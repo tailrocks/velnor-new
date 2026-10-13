@@ -121,7 +121,8 @@ the export has a useful delta. A task-result cache hit, failed/cancelled task, u
 unavailable producer MUST NOT trigger a trusted save. Restore and save destinations MUST not overlap active
 compiler writers.
 
-The generated workflow MUST use these paths. `CARGO_TARGET_DIR` is never an archive path:
+The generated workflow MUST use these paths. `CARGO_TARGET_DIR` is never an archive path. The MBX action
+creates its private object store below `RUNNER_TEMP`; Velnor does not set or archive that store path:
 
 ```text
 VELNOR_CACHE_ROOT     = $RUNNER_TEMP/velnor/cache

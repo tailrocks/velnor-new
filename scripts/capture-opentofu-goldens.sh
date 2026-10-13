@@ -159,6 +159,18 @@ link_identity() {
   done)
 }
 
+# Generated diagnostics contain checkout and preview paths. Pin their labels,
+# not their machine-specific values, so the goldens compare across worktrees.
+normalize_generated_paths() {
+  local stderr="$1"
+  local normalized="$stderr.normalized"
+  sed -E \
+    -e 's|^Preview: .*|Preview: <preview>|' \
+    -e 's|^Repository: .*|Repository: <repo>|' \
+    "$stderr" >"$normalized"
+  mv "$normalized" "$stderr"
+}
+
 build_bin() {
   if [ "$BIN_EXPLICIT" -eq 1 ]; then
     if [ ! -f "$BIN" ] || [ ! -x "$BIN" ]; then

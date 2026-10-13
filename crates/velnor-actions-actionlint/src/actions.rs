@@ -1,7 +1,7 @@
 //! Pinned action refs against the 9-entry allowlist.
 //!
-//! Every ref pins `repo[/path]@sha` plus a `# vX.Y.Z` comment; no
-//! mutable-tag exceptions exist.
+//! Every ref pins `repo[/path]@sha` plus a stable version or matching
+//! immutable commit comment; no mutable-tag exceptions exist.
 
 use crate::ActionlintError;
 
@@ -93,7 +93,7 @@ pub const RUST_CACHE_ACTION_SHA: &str = "6323deb102c322ba6fcbdcafc7e3dddab59af2b
 /// Action key for the Cargo-only Rust cache (P08-7, never with MBX).
 pub const RUST_CACHE_ACTION: &str = "Swatinem/rust-cache";
 /// Qualified `Swatinem/rust-cache` release.
-/// Source: `https://api.github.com/repos/Swatinem/rust-cache/tags`; checked 2026-09-30.
+/// Source: `https://api.github.com/repos/Swatinem/rust-cache/releases/latest`; checked 2026-10-04.
 pub const RUST_CACHE_ACTION_VERSION: &str = "v2.9.2";
 /// Full commit SHA for [`RUST_CACHE_ACTION_VERSION`].
 pub const RUST_CACHE_ACTION_SHA: &str = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6";
@@ -107,7 +107,7 @@ pub struct PinnedActionRef {
     pub path: Option<String>,
     /// Full 40-char commit SHA.
     pub sha: String,
-    /// Matching `# vX.Y.Z` comment text.
+    /// Matching release-version or immutable-commit comment text.
     pub version_comment: String,
 }
 
@@ -128,7 +128,8 @@ impl PinnedActionRef {
     /// # Errors
     ///
     /// Returns [`ActionlintError`] when the key is not allowlisted, the
-    /// SHA is not 40 lowercase hex, or the version comment is not `vX.Y.Z`.
+    /// SHA is not 40 lowercase hex, or the comment is neither `vX.Y.Z`
+    /// nor `commit-<first-seven-SHA-chars>`.
     pub fn new(
         repo: &str,
         path: Option<&str>,
@@ -222,7 +223,7 @@ impl PinnedActionRef {
                 uses: value.to_owned(),
             });
         }
-        if !is_version_tag(version_comment) {
+        if !is_pin_label(reference, version_comment) {
             return Err(ActionlintError::InvalidPin {
                 uses: value.to_owned(),
                 problem: format!("invalid_version_comment:{version_comment}"),
@@ -250,7 +251,7 @@ impl PinnedActionRef {
         if !ALLOWED_ACTIONS.contains(&key.as_str()) {
             return Err(ActionlintError::UnknownAction { uses });
         }
-        if !is_version_tag(&self.version_comment) {
+        if !is_pin_label(&self.sha, &self.version_comment) {
             return Err(ActionlintError::InvalidPin {
                 uses,
                 problem: format!("invalid_version_comment:{}", self.version_comment),
@@ -316,4 +317,30 @@ pub(crate) fn is_version_tag(value: &str) -> bool {
         && parts
             .iter()
             .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()))
+}
+
+/// True for a release version or a comment bound to the pinned commit SHA.
+pub(crate) fn is_pin_label(sha: &str, value: &str) -> bool {
+    is_version_tag(value) || is_commit_sha_label(sha, value)
+}
+
+/// `commit-<first seven SHA chars>` identifies an immutable commit without
+/// claiming that it has an upstream release tag.
+fn is_commit_sha_label(sha: &str, value: &str) -> bool {
+    sha.get(..7)
+        .is_some_and(|prefix| value == format!("commit-{prefix}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_pin_label;
+
+    #[test]
+    fn commit_pin_label_matches_sha_prefix() {
+        let sha = "abcdef0123456789abcdef0123456789abcdef01";
+        assert!(is_pin_label(sha, "commit-abcdef0"));
+        assert!(!is_pin_label(sha, "commit-abcdef1"));
+        assert!(!is_pin_label(sha, "commit-abcdef012"));
+        assert!(!is_pin_label("short", "commit-short"));
+    }
 }

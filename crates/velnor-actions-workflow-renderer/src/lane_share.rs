@@ -1,4 +1,4 @@
-//! One composite action per duplicated verification lane.
+//! One composite action per duplicated verification lane, except MBX jobs.
 //!
 //! GitHub will not start a workflow file larger than 500 KB. Inlining both
 //! lane step lists crosses that limit, so the steps live in one action and

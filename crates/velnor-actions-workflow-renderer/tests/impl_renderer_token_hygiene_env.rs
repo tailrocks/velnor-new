@@ -44,7 +44,7 @@ fn token_in_action_env_fails_render() -> Result<(), RenderError> {
         &mbx_pin(),
         BTreeMap::from([("github-cache-mode".to_owned(), "objects".to_owned())]),
         BTreeMap::from([(
-            MBX_CACHE_MODE_ENV.to_owned(),
+            "ACTIONS_CACHE_MODE".to_owned(),
             "see GITHUB_TOKEN here".to_owned(),
         )]),
     )?;
@@ -63,6 +63,7 @@ fn benign_mbx_cache_mode_env_passes() -> Result<(), RenderError> {
         None,
         &fixture_ctx(),
     )?;
+    assert!(!text.contains("ACTIONS_CACHE_MODE"), "{text}");
     Ok(())
 }
 

@@ -165,9 +165,7 @@ pub fn action_step(
 /// Validated action step with step-level environment.
 ///
 /// Same gates as [`action_step`]; `env` renders as the step's `env:`
-/// map and applies to the action's main and post phases alike, which
-/// is what lets a cache mode gate the post-step save while the
-/// restore still runs on every event.
+/// map and applies to the action's main and post phases alike.
 /// # Errors
 pub fn action_step_with_env(
     name: &str,

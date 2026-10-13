@@ -269,6 +269,33 @@ fn ver37_merge_after_qual() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn ver_action_pin_fixtures_check_release_and_commit_identity() -> Result<(), Box<dyn Error>> {
+    let root = crate::impl_repo_policy::repo_root();
+    let output = std::process::Command::new("python3")
+        .arg(root.join("scripts/test_freshness_action_pins.py"))
+        .current_dir(&root)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "action pin fixtures failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let script = read("scripts/check-freshness.sh")?;
+    assert!(script.contains("validate_action_pin(entry)"));
+    assert!(script.contains("commit_sha_from_response(source, body)"));
+    assert!(script.contains("release_tag_matches(action, tag_body)"));
+    assert!(script.contains("action.get(\"latest_source\", \"\")"));
+    let policy = read("docs/proposed/version-policy.md")?;
+    assert!(
+        policy.contains("commit-<first-seven-SHA-chars>"),
+        "policy must label immutable commits without claiming release status"
+    );
+    Ok(())
+}
+
+#[test]
 fn ver44_velnor_owned_refresh_only() -> Result<(), Box<dyn Error>> {
     let procedure = read("docs/implemented/update-procedure.md")?;
     assert!(procedure.contains("VER-4.4"), "procedure must cite VER-4.4");

@@ -127,9 +127,9 @@ the Cargo-profile task job.
 2. `Verify toolchain`: verify Rust, selected compile driver, selected test
    runner, target, runner platform, and report optional tool-file findings.
 3. `Restore Cargo sources`: restore only the Cargo source cache owned by Velnor.
-4. `Restore compiler objects`: use MBX's supported portable-object restore
-   path only when this workspace's detected profile selects MBX; otherwise
-   this step reports `not_applicable`.
+4. `Restore compiler objects`: the pinned action restores and imports MBX's
+   supported portable-object bundle only when this workspace's detected
+   profile selects MBX; otherwise this step reports `not_applicable`.
 5. `Verify prepared inputs`: run locked/offline preparation checks.
 6. `Clippy`: run the matrix entry's fixed Clippy command and stop this job on
    failure.
@@ -139,7 +139,9 @@ the Cargo-profile task job.
    invoke `cargo test`. V1 uses one command per package/configuration.
 9. `Doctests`: run `cargo test --doc` through the selected compile driver.
 11. `Documentation`: build package docs with rustdoc warnings denied.
-12. `Save eligible caches`: save only permitted immutable snapshots.
+12. `Save eligible caches`: save permitted Cargo-source and qualified task
+    snapshots. MBX object export/save is the pinned action's post-step and
+    follows the same trust and terminal job-outcome rules.
 13. `Report timings and reuse`: write the final machine-readable report.
 
 The matrix job MUST execute Clippy before test compilation. Different matrix entries MUST run in

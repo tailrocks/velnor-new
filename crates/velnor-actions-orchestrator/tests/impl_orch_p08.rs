@@ -331,6 +331,14 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
         mbx_saves + mbx_exports,
         "MBX bundle export and save stay on Scale Set and push-gated:\n{yaml}"
     );
+    assert!(!yaml.contains("Export MBX single bundle"), "{yaml}");
+    assert!(!yaml.contains("Save MBX single bundle"), "{yaml}");
+    assert!(yaml.contains("isolate-objects-cache: \"true\""), "{yaml}");
+    assert!(
+        yaml.contains("cache-key-suffix: ${{ github.job }}"),
+        "{yaml}"
+    );
+    assert!(!yaml.contains("ACTIONS_CACHE_MODE"), "{yaml}");
     assert!(
         !yaml.contains("- name: Restore Cargo sources\n        if:")
             || yaml

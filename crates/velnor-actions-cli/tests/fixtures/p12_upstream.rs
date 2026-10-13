@@ -150,17 +150,7 @@ fn probe_action_rows() -> Vec<ProbeRow> {
 /// Passing fixture with every probe source rewritten to canned `file://` URLs.
 fn probe_fixture(prefix: &str) -> Result<harness::Fixture, Box<dyn Error>> {
     let fixture = harness::passing(prefix)?;
-    let upstream = fixture.dir.join("upstream");
-    std::fs::create_dir_all(&upstream)?;
-    let path = fixture.dir.join(INVENTORY);
-    let mut body = std::fs::read_to_string(&path)?;
-    for (url, file, canned) in probe_rows() {
-        harness::write(&fixture.dir, &format!("upstream/{file}"), canned)?;
-        let file_url = format!("file://{}", upstream.join(file).display());
-        assert!(body.contains(url), "anchor {url}");
-        body = body.replace(url, &file_url);
-    }
-    std::fs::write(path, body)?;
+    harness::write_probe_fixture(&fixture, true)?;
     Ok(fixture)
 }
 
@@ -204,13 +194,7 @@ fn snapshot(dir: &Path) -> Result<Snapshot, Box<dyn Error>> {
 #[test]
 fn default_gate_never_fetches() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-offline")?;
-    let path = fixture.dir.join(INVENTORY);
-    let mut body = std::fs::read_to_string(&path)?;
-    for (url, file, _) in probe_rows() {
-        assert!(body.contains(url), "anchor {url}");
-        body = body.replace(url, &format!("file:///missing-upstream/{file}"));
-    }
-    std::fs::write(path, body)?;
+    harness::write_probe_fixture(&fixture, false)?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);
     harness::cleanup(&fixture);
@@ -239,6 +223,79 @@ fn probe_rows_carry_source_and_check_time() -> Result<(), Box<dyn Error>> {
         assert!(line.contains("source "), "row lacks source: {line}");
         assert!(line.contains("checked 2"), "row lacks check time: {line}");
     }
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
+fn tag_sha_mismatch_fails_while_latest_release_matches() -> Result<(), Box<dyn Error>> {
+    let fixture = probe_fixture("p12-tag-sha-mismatch")?;
+    harness::write(
+        &fixture.dir,
+        "upstream/checkout-tag.json",
+        "{\"sha\": \"1234567890abcdef1234567890abcdef12345678\"}",
+    )?;
+    let run = harness::run_script(&fixture.dir, &["--check-upstream"])?;
+    harness::assert_fail(&run, "release tag SHA mismatch");
+    assert!(
+        harness::rows(&run).iter().any(|line| {
+            line.contains("\"subject\":\"actions/checkout\"")
+                && line.contains("\"status\":\"fail\"")
+                && line.contains("release tag SHA mismatch")
+        }),
+        "wrong release tag SHA passed:\n{}",
+        run.stdout
+    );
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
+fn latest_release_movement_still_fails() -> Result<(), Box<dyn Error>> {
+    let fixture = probe_fixture("p12-latest-release-moved")?;
+    harness::write(
+        &fixture.dir,
+        "upstream/checkout.json",
+        "{\"tag_name\": \"v8.0.0\"}",
+    )?;
+    let run = harness::run_script(&fixture.dir, &["--check-upstream"])?;
+    harness::assert_fail(&run, "stale pin: pinned='v7.0.1' latest='v8.0.0'");
+    assert!(
+        harness::rows(&run).iter().any(|line| {
+            line.contains("\"subject\":\"actions/checkout\"")
+                && line.contains("\"status\":\"fail\"")
+                && line.contains("v8.0.0")
+        }),
+        "latest release movement passed:\n{}",
+        run.stdout
+    );
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
+fn rust_cache_tag_listing_is_rejected_as_latest_source() -> Result<(), Box<dyn Error>> {
+    let fixture = harness::passing("p12-tags-latest-source")?;
+    harness::mutate(
+        &fixture.dir,
+        INVENTORY,
+        "\"latest_source\":\"https://api.github.com/repos/Swatinem/rust-cache/releases/latest\"",
+        "\"latest_source\":\"https://api.github.com/repos/Swatinem/rust-cache/tags\"",
+    )?;
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_fail(
+        &run,
+        "release latest_source must be an exact endpoint for its repository",
+    );
+    assert!(
+        harness::rows(&run).iter().any(|line| {
+            line.contains("\"subject\":\"Swatinem/rust-cache\"")
+                && line.contains("\"status\":\"fail\"")
+                && line.contains("release latest_source")
+        }),
+        "unordered tag listing passed as latest evidence:\n{}",
+        run.stdout
+    );
     harness::cleanup(&fixture);
     Ok(())
 }

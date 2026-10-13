@@ -353,7 +353,7 @@ jobs:
           VELNOR_PRESEED_BINARY: target/release/velnor-actions
           VELNOR_PRESEED_OUT: ${{ runner.temp }}/velnor/preseed-output
           VELNOR_PRESEED_TARGET: x86_64-unknown-linux-gnu
-          VELNOR_PRESEED_TOOLCHAIN: rust@1.98.1+mr-boxington@1.21.1
+          VELNOR_PRESEED_TOOLCHAIN: rust@1.98.1+mr-boxington@1.22.0
         run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR target/release/velnor-actions
       - name: Upload helper (pre-seed trust-on-review)
         if: always()

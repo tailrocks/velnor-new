@@ -14,13 +14,15 @@
     {
       "checked_at": "2026-10-13T19:58:23Z",
       "key": "actions/checkout",
+      "pin_kind": "release",
       "latest": "v7.0.1",
       "pinned_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
       "pinned_version": "v7.0.1",
       "qualified_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
       "qualified_version": "v7.0.1",
-      "source": "https://api.github.com/repos/actions/checkout/releases/latest",
-      "status": "current"
+      "source": "https://api.github.com/repos/actions/checkout/commits/v7.0.1",
+      "status": "current",
+      "latest_source": "https://api.github.com/repos/actions/checkout/releases/latest"
     },
     {
       "checked_at": "2026-10-13T19:58:23Z",
@@ -47,24 +49,28 @@
     {
       "checked_at": "2026-10-13T19:58:23Z",
       "key": "actions/cache/restore",
+      "pin_kind": "release",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
       "pinned_version": "v6.1.0",
       "qualified_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
       "qualified_version": "v6.1.0",
-      "source": "https://api.github.com/repos/actions/cache/releases/latest",
-      "status": "current"
+      "source": "https://api.github.com/repos/actions/cache/commits/v6.1.0",
+      "status": "current",
+      "latest_source": "https://api.github.com/repos/actions/cache/releases/latest"
     },
     {
       "checked_at": "2026-10-13T19:58:23Z",
       "key": "actions/cache/save",
+      "pin_kind": "release",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
       "pinned_version": "v6.1.0",
       "qualified_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
       "qualified_version": "v6.1.0",
-      "source": "https://api.github.com/repos/actions/cache/releases/latest",
-      "status": "current"
+      "source": "https://api.github.com/repos/actions/cache/commits/v6.1.0",
+      "status": "current",
+      "latest_source": "https://api.github.com/repos/actions/cache/releases/latest"
     },
     {
       "checked_at": "2026-10-13T19:58:23Z",
@@ -114,13 +120,15 @@
     {
       "checked_at": "2026-10-01T18:39:41Z",
       "key": "Swatinem/rust-cache",
+      "pin_kind": "release",
       "latest": "v2.9.2",
       "pinned_sha": "6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
       "pinned_version": "v2.9.2",
       "qualified_sha": "6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
       "qualified_version": "v2.9.2",
-      "source": "https://api.github.com/repos/Swatinem/rust-cache/tags",
-      "status": "current"
+      "source": "https://api.github.com/repos/Swatinem/rust-cache/commits/v2.9.2",
+      "status": "current",
+      "latest_source": "https://api.github.com/repos/Swatinem/rust-cache/releases/latest"
     }
   ],
   "check_interval_hours": 24,

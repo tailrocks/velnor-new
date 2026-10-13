@@ -119,6 +119,17 @@ Release records: [mise-action v4.3.0](https://github.com/jdx/mise-action/release
 [cache v6.1.0](https://github.com/actions/cache/releases/tag/v6.1.0),
 [upload-artifact v7.0.1](https://github.com/actions/upload-artifact/releases/tag/v7.0.1).
 
+The v1.7.1 action release includes PR #60’s isolated-objects-cache diagnostic
+fixes: it waits for in-flight resource samples and takes a final sample before
+reporting, keeps sampling failures from replacing cache-operation failures,
+and includes Windows `cache.tar` staging in archive-size sampling. The release
+notes state that cache restore and save behavior is unchanged.
+
+This branch temporarily pins PR #62’s exact commit to qualify immutable
+OUT_DIR cleanup in Velnor CI. The commit is not a release; merge this Velnor
+change only after the action fix is merged upstream and replaced with the
+verified v1.7.2 commit SHA.
+
 Checkout, Mise setup, cache restore/save, and artifact transfer are emitted
 where required by the workflow graph. The Mr. Boxington action is emitted only
 when Rust scanning detects project use of MBX. Cargo sources use the shared
@@ -134,9 +145,23 @@ Pyflakes.
 
 The only per-project pin override is `[actions.overrides]` in
 `.velnor/config.toml`. Each ordinary value contains an exact 40-hex commit SHA
-and its matching stable version. Keys must be exact allowlisted action
-repositories, and the pair must appear in that action's bundled approved-pin
-catalog (latest release plus maintained compatibility pins). The Alint action
+and its matching pin label. Stable releases use `vX.Y.Z`. An immutable
+commit without an upstream release uses `commit-<first-seven-SHA-chars>`; the
+label must match its SHA and does not claim an upstream release. Keys must be
+exact allowlisted action repositories, and the pair must appear in that action's
+bundled approved-pin
+catalog (latest release plus maintained compatibility pins). Each action row
+in `.velnor/freshness-inventory.json` declares `pin_kind = "release"` or
+`pin_kind = "commit"`. Release rows bind the version and full pinned/qualified
+SHA to the exact GitHub `/commits/{tag}` endpoint for the action's owner and
+repository. Their separate `latest_source` records a same-repository GitHub
+releases endpoint (`/releases/latest` or `/releases`) used for upstream
+freshness comparison; tag-listing endpoints are rejected. The scheduled
+probe requires the tag endpoint's response SHA to equal both reviewed SHAs.
+Commit rows bind the label, pinned and qualified SHA, recorded latest SHA,
+and exact GitHub commit API endpoint; an action subpath is removed from that
+endpoint so `actions/cache/restore` and `actions/cache/save` use the
+`actions/cache` repository. The Alint action
 is not a per-project override: Velnor emits exactly
 `asamarts/alint@f558d76d076710312c54723d18e44d8cd95b3977` (`# v0.18.1`).
 Changing that pin is a Velnor version-policy change,
