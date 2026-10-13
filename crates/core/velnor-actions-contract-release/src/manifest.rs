@@ -239,6 +239,15 @@ impl ReleaseManifest {
                 ));
             }
         }
+        for target in crate::targets::SUPPORTED_TARGETS {
+            if !seen.contains(target) {
+                return Err(ContractError::config(
+                    file,
+                    "targets",
+                    format!("missing_target:{target}"),
+                ));
+            }
+        }
         Ok(())
     }
 }
