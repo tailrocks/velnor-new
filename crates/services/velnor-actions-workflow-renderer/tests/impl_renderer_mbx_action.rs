@@ -55,6 +55,10 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
         version_check.id,
         Some(velnor_actions_contract::StepId::MbxReady)
     );
+    assert_eq!(
+        version_check.id,
+        Some(velnor_actions_contract::StepId::MbxReady)
+    );
     let StepKind::Shell {
         run,
         env: check_env,
