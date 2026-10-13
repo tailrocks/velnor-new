@@ -5,13 +5,14 @@ use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind, WorkflowIr,
     WorkflowPolicy, workflow::permissions::PermissionLevel,
 };
-use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
+use velnor_actions_workflow_renderer::setup::MiseSetupSet;
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup, MiseSetupSet,
     RELEASE_COMMIT_ENV, RenderContext, RenderError, STAGED_BINARY_PREFIX, ValidatorCommand,
     ValidatorSourceInput, ValidatorSourceInputKind, ValidatorSourceUnit, acquire_velnor_step,
     checkout_step, plan_step, render_workflow_ir, render_workflow_ir_strict, shell_step,
 };
+use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
 
 pub(crate) const VERSION: &str = "0.1.0";
 pub(crate) const LABEL: &str = "ubuntu-26.04";
@@ -26,12 +27,6 @@ pub(crate) const TEST_RUST_TOOLCHAIN: &str = "1.99.0";
 
 pub(crate) fn mbx_tool_env(rust_toolchain: &str) -> BTreeMap<String, String> {
     BTreeMap::from([
-        ("MISE_NO_CONFIG".to_owned(), "1".to_owned()),
-        ("MISE_NO_ENV".to_owned(), "1".to_owned()),
-        ("MISE_NO_HOOKS".to_owned(), "1".to_owned()),
-        ("MISE_LOCKFILE".to_owned(), "0".to_owned()),
-        ("MISE_AUTO_INSTALL".to_owned(), "false".to_owned()),
-        ("MISE_EXEC_AUTO_INSTALL".to_owned(), "false".to_owned()),
         (
             "MISE_RUSTUP_HOME".to_owned(),
             "${{ runner.temp }}/velnor/rustup".to_owned(),

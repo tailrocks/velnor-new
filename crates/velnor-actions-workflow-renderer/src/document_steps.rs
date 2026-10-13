@@ -207,6 +207,20 @@ pub(crate) fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
     )
 }
 
+/// Preserve typed workflow step IDs for action and shell serialization.
+fn push_step_id(entries: &mut Vec<(String, Yaml)>, name: &str) {
+    let id = match name {
+        crate::cache_steps::MBX_RESTORE_NAME => Some("mbx"),
+        "Restore MBX bundle" => Some("mbx_cache_restore"),
+        "Import MBX bundle" => Some("mbx_cache_import"),
+        "Export MBX bundle" => Some("mbx_cache_export"),
+        _ => None,
+    };
+    if let Some(id) = id {
+        entries.push(("id".to_owned(), Yaml::str(id)));
+    }
+}
+
 /// Render one step; internal ops become env plus request file, never argv.
 /// Every action ref (including the Alint pin) must be a full-SHA pin.
 pub(crate) fn step_to_yaml(

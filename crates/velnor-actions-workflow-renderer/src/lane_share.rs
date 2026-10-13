@@ -21,6 +21,10 @@ mod check;
 #[path = "lane_share_runtime.rs"]
 mod runtime;
 
+#[path = "lane_share_lcs.rs"]
+mod pair_sharing;
+pub(crate) use pair_sharing::SharedCall;
+
 /// CI workflow plus composite actions for duplicated lanes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedWorkflow {
@@ -33,7 +37,7 @@ pub struct RenderedWorkflow {
 /// Jobs rewritten to call a shared action, plus those action files.
 #[derive(Debug)]
 pub(crate) struct LaneShare {
-    /// Same jobs, with shared lanes keeping their headers and elected saves.
+    /// Same jobs, with shared lanes keeping their headers and empty steps.
     pub jobs: BTreeMap<String, Job>,
     /// Job id to local `uses` path.
     pub calls: BTreeMap<String, String>,
@@ -102,10 +106,10 @@ pub(crate) fn share_lanes(
             )));
         };
         let local_id = format!("{logical}{SCALE_SUFFIX}");
-        let Some(local) = jobs.get(&local_id) else {
+        let Some(local) = next.get(&local_id) else {
             continue;
         };
-        let Some(hosted) = jobs.get(&hosted_id) else {
+        let Some(hosted) = next.get(&hosted_id) else {
             continue;
         };
         let Some(parts) = split_pair(hosted, local, &ctx.checkout_uses) else {
@@ -338,8 +342,8 @@ fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {
 }
 
 #[cfg(test)]
-#[path = "lane_share_tests.rs"]
-mod tests;
+mod tests {
+    use std::collections::BTreeMap;
 
 #[cfg(test)]
 #[path = "lane_share_render_tests.rs"]

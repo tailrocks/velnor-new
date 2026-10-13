@@ -87,6 +87,8 @@ const WITH_EXPRESSIONS: [&str; 11] = [
     "runner.arch",
     "github.sha",
     "github.event_name == 'push'",
+    "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected && 'trusted' || 'pr'",
+    "github.sha",
     "steps.publish-baseline.outputs.artifact_name",
     "steps.v2.outputs.identity",
     "steps.v2.outputs.seed_admitted",

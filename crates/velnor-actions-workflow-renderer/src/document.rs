@@ -2,7 +2,7 @@
 //!
 //! Fixed key order: name, on, permissions, env, concurrency, jobs.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use crate::{
     RenderError,
@@ -342,7 +342,10 @@ fn job_to_yaml(
 fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {
     vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
-        ("runs-on".to_owned(), runs_on),
+        (
+            "runs-on".to_owned(),
+            crate::runs_on::runs_on_yaml(&job.runs_on)?,
+        ),
         (
             "timeout-minutes".to_owned(),
             Yaml::Int(i64::from(job.timeout_minutes.minutes())),
@@ -384,5 +387,9 @@ fn append_job_options(
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
-    Ok(())
+    entries.push((
+        "steps".to_owned(),
+        render_job_steps(id, job, ctx, needs_envs, shared)?,
+    ));
+    Ok(Yaml::Map(entries))
 }

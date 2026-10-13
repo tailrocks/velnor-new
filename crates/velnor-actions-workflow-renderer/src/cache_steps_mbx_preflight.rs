@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{CompileDriver, MBX_ACTION_NAME};
+use super::{CompileDriver, MBX_ACTION_NAME, is_exact_mbx_version};
 use crate::RenderError;
 use crate::steps::{action_owned_mbx_shell_step, action_step_with_env, shell_step, validate_uses};
 use velnor_actions_contract::cachekey::mbx_cache_generation;
