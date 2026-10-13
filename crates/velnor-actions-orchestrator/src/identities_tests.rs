@@ -172,6 +172,9 @@ fn formats_stay_single_and_graphs_relocate() {
     let digest_of = |id: &str| {
         super::snapshot::canonical_digest(&snapshot_graph_for(&record(id))).expect("digest")
     };
+    let digest_of = |id: &str| {
+        super::snapshot::canonical_digest(&snapshot_graph_for(&record(id))).expect("digest")
+    };
     assert_eq!(
         digest_of("path+file:///old#a@0.1.0"),
         digest_of("path+file:///new#a@0.1.0")
