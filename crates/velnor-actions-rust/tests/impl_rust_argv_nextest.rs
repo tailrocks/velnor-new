@@ -1,9 +1,10 @@
 //! Nextest payload argv shape cases.
 use velnor_actions_contract::ContractError;
+use velnor_actions_contract::config::{NextestTestSelection, NextestTestSelectionMode};
 use velnor_actions_rust::tasks::{
     TaskGroup, TaskKind, cargo_payload_argv, cargo_payload_with_profile,
 };
-use velnor_actions_rust::{CompileDriver, NextestProfile, TestRunner};
+use velnor_actions_rust::{CompileDriver, NextestProfile, TestRunner, propose_nextest_selection};
 
 fn group(kind: TaskKind) -> TaskGroup {
     TaskGroup {
@@ -44,6 +45,64 @@ fn profiled(group: &TaskGroup) -> Result<Vec<String>, ContractError> {
         .iter()
         .map(|s| s.to_string_lossy().into_owned())
         .collect())
+}
+
+fn selector() -> NextestTestSelection {
+    NextestTestSelection {
+        package: "demo".to_owned(),
+        binary: "control_states".to_owned(),
+        mode: NextestTestSelectionMode::IgnoredOnly,
+        test_ids: vec!["w01_brand_press_paints_distinct_from_hover".to_owned()],
+    }
+}
+
+#[test]
+fn exact_selector_overrides_ignored_mode_and_keeps_empty_suite_guard() -> Result<(), ContractError>
+{
+    let mut nextest = group(TaskKind::Nextest);
+    nextest.task_id = "stack/rust/root/nextest/default".to_owned();
+    nextest.test_runner = TestRunner::CargoNextest;
+    nextest.run_ignored = Some("all".to_owned());
+    let selected = propose_nextest_selection(&nextest, &selector())?;
+    let argv: Vec<String> = selected
+        .payload
+        .iter()
+        .map(|s| s.to_string_lossy().into())
+        .collect();
+    assert_eq!(
+        argv,
+        [
+            "nextest",
+            "run",
+            "--profile",
+            "default",
+            "--locked",
+            "--offline",
+            "--manifest-path",
+            "Cargo.toml",
+            "--package",
+            "demo",
+            "--run-ignored",
+            "only",
+            "--filterset",
+            "package(=demo) & binary(=control_states) & (test(=w01_brand_press_paints_distinct_from_hover))",
+            "--no-tests",
+            "fail",
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn selector_rejects_wrong_package_kind_and_targetless_task() {
+    let selection = selector();
+    let mut wrong_package = group(TaskKind::Nextest);
+    wrong_package.package_name = "other".to_owned();
+    assert!(propose_nextest_selection(&wrong_package, &selection).is_err());
+    assert!(propose_nextest_selection(&group(TaskKind::Build), &selection).is_err());
+    let mut targetless = group(TaskKind::Nextest);
+    targetless.no_test_targets = true;
+    assert!(propose_nextest_selection(&targetless, &selection).is_err());
 }
 
 #[test]

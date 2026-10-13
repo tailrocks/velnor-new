@@ -252,3 +252,24 @@ fn nextest_commands_match_argv() -> Result<(), String> {
     );
     Ok(())
 }
+
+#[test]
+fn archive_manifest_path_targets_nested_workspace() -> Result<(), String> {
+    let archive = NextestArchive::new(NextestDriver::Cargo, "demo", &[], None)
+        .map_err(|err| err.to_string())?
+        .with_manifest_path("nested/Cargo.toml")
+        .map_err(|err| err.to_string())?;
+    let args = archive.payload();
+    let manifest = args
+        .windows(2)
+        .position(|pair| pair[0] == "--manifest-path")
+        .ok_or("manifest flag missing")?;
+    assert_eq!(args[manifest + 1], "nested/Cargo.toml");
+    assert!(
+        NextestArchive::new(NextestDriver::Cargo, "demo", &[], None)
+            .map_err(|err| err.to_string())?
+            .with_manifest_path("../Cargo.toml")
+            .is_err()
+    );
+    Ok(())
+}

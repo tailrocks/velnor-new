@@ -4,8 +4,9 @@ use std::ffi::{OsStr, OsString};
 
 use velnor_actions_contract::{ProposedTask, Stack};
 use velnor_actions_mise::{
-    CandidateBuild, IsolatedCommand, PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog,
-    custom_run::custom_task_run_argv, validate_exact_version,
+    CandidateBuild, IsolatedCommand, NextestDriver, NextestList, NextestPartition, NextestRun,
+    PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog, custom_run::custom_task_run_argv,
+    validate_exact_version,
 };
 use velnor_actions_rust::tool_needs;
 use velnor_actions_workflow_renderer::render::CandidateSpec;
@@ -141,25 +142,14 @@ fn exec_argv(
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// Fixed validator-job vector: privilege-dropping `cargo deny` for each
-/// repository-owned Cargo workspace.
+/// Validator vector: privilege-dropped `cargo deny` for each owned workspace.
 ///
-/// Deny shells `cargo metadata`, which reads repo `.cargo/config.toml`
-/// even from outside the checkout (deny resolves config from the
-/// manifest side), so cwd isolation alone cannot starve repo
-/// credential-providers. The script therefore drops privilege first:
-/// an ambient-credential `mise install` (isolation trio, so no repo
-/// config loads) warms the pinned tool, then the shared
-/// credential-unset prelude removes every ambient secret, and only
-/// then does the isolated deny payload run for both the generator and
-/// nested runner workspaces. Each invocation supplies that workspace's
-/// absolute manifest and deny configuration before the trailing `check`:
-/// deny takes global flags pre-subcommand. A repo provider executing past
-/// this point observes an empty credential environment. A drifted payload
-/// shape fails closed instead of splicing into the wrong position.
-/// Shell assembly lives in [`crate::source_prep::privilege_drop_argv`]:
-/// this module composes typed argv only, keeping the orchestrator's
-/// `sh` confinement set closed.
+/// Deny reads repo `.cargo/config.toml` by manifest, even outside the checkout,
+/// so cwd isolation cannot prevent configured credential providers. The argv
+/// warms the pinned tool under the isolation trio, removes ambient credentials,
+/// then checks both workspaces with absolute manifests/configs and global flags
+/// before `check`. Payload drift fails closed. Shell assembly stays in
+/// [`crate::source_prep::privilege_drop_argv`]; this module composes typed argv.
 pub(crate) fn deny_argv(workspace_roots: &[String]) -> Result<Vec<String>, OrchestratorError> {
     let mut roots = workspace_roots.to_vec();
     roots.sort();
@@ -347,6 +337,51 @@ pub(crate) fn candidate_spec(catalog: &ToolCatalog) -> Result<CandidateSpec, Orc
         build: candidate_build_argv(catalog)?,
         qualify: QualifyRequest::staged().argv()?,
     })
+}
+
+/// Build the existing list/run command pair for one archived shard.
+pub(crate) fn nextest_shard_argv(
+    driver: NextestDriver,
+    partition: NextestPartition,
+    profile: &str,
+    matrix_key: &str,
+    run_ignored: Option<&str>,
+    filterset: Option<&str>,
+    catalog: &ToolCatalog,
+) -> Result<Vec<String>, OrchestratorError> {
+    let partition_id = format!("shard-{}-of-{}", partition.index(), partition.count());
+    let list = NextestList::with_profile(driver, partition, profile).map_err(|err| {
+        OrchestratorError::Contract {
+            problem: err.to_string(),
+        }
+    })?;
+    let run = NextestRun::with_profile(driver, partition, matrix_key, &partition_id, profile)
+        .map_err(|err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        })?;
+    let mut list = list.argv(catalog);
+    let mut run = run.argv(catalog);
+    for argv in [&mut list, &mut run] {
+        velnor_actions_mise::nextest_shapes::append_selection_arguments(
+            argv,
+            run_ignored,
+            filterset,
+        )
+        .map_err(|err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        })?;
+    }
+    let list = strings_of(list).map_err(|problem| OrchestratorError::Contract { problem })?;
+    let run = strings_of(run).map_err(|problem| OrchestratorError::Contract { problem })?;
+    let list = velnor_actions_workflow_renderer::join_argv_for_run(&list)
+        .map_err(OrchestratorError::from)?;
+    let run = velnor_actions_workflow_renderer::join_argv_for_run(&run)
+        .map_err(OrchestratorError::from)?;
+    Ok(vec![
+        "sh".to_owned(),
+        "-c".to_owned(),
+        format!("{list} && {run}"),
+    ])
 }
 
 /// Convert fixed argv to UTF-8 strings.
