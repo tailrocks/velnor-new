@@ -35,6 +35,17 @@ The markers never enter the real release manifest, generator lock, producer
 `fixtures/consumer-release-manifest.json` stays unchanged at 0.1.4 as a
 historical schema fixture for direct schema tests.
 
+## Product version prep v0.1.8 (2026-10-13; source-only)
+
+From current `origin/main` at `4c9a54ac71d3425440864cebb2496e6ed0bc4640`,
+including the Lychee release-asset checksum fix, the workspace and release
+renderer versions were advanced to 0.1.8. Supported CLI generation used a
+`--output-dir` preview; the generated path/type inventory matched `.github`,
+and only byte-different generated files were copied. The CLI parity goldens and
+five OpenTofu cases were recaptured; dogfood reported `tree identical`. These
+records are source-preparation evidence, not release qualification or
+publication evidence. No release was created.
+
 ## Product version prep v0.1.7 (2026-10-13; source-only)
 
 The workspace version, generator asset names/tag, release fixtures, generated
