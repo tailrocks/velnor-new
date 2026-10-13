@@ -1,0 +1,10 @@
+2026-10-04T21:38:14.044660770Z sh: locale: not found
+2026-10-04T21:38:14.045976233Z 2026-10-04 21:38:14.045 UTC [40] WARNING:  no usable system locales were found
+2026-10-04T21:38:15.029101940Z initdb: warning: enabling "trust" authentication for local connections
+2026-10-04T21:38:15.029121273Z initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+2026-10-04T21:38:15.742864233Z 2026-10-04 21:38:15.742 UTC [1] LOG:  starting PostgreSQL 18.6 on x86_64-pc-linux-musl, compiled by gcc (Alpine 15.2.0) 15.2.0, 64-bit
+2026-10-04T21:38:15.744529489Z 2026-10-04 21:38:15.744 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2026-10-04T21:38:15.744534698Z 2026-10-04 21:38:15.744 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2026-10-04T21:38:15.746131371Z 2026-10-04 21:38:15.746 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-10-04T21:38:15.754029318Z 2026-10-04 21:38:15.752 UTC [68] LOG:  database system was shut down at 2026-10-04 21:38:15 UTC
+2026-10-04T21:38:15.763901106Z 2026-10-04 21:38:15.763 UTC [1] LOG:  database system is ready to accept connections
