@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "recorded_at": "2026-10-12T23:38:11Z",
+  "head_at_run_start": "438bd90d2ef64515373f413b501b7ae01189a8e7",
+  "working_tree_changes_included": true,
+  "tool": "cargo-nextest 0.9.148",
+  "command": "cargo nextest run --locked --workspace",
+  "run_id": "d3d7207f-d1c7-40ba-bb72-4cd5f06adfb8",
+  "profile": "default",
+  "discovered_tests": 3699,
+  "passed": 3699,
+  "failed": 0,
+  "skipped": 2,
+  "slow": 4,
+  "result": "passed"
+}

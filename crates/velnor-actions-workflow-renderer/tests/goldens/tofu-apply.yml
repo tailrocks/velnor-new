@@ -61,14 +61,14 @@ jobs:
           NPM_TOKEN: ""
         run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; guard_dir=\"${{ runner.temp }}/velnor-tofu-guard\"; mkdir -p -- \"$guard_dir\"; git rev-parse --verify HEAD >\"$guard_dir/checked-out\"; printf '\\''%s\\n'\\'' \"$GITHUB_SHA\" >\"$guard_dir/requested\"; git ls-remote --exit-code --refs origin '\\''refs/heads/main'\\'' | cut -f1 >\"$guard_dir/remote\"; cmp -s -- \"$guard_dir/checked-out\" \"$guard_dir/requested\" && cmp -s -- \"$guard_dir/checked-out\" \"$guard_dir/remote\"'"
       - name: Setup Mise
-        uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca
+        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
           cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366
-          version: 2026.10.6
+          sha256: c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428
+          version: 2026.10.8
       - name: Check required GitHub provider secrets
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""

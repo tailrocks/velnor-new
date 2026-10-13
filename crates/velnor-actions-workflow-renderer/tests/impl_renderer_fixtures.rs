@@ -14,10 +14,10 @@ use velnor_actions_workflow_renderer::{
 
 pub(crate) const VERSION: &str = "0.1.0";
 pub(crate) const LABEL: &str = "ubuntu-26.04";
-pub(crate) const MISE_USES: &str = "jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca";
-pub(crate) const MISE_VERSION: &str = "2026.10.6";
+pub(crate) const MISE_USES: &str = "jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8";
+pub(crate) const MISE_VERSION: &str = "2026.10.8";
 pub(crate) const MISE_SHA256: &str =
-    "3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366";
+    "c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428";
 pub(crate) const STAGED: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0";
 
 pub(crate) const TEST_MBX_VERSION: &str = "1.21.1";

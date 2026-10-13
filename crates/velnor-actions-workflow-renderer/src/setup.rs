@@ -30,15 +30,15 @@ pub struct MiseSetup {
     pub sha256: String,
 }
 
-/// Official raw Linux x64 binary SHA-256 for Mise 2026.10.6.
+/// Official raw Linux x64 binary SHA-256 for Mise 2026.10.8.
 pub const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366";
-/// Official raw macOS ARM64 binary SHA-256 for Mise 2026.10.6.
+    "c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428";
+/// Official raw macOS ARM64 binary SHA-256 for Mise 2026.10.8.
 pub const MISE_BINARY_SHA256_MACOS_ARM64: &str =
-    "bbcea7b0f844d026424a4c8335357a15a2f5c9e9132c9408de990d9be6f26101";
-/// Official raw macOS x86-64 binary SHA-256 for Mise 2026.10.6.
+    "dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73";
+/// Official raw macOS x86-64 binary SHA-256 for Mise 2026.10.8.
 pub const MISE_BINARY_SHA256_MACOS_X64: &str =
-    "70e1407e2fdc7a19f94db35745a8e5885b0e4bbdbfb34bfb7e3619d6230a8f70";
+    "a122fd04db5f2da07d24528ed61109bc82142ca44e821d4faafa05650f6ba627";
 
 impl MiseSetup {
     /// Resolve a compiled binary pin for one job's target.
@@ -46,7 +46,7 @@ impl MiseSetup {
     /// Unsupported targets or versions have no qualified artifact.
     pub fn for_target(&self, target: &str) -> Result<Self, RenderError> {
         self.validate()?;
-        if self.version != "2026.10.6" {
+        if self.version != "2026.10.8" {
             return Err(RenderError::BadCommand(format!(
                 "mise_setup_unqualified_version:{}",
                 self.version
@@ -99,7 +99,7 @@ impl MiseSetup {
 /// replaces with explicit V2 tools-cache steps for the owned paths. This
 /// action installs Mise itself and loads no repository environment.
 /// The `with` map is exactly these six keys. In the pinned
-/// `jdx/mise-action` v5.1.1, `persist_github_token` defaults to false; leave
+/// `jdx/mise-action` v5.1.2, `persist_github_token` defaults to false; leave
 /// it unset so the action's token cannot be carried into later workflow steps.
 /// # Errors
 pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
@@ -120,7 +120,7 @@ pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// True for catalog version spellings (`2026.10.6`); never `latest`.
+/// True for catalog version spellings (`2026.10.8`); never `latest`.
 fn is_catalog_version(value: &str) -> bool {
     !value.is_empty()
         && value != "latest"

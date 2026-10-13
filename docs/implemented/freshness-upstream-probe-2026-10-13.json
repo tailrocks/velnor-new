@@ -1,0 +1,333 @@
+{
+  "schema": 1,
+  "capture": {
+    "source_commit": "b3b5005830ce442907f36c5e0c815b2890e701af",
+    "source_tree": "693e6a5e688bd80ddc35383c1324301fd22c7b0d",
+    "checked_at": "2026-10-12T22:59:12Z",
+    "command": "scripts/check-freshness.sh --check-upstream",
+    "exit_code": 1,
+    "interpretation": "Both bounded captures returned all upstream source rows with no lookup_failed entries. This command exited 1 because the base inventory evidence was stale and newer versions were observed, including valid held rows; exit 1 is not recorded as a passing freshness gate."
+  },
+  "raw_log": {
+    "path": "docs/implemented/evidence/freshness-2026-10-13/probe-04-root-retry.log",
+    "sha256": "8b8afd7e51c041f9501393b55b0c3208ea935fa62b5c1df0b09cbac22ecca15b",
+    "bytes": 57243
+  },
+  "probes": [
+    {
+      "check": "upstream-probe",
+      "detail": "stale pin: pinned=\"2026.10.6\" latest=\"v2026.10.8\"; source https://api.github.com/repos/jdx/mise/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "fail",
+      "subject": "mise"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "stale pin: pinned=\"1.98.1\" latest=\"1.99.0\"; source https://static.rust-lang.org/dist/channel-rust-stable.toml, checked 2026-10-12T22:59:12Z",
+      "status": "fail",
+      "subject": "rust"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "stale pin: pinned=\"1.21.1\" latest=\"v1.23.0\"; source https://api.github.com/repos/jdx/mr-boxington/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "fail",
+      "subject": "mr-boxington"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "pinned==latest v2.102.0; source https://api.github.com/repos/cli/cli/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "pass",
+      "subject": "gh"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "pinned==latest v1.7.12; source https://api.github.com/repos/rhysd/actionlint/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "pass",
+      "subject": "actionlint"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "pinned==latest v0.11.0; source https://api.github.com/repos/koalaman/shellcheck/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "pass",
+      "subject": "shellcheck"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "pinned==latest v1.30.1; source https://api.github.com/repos/zizmorcore/zizmor/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "pass",
+      "subject": "zizmor"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "pinned==latest 0.9.148; source https://crates.io/api/v1/crates/cargo-nextest, checked 2026-10-12T22:59:12Z",
+      "status": "pass",
+      "subject": "nextest"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "pinned==latest v1.13.1; source https://api.github.com/repos/opentofu/opentofu/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "pass",
+      "subject": "opentofu"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "stale pin: pinned=\"0.3.170\" latest=\"0.3.172\"; source https://crates.io/api/v1/crates/release-plz, checked 2026-10-12T22:59:12Z",
+      "status": "fail",
+      "subject": "release-plz"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "pinned==latest v6.1.0; source https://api.github.com/repos/actions/cache/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "pass",
+      "subject": "actions/cache/restore"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "pinned==latest v6.1.0; source https://api.github.com/repos/actions/cache/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "pass",
+      "subject": "actions/cache/save"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "pinned==latest v7.0.1; source https://api.github.com/repos/actions/checkout/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "pass",
+      "subject": "actions/checkout"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "stale pin: pinned=\"v8.0.1\" latest=\"v8.0.2\"; source https://api.github.com/repos/actions/download-artifact/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "fail",
+      "subject": "actions/download-artifact"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "stale pin: pinned=\"v7.0.1\" latest=\"v7.0.2\"; source https://api.github.com/repos/actions/upload-artifact/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "fail",
+      "subject": "actions/upload-artifact"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "stale pin: pinned=\"v0.17.0\" latest=\"v0.18.1\"; source https://api.github.com/repos/asamarts/alint/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "fail",
+      "subject": "asamarts/alint"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "pinned==latest v6.3.0; source https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "pass",
+      "subject": "aws-actions/configure-aws-credentials"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "stale pin: pinned=\"v5.1.1\" latest=\"v5.1.2\"; source https://api.github.com/repos/jdx/mise-action/releases/latest, checked 2026-10-12T22:59:12Z",
+      "status": "fail",
+      "subject": "jdx/mise-action"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "stale pin: pinned=\"v1.6.0\" latest=\"v1.7.2\"; source https://api.github.com/repos/jdx/mr-boxington-action/releases, checked 2026-10-12T22:59:12Z",
+      "status": "fail",
+      "subject": "jdx/mr-boxington-action"
+    },
+    {
+      "check": "upstream-probe",
+      "detail": "latest image family is platform-qualification evidence, not an API probe",
+      "status": "info",
+      "subject": "runner"
+    }
+  ],
+  "failed_attempts": [
+    {
+      "checked_at": "2026-10-12T22:52:46Z",
+      "interpretation": "All source lookups timed out; excluded from inventory refresh.",
+      "raw_log": {
+        "path": "docs/implemented/evidence/freshness-2026-10-13/probe-02.log",
+        "sha256": "6bdd7cf6e8e1ade19c2767a22f39e220ed3a6d344ac3f788635df10392225362",
+        "bytes": 58283
+      }
+    },
+    {
+      "checked_at": "2026-10-12T22:52:46Z",
+      "interpretation": "All source lookups timed out; excluded from inventory refresh.",
+      "raw_log": {
+        "path": "docs/implemented/evidence/freshness-2026-10-13/probe-03.log",
+        "sha256": "55b96b9f2c2b9f4993965b52e23f310c54cfc0e31a9f3a6d0456ff01041ed815",
+        "bytes": 58286
+      }
+    }
+  ],
+  "runner_observation": {
+    "documentation": {
+      "url": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners",
+      "fetched_at": "2026-10-12T23:00:50Z",
+      "http_date": "Mon, 12 Oct 2026 23:00:50 GMT",
+      "labels": [
+        "ubuntu-26.04",
+        "ubuntu-24.04",
+        "ubuntu-22.04"
+      ],
+      "raw_html": {
+        "path": "docs/implemented/evidence/freshness-2026-10-13/runner-doc.html",
+        "sha256": "2da9a6f63a630c023009ecf41e507150d1709cdcd74bdebf3461fc87b0ca9cfa",
+        "bytes": 435396
+      }
+    },
+    "successful_exact_main_ci": {
+      "run_id": 38316930881,
+      "job_id": 115035687366,
+      "url": "https://github.com/tailrocks/velnor-new/actions/runs/38316930881",
+      "head_sha": "b3b5005830ce442907f36c5e0c815b2890e701af",
+      "conclusion": "success",
+      "created_at": "2026-10-12T22:29:16Z",
+      "updated_at": "2026-10-12T22:38:29Z",
+      "image": "ubuntu-26.04",
+      "image_version": "20260927.149.1",
+      "image_release": "https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20260927.149",
+      "log": {
+        "path": "docs/implemented/evidence/freshness-2026-10-13/main-run-38316930881-plan-job-115035687366.log",
+        "sha256": "acc1236ed3ab0fd94030bedcf3e496e9790a8dcce0bcb8001b31b263f4295f91",
+        "bytes": 347778
+      }
+    }
+  },
+  "mise_release_artifacts": {
+    "tag": "v2026.10.8",
+    "release_url": "https://github.com/jdx/mise/releases/tag/v2026.10.8",
+    "release_published_at": "2026-10-11T10:05:39Z",
+    "tag_object": "6e3520120f0d2182c29781159c71a627977e2531",
+    "peeled_commit": "b671d356aaf33b87e48e7469a77abb40c3553c68",
+    "tree": "ababca8f764247f1fc0c3bbccf66eaf16b56d27f",
+    "checksum_manifest": {
+      "url": "https://github.com/jdx/mise/releases/download/v2026.10.8/SHASUMS256.txt",
+      "fetched_at": "2026-10-12T23:08:53Z",
+      "sha256": "9237b178f5f3d1625045c18608e4bde6f66a023593822e8ae9029967c19474b0",
+      "bytes": 3688,
+      "path": "docs/implemented/evidence/freshness-2026-10-13/mise-SHASUMS256-v2026.10.8.txt",
+      "http_headers_path": "docs/implemented/evidence/freshness-2026-10-13/mise-shasums-headers.txt",
+      "http_headers_note": "Signed release-asset redirect URL was redacted from the saved headers."
+    },
+    "workflow_binary_assets": [
+      {
+        "target": "x86_64-unknown-linux-gnu",
+        "asset": "mise-v2026.10.8-linux-x64",
+        "sha256": "c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428"
+      },
+      {
+        "target": "aarch64-apple-darwin",
+        "asset": "mise-v2026.10.8-macos-arm64",
+        "sha256": "dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73"
+      },
+      {
+        "target": "x86_64-apple-darwin",
+        "asset": "mise-v2026.10.8-macos-x64",
+        "sha256": "a122fd04db5f2da07d24528ed61109bc82142ca44e821d4faafa05650f6ba627"
+      }
+    ],
+    "source_build_archives": [
+      {
+        "target": "aarch64-unknown-linux-gnu",
+        "asset": "mise-v2026.10.8-linux-arm64.tar.gz",
+        "sha256": "88aea77e41c2a3c45a9cbd64df9516ba887017442846213b3de178acbd3c9a46",
+        "bytes": 54755474,
+        "binary_sha256": "6ee0bd8173f1347514f4974d55fb1fae13aa7f6de0a55338adbefa0667cad7e5"
+      },
+      {
+        "target": "aarch64-apple-darwin",
+        "asset": "mise-v2026.10.8-macos-arm64.tar.gz",
+        "sha256": "8228699f316dc17931beb86f7a1aac70e4685535430441492ff4e857c72535ad",
+        "bytes": 43444126,
+        "binary_sha256": "dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73"
+      }
+    ]
+  },
+  "successful_runs": [
+    {
+      "checked_at": "2026-10-12T22:43:28Z",
+      "source_commit": "b3b5005830ce442907f36c5e0c815b2890e701af",
+      "command": "scripts/check-freshness.sh --check-upstream",
+      "exit_code": 1,
+      "interpretation": "All source lookups returned; exit 1 reflects stale base inventory and newer upstream versions, not an operational lookup failure.",
+      "raw_log": {
+        "path": "docs/implemented/evidence/freshness-2026-10-13/probe-01.log",
+        "sha256": "9df853bf9defaf13cd39ec343ae83ae40a0859104e0aab9f83772cd232b0012d",
+        "bytes": 57260
+      }
+    },
+    {
+      "checked_at": "2026-10-12T22:59:12Z",
+      "source_commit": "b3b5005830ce442907f36c5e0c815b2890e701af",
+      "command": "scripts/check-freshness.sh --check-upstream",
+      "exit_code": 1,
+      "interpretation": "All source lookups returned; exit 1 reflects stale base inventory and newer upstream versions, not an operational lookup failure.",
+      "raw_log": {
+        "path": "docs/implemented/evidence/freshness-2026-10-13/probe-04-root-retry.log",
+        "sha256": "8b8afd7e51c041f9501393b55b0c3208ea935fa62b5c1df0b09cbac22ecca15b",
+        "bytes": 57243
+      }
+    }
+  ],
+  "release_plz_qualification": {
+    "recorded_at": "2026-10-12T23:54:16Z",
+    "recording_note": "Imported from the independent isolated install result. The supplied probe did not include its execution timestamp or source HEAD; neither is inferred here.",
+    "package": {
+      "name": "release-plz",
+      "version": "0.3.172",
+      "source": "https://crates.io/api/v1/crates/release-plz/0.3.172/download (resolved static archive: https://static.crates.io/crates/release-plz/release-plz-0.3.172.crate)",
+      "published_archive_sha256": "ca9813f5aff1fbfb88d016a5b6685257caad6270d6a667a9ea23c99d749ab81e",
+      "registry_index_checksum": "ca9813f5aff1fbfb88d016a5b6685257caad6270d6a667a9ea23c99d749ab81e",
+      "registry_index_pubtime": "2026-10-12T21:48:27Z"
+    },
+    "toolchain": "rustc 1.98.1 (48a229cea 2026-09-01), selected by repository mise.toml pin rust=1.98.1",
+    "install": "cargo install release-plz --version 0.3.172 --locked --root work/release-plz-probe/install with CARGO_HOME=work/release-plz-probe/cargo-home, executed under mise exec",
+    "executable": {
+      "path": "work/release-plz-probe/install/bin/release-plz",
+      "version_output": "release-plz 0.3.172",
+      "sha256": "0d868442aaabbe52512558a6014ae450169656f90bab7137de3f76bda10a7707"
+    },
+    "cli_shape": {
+      "command": "release-plz release --help",
+      "usage": "release-plz release [OPTIONS]",
+      "observed_options": [
+        "--manifest-path",
+        "--registry",
+        "--token",
+        "--dry-run",
+        "--no-verify",
+        "--allow-dirty",
+        "--repo-url",
+        "--git-token",
+        "--forge",
+        "--backend",
+        "--verbose",
+        "--output",
+        "--config",
+        "--help"
+      ]
+    },
+    "credential_note": "Install and CLI checks required no credentials. A separate optional crates.io API metadata request returned HTTP 403; registry index metadata locally cached by Cargo supplied the expected checksum and publication time. No credentials or environment values were captured.",
+    "evidence_files": [
+      {
+        "path": "docs/implemented/evidence/freshness-2026-10-13/release-plz-0.3.172-install-evidence.json",
+        "sha256": "69fdbe233b2832bd055f7dc64eb3bf64b80c6ab13e586a35da904a5670ab213e",
+        "bytes": 1563
+      },
+      {
+        "path": "docs/implemented/evidence/freshness-2026-10-13/release-plz-0.3.172-install.log",
+        "sha256": "58b7ab891b3c8524b536fcbcfe8e74f816a91f011dc68a685908bbf6bacf567d",
+        "bytes": 1484
+      },
+      {
+        "path": "docs/implemented/evidence/freshness-2026-10-13/release-plz-0.3.172-release-help.txt",
+        "sha256": "8ae3b0813b1c287231fa0344b463ffcf3a8b2b8f4581e4b5c081af938cec06fb",
+        "bytes": 3047
+      }
+    ],
+    "full_help_capture": {
+      "path": "docs/implemented/evidence/freshness-2026-10-13/release-plz-0.3.172-release-help.txt",
+      "sha256": "8ae3b0813b1c287231fa0344b463ffcf3a8b2b8f4581e4b5c081af938cec06fb",
+      "bytes": 3047,
+      "exit_code": 0,
+      "captured_at": "2026-10-12T23:53:41Z",
+      "normalization": "Trailing horizontal whitespace stripped; help text unchanged."
+    }
+  }
+}

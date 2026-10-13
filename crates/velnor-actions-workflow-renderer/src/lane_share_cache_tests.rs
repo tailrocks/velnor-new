@@ -55,7 +55,7 @@ fn elected_save_stays_on_the_winner_job() {
 #[test]
 fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
     let setup = crate::setup::MiseSetup {
-        uses: "jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca".to_owned(),
+        uses: "jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8".to_owned(),
         version: "2026.10.4".to_owned(),
         sha256: "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75".to_owned(),
     };
@@ -151,7 +151,7 @@ fn tools_cache_prelude(
     runs_on: &str,
 ) -> Result<Vec<velnor_actions_contract::Step>, crate::RenderError> {
     let setup = crate::setup::MiseSetup {
-        uses: "jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca".to_owned(),
+        uses: "jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8".to_owned(),
         version: "2026.10.4".to_owned(),
         sha256: "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75".to_owned(),
     };

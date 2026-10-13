@@ -10,7 +10,7 @@ use super::*;
 
 fn payload(runs_on: &str) -> Result<super::super::ToolsCachePayload, RenderError> {
     let setup = crate::setup::MiseSetup {
-        uses: "jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca".to_owned(),
+        uses: "jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8".to_owned(),
         version: "2026.10.4".to_owned(),
         sha256: "a".repeat(64),
     };

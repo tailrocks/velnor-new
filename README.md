@@ -43,14 +43,15 @@ mise exec -- cargo build --locked -p velnor-actions-cli
 diff -r .github /private/tmp/velnor-preview/.github  # no output: preview matches
 ```
 
-Velnor CI pins checked on 2026-10-09 include Mise 2026.10.6 (candidate;
-hosted qualification pending), Rust 1.98.1, Nextest 0.9.148, and release-plz
-0.3.170. Issue [#6](https://github.com/tailrocks/velnor-new/issues/6)
+Velnor freshness evidence checked on 2026-10-13 includes Mise 2026.10.8
+(hosted qualification pending), Rust 1.98.1, Nextest 0.9.148, and release-plz
+0.3.172. The reviewed workflow pins are `jdx/mise-action` v5.1.2 and
+`asamarts/alint` v0.18.1. Issue [#6](https://github.com/tailrocks/velnor-new/issues/6)
 proposes Rust 1.99.0, but this update keeps the selected toolchain aligned
 with the declared Rust 1.98 MSRV while a separate compatibility decision is
 pending. `mise.toml` remains a read-only local developer input.
-The workflow pins `jdx/mise-action` v5.1.1 to reviewed commit
-`2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca`; the action's
+The workflow pins `jdx/mise-action` v5.1.2 to reviewed commit
+`08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8`; the action's
 `persist_github_token` default is false, and Velnor leaves it unset. This
 supersedes issue #6's earlier v5.0.1 target.
 

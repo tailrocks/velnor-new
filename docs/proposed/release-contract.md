@@ -48,8 +48,8 @@ an enabled section requires exactly one of the two.
 ## 2. Pinned release-plz toolchain selection
 
 The table records the initial 2026-09-30 qualification. Velnor's current
-release-plz CLI pin is `0.3.170`, with crate checksum and source evidence in
-[`freshness-evidence-2026-10-08.md`](../implemented/freshness-evidence-2026-10-08.md).
+release-plz CLI pin is `0.3.172`, with crate checksum and source evidence in
+[`freshness-evidence-2026-10-13.md`](../implemented/freshness-evidence-2026-10-13.md).
 Reverify at execution. Pin the executable content and Action identity
 separately. No runtime `latest` lookup and no recompilation of the coordinator
 on every release.

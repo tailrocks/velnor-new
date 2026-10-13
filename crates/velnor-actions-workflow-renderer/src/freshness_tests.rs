@@ -11,7 +11,7 @@ fn spec() -> FreshnessSpec {
         runs_on: "ubuntu-26.04".to_owned(),
         checkout_uses: CHECKOUT.to_owned(),
         mise_setup: MiseSetup {
-            uses: "jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca".to_owned(),
+            uses: "jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8".to_owned(),
             version: "2026.10.4".to_owned(),
             sha256: "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75".to_owned(),
         },
@@ -57,7 +57,7 @@ fn renders_schedule_only_read_only_probe() {
         "bounded probe:\n{yaml}"
     );
     assert!(
-        yaml.contains("uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca"),
+        yaml.contains("uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8"),
         "pinned Mise setup:\n{yaml}"
     );
     assert!(
