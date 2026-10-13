@@ -337,6 +337,7 @@ fn step_context() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
+        pull_request_cache_policy: PullRequestCachePolicy::ReadOnly,
         plan_consumer_env: BTreeMap::new(),
     }
 }
