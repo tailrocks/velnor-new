@@ -1,0 +1,218 @@
+use std::collections::BTreeMap;
+
+use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
+use velnor_actions_contract::workflow::crate_job::task_digest_for_execution;
+use velnor_actions_contract::{
+    Job, JobTimeout, MiseTaskSource, ScaleSetSelector, Step, StepKind, StepRole,
+    VerificationRunner, VerificationTask,
+};
+
+use crate::yaml::Yaml;
+use crate::{
+    MiseSetup,
+    verification_jobs::{VerificationTaskPolicy, WorkflowTaskPolicy},
+};
+
+use super::{ACTION_NAME_PREFIX, factor_obligation_steps};
+
+const CHECKOUT: &str = "actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const VERSION: &str = "0.1.7";
+const HOSTILE_TASK_ARGUMENT: &str = "crate-0\"; printf injected; #";
+
+fn scale_set_selector() -> ScaleSetSelector {
+    ScaleSetSelector::try_new(
+        "ubuntu-26.04-scale-set",
+        &["ubuntu-26.04-scale-set".to_owned(), "velnor".to_owned()],
+    )
+    .expect("validated Linux scale set")
+}
+
+fn verification_policy(runner: VerificationRunner) -> WorkflowTaskPolicy {
+    WorkflowTaskPolicy::Verification(VerificationTaskPolicy {
+        task: VerificationTask {
+            id: "rust-demo".to_owned(),
+            mise_task: "lint-demo".to_owned(),
+            source: MiseTaskSource {
+                mise_config: "mise.toml".to_owned(),
+                working_directory: ".".to_owned(),
+            },
+            runner,
+            timeout_minutes: 10,
+        },
+        runner_label: runner.runs_on().to_owned(),
+        scale_set_token: Some("scale-set:velnor+ubuntu-26.04-scale-set".to_owned()),
+        mise_setup: MiseSetup {
+            uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
+            version: "2026.10.7".to_owned(),
+            sha256: "a".repeat(64),
+        },
+        selected_tools: Vec::new(),
+        mise_config_sha256: None,
+        mise_lock_sha256: None,
+        rust_toolchain_sha256: None,
+    })
+}
+
+fn task_document_for_test() -> Yaml {
+    let task = task_step(0);
+    let StepKind::TaskExecution {
+        report_helper_version,
+        ..
+    } = &task.kind
+    else {
+        unreachable!();
+    };
+    let shape = super::Shape {
+        helper_version: report_helper_version.clone(),
+    };
+    super::declared_task_document(0, &shape, VERSION).expect("typed composite document")
+}
+
+#[test]
+fn generated_shell_expression_guard_does_not_emit_open_github_template_tokens() {
+    let document = task_document_for_test();
+    let script = action_run_scalar(&document);
+    assert_eq!(script.matches("*'$''{{'*").count(), 2);
+    assert!(
+        !script.contains("${{"),
+        "run script is parsed by Actions as a template: {script}"
+    );
+}
+
+fn action_run_scalar(action: &Yaml) -> &str {
+    let Yaml::Map(action_fields) = action else {
+        panic!("composite action is a mapping");
+    };
+    let Some((_, Yaml::Map(runs_fields))) = action_fields.iter().find(|(key, _)| key == "runs")
+    else {
+        panic!("composite action has a runs mapping");
+    };
+    let Some((_, Yaml::Seq(steps))) = runs_fields.iter().find(|(key, _)| key == "steps") else {
+        panic!("composite runs has a steps sequence");
+    };
+    let Some(Yaml::Map(step_fields)) = steps.first() else {
+        panic!("composite action has one typed run step");
+    };
+    let Some((_, Yaml::Str(run))) = step_fields.iter().find(|(key, _)| key == "run") else {
+        panic!("composite step has a run scalar");
+    };
+    run
+}
+
+fn checkout_step() -> Step {
+    crate::steps::checkout_step(CHECKOUT).expect("configured checkout")
+}
+
+fn acquire_step() -> Step {
+    acquire_step_for(VERSION)
+}
+
+fn acquire_step_for(version: &str) -> Step {
+    let helper = format!("{}{version}", crate::steps::STAGED_BINARY_PREFIX);
+    crate::steps::acquire_velnor_step(
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            format!(
+                "curl -fsSL \"$VELNOR_ASSET_URL\" -o {helper} && echo \"$VELNOR_ASSET_SHA256  {helper}\" | sha256sum -c - && chmod +x {helper}"
+            ),
+        ],
+        &BTreeMap::from([
+            (
+                crate::steps::ASSET_URL_ENV.to_owned(),
+                "https://example.invalid/velnor".to_owned(),
+            ),
+            (crate::steps::ASSET_SHA_ENV.to_owned(), "a".repeat(64)),
+            (crate::steps::RELEASE_COMMIT_ENV.to_owned(), "b".repeat(40)),
+        ]),
+    )
+    .expect("digest-verified helper staging")
+}
+
+fn task_step(index: usize) -> Step {
+    let task_id = format!("stack/rust/crate-{index}/test/default");
+    let toolchain_inputs = ToolchainInputs {
+        tools: vec!["rust@1.99.0".to_owned()],
+        components: vec!["clippy".to_owned(), "rustfmt".to_owned()],
+        compile_driver: "cargo".to_owned(),
+        test_runner: "cargo_test".to_owned(),
+    };
+    let mut argv = vec![
+        "mise".to_owned(),
+        "--no-config".to_owned(),
+        "--no-env".to_owned(),
+        "--no-hooks".to_owned(),
+        "exec".to_owned(),
+        "rust@1.99.0".to_owned(),
+        "--".to_owned(),
+        "cargo".to_owned(),
+        "test".to_owned(),
+        "-p".to_owned(),
+        format!("crate-{index}"),
+    ];
+    if index == 0 {
+        argv[10] = HOSTILE_TASK_ARGUMENT.to_owned();
+    }
+    let toolchain = toolchain_id(&toolchain_inputs).expect("toolchain id");
+    let task_digest = task_digest_for_execution(&task_id, &argv, &toolchain).expect("task digest");
+    let matrix_id =
+        velnor_actions_contract::matrix_id_for_task_group("rust", &task_id).expect("matrix id");
+    let matrix_key = velnor_actions_contract::matrix_key_for_id(&matrix_id).expect("matrix key");
+    let env = BTreeMap::from([
+        ("MISE_NO_CONFIG".to_owned(), "1".to_owned()),
+        ("MISE_NO_ENV".to_owned(), "1".to_owned()),
+        ("MISE_NO_HOOKS".to_owned(), "1".to_owned()),
+        ("MISE_LOCKFILE".to_owned(), "0".to_owned()),
+        ("MISE_AUTO_INSTALL".to_owned(), "false".to_owned()),
+        ("MISE_EXEC_AUTO_INSTALL".to_owned(), "false".to_owned()),
+        (
+            "MISE_RUSTUP_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/rustup".to_owned(),
+        ),
+        (
+            "MISE_CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/cargo".to_owned(),
+        ),
+        ("RUSTUP_TOOLCHAIN".to_owned(), "1.99.0".to_owned()),
+    ]);
+    let condition = velnor_actions_contract::workflow::step::task_execution_condition(&task_id)
+        .expect("coverage condition");
+    Step {
+        name: format!("Test crate {index}"),
+        id: None,
+        role: None,
+        condition: Some(condition),
+        kind: StepKind::TaskExecution {
+            argv,
+            env,
+            task_id,
+            task_digest,
+            toolchain_inputs,
+            matrix_id,
+            matrix_key,
+            report_helper_version: VERSION.to_owned(),
+            matrix_max_parallel: None,
+        },
+    }
+}
+
+fn simple_job(steps: Vec<Step>) -> Job {
+    Job {
+        display_name: "Rust / demo".to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
+        check_runner: None,
+        timeout_minutes: JobTimeout::new(20).expect("valid timeout"),
+        needs: vec!["plan".to_owned()],
+        condition: None,
+        permissions: None,
+        environment: None,
+        steps,
+    }
+}
+
+#[path = "task_wrapper_tests_frame.rs"]
+mod frame_tests;
+#[path = "task_wrapper_tests_runner.rs"]
+mod runner_tests;
+#[path = "task_wrapper_tests_structure.rs"]
+mod structure_tests;
