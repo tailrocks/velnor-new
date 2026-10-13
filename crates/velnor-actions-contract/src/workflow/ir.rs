@@ -10,7 +10,7 @@ use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 /// Stack-neutral GitHub Actions workflow IR.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkflowIr {
     /// Workflow display name.
     pub name: String,
@@ -24,7 +24,7 @@ pub struct WorkflowIr {
     pub jobs: BTreeMap<String, Job>,
 }
 /// Event triggers for generated workflows.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Trigger {
     /// Pull-request event types.
     pub pull_request_types: Vec<String>,
@@ -40,7 +40,7 @@ pub struct Trigger {
     pub schedule: Option<ScheduleTrigger>,
 }
 /// Concurrency group.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Concurrency {
     /// Concurrency group expression.
     pub group: String,
@@ -48,7 +48,7 @@ pub struct Concurrency {
     pub cancel_in_progress: String,
 }
 /// One workflow job.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Job {
     /// Stable display name.
     pub display_name: String,

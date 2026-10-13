@@ -8,6 +8,12 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{JobTimeout, Step, StepKind, validate_job_id};
 
+/// Least-privilege grants (`#[path]`, no `lib.rs` edit); re-exported
+/// below so `release_jobs::X` paths keep working.
+#[path = "release_permissions.rs"]
+pub mod permissions;
+pub use permissions::{JobPermissions, PermissionLevel};
+
 use crate::{
     RenderError,
     release_permissions::JobPermissions,
@@ -185,6 +191,7 @@ impl ReleaseWorkflowSpec {
         for (id, job) in &self.jobs {
             job.validate_shape(id)?;
         }
+        check_single_oidc_writer(&self.jobs)?;
         check_needs_graph(&self.jobs)?;
         check_role_conditions(&self.jobs, &self.repository, &self.bootstrap)?;
         check_publish_needs(&self.jobs)?;
@@ -214,6 +221,38 @@ fn check_role_set(jobs: &BTreeMap<String, ReleaseJobSpec>) -> Result<(), RenderE
         return Err(RenderError::InvalidWorkflow(format!(
             "release_role_set:{}",
             roles.len()
+        )));
+    }
+    Ok(())
+}
+
+/// Require exactly one `id-token: write` holder, the OIDC publisher.
+///
+/// Per-job matrix checks already pin each role; this global invariant
+/// keeps the Trusted Publishing job the sole OIDC writer even if the
+/// matrix is ever relaxed.
+///
+/// # Errors
+///
+/// Returns [`RenderError::InvalidWorkflow`] for zero, multiple, or
+/// non-OIDC writers.
+pub fn check_single_oidc_writer(
+    jobs: &BTreeMap<String, ReleaseJobSpec>,
+) -> Result<(), RenderError> {
+    let writers: Vec<(&String, ReleaseRole)> = jobs
+        .iter()
+        .filter(|(_, job)| job.permissions.id_token == PermissionLevel::Write)
+        .map(|(id, job)| (id, job.role))
+        .collect();
+    let [(id, role)] = writers.as_slice() else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "id_token_writer_count:{}",
+            writers.len()
+        )));
+    };
+    if *role != ReleaseRole::PublishOidc {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "id_token_writer_role:{id}"
         )));
     }
     Ok(())

@@ -119,6 +119,16 @@ impl std::fmt::Debug for PinnedToolExec {
     }
 }
 
+impl std::fmt::Debug for PinnedToolExec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PinnedToolExec")
+            .field("tools", &self.tools)
+            .field("program", &self.program)
+            .field("args", &redact_argv_for_debug(&self.args))
+            .finish()
+    }
+}
+
 /// Program stem that must never run as a payload: direct toolchain
 /// management bypasses Mise selection, so it is forbidden.
 const FORBIDDEN_PROGRAM_STEM: &str = "rustup";

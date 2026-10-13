@@ -8,6 +8,12 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{ScheduleTrigger, is_valid_branch_shorthand};
 
+/// Publisher lock and event eligibility (`#[path]`, no `lib.rs` edit);
+/// re-exported below so `release_spec::X` paths keep working.
+#[path = "release_lock.rs"]
+pub mod lock;
+pub use lock::{ReleaseConcurrency, check_lock_anchor};
+
 use crate::{RenderError, steps::scan_for_private_subcommands};
 
 #[path = "release_validators.rs"]

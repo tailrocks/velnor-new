@@ -76,6 +76,13 @@ fn check_job_steps(id: &str, job: &ReleaseJobSpec) -> Result<(), RenderError> {
             StepKind::Shell { run, env } => {
                 crate::action_mbx_shell::validate_step_argv(run, step.role)?;
                 commands::validate_env(env)?;
+                for key in env.keys() {
+                    if key.starts_with("VELNOR_MATRIX_") {
+                        return Err(RenderError::InvalidWorkflow(format!(
+                            "release_matrix_fanout:{id}"
+                        )));
+                    }
+                }
             }
             StepKind::Internal { .. } => {
                 return Err(RenderError::InvalidWorkflow(format!(
