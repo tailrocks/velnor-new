@@ -17,6 +17,7 @@ fn request(pins: ProductReleasePins) -> Result<Schema2WorkflowRequest, crate::Re
         workflows: BTreeSet::new(),
         mbx_qualification: None,
         mise_pin_qualification: None,
+        rust_toolchain_qualification: None,
         product_release: Some(pins),
     })
 }

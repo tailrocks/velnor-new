@@ -69,7 +69,7 @@ elif [[ ! -d "$ROOT" ]]; then
   echo "check-freshness: root is not a directory: $ROOT" >&2
   exit 1
 else
-  ROOT="$(CDPATH= cd -- "$ROOT" && pwd -P)"
+  ROOT="$(CDPATH='' cd -- "$ROOT" && pwd -P)"
 fi
 INV="$ROOT/.velnor/freshness-inventory.json"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -101,4 +101,4 @@ env \
   VELNOR_REPO_POLICY_ROOT="$ROOT" \
   VELNOR_REPO_POLICY_CHECK_UPSTREAM="$CHECK_UPSTREAM" \
   VELNOR_REPO_POLICY_WITH_ADVISORIES="$WITH_ADVISORIES" \
-  mise exec "rust@$RUST_POLICY" "mr-boxington@$MBX_POLICY" -- cargo run --quiet --locked -p velnor-actions-cli --bin velnor-actions
+  mise exec "rust@$RUST_POLICY" "mr-boxington@$MBX_POLICY" -- mbx run --quiet --locked -p velnor-actions-cli --bin velnor-actions

@@ -3,6 +3,9 @@
 //! Declared via `#[path]` from `matrix_step.rs` under `cfg(test)`.
 
 use super::*;
+use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
+use velnor_actions_contract::workflow::crate_job::task_digest_for_execution;
+use velnor_actions_mise::PinnedTool;
 
 #[test]
 fn tofu_step_env_rejects_triple_and_reserved_keys() {
@@ -56,14 +59,27 @@ fn tofu_step_env_rejects_triple_and_reserved_keys() {
 
 /// Tofu obligation fixture for step construction.
 fn tofu_obligation() -> CrateObligation {
+    let task_id = "stack/tofu/dir-/init/default".to_owned();
+    let run = vec!["tofu".to_owned(), "init".to_owned()];
+    let catalog = ToolCatalog::pinned();
+    let toolchain_inputs = ToolchainInputs {
+        tools: catalog.tool_specs(&[PinnedTool::Opentofu]),
+        components: Vec::new(),
+        compile_driver: "tofu".to_owned(),
+        test_runner: "tofu".to_owned(),
+    };
+    let toolchain = toolchain_id(&toolchain_inputs).expect("toolchain identity");
+    let matrix_id = velnor_actions_contract::matrix_id_for_task_group("tofu", &task_id)
+        .expect("matrix identity");
     CrateObligation {
-        task_id: "stack/tofu/dir-/init/default".to_owned(),
+        task_id: task_id.clone(),
         kind: "init".to_owned(),
         step_name: "Init for validate".to_owned(),
         gated_by: Vec::new(),
-        matrix_key: "m-0123456789abcdef".to_owned(),
-        task_digest: format!("b3-{}", "a".repeat(64)),
-        run: vec!["true".to_owned()],
+        matrix_key: velnor_actions_contract::matrix_key_for_id(&matrix_id).expect("matrix key"),
+        task_digest: task_digest_for_execution(&task_id, &run, &toolchain).expect("task digest"),
+        toolchain_inputs,
+        run,
     }
 }
 
@@ -90,8 +106,14 @@ fn tofu_step_names_render_through_tofu_table() {
 #[test]
 fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
     use velnor_actions_rust::RUSTDOCFLAGS_ENV;
-    let step =
-        obligation_step(&tofu_obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
+    let step = obligation_step(
+        &tofu_obligation(),
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
@@ -107,8 +129,14 @@ fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
 
 #[test]
 fn tofu_obligation_step_carries_isolated_cache_dir() {
-    let step =
-        obligation_step(&tofu_obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
+    let step = obligation_step(
+        &tofu_obligation(),
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
@@ -135,7 +163,14 @@ fn tofu_obligation_step_carries_isolated_cache_dir() {
 fn stackless_obligation_task_ids_keep_malformed_vocabulary() {
     let mut bad = tofu_obligation();
     bad.task_id = "bogus".to_owned();
-    let err = obligation_step(&bad, &ToolCatalog::pinned(), &[], None).expect_err("must fail");
+    let err = obligation_step(
+        &bad,
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect_err("must fail");
     assert!(err.to_string().contains("malformed_task_id"), "{err}");
 }
 
@@ -143,7 +178,13 @@ fn stackless_obligation_task_ids_keep_malformed_vocabulary() {
 fn tofu_obligation_rejects_legacy_root_alias() {
     let mut bad = tofu_obligation();
     bad.task_id = "stack/tofu/root/init/default".to_owned();
-    let err = obligation_step(&bad, &ToolCatalog::pinned(), &[], None)
-        .expect_err("legacy root key must fail closed");
+    let err = obligation_step(
+        &bad,
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect_err("legacy root key must fail closed");
     assert!(err.to_string().contains("noncanonical_root_key"), "{err}");
 }

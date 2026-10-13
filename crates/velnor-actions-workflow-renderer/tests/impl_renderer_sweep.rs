@@ -308,7 +308,10 @@ fn tree_has_exactly_two_tool_free_files() -> Result<(), RenderError> {
     let actionlint = with_marker(VERSION, "self-hosted: false\n")?;
     let tree = render_tree(&workflow, &actionlint, VERSION)?;
     assert_eq!(tree.files.len(), 4);
-    assert!(tree.symlinks.is_empty());
+    assert_eq!(
+        tree.symlinks,
+        [] as [velnor_actions_workflow_renderer::RenderedSymlink; 0]
+    );
     assert_eq!(tree.files[0].path, ".github/AGENTS.md");
     assert_eq!(tree.files[1].path, ".github/CLAUDE.md");
     assert_eq!(tree.files[2].path, ".github/actionlint.yaml");

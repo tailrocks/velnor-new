@@ -3,14 +3,14 @@ use std::fs;
 
 use tempfile::TempDir;
 use velnor_actions_contract::StepKind;
-use velnor_actions_mise::PREPARE_PINNED_TOOLS_STEP;
+use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, ToolCatalog};
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 
 use crate::impl_common::{TestResult, config_with_branch, make_repo, plan_for};
 
 /// Consumer fixture install set: plan + crate + required Prepare tools.
 const PINS: [(&str, &str); 5] = [
-    ("rust", "1.98.1"),
+    ("rust", "1.99.0"),
     ("actionlint", "1.7.12"),
     ("shellcheck", "0.11.0"),
     ("zizmor", "1.30.1"),
@@ -19,7 +19,8 @@ const PINS: [(&str, &str); 5] = [
 
 /// v3 lock entry; `platforms` selects checksummed platforms (`rust` takes none).
 fn entry(tool: &str, version: &str, platforms: &[&str], seed: u8) -> String {
-    let mut out = format!("[[tools.{tool}]]\nversion = \"{version}\"\n");
+    let mut out =
+        format!("[[tools.{tool}]]\nversion = \"{version}\"\nspecifiers = [\"{version}\"]\n");
     for platform in platforms {
         let hex = format!("{seed:02x}").repeat(32);
         let block = format!(
@@ -71,7 +72,7 @@ fn preview_generate(repo: &TempDir) -> Result<String, Box<dyn std::error::Error>
 fn missing_lock_advises_and_generates() -> TestResult {
     let repo = repo_with_lock(None)?;
     let prep = prepare(repo.path())?;
-    assert!(prep.lock_audit_blocking.is_empty());
+    assert_eq!(prep.lock_audit_blocking, [] as [String; 0]);
     let summary = prep
         .discovery
         .recommendations
@@ -80,7 +81,7 @@ fn missing_lock_advises_and_generates() -> TestResult {
         .ok_or("missing-lock summary")?;
     assert!(summary.contains("no mise.lock"), "{summary}");
     for tool in [
-        "rust@1.98.1",
+        "rust@1.99.0",
         "actionlint@1.7.12",
         "shellcheck@0.11.0",
         "zizmor@1.30.1",
@@ -97,14 +98,14 @@ fn missing_lock_advises_and_generates() -> TestResult {
 fn full_lock_leaves_only_rust_unverifiable() -> TestResult {
     let repo = repo_with_lock(Some(&full_lock()))?;
     let prep = prepare(repo.path())?;
-    assert!(prep.lock_audit_blocking.is_empty());
+    assert_eq!(prep.lock_audit_blocking, [] as [String; 0]);
     let summary = prep
         .discovery
         .recommendations
         .iter()
         .find(|line| line.contains("tool_install_unverified"))
         .ok_or("rust-only summary")?;
-    assert!(summary.contains("rust@1.98.1(no_checksums)"), "{summary}");
+    assert!(summary.contains("rust@1.99.0(no_checksums)"), "{summary}");
     for covered in ["actionlint", "shellcheck", "zizmor", "gh@"] {
         assert!(!summary.contains(covered), "{summary}");
     }
@@ -236,10 +237,17 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
 
 #[test]
 fn drifted_lock_advises_without_blocking() -> TestResult {
-    let drifted = full_lock().replace("version = \"1.98.1\"", "version = \"1.97.0\"");
+    let lock = full_lock();
+    let rust_pin = ToolCatalog::pinned().rustup_toolchain();
+    let rust_version = format!("version = \"{rust_pin}\"");
+    let drifted = lock.replacen(&rust_version, "version = \"0.0.0\"", 1);
+    assert_ne!(
+        drifted, lock,
+        "fixture mutation must change the Rust lock pin"
+    );
     let repo = repo_with_lock(Some(&drifted))?;
     let prep = prepare(repo.path())?;
-    assert!(prep.lock_audit_blocking.is_empty());
+    assert_eq!(prep.lock_audit_blocking, [] as [String; 0]);
     let summary = prep
         .discovery
         .recommendations

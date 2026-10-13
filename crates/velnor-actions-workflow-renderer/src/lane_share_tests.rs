@@ -18,7 +18,9 @@ const LOGICAL_JOBS: usize = 21;
 pub(super) fn ctx() -> RenderContext {
     RenderContext {
         generator_version: "0.1.0".to_owned(),
+        report_helper_version: "0.1.0".to_owned(),
         runs_on: HOSTED_RUNS.to_owned(),
+        scale_set_selector: None,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),
@@ -255,7 +257,7 @@ fn unpaired_jobs_stay_inline() {
     );
     let shared = share_lanes(&jobs, &ctx()).expect("share");
     assert!(shared.calls.is_empty());
-    assert!(shared.files.is_empty());
+    assert_eq!(shared.files, [] as [crate::tree::RenderedFile; 0]);
     let kept = shared.jobs.get("actionlint").expect("actionlint");
     assert_eq!(kept.steps.len(), 1);
 }
@@ -293,7 +295,7 @@ fn elected_save_stays_on_the_winner_job() {
     );
     assert_eq!(hosted.steps.len(), 1);
     assert_eq!(hosted.steps.first().expect("save").name, "Save Mise tools");
-    assert!(local.steps.is_empty());
+    assert_eq!(local.steps, [] as [velnor_actions_contract::Step; 0]);
     let action = shared
         .files
         .iter()

@@ -1,5 +1,7 @@
 //! Fixed subprocess wrapper: the sole `std::process::Command` constructor.
 //! Policy (`command_env.rs`) and output (`command_output.rs`) declare here.
+#[path = "command_action_mbx.rs"]
+mod action_owned_mbx;
 #[path = "command_cancellable.rs"]
 mod cancellable;
 #[path = "check_command.rs"]
@@ -14,6 +16,7 @@ mod output;
 mod qualified_acquisition;
 #[path = "command_tofu.rs"]
 mod tofu;
+pub(crate) use self::action_owned_mbx::ActionOwnedMbxPath;
 pub use check::resolve_program as resolve_check_program;
 
 pub use self::env::{
@@ -250,7 +253,11 @@ impl IsolatedCommand {
     fn command(&self) -> Command {
         let mut command = Command::new(&self.program);
         command.args(&self.args);
-        if self.policy.inherits_parent() {
+        if self.policy == EnvPolicy::Mbx {
+            let parent: Vec<(OsString, OsString)> = std::env::vars_os().collect();
+            command.env_clear();
+            command.envs(self.policy.child_env(&parent, &self.full_env()));
+        } else if self.policy.inherits_parent() {
             strip_credentials(&mut command, self.policy);
         } else {
             command.env_clear();
@@ -259,8 +266,10 @@ impl IsolatedCommand {
                 command.envs(proxy_passthrough(&parent));
             }
         }
-        for (key, value) in self.full_env() {
-            command.env(key, value);
+        if self.policy != EnvPolicy::Mbx {
+            for (key, value) in self.full_env() {
+                command.env(key, value);
+            }
         }
         if let Some(cwd) = &self.cwd {
             command.current_dir(cwd);

@@ -344,7 +344,7 @@ fn metadata_msrv_resolves() -> Result<(), Box<dyn Error>> {
             let rust_version = package.get("rust_version").and_then(Json::as_str);
             assert_eq!(
                 rust_version,
-                Some("1.98"),
+                Some("1.99"),
                 "{manifest}: {name} effective rust-version"
             );
         }

@@ -140,7 +140,7 @@ mod tests {
     fn workflow_task_union_parses_variants_and_defaults_empty() {
         let load = load_config;
         let root = rooted(
-            "schema = 1\n[[workflow.tasks]]\nkind = \"build\"\nid = \"native-desktop\"\nmise_task = \"desktop-ci\"\ntools = [\"mr-boxington\", \"rust\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 120\ncargo_build_jobs = 2\nnextest_test_threads = 2\n[[workflow.tasks]]\nkind = \"verification\"\nid = \"native-swift-format\"\nmise_task = \"desktop-format-check\"\nrunner = \"macos-arm64\"\ntimeout_minutes = 10\n",
+            "schema = 1\n[[workflow.tasks]]\nkind = \"build\"\nid = \"native-desktop\"\nmise_task = \"desktop-ci\"\nsource = { mise_config = \"native/mise.toml\", working_directory = \"native\" }\ntools = [\"mr-boxington\", \"rust\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 120\ncargo_build_jobs = 2\nnextest_test_threads = 2\n[[workflow.tasks]]\nkind = \"verification\"\nid = \"native-swift-format\"\nmise_task = \"desktop-format-check\"\nsource = { mise_config = \"native/mise.toml\", working_directory = \"native\" }\nrunner = \"macos-arm64\"\ntimeout_minutes = 10\n",
         );
         let config = load(root.path()).expect("workflow task variants");
         let Some(WorkflowTask::Build(build)) = config.workflow.tasks.first() else {
@@ -148,6 +148,8 @@ mod tests {
         };
         assert_eq!(build.id, "native-desktop");
         assert_eq!(build.mise_task, "desktop-ci");
+        assert_eq!(build.source.mise_config, "native/mise.toml");
+        assert_eq!(build.source.working_directory, "native");
         assert_eq!(build.tools, ["mr-boxington", "rust"]);
         assert_eq!(build.runner.runs_on(), "macos-26");
         assert_eq!(build.cargo_build_jobs, 2);
@@ -157,11 +159,16 @@ mod tests {
         };
         assert_eq!(verification.id, "native-swift-format");
         assert_eq!(verification.mise_task, "desktop-format-check");
+        assert_eq!(verification.source.mise_config, "native/mise.toml");
+        assert_eq!(verification.source.working_directory, "native");
         assert_eq!(verification.runner.runs_on(), "macos-15");
 
         let root = rooted("schema = 1\n");
         let config = load(root.path()).expect("minimal config");
-        assert!(config.workflow.tasks.is_empty());
+        assert_eq!(
+            config.workflow.tasks,
+            [] as [velnor_actions_contract::WorkflowTask; 0]
+        );
 
         let legacy = rooted(
             "schema = 1\n[[workflow.build_tasks]]\nid = \"native-desktop\"\nmise_task = \"desktop-ci\"\ntools = [\"mr-boxington\", \"rust\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 120\ncargo_build_jobs = 2\nnextest_test_threads = 2\n",
@@ -281,7 +288,7 @@ mod tests {
         let load = load_config;
         let root = rooted("schema = 1\n");
         let config = load(root.path()).expect("minimal config");
-        assert!(config.checks.is_empty());
+        assert_eq!(config.checks, [] as [velnor_actions_contract::MiseCheck; 0]);
         let json = serde_json::to_value(&config).expect("serialize config");
         assert!(json.get("checks").is_none());
         let root = rooted(

@@ -15,6 +15,32 @@ struct TargetJobs {
     attester_action: &'static str,
 }
 
+#[test]
+fn credential_assignment_without_matching_env_entry_is_rejected() {
+    let conditional_gh_token = credential_assignment_action("if true; then GH_TOKEN=attacker; fi");
+    assert_credential_action_rejected(&conditional_gh_token);
+    let missing_env_key = credential_assignment_action("if true; then GITHUB_TOKEN=attacker; fi");
+    assert_credential_action_rejected(&missing_env_key);
+}
+
+fn credential_assignment_action(command: &str) -> String {
+    format!(
+        "env:\n  GH_TOKEN: \"\"\nruns:\n  using: composite\n  steps:\n    - env:\n        GH_TOKEN: \"\"\n      run: \"{}\"\n    - run: \"{}\"\n    - run: {command}\n",
+        super::qualification_snapshots::CREDENTIAL_UNSET_PRELUDE,
+        super::qualification_snapshots::CREDENTIAL_UNSET_PRELUDE,
+    )
+}
+
+fn assert_credential_action_rejected(action_body: &str) {
+    assert!(
+        std::panic::catch_unwind(|| {
+            super::qualification_snapshots::assert_empty_credential_environment(action_body);
+        })
+        .is_err(),
+        "credential assignments in shell payloads must be rejected"
+    );
+}
+
 pub(super) fn assert_isolated_candidate_execution(
     workflow: &str,
     actions: &Actions,
@@ -148,6 +174,7 @@ fn assert_qualifier_job_inputs(qualifier: &str, target: TargetJobs) -> Result<()
 
 fn assert_qualifier_action_boundary(qualifier_body: &str) -> Result<(), Box<dyn Error>> {
     assert_action_input(qualifier_body);
+    super::qualification_snapshots::assert_empty_credential_environment(qualifier_body);
     assert!(
         qualifier_body.contains("artifact-ids: ${{ inputs.artifact_id }}"),
         "{qualifier_body}"
@@ -157,8 +184,15 @@ fn assert_qualifier_action_boundary(qualifier_body: &str) -> Result<(), Box<dyn 
     assert!(!qualifier_body.contains("github_token"), "{qualifier_body}");
     assert_eq!(
         qualifier_body.matches("uses:").count(),
-        3,
+        4,
         "{qualifier_body}"
+    );
+    assert_eq!(
+        qualifier_body
+            .matches("uses: actions/download-artifact@")
+            .count(),
+        2,
+        "candidate and manifest artifacts are downloaded separately: {qualifier_body}"
     );
     assert!(
         qualifier_body.contains("actions/download-artifact@"),
@@ -178,7 +212,6 @@ fn assert_qualifier_action_boundary(qualifier_body: &str) -> Result<(), Box<dyn 
             .count(),
         1
     );
-    assert!(!qualifier_body.contains("GH_TOKEN:"), "{qualifier_body}");
     assert!(
         !qualifier_body.contains("Attest built artifacts"),
         "{qualifier_body}"

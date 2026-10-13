@@ -1,5 +1,7 @@
 use super::action_snapshots::{Actions, action};
 
+pub(super) const CREDENTIAL_UNSET_PRELUDE: &str = "unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR;";
+
 pub(super) fn assert_candidate_qualification(
     workflow: &str,
     actions: &Actions,
@@ -57,11 +59,11 @@ pub(super) fn assert_candidate_qualification(
     );
     assert!(action_body.contains("required: true"), "{action_body}");
     assert!(!action_body.contains("${{ needs."), "{action_body}");
+    assert_empty_credential_environment(action_body);
     assert!(
         !action_body.contains("Attest built artifacts"),
         "{action_body}"
     );
-    assert!(!action_body.contains("GH_TOKEN:"), "{action_body}");
     assert!(
         !action_body.contains("actions/upload-artifact@"),
         "{action_body}"
@@ -81,6 +83,58 @@ pub(super) fn assert_candidate_qualification(
     );
     assert_release_fixture_generation_requirements()?;
     Ok(())
+}
+
+pub(super) fn assert_empty_credential_environment(action_body: &str) {
+    const CREDENTIAL_ENV_KEYS: &[&str] = &[
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
+        "ACTIONS_RUNTIME_TOKEN",
+        "CARGO_REGISTRY_TOKEN",
+        "GH_CONFIG_DIR",
+        "GH_HOST",
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "MISE_GITHUB_TOKEN",
+        "NODE_AUTH_TOKEN",
+        "NPM_TOKEN",
+    ];
+    for key in CREDENTIAL_ENV_KEYS {
+        assert!(
+            !contains_credential_assignment(action_body, key),
+            "credential {key} must not be assigned in the payload"
+        );
+    }
+
+    let mut github_token_entries = 0;
+    for line in action_body.lines() {
+        let Some((key, value)) = line.trim().split_once(':') else {
+            continue;
+        };
+        if CREDENTIAL_ENV_KEYS.contains(&key) {
+            assert_eq!(value.trim(), "\"\"", "credential {key} must be empty");
+            if key == "GH_TOKEN" {
+                github_token_entries += 1;
+            }
+        }
+    }
+    assert_eq!(github_token_entries, 2, "{action_body}");
+    assert_eq!(
+        action_body.matches(CREDENTIAL_UNSET_PRELUDE).count(),
+        2,
+        "{action_body}"
+    );
+    assert!(!action_body.contains("secrets."), "{action_body}");
+    assert!(!action_body.contains("github.token"), "{action_body}");
+}
+
+pub(super) fn contains_credential_assignment(action_body: &str, key: &str) -> bool {
+    action_body.match_indices(key).any(|(start, _)| {
+        let bytes = action_body.as_bytes();
+        let starts_identifier =
+            start > 0 && (bytes[start - 1].is_ascii_alphanumeric() || bytes[start - 1] == b'_');
+        !starts_identifier && bytes.get(start + key.len()) == Some(&b'=')
+    })
 }
 
 fn assert_release_fixture_generation_requirements() -> Result<(), Box<dyn std::error::Error>> {
@@ -211,7 +265,7 @@ fn assert_dogfood_cargo_warmup(
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert!(
         qualification_helpers.contains(
-            "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked"
+            "mise --no-config --no-env --no-hooks exec rust@1.99.0 mr-boxington@1.23.0 -- mbx fetch --locked"
         ),
         "{qualification_helpers}"
     );
@@ -230,7 +284,7 @@ fn assert_dogfood_cargo_warmup(
         .ok_or("dogfood capture must exist")?;
     let window = &qualification_helpers[dogfood..];
     let fetch = window
-        .find("cargo fetch --locked")
+        .find("mbx fetch --locked")
         .ok_or("dogfood must warm the cargo cache")?;
     let generate = window
         .find("release candidate dogfood generate failed")

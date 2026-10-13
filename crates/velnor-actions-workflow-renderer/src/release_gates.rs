@@ -74,12 +74,17 @@ fn check_job_steps(id: &str, job: &ReleaseJobSpec) -> Result<(), RenderError> {
                 commands::validate_env(env)?;
             }
             StepKind::Shell { run, env } => {
-                commands::validate_command_argv(run)?;
+                crate::action_mbx_shell::validate_step_argv(run, step.role)?;
                 commands::validate_env(env)?;
             }
             StepKind::Internal { .. } => {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "release_internal_op:{id}"
+                )));
+            }
+            StepKind::TaskExecution { .. } => {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "release_declared_task:{id}"
                 )));
             }
         }
@@ -103,6 +108,28 @@ fn payload_texts(step: &Step) -> Vec<&str> {
             .chain(env.values().map(String::as_str))
             .collect(),
         StepKind::Internal { .. } => Vec::new(),
+        StepKind::TaskExecution {
+            argv,
+            env,
+            task_id,
+            task_digest,
+            matrix_id,
+            matrix_key,
+            report_helper_version,
+            ..
+        } => argv
+            .iter()
+            .map(String::as_str)
+            .chain(env.keys().map(String::as_str))
+            .chain(env.values().map(String::as_str))
+            .chain([
+                task_id.as_str(),
+                task_digest.as_str(),
+                matrix_id.as_str(),
+                matrix_key.as_str(),
+                report_helper_version.as_str(),
+            ])
+            .collect(),
     }
 }
 
@@ -147,6 +174,15 @@ fn forbid_unexpected_secrets(id: &str, steps: &[Step]) -> Result<(), RenderError
                 }
             }
             StepKind::Internal { .. } => {}
+            StepKind::TaskExecution { argv, env, .. } => {
+                if argv.iter().any(|arg| arg.contains("secrets."))
+                    || env.iter().any(|(key, value)| {
+                        value.contains("secrets.") && !is_forge_binding(key, value)
+                    })
+                {
+                    return Err(rejected());
+                }
+            }
         }
     }
     Ok(())
@@ -328,6 +364,11 @@ fn check_publish_bootstrap(
             StepKind::Internal { .. } => {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "release_internal_op:{id}"
+                )));
+            }
+            StepKind::TaskExecution { .. } => {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "release_declared_task:{id}"
                 )));
             }
         }

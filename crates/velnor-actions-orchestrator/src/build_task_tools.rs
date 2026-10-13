@@ -10,7 +10,7 @@ use crate::native_tool_input::NativeMiseConfig;
 use crate::native_tool_lock::{NativeLockedTool, NativeMiseLock};
 
 /// (`version`, `options`, `extra_args`) selected for a tool.
-type ToolVersionSelection = (String, BTreeMap<String, String>, Vec<String>);
+pub(crate) type ToolVersionSelection = (String, BTreeMap<String, String>, Vec<String>);
 
 const BOLTFFI_KEY: &str = "github:boltffi/boltffi";
 const BOLTFFI_MATCHING_REGEX: &str = r"^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$";
@@ -22,21 +22,26 @@ pub(crate) fn resolve_selected_tools(
     rust_version: &str,
     rust_lock_options: &BTreeMap<String, String>,
 ) -> Result<Vec<BuildTaskTool>, OrchestratorError> {
-    if config.tools.contains_key("rust") {
-        return Err(failure("build_task_rust_must_use_idiomatic_file"));
-    }
     task.tools
         .iter()
         .map(|key| {
-            let selected = lock
-                .tools
-                .get(key)
-                .ok_or_else(|| failure("build_task_tool_unlocked"))?;
             let (version, config_options, os) =
                 selected_version_and_options(key, config, rust_version, rust_lock_options)?;
+            let selected = lock
+                .selected_tool(key, &version, &version, &config_options)
+                .ok_or_else(|| {
+                    failure(if lock.tools.contains_key(key) {
+                        "build_task_tool_lock_mismatch"
+                    } else {
+                        "build_task_tool_unlocked"
+                    })
+                })?;
             if !selected.valid_shape
                 || !selected.unsupported_fields.is_empty()
                 || selected.version.as_deref() != Some(version.as_str())
+                || !selected.specifiers.as_ref().is_some_and(|specifiers| {
+                    specifiers.iter().any(|specifier| specifier == &version)
+                })
                 || (key == "rust" && &selected.options != rust_lock_options)
             {
                 return Err(failure("build_task_tool_lock_mismatch"));
@@ -60,7 +65,7 @@ pub(crate) fn resolve_selected_tools(
         .collect()
 }
 
-fn selected_version_and_options(
+pub(crate) fn selected_version_and_options(
     key: &str,
     config: &NativeMiseConfig,
     rust_version: &str,
@@ -77,7 +82,10 @@ fn selected_version_and_options(
         .tools
         .get(key)
         .ok_or_else(|| failure("build_task_tool_unconfigured"))?;
-    if !selector.valid_shape || !selector.unsupported_options.is_empty() {
+    if !selector.valid_shape
+        || !selector.unsupported_options.is_empty()
+        || selector.mr_boxington.is_some()
+    {
         return Err(failure("build_task_tool_selector"));
     }
     let version = selector
@@ -96,14 +104,14 @@ fn selected_artifact(
     selected: &NativeLockedTool,
 ) -> Result<Option<BuildTaskArtifact>, OrchestratorError> {
     if key == "rust" {
-        if selected.macos_arm64.is_some() {
+        if !selected.platforms.is_empty() {
             return Err(failure("build_task_rust_lock_artifact"));
         }
         return Ok(None);
     }
     let artifact = selected
-        .macos_arm64
-        .as_ref()
+        .platforms
+        .get("macos-arm64")
         .ok_or_else(|| failure("build_task_tool_artifact"))?;
     if !artifact.valid_shape
         || !artifact.unsupported_fields.is_empty()

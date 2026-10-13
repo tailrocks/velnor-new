@@ -19,9 +19,6 @@ pub const CANDIDATE_BUILD_PACKAGE: &str = "velnor-actions-cli";
 /// Binary compiled by the candidate build.
 pub const CANDIDATE_BUILD_BIN: &str = "velnor-actions";
 
-/// Payload program handling compilation.
-const MBX_PROGRAM: &str = "mbx";
-
 /// Fixed build arguments after the program.
 const BUILD_ARGS: [&str; 7] = [
     "build",
@@ -50,11 +47,7 @@ impl CandidateBuild {
     pub fn new() -> Result<Self, MiseError> {
         let args = BUILD_ARGS.iter().map(OsString::from).collect();
         Ok(Self {
-            exec: PinnedToolExec::new(
-                vec![PinnedTool::Rust],
-                std::ffi::OsStr::new(MBX_PROGRAM),
-                args,
-            )?,
+            exec: PinnedToolExec::new_action_owned_mbx(vec![PinnedTool::Rust], args)?,
         })
     }
 

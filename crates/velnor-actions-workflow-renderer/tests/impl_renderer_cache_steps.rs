@@ -12,11 +12,12 @@ fn sha() -> &'static str {
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 }
 
-/// Step kinds stay closed: action, shell, internal — no parallel syntax.
+/// Task execution remains a distinct typed step kind alongside actions and shell.
 fn kind_name(step: &Step) -> &'static str {
     match &step.kind {
         StepKind::Action { .. } => "action",
         StepKind::Shell { .. } => "shell",
+        StepKind::TaskExecution { .. } => "task_execution",
         StepKind::Internal { .. } => "internal",
     }
 }

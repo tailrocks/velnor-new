@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{VerificationRunner, VerificationTask};
+use velnor_actions_contract::{MiseTaskSource, VerificationRunner, VerificationTask};
 
 use crate::{
     MiseSetup, RenderContext, VerificationTaskPolicy, build_verification_task_job,
@@ -25,10 +25,14 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         task: VerificationTask {
             id: "native-format".to_owned(),
             mise_task: "desktop-format-check".to_owned(),
-            runner: VerificationRunner::MacosArm64,
+            source: MiseTaskSource {
+                mise_config: "mise.toml".to_owned(),
+                working_directory: ".".to_owned(),
+            },
+            runner: VerificationRunner::Macos26Arm64,
             timeout_minutes: 10,
         },
-        runner_label: "macos-15".to_owned(),
+        runner_label: "macos-26".to_owned(),
         scale_set_token: None,
         mise_setup: MiseSetup {
             uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
@@ -36,7 +40,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
             sha256: "a".repeat(64),
         },
         selected_tools: Vec::new(),
-        mise_config_sha256: None,
+        mise_config_sha256: Some("b".repeat(64)),
         mise_lock_sha256: None,
         rust_toolchain_sha256: None,
     };
@@ -48,7 +52,9 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
     .expect("typed task job");
     let context = RenderContext {
         generator_version: "0.1.0".to_owned(),
+        report_helper_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        scale_set_selector: None,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: "actions/checkout@0123456789abcdef0123456789abcdef01234567".to_owned(),
@@ -88,6 +94,11 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
     assert!(rendered.contains("GITHUB_TOKEN: \"\""));
     assert!(rendered.contains("GH_TOKEN: \"\""));
     assert!(rendered.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
+    assert_enabled_mise_configuration(&rendered);
+    assert_verification_task_execution(&rendered);
+}
+
+fn assert_enabled_mise_configuration(rendered: &str) {
     for key in ["MISE_NO_CONFIG", "MISE_LOCKFILE"] {
         assert!(
             !rendered.contains(key),
@@ -97,5 +108,8 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
     assert!(rendered.contains("export MISE_NO_ENV=1"));
     assert!(rendered.contains("export MISE_NO_HOOKS=1"));
     assert!(!rendered.contains("mise --no-env --locked --no-hooks install"));
+}
+
+fn assert_verification_task_execution(rendered: &str) {
     assert!(rendered.contains("mise --no-env --no-hooks run --skip-tools desktop-format-check"));
 }

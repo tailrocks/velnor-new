@@ -31,6 +31,12 @@ pub(super) fn job(
             &pins.install_qualify_tools_argv,
         )?,
     ];
+    action_steps.extend(
+        pins.qualify_mbx_action_steps
+            .iter()
+            .map(crate::steps_plain::composite_step_to_yaml)
+            .collect::<Result<Vec<_>, _>>()?,
+    );
     action_steps.extend(assets::download_build_steps(
         job.product,
         "Download built asset archive",

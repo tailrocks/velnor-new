@@ -43,6 +43,11 @@ mod generator_release;
 mod mbx_qualification;
 #[path = "schema2_mise_pin_qualification.rs"]
 mod mise_pin_qualification;
+#[path = "schema2_rust_toolchain_qualification.rs"]
+mod rust_toolchain_qualification;
+/// Official Rust channel manifest digest used by the hosted qualification mode.
+pub const RUST_TOOLCHAIN_QUALIFICATION_MANIFEST_SHA256: &str =
+    rust_toolchain_qualification::MANIFEST_SHA256;
 #[path = "schema2_product_release.rs"]
 mod product_release;
 #[path = "schema2_product_release_family.rs"]
@@ -98,6 +103,8 @@ pub struct Schema2WorkflowRequest {
     pub mbx_qualification: Option<MbxQualificationPins>,
     /// Latest Mise release inputs, required only when qualification is emitted.
     pub mise_pin_qualification: Option<MisePinQualificationPins>,
+    /// Official Rust component source pins for the hosted Rust qualification mode.
+    pub rust_toolchain_qualification: Option<RustToolchainQualificationPins>,
     /// Orchestrator-resolved Mise setup and command vectors for product releases.
     pub product_release: Option<ProductReleasePins>,
 }
@@ -123,6 +130,21 @@ pub struct MisePinQualificationPins {
     pub linux_x86_64_setup: MiseSetup,
     /// macOS x86-64 release asset verification pins.
     pub macos_x86_64_setup: MiseSetup,
+}
+
+/// Exact official Rust distribution inputs for hosted component qualification.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RustToolchainQualificationPins {
+    /// Exact Mise setup action and runner-specific binary digest.
+    pub mise_setup: MiseSetup,
+    /// Exact MBX version used to execute the candidate Rust binaries.
+    pub mbx_version: String,
+    /// Exact Rust release selected by the Mise catalog.
+    pub rust_version: String,
+    /// Official versioned Rust channel manifest URL.
+    pub manifest_url: String,
+    /// SHA-256 of the reviewed versioned channel manifest.
+    pub manifest_sha256: String,
 }
 
 impl Schema2WorkflowRequest {
@@ -245,6 +267,13 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
     } else if request.workflows.contains(&RoutingWorkflow::Qualification) {
         return Err(RenderError::InvalidWorkflow(
             "missing_mise_pin_qualification_pins".to_owned(),
+        ));
+    }
+    if let Some(pins) = &request.rust_toolchain_qualification {
+        jobs.extend(rust_toolchain_qualification::jobs(pins)?);
+    } else if request.workflows.contains(&RoutingWorkflow::Qualification) {
+        return Err(RenderError::InvalidWorkflow(
+            "missing_rust_toolchain_qualification_pins".to_owned(),
         ));
     }
     Ok(document("Qualification", mode_trigger(), jobs))

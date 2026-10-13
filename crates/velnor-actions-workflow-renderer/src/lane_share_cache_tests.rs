@@ -37,7 +37,7 @@ fn elected_save_stays_on_the_winner_job() {
     );
     assert_eq!(hosted.steps.len(), 1);
     assert_eq!(hosted.steps.first().expect("save").name, "Save Mise tools");
-    assert!(local.steps.is_empty());
+    assert_eq!(local.steps, [] as [velnor_actions_contract::Step; 0]);
     let action = shared
         .files
         .iter()
@@ -83,7 +83,10 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
         hosted_prelude[1].name,
         crate::cache_steps::TOOLS_RESTORE_NAME
     );
-    assert!(shared.runtime_preludes[local_id].is_empty());
+    assert_eq!(
+        shared.runtime_preludes[local_id],
+        [] as [velnor_actions_contract::Step; 0]
+    );
     let identity_uses = match &shared.runtime_preludes[hosted_id][0].kind {
         StepKind::Action { uses, .. } => Some(uses.as_str()),
         _ => None,

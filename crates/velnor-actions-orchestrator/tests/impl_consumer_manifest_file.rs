@@ -86,6 +86,27 @@ fn acquire_url_and_sha_come_from_committed_file() -> TestResult {
 }
 
 #[test]
+fn normal_consumer_context_uses_generator_version_for_both_authorities() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    fs::write(
+        repo.path().join(".velnor/release-manifest.json"),
+        release_manifest_json(),
+    )?;
+    let prep = prepare(repo.path())?;
+    let context = &prep.workflow.context;
+    assert_eq!(context.generator_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(context.report_helper_version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(
+        context.staged_binary,
+        format!(
+            "$RUNNER_TEMP/velnor/bin/velnor-actions-{}",
+            env!("CARGO_PKG_VERSION")
+        )
+    );
+    Ok(())
+}
+
+#[test]
 fn manifest_version_mismatch_fails_prepare() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     fs::write(

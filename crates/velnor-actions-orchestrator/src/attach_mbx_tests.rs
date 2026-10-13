@@ -53,7 +53,7 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
     let velnor_actions_contract::StepKind::Action { env, with, .. } = &mbx_action.kind else {
         panic!("MBX restore must be an action");
     };
-    assert_eq!(with.get("toolchain").map(String::as_str), Some("1.98.1"));
+    assert_eq!(with.get("toolchain").map(String::as_str), Some("1.99.0"));
     assert!(
         with.get("version").map(String::as_str)
             == Some(ToolCatalog::pinned().version(PinnedTool::MrBoxington)),

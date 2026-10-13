@@ -111,9 +111,13 @@ pub(crate) fn check_internal_staged(
             }
             check_preseed_stage_shape(job_id, step)?;
             staged = true;
-        } else if matches!(step.kind, StepKind::Internal { .. }) && !staged {
+        } else if matches!(
+            &step.kind,
+            StepKind::Internal { .. } | StepKind::TaskExecution { .. }
+        ) && !staged
+        {
             return Err(RenderError::InvalidWorkflow(format!(
-                "internal_without_acquire:{job_id}"
+                "consumer_without_acquire:{job_id}"
             )));
         }
     }

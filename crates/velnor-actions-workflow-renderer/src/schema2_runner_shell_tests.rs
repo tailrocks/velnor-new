@@ -3,8 +3,8 @@ use std::collections::BTreeSet;
 use velnor_actions_contract::{RoutingWorkflow, SCALE_SET_NAME, VELNOR_LABEL};
 
 use super::{
-    MbxQualificationPins, MisePinQualificationPins, Schema2WorkflowRequest, monitoring,
-    qualification, render_schema2_workflows,
+    MbxQualificationPins, MisePinQualificationPins, RustToolchainQualificationPins,
+    Schema2WorkflowRequest, monitoring, qualification, render_schema2_workflows,
 };
 use crate::setup::MiseSetup;
 use crate::yaml::Yaml;
@@ -40,6 +40,17 @@ fn request() -> Schema2WorkflowRequest {
                 version: "2026.10.5".to_owned(),
                 sha256: "c".repeat(64),
             },
+        }),
+        rust_toolchain_qualification: Some(RustToolchainQualificationPins {
+            mise_setup: MiseSetup {
+                uses: format!("jdx/mise-action@{}", "a".repeat(40)),
+                version: velnor_actions_mise::MISE_VERSION.to_owned(),
+                sha256: crate::setup::MISE_BINARY_SHA256_LINUX_X64.to_owned(),
+            },
+            mbx_version: velnor_actions_mise::MR_BOXINGTON_VERSION.to_owned(),
+            rust_version: "1.99.0".to_owned(),
+            manifest_url: "https://static.rust-lang.org/dist/channel-rust-1.99.0.toml".to_owned(),
+            manifest_sha256: super::super::RUST_TOOLCHAIN_QUALIFICATION_MANIFEST_SHA256.to_owned(),
         }),
         product_release: None,
     }
@@ -89,7 +100,9 @@ fn assert_lane_shells(document: &Yaml, minimum_per_lane: usize) {
                     "scale-set job {id} must declare its shell"
                 );
             }
-            Yaml::Str(label) if label == "ubuntu-26.04" || label == "macos-15-intel" => {
+            Yaml::Str(label)
+                if label == "ubuntu-26.04" || label == "macos-15-intel" || label == "macos-26" =>
+            {
                 hosted += 1;
                 if has_container {
                     assert_eq!(
@@ -179,6 +192,55 @@ fn candidate_mbx_roundtrip_defers_gc_and_cleans_after_each_last_consumer() {
         "Require reused compilation",
         "Clean MBX workspace outputs",
     );
+
+    for (job, required) in [
+        (
+            writer,
+            &[
+                "mbx_bin=$(command -v mbx)",
+                "case \"$mbx_bin\" in /*)",
+                "[ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]",
+                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" --version",
+                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" +1.98.1 build --manifest-path",
+                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" clean",
+            ][..],
+        ),
+        (
+            reader,
+            &[
+                "mbx_bin=$(command -v mbx)",
+                "case \"$mbx_bin\" in /*)",
+                "[ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]",
+                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" cache stats --json",
+                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" +1.98.1 build --manifest-path",
+                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" stats --json",
+                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" clean",
+            ][..],
+        ),
+    ] {
+        for &command in required {
+            let serialized_command = command.replace('"', "\\\"");
+            assert!(
+                job.contains(&serialized_command),
+                "missing action-owned MBX binding {command:?}:\n{job}"
+            );
+            if command != "mbx_bin=$(command -v mbx)" {
+                let command_at = job
+                    .find(&serialized_command)
+                    .unwrap_or_else(|| panic!("missing command {command:?}"));
+                let resolver_at = job[..command_at]
+                    .rfind("mbx_bin=$(command -v mbx)")
+                    .unwrap_or_else(|| {
+                        panic!("command lacks a preceding MBX resolver: {command:?}")
+                    });
+                assert!(resolver_at < command_at, "MBX path must resolve first");
+            }
+        }
+        assert!(
+            !job.contains("-- mbx "),
+            "action-owned MBX payload must not depend on Mise PATH rebuilding:\n{job}"
+        );
+    }
 }
 
 fn qualification_job<'a>(yaml: &'a str, id: &str) -> &'a str {

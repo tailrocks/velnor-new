@@ -135,18 +135,19 @@ fn mise_crate_job_prepare_installs_opentofu() {
         opentofu, "opentofu@1.13.1",
         "render pin names the catalog spec"
     );
-    let found = crate::crate_jobs::build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::VelnorRepositoryV1,
-        &discovery(vec![
+    let found = crate::crate_jobs::build_crate_jobs(crate::crate_jobs::CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::VelnorRepositoryV1,
+        discovery: &discovery(vec![
             group("velnor-actions-mise"),
             group("velnor-actions-contract"),
         ]),
-        &catalog,
-        &[],
-        None,
-        2,
-    )
+        catalog: &catalog,
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2);
     for (id, job) in &found.jobs {

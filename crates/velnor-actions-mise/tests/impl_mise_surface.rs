@@ -116,7 +116,7 @@ fn nextest_vectors(catalog: &ToolCatalog) -> Result<Vec<Vec<OsString>>, String> 
 #[test]
 fn all_mise_vectors_invoke_mise_program() -> Result<(), String> {
     let vectors = all_mise_vectors()?;
-    assert!(!vectors.is_empty());
+    assert_ne!(vectors, [] as [Vec<OsString>; 0]);
     for argv in &vectors {
         assert_eq!(argv[0], OsString::from("mise"), "mise-only: {argv:?}");
         let subcommand = argv
@@ -177,7 +177,7 @@ fn catalog_pins_ignore_project_selectors() -> Result<(), String> {
     assert_eq!(first.argv(&pinned()), second.argv(&pinned()));
     assert_eq!(
         catalog.tool_spec(PinnedTool::MrBoxington),
-        "mr-boxington@1.21.1",
+        "mr-boxington@1.23.0",
         "the action-owned MBX pin remains exact in the catalog"
     );
     assert!(

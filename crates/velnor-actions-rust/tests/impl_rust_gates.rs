@@ -180,7 +180,10 @@ fn rerun_inputs_recorded_and_unknown_disables_reuse() {
         parse_rerun_changed(output),
         vec!["proto/a.proto".to_owned(), "proto/b.proto".to_owned()]
     );
-    assert!(parse_rerun_changed("cargo:rustc-link-lib=native\n").is_empty());
+    assert_eq!(
+        parse_rerun_changed("cargo:rustc-link-lib=native\n"),
+        [] as [std::string::String; 0]
+    );
     let targets = vec!["lib".to_owned()];
     let features = vec!["default".to_owned()];
     let declared: Vec<String> = Vec::new();

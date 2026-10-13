@@ -43,7 +43,10 @@ fn detector_emits_no_candidates_from_markers_alone() -> Outcome {
     dir.write("main.tf", "resource \"null_resource\" \"demo\" {}\n")?;
     dir.write("nested/stacks.tf", "")?;
     let index = build_index(dir.path(), &[])?;
-    assert!(discover_stack_candidates(&index).is_empty());
+    assert_eq!(
+        discover_stack_candidates(&index),
+        [] as [velnor_actions_contract::StackCandidate; 0]
+    );
     Ok(())
 }
 
@@ -52,7 +55,10 @@ fn detector_ignores_native_suffix_files() -> Outcome {
     let dir = TempDir::create("tofu-detect-native")?;
     dir.write("main.tofu", "resource \"null_resource\" \"demo\" {}\n")?;
     let index = build_index(dir.path(), &[])?;
-    assert!(discover_stack_candidates(&index).is_empty());
+    assert_eq!(
+        discover_stack_candidates(&index),
+        [] as [velnor_actions_contract::StackCandidate; 0]
+    );
     Ok(())
 }
 
@@ -61,7 +67,10 @@ fn detector_ignores_json_dialect_files() -> Outcome {
     let dir = TempDir::create("tofu-detect-json")?;
     dir.write("main.tf.json", "{\"resource\":{}}\n")?;
     let index = build_index(dir.path(), &[])?;
-    assert!(discover_stack_candidates(&index).is_empty());
+    assert_eq!(
+        discover_stack_candidates(&index),
+        [] as [velnor_actions_contract::StackCandidate; 0]
+    );
     Ok(())
 }
 
@@ -69,7 +78,10 @@ fn detector_ignores_json_dialect_files() -> Outcome {
 fn detector_empty_on_empty_index() -> Outcome {
     let dir = TempDir::create("tofu-detect-bare")?;
     let index = build_index(dir.path(), &[])?;
-    assert!(discover_stack_candidates(&index).is_empty());
+    assert_eq!(
+        discover_stack_candidates(&index),
+        [] as [velnor_actions_contract::StackCandidate; 0]
+    );
     Ok(())
 }
 
@@ -79,7 +91,10 @@ fn detector_empty_under_exclusions() -> Outcome {
     dir.write("main.tf", "")?;
     dir.write("vendor/dep/stacks.tf", "")?;
     let index = build_index(dir.path(), &["vendor/**".to_owned()])?;
-    assert!(discover_stack_candidates(&index).is_empty());
+    assert_eq!(
+        discover_stack_candidates(&index),
+        [] as [velnor_actions_contract::StackCandidate; 0]
+    );
     Ok(())
 }
 
@@ -130,5 +145,8 @@ fn conversion_preserves_candidate_order() {
 #[test]
 fn conversion_of_empty_is_empty() {
     use velnor_actions_tofu::detected_projects_for_units;
-    assert!(detected_projects_for_units(&[]).is_empty());
+    assert_eq!(
+        detected_projects_for_units(&[]),
+        [] as [velnor_actions_contract::DetectedProject; 0]
+    );
 }

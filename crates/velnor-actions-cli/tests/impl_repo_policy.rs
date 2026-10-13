@@ -257,7 +257,7 @@ fn toolchain_edition_and_resolver() -> Result<(), Box<dyn Error>> {
         let root = read(&path)?;
         assert!(root.contains("edition = \"2024\""), "{path}");
         assert!(root.contains("resolver = \"3\""), "{path}");
-        assert!(root.contains("rust-version = \"1.98\""), "{path}");
+        assert!(root.contains("rust-version = \"1.99\""), "{path}");
     }
     Ok(())
 }
@@ -273,7 +273,7 @@ fn rust_version_tracks_toolchain() -> Result<(), Box<dyn Error>> {
     let catalog = quoted_value(&catalog_src, "RUST_VERSION")?;
     let policy = quoted_value(&read(".velnor/version-policy.toml")?, "rust = ")?;
     assert_eq!(catalog, policy, "generator and policy compiler pin drift");
-    assert_eq!(minor(&catalog), "1.98", "generator compiler pin drift");
+    assert_eq!(minor(&catalog), "1.99", "generator compiler pin drift");
     for workspace_root in WORKSPACE_ROOTS {
         let path = if workspace_root.is_empty() {
             "Cargo.toml".to_owned()

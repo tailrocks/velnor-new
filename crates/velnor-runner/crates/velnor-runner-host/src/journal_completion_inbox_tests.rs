@@ -30,12 +30,12 @@ async fn exact_body_is_idempotent_and_resolves_after_retry() -> Result<(), Strin
         .defer_completion_inbox(&pending[0], 10)
         .await
         .map_err(|error| error.to_string())?;
-    assert!(
+    assert_eq!(
         journal
             .pending_completion_inbox(10, 4)
             .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
+            .map_err(|error| error.to_string())?,
+        [] as [crate::journal::CompletionInboxEntry; 0]
     );
     let retry = journal
         .pending_completion_inbox(11, 4)
@@ -47,12 +47,12 @@ async fn exact_body_is_idempotent_and_resolves_after_retry() -> Result<(), Strin
         .resolve_completion_inbox(&retry[0])
         .await
         .map_err(|error| error.to_string())?;
-    assert!(
+    assert_eq!(
         journal
             .pending_completion_inbox(11, 4)
             .await
-            .map_err(|error| error.to_string())?
-            .is_empty()
+            .map_err(|error| error.to_string())?,
+        [] as [crate::journal::CompletionInboxEntry; 0]
     );
     Ok(())
 }

@@ -15,8 +15,8 @@ use velnor_actions_orchestrator::{
 };
 
 use crate::impl_common::{
-    TestResult, config_with_branch, err_of, fixture_manifest_json, git, git_fixture, make_repo,
-    passing_reports, plan_for_source_change, without_ambient_identity,
+    TestResult, anchor_repo, config_with_branch, err_of, fixture_manifest_json, git, git_fixture,
+    make_repo, passing_reports, plan_for_source_change, without_ambient_identity,
 };
 use crate::impl_merge::task_reports_for;
 

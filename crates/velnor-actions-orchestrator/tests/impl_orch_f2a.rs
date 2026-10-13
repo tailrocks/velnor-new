@@ -23,7 +23,12 @@ pub(crate) fn product_src_files() -> Result<Vec<PathBuf>, Box<dyn std::error::Er
         let test_companion = path
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with("_tests.rs") || name.ends_with("_fixtures.rs"));
+            .is_some_and(|name| {
+                name.ends_with("_tests.rs")
+                    || name.contains("_tests_")
+                    || name.ends_with("_fixtures.rs")
+                    || name.ends_with("_test_support.rs")
+            });
         if path.extension().is_some_and(|ext| ext == "rs") && !test_companion {
             out.push(path);
         }
@@ -117,7 +122,7 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     // (metadata probe, offline skip, explicit miss fetch) over validated roots.
     // Step IR has no conditions, so the shell conditional is required; roots
     // are fail-closed validated, never arbitrary shell. P05 reports:
-    // matrix_step.rs emits the fixed obligation report-capture wrappers
+    // matrix_step_reports.rs emits the fixed obligation report-capture wrappers
     // (`sh -c` over a joined validated argv plus the fixed helper call);
     // exit capture needs one shell step, and the joined argv plus helper
     // path are fixed generator values, never repository shell.
@@ -149,12 +154,12 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     assert_eq!(
         sh_files,
         std::collections::BTreeSet::from([
-            "matrix_step.rs".to_owned(),
-            "pins.rs".to_owned(),
+            "matrix_step_reports.rs".to_owned(),
+            "pins_acquire.rs".to_owned(),
             "qualify.rs".to_owned(),
             "source_prep.rs".to_owned(),
         ]),
-        "fixed sh wrappers live in matrix_step/pins/qualify/source_prep only"
+        "fixed sh wrappers live in production report/acquire/qualify/source-prep modules only"
     );
     Ok(())
 }

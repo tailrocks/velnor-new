@@ -2,6 +2,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::Job;
+use velnor_actions_mise::{MR_BOXINGTON_VERSION, RUST_VERSION};
 use velnor_actions_workflow_renderer::{
     INTERNAL_OP_ENV, PRESEED_BUILD_OUTPUT, PRESEED_MANIFEST_BINARY_ENV, PRESEED_MANIFEST_OUT_ENV,
     PRESEED_MANIFEST_TARGET_ENV, PRESEED_MANIFEST_TOOLCHAIN_ENV, PreseedStageSource, RenderError,
@@ -14,26 +15,76 @@ use super::impl_renderer_fixtures::*;
 
 const TARGET: &str = "x86_64-unknown-linux-gnu";
 const MARK: &str = "(pre-seed trust-on-review)";
-const MBX_VERSION: &str = "1.21.1";
+const MBX_VERSION: &str = MR_BOXINGTON_VERSION;
+const RUST_TOOLCHAIN: &str = RUST_VERSION;
+
+fn rust_selector() -> String {
+    format!("rust@{RUST_TOOLCHAIN}")
+}
 
 fn mbx_probe() -> Vec<String> {
-    mise_argv("rust@1.98.1", "mbx", &["--version"])
+    mise_argv(&rust_selector(), "mbx", &["--version"])
 }
 
 fn build_argv() -> Vec<String> {
-    mise_argv(
-        "rust@1.98.1",
-        "mbx",
-        &[
-            "build",
-            "--release",
-            "--locked",
-            "--package",
-            "velnor-actions-cli",
-            "--bin",
-            "velnor-actions",
-        ],
-    )
+    let mut argv = mise_argv(&rust_selector(), "mbx", &[]);
+    argv.extend([
+        format!("+{RUST_TOOLCHAIN}"),
+        "build".to_owned(),
+        "--release".to_owned(),
+        "--locked".to_owned(),
+        "--package".to_owned(),
+        "velnor-actions-cli".to_owned(),
+        "--bin".to_owned(),
+        "velnor-actions".to_owned(),
+    ]);
+    argv
+}
+
+fn assert_action_owned_build_step(
+    build_step: &velnor_actions_contract::Step,
+) -> Result<(), RenderError> {
+    let velnor_actions_contract::StepKind::Shell { run, env } = &build_step.kind else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "pre-seed build must be shell: {:?}",
+            build_step.kind
+        )));
+    };
+    // S1: the helper build compiles PR source, so it unsets runner
+    // credentials before exec and scrubs the step env.
+    assert_eq!(
+        (
+            run.first().map(String::as_str),
+            run.get(1).map(String::as_str)
+        ),
+        (Some("sh"), Some("-c")),
+        "credential scrubbing stays inside the shell wrapper: {run:?}"
+    );
+    assert_eq!(run.len(), 3, "wrapped build command: {run:?}");
+    let script = run[2].as_str();
+    let credential_unset =
+        velnor_actions_workflow_renderer::toolchain_env::credential_unset_prelude();
+    assert!(
+        script.starts_with(&credential_unset),
+        "build must unset runtime credentials before its payload: {script}"
+    );
+    for key in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
+        assert_eq!(
+            env.get(key).map(String::as_str),
+            Some(""),
+            "pre-seed build must scrub {key}"
+        );
+    }
+    let home = env.get("MISE_CARGO_HOME").map(String::as_str);
+    assert_eq!(home, Some("owned"), "build carries caller homes");
+    assert!(script.contains("mbx_bin=$(command -v mbx)"), "{script}");
+    assert!(
+        script.contains(&format!(
+            "exec rust@{RUST_TOOLCHAIN} -- \"$mbx_bin\" +{RUST_TOOLCHAIN} build"
+        )),
+        "build uses the action-owned absolute MBX through Rust-only Mise: {script}"
+    );
+    Ok(())
 }
 
 pub(crate) fn preseed_plan() -> Result<(String, Job), RenderError> {
@@ -78,22 +129,7 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
         &build,
         &BTreeMap::from([("MISE_CARGO_HOME".to_owned(), "owned".to_owned())]),
     )?;
-    // S1: the helper build compiles PR source, so it unsets runner
-    // credentials before exec and scrubs the step env.
-    let velnor_actions_contract::StepKind::Shell { run, env } = &build_step.kind else {
-        panic!("pre-seed build must be shell: {:?}", build_step.kind);
-    };
-    assert_eq!(run.first().map(String::as_str), Some("env"));
-    assert!(run.contains(&"GITHUB_TOKEN".to_owned()), "{run:?}");
-    for key in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
-        assert_eq!(
-            env.get(key).map(String::as_str),
-            Some(""),
-            "pre-seed build must scrub {key}"
-        );
-    }
-    let home = env.get("MISE_CARGO_HOME").map(String::as_str);
-    assert_eq!(home, Some("owned"), "build carries caller homes");
+    assert_action_owned_build_step(&build_step)?;
     for step in [
         build_step,
         preseed_verify_step(&mbx_probe(), MBX_VERSION, &BTreeMap::new())?,
@@ -116,6 +152,20 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
     assert!(
         preseed_manifest_step(&["mbx".to_owned()], TARGET).is_err(),
         "toolchain-less build accepted"
+    );
+    let mut unbound_build = build.clone();
+    unbound_build.remove(8);
+    assert!(
+        preseed_build_step(&unbound_build, &BTreeMap::new()).is_err(),
+        "build without the catalog Rust selector accepted"
+    );
+    assert!(
+        preseed_build_step(
+            &mise_argv(&format!("mr-boxington@{MBX_VERSION}"), "mbx", &["build"],),
+            &BTreeMap::new()
+        )
+        .is_err(),
+        "Mise-owned MBX selector accepted in the action-owned pre-seed route"
     );
     assert!(
         preseed_stage_step(PreseedStageSource::LocalBuild, "target/release/x").is_err(),
@@ -162,9 +212,10 @@ fn preseed_manifest_step_runs_fresh_binary_with_op() -> Result<(), RenderError> 
         Some(TARGET),
         "literal target: {env:?}"
     );
+    let expected_toolchain = format!("rust@{RUST_TOOLCHAIN}");
     assert_eq!(
         env.get(PRESEED_MANIFEST_TOOLCHAIN_ENV).map(String::as_str),
-        Some("rust@1.98.1"),
+        Some(expected_toolchain.as_str()),
         "toolchain derived from the build vector: {env:?}"
     );
     for value in env.values() {
@@ -188,19 +239,30 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
     };
     let home = env.get("MISE_CARGO_HOME").map(String::as_str);
     assert_eq!(home, Some("owned"), "verify carries caller homes");
+    assert_eq!(run.len(), 3, "verification shell wrapper: {run:?}");
     assert_eq!((run[0].as_str(), run[1].as_str()), ("sh", "-c"));
+    let probe_line = format!(
+        "mise --no-config --no-env --no-hooks exec rust@{RUST_TOOLCHAIN} -- \"$mbx_bin\" --version"
+    );
+    let redirected_probe_line = format!(
+        "mise --no-config --no-env --no-hooks exec rust@{RUST_TOOLCHAIN} -- \"$mbx_bin\" --version > \"$RUNNER_TEMP/velnor/preseed-mbx-version\""
+    );
+    let version_line =
+        format!("grep -qxF \"mbx {MBX_VERSION}\" \"$RUNNER_TEMP/velnor/preseed-mbx-version\"");
     for need in [
         "test -x target/release/velnor-actions",
-        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version",
+        "mbx_bin=$(command -v mbx)",
+        probe_line.as_str(),
         "mkdir -p \"$RUNNER_TEMP/velnor\"",
-        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version > \"$RUNNER_TEMP/velnor/preseed-mbx-version\"",
-        "grep -qxF \"mbx 1.21.1\" \"$RUNNER_TEMP/velnor/preseed-mbx-version\"",
+        redirected_probe_line.as_str(),
+        version_line.as_str(),
     ] {
         assert!(run[2].contains(need), "verify misses {need}: {}", run[2]);
     }
+    assert!(!run[2].contains('`'), "no command substitution: {}", run[2]);
     assert!(
-        !run[2].contains('\'') && !run[2].contains('`') && !run[2].contains('|'),
-        "verify has no unneeded quoting or status-masking pipeline: {}",
+        !run[2].contains(" | "),
+        "no status-masking pipeline: {}",
         run[2]
     );
     for bad_version in ["", "latest", "1.19", "v1.19.0", "1.19.0 "] {
@@ -212,9 +274,13 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
     for bad_probe in [
         Vec::new(),
         vec!["mbx".to_owned(), "--version".to_owned()],
-        mise_argv("rust@1.98.1", "mbx", &["--help"]),
-        mise_argv("mr-boxington@1.21.1", "mbx", &["--version"]),
-        mise_argv("rust@1.98.1", "mbx", &["--version", "--verbose"]),
+        mise_argv(&rust_selector(), "mbx", &["--help"]),
+        mise_argv(
+            &format!("mr-boxington@{MBX_VERSION}"),
+            "mbx",
+            &["--version"],
+        ),
+        mise_argv(&rust_selector(), "mbx", &["--version", "--verbose"]),
     ] {
         assert!(
             preseed_verify_step(&bad_probe, MBX_VERSION, &BTreeMap::new()).is_err(),

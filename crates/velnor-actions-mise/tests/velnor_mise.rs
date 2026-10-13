@@ -6,6 +6,8 @@ mod test_temp_dir;
 mod impl_adapter_wire_mise;
 #[path = "impl_mise.rs"]
 mod impl_mise;
+#[path = "impl_mise_action_owned_metadata.rs"]
+mod impl_mise_action_owned_metadata;
 #[path = "impl_mise_baseline.rs"]
 mod impl_mise_baseline;
 #[path = "impl_mise_build.rs"]

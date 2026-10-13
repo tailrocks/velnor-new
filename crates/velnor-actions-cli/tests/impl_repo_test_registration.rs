@@ -1,13 +1,13 @@
 //! Cargo/rustc source closure for every registered workspace test target.
 
-#[path = "impl_repo_test_registration_cargo.rs"]
-mod cargo_config;
 #[path = "impl_repo_test_registration_dep_info.rs"]
 mod dep_info;
 #[path = "impl_repo_test_registration_fixtures.rs"]
 mod fixtures;
 #[path = "impl_repo_test_registration_graph.rs"]
 mod graph;
+#[path = "impl_repo_test_registration_mbx.rs"]
+mod mbx_config;
 #[path = "impl_repo_test_registration_modules.rs"]
 mod modules;
 
@@ -52,7 +52,7 @@ fn registered_sources(workspaces: &[WorkspacePlan]) -> Outcome<HashSet<PathBuf>>
 fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>> {
     let _target_lock = crate::impl_cli_tmp::nested_target::lock_nested_cargo_target()?;
     let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?;
-    let output = cargo_config::cargo_output_at_target(
+    let output = mbx_config::mbx_output_at_target(
         &workspace.manifest,
         &[
             "test",
@@ -89,7 +89,7 @@ fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>>
             }
             if target.required_features.is_empty() {
                 return Err(format!(
-                    "Cargo metadata test target source is absent from rustc dependency files: {}",
+                    "MBX metadata test target source is absent from rustc dependency files: {}",
                     target.source.display()
                 )
                 .into());
@@ -282,7 +282,7 @@ pub(super) fn relative_paths(root: &Path, paths: &[PathBuf]) -> Outcome<Vec<Stri
 #[test]
 fn cargo_targets_register_every_test_bearing_source() -> Outcome<()> {
     let root = repo_root().canonicalize()?;
-    let workspaces = cargo_config::workspace_plans(&root)?;
+    let workspaces = mbx_config::workspace_plans(&root)?;
     let runner_root = root.join("crates/velnor-runner").canonicalize()?;
     let misplaced_target = runner_root.join("target/velnor-cli-nested-cargo");
     let misplaced_target_existed = path_exists(&misplaced_target)?;

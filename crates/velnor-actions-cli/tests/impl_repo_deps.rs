@@ -21,6 +21,11 @@ use crate::impl_repo_policy::{
 fn expected_internal(dir: &str) -> Vec<&str> {
     match dir {
         "crates/velnor-actions-contract" | "crates/velnor-actions-freshness" => vec![],
+        // Workflow rendering reads the Mise catalog only to validate pinned
+        // tool data; command execution stays in the Mise adapter.
+        "crates/velnor-actions-workflow-renderer" => {
+            vec!["velnor-actions-contract", "velnor-actions-mise"]
+        }
         "crates/velnor-actions-orchestrator" => vec![
             "velnor-actions-actionlint",
             "velnor-actions-contract",
@@ -155,7 +160,7 @@ fn cli_tests_assert_through_binary_only() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn lockfile_committed_and_locked_used() -> Result<(), Box<dyn Error>> {
-    assert!(!read("Cargo.lock")?.trim().is_empty());
+    assert_ne!(read("Cargo.lock")?.trim(), "");
     let tracked = git_fixture::command(&repo_root())?
         .arg("ls-files")
         .arg("--error-unmatch")

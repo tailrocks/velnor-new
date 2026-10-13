@@ -47,7 +47,7 @@ pub(super) fn render(
     let mut jobs = vec![release_eligibility::job(hosted.clone(), pins)?];
     let mut family_workflows = Vec::new();
     let mut actions = Vec::new();
-    for family in families {
+    for family in families.iter().copied() {
         jobs.push(family_jobs::prepare_job(family, hosted.clone(), request)?);
         let composed_family_jobs = if family == Family::Generator {
             let generated = super::generator_release::generator_release(request)?;
@@ -67,7 +67,7 @@ pub(super) fn render(
         jobs.push(workflows::reusable_workflow_call(family));
     }
     Ok(Some(ProductRelease {
-        workflow: workflows::document(jobs),
+        workflow: workflows::document(jobs, &families),
         family_workflows,
         actions,
     }))

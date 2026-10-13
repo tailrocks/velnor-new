@@ -73,13 +73,7 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
     let script = entrypoint_text()?;
     assert_eq!(
         inline_stages(&script),
-        [
-            "toolchain",
-            "generated-selector",
-            "generated-tree",
-            "fixtures",
-            "integration",
-        ],
+        ["toolchain", "generated-tree", "fixtures", "integration",],
         "exact inline stage inventory"
     );
     assert_eq!(
@@ -116,6 +110,19 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
     assert!(
         script.contains("stage repo-policy \"${MISE_EXEC[@]}\" bash scripts/check-freshness.sh"),
         "repo-policy stage body"
+    );
+    assert!(
+        script.contains("\"${MISE_EXEC[@]}\" mbx run --quiet --locked -p velnor-actions-cli"),
+        "repo policy invokes the CLI through pinned MBX"
+    );
+    assert!(
+        script.contains("mbx run --quiet --locked")
+            && script.contains("--target-dir \"$GENERATED_TARGET_DIR\""),
+        "generated-tree resolves the CLI target through MBX in the selected target dir"
+    );
+    assert!(
+        !script.contains("cargo_artifact_executable") && !script.contains("\"$BIN\" generate"),
+        "generated-tree has no Cargo artifact parser or raw binary route"
     );
     // Every locking cargo invocation passes `--locked` (`fmt` takes no
     // such flag; `--version` probes build nothing). The trailing space
@@ -167,7 +174,7 @@ fn verify_local_bootstrap_reads_quoted_mise_tool_key() -> Result<(), Box<dyn Err
         "quoted Aqua key rejected: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(String::from_utf8(output.stdout)?.trim(), "0.9.146");
+    assert_eq!(String::from_utf8(output.stdout)?.trim(), "0.9.148");
     Ok(())
 }
 

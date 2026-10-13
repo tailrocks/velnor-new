@@ -1,12 +1,12 @@
 //! Pre-seed helper ownership in the fully emitted workflow.
 
-use velnor_actions_mise::{PinnedTool, ToolCatalog};
+use velnor_actions_mise::{CandidateBuild, PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::{
     MBX_VERSION_CHECK_NAME, WORKFLOW_PATH, steps::MBX_RESTORE_NAME,
 };
 
-use super::{JobText, check_tree, check_verify_mbx, make_velnor_repo};
+use super::{JobText, check_tree, make_velnor_repo};
 use crate::impl_common::{TestResult, without_ambient_identity};
 
 fn assert_native_preseed_owner(jobs: &[JobText], yaml: &str) -> TestResult {
@@ -14,7 +14,7 @@ fn assert_native_preseed_owner(jobs: &[JobText], yaml: &str) -> TestResult {
         .iter()
         .flat_map(|job| {
             job.steps.iter().filter_map(|step| {
-                if step.body.contains("mbx build --release --locked") {
+                if step.name.contains("Build helper") {
                     Some((job.id.as_str(), step.body.as_str()))
                 } else {
                     None
@@ -24,12 +24,25 @@ fn assert_native_preseed_owner(jobs: &[JobText], yaml: &str) -> TestResult {
         .collect();
     assert_eq!(builds.len(), 1, "exactly one helper build:\n{yaml}");
     assert_eq!(builds[0].0, "plan", "build lives in plan");
-    for fragment in ["rust@", "--package velnor-actions-cli --bin velnor-actions"] {
-        assert!(
-            builds[0].1.contains(fragment),
-            "build misses {fragment}:\n{yaml}"
-        );
-    }
+    let catalog = ToolCatalog::pinned();
+    let mut expected = CandidateBuild::new()?
+        .argv(&catalog)
+        .into_iter()
+        .map(|arg| arg.into_string().map_err(|_| "non-utf8 build argument"))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mbx = expected
+        .iter()
+        .position(|arg| arg == "mbx")
+        .ok_or("candidate build has no MBX command")?;
+    // `JobText` retains YAML's escaping around the nested `sh -c` scalar.
+    "\\\"$mbx_bin\\\"".clone_into(&mut expected[mbx]);
+    let expected = expected.join(" ");
+    assert!(
+        builds[0].1.contains("command -v mbx")
+            && builds[0].1.contains(&expected)
+            && builds[0].1.contains("MBX path must be an executable file"),
+        "build resolves and uses the exact pinned candidate vector through action-owned MBX ({expected}):\n{yaml}"
+    );
     assert!(
         !builds[0].1.contains("mr-boxington@"),
         "the native action owns MBX installation:\n{yaml}"
@@ -62,10 +75,8 @@ fn assert_native_preseed_owner(jobs: &[JobText], yaml: &str) -> TestResult {
             .any(|step| step.body.contains("name: velnor-preseed-helper")),
         "plan misses exact artifact upload:\n{yaml}"
     );
-    let mbx = ToolCatalog::pinned()
-        .version(PinnedTool::MrBoxington)
-        .to_owned();
-    check_verify_mbx(plan, &mbx)?;
+    let mbx = catalog.version(PinnedTool::MrBoxington).to_owned();
+    super::check_verify_mbx(plan, &mbx)?;
     assert!(
         !yaml.contains("pattern:"),
         "no wildcard artifact matching:\n{yaml}"

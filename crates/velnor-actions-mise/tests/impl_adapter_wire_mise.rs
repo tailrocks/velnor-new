@@ -112,7 +112,7 @@ fn catalog_identities_validate() {
             assert!(err.to_string().contains("placeholder_digest"), "{err}");
         }
         assert!(identity.source.starts_with("https://"));
-        assert!(!identity.platforms.is_empty());
+        assert_ne!(identity.platforms, [] as [String; 0]);
     }
     assert_eq!(
         catalog.tool_identity(PinnedTool::Rust).version,
@@ -273,7 +273,7 @@ fn inspect_mise_file_never_fails_never_writes() {
     assert_eq!(bad.findings[0].code, TOOLING_INPUT_INVALID);
     assert!(bad.findings[0].recommendation.contains("manually"));
     let good = inspect_mise_file("mise.toml", Some("[tools]\nrust = \"1.98.1\"\n")).expect("valid");
-    assert!(good.findings.is_empty());
+    assert_eq!(good.findings, [] as [velnor_actions_mise::ToolFinding; 0]);
     let spec = good.spec.expect("spec");
     assert_eq!(spec.tools.get("rust").map(String::as_str), Some("1.98.1"));
     assert!(inspect_mise_file("rust-toolchain.toml", Some("")).is_err());

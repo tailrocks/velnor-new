@@ -45,6 +45,8 @@ fn expected_modules() -> Vec<&'static str> {
         "check_tool_projection.rs",
         "checks.rs",
         "command.rs",
+        "command_action_mbx.rs",
+        "command_action_mbx_tests.rs",
         "command_cancellable.rs",
         "command_env.rs",
         "command_git.rs",

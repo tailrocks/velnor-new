@@ -28,7 +28,7 @@ fn terraform_only_pin_flags() {
 #[test]
 fn empty_file_signals_nothing() {
     let signals = signals_for("", Dialect::Native).expect("signals");
-    assert!(signals.required_versions.is_empty());
+    assert_eq!(signals.required_versions, [] as [String; 0]);
     assert!(!signals.has_legacy_ref);
     assert!(!signals.terraform_only);
 }
@@ -40,7 +40,7 @@ fn non_string_version_ignored() {
         Dialect::Native,
     )
     .expect("signals");
-    assert!(signals.required_versions.is_empty());
+    assert_eq!(signals.required_versions, [] as [String; 0]);
 }
 
 #[test]
@@ -89,5 +89,5 @@ fn native_labels_never_signal() {
     )
     .expect("signals");
     assert!(!signals.has_legacy_ref);
-    assert!(signals.required_versions.is_empty());
+    assert_eq!(signals.required_versions, [] as [String; 0]);
 }

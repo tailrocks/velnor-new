@@ -128,7 +128,7 @@ fn coordinator_payload_equals_release_argv_after_separator() {
         "pinned coordinator before --"
     );
     assert!(
-        argv[..separator].iter().any(|arg| arg == "rust@1.98.1"),
+        argv[..separator].iter().any(|arg| arg == "rust@1.99.0"),
         "pinned rust before --"
     );
     assert_eq!(&argv[separator + 1..], request.release_argv().as_slice());

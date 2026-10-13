@@ -1,6 +1,7 @@
 //! Native build-task routing through schema-2 execution modes.
 
 use std::fs;
+use std::path::Path;
 
 use velnor_actions_contract::StepKind;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
@@ -40,68 +41,114 @@ fn native_build_variant_is_shared_source_bounded_and_required_in_every_mode() ->
         let workflow = required_file(&tree, ".github/workflows/ci.yml")?;
         let required = job_body(workflow, "required")?;
         let native = job_body(workflow, "task-native-desktop")?;
-
-        assert!(native.contains("runs-on: macos-26"), "{mode}: {native}");
-        assert!(native.contains("timeout-minutes: 120"), "{mode}: {native}");
-        assert!(
-            native.contains("CARGO_BUILD_JOBS: \"2\""),
-            "{mode}: {native}"
-        );
-        assert!(
-            native.contains("NEXTEST_TEST_THREADS: \"2\""),
-            "{mode}: {native}"
-        );
-        assert!(
-            native.contains("MISE_CARGO_BINSTALL_ONLY: \"1\""),
-            "{mode}: {native}"
-        );
-        assert!(native.contains("DEVELOPER_DIR:"), "{mode}: {native}");
-        assert!(
-            native.contains("persist-credentials: \"false\""),
-            "{mode}: {native}"
-        );
-        assert!(
-            native.contains("wrappers.cargo.command"),
-            "{mode}: {native}"
-        );
-        assert!(
-            native.contains("mise --no-env --locked --no-hooks run --skip-tools desktop-ci"),
-            "{mode}: {native}"
-        );
-        assert!(native.contains("export MISE_NO_ENV=1"), "{mode}: {native}");
-        assert!(
-            native.contains("github:boltffi/boltffi")
-                && native.contains("aqua:nextest-rs/nextest/cargo-nextest")
-                && native.contains("swiftlint")
-                && native.contains("xcodegen"),
-            "{mode}: selected native tool closure is incomplete: {native}"
-        );
-        assert!(!native.contains("repository:"), "{mode}: {native}");
-        assert!(!native.contains("ref:"), "{mode}: {native}");
-        assert!(!native.contains("actions/cache@"), "{mode}: {native}");
-        assert!(
-            !native.contains("actions/upload-artifact@"),
-            "{mode}: {native}"
-        );
-        assert!(
-            required.contains("- task-native-desktop"),
-            "{mode}: {required}"
-        );
-        assert!(required.contains("VELNOR_NEEDS_JSON"), "{mode}: {required}");
-        assert!(
-            required.contains("VELNOR_NEEDS_EXPECTED"),
-            "{mode}: {required}"
-        );
-        assert!(
-            required.lines().any(|line| {
-                line.contains("VELNOR_NEEDS_EXPECTED") && line.contains("task-native-desktop")
-            }),
-            "{mode}: the required conclusion inventory must include the native job: {required}"
-        );
-        assert!(!workflow.contains("task-native-desktop__hosted"));
-        assert!(!workflow.contains("task-native-desktop__local"));
+        assert_native_job_prefix(mode, native);
+        assert_native_source_guard(mode, native, repo.path())?;
+        assert_native_job_selected_tools(mode, native);
+        assert_required_job_includes_native(mode, workflow, required);
     }
     Ok(())
+}
+
+fn assert_native_job_prefix(mode: &str, native: &str) {
+    assert!(native.contains("runs-on: macos-26"), "{mode}: {native}");
+    assert!(native.contains("timeout-minutes: 120"), "{mode}: {native}");
+    assert!(
+        native.contains("CARGO_BUILD_JOBS: \"2\""),
+        "{mode}: {native}"
+    );
+    assert!(
+        native.contains("NEXTEST_TEST_THREADS: \"2\""),
+        "{mode}: {native}"
+    );
+    assert!(
+        native.contains("MISE_CARGO_BINSTALL_ONLY: \"1\""),
+        "{mode}: {native}"
+    );
+    assert!(native.contains("DEVELOPER_DIR:"), "{mode}: {native}");
+    assert!(
+        native.contains("persist-credentials: \"false\""),
+        "{mode}: {native}"
+    );
+    assert!(
+        native.contains("Verify locked MBX Rust route")
+            && native.contains("installs/mr-boxington/1.23.0/"),
+        "{mode}: {native}"
+    );
+    assert!(
+        native.contains("mise --no-env --locked --no-hooks run --skip-tools desktop-ci"),
+        "{mode}: {native}"
+    );
+}
+
+fn assert_native_source_guard(mode: &str, native: &str, repo: &Path) -> TestResult {
+    assert!(
+        native.contains(r#"cd -P \"$workspace_root/native\"; task_working_directory=\"$PWD\""#),
+        "{mode}: task must run from its declared nested directory: {native}"
+    );
+    assert!(
+        native.contains("$workspace_root/native/mise.toml")
+            && native.contains("$workspace_root/mise.toml"),
+        "{mode}: source task config and root tool config are hash-bound: {native}"
+    );
+    assert!(
+        native.contains(r#"export MISE_CEILING_PATHS=\"$workspace_ceiling\""#)
+            && native.contains(r#"workspace_ceiling=\"$workspace_root/..\""#),
+        "{mode}: config discovery includes the root and nested source: {native}"
+    );
+    let restore_cwd = native
+        .find(r#"cd -P \"$task_working_directory\""#)
+        .ok_or("MBX guard restores the task cwd")?;
+    let run_task = native
+        .find("mise --no-env --locked --no-hooks run --skip-tools desktop-ci")
+        .ok_or("declared task is executed")?;
+    assert!(restore_cwd < run_task, "{mode}: {native}");
+    let nested = fs::read_to_string(repo.join("native/mise.toml"))?;
+    assert!(nested.contains("run = \"mise run desktop-lint\""));
+    let root_mise = fs::read_to_string(repo.join("mise.toml"))?;
+    assert!(root_mise.contains("description = \"Native desktop build task\""));
+    assert!(
+        !root_mise.contains("wrappers") && !nested.contains("wrappers"),
+        "{mode}: source task configs must not restore a Cargo wrapper"
+    );
+    Ok(())
+}
+
+fn assert_native_job_selected_tools(mode: &str, native: &str) {
+    assert!(native.contains("export MISE_NO_ENV=1"), "{mode}: {native}");
+    assert!(
+        native.contains("github:boltffi/boltffi")
+            && native.contains("aqua:nextest-rs/nextest/cargo-nextest")
+            && native.contains("swiftlint")
+            && native.contains("xcodegen"),
+        "{mode}: selected native tool closure is incomplete: {native}"
+    );
+    assert!(!native.contains("repository:"), "{mode}: {native}");
+    assert!(!native.contains("ref:"), "{mode}: {native}");
+    assert!(!native.contains("actions/cache@"), "{mode}: {native}");
+    assert!(
+        !native.contains("actions/upload-artifact@"),
+        "{mode}: {native}"
+    );
+}
+
+fn assert_required_job_includes_native(mode: &str, workflow: &str, required: &str) {
+    assert!(
+        required.contains("- task-native-desktop"),
+        "{mode}: {required}"
+    );
+    assert!(required.contains("VELNOR_NEEDS_JSON"), "{mode}: {required}");
+    assert!(
+        required.contains("VELNOR_NEEDS_EXPECTED"),
+        "{mode}: {required}"
+    );
+    assert!(
+        required.lines().any(|line| {
+            line.contains("VELNOR_NEEDS_EXPECTED") && line.contains("task-native-desktop")
+        }),
+        "{mode}: the required conclusion inventory must include the native job: {required}"
+    );
+    assert!(!workflow.contains("task-native-desktop__hosted"));
+    assert!(!workflow.contains("task-native-desktop__local"));
 }
 
 fn assert_selected_mise_projection(
@@ -212,9 +259,9 @@ version = "0.9.140"
 version = "0.30.1"
 matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$'
 [tools."mr-boxington"]
-version = "1.22.0"
+version = "1.23.0"
 [tools."rust"]
-version = "1.97.1"
+version = "1.99.0"
 components = "clippy,rustfmt"
 targets = "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu"
 [tools."swiftlint"]
@@ -224,48 +271,22 @@ os = ["macos"]
 version = "2.46.0"
 [settings]
 lockfile = true
-[settings.cargo]
-binstall = true
-binstall_only = true
-[wrappers.cargo]
-command = "mbx"
-[wrappers.cargo.env]
-MBX_CARGO_SHIM_MODE = "1"
 "#;
-
-#[test]
-fn native_build_task_rejects_cargo_source_install_fallback() -> TestResult {
-    let body = config_with_build("hosted");
-    let repo = make_repo(&body)?;
-    write_native_source_fixture(repo.path())?;
-    let lock_path = repo.path().join("mise.lock");
-    let lock = fs::read_to_string(&lock_path)?.replace(
-        "backend = \"github:boltffi/boltffi\"",
-        "backend = \"cargo:boltffi_cli\"",
-    );
-    fs::write(lock_path, lock)?;
-
-    let error = prepare(repo.path()).expect_err("Cargo fallback backend must fail closed");
-    assert!(
-        error
-            .to_string()
-            .contains("build_task_tool_backend_unsupported"),
-        "{error}"
-    );
-    Ok(())
-}
 
 /// Synthetic source-bound task/tool fixture for the resolver integration.
 /// Artifact digests and URLs test the lock projection shape only; upstream
 /// provenance is separately reviewed against the repository's real Mise lock.
-fn write_native_source_fixture(root: &std::path::Path) -> TestResult {
+pub(crate) fn write_native_source_fixture(root: &std::path::Path) -> TestResult {
     fs::write(
         root.join("mise.toml"),
         r#"
+min_version = "2026.10.7"
+
 [tools]
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.140"
 "github:boltffi/boltffi" = { version = "0.30.1", matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$' }
-"mr-boxington" = "1.22.0"
+"mr-boxington" = "1.23.0"
+rust = { version = "1.99.0", mr_boxington = true }
 swiftlint = { version = "0.65.1", os = ["macos"] }
 xcodegen = "2.46.0"
 
@@ -275,12 +296,6 @@ idiomatic_version_file_enable_tools = ["rust"]
 
 [settings.cargo]
 binstall = true
-
-[wrappers.cargo]
-command = "mbx"
-
-[wrappers.cargo.env]
-MBX_CARGO_SHIM_MODE = "1"
 
 [tasks.lint-linux]
 run = "echo lint-linux"
@@ -323,27 +338,34 @@ usage = 'arg "<app>"'
 run = "cargo xtask desktop verify"
 "#,
     )?;
+    fs::create_dir_all(root.join("native"))?;
+    fs::write(
+        root.join("native/mise.toml"),
+        "[tasks.desktop-ci]\nrun = \"mise run desktop-lint\"\n\n[tasks.format-check]\nrun = \"echo format-check\"\n",
+    )?;
     fs::write(
         root.join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"1.97.1\"\ncomponents = [\"clippy\", \"rustfmt\"]\ntargets = [\"aarch64-unknown-linux-gnu\", \"x86_64-unknown-linux-gnu\"]\n",
+        "[toolchain]\nchannel = \"1.99.0\"\ncomponents = [\"clippy\", \"rustfmt\"]\ntargets = [\"aarch64-unknown-linux-gnu\", \"x86_64-unknown-linux-gnu\"]\n",
     )?;
     fs::write(
         root.join("mise.lock"),
         r#"
+lockfile_version = 3
+
 [tools]
-"aqua:nextest-rs/nextest/cargo-nextest" = [{ version = "0.9.140", backend = "aqua:nextest-rs/nextest/cargo-nextest", "platforms.macos-arm64" = { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.140/cargo-nextest-0.9.140-universal-apple-darwin.tar.gz", checksum = "sha256:58e0a722f9444078fab447783f322acf15a2a771ba785b3fbbe8bacda31c3df9" } }]
-"github:boltffi/boltffi" = [{ version = "0.30.1", backend = "github:boltffi/boltffi", options = { matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$' }, "platforms.macos-arm64" = { url = "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-darwin-aarch64.tar.gz", checksum = "sha256:ce3a47b5c398cbb9c327098a612b431f30db15d353d62cee4e4637540fa8321a" } }]
-"mr-boxington" = [{ version = "1.22.0", backend = "packslip:github.com/jdx/mr-boxington", "platforms.macos-arm64" = { url = "https://github.com/jdx/mr-boxington/releases/download/v1.22.0/mbx-aarch64-apple-darwin.tar.gz", checksum = "sha256:e548b5758498cf822a180b6328597e6aded8fe9bb3046cd918399172ae30dde2", signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml" } }]
-rust = [{ version = "1.97.1", backend = "core:rust", options = { components = "clippy,rustfmt", targets = "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu" } }]
-swiftlint = [{ version = "0.65.1", backend = "aqua:realm/SwiftLint", "platforms.macos-arm64" = { url = "https://github.com/realm/SwiftLint/releases/download/0.65.1/portable_swiftlint.zip", checksum = "sha256:c1e429b0599cf1b516f369a2d9ec04eaf0e436f3c12b637df8851fa52ff694d0" } }]
-xcodegen = [{ version = "2.46.0", backend = "aqua:yonaskolb/XcodeGen", "platforms.macos-arm64" = { url = "https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip", checksum = "sha256:4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806" } }]
+"aqua:nextest-rs/nextest/cargo-nextest" = [{ version = "0.9.140", backend = "aqua:nextest-rs/nextest/cargo-nextest", specifiers = ["0.9.140"], "platforms.macos-arm64" = { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.140/cargo-nextest-0.9.140-universal-apple-darwin.tar.gz", checksum = "sha256:58e0a722f9444078fab447783f322acf15a2a771ba785b3fbbe8bacda31c3df9" } }]
+"github:boltffi/boltffi" = [{ version = "0.30.1", backend = "github:boltffi/boltffi", specifiers = ["0.30.1"], options = { matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$' }, "platforms.macos-arm64" = { url = "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-darwin-aarch64.tar.gz", checksum = "sha256:ce3a47b5c398cbb9c327098a612b431f30db15d353d62cee4e4637540fa8321a" } }]
+"mr-boxington" = [{ version = "1.23.0", backend = "packslip:github.com/jdx/mr-boxington", specifiers = ["1.23.0"], "platforms.macos-arm64" = { url = "https://github.com/jdx/mr-boxington/releases/download/v1.23.0/mbx-aarch64-apple-darwin.tar.gz", checksum = "sha256:e548b5758498cf822a180b6328597e6aded8fe9bb3046cd918399172ae30dde2", signer = "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml" } }]
+rust = [{ version = "1.99.0", backend = "core:rust", specifiers = ["1.99.0"], options = { components = "clippy,rustfmt", targets = "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu" } }]
+swiftlint = [{ version = "0.65.1", backend = "aqua:realm/SwiftLint", specifiers = ["0.65.1"], "platforms.macos-arm64" = { url = "https://github.com/realm/SwiftLint/releases/download/0.65.1/portable_swiftlint.zip", checksum = "sha256:c1e429b0599cf1b516f369a2d9ec04eaf0e436f3c12b637df8851fa52ff694d0" } }]
+xcodegen = [{ version = "2.46.0", backend = "aqua:yonaskolb/XcodeGen", specifiers = ["2.46.0"], "platforms.macos-arm64" = { url = "https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip", checksum = "sha256:4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806" } }]
 "#,
     )?;
     Ok(())
 }
 
-fn config_with_build(mode: &str) -> String {
-    let build = "[[workflow.tasks]]\nid = \"native-desktop\"\nkind = \"build\"\nmise_task = \"desktop-ci\"\ntools = [\"aqua:nextest-rs/nextest/cargo-nextest\", \"github:boltffi/boltffi\", \"mr-boxington\", \"rust\", \"swiftlint\", \"xcodegen\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 120\ncargo_build_jobs = 2\nnextest_test_threads = 2\n";
+pub(crate) fn config_with_build(mode: &str) -> String {
+    let build = "[[workflow.tasks]]\nid = \"native-desktop\"\nkind = \"build\"\nmise_task = \"desktop-ci\"\nsource = { mise_config = \"native/mise.toml\", working_directory = \"native\" }\ntools = [\"aqua:nextest-rs/nextest/cargo-nextest\", \"github:boltffi/boltffi\", \"mr-boxington\", \"rust\", \"swiftlint\", \"xcodegen\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 120\ncargo_build_jobs = 2\nnextest_test_threads = 2\n";
     config(mode).replace(
         "[[workflow.tasks]]\nid = \"native-format\"",
         &format!("{build}[[workflow.tasks]]\nid = \"native-format\""),

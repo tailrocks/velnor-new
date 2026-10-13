@@ -1,6 +1,6 @@
 pub const MISE_VERSION: &str = "2026.10.4";
-pub const RUST_VERSION: &str = "1.98.1";
-pub const MR_BOXINGTON_VERSION: &str = "1.19.0";
+pub const RUST_VERSION: &str = "1.99.0";
+pub const MR_BOXINGTON_VERSION: &str = "1.23.0";
 pub const GH_VERSION: &str = "2.101.0";
 pub const ACTIONLINT_VERSION: &str = "1.7.12";
 pub const SHELLCHECK_VERSION: &str = "0.11.0";

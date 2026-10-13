@@ -49,7 +49,10 @@ fn diamond_fixture_resolves_to_one_shared_dir() -> Outcome {
     let resolved = resolve_refs(&refs).expect("diamond resolves");
     // Root calls a/b, a calls nested/shared, b calls shared: five edges.
     assert_eq!(resolved.edges.len(), 5);
-    assert!(resolved.findings.is_empty());
+    assert_eq!(
+        resolved.findings,
+        [] as [velnor_actions_tofu::ModuleFinding; 0]
+    );
     // Both `../shared` references land on ONE directory.
     let shared = targets(&resolved.edges)
         .into_iter()
@@ -66,7 +69,7 @@ fn diamond_fixture_resolves_to_one_shared_dir() -> Outcome {
 fn remote_fixture_records_kinds() -> Outcome {
     let (refs, _, _) = fixture_refs("tofu-remote")?;
     let resolved = resolve_refs(&refs).expect("remote resolves");
-    assert!(resolved.edges.is_empty());
+    assert_eq!(resolved.edges, [] as [velnor_actions_tofu::ModuleEdge; 0]);
     assert_eq!(resolved.findings.len(), 2);
     let mut kinds: Vec<String> = resolved
         .findings
@@ -83,7 +86,10 @@ fn qualify_accepts_diamond_at_fixture_root() -> Outcome {
     let (refs, files, dir) = fixture_refs("tofu-modules")?;
     let qualified = qualify_module_edges(&dir, &files, &refs).expect("diamond qualifies");
     assert_eq!(qualified.edges.len(), 5);
-    assert!(qualified.findings.is_empty());
+    assert_eq!(
+        qualified.findings,
+        [] as [velnor_actions_tofu::ModuleFinding; 0]
+    );
     Ok(())
 }
 
@@ -91,7 +97,7 @@ fn qualify_accepts_diamond_at_fixture_root() -> Outcome {
 fn qualify_remote_passes_findings_through() -> Outcome {
     let (refs, files, dir) = fixture_refs("tofu-remote")?;
     let qualified = qualify_module_edges(&dir, &files, &refs).expect("remote qualifies");
-    assert!(qualified.edges.is_empty());
+    assert_eq!(qualified.edges, [] as [velnor_actions_tofu::ModuleEdge; 0]);
     assert_eq!(qualified.findings.len(), 2);
     Ok(())
 }

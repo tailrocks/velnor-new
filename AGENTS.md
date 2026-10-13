@@ -25,7 +25,7 @@
 
 ## Proof invariants
 
-- Effective edition 2024 in every crate (`edition.workspace = true`; root sets `edition = "2024"`); MSRV 1.98 resolves everywhere.
+- Effective edition 2024 in every crate (`edition.workspace = true`; root sets `edition = "2024"`); MSRV 1.99 resolves everywhere.
 - `unsafe` forbidden; `Result` never ignored; no `unwrap`/`panic!`/`todo!` in product code; lints inherited purely (`[lints] workspace = true`).
 - Locked resolution: `--locked` everywhere, exact `=x.y.z` pins, registry-only sources; `Cargo.lock` committed.
 - Size gates: 400 lines per file, 150 for `lib.rs`/`main.rs`, 80 per function. No baseline or ratchet: split, never grandfather.

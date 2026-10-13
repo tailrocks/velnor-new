@@ -97,7 +97,7 @@ fn dir_files_lists_direct_children_only() {
     let files = paths(&["main.tf", "child/main.tf", "child/nested/x.tf"]);
     assert_eq!(dir_files(&files, ""), paths(&["main.tf"]));
     assert_eq!(dir_files(&files, "child"), paths(&["child/main.tf"]));
-    assert!(dir_files(&files, "missing").is_empty());
+    assert_eq!(dir_files(&files, "missing"), [] as [String; 0]);
 }
 
 #[test]

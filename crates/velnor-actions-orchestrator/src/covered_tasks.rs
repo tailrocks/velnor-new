@@ -8,7 +8,7 @@
 //! never contain commas, and the empty set encodes as the empty
 //! string, which matches nothing and executes everything.
 
-use velnor_actions_contract::{ObligationDecision, Plan, validate_task_id};
+use velnor_actions_contract::{ObligationDecision, Plan};
 // Re-exported: the CLI emits this exact output name (single-sourced).
 pub use velnor_actions_workflow_renderer::COVERED_TASKS_OUTPUT;
 
@@ -87,10 +87,7 @@ pub(crate) fn covered_by_baseline(plan: &Plan, task_id: &str) -> bool {
 ///
 /// Returns a contract error when the task ID is malformed.
 pub(crate) fn skip_condition(task_id: &str) -> Result<String, OrchestratorError> {
-    validate_task_id(task_id).map_err(internal_contract)?;
-    Ok(format!(
-        "!contains(needs.plan.outputs.{COVERED_TASKS_OUTPUT}, ',{task_id},')"
-    ))
+    velnor_actions_contract::task_execution_condition(task_id).map_err(internal_contract)
 }
 
 #[cfg(test)]

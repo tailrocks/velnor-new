@@ -46,6 +46,23 @@ pub(crate) fn selected_task_tools(
     config: &crate::native_tool_input::NativeMiseConfig,
     task_name: &str,
 ) -> Result<BTreeMap<String, String>, &'static str> {
+    selected_task_tools_with_run_policy(config, task_name, true)
+}
+
+/// Collect tools in a build task's bounded graph, allowing dependency-only
+/// tasks while still requiring every leaf to perform a command.
+pub(crate) fn selected_build_task_tools(
+    config: &crate::native_tool_input::NativeMiseConfig,
+    task_name: &str,
+) -> Result<BTreeMap<String, String>, &'static str> {
+    selected_task_tools_with_run_policy(config, task_name, false)
+}
+
+fn selected_task_tools_with_run_policy(
+    config: &crate::native_tool_input::NativeMiseConfig,
+    task_name: &str,
+    require_inline_run: bool,
+) -> Result<BTreeMap<String, String>, &'static str> {
     let mut active = BTreeSet::new();
     let mut complete = BTreeSet::new();
     let mut tools = BTreeMap::new();
@@ -57,6 +74,7 @@ pub(crate) fn selected_task_tools(
         &mut complete,
         &mut tools,
         &mut count,
+        require_inline_run,
     )?;
     Ok(tools)
 }
@@ -68,6 +86,7 @@ fn visit(
     complete: &mut BTreeSet<String>,
     tools: &mut BTreeMap<String, String>,
     count: &mut usize,
+    require_inline_run: bool,
 ) -> Result<(), &'static str> {
     if complete.contains(name) {
         return Ok(());
@@ -83,10 +102,10 @@ fn visit(
     if !task.valid_shape || !task.unsupported_fields.is_empty() {
         return Err("verification_task_shape");
     }
-    if !task.run_field_present {
+    if require_inline_run && !task.run_field_present {
         return Err("verification_task_inline_run_required");
     }
-    if task.run_commands.is_none() {
+    if task.run_field_present && task.run_commands.is_none() {
         return Err("verification_task_run_shape");
     }
     for (key, version) in &task.task_tools {
@@ -124,8 +143,19 @@ fn visit(
             children.insert(words[2].to_owned());
         }
     }
+    if !require_inline_run && !task.run_field_present && children.is_empty() {
+        return Err("build_task_task_empty");
+    }
     for child in children {
-        visit(config, &child, active, complete, tools, count)?;
+        visit(
+            config,
+            &child,
+            active,
+            complete,
+            tools,
+            count,
+            require_inline_run,
+        )?;
     }
     active.remove(name);
     complete.insert(name.to_owned());
@@ -206,6 +236,10 @@ fn safe_tool_key(key: &str) -> bool {
         })
 }
 
+pub(crate) fn safe_task_tool_version(version: &str) -> bool {
+    safe_version(version)
+}
+
 fn safe_version(version: &str) -> bool {
     !version.is_empty()
         && version.len() <= 64
@@ -213,4 +247,55 @@ fn safe_version(version: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'+' | b'_' | b'-'))
         && !matches!(version, "latest" | "system" | "ref")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::selected_build_task_tools;
+    use crate::native_tool_input::{NativeMiseConfig, NativeToolSource, native_mise_source};
+
+    fn config(source: &str) -> NativeMiseConfig {
+        let value = toml::from_str(source).expect("Mise task config");
+        let input = native_mise_source("native/mise.toml", source.as_bytes(), &value)
+            .expect("typed Mise source");
+        match input.source {
+            NativeToolSource::MiseConfig(config) => config,
+            NativeToolSource::RustToolchain | NativeToolSource::MiseLock(_) => {
+                panic!("wrong source kind")
+            }
+        }
+    }
+
+    #[test]
+    fn build_task_tools_include_dependency_only_task_nodes() {
+        let config = config(
+            r#"
+[tasks.ci]
+depends = ["lint"]
+
+[tasks.lint]
+run = "swiftlint lint --strict"
+tools = { swiftlint = "0.65.1" }
+"#,
+        );
+
+        assert_eq!(
+            selected_build_task_tools(&config, "ci").expect("bounded task graph"),
+            [("swiftlint".to_owned(), "0.65.1".to_owned())].into()
+        );
+    }
+
+    #[test]
+    fn build_task_graph_rejects_empty_dependency_nodes() {
+        let config = config(
+            r#"
+[tasks.ci]
+depends = ["empty"]
+
+[tasks.empty]
+"#,
+        );
+
+        assert!(selected_build_task_tools(&config, "ci").is_err());
+    }
 }

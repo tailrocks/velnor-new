@@ -63,7 +63,7 @@ fn tofu_exec_wraps_pinned_opentofu_payload() -> Result<(), String> {
     assert_eq!(specs, ["opentofu@1.13.1".to_owned()]);
     let command = IsolatedCommand::tofu_exec(
         &specs,
-        &exec.payload(),
+        &exec.payload(&catalog),
         "/velnor/tofu-data",
         "/velnor/tofu-cli.hcl",
         "/velnor/tofu-cache",

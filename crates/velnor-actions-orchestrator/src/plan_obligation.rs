@@ -9,10 +9,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use serde::Serialize;
 use velnor_actions_contract::{
     MatrixEntry, NamedCheckLane, PlanObligation, PlannedPlatform, ProposedTask, Stack,
-    StackExtension, canonical_json_bytes, digest_b3,
+    StackExtension,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
@@ -346,11 +345,6 @@ fn record_lane_target_dir(metadata: &mut serde_json::Value, lane_id: &str) {
     );
 }
 
-/// Digest of canonical bytes for a serializable input struct.
-fn digest_of<T: Serialize>(inputs: &T) -> Result<String, velnor_actions_contract::ContractError> {
-    Ok(digest_b3(&canonical_json_bytes(inputs)?))
-}
-
 /// Task digest binding argv plus toolchain for one obligation.
 ///
 /// Shared by event-time plan obligations and static crate-job
@@ -360,20 +354,9 @@ pub(crate) fn task_digest(
     argv: &[String],
     toolchain_id: &str,
 ) -> Result<String, velnor_actions_contract::ContractError> {
-    digest_of(&TaskDigestInputs {
+    velnor_actions_contract::workflow::crate_job::task_digest_for_execution(
         task_id,
         argv,
         toolchain_id,
-    })
-}
-
-/// Task-digest preimage fields.
-#[derive(Debug, Serialize)]
-struct TaskDigestInputs<'a> {
-    /// Stable task ID.
-    task_id: &'a str,
-    /// Fixed argument vector.
-    argv: &'a [String],
-    /// Toolchain identity digest.
-    toolchain_id: &'a str,
+    )
 }

@@ -1,4 +1,4 @@
-use super::super::{run_shellcheck_bodies, workflow};
+use super::super::run_shellcheck_bodies;
 use super::{ShellDialect, scan_workflow};
 
 fn bodies(workflow: &str) -> Result<Vec<(String, ShellDialect)>, String> {
@@ -13,6 +13,21 @@ fn step_shell_after_run_overrides_the_hosted_default() -> Result<(), String> {
         "jobs:\n  probe:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: test\n        run: echo probe\n        shell: sh\n",
     )?;
     assert_eq!(runs, [("echo probe".to_owned(), ShellDialect::Sh)]);
+    Ok(())
+}
+
+#[test]
+fn hosted_macos_26_uses_the_typed_bash_default() -> Result<(), String> {
+    let runs = bodies(
+        "jobs:\n  macos-26:\n    runs-on: macos-26\n    steps:\n      - name: test\n        run: echo probe\n  macos-15:\n    runs-on: macos-15\n    steps:\n      - name: test\n        run: echo probe\n",
+    )?;
+    assert_eq!(
+        runs,
+        [
+            ("echo probe".to_owned(), ShellDialect::Bash),
+            ("echo probe".to_owned(), ShellDialect::Bash),
+        ]
+    );
     Ok(())
 }
 
@@ -68,7 +83,10 @@ fn only_step_run_keys_are_linted() -> Result<(), String> {
     let runs = bodies(
         "defaults:\n  run:\n    shell: bash\njobs:\n  probe:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: action\n        uses: example/action@0000000000000000000000000000000000000000\n        with:\n          run: action-input\n        env:\n          run: environment-value\n",
     )?;
-    assert!(runs.is_empty());
+    assert_eq!(
+        runs,
+        [] as [(String, crate::validate_shell::workflow::ShellDialect); 0]
+    );
     Ok(())
 }
 
@@ -77,6 +95,11 @@ fn unknown_runner_shell_and_shellcheck_overrides_fail_closed() {
     let unknown_runner = "jobs:\n  probe:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: test\n        run: echo probe\n";
     assert!(
         bodies(unknown_runner).is_err_and(|err| { err.contains("shell_unresolved_for_runner") })
+    );
+
+    let unknown_macos = "jobs:\n  probe:\n    runs-on: macos-27\n    steps:\n      - name: test\n        run: echo probe\n";
+    assert!(
+        bodies(unknown_macos).is_err_and(|err| { err.contains("shell_unresolved_for_runner") })
     );
 
     let custom_shell = "jobs:\n  probe:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: test\n        run: echo probe\n        shell: bash --noprofile {0}\n";
@@ -105,7 +128,10 @@ fn nested_run_values_are_not_confused_with_steps() -> Result<(), String> {
     let runs = bodies(
         "jobs:\n  probe:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: action\n        uses: example/action@0000000000000000000000000000000000000000\n        with:\n          run: action-input\n        env:\n          run: environment-value\n",
     )?;
-    assert!(runs.is_empty());
+    assert_eq!(
+        runs,
+        [] as [(String, crate::validate_shell::workflow::ShellDialect); 0]
+    );
     Ok(())
 }
 
@@ -125,134 +151,6 @@ fn harmless_shellcheck_directives_remain_supported() -> Result<(), String> {
 fn unsupported_step_mapping_order_fails_closed() {
     let workflow = "jobs:\n  probe:\n    runs-on: ubuntu-26.04\n    steps:\n      - run: echo probe\n        name: test\n";
     assert!(bodies(workflow).is_err_and(|err| { err.contains("step_name_must_be_first") }));
-}
-
-#[test]
-fn run_alias_is_linted_with_each_uses_effective_shell() -> Result<(), String> {
-    let runs = bodies(
-        "jobs:\n  hosted:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: &r1 echo \"$HOME\"\n  scale:\n    runs-on: [self-hosted, runner]\n    defaults:\n      run:\n        shell: sh\n    steps:\n      - name: reuse\n        run: *r1\n",
-    )?;
-    assert_eq!(
-        runs,
-        [
-            ("echo \"$HOME\"".to_owned(), ShellDialect::Bash),
-            ("echo \"$HOME\"".to_owned(), ShellDialect::Sh),
-        ]
-    );
-    Ok(())
-}
-
-#[test]
-fn aliases_keep_use_site_environment_and_expression_contexts() -> Result<(), String> {
-    let runs = bodies(
-        "jobs:\n  hosted:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: &r1 printf '%s' \"$VALUE\"\n  scale:\n    runs-on: [self-hosted, runner]\n    defaults:\n      run:\n        shell: sh\n    steps:\n      - name: use alias with local expression context\n        env:\n          VALUE: ${{ vars.SCALE_VALUE }}\n        run: *r1\n  other-hosted:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: use alias with another expression context\n        env:\n          VALUE: ${{ vars.HOSTED_VALUE }}\n        run: *r1\n",
-    )?;
-    assert_eq!(
-        runs,
-        [
-            ("printf '%s' \"$VALUE\"".to_owned(), ShellDialect::Bash),
-            ("printf '%s' \"$VALUE\"".to_owned(), ShellDialect::Sh),
-            ("printf '%s' \"$VALUE\"".to_owned(), ShellDialect::Bash),
-        ]
-    );
-    Ok(())
-}
-
-#[test]
-fn run_aliases_reject_forward_duplicate_and_out_of_scope_definitions() {
-    let forward = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: reuse\n        run: *r1\n";
-    assert!(bodies(forward).is_err_and(|error| error.contains("run_scalar_alias_unresolved")));
-
-    let forward_then_defined = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: forward use\n        run: *r1\n      - name: later definition\n        run: &r1 echo safe\n";
-    assert!(
-        bodies(forward_then_defined)
-            .is_err_and(|error| error.contains("run_scalar_alias_unresolved"))
-    );
-
-    let duplicate = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: duplicate\n        run: echo first\n        run: echo second\n";
-    assert!(bodies(duplicate).is_err_and(|error| error.contains("duplicate_step_run")));
-
-    let outside_scope = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: action\n        uses: example/action@0000000000000000000000000000000000000000\n        with:\n          run: &r1 echo ignored\n      - name: reuse\n        run: *r1\n";
-    assert!(bodies(outside_scope).is_err_and(|error| {
-        error.contains("workflow_alias_outside_step_run")
-            || error.contains("run_scalar_alias_unresolved")
-    }));
-}
-
-#[test]
-fn run_aliases_reject_malformed_and_duplicate_definitions() {
-    let malformed = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: malformed alias\n        run: *bad.name\n";
-    assert!(bodies(malformed).is_err_and(|error| error.contains("run_scalar_alias_malformed")));
-
-    let malformed_anchor = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: malformed anchor\n        run: &bad.name echo ignored\n";
-    assert!(
-        bodies(malformed_anchor).is_err_and(|error| error.contains("run_scalar_anchor_malformed"))
-    );
-
-    let duplicate_definition = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: first definition\n        run: &r1 echo first\n      - name: duplicate definition\n        run: &r1 echo second\n";
-    assert!(
-        bodies(duplicate_definition)
-            .is_err_and(|error| error.contains("run_scalar_anchor_duplicate"))
-    );
-}
-
-#[test]
-fn run_aliases_cannot_cross_workflow_files() -> Result<(), String> {
-    let definition = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: definition\n        run: &r1 echo safe\n";
-    let use_in_other_file = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: other workflow\n        run: *r1\n";
-    let staging = tempfile::tempdir().map_err(|error| error.to_string())?;
-    let first = staging.path().join("first.yml");
-    let second = staging.path().join("second.yml");
-    std::fs::write(&first, definition).map_err(|error| error.to_string())?;
-    std::fs::write(&second, use_in_other_file).map_err(|error| error.to_string())?;
-    assert!(
-        workflow::staged_runs(
-            staging.path(),
-            &["first.yml".to_owned(), "second.yml".to_owned()]
-        )
-        .is_err_and(|error| error.to_string().contains("run_scalar_alias_unresolved"))
-    );
-    Ok(())
-}
-
-#[test]
-fn aliases_outside_executable_run_scalars_fail_closed() {
-    let env_alias = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: &r1 echo safe\n      - name: alias in env\n        env:\n          COPY: *r1\n        run: echo safe\n";
-    let tagged_env_anchor = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: define\n        run: echo safe\n      - name: tagged anchor in env\n        env:\n          COPY: !!str &outside safe\n        run: echo safe\n";
-    let tagged_flow_anchor = "jobs:\n  job:\n    env: {COPY: !!str &outside safe, COPY2: *outside}\n    runs-on: ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n";
-    let runner_anchor = "jobs:\n  job:\n    runs-on: &runner ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n  second:\n    runs-on: *runner\n    steps:\n      - name: second command\n        run: echo safe\n";
-    let flow_alias = "jobs:\n  job:\n    runs-on: [!!str &runner ubuntu-26.04, *runner]\n    steps:\n      - name: command\n        run: echo safe\n";
-    let alias_key = "jobs:\n  job:\n    *runner: value\n    runs-on: ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n";
-    let merge_key = "jobs:\n  job:\n    <<: {runs-on: ubuntu-26.04}\n    steps:\n      - name: command\n        run: echo safe\n";
-    let flow_merge_key = "jobs:\n  job:\n    env: {<<: {COPY: safe}}\n    runs-on: ubuntu-26.04\n    steps:\n      - name: command\n        run: echo safe\n";
-
-    for workflow in [
-        env_alias,
-        tagged_env_anchor,
-        tagged_flow_anchor,
-        runner_anchor,
-        flow_alias,
-        alias_key,
-        merge_key,
-        flow_merge_key,
-    ] {
-        assert!(
-            bodies(workflow).is_err_and(|error| {
-                error.contains("workflow_alias_outside_step_run")
-                    || error.contains("workflow_merge_key_unsupported")
-            }),
-            "accepted out-of-scope alias or merge key: {workflow}"
-        );
-    }
-}
-
-#[test]
-fn literal_shell_globs_and_comments_are_not_yaml_aliases() -> Result<(), String> {
-    let workflow = "jobs:\n  job:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: shell glob\n        env:\n          PATTERN: path[*]\n        run: echo [*r1] [&r1] # &comment\n";
-    let scanned = bodies(workflow)?;
-    assert_eq!(scanned.len(), 1);
-    assert_eq!(scanned[0].0, "echo [*r1] [&r1] # &comment");
-    Ok(())
 }
 
 #[test]

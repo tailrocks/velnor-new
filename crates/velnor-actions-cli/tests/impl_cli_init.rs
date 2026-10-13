@@ -170,7 +170,7 @@ fn invalid_config_fails_with_key_path_and_no_replace() -> Result<(), Box<dyn Err
     std::fs::write(&config, body)?;
     let plan = spawn(&["plan"], &[], &tmp)?;
     assert_eq!(code(&plan), 1);
-    assert!(plan.stdout.is_empty());
+    assert_eq!(plan.stdout, [] as [u8; 0]);
     let stderr = String::from_utf8_lossy(&plan.stderr).into_owned();
     assert!(stderr.contains(".velnor/config.toml"), "{stderr}");
     assert!(stderr.contains("stacks.ignore"), "{stderr}");
@@ -188,15 +188,95 @@ fn invalid_config_fails_with_key_path_and_no_replace() -> Result<(), Box<dyn Err
 #[test]
 fn malformed_manifest_fails_naming_file() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("init-malformed")?;
+    let mbx = fresh_tempdir("init-malformed-mbx")?;
     init_repo(&tmp)?;
     add_crate_pair(&tmp)?;
     ignore_rust(&tmp)?;
     std::fs::write(tmp.join("apple").join("Cargo.toml"), "[[[\n")?;
-    let plan = spawn(&["plan"], &[], &tmp)?;
+    let catalog = crate::impl_repo_policy::read("crates/velnor-actions-mise/src/catalog.rs")?;
+    let rust_version = crate::impl_repo_policy::quoted_value(&catalog, "RUST_VERSION")?;
+    let mbx_version = crate::impl_repo_policy::quoted_value(&catalog, "MR_BOXINGTON_VERSION")?;
+    let log = write_mbx_fixture(&mbx)?;
+    let mut search_path = vec![mbx.join("bin")];
+    if let Some(parent) = std::env::var_os("PATH") {
+        search_path.extend(std::env::split_paths(&parent));
+    }
+    let path = std::env::join_paths(search_path)?;
+    let path = path.to_string_lossy().into_owned();
+    let log = log.to_string_lossy().into_owned();
+    let root = tmp.to_string_lossy().into_owned();
+    let plan = spawn(
+        &["plan"],
+        &[
+            ("PATH", &path),
+            ("VELNOR_TEST_RUST_VERSION", &rust_version),
+            ("VELNOR_TEST_MBX_VERSION", &mbx_version),
+            ("VELNOR_TEST_MBX_LOG", &log),
+            ("VELNOR_TEST_MBX_ROOT", &root),
+        ],
+        &tmp,
+    )?;
     assert_eq!(code(&plan), 1);
     let stderr = String::from_utf8_lossy(&plan.stderr).into_owned();
     assert!(stderr.contains("apple/Cargo.toml"), "{stderr}");
     assert!(stderr.contains("malformed_manifest"), "{stderr}");
+    let calls = std::fs::read_to_string(&log)?;
+    assert!(calls.lines().any(|line| line == "--version"), "{calls}");
+    assert!(
+        calls.lines().any(|line| {
+            line.starts_with(&format!("+{rust_version} metadata "))
+                && line.contains("apple/Cargo.toml")
+        }),
+        "{calls}"
+    );
     cleanup(&tmp);
+    cleanup(&mbx);
     Ok(())
+}
+
+fn write_mbx_fixture(root: &Path) -> Result<std::path::PathBuf, Box<dyn Error>> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&bin)?;
+    let script = bin.join("mbx");
+    std::fs::write(
+        &script,
+        r#"#!/bin/sh
+set -eu
+printf '%s\n' "$*" >> "$VELNOR_TEST_MBX_LOG"
+if [ "${1-}" = "--version" ]; then
+    printf 'mbx %s\n' "$VELNOR_TEST_MBX_VERSION"
+    exit 0
+fi
+if [ "${1-}" = "+$VELNOR_TEST_RUST_VERSION" ]; then
+    shift
+fi
+if [ "${1-}" != "metadata" ]; then
+    echo "unexpected MBX command: $*" >&2
+    exit 2
+fi
+manifest=''
+previous=''
+for argument do
+    if [ "$previous" = "--manifest-path" ]; then
+        manifest=$argument
+        break
+    fi
+    previous=$argument
+done
+if [ -z "$manifest" ]; then
+    echo "metadata manifest path missing" >&2
+    exit 2
+fi
+case "$manifest" in
+    */apple/Cargo.toml) printf '%s\n' '{ malformed metadata';;
+    *) printf '{"version":1,"workspace_root":"%s"}\n' "$VELNOR_TEST_MBX_ROOT";;
+esac
+"#,
+    )?;
+    let mut permissions = std::fs::metadata(&script)?.permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&script, permissions)?;
+    Ok(root.join("calls.log"))
 }

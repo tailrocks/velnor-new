@@ -165,6 +165,11 @@ pub fn render_tree_with_extra(
         files.push(file.clone());
     }
     files.sort_by(|left, right| left.path.cmp(&right.path));
+    #[cfg(feature = "test-render-capture")]
+    crate::render::test_render_capture::record_tree(RenderedTree {
+        files: files.clone(),
+        symlinks: Vec::new(),
+    });
     for file in &files {
         crate::workflow_size::check_workflow_size(&file.path, &file.bytes)?;
     }

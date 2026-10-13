@@ -42,7 +42,7 @@ async fn zero_initial_census_and_positive_poll_keep_jit_conflict_unacked() -> Re
 
     assert_eq!(result, Err(EnsureError::Conflict));
     assert_eq!(script.calls, ["jit"]);
-    assert!(workers.is_empty());
+    assert_eq!(workers, [] as [crate::worker::Started; 0]);
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].subject, "m91");

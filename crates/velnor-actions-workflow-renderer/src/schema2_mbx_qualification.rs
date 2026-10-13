@@ -13,13 +13,13 @@
 
 use super::features::{checkout_step, finish, gated, lane_base, run_step};
 use super::{MbxQualificationPins, RunnerSpec};
-use crate::cache_steps::MBX_ACTION_NAME;
+use crate::cache_steps::{ACTION_MBX_BIN, MBX_ACTION_NAME, RESOLVE_ACTION_MBX_BIN};
 use crate::yaml::Yaml;
 use crate::{RenderError, steps::validate_uses};
 use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
 
 const MAIN_REF: &str = "github.ref == 'refs/heads/main' && github.ref_protected == true";
-const SMOKE_CRATE: &str = r#"set -eu
+const SMOKE_CRATE_SETUP: &str = r#"set -eu
 root="$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification"
 mkdir -p "$root/src"
 cat > "$root/Cargo.toml" <<'EOF'
@@ -38,11 +38,8 @@ EOF
 cat > "$root/src/lib.rs" <<'EOF'
 pub fn cache_probe() -> u64 { 42 }
 EOF
-mbx build --manifest-path "$root/Cargo.toml"
 "#;
 const DISK_SAMPLE: &str = "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"";
-const IMPORT_PROBE: &str = "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx cache stats --json | tee \"$RUNNER_TEMP/mbx-object-stats.json\"; jq -e '.objects > 0' \"$RUNNER_TEMP/mbx-object-stats.json\"";
-const REUSE_PROBE: &str = "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx stats --json | tee \"$RUNNER_TEMP/mbx-reuse-stats.json\"; jq -e '.savings.cached_compilations > 0' \"$RUNNER_TEMP/mbx-reuse-stats.json\"";
 
 /// Emit isolated writer and reader jobs for the pinned MBX runtime.
 ///
@@ -108,11 +105,13 @@ fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (St
         verify_action_step(request, writer),
     ];
     if !writer {
-        steps.push(run_step("Require imported MBX objects", IMPORT_PROBE));
+        let probe = import_probe(request);
+        steps.push(run_step("Require imported MBX objects", &probe));
     }
-    steps.push(build_step());
+    steps.push(build_step(request));
     if !writer {
-        steps.push(run_step("Require reused compilation", REUSE_PROBE));
+        let probe = reuse_probe(request);
+        steps.push(run_step("Require reused compilation", &probe));
     }
     steps.push(clean_workspace_step(request));
     if writer {
@@ -229,17 +228,42 @@ fn verify_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
         (
             "run".to_owned(),
             Yaml::str(format!(
-                "test \"$MBX_VERSION\" = '{}' && test \"$CACHE_SAVE_ELIGIBLE\" = '{}' && test \"$CACHE_SAVE_REASON\" = '{}'{}",
-                request.mbx_version, save_eligible, save_reason, exact_cache_hit
+                "set -eu; {RESOLVE_ACTION_MBX_BIN}; test \"$MBX_VERSION\" = '{}' && test \"$CACHE_SAVE_ELIGIBLE\" = '{}' && test \"$CACHE_SAVE_REASON\" = '{}'{} && actual_version=$(mise --no-config --no-env --no-hooks exec rust@{} -- \"{ACTION_MBX_BIN}\" --version) && test \"$actual_version\" = 'mbx {}'",
+                request.mbx_version,
+                save_eligible,
+                save_reason,
+                exact_cache_hit,
+                request.rust_version,
+                request.mbx_version
             )),
         ),
     ])
 }
 
-fn build_step() -> Yaml {
+fn import_probe(request: &MbxQualificationPins) -> String {
+    format!(
+        "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; {RESOLVE_ACTION_MBX_BIN}; mise --no-config --no-env --no-hooks exec rust@{} -- \"{ACTION_MBX_BIN}\" cache stats --json | tee \"$RUNNER_TEMP/mbx-object-stats.json\"; jq -e '.objects > 0' \"$RUNNER_TEMP/mbx-object-stats.json\"",
+        request.rust_version
+    )
+}
+
+fn reuse_probe(request: &MbxQualificationPins) -> String {
+    format!(
+        "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; {RESOLVE_ACTION_MBX_BIN}; mise --no-config --no-env --no-hooks exec rust@{} -- \"{ACTION_MBX_BIN}\" stats --json | tee \"$RUNNER_TEMP/mbx-reuse-stats.json\"; jq -e '.savings.cached_compilations > 0' \"$RUNNER_TEMP/mbx-reuse-stats.json\"",
+        request.rust_version
+    )
+}
+
+fn build_step(request: &MbxQualificationPins) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Compile MBX cache probe")),
-        ("run".to_owned(), Yaml::str(SMOKE_CRATE)),
+        (
+            "run".to_owned(),
+            Yaml::str(format!(
+                "{SMOKE_CRATE_SETUP}{RESOLVE_ACTION_MBX_BIN}\nmise --no-config --no-env --no-hooks exec rust@{} -- \"{ACTION_MBX_BIN}\" +{} build --manifest-path \"$root/Cargo.toml\"",
+                request.rust_version, request.rust_version
+            )),
+        ),
     ])
 }
 
@@ -250,7 +274,7 @@ fn clean_workspace_step(request: &MbxQualificationPins) -> Yaml {
         (
             "run".to_owned(),
             Yaml::str(format!(
-                "mise --no-config --no-env --no-hooks exec rust@{} -- mbx clean",
+                "set -eu; {RESOLVE_ACTION_MBX_BIN}; mise --no-config --no-env --no-hooks exec rust@{} -- \"{ACTION_MBX_BIN}\" clean",
                 request.rust_version
             )),
         ),

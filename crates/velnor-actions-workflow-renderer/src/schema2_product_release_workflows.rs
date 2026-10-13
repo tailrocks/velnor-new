@@ -1,6 +1,9 @@
 //! Caller and reusable-workflow YAML for the product-release DAG.
 
+use std::collections::BTreeSet;
+
 use crate::yaml::Yaml;
+use velnor_actions_contract::{DispatchInput, DispatchInputType};
 
 use super::super::release_eligibility;
 use super::{Family, HOSTED_RUNS_ON, RELEASE_CONCURRENCY};
@@ -11,6 +14,7 @@ pub(super) fn reusable_workflow_call(family: Family) -> (String, Yaml) {
             "name".to_owned(),
             Yaml::str(format!("Run {} release graph", family.label())),
         ),
+        ("if".to_owned(), Yaml::str(family.selector_condition())),
         (
             "uses".to_owned(),
             Yaml::annotated(
@@ -189,16 +193,10 @@ fn workflow_call_trigger() -> Yaml {
     )])
 }
 
-pub(super) fn document(jobs: Vec<(String, Yaml)>) -> Yaml {
+pub(super) fn document(jobs: Vec<(String, Yaml)>, families: &[Family]) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Velnor product releases")),
-        (
-            "on".to_owned(),
-            Yaml::Map(vec![(
-                "workflow_dispatch".to_owned(),
-                Yaml::Map(Vec::new()),
-            )]),
-        ),
+        ("on".to_owned(), workflow_dispatch(families)),
         (
             "concurrency".to_owned(),
             Yaml::Map(vec![
@@ -212,4 +210,38 @@ pub(super) fn document(jobs: Vec<(String, Yaml)>) -> Yaml {
         ),
         ("jobs".to_owned(), Yaml::Map(jobs)),
     ])
+}
+
+fn workflow_dispatch(families: &[Family]) -> Yaml {
+    let mut choices = BTreeSet::from(["all"]);
+    choices.extend(families.iter().copied().map(Family::selector_value));
+    let input = DispatchInput {
+        name: "release_family".to_owned(),
+        required: false,
+        input_type: DispatchInputType::Choice,
+        choices: choices.into_iter().map(str::to_owned).collect(),
+        default: Some("all".to_owned()),
+    };
+    let mut input_fields = vec![
+        (
+            "description".to_owned(),
+            Yaml::str("Product release family to run; all preserves the configured release set"),
+        ),
+        ("type".to_owned(), Yaml::str(input.input_type.as_str())),
+        ("required".to_owned(), Yaml::Bool(input.required)),
+    ];
+    if let Some(default) = input.default {
+        input_fields.push(("default".to_owned(), Yaml::str(default)));
+    }
+    input_fields.push((
+        "options".to_owned(),
+        Yaml::Seq(input.choices.into_iter().map(Yaml::str).collect()),
+    ));
+    Yaml::Map(vec![(
+        "workflow_dispatch".to_owned(),
+        Yaml::Map(vec![(
+            "inputs".to_owned(),
+            Yaml::Map(vec![(input.name, Yaml::Map(input_fields))]),
+        )]),
+    )])
 }
