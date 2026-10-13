@@ -12,6 +12,8 @@ use velnor_actions_orchestrator::prepare;
 
 use crate::impl_common::{fixture_manifest_json, without_ambient_identity};
 
+use crate::impl_common::without_ambient_identity;
+
 /// Test error shortcut.
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 

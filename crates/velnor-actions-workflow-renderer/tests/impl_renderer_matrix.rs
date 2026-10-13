@@ -6,6 +6,7 @@ use velnor_actions_contract::{
 use velnor_actions_workflow_renderer::render::{
     MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
 };
+use velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub;
 use velnor_actions_workflow_renderer::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError, checkout_step, plan_step,
     render_workflow_ir, shell_step,

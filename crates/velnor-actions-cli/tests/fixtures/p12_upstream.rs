@@ -139,6 +139,11 @@ fn probe_action_rows() -> Vec<ProbeRow> {
             "aws-credentials.json",
             "{\"tag_name\": \"v6.3.0\"}",
         ),
+        (
+            "https://api.github.com/repos/Swatinem/rust-cache/tags",
+            "rust-cache.json",
+            "[{\"name\": \"v2.9.2\"}]",
+        ),
     ]
 }
 

@@ -31,6 +31,11 @@ pub use crate::steps_internal::{
     internal_step, merge_step, plan_step, publish_step, write_request_step,
 };
 
+pub use crate::steps_artifact::{
+    download_artifact_step, matrix_report_upload_step, matrix_report_upload_step_for,
+    upload_artifact_step,
+};
+
 /// Env key selecting the staged-binary internal operation.
 pub const INTERNAL_OP_ENV: &str = "VELNOR_INTERNAL_OP";
 /// Env key carrying the JSON request-file path.

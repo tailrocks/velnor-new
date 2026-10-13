@@ -387,6 +387,7 @@ fn action_const_wiring_is_mapped() -> Result<(), Box<dyn Error>> {
         "actions/cache/restore",
         "actions/cache/save",
         "asamarts/alint",
+        "Swatinem/rust-cache",
     ] {
         assert!(inventory.contains(key), "expected action set misses {key}");
     }

@@ -28,6 +28,7 @@ use crate::{
     artifact_paths::{PRESEED_OUTPUT_DIR_EXPR, PRESEED_STAGE_DIR_EXPR},
     cache_steps::RESOLVE_ACTION_MBX_BIN,
     steps,
+    toolchain_env::{with_credential_scrub, with_env_unset_argv},
 };
 
 #[path = "preseed_mbx.rs"]

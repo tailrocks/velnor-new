@@ -105,6 +105,49 @@ fn runner_label_catalog_maps_or_fails_closed() {
 }
 
 #[test]
+fn runner_label_catalog_maps_or_fails_closed() {
+    // Every config-accepted label either maps to a supported release
+    // target or maps to nothing; `None` labels hard-fail generation
+    // (`bad_label`, `unsupported_target_for_runner`) instead of
+    // silently taking the build host's arch/OS.
+    assert_eq!(RUNNER_LABEL_CATALOG.len(), 6);
+    assert!(RUNNER_LABEL_CATALOG.contains(&LATEST_RUNNER_LABEL));
+    for label in RUNNER_LABEL_CATALOG {
+        match target_for_runner_label(label) {
+            Some(target) => {
+                assert!(
+                    is_supported_target(target),
+                    "{label} maps to supported {target}"
+                );
+                assert!(!label.ends_with("-arm"), "{label} is an x64 label");
+            }
+            None => assert!(
+                label.ends_with("-arm"),
+                "only -arm catalog labels fail mapping: {label}"
+            ),
+        }
+    }
+    assert!(is_supported_target(
+        target_for_runner_label(LATEST_RUNNER_LABEL).expect("latest maps")
+    ));
+    // Rust execution targets are charset-validated, not allowlisted:
+    // supported configs CAN carry non-release triples, so generation
+    // must hard-fail on them (platform identity, cache keys) rather
+    // than mis-executing. See `sources_cache_key` and
+    // `platform_inputs_for` rejection tests.
+    for other in [
+        "host",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-pc-windows-msvc",
+    ] {
+        assert!(is_valid_rust_target(other), "{other} is config-accepted");
+    }
+    assert!(!is_supported_target("aarch64-unknown-linux-gnu"));
+    assert!(!is_valid_rust_target("x86_64 unknown"));
+    assert!(!is_valid_rust_target("aarch64-${{ x }}"));
+}
+
+#[test]
 fn release_manifest_json_round_trip_and_tamper() -> Result<(), ContractError> {
     let sha = "ab".repeat(32);
     let commit = "ab".repeat(20);

@@ -36,7 +36,7 @@ use velnor_actions_contract::{
     NEEDS_EXPECTED_ENV, QualificationDispatch, canonical_json_str, parse_strict_json,
 };
 
-use self::needs_channel::{NEEDS_ENV, parse_needs};
+use self::needs_channel::{NEEDS_ENV, NEEDS_EXPECTED_ENV, parse_needs};
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;

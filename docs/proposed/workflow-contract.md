@@ -297,6 +297,7 @@ actions/cache/save
 actions/upload-artifact
 actions/download-artifact
 asamarts/alint
+Swatinem/rust-cache
 ```
 
 Velnor's compiled-in action registry supplies the latest stable release, full

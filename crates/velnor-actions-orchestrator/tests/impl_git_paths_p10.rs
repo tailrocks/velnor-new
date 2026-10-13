@@ -13,6 +13,8 @@ use crate::impl_common::git_fixture;
 
 use std::fs;
 use std::path::Path;
+#[cfg(unix)]
+use std::process::Command as StdCommand;
 
 use velnor_actions_contract::Plan;
 use velnor_actions_orchestrator::{plan_internal, resolve_root};

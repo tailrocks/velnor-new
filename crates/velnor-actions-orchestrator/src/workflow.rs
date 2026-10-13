@@ -315,6 +315,26 @@ fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
     plan.steps.splice(at..at, reports);
 }
 
+/// Insert deferred format-report steps immediately after `Plan`.
+///
+/// The plan exists only after the planner runs; the publish closure
+/// later lands between `Plan` and these steps, so the plan artifact
+/// carries plan and matrix only, never the format entry's reports.
+/// Without a `plan-v1` anchor the steps close the job.
+fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
+    if reports.is_empty() {
+        return;
+    }
+    let at = plan
+        .steps
+        .iter()
+        .position(|step| {
+            matches!(&step.kind, StepKind::Internal { operation } if operation == PLAN_OPERATION)
+        })
+        .map_or(plan.steps.len(), |plan_at| plan_at + 1);
+    plan.steps.splice(at..at, reports);
+}
+
 /// Insert the workspace `Format` step immediately before `Plan`.
 ///
 /// Mirrors the renderer plan-format anchoring at this stage: the

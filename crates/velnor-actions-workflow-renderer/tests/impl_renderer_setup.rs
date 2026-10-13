@@ -87,7 +87,7 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
         "install: \"false\"".to_owned(),
         "env: \"false\"".to_owned(),
         "cache: \"true\"".to_owned(),
-        "cache_save: \"true\"".to_owned(),
+        "cache_save: ${{ github.event_name == 'push' }}".to_owned(),
         "cache_key: mise-v1-".to_owned(),
     ] {
         assert!(text.contains(&line), "missing {line}:\n{text}");

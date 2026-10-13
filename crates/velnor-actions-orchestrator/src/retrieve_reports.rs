@@ -34,6 +34,33 @@ use crate::retrieve_retry::download_with_retry;
 /// Retrieve operation tag (single-sourced from the renderer protocol).
 pub use velnor_actions_workflow_renderer::steps::FETCH_OPERATION as FETCH_OP;
 
+/// Bounded per-artifact download attempts (F5).
+///
+/// Transient `gh` failures retry up to this many attempts per leg;
+/// persistent failures skip the leg (the merge judges `not_run`).
+/// Replaces the old `continue-on-error` fetch tail: retries absorb
+/// flakes, while hard environment failures fail the job instead of
+/// being masked.
+pub(crate) const MAX_DOWNLOAD_ATTEMPTS: u32 = 3;
+
+/// Attempt one download up to the bounded retry limit.
+///
+/// Returns success plus the attempts spent (1 on first-try success,
+/// [`MAX_DOWNLOAD_ATTEMPTS`] on persistent failure). Pure over the
+/// attempt closure so the bound is unit-testable without `gh`.
+pub(crate) fn download_with_retry(mut attempt: impl FnMut() -> bool) -> (bool, u32) {
+    let mut attempts = 0u32;
+    loop {
+        attempts += 1;
+        if attempt() {
+            return (true, attempts);
+        }
+        if attempts >= MAX_DOWNLOAD_ATTEMPTS {
+            return (false, attempts);
+        }
+    }
+}
+
 /// Retrieve every plan-expected matrix artifact for this run.
 ///
 /// Resolves the run ID from `GITHUB_RUN_ID` and the run directory from

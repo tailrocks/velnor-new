@@ -15,6 +15,7 @@ use crate::{
     closure::{FRESHNESS_OUTDIR, download_plan_step, freshness_step},
     render::{CANDIDATE_JOB_ID, CandidateSpec, PLAN_JOB_ID, RenderContext},
     steps,
+    toolchain_env::{with_credential_scrub, with_credential_unset_script, with_env_unset_argv},
 };
 
 /// Display name of the candidate-manifest verification step.
@@ -78,7 +79,7 @@ pub fn candidate_manifest_verify_step(target: &str) -> Result<Step, RenderError>
             "-c".to_owned(),
             candidate_manifest_verify_script(target),
         ],
-        BTreeMap::new(),
+        with_credential_scrub(&BTreeMap::new()),
     )
 }
 
@@ -123,7 +124,16 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
             steps::shell_step(
                 "Write candidate manifest",
                 vec!["sh".to_owned(), "-c".to_owned(), manifest],
-                BTreeMap::new(),
+                with_credential_scrub(&BTreeMap::new()),
+            )?,
+            steps::shell_step(
+                "Write candidate attestation",
+                vec![
+                    "sh".to_owned(),
+                    "-c".to_owned(),
+                    steps::candidate_attestation_script(),
+                ],
+                with_credential_scrub(&BTreeMap::new()),
             )?,
             steps::shell_step(
                 "Write candidate attestation",

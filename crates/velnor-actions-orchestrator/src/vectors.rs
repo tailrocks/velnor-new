@@ -1,5 +1,6 @@
 //! V1 fixed command vectors built only through the Mise adapter.
 
+use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 
 use velnor_actions_contract::{ProposedTask, Stack};
@@ -348,6 +349,40 @@ fn validator_argv_parts<'a>(
             }
         })?;
     strings_of(exec.argv()).map_err(|problem| OrchestratorError::Contract { problem })
+}
+
+/// Shell steps running each allowlisted custom task via `mise run`.
+///
+/// Only names in `allowlist` are emitted; there is no other path from a
+/// task name to a step, so undeclared names can never execute (R26).
+/// Every step carries the scrubbed execution env plus the unset wrapper:
+/// custom tasks run repository Mise configuration, so ambient tokens
+/// must stop here; the step env alone cannot shadow runner-injected
+/// credentials (D3). The env also inherits `MISE_LOCKFILE=0` (F6,
+/// tooling-input §1.1): CI never writes the project's lockfile.
+/// # Errors
+///
+/// Returns a contract error when a name fails the task-name rule.
+pub(crate) fn custom_task_steps(
+    allowlist: &[String],
+    catalog: &ToolCatalog,
+) -> Result<Vec<Step>, OrchestratorError> {
+    use velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv;
+    allowlist
+        .iter()
+        .map(|task| {
+            let run = custom_task_run_argv(task).map_err(|err| OrchestratorError::Contract {
+                problem: err.to_string(),
+            })?;
+            let run = with_env_unset_argv(&run);
+            let env = crate::matrix_step::task_execution_env(catalog, &BTreeMap::new())?;
+            Ok(Step {
+                name: format!("Custom task {task}"),
+                condition: None,
+                kind: StepKind::Shell { run, env },
+            })
+        })
+        .collect()
 }
 
 /// Fixed pre-seed MBX route probe through pinned Mise.

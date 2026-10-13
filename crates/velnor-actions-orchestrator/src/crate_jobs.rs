@@ -158,6 +158,10 @@ pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, 
             max_parallel_jobs,
             helper_version,
         )?;
+        // Allowlisted custom tasks run after the fixed obligations; an
+        // empty allowlist (the default) appends nothing.
+        job.steps
+            .extend(crate::vectors::custom_task_steps(custom_tasks, catalog)?);
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
             tofu_ids.push(job_id.clone());
