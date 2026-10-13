@@ -78,8 +78,9 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-75c77caa4018556f
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
@@ -134,8 +135,9 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-1e88d9dde00a53da
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
@@ -171,8 +173,9 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-507563a85b3135e7
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
@@ -278,8 +281,9 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
@@ -515,8 +519,9 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-976d3023f73c2670
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
@@ -598,8 +603,9 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-619e806daf8a8f53
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
@@ -757,8 +763,9 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-619e806daf8a8f53
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
@@ -912,8 +919,9 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-619e806daf8a8f53
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
@@ -1065,8 +1073,9 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-619e806daf8a8f53
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
@@ -1224,8 +1233,9 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-619e806daf8a8f53
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
@@ -1377,8 +1387,9 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-619e806daf8a8f53
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
@@ -1683,8 +1694,9 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-619e806daf8a8f53
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
@@ -1836,8 +1848,9 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          cache: "false"
-          cache_save: "false"
+          cache: "true"
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-8f52c1fc1d8f90d8
+          cache_save: "true"
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030

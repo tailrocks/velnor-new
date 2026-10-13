@@ -90,6 +90,14 @@ pub const RUST_CACHE_ACTION_VERSION: &str = "v2.9.2";
 /// Full commit SHA for [`RUST_CACHE_ACTION_VERSION`].
 pub const RUST_CACHE_ACTION_SHA: &str = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6";
 
+/// Action key for the Cargo-only Rust cache (P08-7, never with MBX).
+pub const RUST_CACHE_ACTION: &str = "Swatinem/rust-cache";
+/// Qualified `Swatinem/rust-cache` release.
+/// Source: `https://api.github.com/repos/Swatinem/rust-cache/tags`; checked 2026-09-30.
+pub const RUST_CACHE_ACTION_VERSION: &str = "v2.9.2";
+/// Full commit SHA for [`RUST_CACHE_ACTION_VERSION`].
+pub const RUST_CACHE_ACTION_SHA: &str = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6";
+
 /// One pinned action reference: `repo[/path]@sha` plus version comment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PinnedActionRef {
