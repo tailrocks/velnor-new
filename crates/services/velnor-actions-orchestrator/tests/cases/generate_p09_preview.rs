@@ -19,6 +19,24 @@ use crate::support::{TestResult, config_with_branch, err_of, make_repo, snapshot
 #[path = "impl_generate_p09_preview_contract.rs"]
 mod contract;
 
+fn metadata_diagnostic(path: &std::path::Path) -> String {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => format!(
+            "path={:?},status=ok,is_dir={},is_symlink={}",
+            path,
+            metadata.is_dir(),
+            metadata.file_type().is_symlink()
+        ),
+        Err(error) => format!(
+            "path={:?},status=err,kind={:?},raw_errno={:?},error={:?}",
+            path,
+            error.kind(),
+            error.raw_os_error(),
+            error
+        ),
+    }
+}
+
 /// Preview-generate helper: `Ok` report or the typed error.
 fn preview(
     prep: &GenerationPreparation,
