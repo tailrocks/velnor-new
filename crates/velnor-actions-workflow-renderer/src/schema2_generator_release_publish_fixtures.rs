@@ -4,6 +4,7 @@ use super::super::assets;
 use super::super::required_tool_path::with_required_tool_path;
 use super::{Failure, REPOSITORY, SOURCE_SHA, manifest};
 use std::error::Error;
+use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -19,6 +20,16 @@ pub(super) fn copy_release_helpers(root: &Path) -> Result<(), Box<dyn Error>> {
         )?;
     }
     Ok(())
+}
+
+pub(super) fn test_path_with_sbin() -> Result<OsString, Box<dyn Error>> {
+    let current = std::env::var_os("PATH").ok_or("missing PATH")?;
+    let mut paths = std::env::split_paths(&current).collect::<Vec<_>>();
+    let sbin = PathBuf::from("/sbin");
+    if !paths.contains(&sbin) {
+        paths.push(sbin);
+    }
+    Ok(std::env::join_paths(paths)?)
 }
 
 pub(super) fn write_candidate_records(root: &Path, case: Failure) -> Result<(), Box<dyn Error>> {
