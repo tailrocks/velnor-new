@@ -314,7 +314,7 @@ jobs:
           save-on-pull-request: "false"
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
-          version: 1.21.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -351,7 +351,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; test -x target/release/velnor-actions && mkdir -p \"$RUNNER_TEMP/velnor\" && mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version > \"$RUNNER_TEMP/velnor/preseed-mbx-version\" && grep -qxF \"mbx 1.21.1\" \"$RUNNER_TEMP/velnor/preseed-mbx-version\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; test -x target/release/velnor-actions && mkdir -p \"$RUNNER_TEMP/velnor\" && mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version > \"$RUNNER_TEMP/velnor/preseed-mbx-version\" && grep -qxF \"mbx 1.22.0\" \"$RUNNER_TEMP/velnor/preseed-mbx-version\"'"
       - name: Write helper manifest (pre-seed trust-on-review)
         env:
           VELNOR_INTERNAL_OP: write-preseed-manifest-v1
@@ -643,7 +643,7 @@ jobs:
           save-on-pull-request: "false"
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
-          version: 1.21.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -841,7 +841,7 @@ jobs:
           save-on-pull-request: "false"
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
-          version: 1.21.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -1029,7 +1029,7 @@ jobs:
           save-on-pull-request: "false"
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
-          version: 1.21.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -1221,7 +1221,7 @@ jobs:
           save-on-pull-request: "false"
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
-          version: 1.21.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -1419,7 +1419,7 @@ jobs:
           save-on-pull-request: "false"
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
-          version: 1.21.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -1611,7 +1611,7 @@ jobs:
           save-on-pull-request: "false"
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
-          version: 1.21.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -1803,7 +1803,7 @@ jobs:
           save-on-pull-request: "false"
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
-          version: 1.21.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -1995,7 +1995,7 @@ jobs:
           save-on-pull-request: "false"
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
-          version: 1.21.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -2187,7 +2187,7 @@ jobs:
           save-on-pull-request: "false"
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
-          version: 1.21.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -2379,7 +2379,7 @@ jobs:
           save-on-pull-request: "false"
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
-          version: 1.21.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -2571,7 +2571,7 @@ jobs:
           save-on-pull-request: "false"
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
-          version: 1.21.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -2763,7 +2763,7 @@ jobs:
           save-on-pull-request: "false"
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
-          version: 1.21.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -2955,7 +2955,7 @@ jobs:
           save-on-pull-request: "false"
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
-          version: 1.21.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo

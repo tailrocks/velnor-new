@@ -387,3 +387,7 @@ pub(crate) use baseline_publish_lineage::carry_candidate_fits;
 #[cfg(test)]
 #[path = "baseline_publish_branch_tests.rs"]
 mod baseline_publish_branch_tests;
+
+#[cfg(test)]
+#[path = "baseline_publish_cover_tests.rs"]
+mod baseline_publish_cover_tests;

@@ -20,6 +20,8 @@ mod schema2_feature_snapshots;
 mod schema2_product_release_snapshots;
 #[path = "impl_schema2_routing_shell.rs"]
 mod shell_tests;
+#[path = "impl_schema2_routing_snapshots.rs"]
+mod schema2_routing_snapshots;
 
 const HOSTED_RUNS: &str = "runs-on: ubuntu-26.04";
 const SCALE_RUNS: &str = "runs-on: [velnor, ubuntu-26.04-scale-set]";

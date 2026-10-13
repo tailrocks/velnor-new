@@ -46,12 +46,11 @@ Co-authored-by: Codex <codex@openai.com>
 Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>
 ```
 
-Pass both trailers to `git commit` in that order, for example:
+Use Git's `-s` flag for the DCO signoff and pass the Codex coauthor trailer:
 
 ```sh
-git commit \
+git commit -s \
   --trailer "Co-authored-by: Codex <codex@openai.com>" \
-  --trailer "Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>" \
   -m "docs: explain repository agent roles"
 ```
 

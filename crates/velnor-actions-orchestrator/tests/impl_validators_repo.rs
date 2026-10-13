@@ -10,7 +10,7 @@ use velnor_actions_contract::DetectionStatus;
 use velnor_actions_contract::{PullRequestCachePolicy, WorkflowPolicy};
 use velnor_actions_orchestrator::prepare;
 
-use crate::impl_common::without_ambient_identity;
+use crate::impl_common::{fixture_manifest_json, without_ambient_identity};
 
 /// Test error shortcut.
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -23,24 +23,6 @@ fn git(args: &[&str], cwd: &Path) -> TestResult {
         .status()?;
     assert!(status.success(), "git {args:?} failed");
     Ok(())
-}
-
-/// Release-manifest fixture so consumer `prepare` succeeds.
-fn fixture_manifest_json() -> String {
-    let version = env!("CARGO_PKG_VERSION");
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
-    .iter()
-    .map(|target| {
-        format!(
-            "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{}\"}}",
-            "a".repeat(64)
-        )
-    })
-    .collect::<Vec<_>>()
-    .join(",");
-    format!(
-        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"targets\":[{targets}]}}"
-    )
 }
 
 /// Live repository sample text (the file under review for drift).

@@ -86,6 +86,17 @@ pub enum PullRequestCachePolicy {
     SameRepositoryScoped,
 }
 
+/// Cache-write policy for pull-request workflows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub enum PullRequestCachePolicy {
+    /// Pull requests restore caches and never save them.
+    #[default]
+    ReadOnly,
+    /// Same-repository pull requests may save only to pull-request-scoped caches.
+    SameRepositoryScoped,
+}
+
 /// Workflow policy selector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]

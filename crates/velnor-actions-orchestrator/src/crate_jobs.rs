@@ -29,6 +29,9 @@ use crate::internal::internal;
 use crate::matrix_step::step_name_for;
 use crate::obligation_order::obligation_order_key;
 
+#[path = "crate_jobs_mbx_setup.rs"]
+mod mbx_setup;
+
 #[path = "crate_jobs_stage.rs"]
 mod stage;
 
@@ -302,7 +305,7 @@ fn render_job(
         )?);
     }
     if use_mbx {
-        steps.extend(crate::mbx_preflight::steps_for_catalog(catalog)?);
+        steps.extend(mbx_setup::steps_for_catalog(catalog)?);
     }
     if use_rust {
         steps.extend(crate::source_prep::fetch_steps_for_crate(

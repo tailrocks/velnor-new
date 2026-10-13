@@ -45,7 +45,6 @@ mod inventory_reuse;
 pub mod local_release_manifest;
 mod lock_audit;
 mod matrix_step;
-mod mbx_preflight;
 mod merge;
 mod merge_request;
 mod native_image_tasks;

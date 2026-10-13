@@ -1,4 +1,4 @@
-//! Exact catalog MBX/Rust PATH preflight shared by every action insertion.
+//! Pinned MBX preflight, native action, and version check for a crate job.
 
 use std::collections::BTreeMap;
 
@@ -10,9 +10,9 @@ use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_drive
 
 use crate::OrchestratorError;
 
-/// Build the strict preflight and restore pair from the compiled catalog pins.
+/// Build the strict preflight, native action, and version check from catalog pins.
 /// # Errors
-pub(crate) fn steps_for_catalog(catalog: &ToolCatalog) -> Result<[Step; 3], OrchestratorError> {
+pub(super) fn steps_for_catalog(catalog: &ToolCatalog) -> Result<[Step; 3], OrchestratorError> {
     let uses = PinnedActionRef::new(
         "jdx/mr-boxington-action",
         None,

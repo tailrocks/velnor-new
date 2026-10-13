@@ -47,7 +47,7 @@ pub(super) fn request_json_with_base(head: &str, base: &str) -> String {
 }
 
 /// One `b3-` digest with every byte set to `byte`.
-fn digest(byte: u8) -> String {
+pub(super) fn digest(byte: u8) -> String {
     format!("b3-{}", format!("{byte:02x}").repeat(32))
 }
 
@@ -132,12 +132,15 @@ pub(super) fn fixture_plan(head: &str, run_key: &str) -> Plan {
 }
 
 /// Staged run dir carrying `plan.json` for `run_key`.
-fn staged_run(plan: &Plan, run_key: &str) -> tempfile::TempDir {
+pub(super) fn staged_run(plan: &Plan, run_key: &str) -> tempfile::TempDir {
     let temp = tempfile::tempdir().expect("tempdir");
     let dir = temp.path().join("velnor").join(run_key);
     fs::create_dir_all(&dir).expect("run dir");
-    let plan_json = serde_json::to_string(plan).expect("plan json");
-    fs::write(dir.join("plan.json"), plan_json).expect("plan file");
+    fs::write(
+        dir.join("plan.json"),
+        serde_json::to_string(plan).expect("plan json"),
+    )
+    .expect("plan file");
     temp
 }
 
@@ -254,6 +257,9 @@ fn publish_refuses_every_unsafe_case() {
         "local runs never publish"
     );
 }
+
+#[path = "baseline_publish_lineage_tests.rs"]
+mod lineage_tests;
 
 #[test]
 fn publish_rejects_unknown_request_fields() {

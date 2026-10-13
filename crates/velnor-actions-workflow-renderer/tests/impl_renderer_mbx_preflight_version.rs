@@ -35,7 +35,7 @@ fn native_action_version_guard_accepts_only_one_exact_complete_line()
         ),
         (
             "wrong version",
-            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.22.0'\n"),
+            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\n"),
             false,
         ),
         ("empty output", Some("#!/bin/sh\nexit 0\n"), false),
