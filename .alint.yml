@@ -52,13 +52,6 @@ extends:
       - lockfiles-no-nested-npm
   - alint://bundled/hygiene/no-tracked-artifacts@v1
 
-extends:
-  - alint://bundled/oss-baseline@v1
-  - alint://bundled/ci/github-actions@v1
-  - alint://bundled/rust@v1
-  - alint://bundled/hygiene/lockfiles@v1
-  - alint://bundled/hygiene/no-tracked-artifacts@v1
-
 rules:
   # Required repo-shape files (rust-quality-contract §1 / RQ-1.1).
   - id: required-files
