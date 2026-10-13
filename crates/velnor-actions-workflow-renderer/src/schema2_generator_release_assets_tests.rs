@@ -42,6 +42,20 @@ fn release_manifest_version_matches_the_workspace_package_version() {
     }
 }
 
+#[test]
+fn every_release_asset_matches_the_workspace_version() {
+    assert_eq!(VERSION, env!("CARGO_PKG_VERSION"));
+    let prefix = format!("velnor-actions-{VERSION}-");
+    for asset in ASSETS {
+        assert!(asset.binary.starts_with(&prefix), "{}", asset.binary);
+        assert_eq!(asset.sidecar, format!("{}.sha256", asset.binary));
+        assert_eq!(
+            asset.provenance,
+            format!("{}.provenance.json", asset.binary)
+        );
+    }
+}
+
 struct Scratch(PathBuf);
 
 impl Scratch {
