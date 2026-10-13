@@ -1,0 +1,16 @@
+pub const ALINT_ACTION_VERSION: &str = "v0.16.1";
+pub const ALINT_ACTION_SHA: &str = "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb";
+pub const MISE_ACTION_VERSION: &str = "v4.3.0";
+pub const MISE_ACTION_SHA: &str = "c2a87611a18de5b3828c5652fe268e992400cb5c";
+pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";
+pub const CHECKOUT_ACTION_SHA: &str = "3d3c42e5aac5ba805825da76410c181273ba90b1";
+pub const DOWNLOAD_ARTIFACT_ACTION_VERSION: &str = "v8.0.1";
+pub const DOWNLOAD_ARTIFACT_ACTION_SHA: &str = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c";
+pub const UPLOAD_ARTIFACT_ACTION_VERSION: &str = "v7.0.1";
+pub const UPLOAD_ARTIFACT_ACTION_SHA: &str = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+pub const CACHE_ACTION_VERSION: &str = "v6.1.0";
+pub const CACHE_ACTION_SHA: &str = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
+pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.5.0";
+pub const MR_BOXINGTON_ACTION_SHA: &str = "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3";
+pub const RUST_CACHE_ACTION_VERSION: &str = "v2.9.2";
+pub const RUST_CACHE_ACTION_SHA: &str = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6";

@@ -1,0 +1,253 @@
+{
+  "schema": 1,
+  "qualification_local_date": "2026-10-03",
+  "qualification_local_timezone": "Asia/Ho_Chi_Minh",
+  "status": "PASSED_LOCAL_MACOS_ARM64_WORKLOAD_COMPATIBILITY",
+  "qualification_scope": "Python and uv exact runtime dependency qualification for REUSE 6.2.0; no hosted or performance qualification",
+  "candidate_pins": {
+    "python": "3.14.8",
+    "uv": "0.12.22"
+  },
+  "existing_catalog_pins_at_probe": {
+    "python": "3.14.7",
+    "uv": "0.11.29"
+  },
+  "mise": {
+    "version": "2026.10.0",
+    "installed_binary_sha256": "8d2007efdae0c2b64e3955257533e6ec17197bc2fdcbc5dd8f6847f92881deea",
+    "source_repository": "https://github.com/jdx/mise",
+    "source_commit": "bc11f90c74eba23bf0d7350efb540e62fb7d9ffd",
+    "source_tree": "172af04ce7a3cbc05920575992459a8e7d92135a",
+    "asset_url": "https://github.com/jdx/mise/releases/download/v2026.10.0/mise-v2026.10.0-macos-arm64.tar.gz",
+    "archive_sha256": "e6a966e44f871403df905d50019ca6f7b84624ddfe1d5c095f5bc3f18709259e"
+  },
+  "python": {
+    "selector": "python@3.14.8",
+    "backend": "core:python",
+    "upstream_version_commit": "8e6e75d9102e39bed2a2b279203a396741180f12",
+    "upstream_release_page": "https://www.python.org/downloads/release/python-3148/",
+    "distribution_repository": "astral-sh/python-build-standalone",
+    "distribution_release": "20261001",
+    "distribution_commit": "63249f9a31f23542d5a58754aed0b93cc432e761",
+    "asset": "cpython-3.14.8+20261001-aarch64-apple-darwin-install_only_stripped.tar.gz",
+    "asset_url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261001/cpython-3.14.8%2B20261001-aarch64-apple-darwin-install_only_stripped.tar.gz",
+    "archive_sha256": "69e48cd7f54261df5b6abbd374f69fe6e496fa781d271592aeef49cd5ffbea6c",
+    "installed_binary_sha256": "02f23beea109ccb3ad0f4b211bbea0810b912a94840de34374ad4a8c04f32222",
+    "provenance_distinct_from_cpython_upstream_binary": true,
+    "installed_binary_matches_independently_downloaded_archive": true,
+    "upstream_version_tree": "5c846838d075d0d44c37549e11cdc334fbef2054",
+    "distribution_tree": "94b604e87a621ef4559d5908787165fa93607788",
+    "latest_version_source": "https://www.python.org/downloads/",
+    "latest_version_source_sha256": "f3d8e975c236e3aa9a11ef70d1250700cc0055371b20217cd4cb68a9d4e0d03b",
+    "latest_version_source_checked_at": "2026-10-02T21:48:42.256688+00:00",
+    "qualification_source": "https://www.python.org/downloads/release/python-3148/",
+    "qualification_source_sha256": "499eeb6a56939047144d26ce725bf822343044adeddedce925c5fe54072b8679"
+  },
+  "uv": {
+    "selector": "uv@0.12.22",
+    "backend": "aqua:astral-sh/uv",
+    "release_commit": "70fe1196a546e49148a73b1c592b2f74c33af80e",
+    "asset_url": "https://github.com/astral-sh/uv/releases/download/0.12.22/uv-aarch64-apple-darwin.tar.gz",
+    "archive_sha256": "5d714de09501a59393ceca78f4bc232a50478729640d251907160299b2a93ddd",
+    "installed_binary_sha256": "cf9ecd3dce5aed97bba9aa71b6217140eac437c6678412ba81a8af45ac6f1a4c",
+    "installed_binary_matches_independently_downloaded_archive": true,
+    "release_tree": "87b1502eb7c676c9cc906e5a91cc0d13068fd27d"
+  },
+  "consumer": {
+    "repository": "jackin-project/jackin-role-action",
+    "commit": "534b68a4a44de13117160e6d24bfa0ce7af8ca8e",
+    "github_tree_url": "https://api.github.com/repos/jackin-project/jackin-role-action/git/trees/534b68a4a44de13117160e6d24bfa0ce7af8ca8e?recursive=1",
+    "github_tree_sha": "534b68a4a44de13117160e6d24bfa0ce7af8ca8e",
+    "regular_file_count": 26,
+    "symlink_count": 2,
+    "entire_blob_pathset_verified": true,
+    "all_regular_bytes_and_symlink_targets_match_official_git_blob_oids": true,
+    "probe_copy_matches_immutable_original": true,
+    "original_unchanged": true,
+    "manifest_sha256": "3680486fdedbadf739c7d5afc39d37611ab87af6522a9f64952f52f12d4b9e33",
+    "actual_prior_tools": {
+      "python": "3.14.7",
+      "uv": "0.12.7",
+      "pipx:reuse": "6.2.0"
+    },
+    "actual_command": [
+      "reuse",
+      "lint"
+    ],
+    "task_commands_ci_test_lint_fmt": [
+      "reuse",
+      "lint"
+    ],
+    "execution_route": "Generator-owned explicit Mise exec; project Mise tasks were inspected, not executed",
+    "config_hashes": {
+      "mise.toml": "cd9e044886e58c9485899ae41dd0bdf32a70ce26364d35cb2d96a963b38097e3",
+      "mise.lock": "8bee66418ac468bb2d09334afebd8697728f07c4acc99edbad33c7b06dcadd09",
+      "REUSE.toml": "dd2899d1f2878f284e3783d52f6cf2071988c7eb07dfc163f0d2d345541453e4",
+      "LICENSES/Apache-2.0.txt": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    }
+  },
+  "reuse": {
+    "selector": "pipx:reuse[extras=charset-normalizer,uvx_args=\"--python 3.14.8 --no-python-downloads\"]@6.2.0",
+    "backend": "pipx:reuse selecting uv tool install",
+    "version": "6.2.0",
+    "extra": "charset-normalizer",
+    "source_url": "https://pypi.org/pypi/reuse/6.2.0/json",
+    "source_archive_sha256": "4feae057a2334c9a513e6933cdb9be819d8b822f3b5b435a36138bd218897d23",
+    "requires_python": ">=3.10",
+    "actual_install_argv_with_normalized_owned_path": [
+      "<isolated-mise-data>/installs/uv/0.12.22/uv-aarch64-apple-darwin/uv",
+      "tool",
+      "install",
+      "reuse[charset-normalizer]==6.2.0",
+      "--python",
+      "3.14.8",
+      "--no-python-downloads"
+    ],
+    "venv_observed": {
+      "python_home": "<isolated-mise-data>/installs/python/3.14.8/bin",
+      "implementation": "CPython",
+      "uv": "0.12.22",
+      "version_info": "3.14.8",
+      "include_system_site_packages": false
+    },
+    "transitive_versions_observed": [
+      "attrs==26.1.0",
+      "boolean-py==5.0",
+      "charset-normalizer==3.5.2",
+      "click==8.5.0",
+      "jinja2==3.1.6",
+      "license-expression==30.4.4",
+      "markupsafe==3.0.3",
+      "python-debian==1.1.1",
+      "python-magic==0.4.27",
+      "tomlkit==0.15.1"
+    ],
+    "transitive_version_pinning_claimed": false
+  },
+  "isolation": {
+    "flags": [
+      "--no-config",
+      "--no-env",
+      "--no-hooks"
+    ],
+    "path": "/usr/bin:/bin:/usr/sbin:/sbin",
+    "mise_ceiling_paths": "Canonical actual working directory for each invocation; ancestor miserc reads excluded",
+    "owned_dirs": [
+      "MISE_DATA_DIR",
+      "MISE_CONFIG_DIR",
+      "MISE_CACHE_DIR",
+      "UV_CACHE_DIR"
+    ],
+    "unset_python_overrides": [
+      "PYTHONPATH",
+      "PYTHONHOME",
+      "VIRTUAL_ENV",
+      "CONDA_PREFIX",
+      "UV_PYTHON",
+      "UV_PYTHON_INSTALL_DIR"
+    ],
+    "ambient_python_or_uv_used": false,
+    "dependency_venv_bound_to_exact_isolated_python": true,
+    "mise_github_attestation_verification": {
+      "python_distribution": "passed",
+      "uv_distribution": "passed"
+    }
+  },
+  "observed_versions": {
+    "python": "3.14.8",
+    "uv": "0.12.22 (70fe1196a 2026-10-01 aarch64-apple-darwin)",
+    "reuse": "6.2.0"
+  },
+  "probes": [
+    {
+      "command": [
+        "install",
+        "--verbose",
+        "python@3.14.8",
+        "uv@0.12.22"
+      ],
+      "exit": 0,
+      "raw_log_sha256": "96173f7b29884b9b0edfe7cbff4ea2dc6cafdbd9e9a094cc5d7a0d6d912a559e"
+    },
+    {
+      "command": [
+        "install",
+        "--verbose",
+        "python@3.14.8",
+        "uv@0.12.22",
+        "pipx:reuse[extras=charset-normalizer,uvx_args=\"--python 3.14.8 --no-python-downloads\"]@6.2.0"
+      ],
+      "exit": 0,
+      "raw_log_sha256": "3ef486b73068da939eb8c3d5d92ea277c7cad3b5a6d6c1255b3ab9d16d38eae7"
+    },
+    {
+      "command": [
+        "exec",
+        "python@3.14.8",
+        "uv@0.12.22",
+        "pipx:reuse[extras=charset-normalizer,uvx_args=\"--python 3.14.8 --no-python-downloads\"]@6.2.0",
+        "--",
+        "reuse",
+        "lint"
+      ],
+      "cwd": "consumer",
+      "exit": 0,
+      "files_compliant": "23/23",
+      "raw_log_sha256": "3c0e4d6279c24e204f3672b0b85c2e6a0be641f37c20a49cc6a04f17c1430e62"
+    },
+    {
+      "command": [
+        "exec",
+        "python@3.14.8",
+        "uv@0.12.22",
+        "pipx:reuse[extras=charset-normalizer,uvx_args=\"--python 3.14.8 --no-python-downloads\"]@6.2.0",
+        "--",
+        "reuse",
+        "lint"
+      ],
+      "cwd": "consumer-negative",
+      "mutation": "remove LICENSES/Apache-2.0.txt only in separate copy",
+      "exit": 1,
+      "expected": "Missing licenses: Apache-2.0",
+      "raw_log_sha256": "79ee9c56724861eba7e6641a2cf6e33aa941d5c4e02e3a32dfed075f6b6ab62c"
+    },
+    {
+      "command": [
+        "exec",
+        "python@3.14.8",
+        "uv@0.12.22",
+        "--",
+        "uv",
+        "python",
+        "find",
+        "3.14.99",
+        "--no-python-downloads"
+      ],
+      "exit": 2,
+      "expected": "No interpreter found",
+      "raw_log_sha256": "2919eeabc311094eebced99683b5fbe675a3a125fc85fa460ee18b5e19036b5e"
+    }
+  ],
+  "limits": [
+    "macOS ARM64 local only",
+    "Linux runtime not exercised",
+    "Prior catalog uv0.11.29 differs from actual consumer uv0.12.7; no false baseline parity claim",
+    "REUSE dependency graph resolved during this probe; no claim that transitive versions are pinned by project catalog"
+  ],
+  "source_evidence_sha256": {
+    "consumer-github-tree.json": "3cb397e9aae038b86ec7da06609e51d2274eb93ce2b593894fd5b3dc584fe158",
+    "cpython-commit.json": "acad81066dd0ac7c47f0dd6243bf6dc4989301920caf25596daa52a3aff09273",
+    "python-3.14.8-tag.json": "09a439b0c67d66fc41a953dc968029ea628d659c058dae4fc0b7e04c52eef217",
+    "python-3.14.8.md": "499eeb6a56939047144d26ce725bf822343044adeddedce925c5fe54072b8679",
+    "python-standalone-20261001.json": "d204d2b8777f43775c3432453dab788478b0bf29ddf75cb9a273717f6c14fe38",
+    "python-standalone-commit.json": "4daacf2361024a7136d51789c40a330a5b9cda7be3f4acd75bbc201057bf4523",
+    "python-standalone-tag.json": "1dc21496b6ad937f1e7ec41ee71131e2c63afd47af3e7c11364643fbb09caae2",
+    "python.tar.gz": "69e48cd7f54261df5b6abbd374f69fe6e496fa781d271592aeef49cd5ffbea6c",
+    "reuse-6.2.0.json": "7184d4ddbab25ba44953cb274498c1a67f66613797777a4fe83a319d228dbbee",
+    "reuse-6.2.0.tar.gz": "4feae057a2334c9a513e6933cdb9be819d8b822f3b5b435a36138bd218897d23",
+    "uv-commit.json": "9f2a1cdd6ecdfa27bfa49a003254f8387b93c2acb8c73680fe8d48e26495ac73",
+    "uv-latest.json": "b6ea29af4ad63b7e08537ec6778d1342557df0bc4cc31a7b0bfca3d0151615eb",
+    "uv-tag.json": "d08b223f7294027505076ba396856ab521ad4f776a4627cdde7ade01d259c4b7",
+    "uv.tar.gz": "5d714de09501a59393ceca78f4bc232a50478729640d251907160299b2a93ddd"
+  }
+}
