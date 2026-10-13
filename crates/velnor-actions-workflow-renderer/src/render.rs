@@ -15,8 +15,8 @@ use velnor_actions_contract::{
 };
 
 use crate::{
-    RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
-    preseed_closure, steps, support, workflow_policy,
+    RenderError, cache_p08, closure, commands, final_steps, guard, marker, msrv, preseed_closure,
+    steps, support, workflow_policy,
 };
 
 type JobMap = BTreeMap<String, Job>;
@@ -37,6 +37,9 @@ mod validator_tools;
 
 #[path = "task_wrapper.rs"]
 mod task_wrapper;
+
+#[path = "render_merged.rs"]
+mod render_merged;
 
 pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
@@ -220,7 +223,7 @@ fn render_workflow_parts(
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
     validate_final_jobs(ir, &mut jobs)?;
-    render_merged(ir, &jobs, ctx)
+    render_merged::render_merged(ir, &jobs, ctx)
 }
 
 /// Strict render: setup insertion plus staged-helper and anchor gates.
@@ -260,7 +263,7 @@ pub fn render_workflow_ir_strict_shared(
     mise: &MiseSetup,
 ) -> Result<RenderedWorkflow, RenderError> {
     let jobs = finalize_jobs(ir, policy, support, ctx, mise)?;
-    render_merged(ir, &jobs, ctx)
+    render_merged::render_merged(ir, &jobs, ctx)
 }
 
 /// Finalize jobs exactly as `generate` writes them: policy merge, setup
@@ -369,53 +372,4 @@ fn merged_jobs(
     support::check_final_gate(&jobs)?;
     support::check_token_hygiene(&jobs)?;
     Ok(jobs)
-}
-
-/// Emit matrix strategy plus the quoted, marked workflow text.
-fn render_merged(
-    ir: &WorkflowIr,
-    jobs: &BTreeMap<String, Job>,
-    ctx: &RenderContext,
-) -> Result<RenderedWorkflow, RenderError> {
-    let matrix = matrix::task_matrix_of(jobs)?;
-    let caps = matrix::crate_job_caps(jobs)?;
-    let jobs = if matrix.is_some() || !caps.is_empty() {
-        matrix::scrub_matrix_marker(jobs)
-    } else {
-        jobs.clone()
-    };
-    let (jobs, task_files) = task_wrapper::factor_obligation_steps(
-        &jobs,
-        &ctx.checkout_uses,
-        &ctx.generator_version,
-        &ctx.report_helper_version,
-        &ctx.workflow_tasks,
-        ctx.scale_set_selector.as_ref(),
-    )?;
-    let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
-    let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
-    shared.files.extend(task_files);
-    let mut document = document::workflow_to_yaml(ir, &shared, ctx, &mbx_jobs)?;
-    if let Some((source, max_parallel)) = &matrix {
-        matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
-    } else {
-        matrix::attach_plan_outputs(&mut document)?;
-    }
-    matrix::attach_crate_job_caps(&mut document, &caps)?;
-    let text = fallback::render_checked_workflow(WORKFLOW_PATH, &document, &ctx.generator_version)?;
-    steps::scan_for_private_subcommands(&text)?;
-    let shared_files = crate::render_cache_files::with_runtime_identity_files(
-        shared.files,
-        &jobs,
-        &ctx.generator_version,
-    )?;
-    if crate::tool_seed::any_job_has_seed(&jobs)? {
-        return Err(RenderError::InvalidWorkflow(
-            "tool_seed_requires_tools_prelude".to_owned(),
-        ));
-    }
-    Ok(RenderedWorkflow {
-        yaml: text,
-        shared: shared_files,
-    })
 }

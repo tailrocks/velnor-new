@@ -18,26 +18,32 @@ pub(crate) mod check_jobs;
 
 use std::collections::BTreeMap;
 
-use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
+#[cfg(test)]
+use velnor_actions_actionlint::StepSyntax;
+use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy};
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, Permissions, Stack, Step, StepKind, StepRole, Trigger,
+    Concurrency, GeneratorValidation, Job, Permissions, Step, StepKind, StepRole, Trigger,
     ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::{
     PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
 };
-use velnor_actions_rust::TestRunner;
+#[cfg(test)]
+use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::render::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
-    PUBLISH_JOB_ID, RenderContext, WORKFLOW_PATH,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PUBLISH_JOB_ID,
+    RenderContext, WORKFLOW_PATH,
 };
 use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
+#[cfg(test)]
 use crate::pins::consumer_acquire_step;
 use crate::utf8::{strings_of, strings_of_env};
-use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, final_job, lint_job, plan_job};
+#[cfg(test)]
+use crate::workflow_jobs::PlanRustNeed;
+use crate::workflow_jobs::{PlanJobToolNeeds, final_job, lint_job, plan_job};
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 
@@ -100,6 +106,7 @@ fn build_plan_job(
 /// # Errors
 ///
 /// Returns contract, render-context, or tool-request errors.
+#[cfg(test)]
 pub(crate) fn build_workflow(
     root: &std::path::Path,
     config: &VelnorConfig,
@@ -122,15 +129,18 @@ pub(crate) fn build_workflow(
         WorkflowPolicy::VelnorRepositoryV1 => None,
     };
     let format = wire_w1::workspace_format_step(discovery, &catalog)?;
-    let rust = match (plan_uses_rust(discovery, policy), format.is_some()) {
+    let rust = match (
+        workflow_policy::plan_uses_rust(discovery, policy),
+        format.is_some(),
+    ) {
         (false, false) => PlanRustNeed::None,
         (_, true) => PlanRustNeed::CompilerAndComponents,
         (true, false) => PlanRustNeed::Compiler,
     };
     let needs = PlanJobToolNeeds {
         rust,
-        nextest: plan_uses_nextest(discovery),
-        opentofu: plan_uses_opentofu(discovery),
+        nextest: workflow_policy::plan_uses_nextest(discovery),
+        opentofu: workflow_policy::plan_uses_opentofu(discovery),
         gh: policy == WorkflowPolicy::VelnorRepositoryV1,
     };
     let mut plan = build_plan_job(
@@ -310,48 +320,6 @@ fn insert_format_step(plan: &mut Job, format: Step) {
         })
         .unwrap_or(plan.steps.len());
     plan.steps.insert(at, format);
-}
-
-/// True when any selected workspace runs tests through Nextest; only those
-/// legs resolve the pinned runner.
-fn plan_uses_nextest(discovery: &Discovery) -> bool {
-    discovery
-        .workspaces
-        .iter()
-        .any(|workspace| workspace.profile.test_runner == TestRunner::CargoNextest)
-}
-
-/// True when any proposal runs through the pinned Opentofu driver.
-///
-/// Tofu has no workspace profiles, so the plan derives its tofu role
-/// from task proposals (the same per-task signal crate jobs group
-/// on), never from workspace scans.
-pub(crate) fn plan_uses_opentofu(discovery: &Discovery) -> bool {
-    discovery
-        .proposals
-        .iter()
-        .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Tofu))
-}
-
-/// True when the plan job needs the Rust toolchain.
-///
-/// Consumers require Rust for selected Rust evidence (selected or ignored
-/// Rust projects, or Rust task proposals without inventory records).
-/// Velnor also builds its candidate-source helper in Plan.
-pub(crate) fn plan_uses_rust(discovery: &Discovery, policy: WorkflowPolicy) -> bool {
-    policy == WorkflowPolicy::VelnorRepositoryV1
-        || !discovery.workspaces.is_empty()
-        || discovery.statuses.iter().any(|status| {
-            let project = match status {
-                velnor_actions_contract::DetectionStatus::Selected(project)
-                | velnor_actions_contract::DetectionStatus::Ignored { project, .. } => project,
-            };
-            Stack::from_id(&project.stack_id) == Some(Stack::Rust)
-        })
-        || discovery
-            .proposals
-            .iter()
-            .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Rust))
 }
 
 /// Typed `Prepare Rust components` step, shared by plan and task jobs.

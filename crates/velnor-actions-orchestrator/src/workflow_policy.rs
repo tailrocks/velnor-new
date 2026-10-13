@@ -1,14 +1,9 @@
 //! Workflow policy predicates and pinned tool preparation.
 
-use velnor_actions_contract::{Stack, Step, StepRole, WorkflowPolicy};
-use velnor_actions_mise::{
-    PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
-};
+use velnor_actions_contract::{Stack, WorkflowPolicy};
 use velnor_actions_rust::TestRunner;
 
-use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::utf8::{strings_of, strings_of_env};
 
 /// True when any selected workspace runs tests through Nextest; only those
 /// legs resolve the pinned runner.
@@ -50,31 +45,4 @@ pub(crate) fn plan_uses_rust(discovery: &Discovery, policy: WorkflowPolicy) -> b
             .proposals
             .iter()
             .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Rust))
-}
-
-/// Typed `Prepare Rust components` step, shared by plan and task jobs.
-///
-/// Runs second, right after `Prepare pinned tools`: the pinned toolchain
-/// exists by then, so the fixed `rustup component add` guarantees
-/// clippy/rustfmt idempotently under the owned homes.
-///
-/// # Errors
-///
-/// Returns a contract error when the Mise adapter rejects the request.
-pub(crate) fn prepare_rust_components_step(
-    catalog: &ToolCatalog,
-) -> Result<Step, OrchestratorError> {
-    let request = PrepareRustComponents::new(ToolHomes::runner_temp());
-    let run = strings_of(request.argv(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let env = strings_of_env(&request.env(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let mut step = velnor_actions_workflow_renderer::ambient_shell_step(
-        PREPARE_RUST_COMPONENTS_STEP,
-        run,
-        env,
-    )
-    .map_err(OrchestratorError::from)?;
-    step.role = Some(StepRole::PrepareRustComponents);
-    Ok(step)
 }
