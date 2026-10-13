@@ -83,6 +83,8 @@ mod consumer_release_eligibility;
 mod features;
 #[path = "schema2_generator_release.rs"]
 mod generator_release;
+#[path = "schema2_mbx_corrupt_probe.rs"]
+mod mbx_corrupt_probe;
 #[path = "schema2_mbx_qualification.rs"]
 mod mbx_qualification;
 #[path = "schema2_mise_pin_qualification.rs"]
