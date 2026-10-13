@@ -61,17 +61,17 @@ pub struct Discovery {
     pub clippy_memory: ClippyMemoryPlan,
     /// Non-fatal generation recommendations.
     pub recommendations: Vec<String>,
-    /// Release-manifest text from the committed repo file.
+    /// Release-manifest text for consumer policy from the committed file.
     ///
-    /// Debug builds fall back to a stand-in when the file is absent
+    /// Consumer debug builds fall back to a stand-in when the file is absent
     /// (flagged by [`Discovery::consumer_manifest_stand_in`], warned at
     /// generation); release builds keep `None` so generation fails
     /// closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
     /// Whether the consumer policy uses the debug-only stand-in.
     ///
-    /// Always false in release builds (no fallback exists there).
-    /// `generate` warns loudly when this is set; `plan` stays silent.
+    /// False for Velnor policy and release builds. `generate` warns when
+    /// consumer policy uses the debug stand-in; `plan` stays silent.
     pub consumer_manifest_stand_in: bool,
     /// Whether non-UTF-8 names require broad selection.
     pub skipped_non_utf8: bool,
