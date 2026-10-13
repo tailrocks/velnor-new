@@ -41,6 +41,13 @@ pub(super) use mise_pin_qualification::resolve as resolve_mise_pin_qualification
 mod rust_toolchain_qualification;
 pub(super) use rust_toolchain_qualification::resolve as resolve_rust_toolchain_qualification;
 
+/// Step-env key carrying the release manifest into Check/Plan steps.
+pub(crate) const RELEASE_MANIFEST_ENV: &str = "VELNOR_RELEASE_MANIFEST_JSON";
+
+/// Fail-closed diagnostic when no release manifest exists anywhere.
+pub(crate) const MISSING_MANIFEST_PROBLEM: &str =
+    "consumer_requires_release_install:install an official velnor-actions release";
+
 /// Resolve typed Mise setup pins: overrides plus the compiled catalog.
 ///
 /// The `uses` ref comes from `[actions.overrides]` when present (approved
@@ -216,8 +223,7 @@ fn consumer_acquire_for_target(
 ) -> Result<Step, OrchestratorError> {
     let Some(json) = json else {
         return Err(OrchestratorError::Contract {
-            problem: "consumer_requires_release_install:install an official velnor-actions release"
-                .to_owned(),
+            problem: MISSING_MANIFEST_PROBLEM.to_owned(),
         });
     };
     let manifest = ReleaseManifest::parse_json(json, RELEASE_MANIFEST_FILENAME)?;
