@@ -132,6 +132,29 @@ impl BaselineLookup {
         ])
     }
 
+    /// Single named artifacts extract directly into `--dir`; place that
+    /// directory under the name expected by the manifest reader.
+    /// # Errors
+    /// Rejects artifact names that could escape the staging directory.
+    pub(crate) fn download_args(
+        &self,
+        artifact: &str,
+        run_id: u64,
+        staging: &Path,
+    ) -> Result<Vec<OsString>, String> {
+        velnor_actions_contract::validate_artifact_id(artifact)
+            .map_err(|_| "baseline_no_exact_artifact".to_owned())?;
+        Ok(crate::cover_baseline::baseline_download_args(
+            &self.base_sha,
+            &self.workflow,
+            &self.branch,
+            Some(artifact),
+            run_id,
+            &staging.join(artifact),
+            &self.repo,
+        ))
+    }
+
     /// Run fixed `gh` args under the pinned catalog in `root`.
     pub(crate) fn run(
         catalog: &ToolCatalog,
@@ -235,6 +258,36 @@ pub(crate) fn resolve_manifests(
         |args| BaselineLookup::run(catalog, root, args),
         |args| BaselineLookup::run_archive(catalog, root, args),
     )
+    .map_err(|_| "baseline_unavailable".to_owned())?;
+    let value = crate::internal_plan::snapshot::parse_canonical_json(&text)
+        .map_err(|_| "baseline_unavailable".to_owned())?;
+    let candidate: BaselineManifest =
+        serde_json::from_value(value).map_err(|_| "baseline_unavailable".to_owned())?;
+    let mut found = collect_manifests(
+        temp.path(),
+        &lookup.base_sha,
+        run_id,
+        candidate.run_attempt,
+        artifact,
+    )?;
+    let parent = found
+        .pop()
+        .ok_or_else(|| "baseline_unavailable".to_owned())?;
+    let endpoint = format!(
+        "repos/{}/actions/runs/{run_id}/attempts/{}",
+        lookup.repo, parent.run_attempt
+    );
+    let record = run(vec![OsString::from("api"), OsString::from(endpoint)])?;
+    if !crate::retrieve_baseline::authentic_attempt(
+        &record,
+        &parent,
+        &lookup.repo,
+        &lookup.branch,
+        &lookup.workflow,
+    ) {
+        return Err("baseline_unauthenticated".to_owned());
+    }
+    Ok(parent)
 }
 
 /// One transport-injected normal lookup, retaining original publication proof.

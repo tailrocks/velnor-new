@@ -37,8 +37,11 @@ pub mod owned_source;
 /// Exact-version validation plus qualification sources (split for size).
 #[path = "catalog_versions.rs"]
 mod versions;
+pub use versions::{
+    PYTHON_BINARY_SHA256_LINUX_X64, PYTHON_PBS_SHA256, PYTHON_PBS_SIZE_BYTES, PYTHON_PBS_URL,
+};
 pub use versions::{check_freshness_requirements, validate_exact_version};
-use versions::{invalid_version, tool_source};
+use versions::{invalid_version, python_tool_spec, tool_source};
 
 /// Adopted Mise runner release (tag `v2026.10.9`, published 2026-10-13).
 /// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-10-13.
@@ -130,11 +133,17 @@ pub enum PinnedTool {
     Opentofu,
     /// Release coordinator (`release-plz`, const-pinned: no catalog slot).
     ReleasePlz,
+    /// REUSE license linter (`reuse`, installed through pipx).
+    Reuse,
+    /// `CPython` runtime (`python`).
+    Python,
+    /// Python package installer (`uv`).
+    Uv,
 }
 
 impl PinnedTool {
     /// Every catalog tool in stable order.
-    pub const ALL: [Self; 9] = [
+    pub const ALL: [Self; 12] = [
         Self::Rust,
         Self::MrBoxington,
         Self::Gh,
@@ -144,6 +153,9 @@ impl PinnedTool {
         Self::Nextest,
         Self::Opentofu,
         Self::ReleasePlz,
+        Self::Reuse,
+        Self::Python,
+        Self::Uv,
     ];
 
     /// Mise registry name used in `<tool>@<version>` selectors.
@@ -159,6 +171,9 @@ impl PinnedTool {
             Self::Nextest => "nextest",
             Self::Opentofu => "opentofu",
             Self::ReleasePlz => "release-plz",
+            Self::Reuse => "reuse",
+            Self::Python => "python",
+            Self::Uv => "uv",
         }
     }
 
@@ -202,12 +217,7 @@ pub struct ToolCatalog {
 }
 
 impl ToolCatalog {
-    /// Catalog holding the qualified pins.
-    ///
-    /// Versions are compile-time literals, so no fallible check runs
-    /// here; trusted identity validation is the separate
-    /// [`Self::validate_identities`] gate, which fails until freshness
-    /// binds real artifact digests (P03-8b).
+    /// Qualified pins; trusted identities require the separate validation gate.
     #[must_use]
     pub fn pinned() -> Self {
         Self {
@@ -222,16 +232,10 @@ impl ToolCatalog {
         }
     }
 
-    /// Catalog with explicit versions; every version must be an exact pin.
-    ///
-    /// Only version exactness is enforced here: the catalog owns pins,
-    /// not artifact trust. Trusted identity validation is the separate
-    /// [`Self::validate_identities`] gate (P03-8b).
+    /// Explicit versions; each of the eight configurable slots must be exact.
     ///
     /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidToolVersion`] for the first version
-    /// that is not exact `major.minor.patch`.
+    /// Returns [`MiseError::InvalidToolVersion`] for non-exact versions.
     #[expect(
         clippy::too_many_arguments,
         reason = "catalog carries eight exact pins at once"
@@ -286,28 +290,21 @@ impl ToolCatalog {
 
     /// Qualified artifact digest for one tool, or the placeholder.
     ///
-    /// Only the qualified `OpenTofu` pin carries its digest (contract
-    /// §4.3: the `linux_amd64` `.tar.gz` SHA-256, matching the x64-Linux
-    /// runner fleet); any other version keeps the placeholder so an
-    /// unqualified pin never validates as trusted.
+    /// Qualified OpenTofu and Python pins carry artifact digests. Other
+    /// versions keep the placeholder so unqualified pins never validate.
     fn tool_digest(&self, tool: PinnedTool) -> &str {
-        if tool == PinnedTool::Opentofu && self.version(tool) == OPENTOFU_VERSION {
-            OPENTOFU_SHA256_LINUX_AMD64
-        } else {
-            PLACEHOLDER_DIGEST
+        match tool {
+            PinnedTool::Opentofu if self.version(tool) == OPENTOFU_VERSION => {
+                OPENTOFU_SHA256_LINUX_AMD64
+            }
+            PinnedTool::Python if self.version(tool) == PYTHON_VERSION => PYTHON_PBS_SHA256,
+            _ => PLACEHOLDER_DIGEST,
         }
     }
 
-    /// Trusted gate over every catalog identity record.
-    ///
-    /// Fails closed with `placeholder_digest` for every tool whose
-    /// artifact SHA-256 freshness has not bound yet (`OpenTofu` is
-    /// bound; the rest stay placeholder); it flips to `Ok` only once
-    /// every slot binds, so callers can treat success as qualified
-    /// trust (P03-8b).
+    /// Trusted gate: refuses every identity whose artifact digest remains a placeholder.
     ///
     /// # Errors
-    ///
     /// Returns [`MiseError::Contract`] for the first invalid identity.
     pub fn validate_identities(&self) -> Result<(), MiseError> {
         for tool in PinnedTool::ALL {
@@ -333,21 +330,29 @@ impl ToolCatalog {
             PinnedTool::Nextest => &self.nextest,
             PinnedTool::Opentofu => &self.opentofu,
             PinnedTool::ReleasePlz => RELEASE_PLZ_VERSION,
+            PinnedTool::Reuse => REUSE_VERSION,
+            PinnedTool::Python => PYTHON_VERSION,
+            PinnedTool::Uv => UV_VERSION,
         }
     }
 
-    /// Mise selector for one tool: `<tool>@<exact>`, except Nextest,
-    /// which needs its backend-qualified aqua-registry path.
+    /// Mise selector for one tool, with backend-specific selectors for
+    /// Nextest, Python, and REUSE.
     ///
-    /// Rust carries no inline options: bracketed tool options are silently
-    /// ignored on config-less CLI specs, so components install through the
-    /// fixed `PrepareRustComponents` step instead.
+    /// Rust carries no inline options because the core backend ignores its
+    /// component options in config-less specs; `PrepareRustComponents` adds
+    /// them separately. Python's HTTP selector binds its artifact and layout.
     #[must_use]
     pub fn tool_spec(&self, tool: PinnedTool) -> String {
         match tool {
             PinnedTool::Nextest => {
                 format!("{NEXTEST_TOOL_SPEC_PREFIX}@{}", self.version(tool))
             }
+            PinnedTool::Reuse => format!(
+                "pipx:reuse[extras=charset-normalizer,uvx_args=\"--python {PYTHON_VERSION} --no-python-downloads\"]@{}",
+                self.version(tool)
+            ),
+            PinnedTool::Python => python_tool_spec(self.version(tool)),
             _ => format!("{}@{}", tool.tool_name(), self.version(tool)),
         }
     }

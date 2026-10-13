@@ -3,7 +3,7 @@
 //! [`propose_task`] converts one derived [`TofuTaskGroup`] wholesale
 //! into a [`ProposedTask`]: task IDs through the existing
 //! [`task_id_for_stack`](velnor_actions_contract::task_id_for_stack)
-//! grammar, `Validate depends_on same-root Init` edges through the
+//! grammar with reversible root keys, `Validate depends_on same-root Init` edges through the
 //! neutral `depends_on` vocabulary, and precomputed adapter facts
 //! (payload, environment, component, project root), never recomputed
 //! downstream. The kind/tool helpers below back the orchestrator's

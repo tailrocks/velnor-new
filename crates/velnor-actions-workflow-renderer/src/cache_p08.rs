@@ -4,6 +4,7 @@
 //! sources remain an independent cache layer; MBX owns compiler objects.
 
 use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use crate::{MiseSetup, RenderError, setup};
 

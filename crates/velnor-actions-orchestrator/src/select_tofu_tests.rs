@@ -161,7 +161,12 @@ fn derive_tofu_merges_nested_fmt_scopes() {
     };
     assert_eq!(fmt_no_targets(""), Some(false), "outer fmt runs");
     assert_eq!(
-        fmt_no_targets("stacks/a"),
+        fmt_no_targets(&key_for_root("")),
+        Some(false),
+        "outer fmt runs"
+    );
+    assert_eq!(
+        fmt_no_targets(&key_for_root("stacks/a")),
         Some(true),
         "covered inner fmt skips"
     );

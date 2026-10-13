@@ -483,6 +483,7 @@ jobs:
       - rust-velnor-actions-cli
       - rust-velnor-actions-contract
       - rust-velnor-actions-mise
+      - rust-velnor-actions-native
       - rust-velnor-actions-orchestrator
       - rust-velnor-actions-rust
       - rust-velnor-actions-tofu

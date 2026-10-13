@@ -129,7 +129,7 @@ fn cli_config_uses_direct_provider_installation() {
 }
 
 #[test]
-fn cli_config_rejects_injection_and_oversize() {
+fn cli_config_rejects_injection_without_artificial_path_limit() {
     for bad in [
         "",
         "/tmp/has space/x\"quoted\"",

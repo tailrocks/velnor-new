@@ -15,14 +15,17 @@ and capabilities. The orchestrator composes stack/tool proposals, selection, cac
 The workflow renderer emits generic GitHub Actions YAML. V1 Rust work selects Cargo versus MBX and Cargo test
 versus Nextest independently from explicit repository evidence; it does not impose MBX or Nextest on consumers.
 
-The V1 workspace MUST contain these seven purpose-specific crates under `crates/`: `velnor-actions-contract`,
-`velnor-actions-rust`, `velnor-actions-mise`, `velnor-actions-actionlint`, `velnor-actions-workflow-renderer`,
-`velnor-actions-orchestrator`, and `velnor-actions-cli`. Generic package names such as `velnor-model`,
-`velnor-core`, `velnor-rust`, `velnor-util`, and `velnor-common` are forbidden.
+Product packages live under `crates/` with the ownership and dependency boundaries in
+[architecture §1](architecture.md). Common packages remain contract, Mise, actionlint, workflow renderer,
+orchestrator and CLI. Rust and OpenTofu retain stack packages; `velnor-actions-native` contains isolated
+named domain adapters behind typed façades and mandatory module boundary tests. Unrestricted generic
+packages such as `velnor-model`, `velnor-core`, `velnor-util` and `velnor-common` are forbidden.
 
 ```text
 velnor-actions-contract            Stack-neutral workflow and task contracts
 velnor-actions-rust                All Rust/Cargo scanning and task proposals
+velnor-actions-tofu                OpenTofu discovery and task proposals
+velnor-actions-native              Isolated audited native domain proposals and semantic helper sources
 velnor-actions-mise                Mise tool, command, and cache adapter
 velnor-actions-actionlint          actionlint config, pin metadata, and workflow validation
 velnor-actions-workflow-renderer   Generic GitHub Actions YAML renderer
@@ -50,7 +53,8 @@ directory and writes the sample `.velnor/config.toml` there. It MUST never creat
 directory. `plan` and `generate` resolve the same root and run the same
 analysis. `plan` prints the human summary without writes; `generate` writes the
 rendered `.github` tree.
-With no `--output-dir`, it stages all output and replaces the repository's entire `.github` tree from scratch.
+With no `--output-dir`, it stages generated output together with preserved repository-owned `.github` entries,
+then atomically replaces the directory under [generated-file §3](generated-file-contract.md).
 With `--output-dir PATH`, PATH is the exact fresh preview root; it MUST be absent or empty, and the command
 writes `PATH/.github` without modifying the repository. CI and local callers MUST choose a unique directory
 under `/tmp` or the runner temp directory.
@@ -89,7 +93,7 @@ The following files are authoritative:
 | `rust-toolchain.toml`, `mise.toml`, `mise.lock` | Optional repository-owned inspection inputs; Velnor never writes them |
 | `.velnor/config.toml` | Stack-neutral workflow policy, selected-stack exclusions, and explicit exceptions |
 | `.velnor/generator.lock` | Velnor repository bootstrap override and mirror of bundled action pins; not required or generated for consumers |
-| `.github/**` | Complete generated workflow tree |
+| `.github/workflows/**` and exact declared generated paths | Generator-owned outputs; other `.github` entries remain repository owned |
 
 The supported configuration boundary is:
 

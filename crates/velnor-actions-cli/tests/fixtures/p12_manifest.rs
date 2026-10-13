@@ -216,6 +216,34 @@ fn target_scope_inexact_fails() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn dev_and_build_scopes_require_exact_versions() -> Result<(), Box<dyn Error>> {
+    for (prefix, path, before, after, subject) in [
+        (
+            "p12-dev-inexact",
+            "crates/aaa/Cargo.toml",
+            "tempfile = \"=3.9.0\"",
+            "tempfile = \"3.9.0\"",
+            "aaa:dev-dependencies:tempfile",
+        ),
+        (
+            "p12-build-inexact",
+            "Cargo.toml",
+            "toml = { version = \"=0.9.0\" }",
+            "toml = { version = \"0.9.0\" }",
+            "aaa:build-dependencies:toml",
+        ),
+    ] {
+        let fixture = harness::passing(prefix)?;
+        harness::mutate(&fixture.dir, path, before, after)?;
+        let run = harness::run_script(&fixture.dir, &[])?;
+        harness::assert_fail(&run, subject);
+        harness::assert_fail(&run, "exact `=x.y.z` (VER-2.26)");
+        harness::cleanup(&fixture);
+    }
+    Ok(())
+}
+
+#[test]
 fn dangling_lock_edge_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-dangling")?;
     harness::mutate(

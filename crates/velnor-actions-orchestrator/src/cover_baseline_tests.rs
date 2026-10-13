@@ -29,7 +29,7 @@ fn manifest_json(base: &str, name: &str) -> serde_json::Value {
         "generator_sha256": "1".repeat(64),
         "compatibility_id": digest,
         "artifact_id": numeric,
-        "artifact_name": name,
+        "parent": null, "artifact_name": name,
         "tasks": [],
         "parent": serde_json::Value::Null,
     })

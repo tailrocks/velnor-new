@@ -146,7 +146,16 @@ pub(crate) fn reasons_for<'a>(plan: &'a Plan, member: &str) -> Vec<&'a str> {
     let reasons: Vec<&str> = plan
         .obligations
         .iter()
-        .filter(|ob| ob.task_id.contains(member))
+        .filter(|ob| {
+            if ob.task_id.starts_with("stack/tofu/") {
+                ob.task_id.starts_with(&format!(
+                    "stack/tofu/{}/",
+                    velnor_actions_tofu::key_for_root(member),
+                ))
+            } else {
+                ob.task_id.contains(member)
+            }
+        })
         .map(|ob| ob.reason.as_str())
         .collect();
     assert!(!reasons.is_empty(), "{member} has obligations");

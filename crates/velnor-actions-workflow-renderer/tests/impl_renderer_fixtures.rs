@@ -8,8 +8,8 @@ use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_drive
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup, MiseSetupSet,
     RELEASE_COMMIT_ENV, RenderContext, RenderError, STAGED_BINARY_PREFIX, ValidatorCommand,
-    acquire_velnor_step, checkout_step, plan_step, render_workflow_ir, render_workflow_ir_strict,
-    shell_step,
+    ValidatorSourceInput, ValidatorSourceInputKind, ValidatorSourceUnit, acquire_velnor_step,
+    checkout_step, plan_step, render_workflow_ir, render_workflow_ir_strict, shell_step,
 };
 
 pub(crate) const VERSION: &str = "0.1.0";
@@ -232,6 +232,7 @@ pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
         (ValidatorKind::CargoDeny, "Run cargo-deny"),
         (ValidatorKind::CargoMachete, "Run cargo-machete"),
         (ValidatorKind::Zizmor, "Run zizmor"),
+        (ValidatorKind::PythonSourceTests, "Run Python source tests"),
     ]
     .iter()
     .map(|(validator, name)| ValidatorCommand {

@@ -96,6 +96,11 @@ v1-task-owner = "repository-maintenance"
 
 The Rust metadata adapter maps that value to a typed owner and rejects unknown owner values. Under `VelnorRepositoryV1`, the orchestrator omits only root-workspace packages with this owner from V1 task derivation and feature union; `prepare` verifies the canonical origin first. Under `ConsumerV1`, the same metadata does not exclude a same-named project. Package names and paths alone never grant this exclusion.
 
+Foundation SOURCE qualification is a closed compiled-document exception to ordinary WorkflowIR serialization.
+The renderer owns exact `yml.in` bytes, template digest, single action marker substitution, fixed output path, and managed version marker.
+Its only inputs are an immutable syntax-validated full-SHA action reference and explicit generator version; caller template/path/YAML/body, publication trust, and runtime authority are forbidden.
+The orchestrator retains authenticated publication tuple/action-descriptor evidence, repository policy/identity admission, and safe external preview coordination. This exception grants no runner or native execution behavior.
+
 Hard invariants 10–12 (spec §3.3) are normative throughout. 10 — One owner per
 domain rule per the table above; extend an existing owner before making a new
 module, and fix cycles through ownership changes. 11 — Never duplicate domain

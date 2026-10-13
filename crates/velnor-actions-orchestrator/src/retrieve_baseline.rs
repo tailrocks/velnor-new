@@ -5,8 +5,8 @@
 //! resolve coverage through a live lookup whose manifest never rides
 //! the artifact. The fetch step closes that gap: when the downloaded
 //! plan carries covered obligations and no staged `baseline.json`, it
-//! re-derives the exact artifact name from the plan base plus
-//! plan-derived compatibility and downloads that one exact artifact,
+//! revalidates the plan-selected run, artifact, manifest digest, and
+//! original service attempt and downloads that one exact artifact,
 //! bounded (a whole-run fallback does not exist). Staged evidence
 //! always wins: an existing `baseline.json` — file or symlink —
 //! skips the download, and the final write is exclusive, never an

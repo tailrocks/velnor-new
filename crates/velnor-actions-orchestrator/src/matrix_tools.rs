@@ -199,7 +199,7 @@ pub(crate) fn prepare_install_opentofu(
 /// Driver toolchain per role (Rust only for rust obligations, plus
 /// Opentofu for tofu jobs) plus Nextest when used, plus the
 /// `generate` validators only when `needs_validators` holds (see
-/// [`crate_needs_generate_validators`]). The set is exact and pinned
+/// [`suite_tools_for_tasks`]). The set is exact and pinned
 /// by test: drivers, conditional validators, optional Nextest,
 /// nothing else. Pure-tofu roles carry no owned-homes triple in the
 /// step env; every other role keeps it.

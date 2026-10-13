@@ -317,7 +317,7 @@ fn entry_metadata_pins_tofu_shape() {
     assert_eq!(meta["kind"], serde_json::json!("init"));
     assert_eq!(meta["compile_driver"], serde_json::json!("tofu"));
     assert_eq!(meta["test_runner"], serde_json::json!("none"));
-    let mut drifted = task;
+    let mut drifted = task.clone();
     drifted.identity.compile_driver = "mbx".to_owned();
     assert!(entry_metadata_for_task(&drifted, &[]).is_err());
 }

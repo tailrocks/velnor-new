@@ -28,6 +28,8 @@ use velnor_actions_orchestrator::{
 };
 
 use crate::dispatch_publish::run_publish_internal;
+#[path = "dispatch_foundation_qualification.rs"]
+mod foundation_qualification;
 
 mod public;
 pub(crate) use public::run_public;

@@ -213,6 +213,7 @@ fn script_covers_all_forms_scopes_and_namespaces() -> Result<(), Box<dyn Error>>
             "Rust freshness owner misses {marker}"
         );
     }
+    harness::cleanup(&fixture);
     Ok(())
 }
 

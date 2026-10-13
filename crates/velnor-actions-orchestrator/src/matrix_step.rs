@@ -19,7 +19,7 @@ mod tools;
 mod tofu_env;
 
 #[cfg(test)]
-pub(crate) use tools::crate_needs_tofu_install;
+pub(crate) use tools::crate_suite_tools;
 #[cfg(test)]
 pub(crate) use tools::task_driver_tools;
 pub(crate) use tools::{

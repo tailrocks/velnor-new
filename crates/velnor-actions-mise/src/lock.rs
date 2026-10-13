@@ -14,7 +14,7 @@ use velnor_actions_contract::{
     ReleaseManifest, RunnerInventory, VersionPolicy,
 };
 
-use super::{MISE_VERSION, PinnedTool, ToolCatalog};
+use super::{MISE_VERSION, PinnedTool, ToolCatalog, versions::PYTHON_ARTIFACT_POLICY};
 
 pub use super::lock_verify::verify_lock_against_manifest;
 
@@ -116,6 +116,15 @@ pub fn verify_version_policy(text: &str, catalog: &ToolCatalog) -> Result<(), Lo
                 )));
             }
             None => return Err(mismatch(format!("tool_missing:{}", tool.tool_name()))),
+        }
+    }
+    let python_artifact = section(&doc, "tool_artifacts.python")?;
+    for (key, expected) in PYTHON_ARTIFACT_POLICY {
+        let found = entry(&python_artifact, key)?;
+        if found != expected {
+            return Err(mismatch(format!(
+                "python_artifact:{key}:{found}:{expected}"
+            )));
         }
     }
     match tools.get("mise") {
