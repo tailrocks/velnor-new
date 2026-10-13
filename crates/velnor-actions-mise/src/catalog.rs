@@ -238,6 +238,10 @@ impl ToolCatalog {
     /// not artifact trust. Trusted identity validation is the separate
     /// [`Self::validate_identities`] gate (P03-8b).
     ///
+    /// Only version exactness is enforced here: the catalog owns pins,
+    /// not artifact trust. Trusted identity validation is the separate
+    /// [`Self::validate_identities`] gate (P03-8b).
+    ///
     /// # Errors
     /// Returns [`MiseError::InvalidToolVersion`] for non-exact versions.
     #[expect(
