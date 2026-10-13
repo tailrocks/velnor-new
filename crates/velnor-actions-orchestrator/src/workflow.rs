@@ -129,14 +129,7 @@ pub(crate) fn build_workflow(
         WorkflowPolicy::VelnorRepositoryV1 => None,
     };
     let format = wire_w1::workspace_format_step(discovery, &catalog)?;
-    let rust = match (
-        workflow_policy::plan_uses_rust(discovery, policy),
-        format.is_some(),
-    ) {
-        (false, false) => PlanRustNeed::None,
-        (_, true) => PlanRustNeed::CompilerAndComponents,
-        (true, false) => PlanRustNeed::Compiler,
-    };
+    let rust = plan_rust_need(discovery, policy, format.is_some());
     let needs = PlanJobToolNeeds {
         rust,
         nextest: workflow_policy::plan_uses_nextest(discovery),
@@ -198,6 +191,22 @@ pub(crate) fn build_workflow(
         context,
         actionlint,
     })
+}
+
+#[cfg(test)]
+fn plan_rust_need(
+    discovery: &Discovery,
+    policy: WorkflowPolicy,
+    format_present: bool,
+) -> PlanRustNeed {
+    match (
+        workflow_policy::plan_uses_rust(discovery, policy),
+        format_present,
+    ) {
+        (false, false) => PlanRustNeed::None,
+        (_, true) => PlanRustNeed::CompilerAndComponents,
+        (true, false) => PlanRustNeed::Compiler,
+    }
 }
 
 fn workflow_ir(
