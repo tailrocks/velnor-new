@@ -14,6 +14,7 @@ fn decide(capacity: u32, started: u32, running: u32, idle: Idle) -> Admit {
         capacity,
         capacity,
         started,
+        occupied: running,
         running,
         running,
         u32::MAX,

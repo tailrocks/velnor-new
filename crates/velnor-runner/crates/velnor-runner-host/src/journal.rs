@@ -30,6 +30,10 @@ use sql::{one_row, token_rejected};
 
 pub(crate) use resource_probe::{ProbePhase, ProbeRow, ProbeSeed};
 
+mod launch;
+mod schema;
+mod worker_volume;
+
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IntentState {
@@ -246,6 +250,41 @@ impl Journal {
             }
         })
         .await
+    }
+
+    /// Store the runner id and the private `DinD` id. `None` keeps the column.
+    ///
+    /// Commit this before the container is started. Empty ids are rejected.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] when the row is missing or an id is rejected.
+    pub async fn bind_worker(
+        &self,
+        id: i64,
+        runner_id: Option<&str>,
+        dind_id: Option<&str>,
+    ) -> Result<(), HostError> {
+        if runner_id.is_some_and(token_rejected) || dind_id.is_some_and(token_rejected) {
+            return Err(HostError::Journal);
+        }
+        let conn = self.connection().await?;
+        let changed = conn
+            .execute(
+                "UPDATE intents SET docker_id = COALESCE(docker_id, ?1), dind_id = COALESCE(dind_id, ?2) WHERE id = ?3 AND (?1 IS NULL OR docker_id IS NULL OR docker_id = ?1) AND (?2 IS NULL OR dind_id IS NULL OR dind_id = ?2)",
+                (
+                    runner_id.map(str::to_owned),
+                    dind_id.map(str::to_owned),
+                    id,
+                ),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        match changed {
+            1 => Ok(()),
+            0 => same_ids(&conn, id, runner_id, dind_id).await,
+            _ => Err(HostError::Journal),
+        }
     }
 
     /// Record that cleanup of this row's ids is proven.
