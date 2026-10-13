@@ -40,18 +40,31 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
         velnor_actions_workflow_renderer::MBX_VERSION_CHECK_NAME
     );
     let StepKind::Shell {
+        run: preflight_run, ..
+    } = &preflight.kind
+    else {
+        panic!("preflight must be a shell step");
+    };
+    assert!(preflight_run.ends_with(&[
+        "sh".to_owned(),
+        ".github/scripts/velnor-mbx-rust-checks.sh".to_owned(),
+        "preflight".to_owned(),
+        TEST_RUST_TOOLCHAIN.to_owned(),
+    ]));
+    let StepKind::Shell {
         run,
         env: check_env,
     } = version_check.kind
     else {
         panic!("version check must be a shell step");
     };
-    assert!(run[2].contains("mbx --version"));
-    assert!(run[2].contains("mbx 1.21.1"));
-    assert!(run[2].contains("unterminated"));
-    assert!(run[2].contains(&format!(
-        "mise --no-config --no-env --no-hooks exec rust@{TEST_RUST_TOOLCHAIN} -- mbx --version"
-    )));
+    assert!(run.ends_with(&[
+        "sh".to_owned(),
+        ".github/scripts/velnor-mbx-rust-checks.sh".to_owned(),
+        "verify".to_owned(),
+        TEST_MBX_VERSION.to_owned(),
+        TEST_RUST_TOOLCHAIN.to_owned(),
+    ]));
     let StepKind::Action { uses, with, env } = action.kind else {
         panic!("restore must be an action");
     };
@@ -188,12 +201,12 @@ fn rendered_action_has_rust_homes_and_native_owner_policy() -> Result<(), Render
         assert!(text.contains(&format!("{key}: {cargo_home}")), "{key}");
     }
     assert!(
-        text.contains("GITHUB_PATH"),
-        "rendered preflight exports PATH"
+        text.contains(".github/scripts/velnor-mbx-rust-checks.sh preflight 1.98.1"),
+        "rendered preflight invokes the shared script with its pinned toolchain"
     );
     assert!(
-        text.contains("rust@1.98.1"),
-        "rendered preflight probes the catalog toolchain"
+        text.contains(".github/scripts/velnor-mbx-rust-checks.sh verify 1.21.1 1.98.1"),
+        "rendered version check invokes the shared script with pinned versions"
     );
     assert!(!text.contains("mr-boxington@"), "Mise does not install MBX");
     assert!(
