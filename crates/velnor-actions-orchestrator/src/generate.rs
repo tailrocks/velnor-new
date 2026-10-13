@@ -631,10 +631,18 @@ pub(crate) mod guards;
 #[path = "generate_preserve.rs"]
 mod preserve;
 
+/// Preserve repository-owned entries while replacing generated output.
+#[path = "generate_preserve.rs"]
+mod preserve;
+
+/// Stage and publish fresh preview output transactionally.
+#[path = "generate_preview.rs"]
+mod preview;
+
 /// Re-exported snapshot: the `generate::ToolSnapshot` path is stable API.
 pub use guards::ToolSnapshot;
 
-use guards::{GenerateOwnership, prepare_preview_dir, same_filesystem};
+use guards::{GenerateOwnership, same_filesystem};
 
 /// Options for [`generate`].
 #[derive(Debug, Clone, Default)]
