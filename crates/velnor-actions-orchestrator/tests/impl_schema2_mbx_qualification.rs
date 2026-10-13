@@ -90,7 +90,10 @@ fn assert_writer(writer: &str) {
         "{writer}"
     );
     assert!(
-        writer.contains(&format!("{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}", cache_generation())),
+        writer.contains(&format!(
+            "{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
+            cache_generation()
+        )),
         "{writer}"
     );
     let (mbx, rust) = tool_pins();
@@ -130,7 +133,10 @@ fn assert_reader(reader: &str) {
         "{reader}"
     );
     assert!(
-        reader.contains(&format!("{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}", cache_generation())),
+        reader.contains(&format!(
+            "{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
+            cache_generation()
+        )),
         "{reader}"
     );
     assert!(

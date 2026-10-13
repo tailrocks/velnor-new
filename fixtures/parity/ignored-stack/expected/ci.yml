@@ -48,7 +48,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 9d90371d425335330150a44ddd82153a0f76ae85f2523f9e2af30607ea568f1e
+          d: e4a0cfe622389d5c875cdcee4cfa24364e74bc00bd94d7a1b2bc082f022af021
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -63,7 +63,7 @@ jobs:
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
-          version: 2026.10.8
+          version: 2026.10.9
       - name: Prepare pinned tools
         run: mise --no-config --no-env --no-hooks install actionlint@1.7.12 shellcheck@0.11.0
       - name: Run actionlint
@@ -79,7 +79,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     env:
-      RUSTUP_TOOLCHAIN: 1.98.1
+      RUSTUP_TOOLCHAIN: 1.99.0
       VELNOR_ASSET_SHA256: 923d06dece3fb551648d917e8c39c8e31df94e95c6a3dfad5c718521a95b2f2c
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.8/velnor-actions-0.1.8-x86_64-unknown-linux-gnu
       VELNOR_RELEASE_COMMIT: a5242ea86856e723c829059d716a76b898229070
@@ -100,7 +100,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 8ec05353c9f32e3db4652b37735943c3102a5c88c5c00a73fcfa666baca88523
+          d: 5e4b376f0669dcd3e0cd62921c522e2a78cd95c6c6fcbda765c672d17e447487
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -115,12 +115,12 @@ jobs:
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
-          version: 2026.10.8
+          version: 2026.10.9
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1
+        run: mise --no-config --no-env --no-hooks install rust@1.99.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1
       - name: Acquire Velnor
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.8\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
       - name: Write request
@@ -143,7 +143,7 @@ jobs:
         run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.8'"
       - name: Publish plan
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
           name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
@@ -170,7 +170,7 @@ jobs:
       - name: Acquire Velnor
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.8\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
       - name: Download plan
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
@@ -187,7 +187,7 @@ jobs:
         run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.8'"
       - name: Upload baseline
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
           name: ${{ steps.publish-baseline.outputs.artifact_name }}
@@ -198,7 +198,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     env:
-      RUSTUP_TOOLCHAIN: 1.98.1
+      RUSTUP_TOOLCHAIN: 1.99.0
       VELNOR_ASSET_SHA256: 923d06dece3fb551648d917e8c39c8e31df94e95c6a3dfad5c718521a95b2f2c
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.8/velnor-actions-0.1.8-x86_64-unknown-linux-gnu
       VELNOR_RELEASE_COMMIT: a5242ea86856e723c829059d716a76b898229070
@@ -218,7 +218,7 @@ jobs:
           env: "false"
           install: "false"
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
-          version: 2026.10.8
+          version: 2026.10.9
       - name: Acquire Velnor
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.8\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
       - name: Prepare pinned tools
@@ -228,7 +228,7 @@ jobs:
         run: mise --no-config --no-env --no-hooks install gh@2.102.0
       - name: Download plan
         continue-on-error: true
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
@@ -254,7 +254,7 @@ jobs:
         run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.8'"
       - name: Publish final report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
           name: velnor-final-r${{ github.run_id }}-a${{ github.run_attempt }}
