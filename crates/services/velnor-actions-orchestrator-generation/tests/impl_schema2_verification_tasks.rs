@@ -7,10 +7,46 @@ use tempfile::TempDir;
 use velnor_actions_orchestrator_generation::generate::render_staged_tree;
 use velnor_actions_orchestrator_generation::prepare::prepare;
 
-use crate::impl_common::{TestResult, git, make_repo};
+use crate::impl_common::{TestResult, config_with_branch, git, make_repo};
 use crate::impl_schema2_routing::{job_body, required_file};
 
 const SCALE_RUNS: &str = "runs-on: [velnor, ubuntu-26.04-scale-set, verification-worker]";
+
+#[test]
+fn cold_seed_actionlint_explicitly_installs_exact_tools() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let workflow = required_file(&tree, ".github/workflows/ci.yml")?;
+    let actionlint = job_body(workflow, "actionlint")?;
+
+    let checkout = actionlint.find("name: Checkout").expect("checkout");
+    let install = actionlint
+        .find("name: Prepare pinned tools")
+        .expect("explicit install");
+    let execution = actionlint.find("name: Run actionlint").expect("execution");
+    assert!(checkout < install && install < execution, "{actionlint}");
+    let install_line = "run: mise --no-config --no-env --no-hooks install \
+                        actionlint@1.7.12 shellcheck@0.11.0";
+    let execution_line = "run: mise --no-config --no-env --no-hooks exec \
+                          actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color";
+    assert!(
+        actionlint.contains(install_line),
+        "cold seed must install exact validators:\n{actionlint}"
+    );
+    assert!(
+        actionlint.contains(execution_line),
+        "execution must remain pinned and fail-closed:\n{actionlint}"
+    );
+    assert!(
+        actionlint.contains("MISE_AUTO_INSTALL: \"false\""),
+        "auto-install must stay disabled:\n{actionlint}"
+    );
+    assert!(
+        actionlint.contains("MISE_EXEC_AUTO_INSTALL: \"false\""),
+        "exec auto-install must stay disabled:\n{actionlint}"
+    );
+    Ok(())
+}
 
 #[test]
 fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
