@@ -7,14 +7,14 @@ use serde::{Deserialize, Serialize};
 use crate::errors::ContractError;
 
 /// Typed `workflow_dispatch` inputs.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkflowDispatch {
     /// Dispatch inputs, sorted by name, unique.
     pub inputs: Vec<DispatchInput>,
 }
 
 /// One typed dispatch input.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DispatchInput {
     /// Input name (`[a-z0-9-_]`).
     pub name: String,

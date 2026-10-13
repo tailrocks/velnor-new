@@ -9,7 +9,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
 use velnor_actions_orchestrator::{
-    GenerateOptions, begin_atomic_diagnostic_capture, generate, prepare,
+    DEBUG_GENERATE_PHASE, GenerateOptions, begin_atomic_diagnostic_capture, generate, prepare,
     take_atomic_diagnostic_events,
 };
 
@@ -65,11 +65,10 @@ impl FirstMetadataError {
         target: &Path,
         parent: &Path,
         error: &io::Error,
-        phase: usize,
-        phase_before: usize,
-        phase_after: usize,
+        phases: (usize, usize, usize),
         started: &Instant,
     ) -> Self {
+        let (phase, phase_before, phase_after) = phases;
         let wall_unix_ns = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .ok()
@@ -103,7 +102,7 @@ impl FirstMetadataError {
 
     fn emit(self) {
         eprintln!(
-            "FIRST_METADATA_ERROR wall_unix_ns={:?} elapsed_ns={} observer={} iteration={} writer_phase={} path={} kind={:?} raw_errno={:?} display={:?} POST_ERROR_PARENT_PROBE[{}] POST_ERROR_TARGET_PROBE[{}] POST_ERROR_ROOT_FD_NOFOLLOW[{}]",
+            "FIRST_METADATA_ERROR wall_unix_ns={:?} elapsed_ns={} observer={} iteration={} writer_phase={} phase_before={} phase_before_label={} phase_after={} phase_after_label={} path={} kind={:?} raw_errno={:?} display={:?} POST_ERROR_PARENT_PROBE[{}] POST_ERROR_TARGET_PROBE[{}] POST_ERROR_ROOT_FD_NOFOLLOW[{}]",
             self.wall_unix_ns,
             self.elapsed_ns,
             self.observer,
@@ -213,9 +212,11 @@ fn observe_until_done(
                     target,
                     parent,
                     &error,
-                    writer_phase.load(Ordering::Relaxed),
-                    phase_before,
-                    phase_after,
+                    (
+                        writer_phase.load(Ordering::Relaxed),
+                        phase_before,
+                        phase_after,
+                    ),
                     started,
                 ));
             }
@@ -260,7 +261,7 @@ fn atomic_commit_never_exposes_missing_tree() -> TestResult {
                 .expect("trace receiver remains alive");
         });
         for observer in 0..4 {
-            let parent = root.to_path_buf();
+            let parent = root.clone();
             let target = live.clone();
             let done_ref = &done;
             let counts_ref = &counts;

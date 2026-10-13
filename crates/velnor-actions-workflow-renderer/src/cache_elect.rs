@@ -9,6 +9,15 @@ use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::RenderError;
 
+/// Historical name for the single Mise/tools-cache writer election.
+///
+/// # Errors
+///
+/// Returns [`RenderError`] when [`elect_cache_writers`] does.
+pub fn elect_mise_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
+    elect_cache_writers(jobs)
+}
+
 /// Validate both cache families, then append every elected save atomically.
 ///
 /// Exactly one job per key receives a push-gated save. The plan job wins
@@ -218,7 +227,7 @@ fn provider_restore_entry(job: &Job) -> Option<(String, String)> {
         if step.role != Some(StepRole::TofuProvidersRestore) {
             return None;
         }
-        let StepKind::Action { uses, with, .. } = &step.kind else {
+        let StepKind::Action { uses, with, env } = &step.kind else {
             return None;
         };
         if uses != velnor_actions_contract::workflow::step_identity::TOFU_PROVIDER_ADMISSION_USES

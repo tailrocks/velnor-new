@@ -173,7 +173,7 @@ fn qualification_admission_requires_runner_scope_and_read_only_github_context()
     let dir = tmp.join("request");
     let staged = stage_request(&dir, "plan-v1-request.json", "{}")?;
     let path = staged.to_str().unwrap_or("/");
-    let temp = tmp.to_str().unwrap_or("/");
+    let runner_temp = tmp.to_str().unwrap_or("/");
     let bare = spawn_isolated(&[], &[], &tmp)?;
     for vars in [
         vec![
@@ -185,13 +185,13 @@ fn qualification_admission_requires_runner_scope_and_read_only_github_context()
         vec![
             ("VELNOR_INTERNAL_OP", "resolve-qualification-admission-v1"),
             ("VELNOR_REQUEST_FILE", path),
-            ("RUNNER_TEMP", temp),
+            ("RUNNER_TEMP", runner_temp),
             ("GH_TOKEN", "read-only-test-token"),
         ],
         vec![
             ("VELNOR_INTERNAL_OP", "resolve-qualification-admission-v1"),
             ("VELNOR_REQUEST_FILE", path),
-            ("RUNNER_TEMP", temp),
+            ("RUNNER_TEMP", runner_temp),
             ("GH_REPO", "tailrocks/velnor-new"),
         ],
     ] {

@@ -20,10 +20,9 @@ pub(crate) fn push_explicit_step_id(entries: &mut Vec<(String, Yaml)>, id: &str)
 
 #[cfg(test)]
 mod tests {
-    use super::push_step_id;
+    use super::{Yaml, push_step_id};
     use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
-    use crate::yaml::Yaml;
 
     #[test]
     fn runtime_cache_identity_has_one_renderer_owned_output_id() {

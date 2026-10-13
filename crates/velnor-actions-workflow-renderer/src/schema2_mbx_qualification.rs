@@ -62,8 +62,8 @@ pub(super) fn jobs(
     validate_exact_version(&request.rust_version, "rust")?;
 
     Ok(vec![
-        job(request, hosted, true)?,
-        job(request, hosted, false)?,
+        job(request, hosted, true),
+        job(request, hosted, false),
     ])
 }
 
@@ -72,99 +72,104 @@ fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (St
         (
             "mbx-cache-write-hosted",
             "MBX objects cache / protected-main writer",
-            Vec::new(),
+            "mbx-cache-roundtrip",
         )
     } else {
         (
             "mbx-cache-read-hosted",
             "MBX objects cache / read-only reuse",
-            vec!["mbx-cache-write-hosted".to_owned()],
+            "mbx-cache-roundtrip",
         )
     };
     let mut fields = lane_base(title, hosted, 45);
     if !writer {
         fields.push((
             "needs".to_owned(),
-            Yaml::Seq(needs.iter().cloned().map(Yaml::str).collect()),
+            Yaml::Seq(vec![Yaml::str("mbx-cache-write-hosted")]),
         ));
     }
-    fields.push(("permissions".to_owned(), permission_yaml(writer)));
-    fields.push(("env".to_owned(), qualification_env(request)));
-    Ok(gated(
-        finish(id, fields, rendered_steps),
-        QUALIFICATION_GATE,
-    ))
-}
+    fields.push((
+        "permissions".to_owned(),
+        mapping(&[
+            ("contents", "read"),
+            ("actions", if writer { "write" } else { "read" }),
+        ]),
+    ));
+    fields.push(("env".to_owned(), qualification_env(request, writer)));
 
-fn qualification_steps(
-    request: &MbxQualificationPins,
-    writer: bool,
-) -> Result<Vec<Step>, RenderError> {
     let mut steps = vec![
-        checkout_step()?,
-        mise_setup_step(request)?,
-        mise_install_step(request)?,
-        mbx_action_step(request)?,
-        verify_action_step(request)?,
+        checkout_step(),
+        mise_setup_step(request),
+        mise_install_step(request),
+        mbx_action_step(request, writer),
+        verify_action_step(request, writer),
     ];
     if !writer {
-        let probe = import_probe(request);
-        steps.push(run_step("Require imported MBX objects", &probe));
+        steps.push(run_step(
+            "Require imported MBX objects",
+            &import_probe(request),
+        ));
     }
     steps.push(build_step(request));
     if !writer {
-        let probe = reuse_probe(request);
-        steps.push(run_step("Require reused compilation", &probe));
+        steps.push(run_step(
+            "Require reused compilation",
+            &reuse_probe(request),
+        ));
     }
     steps.push(clean_workspace_step(request));
     if writer {
         steps.push(run_step("Sample runner disk after cleanup", DISK_SAMPLE));
     }
-    steps.push(clean_workspace_step(request));
-    if writer {
-        steps.push(run_step("Sample runner disk after cleanup", DISK_SAMPLE));
-    }
-    Ok(steps)
+    let when = format!("inputs.mode == '{mode}' && {MAIN_REF}");
+    gated(finish(id, fields, steps), &when)
 }
 
-fn checkout_step() -> Result<Step, RenderError> {
-    steps::checkout_step(super::features::CHECKOUT_USES)
-}
-
-fn mise_setup_step(request: &MbxQualificationPins) -> Result<Step, RenderError> {
-    steps::action_step(
-        "Set up Mise",
-        &request.mise_setup.uses,
-        BTreeMap::from([
-            ("version".to_owned(), request.mise_setup.version.clone()),
-            ("sha256".to_owned(), request.mise_setup.sha256.clone()),
-            ("install".to_owned(), "false".to_owned()),
-            ("env".to_owned(), "false".to_owned()),
-            ("cache".to_owned(), "false".to_owned()),
-            ("cache_save".to_owned(), "false".to_owned()),
-        ]),
-    )
-}
-
-fn mise_install_step(request: &MbxQualificationPins) -> Result<Step, RenderError> {
-    let rust = &request.rust_version;
-    shell_step(
-        "Install pinned Rust toolchain",
-        &format!(
-            "mise install rust@{rust} && mise exec rust@{rust} -- rustc --print sysroot > \"$RUNNER_TEMP/mbx-rust-sysroot\" && IFS= read -r sysroot < \"$RUNNER_TEMP/mbx-rust-sysroot\" && test -n \"$sysroot\" && printf '%s/bin\\n' \"$sysroot\" >> \"$GITHUB_PATH\""
+fn mise_setup_step(request: &MbxQualificationPins) -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("Set up Mise")),
+        (
+            "uses".to_owned(),
+            Yaml::str(request.mise_setup.uses.clone()),
         ),
-    )
+        (
+            "with".to_owned(),
+            mapping(&[
+                ("version", &request.mise_setup.version),
+                ("sha256", &request.mise_setup.sha256),
+                ("install", "false"),
+                ("env", "false"),
+                ("cache", "false"),
+                ("cache_save", "false"),
+            ]),
+        ),
+    ])
+}
+
+fn mise_install_step(request: &MbxQualificationPins) -> Yaml {
+    let rust = &request.rust_version;
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Install pinned Rust toolchain"),
+        ),
+        (
+            "run".to_owned(),
+            Yaml::str(format!(
+                "mise install rust@{rust} && mise exec rust@{rust} -- rustc --print sysroot > \"$RUNNER_TEMP/mbx-rust-sysroot\" && IFS= read -r sysroot < \"$RUNNER_TEMP/mbx-rust-sysroot\" && test -n \"$sysroot\" && printf '%s/bin\\n' \"$sysroot\" >> \"$GITHUB_PATH\""
+            )),
+        ),
+    ])
 }
 
 fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
-    let action_sha = &request.mbx_action_uses[format!("{MBX_ACTION_NAME}@").len()..];
     let generation = format!(
         "velnor-qualification-mbx-{}-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
         request.mbx_version,
         &request.candidate_action_uses[format!("{MBX_ACTION_NAME}@").len()..]
     );
     Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str(MBX_SETUP_NAME)),
+        ("name".to_owned(), Yaml::str("Restore MBX objects")),
         (
             "uses".to_owned(),
             Yaml::str(request.candidate_action_uses.clone()),
@@ -178,8 +183,6 @@ fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
                 ("toolchain", &request.rust_version),
                 ("isolate-objects-cache", "true"),
                 ("cache-generation", &generation),
-                ("cache-key", &cache_key),
-                ("isolate-objects-cache", "true"),
                 (
                     "save-on-workflow-dispatch",
                     if writer { "true" } else { "false" },
@@ -281,19 +284,6 @@ fn clean_workspace_step(request: &MbxQualificationPins) -> Yaml {
     ])
 }
 
-fn clean_workspace_step(request: &MbxQualificationPins) -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Clean MBX workspace outputs")),
-        ("if".to_owned(), Yaml::str(MBX_WORKSPACE_CLEAN_CONDITION)),
-        (
-            "run".to_owned(),
-            Yaml::str(format!(
-                "mise --no-config --no-env --no-hooks exec rust@{} -- mbx clean",
-                request.rust_version
-            )),
-        ),
-    ])
-}
 
 fn qualification_env(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let home = "${{ github.workspace }}/.velnor-mbx-cache-qualification";
@@ -303,8 +293,6 @@ fn qualification_env(request: &MbxQualificationPins, writer: bool) -> Yaml {
         ("ACTIONS_CACHE_MODE", if writer { "write" } else { "read" }),
         ("CARGO_HOME", &format!("{home}/cargo")),
         ("MBX_CACHE_DIR", &format!("{home}/mbx-store")),
-        ("MBX_CACHE_EXPORT_GROUP", &export_group),
-        ("MBX_GC_AUTO", "1"),
         ("MISE_AUTO_INSTALL", "false"),
         ("MISE_CARGO_HOME", &format!("{home}/cargo")),
         ("MISE_EXEC_AUTO_INSTALL", "false"),
@@ -325,21 +313,6 @@ fn mapping(pairs: &[(&str, &str)]) -> Yaml {
             .map(|(key, value)| ((*key).to_owned(), Yaml::str(*value)))
             .collect(),
     )
-}
-
-fn step_context() -> RenderContext {
-    RenderContext {
-        generator_version: "0.0.0".to_owned(),
-        runs_on: "ubuntu-26.04".to_owned(),
-        staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.0.0".to_owned(),
-        request_dir: "${{ runner.temp }}/velnor".to_owned(),
-        checkout_uses: super::features::CHECKOUT_USES.to_owned(),
-        validator_commands: Vec::new(),
-        candidate: None,
-        preseed: false,
-        pull_request_cache_policy: PullRequestCachePolicy::ReadOnly,
-        plan_consumer_env: BTreeMap::new(),
-    }
 }
 
 fn validate_exact_version(version: &str, kind: &str) -> Result<(), RenderError> {

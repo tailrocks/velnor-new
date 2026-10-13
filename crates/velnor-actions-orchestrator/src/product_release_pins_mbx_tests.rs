@@ -105,8 +105,8 @@ fn release_qualification_uses_catalog_action_and_exact_version_probe() {
     let mbx_version = catalog.version(PinnedTool::MrBoxington);
     let rust_version = catalog.version(PinnedTool::Rust);
     assert_eq!(
-        uses,
-        &format!("jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}")
+        uses.as_str(),
+        format!("jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}")
     );
     assert_eq!(with.get("version").map(String::as_str), Some(mbx_version));
     assert_eq!(

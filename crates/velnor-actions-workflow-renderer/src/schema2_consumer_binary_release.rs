@@ -104,6 +104,7 @@ fn validate_spec(spec: &ConsumerBinaryReleaseSpec) -> Result<(), RenderError> {
         manifest_path: spec.manifest_path.clone(),
         package: spec.package.clone(),
         bin: spec.bin.clone(),
+        source_commit_env: None,
     };
     config
         .validate("consumer-config.toml")

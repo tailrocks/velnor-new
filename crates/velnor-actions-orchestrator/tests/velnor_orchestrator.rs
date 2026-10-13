@@ -103,6 +103,7 @@ mod impl_schema2_build_task_lock;
 mod impl_schema2_build_tasks;
 mod impl_schema2_mbx_qualification;
 mod impl_schema2_routing;
+mod impl_schema2_verification_tasks;
 mod impl_select;
 mod impl_select_base;
 mod impl_select_removed;

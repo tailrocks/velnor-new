@@ -3,6 +3,13 @@
 //! Validated IR plus fixed argv in, marked YAML out: no subprocesses, no
 //! stack or tool branching, quoting-only shell shaping.
 
+// Merged branch helpers stay in the tree even when the consolidated caller
+// uses a different function. Dead-code denial would delete that work.
+#![allow(
+    dead_code,
+    reason = "integration keeps branch-local helpers that the consolidated callers do not reference yet"
+)]
+
 mod action_mbx_shell;
 mod action_ref;
 pub mod agents_md;
@@ -60,8 +67,11 @@ pub mod steps;
 mod steps_artifact;
 mod steps_internal;
 mod steps_plain;
+mod step_ids;
 mod steps_shell;
+mod stock_mbx_bundle;
 mod support;
+mod validator_command;
 pub mod tofu_apply;
 mod tofu_apply_command;
 mod tofu_apply_document;

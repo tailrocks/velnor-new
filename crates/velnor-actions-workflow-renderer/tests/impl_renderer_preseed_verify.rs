@@ -3,6 +3,7 @@
 //! Split from `impl_renderer_preseed.rs` (alint `rust-max-lines`): these
 //! tests pin the download-side verify script without plan/final fixtures.
 use std::collections::BTreeMap;
+use std::process::Command;
 
 use velnor_actions_workflow_renderer::{
     PRESEED_VERIFY_MANIFEST_NAME, RenderError, preseed_manifest_verify_script,
@@ -128,7 +129,6 @@ fn preseed_verify_script_rejects_tampered_payload() -> Result<(), RenderError> {
 fn preseed_verify_fails_when_mise_emits_version_then_exits_nonzero()
 -> Result<(), Box<dyn std::error::Error>> {
     use std::os::unix::fs::PermissionsExt;
-    use std::process::Command;
 
     use super::impl_renderer_fixtures::mise_argv;
 

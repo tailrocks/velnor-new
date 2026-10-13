@@ -25,12 +25,6 @@ pub use validators::{
     validate_repository, validate_source_sha,
 };
 
-/// Publisher lock and release-event eligibility (`#[path]`, no `lib.rs` edit);
-/// re-exported below so `release_spec::X` paths keep working.
-#[path = "release_lock.rs"]
-pub mod lock;
-pub use lock::{ReleaseConcurrency, check_lock_anchor};
-
 /// One typed `workflow_dispatch` input (plan reference, never free shell).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DispatchInput {

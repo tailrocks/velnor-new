@@ -89,11 +89,6 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     assert!(!with.contains_key("isolate-objects-cache"));
     assert!(!with.contains_key("cache-key"));
     assert!(!with.contains_key("restore-keys"));
-    let expected_generation = format!(
-        "{}-gc-auto-off-final-clean-v1-action-{}-lane-${{{{ runner.environment }}}}-job-${{{{ github.job }}}}",
-        mbx_cache_generation(TEST_MBX_VERSION),
-        "a".repeat(40)
-    );
     let action_sha = MBX_ACTION
         .strip_prefix("jdx/mr-boxington-action@")
         .expect("SHA ref");

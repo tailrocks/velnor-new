@@ -31,6 +31,20 @@ pub(crate) fn check_job_label(
     Ok(())
 }
 
+/// Platform triple used to key a job's installed-tool cache.
+pub(crate) fn cache_target_for_job(
+    job: &velnor_actions_contract::Job,
+    default_label: &str,
+) -> Option<&'static str> {
+    if job.runs_on == MACOS_RUNS_ON {
+        return crate::runs_on::target_for_runner(MACOS_RUNS_ON);
+    }
+    if RunsOn::parse(&job.runs_on).is_ok_and(|selector| selector.is_scale_set()) {
+        return crate::runs_on::target_for_runner(default_label);
+    }
+    crate::runs_on::target_for_runner(&job.runs_on)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

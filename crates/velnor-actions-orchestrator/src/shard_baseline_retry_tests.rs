@@ -40,6 +40,7 @@ fn normal_retry_lookup(
         "digest": format!("sha256:{}", crate::cover_identity::generator::sha256_hex(&archive)),
     });
     let calls = RefCell::new(Vec::new());
+    let archive_calls = RefCell::new(Vec::new());
     let found = resolve_with(
         &lookup,
         &parent.artifact_name,
@@ -74,12 +75,16 @@ fn normal_retry_lookup(
                 .iter()
                 .map(|arg| arg.to_string_lossy().into_owned())
                 .collect();
-            calls.borrow_mut().push(args.clone());
+            archive_calls.borrow_mut().push(args.clone());
             assert_eq!(args, ["api", "repos/o/r/actions/artifacts/99/zip"]);
             Ok(archive.clone())
         },
     );
-    (found, calls.into_inner())
+    (
+        found,
+        calls.into_inner(),
+        archive_calls.into_inner(),
+    )
 }
 
 #[test]
@@ -120,7 +125,8 @@ fn replayed_publication_remains_usable_for_next_plan_coverage() {
 #[test]
 fn failed_summary_cannot_reuse_successful_original_attempt() {
     let parent = retry_parent();
-    let (failed_summary, calls) = normal_retry_lookup(&parent, "failure", "success");
+    let (failed_summary, calls, _archive_calls) =
+        normal_retry_lookup(&parent, "failure", "success");
     assert!(failed_summary.is_err());
     assert_eq!(
         calls.len(),
@@ -132,7 +138,7 @@ fn failed_summary_cannot_reuse_successful_original_attempt() {
 #[test]
 fn successful_summary_reuses_authenticated_attempt_one() {
     let parent = retry_parent();
-    let (found, calls) = normal_retry_lookup(&parent, "success", "success");
+    let (found, calls, _archive_calls) = normal_retry_lookup(&parent, "success", "success");
     assert_eq!(found.expect("selected summary")[0].run_attempt, 1);
     assert!(
         calls

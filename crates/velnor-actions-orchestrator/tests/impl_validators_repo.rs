@@ -10,9 +10,7 @@ use velnor_actions_contract::DetectionStatus;
 use velnor_actions_contract::{PullRequestCachePolicy, WorkflowPolicy};
 use velnor_actions_orchestrator::prepare;
 
-use crate::impl_common::{fixture_manifest_json, without_ambient_identity};
-
-use crate::impl_common::{fixture_manifest_json, without_ambient_identity};
+use crate::impl_common::{fixture_manifest_json, root_manifest, without_ambient_identity};
 
 /// Test error shortcut.
 type TestResult = Result<(), Box<dyn std::error::Error>>;

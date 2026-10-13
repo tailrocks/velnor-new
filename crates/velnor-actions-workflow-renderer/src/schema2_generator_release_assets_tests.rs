@@ -42,52 +42,9 @@ fn release_manifest_version_matches_the_workspace_package_version() {
     }
 }
 
-#[test]
-fn every_release_asset_matches_the_workspace_version() {
-    assert_eq!(VERSION, env!("CARGO_PKG_VERSION"));
-    let prefix = format!("velnor-actions-{VERSION}-");
-    for asset in ASSETS {
-        assert!(asset.binary.starts_with(&prefix), "{}", asset.binary);
-        assert_eq!(asset.sidecar, format!("{}.sha256", asset.binary));
-        assert_eq!(
-            asset.provenance,
-            format!("{}.provenance.json", asset.binary)
-        );
-    }
-}
 
-#[test]
-fn release_manifest_version_matches_the_workspace_package_version() {
-    let current_binary = format!("velnor-actions-{}", super::VERSION);
-    assert_eq!(super::VERSION, env!("CARGO_PKG_VERSION"));
-    for asset in super::ASSETS {
-        assert!(asset.binary.starts_with(&current_binary));
-        assert!(asset.sidecar.starts_with(&current_binary));
-        assert!(asset.provenance.starts_with(&current_binary));
-    }
-}
 
-#[test]
-fn release_manifest_version_matches_the_workspace_package_version() {
-    let current_binary = format!("velnor-actions-{}", super::VERSION);
-    assert_eq!(super::VERSION, env!("CARGO_PKG_VERSION"));
-    for asset in super::ASSETS {
-        assert!(asset.binary.starts_with(&current_binary));
-        assert!(asset.sidecar.starts_with(&current_binary));
-        assert!(asset.provenance.starts_with(&current_binary));
-    }
-}
 
-#[test]
-fn release_manifest_version_matches_the_workspace_package_version() {
-    let current_binary = format!("velnor-actions-{}", super::VERSION);
-    assert_eq!(super::VERSION, env!("CARGO_PKG_VERSION"));
-    for asset in super::ASSETS {
-        assert!(asset.binary.starts_with(&current_binary));
-        assert!(asset.sidecar.starts_with(&current_binary));
-        assert!(asset.provenance.starts_with(&current_binary));
-    }
-}
 
 struct Scratch(PathBuf);
 

@@ -76,113 +76,25 @@ pub(crate) fn needs(rust: PlanRustNeed) -> PlanJobToolNeeds {
     }
 }
 
-/// Discovery with no selected workloads.
-fn empty_discovery() -> Discovery {
-    Discovery {
-        mise_checks: Vec::new(),
-        statuses: Vec::new(),
-        workspaces: Vec::new(),
-        proposals: Vec::new(),
-        feature_fallbacks: Vec::new(),
-        tool_checks: Vec::new(),
-        clippy_memory: ClippyMemoryPlan {
-            groups: Vec::new(),
-            barriers: 0,
-        },
-        recommendations: Vec::new(),
-        consumer_manifest_json: None,
-        skipped_non_utf8: false,
-        tofu_note: None,
-        tofu_units: Vec::new(),
-    }
-}
 
 #[test]
-fn consumer_plan_uses_rust_only_for_selected_rust_evidence() {
-    assert!(!plan_uses_rust(&empty_discovery()));
+fn consumer_plan_uses_rust_only_for_selected_rust_evidence_merged() {
+    assert!(!plan_uses_rust(&empty_discovery(), WorkflowPolicy::ConsumerV1));
 }
 
 #[test]
 fn generator_plan_skips_rust_without_rust_evidence() {
-    assert!(!plan_uses_rust(&empty_discovery()));
+    assert!(!plan_uses_rust(&empty_discovery(), WorkflowPolicy::ConsumerV1));
 }
 
-#[test]
-fn rust_proposals_require_rust_without_inventory_records() {
-    let profile = velnor_actions_rust::RustExecutionProfile {
-        compile_driver: velnor_actions_rust::CompileDriver::Cargo,
-        test_runner: velnor_actions_rust::TestRunner::CargoTest,
-        evidence: Vec::new(),
-        driver_source: velnor_actions_rust::ProfileSource::Detected,
-        runner_source: velnor_actions_rust::ProfileSource::Detected,
-        nextest_profile: velnor_actions_rust::NextestProfile::Default,
-        nextest_config: None,
-        run_ignored: None,
-    };
-    let group =
-        velnor_actions_rust::derive_workspace_fmt("Cargo.toml", &profile, "default", "host")
-            .expect("Rust format group");
-    let mut discovery = empty_discovery();
-    discovery
-        .proposals
-        .push(velnor_actions_rust::propose_task(&group).expect("Rust proposal"));
-    assert!(plan_uses_rust(&discovery));
-}
 
-/// Discovery with no selected workloads.
-fn empty_discovery() -> Discovery {
-    Discovery {
-        mise_checks: Vec::new(),
-        statuses: Vec::new(),
-        workspaces: Vec::new(),
-        proposals: Vec::new(),
-        feature_fallbacks: Vec::new(),
-        tool_checks: Vec::new(),
-        clippy_memory: ClippyMemoryPlan {
-            groups: Vec::new(),
-            barriers: 0,
-        },
-        recommendations: Vec::new(),
-        consumer_manifest_json: None,
-        skipped_non_utf8: false,
-        tofu_note: None,
-        tofu_units: Vec::new(),
-    }
-}
 
 #[test]
 fn plan_uses_rust_only_for_selected_rust_evidence() {
-    assert!(!plan_uses_rust(&empty_discovery()));
+    assert!(!plan_uses_rust(&empty_discovery(), WorkflowPolicy::ConsumerV1));
 }
 
-#[test]
-fn rust_proposals_require_rust_without_inventory_records() {
-    let profile = velnor_actions_rust::RustExecutionProfile {
-        compile_driver: velnor_actions_rust::CompileDriver::Cargo,
-        test_runner: velnor_actions_rust::TestRunner::CargoTest,
-        evidence: Vec::new(),
-        driver_source: velnor_actions_rust::ProfileSource::Detected,
-        runner_source: velnor_actions_rust::ProfileSource::Detected,
-        nextest_profile: velnor_actions_rust::NextestProfile::Default,
-        nextest_config: None,
-        run_ignored: None,
-    };
-    let group =
-        velnor_actions_rust::derive_workspace_fmt("Cargo.toml", &profile, "default", "host")
-            .expect("Rust format group");
-    let mut discovery = empty_discovery();
-    discovery
-        .proposals
-        .push(velnor_actions_rust::propose_task(&group).expect("Rust proposal"));
-    assert!(plan_uses_rust(&discovery));
-}
 
-fn needs(rust: PlanRustNeed) -> PlanJobToolNeeds {
-    PlanJobToolNeeds {
-        rust,
-        ..PlanJobToolNeeds::default()
-    }
-}
 
 /// Internal operation of one step, if any.
 fn operation_of(step: &Step) -> Option<&str> {

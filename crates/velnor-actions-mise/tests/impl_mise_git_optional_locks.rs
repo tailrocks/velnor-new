@@ -323,10 +323,9 @@ mod unix_tests {
         );
         assert_eq!(fs::read(&index).map_err(|error| error.to_string())?, before);
 
-        assert!(
-            git(&stage, &stage.repo, "1", &["status", "--porcelain"])?
-                .stdout
-                .is_empty()
+        assert_eq!(
+            git(&stage, &stage.repo, "1", &["status", "--porcelain"])?.stdout,
+            b""
         );
         assert_ne!(fs::read(&index).map_err(|error| error.to_string())?, before);
         Ok(())

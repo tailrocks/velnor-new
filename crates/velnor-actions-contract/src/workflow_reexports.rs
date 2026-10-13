@@ -5,6 +5,7 @@ pub use crate::workflow::{
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, CacheLayer, CacheOutcome, CacheResult, Concurrency,
     CrateJob, CrateObligation, DYNAMIC_MATRIX_OUTPUT_MODE, DispatchInput, DispatchInputType,
     EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, FINAL_JSON_FILENAME, FRESHNESS_CRON_WEEKLY,
+    GeneratorReleasePlan, GeneratorReleaseTarget,
     FRESHNESS_WORKFLOW_PATH, FinalCounts, FinalReport, FinalStatus, HOSTED_SUFFIX, Job,
     JobConclusion, JobTimeout, MATRIX_JSON_FILENAME, MAX_TASK_EXECUTION_ARGV,
     MAX_TASK_EXECUTION_ENV, MAX_TASK_EXECUTION_FRAME_BYTES, MAX_TASK_EXECUTION_RECORDS,

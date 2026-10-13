@@ -145,19 +145,16 @@ esac
         )?)
     }
 
-    fn mbx_steps(catalog: &ToolCatalog) -> Result<[Step; 3], Box<dyn std::error::Error>> {
-        let uses = format!("jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}");
-        let homes = ToolHomes::runner_temp();
-        let env = strings_map(homes.env(catalog))?;
-        let steps = mbx_steps_for_driver(
-            &uses,
-            CompileDriver::Mbx,
-            catalog.version(PinnedTool::MrBoxington),
-            catalog.version(PinnedTool::Rust),
-            env,
-        )?
-        .ok_or_else(|| std::io::Error::other("MBX driver steps missing"))?;
-        Ok(steps)
+    fn preflight_step(catalog: &ToolCatalog) -> Result<Step, Box<dyn std::error::Error>> {
+        let [preflight, _, _] = mbx_steps(catalog)?;
+        Ok(preflight)
+    }
+
+    fn shell_run(step: &Step) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        match &step.kind {
+            StepKind::Shell { run, .. } => Ok(run.clone()),
+            _ => Err(std::io::Error::other(format!("{} must be a shell step", step.name)).into()),
+        }
     }
 
     fn mbx_steps(catalog: &ToolCatalog) -> Result<[Step; 3], Box<dyn std::error::Error>> {

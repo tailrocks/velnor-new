@@ -132,6 +132,12 @@ pub fn render_yaml(value: &Yaml) -> String {
     emit::render_yaml(value)
 }
 
+/// Render a compact document with one-space nesting indentation.
+#[must_use]
+pub fn render_yaml_compact(value: &Yaml) -> String {
+    emit::render_yaml_compact(value)
+}
+
 /// Quote a scalar only when plain style would be unsafe or ambiguous.
 #[must_use]
 pub fn quote_scalar(value: &str) -> String {

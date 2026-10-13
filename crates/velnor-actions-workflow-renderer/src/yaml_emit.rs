@@ -5,8 +5,18 @@ use super::Yaml;
 /// Render a document with a trailing newline.
 #[must_use]
 pub(super) fn render_yaml(value: &Yaml) -> String {
+    render_yaml_with_indent(value, 2)
+}
+
+/// Same encoding as [`render_yaml`], with `width` spaces per nesting level.
+#[must_use]
+pub(super) fn render_yaml_compact(value: &Yaml) -> String {
+    render_yaml_with_indent(value, 1)
+}
+
+fn render_yaml_with_indent(value: &Yaml, width: usize) -> String {
     let mut out = String::new();
-    emit_node(value, 0, &mut out);
+    emit_node(value, 0, width, &mut out);
     out
 }
 
@@ -21,7 +31,7 @@ pub(super) fn quote_scalar(value: &str) -> String {
 }
 
 /// Emit a nested node at an indent level.
-fn emit_node(value: &Yaml, indent: usize, out: &mut String) {
+fn emit_node(value: &Yaml, indent: usize, width: usize, out: &mut String) {
     if value.is_inline() {
         emit_inline(value, out);
         out.push('\n');
@@ -30,12 +40,12 @@ fn emit_node(value: &Yaml, indent: usize, out: &mut String) {
     match value {
         Yaml::Seq(items) => {
             for item in items {
-                emit_seq_item(item, indent, out);
+                emit_seq_item(item, indent, width, out);
             }
         }
         Yaml::Map(entries) | Yaml::AnchoredMap { entries, .. } => {
             for (key, child) in entries {
-                emit_map_entry(key, child, indent, out);
+                emit_map_entry(key, child, indent, width, out);
             }
         }
         Yaml::Null
@@ -52,8 +62,8 @@ fn emit_node(value: &Yaml, indent: usize, out: &mut String) {
 }
 
 /// Emit one mapping entry.
-fn emit_map_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
-    push_indent(indent, out);
+fn emit_map_entry(key: &str, value: &Yaml, indent: usize, width: usize, out: &mut String) {
+    push_indent(indent, width, out);
     out.push_str(&quote_scalar(key));
     match value {
         Yaml::Null => out.push_str(":\n"),
@@ -67,7 +77,7 @@ fn emit_map_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
             out.push_str(name.as_str());
             out.push('\n');
             for (nested_key, nested_value) in entries {
-                emit_map_entry(nested_key, nested_value, indent + 1, out);
+                emit_map_entry(nested_key, nested_value, indent + 1, width, out);
             }
         }
         inline if inline.is_inline() => {
@@ -77,21 +87,21 @@ fn emit_map_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
         }
         nested => {
             out.push_str(":\n");
-            emit_node(nested, indent + 1, out);
+            emit_node(nested, indent + 1, width, out);
         }
     }
 }
 
 /// Emit one sequence item.
-fn emit_seq_item(item: &Yaml, indent: usize, out: &mut String) {
-    push_indent(indent, out);
+fn emit_seq_item(item: &Yaml, indent: usize, width: usize, out: &mut String) {
+    push_indent(indent, width, out);
     match item {
         Yaml::Map(entries) if !entries.is_empty() => {
             if let Some(((first_key, first_value), rest)) = entries.split_first() {
                 out.push_str("- ");
-                emit_first_entry(first_key, first_value, indent, out);
+                emit_first_entry(first_key, first_value, indent, width, out);
                 for (key, child) in rest {
-                    emit_map_entry(key, child, indent + 1, out);
+                    emit_map_entry(key, child, indent + 1, width, out);
                 }
             }
         }
@@ -100,12 +110,12 @@ fn emit_seq_item(item: &Yaml, indent: usize, out: &mut String) {
             out.push_str(name.as_str());
             out.push('\n');
             for (key, value) in entries {
-                emit_map_entry(key, value, indent + 1, out);
+                emit_map_entry(key, value, indent + 1, width, out);
             }
         }
         Yaml::Seq(items) if !items.is_empty() => {
             out.push_str("-\n");
-            emit_node(item, indent + 1, out);
+            emit_node(item, indent + 1, width, out);
         }
         Yaml::Null => out.push_str("-\n"),
         inline => {
@@ -117,7 +127,7 @@ fn emit_seq_item(item: &Yaml, indent: usize, out: &mut String) {
 }
 
 /// Emit the first mapping entry of a sequence item after `- `.
-fn emit_first_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
+fn emit_first_entry(key: &str, value: &Yaml, indent: usize, width: usize, out: &mut String) {
     out.push_str(&quote_scalar(key));
     match value {
         Yaml::Null => out.push_str(":\n"),
@@ -131,7 +141,7 @@ fn emit_first_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
             out.push_str(name.as_str());
             out.push('\n');
             for (nested_key, nested_value) in entries {
-                emit_map_entry(nested_key, nested_value, indent + 2, out);
+                emit_map_entry(nested_key, nested_value, indent + 2, width, out);
             }
         }
         inline if inline.is_inline() => {
@@ -141,7 +151,7 @@ fn emit_first_entry(key: &str, value: &Yaml, indent: usize, out: &mut String) {
         }
         nested => {
             out.push_str(":\n");
-            emit_node(nested, indent + 2, out);
+            emit_node(nested, indent + 2, width, out);
         }
     }
 }
@@ -208,9 +218,10 @@ fn emit_flow_map(entries: &[(String, String)], out: &mut String) {
 }
 
 /// Push 2-space indentation.
-fn push_indent(indent: usize, out: &mut String) {
+fn push_indent(indent: usize, width: usize, out: &mut String) {
+    let unit = " ".repeat(width);
     for _ in 0..indent {
-        out.push_str("  ");
+        out.push_str(&unit);
     }
 }
 

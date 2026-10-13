@@ -80,7 +80,7 @@ pub(super) fn config() -> RustBinaryReleaseConfig {
         enabled: true,
         manifest_path: "Cargo.toml".to_owned(),
         package: PACKAGE.to_owned(),
-        binary: Some(BINARY.to_owned()),
+        bin: BINARY.to_owned(),
         source_commit_env: None,
     }
 }

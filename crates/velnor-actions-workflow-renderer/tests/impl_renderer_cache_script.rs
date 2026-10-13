@@ -51,7 +51,7 @@ fn render_cache_fixture() -> Result<RenderedWorkflow, RenderError> {
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
-        &mise(),
+        &mise_set()?,
     )
 }
 
@@ -187,7 +187,7 @@ fn cache_free_render_does_not_emit_runtime_identity_script() -> Result<(), Rende
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
-        &mise(),
+        &mise_set()?,
     )?;
     assert!(rendered.shared.is_empty(), "{:?}", rendered.shared);
     assert!(!rendered.yaml.contains("velnor-tools-cache-identity"));

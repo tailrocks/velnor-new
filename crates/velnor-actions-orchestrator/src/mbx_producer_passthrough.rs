@@ -159,7 +159,7 @@ mod tests {
         let root = scratch("absent");
         let mut tree = empty_tree();
         append_allowlisted(&root, &mut tree).expect("absent");
-        assert!(tree.files.is_empty());
+        assert_eq!(tree.files, Vec::new());
     }
 
     #[test]
@@ -186,7 +186,7 @@ mod tests {
         let mut tree = empty_tree();
         let err = append_allowlisted(&root, &mut tree).expect_err("partial");
         assert!(err.to_string().contains("mbx_producer_partial"), "{err}");
-        assert!(tree.files.is_empty());
+        assert_eq!(tree.files, Vec::new());
     }
 
     #[test]
@@ -203,7 +203,7 @@ mod tests {
         let mut tree = empty_tree();
         let err = append_allowlisted(&root, &mut tree).expect_err("symlink");
         assert!(err.to_string().contains("symlink_refused"), "{err}");
-        assert!(tree.files.is_empty());
+        assert_eq!(tree.files, Vec::new());
     }
 
     #[test]
@@ -215,7 +215,7 @@ mod tests {
         let mut tree = empty_tree();
         let err = append_allowlisted(&root, &mut tree).expect_err("parent symlink");
         assert!(err.to_string().contains("symlink_refused"), "{err}");
-        assert!(tree.files.is_empty());
+        assert_eq!(tree.files, Vec::new());
     }
 
     #[test]
@@ -265,6 +265,6 @@ mod tests {
         let mut tree = empty_tree();
         let err = append_allowlisted(&root, &mut tree).expect_err("token");
         assert!(err.to_string().contains("velnor-actions run"), "{err}");
-        assert!(tree.files.is_empty());
+        assert_eq!(tree.files, Vec::new());
     }
 }

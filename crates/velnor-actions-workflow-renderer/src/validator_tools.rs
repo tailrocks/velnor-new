@@ -84,6 +84,8 @@ mod tests {
             .into_iter()
             .map(str::to_owned)
             .collect(),
+            source_units: Vec::new(),
+            tool_inputs: Vec::new(),
         }
     }
 

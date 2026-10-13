@@ -16,14 +16,9 @@ use crate::tree::RenderedFile;
 #[path = "lane_share_runtime.rs"]
 mod runtime;
 
-#[path = "lane_share_check.rs"]
-mod check;
-#[path = "lane_share_runtime.rs"]
-mod runtime;
-
 #[path = "lane_share_lcs.rs"]
 mod pair_sharing;
-pub(crate) use pair_sharing::SharedCall;
+pub(crate) use crate::lane_share_sections::{composite_file, composite_file_at};
 
 /// CI workflow plus composite actions for duplicated lanes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -342,8 +337,8 @@ fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::collections::BTreeMap;
+#[path = "lane_share_tests.rs"]
+mod tests;
 
 #[cfg(test)]
 #[path = "lane_share_render_tests.rs"]

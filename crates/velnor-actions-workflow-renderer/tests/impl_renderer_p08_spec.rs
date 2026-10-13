@@ -50,7 +50,7 @@ fn http_backend_spec_gets_mise_setup_in_generated_workflow() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &fixture_ctx(),
-        &mise(),
+        &mise_set().expect("mise pins"),
     )
     .expect("render cargo-machete workflow");
     let names = step_names(&yaml, "cargo-machete");

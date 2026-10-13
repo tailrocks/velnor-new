@@ -26,7 +26,7 @@ fn request() -> RustBinaryReleaseRequest {
         enabled: true,
         manifest_path: "Cargo.toml".to_owned(),
         package: "demo-package".to_owned(),
-        binary: Some("demo-binary".to_owned()),
+        bin: "demo-binary".to_owned(),
         source_commit_env: Some("REPO_SCAN_SOURCE_COMMIT".to_owned()),
     };
     let rust = "rust@1.98.1";

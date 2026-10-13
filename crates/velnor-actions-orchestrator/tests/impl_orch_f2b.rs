@@ -28,23 +28,6 @@ fn open_inputs() -> ObligationInputs {
     }
 }
 
-/// Fully observed restore: real path, bytes, and matching digests.
-fn observed_restore() -> velnor_actions_mise::restore_evidence::RestoreObservation {
-    use velnor_actions_mise::restore_evidence::RestoreObservation;
-    let bytes = b"entry bytes".to_vec();
-    RestoreObservation {
-        entry_path: "task-artifacts/v2/clippy/entry".to_owned(),
-        entry_bytes: bytes.clone(),
-        expected_digest: digest_b3(&bytes),
-        expected_compat: digest_b3(b"compat"),
-        observed_compat: digest_b3(b"compat"),
-        expected_owner: "trusted".to_owned(),
-        observed_owner: "trusted".to_owned(),
-        expected_inputs: digest_b3(b"inputs"),
-        observed_inputs: digest_b3(b"inputs"),
-    }
-}
-
 #[test]
 fn offline_stderr_aborts_preparation() {
     use velnor_actions_orchestrator::decisions::classify_metadata_failure;

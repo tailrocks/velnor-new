@@ -9,11 +9,11 @@ use super::PinnedTool;
 use crate::error::MiseError;
 
 /// Immutable Astral PBS release supplying the Linux runner Python.
-pub const PYTHON_PBS_RELEASE: &str = "20261001";
+pub(super) const PYTHON_PBS_RELEASE: &str = "20261001";
 /// Immutable release source for the selected PBS archive.
-pub const PYTHON_PBS_SOURCE: &str =
+pub(super) const PYTHON_PBS_SOURCE: &str =
     "https://github.com/astral-sh/python-build-standalone/releases/tag/20261001";
-/// Direct x86_64 Linux GNU PBS artifact selected by the catalog.
+/// Direct `x86_64` Linux GNU PBS artifact selected by the catalog.
 pub const PYTHON_PBS_URL: &str = concat!(
     "https://github.com/astral-sh/python-build-standalone/releases/download/",
     "20261001/cpython-3.14.8%2B20261001-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
@@ -27,7 +27,7 @@ pub const PYTHON_PBS_SIZE_BYTES: &str = "36292523";
 pub const PYTHON_BINARY_SHA256_LINUX_X64: &str =
     "4b67d7e58e4e3f58339106f9192dbd66421608dc2fcc6a705b20115ba588232b";
 /// Policy mirror values for the compiled Python PBS artifact identity.
-pub const PYTHON_ARTIFACT_POLICY: [(&str, &str); 11] = [
+pub(super) const PYTHON_ARTIFACT_POLICY: [(&str, &str); 11] = [
     ("provider", "http"),
     ("release", PYTHON_PBS_RELEASE),
     ("platform", "x86_64-unknown-linux-gnu"),
@@ -44,11 +44,9 @@ pub const PYTHON_ARTIFACT_POLICY: [(&str, &str); 11] = [
 /// Build the only accepted Python HTTP selector at the pinned version.
 pub(crate) fn python_tool_spec(version: &str) -> String {
     if version == super::PYTHON_VERSION {
-        format!(concat!(
-            "http:python[url={PYTHON_PBS_URL},",
-            "checksum=sha256:{PYTHON_PBS_SHA256},",
-            "strip_components=1,bin_path=bin]@{version}"
-        ))
+        format!(
+            "http:python[url={PYTHON_PBS_URL},checksum=sha256:{PYTHON_PBS_SHA256},strip_components=1,bin_path=bin]@{version}"
+        )
     } else {
         format!("python@{version}")
     }

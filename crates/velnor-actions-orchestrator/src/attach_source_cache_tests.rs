@@ -1,9 +1,11 @@
 use super::*;
-use velnor_actions_workflow_renderer::steps::MBX_RESTORE_NAME;
+use velnor_actions_workflow_renderer::cache_p08::{RESTORE_SOURCES_NAME, SAVE_SOURCES_NAME};
+use velnor_actions_workflow_renderer::steps::{
+    MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME,
+};
 
 #[test]
 fn cargo_only_preseed_uses_exact_sources_and_native_helper_owners() {
-    use velnor_actions_contract::StepRole;
     use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
     let roots = [String::new()];
     let mut plan = preseed_fixture(&roots);

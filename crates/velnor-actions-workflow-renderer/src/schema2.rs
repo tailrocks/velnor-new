@@ -17,50 +17,6 @@ use crate::yaml::Yaml;
 #[path = "../../test_support/git_fixture.rs"]
 pub(crate) mod git_fixture;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum RunnerLane {
-    Hosted,
-    ScaleSet,
-}
-
-pub(super) struct RunnerSpec {
-    pub(super) runs_on: Yaml,
-    lane: RunnerLane,
-}
-
-impl RunnerSpec {
-    fn hosted(label: &str) -> Result<Self, RenderError> {
-        if !is_hosted_catalog(label) {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "schema2_hosted_runner_not_catalog:{label}"
-            )));
-        }
-        Ok(Self {
-            runs_on: Yaml::str(label),
-            lane: RunnerLane::Hosted,
-        })
-    }
-
-    fn scale_set(runs_on: Yaml) -> Self {
-        Self {
-            runs_on,
-            lane: RunnerLane::ScaleSet,
-        }
-    }
-
-    pub(super) fn push_default_shell(&self, fields: &mut Vec<(String, Yaml)>, has_container: bool) {
-        if has_container {
-            fields.push(crate::runs_on::run_shell_defaults_field(
-                crate::runs_on::CONTAINER_RUN_SHELL,
-            ));
-        } else if self.lane == RunnerLane::ScaleSet {
-            fields.push(crate::runs_on::run_shell_defaults_field(
-                crate::runs_on::SCALE_SET_RUN_SHELL,
-            ));
-        }
-    }
-}
-
 /// Qualification workflow path.
 pub const QUALIFICATION_WORKFLOW: &str = ".github/workflows/qualification.yml";
 /// Shared product-release workflow path.
@@ -85,6 +41,8 @@ mod features;
 mod generator_release;
 #[path = "schema2_mbx_corrupt_probe.rs"]
 mod mbx_corrupt_probe;
+#[path = "schema2_mbx_qualification_helpers.rs"]
+mod mbx_qualification_helpers;
 #[path = "schema2_mbx_qualification.rs"]
 mod mbx_qualification;
 #[path = "schema2_mise_pin_qualification.rs"]
@@ -133,15 +91,6 @@ mod resource_probe_image_tests;
 #[cfg(test)]
 #[path = "schema2_product_release_test_pins.rs"]
 pub(super) mod product_release_test_pins;
-
-#[cfg(test)]
-#[path = "schema2_runner_shell_tests.rs"]
-mod runner_shell_tests;
-
-#[cfg(test)]
-#[path = "schema2_product_release_test_pins.rs"]
-pub(super) mod product_release_test_pins;
-
 /// Which schema 2 workflows to emit, plus the selectors they use.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Schema2WorkflowRequest {
@@ -382,64 +331,4 @@ fn document(name: &str, on: Yaml, jobs: Vec<(String, Yaml)>) -> Yaml {
     ])
 }
 
-fn mode_trigger() -> Yaml {
-    Yaml::Map(vec![(
-        "workflow_dispatch".to_owned(),
-        Yaml::Map(vec![(
-            "inputs".to_owned(),
-            Yaml::Map(vec![
-                (
-                    "mode".to_owned(),
-                    Yaml::Map(vec![
-                        ("type".to_owned(), Yaml::str("string")),
-                        ("required".to_owned(), Yaml::Bool(false)),
-                        ("default".to_owned(), Yaml::str("both")),
-                    ]),
-                ),
-                (
-                    "probe_id".to_owned(),
-                    Yaml::Map(vec![
-                        ("type".to_owned(), Yaml::str("string")),
-                        ("required".to_owned(), Yaml::Bool(false)),
-                        ("default".to_owned(), Yaml::str("")),
-                    ]),
-                ),
-            ]),
-        )]),
-    )])
-}
-
-fn empty_dispatch() -> Yaml {
-    Yaml::Map(vec![("workflow_dispatch".to_owned(), Yaml::Map(vec![]))])
-}
-
-fn job(
-    id: &str,
-    name: &str,
-    runner: &RunnerSpec,
-    timeout: i64,
-    needs: Vec<String>,
-    step_name: &str,
-    run: &str,
-) -> (String, Yaml) {
-    let mut fields = vec![
-        ("name".to_owned(), Yaml::str(name)),
-        ("runs-on".to_owned(), runner.runs_on.clone()),
-        ("timeout-minutes".to_owned(), Yaml::Int(timeout)),
-    ];
-    runner.push_default_shell(&mut fields, false);
-    if !needs.is_empty() {
-        fields.push((
-            "needs".to_owned(),
-            Yaml::Seq(needs.into_iter().map(Yaml::str).collect()),
-        ));
-    }
-    fields.push((
-        "steps".to_owned(),
-        Yaml::Seq(vec![Yaml::Map(vec![
-            ("name".to_owned(), Yaml::str(step_name)),
-            ("run".to_owned(), Yaml::str(run)),
-        ])]),
-    ));
-    (id.to_owned(), Yaml::Map(fields))
-}
+include!("schema2.part2.rs");

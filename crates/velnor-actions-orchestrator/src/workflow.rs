@@ -154,7 +154,6 @@ pub(crate) fn build_workflow(
     let built = crate::crate_jobs::build_for_workflow(
         config,
         label,
-        policy,
         discovery,
         &catalog,
         fetch_roots,
@@ -316,53 +315,7 @@ fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
     plan.steps.splice(at..at, reports);
 }
 
-/// Insert the lint, final-gate, and baseline-publish jobs.
-///
-/// The publish job closes the graph after the final gate: it needs
-/// Required, so it runs only when the gate passed.
-///
-/// # Errors
-///
-/// Returns contract, render-context, or tool-request errors.
-fn insert_gate_jobs(
-    jobs: &mut BTreeMap<String, Job>,
-    label: &str,
-    branch: &str,
-    crate_ids: &[String],
-    acquire: Option<Step>,
-    catalog: &ToolCatalog,
-) -> Result<(), OrchestratorError> {
-    jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, catalog)?);
-    jobs.insert(
-        FINAL_JOB_ID.to_owned(),
-        final_job(label, crate_ids, acquire.clone(), catalog)?,
-    );
-    jobs.insert(
-        PUBLISH_JOB_ID.to_owned(),
-        crate::publish_job::baseline_publish_job(label, branch, acquire)?,
-    );
-    Ok(())
-}
 
-/// Insert deferred format-report steps immediately after `Plan`.
-///
-/// The plan exists only after the planner runs; the publish closure
-/// later lands between `Plan` and these steps, so the plan artifact
-/// carries plan and matrix only, never the format entry's reports.
-/// Without a `plan-v1` anchor the steps close the job.
-fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
-    if reports.is_empty() {
-        return;
-    }
-    let at = plan
-        .steps
-        .iter()
-        .position(|step| {
-            matches!(&step.kind, StepKind::Internal { operation } if operation == PLAN_OPERATION)
-        })
-        .map_or(plan.steps.len(), |plan_at| plan_at + 1);
-    plan.steps.splice(at..at, reports);
-}
 
 /// Insert the workspace `Format` step immediately before `Plan`.
 ///

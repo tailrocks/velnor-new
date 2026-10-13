@@ -12,6 +12,7 @@ test-render-capture = []
 [dependencies]
 velnor-actions-contract = { version = "=0.1.8", path = "../velnor-actions-contract" }
 velnor-actions-mise = { version = "=0.1.8", path = "../velnor-actions-mise" }
+sha2 = { version = "=0.11.0", default-features = false }
 
 [dev-dependencies]
 granit-parser = "=1.0.1"

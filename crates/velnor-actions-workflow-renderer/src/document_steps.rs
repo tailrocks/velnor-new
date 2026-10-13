@@ -140,8 +140,8 @@ fn action_step_to_yaml(
     }
     for (key, value) in with {
         crate::expressions::check_with_key(key)?;
-        let guarded_seed_key =
-            tool_seed && crate::tool_seed::is_guarded_seed_key_input(uses, with, key, value);
+        let guarded_seed_key = uses == crate::tool_seed::TOOL_SEED_USES
+            && crate::tool_seed::is_guarded_seed_key(value);
         if !guarded_seed_key {
             crate::expressions::check_with_value(key, value)?;
         }
@@ -224,19 +224,13 @@ fn push_step_id(entries: &mut Vec<(String, Yaml)>, name: &str) {
 /// Render one step; internal ops become env plus request file, never argv.
 /// Every action ref (including the Alint pin) must be a full-SHA pin.
 pub(crate) fn step_to_yaml(
+    job_id: &str,
     step: &Step,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     composite: bool,
     step_context: &crate::document_lanes::JobStepContext<'_>,
 ) -> Result<Yaml, RenderError> {
-    let job_id = render.job_id;
-    let ctx = render.ctx;
-    let needs_envs = render.needs_envs;
-    let composite = render.composite;
-    let job_env = render.job_env;
-    let actions_read = render.actions_read;
-    let runs_on = render.runs_on;
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
         StepKind::Action { uses, with, env } => action_step_to_yaml(
@@ -346,128 +340,4 @@ fn internal_step_to_yaml(
     Ok(Yaml::Map(entries))
 }
 
-#[cfg(test)]
-mod tests {
-    use std::collections::BTreeMap;
-
-    use velnor_actions_contract::{Step, StepKind};
-
-    use super::action_step_to_yaml;
-    use crate::yaml;
-
-    #[test]
-    fn only_generated_task_calls_use_a_compact_flow_input_map() {
-        let digest = format!("b3-{}", "a".repeat(64));
-        let with = BTreeMap::from([("digest".to_owned(), digest.clone())]);
-        let env = BTreeMap::new();
-        let job_env = BTreeMap::new();
-        let task_uses = "./.github/actions/declared-task-0";
-        let task_step = Step {
-            name: "Run declared task".to_owned(),
-            id: None,
-            role: None,
-            condition: None,
-            kind: StepKind::Action {
-                uses: task_uses.to_owned(),
-                with: with.clone(),
-                env: env.clone(),
-            },
-        };
-        let task_yaml = action_step_to_yaml(
-            "rust-crate-0",
-            &task_step,
-            task_uses,
-            &with,
-            &env,
-            &job_env,
-            Some("ubuntu-24.04"),
-        )
-        .expect("generated task action is valid");
-        let task_yaml = yaml::render_yaml(&task_yaml);
-        assert!(task_yaml.contains(&format!("with: {{\"digest\": \"{digest}\"}}")));
-
-        let ordinary_uses = format!("actions/cache@{}", "a".repeat(40));
-        let ordinary_step = Step {
-            name: "Ordinary action".to_owned(),
-            id: None,
-            role: None,
-            condition: None,
-            kind: StepKind::Action {
-                uses: ordinary_uses.clone(),
-                with: with.clone(),
-                env: env.clone(),
-            },
-        };
-        let ordinary_yaml = action_step_to_yaml(
-            "rust-crate-0",
-            &ordinary_step,
-            &ordinary_uses,
-            &with,
-            &env,
-            &job_env,
-            Some("ubuntu-24.04"),
-        )
-        .expect("ordinary pinned action is valid");
-        let ordinary_yaml = yaml::render_yaml(&ordinary_yaml);
-        assert!(ordinary_yaml.contains(&format!("with:\n  digest: {digest}")));
-    }
-}
-
-/// Render one internal planner step. The operation travels in env, never argv.
-fn internal_step_to_yaml(
-    job_id: &str,
-    step: &Step,
-    ctx: &RenderContext,
-    needs_envs: &[(String, String)],
-    composite: bool,
-    step_context: &crate::document_lanes::JobStepContext<'_>,
-) -> Result<Yaml, RenderError> {
-    let StepKind::Internal {
-        operation,
-        env: step_env,
-    } = &step.kind
-    else {
-        return Err(RenderError::InvalidWorkflow(
-            "internal_step_required".to_owned(),
-        ));
-    };
-    let (op, target) = steps::split_internal_operation(operation)?;
-    if op == steps::FETCH_OPERATION && !step_context.actions_read {
-        return Err(RenderError::InvalidWorkflow(
-            "report_fetch_requires_actions_read".to_owned(),
-        ));
-    }
-    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-    if let Some(condition) = &step.condition {
-        steps::scan_for_private_subcommands(condition)?;
-        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-    }
-    // No `continue-on-error` on the fetch step (F5): the helper
-    // retries each leg bounded and still exits success on
-    // per-leg failure, so the merge judges honestly; only hard
-    // environment failures fail the job, unmasked.
-    let channel = if job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION {
-        needs_envs
-    } else {
-        &[]
-    };
-    crate::step_ids::push_step_id(&mut entries, step);
-    entries.push((
-        "env".to_owned(),
-        internal_env(
-            op,
-            target,
-            ctx,
-            channel,
-            step_context.job_env,
-            step_env,
-            step_context.actions_read,
-        )?,
-    ));
-    push_composite_shell(&mut entries, composite);
-    entries.push((
-        "run".to_owned(),
-        Yaml::str(commands::quote_run_arg(&ctx.staged_binary)),
-    ));
-    Ok(Yaml::Map(entries))
-}
+include!("document_steps.part2.rs");

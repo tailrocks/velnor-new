@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{RunsOn, Step, StepId, StepKind, StepRole};
+use velnor_actions_contract::{RunsOn, Step, StepKind};
 
 use crate::{RenderError, cache_p08, commands, marker, steps, tree::RenderedFile, yaml::Yaml};
 
@@ -135,7 +135,7 @@ pub(super) fn action_file(runs_on: &str, version: &str) -> Result<RenderedFile, 
             "tools_cache_identity_inner_step_not_shell".to_owned(),
         ));
     };
-    let mut entries = vec![("name".to_owned(), Yaml::str(inner.name))];
+    let mut entries = vec![("name".to_owned(), Yaml::str(name))];
     crate::step_ids::push_explicit_step_id(&mut entries, cache_p08::TOOLS_CACHE_IDENTITY_STEP_ID);
     entries.extend([
         (

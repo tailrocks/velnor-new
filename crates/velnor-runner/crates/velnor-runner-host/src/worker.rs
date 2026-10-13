@@ -296,40 +296,6 @@ pub(crate) async fn worker_id_for_name(
     }
 }
 
-pub(crate) async fn worker_id_for_name(
-    docker: &Docker,
-    name: &str,
-    volume: &str,
-    role: &str,
-) -> Result<Option<String>, HostError> {
-    if name.is_empty() || volume.is_empty() || role.is_empty() {
-        return Err(HostError::Docker);
-    }
-    match Box::pin(docker_deadline(docker.inspect_container(name, None))).await? {
-        Ok(body) => {
-            let id = body
-                .id
-                .filter(|id| !id.is_empty())
-                .ok_or(HostError::Docker)?;
-            let labels = body
-                .config
-                .and_then(|config| config.labels)
-                .ok_or(HostError::Docker)?;
-            if labels.get("velnor.volume").map(String::as_str) != Some(volume)
-                || labels.get("velnor.worker").map(String::as_str) != Some(volume)
-                || labels.get("velnor.role").map(String::as_str) != Some(role)
-            {
-                return Err(HostError::Docker);
-            }
-            Ok(Some(id))
-        }
-        Err(bollard::errors::Error::DockerResponseServerError {
-            status_code: 404, ..
-        }) => Ok(None),
-        Err(_) => Err(HostError::Docker),
-    }
-}
-
 pub(crate) async fn create_only(
     docker: &Docker,
     spec: &CreateProjection,

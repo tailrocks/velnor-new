@@ -229,16 +229,12 @@ pub(crate) fn execution_argv(command: &ValidatorCommand) -> Result<Vec<String>, 
         }
     }
     let mut checks = Vec::with_capacity(directories.len() + files.len());
-    checks.extend(
-        directories
-            .into_iter()
-            .map(|path| format!("test -d {}", commands::quote_run_arg(path))),
-    );
-    checks.extend(
-        files
-            .into_iter()
-            .map(|path| format!("test -f {}", commands::quote_run_arg(path))),
-    );
+    for path in directories {
+        checks.push(format!("test -d {}", commands::quote_run_arg(path)?));
+    }
+    for path in files {
+        checks.push(format!("test -f {}", commands::quote_run_arg(path)?));
+    }
     let mut argv = command.argv.clone();
     argv[2] = format!("set -eu; {}; {script}", checks.join("; "));
     commands::validate_command_argv(&argv)?;

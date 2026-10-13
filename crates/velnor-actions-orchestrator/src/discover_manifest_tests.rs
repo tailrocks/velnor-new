@@ -15,8 +15,6 @@ use super::{
     detected_projects,
 };
 use crate::safe_read::MAX_REPO_FILE_BYTES;
-use velnor_actions_contract::WorkflowPolicy;
-
 /// Present file returns its exact text.
 #[test]
 fn present_file_returns_its_text() {
@@ -122,7 +120,7 @@ fn oversize_file_errors() {
 
 /// Velnor policy does not read irrelevant consumer-manifest inputs.
 #[test]
-fn velnor_policy_skips_consumer_manifest_input() {
+fn velnor_policy_skips_consumer_manifest_input_merged() {
     let root = TempDir::new().expect("temp root");
     let dir = root.path().join(".velnor");
     fs::create_dir_all(&dir).expect("velnor dir");

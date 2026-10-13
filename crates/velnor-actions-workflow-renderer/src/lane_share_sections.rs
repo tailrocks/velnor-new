@@ -10,7 +10,7 @@ use velnor_actions_contract::{Job, StepKind};
 use velnor_actions_contract::{Step, StepRole};
 
 use crate::composite::composite_yaml;
-use crate::document_steps::{StepRenderContext, step_to_yaml};
+use crate::document_steps::step_to_yaml;
 use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, marker, steps, yaml::render_yaml};
@@ -222,4 +222,16 @@ pub(crate) fn composite_file(
         path: format!(".github/actions/{logical}/action.yml"),
         bytes,
     })
+}
+
+/// Render one composite at an explicit action directory.
+pub(crate) fn composite_file_at(
+    logical: &str,
+    action_path: &str,
+    steps: &[Step],
+    ctx: &RenderContext,
+) -> Result<RenderedFile, RenderError> {
+    let mut file = composite_file(logical, steps, ctx)?;
+    file.path = format!("{action_path}/action.yml");
+    Ok(file)
 }

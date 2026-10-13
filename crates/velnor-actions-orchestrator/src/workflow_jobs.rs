@@ -156,7 +156,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![checkout_action()?, prepare, lint],
+        steps: vec![checkout_action()?, install, prepare, lint],
     })
 }
 
@@ -177,7 +177,7 @@ fn actionlint_install_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorEr
     let env = strings_of_env(&prepare.env_without_homes())
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     let mut step =
-        velnor_actions_workflow_steps::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
+        velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
             .map_err(|err| OrchestratorError::Contract {
                 problem: err.to_string(),
             })?;

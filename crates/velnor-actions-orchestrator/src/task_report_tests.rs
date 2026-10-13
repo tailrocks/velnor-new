@@ -375,47 +375,5 @@ fn planted_symlink_at_report_path_refuses_without_writing() {
     assert!(!loot.exists(), "producer bytes never followed the plant");
 }
 
-#[cfg(unix)]
-#[test]
-fn planted_symlink_at_report_path_refuses_without_writing() {
-    let plan = fixture_plan();
-    let temp = staged_run(&plan, "local");
-    let entry = &plan.matrix.include[0];
-    let dir = temp
-        .path()
-        .join("velnor")
-        .join("local")
-        .join(&entry.matrix_key);
-    let report_dir = dir.join("tasks");
-    fs::create_dir_all(&report_dir).expect("report dirs");
-    let loot = temp.path().join("loot.json");
-    std::os::unix::fs::symlink(&loot, dir.join("matrix-report.json")).expect("plant");
-    let err =
-        write_task_report_to("local", CLIPPY, 0, &[], temp.path()).expect_err("plant refused");
-    assert!(err.to_string().contains("symlink_refused"), "{err}");
-    assert!(!loot.exists(), "producer bytes never followed the plant");
-}
 
-#[test]
-fn ambiguous_entries_refuse_rather_than_guess() {
-    let mut plan = fixture_plan();
-    plan.matrix.include[0]
-        .execute_task_ids
-        .tasks
-        .insert("extra".to_owned(), ExecuteTaskRef::Single(TEST.to_owned()));
-    let multi = staged_run(&plan, "local");
-    assert!(write_task_report_to("local", CLIPPY, 0, None, &[], multi.path()).is_err());
-
-    let mut plan = fixture_plan();
-    plan.matrix.include[0].execute_task_ids.tasks =
-        BTreeMap::from([("only".to_owned(), ExecuteTaskRef::Single(TEST.to_owned()))]);
-    let dupe = staged_run(&plan, "local");
-    assert!(write_task_report_to("local", TEST, 0, None, &[], dupe.path()).is_err());
-
-    let mut plan = fixture_plan();
-    plan.obligations.clear();
-    plan.task_ids.clear();
-    plan.validate().expect("obligation-free plan validates");
-    let orphan = staged_run(&plan, "local");
-    assert!(write_task_report_to("local", CLIPPY, 0, None, &[], orphan.path()).is_err());
-}
+include!("task_report_tests.part2.rs");

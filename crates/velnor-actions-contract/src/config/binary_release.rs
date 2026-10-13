@@ -29,6 +29,9 @@ pub struct RustBinaryReleaseConfig {
     /// Exact Cargo binary target to build; required when enabled.
     #[serde(default)]
     pub bin: String,
+    /// Optional compile-time environment variable that receives the source SHA.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_commit_env: Option<String>,
 }
 
 fn default_manifest_path() -> String {
@@ -42,6 +45,7 @@ impl Default for RustBinaryReleaseConfig {
             manifest_path: default_manifest_path(),
             package: String::new(),
             bin: String::new(),
+            source_commit_env: None,
         }
     }
 }
@@ -57,8 +61,55 @@ impl RustBinaryReleaseConfig {
         validate_manifest_path(file, &self.manifest_path)?;
         validate_name(file, "package", &self.package, self.enabled)?;
         validate_name(file, "bin", &self.bin, self.enabled)?;
+        if let Some(name) = &self.source_commit_env
+            && !is_source_commit_env(name)
+        {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.binary_release.source_commit_env",
+                "bad_environment_name",
+            ));
+        }
         Ok(())
     }
+
+    /// Cargo `--bin` target. An empty `bin` selects the package name.
+    #[must_use]
+    pub fn binary_name(&self) -> &str {
+        if self.bin.is_empty() {
+            &self.package
+        } else {
+            &self.bin
+        }
+    }
+}
+
+fn is_source_commit_env(value: &str) -> bool {
+    let mut bytes = value.bytes();
+    let valid = bytes
+        .next()
+        .is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_');
+    valid
+        && !matches!(
+            value,
+            "PATH"
+                | "HOME"
+                | "SOURCE_SHA"
+                | "RELEASE_VERSION"
+                | "RELEASE_TAG"
+                | "RUSTUP_TOOLCHAIN"
+                | "RUSTC"
+                | "RUSTDOC"
+                | "RUSTFLAGS"
+                | "RUSTDOCFLAGS"
+                | "GH_TOKEN"
+        )
+        && [
+            "GITHUB_", "RUNNER_", "ACTIONS_", "MISE_", "CARGO_", "RUSTC_", "RUSTDOC_", "RUSTUP_",
+        ]
+        .iter()
+        .all(|prefix| !value.starts_with(prefix))
 }
 
 fn validate_name(file: &str, field: &str, name: &str, required: bool) -> Result<(), ContractError> {
@@ -70,10 +121,12 @@ fn validate_name(file: &str, field: &str, name: &str, required: bool) -> Result<
             Ok(())
         };
     }
+    let mut bytes = name.bytes();
     let valid = name.len() <= 100
-        && name
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'));
+        && bytes
+            .next()
+            .is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'));
     if !valid {
         return Err(ContractError::config(file, key, "bad_cargo_target_name"));
     }
@@ -113,6 +166,7 @@ mod tests {
             manifest_path: "Cargo.toml".to_owned(),
             package: "repo-scan".to_owned(),
             bin: "repo-scan".to_owned(),
+            source_commit_env: None,
         };
         assert!(enabled.validate("config.toml").is_ok());
         assert_eq!(CONSUMER_BINARY_TARGET, "aarch64-apple-darwin");
@@ -134,6 +188,7 @@ mod tests {
             manifest_path: "Cargo.toml".to_owned(),
             package: "repo-scan;id".to_owned(),
             bin: "repo-scan".to_owned(),
+            source_commit_env: None,
         };
         let err = unsafe_name
             .validate("config.toml")

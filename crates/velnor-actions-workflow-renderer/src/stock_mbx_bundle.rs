@@ -50,7 +50,7 @@ pub(crate) fn lifecycle_steps(
         &[restore_prefix.to_owned()],
         &[MBX_BUNDLE_CACHE_PATH.to_owned()],
     )?;
-    restore.name = RESTORE_STEP_NAME.to_owned();
+    RESTORE_STEP_NAME.clone_into(&mut restore.name);
 
     let import = import_step()?;
 
@@ -67,7 +67,7 @@ pub(crate) fn lifecycle_steps(
         &[],
         &[MBX_BUNDLE_CACHE_PATH.to_owned()],
     )?;
-    save.name = SAVE_STEP_NAME.to_owned();
+    SAVE_STEP_NAME.clone_into(&mut save.name);
     save.condition = Some(format!(
         "({save_condition}) && steps.mbx_cache_export.outputs.ready == 'true'"
     ));
@@ -149,7 +149,6 @@ fn export_step() -> Result<Step, RenderError> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
 
     use velnor_actions_contract::StepKind;
 

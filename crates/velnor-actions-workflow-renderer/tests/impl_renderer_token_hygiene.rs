@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{Permissions, WorkflowPolicy};
+use velnor_actions_contract::{Permissions, Step, StepKind, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     RenderError, ambient_shell_step, checkout_step, merge_step, plan_step, render_workflow_ir,
     shell_step,
@@ -154,7 +154,6 @@ fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
 
 #[test]
 fn token_hygiene_constructor_owns_overlay_and_rejects_all_nine_keys() -> Result<(), RenderError> {
-    use velnor_actions_contract::{Step, StepKind};
     use velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST;
     // Bare env: the constructor scrubs shut, so it renders clean.
     let clean = job(
@@ -225,7 +224,6 @@ fn token_hygiene_constructor_owns_overlay_and_rejects_all_nine_keys() -> Result<
 
 #[test]
 fn scrub_coverage_rejects_bare_and_partial_shell_env() -> Result<(), RenderError> {
-    use velnor_actions_contract::{Step, StepKind};
     // Hand-built literals: the constructor would scrub these shut, so
     // only a literal bypassing it reaches the gate uncovered.
     for (label, env) in [

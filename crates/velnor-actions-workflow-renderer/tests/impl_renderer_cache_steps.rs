@@ -1,11 +1,10 @@
 //! Gate 4 renderer cases: cache actions, lane target dirs, and V2 tools.
 
-use velnor_actions_contract::workflow::ir::CACHE_MODE_PUSH_WRITE_EXPR;
-use velnor_actions_contract::{Step, StepKind, WorkflowPolicy};
+use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::steps::{
     TOOLS_CACHE_PATHS, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME, cache_action_step,
 };
-use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
+use velnor_actions_workflow_renderer::checkout_step;
 
 use super::impl_renderer_fixtures::*;
 
@@ -273,7 +272,6 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
 #[test]
 fn seed_and_tools_prelude_require_the_configured_unconditional_checkout()
 -> Result<(), velnor_actions_workflow_renderer::RenderError> {
-    use velnor_actions_workflow_renderer::checkout_step;
     let shell_checkout = scrubbed_shell_step("Checkout", vec!["true".to_owned()])?;
     let run = || {
         let job = job(

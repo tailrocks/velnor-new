@@ -54,6 +54,9 @@ const TRUST_MARK: &str = " (pre-seed trust-on-review)";
 pub const PRESEED_BUILD_NAME: &str = "Build helper (pre-seed trust-on-review)";
 /// Display name of the MBX-compile verification step.
 pub const PRESEED_VERIFY_NAME: &str = "Verify MBX compile (pre-seed trust-on-review)";
+/// Display name of the pre-seed manifest verification step.
+pub const PRESEED_VERIFY_MANIFEST_NAME: &str =
+    "Verify helper manifest (pre-seed trust-on-review)";
 /// Display name of the pre-seed manifest step.
 pub const PRESEED_MANIFEST_NAME: &str = "Write helper manifest (pre-seed trust-on-review)";
 /// Display name of the pre-seed helper upload step.

@@ -10,8 +10,8 @@ use velnor_actions_contract::{
     CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ScaleSetSelector, ValidatorKind,
-    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ScaleSetSelector, VelnorSupportWorkflow, WorkflowIr,
+    WorkflowPolicy,
 };
 
 use crate::{
@@ -33,10 +33,6 @@ mod action_pins_impl;
 #[path = "validator_tools.rs"]
 mod validator_tools;
 pub use action_pins_impl::action_pins;
-
-#[path = "validator_tools.rs"]
-mod validator_tools;
-
 #[path = "task_wrapper.rs"]
 mod task_wrapper;
 
@@ -48,6 +44,10 @@ pub use crate::matrix::{
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
 };
 pub use crate::setup::{MiseSetup, MiseSetupSet};
+pub use crate::validator_command::{
+    PYTHON_SOURCE_PREPARE_NAME, PYTHON_SOURCE_RUN_NAME, ValidatorCommand, ValidatorSourceInput,
+    ValidatorSourceInputKind, ValidatorSourceUnit,
+};
 
 /// Generated workflow path inside the repository.
 ///
@@ -278,12 +278,8 @@ pub fn finalize_jobs(
             .ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
-        let setup = if job.check_runner.is_some() {
-            mise.for_target(target)?
-        } else {
-            mise.clone()
-        };
-        cache_p08::ensure_tools_cache_v2(id, job, &setup, always, target, &ctx.checkout_uses)?;
+        let setup = mise.for_target(target)?;
+        cache_p08::ensure_tools_cache_v2(id, job, setup, always, target, &ctx.checkout_uses)?;
         cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;

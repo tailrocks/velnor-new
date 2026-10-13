@@ -5,6 +5,8 @@
 //! typed V2 tools archive lives in `cache_p08`; this module keeps the pin
 //! type, its validation, and the cache-disabled action used to install Mise.
 
+use std::collections::BTreeMap;
+
 use velnor_actions_contract::{Step, StepRole};
 
 use crate::{RenderError, steps};
@@ -28,6 +30,52 @@ pub struct MiseSetup {
     pub version: String,
     /// Lowercase hex SHA-256 of the installed `mise` binary.
     pub sha256: String,
+}
+
+/// Non-empty set of target-bound Mise setup records.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MiseSetupSet {
+    by_target: BTreeMap<String, MiseSetup>,
+}
+
+impl MiseSetupSet {
+    /// Build a non-empty set of target-bound setup records.
+    ///
+    /// # Errors
+    ///
+    /// Returns a render error for an unsupported target, duplicate
+    /// target, invalid setup pin, or an empty set.
+    pub fn new(setups: impl IntoIterator<Item = (String, MiseSetup)>) -> Result<Self, RenderError> {
+        let mut by_target = BTreeMap::new();
+        for (target, setup) in setups {
+            if !velnor_actions_contract::targets::is_supported_target(&target) {
+                return Err(RenderError::BadCommand(format!(
+                    "unsupported_mise_setup_target:{target}"
+                )));
+            }
+            setup.validate()?;
+            if by_target.insert(target.clone(), setup).is_some() {
+                return Err(RenderError::BadCommand(format!(
+                    "duplicate_mise_setup_target:{target}"
+                )));
+            }
+        }
+        if by_target.is_empty() {
+            return Err(RenderError::BadCommand("empty_mise_setup_targets".to_owned()));
+        }
+        Ok(Self { by_target })
+    }
+
+    /// Select the already-validated setup record for one target.
+    ///
+    /// # Errors
+    ///
+    /// Returns a render error when the workflow has no pin for `target`.
+    pub fn for_target(&self, target: &str) -> Result<&MiseSetup, RenderError> {
+        self.by_target.get(target).ok_or_else(|| {
+            RenderError::InvalidWorkflow(format!("missing_mise_setup_target:{target}"))
+        })
+    }
 }
 
 /// Official raw Linux x64 binary SHA-256 for Mise 2026.10.9.

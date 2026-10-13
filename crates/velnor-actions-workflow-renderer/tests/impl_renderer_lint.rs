@@ -1,6 +1,5 @@
 //! Always-on lint job cases: emitted from typed IR for both policies.
 use std::collections::BTreeMap;
-use velnor_actions_contract::workflow::ir::PermissionLevel;
 use velnor_actions_contract::{
     Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Trigger, ValidatorKind,
     VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy, workflow::permissions::PermissionLevel,
@@ -9,6 +8,8 @@ use velnor_actions_workflow_renderer::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError, ValidatorCommand,
     checkout_step, merge_step, render_workflow_ir, shell_step,
 };
+
+use super::impl_renderer_fixtures::mise_argv;
 
 const VERSION: &str = "0.1.0";
 const LABEL: &str = "ubuntu-26.04";
@@ -217,6 +218,8 @@ fn validator_command(
         name: name.to_owned(),
         argv: argv.into_iter().map(str::to_owned).collect(),
         prepare_argv: prepare_argv.into_iter().map(str::to_owned).collect(),
+        source_units: Vec::new(),
+        tool_inputs: Vec::new(),
     }
 }
 
@@ -267,6 +270,8 @@ fn zizmor_support_unsets_empty_tokens_after_pinned_install() -> Result<(), Rende
             "install".to_owned(),
             "zizmor@1.30.1".to_owned(),
         ],
+        source_units: Vec::new(),
+        tool_inputs: Vec::new(),
         argv: with_credential_unset(mise_argv(
             "zizmor@1.30.1",
             "zizmor",

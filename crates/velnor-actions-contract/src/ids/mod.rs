@@ -70,54 +70,6 @@ id_newtype!(TaskReportId, validate_task_report_id);
 id_newtype!(ArtifactId, artifact::validate_artifact_id);
 id_newtype!(TargetKey, artifact::validate_target_key);
 
-/// Define a validated identifier newtype with a private constructor.
-///
-/// Parsing is the only construction path; serde deserialization routes
-/// through the same `TryFrom<String>` validation.
-macro_rules! id_newtype {
-    ($name:ident, $validate:expr) => {
-        #[doc = concat!("Validated `", stringify!($name), "` identifier.")]
-        #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
-        #[serde(try_from = "String")]
-        pub struct $name(String);
-        impl $name {
-            /// Parse and validate.
-            /// # Errors
-            pub fn parse(value: &str) -> Result<Self, ContractError> {
-                $validate(value)?;
-                Ok(Self(value.to_owned()))
-            }
-            /// Borrow the inner string.
-            #[must_use]
-            pub fn as_str(&self) -> &str {
-                &self.0
-            }
-            /// Unwrap the validated string.
-            #[must_use]
-            pub fn into_inner(self) -> String {
-                self.0
-            }
-        }
-        impl TryFrom<String> for $name {
-            type Error = ContractError;
-            fn try_from(value: String) -> Result<Self, Self::Error> {
-                Self::parse(&value)
-            }
-        }
-    };
-}
-
-id_newtype!(RunKey, validate_run_key);
-id_newtype!(ManifestKey, validate_manifest_key);
-id_newtype!(TaskId, validate_task_id);
-id_newtype!(MatrixId, validate_id);
-id_newtype!(MatrixKey, validate_matrix_key);
-id_newtype!(PlanId, validate_plan_id);
-id_newtype!(ReportId, validate_report_id);
-id_newtype!(TaskReportId, validate_task_report_id);
-id_newtype!(ArtifactId, artifact::validate_artifact_id);
-id_newtype!(TargetKey, artifact::validate_target_key);
-
 /// Build a CI run key `r<run-id>-a<attempt>` from numeric GitHub IDs.
 #[must_use]
 pub fn run_key_for_ci(run_id: u64, run_attempt: u64) -> String {
@@ -387,62 +339,4 @@ pub fn is_lower_hex_len(text: &str, len: usize) -> bool {
     text.len() == len && is_lower_hex(text)
 }
 
-/// Check the `r<digits>-a<digits>` CI run-key shape.
-fn is_ci_run_key(value: &str) -> bool {
-    let Some(rest) = value.strip_prefix('r') else {
-        return false;
-    };
-    let Some((run, attempt)) = rest.split_once("-a") else {
-        return false;
-    };
-    !run.is_empty()
-        && !attempt.is_empty()
-        && run.bytes().all(|b| b.is_ascii_digit())
-        && attempt.bytes().all(|b| b.is_ascii_digit())
-}
-
-/// Validate one lowercase component name (`.`/`..` are never components).
-fn validate_component(value: &str, field: &'static str) -> Result<(), ContractError> {
-    if !value.is_empty() && value != "." && value != ".." && value.bytes().all(is_component_byte) {
-        Ok(())
-    } else {
-        Err(ContractError::identity(field, "bad_component"))
-    }
-}
-
-/// Validate `/`-separated manifest-key segments.
-fn validate_path_segments(path: &str, field: &'static str) -> Result<(), ContractError> {
-    if path.is_empty() {
-        return Err(ContractError::identity(field, "empty_path"));
-    }
-    for segment in path.split('/') {
-        validate_component(segment, field)?;
-    }
-    Ok(())
-}
-
-/// Validate a fetch workspace root for shell interpolation.
-///
-/// Single source shared by the fetch-step generator (orchestrator) and
-/// the render-time ambient-auth exemption (renderer): both agree on
-/// which roots are safe by construction. Empty is the root workspace.
-/// Rejects parent traversal, quoting and expansion characters,
-/// backslashes, newlines, and absolute paths.
-/// # Errors
-pub fn validate_fetch_root(root: &str) -> Result<(), ContractError> {
-    let bad = root.contains("..")
-        || root.contains('\'')
-        || root.contains('"')
-        || root.contains('$')
-        || root.contains('`')
-        || root.contains('\\')
-        || root.contains('\n')
-        || root.starts_with('/');
-    if bad {
-        return Err(ContractError::identity(
-            "fetch.root",
-            format!("unsafe_fetch_root:{root}"),
-        ));
-    }
-    Ok(())
-}
+include!("mod.part2.rs");

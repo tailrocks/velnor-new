@@ -154,37 +154,46 @@ pub(crate) fn verify_command(
             name: crate::vectors::ZIZMOR_STEP_NAME.to_owned(),
             argv: crate::vectors::zizmor_argv(catalog)?,
             prepare_argv: verify_install_argv("zizmor", catalog.version(PinnedTool::Zizmor))?,
-        })),
+                source_units: Vec::new(),
+                tool_inputs: Vec::new(),})),
         ValidatorKind::Markdownlint => Ok(Some(ValidatorCommand {
             validator: kind,
             name: MARKDOWNLINT_STEP_NAME.to_owned(),
             argv: markdownlint_argv()?,
             prepare_argv: verify_install_argv(MARKDOWNLINT_SPEC, MARKDOWNLINT_VERSION)?,
-        })),
+                source_units: Vec::new(),
+                tool_inputs: Vec::new(),})),
         ValidatorKind::StrictJson => Ok(Some(ValidatorCommand {
             validator: kind,
             name: STRICT_JSON_STEP_NAME.to_owned(),
             argv: strict_json_argv(options.strict_json_files.as_deref())?,
             prepare_argv: verify_install_argv(VERIFY_NODE_SPEC, VERIFY_NODE_VERSION)?,
-        })),
+                source_units: Vec::new(),
+                tool_inputs: Vec::new(),})),
         ValidatorKind::FrontmatterId => Ok(Some(ValidatorCommand {
             validator: kind,
             name: FRONTMATTER_ID_STEP_NAME.to_owned(),
             argv: node_eval_argv(FRONTMATTER_ID_SCRIPT, &[])?,
             prepare_argv: verify_install_argv(VERIFY_NODE_SPEC, VERIFY_NODE_VERSION)?,
-        })),
+                source_units: Vec::new(),
+                tool_inputs: Vec::new(),})),
         ValidatorKind::LinkCheck => Ok(Some(ValidatorCommand {
             validator: kind,
             name: LINK_CHECK_STEP_NAME.to_owned(),
             argv: link_check_argv(&options.lychee_args)?,
             prepare_argv: verify_install_argv(LYCHEE_SPEC, LYCHEE_VERSION)?,
-        })),
+                source_units: Vec::new(),
+                tool_inputs: Vec::new(),})),
         ValidatorKind::NativeValidators => Ok(Some(ValidatorCommand {
             validator: kind,
             name: NATIVE_VALIDATORS_STEP_NAME.to_owned(),
             argv: crate::source_prep::native_validators_argv(),
             prepare_argv: Vec::new(),
-        })),
+                source_units: Vec::new(),
+                tool_inputs: Vec::new(),})),
+        ValidatorKind::PythonSourceTests => {
+            Ok(Some(crate::python_source_units::validator_command(catalog)?))
+        }
         ValidatorKind::CargoDeny | ValidatorKind::CargoMachete | ValidatorKind::Actionlint => {
             Err(OrchestratorError::Contract {
                 problem: format!("verify_kind_rejected:{}", kind.job_id()),

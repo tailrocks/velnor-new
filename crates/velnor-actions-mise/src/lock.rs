@@ -18,8 +18,6 @@ use super::{MISE_VERSION, PinnedTool, ToolCatalog, versions::PYTHON_ARTIFACT_POL
 
 pub use super::lock_verify::verify_lock_against_manifest;
 
-pub use super::lock_verify::verify_lock_against_manifest;
-
 /// Lock, manifest, and version-policy verification failure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]

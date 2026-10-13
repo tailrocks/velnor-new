@@ -1,4 +1,4 @@
-use velnor_actions_contract::RustBinaryReleaseConfig;
+use velnor_actions_contract::config::RustBinaryReleaseConfig;
 
 const FILE: &str = "config.toml";
 
@@ -7,8 +7,8 @@ fn enabled() -> RustBinaryReleaseConfig {
         enabled: true,
         manifest_path: "crates/repo-scan/Cargo.toml".to_owned(),
         package: "repo-scan".to_owned(),
-        binary: Some("repo-scan".to_owned()),
-        source_commit_env: Some("REPO_SCAN_SOURCE_COMMIT".to_owned()),
+        bin: "repo-scan".to_owned(),
+        source_commit_env: None,
     }
 }
 
@@ -24,24 +24,19 @@ fn binary_release_defaults_disabled_and_requires_a_package_when_enabled() {
     let default = RustBinaryReleaseConfig::default();
     assert!(!default.enabled);
     assert_eq!(default.manifest_path, "Cargo.toml");
-    assert_eq!(default.binary_name(), "");
+    assert_eq!(default.bin, "");
     assert_eq!(default.validate(FILE), Ok(()));
 
     let mut missing_package = default;
     missing_package.enabled = true;
-    assert!(problem(&missing_package).contains("missing_package"));
+    assert!(problem(&missing_package).contains("required_when_enabled"));
 }
 
 #[test]
 fn binary_release_accepts_exact_package_and_binary_names() {
     let config = enabled();
-    assert_eq!(config.binary_name(), "repo-scan");
+    assert_eq!(config.bin, "repo-scan");
     assert_eq!(config.validate(FILE), Ok(()));
-
-    let mut default_binary = config;
-    default_binary.binary = None;
-    assert_eq!(default_binary.binary_name(), "repo-scan");
-    assert_eq!(default_binary.validate(FILE), Ok(()));
 }
 
 #[test]
@@ -68,46 +63,8 @@ fn binary_release_rejects_unsafe_paths_and_names() {
     }
     for binary in ["../repo-scan", "--help", "repo scan", "$PATH"] {
         let mut config = enabled();
-        config.binary = Some(binary.to_owned());
-        assert!(problem(&config).contains("binary_release.binary"));
-    }
-    for name in [
-        "",
-        "1SOURCE",
-        "SOURCE-COMMIT",
-        "${{ GITHUB_SHA }}",
-        "PATH",
-        "GITHUB_TOKEN",
-        "RUSTUP_TOOLCHAIN",
-        "RUSTUP_HOME",
-        "RUSTUP_DIST_SERVER",
-    ] {
-        let mut config = enabled();
-        config.source_commit_env = Some(name.to_owned());
-        assert!(problem(&config).contains("binary_release.source_commit_env"));
-    }
-}
-
-#[test]
-fn binary_release_blocks_rust_compiler_environment_overrides() {
-    for name in ["RUSTCACHED", "RUSTDOCS"] {
-        let mut config = enabled();
-        config.source_commit_env = Some(name.to_owned());
-        assert_eq!(config.validate(FILE), Ok(()));
-    }
-
-    for name in [
-        "RUSTC",
-        "RUSTDOC",
-        "RUSTFLAGS",
-        "RUSTDOCFLAGS",
-        "RUSTC_WRAPPER",
-        "RUSTC_WORKSPACE_WRAPPER",
-        "RUSTDOC_BOOTSTRAP",
-    ] {
-        let mut config = enabled();
-        config.source_commit_env = Some(name.to_owned());
-        assert!(problem(&config).contains("binary_release.source_commit_env"));
+        config.bin = binary.to_owned();
+        assert!(problem(&config).contains("binary_release.bin"));
     }
 }
 

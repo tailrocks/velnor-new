@@ -9,7 +9,7 @@ fn release_plan_binds_version_tag_targets_and_all_assets() {
     assert_eq!(plan.repository(), "tailrocks/velnor-new");
     assert_eq!(
         plan.targets().map(GeneratorReleaseTarget::triple),
-        SUPPORTED_TARGETS
+        [SUPPORTED_TARGETS[0], SUPPORTED_TARGETS[1]]
     );
     assert_eq!(
         plan.targets().map(GeneratorReleaseTarget::runner_label),

@@ -17,8 +17,6 @@ mod rust_invocation;
 
 pub use rust_invocation::check_no_bare_cargo;
 
-pub(crate) use crate::commands_env::validate_composite_env;
-pub use crate::commands_env::validate_env;
 
 /// Validate a fixed argument vector: nonempty, no shell fragments.
 ///

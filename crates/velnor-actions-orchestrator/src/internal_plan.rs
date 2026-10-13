@@ -224,9 +224,6 @@ pub(crate) fn task_identity_digest(inputs: &IdentityInputs<'_>) -> Result<String
         task.identity.project_root.as_str()
     } else if Stack::from_id(&task.stack_id) == Some(Stack::Mise) {
         task.identity.project_root.as_str()
-    } else if task.stack_id == velnor_actions_tofu::STACK_ID {
-        velnor_actions_tofu::normalized_root_for_proposal(task)?;
-        task.identity.project_root.as_str()
     } else {
         project_root_of(inputs.manifest)
     };

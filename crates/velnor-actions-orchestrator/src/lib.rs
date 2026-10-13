@@ -1,6 +1,11 @@
 //! Generation coordination: discovery, planning, workflow IR, and writes.
 //! Execution belongs to Mise, vector requests to vectors, and YAML to the renderer.
 
+#![allow(
+    dead_code,
+    reason = "integration keeps branch-local helpers that consolidated callers do not reference yet"
+)]
+
 mod api;
 mod attach;
 mod baseline_artifact_listing;
@@ -46,6 +51,8 @@ mod inventory_reuse;
 pub mod local_release_manifest;
 mod lock_audit;
 mod matrix_step;
+mod matrix_suite;
+mod mbx_preflight;
 mod merge;
 mod merge_request;
 mod native_image_tasks;
@@ -67,6 +74,7 @@ mod prepare;
 mod preseed_manifest;
 mod product_release_pins;
 mod provenance;
+mod python_source_units;
 mod publish_job;
 mod qualification_resolver;
 mod qualify;

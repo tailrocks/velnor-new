@@ -17,18 +17,6 @@ pub(crate) use tokens::check_token_hygiene;
 #[path = "support_tests.rs"]
 mod support_tests;
 
-// Token-hygiene gate lives beside the policy gates (`#[path]`, no `lib.rs` edit).
-#[path = "support_tokens.rs"]
-mod tokens;
-
-pub(crate) use tokens::check_token_hygiene;
-
-// Token-hygiene gate lives beside the policy gates (`#[path]`, no `lib.rs` edit).
-#[path = "support_tokens.rs"]
-mod tokens;
-
-pub(crate) use tokens::check_token_hygiene;
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
@@ -40,7 +28,7 @@ use crate::{
     candidate::{candidate_job, release_job},
     render::{
         ALINT_BINARY_VERSION, ALINT_USES, CANDIDATE_JOB_ID, FINAL_CONDITION, FINAL_DISPLAY_NAME,
-        FINAL_JOB_ID, PLAN_JOB_ID, PYTHON_SOURCE_PREPARE_NAME, RenderContext, ValidatorCommand,
+        FINAL_JOB_ID, PLAN_JOB_ID, RenderContext, ValidatorCommand,
     },
     steps,
 };
@@ -166,7 +154,8 @@ pub(crate) fn merge_support_jobs(
             | ValidatorKind::StrictJson
             | ValidatorKind::FrontmatterId
             | ValidatorKind::LinkCheck
-            | ValidatorKind::NativeValidators => validator_job(ctx, *validator)?,
+            | ValidatorKind::NativeValidators
+            | ValidatorKind::PythonSourceTests => validator_job(ctx, *validator)?,
         };
         insert_support_job(jobs, validator.job_id(), job, policy)?;
     }
@@ -282,22 +271,23 @@ pub(crate) fn validator_job(
 ) -> Result<Job, RenderError> {
     let command = find_validator_command(&ctx.validator_commands, validator)?;
     let mut step = steps::ambient_shell_step(&command.name, command.argv.clone(), BTreeMap::new())?;
-    step.role = Some(match validator {
-        ValidatorKind::CargoDeny => StepRole::CargoDeny,
-        ValidatorKind::CargoMachete => StepRole::CargoMachete,
-        ValidatorKind::Zizmor => StepRole::Zizmor,
-        ValidatorKind::Markdownlint => StepRole::Markdownlint,
-        ValidatorKind::StrictJson => StepRole::StrictJson,
-        ValidatorKind::FrontmatterId => StepRole::FrontmatterId,
-        ValidatorKind::LinkCheck => StepRole::LinkCheck,
-        ValidatorKind::NativeValidators => StepRole::NativeValidators,
+    step.role = match validator {
+        ValidatorKind::CargoDeny => Some(StepRole::CargoDeny),
+        ValidatorKind::CargoMachete => Some(StepRole::CargoMachete),
+        ValidatorKind::Zizmor => Some(StepRole::Zizmor),
+        ValidatorKind::Markdownlint => Some(StepRole::Markdownlint),
+        ValidatorKind::StrictJson => Some(StepRole::StrictJson),
+        ValidatorKind::FrontmatterId => Some(StepRole::FrontmatterId),
+        ValidatorKind::LinkCheck => Some(StepRole::LinkCheck),
+        ValidatorKind::NativeValidators => Some(StepRole::NativeValidators),
+        ValidatorKind::PythonSourceTests => None,
         ValidatorKind::Alint | ValidatorKind::Actionlint => {
             return Err(RenderError::InvalidWorkflow(format!(
                 "validator_not_shell:{}",
                 validator.job_id()
             )));
         }
-    });
+    };
     let mut job_steps = vec![steps::checkout_step(&ctx.checkout_uses)?];
     if !command.prepare_argv.is_empty() {
         let mut prepare = steps::ambient_shell_step(
@@ -386,24 +376,4 @@ pub(crate) fn check_candidate_invariants(jobs: &BTreeMap<String, Job>) -> Result
     Ok(())
 }
 
-/// Final gate keeps the exact required-check name and `always()` condition.
-///
-/// The always-on lint job keeps its exact display name on both policies.
-pub(crate) fn check_final_gate(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
-    if let Some(final_job) = jobs.get(FINAL_JOB_ID) {
-        if final_job.display_name != FINAL_DISPLAY_NAME {
-            return Err(RenderError::InvalidWorkflow("bad_final_name".to_owned()));
-        }
-        if final_job.condition.as_deref() != Some(FINAL_CONDITION) {
-            return Err(RenderError::InvalidWorkflow(
-                "bad_final_condition".to_owned(),
-            ));
-        }
-    }
-    if let Some(lint) = jobs.get(LINT_JOB_ID)
-        && lint.display_name != LINT_DISPLAY_NAME
-    {
-        return Err(RenderError::InvalidWorkflow("bad_lint_name".to_owned()));
-    }
-    Ok(())
-}
+include!("support.part2.rs");

@@ -18,7 +18,10 @@ use velnor_actions_orchestrator::{
 
 #[path = "impl_common_path.rs"]
 mod path;
+#[path = "fixture_package.rs"]
+mod fixture_package;
 
+pub(crate) use fixture_package::root_manifest;
 pub(crate) use path::test_path_with_sbin;
 
 /// Test error shortcut.

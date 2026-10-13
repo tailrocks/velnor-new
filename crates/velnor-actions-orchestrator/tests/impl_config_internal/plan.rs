@@ -1,6 +1,7 @@
 //! Internal plan and merge integration cases.
 
 use super::*;
+use velnor_actions_orchestrator::{finalized_jobs, plan_text};
 
 #[test]
 fn internal_plan_selects_affected_and_validates() -> TestResult {

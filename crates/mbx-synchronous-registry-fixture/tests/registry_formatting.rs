@@ -1,3 +1,5 @@
+//! Integration checks for the synchronous registry fixture.
+
 use mbx_synchronous_registry_fixture::decimal_length;
 
 #[test]

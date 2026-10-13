@@ -19,12 +19,10 @@ mod tools;
 mod tofu_env;
 
 #[cfg(test)]
-pub(crate) use tools::crate_suite_tools;
-#[cfg(test)]
-pub(crate) use tools::task_driver_tools;
+pub(crate) use tools::{crate_needs_tofu_install, task_driver_tools};
 pub(crate) use tools::{
-    CrateSuite, crate_needs_generate_validators, prepare_crate_tools_step,
-    prepare_install_opentofu, suite_for_package,
+    CrateSuite, crate_needs_generate_validators, prepare_crate_tools_step, prepare_install_opentofu,
+    suite_for_package,
 };
 
 /// `Documentation` obligation step name.
@@ -157,7 +155,7 @@ pub(crate) fn task_execution_env(
 ) -> Result<BTreeMap<String, String>, OrchestratorError> {
     use velnor_actions_workflow_renderer::toolchain_env;
     Ok(toolchain_env::with_credential_scrub(&task_step_env(
-        catalog, extra,
+        catalog, extra, true,
     )?))
 }
 

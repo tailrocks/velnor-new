@@ -14,9 +14,6 @@ use velnor_actions_contract::{
     artifact_id_for_baseline, plan_id_for_run,
 };
 
-#[path = "baseline_publish_request_tests.rs"]
-mod request_tests;
-
 /// Push payload over `head` on the default branch.
 fn push_payload(head: &str) -> String {
     serde_json::json!({
@@ -147,7 +144,7 @@ pub(super) fn staged_run(plan: &Plan, run_key: &str) -> tempfile::TempDir {
 }
 
 /// Staged manifest value for one publish run.
-fn staged_manifest(temp: &Path, run_key: &str) -> serde_json::Value {
+pub(crate) fn staged_manifest(temp: &Path, run_key: &str) -> serde_json::Value {
     let bytes = fs::read(
         temp.join("velnor")
             .join(run_key)
@@ -259,9 +256,6 @@ fn publish_refuses_every_unsafe_case() {
         "local runs never publish"
     );
 }
-
-#[path = "baseline_publish_lineage_tests.rs"]
-mod lineage_tests;
 
 #[test]
 fn publish_rejects_unknown_request_fields() {

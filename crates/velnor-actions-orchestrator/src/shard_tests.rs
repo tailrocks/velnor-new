@@ -42,7 +42,7 @@ fn lookup_args_are_fixed_and_validated() {
         select_exact_base_candidates(&runs.to_string(), &base, "t"),
         Ok(vec![2])
     );
-    assert!(select_exact_base_run(&runs.to_string(), &"c".repeat(40), "t").is_err());
+    assert!(select_exact_base_candidates(&runs.to_string(), &"c".repeat(40), "t").is_err());
     let artifact = velnor_actions_contract::artifact_id_for_baseline(
         &base,
         &velnor_actions_contract::digest_b3(b"compat"),

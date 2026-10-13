@@ -217,7 +217,7 @@ pub(crate) fn check_archive_identity_with_source(
 /// any kind fails closed. `Verified` needs the full observation set
 /// once reports carry restore metadata.
 pub(crate) fn verify_reused_task(
-    _task_id: &str,
+    task_id: &str,
     declared: &[String],
     observed: &[(String, Vec<u8>, String)],
     expected: Option<&ExpectedReuseIdentity>,

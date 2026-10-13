@@ -1,4 +1,9 @@
 //! Integration test entry point; cases live in the sibling files.
+
+#![allow(
+    dead_code,
+    reason = "integration keeps branch-local test helpers that consolidated callers do not reference yet"
+)]
 #[path = "impl_archive_guard_builder.rs"]
 mod impl_archive_guard_builder;
 #[path = "impl_cli.rs"]

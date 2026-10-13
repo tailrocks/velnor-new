@@ -13,21 +13,22 @@
 //! the environment set.
 
 use std::env;
-use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, OrchestratorError,
-    PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
-    REPORT_OP, REQUEST_FILE_ENV, TASK_EXECUTION_RESOLVER_OP, WRITE_REQUEST_OP, execute_check,
-    merge_internal, merge_passed, plan_internal, plan_outputs, publish_final_report,
-    publish_plan_files, resolve_task_execution, response_path_for, retrieve_reports,
-    write_preseed_manifest, write_request, write_task_report,
+    EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, OrchestratorError, PLAN_OP, PRESEED_MANIFEST_OP,
+    PUBLISH_OP, REPORT_OP, REQUEST_FILE_ENV, TASK_EXECUTION_RESOLVER_OP, WRITE_REQUEST_OP,
+    execute_check, resolve_task_execution, retrieve_reports, write_preseed_manifest, write_request,
+    write_task_report,
 };
 
 use crate::dispatch_publish::run_publish_internal;
+#[expect(
+    dead_code,
+    reason = "retired foundation-qualification flag keeps its preview entry for the source lane"
+)]
 #[path = "dispatch_foundation_qualification.rs"]
 mod foundation_qualification;
 
@@ -87,7 +88,7 @@ struct InternalRequest {
 /// to Clap; bare invocations then fail with the usage diagnostic (exit 2),
 /// keeping public behavior byte-identical with or without the environment.
 pub(crate) fn try_internal() -> Option<ExitCode> {
-    let request = crate::dispatch_internal::gate_request()?;
+    let request = gate_request()?;
     Some(run_internal(&request))
 }
 
@@ -213,100 +214,6 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             },
             Err(error) => fail_internal(&error.to_string()),
         },
-    }
-}
-
-/// Read the request, run the planner, publish files, write response plus outputs.
-fn run_plan_internal(path: &Path) -> ExitCode {
-    let text = match fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(error) => return fail_internal(&format!("read request: {error}")),
-    };
-    let mode = match env::var_os(PLAN_MATRIX_OUTPUT_MODE_ENV) {
-        None => PlanOutputMode::Static,
-        Some(value) if value == DYNAMIC_MATRIX_OUTPUT_MODE => PlanOutputMode::DynamicMatrix,
-        Some(_) => return fail_internal("bad_plan_matrix_output_mode"),
-    };
-    let response = match plan_internal(&text) {
-        Ok(response) => response,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    let admission = match crate::dispatch_qualification::admission_for_plan(&response, path) {
-        Ok(admission) => admission,
-        Err(problem) => return fail_internal(problem),
-    };
-    let outputs = match plan_outputs_with_admission(&response, mode, admission.as_ref()) {
-        Ok(outputs) => outputs,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    let sibling = match response_path_for(path) {
-        Ok(sibling) => sibling,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    if let Err(error) = fs::write(&sibling, &response) {
-        return fail_internal(&format!("write response: {error}"));
-    }
-    let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
-        return fail_internal("missing runner temp");
-    };
-    let outputs = match plan_outputs_from_staged_admission(&response, mode, Path::new(&runner_temp))
-    {
-        Ok(outputs) => outputs,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    let Some(output_path) = env::var_os(GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty()) else {
-        return fail_internal("missing github output");
-    };
-    if let Err(error) = publish_plan_files(&response, &Path::new(&runner_temp).join("velnor")) {
-        return fail_internal(&error.to_string());
-    }
-    let mut body = String::new();
-    for (name, value) in outputs.step_outputs() {
-        body.push_str(name);
-        body.push('=');
-        body.push_str(value);
-        body.push('\n');
-    }
-    match fs::OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(&output_path)
-        .and_then(|mut file| {
-            use std::io::Write;
-            file.write_all(body.as_bytes())
-        }) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => fail_internal(&format!("append outputs: {error}")),
-    }
-}
-
-/// Read the request, run the merge, publish the verdict, exit verdict.
-fn run_merge_internal(path: &Path) -> ExitCode {
-    let text = match fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(error) => return fail_internal(&format!("read request: {error}")),
-    };
-    let response = match merge_internal(&text) {
-        Ok(response) => response,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    let sibling = match response_path_for(path) {
-        Ok(sibling) => sibling,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    if let Err(error) = fs::write(&sibling, &response) {
-        return fail_internal(&format!("write response: {error}"));
-    }
-    let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
-        return fail_internal("missing runner temp");
-    };
-    if let Err(error) = publish_final_report(&response, &Path::new(&runner_temp).join("velnor")) {
-        return fail_internal(&error.to_string());
-    }
-    match merge_passed(&response) {
-        Ok(true) => ExitCode::SUCCESS,
-        Ok(false) => ExitCode::from(1),
-        Err(error) => fail_internal(&error.to_string()),
     }
 }
 

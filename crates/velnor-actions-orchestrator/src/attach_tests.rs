@@ -7,7 +7,7 @@ use crate::publish_job::baseline_publish_job;
 use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
 use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, final_job, plan_job};
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowPolicy};
+use velnor_actions_contract::{Concurrency, Job, JobTimeout, Permissions, Trigger};
 use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
 
 fn rust_plan_needs() -> PlanJobToolNeeds {

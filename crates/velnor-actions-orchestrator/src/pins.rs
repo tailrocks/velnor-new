@@ -29,6 +29,7 @@ const MISE_ACTION_KEY: &str = "jdx/mise-action";
 
 use velnor_actions_workflow_renderer::setup::{
     MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
+    MiseSetupSet,
 };
 
 #[path = "pins_consumer_binary_release.rs"]
@@ -40,13 +41,6 @@ pub(super) use mise_pin_qualification::resolve as resolve_mise_pin_qualification
 #[path = "pins_rust_toolchain_qualification.rs"]
 mod rust_toolchain_qualification;
 pub(super) use rust_toolchain_qualification::resolve as resolve_rust_toolchain_qualification;
-
-/// Step-env key carrying the release manifest into Check/Plan steps.
-pub(crate) const RELEASE_MANIFEST_ENV: &str = "VELNOR_RELEASE_MANIFEST_JSON";
-
-/// Fail-closed diagnostic when no release manifest exists anywhere.
-pub(crate) const MISSING_MANIFEST_PROBLEM: &str =
-    "consumer_requires_release_install:install an official velnor-actions release";
 
 /// Step-env key carrying the release manifest into Check/Plan steps.
 pub(crate) const RELEASE_MANIFEST_ENV: &str = "VELNOR_RELEASE_MANIFEST_JSON";
@@ -152,49 +146,24 @@ pub(crate) fn resolve_build_task_mise_setup(
     })
 }
 
-/// Resolve all typed Mise setup records needed by one generated workflow.
-///
-/// The configured runner's setup is reused; only the other supported native
-/// platform is resolved separately. Action overrides therefore apply to both
-/// records without duplicating override policy.
-pub(crate) fn resolve_mise_setup_set(
-    config: &VelnorConfig,
-    label: &str,
-    configured_setup: &MiseSetup,
-) -> Result<MiseSetupSet, OrchestratorError> {
-    let configured_target =
-        mise_target_for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("mise_setup_unsupported_target:{label}"),
-        })?;
-    let mut setups = vec![(configured_target.to_owned(), configured_setup.clone())];
-    for (target, runner_label) in [
-        (LINUX_X64_TARGET, "ubuntu-26.04"),
-        (MACOS_ARM64_TARGET, MACOS_ARM64_RUNNER_LABEL),
-    ] {
-        if target != configured_target {
-            setups.push((target.to_owned(), resolve_mise_setup(config, runner_label)?));
-        }
-    }
-    Ok(MiseSetupSet::new(setups)?)
-}
-
-/// Resolve the exact supported target for a hosted label.
+/// Resolve the exact supported target triple for a hosted label.
 fn mise_target_for_runner_label(label: &str) -> Option<&'static str> {
-    if label == MACOS_ARM64_RUNNER_LABEL {
-        return Some(MACOS_ARM64_TARGET);
-    }
-    (target_for_runner_label(label) == Some(LINUX_X64_TARGET)).then_some(LINUX_X64_TARGET)
+    ReleaseTarget::for_runner_label(label).map(ReleaseTarget::triple)
 }
 
-/// Select the digest compiled for one supported Mise target.
+/// Select the digest compiled for one supported Mise target triple.
 fn mise_binary_sha256(target: &str) -> Result<&'static str, OrchestratorError> {
-    match target {
-        LINUX_X64_TARGET => Ok(MISE_BINARY_SHA256_LINUX_X64),
-        MACOS_ARM64_TARGET => Ok(MISE_BINARY_SHA256_MACOS_ARM64),
-        _ => Err(OrchestratorError::Contract {
-            problem: format!("mise_setup_unsupported_target:{target}"),
-        }),
-    }
+    let digest = match ReleaseTarget::parse_triple(target) {
+        Some(ReleaseTarget::LinuxX86_64) => MISE_BINARY_SHA256_LINUX_X64,
+        Some(ReleaseTarget::MacosArm64) => MISE_BINARY_SHA256_MACOS_ARM64,
+        Some(ReleaseTarget::MacosX86_64) => MISE_BINARY_SHA256_MACOS_X64,
+        None => {
+            return Err(OrchestratorError::Contract {
+                problem: format!("mise_setup_unsupported_target:{target}"),
+            });
+        }
+    };
+    Ok(digest)
 }
 
 /// Resolve the Mise action ref: an approved override or the compiled default.

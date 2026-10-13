@@ -10,9 +10,6 @@ use velnor_actions_contract::StepKind;
 use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-#[path = "impl_orch_p08_save_cases.rs"]
-mod save_cases;
-
 use super::impl_common::{TestResult, config_with_branch, make_repo};
 
 type ToolsCacheIdentity = (String, String);
@@ -287,7 +284,7 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
         save_condition.contains("success() && github.event_name == 'push'"),
         "the canonical push-only save gate already denies dispatch:\n{yaml}"
     );
-    tools::assert_tools_saves_push_gated_per_key(&yaml);
+    assert_tools_saves_push_gated_per_key(&yaml);
     Ok(())
 }
 
@@ -305,10 +302,10 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
         1 + saves.len() + mbx_saves,
         "sources plus one tools save per key plus the MBX bundle:\n{yaml}"
     );
-    let source_prunes = yaml
+    let _source_prunes = yaml
         .matches("- name: Measure and prune Cargo sources")
         .count();
-    let push_gated_cache_steps = yaml
+    let _push_gated_cache_steps = yaml
         .lines()
         .filter(|line| {
             let line = line.trim_start();
@@ -389,42 +386,4 @@ fn assert_one_save_per_identity(
     );
 }
 
-fn tools_cache_identities(yaml: &str) -> ToolsCacheIdentities {
-    let mut restored = std::collections::BTreeSet::new();
-    let mut saves = Vec::new();
-    let mut digest = None;
-    let mut identity_step = false;
-    let mut cache_step = None;
-    for line in yaml.lines() {
-        let trimmed = line.trim();
-        if line.starts_with("  ") && !line.starts_with("   ") && trimmed.ends_with(':') {
-            digest = None;
-        }
-        if let Some(name) = trimmed.strip_prefix("- name: ") {
-            identity_step = name.trim_matches('"') == "V2 identity";
-            cache_step = match name.trim_matches('"') {
-                "Restore Mise tools" => Some(false),
-                "Save Mise tools" => Some(true),
-                _ => None,
-            };
-            continue;
-        }
-        if identity_step && let Some(value) = trimmed.strip_prefix("d: ") {
-            digest = Some(value.to_owned());
-            identity_step = false;
-        }
-        if let Some(is_save) = cache_step
-            && let Some(key) = trimmed.strip_prefix("key: ")
-            && let Some(digest) = &digest
-        {
-            let identity = (key.trim_matches('"').to_owned(), digest.clone());
-            if is_save {
-                saves.push(identity);
-            } else {
-                restored.insert(identity);
-            }
-            cache_step = None;
-        }
-    }
-    (restored, saves)
-}
+include!("impl_orch_p08.part2.rs");

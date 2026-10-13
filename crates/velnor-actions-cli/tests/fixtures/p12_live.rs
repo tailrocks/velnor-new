@@ -198,13 +198,13 @@ fn script_covers_all_forms_scopes_and_namespaces() -> Result<(), Box<dyn Error>>
         "advisories",
         "fn fail_row",
     ] {
-        let expected_subject = format!("\"subject\":\"{subject}\"");
-        let expected_detail = format!("\"detail\":\"{detail}\"");
         assert!(
             owner.contains(marker),
             "Rust freshness owner misses {marker}"
         );
     }
+    let fixture = harness::passing("p12-script-covers")?;
+    let run = harness::run_script(&fixture.dir, &[])?;
     for (subject, status, detail) in [
         (
             "(declared-summary)",

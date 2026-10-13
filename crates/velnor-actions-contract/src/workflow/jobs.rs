@@ -71,6 +71,8 @@ pub enum ValidatorKind {
     LinkCheck,
     /// Host-native plugin/skill validators, where installed.
     NativeValidators,
+    /// Python unittest discovery over the repository source suites.
+    PythonSourceTests,
 }
 
 impl ValidatorKind {
@@ -88,6 +90,7 @@ impl ValidatorKind {
             Self::FrontmatterId => "frontmatter-id",
             Self::LinkCheck => "link-check",
             Self::NativeValidators => "native-validators",
+            Self::PythonSourceTests => "python-source-tests",
         }
     }
 
@@ -105,12 +108,13 @@ impl ValidatorKind {
             Self::FrontmatterId => "Frontmatter ID",
             Self::LinkCheck => "Link Check",
             Self::NativeValidators => "Native Validators",
+            Self::PythonSourceTests => "Run Python source tests",
         }
     }
 
     /// Every validator kind in emission order.
     #[must_use]
-    pub fn all() -> [Self; 10] {
+    pub fn all() -> [Self; 11] {
         [
             Self::Alint,
             Self::CargoDeny,
@@ -122,6 +126,7 @@ impl ValidatorKind {
             Self::FrontmatterId,
             Self::LinkCheck,
             Self::NativeValidators,
+            Self::PythonSourceTests,
         ]
     }
 

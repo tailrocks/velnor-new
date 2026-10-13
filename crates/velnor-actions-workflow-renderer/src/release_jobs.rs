@@ -8,15 +8,10 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{JobTimeout, Step, StepKind, validate_job_id};
 
-/// Least-privilege grants (`#[path]`, no `lib.rs` edit); re-exported
-/// below so `release_jobs::X` paths keep working.
-#[path = "release_permissions.rs"]
-pub mod permissions;
-pub use permissions::{JobPermissions, PermissionLevel};
+pub use crate::release_permissions::{JobPermissions, PermissionLevel};
 
 use crate::{
     RenderError,
-    release_permissions::JobPermissions,
     release_spec::{
         BootstrapPlan, ReleaseConcurrency, ReleaseTriggers, check_lock_anchor, is_clean_text,
         publish_gate_condition, validate_environment, validate_repository,

@@ -2,9 +2,8 @@
 use std::collections::BTreeMap;
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::release_jobs::{
-    ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
+    JobPermissions, PermissionLevel, ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
 };
-use velnor_actions_workflow_renderer::release_permissions::{JobPermissions, PermissionLevel};
 use velnor_actions_workflow_renderer::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseConcurrency, ReleaseTriggers, publish_gate_condition,
 };

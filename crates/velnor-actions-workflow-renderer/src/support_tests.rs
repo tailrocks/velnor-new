@@ -63,6 +63,8 @@ fn shell_command(validator: ValidatorKind) -> ValidatorCommand {
         // gate passes without a preparation vector.
         argv: vec!["tool".to_owned()],
         prepare_argv: Vec::new(),
+        source_units: Vec::new(),
+        tool_inputs: Vec::new(),
     }
 }
 

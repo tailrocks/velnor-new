@@ -5,8 +5,6 @@
 
 use velnor_actions_contract::is_valid_branch_shorthand;
 
-use velnor_actions_contract::is_valid_branch_name;
-
 use crate::catalog::{PinnedTool, ToolCatalog};
 use crate::command::IsolatedCommand;
 use crate::error::MiseError;

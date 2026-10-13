@@ -99,37 +99,6 @@ pub(crate) fn checkout_step_full() -> Result<Step, OrchestratorError> {
     })
 }
 
-/// Checkout with full history for git-archaeology jobs (plan only).
-///
-/// Plan verifies the checkout against the PR head through the merge
-/// commit's second parent and diffs `base...head` for affected work;
-/// both need history the default depth-1 checkout never fetches, so a
-/// shallow plan checkout fails closed with `checkout_head_mismatch` on
-/// every pull-request run (CI run 36749240499).
-///
-/// # Errors
-///
-/// Returns a contract error when the fixed inputs fail schema validation.
-pub(crate) fn checkout_step_full() -> Result<Step, OrchestratorError> {
-    let with = BTreeMap::from([
-        ("persist-credentials".to_owned(), "false".to_owned()),
-        ("fetch-depth".to_owned(), "0".to_owned()),
-    ]);
-    validate_action_inputs(&checkout_inputs_schema(), &with).map_err(|err| {
-        OrchestratorError::Contract {
-            problem: err.to_string(),
-        }
-    })?;
-    Ok(Step {
-        name: "Checkout".to_owned(),
-        condition: None,
-        kind: StepKind::Action {
-            uses: PinnedActionRef::checkout().uses_value(),
-            with,
-            env: BTreeMap::new(),
-        },
-    })
-}
 
 /// Reject workflow syntax the pinned actionlint cannot parse (PAR-6.1).
 ///

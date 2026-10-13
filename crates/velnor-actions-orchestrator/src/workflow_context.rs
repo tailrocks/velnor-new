@@ -4,7 +4,7 @@ use velnor_actions_contract::{
     ExecutionMode, GeneratorValidation, ScaleSetSelector, ValidatorKind, VelnorConfig,
     VerifyConfig, WorkflowPolicy,
 };
-use velnor_actions_mise::{IsolatedCommand, PinnedTool, ToolCatalog};
+use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::{RenderContext, ValidatorCommand};
 use velnor_actions_workflow_renderer::steps::{
     DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
@@ -52,7 +52,9 @@ pub(super) fn render_context(
                 validator: ValidatorKind::CargoDeny,
                 name: DENY_STEP_NAME.to_owned(),
                 argv: deny_argv(&workspaces)?,
-            });
+                prepare_argv: Vec::new(),
+                source_units: Vec::new(),
+                tool_inputs: Vec::new(),});
         }
         validator_commands.extend([
             ValidatorCommand {

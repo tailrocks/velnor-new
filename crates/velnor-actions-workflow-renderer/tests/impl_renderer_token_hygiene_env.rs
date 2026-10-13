@@ -7,8 +7,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, StepRole, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     RenderError, action_step_with_env, ambient_shell_step, checkout_step, plan_step,
-    render_workflow_ir, steps::MBX_CACHE_MODE_ENV, steps::RESOLVE_QUALIFICATION_OPERATION,
-    steps::internal_step,
+    render_workflow_ir, steps::RESOLVE_QUALIFICATION_OPERATION, steps::internal_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -49,19 +48,28 @@ fn token_in_action_env_fails_render() -> Result<(), RenderError> {
 fn benign_mbx_cache_mode_env_passes() -> Result<(), RenderError> {
     // The genuine MBX restore step pins its push-gated cache mode in
     // step env; the extended gate must not flag that expression.
-    let restore = mbx_tool_steps(&mbx_pin(), "1.5.0", "1.99.0")?;
-    render_workflow_ir(
+    let [preflight, restore, version_check] = mbx_tool_steps(&mbx_pin(), "1.5.0", "1.99.0")?;
+    let text = render_workflow_ir(
         &fixture_ir(vec![job(
             "plan",
             "Plan",
             Vec::new(),
-            vec![checkout_step(&checkout_pin())?, preflight, restore, plan_step()],
+            vec![
+                checkout_step(&checkout_pin())?,
+                preflight,
+                restore,
+                version_check,
+                plan_step(),
+            ],
         )]),
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
     )?;
-    assert!(!text.contains("ACTIONS_CACHE_MODE"), "{text}");
+    assert!(
+        text.contains("github-cache-mode"),
+        "benign MBX cache mode must render: {text}"
+    );
     Ok(())
 }
 
@@ -73,7 +81,7 @@ fn qualification_resolver_is_scoped_to_dispatch_in_plan_job() -> Result<(), Rend
     )?;
     resolver.condition = Some("github.event_name == 'workflow_dispatch'".to_owned());
     render_workflow_ir(
-        &fixture_ir(vec![action_plan_job(vec![resolver])?]),
+        &fixture_ir(vec![action_plan_job(resolver)?]),
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
@@ -84,7 +92,7 @@ fn qualification_resolver_is_scoped_to_dispatch_in_plan_job() -> Result<(), Rend
         RESOLVE_QUALIFICATION_OPERATION,
     )?;
     let error = render_workflow_ir(
-        &fixture_ir(vec![action_plan_job(vec![unguarded])?]),
+        &fixture_ir(vec![action_plan_job(unguarded)?]),
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),

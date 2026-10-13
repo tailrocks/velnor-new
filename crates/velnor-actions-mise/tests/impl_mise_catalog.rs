@@ -55,13 +55,11 @@ fn tool_specs_use_exact_catalog_selectors() {
     assert_eq!(catalog.tool_spec(PinnedTool::Opentofu), "opentofu@1.13.1");
     assert_eq!(
         catalog.tool_spec(PinnedTool::Python),
-        format!(concat!(
-            "http:python[url={PYTHON_PBS_URL},",
-            "checksum=sha256:{PYTHON_PBS_SHA256},",
-            "strip_components=1,bin_path=bin]@3.14.8"
-        ))
+        format!(
+            "http:python[url={PYTHON_PBS_URL},checksum=sha256:{PYTHON_PBS_SHA256},strip_components=1,bin_path=bin]@3.14.8"
+        )
     );
-    assert_eq!(catalog.tool_spec(PinnedTool::Uv), "uv@0.12.23");
+    assert_eq!(catalog.tool_spec(PinnedTool::Uv), "uv@0.12.22");
     assert_eq!(
         catalog.tool_spec(PinnedTool::Reuse),
         "pipx:reuse[extras=charset-normalizer,uvx_args=\"--python 3.14.8 --no-python-downloads\"]@6.2.0"
@@ -352,7 +350,7 @@ fn mbx_provisioning_modes_validated() {
 }
 
 #[test]
-fn action_mbx_reconcile_matches_pin_only() {
+fn action_mbx_reconcile_matches_pin_only_merged() {
     let catalog = ToolCatalog::pinned();
     assert!(catalog.reconcile_action_mbx(MR_BOXINGTON_VERSION).is_ok());
     assert!(matches!(
@@ -370,36 +368,17 @@ fn action_mbx_reconcile_matches_pin_only() {
         );
     }
     let moved = ToolCatalog::new(
-        "1.98.1", "1.22.0", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146",
+        "1.98.1",
+        "1.22.0",
+        "2.102.0",
+        "1.7.12",
+        "0.11.0",
+        "1.30.1",
+        "0.9.146",
+        OPENTOFU_VERSION,
     )
     .expect("exact catalog");
     assert!(moved.reconcile_action_mbx("1.22.0").is_ok());
     assert!(moved.reconcile_action_mbx(MR_BOXINGTON_VERSION).is_err());
 }
 
-#[test]
-fn mbx_provisioning_modes_validated() {
-    assert_eq!(
-        MbxProvisioning::preinstalled("/opt/mbx/bin/mbx").expect("absolute path"),
-        MbxProvisioning::PreinstalledTool {
-            tool_path: "/opt/mbx/bin/mbx".to_owned(),
-        }
-    );
-    for bad in ["", "relative/mbx", "mbx", "C:\\mbx\\mbx", "/tmp/has\0nul"] {
-        assert!(
-            matches!(
-                MbxProvisioning::preinstalled(bad),
-                Err(MiseError::InvalidStepInput { field, .. }) if field == "tool_path"
-            ),
-            "{bad:?} must fail closed"
-        );
-    }
-    assert_eq!(
-        MbxProvisioning::CatalogInstall,
-        MbxProvisioning::CatalogInstall
-    );
-    assert_eq!(
-        MbxProvisioning::ActionExactVersion,
-        MbxProvisioning::ActionExactVersion
-    );
-}

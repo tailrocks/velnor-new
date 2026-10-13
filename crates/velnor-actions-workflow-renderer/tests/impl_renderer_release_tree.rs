@@ -6,9 +6,8 @@ use velnor_actions_workflow_renderer::release_config::{
     BootstrapReleasePlzConfig, ReleasePlzConfig, ReleasePlzPackage,
 };
 use velnor_actions_workflow_renderer::release_jobs::{
-    ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
+    JobPermissions, ReleaseJobSpec, ReleaseRole, ReleaseWorkflowSpec,
 };
-use velnor_actions_workflow_renderer::release_permissions::JobPermissions;
 use velnor_actions_workflow_renderer::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseConcurrency, ReleaseTriggers, publish_gate_condition,
 };

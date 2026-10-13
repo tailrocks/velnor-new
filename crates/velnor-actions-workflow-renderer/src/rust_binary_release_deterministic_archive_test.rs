@@ -40,7 +40,7 @@ fn binary_build_archives_are_reproducible_for_long_names_across_source_mtimes_an
         enabled: true,
         manifest_path: "Cargo.toml".to_owned(),
         package: PACKAGE.to_owned(),
-        binary: Some(binary.clone()),
+        bin: binary.clone(),
         source_commit_env: None,
     };
     config.validate("test")?;

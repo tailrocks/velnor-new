@@ -52,7 +52,7 @@ pub(super) fn qualification_env(request: &MbxQualificationPins) -> Yaml {
         ),
         (
             "MBX_QUALIFICATION_ACTION_REF".to_owned(),
-            Yaml::str(request.mbx_action_uses.clone()),
+            Yaml::str(request.candidate_action_uses.clone()),
         ),
         (
             "MBX_QUALIFICATION_PHASE_FILE".to_owned(),

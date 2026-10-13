@@ -21,6 +21,7 @@ pub use super::external_data::{
     external_data_kind, may_skip_external_data,
 };
 pub use super::finalized::finalized_jobs;
+pub use super::foundation_qualification::preview_foundation_qualification;
 #[cfg(debug_assertions)]
 #[doc(hidden)]
 pub use super::generate::DEBUG_GENERATE_PHASE;

@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::step_identity::is_tool_seed_step;
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::RenderError;
 use crate::yaml::Yaml;
@@ -16,10 +16,19 @@ use crate::tool_seed_admission::trusted_seed_guard;
 pub(crate) use crate::tool_seed_admission::{SEED_ROOT, require_seed_root};
 pub(crate) use velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES;
 
+/// A tool-seed step without Setup Mise is not a valid job.
+pub(crate) fn reject_orphan_seed(job_id: &str, job: &Job) -> Result<(), RenderError> {
+    if job.steps.iter().any(is_tool_seed_step) {
+        Err(RenderError::InvalidWorkflow(format!(
+            "tool_seed_without_setup:{job_id}"
+        )))
+    } else {
+        Ok(())
+    }
+}
+
 /// Display name of the copy step ahead of `Setup Mise`.
 pub(crate) const TOOL_SEED_NAME: &str = "Restore Velnor tool seed";
-/// Workflow `uses` of the one local tool-seed composite.
-pub(crate) const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
 /// Repository path of that composite.
 const TOOL_SEED_ACTION_PATH: &str = ".github/actions/velnor-tool-seed/action.yml";
 
@@ -52,9 +61,6 @@ fn validate_seed_action(step: &Step) -> Result<(), RenderError> {
         ));
     };
     let key = with.get("cache_key");
-    let key_ok = key.is_some_and(|value| is_guarded_seed_key(value));
-    let expected_key_ok = expected_key
-        .is_none_or(|expected| key.is_some_and(|value| value == &guarded_seed_key(expected)));
     if uses != TOOL_SEED_USES
         || step.role != Some(StepRole::ToolSeed)
         || step.condition.is_some()

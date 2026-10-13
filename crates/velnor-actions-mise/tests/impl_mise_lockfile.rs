@@ -340,7 +340,7 @@ fn python_http_lock_hygiene_uses_generated_shape() -> Result<(), String> {
         Some(checksum(PYTHON_PBS_SHA256).as_str())
     );
     assert_eq!(
-        audit_install_coverage(&lock, &[python_subject.clone()], "linux-x64"),
+        audit_install_coverage(&lock, std::slice::from_ref(&python_subject), "linux-x64"),
         vec![InstallCoverage::Verified]
     );
 

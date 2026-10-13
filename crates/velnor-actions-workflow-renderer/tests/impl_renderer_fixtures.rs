@@ -1,13 +1,12 @@
 //! Shared fixtures for the strict-emission test family.
 use std::collections::BTreeMap;
-use velnor_actions_contract::workflow::ir::PermissionLevel;
 use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind, WorkflowIr,
     WorkflowPolicy, workflow::permissions::PermissionLevel,
 };
 use velnor_actions_workflow_renderer::setup::MiseSetupSet;
 use velnor_actions_workflow_renderer::{
-    ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup, MiseSetupSet,
+    ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup,
     RELEASE_COMMIT_ENV, RenderContext, RenderError, STAGED_BINARY_PREFIX, ValidatorCommand,
     ValidatorSourceInput, ValidatorSourceInputKind, ValidatorSourceUnit, acquire_velnor_step,
     checkout_step, plan_step, render_workflow_ir, render_workflow_ir_strict, shell_step,

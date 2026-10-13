@@ -58,7 +58,7 @@ pub const WRITE_REQUEST_OP: &str = "write-request-v1";
 /// Plan operation tag.
 pub const PLAN_OP: &str = "plan-v1";
 /// Qualification predecessor verification operation tag.
-pub const RESOLVE_QUALIFICATION_ADMISSION_OP: &str = "resolve-qualification-admission-v1";
+pub(crate) const RESOLVE_QUALIFICATION_ADMISSION_OP: &str = "resolve-qualification-admission-v1";
 /// Merge operation tag.
 pub const MERGE_OP: &str = "merge-v1";
 
@@ -78,20 +78,6 @@ pub(crate) struct PlanResponse {
     /// planner used; absent when nothing covered.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) baseline_manifest: Option<BaselineManifest>,
-}
-
-impl PlanResponse {
-    /// Validate the plan and its duplicated matrix before emitting artifacts or outputs.
-    /// # Errors
-    pub(crate) fn validate(&self) -> Result<(), OrchestratorError> {
-        self.plan.validate().map_err(internal_contract)?;
-        let response_matrix = canonical_json_bytes(&self.matrix).map_err(internal_contract)?;
-        let plan_matrix = canonical_json_bytes(&self.plan.matrix).map_err(internal_contract)?;
-        if response_matrix != plan_matrix {
-            return Err(internal("response_matrix_mismatch"));
-        }
-        Ok(())
-    }
 }
 
 /// Compute the affected plan plus matrix for one event (schema-1 JSON).

@@ -60,6 +60,7 @@ pub(crate) fn run_generate(output_dir: Option<PathBuf>, mode: Option<String>) ->
 }
 
 /// Format post-publication cleanup warnings for the command's stderr report.
+#[cfg(test)]
 fn warning_lines(warnings: &[String]) -> impl Iterator<Item = String> + '_ {
     warnings
         .iter()

@@ -41,6 +41,7 @@ ignore:
   - "fixtures/**"
   # Recovery snapshots and scratch prototypes are retained only for
   # provenance; they are not active first-party source or instruction files.
+  - "preserved-unrelated/**"
 
 extends:
   - alint://bundled/oss-baseline@v1

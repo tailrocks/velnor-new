@@ -14,7 +14,8 @@ mod size_limits;
 use crate::impl_cli_tmp::git_fixture;
 
 use crate::impl_repo_policy::{
-    MEMBERS, dep_key, dep_lines, manifest, p11_toml, read, repo_root, test_markers, tree_files,
+    MEMBERS, dep_key, dep_lines, dep_referenced, manifest, p11_toml, read, repo_root, test_markers,
+    tree_files,
 };
 
 #[path = "impl_repo_deps_layout.rs"]

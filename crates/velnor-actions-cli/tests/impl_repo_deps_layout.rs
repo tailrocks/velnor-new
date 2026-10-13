@@ -2,7 +2,7 @@
 
 use std::error::Error;
 
-use super::physical_lines;
+use super::size_limits::physical_lines;
 use crate::impl_repo_policy::{MEMBERS, manifest, read, repo_root, test_markers, tree_files};
 
 #[test]

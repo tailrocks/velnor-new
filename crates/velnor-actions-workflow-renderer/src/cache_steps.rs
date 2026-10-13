@@ -5,7 +5,10 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::cachekey::{
+    MBX_CACHE_GENERATION_PREFIX, cache_key, mbx_cache_generation, restore_prefix,
+};
+use velnor_actions_contract::{Job, RunsOn, Step, StepKind, digest_b3};
 
 #[path = "cache_steps_mbx_command.rs"]
 mod mbx_command;
@@ -25,18 +28,14 @@ pub use mbx_preflight::{
     MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME,
     mbx_steps_for_driver,
 };
-pub(crate) use mbx_preflight::{MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, is_mbx_action};
 
 use crate::{
     RenderError,
-    steps::{action_step, action_step_with_env, validate_uses},
+    steps::{action_step, validate_uses},
 };
 
 #[path = "cache_steps_tools.rs"]
 mod tools;
-#[path = "cache_steps_mbx_preflight.rs"]
-mod mbx_preflight;
-
 pub use tools::{
     TOOLS_CACHE_PATH, TOOLS_CACHE_PATHS, TOOLS_RESTORE_ACTION_USES, TOOLS_RESTORE_NAME,
     TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES,
@@ -45,22 +44,6 @@ pub(crate) use tools::{TOOLS_SEED_ADMITTED_EXPRESSION, TOOLS_SEED_ADMITTED_INPUT
 
 #[cfg(test)]
 pub(crate) use tools::assert_rendered_admission_parses;
-pub(crate) use tools::restore_action_file as tools_restore_action_file;
-
-/// Build one V2 tools-cache action over the fixed path set.
-/// # Errors
-pub(crate) fn tools_cache_step(
-    restore: bool,
-    key: &str,
-    condition: Option<String>,
-) -> Result<Step, RenderError> {
-    tools::cache_step(restore, key, condition)
-}
-
-pub(crate) fn validate_tools_restore_call(step: &Step) -> Result<&str, RenderError> {
-    tools::validate_restore_call(step)
-}
-
 pub(crate) use tools::restore_action_file as tools_restore_action_file;
 
 /// Build one V2 tools-cache action over the fixed path set.
@@ -111,66 +94,6 @@ pub enum CompileDriver {
     Cargo,
     /// MBX profile: the objects-mode action restores compiler objects.
     Mbx,
-}
-
-/// Gate MBX action/tool presence against per-job driver selections.
-///
-/// Jobs without a declared driver are skipped (plan/final/lint carry
-/// none); declared Cargo jobs must be MBX-free while MBX jobs carry
-/// exactly one objects-mode step.
-/// # Errors
-pub fn check_mbx_gating(
-    jobs: &BTreeMap<String, Job>,
-    drivers: &BTreeMap<String, CompileDriver>,
-) -> Result<(), RenderError> {
-    for (id, driver) in drivers {
-        let Some(job) = jobs.get(id.as_str()) else {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_gating_unknown_job:{id}"
-            )));
-        };
-        check_job_mbx(id, job, *driver)?;
-    }
-    Ok(())
-}
-
-/// Enforce one job's MBX presence against its declared driver.
-fn check_job_mbx(id: &str, job: &Job, driver: CompileDriver) -> Result<(), RenderError> {
-    let actions = job.steps.iter().filter(|step| is_mbx_action(step)).count();
-    let tools = job
-        .steps
-        .iter()
-        .any(|step| uses_mbx_tool(step) && !is_mbx_action(step));
-    match driver {
-        CompileDriver::Cargo => {
-            if actions > 0 {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "mbx_action_without_selection:{id}"
-                )));
-            }
-            if tools {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "mbx_tool_without_selection:{id}"
-                )));
-            }
-        }
-        CompileDriver::Mbx => {
-            if actions == 0 {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "mbx_missing_for_selection:{id}"
-                )));
-            }
-            if actions > 1 {
-                return Err(RenderError::InvalidWorkflow(format!("mbx_duplicated:{id}")));
-            }
-        }
-    }
-    Ok(())
-}
-
-/// True for `jdx/mr-boxington-action` steps.
-pub(crate) fn is_mbx_action(step: &Step) -> bool {
-    matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with(&format!("{MBX_ACTION_NAME}@")))
 }
 
 /// Keep the pinned MBX action in local-only mode and add the explicit
@@ -287,13 +210,13 @@ fn mbx_bundle_steps(
     let (version, toolchain) = identity;
     let compatibility = mbx_compatibility_digest(id, target, toolchain, version);
     let snapshot = mbx_snapshot_digest(job);
-    let trusted_key = typed_cache_key("mbx", "trusted", &compatibility, &snapshot)
+    let trusted_key = cache_key("mbx", "trusted", &compatibility, &snapshot)
         .map_err(RenderError::Contract)?;
-    let pr_key = typed_cache_key("mbx", "pr", &compatibility, &snapshot)
+    let pr_key = cache_key("mbx", "pr", &compatibility, &snapshot)
         .map_err(RenderError::Contract)?;
-    let trusted_prefix = typed_restore_prefix("mbx", "trusted", &compatibility)
+    let trusted_prefix = restore_prefix("mbx", "trusted", &compatibility)
         .map_err(RenderError::Contract)?;
-    let pr_prefix = typed_restore_prefix("mbx", "pr", &compatibility)
+    let pr_prefix = restore_prefix("mbx", "pr", &compatibility)
         .map_err(RenderError::Contract)?;
     let trust_selector = "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected";
     let key = format!(
@@ -362,9 +285,24 @@ fn mbx_snapshot_digest(job: &Job) -> String {
                     append_identity_part(&mut bytes, value.as_bytes());
                 }
             }
-            StepKind::Internal { operation } => {
+            StepKind::Internal { operation, env } => {
                 append_identity_part(&mut bytes, b"internal");
                 append_identity_part(&mut bytes, operation.as_bytes());
+                for (key, value) in env {
+                    append_identity_part(&mut bytes, key.as_bytes());
+                    append_identity_part(&mut bytes, value.as_bytes());
+                }
+            }
+            StepKind::TaskExecution { argv, env, task_id, .. } => {
+                append_identity_part(&mut bytes, b"task");
+                append_identity_part(&mut bytes, task_id.as_bytes());
+                for arg in argv {
+                    append_identity_part(&mut bytes, arg.as_bytes());
+                }
+                for (key, value) in env {
+                    append_identity_part(&mut bytes, key.as_bytes());
+                    append_identity_part(&mut bytes, value.as_bytes());
+                }
             }
         }
     }
@@ -388,196 +326,4 @@ fn insert_before_producers(
     Ok(())
 }
 
-fn mbx_action_identity(step: &Step, id: &str) -> Result<(String, String), RenderError> {
-    let StepKind::Action { with, .. } = &step.kind else {
-        return Err(RenderError::InvalidWorkflow(format!("mbx_action_invalid:{id}")));
-    };
-    if with.get("github-cache-mode").map(String::as_str) != Some("objects")
-        || with.contains_key("version")
-    {
-        return Err(RenderError::InvalidWorkflow(format!("mbx_action_inputs_invalid:{id}")));
-    }
-    let generation = with.get("cache-generation").ok_or_else(|| {
-        RenderError::InvalidWorkflow(format!("mbx_cache_generation_missing:{id}"))
-    })?;
-    let version = generation
-        .strip_prefix(MBX_CACHE_GENERATION_PREFIX)
-        .filter(|version| is_exact_mbx_version(version))
-        .ok_or_else(|| RenderError::InvalidWorkflow(format!("mbx_cache_generation_invalid:{id}")))?
-        .to_owned();
-    if *generation != mbx_cache_generation(&version) {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "mbx_cache_generation_override:{id}"
-        )));
-    }
-    let toolchain = with.get("toolchain").cloned().ok_or_else(|| {
-        RenderError::InvalidWorkflow(format!("mbx_toolchain_missing:{id}"))
-    })?;
-    Ok((version, toolchain))
-}
-
-/// Whether a job maps to a supported hosted target rather than a selector.
-pub(crate) fn has_hosted_cache_target(job: &Job, default_label: &str) -> bool {
-    hosted_cache_target(job, default_label).is_some()
-}
-
-fn hosted_cache_target(job: &Job, default_label: &str) -> Option<&'static str> {
-    let is_scale_set = RunsOn::parse(&job.runs_on).is_ok_and(|selector| selector.is_scale_set());
-    (!is_scale_set)
-        .then(|| crate::job_runners::cache_target_for_job(job, default_label))
-        .flatten()
-}
-
-/// True when shell argv invokes the `mbx` program or tool spec.
-fn uses_mbx_tool(step: &Step) -> bool {
-    matches!(&step.kind, velnor_actions_contract::StepKind::Shell { run, .. } if run.iter().any(|arg| arg == "mbx" || arg.contains("mr-boxington")))
-}
-
-/// Exact MBX versions: three nonempty numeric dot parts, nothing else.
-fn is_exact_mbx_version(version: &str) -> bool {
-    let parts: Vec<&str> = version.split('.').collect();
-    parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
-}
-
-/// Cache restore/save step over `actions/cache`; MBX never archives here.
-/// # Errors
-pub fn cache_action_step(
-    restore: bool,
-    uses: &str,
-    layer: &str,
-    key: &str,
-    restore_keys: &[String],
-    paths: &[String],
-) -> Result<Step, RenderError> {
-    validate_uses(uses)?;
-    let want = if restore {
-        CACHE_RESTORE_NAME
-    } else {
-        CACHE_SAVE_NAME
-    };
-    if !uses.starts_with(&format!("{want}@")) {
-        return Err(RenderError::BadActionRef(format!("bad_cache_uses:{uses}")));
-    }
-    if !matches!(layer, "sources" | "task" | "tools" | "tofu-providers" | "mbx") {
-        return Err(RenderError::BadCommand("mbx_needs_objects_mode".to_owned()));
-    }
-    if !cache_key_shape_ok(key) || key.contains('\n') || key.contains('\r') {
-        return Err(RenderError::BadCommand("bad_cache_key".to_owned()));
-    }
-    crate::expressions::check_with_value("key", key)?;
-    for restore_key in restore_keys {
-        if !cache_key_shape_ok(restore_key)
-            || restore_key.contains('\n')
-            || restore_key.contains('\r')
-        {
-            return Err(RenderError::BadCommand("bad_cache_restore_key".to_owned()));
-        }
-        crate::expressions::check_with_value("restore-keys", restore_key)?;
-    }
-    if paths.is_empty() {
-        return Err(RenderError::BadCommand("empty_cache_paths".to_owned()));
-    }
-    for path in paths {
-        validate_cache_path(layer, path)?;
-    }
-    let mut with = BTreeMap::from([
-        ("key".to_owned(), key.to_owned()),
-        ("path".to_owned(), paths.join("\n")),
-    ]);
-    if restore {
-        with.insert("restore-keys".to_owned(), restore_keys.join("\n"));
-    }
-    let name = if restore {
-        "Restore cache"
-    } else {
-        "Save cache"
-    };
-    action_step(name, uses, with)
-}
-
-fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
-    if layer == "sources" && sources_subset_ok(path)
-        || layer == "task" && path == TASK_ARTIFACTS_DIR
-        || layer == "tools" && tools::tools_cache_path_ok(path)
-        || layer == "tofu-providers" && crate::tofu_cache::tofu_providers_path_ok(path)
-        || layer == "mbx" && path == crate::stock_mbx_bundle::MBX_BUNDLE_CACHE_PATH
-    {
-        Ok(())
-    } else {
-        Err(RenderError::BadCommand(format!("bad_cache_path:{path}")))
-    }
-}
-
-fn cache_key_shape_ok(value: &str) -> bool {
-    if value.is_empty() {
-        return false;
-    }
-    let mut rest = value;
-    while let Some(start) = rest.find("${{") {
-        if !rest[..start].bytes().all(is_cache_key_literal_byte) {
-            return false;
-        }
-        let Some(end) = rest[start + 3..].find("}}") else {
-            return false;
-        };
-        rest = &rest[start + 3 + end + 2..];
-    }
-    rest.bytes().all(is_cache_key_literal_byte)
-}
-
-fn is_cache_key_literal_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')
-}
-
-/// P08 sources subset under the owned Cargo home expression.
-fn sources_subset_ok(path: &str) -> bool {
-    const HOME: &str = "${{ runner.temp }}/velnor/cargo";
-    if path.contains("..") || is_never_archive_path(path) {
-        return false;
-    }
-    let Some(suffix) = path.strip_prefix(&format!("{HOME}/")) else {
-        return false;
-    };
-    if suffix.starts_with("registry/src") {
-        return false;
-    }
-    matches!(suffix, "registry/index" | "registry/cache" | "git/db")
-        || suffix.starts_with("registry/index/")
-        || suffix.starts_with("registry/cache/")
-        || suffix.starts_with("git/db/")
-}
-
-/// Check restore-before/save-after ordering over cache action steps.
-///
-/// Every cache download and MBX objects restore must precede every save.
-/// A lookup-only restore is an exact-key existence check; it may follow a
-/// save because it does not download or mutate the archived path.
-/// # Errors
-pub fn check_cache_step_order(steps: &[Step]) -> Result<(), RenderError> {
-    let mut last_restore: Option<usize> = None;
-    let mut first_save: Option<usize> = None;
-    for (index, step) in steps.iter().enumerate() {
-        let StepKind::Action { uses, with, .. } = &step.kind else {
-            continue;
-        };
-        if uses == TOOLS_RESTORE_USES
-            || uses.starts_with("actions/cache/restore@")
-            || uses.starts_with(&format!("{MBX_ACTION_NAME}@"))
-        {
-            last_restore = Some(index);
-        } else if uses.starts_with("actions/cache/save@") {
-            first_save.get_or_insert(index);
-        }
-    }
-    if let (Some(restore), Some(save)) = (last_restore, first_save)
-        && restore > save
-    {
-        return Err(RenderError::InvalidWorkflow(
-            "cache_save_before_restore".to_owned(),
-        ));
-    }
-    Ok(())
-}
+include!("cache_steps.part2.rs");

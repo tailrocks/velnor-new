@@ -4,7 +4,6 @@
 //! sources remain an independent cache layer; MBX owns compiler objects.
 
 use velnor_actions_contract::{Job, Step, StepKind};
-use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use crate::{MiseSetup, RenderError, setup};
 
@@ -21,10 +20,11 @@ mod save_policy;
 mod setup_pipeline;
 
 pub use crate::cache_elect::elect_cache_writers;
-
 pub use crate::cache_elect::elect_mise_cache_writers;
 
-pub use crate::cache_elect::elect_mise_cache_writers;
+/// Prefix of a qualified Mise tools-cache key.
+pub const MISE_KEY_PREFIX: &str = "mise-v1";
+
 
 /// Display name of the shared sources restore step.
 pub const RESTORE_SOURCES_NAME: &str = "Restore Cargo sources";
@@ -147,6 +147,42 @@ pub(crate) fn tools_digest(specs: &[String]) -> String {
     digest.get(3..19).unwrap_or("0000000000000000").to_owned()
 }
 
+/// Tools-cache key derived from the complete pinned job payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MiseToolsCacheKey(String);
+
+impl MiseToolsCacheKey {
+    pub(crate) fn derive(
+        target: &str,
+        mise_version: &str,
+        specs: &[String],
+    ) -> Result<Self, RenderError> {
+        if !velnor_actions_contract::is_supported_target(target) {
+            return Err(RenderError::BadCommand(format!("bad_cache_target:{target}")));
+        }
+        if !is_catalog_version(mise_version) {
+            return Err(RenderError::BadCommand(format!("bad_mise_version:{mise_version}")));
+        }
+        if specs.is_empty() {
+            return Err(RenderError::BadCommand("empty_tool_specs".to_owned()));
+        }
+        for spec in specs {
+            if !is_tool_spec(spec) {
+                return Err(RenderError::BadCommand(format!("bad_tool_spec:{spec}")));
+            }
+        }
+        Ok(Self(format!(
+            "{MISE_KEY_PREFIX}-{target}-{mise_version}-{}",
+            tools_digest(specs)
+        )))
+    }
+
+    #[must_use]
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Qualified host seed key for the exact target, Mise pin, and tools.
 /// # Errors
 pub fn mise_cache_key_for_tools(
@@ -197,13 +233,6 @@ pub(crate) fn setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     setup::mise_setup_step(setup)
 }
 
-/// Compare semantic step fields while leaving the display-only name mutable.
-pub(crate) fn same_step_semantics(left: &Step, right: &Step) -> bool {
-    left.id == right.id
-        && left.role == right.role
-        && left.condition == right.condition
-        && left.kind == right.kind
-}
 
 /// True only for the canonical typed V2 cache-key expression.
 pub(crate) fn is_v2_cache_key_expression(value: &str) -> bool {

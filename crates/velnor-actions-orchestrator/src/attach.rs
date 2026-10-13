@@ -7,19 +7,15 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_actionlint::PinnedActionRef;
-use velnor_actions_actionlint::actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION};
 use velnor_actions_contract::{
     GeneratorLock, ReleaseTarget, Step, StepRole, WorkflowIr, is_crate_job_id,
 };
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
-use velnor_actions_workflow_renderer::steps::{
-    CompileDriver, STAGED_BINARY_PREFIX, mbx_steps_for_driver,
-};
+use velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX;
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
-    preseed_stage_step, preseed_upload_step, preseed_verify_step,
+    preseed_manifest_verify_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
 };
 
 use crate::OrchestratorError;
@@ -137,7 +133,7 @@ pub(crate) fn attach_preseed(
             problem: "plan_job_missing".to_owned(),
         });
     };
-    insert_plan_mbx_setup(&catalog, &mut plan.steps)?;
+    insert_plan_mbx_restore(&catalog, &mut plan.steps)?;
     let at = preseed_anchor(&plan.steps);
     plan.steps.splice(at..at, plan_steps);
     let Some(final_gate) = workflow.ir.jobs.get_mut(FINAL_JOB_ID) else {
@@ -201,7 +197,7 @@ fn insert_plan_mbx_restore(
         .iter()
         .position(|step| step.role == Some(StepRole::CargoSourcesRestore))
         .map_or_else(|| after_rust_setup(steps), |index| index + 1);
-    for (offset, step) in plan_mbx_steps(catalog)?
+    for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog)?
         .into_iter()
         .enumerate()
     {

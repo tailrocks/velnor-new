@@ -32,8 +32,9 @@ pub(super) fn exclude_inherited(
 
 #[cfg(test)]
 mod tests {
-    use super::{exclude_inherited, workflow_env};
     use std::collections::BTreeMap;
+
+    use super::{exclude_inherited, workflow_env};
 
     #[test]
     fn workflow_policy_keeps_verification_mise_config_available() {

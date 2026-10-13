@@ -1,4 +1,6 @@
 //! F2 closure: candidate artifacts, verify-before-run, release.
+use std::process::Command;
+
 use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
     candidate_attestation_script, download_artifact_step, matrix_report_upload_step,
@@ -124,7 +126,6 @@ fn candidate_verify_script_checks_live_manifest() -> Result<(), RenderError> {
 #[test]
 #[cfg(unix)]
 fn candidate_attestation_script_attests_live_plan() -> Result<(), RenderError> {
-    use std::process::Command;
     let script = candidate_attestation_script();
     for banned in ["$(", "`", "\n"] {
         assert!(!script.contains(banned), "banned {banned:?}:\n{script}");

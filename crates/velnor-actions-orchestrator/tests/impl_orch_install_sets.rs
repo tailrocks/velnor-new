@@ -155,6 +155,7 @@ fn assert_cold_install_order(section: &str, command: &str) -> Result<(), String>
     if !(restore < setup && setup < install && install < run) {
         return Err(format!("cold install order is wrong: {section}"));
     }
+    Ok(())
 }
 
 #[test]

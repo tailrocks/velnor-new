@@ -348,12 +348,26 @@ fn with_rustup_process_homes(
     Ok(env)
 }
 
-fn is_exact_mbx_version(version: &str) -> bool {
-    let parts: Vec<&str> = version.split('.').collect();
-    parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+/// The preflight immediately before an MBX action must be the canonical pair.
+pub(super) fn matches_mbx_steps(
+    preflight: &Step,
+    action: &Step,
+    mbx_version: &str,
+    rust_toolchain: &str,
+) -> bool {
+    let StepKind::Action { uses, with, env } = &action.kind else {
+        return false;
+    };
+    let generation = mbx_cache_generation(mbx_version);
+    if !uses.starts_with(&format!("{MBX_ACTION_NAME}@"))
+        || with.get("github-cache-mode").map(String::as_str) != Some("objects")
+        || with.get("toolchain").map(String::as_str) != Some(rust_toolchain)
+        || with.get("cache-generation").map(String::as_str) != Some(generation.as_str())
+    {
+        return false;
+    }
+    canonical_mbx_preflight_step(mbx_version, rust_toolchain, env)
+        .is_ok_and(|expected| expected == *preflight)
 }
 
 fn validate_rust_toolchain(toolchain: &str) -> Result<(), RenderError> {

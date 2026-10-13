@@ -59,6 +59,8 @@ pub fn setup_rust_steps(
     }
     let action = Step {
         name: SETUP_MISE_STEP.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Action {
             uses: mise_action_uses.to_owned(),
@@ -144,6 +146,8 @@ fn shell_step(
     }
     Ok(Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell { run, env: env_map },
     })

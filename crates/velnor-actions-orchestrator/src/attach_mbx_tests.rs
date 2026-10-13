@@ -1,4 +1,5 @@
 use super::*;
+use velnor_actions_workflow_renderer::steps::MBX_RESTORE_NAME;
 
 #[test]
 fn preseed_restores_mbx_builds_after_sources_with_homes() {
@@ -9,24 +10,24 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
     attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
     let steps = &plan.ir.jobs["plan"].steps;
     let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
-    let at = |name: &str| {
-        names
+    let at_role = |role: StepRole| {
+        steps
             .iter()
-            .position(|step| *step == name)
-            .unwrap_or_else(|| panic!("missing {name}: {names:?}"))
+            .position(|step| step.role == Some(role))
+            .unwrap_or_else(|| panic!("missing {role:?}: {names:?}"))
     };
     let (restore, preflight, mbx, version_check, probe, build, verify, save) = (
-        at(StepRole::CargoSourcesRestore),
-        at(StepRole::MbxPreflight),
-        at(StepRole::MbxCache),
-        at(StepRole::MbxVersionCheck),
-        at(StepRole::CargoSourcesFetch),
-        at(StepRole::PreseedBuild),
-        at(StepRole::PreseedVerifyBuild),
-        at(StepRole::CargoSourcesSave),
+        at_role(StepRole::CargoSourcesRestore),
+        at_role(StepRole::MbxPreflight),
+        at_role(StepRole::MbxCache),
+        at_role(StepRole::MbxVersionCheck),
+        at_role(StepRole::CargoSourcesFetch),
+        at_role(StepRole::PreseedBuild),
+        at_role(StepRole::PreseedVerifyBuild),
+        at_role(StepRole::CargoSourcesSave),
     );
     assert!(
-        at(StepRole::PreparePinnedTools) < restore
+        at_role(StepRole::PreparePinnedTools) < restore
             && restore < preflight
             && preflight < mbx
             && mbx < version_check
@@ -156,6 +157,8 @@ fn preseed_attach_builds_once_and_sets_mode() {
         support: None,
         context: RenderContext {
             generator_version: "0.1.0".to_owned(),
+            report_helper_version: "0.1.0".to_owned(),
+            scale_set_selector: None,
             runs_on: "ubuntu-26.04".to_owned(),
             staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),
             request_dir: REQUEST_DIR.to_owned(),
@@ -163,7 +166,8 @@ fn preseed_attach_builds_once_and_sets_mode() {
             validator_commands: Vec::new(),
             candidate: None,
             preseed: false,
-            verification_tasks: Vec::new(),
+            workflow_tasks: Vec::new(),
+            pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
             plan_consumer_env: std::collections::BTreeMap::new(),
         },
         actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
@@ -198,7 +202,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
 }
 
 #[test]
-fn lockless_preseed_installs_mbx_before_the_build_without_a_restore() {
+fn lockless_preseed_installs_mbx_before_the_build_without_a_restore_merged() {
     use velnor_actions_contract::StepRole;
     use velnor_actions_workflow_renderer::PRESEED_BUILD_NAME;
     let mut plan = preseed_fixture(&[]);

@@ -4,7 +4,7 @@ use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::toolfiles::lockfile::{InstallSubject, subject_for_install_spec};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
-use crate::vectors::validator_install_pin;
+use crate::verify::validator_install_pin;
 
 use super::bare_install;
 
@@ -76,8 +76,8 @@ pub(super) fn validator_command_specs(command: &ValidatorCommand) -> CommandInst
         (MiseVectors::Unclassifiable(detail), _) | (_, MiseVectors::Unclassifiable(detail)) => {
             CommandInstalls::Unclassifiable(detail)
         }
-        (MiseVectors::Install(specs), MiseVectors::NotInstall) => CommandInstalls::Specs(specs),
-        (MiseVectors::NotInstall, MiseVectors::Install(specs)) => CommandInstalls::Specs(specs),
+        (MiseVectors::Install(specs), MiseVectors::NotInstall)
+        | (MiseVectors::NotInstall, MiseVectors::Install(specs)) => CommandInstalls::Specs(specs),
         (MiseVectors::Install(_), MiseVectors::Install(_)) => {
             CommandInstalls::Unclassifiable("multiple_install_argv".to_owned())
         }
@@ -149,11 +149,11 @@ fn specs_until_metachar(tail: &[&str]) -> Vec<String> {
 /// Resolve one emitted spec through the catalog or validator-specific pin.
 pub(super) fn validator_subject(spec: &str, catalog: &ToolCatalog) -> Option<InstallSubject> {
     subject_for_install_spec(spec, catalog).or_else(|| {
-        let (name, version) = validator_install_pin(spec)?;
+        let (name, version, lock_key) = validator_install_pin(spec)?;
         Some(InstallSubject {
             display: format!("{name}@{version}"),
             expected_version: version.to_owned(),
-            lock_key: name.to_owned(),
+            lock_key: lock_key.to_owned(),
         })
     })
 }

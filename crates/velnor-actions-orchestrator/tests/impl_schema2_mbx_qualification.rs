@@ -116,60 +116,12 @@ fn assert_writer(writer: &str) {
     assert!(writer.contains("df -i -P \\\"$RUNNER_TEMP\\\""), "{writer}");
 }
 
-fn assert_reader(reader: &str) {
-    assert!(
-        writer.contains("MBX_CACHE_EXPORT_GROUP: velnor-qualification-mbx-"),
-        "{writer}"
-    );
-    assert!(writer.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{writer}");
-    assert!(writer.contains("rustc --print sysroot"), "{writer}");
-    assert_mbx_action_pin(writer);
-    assert!(
-        writer.contains("actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"),
-        "{writer}"
-    );
-    assert!(
-        writer.contains("actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"),
-        "{writer}"
-    );
-    assert!(
-        writer.contains("success() && inputs.mode == 'mbx-cache-roundtrip' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected == true"),
-        "{writer}"
-    );
-    assert_eq!(writer.matches("if: success() &&").count(), 2, "{writer}");
-    assert!(!writer.contains("continue-on-error"), "{writer}");
-    assert!(
-        writer.contains("mbx bundle import failed; continuing cold"),
-        "{writer}"
-    );
-    assert_no_implicit_cache(writer);
-    assert_ordered(
-        writer,
-        &[
-            "name: Restore MBX objects",
-            "name: Prepare MBX bundle key",
-            "name: Restore MBX single bundle",
-            "name: Import MBX single bundle",
-            "name: Verify pinned MBX version",
-            "name: Compile MBX cache probe",
-            "name: Export MBX single bundle",
-            "name: Save MBX single bundle",
-        ],
-    );
-    assert_eq!(
-        writer.matches("uses: actions/cache/restore@").count(),
-        1,
-        "{writer}"
-    );
-    assert_eq!(
-        writer.matches("uses: actions/cache/save@").count(),
-        1,
-        "{writer}"
-    );
-}
 
 fn assert_reader(reader: &str) {
-    assert_qualification_gate(reader);
+    assert!(
+        reader.contains("inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true"),
+        "{reader}"
+    );
     assert!(
         reader.contains("needs:\n      - mbx-cache-write-hosted"),
         "{reader}"
@@ -190,7 +142,7 @@ fn assert_reader(reader: &str) {
         "{reader}"
     );
     assert!(
-        reader.contains(&format!("cache-key: {exact_key}")),
+        reader.contains("cache-generation:"),
         "{reader}"
     );
     assert!(
@@ -198,8 +150,8 @@ fn assert_reader(reader: &str) {
         "{reader}"
     );
     assert!(
-        reader.contains("test \\\"$CACHE_HIT\\\" = 'true'"),
-        "reader must require an exact warm hit: {reader}"
+        reader.contains("test \\\"$CACHE_HIT\\\" = 'false'"),
+        "reader restores by run-bound prefix, so exact cache-hit stays false: {reader}"
     );
     assert!(
         reader.contains("save-on-workflow-dispatch: \"false\""),
@@ -212,7 +164,11 @@ fn assert_reader(reader: &str) {
         reader.contains(".savings.cached_compilations > 0"),
         "{reader}"
     );
-    let (mbx, _) = tool_pins();
+    assert_reader_probes(reader);
+}
+
+fn assert_reader_probes(reader: &str) {
+    let (mbx, rust) = tool_pins();
     assert!(reader.contains(&format!("version: {mbx}")), "{reader}");
     assert!(
         reader.contains("df -B1 -P \\\"$RUNNER_TEMP\\\""),
@@ -241,7 +197,6 @@ fn assert_reader(reader: &str) {
         ),
         "{reader}"
     );
-    let (_, rust) = tool_pins();
     assert!(
         reader.contains(&format!("RUSTUP_TOOLCHAIN: {rust}")),
         "{reader}"

@@ -65,6 +65,16 @@ fn is_ambient_auth_role(role: Option<StepRole>) -> bool {
 ///
 /// Exact match, except genuine generator nested-fetch names, which
 /// share the root fetch purpose.
+const AMBIENT_AUTH_STEPS: [&str; 7] = [
+    "Prepare pinned tools",
+    "Prepare Rust components",
+    "Fetch Cargo sources",
+    crate::steps::DENY_STEP_NAME,
+    crate::steps::MACHETE_STEP_NAME,
+    "Run zizmor",
+    "Run actionlint",
+];
+
 fn is_ambient_auth_step(name: &str) -> bool {
     AMBIENT_AUTH_STEPS.contains(&name) || is_generator_nested_fetch(name)
 }

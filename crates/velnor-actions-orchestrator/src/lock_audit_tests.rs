@@ -10,7 +10,11 @@ use velnor_actions_workflow_renderer::render::ValidatorCommand;
 use velnor_actions_workflow_renderer::steps::DENY_STEP_NAME;
 
 use super::audit_prepare_installs;
+use super::validator::{
+    CommandInstalls, audit_validator_command, validator_command_specs, validator_subject,
+};
 use crate::vectors::{CARGO_DENY_VERSION, LYCHEE_TOOL_SPEC, LYCHEE_VERSION};
+use velnor_actions_workflow_renderer::steps::MACHETE_STEP_NAME;
 
 fn shell_job(run: Vec<String>) -> Job {
     Job {
@@ -173,7 +177,8 @@ fn machete_cold_install_is_audited_by_exact_backend_key() {
             "cargo".to_owned(),
             "machete".to_owned(),
         ],
-    };
+                source_units: Vec::new(),
+                tool_inputs: Vec::new(),};
     let mut ir = ir_for(shell_job(vec!["true".to_owned()]));
     if let Some(plan) = ir.jobs.get_mut("plan") {
         plan.steps.clear();
@@ -182,7 +187,10 @@ fn machete_cold_install_is_audited_by_exact_backend_key() {
     assert!(outcome.blocking.is_empty(), "{:?}", outcome.blocking);
     let summary = outcome.recommendation.expect("machete advisory");
     assert!(summary.contains("cargo-machete@0.9.2"), "{summary}");
-    let subject = super::validator_subject("http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2")
+    let subject = validator_subject(
+        "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2",
+        &ToolCatalog::pinned(),
+    )
         .expect("qualified machete subject");
     assert_eq!(
         subject.lock_key,
@@ -213,7 +221,10 @@ fn lychee_cold_install_is_audited_by_exact_backend_key() {
             .expect("unlocked tool advisory")
             .contains(&format!("lychee@{LYCHEE_VERSION}"))
     );
-    let subject = super::validator_subject(&format!("{LYCHEE_TOOL_SPEC}@{LYCHEE_VERSION}"))
+    let subject = validator_subject(
+        &format!("{LYCHEE_TOOL_SPEC}@{LYCHEE_VERSION}"),
+        &ToolCatalog::pinned(),
+    )
         .expect("qualified Lychee subject");
     assert_eq!(subject.lock_key, LYCHEE_TOOL_SPEC);
 }
@@ -371,65 +382,4 @@ fn oversized_tool_file_blocks() {
     );
 }
 
-#[test]
-fn python_source_install_resolves_through_the_catalog_pin() {
-    let catalog = ToolCatalog::pinned();
-    let command = crate::python_source_units::validator_command(&catalog)
-        .expect("pinned source-suite command");
-    let python = catalog.tool_spec(PinnedTool::Python);
-    assert!(matches!(
-        validator_command_specs(&command),
-        CommandInstalls::Specs(specs) if specs == vec![python.clone()]
-    ));
-    assert_eq!(
-        command.argv[2]
-            .matches("mise --no-config --no-env --no-hooks exec")
-            .count(),
-        1,
-        "all Python suites share one verified Mise execution environment"
-    );
-    let mut subjects = Vec::new();
-    let mut blocking = Vec::new();
-    audit_validator_command(&command, &catalog, &mut subjects, &mut blocking);
-    assert_eq!(blocking, Vec::<String>::new());
-    assert_eq!(subjects.len(), 1, "only Python install is lock-audited");
-    assert_eq!(
-        validator_subject(&python, &catalog).map(|subject| subject.display),
-        Some("python@3.14.8".to_owned())
-    );
-    assert!(
-        validator_subject("python@3.14.8", &catalog).is_none(),
-        "bare registry shorthand must not bypass the pinned PBS artifact"
-    );
-}
-
-#[test]
-fn python_source_audit_rejects_unclassifiable_exec_after_install() {
-    let catalog = ToolCatalog::pinned();
-    let mut command = crate::python_source_units::validator_command(&catalog)
-        .expect("pinned source-suite command");
-    let python = catalog.tool_spec(PinnedTool::Python);
-    command.argv[2] =
-        format!("mise --no-config --no-env --no-hooks exec '{python}' -- true && mise unknown");
-    assert!(matches!(
-        validator_command_specs(&command),
-        CommandInstalls::Unclassifiable(detail) if detail == "unexpected_subcommand:unknown"
-    ));
-}
-
-#[test]
-fn validator_prepare_must_be_install_even_when_run_contains_install() {
-    let mut command = deny_command("mise --no-config install cargo-deny@0.20.2");
-    command.prepare_argv = vec![
-        "mise".to_owned(),
-        "--no-config".to_owned(),
-        "exec".to_owned(),
-        "python@3.14.8".to_owned(),
-        "--".to_owned(),
-        "true".to_owned(),
-    ];
-    assert!(matches!(
-        validator_command_specs(&command),
-        CommandInstalls::Unclassifiable(detail) if detail == "prepare_without_install"
-    ));
-}
+include!("lock_audit_tests.part2.rs");

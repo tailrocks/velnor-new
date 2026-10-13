@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::render::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, PLAN_JOB_ID, RenderContext};
-use crate::setup::MiseSetup;
+use crate::setup::{MiseSetup, MiseSetupSet};
 use crate::steps::{RELEASE_COMMIT_ENV, STAGED_BINARY_PREFIX};
 use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, StepKind, Trigger, WorkflowIr, WorkflowPolicy,
@@ -206,6 +206,14 @@ fn dispatch_render_context(staged: String) -> RenderContext {
     }
 }
 
+fn dispatch_mise_set() -> MiseSetupSet {
+    MiseSetupSet::new([(
+        "x86_64-unknown-linux-gnu".to_owned(),
+        dispatch_mise(),
+    )])
+    .expect("dispatch mise set")
+}
+
 fn dispatch_mise() -> MiseSetup {
     MiseSetup {
         uses: format!("jdx/mise-action@{}", "d".repeat(40)),
@@ -225,7 +233,7 @@ fn generated_dispatch_plan_gates_native_mbx_and_tools_cache_steps() -> Result<()
         WorkflowPolicy::ConsumerV1,
         None,
         &context,
-        &dispatch_mise(),
+        &dispatch_mise_set(),
     )?;
     let plan = jobs.get(PLAN_JOB_ID).expect("finalized plan job");
     assert_native_mbx_step(plan);
@@ -311,7 +319,7 @@ fn assert_rendered_dispatch_guard(
         WorkflowPolicy::ConsumerV1,
         None,
         context,
-        &dispatch_mise(),
+        &dispatch_mise_set(),
     )?;
     assert!(
         rendered

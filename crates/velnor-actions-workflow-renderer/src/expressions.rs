@@ -74,7 +74,7 @@ const ENV_EXPRESSIONS: [&str; 11] = [
 /// push-gated cache-save flag, and the publish step's derived
 /// artifact name. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 11] = [
+const WITH_EXPRESSIONS: [&str; 21] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
