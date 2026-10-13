@@ -197,9 +197,9 @@ fn action_mbx_reconcile_matches_pin_only() {
     let catalog = ToolCatalog::pinned();
     assert!(catalog.reconcile_action_mbx(MR_BOXINGTON_VERSION).is_ok());
     assert!(matches!(
-        catalog.reconcile_action_mbx("1.21.1"),
+        catalog.reconcile_action_mbx("1.22.0"),
         Err(MiseError::InvalidToolVersion { tool, version })
-            if tool == "mr-boxington" && version == "1.21.1"
+            if tool == "mr-boxington" && version == "1.22.0"
     ));
     for loose in ["latest", "v1.24.0", "1.19", ""] {
         assert!(
@@ -214,7 +214,7 @@ fn action_mbx_reconcile_matches_pin_only() {
         "1.99.0", "1.22.0", "2.102.0", "1.7.12", "0.11.0", "1.30.1", "0.9.148", "1.13.1",
     )
     .expect("exact catalog");
-    assert!(moved.reconcile_action_mbx("1.22.0").is_ok());
+    assert!(moved.reconcile_action_mbx("1.20.0").is_ok());
     assert!(moved.reconcile_action_mbx("1.21.1").is_err());
 }
 

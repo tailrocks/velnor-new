@@ -321,7 +321,8 @@ fn is_checkout_step(step: &Step) -> bool {
     step.role == Some(StepRole::Checkout)
         || matches!(
             &step.kind,
-            StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@")
+            StepKind::Action { uses, .. }
+                if uses.starts_with("actions/checkout@")
         )
 }
 

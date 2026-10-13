@@ -170,11 +170,10 @@ pushes use `read-write`; release jobs use `off`. The exact task TOML cache field
 be enabled only with Gate 6 qualification fixtures; no task-cache behavior is implied before that gate.
 
 Pull requests and merge groups MAY restore trusted default-branch archives but MUST NOT write trusted or
-release archives or promote PR-produced executable contents. A same-repository PR MAY write only when the
-`SameRepositoryScoped` policy is enabled, under a separate key namespace bound to its PR number and head SHA;
-forks remain read-only. Protected default-branch pushes MAY write trusted archives only after the task passes
-and its report is complete. Release jobs MUST reject PR archives and MUST NOT restore or save MBX or task-result
-archives; release outputs use a clean or trusted-source-only path.
+release archives. They MUST NOT promote PR-produced executable contents. Fork pull requests are read-only.
+Protected default-branch pushes MAY write trusted archives only after the task passes and its report is
+complete. Release jobs MUST reject PR archives and MUST NOT restore or save MBX or task-result archives;
+release outputs use a clean or trusted-source-only path.
 
 Cache restore MUST verify compatibility and ownership before use. A missing archive is `no_entry`; a GitHub
 restore/save failure is `cache_unavailable`; failed MBX import is `cache_corrupt`; a failed task-cache

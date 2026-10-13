@@ -353,7 +353,7 @@ fn is_exact_mbx_version(version: &str) -> bool {
     parts.len() == 3
         && parts
             .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
 }
 
 fn validate_rust_toolchain(toolchain: &str) -> Result<(), RenderError> {

@@ -138,12 +138,6 @@ pub(super) fn paired(steps: &[Step]) -> BTreeMap<String, Job> {
     jobs
 }
 
-fn positions(yaml: &str, needle: &str) -> Vec<usize> {
-    yaml.match_indices(needle)
-        .map(|(position, _)| position)
-        .collect()
-}
-
 #[test]
 fn differing_lane_bodies_fail_closed() {
     let step = echo_step(0, "one");
