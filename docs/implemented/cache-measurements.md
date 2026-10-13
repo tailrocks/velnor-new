@@ -296,6 +296,17 @@ prove all blocks completed or V2 `FinalizeCacheEntryUpload` succeeded.
 
 A fast small upload may produce only a final `Sent TOTAL of TOTAL` line. That
 does not qualify a cancellation probe: record `NOT_RUN`. Do not add archive
-padding or artificial delay to manufacture a partial sample. This section is
-source review only: no local upload/cancellation test is recorded, and hosted
-cache-save cancellation evidence remains `UNRUN`.
+padding or artificial delay to manufacture a partial sample. Controller
+`122c79a1` has source-only GO for enum validation and terminal output across
+18 mocked states. A successful live step-log `GET` (exact HTTP 200), positive
+timestamped progress fixtures, and registered integration execution remain
+pending. Once obtained, the timing claim is limited to a positive partial SDK
+progress row with a lower log ordinal than the runner cancellation error in
+`cancelledSave`; it does not show progress before POST or the initial cancel
+receipt, interrupted payload bytes, cache commit/rollback, or reservation
+cleanup. `MISS` records observed exact-key absence; reservation state remains
+`UNKNOWN`. Only enum mocks have local cancellation coverage; no service-backed
+upload/cancellation test has run. Local enum receipt
+`/private/tmp/velnor-v22-122c79-enum-receipt.json`
+has SHA-256 `717626ad7643e344e0fb67411c4671d19fc2399dd6f00f2a405986112bda961c`.
+This does not qualify hosted cancellation: status remains `UNRUN`.

@@ -94,7 +94,7 @@ mod tests {
     #[test]
     fn shared_calls_use_only_canonical_repository_local_actions() {
         let yaml = crate::yaml::render_yaml(
-            &shared_call("./.github/actions/rust-0").expect("canonical local action"),
+            &shared_call("./.github/actions/rust-0", None).expect("canonical local action"),
         );
         assert!(
             yaml.contains("uses: ./.github/actions/rust-0 # zizmor: ignore[self-repository]"),
@@ -108,7 +108,7 @@ mod tests {
             "./.github/actions/rust-0@deadbeef",
             "actions/checkout@0000000000000000000000000000000000000000",
         ] {
-            assert!(shared_call(uses).is_err(), "accepted {uses}");
+            assert!(shared_call(uses, None).is_err(), "accepted {uses}");
         }
     }
 }
