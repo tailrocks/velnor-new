@@ -1,0 +1,15 @@
+{
+  "group_id": "28e3e2e7aa1cbb7d9ebc39fd",
+  "schema": "github-repatriation.mapped-empty-directory-layout.v1",
+  "sources": [
+    {
+      "directories": [
+        {
+          "mode": 493,
+          "relative_path": "qualification/fixtures/submodule"
+        }
+      ],
+      "source_id": "5e0b4c976810b5372103d6ea"
+    }
+  ]
+}
