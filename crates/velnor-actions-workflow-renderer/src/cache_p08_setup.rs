@@ -171,9 +171,26 @@ fn step_uses_mise(step: &Step) -> bool {
     let StepKind::Shell { run, .. } = &step.kind else {
         return false;
     };
-    crate::cache_p08_detect::detector_words(run)
-        .iter()
-        .any(|word| word == "mise")
+    let words = crate::cache_p08_detect::detector_words(run);
+    words.iter().any(|word| word == "mise") || runs_mbx_support_script(&words)
+}
+
+fn runs_mbx_support_script(words: &[String]) -> bool {
+    let script_path = crate::render_cache_files::MBX_RUST_CHECKS_SCRIPT_PATH;
+    for (mode, suffix_len) in [("preflight", 4), ("verify", 5)] {
+        let Some(suffix) = words.get(words.len().saturating_sub(suffix_len)..) else {
+            continue;
+        };
+        if suffix.len() == suffix_len
+            && suffix[0] == "sh"
+            && suffix[1] == script_path
+            && suffix[2] == mode
+            && suffix[3..].iter().all(|argument| !argument.is_empty())
+        {
+            return true;
+        }
+    }
+    false
 }
 
 fn first_mise_index(job: &Job) -> Option<usize> {
@@ -246,7 +263,7 @@ pub(crate) fn rust_components(
 
 #[cfg(test)]
 mod tests {
-    use super::rust_components;
+    use super::{rust_components, step_uses_mise};
     use crate::steps::ambient_shell_step;
     use std::collections::BTreeMap;
 
@@ -274,5 +291,71 @@ mod tests {
             rust_components(&step, "1.98.1", "x86_64-unknown-linux-gnu").expect("components"),
             ["clippy", "rustfmt"]
         );
+    }
+
+    #[test]
+    fn detects_only_closed_mbx_support_script_invocations_as_mise_steps() {
+        let support_path = crate::render_cache_files::MBX_RUST_CHECKS_SCRIPT_PATH;
+        let preflight = crate::steps::shell_step(
+            "MBX preflight",
+            vec![
+                "sh".to_owned(),
+                support_path.to_owned(),
+                "preflight".to_owned(),
+                "1.98.1".to_owned(),
+            ],
+            BTreeMap::new(),
+        )
+        .expect("fixed preflight invocation");
+        let verify = crate::steps::shell_step(
+            "MBX version check",
+            vec![
+                "sh".to_owned(),
+                support_path.to_owned(),
+                "verify".to_owned(),
+                "1.21.1".to_owned(),
+                "1.98.1".to_owned(),
+            ],
+            BTreeMap::new(),
+        )
+        .expect("fixed verify invocation");
+        let unsupported_mode = crate::steps::shell_step(
+            "MBX unsupported mode",
+            vec![
+                "sh".to_owned(),
+                support_path.to_owned(),
+                "other".to_owned(),
+                "1.98.1".to_owned(),
+            ],
+            BTreeMap::new(),
+        )
+        .expect("unsupported mode invocation");
+        let unrelated_script = crate::steps::shell_step(
+            "Unrelated script",
+            vec![
+                "sh".to_owned(),
+                "scripts/other.sh".to_owned(),
+                "preflight".to_owned(),
+                "1.98.1".to_owned(),
+            ],
+            BTreeMap::new(),
+        )
+        .expect("unrelated invocation");
+        let direct_mise = ambient_shell_step(
+            "Mise install",
+            vec![
+                "mise".to_owned(),
+                "install".to_owned(),
+                "rust@1.98.1".to_owned(),
+            ],
+            BTreeMap::new(),
+        )
+        .expect("direct Mise invocation");
+
+        assert!(step_uses_mise(&preflight));
+        assert!(step_uses_mise(&verify));
+        assert!(step_uses_mise(&direct_mise));
+        assert!(!step_uses_mise(&unsupported_mode));
+        assert!(!step_uses_mise(&unrelated_script));
     }
 }

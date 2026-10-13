@@ -4,7 +4,7 @@ use std::fs;
 use std::os::unix::fs::symlink;
 use std::process::Command;
 
-use super::{TempRoot, preflight_script, write_tool};
+use super::{TempRoot, preflight_script, write_support_script, write_tool};
 
 #[test]
 fn preflight_rejects_store_and_ancestor_symlinks_without_touching_targets()
@@ -36,8 +36,11 @@ fn preflight_rejects_store_and_ancestor_symlinks_without_touching_targets()
         fs::write(&github_env, "")?;
         fs::write(&github_path, "")?;
         let script = preflight_script()?;
+        let script_path = write_support_script(&root.0, &script)?;
         let result = Command::new("sh")
-            .args(["-c", script.as_str()])
+            .arg(script_path)
+            .args(["preflight", "1.98.1"])
+            .current_dir(&root.0)
             .env_clear()
             .env("PATH", format!("{}:/usr/bin:/bin", fake_bin.display()))
             .env("RUNNER_TEMP", &runner_temp)

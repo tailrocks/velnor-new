@@ -7,9 +7,15 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract::{StepKind, WorkflowPolicy};
+use velnor_actions_workflow_renderer::{checkout_step, render::render_workflow_ir_strict_shared};
 
-use super::impl_renderer_fixtures::{TEST_MBX_VERSION, TEST_RUST_TOOLCHAIN, mbx_tool_steps};
+use super::impl_renderer_fixtures::{
+    TEST_MBX_VERSION, TEST_RUST_TOOLCHAIN, checkout_pin, fixture_ctx, fixture_ir, job,
+    mbx_tool_steps, mise,
+};
+
+const MBX_RUST_CHECKS_SCRIPT_PATH: &str = ".github/scripts/velnor-mbx-rust-checks.sh";
 
 #[path = "impl_renderer_mbx_preflight_store.rs"]
 mod store;
@@ -60,17 +66,40 @@ fn write_tool(path: &Path, script: &str) -> std::io::Result<()> {
 }
 
 fn version_check_script() -> Result<String, Box<dyn std::error::Error>> {
-    let [_, _, check] = mbx_tool_steps(
+    emitted_mbx_support_script()
+}
+
+fn emitted_mbx_support_script() -> Result<String, Box<dyn std::error::Error>> {
+    let [preflight, action, version_check] = mbx_tool_steps(
         "jdx/mr-boxington-action@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         TEST_MBX_VERSION,
         TEST_RUST_TOOLCHAIN,
     )?;
-    let StepKind::Shell { run, .. } = check.kind else {
-        return Err("version guard is not a shell step".into());
-    };
-    run.get(2)
-        .cloned()
-        .ok_or_else(|| "version-check script missing".into())
+    let mut steps = vec![checkout_step(&checkout_pin())?];
+    steps.extend([preflight, action, version_check]);
+    let rendered = render_workflow_ir_strict_shared(
+        &fixture_ir(vec![job("mbx", "MBX", Vec::new(), steps)]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+        &mise(),
+    )?;
+    rendered
+        .shared
+        .into_iter()
+        .find(|file| file.path == MBX_RUST_CHECKS_SCRIPT_PATH)
+        .map(|file| file.bytes)
+        .ok_or_else(|| "rendered MBX support script missing".into())
+}
+
+fn write_support_script(root: &Path, script: &str) -> std::io::Result<PathBuf> {
+    let path = root.join(MBX_RUST_CHECKS_SCRIPT_PATH);
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("support script has no parent"))?;
+    fs::create_dir_all(parent)?;
+    fs::write(&path, script)?;
+    Ok(path)
 }
 
 fn run_version_check(root: &Path, script: &str) -> std::io::Result<std::process::Output> {
@@ -84,10 +113,13 @@ fn run_version_check_with_cache_dir_mode(
 ) -> std::io::Result<std::process::Output> {
     let mbx_cache_dir = root.join("velnor/mbx");
     fs::create_dir_all(mbx_cache_dir.join("actions"))?;
+    let script_path = write_support_script(root, script)?;
     let fake_bin = root.join("fake-bin");
     let path = format!("{}:/usr/bin:/bin", fake_bin.display());
     Command::new("sh")
-        .args(["-c", script])
+        .arg(script_path)
+        .args(["verify", TEST_MBX_VERSION, TEST_RUST_TOOLCHAIN])
+        .current_dir(root)
         .env_clear()
         .env("PATH", path)
         .env("RUNNER_TEMP", root)
@@ -118,11 +150,20 @@ fn assert_preflight_step_shapes(
     preflight: &velnor_actions_contract::Step,
     action: &velnor_actions_contract::Step,
     version_check: &velnor_actions_contract::Step,
+    script: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let StepKind::Shell { run, .. } = &preflight.kind else {
         return Err("preflight is not shell".into());
     };
-    let script = run.get(2).ok_or("preflight script missing")?;
+    assert!(
+        run.ends_with(&[
+            "sh".to_owned(),
+            MBX_RUST_CHECKS_SCRIPT_PATH.to_owned(),
+            "preflight".to_owned(),
+            TEST_RUST_TOOLCHAIN.to_owned(),
+        ]),
+        "preflight invokes the emitted script with the exact mode and pinned toolchain"
+    );
     assert!(!script.contains("mr-boxington@"));
     assert!(script.contains("umask 077"));
     assert!(script.contains("$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"));
@@ -140,9 +181,22 @@ fn assert_preflight_step_shapes(
     let StepKind::Shell { run, .. } = &version_check.kind else {
         return Err("native version check is not shell".into());
     };
-    let version_script = run.get(2).ok_or("version-check script missing")?;
-    assert!(version_script.contains("mbx --version"));
-    assert!(version_script.contains("mbx 1.21.1"));
+    assert!(
+        run.ends_with(&[
+            "sh".to_owned(),
+            MBX_RUST_CHECKS_SCRIPT_PATH.to_owned(),
+            "verify".to_owned(),
+            TEST_MBX_VERSION.to_owned(),
+            TEST_RUST_TOOLCHAIN.to_owned(),
+        ]),
+        "version check invokes the emitted script with the exact mode and pinned versions"
+    );
+    assert!(script.contains("mbx --version"));
+    assert!(script.contains("mbx $mbx_version"));
+    assert!(script.contains("MBX version output is empty or unterminated"));
+    assert!(script.contains(
+        "mise --no-config --no-env --no-hooks exec \"rust@$rust_toolchain\" -- mbx --version"
+    ));
     Ok(())
 }
 
@@ -179,14 +233,14 @@ fn rust_preflight_exports_only_the_owned_toolchain_and_uses_no_scratch_leaf()
         TEST_MBX_VERSION,
         TEST_RUST_TOOLCHAIN,
     )?;
-    let StepKind::Shell { run, .. } = &preflight.kind else {
-        return Err("preflight is not shell".into());
-    };
-    let script = run.get(2).ok_or("preflight script missing")?;
-    assert_preflight_step_shapes(&preflight, &action, &version_check)?;
+    let script = preflight_script()?;
+    assert_preflight_step_shapes(&preflight, &action, &version_check, &script)?;
+    let script_path = write_support_script(&root.0, &script)?;
 
     let result = Command::new("sh")
-        .args(["-c", script])
+        .arg(script_path)
+        .args(["preflight", TEST_RUST_TOOLCHAIN])
+        .current_dir(&root.0)
         .env_clear()
         .env("PATH", path)
         .env("RUST_ROOT", &rust_root)
@@ -247,15 +301,18 @@ fn preexisting_unique_scratch_symlink_fails_without_touching_its_target()
         TEST_MBX_VERSION,
         TEST_RUST_TOOLCHAIN,
     )?;
-    let StepKind::Shell { run, .. } = preflight.kind else {
+    let StepKind::Shell { .. } = preflight.kind else {
         return Err("preflight is not shell".into());
     };
-    let script = run.get(2).ok_or("preflight script missing")?;
+    let script = preflight_script()?;
+    let script_path = write_support_script(&root.0, &script)?;
     let path = format!("{}:/usr/bin:/bin", fake_bin.display());
     let github_env = root.0.join("github-env");
     fs::write(&github_env, "")?;
     let result = Command::new("sh")
-        .args(["-c", script])
+        .arg(script_path)
+        .args(["preflight", TEST_RUST_TOOLCHAIN])
+        .current_dir(&root.0)
         .env_clear()
         .env("PATH", path)
         .env("RUNNER_TEMP", &root.0)
@@ -325,8 +382,11 @@ fn rust_preflight_rejects_invalid_selected_install_facts() -> Result<(), Box<dyn
         let github_path = root.0.join("github-path");
         fs::write(&github_path, "")?;
         let script = preflight_script()?;
+        let script_path = write_support_script(&root.0, &script)?;
         let result = Command::new("sh")
-            .args(["-c", script.as_str()])
+            .arg(script_path)
+            .args(["preflight", TEST_RUST_TOOLCHAIN])
+            .current_dir(&root.0)
             .env_clear()
             .env("PATH", path)
             .env("RUST_ROOT", &rust_root)
@@ -379,13 +439,5 @@ fn native_action_version_guard_preserves_preexisting_scratch_symlink()
 }
 
 fn preflight_script() -> Result<String, Box<dyn std::error::Error>> {
-    let [preflight, _, _] = mbx_tool_steps(
-        "jdx/mr-boxington-action@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        TEST_MBX_VERSION,
-        TEST_RUST_TOOLCHAIN,
-    )?;
-    let StepKind::Shell { run, .. } = preflight.kind else {
-        return Err("preflight must be a shell step".into());
-    };
-    Ok(run.get(2).ok_or("preflight script missing")?.clone())
+    emitted_mbx_support_script()
 }
