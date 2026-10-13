@@ -252,6 +252,15 @@ impl StepRole {
     }
 }
 
+/// Require one of the checked-in lane-specific tools-identity actions.
+fn valid_tools_cache_identity(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Action { uses, with, env }
+        if matches!(uses.as_str(), "./.github/actions/u22" | "./.github/actions/u24" | "./.github/actions/u26")
+            && with.len() == 1
+            && with.get("d").is_some_and(|digest| !digest.is_empty())
+            && env.is_empty())
+}
+
 /// Check that a step is the configured checkout owner in this workflow scope.
 ///
 /// Checkout is a semantic role, not a display-name convention. The caller

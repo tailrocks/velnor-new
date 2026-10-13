@@ -7,7 +7,7 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
-use velnor_actions_workflow_renderer::steps::{DENY_STEP_NAME, MACHETE_STEP_NAME};
+use velnor_actions_workflow_renderer::steps::DENY_STEP_NAME;
 
 use super::audit_prepare_installs;
 use crate::vectors::{CARGO_DENY_VERSION, LYCHEE_TOOL_SPEC, LYCHEE_VERSION};
@@ -41,7 +41,6 @@ fn deny_command(script: &str) -> ValidatorCommand {
         validator: ValidatorKind::CargoDeny,
         name: DENY_STEP_NAME.to_owned(),
         argv: vec!["sh".to_owned(), "-c".to_owned(), script.to_owned()],
-        prepare_argv: Vec::new(),
     }
 }
 
@@ -266,7 +265,6 @@ fn deny_drift_blocks() {
             "-c".to_owned(),
             "cargo install foo && mise --no-env exec rust@1.99.0 -- cargo build".to_owned(),
         ],
-        prepare_argv: Vec::new(),
     }];
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &commands);
     assert_eq!(outcome.blocking, [] as [String; 0]);

@@ -18,6 +18,8 @@ pub(crate) use velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES;
 
 /// Display name of the copy step ahead of `Setup Mise`.
 pub(crate) const TOOL_SEED_NAME: &str = "Restore Velnor tool seed";
+/// Workflow `uses` of the one local tool-seed composite.
+pub(crate) const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
 /// Repository path of that composite.
 const TOOL_SEED_ACTION_PATH: &str = ".github/actions/velnor-tool-seed/action.yml";
 
@@ -50,8 +52,11 @@ fn validate_seed_action(step: &Step) -> Result<(), RenderError> {
         ));
     };
     let key = with.get("cache_key");
+    let key_ok = key.is_some_and(|value| is_guarded_seed_key(value));
+    let expected_key_ok = expected_key
+        .is_none_or(|expected| key.is_some_and(|value| value == &guarded_seed_key(expected)));
     if uses != TOOL_SEED_USES
-        || !is_tool_seed_step(step)
+        || step.role != Some(StepRole::ToolSeed)
         || step.condition.is_some()
         || !env.is_empty()
         || with.len() != 1
@@ -167,7 +172,7 @@ fn action_yaml(step_name: &str, env: &BTreeMap<String, String>, run: &str) -> Ya
                 Yaml::Map(vec![
                     (
                         "description".to_owned(),
-                        Yaml::str("Exact immutable host-seed key.".to_owned()),
+                        Yaml::str("Exact Mise cache key.".to_owned()),
                     ),
                     ("required".to_owned(), Yaml::Bool(true)),
                 ]),

@@ -177,6 +177,13 @@ fn rust_proposals_require_rust_without_inventory_records() {
     assert!(plan_uses_rust(&discovery));
 }
 
+fn needs(rust: PlanRustNeed) -> PlanJobToolNeeds {
+    PlanJobToolNeeds {
+        rust,
+        ..PlanJobToolNeeds::default()
+    }
+}
+
 /// Internal operation of one step, if any.
 fn operation_of(step: &Step) -> Option<&str> {
     match &step.kind {

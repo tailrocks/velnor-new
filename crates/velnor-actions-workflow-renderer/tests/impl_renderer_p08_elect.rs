@@ -18,7 +18,7 @@ use super::impl_renderer_fixtures::*;
 fn tools_saves(job: &Job) -> Vec<&Step> {
     job.steps
         .iter()
-        .filter(|step| step.role == Some(StepRole::ToolsCacheSave))
+        .filter(|step| step.name == TOOLS_SAVE_NAME)
         .collect()
 }
 

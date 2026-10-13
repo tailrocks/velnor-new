@@ -1,4 +1,5 @@
 use super::*;
+use velnor_actions_workflow_renderer::steps::MBX_RESTORE_NAME;
 
 #[test]
 fn cargo_only_preseed_uses_exact_sources_and_native_helper_owners() {
@@ -17,19 +18,34 @@ fn cargo_only_preseed_uses_exact_sources_and_native_helper_owners() {
         )),
         "retired action has no producer: {names:?}"
     );
-    let role_at = |role| {
-        steps
-            .iter()
-            .position(|step| step.role == Some(role))
-            .unwrap_or_else(|| panic!("missing {role:?}: {names:?}"))
-    };
-    let source_restore = role_at(StepRole::CargoSourcesRestore);
-    let probe = role_at(StepRole::CargoSourcesFetch);
-    let native_preflight = role_at(StepRole::MbxPreflight);
-    let native_owner = role_at(StepRole::MbxCache);
-    let version_check = role_at(StepRole::MbxVersionCheck);
-    let build = role_at(StepRole::PreseedBuild);
-    let source_save = role_at(StepRole::CargoSourcesSave);
+    let source_restore = names
+        .iter()
+        .position(|step| *step == RESTORE_SOURCES_NAME)
+        .expect("shared Cargo source restore");
+    let probe = names
+        .iter()
+        .position(|step| *step == crate::source_prep::FETCH_SOURCES_STEP)
+        .expect("sources step");
+    let native_preflight = names
+        .iter()
+        .position(|step| *step == MBX_PREFLIGHT_NAME)
+        .expect("native Rust preflight for the helper build");
+    let native_owner = names
+        .iter()
+        .position(|step| *step == MBX_RESTORE_NAME)
+        .expect("native MBX owner for the helper build");
+    let version_check = names
+        .iter()
+        .position(|step| *step == MBX_VERSION_CHECK_NAME)
+        .expect("native MBX version guard");
+    let build = names
+        .iter()
+        .position(|step| *step == PRESEED_BUILD_NAME)
+        .expect("build step");
+    let source_save = names
+        .iter()
+        .position(|step| *step == SAVE_SOURCES_NAME)
+        .expect("shared Cargo source save");
     assert!(
         source_restore < native_preflight
             && native_preflight < native_owner
@@ -40,9 +56,9 @@ fn cargo_only_preseed_uses_exact_sources_and_native_helper_owners() {
         "Cargo-only tasks keep the shared source owner and the helper has one native MBX owner: {names:?}"
     );
     assert_eq!(
-        steps
+        names
             .iter()
-            .filter(|step| step.role == Some(StepRole::MbxCache))
+            .filter(|step| **step == MBX_RESTORE_NAME)
             .count(),
         1,
         "the native action is the only MBX owner"
@@ -55,6 +71,14 @@ fn cargo_only_preseed_uses_exact_sources_and_native_helper_owners() {
         )),
         "the pre-seed lane must not install action-owned MBX through Mise"
     );
-    assert_owned_homes(steps, StepRole::PreseedBuild, PRESEED_BUILD_NAME);
-    assert_owned_homes(steps, StepRole::PreseedVerifyBuild, PRESEED_VERIFY_NAME);
+    assert_owned_homes(
+        steps,
+        velnor_actions_contract::StepRole::PreseedBuild,
+        PRESEED_BUILD_NAME,
+    );
+    assert_owned_homes(
+        steps,
+        velnor_actions_contract::StepRole::PreseedVerifyBuild,
+        PRESEED_VERIFY_NAME,
+    );
 }

@@ -144,17 +144,6 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
                 }
             }
         }
-        StepKind::Internal { operation }
-            if operation == crate::steps::RESOLVE_QUALIFICATION_OPERATION
-                && (id != PLAN_JOB_ID
-                    || step.condition.as_deref()
-                        != Some("github.event_name == 'workflow_dispatch'")) =>
-        {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "qualification_resolver_scope:{id}:{}",
-                step.name
-            )));
-        }
         StepKind::Internal { .. } => {}
     }
     if matches!(&step.kind, StepKind::Internal { operation, .. }

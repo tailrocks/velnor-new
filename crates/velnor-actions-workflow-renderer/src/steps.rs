@@ -8,6 +8,10 @@ use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, commands, marker};
 
+#[path = "steps_action.rs"]
+mod action;
+pub use action::{action_step, action_step_with_env};
+
 pub(crate) use crate::cache_steps::tools_cache_step;
 pub use crate::cache_steps::{
     CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, MBX_CACHE_MODE_ENV,

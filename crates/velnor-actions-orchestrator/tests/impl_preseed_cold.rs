@@ -145,7 +145,7 @@ esac
         )?)
     }
 
-    fn preflight_step(catalog: &ToolCatalog) -> Result<Step, Box<dyn std::error::Error>> {
+    fn mbx_steps(catalog: &ToolCatalog) -> Result<[Step; 3], Box<dyn std::error::Error>> {
         let uses = format!("jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}");
         let homes = ToolHomes::runner_temp();
         let env = strings_map(homes.env(catalog))?;
@@ -157,10 +157,7 @@ esac
             env,
         )?
         .ok_or_else(|| std::io::Error::other("MBX driver steps missing"))?;
-        steps
-            .into_iter()
-            .next()
-            .ok_or_else(|| std::io::Error::other("preflight step missing").into())
+        Ok(steps)
     }
 
     fn mbx_steps(catalog: &ToolCatalog) -> Result<[Step; 3], Box<dyn std::error::Error>> {

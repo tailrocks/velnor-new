@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{RunsOn, Step, StepKind};
+use velnor_actions_contract::{RunsOn, Step, StepId, StepKind, StepRole};
 
 use crate::{RenderError, cache_p08, commands, marker, steps, tree::RenderedFile, yaml::Yaml};
 
@@ -125,7 +125,12 @@ pub(super) fn action_file(runs_on: &str, version: &str) -> Result<RenderedFile, 
         RenderError::BadCommand("unsupported_tools_cache_identity_lane".to_owned())
     })?;
     let inner = inner_step(runs_on)?;
-    let StepKind::Shell { run, env } = inner.kind else {
+    let Step {
+        name,
+        kind: StepKind::Shell { run, env },
+        ..
+    } = inner
+    else {
         return Err(RenderError::InvalidWorkflow(
             "tools_cache_identity_inner_step_not_shell".to_owned(),
         ));

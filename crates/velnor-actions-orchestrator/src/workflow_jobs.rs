@@ -122,7 +122,7 @@ pub(crate) fn plan_job(
     })
 }
 
-/// Always-on lint job: checkout, pinned installation, then actionlint.
+/// Always-on lint job: checkout plus pinned actionlint over the tree.
 pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, OrchestratorError> {
     let program = OsString::from("actionlint");
     let exec = PinnedToolExec::new(

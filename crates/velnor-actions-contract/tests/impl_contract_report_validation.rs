@@ -119,6 +119,7 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
     let job = Job {
         display_name: "Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::PLAN,
         needs: vec![],
         condition: None,
@@ -126,6 +127,8 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
         environment: None,
         steps: vec![Step {
             name: "Checkout".to_owned(),
+            id: None,
+            role: None,
             condition: None,
             kind: StepKind::Shell {
                 run: vec!["mise".to_owned(), "install".to_owned()],

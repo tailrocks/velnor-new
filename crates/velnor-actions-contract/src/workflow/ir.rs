@@ -32,7 +32,7 @@ pub struct Trigger {
     pub push_branches: Vec<String>,
     /// Whether `merge_group` is enabled.
     pub merge_group: bool,
-    /// Optional typed `workflow_dispatch` inputs.
+    /// Optional `workflow_dispatch` inputs (exact-plan bootstrap dispatch).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workflow_dispatch: Option<WorkflowDispatch>,
     /// Optional cron schedule.

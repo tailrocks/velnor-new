@@ -3,7 +3,7 @@ name: Restore Velnor tool seed
 description: Copy a matching host tool seed into this job.
 inputs:
   cache_key:
-    description: Exact immutable host-seed key.
+    description: Exact Mise cache key.
     required: true
 outputs:
   seed_admitted:

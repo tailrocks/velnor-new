@@ -87,6 +87,14 @@ pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError
     Ok(())
 }
 
+/// Compare step authority and payload while leaving its display name mutable.
+pub(crate) fn same_step_semantics(left: &Step, right: &Step) -> bool {
+    left.id == right.id
+        && left.role == right.role
+        && left.condition == right.condition
+        && left.kind == right.kind
+}
+
 /// Union exact Mise selectors from each shell step's fixed argv.
 #[must_use]
 pub fn infer_job_tools(job: &Job) -> Vec<String> {
@@ -125,6 +133,26 @@ pub(crate) fn is_catalog_version(value: &str) -> bool {
         && !value.contains("${{")
 }
 
+/// Digest of sorted tool specs (16 hex chars, no `b3-` prefix).
+#[must_use]
+pub(crate) fn tools_digest(specs: &[String]) -> String {
+    let mut sorted = specs.to_vec();
+    sorted.sort();
+    sorted.dedup();
+    let digest = velnor_actions_contract::digest_b3(sorted.join(",").as_bytes());
+    digest.get(3..19).unwrap_or("0000000000000000").to_owned()
+}
+
+/// Qualified host seed key for the exact target, Mise pin, and tools.
+/// # Errors
+pub fn mise_cache_key_for_tools(
+    target: &str,
+    mise_version: &str,
+    specs: &[String],
+) -> Result<String, RenderError> {
+    MiseToolsCacheKey::derive(target, mise_version, specs).map(|key| key.as_str().to_owned())
+}
+
 /// True for `<tool>@<version>` selectors supported by the tool cache.
 pub(crate) fn is_tool_spec(value: &str) -> bool {
     let Some((tool, version)) = value.split_once('@') else {
@@ -144,6 +172,20 @@ pub(crate) fn is_tool_spec(value: &str) -> bool {
         && version
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_' | b'+'))
+}
+
+/// True for qualified `mise-v1-<target>-<mise>-<16hex>` keys.
+pub(crate) fn is_cache_key(value: &str) -> bool {
+    let parts: Vec<&str> = value.split('-').collect();
+    value.starts_with(&format!("{MISE_KEY_PREFIX}-"))
+        && !value.contains(' ')
+        && !value.contains('\n')
+        && !value.contains("${{")
+        && !value.contains("latest")
+        && parts.len() >= 4
+        && parts.last().is_some_and(|digest| {
+            digest.len() == 16 && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
 }
 
 /// Detect the current pinned Setup Mise shape, with cache delegated to V2.

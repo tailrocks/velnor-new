@@ -10,7 +10,7 @@ use velnor_actions_contract::{Job, StepKind};
 use velnor_actions_contract::{Step, StepRole};
 
 use crate::composite::composite_yaml;
-use crate::document_steps::step_to_yaml;
+use crate::document_steps::{StepRenderContext, step_to_yaml};
 use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, marker, steps, yaml::render_yaml};

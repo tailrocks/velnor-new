@@ -38,8 +38,6 @@ mod owned_publication;
 
 /// Environment variable selecting the private operation. Never printed.
 const OP_ENV: &str = "VELNOR_INTERNAL_OP";
-/// Environment variable carrying the `$GITHUB_OUTPUT` path. Never printed.
-const GITHUB_OUTPUT_ENV: &str = "GITHUB_OUTPUT";
 /// Environment variable carrying the runner temp dir. Never printed.
 const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 /// Environment variable carrying the triggering event name. Never printed.
@@ -191,8 +189,8 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
-        InternalOp::Plan => run_plan_internal(&request.path),
-        InternalOp::Merge => run_merge_internal(&request.path),
+        InternalOp::Plan => crate::dispatch_internal::run_plan(&request.path),
+        InternalOp::Merge => crate::dispatch_internal::run_merge(&request.path),
         InternalOp::Fetch => match retrieve_reports() {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),

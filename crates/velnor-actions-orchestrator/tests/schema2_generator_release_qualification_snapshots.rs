@@ -158,6 +158,13 @@ fn assert_release_fixture_generation_requirements() -> Result<(), Box<dyn std::e
     );
     assert_schema_only_consumer_manifest_input(fixture_check);
     assert!(
+        fixture_check.contains("write_fixture_consumer_manifest()")
+            && fixture_check
+                .contains(r#"cp "$ROOT/fixtures/consumer-release-manifest.json" "$manifest""#)
+            && fixture_check.contains("write_fixture_consumer_manifest \"$repo\""),
+        "positive fixtures install an explicit schema input only: {fixture_check}"
+    );
+    assert!(
         fixture_check.contains("capture_release_dogfood"),
         "{fixture_check}"
     );

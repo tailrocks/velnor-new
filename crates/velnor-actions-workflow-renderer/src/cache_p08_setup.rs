@@ -31,6 +31,7 @@ pub(crate) fn ensure_tools_cache_v2(
     let needed = always || job.steps.iter().any(step_uses_mise);
     if !needed && setup_indices.is_empty() {
         reject_v2_steps(job_id, job)?;
+        crate::tool_seed::reject_orphan_seed(job_id, job)?;
         return Ok(());
     }
     let expected_setup = cache_p08::setup_step(setup)?;

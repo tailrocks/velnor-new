@@ -9,8 +9,6 @@ use velnor_actions_workflow_renderer::{
     checkout_step, merge_step, render_workflow_ir, shell_step,
 };
 
-use super::impl_renderer_fixtures::mise_argv;
-
 const VERSION: &str = "0.1.0";
 const LABEL: &str = "ubuntu-26.04";
 const LINT_ID: &str = "actionlint";

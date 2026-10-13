@@ -140,7 +140,11 @@ fn action_step_to_yaml(
     }
     for (key, value) in with {
         crate::expressions::check_with_key(key)?;
-        crate::expressions::check_with_value(key, value)?;
+        let guarded_seed_key =
+            tool_seed && crate::tool_seed::is_guarded_seed_key_input(uses, with, key, value);
+        if !guarded_seed_key {
+            crate::expressions::check_with_value(key, value)?;
+        }
         steps::scan_for_private_subcommands(key)?;
         steps::scan_for_private_subcommands(value)?;
     }
