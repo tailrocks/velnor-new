@@ -10,11 +10,18 @@ fn retry_parent() -> BaselineManifest {
     parent
 }
 
+/// Lookup outcome plus the text and archive transports it exercised.
+type RetryLookupOutcome = (
+    Result<Vec<BaselineManifest>, String>,
+    Vec<Vec<String>>,
+    Vec<Vec<String>>,
+);
+
 fn normal_retry_lookup(
     parent: &BaselineManifest,
     current_conclusion: &str,
     original_conclusion: &str,
-) -> (Result<Vec<BaselineManifest>, String>, Vec<Vec<String>>) {
+) -> RetryLookupOutcome {
     let lookup = BaselineLookup::new(
         &parent.source_commit,
         ".github/workflows/ci.yml",
@@ -22,48 +29,56 @@ fn normal_retry_lookup(
         "o/r",
     )
     .expect("lookup");
+    let manifest = canonical_json_bytes(parent).expect("canonical original bytes");
+    let archive = crate::baseline_archive::test_archive("baseline.json", &manifest);
+    let listed = serde_json::json!({"total_count":1,"artifacts":[{
+        "id":parent.artifact_id,"name":parent.artifact_name,"expired":false,
+        "size_in_bytes":archive.len(),"digest":format!(
+            "sha256:{}",crate::cover_identity::generator::sha256_hex(&archive)
+        )
+    }]})
+    .to_string();
     let mut calls = Vec::new();
-    let found = resolve_with(&lookup, &parent.artifact_name, |args| {
-        let args: Vec<_> = args
-            .iter()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect();
-        calls.push(args.clone());
-        if args[0] == "run" && args[1] == "list" {
-            Ok(
-                serde_json::json!([{"databaseId":7,"headSha":parent.source_commit,
+    let mut archive_calls = Vec::new();
+    let found = resolve_with(
+        &lookup,
+        &parent.artifact_name,
+        |args| {
+            let args: Vec<_> = args
+                .iter()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect();
+            calls.push(args.clone());
+            if args[0] == "run" && args[1] == "list" {
+                Ok(
+                    serde_json::json!([{"databaseId":7,"headSha":parent.source_commit,
                 "event":"push","conclusion":current_conclusion,"headBranch":"testmain",
                 "attempt":2}])
-                .to_string(),
-            )
-        } else if args[0] == "run" {
-            let at = args.iter().position(|arg| arg == "--dir").expect("dir") + 1;
-            let directory = Path::new(&args[at]);
-            std::fs::create_dir(directory).expect("download dir");
-            std::fs::write(
-                directory.join("baseline.json"),
-                canonical_json_bytes(parent).expect("canonical original bytes"),
-            )
-            .expect("original download");
-            Ok(String::new())
-        } else if args[1].ends_with("/artifacts") {
-            Ok(
-                serde_json::json!({"artifacts":[{"id":99,"name":parent.artifact_name,
-                "expired":false}]})
-                .to_string(),
-            )
-        } else {
-            assert!(args[1].ends_with("/runs/7/attempts/1"));
-            Ok(
-                serde_json::json!({"id":7,"run_attempt":1,"head_sha":parent.source_commit,
+                    .to_string(),
+                )
+            } else if args[1].contains("/artifacts?name=") {
+                Ok(listed.clone())
+            } else {
+                assert!(args[1].ends_with("/runs/7/attempts/1"));
+                Ok(
+                    serde_json::json!({"id":7,"run_attempt":1,"head_sha":parent.source_commit,
                 "event":"push","status":"completed","conclusion":original_conclusion,
                 "head_branch":"testmain","path":".github/workflows/ci.yml",
                 "repository":{"full_name":"O/R"}})
-                .to_string(),
-            )
-        }
-    });
-    (found, calls)
+                    .to_string(),
+                )
+            }
+        },
+        |args| {
+            archive_calls.push(
+                args.iter()
+                    .map(|arg| arg.to_string_lossy().into_owned())
+                    .collect(),
+            );
+            Ok(archive.clone())
+        },
+    );
+    (found, calls, archive_calls)
 }
 
 #[test]
@@ -72,7 +87,7 @@ fn replayed_publication_remains_usable_for_next_plan_coverage() {
     let original_bytes = canonical_json_bytes(&retained).expect("original bytes");
     // The T16 publisher retains this immutable attempt-1 artifact when
     // attempt 2 succeeds. Normal lookup sees the latest summary attempt 2.
-    let (found, calls) = normal_retry_lookup(&retained, "success", "success");
+    let (found, calls, archive_calls) = normal_retry_lookup(&retained, "success", "success");
     let found = found
         .expect("normal lookup")
         .pop()
@@ -86,6 +101,13 @@ fn replayed_publication_remains_usable_for_next_plan_coverage() {
         calls
             .iter()
             .any(|args| args[1].ends_with("/runs/7/attempts/1"))
+    );
+    assert_eq!(
+        archive_calls,
+        [vec![
+            "api".to_owned(),
+            format!("repos/o/r/actions/artifacts/{}/zip", retained.artifact_id)
+        ]]
     );
     let next_plan = plan_for(&found, Some(&found.source_commit));
     assert!(crate::covered_tasks::plan_has_covered(&next_plan));

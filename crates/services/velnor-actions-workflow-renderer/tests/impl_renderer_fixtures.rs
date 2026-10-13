@@ -73,6 +73,31 @@ pub(crate) fn policy_pin() -> velnor_actions_contract_config::RustPolicyConfig {
     }
 }
 
+pub(crate) fn mise_set() -> Result<MiseSetupSet, RenderError> {
+    use velnor_actions_workflow_renderer::setup::{
+        MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
+    };
+    let record = |sha256: &str| MiseSetup {
+        uses: MISE_USES.to_owned(),
+        version: MISE_VERSION.to_owned(),
+        sha256: sha256.to_owned(),
+    };
+    MiseSetupSet::new([
+        (
+            "x86_64-unknown-linux-gnu".to_owned(),
+            record(MISE_BINARY_SHA256_LINUX_X64),
+        ),
+        (
+            "aarch64-apple-darwin".to_owned(),
+            record(MISE_BINARY_SHA256_MACOS_ARM64),
+        ),
+        (
+            "x86_64-apple-darwin".to_owned(),
+            record(MISE_BINARY_SHA256_MACOS_X64),
+        ),
+    ])
+}
+
 pub(crate) fn fixture_ctx() -> RenderContext {
     RenderContext {
         generator_version: VERSION.to_owned(),

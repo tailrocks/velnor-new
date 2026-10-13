@@ -134,3 +134,60 @@ fn is_catalog_version(value: &str) -> bool {
         && value.contains('.')
         && !value.contains("${{")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn setup(sha256: &str) -> MiseSetup {
+        MiseSetup {
+            uses: "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5".to_owned(),
+            version: "2026.9.18".to_owned(),
+            sha256: sha256.to_owned(),
+        }
+    }
+
+    #[test]
+    fn setup_set_selects_only_the_requested_typed_record() {
+        let linux_sha256 = "a".repeat(64);
+        let macos_sha256 = "b".repeat(64);
+        let linux = setup(&linux_sha256);
+        let macos = setup(&macos_sha256);
+        let setups = MiseSetupSet::new([
+            ("x86_64-unknown-linux-gnu".to_owned(), linux.clone()),
+            ("aarch64-apple-darwin".to_owned(), macos.clone()),
+        ])
+        .expect("valid target pins");
+        assert_eq!(
+            setups
+                .for_target("x86_64-unknown-linux-gnu")
+                .expect("Linux setup"),
+            &linux
+        );
+        assert_eq!(
+            setups
+                .for_target("aarch64-apple-darwin")
+                .expect("macOS setup"),
+            &macos
+        );
+        assert!(
+            setups
+                .for_target("x86_64-apple-darwin")
+                .is_err_and(|error| error.to_string().contains("missing_mise_setup_target"))
+        );
+    }
+
+    #[test]
+    fn setup_set_rejects_duplicate_unsupported_and_empty_targets() {
+        let pin = setup(&"c".repeat(64));
+        assert!(MiseSetupSet::new(Vec::new()).is_err());
+        assert!(MiseSetupSet::new([("unknown-target".to_owned(), pin.clone())]).is_err());
+        assert!(
+            MiseSetupSet::new([
+                ("x86_64-unknown-linux-gnu".to_owned(), pin.clone()),
+                ("x86_64-unknown-linux-gnu".to_owned(), pin),
+            ])
+            .is_err()
+        );
+    }
+}

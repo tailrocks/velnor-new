@@ -77,6 +77,35 @@ pub fn resolve_mise_setup_for_release_target(
     })
 }
 
+/// Resolve all typed Mise setup records needed by one generated workflow.
+///
+/// The configured runner's setup is reused; every other supported target
+/// resolves through the same override policy, so action overrides apply
+/// uniformly without duplicating override policy.
+pub(crate) fn resolve_mise_setup_set(
+    config: &VelnorConfig,
+    label: &str,
+    configured_setup: &MiseSetup,
+) -> Result<MiseSetupSet, OrchestratorError> {
+    let configured_target =
+        ReleaseTarget::for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
+            problem: format!("mise_setup_unsupported_target:{label}"),
+        })?;
+    let mut setups = vec![(
+        configured_target.triple().to_owned(),
+        configured_setup.clone(),
+    )];
+    for target in ReleaseTarget::ALL {
+        if target != configured_target {
+            setups.push((
+                target.triple().to_owned(),
+                resolve_mise_setup_for_release_target(config, target)?,
+            ));
+        }
+    }
+    Ok(MiseSetupSet::new(setups)?)
+}
+
 /// Resolve cache-off Mise setup for an isolated verification runner.
 pub fn resolve_verification_mise_setup(
     config: &VelnorConfig,
