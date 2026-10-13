@@ -62,8 +62,8 @@ pub(super) fn jobs(
     validate_exact_version(&request.rust_version, "rust")?;
 
     Ok(vec![
-        job(request, hosted, true),
-        job(request, hosted, false),
+        job(request, hosted, true)?,
+        job(request, hosted, false)?,
     ])
 }
 
@@ -72,37 +72,40 @@ fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (St
         (
             "mbx-cache-write-hosted",
             "MBX objects cache / protected-main writer",
-            "mbx-cache-roundtrip",
+            Vec::new(),
         )
     } else {
         (
             "mbx-cache-read-hosted",
             "MBX objects cache / read-only reuse",
-            "mbx-cache-roundtrip",
+            vec!["mbx-cache-write-hosted".to_owned()],
         )
     };
     let mut fields = lane_base(title, hosted, 45);
     if !writer {
         fields.push((
             "needs".to_owned(),
-            Yaml::Seq(vec![Yaml::str("mbx-cache-write-hosted")]),
+            Yaml::Seq(needs.iter().cloned().map(Yaml::str).collect()),
         ));
     }
-    fields.push((
-        "permissions".to_owned(),
-        mapping(&[
-            ("contents", "read"),
-            ("actions", if writer { "write" } else { "read" }),
-        ]),
-    ));
-    fields.push(("env".to_owned(), qualification_env(request, writer)));
+    fields.push(("permissions".to_owned(), permission_yaml(writer)));
+    fields.push(("env".to_owned(), qualification_env(request)));
+    Ok(gated(
+        finish(id, fields, rendered_steps),
+        QUALIFICATION_GATE,
+    ))
+}
 
+fn qualification_steps(
+    request: &MbxQualificationPins,
+    writer: bool,
+) -> Result<Vec<Step>, RenderError> {
     let mut steps = vec![
-        checkout_step(),
-        mise_setup_step(request),
-        mise_install_step(request),
-        mbx_action_step(request, writer),
-        verify_action_step(request, writer),
+        checkout_step()?,
+        mise_setup_step(request)?,
+        mise_install_step(request)?,
+        mbx_action_step(request)?,
+        verify_action_step(request)?,
     ];
     if !writer {
         let probe = import_probe(request);
@@ -121,46 +124,36 @@ fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (St
     if writer {
         steps.push(run_step("Sample runner disk after cleanup", DISK_SAMPLE));
     }
-
-    let when = format!("inputs.mode == '{mode}' && {MAIN_REF}");
-    gated(finish(id, fields, steps), &when)
+    Ok(steps)
 }
 
-fn mise_setup_step(request: &MbxQualificationPins) -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Set up Mise")),
-        (
-            "uses".to_owned(),
-            Yaml::str(request.mise_setup.uses.clone()),
-        ),
-        (
-            "with".to_owned(),
-            mapping(&[
-                ("version", &request.mise_setup.version),
-                ("sha256", &request.mise_setup.sha256),
-                ("install", "false"),
-                ("env", "false"),
-                ("cache", "false"),
-                ("cache_save", "false"),
-            ]),
-        ),
-    ])
+fn checkout_step() -> Result<Step, RenderError> {
+    steps::checkout_step(super::features::CHECKOUT_USES)
 }
 
-fn mise_install_step(request: &MbxQualificationPins) -> Yaml {
+fn mise_setup_step(request: &MbxQualificationPins) -> Result<Step, RenderError> {
+    steps::action_step(
+        "Set up Mise",
+        &request.mise_setup.uses,
+        BTreeMap::from([
+            ("version".to_owned(), request.mise_setup.version.clone()),
+            ("sha256".to_owned(), request.mise_setup.sha256.clone()),
+            ("install".to_owned(), "false".to_owned()),
+            ("env".to_owned(), "false".to_owned()),
+            ("cache".to_owned(), "false".to_owned()),
+            ("cache_save".to_owned(), "false".to_owned()),
+        ]),
+    )
+}
+
+fn mise_install_step(request: &MbxQualificationPins) -> Result<Step, RenderError> {
     let rust = &request.rust_version;
-    Yaml::Map(vec![
-        (
-            "name".to_owned(),
-            Yaml::str("Install pinned Rust toolchain"),
+    shell_step(
+        "Install pinned Rust toolchain",
+        &format!(
+            "mise install rust@{rust} && mise exec rust@{rust} -- rustc --print sysroot > \"$RUNNER_TEMP/mbx-rust-sysroot\" && IFS= read -r sysroot < \"$RUNNER_TEMP/mbx-rust-sysroot\" && test -n \"$sysroot\" && printf '%s/bin\\n' \"$sysroot\" >> \"$GITHUB_PATH\""
         ),
-        (
-            "run".to_owned(),
-            Yaml::str(format!(
-                "mise install rust@{rust} && printf '%s/bin\\n' \"$(mise exec rust@{rust} -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
-            )),
-        ),
-    ])
+    )
 }
 
 fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
@@ -306,6 +299,9 @@ fn qualification_env(request: &MbxQualificationPins, writer: bool) -> Yaml {
         ("MBX_SHARE_OUT_DIR", "0"),
         ("ACTIONS_CACHE_MODE", if writer { "write" } else { "read" }),
         ("CARGO_HOME", &format!("{home}/cargo")),
+        ("MBX_CACHE_DIR", &format!("{home}/mbx-store")),
+        ("MBX_CACHE_EXPORT_GROUP", &export_group),
+        ("MBX_GC_AUTO", "1"),
         ("MISE_AUTO_INSTALL", "false"),
         ("MISE_CARGO_HOME", &format!("{home}/cargo")),
         ("MISE_EXEC_AUTO_INSTALL", "false"),
@@ -328,17 +324,31 @@ fn mapping(pairs: &[(&str, &str)]) -> Yaml {
     )
 }
 
-fn validate_exact_version(value: &str, tool: &str) -> Result<(), RenderError> {
-    let parts: Vec<_> = value.split('.').collect();
+fn step_context() -> RenderContext {
+    RenderContext {
+        generator_version: "0.0.0".to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
+        staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.0.0".to_owned(),
+        request_dir: "${{ runner.temp }}/velnor".to_owned(),
+        checkout_uses: super::features::CHECKOUT_USES.to_owned(),
+        validator_commands: Vec::new(),
+        candidate: None,
+        preseed: false,
+        plan_consumer_env: BTreeMap::new(),
+    }
+}
+
+fn validate_exact_version(version: &str, kind: &str) -> Result<(), RenderError> {
+    let parts: Vec<&str> = version.split('.').collect();
     if parts.len() == 3
         && parts
             .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
     {
         Ok(())
     } else {
         Err(RenderError::BadCommand(format!(
-            "bad_{tool}_version:{value}"
+            "bad_{kind}_version:{version}"
         )))
     }
 }

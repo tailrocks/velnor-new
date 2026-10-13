@@ -798,7 +798,7 @@ jobs:
         run: "test -n \"$G3_CANARY\" && sleep 180"
   mbx-cache-write-hosted:
     name: MBX objects cache / protected-main writer
-    if: inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true
+    if: inputs.mode == 'mbx-cache-roundtrip' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected == true
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
@@ -809,6 +809,9 @@ jobs:
       MBX_SHARE_OUT_DIR: "0"
       ACTIONS_CACHE_MODE: write
       CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
+      MBX_CACHE_DIR: ${{ github.workspace }}/.velnor-mbx-cache-qualification/mbx-store
+      MBX_CACHE_EXPORT_GROUP: velnor-qualification-mbx-1.21.1-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+      MBX_GC_AUTO: "1"
       MISE_AUTO_INSTALL: "false"
       MISE_CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
       MISE_EXEC_AUTO_INSTALL: "false"
@@ -820,7 +823,7 @@ jobs:
       RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
       RUSTUP_TOOLCHAIN: 1.99.0
     steps:
-      - name: Check out
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
@@ -833,6 +836,10 @@ jobs:
           env: "false"
           cache: "false"
           cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Install pinned Rust toolchain
         run: "mise install rust@1.99.0 && printf '%s/bin\\n' \"$(mise exec rust@1.99.0 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
       - name: Restore MBX objects
@@ -862,7 +869,7 @@ jobs:
         run: "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\""
   mbx-cache-read-hosted:
     name: MBX objects cache / read-only reuse
-    if: inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true
+    if: inputs.mode == 'mbx-cache-roundtrip' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected == true
     runs-on: ubuntu-26.04
     timeout-minutes: 45
     needs:
@@ -875,6 +882,9 @@ jobs:
       MBX_SHARE_OUT_DIR: "0"
       ACTIONS_CACHE_MODE: read
       CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
+      MBX_CACHE_DIR: ${{ github.workspace }}/.velnor-mbx-cache-qualification/mbx-store
+      MBX_CACHE_EXPORT_GROUP: velnor-qualification-mbx-1.21.1-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+      MBX_GC_AUTO: "1"
       MISE_AUTO_INSTALL: "false"
       MISE_CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
       MISE_EXEC_AUTO_INSTALL: "false"
@@ -886,7 +896,7 @@ jobs:
       RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
       RUSTUP_TOOLCHAIN: 1.99.0
     steps:
-      - name: Check out
+      - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
@@ -944,10 +954,6 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          version: 2026.9.18
-          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
-          install: "false"
-          env: "false"
           cache: "false"
           cache_save: "false"
           env: "false"

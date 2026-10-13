@@ -1,4 +1,4 @@
-//! Security assertions for the protected-main MBX cache round trip.
+//! Security assertions for the generated single-bundle MBX round trip.
 
 use std::fs;
 use std::process::Command;
@@ -58,7 +58,7 @@ fn assert_candidate_owner(job: &str) {
 }
 
 #[test]
-fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestResult {
+fn protected_main_writer_and_fresh_reader_use_production_bundle_graph() -> TestResult {
     let repo = make_repo(&crate::impl_schema2_routing::workflow_config())?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let qualification =
@@ -118,14 +118,64 @@ fn assert_writer(writer: &str) {
 
 fn assert_reader(reader: &str) {
     assert!(
-        reader.contains("inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true"),
-        "{reader}"
+        writer.contains("MBX_CACHE_EXPORT_GROUP: velnor-qualification-mbx-"),
+        "{writer}"
     );
+    assert!(writer.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{writer}");
+    assert!(writer.contains("rustc --print sysroot"), "{writer}");
+    assert_mbx_action_pin(writer);
+    assert!(
+        writer.contains("actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"),
+        "{writer}"
+    );
+    assert!(
+        writer.contains("actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"),
+        "{writer}"
+    );
+    assert!(
+        writer.contains("success() && inputs.mode == 'mbx-cache-roundtrip' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref_protected == true"),
+        "{writer}"
+    );
+    assert_eq!(writer.matches("if: success() &&").count(), 2, "{writer}");
+    assert!(!writer.contains("continue-on-error"), "{writer}");
+    assert!(
+        writer.contains("mbx bundle import failed; continuing cold"),
+        "{writer}"
+    );
+    assert_no_implicit_cache(writer);
+    assert_ordered(
+        writer,
+        &[
+            "name: Restore MBX objects",
+            "name: Prepare MBX bundle key",
+            "name: Restore MBX single bundle",
+            "name: Import MBX single bundle",
+            "name: Verify pinned MBX version",
+            "name: Compile MBX cache probe",
+            "name: Export MBX single bundle",
+            "name: Save MBX single bundle",
+        ],
+    );
+    assert_eq!(
+        writer.matches("uses: actions/cache/restore@").count(),
+        1,
+        "{writer}"
+    );
+    assert_eq!(
+        writer.matches("uses: actions/cache/save@").count(),
+        1,
+        "{writer}"
+    );
+}
+
+fn assert_reader(reader: &str) {
+    assert_qualification_gate(reader);
     assert!(
         reader.contains("needs:\n      - mbx-cache-write-hosted"),
         "{reader}"
     );
     assert!(reader.contains("actions: read"), "{reader}");
+    assert!(reader.contains("backend: local"), "{reader}");
     assert!(reader.contains("ACTIONS_CACHE_MODE: read"), "{reader}");
     assert!(reader.contains("MBX_GC_AUTO: \"0\""), "{reader}");
     assert!(
@@ -189,8 +239,7 @@ fn assert_reader(reader: &str) {
         "{reader}"
     );
     assert!(
-        reader
-            .contains("CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo"),
+        reader.contains("path: ${{ runner.temp }}/mbx-single-bundle"),
         "{reader}"
     );
     assert_candidate_owner(reader);
