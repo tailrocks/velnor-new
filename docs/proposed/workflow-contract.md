@@ -249,6 +249,12 @@ Mise task file. Checkout, artifact transfer, and Alint are fixed GitHub Actions 
 report aggregation are fixed internal workflow steps. Any helper binary is staged in runner temporary storage
 and never written to the repo.
 
+The credential-scrubbed Link Check MUST install Lychee from its version-qualified official release asset URL
+through Mise's `http` backend, with the downloaded archive checked against the SHA-256 pinned in the generator.
+GitHub publishes no digest or checksum sidecar for this asset, so the reviewed generator pin is the integrity
+boundary. This avoids Ubi's GitHub release API lookup without restoring credentials to resolve public metadata;
+the verifier still runs through the fixed Mise `exec` vector.
+
 `plan` steps, in order:
 
 1. `Checkout`: `actions/checkout` at the event's intended commit with `persist-credentials: false`.

@@ -10,7 +10,7 @@ use velnor_actions_workflow_renderer::render::ValidatorCommand;
 use velnor_actions_workflow_renderer::steps::{DENY_STEP_NAME, MACHETE_STEP_NAME};
 
 use super::audit_prepare_installs;
-use crate::vectors::CARGO_DENY_VERSION;
+use crate::vectors::{CARGO_DENY_VERSION, LYCHEE_TOOL_SPEC, LYCHEE_VERSION};
 
 fn shell_job(run: Vec<String>) -> Job {
     Job {
@@ -186,6 +186,34 @@ fn machete_cold_install_is_audited_by_exact_backend_key() {
         subject.lock_key,
         "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]"
     );
+}
+
+#[test]
+fn lychee_cold_install_is_audited_by_exact_backend_key() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let command = crate::verify::verify_command(
+        ValidatorKind::LinkCheck,
+        &velnor_actions_contract::VerifyConfig::default(),
+        &velnor_actions_mise::ToolCatalog::pinned(),
+    )
+    .expect("link-check vector")
+    .expect("link-check shell command");
+    let mut ir = ir_for(shell_job(vec!["true".to_owned()]));
+    if let Some(plan) = ir.jobs.get_mut("plan") {
+        plan.steps.clear();
+    }
+
+    let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &[command]);
+    assert!(outcome.blocking.is_empty(), "{:?}", outcome.blocking);
+    assert!(
+        outcome
+            .recommendation
+            .expect("unlocked tool advisory")
+            .contains(&format!("lychee@{LYCHEE_VERSION}"))
+    );
+    let subject = super::validator_subject(&format!("{LYCHEE_TOOL_SPEC}@{LYCHEE_VERSION}"))
+        .expect("qualified Lychee subject");
+    assert_eq!(subject.lock_key, LYCHEE_TOOL_SPEC);
 }
 
 /// Deny command drift fails closed: a foreign spec and a drifted

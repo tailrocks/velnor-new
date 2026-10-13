@@ -14,7 +14,10 @@ use velnor_actions_mise::{IsolatedCommand, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
 use crate::OrchestratorError;
-use crate::vectors::{CARGO_DENY_VERSION, CARGO_MACHETE_TOOL_SPEC, CARGO_MACHETE_VERSION};
+use crate::vectors::{
+    CARGO_DENY_VERSION, CARGO_MACHETE_TOOL_SPEC, CARGO_MACHETE_VERSION, LYCHEE_TOOL_SPEC,
+    LYCHEE_VERSION,
+};
 
 /// Qualified markdownlint-cli2 release (npm, latest).
 /// Source: `npm view markdownlint-cli2 versions`; checked 2026-10-07.
@@ -27,12 +30,6 @@ pub(crate) const MARKDOWNLINT_VERSION: &str = "0.23.3";
 /// The isolated `mise exec node@24.21.0 -- node --version` probe
 /// reported v24.21.0.
 pub(crate) const VERIFY_NODE_VERSION: &str = "24.21.0";
-
-/// Qualified lychee release (GitHub, latest).
-/// Source: `mise ls-remote ubi:lycheeverse/lychee`; checked 2026-10-07.
-/// No macOS/aarch64 asset exists, so the probe ran resolution only;
-/// the release carries `x86_64-unknown-linux-gnu` for CI runners.
-pub(crate) const LYCHEE_VERSION: &str = "0.15.1";
 
 /// Resolve an emitted validator install spec to its pinned name and version.
 ///
@@ -63,8 +60,8 @@ pub(crate) fn validator_install_pin(
             "npm:markdownlint-cli2",
         )),
         "node" if version == VERIFY_NODE_VERSION => Some(("node", VERIFY_NODE_VERSION, "node")),
-        "ubi:lycheeverse/lychee" if version == LYCHEE_VERSION => {
-            Some(("lychee", LYCHEE_VERSION, "ubi:lycheeverse/lychee"))
+        LYCHEE_TOOL_SPEC if version == LYCHEE_VERSION => {
+            Some(("lychee", LYCHEE_VERSION, LYCHEE_TOOL_SPEC))
         }
         _ => None,
     }
@@ -75,7 +72,7 @@ const MARKDOWNLINT_SPEC: &str = "npm:markdownlint-cli2";
 /// Mise tool spec for the fixed content checks.
 const VERIFY_NODE_SPEC: &str = "node";
 /// Mise tool spec for the link-check vector.
-const LYCHEE_SPEC: &str = "ubi:lycheeverse/lychee";
+const LYCHEE_SPEC: &str = LYCHEE_TOOL_SPEC;
 
 /// Fixed strict-JSON check: every `*.json` outside the skipped trees
 /// must parse (rejecting comments, trailing commas, syntax errors)

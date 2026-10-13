@@ -30,13 +30,25 @@ pub(crate) const CARGO_MACHETE_TOOL_SPEC: &str = concat!(
     "checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]",
 );
 
+/// Exact Linux x86-64 Lychee release archive with a content pin.
+/// The SHA-256 was computed from the official v0.15.1 asset on 2026-10-13;
+/// GitHub publishes no digest or checksum sidecar for this asset. The pinned
+/// hash is therefore the integrity boundary. The version-qualified URL avoids
+/// Ubi's GitHub release API lookup when workflow credentials are scrubbed.
+pub(crate) const LYCHEE_VERSION: &str = "0.15.1";
+pub(crate) const LYCHEE_TOOL_SPEC: &str = concat!(
+    "http:lychee[url=https://github.com/lycheeverse/lychee/releases/",
+    "download/v0.15.1/lychee-v0.15.1-x86_64-unknown-linux-gnu.tar.gz,",
+    "checksum=sha256:9afdf0f48064fdcd8a8815ca6d2d9fcd43a0ef4c2edf9da23d6f7bf46a764eb8]",
+);
+
 /// Mise tool specs the validator vectors may select, without versions.
 const VALIDATOR_TOOL_SPECS: [&str; 5] = [
     "cargo-deny",
     CARGO_MACHETE_TOOL_SPEC,
     "npm:markdownlint-cli2",
     "node",
-    "ubi:lycheeverse/lychee",
+    LYCHEE_TOOL_SPEC,
 ];
 
 /// Product crates scanned by the machete vector, in contract order.
