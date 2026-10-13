@@ -41,10 +41,10 @@ EOF
 "#;
 const DISK_SAMPLE: &str = "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"";
 
-/// Emit isolated writer and reader jobs for the pinned MBX runtime.
+/// Emit roundtrip, corruption, and parallel jobs for the pinned MBX runtime.
 ///
 /// # Errors
-/// Invalid action, Mise, MBX, or Rust pins fail closed.
+/// Invalid action, Mise, MBX, Rust, or hosted-runner inputs fail closed.
 pub(super) fn jobs(
     request: &MbxQualificationPins,
     hosted: &RunnerSpec,

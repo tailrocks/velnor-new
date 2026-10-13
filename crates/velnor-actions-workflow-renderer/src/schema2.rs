@@ -387,14 +387,24 @@ fn mode_trigger() -> Yaml {
         "workflow_dispatch".to_owned(),
         Yaml::Map(vec![(
             "inputs".to_owned(),
-            Yaml::Map(vec![(
-                "mode".to_owned(),
-                Yaml::Map(vec![
-                    ("type".to_owned(), Yaml::str("string")),
-                    ("required".to_owned(), Yaml::Bool(false)),
-                    ("default".to_owned(), Yaml::str("both")),
-                ]),
-            )]),
+            Yaml::Map(vec![
+                (
+                    "mode".to_owned(),
+                    Yaml::Map(vec![
+                        ("type".to_owned(), Yaml::str("string")),
+                        ("required".to_owned(), Yaml::Bool(false)),
+                        ("default".to_owned(), Yaml::str("both")),
+                    ]),
+                ),
+                (
+                    "probe_id".to_owned(),
+                    Yaml::Map(vec![
+                        ("type".to_owned(), Yaml::str("string")),
+                        ("required".to_owned(), Yaml::Bool(false)),
+                        ("default".to_owned(), Yaml::str("")),
+                    ]),
+                ),
+            ]),
         )]),
     )])
 }
