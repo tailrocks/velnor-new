@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use self::stubs::{GH_STUB, MISE_STUB};
+use self::stubs::{GH_STUB, GIT_STUB, MISE_STUB, TIMEOUT_STUB};
 use super::Family;
 
 #[path = "schema2_product_release_exec_stubs.rs"]
@@ -35,6 +35,9 @@ pub(super) struct ResultRecord {
 
 impl Fixture {
     pub(super) fn new(family: Family, mode: &'static str) -> Result<Self, Box<dyn Error>> {
+        if family == Family::Generator {
+            return Err("generator release requires the canonical manifest fixture".into());
+        }
         let id = NEXT_FIXTURE.fetch_add(1, Ordering::Relaxed);
         let root = std::env::temp_dir().join(format!(
             "velnor-product-release-{}-{id}",
@@ -44,6 +47,8 @@ impl Fixture {
         fs::create_dir_all(&bin)?;
         write_executable(&bin.join("mise"), MISE_STUB)?;
         write_executable(&bin.join("gh"), GH_STUB)?;
+        write_executable(&bin.join("timeout"), TIMEOUT_STUB)?;
+        write_executable(&bin.join("git"), GIT_STUB)?;
         let fixture = Self {
             calls: root.join("calls"),
             output: root.join("outputs"),
@@ -90,7 +95,7 @@ impl Fixture {
             .env("VELNOR_RELEASE_CI_POLL_SECONDS", "0")
             .env("GITHUB_REPOSITORY", REPOSITORY)
             .env("GITHUB_REF", "refs/heads/main")
-            .env("GITHUB_EVENT_NAME", "push")
+            .env("GITHUB_EVENT_NAME", "workflow_dispatch")
             .env("GITHUB_WORKFLOW_REF", WORKFLOW_REF)
             .env("GITHUB_SHA", SOURCE)
             .env("GITHUB_WORKFLOW_SHA", SOURCE)
@@ -121,12 +126,7 @@ impl Fixture {
                 "SHA256SUMS",
             ],
             Family::Binary => &["velnor-host", "SHA256SUMS"],
-            Family::Generator => &[
-                "velnor-actions-0.1.0-x86_64-unknown-linux-gnu",
-                "velnor-actions-0.1.0-x86_64-unknown-linux-gnu.sha256",
-                "velnor-actions-0.1.0-aarch64-apple-darwin",
-                "velnor-actions-0.1.0-aarch64-apple-darwin.sha256",
-            ],
+            Family::Generator => &[],
         }
     }
 
@@ -212,28 +212,10 @@ impl Fixture {
                 fs::write(directory.join("SHA256SUMS"), sums)?;
             }
             Family::Generator => {
-                for (index, asset) in self.assets().iter().enumerate() {
-                    if asset.ends_with(".sha256") {
-                        continue;
-                    }
-                    let directory = self.asset_directory(index);
-                    fs::create_dir_all(&directory)?;
-                    fs::write(directory.join(asset), format!("fixture bytes: {asset}"))?;
-                    let sums = checksum_file(&directory, [*asset])?;
-                    fs::write(directory.join(format!("{asset}.sha256")), sums)?;
-                }
+                return Err("generator release assets need canonical provenance".into());
             }
         }
         Ok(())
-    }
-
-    fn asset_directory(&self, index: usize) -> PathBuf {
-        let child = match self.family {
-            Family::Images | Family::Binary => "assets",
-            Family::Generator if index < 2 => "linux-assets",
-            Family::Generator => "macos-assets",
-        };
-        self.root.join(child)
     }
 }
 

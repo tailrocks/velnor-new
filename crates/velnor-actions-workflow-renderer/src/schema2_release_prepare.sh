@@ -1,11 +1,16 @@
 set -euo pipefail
 
 readonly repository='@REPOSITORY@'
-readonly gh_version='@GH_VERSION@'
-readonly workflow_path='@WORKFLOW_PATH@'
 readonly source_sha="$VELNOR_SOURCE_SHA"
 readonly authority_sha="$VELNOR_WORKFLOW_AUTHORITY_SHA"
-readonly prepare_tag='@TAG_PREFIX@-'"$source_sha"
+readonly tag_prefix='@TAG_PREFIX@'
+readonly fixed_tag='@FIXED_TAG@'
+if [[ -n "$fixed_tag" ]]; then
+  prepare_tag="$fixed_tag"
+else
+  prepare_tag="${tag_prefix}-${source_sha}"
+fi
+readonly prepare_tag
 readonly prepare_expected_assets='@ASSET_NAMES_JSON@'
 
 fail() {
@@ -17,9 +22,7 @@ fail() {
 [[ "$authority_sha" == "$source_sha" ]] || fail 'workflow authority differs from source'
 [[ -n "$GH_TOKEN" ]] || fail 'read-only GitHub token is missing'
 
-gh() {
-  mise --no-config --no-env --no-hooks exec "gh@$gh_version" -- gh "$@"
-}
+@GH_FUNCTION@
 
 assert_tag_target() {
   local reference tag_object object_type object_sha

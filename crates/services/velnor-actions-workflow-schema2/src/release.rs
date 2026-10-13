@@ -129,26 +129,21 @@ fn build_job(
     upload_name: &str,
     files: &[&str],
 ) -> (String, Yaml) {
-    let mut prefixed = vec![checkout_step(
-        "${{ needs['release-eligibility'].outputs.source_sha }}",
-    )];
+    let mut prefixed = vec![checkout_step()];
     prefixed.append(&mut steps);
     prefixed.push(upload_step(upload_name, artifact_name(id), files));
     finish(
         id,
-        with_needs(
-            with_permissions(base(name, runs_on, timeout), build_permissions()),
-            &[release_eligibility::JOB_ID],
-        ),
+        with_permissions(base(name, runs_on, timeout), build_permissions()),
         prefixed,
     )
 }
 
-pub(super) fn attest_job(
+fn attest_job(
     id: &str,
     name: &str,
     runs_on: Yaml,
-    needs: &[&str],
+    needs: &str,
     artifact: &str,
     files: &[&str],
 ) -> (String, Yaml) {
@@ -162,18 +157,17 @@ pub(super) fn attest_job(
     )
 }
 
-pub(super) struct Publish<'a> {
-    pub(super) id: &'a str,
-    pub(super) name: &'a str,
-    pub(super) needs: &'a [&'a str],
-    pub(super) artifact: &'a str,
-    pub(super) prefix: &'a str,
-    pub(super) notes: &'a str,
-    pub(super) files: &'a [&'a str],
-    pub(super) workflow_path: &'a str,
+struct Publish<'a> {
+    id: &'a str,
+    name: &'a str,
+    needs: &'a str,
+    artifact: &'a str,
+    prefix: &'a str,
+    notes: &'a str,
+    files: &'a [&'a str],
 }
 
-pub(super) fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
+fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
     finish(
         spec.id,
         with_needs(
@@ -181,15 +175,7 @@ pub(super) fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
             spec.needs,
         ),
         vec![
-            checkout_step("${{ needs['release-eligibility'].outputs.source_sha }}"),
-            release_eligibility::mise_step(),
-            run_step(
-                "Install pinned GitHub CLI",
-                &format!(
-                    "mise --no-config --no-env --no-hooks install gh@{}",
-                    release_eligibility::GH_VERSION
-                ),
-            ),
+            checkout_step(),
             download_step(spec.artifact),
             identified_publish_step(
                 product_release_family::PUBLISH_STEP_ID,
@@ -216,7 +202,6 @@ fn checkout_step() -> Yaml {
             Yaml::Map(vec![
                 ("fetch-depth".to_owned(), Yaml::str("1")),
                 ("persist-credentials".to_owned(), Yaml::str("false")),
-                ("ref".to_owned(), Yaml::str(ref_value)),
             ]),
         ),
     ])
@@ -268,10 +253,10 @@ fn with_permissions(mut fields: Vec<(String, Yaml)>, perms: Yaml) -> Vec<(String
     fields
 }
 
-fn with_needs(mut fields: Vec<(String, Yaml)>, needs: &[&str]) -> Vec<(String, Yaml)> {
+fn with_needs(mut fields: Vec<(String, Yaml)>, needs: &str) -> Vec<(String, Yaml)> {
     fields.push((
         "needs".to_owned(),
-        Yaml::Seq(needs.iter().map(|need| Yaml::str(*need)).collect()),
+        Yaml::Seq(vec![Yaml::str(needs.to_owned())]),
     ));
     fields
 }
@@ -325,28 +310,12 @@ fn release_command(prefix: &str, notes: &str, files: &[&str]) -> String {
     )
 }
 
-pub(super) fn document(name: &str, jobs: Vec<(String, Yaml)>) -> Yaml {
+fn document(name: &str, jobs: Vec<(String, Yaml)>) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
         (
             "on".to_owned(),
-            Yaml::Map(vec![(
-                "workflow_dispatch".to_owned(),
-                Yaml::Map(vec![(
-                    "inputs".to_owned(),
-                    Yaml::Map(vec![(
-                        "source_sha".to_owned(),
-                        Yaml::Map(vec![
-                            (
-                                "description".to_owned(),
-                                Yaml::str("Exact tested main commit to build and publish"),
-                            ),
-                            ("required".to_owned(), Yaml::Bool(true)),
-                            ("type".to_owned(), Yaml::str("string")),
-                        ]),
-                    )]),
-                )]),
-            )]),
+            Yaml::Map(vec![("workflow_dispatch".to_owned(), Yaml::Map(vec![]))]),
         ),
         (
             "permissions".to_owned(),

@@ -136,6 +136,10 @@ pub(super) mod product_release_test_pins;
 #[path = "schema2_runner_shell_tests.rs"]
 mod runner_shell_tests;
 
+#[cfg(test)]
+#[path = "schema2_product_release_test_pins.rs"]
+pub(super) mod product_release_test_pins;
+
 /// Which schema 2 workflows to emit, plus the selectors they use.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Schema2WorkflowRequest {

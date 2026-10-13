@@ -33,6 +33,9 @@ pub(crate) const MAX_BASELINE_MANIFEST_BYTES: usize = 1_048_576;
 /// Shared raw and canonical byte cap for protected baseline manifests.
 pub(crate) const MAX_BASELINE_MANIFEST_BYTES: usize = 1_048_576;
 
+/// Shared raw and canonical byte cap for protected baseline manifests.
+pub(crate) const MAX_BASELINE_MANIFEST_BYTES: usize = 1_048_576;
+
 /// One trusted-baseline task proof: identities plus provenance run IDs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

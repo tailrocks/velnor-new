@@ -10,6 +10,23 @@ set -eu
 exec gh "$@"
 "#;
 
+pub(super) const TIMEOUT_STUB: &str = r#"#!/bin/sh
+set -eu
+test "$1" = --signal=TERM
+shift
+test "$1" = --kill-after=5s
+shift
+test "$1" = 60s
+shift
+exec "$@"
+"#;
+
+pub(super) const GIT_STUB: &str = r#"#!/bin/sh
+set -eu
+if [ "$1" = rev-parse ] && [ "$2" = HEAD ]; then printf '%s\n' "$GITHUB_SHA"; exit 0; fi
+exec /usr/bin/git "$@"
+"#;
+
 pub(super) const GH_STUB: &str = r#"#!/bin/sh
 set -eu
 printf 'gh %s\n' "$*" >> "$VELNOR_TEST_CALLS"

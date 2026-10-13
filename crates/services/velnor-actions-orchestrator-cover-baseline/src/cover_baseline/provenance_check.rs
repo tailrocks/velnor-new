@@ -25,6 +25,10 @@ pub(crate) use provenance_lineage::{validate_manifest_lineage, validate_manifest
 mod provenance_lineage;
 pub(crate) use provenance_lineage::{validate_manifest_lineage, validate_manifest_lineage_at};
 
+#[path = "provenance_lineage.rs"]
+mod provenance_lineage;
+pub(crate) use provenance_lineage::{validate_manifest_lineage, validate_manifest_lineage_at};
+
 // Unit tests live here so `provenance_check.rs` keeps its size gate.
 #[cfg(test)]
 mod tests;

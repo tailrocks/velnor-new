@@ -109,7 +109,9 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
         platform: RUNNER_PLATFORM.to_owned(),
         readonly_rootfs: false,
         image: RUNNER_IMAGE.to_owned(),
-        env: Vec::new(),
+        env: vec![format!(
+            "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE={ACTION_ARCHIVE_TARGET}"
+        )],
         cmd: vec![ENTRYPOINT.to_owned()],
         labels: vec![
             "velnor.role=runner".to_owned(),
