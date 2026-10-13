@@ -26,8 +26,8 @@ fn typed_mbx_owner_precedes_cargo_source_fetch_independent_of_labels() {
             uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),
             with: BTreeMap::from([
                 ("github-cache-mode".to_owned(), "objects".to_owned()),
-                ("version".to_owned(), "1.21.1".to_owned()),
-                ("toolchain".to_owned(), "1.98.1".to_owned()),
+                ("version".to_owned(), "1.24.0".to_owned()),
+                ("toolchain".to_owned(), "1.99.0".to_owned()),
                 ("cache-generation".to_owned(), "generation".to_owned()),
             ]),
             env: BTreeMap::new(),

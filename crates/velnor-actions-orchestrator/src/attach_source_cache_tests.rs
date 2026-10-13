@@ -51,7 +51,7 @@ fn cargo_only_preseed_uses_exact_sources_and_native_helper_owners() {
         steps.iter().all(|step| !matches!(
             &step.kind,
             velnor_actions_contract::StepKind::Shell { run, .. }
-                if run.iter().any(|argument| argument == "mr-boxington@1.21.1")
+                if run.iter().any(|argument| argument == "mr-boxington@1.24.0")
         )),
         "the pre-seed lane must not install action-owned MBX through Mise"
     );

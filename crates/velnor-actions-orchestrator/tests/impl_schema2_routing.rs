@@ -122,10 +122,8 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
     let repo = make_repo(&workflow_config())?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let qualification = required_file(&tree, ".github/workflows/qualification.yml")?;
-    assert_eq!(
-        qualification,
-        &marked(schema2_feature_snapshots::QUALIFICATION)
-    );
+    let expected = marked(schema2_feature_snapshots::QUALIFICATION);
+    assert_eq!(qualification, &expected);
     required_file(&tree, ".github/workflows/product-release.yml")?;
     schema2_product_release_snapshots::assert_rendered(&tree)?;
     let images = required_file(&tree, ".github/workflows/product-release-images.yml")?;
@@ -320,9 +318,9 @@ fn assert_macos_producer(body: &str) -> TestResult {
     let build = job_body(body, "build-binary")?;
     assert!(build.contains("runs-on: macos-15"), "{build}");
     assert!(build.contains("jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8"));
-    assert!(build.contains("rust@1.98.1"), "{build}");
+    assert!(build.contains("rust@1.99.0"), "{build}");
     assert!(body.contains(
-        "cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-runner-cli"
+        "mbx build --locked --manifest-path crates/velnor-runner/Cargo.toml --release --package velnor-runner-cli"
     ));
     assert!(body.contains("Mach-O"));
     assert!(body.contains("arm64"));

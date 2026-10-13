@@ -54,7 +54,7 @@ fn msrv_step_pins_tool_to_rust_version_and_locked() -> Result<(), RenderError> {
             "package {bad:?} must fail"
         );
     }
-    for bad in ["", "1.98.1", "latest", "1.x"] {
+    for bad in ["", "1.99.0", "latest", "1.x"] {
         let spec = MsrvSpec {
             package: "pkg".to_owned(),
             rust_version: bad.to_owned(),

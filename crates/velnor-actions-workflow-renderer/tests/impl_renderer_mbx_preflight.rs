@@ -143,7 +143,7 @@ fn assert_preflight_step_shapes(
     let version_script = run.get(2).ok_or("version-check script missing")?;
     assert!(version_script.contains("mbx_bin=$(command -v mbx)"));
     assert!(version_script.contains("-- \"$mbx_bin\" --version"));
-    assert!(version_script.contains("mbx 1.21.1"));
+    assert!(version_script.contains("mbx 1.24.0"));
     Ok(())
 }
 
@@ -163,11 +163,11 @@ fn rust_preflight_exports_only_the_owned_toolchain_and_uses_no_scratch_leaf()
     symlink(&external, velnor.join("mbx-preflight"))?;
     write_tool(
         &fake_bin.join("mise"),
-        "#!/bin/sh\nset -eu\n[ \"$4\" = where ] || exit 2\n[ \"$5\" = 'rust@1.98.1' ] || exit 3\nprintf '%s\\n' \"$RUST_ROOT\"\n",
+        "#!/bin/sh\nset -eu\n[ \"$4\" = where ] || exit 2\n[ \"$5\" = 'rust@1.99.0' ] || exit 3\nprintf '%s\\n' \"$RUST_ROOT\"\n",
     )?;
     write_tool(
         &rust_root.join("rustc"),
-        "#!/bin/sh\n[ \"$1\" = '+1.98.1' ] || exit 2\n[ \"$2\" = -vV ] || exit 3\nprintf 'rustc 1.98.1 (abc)\\nrelease: 1.98.1\\nhost: x86_64-unknown-linux-gnu\\n'\n",
+        "#!/bin/sh\n[ \"$1\" = '+1.99.0' ] || exit 2\n[ \"$2\" = -vV ] || exit 3\nprintf 'rustc 1.99.0 (abc)\\nrelease: 1.99.0\\nhost: x86_64-unknown-linux-gnu\\n'\n",
     )?;
     let path = std::env::var("PATH").unwrap_or_default();
     let path = format!("{}:{path}", fake_bin.display());
@@ -310,13 +310,13 @@ fn rust_preflight_rejects_invalid_selected_install_facts() -> Result<(), Box<dyn
         fs::create_dir_all(&rust_root)?;
         write_tool(
             &fake_bin.join("mise"),
-            "#!/bin/sh\nset -eu\n[ \"$4\" = where ] || exit 2\n[ \"$5\" = 'rust@1.98.1' ] || exit 3\ncase \"$MISE_MODE\" in\n  relative) printf '%s\\n' 'relative/rust' ;;\n  unterminated-extra) printf '%s\\n' \"$RUST_ROOT\"; printf '%s' extra ;;\n  *) printf '%s\\n' \"$RUST_ROOT\" ;;\nesac\n",
+            "#!/bin/sh\nset -eu\n[ \"$4\" = where ] || exit 2\n[ \"$5\" = 'rust@1.99.0' ] || exit 3\ncase \"$MISE_MODE\" in\n  relative) printf '%s\\n' 'relative/rust' ;;\n  unterminated-extra) printf '%s\\n' \"$RUST_ROOT\"; printf '%s' extra ;;\n  *) printf '%s\\n' \"$RUST_ROOT\" ;;\nesac\n",
         )?;
         if rustc_present {
             let rustc = rust_root.join("rustc");
             fs::write(
                 &rustc,
-                "#!/bin/sh\n[ \"$1\" = '+1.98.1' ] || exit 2\n[ \"$2\" = -vV ] || exit 3\nif [ \"$RUST_MODE\" = missing-toolchain ]; then printf '%s\\n' 'error: toolchain is not installed' >&2; exit 4; fi\nif [ \"$RUST_MODE\" = wrong ]; then printf 'release: 1.98.0\\nhost: x86_64-unknown-linux-gnu\\n'; else printf 'release: 1.98.1\\nhost: x86_64-unknown-linux-gnu\\n'; fi\n",
+                "#!/bin/sh\n[ \"$1\" = '+1.99.0' ] || exit 2\n[ \"$2\" = -vV ] || exit 3\nif [ \"$RUST_MODE\" = missing-toolchain ]; then printf '%s\\n' 'error: toolchain is not installed' >&2; exit 4; fi\nif [ \"$RUST_MODE\" = wrong ]; then printf 'release: 1.98.0\\nhost: x86_64-unknown-linux-gnu\\n'; else printf 'release: 1.99.0\\nhost: x86_64-unknown-linux-gnu\\n'; fi\n",
             )?;
             let mut permissions = fs::metadata(&rustc)?.permissions();
             permissions.set_mode(if rustc_executable { 0o755 } else { 0o644 });

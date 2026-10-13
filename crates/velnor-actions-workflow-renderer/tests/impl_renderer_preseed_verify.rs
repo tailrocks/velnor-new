@@ -56,7 +56,7 @@ fn preseed_verify_script_rejects_tampered_payload() -> Result<(), RenderError> {
         .map_err(|err| RenderError::InvalidWorkflow(format!("tmp:{err}")))?;
     let run_case = |commit: &str, target: &str, sha: &str| {
         let manifest = format!(
-            "{{\"schema\":1,\"commit\":\"{commit}\",\"target\":\"{target}\",\"toolchain\":\"rust@1.98.1+mbx@1.0.0\",\"sha256\":\"{sha}\"}}"
+            "{{\"schema\":1,\"commit\":\"{commit}\",\"target\":\"{target}\",\"toolchain\":\"rust@1.99.0+mbx@1.0.0\",\"sha256\":\"{sha}\"}}"
         );
         std::fs::write(dir.join("preseed-manifest.json"), &manifest).expect("manifest fixture");
         std::fs::write(dir.join("velnor-actions"), []).expect("binary fixture");
@@ -72,7 +72,7 @@ fn preseed_verify_script_rejects_tampered_payload() -> Result<(), RenderError> {
             .env("GITHUB_SHA", "f".repeat(40))
             .env(
                 "line",
-                "{\"schema\":1,\"commit\":\"ffffffffffffffffffffffffffffffffffffffff\",\"target\":\"x86_64-unknown-linux-gnu\",\"toolchain\":\"rust@1.98.1+mbx@1.0.0\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}",
+                "{\"schema\":1,\"commit\":\"ffffffffffffffffffffffffffffffffffffffff\",\"target\":\"x86_64-unknown-linux-gnu\",\"toolchain\":\"rust@1.99.0+mbx@1.0.0\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}",
             )
             .status()
             .expect("sh")
@@ -98,7 +98,7 @@ fn preseed_verify_script_rejects_tampered_payload() -> Result<(), RenderError> {
             .env("GITHUB_SHA", "f".repeat(40))
             .env(
                 "line",
-                "{\"schema\":1,\"commit\":\"ffffffffffffffffffffffffffffffffffffffff\",\"target\":\"x86_64-unknown-linux-gnu\",\"toolchain\":\"rust@1.98.1+mbx@1.0.0\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}",
+                "{\"schema\":1,\"commit\":\"ffffffffffffffffffffffffffffffffffffffff\",\"target\":\"x86_64-unknown-linux-gnu\",\"toolchain\":\"rust@1.99.0+mbx@1.0.0\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\"}",
             )
             .status()
             .expect("sh")
@@ -133,8 +133,8 @@ fn preseed_verify_fails_when_mise_emits_version_then_exits_nonzero()
     use super::impl_renderer_fixtures::mise_argv;
 
     let step = preseed_verify_step(
-        &mise_argv("rust@1.98.1", "mbx", &["--version"]),
-        "1.21.1",
+        &mise_argv("rust@1.99.0", "mbx", &["--version"]),
+        "1.24.0",
         &BTreeMap::new(),
     )?;
     let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
@@ -165,7 +165,7 @@ fn preseed_verify_fails_when_mise_emits_version_then_exits_nonzero()
     let mise = bin.join("mise");
     std::fs::write(
         &mise,
-        "#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\nprintf invoked > \"$MISE_MARKER\"\nexit 7\n",
+        "#!/bin/sh\nprintf '%s\\n' 'mbx 1.24.0'\nprintf invoked > \"$MISE_MARKER\"\nexit 7\n",
     )?;
     let mut permissions = std::fs::metadata(&mise)?.permissions();
     permissions.set_mode(0o755);
@@ -185,7 +185,7 @@ fn preseed_verify_fails_when_mise_emits_version_then_exits_nonzero()
     let version_output = std::fs::read_to_string(runner_temp.join("velnor/preseed-mbx-version"))?;
     std::fs::remove_dir_all(&root)?;
     assert_eq!(called, "invoked");
-    assert_eq!(version_output, "mbx 1.21.1\n");
+    assert_eq!(version_output, "mbx 1.24.0\n");
     assert!(
         !output.status.success(),
         "the rendered verification step accepted a failed MBX producer"

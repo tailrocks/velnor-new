@@ -70,8 +70,8 @@ fn mbx_cleanup_requires_the_successful_ready_outcome_guard() {
             uses: "jdx/mr-boxington-action@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_owned(),
             with: BTreeMap::from([
                 ("github-cache-mode".to_owned(), "objects".to_owned()),
-                ("version".to_owned(), "1.21.1".to_owned()),
-                ("toolchain".to_owned(), "1.98.1".to_owned()),
+                ("version".to_owned(), "1.24.0".to_owned()),
+                ("toolchain".to_owned(), "1.99.0".to_owned()),
                 ("cache-generation".to_owned(), "test-generation".to_owned()),
             ]),
             env: BTreeMap::new(),

@@ -61,7 +61,7 @@ impl Drop for Fixture {
 }
 
 fn payload(runs_on: &str) -> ToolsCachePayload {
-    payload_with_specs(runs_on, &["rust@1.98.1".to_owned()])
+    payload_with_specs(runs_on, &["rust@1.99.0".to_owned()])
 }
 
 fn payload_with_specs(runs_on: &str, tool_specs: &[String]) -> ToolsCachePayload {
@@ -75,7 +75,7 @@ fn payload_with_specs(runs_on: &str, tool_specs: &[String]) -> ToolsCachePayload
         target: "x86_64-unknown-linux-gnu",
         mise_setup: &setup,
         tool_specs,
-        rustup_toolchain: Some("1.98.1"),
+        rustup_toolchain: Some("1.99.0"),
         rustup_components: &[],
     })
     .expect("typed payload")
@@ -260,7 +260,7 @@ fn static_tools_digest_is_bound_into_the_canonical_runtime_key() -> Result<(), B
     let base = payload("ubuntu-26.04");
     let expanded = payload_with_specs(
         "ubuntu-26.04",
-        &["rust@1.98.1".to_owned(), "shellcheck@0.11.0".to_owned()],
+        &["rust@1.99.0".to_owned(), "shellcheck@0.11.0".to_owned()],
     );
     assert_ne!(base.static_digest(), expanded.static_digest());
     assert_eq!(

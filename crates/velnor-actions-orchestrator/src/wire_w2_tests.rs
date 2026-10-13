@@ -279,7 +279,7 @@ fn observations_thread_to_verified_or_precise_miss() {
         outputs: vec!["out/report.json".to_owned()],
         command_inputs: Vec::new(),
         env: std::collections::BTreeMap::new(),
-        tools: vec!["rust@1.98.1".to_owned()],
+        tools: vec!["rust@1.99.0".to_owned()],
         dep_keys: Vec::new(),
     };
     let (key, compat) = (digest_b3(b"key"), digest_b3(b"compat"));

@@ -19,7 +19,7 @@ fn lock_text() -> String {
         .map(|target| binary_record(target))
         .collect::<String>();
     format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.8\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.9\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "e".repeat(40),
         "b".repeat(64)
     )
@@ -145,7 +145,7 @@ fn version_policy_drift_fails_velnor_generate() -> TestResult {
         )?;
         fs::write(
             repo.path().join(".velnor/version-policy.toml"),
-            repo_policy()?.replace("1.98.1", "9.9.9"),
+            repo_policy()?.replace("1.99.0", "9.9.9"),
         )?;
         let prep = prepare(repo.path())?;
         let parent = TempDir::new()?;

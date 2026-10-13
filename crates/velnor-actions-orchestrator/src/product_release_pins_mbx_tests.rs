@@ -102,14 +102,17 @@ fn release_qualification_uses_catalog_action_and_exact_version_probe() {
     let StepKind::Action { uses, with, .. } = &steps[1].kind else {
         panic!("qualification middle step must install the native MBX action");
     };
+    let mbx_version = catalog.version(PinnedTool::MrBoxington);
+    let rust_version = catalog.version(PinnedTool::Rust);
     assert_eq!(
         uses,
         &format!("jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}")
     );
-    assert_eq!(with.get("version").map(String::as_str), Some("1.23.0"));
-    assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.23.0");
-    assert_eq!(with.get("toolchain").map(String::as_str), Some("1.99.0"));
-    assert_eq!(catalog.version(PinnedTool::Rust), "1.99.0");
+    assert_eq!(with.get("version").map(String::as_str), Some(mbx_version));
+    assert_eq!(
+        with.get("toolchain").map(String::as_str),
+        Some(rust_version)
+    );
     let StepKind::Shell { run, .. } = &steps[2].kind else {
         panic!("qualification last step must verify the native MBX version");
     };
@@ -117,9 +120,9 @@ fn release_qualification_uses_catalog_action_and_exact_version_probe() {
     assert!(command.contains("mbx_bin=$(command -v mbx)"));
     assert!(command.contains("case \"$mbx_bin\" in /*)"));
     assert!(command.contains("[ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]"));
-    assert!(command.contains(
-        "mise --no-config --no-env --no-hooks exec rust@1.99.0 -- \"$mbx_bin\" --version"
-    ));
+    assert!(command.contains(&format!(
+        "mise --no-config --no-env --no-hooks exec rust@{rust_version} -- \"$mbx_bin\" --version"
+    )));
     assert!(!command.contains("-- mbx --version"));
-    assert!(command.contains("mbx 1.23.0"));
+    assert!(command.contains(&format!("mbx {mbx_version}")));
 }

@@ -252,8 +252,8 @@ mod tests {
         )?;
         let manifest = scratch.0.join("Cargo.toml");
         let target = scratch.0.join("target");
-        let workspace = registration::cargo_config::workspace_plan_at_target(&manifest, &target)?;
-        let output = registration::cargo_config::cargo_output_at_target(
+        let workspace = registration::mbx_config::workspace_plan_at_target(&manifest, &target)?;
+        let output = registration::mbx_config::mbx_output_at_target(
             &manifest,
             &["test", "--no-run", "--locked", "--message-format=json"],
             &target,

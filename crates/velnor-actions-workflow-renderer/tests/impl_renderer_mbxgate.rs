@@ -19,7 +19,7 @@ fn mbx_argv() -> Vec<String> {
 fn report_wrapped_mbx_task() -> Result<velnor_actions_contract::Step, RenderError> {
     let script = concat!(
         "s=$(date +%s%3N); ",
-        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx test; ",
+        "mise --no-config --no-env --no-hooks exec rust@1.99.0 -- mbx test; ",
         "code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" ",
         "VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions\"; ",
         "helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
@@ -33,7 +33,7 @@ fn report_wrapped_mbx_task() -> Result<velnor_actions_contract::Step, RenderErro
 
 #[test]
 fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
-    let [preflight, selected, version_check] = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?;
+    let [preflight, selected, version_check] = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.99.0")?;
     assert_eq!(preflight.name, "Verify Rust before MBX action");
     assert_eq!(selected.name, "Restore MBX objects");
     assert_eq!(version_check.name, "Verify native MBX version");
@@ -42,8 +42,8 @@ fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
             &mbx_pin(),
             CompileDriver::Cargo,
             "1.19.0",
-            "1.98.1",
-            mbx_tool_env("1.98.1"),
+            "1.99.0",
+            mbx_tool_env("1.99.0"),
         )?
         .is_none()
     );
@@ -52,8 +52,8 @@ fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
             &checkout_pin(),
             CompileDriver::Mbx,
             "1.19.0",
-            "1.98.1",
-            mbx_tool_env("1.98.1"),
+            "1.99.0",
+            mbx_tool_env("1.99.0"),
         )
         .is_err_and(|err| format!("{err:?}").contains("not_mbx_action")),
         "non-MBX action must fail"
@@ -63,8 +63,8 @@ fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
             &mbx_pin(),
             CompileDriver::Mbx,
             "latest",
-            "1.98.1",
-            mbx_tool_env("1.98.1"),
+            "1.99.0",
+            mbx_tool_env("1.99.0"),
         )
         .is_err_and(|err| format!("{err:?}").contains("bad_mbx_version")),
         "floating action version must fail"
@@ -111,7 +111,7 @@ fn cargo_gating_rejects_mbx_commands_but_ignores_decoy_text() -> Result<(), Rend
 #[test]
 fn cargo_gating_rejects_the_native_action() -> Result<(), RenderError> {
     let mut steps = vec![checkout_step(&checkout_pin())?];
-    steps.extend(mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?);
+    steps.extend(mbx_tool_steps(&mbx_pin(), "1.19.0", "1.99.0")?);
     let jobs = BTreeMap::from([job("velnor-cargo", "Cargo leg", Vec::new(), steps)]);
     let cargo = BTreeMap::from([("velnor-cargo".to_owned(), CompileDriver::Cargo)]);
     assert!(
@@ -125,7 +125,7 @@ fn cargo_gating_rejects_the_native_action() -> Result<(), RenderError> {
 #[test]
 fn mbx_gating_requires_typed_action_and_preflight_roles() -> Result<(), RenderError> {
     let mut steps = vec![checkout_step(&checkout_pin())?];
-    steps.extend(mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?);
+    steps.extend(mbx_tool_steps(&mbx_pin(), "1.19.0", "1.99.0")?);
     let mut jobs = BTreeMap::from([job("velnor-mbx", "MBX leg", Vec::new(), steps)]);
     let mbx = BTreeMap::from([("velnor-mbx".to_owned(), CompileDriver::Mbx)]);
     let preflight = jobs.get("velnor-mbx").expect("MBX job").steps[1].clone();
@@ -163,7 +163,7 @@ fn assert_preflight_mismatch(steps: [Step; 3]) -> Result<(), RenderError> {
 
 #[test]
 fn mbx_preflight_must_equal_the_factory_step_for_the_selected_action() -> Result<(), RenderError> {
-    let canonical = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?;
+    let canonical = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.99.0")?;
     let mut complete = vec![checkout_step(&checkout_pin())?];
     complete.extend(canonical.clone());
     complete.push(report_wrapped_mbx_task()?);
@@ -203,7 +203,7 @@ fn mbx_preflight_must_equal_the_factory_step_for_the_selected_action() -> Result
 
 #[test]
 fn mbx_preflight_role_and_cardinality_are_gated() -> Result<(), RenderError> {
-    let [preflight, action, version_check] = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?;
+    let [preflight, action, version_check] = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.99.0")?;
     let mut untyped = vec![checkout_step(&checkout_pin())?];
     let mut no_role = preflight.clone();
     no_role.role = None;
@@ -233,7 +233,7 @@ fn mbx_preflight_role_and_cardinality_are_gated() -> Result<(), RenderError> {
 
 #[test]
 fn mbx_preflight_role_is_rejected_without_a_selected_driver() -> Result<(), RenderError> {
-    let [mut preflight, _, _] = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?;
+    let [mut preflight, _, _] = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.99.0")?;
     preflight.role = Some(StepRole::MbxPreflight);
     let jobs = BTreeMap::from([job(
         "orphan",
@@ -256,7 +256,7 @@ fn mbx_preflight_role_is_rejected_without_a_selected_driver() -> Result<(), Rend
 #[test]
 fn mbx_gating_requires_the_exact_guard_before_a_real_command() -> Result<(), RenderError> {
     let mut steps = vec![checkout_step(&checkout_pin())?];
-    steps.extend(mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?);
+    steps.extend(mbx_tool_steps(&mbx_pin(), "1.19.0", "1.99.0")?);
     let mut jobs = BTreeMap::from([job("velnor-mbx", "MBX leg", Vec::new(), steps)]);
     let mbx = BTreeMap::from([("velnor-mbx".to_owned(), CompileDriver::Mbx)]);
     jobs.get_mut("velnor-mbx").expect("MBX job").steps[2].role = Some(StepRole::MbxCache);
@@ -312,7 +312,7 @@ fn mbx_gating_requires_the_exact_guard_before_a_real_command() -> Result<(), Ren
     );
     jobs.get_mut("velnor-mbx").expect("MBX job").steps.insert(
         3,
-        mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?[2].clone(),
+        mbx_tool_steps(&mbx_pin(), "1.19.0", "1.99.0")?[2].clone(),
     );
     jobs.get_mut("velnor-mbx").expect("MBX job").steps.remove(2);
     assert!(

@@ -57,7 +57,7 @@ fn candidate_job_renders_with_plan_dependency() -> Result<(), RenderError> {
         build: argv_of(&[
             "mise",
             "exec",
-            "rust@1.98.1",
+            "rust@1.99.0",
             "mr-boxington@1.19.0",
             "--",
             "build",
@@ -100,7 +100,7 @@ fn candidate_qualify_rejects_non_shell_vectors() {
         build: argv_of(&[
             "mise",
             "exec",
-            "rust@1.98.1",
+            "rust@1.99.0",
             "mr-boxington@1.19.0",
             "--",
             "build",

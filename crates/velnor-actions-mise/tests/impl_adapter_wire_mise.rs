@@ -119,7 +119,7 @@ fn catalog_identities_validate() {
         RUST_VERSION
     );
     let custom = ToolCatalog::new(
-        "1.98.1", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.30.1", "0.9.148", "1.13.0",
+        "1.99.0", "1.19.0", "2.101.0", "1.7.12", "0.11.0", "1.30.1", "0.9.148", "1.13.0",
     );
     assert!(custom.is_ok());
     assert!(
@@ -272,10 +272,10 @@ fn inspect_mise_file_never_fails_never_writes() {
     assert!(bad.spec.is_none());
     assert_eq!(bad.findings[0].code, TOOLING_INPUT_INVALID);
     assert!(bad.findings[0].recommendation.contains("manually"));
-    let good = inspect_mise_file("mise.toml", Some("[tools]\nrust = \"1.98.1\"\n")).expect("valid");
+    let good = inspect_mise_file("mise.toml", Some("[tools]\nrust = \"1.99.0\"\n")).expect("valid");
     assert_eq!(good.findings, [] as [velnor_actions_mise::ToolFinding; 0]);
     let spec = good.spec.expect("spec");
-    assert_eq!(spec.tools.get("rust").map(String::as_str), Some("1.98.1"));
+    assert_eq!(spec.tools.get("rust").map(String::as_str), Some("1.99.0"));
     assert!(inspect_mise_file("rust-toolchain.toml", Some("")).is_err());
     let src = std::fs::read_to_string(
         std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/toolfiles.rs"),
@@ -294,11 +294,11 @@ fn inspect_mise_file_never_fails_never_writes() {
 
 #[test]
 fn lock_tool_versions_exposes_map() {
-    let versions = lock_tool_versions("[tools]\nrust = \"1.98.1\"\ngh = \"2.101.0\"\n");
+    let versions = lock_tool_versions("[tools]\nrust = \"1.99.0\"\ngh = \"2.101.0\"\n");
     assert_eq!(versions.len(), 2);
-    assert_eq!(versions.get("rust").map(String::as_str), Some("1.98.1"));
+    assert_eq!(versions.get("rust").map(String::as_str), Some("1.99.0"));
     assert!(lock_tool_versions("[tools\nrust = ").is_empty());
-    assert!(lock_tool_versions("[other]\nrust = \"1.98.1\"\n").is_empty());
+    assert!(lock_tool_versions("[other]\nrust = \"1.99.0\"\n").is_empty());
 }
 
 #[test]

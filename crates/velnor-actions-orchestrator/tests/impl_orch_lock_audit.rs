@@ -186,7 +186,7 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     fs::write(
         repo.path().join("mise.toml"),
-        "[tools.rust]\nversion = \"1.98.1\"\npostinstall = \"touch pwned\"\n\n[plugins.evil]\nurl = \"https://example.invalid/evil\"\n",
+        "[tools.rust]\nversion = \"1.99.0\"\npostinstall = \"touch pwned\"\n\n[plugins.evil]\nurl = \"https://example.invalid/evil\"\n",
     )?;
     let prep = prepare(repo.path())?;
     assert!(

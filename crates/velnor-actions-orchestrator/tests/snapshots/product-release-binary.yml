@@ -64,29 +64,29 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          version: 2026.10.8
-          sha256: dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73
+          version: 2026.10.9
+          sha256: 93a0703c25fc15cd4fbe02019c9ea23ca9045e077af5e96c01207e1346edb14a
           install: "false"
           env: "false"
           cache: "false"
           cache_save: "false"
       - name: Install pinned Rust
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1
+        run: mise --no-config --no-env --no-hooks install rust@1.99.0 mr-boxington@1.24.0
       - name: Build attestation helper
         id: helper
-        run: "set -eu\nmise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-runner-attestation --bin velnor-runner-attestation-helper\ncp crates/velnor-runner/target/release/velnor-runner-attestation-helper velnor-runner-attestation-helper\ntest -s velnor-runner-attestation-helper\ndescription=\"$(file -b velnor-runner-attestation-helper)\"\ncase \"$description\" in\n  *Mach-O*arm64*) ;;\n  *) echo \"not an arm64 Mach-O: $description\" >&2; exit 1 ;;\nesac\nhelper_sha256=\"$(shasum -a 256 velnor-runner-attestation-helper | awk 'NR == 1 { print $1; next } END { if (NR != 1) exit 1 }')\"\nhelper_size=\"$(stat -f '%z' velnor-runner-attestation-helper)\"\n[[ \"$helper_sha256\" =~ ^[0-9a-f]{64}$ ]]\n[[ \"$helper_size\" =~ ^[1-9][0-9]*$ ]]\nprintf 'sha256=%s\\nsize=%s\\n' \"$helper_sha256\" \"$helper_size\" >> \"$GITHUB_OUTPUT\"\n"
+        run: "set -eu\nmise --no-config --no-env --no-hooks exec rust@1.99.0 -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-runner-attestation --bin velnor-runner-attestation-helper\ncp crates/velnor-runner/target/release/velnor-runner-attestation-helper velnor-runner-attestation-helper\ntest -s velnor-runner-attestation-helper\ndescription=\"$(file -b velnor-runner-attestation-helper)\"\ncase \"$description\" in\n  *Mach-O*arm64*) ;;\n  *) echo \"not an arm64 Mach-O: $description\" >&2; exit 1 ;;\nesac\nhelper_sha256=\"$(shasum -a 256 velnor-runner-attestation-helper | awk 'NR == 1 { print $1; next } END { if (NR != 1) exit 1 }')\"\nhelper_size=\"$(stat -f '%z' velnor-runner-attestation-helper)\"\n[[ \"$helper_sha256\" =~ ^[0-9a-f]{64}$ ]]\n[[ \"$helper_size\" =~ ^[1-9][0-9]*$ ]]\nprintf 'sha256=%s\\nsize=%s\\n' \"$helper_sha256\" \"$helper_size\" >> \"$GITHUB_OUTPUT\"\n"
       - name: Build velnor-host
         env:
           VELNOR_SOURCE_SHA: ${{ inputs.source_sha }}
           VELNOR_ATTESTATION_HELPER_SHA256: ${{ steps.helper.outputs.sha256 }}
-        run: "set -eu\n[[ \"$VELNOR_SOURCE_SHA\" =~ ^[0-9a-f]{40}$ ]]\n[[ \"$VELNOR_ATTESTATION_HELPER_SHA256\" =~ ^[0-9a-f]{64}$ ]]\nmise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-runner-cli\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ntest -s velnor-host"
+        run: "set -eu\n[[ \"$VELNOR_SOURCE_SHA\" =~ ^[0-9a-f]{40}$ ]]\n[[ \"$VELNOR_ATTESTATION_HELPER_SHA256\" =~ ^[0-9a-f]{64}$ ]]\nmise --no-config --no-env --no-hooks exec rust@1.99.0 mr-boxington@1.24.0 -- mbx build --locked --manifest-path crates/velnor-runner/Cargo.toml --release --package velnor-runner-cli\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ntest -s velnor-host"
       - name: Write binary manifest and checksums
         env:
           VELNOR_EXPECTED_HELPER_SHA256: ${{ steps.helper.outputs.sha256 }}
           VELNOR_EXPECTED_HELPER_SIZE: ${{ steps.helper.outputs.size }}
         run: "set -eu\nsource_sha=\"$VELNOR_SOURCE_SHA\"\nauthority_sha=\"$VELNOR_WORKFLOW_AUTHORITY_SHA\"\n[[ \"$source_sha\" =~ ^[0-9a-f]{40}$ ]]\n[[ \"$authority_sha\" == \"$source_sha\" ]]\n[[ \"$VELNOR_EXPECTED_HELPER_SHA256\" =~ ^[0-9a-f]{64}$ ]]\n[[ \"$VELNOR_EXPECTED_HELPER_SIZE\" =~ ^[1-9][0-9]*$ ]]\nverify_arm64_macho() {\n  local description\n  description=\"$(file -b \"$1\")\"\n  case \"$description\" in\n    *Mach-O*arm64*) ;;\n    *) echo \"not an arm64 Mach-O: $description\" >&2; exit 1 ;;\n  esac\n}\ntest -s velnor-host\ntest -s velnor-runner-attestation-helper\nverify_arm64_macho velnor-host\nverify_arm64_macho velnor-runner-attestation-helper\nhost_sha256=\"$(shasum -a 256 velnor-host | awk 'NR == 1 { print $1; next } END { if (NR != 1) exit 1 }')\"\nhelper_sha256=\"$(shasum -a 256 velnor-runner-attestation-helper | awk 'NR == 1 { print $1; next } END { if (NR != 1) exit 1 }')\"\nhost_size=\"$(stat -f '%z' velnor-host)\"\nhelper_size=\"$(stat -f '%z' velnor-runner-attestation-helper)\"\n[[ \"$host_sha256\" =~ ^[0-9a-f]{64}$ ]]\n[[ \"$helper_sha256\" == \"$VELNOR_EXPECTED_HELPER_SHA256\" ]]\n[[ \"$helper_size\" == \"$VELNOR_EXPECTED_HELPER_SIZE\" ]]\n[[ \"$host_size\" =~ ^[1-9][0-9]*$ ]]\nprintf '{\"schema_version\":1,\"repository\":\"tailrocks/velnor-new\",\"source_ref\":\"refs/heads/main\",\"source_commit\":\"%s\",\"signer_workflow\":\".github/workflows/product-release-binary.yml\",\"signer_ref\":\"refs/heads/main\",\"workflow_authority_sha\":\"%s\",\"trusted_signing_identity\":{\"oidc_issuer\":\"https://token.actions.githubusercontent.com\",\"certificate_identity\":\"https://github.com/tailrocks/velnor-new/.github/workflows/product-release-binary.yml@refs/heads/main\"},\"platform\":\"macos/arm64\",\"host\":{\"name\":\"velnor-host\",\"target\":\"aarch64-apple-darwin\",\"sha256\":\"%s\",\"size\":%s},\"attestation_helper\":{\"name\":\"velnor-runner-attestation-helper\",\"target\":\"aarch64-apple-darwin\",\"sha256\":\"%s\",\"size\":%s}}\\n' \"$source_sha\" \"$authority_sha\" \"$host_sha256\" \"$host_size\" \"$helper_sha256\" \"$helper_size\" > BINARY_RELEASE_MANIFEST.json\nshasum -a 256 velnor-host velnor-runner-attestation-helper BINARY_RELEASE_MANIFEST.json > SHA256SUMS"
       - name: Upload binary assets
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           if-no-files-found: error
           name: binary-assets
@@ -108,7 +108,7 @@ jobs:
     if: inputs.release_action == 'build'
     steps:
       - name: Download built assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: binary-assets
           path: assets
@@ -132,8 +132,8 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          version: 2026.10.8
-          sha256: dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73
+          version: 2026.10.9
+          sha256: 93a0703c25fc15cd4fbe02019c9ea23ca9045e077af5e96c01207e1346edb14a
           install: "false"
           env: "false"
           cache: "false"
@@ -148,7 +148,7 @@ jobs:
           persist-credentials: "false"
           ref: ${{ inputs.source_sha }}
       - name: Download built assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: binary-assets
           path: assets

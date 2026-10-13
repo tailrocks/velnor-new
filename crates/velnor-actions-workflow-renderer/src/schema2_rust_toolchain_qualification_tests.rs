@@ -73,14 +73,14 @@ fn assert_hosted_target_setup(index: usize, id: &str, body: &Yaml) {
     assert!(rendered.contains("ref: ${{ github.sha }}"), "{id}");
     assert!(rendered.contains("persist-credentials: \"false\""), "{id}");
     assert!(rendered.contains("name: Setup Mise"), "{id}");
-    assert!(rendered.contains("version: 2026.10.8"), "{id}");
+    assert!(rendered.contains("version: 2026.10.9"), "{id}");
     let mise_sha = if index == 0 {
         crate::setup::MISE_BINARY_SHA256_LINUX_X64
     } else {
         crate::setup::MISE_BINARY_SHA256_MACOS_ARM64
     };
     assert!(rendered.contains(mise_sha), "{id}");
-    assert!(rendered.contains("MBX_VERSION: 1.21.1"), "{id}");
+    assert!(rendered.contains("MBX_VERSION: 1.24.0"), "{id}");
     assert_pinned_mbx_install(id, body);
 }
 
@@ -118,7 +118,7 @@ fn assert_measurement_artifact(index: usize, id: &str, body: &Yaml) {
     );
     assert_qualification_probe(body, id);
     assert!(
-        rendered.contains("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"),
+        rendered.contains(crate::steps::UPLOAD_ARTIFACT_USES),
         "{id}"
     );
     assert!(rendered.contains(&format!("name: {artifact}")), "{id}");

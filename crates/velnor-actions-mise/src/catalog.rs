@@ -40,17 +40,18 @@ mod versions;
 pub use versions::{check_freshness_requirements, validate_exact_version};
 use versions::{invalid_version, tool_source};
 
-/// Adopted Mise runner release (tag `v2026.10.8`); hosted version/digest qualification
-/// passed on Linux x64 and macOS x64 in run 38321521320 for source SHA
-/// `438bd90d2ef64515373f413b501b7ae01189a8e7`.
-/// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-10-12.
-pub const MISE_VERSION: &str = "2026.10.8";
-/// Qualified Rust stable toolchain; 1.99.0 is held pending policy review.
-/// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-10-08.
-pub const RUST_VERSION: &str = "1.98.1";
-/// Qualified `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.21.1`).
-/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-03.
-pub const MR_BOXINGTON_VERSION: &str = "1.21.1";
+/// Adopted Mise runner release (tag `v2026.10.9`, published 2026-10-13).
+/// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-10-13.
+/// Hosted digest qualification for this exact release was not re-run.
+pub const MISE_VERSION: &str = "2026.10.9";
+/// Selected Rust stable toolchain (`rustc 1.99.0 (b940084d7 2026-09-28)`).
+/// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-10-13.
+/// Hosted qualification for this compiler pin was not re-run.
+pub const RUST_VERSION: &str = "1.99.0";
+/// Selected `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.24.0`, published 2026-10-13).
+/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-13.
+/// Local binary reports `mbx 1.24.0`. Hosted qualification for this pin was not re-run.
+pub const MR_BOXINGTON_VERSION: &str = "1.24.0";
 /// Qualified GitHub CLI (tag `v2.102.0`).
 /// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-09-30.
 pub const GH_VERSION: &str = "2.102.0";

@@ -252,7 +252,7 @@ fn strict_mixed_platform_checks_use_native_setup_and_keep_global_runner() -> Res
             checkout_step(&checkout_pin())?,
             scrubbed_shell_step(
                 "Native task",
-                mise_argv("rust@1.98.1", "rustc", &["--version"]),
+                mise_argv("rust@1.99.0", "rustc", &["--version"]),
             )?,
         ],
     );

@@ -257,21 +257,21 @@ mod tests {
             vec![
                 "mise".to_owned(),
                 "exec".to_owned(),
-                "rust@1.98.1".to_owned(),
+                "rust@1.99.0".to_owned(),
                 "--".to_owned(),
                 "rustup".to_owned(),
                 "component".to_owned(),
                 "add".to_owned(),
                 "--toolchain".to_owned(),
-                "1.98.1-x86_64-unknown-linux-gnu".to_owned(),
+                "1.99.0-x86_64-unknown-linux-gnu".to_owned(),
                 "clippy".to_owned(),
                 "rustfmt".to_owned(),
             ],
-            BTreeMap::from([("RUSTUP_TOOLCHAIN".to_owned(), "1.98.1".to_owned())]),
+            BTreeMap::from([("RUSTUP_TOOLCHAIN".to_owned(), "1.99.0".to_owned())]),
         )
         .expect("fixed step");
         assert_eq!(
-            rust_components(&step, "1.98.1", "x86_64-unknown-linux-gnu").expect("components"),
+            rust_components(&step, "1.99.0", "x86_64-unknown-linux-gnu").expect("components"),
             ["clippy", "rustfmt"]
         );
     }

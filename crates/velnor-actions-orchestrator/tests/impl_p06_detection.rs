@@ -220,7 +220,7 @@ fn root_pair_wrapper_conflict_fails() -> TestResult {
 fn nested_workspace_detects_own_wrapper_and_config() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
-    write_file(root, "mise.toml", "[tools]\nrust = \"1.98.1\"\n")?;
+    write_file(root, "mise.toml", "[tools]\nrust = \"1.99.0\"\n")?;
     write_file(
         root,
         "sub/Cargo.toml",
@@ -273,7 +273,7 @@ fn misleading_names_and_comments_not_evidence() -> TestResult {
     write_file(
         root,
         "mise.toml",
-        "# wrappers.cargo.command = \"mbx\"\n[tools]\nrust = \"1.98.1\"\n",
+        "# wrappers.cargo.command = \"mbx\"\n[tools]\nrust = \"1.99.0\"\n",
     )?;
     write_task(root, "nextest", "#!/bin/sh\necho hi\n")?;
     write_task(root, "mbx-test", "#!/bin/sh\necho hi\n")?;

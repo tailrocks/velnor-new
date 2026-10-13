@@ -7,7 +7,7 @@ use crate::yaml::Yaml;
 use velnor_actions_contract::ReleaseTarget;
 
 const MODE: &str = "inputs.mode == 'rust-toolchain'";
-const UPLOAD_USES: &str = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+const UPLOAD_USES: &str = crate::steps::UPLOAD_ARTIFACT_USES;
 pub(super) const MANIFEST_SHA256: &str =
     "ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2";
 const RUST_VERSION: &str = "1.99.0";

@@ -7,7 +7,7 @@ use super::{
 };
 
 fn fake_mise_script() -> &'static str {
-    "#!/bin/sh\nset -eu\n[ \"$1\" = --no-config ] && [ \"$2\" = --no-env ] && [ \"$3\" = --no-hooks ] || exit 2\n[ \"$4\" = exec ] && [ \"$5\" = rust@1.98.1 ] && [ \"$6\" = -- ] || exit 3\nmbx_bin=$7\ncase \"$mbx_bin\" in /*) ;; *) exit 4 ;; esac\n[ -f \"$mbx_bin\" ] && [ -x \"$mbx_bin\" ] || exit 5\nshift 6\n[ \"$1\" = \"$mbx_bin\" ] || exit 6\nshift\nPATH=/usr/bin:/bin exec \"$mbx_bin\" \"$@\"\n"
+    "#!/bin/sh\nset -eu\n[ \"$1\" = --no-config ] && [ \"$2\" = --no-env ] && [ \"$3\" = --no-hooks ] || exit 2\n[ \"$4\" = exec ] && [ \"$5\" = rust@1.99.0 ] && [ \"$6\" = -- ] || exit 3\nmbx_bin=$7\ncase \"$mbx_bin\" in /*) ;; *) exit 4 ;; esac\n[ -f \"$mbx_bin\" ] && [ -x \"$mbx_bin\" ] || exit 5\nshift 6\n[ \"$1\" = \"$mbx_bin\" ] || exit 6\nshift\nPATH=/usr/bin:/bin exec \"$mbx_bin\" \"$@\"\n"
 }
 
 fn fake_mbx_script(version_body: Option<&str>) -> String {
@@ -30,7 +30,7 @@ fn native_action_version_guard_accepts_only_one_exact_complete_line()
     for (name, output, want_success) in [
         (
             "exact version",
-            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\n"),
+            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.24.0'\n"),
             true,
         ),
         (
@@ -41,17 +41,17 @@ fn native_action_version_guard_accepts_only_one_exact_complete_line()
         ("empty output", Some("#!/bin/sh\nexit 0\n"), false),
         (
             "extra line",
-            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1' 'diagnostic'\n"),
+            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.24.0' 'diagnostic'\n"),
             false,
         ),
         (
             "unterminated output",
-            Some("#!/bin/sh\nprintf '%s' 'mbx 1.21.1'\n"),
+            Some("#!/bin/sh\nprintf '%s' 'mbx 1.24.0'\n"),
             false,
         ),
         (
             "nonzero command",
-            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\nexit 2\n"),
+            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.24.0'\nexit 2\n"),
             false,
         ),
         ("missing executable", None, false),
@@ -86,7 +86,7 @@ fn native_action_cache_dir_guard_rejects_wrong_or_ambiguous_output()
         write_tool(&fake_bin.join("mise"), fake_mise_script())?;
         write_tool(
             &fake_bin.join("mbx"),
-            &fake_mbx_script(Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\n")),
+            &fake_mbx_script(Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.24.0'\n")),
         )?;
         let result = run_version_check_with_cache_dir_mode(&root.0, &guard, mode)?;
         assert!(

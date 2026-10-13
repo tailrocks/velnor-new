@@ -59,7 +59,7 @@ fn wrapper_comment_is_not_evidence() {
         "# wrappers.cargo.command = \"mbx\"\n",
         "#wrappers = { cargo = { command = \"mbx\" } }\n",
         "[wrappers.cargo]\n# command = \"mbx\"\n",
-        "[tools]\n# mr_boxington leftovers\nrust = \"1.98.1\"\n",
+        "[tools]\n# mr_boxington leftovers\nrust = \"1.99.0\"\n",
     ] {
         assert_eq!(parse_cargo_wrapper(content), Ok(None), "{content:?}");
     }
@@ -92,7 +92,7 @@ fn wrapper_near_miss_commands_not_mbx() {
 
 #[test]
 fn wrapper_absent_is_none() {
-    for content in ["", "\n", "[tools]\nrust = \"1.98.1\"\n", "[wrappers]\n"] {
+    for content in ["", "\n", "[tools]\nrust = \"1.99.0\"\n", "[wrappers]\n"] {
         assert_eq!(parse_cargo_wrapper(content), Ok(None), "{content:?}");
     }
 }
@@ -347,7 +347,7 @@ fn repo_wrapper_reconciles_with_local_mbx_pin() {
 #[test]
 fn mbx_wrapper_without_pin_is_missing() {
     for content in [
-        "[wrappers.cargo]\ncommand = \"mbx\"\n[tools]\nrust = \"1.98.1\"\n",
+        "[wrappers.cargo]\ncommand = \"mbx\"\n[tools]\nrust = \"1.99.0\"\n",
         "[wrappers.cargo]\ncommand = \"mbx\"\n",
     ] {
         assert_eq!(
@@ -381,8 +381,8 @@ fn mbx_wrapper_loose_pin_is_invalid() {
 #[test]
 fn non_mbx_wrapper_needs_no_pin() {
     for content in [
-        "[tools]\nrust = \"1.98.1\"\n",
-        "[wrappers.cargo]\ncommand = \"cargo\"\n[tools]\nrust = \"1.98.1\"\n",
+        "[tools]\nrust = \"1.99.0\"\n",
+        "[wrappers.cargo]\ncommand = \"cargo\"\n[tools]\nrust = \"1.99.0\"\n",
     ] {
         assert_eq!(
             mbx_wrapper_pin_status(content),

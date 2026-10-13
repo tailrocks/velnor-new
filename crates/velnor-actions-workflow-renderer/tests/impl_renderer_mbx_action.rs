@@ -140,13 +140,13 @@ fn action_construction_rejects_floating_refs_and_tool_versions() {
             "invalid action ref {uses}"
         );
     }
-    for version in ["latest", "v1.21.1", "1.21", "1.21.1.0", "1.21.x", ""] {
+    for version in ["latest", "v1.24.0", "1.21", "1.24.0.0", "1.21.x", ""] {
         assert!(
             steps(version, TEST_RUST_TOOLCHAIN).is_err(),
             "invalid MBX version {version:?}"
         );
     }
-    for rust in ["stable", "1.98", "1.98.1-nightly", "1.98.1;exit 1"] {
+    for rust in ["stable", "1.98", "1.99.0-nightly", "1.99.0;exit 1"] {
         env = mbx_tool_env(rust);
         assert!(
             mbx_steps_for_driver(MBX_ACTION, CompileDriver::Mbx, TEST_MBX_VERSION, rust, env,)
@@ -203,7 +203,7 @@ fn rendered_action_has_rust_homes_and_native_owner_policy() -> Result<(), Render
         "rendered preflight exports PATH"
     );
     assert!(
-        text.contains("rust@1.98.1"),
+        text.contains("rust@1.99.0"),
         "rendered preflight probes the catalog toolchain"
     );
     assert!(!text.contains("mr-boxington@"), "Mise does not install MBX");
@@ -217,7 +217,7 @@ fn rendered_action_has_rust_homes_and_native_owner_policy() -> Result<(), Render
     assert!(text.contains("name: Clean MBX workspace outputs"));
     assert!(text.contains("if: always() && steps.mbx-ready.outcome == 'success'"));
     assert!(text.contains(
-        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \\\"$mbx_bin\\\" clean"
+        "mise --no-config --no-env --no-hooks exec rust@1.99.0 -- \\\"$mbx_bin\\\" clean"
     ));
     Ok(())
 }

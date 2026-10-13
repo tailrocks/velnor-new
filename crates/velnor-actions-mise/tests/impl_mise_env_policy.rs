@@ -55,7 +55,7 @@ fn hostile_tofu_parent() -> Vec<(OsString, OsString)> {
 }
 
 fn bootstrap() -> Result<IsolatedCommand, String> {
-    IsolatedCommand::mise_install(&["rust@1.98.1".to_owned()]).map_err(|err| err.to_string())
+    IsolatedCommand::mise_install(&["rust@1.99.0".to_owned()]).map_err(|err| err.to_string())
 }
 
 fn baseline() -> Result<IsolatedCommand, String> {
@@ -71,7 +71,7 @@ fn baseline() -> Result<IsolatedCommand, String> {
 
 fn verify() -> Result<IsolatedCommand, String> {
     IsolatedCommand::mise_exec(
-        &["rust@1.98.1".to_owned()],
+        &["rust@1.99.0".to_owned()],
         &[OsString::from("cargo"), OsString::from("--version")],
     )
     .map_err(|err| err.to_string())

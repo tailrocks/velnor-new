@@ -24,7 +24,7 @@ fn toolchain_homes_merge_and_validate() {
         ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"]
     );
     let base = BTreeMap::from([("MATRIX_KEY".to_owned(), "m".to_owned())]);
-    let merged = with_toolchain_homes(&base, "/r/rustup", "/r/cargo", "1.98.1");
+    let merged = with_toolchain_homes(&base, "/r/rustup", "/r/cargo", "1.99.0");
     assert_eq!(merged.get("MATRIX_KEY").map(String::as_str), Some("m"));
     assert_eq!(check_toolchain_homes(&merged), Ok(()));
     assert!(check_toolchain_homes(&base).is_err());
@@ -35,13 +35,13 @@ fn toolchain_homes_merge_and_validate() {
 
 #[test]
 fn bare_cargo_scan_rejects_unpinned_rust() {
-    let pinned = "      run: mise --no-config exec rust@1.98.1 -- cargo --version\n";
+    let pinned = "      run: mise --no-config exec rust@1.99.0 -- cargo --version\n";
     assert_eq!(check_no_bare_cargo(pinned), Ok(()));
     let bare = "      run: cargo --version\n";
     let err = check_no_bare_cargo(bare).expect_err("bare cargo");
     assert!(err.to_string().contains("bare_rust_invocation:cargo"));
     let block =
-        "      run: |\n        mise exec rust@1.98.1 -- cargo test\n        mbx build --locked\n";
+        "      run: |\n        mise exec rust@1.99.0 -- cargo test\n        mbx build --locked\n";
     let err = check_no_bare_cargo(block).expect_err("bare mbx");
     assert!(err.to_string().contains("bare_rust_invocation:mbx"));
     let names = "    - name: Run cargo-deny\n      uses: example/example@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n";
@@ -54,7 +54,7 @@ fn bare_cargo_scan_rejects_unpinned_rust() {
 #[test]
 fn bare_cargo_scan_covers_rendered_workflow() -> Result<(), RenderError> {
     let ctx = fixture_ctx();
-    let argv = mise_argv("rust@1.98.1", "cargo", &["--version"]);
+    let argv = mise_argv("rust@1.99.0", "cargo", &["--version"]);
     let step = scrubbed_shell_step("Run cargo", argv)?;
     let ir = fixture_ir(vec![job("task", "Task", Vec::new(), vec![step])]);
     let rendered = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;

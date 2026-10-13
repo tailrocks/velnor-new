@@ -104,9 +104,9 @@ fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
         condition: None,
             kind: StepKind::Action {
                 uses: format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
-                with: BTreeMap::from([("toolchain".to_owned(), "1.98.1".to_owned())]),
+                with: BTreeMap::from([("toolchain".to_owned(), "1.99.0".to_owned())]),
                 env: BTreeMap::from([
-                    ("VELNOR_MBX_VERSION".to_owned(), "1.21.1".to_owned()),
+                    ("VELNOR_MBX_VERSION".to_owned(), "1.24.0".to_owned()),
                     (
                         crate::cache_steps::MBX_CACHE_MODE_ENV.to_owned(),
                         "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}".to_owned(),

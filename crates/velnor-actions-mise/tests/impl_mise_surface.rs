@@ -26,7 +26,7 @@ fn homes() -> Result<ToolHomes, String> {
 /// Every mise-owned argv shape, including the program token.
 fn all_mise_vectors() -> Result<Vec<Vec<OsString>>, String> {
     let catalog = pinned();
-    let specs = vec!["rust@1.98.1".to_owned()];
+    let specs = vec!["rust@1.99.0".to_owned()];
     let payload = vec![OsString::from("cargo"), OsString::from("--version")];
     let mut vectors = vec![
         IsolatedCommand::mise_exec(&specs, &payload)

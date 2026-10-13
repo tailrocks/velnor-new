@@ -102,7 +102,7 @@ fn undeclared_tools_never_resolve_from_the_compiled_catalog() {
     for id in ["rust", "cargo-nextest", "node", "unknown"] {
         assert!(names::resolve_on(&[], &[id.to_owned()], CheckPlatform::LinuxX64).is_err());
     }
-    assert!(fingerprint(&[], &["rust@1.98.1".to_owned()]).is_err());
+    assert!(fingerprint(&[], &["rust@1.99.0".to_owned()]).is_err());
     assert!(fingerprint(&[rust()], &[]).is_err());
 }
 #[test]
@@ -280,7 +280,7 @@ fn altered_qualification_cannot_retain_the_discovered_proposal_binding() {
     changed.qualified_tools[0].platforms[0].install_tree_sha256 = "e".repeat(64);
     assert!(changed.verify_qualification_identity().is_err());
     let mut changed = original.clone();
-    changed.tool_specs = vec!["rust@1.98.1".to_owned()];
+    changed.tool_specs = vec!["rust@1.99.0".to_owned()];
     assert!(changed.verify_qualification_identity().is_err());
     let mut changed = original;
     changed

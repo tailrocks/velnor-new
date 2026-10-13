@@ -35,6 +35,9 @@ pub use action_pins_impl::action_pins;
 #[path = "validator_tools.rs"]
 mod validator_tools;
 
+#[path = "task_wrapper.rs"]
+mod task_wrapper;
+
 pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
@@ -71,7 +74,7 @@ pub const CANDIDATE_JOB_ID: &str = "candidate";
 /// Baseline-publish job ID: runs after the final gate passes.
 pub const PUBLISH_JOB_ID: &str = "publish-baseline";
 /// Full-SHA Alint pin for the repository-policy `alint` job.
-pub const ALINT_USES: &str = "asamarts/alint@f558d76d076710312c54723d18e44d8cd95b3977";
+pub const ALINT_USES: &str = "asamarts/alint@c08c68be72e0c3a3a02051bd15f4a7d768fa5cbe";
 /// Pinned Alint binary release tag for the step's `version:` input.
 ///
 /// Per the action's `action.yml`, a SHA-pinned `uses:` falls back to
@@ -80,7 +83,7 @@ pub const ALINT_USES: &str = "asamarts/alint@f558d76d076710312c54723d18e44d8cd95
 /// release); the renderer cannot depend on that crate, so
 /// `scripts/check-freshness.sh` pins this mirror to the reviewed
 /// `asamarts/alint` inventory row instead of trusting the duplication.
-pub const ALINT_BINARY_VERSION: &str = "v0.18.1";
+pub const ALINT_BINARY_VERSION: &str = "v0.18.2";
 
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]
@@ -381,8 +384,17 @@ fn render_merged(
     } else {
         jobs.clone()
     };
+    let (jobs, task_files) = task_wrapper::factor_obligation_steps(
+        &jobs,
+        &ctx.checkout_uses,
+        &ctx.generator_version,
+        &ctx.report_helper_version,
+        &ctx.workflow_tasks,
+        ctx.scale_set_selector.as_ref(),
+    )?;
     let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
-    let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
+    let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
+    shared.files.extend(task_files);
     let mut document = document::workflow_to_yaml(ir, &shared, ctx, &mbx_jobs)?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;

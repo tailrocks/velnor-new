@@ -11,33 +11,49 @@ use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
 use crate::impl_common::{TestResult, make_repo};
 
-const CACHE_GENERATION: &str = "velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-47ce49b32025d93a7a2f4570815afaa2b7092240";
+fn tool_pins() -> (String, String) {
+    let catalog = velnor_actions_mise::ToolCatalog::pinned();
+    (
+        catalog
+            .version(velnor_actions_mise::PinnedTool::MrBoxington)
+            .to_owned(),
+        catalog
+            .version(velnor_actions_mise::PinnedTool::Rust)
+            .to_owned(),
+    )
+}
+
+fn cache_generation() -> String {
+    let (mbx, _) = tool_pins();
+    format!(
+        "velnor-qualification-mbx-{mbx}-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-{MR_BOXINGTON_ACTION_CANDIDATE_SHA}"
+    )
+}
 
 fn assert_candidate_ref(writer: &str) {
-    assert!(
-        writer.contains(&format!(
-            "uses: jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_CANDIDATE_SHA}"
-        )),
-        "the experiment must invoke its exact immutable candidate"
+    assert_eq!(
+        MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_CANDIDATE_SHA,
+        "the production pin is the current action release"
     );
     assert!(
-        !writer.contains(&format!(
+        writer.contains(&format!(
             "uses: jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}"
         )),
-        "qualification must not silently substitute the production pin"
+        "qualification must invoke the current immutable action pin"
     );
 }
 
 fn assert_candidate_owner(job: &str) {
+    let (mbx, rust) = tool_pins();
     for fragment in [
-        "version: 1.21.1",
-        "toolchain: 1.98.1",
-        "isolate-objects-cache: \"true\"",
-        "RUSTUP_TOOLCHAIN: 1.98.1",
-        "MBX_SHARE_OUT_DIR: \"0\"",
-        "CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo",
+        format!("version: {mbx}"),
+        format!("toolchain: {rust}"),
+        "isolate-objects-cache: \"true\"".to_owned(),
+        format!("RUSTUP_TOOLCHAIN: {rust}"),
+        "MBX_SHARE_OUT_DIR: \"0\"".to_owned(),
+        "CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo".to_owned(),
     ] {
-        assert!(job.contains(fragment), "{job}");
+        assert!(job.contains(&fragment), "{job}");
     }
 }
 
@@ -74,11 +90,15 @@ fn assert_writer(writer: &str) {
         "{writer}"
     );
     assert!(
-        writer.contains(&format!("{CACHE_GENERATION}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}")),
+        writer.contains(&format!("{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}", cache_generation())),
         "{writer}"
     );
-    assert!(writer.contains("version: 1.21.1"), "{writer}");
-    assert!(writer.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{writer}");
+    let (mbx, rust) = tool_pins();
+    assert!(writer.contains(&format!("version: {mbx}")), "{writer}");
+    assert!(
+        writer.contains(&format!("RUSTUP_TOOLCHAIN: {rust}")),
+        "{writer}"
+    );
     assert!(
         writer
             .contains("CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo"),
@@ -110,7 +130,7 @@ fn assert_reader(reader: &str) {
         "{reader}"
     );
     assert!(
-        reader.contains(&format!("{CACHE_GENERATION}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}")),
+        reader.contains(&format!("{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}", cache_generation())),
         "{reader}"
     );
     assert!(
@@ -128,7 +148,8 @@ fn assert_reader(reader: &str) {
         reader.contains(".savings.cached_compilations > 0"),
         "{reader}"
     );
-    assert!(reader.contains("version: 1.21.1"), "{reader}");
+    let (mbx, _) = tool_pins();
+    assert!(reader.contains(&format!("version: {mbx}")), "{reader}");
     assert!(
         reader.contains("df -B1 -P \\\"$RUNNER_TEMP\\\""),
         "{reader}"
@@ -156,7 +177,11 @@ fn assert_reader(reader: &str) {
         ),
         "{reader}"
     );
-    assert!(reader.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{reader}");
+    let (_, rust) = tool_pins();
+    assert!(
+        reader.contains(&format!("RUSTUP_TOOLCHAIN: {rust}")),
+        "{reader}"
+    );
     assert!(
         reader
             .contains("CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo"),

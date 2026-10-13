@@ -81,7 +81,7 @@ fn lock_text() -> Result<String, Box<dyn std::error::Error>> {
         )?;
     }
     Ok(format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.8\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.9\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "e".repeat(40),
         "b".repeat(64)
     ))
@@ -231,7 +231,7 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
 fn every_emitted_install_argv_carries_no_config() -> TestResult {
     without_ambient_identity("every_emitted_install_argv_carries_no_config", || {
         let catalog = ToolCatalog::pinned();
-        let specs = vec!["rust@1.98.1".to_owned()];
+        let specs = vec!["rust@1.99.0".to_owned()];
         let install = IsolatedCommand::mise_install(&specs).map_err(|err| err.to_string())?;
         let request = MiseInstall::new(vec![PinnedTool::Rust]).map_err(|err| err.to_string())?;
         let step = PreparePinnedTools::new(vec![PinnedTool::Rust], ToolHomes::runner_temp())

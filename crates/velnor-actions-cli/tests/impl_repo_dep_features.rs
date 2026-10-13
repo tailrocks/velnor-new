@@ -28,7 +28,7 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // features only, so pin comparison uses the audited implementation.
         "sha2",
         // HCL structural parser for tofu (T10, S8); hcl-rs 0.19.8 is
-        // compile-gated at MSRV 1.98.1, default features only, with
+        // compile-gated at MSRV 1.99.0, default features only, with
         // facade-owned byte/count/depth caps and no expression evaluation.
         "hcl",
         // Reviewed proc-macro token tree for the test-source scanner.

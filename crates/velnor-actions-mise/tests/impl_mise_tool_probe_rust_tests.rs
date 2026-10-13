@@ -57,7 +57,7 @@ fn rustc_verbose_requires_exact_declared_release_commit_and_platform() -> TestRe
         )
         .is_err()
     );
-    let bad = expected.replace("release: 1.97.1", "release: 1.98.1");
+    let bad = expected.replace("release: 1.97.1", "release: 1.99.0");
     let drift = fixture.observation("rustc", &format!("printf '%s\\n' '{bad}'"))?;
     assert!(
         verify_qualified_executable(

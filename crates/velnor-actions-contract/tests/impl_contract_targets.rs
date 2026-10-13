@@ -362,7 +362,7 @@ fn candidate_manifest_validates_all_fields() {
         schema: 1,
         commit: "ab".repeat(20),
         target: "x86_64-unknown-linux-gnu".to_owned(),
-        toolchain: "rust@1.98.1+mr-boxington@1.19.0".to_owned(),
+        toolchain: "rust@1.99.0+mr-boxington@1.19.0".to_owned(),
         sha256: "cd".repeat(32),
     };
     assert!(good.validate("c.json").is_ok());

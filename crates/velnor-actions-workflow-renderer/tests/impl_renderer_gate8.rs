@@ -90,7 +90,7 @@ fn rendered_action_inputs_carry_no_shell_expansions() -> Result<(), RenderError>
     let mut ctx = fixture_ctx();
     ctx.validator_commands = validator_commands();
     ctx.candidate = Some(velnor_actions_workflow_renderer::CandidateSpec {
-        build: mise_argv("rust@1.98.1", "mbx", &["build"]),
+        build: mise_argv("rust@1.99.0", "mbx", &["build"]),
         qualify: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
     });
     let plan = job(
@@ -148,7 +148,7 @@ fn rendered_action_inputs_carry_no_shell_expansions() -> Result<(), RenderError>
 
 #[test]
 fn manifest_script_carries_contract_keys_without_substitution() {
-    let script = candidate_manifest_script("x86_64-unknown-linux-gnu", "rust@1.98.1");
+    let script = candidate_manifest_script("x86_64-unknown-linux-gnu", "rust@1.99.0");
     for key in ["commit", "target", "toolchain", "sha256", "GITHUB_SHA"] {
         assert!(script.contains(key), "missing {key}");
     }

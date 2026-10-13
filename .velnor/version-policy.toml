@@ -16,9 +16,9 @@ check_interval_hours = 24
 max_exception_days = 14
 
 [tools]
-mise = "2026.10.8"
-rust = "1.98.1"
-mr-boxington = "1.21.1"
+mise = "2026.10.9"
+rust = "1.99.0"
+mr-boxington = "1.24.0"
 gh = "2.102.0"
 actionlint = "1.7.12"
 shellcheck = "0.11.0"
@@ -45,15 +45,15 @@ reviewed = "2026-09-28"
 
 [[actions]]
 name = "actions/download-artifact"
-version = "v8.0.1"
-sha = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
-reviewed = "2026-09-28"
+version = "v8.0.2"
+sha = "9000827ccba6bdab643e8b6fd33ac0654aef8333"
+reviewed = "2026-10-13"
 
 [[actions]]
 name = "actions/upload-artifact"
-version = "v7.0.1"
-sha = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
-reviewed = "2026-09-28"
+version = "v7.0.2"
+sha = "cf430e030ddbb5b0abf93d22962f4752f3646cd9"
+reviewed = "2026-10-13"
 
 [[actions]]
 name = "actions/cache/restore"
@@ -69,15 +69,15 @@ reviewed = "2026-09-28"
 
 [[actions]]
 name = "jdx/mr-boxington-action"
-version = "v1.6.0"
-sha = "1687e54eb349cadf61fa38b5813a77875489e8e6"
-reviewed = "2026-10-03"
+version = "v1.7.2"
+sha = "47ce49b32025d93a7a2f4570815afaa2b7092240"
+reviewed = "2026-10-13"
 
 [[actions]]
 name = "asamarts/alint"
-version = "v0.18.1"
-sha = "f558d76d076710312c54723d18e44d8cd95b3977"
-reviewed = "2026-10-12"
+version = "v0.18.2"
+sha = "c08c68be72e0c3a3a02051bd15f4a7d768fa5cbe"
+reviewed = "2026-10-13"
 
 [[actions]]
 name = "aws-actions/configure-aws-credentials"

@@ -149,8 +149,8 @@ fn create_candidate_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn E
             "scripts/generator-release/create-release-manifest.sh",
             "0.1.8",
             REPOSITORY,
-            "1.98.1",
-            "1.21.1",
+            "1.99.0",
+            "1.24.0",
         ])
         .current_dir(root)
         .env("PATH", with_required_tool_path(&[])?)

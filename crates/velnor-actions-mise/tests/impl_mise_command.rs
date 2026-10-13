@@ -9,7 +9,7 @@ use velnor_actions_mise::{
 };
 
 fn specs() -> Vec<String> {
-    vec!["rust@1.98.1".to_owned()]
+    vec!["rust@1.99.0".to_owned()]
 }
 
 fn payload() -> Vec<OsString> {
@@ -51,7 +51,7 @@ fn mise_argv_places_globals_before_subcommand() -> Result<(), String> {
             OsString::from("--no-env"),
             OsString::from("--no-hooks"),
             OsString::from("exec"),
-            OsString::from("rust@1.98.1"),
+            OsString::from("rust@1.99.0"),
             OsString::from("--"),
             OsString::from("cargo"),
             OsString::from("metadata"),
@@ -74,7 +74,7 @@ fn separator_splits_specs_from_payload() -> Result<(), String> {
     let split = argv.iter().position(|arg| arg == "--").unwrap_or(0);
     assert_eq!(
         argv[..split].last().map(OsString::as_os_str),
-        Some(OsStr::new("rust@1.98.1"))
+        Some(OsStr::new("rust@1.99.0"))
     );
     assert_eq!(argv[split + 1], OsString::from("cargo"));
     Ok(())

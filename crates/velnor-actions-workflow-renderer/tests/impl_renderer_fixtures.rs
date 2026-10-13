@@ -15,13 +15,13 @@ use velnor_actions_workflow_renderer::{
 pub(crate) const VERSION: &str = "0.1.0";
 pub(crate) const LABEL: &str = "ubuntu-26.04";
 pub(crate) const MISE_USES: &str = "jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8";
-pub(crate) const MISE_VERSION: &str = "2026.10.8";
+pub(crate) const MISE_VERSION: &str = "2026.10.9";
 pub(crate) const MISE_SHA256: &str =
-    "c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428";
+    velnor_actions_workflow_renderer::setup::MISE_BINARY_SHA256_LINUX_X64;
 pub(crate) const STAGED: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0";
 
-pub(crate) const TEST_MBX_VERSION: &str = "1.21.1";
-pub(crate) const TEST_RUST_TOOLCHAIN: &str = "1.98.1";
+pub(crate) const TEST_MBX_VERSION: &str = "1.24.0";
+pub(crate) const TEST_RUST_TOOLCHAIN: &str = "1.99.0";
 
 pub(crate) fn mbx_tool_env(rust_toolchain: &str) -> BTreeMap<String, String> {
     BTreeMap::from([

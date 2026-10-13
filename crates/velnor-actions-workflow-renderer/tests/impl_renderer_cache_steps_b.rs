@@ -23,13 +23,13 @@ fn lane_target_dirs_stay_isolated() {
 #[test]
 fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
     let uses = format!("jdx/mr-boxington-action@{}", sha());
-    let [_, direct, _] = mbx_tool_steps(&uses, "1.19.0", "1.98.1").expect("direct MBX steps");
+    let [_, direct, _] = mbx_tool_steps(&uses, "1.19.0", "1.99.0").expect("direct MBX steps");
     let [_, driven, _] = mbx_steps_for_driver(
         &uses,
         CompileDriver::Mbx,
         "1.19.0",
-        "1.98.1",
-        mbx_tool_env("1.98.1"),
+        "1.99.0",
+        mbx_tool_env("1.99.0"),
     )
     .expect("driver MBX")
     .expect("MBX driver emits");
@@ -50,8 +50,8 @@ fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
             &uses,
             CompileDriver::Cargo,
             "1.19.0",
-            "1.98.1",
-            mbx_tool_env("1.98.1"),
+            "1.99.0",
+            mbx_tool_env("1.99.0"),
         )
         .expect("cargo driver")
         .is_none(),

@@ -118,14 +118,14 @@ fn checked_task_env_merges_triple_over_validated_base() {
             "${{ matrix.task_id }}".to_owned(),
         ),
     ]);
-    let merged = checked_task_env(&base, "/r/rustup", "/r/cargo", "1.98.1").expect("checked env");
+    let merged = checked_task_env(&base, "/r/rustup", "/r/cargo", "1.99.0").expect("checked env");
     assert_eq!(
         merged.get("MISE_RUSTUP_HOME").map(String::as_str),
         Some("/r/rustup")
     );
     assert_eq!(
         merged.get("RUSTUP_TOOLCHAIN").map(String::as_str),
-        Some("1.98.1")
+        Some("1.99.0")
     );
     assert_eq!(
         merged.get("VELNOR_TASK_ID").map(String::as_str),
@@ -138,8 +138,8 @@ fn checked_task_env_merges_triple_over_validated_base() {
 fn checked_task_env_rejects_blank_triple_inputs() {
     let base = BTreeMap::new();
     for (rustup, cargo, toolchain) in [
-        ("", "/r/cargo", "1.98.1"),
-        ("/r/rustup", "", "1.98.1"),
+        ("", "/r/cargo", "1.99.0"),
+        ("/r/rustup", "", "1.99.0"),
         ("/r/rustup", "/r/cargo", ""),
     ] {
         let err = checked_task_env(&base, rustup, cargo, toolchain).expect_err("blank must fail");
@@ -155,7 +155,7 @@ fn checked_task_env_rejects_denied_base_keys() {
     for denied in STEP_CREDENTIAL_DENYLIST {
         let base = BTreeMap::from([(denied.to_owned(), "sentinel".to_owned())]);
         let err =
-            checked_task_env(&base, "/r/rustup", "/r/cargo", "1.98.1").expect_err("denied in base");
+            checked_task_env(&base, "/r/rustup", "/r/cargo", "1.99.0").expect_err("denied in base");
         assert!(
             err.to_string()
                 .contains(&format!("credential_step_env:{denied}")),
@@ -169,7 +169,7 @@ fn legacy_merge_stays_unvalidated_for_compat() {
     // `with_toolchain_homes` keeps its infallible shape for existing
     // callers; only `checked_task_env` enforces the contract.
     let base = BTreeMap::from([("MISE_GITHUB_TOKEN".to_owned(), "x".to_owned())]);
-    let merged = with_toolchain_homes(&base, "/r/rustup", "/r/cargo", "1.98.1");
+    let merged = with_toolchain_homes(&base, "/r/rustup", "/r/cargo", "1.99.0");
     assert!(merged.contains_key("MISE_GITHUB_TOKEN"));
     assert!(reject_denied_step_keys(&merged).is_err());
 }
@@ -211,7 +211,7 @@ fn project_task_env_rejects_hook_escape_keys() {
                     .contains(&format!("privileged_task_env:{hostile}")),
                 "got {err}"
             );
-            let err = checked_project_task_env(&base, "/r/rustup", "/r/cargo", "1.98.1")
+            let err = checked_project_task_env(&base, "/r/rustup", "/r/cargo", "1.99.0")
                 .expect_err("project task must fail");
             assert!(
                 err.to_string()
@@ -223,7 +223,7 @@ fn project_task_env_rejects_hook_escape_keys() {
     for denied in STEP_CREDENTIAL_DENYLIST {
         let base = BTreeMap::from([(denied.to_owned(), "sentinel".to_owned())]);
         assert!(
-            checked_project_task_env(&base, "/r/rustup", "/r/cargo", "1.98.1").is_err(),
+            checked_project_task_env(&base, "/r/rustup", "/r/cargo", "1.99.0").is_err(),
             "project task smuggling {denied} must fail"
         );
     }
@@ -326,7 +326,7 @@ fn tf_family_keys_denied_except_automation_pair() {
 fn project_task_env_rejects_tf_keys() {
     for hostile in ["TF_VAR_evil", "TF_DATA_DIR", "CHECKPOINT_DISABLE"] {
         let base = BTreeMap::from([(hostile.to_owned(), "evil".to_owned())]);
-        let err = checked_project_task_env(&base, "/r/rustup", "/r/cargo", "1.98.1")
+        let err = checked_project_task_env(&base, "/r/rustup", "/r/cargo", "1.99.0")
             .expect_err("hostile TF key must fail");
         assert!(
             err.to_string().contains(&format!("tf_task_env:{hostile}")),
@@ -337,7 +337,7 @@ fn project_task_env_rejects_tf_keys() {
         ("TF_IN_AUTOMATION".to_owned(), "1".to_owned()),
         ("TF_INPUT".to_owned(), "0".to_owned()),
     ]);
-    let merged = checked_project_task_env(&base, "/r/rustup", "/r/cargo", "1.98.1")
+    let merged = checked_project_task_env(&base, "/r/rustup", "/r/cargo", "1.99.0")
         .expect("automation pair stays allowed");
     assert_eq!(
         merged.get("TF_IN_AUTOMATION").map(String::as_str),
@@ -348,7 +348,7 @@ fn project_task_env_rejects_tf_keys() {
 #[test]
 fn project_task_env_merges_clean_declarations() {
     let base = BTreeMap::from([("VELNOR_TASK_RUN".to_owned(), "lint".to_owned())]);
-    let merged = checked_project_task_env(&base, "/r/rustup", "/r/cargo", "1.98.1")
+    let merged = checked_project_task_env(&base, "/r/rustup", "/r/cargo", "1.99.0")
         .expect("clean project env");
     assert_eq!(
         merged.get("MISE_RUSTUP_HOME").map(String::as_str),
@@ -359,7 +359,7 @@ fn project_task_env_merges_clean_declarations() {
         Some("lint")
     );
     let err =
-        checked_project_task_env(&base, "", "/r/cargo", "1.98.1").expect_err("blank must fail");
+        checked_project_task_env(&base, "", "/r/cargo", "1.99.0").expect_err("blank must fail");
     assert!(
         err.to_string().contains("missing_toolchain_home"),
         "got {err}"

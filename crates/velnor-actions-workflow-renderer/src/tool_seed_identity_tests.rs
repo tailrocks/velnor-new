@@ -146,7 +146,7 @@ fn mise_shell() -> Step {
             run: vec![
                 "mise".to_owned(),
                 "exec".to_owned(),
-                "rust@1.98.1".to_owned(),
+                "rust@1.99.0".to_owned(),
                 "--".to_owned(),
                 "cargo".to_owned(),
                 "check".to_owned(),

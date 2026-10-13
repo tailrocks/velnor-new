@@ -56,7 +56,7 @@ fn token_in_action_env_fails_render() -> Result<(), RenderError> {
 fn benign_mbx_cache_mode_env_passes() -> Result<(), RenderError> {
     // The genuine MBX restore step pins its push-gated cache mode in
     // step env; the extended gate must not flag that expression.
-    let restore = mbx_tool_steps(&mbx_pin(), "1.5.0", "1.98.1")?;
+    let restore = mbx_tool_steps(&mbx_pin(), "1.5.0", "1.99.0")?;
     render_workflow_ir(
         &fixture_ir(vec![action_plan_job(restore.into())?]),
         WorkflowPolicy::ConsumerV1,

@@ -17,7 +17,7 @@ fn descriptor() -> CachedTaskDescriptor {
         outputs: vec!["out/report.json".to_owned()],
         command_inputs: Vec::new(),
         env: BTreeMap::from([("RUSTFLAGS".to_owned(), "--deny warnings".to_owned())]),
-        tools: vec!["rust@1.98.1".to_owned()],
+        tools: vec!["rust@1.99.0".to_owned()],
         dep_keys: Vec::new(),
     }
 }

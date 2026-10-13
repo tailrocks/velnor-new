@@ -132,7 +132,7 @@ fn cache_identity_validates_exact_twelve_fields() {
 #[test]
 fn cache_toolchain_excludes_tool_files() -> Result<(), ContractError> {
     let inputs = ToolchainInputs {
-        tools: vec!["cargo-nextest@0.9.96".to_owned(), "rust@1.98.1".to_owned()],
+        tools: vec!["cargo-nextest@0.9.96".to_owned(), "rust@1.99.0".to_owned()],
         components: vec!["clippy".to_owned()],
         compile_driver: "cargo".to_owned(),
         test_runner: "cargo_test".to_owned(),

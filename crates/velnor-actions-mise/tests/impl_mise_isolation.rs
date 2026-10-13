@@ -13,7 +13,7 @@ use velnor_actions_mise::command::{
 use velnor_actions_mise::{GitRequest, MiseError};
 
 fn specs() -> Vec<String> {
-    vec!["rust@1.98.1".to_owned()]
+    vec!["rust@1.99.0".to_owned()]
 }
 
 fn payload() -> Vec<OsString> {

@@ -15,7 +15,7 @@ fn spec() -> FreshnessSpec {
             version: "2026.10.4".to_owned(),
             sha256: "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75".to_owned(),
         },
-        rust_version: "1.98.1".to_owned(),
+        rust_version: "1.99.0".to_owned(),
         generator_version: "0.1.0".to_owned(),
     }
 }
@@ -69,11 +69,11 @@ fn renders_schedule_only_read_only_probe() {
         "current Mise binary digest:\n{yaml}"
     );
     assert!(
-        yaml.contains("mise --no-config --no-env --no-hooks install rust@1.98.1"),
+        yaml.contains("mise --no-config --no-env --no-hooks install rust@1.99.0"),
         "exact Rust install:\n{yaml}"
     );
     assert!(
-        yaml.contains("mise --no-config --no-env --no-hooks exec rust@1.98.1 -- bash scripts/check-freshness.sh --check-upstream"),
+        yaml.contains("mise --no-config --no-env --no-hooks exec rust@1.99.0 -- bash scripts/check-freshness.sh --check-upstream"),
         "freshness runs with the installed Rust:\n{yaml}"
     );
     let positions = [
@@ -123,7 +123,7 @@ fn rejects_bad_spec_scalars() {
             "bad label {runs_on}"
         );
     }
-    for rust_version in ["", "latest", "1.98", "1.98.1; id", "1.98.1.2"] {
+    for rust_version in ["", "latest", "1.98", "1.99.0; id", "1.99.0.2"] {
         let bad = FreshnessSpec {
             rust_version: rust_version.to_owned(),
             ..spec()

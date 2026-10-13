@@ -27,7 +27,7 @@ fn request() -> Schema2WorkflowRequest {
                 "b".repeat(40)
             ),
             mbx_version: "1.0.0".to_owned(),
-            rust_version: "1.98.1".to_owned(),
+            rust_version: "1.99.0".to_owned(),
         }),
         mise_pin_qualification: Some(MisePinQualificationPins {
             linux_x86_64_setup: MiseSetup {
@@ -200,9 +200,9 @@ fn candidate_mbx_roundtrip_defers_gc_and_cleans_after_each_last_consumer() {
                 "mbx_bin=$(command -v mbx)",
                 "case \"$mbx_bin\" in /*)",
                 "[ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]",
-                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" --version",
-                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" +1.98.1 build --manifest-path",
-                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" clean",
+                "mise --no-config --no-env --no-hooks exec rust@1.99.0 -- \"$mbx_bin\" --version",
+                "mise --no-config --no-env --no-hooks exec rust@1.99.0 -- \"$mbx_bin\" +1.99.0 build --manifest-path",
+                "mise --no-config --no-env --no-hooks exec rust@1.99.0 -- \"$mbx_bin\" clean",
             ][..],
         ),
         (
@@ -211,10 +211,10 @@ fn candidate_mbx_roundtrip_defers_gc_and_cleans_after_each_last_consumer() {
                 "mbx_bin=$(command -v mbx)",
                 "case \"$mbx_bin\" in /*)",
                 "[ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]",
-                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" cache stats --json",
-                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" +1.98.1 build --manifest-path",
-                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" stats --json",
-                "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \"$mbx_bin\" clean",
+                "mise --no-config --no-env --no-hooks exec rust@1.99.0 -- \"$mbx_bin\" cache stats --json",
+                "mise --no-config --no-env --no-hooks exec rust@1.99.0 -- \"$mbx_bin\" +1.99.0 build --manifest-path",
+                "mise --no-config --no-env --no-hooks exec rust@1.99.0 -- \"$mbx_bin\" stats --json",
+                "mise --no-config --no-env --no-hooks exec rust@1.99.0 -- \"$mbx_bin\" clean",
             ][..],
         ),
     ] {

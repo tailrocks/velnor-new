@@ -233,19 +233,19 @@ fn retired_rust_cache_action_is_not_allowlisted() {
 }
 
 #[test]
-fn mbx_experiment_target_is_current_unqualified_release() {
+fn mbx_action_pin_matches_current_release() {
     use velnor_actions_actionlint::actions::{
         MR_BOXINGTON_ACTION_CANDIDATE_SHA, MR_BOXINGTON_ACTION_CANDIDATE_VERSION,
         MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION,
     };
 
-    assert_ne!(
+    assert_eq!(
         (
             MR_BOXINGTON_ACTION_CANDIDATE_VERSION,
             MR_BOXINGTON_ACTION_CANDIDATE_SHA
         ),
         (MR_BOXINGTON_ACTION_VERSION, MR_BOXINGTON_ACTION_SHA),
-        "the experiment target must stay separate from the production pin"
+        "qualification routing and the production pin use the current release"
     );
     let inventory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../.velnor/freshness-inventory.json");

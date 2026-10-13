@@ -264,7 +264,7 @@ fn deny_drift_blocks() {
         argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "cargo install foo && mise --no-env exec rust@1.98.1 -- cargo build".to_owned(),
+            "cargo install foo && mise --no-env exec rust@1.99.0 -- cargo build".to_owned(),
         ],
         prepare_argv: Vec::new(),
     }];

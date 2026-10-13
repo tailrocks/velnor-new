@@ -1,19 +1,20 @@
 # Mise platform binary pins
 
-Named workflow checks pin the official Mise `v2026.10.8` release and use
+Named workflow checks pin the official Mise `v2026.10.9` release and use
 the target-specific raw executable SHA-256 as the `jdx/mise-action` input.
 The workflow generator selects only the digest for the job's exact target.
-The full official [`SHASUMS256.txt`](https://github.com/jdx/mise/releases/download/v2026.10.8/SHASUMS256.txt)
-was captured at `2026-10-12T23:08:53Z`; its SHA-256 is
-`9237b178f5f3d1625045c18608e4bde6f66a023593822e8ae9029967c19474b0`.
-The raw receipt is recorded in
+The full official [`SHASUMS256.txt`](https://github.com/jdx/mise/releases/download/v2026.10.9/SHASUMS256.txt)
+was checked on 2026-10-13; its SHA-256 is
+`96044e97744abf0d993b78696a41c358bac074f84d06bbaab6c7512280609fe7`.
+Hosted qualification of this release was not re-run. The earlier
+`v2026.10.8` receipt remains in
 [`freshness-upstream-probe-2026-10-13.json`](freshness-upstream-probe-2026-10-13.json).
 
 | Target | Official raw executable | SHA-256 |
 | --- | --- | --- |
-| `x86_64-unknown-linux-gnu` | [`mise-v2026.10.8-linux-x64`](https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-linux-x64) | `c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428` |
-| `aarch64-apple-darwin` | [`mise-v2026.10.8-macos-arm64`](https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-macos-arm64) | `dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73` |
-| `x86_64-apple-darwin` | [`mise-v2026.10.8-macos-x64`](https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-macos-x64) | `a122fd04db5f2da07d24528ed61109bc82142ca44e821d4faafa05650f6ba627` |
+| `x86_64-unknown-linux-gnu` | [`mise-v2026.10.9-linux-x64`](https://github.com/jdx/mise/releases/download/v2026.10.9/mise-v2026.10.9-linux-x64) | `6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030` |
+| `aarch64-apple-darwin` | [`mise-v2026.10.9-macos-arm64`](https://github.com/jdx/mise/releases/download/v2026.10.9/mise-v2026.10.9-macos-arm64) | `93a0703c25fc15cd4fbe02019c9ea23ca9045e077af5e96c01207e1346edb14a` |
+| `x86_64-apple-darwin` | [`mise-v2026.10.9-macos-x64`](https://github.com/jdx/mise/releases/download/v2026.10.9/mise-v2026.10.9-macos-x64) | `8e243d9afcb73f3ee3ea35998e61f828cc0fc4a1cb0962defa702e54454bc1a7` |
 
 The source-build bootstrap also accepts Linux ARM64 and macOS ARM64 archives.
 Their archive and extracted executable hashes are checked against the same

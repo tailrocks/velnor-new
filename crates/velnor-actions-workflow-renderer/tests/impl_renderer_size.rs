@@ -115,7 +115,7 @@ fn direct_freshness_renderer_rejects_an_oversized_workflow() {
             version: "2026.10.4".to_owned(),
             sha256: "a".repeat(64),
         },
-        rust_version: "1.98.1".to_owned(),
+        rust_version: "1.99.0".to_owned(),
         generator_version: VERSION.to_owned(),
     };
     let error =

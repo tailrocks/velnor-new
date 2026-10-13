@@ -90,7 +90,7 @@ fn candidate_verify_script_checks_live_manifest() -> Result<(), RenderError> {
         .map_err(|err| RenderError::InvalidWorkflow(format!("tmp:{err}")))?;
     let run_case = |commit: &str, target: &str, sha: &str| {
         let manifest = format!(
-            "{{\"schema\":1,\"commit\":\"{commit}\",\"target\":\"{target}\",\"toolchain\":\"rust@1.98.1+mbx@1.0.0\",\"sha256\":\"{sha}\"}}"
+            "{{\"schema\":1,\"commit\":\"{commit}\",\"target\":\"{target}\",\"toolchain\":\"rust@1.99.0+mbx@1.0.0\",\"sha256\":\"{sha}\"}}"
         );
         std::fs::write(dir.join("candidate-manifest.json"), &manifest).expect("manifest fixture");
         std::fs::write(dir.join("velnor-actions"), []).expect("binary fixture");

@@ -354,13 +354,13 @@ fn toolchain_case(root: &std::path::Path) -> TestResult {
         .output()?;
     let installed = String::from_utf8_lossy(&listed.stdout).into_owned();
     let have = |prefix: &str| installed.lines().any(|line| line.starts_with(prefix));
-    if !(have("1.97.1-") && have("1.98.1-")) {
-        eprintln!("bench: case=toolchain status=UNMEASURED note=needs-1.97.1-and-1.98.1");
+    if !(have("1.97.1-") && have("1.99.0-")) {
+        eprintln!("bench: case=toolchain status=UNMEASURED note=needs-1.97.1-and-1.99.0");
         return Ok(());
     }
     let mut walls = Vec::new();
     let mut records = Vec::new();
-    for toolchain in ["1.97.1", "1.98.1"] {
+    for toolchain in ["1.97.1", "1.99.0"] {
         let start = std::time::Instant::now();
         let json = toolchain_metadata(root, toolchain)?;
         walls.push(start.elapsed().as_millis());

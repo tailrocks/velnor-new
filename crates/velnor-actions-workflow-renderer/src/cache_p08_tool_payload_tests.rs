@@ -38,13 +38,13 @@ fn payload(inputs: ToolsCacheInputs<'_>) -> ToolsCachePayload {
 
 fn sample_payload() -> ToolsCachePayload {
     let setup = pinned_mise();
-    let specs = vec!["rust@1.98.1".to_owned(), "shellcheck@0.11.0".to_owned()];
+    let specs = vec!["rust@1.99.0".to_owned(), "shellcheck@0.11.0".to_owned()];
     let components = vec!["rustfmt".to_owned(), "clippy".to_owned()];
     payload(inputs(
         "ubuntu-26.04",
         &setup,
         &specs,
-        Some("1.98.1"),
+        Some("1.99.0"),
         &components,
     ))
 }
@@ -206,8 +206,8 @@ fn restore_composite_binds_marker_pin_key_and_paths() {
 #[test]
 fn save_step_renders_generic_protected_default_branch_policy() {
     let setup = pinned_mise();
-    let specs = vec!["rust@1.98.1".to_owned()];
-    let payload = payload(inputs("ubuntu-26.04", &setup, &specs, Some("1.98.1"), &[]));
+    let specs = vec!["rust@1.99.0".to_owned()];
+    let payload = payload(inputs("ubuntu-26.04", &setup, &specs, Some("1.99.0"), &[]));
     let condition = rendered_condition(&payload.save_step().expect("save step"));
 
     assert_eq!(
@@ -223,29 +223,29 @@ fn save_step_renders_generic_protected_default_branch_policy() {
 #[test]
 fn static_identity_canonicalizes_inputs_and_binds_runner_selector() {
     let setup = pinned_mise();
-    let specs_a = vec!["rust@1.98.1".to_owned(), "shellcheck@0.11.0".to_owned()];
-    let specs_b = vec!["shellcheck@0.11.0".to_owned(), "rust@1.98.1".to_owned()];
+    let specs_a = vec!["rust@1.99.0".to_owned(), "shellcheck@0.11.0".to_owned()];
+    let specs_b = vec!["shellcheck@0.11.0".to_owned(), "rust@1.99.0".to_owned()];
     let components_a = vec!["clippy".to_owned(), "rustfmt".to_owned()];
     let components_b = vec!["rustfmt".to_owned(), "clippy".to_owned()];
     let first = payload(inputs(
         "ubuntu-26.04",
         &setup,
         &specs_a,
-        Some("1.98.1"),
+        Some("1.99.0"),
         &components_a,
     ));
     let reordered = payload(inputs(
         "ubuntu-26.04",
         &setup,
         &specs_b,
-        Some("1.98.1"),
+        Some("1.99.0"),
         &components_b,
     ));
     let scale_set = payload(inputs(
         "scale-set:velnor+ubuntu-26.04-scale-set",
         &setup,
         &specs_a,
-        Some("1.98.1"),
+        Some("1.99.0"),
         &components_a,
     ));
     assert_eq!(first.static_digest(), reordered.static_digest());
@@ -262,8 +262,8 @@ fn static_identity_canonicalizes_inputs_and_binds_runner_selector() {
 #[test]
 fn runtime_identity_is_required_and_changes_the_final_key() {
     let setup = pinned_mise();
-    let specs = vec!["rust@1.98.1".to_owned()];
-    let payload = payload(inputs("ubuntu-26.04", &setup, &specs, Some("1.98.1"), &[]));
+    let specs = vec!["rust@1.99.0".to_owned()];
+    let payload = payload(inputs("ubuntu-26.04", &setup, &specs, Some("1.99.0"), &[]));
     let first_identity = "a".repeat(64);
     let second_identity = "b".repeat(64);
     assert_ne!(
@@ -295,7 +295,7 @@ fn runtime_identity_is_required_and_changes_the_final_key() {
 #[test]
 fn payload_rejects_untyped_or_mismatched_tool_inputs() {
     let setup = pinned_mise();
-    let specs = vec!["rust@1.98.1".to_owned()];
+    let specs = vec!["rust@1.99.0".to_owned()];
     let components = vec!["clippy".to_owned()];
     assert!(ToolsCachePayload::new(inputs("ubuntu-26.04", &setup, &[], None, &[])).is_err());
     assert!(
@@ -303,7 +303,7 @@ fn payload_rejects_untyped_or_mismatched_tool_inputs() {
             "ubuntu-latest",
             &setup,
             &specs,
-            Some("1.98.1"),
+            Some("1.99.0"),
             &components
         ))
         .is_err()
@@ -326,7 +326,7 @@ fn payload_rejects_untyped_or_mismatched_tool_inputs() {
             "ubuntu-26.04",
             &setup,
             &specs,
-            Some("1.98.1"),
+            Some("1.99.0"),
             &["cargo".to_owned()]
         ))
         .is_err()
@@ -340,7 +340,7 @@ fn payload_rejects_untyped_or_mismatched_tool_inputs() {
             "ubuntu-26.04",
             &invalid_setup,
             &specs,
-            Some("1.98.1"),
+            Some("1.99.0"),
             &components
         ))
         .is_err()
@@ -350,13 +350,13 @@ fn payload_rejects_untyped_or_mismatched_tool_inputs() {
 #[test]
 fn payload_key_is_namespaced_to_static_payload_and_runtime_identity() {
     let setup = pinned_mise();
-    let specs = vec!["rust@1.98.1".to_owned()];
+    let specs = vec!["rust@1.99.0".to_owned()];
     let components = vec!["clippy".to_owned()];
     let base = payload(inputs(
         "ubuntu-26.04",
         &setup,
         &specs,
-        Some("1.98.1"),
+        Some("1.99.0"),
         &components,
     ));
     let changed_action_setup = MiseSetup {
@@ -367,7 +367,7 @@ fn payload_key_is_namespaced_to_static_payload_and_runtime_identity() {
         "ubuntu-26.04",
         &changed_action_setup,
         &specs,
-        Some("1.98.1"),
+        Some("1.99.0"),
         &components,
     ))
     .expect("different valid action SHA");
@@ -379,7 +379,7 @@ fn payload_key_is_namespaced_to_static_payload_and_runtime_identity() {
         "ubuntu-26.04",
         &changed_binary_setup,
         &specs,
-        Some("1.98.1"),
+        Some("1.99.0"),
         &components,
     ))
     .expect("different valid binary SHA");

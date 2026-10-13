@@ -37,8 +37,8 @@ fn tools_payload() -> crate::cache_p08::ToolsCachePayload {
         runs_on: "ubuntu-26.04",
         target: TARGET,
         mise_setup: &mise,
-        tool_specs: &["rust@1.98.1".to_owned()],
-        rustup_toolchain: Some("1.98.1"),
+        tool_specs: &["rust@1.99.0".to_owned()],
+        rustup_toolchain: Some("1.99.0"),
         rustup_components: &[],
     })
     .expect("tools payload")

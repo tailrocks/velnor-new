@@ -154,8 +154,8 @@ fn ver_nightly_record_requires_dated_toolchain() -> Result<(), ContractError> {
 fn ver_freshness_entry_schema() {
     let entry = FreshnessEntry {
         component: "rust".to_owned(),
-        current_pin: "1.98.1".to_owned(),
-        latest_stable: "1.98.1".to_owned(),
+        current_pin: "1.99.0".to_owned(),
+        latest_stable: "1.99.0".to_owned(),
         source_url: "https://releases.rs".to_owned(),
         checked_at: "2026-09-28T00:00:00Z".to_owned(),
         status: FreshnessStatus::Current,
@@ -232,7 +232,7 @@ fn ver_platform_binds_runner_image() -> Result<(), ContractError> {
 fn ver_tool_identity_carries_source_platforms_digest() {
     let tool = ToolIdentity {
         name: "rust".to_owned(),
-        version: "1.98.1".to_owned(),
+        version: "1.99.0".to_owned(),
         source: "https://static.rust-lang.org/dist/channel-rust-stable.toml".to_owned(),
         platforms: vec!["linux-x64".to_owned()],
         digest: "ab".repeat(32),

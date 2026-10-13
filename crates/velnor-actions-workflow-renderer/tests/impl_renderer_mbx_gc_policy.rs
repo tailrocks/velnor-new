@@ -12,7 +12,7 @@ use super::impl_renderer_fixtures::*;
 #[test]
 fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
-    let [preflight, mbx, version_check] = mbx_tool_steps(&uses, "1.21.1", "1.98.1")?;
+    let [preflight, mbx, version_check] = mbx_tool_steps(&uses, "1.24.0", "1.99.0")?;
     let plain = checkout_step(&checkout_pin())?;
     let text = render_workflow_ir(
         &fixture_ir(vec![job(
@@ -93,7 +93,7 @@ fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderEr
     );
     assert_eq!(
         text.matches(
-            "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \\\"$mbx_bin\\\" clean"
+            "mise --no-config --no-env --no-hooks exec rust@1.99.0 -- \\\"$mbx_bin\\\" clean"
         )
         .count(),
         2,
@@ -177,7 +177,7 @@ fn native_mbx_disk_samples_cover_the_active_lifecycle_boundaries() -> Result<(),
 
 fn render_mbx_lane_pair() -> Result<String, RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
-    let mbx = mbx_tool_steps(&uses, "1.21.1", "1.98.1")?;
+    let mbx = mbx_tool_steps(&uses, "1.24.0", "1.99.0")?;
     let checkout = checkout_step(&checkout_pin())?;
     let hosted = job(
         &format!("rust-demo{HOSTED_SUFFIX}"),
@@ -218,7 +218,7 @@ fn positions(text: &str, needle: &str) -> Vec<usize> {
 #[test]
 fn public_renderer_rejects_missing_duplicate_and_misordered_mbx_ready_checks() {
     let uses = format!("jdx/mr-boxington-action@{}", "b".repeat(40));
-    let valid = mbx_tool_steps(&uses, "1.21.1", "1.98.1")
+    let valid = mbx_tool_steps(&uses, "1.24.0", "1.99.0")
         .expect("native MBX steps render")
         .to_vec();
 

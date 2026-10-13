@@ -41,7 +41,7 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
         steps.iter().all(|step| !matches!(
             &step.kind,
             velnor_actions_contract::StepKind::Shell { run, .. }
-                if run.iter().any(|argument| argument == "mr-boxington@1.21.1")
+                if run.iter().any(|argument| argument == "mr-boxington@1.24.0")
         )),
         "Mise must not install action-owned MBX: {names:?}"
     );

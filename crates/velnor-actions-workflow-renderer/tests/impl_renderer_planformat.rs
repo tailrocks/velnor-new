@@ -20,7 +20,7 @@ fn format_env() -> BTreeMap<String, String> {
             "MISE_CARGO_HOME".to_owned(),
             "${{ runner.temp }}/velnor/cargo".to_owned(),
         ),
-        ("RUSTUP_TOOLCHAIN".to_owned(), "1.98.1".to_owned()),
+        ("RUSTUP_TOOLCHAIN".to_owned(), "1.99.0".to_owned()),
     ])
 }
 
@@ -39,7 +39,7 @@ fn plan_format_inserts_between_staging_and_plan() -> Result<(), RenderError> {
     let mut jobs = fixture_ir(vec![plan]).jobs;
     ensure_plan_format(
         &mut jobs,
-        mise_argv("rust@1.98.1", "cargo", &["fmt", "--check"]),
+        mise_argv("rust@1.99.0", "cargo", &["fmt", "--check"]),
         &format_env(),
     )?;
     let names: Vec<&str> = jobs["plan"]
@@ -86,7 +86,7 @@ fn plan_format_is_idempotent_and_validates_shape() -> Result<(), RenderError> {
         vec![checkout_step(&checkout_pin())?, plan_step()],
     );
     let mut jobs = fixture_ir(vec![plan]).jobs;
-    let argv = mise_argv("rust@1.98.1", "cargo", &["fmt", "--check"]);
+    let argv = mise_argv("rust@1.99.0", "cargo", &["fmt", "--check"]);
     ensure_plan_format(&mut jobs, argv.clone(), &format_env())?;
     ensure_plan_format(&mut jobs, argv, &format_env())?;
     let count = jobs["plan"]
@@ -120,7 +120,7 @@ fn plan_format_is_idempotent_and_validates_shape() -> Result<(), RenderError> {
     let mut jobs = fixture_ir(vec![lonely]).jobs;
     ensure_plan_format(
         &mut jobs,
-        mise_argv("rust@1.98.1", "cargo", &["fmt"]),
+        mise_argv("rust@1.99.0", "cargo", &["fmt"]),
         &format_env(),
     )?;
     Ok(())
@@ -141,7 +141,7 @@ fn plan_format_rejects_non_shell_format() -> Result<(), RenderError> {
     assert!(
         ensure_plan_format(
             &mut jobs,
-            mise_argv("rust@1.98.1", "cargo", &["fmt"]),
+            mise_argv("rust@1.99.0", "cargo", &["fmt"]),
             &format_env(),
         )
         .is_err_and(|err| format!("{err:?}").contains("format_step_malformed")),

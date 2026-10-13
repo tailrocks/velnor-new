@@ -44,7 +44,8 @@ pub(super) fn assert_rendered(tree: &RenderedTree) -> Result<(), Box<dyn std::er
     let mut workflows = Vec::new();
     for (path, expected) in paths {
         let body = tree.get(path).ok_or_else(|| format!("missing {path}"))?;
-        assert_eq!(body, super::marked(expected), "{path}");
+        let expected_body = super::marked(expected);
+        assert_eq!(body, &expected_body, "{path}");
         workflows.push(body);
     }
     let actions = action_snapshots::rendered_actions(tree)?;
@@ -94,10 +95,23 @@ fn assert_product(workflows: &[&str], actions: &Actions) -> Result<(), Box<dyn s
         parent.contains("name: Velnor product releases\n"),
         "{parent}"
     );
-    assert!(parent.contains("workflow_dispatch: {}"), "{parent}");
+    assert!(parent.contains("workflow_dispatch:\n"), "{parent}");
+    assert!(parent.contains("release_family:"), "{parent}");
+    assert!(
+        parent.contains("inputs.release_family == 'all' || inputs.release_family == 'images'"),
+        "{parent}"
+    );
+    assert!(
+        parent.contains("inputs.release_family == 'all' || inputs.release_family == 'binary'"),
+        "{parent}"
+    );
+    assert!(
+        parent.contains("inputs.release_family == 'all' || inputs.release_family == 'generator'"),
+        "{parent}"
+    );
+    assert!(!parent.contains("workflow_dispatch: {}"), "{parent}");
     assert!(!parent.contains("schedule:"), "{parent}");
     assert!(!parent.contains("push:"), "{parent}");
-    assert!(!parent.contains("inputs:"), "{parent}");
     assert_parent_job_order(parent);
     assert_source_gate(parent)?;
     for (path, module) in [

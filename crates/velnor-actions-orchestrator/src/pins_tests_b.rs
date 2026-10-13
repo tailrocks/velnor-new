@@ -49,18 +49,12 @@ fn mise_setup_defaults_to_compiled_pins() {
 fn consumer_binary_mise_setup_uses_latest_verified_platforms_only() {
     let config = config_with(BTreeMap::new());
     for (target, digest) in [
-        (
-            ReleaseTarget::LinuxX86_64,
-            "c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428",
-        ),
-        (
-            ReleaseTarget::MacosArm64,
-            "dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73",
-        ),
+        (ReleaseTarget::LinuxX86_64, MISE_BINARY_SHA256_LINUX_X64),
+        (ReleaseTarget::MacosArm64, MISE_BINARY_SHA256_MACOS_ARM64),
     ] {
         let setup = resolve_mise_setup_for_consumer_binary_release(&config, target)
             .expect("supported consumer runner");
-        assert_eq!(setup.version, "2026.10.8");
+        assert_eq!(setup.version, "2026.10.9");
         assert_eq!(setup.sha256, digest);
     }
     assert!(

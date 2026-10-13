@@ -30,15 +30,18 @@ pub struct MiseSetup {
     pub sha256: String,
 }
 
-/// Official raw Linux x64 binary SHA-256 for Mise 2026.10.8.
+/// Official raw Linux x64 binary SHA-256 for Mise 2026.10.9.
+/// `mise-v2026.10.9-linux-x64` in SHASUMS256.txt, checked 2026-10-13.
 pub const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428";
-/// Official raw macOS ARM64 binary SHA-256 for Mise 2026.10.8.
+    "6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030";
+/// Official raw macOS ARM64 binary SHA-256 for Mise 2026.10.9.
+/// `mise-v2026.10.9-macos-arm64` in SHASUMS256.txt, checked 2026-10-13.
 pub const MISE_BINARY_SHA256_MACOS_ARM64: &str =
-    "dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73";
-/// Official raw macOS x86-64 binary SHA-256 for Mise 2026.10.8.
+    "93a0703c25fc15cd4fbe02019c9ea23ca9045e077af5e96c01207e1346edb14a";
+/// Official raw macOS x86-64 binary SHA-256 for Mise 2026.10.9.
+/// `mise-v2026.10.9-macos-x64` in SHASUMS256.txt, checked 2026-10-13.
 pub const MISE_BINARY_SHA256_MACOS_X64: &str =
-    "a122fd04db5f2da07d24528ed61109bc82142ca44e821d4faafa05650f6ba627";
+    "8e243d9afcb73f3ee3ea35998e61f828cc0fc4a1cb0962defa702e54454bc1a7";
 
 impl MiseSetup {
     /// Resolve a compiled binary pin for one job's target.
@@ -46,7 +49,7 @@ impl MiseSetup {
     /// Unsupported targets or versions have no qualified artifact.
     pub fn for_target(&self, target: &str) -> Result<Self, RenderError> {
         self.validate()?;
-        if self.version != "2026.10.8" {
+        if self.version != "2026.10.9" {
             return Err(RenderError::BadCommand(format!(
                 "mise_setup_unqualified_version:{}",
                 self.version
@@ -120,7 +123,7 @@ pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// True for catalog version spellings (`2026.10.8`); never `latest`.
+/// True for catalog version spellings (`2026.10.9`); never `latest`.
 fn is_catalog_version(value: &str) -> bool {
     !value.is_empty()
         && value != "latest"

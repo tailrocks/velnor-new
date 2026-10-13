@@ -79,7 +79,7 @@ fn mise_opentofu_tool_classifies_strong() {
 
 #[test]
 fn mise_selection_matches_exact_tool_segments() {
-    let values = mise(&[("tools.rust", "1.98.1"), ("tools.my-opentofu-fork", "1.0")]);
+    let values = mise(&[("tools.rust", "1.99.0"), ("tools.my-opentofu-fork", "1.0")]);
     assert!(!mise_tool_selected(&values, "opentofu"));
     assert!(mise_tool_selected(&values, "rust"));
     assert!(!mise_tool_selected(&mise(&[]), "opentofu"));

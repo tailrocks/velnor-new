@@ -56,8 +56,8 @@ fn nested_task_source_is_hash_bound_and_mbx_preserves_its_working_directory() {
 #[test]
 fn selected_config_and_lock_preserve_only_selected_platform_pins() {
     let (config, lock) = selected_mise_files(&policy()).expect("selected source projection");
-    assert!(config.contains("[tools.\"mr-boxington\"]\nversion = \"1.21.1\""));
-    assert!(config.contains("[tools.\"rust\"]\nversion = \"1.98.1\""));
+    assert!(config.contains("[tools.\"mr-boxington\"]\nversion = \"1.24.0\""));
+    assert!(config.contains("[tools.\"rust\"]\nversion = \"1.99.0\""));
     assert!(config.contains("components = \"clippy,rustfmt\""));
     assert!(config.contains("targets = \"aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu\""));
     assert!(config.contains("\"github:boltffi/boltffi\""));

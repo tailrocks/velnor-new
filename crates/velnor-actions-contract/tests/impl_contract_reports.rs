@@ -245,7 +245,7 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
     let entry = MatrixEntry::derive(
         "rust",
         "stack/rust/crates/velnor-actions-contract/validation/default",
-        "mise exec --no-config rust@1.98.1 -- cargo clippy --locked",
+        "mise exec --no-config rust@1.99.0 -- cargo clippy --locked",
         &digest_b3(b"task-bytes"),
         serde_json::json!({"manifest": "crates/velnor-actions-contract/Cargo.toml"}),
         ExecuteTaskIds { tasks },

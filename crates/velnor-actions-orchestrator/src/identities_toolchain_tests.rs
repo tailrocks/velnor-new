@@ -10,7 +10,7 @@ fn compiler_spec_versions_flip_the_digest() {
         compile_driver: "cargo".to_owned(),
         test_runner: "cargo_test".to_owned(),
     };
-    let pinned = inputs(vec!["rust@1.98.1".to_owned()]);
+    let pinned = inputs(vec!["rust@1.99.0".to_owned()]);
     let bumped = inputs(vec!["rust@1.99.1".to_owned()]);
     assert_ne!(
         toolchain_id(&pinned).expect("digest"),

@@ -70,7 +70,7 @@ pub(crate) fn sample_identity() -> TaskIdentity {
 }
 
 /// Fixed leg command shared by contract matrix fixtures.
-pub(crate) const SAMPLE_RUN: &str = "mise exec --no-config rust@1.98.1 -- cargo clippy --locked";
+pub(crate) const SAMPLE_RUN: &str = "mise exec --no-config rust@1.99.0 -- cargo clippy --locked";
 
 /// Build one sample matrix entry shared by contract cases.
 pub(crate) fn sample_entry(run_key: &str) -> Result<MatrixEntry, ContractError> {

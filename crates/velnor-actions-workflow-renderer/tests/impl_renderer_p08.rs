@@ -28,7 +28,7 @@ fn job_tools_inferred_from_install_and_exec() {
                     "mise".to_owned(),
                     "--no-config".to_owned(),
                     "install".to_owned(),
-                    "rust@1.98.1".to_owned(),
+                    "rust@1.99.0".to_owned(),
                 ],
                 BTreeMap::new(),
             )
@@ -42,7 +42,7 @@ fn job_tools_inferred_from_install_and_exec() {
         ],
     };
     let tools = infer_job_tools(&job);
-    assert!(tools.contains(&"rust@1.98.1".to_owned()), "{tools:?}");
+    assert!(tools.contains(&"rust@1.99.0".to_owned()), "{tools:?}");
     assert!(tools.contains(&"actionlint@1.7.12".to_owned()), "{tools:?}");
 }
 
@@ -163,7 +163,7 @@ fn retired_rust_cache_is_rejected_for_every_lane() {
     let [preflight, mbx, version_check] = mbx_tool_steps(
         &format!("jdx/mr-boxington-action@{sha}"),
         "1.19.0",
-        "1.98.1",
+        "1.99.0",
     )
     .expect("mbx steps");
     let rust_cache = velnor_actions_contract::Step {
@@ -256,7 +256,7 @@ fn step_conditions_serialize_as_if_with_upload_default()
         vec![
             "mise".to_owned(),
             "exec".to_owned(),
-            "rust@1.98.1".to_owned(),
+            "rust@1.99.0".to_owned(),
         ],
     )?;
     check.condition = Some(CACHE_SAVE_CONDITION.to_owned());
@@ -307,7 +307,7 @@ fn strict_render_elects_single_writer_per_shared_key()
             vec![
                 "mise".to_owned(),
                 "install".to_owned(),
-                "rust@1.98.1".to_owned(),
+                "rust@1.99.0".to_owned(),
             ],
             BTreeMap::new(),
         )
