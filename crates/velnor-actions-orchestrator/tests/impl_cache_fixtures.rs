@@ -18,6 +18,9 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, fixture_manifest_json, git};
 
+#[path = "impl_cache_report_fixtures.rs"]
+mod report_fixtures;
+
 /// Owned Cargo home expression shared by writers and readers.
 const SHARED_HOME: &str = "${{ runner.temp }}/velnor/cargo";
 

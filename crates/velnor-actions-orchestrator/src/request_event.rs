@@ -342,4 +342,57 @@ mod qualification_tests {
             );
         }
     }
+
+    #[test]
+    fn rejects_partial_or_nonpositive_predecessor_locators() {
+        for inputs in [
+            serde_json::json!({
+                "campaign": "campaign-2030",
+                "phase": "warm",
+                "predecessor_run_id": "39"
+            }),
+            serde_json::json!({
+                "campaign": "campaign-2030",
+                "phase": "warm",
+                "predecessor_run_id": "0",
+                "predecessor_run_attempt": "2"
+            }),
+            serde_json::json!({
+                "campaign": "campaign-2030",
+                "phase": "warm",
+                "predecessor_run_id": "39",
+                "predecessor_run_attempt": "0"
+            }),
+            serde_json::json!({
+                "campaign": "campaign-2030",
+                "phase": "warm",
+                "predecessor_run_id": "39",
+                "predecessor_run_attempt": "2; exit 1"
+            }),
+        ] {
+            let payload = serde_json::json!({
+                "inputs": inputs,
+                "ref": "refs/heads/main",
+                "repository": {
+                    "full_name": "owner/project",
+                    "default_branch": "main"
+                }
+            });
+            assert!(
+                qualification_dispatch_for_parts(
+                    "workflow_dispatch",
+                    &payload,
+                    Some("owner/project"),
+                    Some("refs/heads/main"),
+                    Some("true"),
+                    Some("owner/project/.github/workflows/ci.yml@refs/heads/main"),
+                    Some("0123456789abcdef0123456789abcdef01234567"),
+                    Some("0123456789abcdef0123456789abcdef01234567"),
+                    Some("41"),
+                    Some("1"),
+                )
+                .is_err()
+            );
+        }
+    }
 }
