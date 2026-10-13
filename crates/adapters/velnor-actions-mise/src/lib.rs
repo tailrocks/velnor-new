@@ -24,6 +24,7 @@ pub mod command;
 pub mod custom_run;
 pub mod error;
 pub mod gate6;
+pub mod generator_release_workflow;
 pub mod gh;
 pub mod git;
 pub mod nextest;

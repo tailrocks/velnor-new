@@ -7,6 +7,7 @@
 
 pub mod evidence;
 mod evidence_text;
+pub mod generator_release_build;
 pub mod graph;
 mod manifest_edges;
 pub mod metadata;
@@ -26,6 +27,9 @@ pub use evidence::{
     Evidence, EvidenceFile, EvidenceStrength, MiseWrapperInput, NEXTEST_RECOMMENDATION,
     NextestConfigInput, PERSIST_EVIDENCE, SHADOWED_NEXTEST_CONFIG, evidence_scan_excluded,
     is_generated_output,
+};
+pub use generator_release_build::{
+    GeneratorBinaryCheck, GeneratorBinaryVerification, GeneratorCargoBuild,
 };
 pub use graph::dedupe_workspaces;
 pub use manifest_edges::manifest_edges;

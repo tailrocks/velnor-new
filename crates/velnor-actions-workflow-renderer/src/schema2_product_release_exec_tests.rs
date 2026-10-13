@@ -116,6 +116,11 @@ fn complete_publisher_revalidates_without_artifact_upload_or_mutation() -> Resul
     assert!(result.calls.contains("--dir"));
     assert!(result.calls.contains("linux-assets"));
     assert!(result.calls.contains("macos-assets"));
+    assert!(
+        result.output.is_empty(),
+        "nested revalidation output leaked to the publisher step: {}",
+        result.output
+    );
     assert!(!contains_mutation(&result.calls));
     Ok(())
 }
