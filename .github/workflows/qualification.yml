@@ -811,7 +811,6 @@ jobs:
       CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
       MBX_CACHE_DIR: ${{ github.workspace }}/.velnor-mbx-cache-qualification/mbx-store
       MBX_CACHE_EXPORT_GROUP: velnor-qualification-mbx-1.21.1-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
-      MBX_GC_AUTO: "1"
       MISE_AUTO_INSTALL: "false"
       MISE_CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
       MISE_EXEC_AUTO_INSTALL: "false"
@@ -836,10 +835,6 @@ jobs:
           env: "false"
           cache: "false"
           cache_save: "false"
-          env: "false"
-          install: "false"
-          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
-          version: 2026.9.18
       - name: Install pinned Rust toolchain
         run: "mise install rust@1.99.0 && printf '%s/bin\\n' \"$(mise exec rust@1.99.0 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
       - name: Restore MBX objects
@@ -884,7 +879,6 @@ jobs:
       CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
       MBX_CACHE_DIR: ${{ github.workspace }}/.velnor-mbx-cache-qualification/mbx-store
       MBX_CACHE_EXPORT_GROUP: velnor-qualification-mbx-1.21.1-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
-      MBX_GC_AUTO: "1"
       MISE_AUTO_INSTALL: "false"
       MISE_CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
       MISE_EXEC_AUTO_INSTALL: "false"
@@ -909,10 +903,6 @@ jobs:
           env: "false"
           cache: "false"
           cache_save: "false"
-          env: "false"
-          install: "false"
-          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
-          version: 2026.9.18
       - name: Install pinned Rust toolchain
         run: "mise install rust@1.99.0 && printf '%s/bin\\n' \"$(mise exec rust@1.99.0 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
       - name: Restore MBX objects
