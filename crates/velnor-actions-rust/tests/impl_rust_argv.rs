@@ -48,6 +48,14 @@ pub(crate) fn profiled(group: &TaskGroup) -> Result<Vec<String>, ContractError> 
         .collect())
 }
 
+/// Profiled payload argv under an explicit resolved profile.
+fn profiled(group: &TaskGroup, profile: NextestProfile) -> Vec<String> {
+    cargo_payload_with_profile(group, profile)
+        .iter()
+        .map(|s| s.to_string_lossy().into_owned())
+        .collect()
+}
+
 #[test]
 fn payload_shapes_per_kind() -> Result<(), ContractError> {
     assert_eq!(
@@ -316,6 +324,7 @@ fn nextest_payload_is_pinned_tool_input() -> Result<(), ContractError> {
     );
     let mut custom = group(TaskKind::Nextest);
     custom.manifest_key = "crates/demo".to_owned();
+    let resolved = NextestProfile::parse(&custom.nextest_profile).expect("valid profile");
     assert!(
         profiled(&custom)?
             .windows(2)

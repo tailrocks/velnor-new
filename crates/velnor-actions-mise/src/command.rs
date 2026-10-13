@@ -134,6 +134,34 @@ impl IsolatedCommand {
         })
     }
 
+    /// Build a repo-task child: cleared env plus explicit declared inputs.
+    /// Reserved keys are rejected; platform values arrive only as declared inputs.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::InvalidStepInput`] when a declared key is reserved.
+    pub fn repo_task(
+        program: &str,
+        args: Vec<OsString>,
+        declared: &[(OsString, OsString)],
+    ) -> Result<Self, MiseError> {
+        for (key, _) in declared {
+            if is_reserved_env_key(&key.to_string_lossy()) {
+                return Err(MiseError::InvalidStepInput {
+                    field: key.to_string_lossy().into_owned(),
+                    value: "reserved_env_key".to_owned(),
+                });
+            }
+        }
+        Ok(Self {
+            program: OsString::from(program),
+            args,
+            cwd: None,
+            extra_env: declared.to_vec(),
+            policy: EnvPolicy::RepoTask,
+        })
+    }
+
     /// Override the working directory for this invocation.
     #[must_use]
     pub fn with_cwd(mut self, cwd: PathBuf) -> Self {

@@ -350,3 +350,56 @@ fn mbx_provisioning_modes_validated() {
         MbxProvisioning::ActionExactVersion
     );
 }
+
+#[test]
+fn action_mbx_reconcile_matches_pin_only() {
+    let catalog = ToolCatalog::pinned();
+    assert!(catalog.reconcile_action_mbx(MR_BOXINGTON_VERSION).is_ok());
+    assert!(matches!(
+        catalog.reconcile_action_mbx("1.21.0"),
+        Err(MiseError::InvalidToolVersion { tool, version })
+            if tool == "mr-boxington" && version == "1.21.0"
+    ));
+    for loose in ["latest", "v1.19.0", "1.19", ""] {
+        assert!(
+            matches!(
+                catalog.reconcile_action_mbx(loose),
+                Err(MiseError::InvalidToolVersion { .. })
+            ),
+            "{loose} must fail closed"
+        );
+    }
+    let moved = ToolCatalog::new(
+        "1.98.1", "1.21.0", "2.101.0", "1.7.12", "0.11.0", "1.30.1", "0.9.146",
+    )
+    .expect("exact catalog");
+    assert!(moved.reconcile_action_mbx("1.21.0").is_ok());
+    assert!(moved.reconcile_action_mbx(MR_BOXINGTON_VERSION).is_err());
+}
+
+#[test]
+fn mbx_provisioning_modes_validated() {
+    assert_eq!(
+        MbxProvisioning::preinstalled("/opt/mbx/bin/mbx").expect("absolute path"),
+        MbxProvisioning::PreinstalledTool {
+            tool_path: "/opt/mbx/bin/mbx".to_owned(),
+        }
+    );
+    for bad in ["", "relative/mbx", "mbx", "C:\\mbx\\mbx", "/tmp/has\0nul"] {
+        assert!(
+            matches!(
+                MbxProvisioning::preinstalled(bad),
+                Err(MiseError::InvalidStepInput { field, .. }) if field == "tool_path"
+            ),
+            "{bad:?} must fail closed"
+        );
+    }
+    assert_eq!(
+        MbxProvisioning::CatalogInstall,
+        MbxProvisioning::CatalogInstall
+    );
+    assert_eq!(
+        MbxProvisioning::ActionExactVersion,
+        MbxProvisioning::ActionExactVersion
+    );
+}

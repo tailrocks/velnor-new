@@ -332,10 +332,7 @@ pub fn merge_passed(response_json: &str) -> Result<bool, OrchestratorError> {
     }
     let verdict: Verdict =
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
-    Ok(matches!(
-        verdict.status,
-        FinalStatus::Passed | FinalStatus::NoWork
-    ))
+    Ok(matches!(verdict.status, FinalStatus::Passed))
 }
 
 /// Explicit run key, else `r<run-id>-a<attempt>` from the GitHub environment.

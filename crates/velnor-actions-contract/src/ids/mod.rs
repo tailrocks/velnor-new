@@ -70,6 +70,54 @@ id_newtype!(TaskReportId, validate_task_report_id);
 id_newtype!(ArtifactId, artifact::validate_artifact_id);
 id_newtype!(TargetKey, artifact::validate_target_key);
 
+/// Define a validated identifier newtype with a private constructor.
+///
+/// Parsing is the only construction path; serde deserialization routes
+/// through the same `TryFrom<String>` validation.
+macro_rules! id_newtype {
+    ($name:ident, $validate:expr) => {
+        #[doc = concat!("Validated `", stringify!($name), "` identifier.")]
+        #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+        #[serde(try_from = "String")]
+        pub struct $name(String);
+        impl $name {
+            /// Parse and validate.
+            /// # Errors
+            pub fn parse(value: &str) -> Result<Self, ContractError> {
+                $validate(value)?;
+                Ok(Self(value.to_owned()))
+            }
+            /// Borrow the inner string.
+            #[must_use]
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
+            /// Unwrap the validated string.
+            #[must_use]
+            pub fn into_inner(self) -> String {
+                self.0
+            }
+        }
+        impl TryFrom<String> for $name {
+            type Error = ContractError;
+            fn try_from(value: String) -> Result<Self, Self::Error> {
+                Self::parse(&value)
+            }
+        }
+    };
+}
+
+id_newtype!(RunKey, validate_run_key);
+id_newtype!(ManifestKey, validate_manifest_key);
+id_newtype!(TaskId, validate_task_id);
+id_newtype!(MatrixId, validate_id);
+id_newtype!(MatrixKey, validate_matrix_key);
+id_newtype!(PlanId, validate_plan_id);
+id_newtype!(ReportId, validate_report_id);
+id_newtype!(TaskReportId, validate_task_report_id);
+id_newtype!(ArtifactId, artifact::validate_artifact_id);
+id_newtype!(TargetKey, artifact::validate_target_key);
+
 /// Build a CI run key `r<run-id>-a<attempt>` from numeric GitHub IDs.
 #[must_use]
 pub fn run_key_for_ci(run_id: u64, run_attempt: u64) -> String {

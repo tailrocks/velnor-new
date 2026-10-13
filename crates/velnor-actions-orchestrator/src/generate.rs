@@ -623,6 +623,15 @@ mod output_commit;
 
 use output_commit::swap_directories;
 
+/// Filesystem guards: snapshots, destination validation, and ownership.
+#[path = "generate_guards.rs"]
+pub(crate) mod guards;
+
+/// Re-exported snapshot: the `generate::ToolSnapshot` path is stable API.
+pub use guards::ToolSnapshot;
+
+use guards::{GenerateOwnership, prepare_preview_dir, same_filesystem};
+
 /// Options for [`generate`].
 #[derive(Debug, Clone, Default)]
 pub struct GenerateOptions {

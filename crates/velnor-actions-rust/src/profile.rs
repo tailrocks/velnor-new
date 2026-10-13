@@ -143,6 +143,46 @@ impl NextestProfile {
     }
 }
 
+/// Selected Nextest profile for one workspace.
+///
+/// Meaningful when the test runner is Nextest: `ci` when the nearest
+/// `.config/nextest.toml` declares `[profile.ci]`, else Nextest's
+/// documented `default` profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NextestProfile {
+    /// `[profile.ci]` declared in the nearest Nextest config.
+    Ci,
+    /// Documented default (no `[profile.ci]` in the nearest config).
+    Default,
+}
+
+impl NextestProfile {
+    /// Stable profile name.
+    #[must_use]
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Ci => "ci",
+            Self::Default => "default",
+        }
+    }
+
+    /// Parse a resolved profile token; unknown tokens fail closed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContractError`] for any token outside `ci`/`default`.
+    pub fn parse(value: &str) -> Result<Self, ContractError> {
+        match value {
+            "ci" => Ok(Self::Ci),
+            "default" => Ok(Self::Default),
+            _ => Err(ContractError::identity(
+                "nextest_profile",
+                format!("unknown_profile:{value}"),
+            )),
+        }
+    }
+}
+
 /// Where one profile axis came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProfileSource {
