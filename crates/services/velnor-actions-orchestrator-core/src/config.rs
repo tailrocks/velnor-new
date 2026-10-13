@@ -251,6 +251,10 @@ impl PartialWorkflow {
     }
 }
 
+#[cfg(test)]
+#[path = "config_tests.rs"]
+mod config_tests;
+
 impl PartialResources {
     /// Fill resources defaults.
     fn materialize(self) -> ResourcesConfig {

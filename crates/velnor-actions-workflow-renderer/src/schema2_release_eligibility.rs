@@ -1,4 +1,4 @@
-//! Exact-source eligibility shared by every product release job.
+//! Exact-source eligibility shared by native product release jobs.
 
 use crate::yaml::Yaml;
 
@@ -55,7 +55,7 @@ pub const JOB_ID: &str = "release-eligibility";
 /// Read-only source and required-CI gate. Its outputs bind all build jobs to
 /// one immutable event SHA and identify the authority and CI attempt.
 #[must_use]
-pub fn job(runs_on: Yaml) -> (String, Yaml) {
+pub fn job(runs_on: Yaml, workflow_path: &str) -> (String, Yaml) {
     let mut fields = base("Check release source eligibility", runs_on, 70);
     fields.push((
         "permissions".to_owned(),
@@ -89,13 +89,13 @@ pub fn job(runs_on: Yaml) -> (String, Yaml) {
         JOB_ID,
         fields,
         vec![
-            checkout_step(),
+            checkout_step("${{ github.sha }}"),
             mise_step(),
             run_step(
                 "Install pinned GitHub CLI",
                 &format!("mise --no-config --no-env --no-hooks install gh@{GH_VERSION}"),
             ),
-            check_step(),
+            check_step(workflow_path),
         ],
     )
 }
@@ -113,7 +113,7 @@ pub(super) fn publisher_script() -> String {
 fn render_script(continue_on_success: bool) -> String {
     ELIGIBILITY_SCRIPT
         .replace("@REPOSITORY@", REPOSITORY)
-        .replace("@WORKFLOW_PATH@", WORKFLOW_PATH)
+        .replace("@WORKFLOW_PATH@", workflow_path)
         .replace("@CI_WORKFLOW_PATH@", CI_WORKFLOW_PATH)
         .replace("@CI_WORKFLOW_API_ID@", CI_WORKFLOW_API_ID)
         .replace("@GH_VERSION@", GH_VERSION)
@@ -153,13 +153,14 @@ is_sha() {
 [[ "${GITHUB_REPOSITORY-}" == "$repository" ]] || fail 'unexpected repository'
 [[ "${GITHUB_REF-}" == 'refs/heads/main' ]] || fail 'source ref is not main'
 [[ "${GITHUB_WORKFLOW_REF-}" == "$repository/$workflow_path@refs/heads/main" ]] || fail 'unexpected workflow authority path or ref'
-case "${GITHUB_EVENT_NAME-}" in
-  push|schedule|workflow_dispatch) ;;
-  *) fail 'event is not eligible' ;;
-esac
+[[ "${GITHUB_EVENT_NAME-}" == 'workflow_dispatch' ]] || fail 'event is not an eligible manual dispatch'
+is_sha "$requested_sha" || fail 'requested source SHA is malformed'
 is_sha "$source_sha" || fail 'source SHA is malformed'
 is_sha "$authority_sha" || fail 'workflow authority SHA is malformed'
+[[ "$requested_sha" == "$source_sha" ]] || fail 'requested source SHA and workflow source differ'
 [[ "$source_sha" == "$authority_sha" ]] || fail 'workflow authority and source differ'
+checkout_sha="$(git rev-parse HEAD)" || fail 'cannot read checked-out source SHA'
+[[ "$checkout_sha" == "$source_sha" ]] || fail 'checked-out source SHA differs'
 [[ -n "${GH_TOKEN-}" ]] || fail 'read-only GitHub token is missing'
 [[ -n "${GITHUB_OUTPUT-}" ]] || fail 'workflow output path is missing'
 
@@ -271,7 +272,7 @@ done
 @CALL@
 "#;
 
-fn checkout_step() -> Yaml {
+fn checkout_step(ref_value: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Check out exact event source")),
         ("uses".to_owned(), Yaml::str(CHECKOUT_USES)),
@@ -280,13 +281,13 @@ fn checkout_step() -> Yaml {
             Yaml::Map(vec![
                 ("fetch-depth".to_owned(), Yaml::str("1")),
                 ("persist-credentials".to_owned(), Yaml::str("false")),
-                ("ref".to_owned(), Yaml::str("${{ github.sha }}")),
+                ("ref".to_owned(), Yaml::str(ref_value)),
             ]),
         ),
     ])
 }
 
-fn mise_step() -> Yaml {
+pub(super) fn mise_step() -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Set up pinned Mise")),
         ("uses".to_owned(), Yaml::str(MISE_USES)),
@@ -302,7 +303,7 @@ fn mise_step() -> Yaml {
     ])
 }
 
-fn check_step() -> Yaml {
+pub(super) fn check_step(workflow_path: &str) -> Yaml {
     Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -311,13 +312,16 @@ fn check_step() -> Yaml {
         ("id".to_owned(), Yaml::str("check")),
         (
             "env".to_owned(),
-            Yaml::Map(vec![(
-                "GH_TOKEN".to_owned(),
-                Yaml::str("${{ github.token }}"),
-            )]),
+            Yaml::Map(vec![
+                ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
+                (
+                    "VELNOR_RELEASE_SOURCE_SHA".to_owned(),
+                    Yaml::str("${{ inputs.source_sha }}"),
+                ),
+            ]),
         ),
         ("shell".to_owned(), Yaml::str("bash")),
-        ("run".to_owned(), Yaml::str(script())),
+        ("run".to_owned(), Yaml::str(script(workflow_path))),
     ])
 }
 

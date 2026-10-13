@@ -53,6 +53,8 @@ pub(crate) fn idle(polled: &Poll) -> Idle {
                     || batch.statistics.is_some() && crate::assign::started_replay(batch)
                 {
                     Idle::Ack
+                } else if batch.statistics.is_some() && crate::assign::started_replay(batch) {
+                    Idle::Ack
                 } else {
                     match assigned_population(batch) {
                         Some(population) if population > 0 => Idle::Scale,

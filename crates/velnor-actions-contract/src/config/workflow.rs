@@ -297,6 +297,30 @@ impl VerifyConfig {
         }
         Ok(())
     }
+
+    #[test]
+    fn default_branch_rejects_yaml_and_git_injection() {
+        for branch in [
+            "",
+            "feature/x y",
+            "main\non: [push]",
+            "main;git status",
+            "${{ github.ref }}",
+            "release/../main",
+            "main.lock",
+        ] {
+            let mut config = named("CI");
+            config.default_branch = Some(branch.to_owned());
+            let err = config
+                .validate("config.toml")
+                .expect_err("malformed default branch must fail");
+            assert!(err.to_string().contains("malformed_branch"), "{err}");
+        }
+
+        let mut config = named("CI");
+        config.default_branch = Some("release/1.2".to_owned());
+        assert_eq!(config.validate("config.toml"), Ok(()));
+    }
 }
 
 fn valid_json_path(value: &str) -> bool {

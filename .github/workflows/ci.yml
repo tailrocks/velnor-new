@@ -54,6 +54,24 @@ env:
 concurrency:
   group: velnor-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+env:
+  ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+  ACTIONS_ID_TOKEN_REQUEST_URL: ""
+  ACTIONS_RUNTIME_TOKEN: ""
+  CARGO_REGISTRY_TOKEN: ""
+  GH_CONFIG_DIR: ""
+  GH_HOST: ""
+  GH_TOKEN: ""
+  GITHUB_TOKEN: ""
+  MISE_AUTO_INSTALL: "false"
+  MISE_EXEC_AUTO_INSTALL: "false"
+  MISE_GITHUB_TOKEN: ""
+  MISE_LOCKFILE: "0"
+  MISE_NO_CONFIG: "1"
+  MISE_NO_ENV: "1"
+  MISE_NO_HOOKS: "1"
+  NODE_AUTH_TOKEN: ""
+  NPM_TOKEN: ""
 jobs:
   actionlint:
     name: Actionlint

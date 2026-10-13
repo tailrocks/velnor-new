@@ -321,6 +321,8 @@ fn preseed_plan_installs_before_build_and_check_generated() -> TestResult {
             let steps = plan_steps(&yaml);
             let prepare_at =
                 step_index(&steps, "Prepare pinned tools").ok_or("missing Prepare step")?;
+            let rust_at = step_index(&steps, "Prepare Rust components")
+                .ok_or("missing Rust components step")?;
             let build_at = steps
                 .iter()
                 .position(|(step, _)| step.contains("Build helper"))

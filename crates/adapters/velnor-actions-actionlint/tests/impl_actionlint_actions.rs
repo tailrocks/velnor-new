@@ -20,7 +20,7 @@ fn checkout_schema() -> ActionInputSchema {
 
 #[test]
 fn allowlist_has_nine_entries() {
-    assert_eq!(ALLOWED_ACTIONS.len(), 9);
+    assert_eq!(ALLOWED_ACTIONS.len(), 10);
     assert!(ALLOWED_ACTIONS.contains(&"actions/cache/restore"));
     assert!(ALLOWED_ACTIONS.contains(&"asamarts/alint"));
     assert!(!ALLOWED_ACTIONS.contains(&"Swatinem/rust-cache"));

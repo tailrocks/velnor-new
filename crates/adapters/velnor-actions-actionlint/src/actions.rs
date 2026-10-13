@@ -1,4 +1,4 @@
-//! Pinned action refs against the 9-entry allowlist.
+//! Pinned action refs against the 10-entry allowlist.
 //!
 //! Every ref pins `repo[/path]@sha` plus a `# vX.Y.Z` comment; no
 //! mutable-tag exceptions exist.
@@ -6,7 +6,7 @@
 use crate::ActionlintError;
 
 /// Exhaustive allowlist of `owner/repo[/path]` action keys.
-pub const ALLOWED_ACTIONS: [&str; 9] = [
+pub const ALLOWED_ACTIONS: [&str; 10] = [
     "jdx/mise-action",
     "actions/checkout",
     "actions/download-artifact",

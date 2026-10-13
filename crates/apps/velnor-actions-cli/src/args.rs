@@ -73,6 +73,19 @@ impl Command {
     }
 }
 
+impl Command {
+    /// True when `generate` requests only the owned-tool candidate preview.
+    pub(crate) fn is_owned_preview(&self) -> bool {
+        matches!(
+            self,
+            Command::Generate {
+                owned_tool_candidates_only: true,
+                ..
+            }
+        )
+    }
+}
+
 /// Config subcommands.
 #[derive(Debug, Subcommand)]
 pub(crate) enum ConfigCommand {

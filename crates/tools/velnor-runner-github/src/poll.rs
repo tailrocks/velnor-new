@@ -296,6 +296,9 @@ fn numeric_job_id(value: Option<&str>) -> Option<String> {
     if text.bytes().all(|byte| byte == b'0') {
         return None;
     }
+    if text.bytes().all(|byte| byte == b'0') {
+        return None;
+    }
     Some(text.to_owned())
 }
 

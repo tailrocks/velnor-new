@@ -1,6 +1,6 @@
 //! Workflow-IR to YAML document builders.
 //!
-//! Fixed key order: name, on, permissions, concurrency, jobs.
+//! Fixed key order: name, on, permissions, concurrency, env, jobs.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -69,6 +69,7 @@ pub(crate) fn workflow_to_yaml(
                 ),
             ]),
         ),
+        ("env".to_owned(), string_map_yaml(&workflow_env)),
         ("jobs".to_owned(), Yaml::Map(rendered_jobs)),
     ]))
 }
@@ -205,6 +206,7 @@ fn job_to_yaml(
     checkouts: &BTreeMap<String, Step>,
     mbx_gc_auto: bool,
 ) -> Result<Yaml, RenderError> {
+    let workflow_env = crate::toolchain_env::workflow_level_env();
     steps::scan_for_private_subcommands(&job.display_name)?;
     let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
     let scale_set = matches!(&runner, RunsOn::ScaleSet(_));

@@ -161,6 +161,26 @@ fn owned_tool_file_lines(out: &mut String, prep: &GenerationPreparation) {
     }
 }
 
+/// Protected apply workflow path, exactly when the closed config enables it.
+fn tofu_apply_file_lines(out: &mut String, prep: &GenerationPreparation) {
+    if crate::tofu_apply_emit::tofu_apply_enabled(prep) {
+        push(out, &format!("  {TOFU_APPLY_WORKFLOW_PATH}"));
+    }
+}
+
+/// Owned-tool candidate workflow, exactly when `generate` emits it.
+///
+/// The checked entrypoint already rendered the staged tree (owned-tool
+/// files included) before this infallible section runs, so an error
+/// here means nothing is emitted.
+fn owned_tool_file_lines(out: &mut String, prep: &GenerationPreparation) {
+    if let Ok(files) = crate::owned_tool_publication::files(prep) {
+        for file in files {
+            push(out, &format!("  {}", file.path));
+        }
+    }
+}
+
 /// Finalized crate-job IDs: exactly the crate-group jobs.
 ///
 /// Structural, never an exclusion list: plan, final, lint, validators,

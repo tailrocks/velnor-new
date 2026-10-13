@@ -125,6 +125,7 @@ async fn ack_error_propagates_without_start_or_repoll() -> Result<(), String> {
 fn batch(message_id: i64, jobs: Vec<InnerJob>) -> Poll {
     Poll::Batch(ParsedBatch {
         message_id,
+        raw_body: String::new(),
         statistics: None,
         jobs,
     })

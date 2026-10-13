@@ -5,6 +5,8 @@
 
 use velnor_actions_contract::is_valid_branch_name;
 
+use velnor_actions_contract::is_valid_branch_name;
+
 use crate::catalog::{PinnedTool, ToolCatalog};
 use crate::requests::PinnedToolExec;
 use std::ffi::{OsStr, OsString};

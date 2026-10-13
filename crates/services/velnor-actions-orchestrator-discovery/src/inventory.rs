@@ -62,6 +62,26 @@ fn run_inventories_inner(
     reads: &mut velnor_actions_tofu::FileCache,
     mut phases: Option<&mut PlanPhaseTimings>,
 ) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
+    run_inventories_inner(root, candidates, files, reads, None)
+}
+
+pub(crate) fn run_inventories_with_phase_timings(
+    root: &Path,
+    candidates: &[StackCandidate],
+    files: &[String],
+    reads: &mut velnor_actions_tofu::FileCache,
+    phases: &mut PlanPhaseTimings,
+) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
+    run_inventories_inner(root, candidates, files, reads, Some(phases))
+}
+
+fn run_inventories_inner(
+    root: &Path,
+    candidates: &[StackCandidate],
+    files: &[String],
+    reads: &mut velnor_actions_tofu::FileCache,
+    mut phases: Option<&mut PlanPhaseTimings>,
+) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
     let catalog = ToolCatalog::pinned();
     let mut manifests = Vec::with_capacity(candidates.len());
     for candidate in candidates {

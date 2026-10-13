@@ -65,6 +65,13 @@ pub(super) async fn poll_and_drive(
             workers.push(started);
         }
     }
+    let completion = CompletionWorker::start(
+        journal.clone(),
+        docker.clone(),
+        link.base().to_owned(),
+        admin_token.to_owned(),
+    )
+    .map_err(|_| completion_error())?;
     let target = capacity::admit_target(capacity);
     let mut turn = Turn {
         link,
@@ -92,6 +99,16 @@ pub(super) async fn poll_and_drive(
         (Ok(()), Err(_)) => Err(completion_error()),
         (Ok(()), Ok(())) => Ok(workers),
     }
+}
+
+/// A cleared job name and a steady scale name stay on the queue.
+///
+/// Neither error acknowledges the message or ends the session.
+fn queue_stays(error: Option<&EnsureError>) -> bool {
+    matches!(
+        error,
+        Some(EnsureError::NameSteady | EnsureError::NameCleared)
+    )
 }
 
 /// A cleared job name and a steady scale name stay on the queue.

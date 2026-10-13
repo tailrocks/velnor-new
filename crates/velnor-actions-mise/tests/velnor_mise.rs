@@ -102,3 +102,5 @@ mod impl_mise_tool_probes;
 mod impl_miserc_isolation;
 #[path = "impl_qualified_acquisition.rs"]
 mod impl_qualified_acquisition;
+#[path = "impl_miserc_isolation.rs"]
+mod impl_miserc_isolation;
