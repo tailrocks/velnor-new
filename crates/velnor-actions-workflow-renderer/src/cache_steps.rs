@@ -29,7 +29,7 @@ pub(crate) use mbx_preflight::{MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, is_mbx_action
 
 use crate::{
     RenderError,
-    steps::{action_step, validate_uses},
+    steps::{action_step, action_step_with_env, validate_uses},
 };
 
 #[path = "cache_steps_tools.rs"]
