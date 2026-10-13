@@ -94,6 +94,13 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
         mbx_cache_generation(TEST_MBX_VERSION),
         "a".repeat(40)
     );
+    let action_sha = MBX_ACTION
+        .strip_prefix("jdx/mr-boxington-action@")
+        .expect("SHA ref");
+    let expected_generation = format!(
+        "{}${{{{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}}}-action-{action_sha}",
+        mbx_cache_generation(TEST_MBX_VERSION)
+    );
     assert_eq!(
         with.get("cache-generation").map(String::as_str),
         Some(expected_generation.as_str()),

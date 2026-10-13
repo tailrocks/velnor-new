@@ -38,6 +38,16 @@ pub(super) fn with_mbx(root: &std::path::Path) -> TestResult {
 pub(super) fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
     let prep = preparation_for(mbx)?;
     let tree = render_staged_tree(&prep)?;
+    let prune_helper = tree.get(".github/scripts/prune_hosted_cargo_sources.py");
+    assert_eq!(
+        prune_helper.is_some(),
+        mbx,
+        "helper follows hosted Linux MBX use"
+    );
+    if let Some(helper) = prune_helper {
+        assert!(helper.contains("def prune_sources("), "{helper}");
+        assert!(helper.contains("mnt_id:"), "{helper}");
+    }
     Ok(tree
         .get(WORKFLOW_PATH)
         .ok_or_else(|| std::io::Error::other("missing workflow"))?
@@ -286,11 +296,24 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     assert_one_save_per_identity(&keys, &saves, yaml);
     let mbx_saves = yaml.matches("- name: Save MBX single bundle").count();
     let mbx_exports = yaml.matches("- name: Export MBX single bundle").count();
+    assert!(!yaml.contains("Collect MBX cache before export"), "{yaml}");
     assert_eq!(
         yaml.matches("actions/cache/save@").count(),
         1 + saves.len() + mbx_saves,
         "sources plus one tools save per key plus the MBX bundle:\n{yaml}"
     );
+    let source_prunes = yaml
+        .matches("- name: Measure and prune Cargo sources")
+        .count();
+    let push_gated_cache_steps = yaml
+        .lines()
+        .filter(|line| {
+            let line = line.trim_start();
+            line.starts_with("if: ")
+                && line.contains("success()")
+                && line.contains("github.event_name == 'push'")
+        })
+        .count();
     assert_eq!(
         yaml.matches("if: success() && github.event_name == 'push'")
             .count(),

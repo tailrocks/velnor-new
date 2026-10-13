@@ -17,7 +17,7 @@ pub use platform::{
 
 /// Cache-key schema id, always `v1`.
 pub const CACHE_SCHEMA_ID: &str = "v1";
-/// Prefix shared by the MBX action namespace and task cache identity.
+/// Prefix used by MBX action-cache generations and task cache identities.
 pub const MBX_CACHE_GENERATION_PREFIX: &str = "velnor-mbx-";
 pub use crate::extension_schemas::{
     KNOWN_STACK_EXTENSION_SCHEMAS, RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SCHEMA,

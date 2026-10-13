@@ -70,7 +70,7 @@ const ENV_EXPRESSIONS: [&str; 11] = [
 
 /// Exact `${{ }}` inners permitted in action `with:` values.
 ///
-/// Run-scoped names, runner paths, matrix coordinates, the
+/// Run/job-scoped names, runner paths, matrix coordinates, the
 /// push-gated cache-save flag, and the publish step's derived
 /// artifact name. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
@@ -78,6 +78,14 @@ const WITH_EXPRESSIONS: [&str; 11] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
+    "github.job",
+    "runner.environment == 'github-hosted'",
+    "runner.environment == 'github-hosted' && runner.os == 'Linux'",
+    "runner.environment == 'github-hosted' && github.job || ''",
+    "runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || ''",
+    "runner.os",
+    "runner.arch",
+    "github.sha",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
     "steps.v2.outputs.identity",

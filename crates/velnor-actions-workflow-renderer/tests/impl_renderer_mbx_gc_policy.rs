@@ -10,7 +10,7 @@ use super::impl_renderer_fixtures::*;
 
 /// Rendered MBX policy reaches the action and build payload.
 #[test]
-fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
+fn hosted_action_step_has_isolated_trusted_main_cache_policy() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
     let [preflight, mbx, version_check] = mbx_tool_steps(&uses, "1.24.0", "1.99.0")?;
     let plain = checkout_step(&checkout_pin())?;

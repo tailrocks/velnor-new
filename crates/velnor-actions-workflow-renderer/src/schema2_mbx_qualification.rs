@@ -157,6 +157,7 @@ fn mise_install_step(request: &MbxQualificationPins) -> Result<Step, RenderError
 }
 
 fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
+    let action_sha = &request.mbx_action_uses[format!("{MBX_ACTION_NAME}@").len()..];
     let generation = format!(
         "velnor-qualification-mbx-{}-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
         request.mbx_version,
@@ -177,6 +178,8 @@ fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
                 ("toolchain", &request.rust_version),
                 ("isolate-objects-cache", "true"),
                 ("cache-generation", &generation),
+                ("cache-key", &cache_key),
+                ("isolate-objects-cache", "true"),
                 (
                     "save-on-workflow-dispatch",
                     if writer { "true" } else { "false" },

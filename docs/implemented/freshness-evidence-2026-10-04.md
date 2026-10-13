@@ -23,7 +23,7 @@ The bounded read-only `bash scripts/check-freshness.sh --check-upstream` probe c
 | `actions/download-artifact` | `v8.0.1` | `v8.0.1` | Current |
 | `actions/upload-artifact` | `v7.0.1` | `v7.0.1` | Current |
 | `actions/cache/restore`, `actions/cache/save` | `v6.1.0` | `v6.1.0` | Current |
-| `jdx/mr-boxington-action` | `v1.6.0` at `1687e54` | `v1.7.1`, tag resolves to [`d0825fba`](https://github.com/jdx/mr-boxington-action/commit/d0825fbaf3cc36ca2609aa38e71046265a1f1e37) | Hold `#29`; the integration candidate is recorded below |
+| `jdx/mr-boxington-action` | `v1.7.1` at [`d0825fba`](https://github.com/jdx/mr-boxington-action/commit/d0825fbaf3cc36ca2609aa38e71046265a1f1e37) | `v1.7.1` | Current |
 | `asamarts/alint` | `v0.16.1` | `v0.17.0` | Existing hold `#6` |
 | `Swatinem/rust-cache` | `v2.9.2` | `v2.9.2` | Current |
 

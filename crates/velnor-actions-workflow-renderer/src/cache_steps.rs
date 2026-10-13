@@ -25,6 +25,7 @@ pub use mbx_preflight::{
     MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME,
     mbx_steps_for_driver,
 };
+pub(crate) use mbx_preflight::{MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, is_mbx_action};
 
 use crate::{
     RenderError,
