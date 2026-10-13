@@ -87,9 +87,6 @@ struct InternalRequest {
 /// to Clap; bare invocations then fail with the usage diagnostic (exit 2),
 /// keeping public behavior byte-identical with or without the environment.
 pub(crate) fn try_internal() -> Option<ExitCode> {
-    if let Some(outcome) = crate::dispatch_generator_release::try_internal() {
-        return Some(outcome);
-    }
     let request = gate_request()?;
     Some(run_internal(&request))
 }

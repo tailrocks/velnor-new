@@ -81,7 +81,9 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
         privileged: false,
         platform: RUNNER_PLATFORM.to_owned(),
         image: RUNNER_IMAGE.to_owned(),
-        env: Vec::new(),
+        env: vec![format!(
+            "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE={ACTION_ARCHIVE_TARGET}"
+        )],
         cmd: vec![ENTRYPOINT.to_owned()],
         labels: vec![
             "velnor.role=runner".to_owned(),
