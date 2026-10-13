@@ -196,6 +196,18 @@ pub(crate) fn lookup_artifact_name(plan: &Plan, base: &str) -> Result<String, St
         .map_err(|_| "baseline_no_exact_artifact".to_owned())
 }
 
+/// Exact baseline artifact name for one plan over its base.
+///
+/// Compatibility derives from the plan's obligation set alone, so the
+/// lookup names the same artifact the protected push published without
+/// caller input. A malformed base or an underivable shape misses
+/// before spawning anything.
+pub(crate) fn lookup_artifact_name(plan: &Plan, base: &str) -> Result<String, String> {
+    let compat = crate::cover_compat::baseline_compat_for_plan(plan)?;
+    velnor_actions_contract::artifact_id_for_baseline(base, &compat)
+        .map_err(|_| "baseline_no_exact_artifact".to_owned())
+}
+
 /// Mark baseline evidence unavailable with an explicit reason.
 fn mark_unavailable(plan: &mut Plan, reason: &str) {
     if plan.baseline.mark_unavailable(reason).is_err() {

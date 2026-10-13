@@ -32,8 +32,13 @@ pub use crate::steps_internal::{
 };
 
 pub use crate::steps_artifact::{
-    download_artifact_step, matrix_report_upload_step, matrix_report_upload_step_for,
-    upload_artifact_step,
+    ARTIFACT_NAME_OUTPUT, BASELINE_PUBLISH_UPLOAD_NAME, BASELINE_RETENTION_DAYS, PUBLISH_STEP_ID,
+    baseline_publish_upload_step, crate_job_report_upload_step, download_artifact_step,
+    matrix_report_upload_step, upload_artifact_step,
+};
+pub(crate) use crate::steps_internal::split_internal_operation;
+pub use crate::steps_internal::{
+    internal_step, merge_step, plan_step, publish_step, write_request_step,
 };
 
 /// Env key selecting the staged-binary internal operation.
@@ -287,6 +292,21 @@ pub fn acquire_velnor_step(
     let mut step = shell_step(ACQUIRE_NAME, argv, env.clone())?;
     step.role = Some(StepRole::AcquireVelnor);
     Ok(step)
+}
+
+/// Target-directory prefix isolating one lane.
+pub const TARGET_DIR_PREFIX: &str = "$RUNNER_TEMP/velnor/target/";
+
+/// Isolated target directory for one lane.
+#[must_use]
+pub fn target_dir_for_lane(lane_id: &str) -> String {
+    format!("{TARGET_DIR_PREFIX}{lane_id}")
+}
+
+/// `CARGO_TARGET_DIR` env pair isolating one lane (CACHE-1.20).
+#[must_use]
+pub fn lane_cargo_target_env(lane_id: &str) -> (String, String) {
+    ("CARGO_TARGET_DIR".to_owned(), target_dir_for_lane(lane_id))
 }
 
 /// Target-directory prefix isolating one lane.

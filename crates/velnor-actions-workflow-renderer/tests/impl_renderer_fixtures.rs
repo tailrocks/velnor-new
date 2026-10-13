@@ -280,7 +280,7 @@ pub(crate) fn matrix_task_job() -> Result<(String, velnor_actions_contract::Job)
     let step = shell_step(
         "Run task",
         vec!["sh".to_owned(), "-c".to_owned(), "echo hi".to_owned()],
-        velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub(&env),
+        env,
     )?;
     Ok(job(
         "velnor-task",

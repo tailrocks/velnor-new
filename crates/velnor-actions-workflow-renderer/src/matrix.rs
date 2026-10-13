@@ -328,6 +328,63 @@ pub(crate) fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError
     insert_job_key(jobs, PLAN_JOB_ID, "outputs", Yaml::Map(outputs))
 }
 
+/// Emit the plan job's `covered_tasks` output plus the plan step ID.
+///
+/// Static (non-matrix) workflows still gate obligation steps on plan
+/// coverage, so the plan job always exports the covered set; without
+/// a plan job or plan step there is nothing to export.
+pub(crate) fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError> {
+    let Yaml::Map(entries) = document else {
+        return Err(matrix_invalid("matrix_without_document"));
+    };
+    let Some(Yaml::Map(jobs)) = entries
+        .iter_mut()
+        .find(|entry| entry.0 == "jobs")
+        .map(|entry| &mut entry.1)
+    else {
+        return Err(matrix_invalid("matrix_without_jobs"));
+    };
+    if !tag_op_step(jobs, PLAN_JOB_ID, steps::PLAN_OPERATION, PLAN_STEP_ID) {
+        return Ok(());
+    }
+    insert_job_key(
+        jobs,
+        PLAN_JOB_ID,
+        "outputs",
+        Yaml::Map(vec![(
+            COVERED_TASKS_OUTPUT.to_owned(),
+            Yaml::str(format!(
+                "${{{{ steps.{PLAN_STEP_ID}.outputs.{COVERED_TASKS_OUTPUT} }}}}"
+            )),
+        )]),
+    )
+}
+
+/// Tag the publish job's publish step with its step ID.
+///
+/// The upload step names the artifact through the publish step's
+/// outputs; without the tag the reference dangles. No-op without a
+/// publish job.
+pub(crate) fn insert_publish_step_id(document: &mut Yaml) -> Result<(), RenderError> {
+    let Yaml::Map(entries) = document else {
+        return Err(matrix_invalid("matrix_without_document"));
+    };
+    let Some(Yaml::Map(jobs)) = entries
+        .iter_mut()
+        .find(|entry| entry.0 == "jobs")
+        .map(|entry| &mut entry.1)
+    else {
+        return Err(matrix_invalid("matrix_without_jobs"));
+    };
+    tag_op_step(
+        jobs,
+        PUBLISH_JOB_ID,
+        steps::PUBLISH_OPERATION,
+        steps::PUBLISH_STEP_ID,
+    );
+    Ok(())
+}
+
 /// Insert a job key directly before its `steps` entry.
 fn insert_job_key(
     jobs: &mut [(String, Yaml)],

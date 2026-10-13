@@ -134,12 +134,9 @@ impl IsolatedCommand {
         })
     }
 
-    /// Build a repo-task child: cleared env plus explicit declared inputs.
-    /// Reserved keys are rejected; platform values arrive only as declared inputs.
-    ///
+    /// Build a repo-task child: cleared env plus declared inputs.
     /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidStepInput`] when a declared key is reserved.
+    /// Returns [`MiseError::InvalidStepInput`] on a reserved declared key.
     pub fn repo_task(
         program: &str,
         args: Vec<OsString>,

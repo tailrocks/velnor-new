@@ -144,6 +144,11 @@ fn probe_action_rows() -> Vec<ProbeRow> {
             "rust-cache.json",
             "[{\"name\": \"v2.9.2\"}]",
         ),
+        (
+            "https://api.github.com/repos/Swatinem/rust-cache/tags",
+            "rust-cache.json",
+            "[{\"name\": \"v2.9.2\"}]",
+        ),
     ]
 }
 

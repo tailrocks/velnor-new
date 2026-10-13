@@ -253,6 +253,54 @@ custom steps from the committed project configuration. See
 [task-execution §2](task-execution-contract.md) for the fixed vectors
 and [workflow §3](workflow-contract.md) for the prepare step.
 
+## 1.1. Install isolation everywhere; lock hygiene for local dev (F6, G2)
+
+Every generated install step (`Prepare pinned tools`) carries
+`--no-config` plus `MISE_NO_CONFIG=1`, so mise loads no repository
+config during install — none of the paths mise reads (`mise.toml`,
+`.mise.toml`, `.mise/config.toml`, `mise/config.toml`, `*.local.toml`
+variants, `mise/conf.d/*.toml`, `.mise/conf.d/*.toml`,
+`.config/mise*`, `MISE_ENV` variants) are ever opened. With no config
+loaded, no `[plugins]` backend shadowing, no `bin/install` execution,
+no `postinstall`, no `[hooks]`, no `[tasks]`, and no env loading can
+fire: there is nothing to read them from. `generate` proves no
+executable surface because isolation leaves no surface to prove —
+there is no config gate to bypass when no config is loaded.
+
+Download bytes in CI trust upstream TLS plus exact catalog pins:
+explicit `tool@exact` specs from Velnor's locked version policy are
+the sole version authority. The committed `mise.lock` is never
+consulted at install time — a lone lock is not enforced by mise
+(tampering is ignored), and config-visible verification would re-arm
+the code-execution paths isolation exists to close. The lock audit is
+instead lockfile hygiene for local development: `generate` verifies
+the committed `mise.lock` is present, complete, and well-formed so a
+maintainer's local `mise install` (which does load repo config)
+verifies bytes it already trusts. Version drift, missing entries,
+and missing or malformed locks stay advisory — versions remain
+authoritative and the lock remains an optional input.
+
+Custom `mise run` allowlists are rejected while non-empty
+(`custom_tasks_unqualified`): no repository configures them today,
+and the emission path needs a redesign (a qualified
+config-visible execution boundary) before any allowlisted task may
+run. Projects MUST keep `custom_tasks` empty until that path is
+qualified.
+
+Checksums are TOFU (trust on first use): the first download that
+records a checksum trusts the bytes it received. Accepted residual,
+stated explicitly: if an upstream artifact mutates after the lock
+recorded its checksum (registry compromise, CDN poisoning, or a
+re-published release tarball under the same version), neither the
+hygiene audit nor CI installs detect it — CI installs the mutated
+bytes under the same exact pin. Out of scope for V1 (independent
+shasum channel, artifact transparency).
+
+Determinism follows per class: fixed steps from exact catalog pins,
+custom steps from the committed project configuration. See
+[task-execution §2](task-execution-contract.md) for the fixed vectors
+and [workflow §3](workflow-contract.md) for the prepare step.
+
 ## 2. Read-only command contract
 
 `plan` and `generate` MUST ask all registered adapters to check their respective

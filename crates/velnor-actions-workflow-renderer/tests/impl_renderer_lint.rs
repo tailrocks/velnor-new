@@ -4,7 +4,6 @@ use velnor_actions_contract::{
     Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Trigger, ValidatorKind,
     VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy, workflow::permissions::PermissionLevel,
 };
-use velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub;
 use velnor_actions_workflow_renderer::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError, ValidatorCommand,
     checkout_step, merge_step, render_workflow_ir, shell_step,
@@ -65,7 +64,7 @@ fn lint_job() -> Result<Job, RenderError> {
                     "actionlint".to_owned(),
                     "-color".to_owned(),
                 ],
-                with_credential_scrub(&BTreeMap::new()),
+                BTreeMap::new(),
             )?,
         ],
     })

@@ -140,8 +140,8 @@ fn check_setup_cache_disabled(job: &JobText) -> Result<(), String> {
     for step in job.steps.iter().filter(|s| s.name == "Setup Mise") {
         for need in [
             "cache: \"true\"",
-            "cache_save: ${{ github.event_name == 'push' }}",
             "cache_key: mise-v1-",
+            "cache_save: \"false\"",
         ] {
             if !step.body.contains(need) {
                 return Err(format!("{}: Setup Mise misses {need}", job.id));
