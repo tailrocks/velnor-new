@@ -2,14 +2,18 @@
 //!
 //! The resolver — not manifest substrings — is the source of truth here:
 //! effective edition and MSRV per package (inheritance resolved), the
-//! exact eight-member set, and the locked dependency graph (registry-only
+//! exact workspace member sets, and the locked dependency graph (registry-only
 //! sources, exact requirements). Runs fully offline: any unlocked input
 //! fails the command instead of fetching.
 
 use std::error::Error;
 
 const WORKSPACE_MANIFESTS: [&str; 2] = ["Cargo.toml", "crates/velnor-runner/Cargo.toml"];
-pub(super) const RUNNER_MEMBERS: [(&str, &str); 5] = [
+pub(super) const RUNNER_MEMBERS: [(&str, &str); 6] = [
+    (
+        "crates/velnor-runner/crates/velnor-runner-attestation",
+        "velnor-runner-attestation",
+    ),
     (
         "crates/velnor-runner/crates/velnor-runner-cli",
         "velnor-runner-cli",
@@ -303,7 +307,7 @@ fn metadata_members_match_products_and_archive_guard() -> Result<(), Box<dyn Err
 }
 
 #[test]
-fn metadata_runner_members_match_five() -> Result<(), Box<dyn Error>> {
+fn metadata_runner_members_match_six() -> Result<(), Box<dyn Error>> {
     let doc = metadata_for("crates/velnor-runner/Cargo.toml")?;
     let mut names: Vec<&str> = workspace_packages(&doc)?
         .iter()

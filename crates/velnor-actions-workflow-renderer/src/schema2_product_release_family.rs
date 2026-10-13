@@ -122,9 +122,14 @@ impl Family {
             ]
             .map(|name| format!("assets/{name}"))
             .to_vec(),
-            Self::Binary => ["velnor-host", "SHA256SUMS"]
-                .map(|name| format!("assets/{name}"))
-                .to_vec(),
+            Self::Binary => [
+                "velnor-host",
+                "velnor-runner-attestation-helper",
+                "BINARY_RELEASE_MANIFEST.json",
+                "SHA256SUMS",
+            ]
+            .map(|name| format!("assets/{name}"))
+            .to_vec(),
             Self::Generator => super::generator_release::publication_asset_paths(),
         }
     }

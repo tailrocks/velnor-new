@@ -212,7 +212,8 @@ impl Turn<'_> {
     async fn fit_pressure(&mut self) -> Result<(), EnsureError> {
         let running_now = slot::running_count(self.journal, self.docker).await?;
         let ceiling = capacity::job_capacity();
-        let sample = super::resource_probe::pressure_sample(self.docker, self.journal).await;
+        let sample =
+            super::resource_probe::pressure_sample(self.docker, self.journal, self.rest).await;
         let next = super::pressure::adjust_with_sample(self.capacity, running_now, ceiling, sample);
         if self.target == self.capacity {
             self.target = next;

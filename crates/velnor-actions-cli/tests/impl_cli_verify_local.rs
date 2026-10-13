@@ -11,8 +11,12 @@
 
 use std::error::Error;
 use std::fs;
+#[cfg(unix)]
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::PathBuf;
 use std::process::Command;
+#[cfg(unix)]
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::impl_repo_policy::p12_harness as freshness;
 
@@ -103,6 +107,10 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
         "fail() records the stage"
     );
     assert!(script.contains("exit 1"), "failures exit nonzero");
+    assert!(
+        !script.contains("/tmp/verify-local-"),
+        "logs are allocated per invocation"
+    );
     // The repo-policy stage body is the freshness script at default
     // (offline) flags — the exact command the stage test executes.
     assert!(
@@ -181,5 +189,95 @@ fn verify_local_repo_policy_stage_executes() -> Result<(), Box<dyn Error>> {
     let output = freshness::run_script(&fixture.dir, &[]);
     freshness::cleanup(&fixture);
     freshness::assert_clean(&output?);
+    Ok(())
+}
+
+#[cfg(unix)]
+fn verify_local_log_parent() -> Result<PathBuf, Box<dyn Error>> {
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let parent = std::env::temp_dir().join(format!(
+        "velnor-verify-local-logs-{}-{unique}",
+        std::process::id()
+    ));
+    fs::create_dir(&parent)?;
+    fs::set_permissions(&parent, fs::Permissions::from_mode(0o2700))?;
+    let bin = parent.join("bin");
+    fs::create_dir(&bin)?;
+    fs::set_permissions(&bin, fs::Permissions::from_mode(0o700))?;
+    let mise = bin.join("mise");
+    fs::write(
+        &mise,
+        "#!/bin/sh\ncase \"$1\" in\n  --version) printf '2026.10.6\\n' ;;\n  install) printf '%s\\n' \"$VERIFY_LOCAL_LOG_TEST_MARKER\" >&2; exit 1 ;;\n  *) exit 2 ;;\nesac\n",
+    )?;
+    fs::set_permissions(&mise, fs::Permissions::from_mode(0o700))?;
+    Ok(parent)
+}
+
+#[cfg(unix)]
+fn run_verify_local_failure(
+    parent: &std::path::Path,
+    marker: &str,
+) -> Result<std::process::Output, Box<dyn Error>> {
+    let bin = parent.join("bin");
+    let mut path = std::ffi::OsString::from(bin);
+    path.push(":");
+    path.push(std::env::var_os("PATH").ok_or("PATH is missing")?);
+    Ok(Command::new("bash")
+        .arg(workspace_root().join("scripts/verify-local.sh"))
+        .env("TMPDIR", parent)
+        .env("PATH", path)
+        .env("VERIFY_LOCAL_LOG_TEST_MARKER", marker)
+        .output()?)
+}
+
+#[cfg(unix)]
+fn verify_local_log_dir(output: &[u8]) -> Result<PathBuf, Box<dyn Error>> {
+    let output = String::from_utf8_lossy(output);
+    let path = output
+        .lines()
+        .find_map(|line| line.strip_prefix("verify-local: log directory: "))
+        .ok_or("verify-local did not print its log directory")?;
+    Ok(PathBuf::from(path))
+}
+
+#[cfg(unix)]
+fn current_effective_uid() -> Result<u32, Box<dyn Error>> {
+    let output = Command::new("id").arg("-u").output()?;
+    if !output.status.success() {
+        return Err("id -u failed".into());
+    }
+    Ok(String::from_utf8(output.stdout)?.trim().parse()?)
+}
+
+#[cfg(unix)]
+#[test]
+fn verify_local_failure_logs_are_private_and_isolated() -> Result<(), Box<dyn Error>> {
+    let parent = verify_local_log_parent()?;
+    let first = run_verify_local_failure(&parent, "failure-A")?;
+    assert_eq!(first.status.code(), Some(1), "first run failure exit");
+    let first_dir = verify_local_log_dir(&first.stdout)?;
+    let first_log = first_dir.join("toolchain.log");
+    let first_output = String::from_utf8_lossy(&first.stdout);
+    assert!(first_output.contains(&first_log.display().to_string()));
+    assert!(fs::read_to_string(&first_log)?.contains("failure-A"));
+    let first_meta = fs::metadata(&first_dir)?;
+    assert_eq!(first_meta.permissions().mode() & 0o777, 0o700);
+    assert_eq!(first_meta.uid(), current_effective_uid()?);
+
+    let second = run_verify_local_failure(&parent, "failure-B")?;
+    assert_eq!(second.status.code(), Some(1), "second run failure exit");
+    let second_dir = verify_local_log_dir(&second.stdout)?;
+    let second_log = second_dir.join("toolchain.log");
+    assert_ne!(first_dir, second_dir, "invocations use unique directories");
+    assert!(fs::read_to_string(&second_log)?.contains("failure-B"));
+    assert_eq!(fs::read_to_string(&first_log)?.trim(), "failure-A");
+    assert_eq!(
+        fs::metadata(&second_dir)?.permissions().mode() & 0o777,
+        0o700
+    );
+    let parent_mode = fs::metadata(&parent)?.permissions().mode() & 0o7777;
+    assert_eq!(parent_mode, 0o2700, "the caller's SGID parent is preserved");
+
+    fs::remove_dir_all(parent)?;
     Ok(())
 }

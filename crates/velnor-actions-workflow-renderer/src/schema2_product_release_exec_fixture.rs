@@ -127,7 +127,12 @@ impl Fixture {
                 "RESOURCE_PROBE_MANIFEST.json",
                 "SHA256SUMS",
             ],
-            Family::Binary => &["velnor-host", "SHA256SUMS"],
+            Family::Binary => &[
+                "velnor-host",
+                "velnor-runner-attestation-helper",
+                "BINARY_RELEASE_MANIFEST.json",
+                "SHA256SUMS",
+            ],
             Family::Generator => &[],
         }
     }

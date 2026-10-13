@@ -21,8 +21,13 @@ pub(super) enum Possibility {
 pub(super) use macros::{Call, Definition};
 
 pub(super) struct IncludeSource {
-    pub(super) path: PathBuf,
+    pub(super) path: IncludePath,
     pub(super) condition: Possibility,
+}
+
+pub(super) enum IncludePath {
+    Relative(PathBuf),
+    CargoOutDir(PathBuf),
 }
 
 #[derive(Default)]
@@ -55,6 +60,13 @@ pub(super) fn macro_include_sources(
     definition: &Definition,
 ) -> Outcome<Vec<(PathBuf, Possibility)>> {
     macros::included_sources(definition, &definition.source)
+}
+
+pub(super) fn direct_include_path(
+    tokens: &proc_macro2::TokenStream,
+    source: &Path,
+) -> Outcome<IncludePath> {
+    macros::direct_include_path(tokens, source)
 }
 
 struct SourceVisitor<'a> {
@@ -135,7 +147,7 @@ impl<'ast> Visit<'ast> for SourceVisitor<'_> {
                 Err(error) => self.error = Some(error.to_string()),
             }
         } else if path.is_ident("include") {
-            match macros::include_source(&node.mac.tokens, self.source) {
+            match direct_include_path(&node.mac.tokens, self.source) {
                 Ok(path) => self.findings.includes.push(IncludeSource {
                     path,
                     condition: item_condition,

@@ -7,17 +7,13 @@
 //! or a checksum.
 
 use crate::RenderError;
-use crate::commands::join_argv_for_run;
 use crate::runs_on::runs_on_yaml;
 use crate::steps::{ATTEST_BUILD_PROVENANCE_USES, DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 use crate::yaml::Yaml;
 
 use super::features::{CHECKOUT_USES, base, finish, identified_publish_step, run_step};
-use super::{Schema2WorkflowRequest, generator_release, product_release_family};
-use velnor_actions_contract::ReleaseTarget;
+use super::{Schema2WorkflowRequest, product_release_family};
 
-/// GitHub-hosted macOS label. The binary is native; it is not built on Ubuntu.
-const MACOS_RUNS_ON: &str = "macos-15";
 /// `actions/attest-build-provenance` tag `v4.2.2` (commit, not a floating tag).
 const ASSET_DIR: &str = "assets";
 const CHECKSUMS: &str = "SHA256SUMS";
@@ -25,7 +21,6 @@ const RUNNER_TAR: &str = "velnor-runner-linux-amd64.tar";
 const DIND_TAR: &str = "velnor-dind-linux-amd64.tar";
 const RESOURCE_PROBE_TAR: &str = "velnor-resource-probe-linux-amd64.tar";
 const RESOURCE_PROBE_MANIFEST: &str = "RESOURCE_PROBE_MANIFEST.json";
-const HOST_BIN: &str = "velnor-host";
 
 const IMAGE_BUILD: &str = "\
 set -eu
@@ -51,18 +46,6 @@ test -s RESOURCE_PROBE_MANIFEST.json";
 const IMAGE_SUM: &str = "\
 set -eu
 sha256sum velnor-runner-linux-amd64.tar velnor-dind-linux-amd64.tar velnor-resource-probe-linux-amd64.tar RESOURCE_PROBE_MANIFEST.json > SHA256SUMS";
-
-const BINARY_VERIFY: &str = "\
-set -eu
-desc=\"$(file -b velnor-host)\"
-case \"$desc\" in
-  *Mach-O*arm64*) ;;
-  *) echo \"not an arm64 Mach-O: $desc\" >&2; exit 1 ;;
-esac";
-
-const BINARY_SUM: &str = "\
-set -eu
-shasum -a 256 velnor-host > SHA256SUMS";
 
 /// Image release: build both linux/amd64 images, attest, then upload assets.
 ///
@@ -131,58 +114,11 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
 ///
 /// An illegal macOS label fails.
 pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
-    let pins = request
-        .product_release
-        .as_ref()
-        .ok_or_else(|| RenderError::InvalidWorkflow("product_release_pins_missing".to_owned()))?;
-    let install = join_argv_for_run(&pins.install_runner_build_tools_argv)?;
-    let build = format!(
-        "set -eu\n{}\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ntest -s velnor-host",
-        join_argv_for_run(&pins.runner_build_argv)?
-    );
-    let macos = runs_on_yaml(MACOS_RUNS_ON)?;
-    let files = [HOST_BIN, CHECKSUMS];
-    Ok(document(
-        "macOS binary release",
-        vec![
-            build_job(
-                "build-binary",
-                "Build velnor-host",
-                macos.clone(),
-                120,
-                vec![
-                    generator_release::mise_setup_step(pins, ReleaseTarget::MacosArm64)?,
-                    run_step("Install pinned Rust", &install),
-                    run_step("Build velnor-host", &build),
-                    run_step("Verify Mach-O architecture", BINARY_VERIFY),
-                    run_step("Checksum built bytes", BINARY_SUM),
-                ],
-                "Upload binary asset",
-                &files,
-            ),
-            attest_job(
-                "attest-binary",
-                "Attest velnor-host",
-                macos.clone(),
-                "build-binary",
-                "binary-assets",
-                &files,
-            ),
-            publish_job(
-                macos,
-                &Publish {
-                    id: "publish-binary",
-                    name: "Publish velnor-host",
-                    needs: "attest-binary",
-                    artifact: "binary-assets",
-                    prefix: "binary",
-                    notes: "velnor-host built from ${GITHUB_SHA}.",
-                    files: &files,
-                },
-            ),
-        ],
-    ))
+    binary::macos_binary_release(request)
 }
+
+#[path = "schema2_release_binary.rs"]
+mod binary;
 
 fn build_job(
     id: &str,

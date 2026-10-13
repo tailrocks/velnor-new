@@ -34,6 +34,8 @@ pub struct ProductReleasePins {
     pub install_resource_probe_target_argv: Vec<String>,
     /// Exact pinned macOS host binary build argv.
     pub runner_build_argv: Vec<String>,
+    /// Exact pinned macOS attestation-helper binary build argv.
+    pub runner_attestation_helper_build_argv: Vec<String>,
     /// Exact locked Cargo argv for the static Linux resource probe.
     pub resource_probe_build_argv: Vec<String>,
     /// Exact pinned actionlint argv.
