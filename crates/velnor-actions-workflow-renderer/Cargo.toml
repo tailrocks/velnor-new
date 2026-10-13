@@ -13,6 +13,9 @@ test-render-capture = []
 velnor-actions-contract = { version = "=0.1.8", path = "../velnor-actions-contract" }
 velnor-actions-mise = { version = "=0.1.8", path = "../velnor-actions-mise" }
 
+[dev-dependencies]
+granit-parser = "=1.0.1"
+
 [lints]
 workspace = true
 

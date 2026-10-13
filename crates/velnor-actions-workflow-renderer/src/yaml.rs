@@ -137,3 +137,97 @@ pub fn render_yaml(value: &Yaml) -> String {
 pub fn quote_scalar(value: &str) -> String {
     emit::quote_scalar(value)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::error::Error;
+
+    use super::{Yaml, render_yaml, render_yaml_compact};
+
+    #[test]
+    fn compact_render_preserves_multiline_run_scalar_and_structure() {
+        let document = Yaml::Map(vec![(
+            "jobs".to_owned(),
+            Yaml::Map(vec![(
+                "build".to_owned(),
+                Yaml::Map(vec![(
+                    "steps".to_owned(),
+                    Yaml::Seq(vec![Yaml::Map(vec![
+                        ("name".to_owned(), Yaml::str("compile")),
+                        ("run".to_owned(), Yaml::str("echo first\necho second")),
+                    ])]),
+                )]),
+            )]),
+        )]);
+
+        let regular = render_yaml(&document);
+        let compact = render_yaml_compact(&document);
+        assert!(compact.len() < regular.len());
+        assert!(regular.contains("run: \"echo first\\necho second\"\n"));
+        assert!(compact.contains("run: \"echo first\\necho second\"\n"));
+        assert!(compact.contains("jobs:\n build:\n  steps:\n   - name: compile\n     run:"));
+    }
+
+    #[test]
+    fn compact_render_keeps_scalar_quoting_and_map_order() {
+        let document = Yaml::Map(vec![
+            ("on".to_owned(), Yaml::str("push")),
+            ("timeout-minutes".to_owned(), Yaml::Int(5)),
+            (
+                "runs-on".to_owned(),
+                Yaml::Flow(vec!["ubuntu-latest".to_owned()]),
+            ),
+        ]);
+
+        assert_eq!(
+            render_yaml_compact(&document),
+            "\"on\": push\ntimeout-minutes: 5\nruns-on: [ubuntu-latest]\n"
+        );
+    }
+
+    #[test]
+    fn compact_workflow_matches_canonical_yaml_event_stream() -> Result<(), Box<dyn Error>> {
+        let document = Yaml::Map(vec![(
+            "jobs".to_owned(),
+            Yaml::Map(vec![(
+                "build".to_owned(),
+                Yaml::Map(vec![(
+                    "steps".to_owned(),
+                    Yaml::Seq(vec![Yaml::Map(vec![
+                        ("name".to_owned(), Yaml::str("compile")),
+                        ("run".to_owned(), Yaml::str("echo first\necho second")),
+                        (
+                            "env".to_owned(),
+                            Yaml::Map(vec![("MODE".to_owned(), Yaml::str("safe"))]),
+                        ),
+                        (
+                            "with".to_owned(),
+                            Yaml::Map(vec![(
+                                "args".to_owned(),
+                                Yaml::Seq(vec![Yaml::str("one"), Yaml::str("two")]),
+                            )]),
+                        ),
+                    ])]),
+                )]),
+            )]),
+        )]);
+        let canonical = render_yaml(&document);
+        let compact = render_yaml_compact(&document);
+        let canonical_events = yaml_events(&canonical)?;
+        let compact_events = yaml_events(&compact)?;
+
+        assert_eq!(compact_events, canonical_events);
+        assert!(
+            compact_events
+                .iter()
+                .any(|event| { event.contains("echo first\\necho second") })
+        );
+        Ok(())
+    }
+
+    fn yaml_events(source: &str) -> Result<Vec<String>, granit_parser::ScanError> {
+        granit_parser::Parser::new_from_str(source)
+            .map(|result| result.map(|(event, _span)| format!("{event:?}")))
+            .collect()
+    }
+}
