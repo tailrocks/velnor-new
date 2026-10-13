@@ -7,8 +7,8 @@
 use serde::Deserialize;
 use velnor_actions_contract::config::{RustBinaryReleaseConfig, RustReleaseConfig};
 use velnor_actions_contract::{
-    DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
-    TofuStackConfig, Utf8RepoRelDir,
+    DeclaredCompileDriver, DeclaredTestRunner, NextestTestSelection, RustConfiguration,
+    RustStackConfig, StacksConfig, TofuStackConfig, Utf8RepoRelDir,
 };
 
 use crate::OrchestratorError;
@@ -39,6 +39,9 @@ pub(crate) struct PartialRustStack {
     test_runner: Option<DeclaredTestRunner>,
     /// Ignored test execution mode.
     run_ignored: Option<String>,
+    /// Exact per-package Nextest test allowlists.
+    #[serde(default)]
+    nextest_test_selectors: Vec<NextestTestSelection>,
     /// Rust release policy; disabled by default.
     release: Option<RustReleaseConfig>,
     /// Single-package binary release policy; disabled by default.
@@ -63,6 +66,7 @@ impl PartialStacks {
                 compile_driver: stack.compile_driver,
                 test_runner: stack.test_runner,
                 run_ignored: stack.run_ignored,
+                nextest_test_selectors: stack.nextest_test_selectors,
                 release: stack.release.unwrap_or_default(),
                 binary_release: stack.binary_release.unwrap_or_default(),
             }
@@ -206,6 +210,36 @@ mod tests {
             let root = rooted(body);
             let err = load(root.path()).expect_err("unknown key must fail");
             assert!(err.to_string().contains(CONFIG_REL), "got {err}");
+        }
+    }
+
+    #[test]
+    fn nextest_selector_table_parses_and_defaults_empty() {
+        let load = load_config;
+        let root = rooted("schema = 1\n[stacks.rust]\n");
+        let config = load(root.path()).expect("default selector config");
+        let rust = config.stacks.rust.expect("rust config");
+        assert!(rust.nextest_test_selectors.is_empty());
+        let root = rooted(
+            "schema = 1\n[[stacks.rust.nextest_test_selectors]]\npackage = \"demo\"\nbinary = \"control_states\"\nmode = \"ignored_only\"\ntest_ids = [\"a_test\", \"b_test\"]\n",
+        );
+        let config = load(root.path()).expect("typed selector config");
+        let rust = config.stacks.rust.expect("rust config");
+        assert_eq!(rust.nextest_test_selectors.len(), 1);
+        assert_eq!(rust.nextest_test_selectors[0].package, "demo");
+        assert_eq!(rust.nextest_test_selectors[0].binary, "control_states");
+    }
+
+    #[test]
+    fn nextest_selector_table_rejects_unknown_and_unsafe_values() {
+        let load = load_config;
+        for body in [
+            "schema = 1\n[[stacks.rust.nextest_test_selectors]]\npackage = \"demo\"\nbinary = \"control_states\"\nmode = \"all\"\ntest_ids = [\"a_test\"]\n",
+            "schema = 1\n[[stacks.rust.nextest_test_selectors]]\npackage = \"demo\"\nbinary = \"control_states\"\nmode = \"ignored_only\"\ntest_ids = [\"a_test | test(=b_test)\"]\n",
+            "schema = 1\n[[stacks.rust.nextest_test_selectors]]\npackage = \"demo\"\nbinary = \"control_states\"\nmode = \"ignored_only\"\ntest_ids = [\"a_test\"]\nfilter = \"*\"\n",
+        ] {
+            let root = rooted(body);
+            assert!(load(root.path()).is_err(), "unsafe config accepted: {body}");
         }
     }
 

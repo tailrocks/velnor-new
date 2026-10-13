@@ -11,6 +11,7 @@ mod execution;
 mod host_container;
 mod image_task;
 mod mise;
+mod nextest_selection;
 mod qualified_tools;
 mod release;
 mod resources;
@@ -48,6 +49,7 @@ pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
     MiseCheck, is_valid_mise_task_name,
 };
+pub use nextest_selection::{NextestTestSelection, NextestTestSelectionMode};
 pub use qualified_tools::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend,
     QualifiedToolExecutable, QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe,
