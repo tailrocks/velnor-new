@@ -1,3 +1,0 @@
-variable "level" {
-  default = "b"
-}
