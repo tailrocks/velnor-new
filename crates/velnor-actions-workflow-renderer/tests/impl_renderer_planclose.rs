@@ -33,6 +33,7 @@ fn strict_plan_job_gets_full_prelude_in_order() -> Result<(), RenderError> {
             "Write request",
             "Plan",
             PUBLISH_PLAN_NAME,
+            "Save Mise tools",
         ]
     );
     assert!(

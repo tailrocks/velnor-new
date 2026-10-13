@@ -135,6 +135,13 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
         !setup.contains("cache_key:"),
         "Mise has no archive key:\n{setup}"
     );
+    for line in [
+        "- name: Save Mise tools".to_owned(),
+        "key: mise-v1-".to_owned(),
+        "if: success() && github.event_name == 'push'".to_owned(),
+    ] {
+        assert!(text.contains(&line), "sole owner saves {line}:\n{text}");
+    }
     Ok(())
 }
 
