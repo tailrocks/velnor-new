@@ -126,7 +126,7 @@
       "pinned": "2026.10.9",
       "qualified": "2026.10.9",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
-      "status": "current"
+      "status": "pending-qualification"
     },
     {
       "checked_at": "2026-10-13T19:58:23Z",
