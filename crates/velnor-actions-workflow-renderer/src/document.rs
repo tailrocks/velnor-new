@@ -8,6 +8,7 @@ use crate::{
     RenderError,
     composite::shared_call,
     document_steps::step_to_yaml,
+    lane_share::SharedCall,
     render::{FINAL_JOB_ID, RenderContext},
     steps,
     yaml::Yaml,
@@ -283,7 +284,7 @@ fn render_job_steps(
 ) -> Result<Vec<Yaml>, RenderError> {
     let mut rendered_steps =
         Vec::with_capacity(job.steps.len() + 2 * usize::from(shared.is_some()));
-    if let Some(uses) = shared {
+    if let Some(call) = shared {
         let Some(checkout) = checkouts.get(id) else {
             return Err(RenderError::InvalidWorkflow(format!(
                 "shared_lane_missing_checkout:{id}"
@@ -295,7 +296,7 @@ fn render_job_steps(
             )));
         }
         rendered_steps.push(step_to_yaml(id, checkout, ctx, needs_envs, false)?);
-        rendered_steps.push(shared_call(uses)?);
+        rendered_steps.push(shared_call(&call.uses, call.id.as_deref())?);
     } else if checkouts.contains_key(id) {
         return Err(RenderError::InvalidWorkflow(format!(
             "checkout_without_shared_lane:{id}"

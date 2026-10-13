@@ -48,7 +48,7 @@ struct SharedLaneParts {
 ///
 /// # Errors
 ///
-/// A pair whose timeout, condition, permissions, environment, or steps
+/// A pair whose timeout, condition, permissions, environment, checkout, or steps
 /// differ fails closed. Elected cache saves (`Save Mise tools`, `Save Tofu
 /// providers`) stay on the job that owns them and are not part of that
 /// comparison. An unsafe logical id fails closed.
@@ -136,7 +136,7 @@ fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLa
 
 fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
     let (checkout, remaining) = steps.split_first()?;
-    let is_expected_checkout = checkout.name == "Checkout"
+    let expected = checkout.name == "Checkout"
         && checkout.condition.is_none()
         && matches!(
             &checkout.kind,
@@ -145,7 +145,7 @@ fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step
                     && with.get("persist-credentials").map(String::as_str) == Some("false")
                     && env.is_empty()
         );
-    if !is_expected_checkout || remaining.iter().any(is_checkout_step) {
+    if !expected || remaining.iter().any(is_checkout_step) {
         return None;
     }
     Some((checkout, remaining))
@@ -155,8 +155,7 @@ fn is_checkout_step(step: &Step) -> bool {
     step.name == "Checkout"
         || matches!(
             &step.kind,
-            StepKind::Action { uses, .. }
-                if uses.starts_with("actions/checkout@")
+            StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@")
         )
 }
 

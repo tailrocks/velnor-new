@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::Command;
 
 use tempfile::TempDir;
-use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract::{PullRequestCachePolicy, WorkflowPolicy};
 use velnor_actions_mise::cache::validate_sources_path;
 use velnor_actions_orchestrator::prepare;
 use velnor_actions_workflow_renderer::steps::{
@@ -146,6 +146,7 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
                 "default_branch",
                 "generator_validation",
                 "max_parallel_jobs",
+                "pull_request_cache_policy",
                 "runner_label",
             ]
             .contains(&key.as_str()),
