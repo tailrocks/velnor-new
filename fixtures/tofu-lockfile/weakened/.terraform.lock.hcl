@@ -1,2 +1,0 @@
-provider "x" {
-  version===
