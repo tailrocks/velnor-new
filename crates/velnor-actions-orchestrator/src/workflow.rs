@@ -3,8 +3,13 @@
 //! W1 emission wiring lives in the child module below.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
+#[path = "workflow_build.rs"]
+mod workflow_build;
 #[path = "workflow_context.rs"]
 mod workflow_context;
+#[path = "workflow_policy.rs"]
+pub(super) mod workflow_policy;
+pub(super) use workflow_build::{WorkflowBuildInput, build_workflow_for_consumer_release};
 #[path = "workflow_dispatch.rs"]
 mod workflow_dispatch;
 
@@ -35,6 +40,14 @@ use crate::utf8::{strings_of, strings_of_env};
 use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, final_job, lint_job, plan_job};
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
+
+/// Resolve the scale-set selector for the mode that will actually be rendered.
+pub(crate) fn scale_set_selector_for_dispatch(
+    config: &VelnorConfig,
+    dispatch: Option<velnor_actions_contract::ExecutionMode>,
+) -> Result<Option<velnor_actions_contract::ScaleSetSelector>, OrchestratorError> {
+    workflow_context::scale_set_selector(config, dispatch)
+}
 
 /// Pinned `actions/checkout` ref (cli-contract section 4 sample pin).
 pub const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
@@ -142,6 +155,7 @@ pub(crate) fn build_workflow(
         &catalog,
         fetch_roots,
         acquire.as_ref(),
+        &version,
     )?;
     let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.jobs {
@@ -158,6 +172,7 @@ pub(crate) fn build_workflow(
     let context = workflow_context::render_context(
         config,
         label,
+        &version,
         &version,
         &catalog,
         discovery,

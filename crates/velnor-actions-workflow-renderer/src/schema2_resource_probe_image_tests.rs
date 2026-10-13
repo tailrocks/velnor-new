@@ -90,7 +90,7 @@ fn assert_resource_probe_steps(
         "Install pinned Rust and MBX for the resource probe",
         "Install pinned Linux musl target",
         "Build locked resource probe through MBX",
-        "rust@1.99.0 mr-boxington@1.23.0 -- mbx build --locked --manifest-path crates/velnor-runner/Cargo.toml",
+        "rust@1.98.1 mr-boxington@1.21.1 -- mbx build --locked --manifest-path crates/velnor-runner/Cargo.toml",
         "--package velnor-resource-probe --bin velnor-resource-probe --release --target x86_64-unknown-linux-musl",
         "bash images/resource-probe/build-image.sh",
     ] {

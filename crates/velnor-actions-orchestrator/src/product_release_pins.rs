@@ -43,6 +43,7 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
             &catalog,
         )?,
         install_qualify_tools_argv: qualify_install_argv(&catalog)?,
+        qualify_mbx_action_steps: crate::mbx_preflight::steps_for_catalog(&catalog)?,
         install_runner_build_tools_argv: install_argv(&[PinnedTool::Rust], &catalog)?,
         install_gh_argv: install_argv(&[PinnedTool::Gh], &catalog)?,
         build_argv: mbx_build_argv(&[], &catalog)?,

@@ -73,6 +73,8 @@ pub(crate) fn mise() -> MiseSetup {
 pub(crate) fn fixture_ctx() -> RenderContext {
     RenderContext {
         generator_version: VERSION.to_owned(),
+        report_helper_version: VERSION.to_owned(),
+        scale_set_selector: None,
         runs_on: LABEL.to_owned(),
         staged_binary: STAGED.to_owned(),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),

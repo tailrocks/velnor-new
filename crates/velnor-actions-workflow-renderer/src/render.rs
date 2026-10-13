@@ -10,8 +10,8 @@ use velnor_actions_contract::{
     CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
-    WorkflowPolicy,
+    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ScaleSetSelector, ValidatorKind,
+    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 
 use crate::{
@@ -85,10 +85,19 @@ pub const ALINT_BINARY_VERSION: &str = "v0.18.1";
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]
 pub struct RenderContext {
-    /// Exact generator version for the marker and staged path.
+    /// Exact generator version for generated-file markers and runtime identity.
     pub generator_version: String,
+    /// Exact helper release selected by the consumer's validated release manifest.
+    ///
+    /// This can differ from `generator_version` while rendering a newer
+    /// generator against an older pinned consumer. Task report wrappers and
+    /// the staged helper path use this version; generated-file markers do not.
+    pub report_helper_version: String,
     /// Single literal versioned Ubuntu label every job must use.
     pub runs_on: String,
+    /// Scale Set selected by the validated execution profile, when present.
+    /// Typed task steps can use only this exact Linux/amd64 selector.
+    pub scale_set_selector: Option<ScaleSetSelector>,
     /// Digest-verified staged binary under runner temp.
     pub staged_binary: String,
     /// Internal request directory under runner temp.
@@ -152,8 +161,9 @@ impl RenderContext {
     /// Returns [`RenderError`] describing the first invalid scalar.
     pub fn validate(&self) -> Result<(), RenderError> {
         marker::validate_version(&self.generator_version)?;
+        marker::validate_version(&self.report_helper_version)?;
         guard::validate_runs_on(&self.runs_on)?;
-        guard::validate_staged_binary(&self.staged_binary, &self.generator_version)?;
+        guard::validate_staged_binary(&self.staged_binary, &self.report_helper_version)?;
         guard::validate_request_dir(&self.request_dir)?;
         steps::checkout_step(&self.checkout_uses).map(|_| ())?;
         for command in &self.validator_commands {

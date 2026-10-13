@@ -18,6 +18,7 @@ fn binary_request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
         workflows: BTreeSet::from([RoutingWorkflow::MacosBinaryRelease]),
         mbx_qualification: None,
         mise_pin_qualification: None,
+        rust_toolchain_qualification: None,
         product_release: Some(test_pins()),
     })
 }

@@ -1,5 +1,14 @@
+use std::collections::BTreeMap;
+
+use velnor_actions_mise::catalog::{PinnedTool, ToolCatalog};
+use velnor_actions_mise::{
+    ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, NO_AUTO_INSTALL_ENV,
+    RUSTUP_TOOLCHAIN_ENV, ToolHomes,
+};
+
 use crate::schema2::ProductReleasePins;
 use crate::setup::MiseSetup;
+use crate::steps::{CompileDriver, mbx_steps_for_driver};
 
 pub(super) fn test_pins() -> ProductReleasePins {
     let setup = MiseSetup {
@@ -15,6 +24,7 @@ pub(super) fn test_pins() -> ProductReleasePins {
         install_gate_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
         install_build_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
         install_qualify_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
+        qualify_mbx_action_steps: qualification_mbx_action_steps(),
         install_runner_build_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
         install_gh_argv: [
             "mise",
@@ -75,6 +85,34 @@ pub(super) fn test_pins() -> ProductReleasePins {
     }
 }
 
+fn qualification_mbx_action_steps() -> [velnor_actions_contract::Step; 3] {
+    let catalog = ToolCatalog::pinned();
+    let homes = ToolHomes::runner_temp();
+    let mut env = ISOLATION_ENV
+        .iter()
+        .chain(NO_AUTO_INSTALL_ENV.iter())
+        .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+        .collect::<BTreeMap<_, _>>();
+    env.insert(
+        MISE_RUSTUP_HOME_ENV.to_owned(),
+        homes.rustup_home().to_owned(),
+    );
+    env.insert(
+        MISE_CARGO_HOME_ENV.to_owned(),
+        homes.cargo_home().to_owned(),
+    );
+    env.insert(RUSTUP_TOOLCHAIN_ENV.to_owned(), catalog.rustup_toolchain());
+    mbx_steps_for_driver(
+        &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
+        CompileDriver::Mbx,
+        catalog.version(PinnedTool::MrBoxington),
+        catalog.version(PinnedTool::Rust),
+        env,
+    )
+    .expect("test MBX qualification steps are valid")
+    .expect("MBX qualification emits the native action steps")
+}
+
 fn resource_probe_argvs() -> (Vec<String>, Vec<String>) {
     let install = [
         "mise",
@@ -88,7 +126,7 @@ fn resource_probe_argvs() -> (Vec<String>, Vec<String>) {
         "target",
         "add",
         "--toolchain",
-        "1.98.1",
+        "1.98.1-x86_64-unknown-linux-gnu",
         "x86_64-unknown-linux-musl",
     ]
     .map(str::to_owned)
@@ -100,8 +138,9 @@ fn resource_probe_argvs() -> (Vec<String>, Vec<String>) {
         "--no-hooks",
         "exec",
         "rust@1.98.1",
+        "mr-boxington@1.21.1",
         "--",
-        "cargo",
+        "mbx",
         "build",
         "--locked",
         "--manifest-path",

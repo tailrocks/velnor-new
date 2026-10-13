@@ -72,14 +72,14 @@ fn build_policy() -> BuildTaskPolicy {
         selected_tools: vec![
             BuildTaskTool {
                 key: "mr-boxington".to_owned(),
-                version: "1.23.0".to_owned(),
+                version: "1.21.1".to_owned(),
                 backend: "packslip:github.com/jdx/mr-boxington".to_owned(),
                 os: Vec::new(),
                 config_options: BTreeMap::new(),
                 lock_options: BTreeMap::new(),
                 artifact: Some(BuildTaskArtifact {
                     checksum: "sha256:e548b5758498cf822a180b6328597e6aded8fe9bb3046cd918399172ae30dde2".to_owned(),
-                    url: "https://github.com/jdx/mr-boxington/releases/download/v1.23.0/mbx-aarch64-apple-darwin.tar.gz".to_owned(),
+                    url: "https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx-aarch64-apple-darwin.tar.gz".to_owned(),
                     url_api: None,
                     signer: Some(
                         "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
@@ -90,7 +90,7 @@ fn build_policy() -> BuildTaskPolicy {
             },
             BuildTaskTool {
                 key: "rust".to_owned(),
-                version: "1.99.0".to_owned(),
+                version: "1.98.1".to_owned(),
                 backend: "core:rust".to_owned(),
                 os: Vec::new(),
                 config_options: rust_options(),

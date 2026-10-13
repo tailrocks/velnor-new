@@ -242,8 +242,8 @@ fn assert_qualifier_mbx_preflight(
         super::scalar(super::map_field(native_inputs, "toolchain")?)?,
         pins.rust_version
     );
-    assert_eq!(pins.mr_boxington_version, "1.23.0");
-    assert_eq!(pins.rust_version, "1.99.0");
+    assert_eq!(pins.mr_boxington_version, "1.21.1");
+    assert_eq!(pins.rust_version, "1.98.1");
 
     let version_check =
         super::scalar(super::map_field(super::map_entries(&mbx_steps[2])?, "run")?)?;

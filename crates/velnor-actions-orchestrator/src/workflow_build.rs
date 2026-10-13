@@ -52,17 +52,18 @@ pub(crate) fn build_workflow_for_consumer_release(
     let plan = build_workflow_plan(input, &mut prepared)?;
     let jobs = build_workflow_jobs(input, &mut prepared, plan)?;
     let ir = workflow_ir(input.config, input.branch, jobs, prepared.policy);
-    let context = workflow_context::render_context(workflow_context::RenderContextInputs {
-        config: input.config,
-        label: input.label,
-        generator_version: prepared.generator_version,
-        report_helper_version: &prepared.report_helper_version,
-        catalog: &prepared.catalog,
-        discovery: input.discovery,
-        plan_needs_rust: prepared.needs.rust.has_compiler(),
-        workflow_tasks: prepared.workflow_tasks,
-        verify: &prepared.verify,
-    })?;
+    let context = workflow_context::render_context(
+        input.config,
+        input.label,
+        prepared.generator_version,
+        &prepared.report_helper_version,
+        &prepared.catalog,
+        input.discovery,
+        prepared.needs.rust.has_compiler(),
+        prepared.workflow_tasks.clone(),
+        &prepared.verify,
+        &input.config.workflow.verify,
+    )?;
     let actionlint = actionlint_input(input.config, prepared.generator_version, input.label);
     Ok(WorkflowPlan {
         ir,

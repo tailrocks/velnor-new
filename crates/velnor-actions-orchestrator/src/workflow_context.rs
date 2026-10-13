@@ -1,7 +1,8 @@
 //! Renderer context construction from discovered repository evidence.
 
 use velnor_actions_contract::{
-    GeneratorValidation, ValidatorKind, VelnorConfig, VerifyConfig, WorkflowPolicy,
+    ExecutionMode, GeneratorValidation, ScaleSetSelector, ValidatorKind, VelnorConfig,
+    VerifyConfig, WorkflowPolicy,
 };
 use velnor_actions_mise::{IsolatedCommand, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{RenderContext, ValidatorCommand};
@@ -30,7 +31,8 @@ use super::{CHECKOUT_USES, REQUEST_DIR};
 pub(super) fn render_context(
     config: &VelnorConfig,
     label: &str,
-    version: &str,
+    generator_version: &str,
+    report_helper_version: &str,
     catalog: &ToolCatalog,
     discovery: &Discovery,
     plan_needs_rust: bool,
@@ -88,9 +90,11 @@ pub(super) fn render_context(
             None
         };
     Ok(RenderContext {
-        generator_version: version.to_owned(),
+        generator_version: generator_version.to_owned(),
+        report_helper_version: report_helper_version.to_owned(),
         runs_on: label.to_owned(),
-        staged_binary: format!("{STAGED_BINARY_PREFIX}{version}"),
+        scale_set_selector: scale_set_selector(config, None)?,
+        staged_binary: format!("{STAGED_BINARY_PREFIX}{report_helper_version}"),
         request_dir: REQUEST_DIR.to_owned(),
         checkout_uses: CHECKOUT_USES.to_owned(),
         validator_commands,
@@ -104,4 +108,35 @@ pub(super) fn render_context(
             plan_needs_rust,
         )?,
     })
+}
+
+pub(super) fn scale_set_selector(
+    config: &VelnorConfig,
+    dispatch: Option<ExecutionMode>,
+) -> Result<Option<ScaleSetSelector>, OrchestratorError> {
+    let selector = config
+        .execution
+        .as_ref()
+        .map(|execution| {
+            execution
+                .validate("config.toml")
+                .map_err(|error| OrchestratorError::Contract {
+                    problem: error.to_string(),
+                })?;
+            let mut effective = execution.clone();
+            if let Some(mode) = dispatch {
+                effective.mode = Some(mode);
+            }
+            if !effective.emits_scale_set_selector() {
+                return Ok(None);
+            }
+            effective
+                .scale_selector()
+                .map(Some)
+                .map_err(|error| OrchestratorError::Contract {
+                    problem: error.to_string(),
+                })
+        })
+        .transpose()?;
+    Ok(selector.flatten())
 }

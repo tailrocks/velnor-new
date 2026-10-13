@@ -73,14 +73,14 @@ fn assert_hosted_target_setup(index: usize, id: &str, body: &Yaml) {
     assert!(rendered.contains("ref: ${{ github.sha }}"), "{id}");
     assert!(rendered.contains("persist-credentials: \"false\""), "{id}");
     assert!(rendered.contains("name: Setup Mise"), "{id}");
-    assert!(rendered.contains("version: 2026.10.7"), "{id}");
+    assert!(rendered.contains("version: 2026.10.8"), "{id}");
     let mise_sha = if index == 0 {
         crate::setup::MISE_BINARY_SHA256_LINUX_X64
     } else {
         crate::setup::MISE_BINARY_SHA256_MACOS_ARM64
     };
     assert!(rendered.contains(mise_sha), "{id}");
-    assert!(rendered.contains("MBX_VERSION: 1.23.0"), "{id}");
+    assert!(rendered.contains("MBX_VERSION: 1.21.1"), "{id}");
     assert_pinned_mbx_install(id, body);
 }
 

@@ -226,6 +226,9 @@ fn optional_source<'a>(
 }
 
 fn validate_config_shape(config: &NativeMiseConfig) -> Result<(), OrchestratorError> {
+    if config.root_keys.iter().any(|key| key == "wrappers") {
+        return Err(failure("verification_mise_wrappers"));
+    }
     let allowed = ["min_version", "settings", "tasks", "tools"];
     if config
         .root_keys

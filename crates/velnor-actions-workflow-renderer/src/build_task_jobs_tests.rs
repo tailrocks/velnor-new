@@ -127,7 +127,7 @@ fn boltffi_tool() -> BuildTaskTool {
 
 fn mbx_tool() -> BuildTaskTool {
     let mut artifact = artifact(
-        "https://github.com/jdx/mr-boxington/releases/download/v1.23.0/mbx-aarch64-apple-darwin.tar.gz",
+        "https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx-aarch64-apple-darwin.tar.gz",
         "e548b5758498cf822a180b6328597e6aded8fe9bb3046cd918399172ae30dde2",
     );
     artifact.signer = Some(
@@ -136,7 +136,7 @@ fn mbx_tool() -> BuildTaskTool {
     );
     tool(
         "mr-boxington",
-        "1.23.0",
+        "1.21.1",
         "packslip:github.com/jdx/mr-boxington",
         Some(artifact),
     )
@@ -150,7 +150,7 @@ fn rust_tool() -> BuildTaskTool {
             "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu".to_owned(),
         ),
     ]);
-    let mut tool = tool("rust", "1.99.0", "core:rust", None);
+    let mut tool = tool("rust", "1.98.1", "core:rust", None);
     tool.config_options = options.clone();
     tool.lock_options = options;
     tool
@@ -249,13 +249,13 @@ fn native_job_bootstraps_only_locked_selected_tools_and_guards_current_source() 
     assert!(!guard.contains("MBX_CARGO_SHIM_MODE"));
     assert!(guard.contains("mise.lock"));
     assert!(guard.contains("rust-toolchain.toml"));
-    assert!(guard.contains("MISE_DATA_DIR/installs/mr-boxington/1.23.0/"));
+    assert!(guard.contains("MISE_DATA_DIR/installs/mr-boxington/1.21.1/"));
     assert!(guard.contains("mise --no-env --locked --no-hooks which rustc"));
-    assert!(guard.contains("MISE_DATA_DIR/installs/rust/1.99.0/"));
+    assert!(guard.contains("MISE_DATA_DIR/installs/rust/1.98.1/"));
     assert!(guard.contains(
         "\"$mbx_path\" exec --project-root \"$workspace_root\" \"$rustc_path\" --version"
     ));
-    assert!(guard.contains("'rustc 1.99.0 ('*"));
+    assert!(guard.contains("'rustc 1.98.1 ('*"));
     assert!(!guard.contains("cargo --version"));
 
     assert_eq!(job.steps[5].name, RUN_BUILD_TASK_NAME);

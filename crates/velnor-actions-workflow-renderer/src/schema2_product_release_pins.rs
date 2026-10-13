@@ -1,4 +1,4 @@
-use velnor_actions_contract::ReleaseTarget;
+use velnor_actions_contract::{ReleaseTarget, Step};
 
 use crate::setup::MiseSetup;
 
@@ -20,6 +20,8 @@ pub struct ProductReleasePins {
     pub install_build_tools_argv: Vec<String>,
     /// Exact `mise install` argv for candidate qualification tools.
     pub install_qualify_tools_argv: Vec<String>,
+    /// Rust preflight, pinned native MBX action, and exact action-owned version check.
+    pub qualify_mbx_action_steps: [Step; 3],
     /// Exact `mise install` argv for the macOS host binary build.
     pub install_runner_build_tools_argv: Vec<String>,
     /// Exact `mise install` argv for GitHub CLI.
