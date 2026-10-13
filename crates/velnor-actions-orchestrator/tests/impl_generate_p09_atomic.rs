@@ -1,6 +1,7 @@
 //! Root-visibility diagnostics for atomic `.github` replacement.
 
 use std::io;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc;
@@ -51,6 +52,7 @@ struct FirstMetadataError {
     display: String,
     parent_probe: String,
     target_probe: String,
+    root_fd_probe: String,
 }
 
 impl FirstMetadataError {
@@ -75,6 +77,7 @@ impl FirstMetadataError {
         let display = error.to_string();
         let parent_probe = metadata_probe(parent);
         let target_probe = metadata_probe(target);
+        let root_fd_probe = root_fd_nofollow_probe(parent);
         Self {
             observer,
             iteration,
@@ -87,12 +90,13 @@ impl FirstMetadataError {
             display,
             parent_probe,
             target_probe,
+            root_fd_probe,
         }
     }
 
     fn emit(self) {
         eprintln!(
-            "FIRST_METADATA_ERROR wall_unix_ns={:?} elapsed_ns={} observer={} iteration={} writer_phase={} path={} kind={:?} raw_errno={:?} display={:?} POST_ERROR_PARENT_PROBE[{}] POST_ERROR_TARGET_PROBE[{}]",
+            "FIRST_METADATA_ERROR wall_unix_ns={:?} elapsed_ns={} observer={} iteration={} writer_phase={} path={} kind={:?} raw_errno={:?} display={:?} POST_ERROR_PARENT_PROBE[{}] POST_ERROR_TARGET_PROBE[{}] POST_ERROR_ROOT_FD_NOFOLLOW[{}]",
             self.wall_unix_ns,
             self.elapsed_ns,
             self.observer,
@@ -103,7 +107,8 @@ impl FirstMetadataError {
             self.raw_errno,
             self.display,
             self.parent_probe,
-            self.target_probe
+            self.target_probe,
+            self.root_fd_probe
         );
     }
 }
@@ -128,6 +133,30 @@ fn metadata_probe(path: &Path) -> String {
         Err(error) => format!(
             "path={},status=err,kind={:?},raw_errno={:?},display={:?}",
             path.display(),
+            error.kind(),
+            error.raw_os_error(),
+            error
+        ),
+    }
+}
+
+fn root_fd_nofollow_probe(root: &Path) -> String {
+    let root_fd = match std::fs::File::open(root) {
+        Ok(file) => file,
+        Err(error) => {
+            return format!(
+                "relative=.github,root_open=err,kind={:?},raw_errno={:?}",
+                error.kind(),
+                error.raw_os_error()
+            );
+        }
+    };
+    match rustix::fs::statat(&root_fd, ".github", rustix::fs::AtFlags::SYMLINK_NOFOLLOW)
+        .map_err(std::io::Error::from)
+    {
+        Ok(_) => "relative=.github,status=ok".to_owned(),
+        Err(error) => format!(
+            "relative=.github,status=err,kind={:?},raw_errno={:?},display={:?}",
             error.kind(),
             error.raw_os_error(),
             error
