@@ -57,6 +57,9 @@ fn assert_lock_staleness_failure(
     assert_lock_staleness_row(run, "aaa:dependencies:serde_json", "fail", Some(detail))
 }
 
+#[path = "fixtures/p12_property.rs"]
+mod p12_property;
+
 #[test]
 fn boot34_mise_version_matches_catalog() -> Result<(), Box<dyn Error>> {
     let pinned = read(".mise-version")?;
