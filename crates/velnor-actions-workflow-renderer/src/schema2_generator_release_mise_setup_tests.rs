@@ -8,7 +8,7 @@ use velnor_actions_contract::ReleaseTarget;
 #[test]
 fn each_archive_consumer_has_target_pinned_mise_before_extraction() -> Result<(), Box<dyn Error>> {
     let mut pins = super::test_pins();
-    pins.linux_x86_64_setup = mise_setup('a', "2026.10.4", 'b');
+    pins.linux_x86_64_setup = mise_setup('a', "2026.10.5", 'b');
     pins.macos_arm64_setup = mise_setup('c', "2026.9.19", 'd');
     pins.macos_x86_64_setup = mise_setup('e', "2026.9.20", 'f');
     let request = Schema2WorkflowRequest {

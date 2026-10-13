@@ -13,7 +13,7 @@ use crate::steps::{CompileDriver, mbx_steps_for_driver};
 pub(super) fn test_pins() -> ProductReleasePins {
     let setup = MiseSetup {
         uses: format!("jdx/mise-action@{}", "a".repeat(40)),
-        version: "2026.10.4".to_owned(),
+        version: "2026.10.5".to_owned(),
         sha256: "b".repeat(64),
     };
     let (install_resource_probe_target_argv, resource_probe_build_argv) = resource_probe_argvs();
