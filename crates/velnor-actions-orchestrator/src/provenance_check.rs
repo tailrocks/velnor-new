@@ -176,17 +176,6 @@ pub(crate) fn validate_provenance(
     })
 }
 
-/// Shared run-binding predicate: a task entry is bound to the carrying
-/// manifest's own run only. Plan-time [`validate_provenance`] and
-/// merge-time revalidation call this one predicate so a forwarded proof
-/// the plan rejects can never pass at merge.
-pub(crate) fn task_run_ids_bound(
-    task: &crate::merge::required_evidence::BaselineTaskEntry,
-    run_id: u64,
-) -> bool {
-    run_id > 0 && task.proof_run_id == run_id && task.observed_run_id == run_id
-}
-
 /// Validate one task entry: identities, run binding, freshness, proof.
 ///
 /// Every entry passes every check: a structured proof adds its binding
