@@ -45,6 +45,8 @@ implementation or a completed release; it becomes implemented only after the
 PR merges with its required checks passing.
 
 - [Product version preparation for v0.1.5](product-version-preparation-v0.1.5.md)
+- [Product version preparation for v0.1.8](product-version-preparation-v0.1.8.md)
+- [Product version preparation for v0.1.8](product-version-preparation-v0.1.8.md)
   — candidate source and generated-output evidence; release and adoption
   remain pending.
 
