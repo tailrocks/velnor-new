@@ -37,17 +37,18 @@ BUILD = {
             "--bin", "mbx", "--features", "owned-cache-transport"],
 }
 ABI = {"mise": "mise-owned-cargo-wrapper-v1", "mbx": None}
-OFFICIAL_MISE_VERSION = "2026.10.6"
-OFFICIAL_MISE_SOURCE_COMMIT = "6be3cbdc639a66c03651479428e4c5f60b00485f"
-OFFICIAL_MISE_SOURCE_TREE = "fb96c2f0fde04045796887b1b80ad80b3824d258"
-OFFICIAL_MISE_BASE = "https://github.com/jdx/mise/releases/download/v2026.10.6/mise-v2026.10.6-"
+# Exact measured authority: catalog_source_build_bootstrap.rs, Mise v2026.10.8.
+OFFICIAL_MISE_VERSION = "2026.10.8"
+OFFICIAL_MISE_SOURCE_COMMIT = "b671d356aaf33b87e48e7469a77abb40c3553c68"
+OFFICIAL_MISE_SOURCE_TREE = "ababca8f764247f1fc0c3bbccf66eaf16b56d27f"
+OFFICIAL_MISE_BASE = "https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-"
 OFFICIAL_MISE_PINS = {
-    "linux-x64": ("standalone", "3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366",
-                  "3f44343eebc7e0d6623bcea46e304864f02dff648edd75c82871b53cc697b366"),
-    "linux-arm64.tar.gz": ("tar.gz", "60f0e34ea2088e822797393ed3d3b50d58dd9b45687006b31ac66ef68e99a2f4",
-                           "5f3187febbe9ff98e4c78b3596c7bbfde0e3ef8e4b1820494d03efd499de7b6e"),
-    "macos-arm64.tar.gz": ("tar.gz", "6c6a0b26b15b7dabec9fe61a56f53e1bf5dfa5246da9f59fa8028eef2ec238cb",
-                           "bbcea7b0f844d026424a4c8335357a15a2f5c9e9132c9408de990d9be6f26101"),
+    "linux-x64": ("standalone", "c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428",
+                  "c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428"),
+    "linux-arm64.tar.gz": ("tar.gz", "88aea77e41c2a3c45a9cbd64df9516ba887017442846213b3de178acbd3c9a46",
+                           "6ee0bd8173f1347514f4974d55fb1fae13aa7f6de0a55338adbefa0667cad7e5"),
+    "macos-arm64.tar.gz": ("tar.gz", "8228699f316dc17931beb86f7a1aac70e4685535430441492ff4e857c72535ad",
+                           "dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73"),
 }
 OFFICIAL_MISE_HOSTS = {"x86_64-unknown-linux-gnu": "linux-x64",
                       "aarch64-unknown-linux-gnu": "linux-arm64.tar.gz",
@@ -209,7 +210,9 @@ class HttpsRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(request, fp, code, msg, headers, newurl)
 
 
-def fetch(url, sha, max_bytes=MAX_DOWNLOAD):
+def fetch(url, sha, max_bytes=None):
+    if max_bytes is None:
+        max_bytes = MAX_DOWNLOAD
     with urllib.request.build_opener(HttpsRedirect()).open(url, timeout=120) as response:
         data = response.read(max_bytes + 1)
     if len(data) > max_bytes or digest(data) != sha:

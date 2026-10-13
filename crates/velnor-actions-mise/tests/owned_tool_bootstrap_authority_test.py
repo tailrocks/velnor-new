@@ -31,7 +31,7 @@ class BootstrapAuthorityTests(unittest.TestCase):
                 self.assertEqual((asset["url"], asset["archive_sha256"], asset["binary_sha256"]),
                                  (url, archive_sha, binary_sha))
                 for field in ("source_repository", "source_commit", "source_tree", "version", "binary_member"):
-                    self.assertIn('"' + asset[field] + '"', text)
+                    self.assertIn('"' + asset[field] + '"', functions[tool])
                 supplied = {"mise": source.official_assets("mise")[target],
                             "mbx": source.official_assets("mbx")[target]}
                 self.assertEqual(source.build_bootstrap_descriptor(json.dumps(supplied), target), supplied)

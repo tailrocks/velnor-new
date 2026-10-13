@@ -85,12 +85,32 @@ summary are recorded in the [Nextest receipt](evidence/freshness-2026-10-13/work
 It ran with Rust `1.98.1`, Mise `2026.10.8`, and MBX `1.21.1`. Workspace
 doctests passed (0 doctests present). Both `scripts/check-freshness.sh` and
 `scripts/check-freshness.sh --with-advisories` passed after qualification.
-Other completed gates:
-`cargo fmt --all -- --check`, Clippy with warnings denied, both Cargo Deny
-workspaces, Actionlint, Alint `check --fail-on-warning` (three existing
-informational notices), Zizmor with no findings, shell syntax and diff checks,
-generated `.github` tree byte comparison against CLI output, and all five
-OpenTofu workflow goldens. The updated inventory records the four non-held
-pins as qualified/current against the successful bounded upstream
-observations above. No release workflow was published or merged as part of
-this update.
+Other completed gates for that qualified update set included
+`cargo fmt --all -- --check`, Clippy with warnings denied in PR CI
+([run 38324652382](https://github.com/tailrocks/velnor-new/actions/runs/38324652382)),
+both Cargo Deny workspaces, Actionlint, Alint `check --fail-on-warning` (three
+existing informational notices), Zizmor with no findings, shell syntax and
+diff checks, generated `.github` tree byte comparison against CLI output, and
+all five OpenTofu workflow goldens. The updated inventory records the four
+non-held pins as qualified/current against the successful bounded upstream
+observations above.
+
+### Python bootstrap authority follow-up
+
+The PR follow-up synchronizes the Python bootstrap authority with the already
+measured Mise `2026.10.8` catalog and narrows metadata concordance to each
+tool's Rust catalog function. Its focused authority test and the affected
+owned-tool Python suites pass. The Mise package Nextest run passed 415 tests
+(one skipped; run ID `d334a0ce-2bc6-43ec-a87f-d2d6237437ec`), and
+`cargo test --locked -p velnor-actions-mise --doc` passed with zero doctests.
+The offline freshness gate, whole-tree format check, and `git diff --check`
+also pass.
+
+The local pinned-Rust `1.98.1` command
+`cargo clippy --locked -p velnor-actions-mise --all-targets -- -D warnings`
+fails on unmodified baseline warnings: deprecated `fetch_update` in
+`test_support/temp_dir.rs` and `clippy::assert_is_empty` in existing test
+files. The same Clippy command scoped to `--lib` passes. This follow-up changes
+no Rust files, and does not claim a local all-targets Clippy pass. The PR CI
+rerun for the follow-up commit will provide the final hosted result. No
+release workflow was published or merged as part of this update.
