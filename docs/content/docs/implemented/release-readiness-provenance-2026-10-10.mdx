@@ -1,0 +1,25 @@
+---
+title: "Release readiness provenance: 2026-10-10"
+description: "Corrected source provenance for the Velnor 0.1.7 release-readiness repair."
+---
+
+This record fixes the release-repair provenance before any candidate source
+change. It is evidence only and does not claim hosted qualification or a
+published release.
+
+## Baseline identity
+
+- Repository: `tailrocks/velnor-new`.
+- Task branch: `disposable/v1-callee`.
+- Requested head: `16e52b672895546e4b42bb284091d0e808fa6991`.
+- Actual parent: `83031d2fe1bf6236636931e00ab3b9c3080ba363`.
+- Baseline tree:
+  `c0d715706a60ace0d529a7a6753fc3f1dd8ef5bf`.
+- Parent-to-head raw patch SHA-256:
+  `968b15e85b61246471f7da3c5133df0470704125cd503f98446b26f7734b554c`.
+
+The branch was fetched from `origin/disposable/v1-callee` before the checks.
+All four requested identifiers matched `git rev-parse`, and the digest was
+computed from `git diff --binary HEAD^ HEAD`. The upstream check found the
+local and origin heads equal at the requested SHA. The working tree had no
+local modifications at that check.

@@ -4,7 +4,7 @@ set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SCRIPT="$ROOT/scripts/capture-opentofu-goldens.sh"
-GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
+GOLDEN_DIR="$ROOT/crates/apps/velnor-actions-cli/fixtures/opentofu-goldens"
 CLI_ARG="${1:-}"
 if [ -z "$CLI_ARG" ]; then
   echo "FATAL: provide the CLI binary path"

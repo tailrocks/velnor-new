@@ -59,6 +59,24 @@ jobs:
     name: Actionlint
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -98,11 +116,33 @@ jobs:
     name: Alint
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Materialize Rust policy
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_OS-$RUNNER_ARCH\" in Linux-X64) POLICY_ASSET=\"linux-x86_64\"; ALINT_ASSET=\"x86_64-unknown-linux-musl\"; ALINT_SHA=\"81ce8785e99a65bfa6a2e5cad6451dc3cac8a5cbc404b4452ae453ea392acb05\";; macOS-ARM64) POLICY_ASSET=\"macos-arm64\"; ALINT_ASSET=\"aarch64-apple-darwin\"; ALINT_SHA=\"def639d9581520832096f0318b9f66204181679521b446da93a5d4875d5240e9\";; *) echo \"unsupported runner for rust policy\" >&2; exit 1;; esac; POLICY_TMP=\"$RUNNER_TEMP/velnor-policy-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; rm -rf \"$POLICY_TMP\"; mkdir -p \"$POLICY_TMP\" .cache/rust-policy \"$HOME/.local/bin\"; curl -sSL -o \"$POLICY_TMP/policy.tar.gz\" \"https://github.com/tailrocks/rust-repository-policy/releases/download/v0.1.3/rust-repository-policy-0.1.3.tar.gz\"; printf \"%s  %s\\n\" \"104c0d8b3a827875776358f941aa88f1c5837c1009305076af9380f4e3fcda25\" \"$POLICY_TMP/policy.tar.gz\" | sha256sum -c -; tar xzf \"$POLICY_TMP/policy.tar.gz\" -C .cache/rust-policy --strip-components=1; test -f \".cache/rust-policy/profiles/rust-strict-v1.yml\"; cp \".cache/rust-policy/bin/$POLICY_ASSET/rust-repository-policy\" \"$HOME/.local/bin/rust-repository-policy\"; chmod +x \"$HOME/.local/bin/rust-repository-policy\"; curl -sSL -o \"$POLICY_TMP/alint.tar.gz\" \"https://github.com/asamarts/alint/releases/download/v0.16.1/alint-v0.16.1-$ALINT_ASSET.tar.gz\"; printf \"%s  %s\\n\" \"$ALINT_SHA\" \"$POLICY_TMP/alint.tar.gz\" | sha256sum -c -; tar xzf \"$POLICY_TMP/alint.tar.gz\" -C \"$POLICY_TMP\" --strip-components=1; cp \"$POLICY_TMP/alint\" \"$HOME/.local/bin/alint\"; chmod +x \"$HOME/.local/bin/alint\"; printf \"%s\\n\" \"$HOME/.local/bin\" >> \"$GITHUB_PATH\"; rm -rf \"$POLICY_TMP\"'"
+      - name: Validate policy config
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR alint validate-config --config .alint.yml
       - name: Run Alint
         uses: asamarts/alint@c08c68be72e0c3a3a02051bd15f4a7d768fa5cbe
         with:
@@ -115,6 +155,24 @@ jobs:
     name: Cargo Deny
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -141,7 +199,7 @@ jobs:
           sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
           version: 2026.10.9
       - name: Run cargo-deny
-        run: "sh -c '{ mise --no-config --no-env --no-hooks install cargo-deny@0.20.2 && unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; } && mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" --config \"$GITHUB_WORKSPACE/deny.toml\" check && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" --config \"$GITHUB_WORKSPACE/crates/velnor-runner/deny.toml\" check'"
+        run: "sh -c '{ mise --no-config --no-env --no-hooks install cargo-deny@0.20.2 && unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; } && mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" --config \"$GITHUB_WORKSPACE/deny.toml\" check'"
       - name: Save Mise tools
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -152,6 +210,24 @@ jobs:
     name: Cargo Machete
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -482,15 +558,72 @@ jobs:
       - rust-velnor-actions-actionlint
       - rust-velnor-actions-cli
       - rust-velnor-actions-contract
+      - rust-velnor-actions-contract-config
+      - rust-velnor-actions-contract-planning
+      - rust-velnor-actions-contract-release
+      - rust-velnor-actions-contract-workflow
       - rust-velnor-actions-mise
+      - rust-velnor-actions-mise-cache
+      - rust-velnor-actions-mise-catalog
+      - rust-velnor-actions-mise-core
+      - rust-velnor-actions-mise-nextest
+      - rust-velnor-actions-mise-probes
       - rust-velnor-actions-orchestrator
+      - rust-velnor-actions-orchestrator-baseline-publish
+      - rust-velnor-actions-orchestrator-check-acquisition
+      - rust-velnor-actions-orchestrator-check-evidence
+      - rust-velnor-actions-orchestrator-check-preparation
+      - rust-velnor-actions-orchestrator-check-runtime
+      - rust-velnor-actions-orchestrator-core
+      - rust-velnor-actions-orchestrator-cover
+      - rust-velnor-actions-orchestrator-cover-baseline
+      - rust-velnor-actions-orchestrator-cover-compat
+      - rust-velnor-actions-orchestrator-covered-tasks
+      - rust-velnor-actions-orchestrator-discovery
+      - rust-velnor-actions-orchestrator-external-data
+      - rust-velnor-actions-orchestrator-generation
+      - rust-velnor-actions-orchestrator-graph
+      - rust-velnor-actions-orchestrator-internal
+      - rust-velnor-actions-orchestrator-merge
+      - rust-velnor-actions-orchestrator-merge-ports
+      - rust-velnor-actions-orchestrator-merge-request
+      - rust-velnor-actions-orchestrator-merge-request-ports
+      - rust-velnor-actions-orchestrator-noop-report
+      - rust-velnor-actions-orchestrator-pins
+      - rust-velnor-actions-orchestrator-plan
+      - rust-velnor-actions-orchestrator-plan-obligation
+      - rust-velnor-actions-orchestrator-preseed-manifest
+      - rust-velnor-actions-orchestrator-provisioning
+      - rust-velnor-actions-orchestrator-request-event
+      - rust-velnor-actions-orchestrator-retrieve
+      - rust-velnor-actions-orchestrator-retrieve-reports
+      - rust-velnor-actions-orchestrator-retrieve-retry
+      - rust-velnor-actions-orchestrator-run-select
+      - rust-velnor-actions-orchestrator-runtime-evidence
+      - rust-velnor-actions-orchestrator-runtime-execute
+      - rust-velnor-actions-orchestrator-runtime-plan
+      - rust-velnor-actions-orchestrator-selection
+      - rust-velnor-actions-orchestrator-staged-validation
+      - rust-velnor-actions-orchestrator-task-report
+      - rust-velnor-actions-orchestrator-task-report-write
+      - rust-velnor-actions-orchestrator-workflow-ir
+      - rust-velnor-actions-repo-policy
       - rust-velnor-actions-rust
+      - rust-velnor-actions-rust-core
       - rust-velnor-actions-tofu
+      - rust-velnor-actions-tofu-core
+      - rust-velnor-actions-workflow-cache
+      - rust-velnor-actions-workflow-document
+      - rust-velnor-actions-workflow-generator
+      - rust-velnor-actions-workflow-jobs
+      - rust-velnor-actions-workflow-release
+      - rust-velnor-actions-workflow-render-strict
       - rust-velnor-actions-workflow-renderer
       - rust-velnor-resource-probe
       - rust-velnor-runner-attestation
       - rust-velnor-runner-cli
       - rust-velnor-runner-core
+      - rust-velnor-runner-docker-spec
       - rust-velnor-runner-github
       - rust-velnor-runner-host
       - check-maintenance-helpers
@@ -501,6 +634,15 @@ jobs:
       - zizmor
     if: always()
     steps:
+      - name: Resolve hosted Mise cache identity
+        env:
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_EXPECTED_RUNNER_ARCH: X64
+          VELNOR_CACHE_EXPECTED_RUNNER_OS: Linux
+          VELNOR_CACHE_RUNNER_ARCH: ${{ runner.arch }}
+          VELNOR_CACHE_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+          VELNOR_CACHE_RUNNER_OS: ${{ runner.os }}
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; enabled=false; suffix=disabled; if [ \"$VELNOR_CACHE_RUNNER_ENVIRONMENT\" = github-hosted ] && [ \"$VELNOR_CACHE_RUNNER_OS\" = \"$VELNOR_CACHE_EXPECTED_RUNNER_OS\" ] && [ \"$VELNOR_CACHE_RUNNER_ARCH\" = \"$VELNOR_CACHE_EXPECTED_RUNNER_ARCH\" ] && [ \"${ImageOS:-}\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ]; then image_version=${ImageVersion:-}; case \"$image_version\" in '\\'''\\''|*[!0-9.]*|.*|*..*|*.) ;; *) if [ \"${#image_version}\" -le 64 ] && [ \"$image_version\" != latest ]; then enabled=true; suffix=\"$ImageOS-$image_version\"; fi ;; esac; fi; if [ -z \"${GITHUB_ENV:-}\" ] || [ ! -f \"$GITHUB_ENV\" ] || [ -L \"$GITHUB_ENV\" ]; then printf '\\''%s\\n'\\'' '\\''GITHUB_ENV must be a regular runner file'\\'' >&2; exit 1; fi; printf '\\''VELNOR_MISE_CACHE_ENABLED=%s\\nVELNOR_MISE_CACHE_SUFFIX=%s\\n'\\'' \"$enabled\" \"$suffix\" >> \"$GITHUB_ENV\"'"
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
@@ -568,6 +710,9 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -697,6 +842,7 @@ jobs:
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-fd4052f5fd85b4def600319b1f2ce7bb9b6fd512cc958b8c4d67cacd391e04bd"}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -729,6 +875,9 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -854,6 +1003,7 @@ jobs:
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-5285b6915ab01f01ba35ec349ffb7c29d3b5e6bbe97f0edc85c84bec7899e9ec"}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -886,6 +1036,9 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1015,6 +1168,7 @@ jobs:
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-67f1ce6cea02c359970acfc3386345c13d06e70c9f40a9ac720acb0616b9286a"}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -1041,6 +1195,9 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1170,6 +1327,7 @@ jobs:
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-7e34fbf523ebdad2b51a760a0a8e5a9e4b58e0620c5471211e4703403a53be79"}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -1202,6 +1360,9 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1331,6 +1492,7 @@ jobs:
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-6be735f586a622d65c7eac5860c9c6172b769c45294ed5e89191e44a244bae3a"}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -1357,6 +1519,9 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1486,6 +1651,7 @@ jobs:
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-f02ea00ccdd99dd120fb0c191a47ab1603a245fd0e480ed51c2f6437539304eb"}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -1512,6 +1678,9 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1641,6 +1810,7 @@ jobs:
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-44f603db1808e65cefa829668b52204a0916f677e3947b24e22f48eb4a6c694c"}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -1667,6 +1837,9 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1796,6 +1969,7 @@ jobs:
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-88b395c39b11e8f6e42f762067ae643927f38a971cf66a7ea2a7a91dfc0fca9f"}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -1822,6 +1996,9 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -1951,6 +2128,7 @@ jobs:
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-daf8e28f07a5c236fdde00747cacd39a8aca51a07a2a357e49e868719c9182e7"}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -2128,6 +2306,9 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -2257,6 +2438,7 @@ jobs:
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-0911ac8a613e327319d5836e7551bd7881a1ad971c7530a9632f511db02da3b1"}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -2283,6 +2465,9 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -2412,6 +2597,7 @@ jobs:
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d30cea3d4ec176612c12b33988cf290c50f1246cc4e8093163e44e592621666e"}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -2438,6 +2624,9 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -2567,6 +2756,7 @@ jobs:
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-aa4e289ca4dbc5f0441720276b87bb472c29768ad8a1b71b02433ef51c21431c"}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -2593,6 +2783,9 @@ jobs:
       RUSTUP_TOOLCHAIN: 1.99.0
     needs:
       - plan
+    outputs:
+      task_report_artifact_id: ${{ steps.crate-report-upload.outputs.artifact-id }}
+      task_report_check_run_id: ${{ job.check_run_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -2722,6 +2915,7 @@ jobs:
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-2c76a729130d89ca259ccf9b496b51600784817394b35099d3ebfa2d5b7332a5"}
       - name: Upload crate reports
+        id: crate-report-upload
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -2742,6 +2936,24 @@ jobs:
     name: Zizmor
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

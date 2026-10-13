@@ -5,7 +5,8 @@ Detected stacks
   Rust: selected
   Workspace crates: 1
     - minimal-cargo (Cargo.toml) [lib]
-  Profile .: cargo compile driver (detected), cargo_test test runner (detected)
+  Profile .: cargo compile driver (detected), cargo nextest test runner (detected)
+  Nextest profile .: default (no nextest config)
 
 Workflow to generate
   .github/actionlint.yaml
@@ -20,16 +21,16 @@ Workflow to generate
     - required (8 steps)
     - rust-minimal-cargo (14 steps)
     - 1 Rust crate job
-      Each: Clippy -> run tests -> doctests -> doc build
+      Each: Clippy -> build -> run tests -> doc build
       Entries:
         - rust-minimal-cargo
       Obligations:
+        - stack/rust/root/build/default
         - stack/rust/root/clippy/default
         - stack/rust/root/doc/default
-        - stack/rust/root/doctest/default
-        - stack/rust/root/test/default
+        - stack/rust/root/nextest/default
   Parallel: 1 independent crate job; no matrix fan-out
-  Critical path: stack/rust/root/clippy/default -> stack/rust/root/doctest/default -> stack/rust/root/doc/default (3 tasks)
+  Critical path: stack/rust/root/clippy/default -> stack/rust/root/build/default -> stack/rust/root/nextest/default (3 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools
   Actionlint: 1.7.12 pinned
@@ -51,7 +52,7 @@ Required-check migration
 Recommendations
   mise.lock not found; Velnor will not create or refresh it
   mise.toml not found; Velnor will use its pinned tools
-  nextest_recommendation: no explicit test-runner usage; defaulting to `cargo test`
+  nextest_recommendation: no explicit Nextest usage; generated Actions use `cargo nextest`
   persist_evidence: no MBX or Nextest usage detected; to adopt either, add a durable signal
   rust-toolchain.toml not found; Velnor will not create it
   tool_install_unverified:5 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.0, rust@1.99.0, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock

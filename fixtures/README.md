@@ -6,10 +6,10 @@ Detector/validator behavior itself is proven by synthetic
 `TempDir`/`ProfileInputs` cases (e.g.
 `handwritten_workflow_invoking_mbx_is_strong_evidence`,
 `conflicting_runners_rejected` in
-`crates/velnor-actions-rust/tests/impl_rust_evidence.rs`),
+`crates/adapters/velnor-actions-rust/tests/impl_rust_evidence.rs`),
 not by reading these dirs; only `alint-negative/*` is
 consumed directly (via `include_str!` in
-`crates/velnor-actions-contract/tests/impl_alint_negative.rs`).
+`crates/core/velnor-actions-contract/tests/impl_alint_negative.rs`).
 
 | Fixture | Intent | Expected outcome |
 |---|---|---|
@@ -24,7 +24,7 @@ consumed directly (via `include_str!` in
 ## Parity corpus (`parity/`)
 
 Refactor-behavior corpus consumed by
-`crates/velnor-actions-cli/tests/impl_cli_parity_golden.rs`: each
+`crates/apps/velnor-actions-cli/tests/impl_cli_parity_golden.rs`: each
 `<case>/input` is copied to a scratch git checkout, then `plan`,
 `generate`, and `plan-v1` outputs must byte-match `<case>/expected`
 (modulo documented normalization: repo path, head SHA, generator

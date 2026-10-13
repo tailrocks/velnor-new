@@ -9,13 +9,13 @@
 #
 # Usage: scripts/capture-opentofu-goldens.sh [capture|check [CLI_BINARY]]
 #        scripts/capture-opentofu-goldens.sh check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256
-#   capture  regenerate docs/proposed/opentofu-goldens/ (only at known-good)
+#   capture  regenerate crates/apps/velnor-actions-cli/fixtures/opentofu-goldens/ (only at known-good)
 #   check    regenerate to temp and byte-diff (default; never writes goldens)
 #   CLI_BINARY uses that exact executable and skips the default debug build.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
+GOLDEN_DIR="$ROOT/crates/apps/velnor-actions-cli/fixtures/opentofu-goldens"
 WORK=""
 MODE="${1:-check}"
 BIN_EXPLICIT=0

@@ -1,8 +1,6 @@
-# Repository policy, enforced by asamarts/alint as its own CI job.
-# Local rules cover generic file/path requirements and agent-instruction
-# file integrity only. No dependency-architecture, Rust-syntax, or
-# test-layout claims: Alint cannot inspect those (see
-# docs/proposed/rust-quality-contract.md §1, §4).
+# S2 consumer adapter: extend the materialized strict profile, add the
+# one command rule the trust gate requires to live in the adopter's own
+# top-level config (never via extends).
 #
 # `extends` pins the five pr-1 R04 bundles (OSS, GitHub Actions, Rust,
 # lockfiles, no-tracked-artifacts), deduped: the review example repeats
@@ -43,29 +41,13 @@ ignore:
   # provenance; they are not active first-party source or instruction files.
 
 extends:
-  - alint://bundled/oss-baseline@v1
-  - alint://bundled/ci/github-actions@v1
-  - alint://bundled/rust@v1
-  - url: alint://bundled/hygiene/lockfiles@v1
-    except:
-      - lockfiles-no-nested-cargo
-      - lockfiles-no-nested-npm
-  - alint://bundled/hygiene/no-tracked-artifacts@v1
-
+  - ./.cache/rust-policy/profiles/rust-strict-v1.yml
 rules:
-  # Required repo-shape files (rust-quality-contract §1 / RQ-1.1).
-  - id: required-files
-    kind: file_exists
-    paths:
-      - Cargo.toml
-      - Cargo.lock
-      - clippy.toml
-      - deny.toml
-      - rustfmt.toml
-      - CODEOWNERS
-      - .alint.yml
-      - .config/nextest.toml
-      - AGENTS.md
+  - id: policy-gaps
+    kind: command_idempotent
+    command: ["rust-repository-policy", "check-gaps", "--root", "."]
+    files_from: stdout
+    files_pattern: "^\\S+ (\\S+?):\\d+:"
     level: error
     message: "Repo-shape file is missing (rust-quality-contract §1)"
 

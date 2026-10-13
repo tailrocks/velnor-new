@@ -2,9 +2,13 @@
 
 Velnor Actions is a stack-generic GitHub Actions workflow generator. It scans repositories for every registered stack and plans all detected, supported stacks unless `.velnor/config.toml` excludes them. V1 registers the Rust/Cargo adapter; TypeScript, Bun, and other stacks can be added later through dedicated adapters. Rust analysis, Mise integration, generic workflow rendering, orchestration, and CLI are separate crates. The V1 implementation and its release records are on `main`; the generated tree includes `.github/workflows/ci.yml` and the scheduled `.github/workflows/freshness.yml` probe.
 
-See the [documentation index](docs/README.md) for the proposed V1 specification, deferred runner roadmap, and implemented status.
+Canonical documentation (MDX site sources):
 
-The CLI is implemented (`crates/velnor-actions-cli`):
+- [Documentation home](docs/content/docs/index.mdx)
+- [Proposed V1 specification](docs/content/docs/proposed/index.mdx)
+- [Implemented work](docs/content/docs/implemented/index.mdx)
+- [Bootstrap and release contract](docs/content/docs/proposed/bootstrap-and-release-contract.mdx)
+- [Strict Rust policy rollout record](docs/content/development/rust-policy-rollout.mdx)
 
 ```text
 velnor-actions init

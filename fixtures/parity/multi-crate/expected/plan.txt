@@ -6,7 +6,7 @@ Detected stacks
   Workspace crates: 2
     - parity-app (crates/app/Cargo.toml) [lib; depends on parity-tool]
     - parity-tool (crates/tool/Cargo.toml) [bin, lib]
-  Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
+  Profile .: mbx compile driver (declared), cargo nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
     evidence .config/nextest.toml:1 [profile.ci] [durable]
 
@@ -24,7 +24,7 @@ Workflow to generate
     - rust-parity-app (22 steps)
     - rust-parity-tool (20 steps)
     - 2 Rust crate jobs
-      Each: Clippy -> build -> run tests -> doctests -> doc build
+      Each: Clippy -> build -> run tests -> doc build
       Entries:
         - rust-parity-app
         - rust-parity-tool
@@ -32,7 +32,6 @@ Workflow to generate
         - stack/rust/crates/app/build/default
         - stack/rust/crates/app/clippy/default
         - stack/rust/crates/app/doc/default
-        - stack/rust/crates/app/doctest/default
         - stack/rust/crates/app/nextest/default/shard-1-of-2
         - stack/rust/crates/app/nextest/default/shard-2-of-2
         - stack/rust/crates/tool/build/default

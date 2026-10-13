@@ -1,7 +1,7 @@
 # Alint negative fixtures
 
 One failing input per enabled rule in `.alint.yml` (mirrored by
-`crates/velnor-actions-contract/tests/impl_alint_negative.rs`, which embeds
+`crates/core/velnor-actions-contract/tests/impl_alint_negative.rs`, which embeds
 these files with `include_str!` and asserts the mirrored predicate rejects
 each one). Real enforcement is the pinned `alint` binary in its own CI job
 (rust-quality-contract §8). This directory is excluded from the walked index

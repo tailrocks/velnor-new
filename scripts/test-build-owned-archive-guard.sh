@@ -17,8 +17,8 @@ mkdir -m 700 -- "$case_home" "$tool_bin"
 copy_checkout() {
   local destination="$1"
   mkdir -p -- "$destination/.velnor" "$destination/scripts" \
-    "$destination/crates/velnor-archive-guard/src" \
-    "$destination/crates/velnor-archive-guard/build_support"
+    "$destination/crates/tools/velnor-archive-guard/src" \
+    "$destination/crates/tools/velnor-archive-guard/build_support"
   cp -- "$repository/Cargo.toml" "$repository/Cargo.lock" "$repository/.mise-version" \
     "$destination/"
   cp -- "$repository/.velnor/version-policy.toml" "$destination/.velnor/"
@@ -27,19 +27,19 @@ copy_checkout() {
     "$repository/scripts/build-owned-archive-guard.sh" \
     "$repository/scripts/check-owned-archive-guard-sources.sh" \
     "$repository/scripts/owned_archive_preflight.py" "$destination/scripts/"
-  cp -- "$repository/crates/velnor-archive-guard/Cargo.toml" \
-    "$repository/crates/velnor-archive-guard/build.rs" \
-    "$destination/crates/velnor-archive-guard/"
-  cp -- "$repository/crates/velnor-archive-guard/build_support/archive_guard_inputs.rs" \
-    "$destination/crates/velnor-archive-guard/build_support/"
-  cp -R -- "$repository/crates/velnor-archive-guard/src/." \
-    "$destination/crates/velnor-archive-guard/src/"
+  cp -- "$repository/crates/tools/velnor-archive-guard/Cargo.toml" \
+    "$repository/crates/tools/velnor-archive-guard/build.rs" \
+    "$destination/crates/tools/velnor-archive-guard/"
+  cp -- "$repository/crates/tools/velnor-archive-guard/build_support/archive_guard_inputs.rs" \
+    "$destination/crates/tools/velnor-archive-guard/build_support/"
+  cp -R -- "$repository/crates/tools/velnor-archive-guard/src/." \
+    "$destination/crates/tools/velnor-archive-guard/src/"
 }
 
 copy_checkout "$case_root/checkout-a"
 copy_checkout "$case_root/checkout-b"
-source_a="$case_root/checkout-a/crates/velnor-archive-guard/src/bin/velnor_archive_guard.rs"
-source_b="$case_root/checkout-b/crates/velnor-archive-guard/src/bin/velnor_archive_guard.rs"
+source_a="$case_root/checkout-a/crates/tools/velnor-archive-guard/src/bin/velnor_archive_guard.rs"
+source_b="$case_root/checkout-b/crates/tools/velnor-archive-guard/src/bin/velnor_archive_guard.rs"
 shared_mtime="$(python3 - "$source_a" "$source_b" <<'PY'
 import os
 import sys
@@ -137,7 +137,7 @@ case "$command_name" in
             done
             [[ -n "$manifest" ]] || exit 2
             checkout="$(dirname -- "$manifest")"
-            printf 'velnor-archive-guard v0.1.0 (%s/crates/velnor-archive-guard)\n' \
+            printf 'velnor-archive-guard v0.1.0 (%s/crates/tools/velnor-archive-guard)\n' \
               "$checkout"
             ;;
           build)
