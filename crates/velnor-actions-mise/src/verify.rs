@@ -214,9 +214,9 @@ impl VerifyToolchain {
     /// empty, which construction rules out.
     pub fn commands(&self, catalog: &ToolCatalog) -> Result<Vec<IsolatedCommand>, MiseError> {
         let homes = self.homes.env(catalog);
-        let mut commands = vec![self.route.command(catalog)?.with_env(&homes)];
+        let mut commands = vec![self.route.command(catalog)?.with_env(&homes)?];
         if let Some(probe) = &self.runner_probe {
-            commands.push(probe.command(catalog)?.with_env(&homes));
+            commands.push(probe.command(catalog)?.with_env(&homes)?);
         }
         Ok(commands)
     }

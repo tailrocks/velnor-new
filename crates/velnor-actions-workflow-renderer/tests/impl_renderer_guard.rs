@@ -41,7 +41,7 @@ fn guard_rejects_unsafe_paths() {
 fn guard_join_stays_within_root() -> Result<(), RenderError> {
     let rel = validate_tree_path(WORKFLOW_PATH)?;
     let joined = join_within_root(Path::new("/repo"), &rel);
-    assert_eq!(joined, Path::new("/repo/.github/workflows/velnor.yml"));
+    assert_eq!(joined, Path::new("/repo/.github/workflows/ci.yml"));
     assert!(joined.starts_with("/repo"));
     Ok(())
 }

@@ -161,7 +161,7 @@ fn broaden_paths_classify_global_and_outside() {
     for path in [
         ".velnor/config.toml",
         ".velnor/",
-        ".github/workflows/velnor.yml",
+        ".github/workflows/ci.yml",
     ] {
         assert_eq!(
             selection_broadens_for_path(path),
@@ -270,7 +270,7 @@ fn sequential_reference_merges_clean() -> TestResult {
 }
 
 #[test]
-fn not_selected_tasks_fold_to_not_run() -> TestResult {
+fn not_selected_tasks_fold_to_blocked() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let mut reports = passing_reports(&plan)?;
     let first = reports.first_mut().ok_or("report")?;
@@ -280,7 +280,7 @@ fn not_selected_tasks_fold_to_not_run() -> TestResult {
     first.validate()?;
     assert_eq!(
         merge_status(&plan, &reports, &[], &serde_json::json!({}))?,
-        FinalStatus::NotRun
+        FinalStatus::Blocked
     );
     Ok(())
 }

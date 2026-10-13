@@ -25,21 +25,24 @@ fn fixture_ctx() -> RenderContext {
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{VERSION}"),
         request_dir: REQUEST_DIR.to_owned(),
         checkout_uses: checkout_pin(),
-        policy_commands: Vec::new(),
+        validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
+        plan_consumer_env: std::collections::BTreeMap::new(),
     }
 }
 
 fn fixture_ir(steps: Vec<velnor_actions_contract::Step>) -> WorkflowIr {
     let mut jobs = BTreeMap::new();
     jobs.insert(
-        "velnor-plan".to_owned(),
+        "plan".to_owned(),
         Job {
-            display_name: "Velnor Plan".to_owned(),
+            display_name: "Plan".to_owned(),
             runs_on: LABEL.to_owned(),
             needs: Vec::new(),
             condition: None,
+            permissions: None,
+            environment: None,
             steps,
         },
     );
@@ -52,11 +55,10 @@ fn fixture_ir(steps: Vec<velnor_actions_contract::Step>) -> WorkflowIr {
                 .collect(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
         },
-        permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
-        },
+        permissions: Permissions::default(),
         concurrency: Concurrency {
             group: CONCURRENCY_GROUP.to_owned(),
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),

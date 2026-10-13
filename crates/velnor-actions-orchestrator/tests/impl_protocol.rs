@@ -12,16 +12,16 @@ use velnor_actions_orchestrator::{
     assemble_merge_request, merge_internal, merge_passed, plan_internal, plan_outputs,
     publish_plan_files, response_path_for, write_request_parts,
 };
-use velnor_actions_workflow_renderer::render::RenderContext;
-use velnor_actions_workflow_renderer::steps::write_request_step;
 use velnor_actions_workflow_renderer::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, checkout_step, plan_step, render_workflow_ir,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, checkout_step, plan_step, render::RenderContext,
+    render_workflow_ir, steps::write_request_step,
 };
 
 use crate::impl_common::{
     TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,
     plan_for_source_change,
 };
+use crate::impl_merge::task_reports_for;
 
 #[test]
 fn write_request_materializes_pull_request() -> TestResult {
@@ -181,6 +181,8 @@ fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
         run.join("matrix.json"),
         serde_json::to_string(&plan.matrix)?,
     )?;
+    let plan_value = serde_json::to_value(&plan)?;
+    let task_files = task_reports_for(&plan_value, &serde_json::to_value(&reports)?);
     for report in &reports {
         let entry = plan
             .matrix
@@ -189,11 +191,22 @@ fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
             .find(|entry| entry.report_id == report.report_id)
             .ok_or_else(|| std::io::Error::other("report without entry"))?;
         let dir = run.join("reports").join(&entry.artifact_id);
-        fs::create_dir_all(&dir)?;
+        fs::create_dir_all(dir.join("tasks"))?;
         fs::write(
             dir.join("matrix-report.json"),
             serde_json::to_string(report)?,
         )?;
+        for task in &report.tasks {
+            let want = Some(task.task_report_id.as_str());
+            let file = task_files
+                .as_array()
+                .and_then(|files| files.iter().find(|f| f["task_report_id"].as_str() == want))
+                .ok_or_else(|| std::io::Error::other("task without file"))?;
+            let path = dir
+                .join("tasks")
+                .join(format!("{}.json", task.task_report_id));
+            fs::write(path, serde_json::to_string(file)?)?;
+        }
     }
     let request = assemble_merge_request("local", &run)?;
     let mut value: serde_json::Value = serde_json::from_str(&request)?;
@@ -290,6 +303,7 @@ fn merge_verdict_mapping() -> TestResult {
         ("no_work", false),
         ("failed", false),
         ("cancelled", false),
+        ("blocked", false),
         ("not_run", false),
         ("planning_failed", false),
     ] {
@@ -322,12 +336,14 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
     let pin = format!("actions/checkout@{:040x}", 0);
     let mut jobs = BTreeMap::new();
     jobs.insert(
-        "velnor-plan".to_owned(),
+        "plan".to_owned(),
         Job {
-            display_name: "Velnor Plan".to_owned(),
+            display_name: "Plan".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             needs: Vec::new(),
             condition: None,
+            permissions: None,
+            environment: None,
             steps: vec![
                 checkout_step(&pin)?,
                 write_request_step("plan-v1")?,
@@ -344,11 +360,10 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
                 .collect(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
         },
-        permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
-        },
+        permissions: Permissions::default(),
         concurrency: Concurrency {
             group: CONCURRENCY_GROUP.to_owned(),
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
@@ -361,9 +376,10 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: pin,
-        policy_commands: Vec::new(),
+        validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
+        plan_consumer_env: std::collections::BTreeMap::new(),
     };
     let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;
     let pairs = internal_env_pairs(&text);

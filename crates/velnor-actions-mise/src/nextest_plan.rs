@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 use velnor_actions_contract::{ArchiveInputs, archive_id, parse_strict_json};
 
 use crate::error::MiseError;
-use crate::nextest::NextestArchive;
+use crate::nextest_shapes::NextestArchive;
 
 /// Archive-once plan: one configuration key per planned archive.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

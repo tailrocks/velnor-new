@@ -154,7 +154,6 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     assert_eq!(
         sh_files,
         std::collections::BTreeSet::from([
-            "matrix_step.rs".to_owned(),
             "pins.rs".to_owned(),
             "qualify.rs".to_owned(),
             "source_prep.rs".to_owned(),

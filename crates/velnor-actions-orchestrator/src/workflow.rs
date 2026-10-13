@@ -10,29 +10,27 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Permissions, Step, StepKind, Trigger, VelnorConfig,
-    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    Concurrency, GeneratorValidation, Job, Permissions, Step, StepKind, Trigger, ValidatorKind,
+    VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::{
     PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
 };
-use velnor_actions_rust::{CompileDriver, TaskGroup, TestRunner};
+use velnor_actions_rust::{CompileDriver, TestRunner};
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
-    PolicyCommand, RenderContext, TASK_JOB_ID, WORKFLOW_PATH,
+    RenderContext, ValidatorCommand, WORKFLOW_PATH,
 };
 use velnor_actions_workflow_renderer::steps::{
-    DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
+    DENY_STEP_NAME, MACHETE_STEP_NAME, PLAN_OPERATION, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
 };
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
 use crate::utf8::{strings_of, strings_of_env};
-use crate::vectors::{
-    ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, verify_tools_argv, zizmor_argv,
-};
-use crate::workflow_jobs::{final_job, lint_job, plan_job, task_job};
+use crate::vectors::{ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv};
+use crate::workflow_jobs::{final_job, lint_job, plan_job};
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 
@@ -90,53 +88,39 @@ pub(crate) fn build_workflow(
         WorkflowPolicy::VelnorRepositoryV1 => None,
     };
     let use_nextest = plan_uses_nextest(discovery);
-    jobs.insert(
-        PLAN_JOB_ID.to_owned(),
-        plan_job(
-            label,
-            acquire.clone(),
-            &catalog,
-            use_mbx,
-            use_nextest,
-            fetch_roots,
-        )?,
-    );
-    let task_groups: Vec<&TaskGroup> = discovery
-        .task_groups
-        .iter()
-        .filter(|group| !group.no_test_targets)
-        .collect();
-    if !task_groups.is_empty() {
-        jobs.insert(
-            TASK_JOB_ID.to_owned(),
-            task_job(
-                label,
-                config.workflow.max_parallel_jobs,
-                &catalog,
-                use_mbx,
-                use_nextest,
-                fetch_roots,
-            )?,
-        );
+    let mut plan = plan_job(
+        label,
+        acquire.clone(),
+        &catalog,
+        use_mbx,
+        use_nextest,
+        fetch_roots,
+    )?;
+    if let Some(format) = wire_w1::workspace_format_step(discovery, &catalog)? {
+        insert_format_step(&mut plan, format);
+    }
+    jobs.insert(PLAN_JOB_ID.to_owned(), plan);
+    let built = crate::crate_jobs::build_crate_jobs(label, discovery, &catalog, fetch_roots)?;
+    let crate_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
+    for (id, job) in built.jobs {
+        jobs.insert(id, job);
     }
     jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, &catalog)?);
     jobs.insert(
         FINAL_JOB_ID.to_owned(),
-        final_job(label, !task_groups.is_empty(), acquire, &catalog)?,
+        final_job(label, &crate_ids, acquire, &catalog)?,
     );
-    wire_w1::ensure_plan_format_step(&mut jobs, discovery, &catalog)?;
-    wire_w1::check_task_mbx_gating(&jobs, !task_groups.is_empty(), use_mbx)?;
+    wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
     let ir = WorkflowIr {
         name: config.workflow.name.clone(),
         triggers: Trigger {
             pull_request_types: EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect(),
             push_branches: vec![branch.to_owned()],
             merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
         },
-        permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
-        },
+        permissions: Permissions::default(),
         concurrency: Concurrency {
             group: CONCURRENCY_GROUP.to_owned(),
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
@@ -153,11 +137,27 @@ pub(crate) fn build_workflow(
     })
 }
 
+/// Insert the workspace `Format` step immediately before `Plan`.
+///
+/// Mirrors the renderer plan-format anchoring at this stage: the
+/// freshness and publish closures do not exist yet, so the `plan-v1`
+/// step is the anchor; without it the step closes the job.
+fn insert_format_step(plan: &mut Job, format: Step) {
+    let at = plan
+        .steps
+        .iter()
+        .position(|step| {
+            matches!(&step.kind, StepKind::Internal { operation } if operation == PLAN_OPERATION)
+        })
+        .unwrap_or(plan.steps.len());
+    plan.steps.insert(at, format);
+}
+
 /// True when any selected workspace compiles through MBX.
 ///
 /// The plan job pre-installs the MBX driver only on detected project
 /// evidence, never by default; consumers without MBX stay Cargo-only.
-fn plan_uses_mbx(discovery: &Discovery) -> bool {
+pub(crate) fn plan_uses_mbx(discovery: &Discovery) -> bool {
     discovery
         .workspaces
         .iter()
@@ -208,21 +208,20 @@ fn render_context(
 ) -> Result<RenderContext, OrchestratorError> {
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
-    let policy_commands = if velnor {
+    let validator_commands = if velnor {
         vec![
-            PolicyCommand {
-                name: "Verify pinned tools".to_owned(),
-                argv: verify_tools_argv(catalog)?,
-            },
-            PolicyCommand {
+            ValidatorCommand {
+                validator: ValidatorKind::CargoDeny,
                 name: DENY_STEP_NAME.to_owned(),
                 argv: deny_argv()?,
             },
-            PolicyCommand {
+            ValidatorCommand {
+                validator: ValidatorKind::CargoMachete,
                 name: MACHETE_STEP_NAME.to_owned(),
                 argv: machete_argv()?,
             },
-            PolicyCommand {
+            ValidatorCommand {
+                validator: ValidatorKind::Zizmor,
                 name: ZIZMOR_STEP_NAME.to_owned(),
                 argv: zizmor_argv(catalog)?,
             },
@@ -242,9 +241,13 @@ fn render_context(
         staged_binary: format!("{STAGED_BINARY_PREFIX}{version}"),
         request_dir: REQUEST_DIR.to_owned(),
         checkout_uses: CHECKOUT_USES.to_owned(),
-        policy_commands,
+        validator_commands,
         candidate,
         preseed: false,
+        plan_consumer_env: crate::matrix_step::task_step_env(
+            catalog,
+            &std::collections::BTreeMap::new(),
+        )?,
     })
 }
 

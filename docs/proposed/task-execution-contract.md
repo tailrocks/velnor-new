@@ -4,7 +4,7 @@
 
 The public `velnor-actions plan` command performs analysis only; it never
 executes Rust tasks. Task execution exists only in generated GitHub workflows.
-The generated workflow job named `velnor-plan` is internal and distinct from
+The generated workflow job named `plan` is internal and distinct from
 the local command. This is the Rust adapter's execution extension. Future stack adapters define
 their own workflow steps; the orchestrator handles typed task definitions
 without assuming Cargo, Clippy, MBX, or Nextest. Internal task identities are
@@ -55,7 +55,7 @@ parallel. Matrix `fail-fast` MUST be false so a package failure does not cancel 
 obligations. Test build and test execution steps MUST NOT run for a package whose Clippy task failed. See
 the [parallelism and affected-work contract](parallelism-and-selection-contract.md) for native
 background/wait groups, resource bounds, exact baseline coverage, and complete test partitioning.
-Formatting runs once in `velnor-plan` unless the package has an explicit formatting configuration.
+Formatting runs once in `plan` unless the package has an explicit formatting configuration.
 
 All compile and test commands run through exact Velnor-pinned Mise tools with
 project config, env files, and hooks disabled. The Rust adapter records one

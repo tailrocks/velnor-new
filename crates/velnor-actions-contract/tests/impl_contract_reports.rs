@@ -2,14 +2,14 @@
 use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    BaselineProof, BaselineStatus, CacheLayer, CacheOutcome, CacheResult, CandidateReport,
-    CandidateStatus, Concurrency, ContractError, FinalCounts, FinalReport, FinalStatus, Job,
-    MatrixReport, MatrixStatus, NotSelectedReason, ObligationDecision, Permissions, Plan,
-    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner,
-    RequiredJobResult, RunnerSelection, Step, StepKind, TaskReport, TaskStatus, Trigger, Trust,
-    WorkflowEvent, WorkflowIr, artifact_id_for_candidate, artifact_id_for_matrix,
-    artifact_id_for_plan, candidate_report_id_for_run, digest_b3, final_report_id_for_run,
-    plan_id_for_run, run_key_for_ci, task_report_id_for_task, validate_candidate_report_id,
+    BaselineProof, CacheLayer, CacheOutcome, CacheResult, CandidateReport, CandidateStatus,
+    Concurrency, ContractError, FinalCounts, FinalReport, FinalStatus, Job, MatrixReport,
+    MatrixStatus, NotSelectedReason, ObligationDecision, Permissions, Plan, PlanBaseline,
+    PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, RequiredJobResult,
+    RunnerSelection, Step, StepKind, TaskReport, TaskStatus, Trigger, Trust, WorkflowEvent,
+    WorkflowIr, artifact_id_for_candidate, artifact_id_for_matrix, artifact_id_for_plan,
+    candidate_report_id_for_run, digest_b3, final_report_id_for_run, plan_id_for_run,
+    run_key_for_ci, task_report_id_for_task, validate_candidate_report_id,
     validate_final_report_id,
 };
 
@@ -29,15 +29,7 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline {
-            status: BaselineStatus::Unavailable,
-            base_commit: None,
-            run_id: None,
-            artifact_id: None,
-            artifact_name: None,
-            manifest_digest: None,
-            reason: Some("no_entry".to_owned()),
-        },
+        baseline: PlanBaseline::unavailable(Some("no_entry"))?,
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -57,6 +49,7 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
             reason: "changed".to_owned(),
             task_digest: digest_b3(b"task"),
             input_digest: digest_b3(b"inputs"),
+            closure_digest: digest_b3(b"closure"),
             baseline_proof: None,
         }],
         matrix: PlanMatrix {
@@ -72,13 +65,13 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
     assert!(bad.validate().is_err());
     let covered = PlanObligation {
         decision: ObligationDecision::CoveredByTrustedBaseline,
-        baseline_proof: Some(BaselineProof {
-            source_commit: "ab".repeat(20),
-            run_id: 99,
-            artifact_id: 4242,
-            artifact_name: artifact_id_for_plan(&run_key)?,
-            manifest_digest: digest_b3(b"manifest"),
-        }),
+        baseline_proof: Some(BaselineProof::new(
+            &"ab".repeat(20),
+            99,
+            4242,
+            &artifact_id_for_plan(&run_key)?,
+            &digest_b3(b"manifest"),
+        )?),
         ..plan.obligations[0].clone()
     };
     let mut plan2 = plan.clone();
@@ -176,7 +169,7 @@ fn final_and_candidate_reports_validate() -> Result<(), ContractError> {
             artifact_id_for_plan(&run_key)?,
         ],
         required_job_results: vec![RequiredJobResult {
-            job_id: "velnor-plan".to_owned(),
+            job_id: "plan".to_owned(),
             conclusion: "success".to_owned(),
         }],
         status: FinalStatus::Passed,
@@ -226,6 +219,8 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
         runs_on: "ubuntu-26.04".to_owned(),
         needs: vec![],
         condition: None,
+        permissions: None,
+        environment: None,
         steps: vec![Step {
             name: "Checkout".to_owned(),
             kind: StepKind::Shell {
@@ -240,20 +235,19 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
             pull_request_types: vec!["opened".to_owned()],
             push_branches: vec!["main".to_owned()],
             merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
         },
-        permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
-        },
+        permissions: Permissions::default(),
         concurrency: Concurrency {
             group: "velnor-ci".to_owned(),
             cancel_in_progress: "true".to_owned(),
         },
-        jobs: BTreeMap::from([("velnor-plan".to_owned(), job)]),
+        jobs: BTreeMap::from([("plan".to_owned(), job)]),
     };
     ir.validate()?;
     let mut bad = ir.clone();
-    if let Some(job) = bad.jobs.get_mut("velnor-plan") {
+    if let Some(job) = bad.jobs.get_mut("plan") {
         job.runs_on = "ubuntu-latest".to_owned();
     }
     assert!(bad.validate().is_err());
@@ -344,11 +338,11 @@ fn final_without_plan_is_planning_failed() -> Result<(), ContractError> {
     let run_key = run_key_for_ci(9, 3);
     let jobs = vec![
         RequiredJobResult {
-            job_id: "velnor-plan".to_owned(),
+            job_id: "plan".to_owned(),
             conclusion: "failure".to_owned(),
         },
         RequiredJobResult {
-            job_id: "velnor-alint".to_owned(),
+            job_id: "alint".to_owned(),
             conclusion: "success".to_owned(),
         },
     ];
@@ -359,7 +353,7 @@ fn final_without_plan_is_planning_failed() -> Result<(), ContractError> {
     assert_eq!(report.plan_id, format!("plan-{run_key}"));
     assert!(report.expected_report_ids.is_empty());
     assert!(report.downloaded_artifact_ids.is_empty());
-    assert_eq!(report.required_job_results[0].job_id, "velnor-alint");
+    assert_eq!(report.required_job_results[0].job_id, "alint");
     assert_eq!(report.counts.selected, 0);
     assert!(FinalReport::without_plan("bogus", Vec::new()).is_err());
     Ok(())

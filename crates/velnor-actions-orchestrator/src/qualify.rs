@@ -47,7 +47,7 @@ impl QualifyRequest {
     /// into scratch) without invoking any build tool. Rejects rebuilds.
     pub(crate) fn argv(&self) -> Result<Vec<String>, OrchestratorError> {
         let script = format!(
-            "{} plan && {} generate --output-dir {} && test -f {}/.github/workflows/velnor.yml",
+            "{} plan && {} generate --output-dir {} && test -f {}/.github/workflows/ci.yml",
             self.binary, self.binary, self.output_dir, self.output_dir
         );
         let argv = vec!["sh".to_owned(), "-c".to_owned(), script];

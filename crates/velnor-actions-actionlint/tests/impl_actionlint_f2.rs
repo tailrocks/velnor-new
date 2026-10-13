@@ -8,7 +8,7 @@ use velnor_actions_actionlint::{
 fn gen_2_11_rendered_bytes_never_carry_init_or_fetch() {
     let input = ActionlintConfigInput::new("0.1.0")
         .with_config_variable("ALPHA")
-        .with_workflow_path(".github/workflows/velnor.yml");
+        .with_workflow_path(".github/workflows/ci.yml");
     let output = render_actionlint_yaml(&input).expect("renders");
     for token in ["init-config", "fetch", "http://", "https://"] {
         assert!(
@@ -57,7 +57,7 @@ fn gen_2_16_staged_argv_lints_config_and_workflows_together() {
     assert_eq!(toolchain.version(), ACTIONLINT_VERSION);
     let workflows = vec![
         ".github/workflows/a.yml".to_owned(),
-        ".github/workflows/velnor.yml".to_owned(),
+        ".github/workflows/ci.yml".to_owned(),
     ];
     let argv = ActionlintToolchain::staged_lint_argv(".github/actionlint.yaml", &workflows);
     assert_eq!(
@@ -68,7 +68,7 @@ fn gen_2_16_staged_argv_lints_config_and_workflows_together() {
             "-config-file".to_owned(),
             ".github/actionlint.yaml".to_owned(),
             ".github/workflows/a.yml".to_owned(),
-            ".github/workflows/velnor.yml".to_owned(),
+            ".github/workflows/ci.yml".to_owned(),
         ]
     );
     assert_eq!(

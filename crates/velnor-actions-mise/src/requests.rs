@@ -1,14 +1,18 @@
 //! Typed mise requests: metadata discovery, qualification, and pinned exec.
 //!
 //! Discovery uses Cargo even for MBX workspaces (metadata discovery is not
-//! compilation). Callers own parsing; discovery and qualification return the
-//! raw metadata JSON string, and pinned exec returns the typed output.
+//! compilation). Discovery never resolves (`--no-deps`: no fetch, no write);
+//! only lockful qualification resolves, `--locked --offline`. Callers own
+//! parsing; discovery and qualification return the raw metadata JSON string,
+//! and pinned exec returns the typed output.
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
 use crate::catalog::{PinnedTool, ToolCatalog};
-use crate::command::{IsolatedCommand, ProcessOutput, mise_argv_tail, mise_install_argv_tail};
+use crate::command::{
+    IsolatedCommand, ProcessOutput, mise_argv_tail, mise_install_argv_tail, redact_argv_for_debug,
+};
 use crate::error::MiseError;
 
 /// Cargo payload program executed after the `--` separator.
@@ -21,7 +25,11 @@ const CARGO_METADATA: &str = "metadata";
 ///
 /// Exact payload: `cargo metadata --format-version 1 --no-deps
 /// --manifest-path <manifest>`. No `--locked`/`--offline`: discovery must not
-/// wait for full resolution.
+/// wait for full resolution. `--no-deps` skips resolution entirely, so the
+/// probe performs no index access, network fetch, or repository write --
+/// not even for lockless-with-dependencies manifests (poison-fixture proven;
+/// the orchestrator also brackets every run with a tool snapshot that fails
+/// closed on drift). Full resolution is qualification's job, lockful-only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetadataDiscovery {
     /// Manifest whose metadata is requested.
@@ -173,7 +181,9 @@ impl MetadataQualification {
 }
 
 /// One payload program run under at least one pinned tool.
-#[derive(Debug, Clone, PartialEq, Eq)]
+///
+/// `Debug` redacts `--token` values; payload shape stays visible.
+#[derive(Clone, PartialEq, Eq)]
 pub struct PinnedToolExec {
     /// Tools selected as `<tool>@<exact>` before the `--` separator.
     tools: Vec<PinnedTool>,
@@ -181,6 +191,16 @@ pub struct PinnedToolExec {
     program: OsString,
     /// Payload arguments passed byte-exact.
     args: Vec<OsString>,
+}
+
+impl std::fmt::Debug for PinnedToolExec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PinnedToolExec")
+            .field("tools", &self.tools)
+            .field("program", &self.program)
+            .field("args", &redact_argv_for_debug(&self.args))
+            .finish()
+    }
 }
 
 /// Program stem that must never run as a payload: direct toolchain
@@ -253,7 +273,7 @@ impl PinnedToolExec {
         full_mise_argv(catalog, &self.tools, &self.payload())
     }
 
-    /// Isolated command running this pinned execution.
+    /// Isolated command running this pinned execution (`gh` selects Baseline).
     ///
     /// # Errors
     ///
@@ -261,7 +281,11 @@ impl PinnedToolExec {
     /// which the constructor rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         let specs = catalog.tool_specs(&self.tools);
-        IsolatedCommand::mise_exec(&specs, &self.payload())
+        let command = IsolatedCommand::mise_exec(&specs, &self.payload())?;
+        if self.tools.as_slice() == [PinnedTool::Gh] {
+            return Ok(command.with_policy(crate::command::EnvPolicy::Baseline));
+        }
+        Ok(command)
     }
 
     /// Run the payload and return its typed output, whatever the exit is.

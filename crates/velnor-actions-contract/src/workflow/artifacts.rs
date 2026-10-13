@@ -7,6 +7,7 @@
 
 use crate::canonical::canonical_json_bytes;
 use crate::errors::ContractError;
+use crate::strict_json::{MAX_UNTRUSTED_DOCUMENT_BYTES, parse_strict_json_bytes};
 use crate::workflow::plan::{Plan, PlanMatrix};
 
 /// Plan document filename inside the plan artifact.
@@ -32,15 +33,17 @@ pub fn matrix_json_bytes(matrix: &PlanMatrix) -> Result<Vec<u8>, ContractError> 
 /// Check downloaded `matrix.json` bytes agree with the plan matrix.
 ///
 /// Both sides are compared as canonical bytes, so pretty-printed
-/// downloads still agree; any content difference fails closed.
+/// downloads still agree; any content difference fails closed. The
+/// download parses through the bounded strict boundary: oversize,
+/// non-UTF-8, and duplicate-key documents are rejected.
 /// # Errors
 pub fn check_matrix_agreement(
     plan_matrix: &PlanMatrix,
     matrix_file_bytes: &[u8],
 ) -> Result<(), ContractError> {
     let expect = canonical_json_bytes(plan_matrix)?;
-    let value: serde_json::Value = serde_json::from_slice(matrix_file_bytes)
-        .map_err(|err| ContractError::identity("matrix.json", format!("malformed_json:{err}")))?;
+    let value = parse_strict_json_bytes(matrix_file_bytes, MAX_UNTRUSTED_DOCUMENT_BYTES)
+        .map_err(|err| ContractError::identity("matrix.json", err.to_string()))?;
     let actual = canonical_json_bytes(&value)?;
     if expect == actual {
         Ok(())
@@ -49,5 +52,21 @@ pub fn check_matrix_agreement(
             "matrix.json",
             "matrix_agreement_mismatch",
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{check_matrix_agreement, matrix_json_bytes};
+    use crate::workflow::plan::PlanMatrix;
+
+    #[test]
+    fn agreement_rejects_duplicate_keys() {
+        let matrix = PlanMatrix { include: vec![] };
+        let bytes = matrix_json_bytes(&matrix).expect("bytes");
+        assert_eq!(check_matrix_agreement(&matrix, &bytes), Ok(()));
+        let dup = br#"{"include":[],"include":[]}"#;
+        assert!(check_matrix_agreement(&matrix, dup).is_err());
+        assert!(check_matrix_agreement(&matrix, b"\xff").is_err());
     }
 }

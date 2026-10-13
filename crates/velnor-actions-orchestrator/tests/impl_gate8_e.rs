@@ -48,21 +48,24 @@ fn ctx() -> RenderContext {
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/r".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),
-        policy_commands: Vec::new(),
+        validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
+        plan_consumer_env: std::collections::BTreeMap::new(),
     }
 }
 
 fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
     let mut jobs = BTreeMap::new();
     jobs.insert(
-        "velnor-plan".to_owned(),
+        "plan".to_owned(),
         Job {
             display_name: "P".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             needs: Vec::new(),
             condition: None,
+            permissions: None,
+            environment: None,
             steps: vec![
                 checkout_step(&format!("actions/checkout@{:040x}", 0))?,
                 plan_step(),
@@ -70,12 +73,14 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
         },
     );
     jobs.insert(
-        "velnor-candidate".to_owned(),
+        "candidate".to_owned(),
         Job {
             display_name: "C".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
-            needs: vec!["velnor-plan".to_owned()],
+            needs: vec!["plan".to_owned()],
             condition: None,
+            permissions: None,
+            environment: None,
             steps,
         },
     );
@@ -88,11 +93,10 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
                 .collect(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
         },
-        permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
-        },
+        permissions: Permissions::default(),
         concurrency: Concurrency {
             group: CONCURRENCY_GROUP.to_owned(),
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),

@@ -154,7 +154,7 @@ The artifact contains one UTF-8 `baseline.json` and no other payload. Its minimu
   "source_commit": "<40 lowercase hex>",
   "ref": "refs/heads/main",
   "event": "push",
-  "workflow_ref": "owner/repo/.github/workflows/velnor.yml@refs/heads/main",
+  "workflow_ref": "owner/repo/.github/workflows/ci.yml@refs/heads/main",
   "run_id": 12345,
   "run_attempt": 1,
   "final_status": "passed",
@@ -207,7 +207,7 @@ reused_from_task_cache
 covered_by_trusted_baseline
 ```
 
-The matrix contains only `execute` obligations. The plan and final report contain all obligations. `velnor-final` validates direct reports for executed work, complete outputs for task-cache reuse, and exact manifest entries for baseline coverage. A plan with obligations all covered is `passed`, not `no_work`; `no_work` means there are no obligations.
+The matrix contains only `execute` obligations. The plan and final report contain all obligations. `required` validates direct reports for executed work, complete outputs for task-cache reuse, and exact manifest entries for baseline coverage. A plan with obligations all covered is `passed`, not `no_work`; `no_work` means there are no obligations.
 
 Baseline trust is separate from the semantic task digest. Trust controls who may read/write/promote evidence; it is not source content. PR/merge jobs may read trusted baseline evidence but cannot publish trusted baseline or cache state. Mise task-result caching remains a separate, later-qualified layer. MBX hits never count as task reuse or baseline coverage.
 

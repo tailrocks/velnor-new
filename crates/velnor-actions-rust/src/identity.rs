@@ -5,6 +5,14 @@
 //! or reuse is considered (par §3). This module launches no processes, reads
 //! no files, and builds no tool invocations.
 
+// P03 resolution states live here so no `lib.rs` edit can collide.
+#[path = "identity_closure.rs"]
+mod identity_closure;
+
+pub use self::identity_closure::{
+    UnresolvedInput, normalize_component_id, normalize_identity_path, unresolved_inputs,
+};
+
 use velnor_actions_contract::ContractError;
 
 use crate::argv::{ExtensionInputs, shards_allowed};
@@ -53,8 +61,9 @@ impl TaskGroup {
         &self,
         inputs: &GroupExtensionInputs<'_>,
     ) -> RustTaskIdentityExtension {
+        let package_id = normalize_component_id(inputs.package_id, inputs.manifest);
         let derived = ExtensionInputs {
-            package_id: inputs.package_id,
+            package_id: &package_id,
             workspace_id: inputs.workspace_id,
             profile: inputs.profile,
             manifest: inputs.manifest,

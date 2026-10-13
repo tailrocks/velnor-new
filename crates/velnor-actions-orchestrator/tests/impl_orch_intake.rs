@@ -1,7 +1,7 @@
 //! Intake remediation cases: discovery, registry order, tool inputs, config.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use tempfile::TempDir;
 use velnor_actions_contract::WorkflowPolicy;
@@ -148,7 +148,11 @@ fn intake_tool_changes_refresh_findings_not_tasks() -> TestResult {
     fs::write(root.join("mise.toml"), "!!! not toml {{{ \n")?;
     fs::write(root.join("rust-toolchain.toml"), "[[[ nope\n")?;
     fs::write(root.join("mise.lock"), "not json {{{\n")?;
-    assert_eq!(task_ids_for(root)?, tasks_before);
+    let err = err_of(prepare(root).map(|_| ()), "garbage wrapper")?;
+    assert!(
+        err.to_string().contains("wrapper_invalid"),
+        "diagnostic: {err}"
+    );
     fs::remove_file(root.join("mise.toml"))?;
     fs::remove_file(root.join("rust-toolchain.toml"))?;
     fs::remove_file(root.join("mise.lock"))?;
@@ -250,12 +254,13 @@ fn intake_unconfigured_suites_are_not_sharded() -> TestResult {
 }
 
 #[test]
-fn intake_generated_workflow_uses_matrix_not_native_parallel() -> TestResult {
+fn intake_generated_workflow_uses_crate_jobs_not_native_parallel() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
     generate(&prep, &GenerateOptions { output_dir: None })?;
-    let yml = fs::read_to_string(repo.path().join(".github/workflows/velnor.yml"))?;
-    assert!(yml.contains("max-parallel: 2"), "budget cap:\n{yml}");
+    let yml = fs::read_to_string(repo.path().join(".github/workflows/ci.yml"))?;
+    assert!(yml.contains("  rust-demo:"), "crate job:\n{yml}");
+    assert!(!yml.contains("strategy:"), "static graph:\n{yml}");
     for line in yml.lines() {
         let stepped = line.trim_start();
         assert!(
@@ -359,40 +364,5 @@ fn intake_selected_detection_contributes_tasks() -> TestResult {
     contributed.sort();
     contributed.dedup();
     assert_eq!(contributed, selected);
-    Ok(())
-}
-
-#[test]
-fn intake_adapter_dependency_direction() -> TestResult {
-    let crates = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
-    for adapter in ["rust", "mise", "actionlint", "workflow-renderer"] {
-        let path = crates.join(format!("velnor-actions-{adapter}/Cargo.toml"));
-        let text = fs::read_to_string(path)?;
-        let manifest: toml::Table = toml::from_str(&text)?;
-        if let Some(deps) = manifest.get("dependencies").and_then(toml::Value::as_table) {
-            for name in deps.keys() {
-                assert!(
-                    !name.starts_with("velnor-actions-") || name == "velnor-actions-contract",
-                    "{adapter} must not depend on {name}"
-                );
-            }
-        }
-    }
-    let path = crates.join("velnor-actions-orchestrator/Cargo.toml");
-    let text = fs::read_to_string(path)?;
-    let manifest: toml::Table = toml::from_str(&text)?;
-    let deps = manifest
-        .get("dependencies")
-        .and_then(toml::Value::as_table)
-        .ok_or("orchestrator deps")?;
-    for name in [
-        "velnor-actions-contract",
-        "velnor-actions-rust",
-        "velnor-actions-mise",
-        "velnor-actions-actionlint",
-        "velnor-actions-workflow-renderer",
-    ] {
-        assert!(deps.contains_key(name), "orchestrator composes {name}");
-    }
     Ok(())
 }

@@ -78,8 +78,9 @@ pub(crate) struct MergeRequest {
 /// Returns [`OrchestratorError::Internal`] for malformed requests and
 /// response-encoding failures.
 pub fn merge_internal(request_json: &str) -> Result<String, OrchestratorError> {
+    let envelope = parse_strict_json(request_json).map_err(internal_contract)?;
     let mut request: MergeRequest =
-        serde_json::from_str(request_json).map_err(|err| OrchestratorError::Internal {
+        serde_json::from_value(envelope).map_err(|err| OrchestratorError::Internal {
             problem: format!("malformed_request:{err}"),
         })?;
     check_schema(request.schema)?;
@@ -171,9 +172,16 @@ fn candidate_failure(request: &MergeRequest) -> Option<String> {
 /// Aggregate one final report from validated plan plus reports.
 fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, OrchestratorError> {
     let mut signals = Signals::default();
-    check_agreement(request.matrix.as_ref(), plan, &mut signals)?;
-    check_plan_shape(plan, &mut signals);
-    check_plan_evidence(plan, request, &mut signals);
+    let mut miss_reasons = BTreeSet::new();
+    check_agreement(
+        request.matrix.as_ref(),
+        plan,
+        &mut signals,
+        &mut miss_reasons,
+    )?;
+    check_plan_shape(plan, &mut signals, &mut miss_reasons);
+    check_plan_evidence(plan, request, &mut signals, &mut miss_reasons);
+    check_execute_inventory(plan, &mut signals, &mut miss_reasons);
     let entries = plan_entries(plan);
     let obligations = plan_digests(plan);
     let mut miss_reasons = BTreeSet::new();
@@ -187,6 +195,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
         let Some(report) = partition.valid.get(entry.report_id.as_str()) else {
             uncovered += 1;
             signals.not_run = true;
+            miss_reasons.insert("no_entry".to_owned());
             continue;
         };
         if shards_failed(entry, report.empty_partition, plan, request) {
@@ -196,6 +205,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
         }
         let mut sinks = CoverSinks {
             seen_task_reports: &mut seen_task_reports,
+            task_files: &tasks.valid,
             fold: &mut fold,
             signals: &mut signals,
             miss_reasons: &mut miss_reasons,
@@ -228,7 +238,11 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
             failed: fold.failed,
             cancelled: fold.cancelled,
             blocked: fold.blocked,
-            not_run: uncovered + partition.malformed + partition.duplicates,
+            not_run: uncovered
+                + partition.malformed
+                + partition.duplicates
+                + tasks.malformed
+                + tasks.duplicates,
         },
         miss_reasons: miss_reasons.into_iter().collect(),
     })
@@ -333,6 +347,13 @@ fn plan_digests(plan: &Plan) -> BTreeMap<&str, &str> {
         .collect()
 }
 /// Check 5: precedence over collected signals, then pass or no-work.
+///
+/// Documented precedence: `planning_failed` beats `failed` beats
+/// `cancelled` beats `blocked` beats `not_run`; an obligation-free
+/// plan is `no_work`, otherwise every signal clear is `passed`.
+/// Blocked (`not_selected`) stays distinct from missing evidence:
+/// collapsing it into `not_run` would hide a decided outcome behind
+/// an evidence gap.
 fn decide(signals: &Signals, plan: &Plan) -> FinalStatus {
     if signals.planning_failed {
         FinalStatus::PlanningFailed
@@ -340,6 +361,8 @@ fn decide(signals: &Signals, plan: &Plan) -> FinalStatus {
         FinalStatus::Failed
     } else if signals.cancelled {
         FinalStatus::Cancelled
+    } else if signals.blocked {
+        FinalStatus::Blocked
     } else if signals.not_run {
         FinalStatus::NotRun
     } else if plan.task_ids.is_empty() && plan.obligations.is_empty() {
@@ -350,12 +373,17 @@ fn decide(signals: &Signals, plan: &Plan) -> FinalStatus {
 }
 
 /// Obligations covered without execution.
+///
+/// The match stays exhaustive so a future decision variant fails to
+/// compile here instead of silently joining one side of the count.
 fn covered_count(plan: &Plan) -> u32 {
-    u32::try_from(
-        plan.obligations
-            .iter()
-            .filter(|obligation| obligation.decision != ObligationDecision::Execute)
-            .count(),
-    )
-    .unwrap_or(u32::MAX)
+    let mut covered = 0usize;
+    for obligation in &plan.obligations {
+        match obligation.decision {
+            ObligationDecision::Execute => {}
+            ObligationDecision::ReusedFromTaskCache
+            | ObligationDecision::CoveredByTrustedBaseline => covered += 1,
+        }
+    }
+    u32::try_from(covered).unwrap_or(u32::MAX)
 }

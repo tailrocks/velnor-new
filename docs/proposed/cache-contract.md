@@ -278,10 +278,10 @@ against its required evidence.
 
 The final job writes `$RUNNER_TEMP/velnor/<run-key>/final-report.json` with report ID `final-<run-key>` and
 uploads `velnor-final-<run-key>`. It MUST record the `plan_id`, every expected matrix `report_id`, every
-downloaded artifact ID, each required job ID and conclusion (including `velnor-alint` when emitted), the
+downloaded artifact ID, each required job ID and conclusion (including `alint` when emitted), the
 computed final result, and selected/reused/executed/empty-partition/covered/failed/cancelled/blocked/not-run
 counts. Its `status` MUST use the final result enum below. `required_job_results` MUST include every
-non-matrix required job's ID and conclusion, including `velnor-alint` when emitted. The final report is an
+non-matrix required job's ID and conclusion, including `alint` when emitted. The final report is an
 aggregate and is not a task-cache input.
 
 Candidate validation, when required, writes one report with ID `candidate-<run-key>-<target-key>` and artifact
@@ -322,8 +322,8 @@ bytes byte-identical.
 ## 4. Final gate and exit rules
 
 Every matrix entry uploads the artifact named by its matrix `artifact_id` with `if: always()`.
-`velnor-candidate`, when present, uploads its derived candidate artifact and report with `if: always()`.
-`velnor-final` MUST download exactly the plan artifact `velnor-plan-<run-key>`, every expected matrix
+`candidate`, when present, uploads its derived candidate artifact and report with `if: always()`.
+`required` MUST download exactly the plan artifact `velnor-plan-<run-key>`, every expected matrix
 artifact, and the candidate artifact when `generator_validation = "candidate"`. It MUST fail when an expected
 artifact or report is absent, malformed, duplicated, or has an unknown schema. Artifact names MUST be matched
 against the plan's derived IDs; wildcard downloads are prohibited.
@@ -351,16 +351,17 @@ The final gate computes exactly one result:
 | `passed` | Every obligation is `reused`, `executed`, validly `empty_partition`, or exactly `covered` by trusted baseline evidence | 0 |
 | `failed` | A valid required task report records failure, a nonzero child exit, or required candidate validation fails | 1 |
 | `cancelled` | Any required task was cancelled | 1 |
+| `blocked` | A required task was blocked (`not_selected`), below cancelled | 1 |
 | `not_run` | A selected matrix entry lacks a valid report and no task failure was reported | 1 |
 | `planning_failed` | Discovery, generation, formatting, matrix validation, or plan-report validation failed | 1 |
 
-`velnor-final` MUST run with `if: always()` and MUST be the branch-protection check. A skipped job, missing
+`required` MUST run with `if: always()` and MUST be the branch-protection check. A skipped job, missing
 report, cache miss, or omitted task MUST NOT be treated as success. The final summary MUST show selected,
 reused, executed, empty-partition, covered, failed, cancelled, blocked, and not-run counts plus every
 cache/baseline miss reason.
 
 If more than one result condition applies, choose the result in this order: `planning_failed`, `failed`,
-`cancelled`, `not_run`, then `passed` or `no_work`. A shard with `empty_partition` is valid only with its
+`cancelled`, `blocked`, `not_run`, then `passed` or `no_work`. A shard with `empty_partition` is valid only with its
 inventory proof and is counted separately in the final report. A real failed task takes precedence over
 dependent tasks blocked by that failure. If no task failure is reported, a missing, malformed, or duplicate
 matrix report is `not_run`.

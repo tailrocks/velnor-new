@@ -2,7 +2,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::metadata::{LocalEdge, WorkspaceRecord};
+use crate::metadata::WorkspaceRecord;
+use crate::metadata_edges::LocalEdge;
 
 /// Reverse dependents of `changed` ids using base plus head edges.
 ///

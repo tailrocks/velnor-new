@@ -77,7 +77,7 @@ fn make_mixed_repo() -> Result<TempDir, Box<dyn std::error::Error>> {
 }
 
 /// Commit everything and return the new HEAD.
-fn commit(root: &Path, message: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub(crate) fn commit(root: &Path, message: &str) -> Result<String, Box<dyn std::error::Error>> {
     git(&["add", "."], root)?;
     git(&["commit", "-m", message], root)?;
     git_line(&["rev-parse", "HEAD"], root)
@@ -94,7 +94,7 @@ fn lockfile(root: &Path) -> TestResult {
 }
 
 /// Plan base..head as a pull request; return plan plus warnings.
-fn plan_pr(
+pub(crate) fn plan_pr(
     root: &Path,
     base: Option<&str>,
     head: &str,
@@ -114,8 +114,29 @@ fn plan_pr(
     Ok((plan, warnings))
 }
 
+/// Plan base..head as a push; return plan plus warnings.
+pub(crate) fn plan_push(
+    root: &Path,
+    base: Option<&str>,
+    head: &str,
+) -> Result<(Plan, Vec<String>), Box<dyn std::error::Error>> {
+    let request = serde_json::json!({
+        "schema": 1,
+        "run_key": "local",
+        "base": base,
+        "head": head,
+        "event": "push",
+        "root": root.display().to_string(),
+    });
+    let response = plan_internal(&request.to_string())?;
+    let value: serde_json::Value = serde_json::from_str(&response)?;
+    let plan: Plan = serde_json::from_value(value["plan"].clone())?;
+    let warnings: Vec<String> = serde_json::from_value(value["plan"]["warnings"].clone())?;
+    Ok((plan, warnings))
+}
+
 /// True when both members have selected tasks.
-fn selects_both(plan: &Plan) -> bool {
+pub(crate) fn selects_both(plan: &Plan) -> bool {
     plan.task_ids.iter().any(|id| id.contains("alpha"))
         && plan.task_ids.iter().any(|id| id.contains("beta"))
 }
@@ -391,5 +412,6 @@ fn missing_or_bad_base_tags_comparison_unavailable() -> TestResult {
             .any(|warning| warning.contains("comparison_unavailable")),
         "tag: {warnings:?}"
     );
+    assert_all_changed(&plan);
     Ok(())
 }

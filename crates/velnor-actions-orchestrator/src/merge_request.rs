@@ -26,7 +26,7 @@ mod needs_channel;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{canonical_json_str, validate_artifact_id};
+use velnor_actions_contract::canonical_json_str;
 
 use self::needs_channel::{NEEDS_ENV, parse_needs};
 use crate::OrchestratorError;

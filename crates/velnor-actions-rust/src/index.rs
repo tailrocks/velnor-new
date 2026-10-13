@@ -4,6 +4,8 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use crate::index_glob::{is_excluded, validate_pattern};
+
 /// Built-in exclusions applied before every detector runs.
 pub const BUILTIN_EXCLUSIONS: &[&str] = &[".git/**"];
 
@@ -12,6 +14,7 @@ pub const BUILTIN_EXCLUSIONS: &[&str] = &[".git/**"];
 pub struct FileIndex {
     root: PathBuf,
     files: Vec<String>,
+    skipped_non_utf8: bool,
 }
 
 impl FileIndex {
@@ -43,6 +46,16 @@ impl FileIndex {
     #[must_use]
     pub fn contains(&self, relative: &str) -> bool {
         self.files.iter().any(|file| file == relative)
+    }
+
+    /// Whether any entry was skipped for a non-UTF-8 name.
+    ///
+    /// Skipped entries never abort indexing: detectors match ASCII
+    /// manifest names no undecodable entry could equal, and the
+    /// orchestrator broadens explicitly on this flag.
+    #[must_use]
+    pub fn skipped_non_utf8(&self) -> bool {
+        self.skipped_non_utf8
     }
 }
 
@@ -87,7 +100,9 @@ pub fn build_index(root: &Path, exclusions: &[String]) -> Result<FileIndex, Inde
 /// Build the sorted index of `root` by walking the filesystem.
 ///
 /// Non-git contexts only. Applies [`BUILTIN_EXCLUSIONS`] plus `exclusions`;
-/// refuses symlinks that escape `root` or loop.
+/// refuses symlinks that escape `root` or loop. Entries with non-UTF-8
+/// names are skipped and reported via [`FileIndex::skipped_non_utf8`],
+/// never an error.
 ///
 /// # Errors
 ///
@@ -102,12 +117,21 @@ pub fn build_index_walk(root: &Path, exclusions: &[String]) -> Result<FileIndex,
     let mut files = BTreeSet::new();
     let mut stack = vec![canonical.clone()];
     let mut visited = BTreeSet::from([canonical.clone()]);
+    let mut skipped_non_utf8 = false;
     while let Some(dir) = stack.pop() {
-        walk_dir(&dir, &canonical, &mut stack, &mut visited, &mut files)?;
+        walk_dir(
+            &dir,
+            &canonical,
+            &mut stack,
+            &mut visited,
+            &mut files,
+            &mut skipped_non_utf8,
+        )?;
     }
     Ok(FileIndex {
         root: canonical,
         files: apply_exclusions(files, exclusions),
+        skipped_non_utf8,
     })
 }
 
@@ -138,6 +162,7 @@ pub fn build_index_from_list(
     Ok(FileIndex {
         root: canonical,
         files: apply_exclusions(files.iter().cloned().collect(), exclusions),
+        skipped_non_utf8: false,
     })
 }
 
@@ -173,6 +198,7 @@ fn walk_dir(
     stack: &mut Vec<PathBuf>,
     visited: &mut BTreeSet<PathBuf>,
     files: &mut BTreeSet<String>,
+    skipped_non_utf8: &mut bool,
 ) -> Result<(), IndexError> {
     let entries = std::fs::read_dir(dir).map_err(|err| IndexError::ReadFailed(err.to_string()))?;
     for entry in entries {
@@ -182,13 +208,13 @@ fn walk_dir(
             .file_type()
             .map_err(|err| IndexError::ReadFailed(err.to_string()))?;
         if kind.is_symlink() {
-            walk_link(&path, root, stack, visited, files)?;
+            walk_link(&path, root, stack, visited, files, skipped_non_utf8)?;
         } else if kind.is_dir() {
             if visited.insert(path.clone()) {
                 stack.push(path);
             }
         } else if kind.is_file() {
-            files.insert(relative_posix(root, &path)?);
+            record_file(root, &path, files, skipped_non_utf8)?;
         }
     }
     Ok(())
@@ -201,6 +227,7 @@ fn walk_link(
     stack: &mut Vec<PathBuf>,
     visited: &mut BTreeSet<PathBuf>,
     files: &mut BTreeSet<String>,
+    skipped_non_utf8: &mut bool,
 ) -> Result<(), IndexError> {
     let target = link
         .canonicalize()
@@ -216,7 +243,25 @@ fn walk_link(
             stack.push(target);
         }
     } else if target.is_file() {
-        files.insert(relative_posix(root, link)?);
+        record_file(root, link, files, skipped_non_utf8)?;
+    }
+    Ok(())
+}
+
+/// Record one file, skipping non-UTF-8 names with an explicit flag.
+fn record_file(
+    root: &Path,
+    path: &Path,
+    files: &mut BTreeSet<String>,
+    skipped_non_utf8: &mut bool,
+) -> Result<(), IndexError> {
+    match relative_posix(root, path)? {
+        Some(relative) => {
+            files.insert(relative);
+        }
+        None => {
+            *skipped_non_utf8 = true;
+        }
     }
     Ok(())
 }
@@ -227,19 +272,21 @@ fn is_ancestor_or_self(target: &Path, link: &Path) -> bool {
 }
 
 /// Render `path` as a repository-relative POSIX path.
-fn relative_posix(root: &Path, path: &Path) -> Result<String, IndexError> {
+///
+/// Returns `None` for non-UTF-8 names so the caller skips explicitly
+/// instead of aborting the walk.
+fn relative_posix(root: &Path, path: &Path) -> Result<Option<String>, IndexError> {
     let rel = path
         .strip_prefix(root)
         .map_err(|_| IndexError::SymlinkEscape(show(path)))?;
     let mut parts = Vec::new();
     for component in rel.components() {
-        let text = component
-            .as_os_str()
-            .to_str()
-            .ok_or_else(|| IndexError::ReadFailed(format!("non_utf8_name: {}", show(path))))?;
+        let Some(text) = component.as_os_str().to_str() else {
+            return Ok(None);
+        };
         parts.push(text);
     }
-    Ok(parts.join("/"))
+    Ok(Some(parts.join("/")))
 }
 
 /// Lossy display form for diagnostics.
@@ -247,153 +294,39 @@ fn show(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
-/// Validate one exclusion glob (relative, no traversal, well-formed).
-///
-/// # Errors
-///
-/// Rejects bad patterns with [`IndexError::MalformedPattern`].
-pub fn validate_pattern(pattern: &str) -> Result<(), IndexError> {
-    let malformed = pattern.is_empty()
-        || pattern.starts_with('/')
-        || pattern.contains('\\')
-        || pattern.split('/').any(|segment| segment == "..")
-        || !pattern.bytes().all(is_glob_byte);
-    if malformed {
-        return Err(IndexError::MalformedPattern(pattern.to_owned()));
-    }
-    Ok(())
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-/// Bytes allowed in exclusion globs.
-fn is_glob_byte(byte: u8) -> bool {
-    byte.is_ascii_alphanumeric() || b"/.-_*?[]{}!+@".contains(&byte)
-}
-
-/// Whether `path` or an ancestor directory matches any pattern.
-#[must_use]
-pub fn is_excluded(path: &str, patterns: &[&str]) -> bool {
-    patterns
-        .iter()
-        .any(|pattern| matches_path_or_ancestor(pattern, path))
-}
-
-/// Match `path` plus each ancestor prefix against one pattern.
-fn matches_path_or_ancestor(pattern: &str, path: &str) -> bool {
-    if matches_glob(pattern, path) {
-        return true;
+    /// Decodable names render as relative POSIX paths.
+    #[test]
+    fn relative_posix_renders_decodable() {
+        let root = Path::new("/repo");
+        let rendered =
+            relative_posix(root, &root.join("alpha/src/lib.rs")).expect("decodable renders");
+        assert_eq!(rendered.as_deref(), Some("alpha/src/lib.rs"));
     }
-    let mut prefix = path;
-    while let Some((parent, _)) = prefix.rsplit_once('/') {
-        if matches_glob(pattern, parent) {
-            return true;
-        }
-        prefix = parent;
-    }
-    false
-}
 
-/// Match a repository-relative path against one glob (`**`, `*`, `?`, `[...]`, `{a,b}`).
-#[must_use]
-pub fn matches_glob(pattern: &str, path: &str) -> bool {
-    let segments: Vec<&str> = path.split('/').collect();
-    expand_braces(pattern)
-        .iter()
-        .any(|expanded| match_segments(&expanded.split('/').collect::<Vec<_>>(), &segments))
-}
+    /// Non-UTF-8 names skip explicitly instead of erroring.
+    #[test]
+    #[cfg(unix)]
+    fn relative_posix_skips_non_utf8() {
+        use std::os::unix::ffi::OsStrExt;
+        let root = Path::new("/repo");
+        let raw = b"/repo/alpha/src/\xffinvalid.rs";
+        let path = Path::new(std::ffi::OsStr::from_bytes(raw));
+        let rendered = relative_posix(root, path).expect("skip is not an error");
+        assert_eq!(rendered, None);
+    }
 
-/// Expand the first top-level `{a,b}` group; without braces returns `pattern`.
-fn expand_braces(pattern: &str) -> Vec<String> {
-    let Some(open) = pattern.find('{') else {
-        return vec![pattern.to_owned()];
-    };
-    let Some(close) = pattern[open..].find('}') else {
-        return vec![pattern.to_owned()];
-    };
-    let close = open + close;
-    let inner = &pattern[open + 1..close];
-    if !inner.contains(',') {
-        return vec![pattern.to_owned()];
+    /// Paths outside the root still fail closed.
+    #[test]
+    fn relative_posix_rejects_escape() {
+        let root = Path::new("/repo");
+        let err = relative_posix(root, Path::new("/other/lib.rs")).expect_err("escape fails");
+        assert!(
+            matches!(err, IndexError::SymlinkEscape(_)),
+            "fails closed: {err}"
+        );
     }
-    let (head, _) = pattern.split_at(open);
-    let tail = &pattern[close + 1..];
-    let mut out = Vec::new();
-    for option in inner.split(',') {
-        out.extend(expand_braces(&format!("{head}{option}{tail}")));
-    }
-    out
-}
-
-/// Match pattern segments against path segments; `**` spans segments.
-fn match_segments(pattern: &[&str], path: &[&str]) -> bool {
-    match pattern.split_first() {
-        None => path.is_empty(),
-        Some((head, tail)) if *head == "**" => {
-            (0..=path.len()).any(|skip| match_segments(tail, &path[skip..]))
-        }
-        Some((head, tail)) => path
-            .split_first()
-            .is_some_and(|(name, rest)| match_segment(head, name) && match_segments(tail, rest)),
-    }
-}
-
-/// Match one segment with `*`, `?`, and `[...]` classes.
-fn match_segment(pattern: &str, name: &str) -> bool {
-    match_chars(
-        &pattern.chars().collect::<Vec<_>>(),
-        &name.chars().collect::<Vec<_>>(),
-    )
-}
-
-/// Match character patterns against character text.
-fn match_chars(pattern: &[char], text: &[char]) -> bool {
-    match pattern.split_first() {
-        None => text.is_empty(),
-        Some(('*', rest)) => (0..=text.len()).any(|skip| match_chars(rest, &text[skip..])),
-        Some(('?', rest)) => text
-            .split_first()
-            .is_some_and(|(_, tail)| match_chars(rest, tail)),
-        Some(('[', _)) => match_class(pattern, text),
-        Some((literal, rest)) => text
-            .split_first()
-            .is_some_and(|(head, tail)| head == literal && match_chars(rest, tail)),
-    }
-}
-
-/// Match a leading `[...]` class against the first text character.
-fn match_class(pattern: &[char], text: &[char]) -> bool {
-    let Some(head) = text.first() else {
-        return false;
-    };
-    let Some(end) = pattern.iter().position(|char| *char == ']') else {
-        return false;
-    };
-    if end < 2 {
-        return false;
-    }
-    let (mut items, rest) = (&pattern[1..end], &pattern[end + 1..]);
-    let mut negated = false;
-    if items.first() == Some(&'!') {
-        negated = true;
-        items = &items[1..];
-    }
-    (class_hit(items, *head) != negated) && match_chars(rest, &text[1..])
-}
-
-/// Whether `target` is listed by class `items`, honoring `a-z` ranges.
-fn class_hit(items: &[char], target: char) -> bool {
-    let mut index = 0;
-    while index < items.len() {
-        if index + 2 < items.len() && items[index + 1] == '-' {
-            if items[index] <= target && target <= items[index + 2] {
-                return true;
-            }
-            index += 3;
-        } else {
-            if items[index] == target {
-                return true;
-            }
-            index += 1;
-        }
-    }
-    false
 }

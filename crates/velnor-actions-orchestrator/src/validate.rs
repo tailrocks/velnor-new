@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn actionlint_argv_has_single_config_file_first() {
-        let workflows = vec![".github/workflows/velnor.yml".to_owned()];
+        let workflows = vec![".github/workflows/ci.yml".to_owned()];
         let argv: Vec<String> = actionlint_argv(&workflows)
             .iter()
             .map(|arg| arg.to_string_lossy().into_owned())

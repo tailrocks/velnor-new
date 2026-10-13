@@ -262,12 +262,17 @@ fn cache_action_transport_never_carries_mbx() {
 #[test]
 fn mbx_transport_stays_with_mr_boxington_action() {
     let mbx = uses("jdx/mr-boxington-action");
-    let step = mbx_objects_step(&mbx, false).expect("objects step");
+    let pin = velnor_actions_mise::MR_BOXINGTON_VERSION;
+    let step = mbx_objects_step(&mbx, false, pin).expect("objects step");
     assert!(
         format!("{:?}", step.kind).contains("jdx/mr-boxington-action"),
         "mbx bytes move only through the external action"
     );
-    assert!(mbx_objects_step(&mbx, true).is_err());
+    assert!(
+        format!("{:?}", step.kind).contains(pin),
+        "action installs the catalog pin, never latest"
+    );
+    assert!(mbx_objects_step(&mbx, true, pin).is_err());
     let other = uses("actions/cache/restore");
-    assert!(mbx_objects_step(&other, false).is_err());
+    assert!(mbx_objects_step(&other, false, pin).is_err());
 }

@@ -11,8 +11,8 @@ use velnor_actions_orchestrator::{
 };
 
 use crate::impl_common::{
-    TestResult, config_with_branch, fixture_manifest_json, make_repo, plan_for_source_change,
-    snapshot,
+    TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
+    plan_for_source_change, snapshot,
 };
 
 /// Preview-generate `prep` into `dir`.
@@ -71,7 +71,7 @@ fn plan_and_workflow_ids_agree() -> TestResult {
     let report = preview_into(&prep, parent.path().join("preview"))?;
     assert_eq!(
         report.files_written,
-        [".github/actionlint.yaml", ".github/workflows/velnor.yml"]
+        [".github/actionlint.yaml", ".github/workflows/ci.yml"]
     );
     Ok(())
 }
@@ -137,10 +137,10 @@ fn plan_json_matches_github_outputs() -> TestResult {
 }
 
 #[test]
-fn malformed_toolfiles_recommend_without_writes() -> TestResult {
+fn malformed_toolchain_recommends_without_writes() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
-    fs::write(root.join("mise.toml"), "[tools\nrust = \n")?;
+    fs::write(root.join("mise.toml"), "[tools]\n")?;
     fs::write(root.join("rust-toolchain.toml"), "[[[\n")?;
     let before = snapshot(root)?;
     let prep = prepare(root)?;
@@ -148,7 +148,6 @@ fn malformed_toolfiles_recommend_without_writes() -> TestResult {
     let report = preview_into(&prep, parent.path().join("preview"))?;
     let text = report.recommendations.join("\n");
     assert!(text.contains("tooling_input_invalid"), "{text}");
-    assert!(text.contains("mise.toml"), "{text}");
     assert!(text.contains("rust-toolchain.toml"), "{text}");
     assert!(text.contains("continues with its pinned tools"), "{text}");
     assert_eq!(report.files_written.len(), 2);
@@ -223,10 +222,13 @@ fn in_place_generate_preserves_config() -> TestResult {
 #[test]
 fn authority_order_gates_pipeline() -> TestResult {
     let bad = make_repo("schema = \n")?;
-    let request = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": "abc", "event": "push", "root": bad.path().display().to_string()});
+    git(&["add", "."], bad.path())?;
+    git(&["commit", "-m", "bad"], bad.path())?;
+    let head = git_line(&["rev-parse", "HEAD"], bad.path())?;
+    let request = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": head, "event": "push", "root": bad.path().display().to_string()});
     let err = plan_internal(&request.to_string()).expect_err("bad config gates first");
     assert!(err.to_string().contains("config.toml"), "{err}");
-    let missing = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": "abc", "event": "push", "root": "/nonexistent-velnor-root-xyz"});
+    let missing = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": head, "event": "push", "root": "/nonexistent-velnor-root-xyz"});
     assert!(
         plan_internal(&missing.to_string()).is_err(),
         "root gates before config"
@@ -251,8 +253,8 @@ fn lint_freshness_and_advisory_run_every_generate() -> TestResult {
     let parent = TempDir::new()?;
     let preview = parent.path().join("preview");
     let report = preview_into(&prep, preview.clone())?;
-    let yaml = fs::read_to_string(preview.join(".github/workflows/velnor.yml"))?;
-    assert!(yaml.contains("velnor-workflow-lint"), "lint job");
+    let yaml = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
+    assert!(yaml.contains("actionlint"), "lint job");
     assert!(yaml.contains(CHECK_GENERATED_NAME), "freshness gate");
     assert!(
         !report.recommendations.is_empty(),
@@ -262,20 +264,20 @@ fn lint_freshness_and_advisory_run_every_generate() -> TestResult {
 }
 
 #[test]
-fn policy_commands_stay_velnor_only() -> TestResult {
+fn validator_commands_stay_velnor_only() -> TestResult {
     let velnor_config = "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n";
     let velnor = make_velnor_repo(velnor_config)?;
     let prep = prepare(velnor.path())?;
     let parent = TempDir::new()?;
     let preview = parent.path().join("preview");
     preview_into(&prep, preview.clone())?;
-    let yaml = fs::read_to_string(preview.join(".github/workflows/velnor.yml"))?;
+    let yaml = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
     assert!(yaml.contains("cargo deny"), "velnor policy job");
     let consumer = make_repo(config_with_branch())?;
     let prep = prepare(consumer.path())?;
     let preview = parent.path().join("consumer");
     preview_into(&prep, preview.clone())?;
-    let yaml = fs::read_to_string(preview.join(".github/workflows/velnor.yml"))?;
+    let yaml = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
     assert!(!yaml.contains("cargo deny"), "consumer has no policy job");
     Ok(())
 }
@@ -289,14 +291,14 @@ fn workflow_steps_stay_sequential() -> TestResult {
     let second = parent.path().join("second");
     preview_into(&prep, first.clone())?;
     preview_into(&prep, second.clone())?;
-    for rel in [".github/actionlint.yaml", ".github/workflows/velnor.yml"] {
+    for rel in [".github/actionlint.yaml", ".github/workflows/ci.yml"] {
         assert_eq!(
             fs::read(first.join(rel))?,
             fs::read(second.join(rel))?,
             "{rel} deterministic"
         );
     }
-    let yaml = fs::read_to_string(first.join(".github/workflows/velnor.yml"))?;
+    let yaml = fs::read_to_string(first.join(".github/workflows/ci.yml"))?;
     for line in yaml.lines() {
         if line.contains("run:") {
             assert!(!has_bare_ampersand(line), "no background step: {line}");
@@ -321,15 +323,15 @@ fn committed_workflow_carries_generator_gates() -> TestResult {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../..")
         .canonicalize()?;
-    for rel in [".github/workflows/velnor.yml", ".github/actionlint.yaml"] {
+    for rel in [".github/workflows/ci.yml", ".github/actionlint.yaml"] {
         let text = fs::read_to_string(root.join(rel))?;
         assert!(
             text.starts_with("# Generated by Velnor Actions "),
             "{rel} carries the generator marker"
         );
     }
-    let yaml = fs::read_to_string(root.join(".github/workflows/velnor.yml"))?;
-    assert!(yaml.contains("velnor-workflow-lint"), "committed lint job");
+    let yaml = fs::read_to_string(root.join(".github/workflows/ci.yml"))?;
+    assert!(yaml.contains("actionlint"), "committed lint job");
     assert!(
         yaml.contains(CHECK_GENERATED_NAME),
         "committed freshness gate"

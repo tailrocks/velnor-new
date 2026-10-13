@@ -3,14 +3,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use velnor_actions_contract::{
-    ContractError, RustConfiguration, RustStackConfig, VelnorConfig, task_id_for_stack,
-};
+use velnor_actions_contract::{ContractError, RustStackConfig, VelnorConfig, task_id_for_stack};
 use velnor_actions_mise::{ArchivePlan, NextestArchive, NextestDriver, SortedInventory};
 use velnor_actions_rust::{
-    DeriveInputs, DetectionStatus, FileIndex, Recommendation, RustExecutionProfile, TaskGroup,
-    WorkspaceRecord, apply_stack_ignores, check_candidate_outcomes, check_duplicates,
-    dedupe_workspaces, derive_task_groups, derive_workspace_fmt_if_explicit,
+    DetectionStatus, FileIndex, Recommendation, RustExecutionProfile, TaskGroup, WorkspaceRecord,
+    apply_stack_ignores, check_candidate_outcomes, check_duplicates, dedupe_workspaces,
     expand_shards_for_group, to_detected_projects,
 };
 
@@ -48,6 +45,8 @@ pub struct Discovery {
     pub workspaces: Vec<PlannedWorkspace>,
     /// Derived task groups sorted by task ID.
     pub task_groups: Vec<TaskGroup>,
+    /// Per-crate feature fallbacks in derivation order.
+    pub feature_fallbacks: Vec<crate::derive_groups::FeatureFallback>,
     /// Tool-input checks: presence, parse, values, digests.
     pub tool_checks: Vec<ToolInputCheck>,
     /// Barrier-separated Clippy memory schedule.
@@ -56,6 +55,11 @@ pub struct Discovery {
     pub recommendations: Vec<String>,
     /// Debug-only release-manifest text; always `None` in release builds.
     pub consumer_manifest_json: Option<String>,
+    /// Whether index enumeration skipped any non-UTF-8 name.
+    ///
+    /// Selection broadens explicitly on this: a skipped name cannot be
+    /// attributed to an owning package.
+    pub skipped_non_utf8: bool,
 }
 
 /// Run file index, detection, inventory, profiles, and task derivation.
@@ -65,7 +69,7 @@ pub struct Discovery {
 /// Returns discovery, detection, inventory, profile, preparation, or
 /// contract errors when any stage fails.
 pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, OrchestratorError> {
-    let index = build_file_index(root, &config.discovery.exclude)?;
+    let (index, skipped_non_utf8) = build_file_index(root, &config.discovery.exclude)?;
     let mut candidates = Vec::new();
     let mut previous = "";
     for (stack_id, schema, detect) in DETECTORS {
@@ -87,7 +91,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     })?;
     let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
     qualify_workspaces(root, &workspaces)?;
-    let task_groups = derive_all(config, &index, &workspaces)?;
+    let (task_groups, fallbacks) = derive_all(config, &index, &workspaces)?;
     let tool_checks = check_tool_inputs(root);
     let clippy_memory = clippy_memory_groups(&task_groups);
     let recommendations = collect_recommendations(&index, &workspaces, &tool_checks);
@@ -95,10 +99,12 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         statuses,
         workspaces,
         task_groups,
+        feature_fallbacks: fallbacks,
         tool_checks,
         clippy_memory,
         recommendations,
         consumer_manifest_json: debug_manifest_fixture(root),
+        skipped_non_utf8,
     })
 }
 
@@ -212,82 +218,49 @@ fn plan_workspaces(
     Ok(planned)
 }
 
-/// Derive every task group, expanding test shards.
+/// Derive every task group plus feature fallbacks, expanding test shards.
 fn derive_all(
     config: &VelnorConfig,
     index: &FileIndex,
     workspaces: &[PlannedWorkspace],
-) -> Result<Vec<TaskGroup>, OrchestratorError> {
+) -> Result<(Vec<TaskGroup>, Vec<crate::derive_groups::FeatureFallback>), OrchestratorError> {
     let rust = config
         .stacks
         .rust
         .clone()
         .unwrap_or_else(RustStackConfig::default_config);
     let explicit_fmt = index.contains("rustfmt.toml") || index.contains(".rustfmt.toml");
+    let union = crate::derive_groups::declared_union(workspaces);
     let mut groups = Vec::new();
+    let mut fallbacks = Vec::new();
     let mut archives = ArchivePlan::new();
     for workspace in workspaces {
         for config_name in &rust.configurations {
-            groups.extend(derive_for_config(
+            let (derived, narrowed) = crate::derive_groups::derive_for_config(
                 config,
                 &workspace.record,
                 &workspace.profile,
                 config_name,
                 explicit_fmt,
                 &mut archives,
-            )?);
+                &union,
+            )?;
+            groups.extend(derived);
+            fallbacks.extend(narrowed);
         }
     }
     for group in &groups {
         velnor_actions_contract::validate_task_id(&group.task_id)?;
     }
     groups.sort_by(|left, right| left.task_id.cmp(&right.task_id));
-    Ok(groups)
-}
-
-/// Derive task groups for one workspace and configuration.
-fn derive_for_config(
-    config: &VelnorConfig,
-    record: &WorkspaceRecord,
-    profile: &RustExecutionProfile,
-    rust_config: &RustConfiguration,
-    explicit_fmt: bool,
-    archives: &mut ArchivePlan,
-) -> Result<Vec<TaskGroup>, OrchestratorError> {
-    let mut groups = Vec::new();
-    for package in &record.packages {
-        if !package.in_workspace || package.external {
-            continue;
-        }
-        let inputs = DeriveInputs {
-            package,
-            profile,
-            configuration: &rust_config.name,
-            features: &rust_config.features,
-            target: &rust_config.target,
-            explicit_fmt,
-        };
-        for group in derive_task_groups(&inputs)? {
-            groups.extend(expand_shards(config, &group, archives)?);
-        }
-    }
-    let manifest = workspace_manifest(&record.workspace_root);
-    if let Some(fmt) = derive_workspace_fmt_if_explicit(
-        &manifest,
-        profile,
-        &rust_config.name,
-        &rust_config.target,
-        explicit_fmt,
-    )? {
-        groups.push(fmt);
-    }
-    Ok(groups)
+    Ok((groups, fallbacks))
 }
 
 /// Expand test groups into per-shard groups when sharding exceeds one.
-fn expand_shards(
+pub(crate) fn expand_shards(
     config: &VelnorConfig,
     group: &TaskGroup,
+    profile: &RustExecutionProfile,
     archives: &mut ArchivePlan,
 ) -> Result<Vec<TaskGroup>, ContractError> {
     let shards = shard_count(config, group);
@@ -299,7 +272,7 @@ fn expand_shards(
     )? {
         return Ok(vec![group.clone()]);
     }
-    plan_shard_archive(group, archives);
+    plan_shard_archive(group, profile, archives);
     let mut expanded = Vec::new();
     for shard in 1..=shards {
         let task_id = task_id_for_stack(
@@ -320,8 +293,12 @@ fn expand_shards(
     Ok(expanded)
 }
 
-/// Record one archive per package/config; duplicates are already planned.
-fn plan_shard_archive(group: &TaskGroup, archives: &mut ArchivePlan) {
+/// Record one archive per package/config under the resolved profile.
+fn plan_shard_archive(
+    group: &TaskGroup,
+    profile: &RustExecutionProfile,
+    archives: &mut ArchivePlan,
+) {
     let driver = match group.compile_driver.as_str() {
         "cargo" => NextestDriver::Cargo,
         "mbx" => NextestDriver::Mbx,
@@ -332,8 +309,13 @@ fn plan_shard_archive(group: &TaskGroup, archives: &mut ArchivePlan) {
     } else {
         Some(group.target.as_str())
     };
-    let Ok(archive) = NextestArchive::new(driver, &group.package_name, &group.features, target)
-    else {
+    let Ok(archive) = NextestArchive::with_profile(
+        driver,
+        &group.package_name,
+        &group.features,
+        target,
+        profile.nextest_profile.as_str(),
+    ) else {
         return;
     };
     if archives.add(&archive).is_err() {

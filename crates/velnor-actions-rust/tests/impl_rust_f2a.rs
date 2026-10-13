@@ -4,8 +4,8 @@ use std::collections::BTreeSet;
 use velnor_actions_rust::tasks::{ExtensionInputs, RustTaskIdentityExtension, parse_rerun_changed};
 use velnor_actions_rust::{
     CompileDriver, DepKind, DeriveInputs, Evidence, EvidenceStrength, GroupExtensionInputs,
-    LocalEdge, PackageRecord, ProfileSource, RustExecutionProfile, TargetRecord, TaskKind,
-    TestRunner, adapter_entry_metadata, derive_task_groups, evidence_scan_excluded,
+    LocalEdge, NextestProfile, PackageRecord, ProfileSource, RustExecutionProfile, TargetRecord,
+    TaskKind, TestRunner, adapter_entry_metadata, derive_task_groups, evidence_scan_excluded,
     expand_shards_for_group, reverse_closure,
 };
 
@@ -46,6 +46,8 @@ fn cargo_profile() -> RustExecutionProfile {
         evidence: Vec::new(),
         driver_source: ProfileSource::Detected,
         runner_source: ProfileSource::Detected,
+        nextest_profile: NextestProfile::Default,
+        nextest_config: None,
     }
 }
 
@@ -57,6 +59,8 @@ fn nextest_profile() -> RustExecutionProfile {
         evidence: Vec::new(),
         driver_source: ProfileSource::Detected,
         runner_source: ProfileSource::Detected,
+        nextest_profile: NextestProfile::Ci,
+        nextest_config: Some(".config/nextest.toml".to_owned()),
     }
 }
 

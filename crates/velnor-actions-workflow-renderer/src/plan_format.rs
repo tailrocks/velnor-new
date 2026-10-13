@@ -1,6 +1,6 @@
 //! Plan-job `Format` step (workflow contract §3 plan step 5).
 //!
-//! Formatting runs in `velnor-plan` per selected stack config through
+//! Formatting runs in `plan` per selected stack config through
 //! pinned Mise; the fixed argv arrives from the orchestrator's Mise
 //! vectors. The renderer validates the Mise shape and anchors the step
 //! between helper staging and the freshness/plan closure.

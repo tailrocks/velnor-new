@@ -4,17 +4,17 @@
 //! verify (bootstrap §4.1 pre-seed is trust-on-review). Pre-seed mode makes
 //! that explicit: the plan job builds the helper ONCE from the checked-out
 //! source with the fixed §4 candidate vector, records the source commit in
-//! a manifest, and shares the binary via an exactly-named artifact. Task
+//! a manifest, and shares the binary via an exactly-named artifact. Crate
 //! and final jobs download that artifact; nothing rebuilds it (Gap A).
 //! Every pre-seed step name carries the trust-on-review marker so the
 //! weaker provenance is visible in CI logs, not silently implied.
 
-use velnor_actions_contract::{Job, Step};
+use velnor_actions_contract::{CRATE_JOB_ID_PREFIX, Job, Step};
 
 use crate::{
     RenderError,
     artifact_paths::{PRESEED_OUTPUT_DIR_EXPR, PRESEED_STAGE_DIR_EXPR},
-    render::{FINAL_JOB_ID, PLAN_JOB_ID, TASK_JOB_ID},
+    render::{FINAL_JOB_ID, PLAN_JOB_ID},
     steps,
 };
 
@@ -47,6 +47,8 @@ pub const PRESEED_MANIFEST_NAME: &str = "Write helper manifest (pre-seed trust-o
 pub const PRESEED_UPLOAD_NAME: &str = "Upload helper (pre-seed trust-on-review)";
 /// Display name of the pre-seed helper download step.
 pub const PRESEED_DOWNLOAD_NAME: &str = "Download helper (pre-seed trust-on-review)";
+/// Display name of the pre-seed manifest verification step.
+pub const PRESEED_VERIFY_MANIFEST_NAME: &str = "Verify helper manifest (pre-seed trust-on-review)";
 /// Display name of the pre-seed helper staging step.
 pub const PRESEED_STAGE_NAME: &str = "Stage helper (pre-seed trust-on-review)";
 
@@ -230,6 +232,46 @@ pub fn preseed_download_step() -> Result<Step, RenderError> {
     )
 }
 
+/// Fixed script verifying the downloaded manifest before any staging.
+///
+/// Same shape as the candidate verification: schema 1, 40-hex commit
+/// equal to the checked-out `$GITHUB_SHA`, exact expected target,
+/// nonempty toolchain, 64-hex sha256 equal to the downloaded binary's
+/// recomputed digest. Existence-only on the binary: artifact downloads
+/// do not preserve the exec bit, so `test -x` here would fail closed on
+/// every legitimate payload; executability is established by the staging
+/// copy's `chmod +x` below. A tampered staged payload fails closed here,
+/// so the staging copy below never runs on attacker bytes.
+#[must_use]
+pub fn preseed_manifest_verify_script(target: &str) -> String {
+    format!(
+        "m=\"{PRESEED_STAGE_DIR}/{PRESEED_MANIFEST_FILE}\" && b=\"{PRESEED_STAGE_DIR}/velnor-actions\" && test -f \"$m\" && test -f \"$b\" && read line rest < \"$m\" || [ -n \"$line\" ] && v=${{line#*\\\"schema\\\":}} && v=${{v%%,*}} && [ \"$v\" = 1 ] && c=${{line#*\\\"commit\\\":\\\"}} && c=${{c%%\\\"*}} && [ \"${{#c}}\" = 40 ] && [ \"$c\" = \"$GITHUB_SHA\" ] && t=${{line#*\\\"target\\\":\\\"}} && t=${{t%%\\\"*}} && [ \"$t\" = \"{target}\" ] && tc=${{line#*\\\"toolchain\\\":\\\"}} && tc=${{tc%%\\\"*}} && [ -n \"$tc\" ] && s=${{line#*\\\"sha256\\\":\\\"}} && s=${{s%%\\\"*}} && [ \"${{#s}}\" = 64 ] && sha256sum \"$b\" > \"{PRESEED_STAGE_DIR}/got.txt\" && read got rest < \"{PRESEED_STAGE_DIR}/got.txt\" && [ \"$got\" = \"$s\" ]"
+    )
+}
+
+/// Manifest verification step; must precede every downloaded staging.
+///
+/// The expected target is the literal triple the plan job builds for
+/// (never the manifest's own claim).
+/// # Errors
+pub fn preseed_manifest_verify_step(target: &str) -> Result<Step, RenderError> {
+    debug_assert!(PRESEED_VERIFY_MANIFEST_NAME.ends_with(TRUST_MARK));
+    if !velnor_actions_contract::is_supported_target(target) {
+        return Err(RenderError::BadCommand(format!(
+            "preseed_unsupported_target:{target}"
+        )));
+    }
+    steps::shell_step(
+        PRESEED_VERIFY_MANIFEST_NAME,
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            preseed_manifest_verify_script(target),
+        ],
+        std::collections::BTreeMap::new(),
+    )
+}
+
 /// Pre-seed staging step: copy the helper to the staged binary path.
 ///
 /// The staged path is the same fixed path internal steps invoke, so plan,
@@ -271,9 +313,10 @@ fn validate_staged_path(staged: &str) -> Result<(), RenderError> {
 /// Pre-seed closure: single plan build plus artifact sharing (Gap A).
 ///
 /// In pre-seed mode the plan job must build, upload, and stage the helper
-/// while every present task/final job downloads and stages it; anything
-/// less would rebuild per job or invoke an unstaged helper. Outside
-/// pre-seed mode there is nothing to close over.
+/// while every present task/final job downloads, digest-verifies, and
+/// stages it in that order; anything less would rebuild per job, stage
+/// unverified bytes, or invoke an unstaged helper. Outside pre-seed
+/// mode there is nothing to close over.
 /// # Errors
 pub(crate) fn check_preseed_closure(
     jobs: &std::collections::BTreeMap<String, Job>,
@@ -297,18 +340,30 @@ pub(crate) fn check_preseed_closure(
         }
     }
     for (id, job) in jobs {
-        if id != TASK_JOB_ID && id != FINAL_JOB_ID {
+        if id != FINAL_JOB_ID && !id.starts_with(CRATE_JOB_ID_PREFIX) {
             continue;
         }
-        for (name, kind) in [
-            (PRESEED_DOWNLOAD_NAME, "download"),
-            (PRESEED_STAGE_NAME, "stage"),
-        ] {
-            if !job.steps.iter().any(|step| step.name == name) {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "preseed_incomplete:{id}:{kind}"
-                )));
-            }
+        let position = |name: &str| job.steps.iter().position(|step| step.name == name);
+        let (Some(download_at), Some(verify_at), Some(stage_at)) = (
+            position(PRESEED_DOWNLOAD_NAME),
+            position(PRESEED_VERIFY_MANIFEST_NAME),
+            position(PRESEED_STAGE_NAME),
+        ) else {
+            let kind = if position(PRESEED_DOWNLOAD_NAME).is_none() {
+                "download"
+            } else if position(PRESEED_VERIFY_MANIFEST_NAME).is_none() {
+                "verify"
+            } else {
+                "stage"
+            };
+            return Err(RenderError::InvalidWorkflow(format!(
+                "preseed_incomplete:{id}:{kind}"
+            )));
+        };
+        if !(download_at < verify_at && verify_at < stage_at) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "preseed_misordered:{id}"
+            )));
         }
     }
     Ok(())

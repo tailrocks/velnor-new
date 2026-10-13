@@ -214,32 +214,26 @@ fn second_parent(root: &Path) -> Option<String> {
 
 /// Files changed between base and head via the allowlisted `diff` verb.
 ///
-/// The trailing `--` separates the revision range from paths; a `--` before
-/// the range would misparse the range as a path, so validation above is the
-/// flag-injection defense and the separator is belt and braces.
+/// Validation gates the untrusted range (flag-injection defense); `-z` is
+/// our own trusted constant added after, so output is NUL-delimited with
+/// no C-quoting or trimming. Rename detection stays at its default.
 fn changed_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, String> {
     validate_diff_rev(base, "bad_base")?;
     validate_diff_rev(head, "bad_head")?;
-    let range = format!("{base}...{head}");
-    let args = vec![
+    let mut args = vec![
         OsString::from("--name-only"),
-        OsString::from(range),
+        OsString::from(format!("{base}...{head}")),
         OsString::from("--"),
     ];
     validate_select_diff_args(&args).map_err(|err| err.to_string())?;
+    args.insert(0, OsString::from("-z"));
     let output = GitRequest::diff(args)
         .run_in(root)
         .map_err(|err| err.to_string())?;
     output
         .require_success("git")
         .map_err(|err| err.to_string())?;
-    let text = output.stdout_text("git").map_err(|err| err.to_string())?;
-    Ok(text
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_owned)
-        .collect())
+    split_nul_paths(&output.stdout)
 }
 
 /// Committed change set minus advisory tool files, or `None` to broaden.
@@ -314,7 +308,7 @@ fn local_change_set(root: &Path, warnings: &mut Vec<String>) -> Option<(BTreeSet
     Some((changed, toolfiles))
 }
 
-/// Names from the staged (`--cached`) or unstaged working-tree diff.
+/// Staged (`--cached`) or unstaged names, NUL-delimited like `changed_files`.
 fn tree_diff_names(root: &Path, cached: bool) -> Result<BTreeSet<String>, String> {
     let mut args = vec![OsString::from("--name-only")];
     if cached {
@@ -323,19 +317,14 @@ fn tree_diff_names(root: &Path, cached: bool) -> Result<BTreeSet<String>, String
     args.push(OsString::from("--no-renames"));
     args.push(OsString::from("--"));
     validate_select_diff_args(&args).map_err(|err| err.to_string())?;
+    args.insert(0, OsString::from("-z"));
     let output = GitRequest::diff(args)
         .run_in(root)
         .map_err(|err| err.to_string())?;
     output
         .require_success("git")
         .map_err(|err| err.to_string())?;
-    let text = output.stdout_text("git").map_err(|err| err.to_string())?;
-    Ok(text
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_owned)
-        .collect())
+    split_nul_paths(&output.stdout)
 }
 
 /// Resolve `HEAD` to a SHA for local comparison.
@@ -370,16 +359,7 @@ fn untracked_files(root: &Path) -> Result<BTreeSet<String>, String> {
     output
         .require_success("git")
         .map_err(|err| err.to_string())?;
-    let mut out = BTreeSet::new();
-    for chunk in output
-        .stdout
-        .split(|byte| *byte == 0)
-        .filter(|entry| !entry.is_empty())
-    {
-        let path = String::from_utf8(chunk.to_vec()).map_err(|err| err.to_string())?;
-        out.insert(path);
-    }
-    Ok(out)
+    split_nul_paths(&output.stdout)
 }
 
 /// True for advisory tool files: findings-only, never select or broaden.

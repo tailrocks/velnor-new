@@ -8,11 +8,12 @@ use velnor_actions_mise::restore::{
 };
 
 /// REUSE-5: evidence checks run present/digest/compat/owner/inputs, then
-/// every declared output must be present and verified.
+/// every declared output must be present and verified. Evidence builds
+/// only from real observations via `verify` (no `intact()` shortcut).
 #[test]
 fn restore_verification_orders_evidence_then_outputs() {
-    let intact = RestoreEvidence::intact();
-    assert!(intact.check().is_ok());
+    let verified = RestoreEvidence::verify([true; 5]);
+    assert!(verified.check().is_ok());
     let cases = [
         (RestoreCheck::EntryPresent, MissReason::NO_ENTRY),
         (RestoreCheck::DigestMatches, MissReason::CACHE_CORRUPT),
@@ -24,30 +25,40 @@ fn restore_verification_orders_evidence_then_outputs() {
         (RestoreCheck::InputsMatch, MissReason::INPUT_DIGEST_MISMATCH),
     ];
     for (check, reason) in cases {
-        assert_eq!(intact.fail(check).check(), Err(reason), "evidence order");
+        assert_eq!(verified.fail(check).check(), Err(reason), "evidence order");
     }
+    assert!(
+        RestoreEvidence::verify([false, true, true, true, true])
+            .check()
+            .is_err()
+    );
+    assert!(
+        RestoreEvidence::verify([true, true, false, true, true])
+            .check()
+            .is_err()
+    );
     let bytes = b"output bytes".to_vec();
     let observed = vec![("out.json".to_owned(), bytes.clone(), digest_b3(&bytes))];
     let declared = vec!["out.json".to_owned()];
     assert!(
-        verify_restored_task_result("clippy", intact, &declared, &observed).is_ok(),
-        "intact restore with verified outputs verifies"
+        verify_restored_task_result("clippy", verified, &declared, &observed).is_ok(),
+        "verified restore with verified outputs verifies"
     );
     assert_eq!(
-        verify_restored_task_result("clippy", intact, &declared, &[]),
+        verify_restored_task_result("clippy", verified, &declared, &[]),
         Err(MissReason::TASK_RESULT_INCOMPLETE),
         "missing output is incomplete"
     );
     let tampered = vec![("out.json".to_owned(), b"other".to_vec(), digest_b3(&bytes))];
     assert_eq!(
-        verify_restored_task_result("clippy", intact, &declared, &tampered),
+        verify_restored_task_result("clippy", verified, &declared, &tampered),
         Err(MissReason::TASK_RESULT_INCOMPLETE),
         "mismatched output is incomplete"
     );
     assert_eq!(
         verify_restored_task_result(
             "clippy",
-            intact.fail(RestoreCheck::EntryPresent),
+            verified.fail(RestoreCheck::EntryPresent),
             &declared,
             &observed,
         ),
@@ -250,10 +261,40 @@ fn fallback_maps_every_error_and_executes() {
         .chain(fallback_execution_cases())
         .collect();
     for (error, reason) in &cases {
-        assert_eq!(fallback_for_error(error), *reason, "map {error}");
+        assert_eq!(fallback_for_error(error), Ok(*reason), "map {error}");
     }
     assert_eq!(cases.len(), 24, "every variant mapped");
     let fallback = ReuseFallback::execute_with(MissReason::CACHE_UNAVAILABLE);
     assert_eq!(fallback.reason(), MissReason::CACHE_UNAVAILABLE);
     assert!(fallback.proceeds_to_execute(), "miss never fails");
+}
+
+/// P07-5: a cancelled or hung child never surfaces as a normal miss.
+///
+/// Cancel/timeout propagates as the typed error; only genuine backend
+/// failures (e.g. `noent`) map to `cache_unavailable`.
+#[test]
+fn cancelled_child_never_maps_to_miss() {
+    for message in ["cancelled", "timeout_after_secs:30", "timeout_after_secs:0"] {
+        let error = MiseError::SpawnFailed {
+            program: "mise".to_owned(),
+            message: message.to_owned(),
+        };
+        assert_eq!(fallback_for_error(&error), Err(error.clone()), "{message}");
+        assert!(velnor_actions_mise::command::is_cancel_or_timeout(&error));
+    }
+    let failure = MiseError::SpawnFailed {
+        program: "mise".to_owned(),
+        message: "noent".to_owned(),
+    };
+    assert_eq!(
+        fallback_for_error(&failure),
+        Ok(MissReason::CACHE_UNAVAILABLE)
+    );
+    let exit = MiseError::NonZeroExit {
+        program: "mise".to_owned(),
+        code: Some(1),
+        stderr: String::new(),
+    };
+    assert_eq!(fallback_for_error(&exit), Ok(MissReason::CACHE_UNAVAILABLE));
 }

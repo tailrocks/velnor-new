@@ -1,8 +1,8 @@
 //! Git invocation restricted to the read-only discovery allowlist.
 //!
-//! Only `rev-parse`, `ls-files`, `diff`, and `show` may run, always through
-//! the fixed wrapper with the isolation environment. Anything else is a
-//! typed rejection, never a spawned process.
+//! Only `rev-parse`, `ls-files`, `diff`, `show`, and `config` may run,
+//! always through the fixed wrapper with the isolation environment.
+//! Anything else is a typed rejection, never a spawned process.
 
 use std::ffi::OsString;
 use std::path::Path;
@@ -14,7 +14,11 @@ use crate::error::MiseError;
 const GIT_PROGRAM: &str = "git";
 
 /// Verbs permitted for repository discovery and comparison.
-pub const ALLOWED_GIT_VERBS: [&str; 4] = ["rev-parse", "ls-files", "diff", "show"];
+///
+/// `config` is read-only here: callers query repository identity through
+/// `git config --get` in the working tree so linked worktrees, includes,
+/// and worktree configuration resolve with Git semantics.
+pub const ALLOWED_GIT_VERBS: [&str; 5] = ["rev-parse", "ls-files", "diff", "show", "config"];
 
 /// Whether a verb is inside the discovery allowlist.
 #[must_use]
@@ -72,6 +76,12 @@ impl GitRequest {
     #[must_use]
     pub fn show(args: Vec<OsString>) -> Self {
         Self::allowed("show", args)
+    }
+
+    /// `git config` with byte-exact arguments.
+    #[must_use]
+    pub fn config(args: Vec<OsString>) -> Self {
+        Self::allowed("config", args)
     }
 
     /// Allowlisted verb such as `rev-parse`.

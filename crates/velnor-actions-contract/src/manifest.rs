@@ -111,9 +111,20 @@ impl ReleaseManifest {
     /// `unknown_config_field` (arch §3).
     /// # Errors
     pub fn parse_json(text: &str, file: &str) -> Result<Self, ContractError> {
-        let value = crate::strict_json::parse_strict_json(text).map_err(|err| {
-            ContractError::config(file, "document", format!("malformed_json:{err}"))
-        })?;
+        Self::parse_json_with_limit(text, file, crate::strict_json::MAX_UNTRUSTED_DOCUMENT_BYTES)
+    }
+
+    /// Parse manifest JSON with an explicit per-caller size bound in bytes.
+    /// # Errors
+    pub fn parse_json_with_limit(
+        text: &str,
+        file: &str,
+        limit: usize,
+    ) -> Result<Self, ContractError> {
+        let value =
+            crate::strict_json::parse_strict_json_with_limit(text, limit).map_err(|err| {
+                ContractError::config(file, "document", format!("malformed_json:{err}"))
+            })?;
         serde_json::from_value(value).map_err(|err| map_manifest_error(file, &err))
     }
 

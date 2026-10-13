@@ -54,16 +54,21 @@ fn assert_no_query_or_exposure(text: &str) {
     }
 }
 
-/// Matrix entry count from the `Rust crate matrix: N entries` plan line.
-fn matrix_count(stdout: &str) -> Result<usize, Box<dyn Error>> {
+/// Crate-job count from the `- N Rust crate job(s)` plan line.
+fn crate_count(stdout: &str) -> Result<usize, Box<dyn Error>> {
     for line in stdout.lines() {
-        if let Some(rest) = line.trim().strip_prefix("- Rust crate matrix: ")
-            && let Some(count) = rest.strip_suffix(" entries")
-        {
-            return Ok(count.parse()?);
-        }
+        let Some(rest) = line.trim().strip_prefix("- ") else {
+            continue;
+        };
+        let Some(count) = rest
+            .strip_suffix(" Rust crate jobs")
+            .or_else(|| rest.strip_suffix(" Rust crate job"))
+        else {
+            continue;
+        };
+        return Ok(count.parse()?);
     }
-    Err("matrix count line missing".into())
+    Err("crate count line missing".into())
 }
 
 /// Snapshot every file under `dir` except `.git`, as relative path to bytes.
@@ -87,14 +92,14 @@ fn snapshot(dir: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>, Box<dyn Error>> {
     Ok(out)
 }
 
-/// Job IDs from plan lines shaped `    - <id> (<n> steps)`.
+/// Job IDs from plan job lines shaped `- <id> (<n> steps)`.
 fn plan_job_ids(stdout: &str) -> Vec<String> {
     stdout
         .lines()
         .filter_map(|line| {
-            let rest = line.strip_prefix("    - ")?;
-            let (id, _) = rest.split_once(" (")?;
-            if id.starts_with("velnor-") {
+            let rest = line.trim_start().strip_prefix("- ")?;
+            let (id, steps) = rest.split_once(" (")?;
+            if !id.is_empty() && !id.contains(' ') && steps.ends_with(" steps)") {
                 Some(id.to_owned())
             } else {
                 None
@@ -103,13 +108,17 @@ fn plan_job_ids(stdout: &str) -> Vec<String> {
         .collect()
 }
 
-/// Job IDs from top-level `  <id>:` keys with the `velnor-` prefix.
+/// Job IDs from top-level `  <id>:` keys under the jobs block.
 fn workflow_job_ids(yaml: &str) -> Vec<String> {
-    yaml.lines()
+    let jobs = yaml.split_once("jobs:").map_or("", |(_, tail)| tail);
+    jobs.lines()
         .filter_map(|line| {
             let rest = line.strip_prefix("  ")?;
+            if rest.starts_with(' ') {
+                return None;
+            }
             let id = rest.strip_suffix(':')?;
-            if id.starts_with("velnor-") && !id.contains(' ') {
+            if !id.is_empty() && !id.contains(' ') {
                 Some(id.to_owned())
             } else {
                 None
@@ -134,7 +143,7 @@ fn plan_job_ids_match_generated_workflow() -> Result<(), Box<dyn Error>> {
         &tmp,
     )?;
     assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
-    let yaml = std::fs::read_to_string(preview.join(".github/workflows/velnor.yml"))?;
+    let yaml = std::fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
     let rendered = workflow_job_ids(&yaml);
     assert!(!rendered.is_empty(), "no jobs in workflow:\n{yaml}");
     for id in &planned {
@@ -149,15 +158,15 @@ fn plan_job_ids_match_generated_workflow() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn plan_reports_full_configured_matrix_in_agreement_with_yaml() -> Result<(), Box<dyn Error>> {
+fn plan_reports_full_configured_crates_in_agreement_with_yaml() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("parity-matrix")?;
     init_repo(&tmp)?;
     add_crate_pair(&tmp)?;
     let stdout = plan_stdout(&tmp)?;
     // PAR-10.1 cli half: the full configured count (never narrowed here),
-    // the per-entry kind chain, and the event-time narrowing explanation.
-    let count = matrix_count(&stdout)?;
-    assert!(count > 0, "full matrix must be non-empty:\n{stdout}");
+    // the per-obligation kind chain, and the event-time narrowing explanation.
+    let count = crate_count(&stdout)?;
+    assert_eq!(count, 2, "both crates planned:\n{stdout}");
     assert!(stdout.contains("Each: "), "kind chain missing:\n{stdout}");
     assert!(
         stdout.contains(
@@ -165,7 +174,7 @@ fn plan_reports_full_configured_matrix_in_agreement_with_yaml() -> Result<(), Bo
         ),
         "{stdout}"
     );
-    assert_eq!(plan_stdout(&tmp)?, stdout, "matrix print not deterministic");
+    assert_eq!(plan_stdout(&tmp)?, stdout, "crate print not deterministic");
     let outer = fresh_tempdir("parity-matrix-preview")?;
     let preview = outer.join("preview");
     let output = spawn(
@@ -174,14 +183,17 @@ fn plan_reports_full_configured_matrix_in_agreement_with_yaml() -> Result<(), Bo
         &tmp,
     )?;
     assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
-    let yaml = std::fs::read_to_string(preview.join(".github/workflows/velnor.yml"))?;
-    for marker in ["strategy:", "fail-fast: false", "fromJSON"] {
+    let yaml = std::fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
+    for marker in ["  rust-apple:", "  rust-zebra:", "name: Rust / apple"] {
         assert!(yaml.contains(marker), "yaml lacks {marker}:\n{yaml}");
     }
-    // Ignored work: no matrix in plan and none in YAML (both directions).
+    for marker in ["strategy:", "fail-fast: false", "fromJSON"] {
+        assert!(!yaml.contains(marker), "yaml keeps {marker}:\n{yaml}");
+    }
+    // Ignored work: no crates in plan and none in YAML (both directions).
     ignore_rust(&tmp)?;
     let ignored = plan_stdout(&tmp)?;
-    assert!(!ignored.contains("Rust crate matrix"), "{ignored}");
+    assert!(!ignored.contains("Rust crate job"), "{ignored}");
     assert!(ignored.contains("no matrix entries"), "{ignored}");
     let second = outer.join("second");
     let output = spawn(
@@ -190,7 +202,7 @@ fn plan_reports_full_configured_matrix_in_agreement_with_yaml() -> Result<(), Bo
         &tmp,
     )?;
     assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
-    let yaml = std::fs::read_to_string(second.join(".github/workflows/velnor.yml"))?;
+    let yaml = std::fs::read_to_string(second.join(".github/workflows/ci.yml"))?;
     assert!(!yaml.contains("strategy:"), "static yaml:\n{yaml}");
     assert!(!yaml.contains("fromJSON"), "static yaml:\n{yaml}");
     cleanup(&tmp);

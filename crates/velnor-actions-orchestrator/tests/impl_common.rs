@@ -93,6 +93,19 @@ pub(crate) fn git(args: &[&str], cwd: &Path) -> TestResult {
     Ok(())
 }
 
+/// Anchor a fixture repo so fail-closed provenance can validate it.
+pub(crate) fn anchor_repo(root: &Path) -> TestResult {
+    git(
+        &["remote", "add", "origin", "https://github.com/o/r.git"],
+        root,
+    )
+}
+
+/// Manifest `repository_id` matching [`anchor_repo`].
+pub(crate) fn anchor_id() -> String {
+    velnor_actions_contract::digest_b3(b"github.com/o/r")
+}
+
 /// Single git stdout line.
 pub(crate) fn git_line(args: &[&str], cwd: &Path) -> Result<String, Box<dyn std::error::Error>> {
     let output = StdCommand::new("git")

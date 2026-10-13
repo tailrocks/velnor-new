@@ -112,8 +112,8 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # Optional Rust task configuration. The Rust detector is automatic in V1.
 # [stacks.rust]
 # configurations = [{ name = "default", features = ["default"], target = "host" }]
-# compile_driver = "cargo"         # Sticky override: "cargo" or "mbx"; conflicts with durable evidence fail closed.
-# test_runner = "cargo_test"       # Sticky override: "cargo_test" or "cargo_nextest".
+# compile_driver = "cargo"         # Sticky override: "cargo" (default) or "mbx". Without it, a repo-local Mise Cargo wrapper selects MBX. Each key overrides its own axis only; conflicts with durable evidence fail closed.
+# test_runner = "cargo_test"       # Sticky override: "cargo_test" (default) or "cargo_nextest". Without it, .config/nextest.toml selects Nextest ([profile.ci] when declared, else the documented default profile).
 
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]

@@ -153,6 +153,10 @@ impl BaselineLookup {
 
     /// Isolated command running fixed `gh` args under the pinned catalog.
     ///
+    /// The `gh` tool selects [`EnvPolicy::Baseline`](crate::command::EnvPolicy):
+    /// baseline lookup keeps the ambient CI identity for API reads while
+    /// every other credential is stripped before spawn.
+    ///
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyCommand`] for empty args and

@@ -74,7 +74,18 @@ fn sample_metadata(root: &Path) -> serde_json::Value {
 fn parses_no_deps_metadata_into_conservative_graph() -> Outcome {
     let dir = TempDir::create("meta-graph")?;
     let root = dir.path().canonicalize()?;
-    let record = parse_metadata_json(&sample_metadata(&root).to_string(), &root, "Cargo.toml")?;
+    // A populated known-manifest set must never divert intra-workspace edges.
+    let known = BTreeSet::from([
+        "Cargo.toml".to_owned(),
+        "crates/a/Cargo.toml".to_owned(),
+        "crates/b/Cargo.toml".to_owned(),
+    ]);
+    let record = parse_metadata_json(
+        &sample_metadata(&root).to_string(),
+        &root,
+        "Cargo.toml",
+        &known,
+    )?;
     assert_eq!(record.workspace_root, "");
     assert_eq!(record.members, vec!["a-id".to_owned(), "b-id".to_owned()]);
     assert_eq!(record.packages.len(), 2);
@@ -90,6 +101,7 @@ fn parses_no_deps_metadata_into_conservative_graph() -> Outcome {
     assert!(record.edges.iter().any(|edge| edge.kind == DepKind::Dev));
     assert!(record.edges.iter().any(|edge| edge.kind == DepKind::Build));
     assert!(record.edges.windows(2).all(|pair| pair[0] <= pair[1]));
+    assert!(record.skipped_edges.is_empty());
     Ok(())
 }
 
@@ -97,7 +109,13 @@ fn parses_no_deps_metadata_into_conservative_graph() -> Outcome {
 fn records_targets_features_doctests_and_build_scripts() -> Outcome {
     let dir = TempDir::create("meta-inventory")?;
     let root = dir.path().canonicalize()?;
-    let record = parse_metadata_json(&sample_metadata(&root).to_string(), &root, "Cargo.toml")?;
+    let known = BTreeSet::new();
+    let record = parse_metadata_json(
+        &sample_metadata(&root).to_string(),
+        &root,
+        "Cargo.toml",
+        &known,
+    )?;
     let package_a = record.packages.iter().find(|p| p.id == "a-id");
     let Some(package_a) = package_a else {
         return Err("package a-id must be retained".into());
@@ -130,11 +148,12 @@ fn records_targets_features_doctests_and_build_scripts() -> Outcome {
 fn rejects_invalid_json_and_bad_version_without_fallback() -> Outcome {
     let dir = TempDir::create("meta-invalid")?;
     let root = dir.path().canonicalize()?;
-    let bad = parse_metadata_json("not json", &root, "Cargo.toml");
+    let known = BTreeSet::new();
+    let bad = parse_metadata_json("not json", &root, "Cargo.toml", &known);
     assert!(matches!(bad, Err(MetadataError::InvalidJson { .. })));
     let mut document = sample_metadata(&root);
     document["version"] = json!(2);
-    let versioned = parse_metadata_json(&document.to_string(), &root, "Cargo.toml");
+    let versioned = parse_metadata_json(&document.to_string(), &root, "Cargo.toml", &known);
     assert!(matches!(
         versioned,
         Err(MetadataError::UnsupportedVersion { found: 2, .. })
@@ -143,7 +162,7 @@ fn rejects_invalid_json_and_bad_version_without_fallback() -> Outcome {
     missing["packages"][0]
         .as_object_mut()
         .map(|map| map.remove("id"));
-    let incomplete = parse_metadata_json(&missing.to_string(), &root, "Cargo.toml");
+    let incomplete = parse_metadata_json(&missing.to_string(), &root, "Cargo.toml", &known);
     assert!(matches!(incomplete, Err(MetadataError::InvalidJson { .. })));
     Ok(())
 }
@@ -152,17 +171,18 @@ fn rejects_invalid_json_and_bad_version_without_fallback() -> Outcome {
 fn rejects_unmapped_edges_and_unknown_kinds() -> Outcome {
     let dir = TempDir::create("meta-edges")?;
     let root = dir.path().canonicalize()?;
+    let known = BTreeSet::new();
     let mut dangling = sample_metadata(&root);
     dangling["packages"][1]["dependencies"][0]["path"] =
         json!(format!("{}/crates/missing", root.to_string_lossy()));
-    let result = parse_metadata_json(&dangling.to_string(), &root, "Cargo.toml");
+    let result = parse_metadata_json(&dangling.to_string(), &root, "Cargo.toml", &known);
     assert!(matches!(
         result,
         Err(MetadataError::UnresolvedPathEdge { .. })
     ));
     let mut kinded = sample_metadata(&root);
     kinded["packages"][1]["dependencies"][0]["kind"] = json!("mystery");
-    let result = parse_metadata_json(&kinded.to_string(), &root, "Cargo.toml");
+    let result = parse_metadata_json(&kinded.to_string(), &root, "Cargo.toml", &known);
     assert!(matches!(result, Err(MetadataError::UnknownDepKind { .. })));
     Ok(())
 }
@@ -171,9 +191,10 @@ fn rejects_unmapped_edges_and_unknown_kinds() -> Outcome {
 fn resolves_duplicate_names_by_id_and_manifest() -> Outcome {
     let dir = TempDir::create("meta-dups")?;
     let root = dir.path().canonicalize()?;
+    let known = BTreeSet::new();
     let mut document = sample_metadata(&root);
     document["packages"][1]["name"] = json!("a");
-    let record = parse_metadata_json(&document.to_string(), &root, "Cargo.toml")?;
+    let record = parse_metadata_json(&document.to_string(), &root, "Cargo.toml", &known)?;
     let names: Vec<&str> = record
         .packages
         .iter()
@@ -204,7 +225,8 @@ fn flags_path_dependencies_outside_the_root() -> Outcome {
     for index in 1..5 {
         document["packages"][1]["dependencies"][index]["path"] = json!(null);
     }
-    let record = parse_metadata_json(&document.to_string(), &root, "Cargo.toml")?;
+    let known = BTreeSet::new();
+    let record = parse_metadata_json(&document.to_string(), &root, "Cargo.toml", &known)?;
     let package_a = record.packages.iter().find(|p| p.id == "a-id");
     let Some(package_a) = package_a else {
         return Err("package a-id must be retained".into());
@@ -271,8 +293,9 @@ fn dedupe_workspaces_by_root() -> Outcome {
     let dir = TempDir::create("meta-dedupe")?;
     let root = dir.path().canonicalize()?;
     let json = sample_metadata(&root).to_string();
-    let first = parse_metadata_json(&json, &root, "Cargo.toml")?;
-    let second = parse_metadata_json(&json, &root, "crates/a/Cargo.toml")?;
+    let known = BTreeSet::new();
+    let first = parse_metadata_json(&json, &root, "Cargo.toml", &known)?;
+    let second = parse_metadata_json(&json, &root, "crates/a/Cargo.toml", &known)?;
     assert_eq!(dedupe_workspaces(vec![first, second]).len(), 1);
     Ok(())
 }

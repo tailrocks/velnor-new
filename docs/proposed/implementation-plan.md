@@ -163,7 +163,7 @@ contracts. These are implementation artifacts, not public CLI commands:
   `artifact_id` values. Each matrix job uploads exactly one artifact containing
   one aggregate matrix report and one task report for every expected task,
   including `not_selected` tasks after an upstream failure.
-- `velnor-final` downloads exact derived artifact IDs, validates the plan and
+- `required` downloads exact derived artifact IDs, validates the plan and
   report sets, validates candidate evidence when self-hosting is enabled, and
   writes `final-<run-key>` before returning the required status.
 - A missing, duplicate, malformed, or unexpected report is a failure. A cache

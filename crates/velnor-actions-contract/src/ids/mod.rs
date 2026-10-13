@@ -16,10 +16,60 @@ pub use artifact::{
 use crate::canonical::validate_digest;
 use crate::errors::ContractError;
 
+/// Define a validated identifier newtype with a private constructor.
+///
+/// Parsing is the only construction path; serde deserialization routes
+/// through the same `TryFrom<String>` validation.
+macro_rules! id_newtype {
+    ($name:ident, $validate:expr) => {
+        #[doc = concat!("Validated `", stringify!($name), "` identifier.")]
+        #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+        #[serde(try_from = "String")]
+        pub struct $name(String);
+        impl $name {
+            /// Parse and validate.
+            /// # Errors
+            pub fn parse(value: &str) -> Result<Self, ContractError> {
+                $validate(value)?;
+                Ok(Self(value.to_owned()))
+            }
+            /// Borrow the inner string.
+            #[must_use]
+            pub fn as_str(&self) -> &str {
+                &self.0
+            }
+            /// Unwrap the validated string.
+            #[must_use]
+            pub fn into_inner(self) -> String {
+                self.0
+            }
+        }
+        impl TryFrom<String> for $name {
+            type Error = ContractError;
+            fn try_from(value: String) -> Result<Self, Self::Error> {
+                Self::parse(&value)
+            }
+        }
+    };
+}
+
+id_newtype!(RunKey, validate_run_key);
+id_newtype!(ManifestKey, validate_manifest_key);
+id_newtype!(TaskId, validate_task_id);
+id_newtype!(MatrixId, validate_id);
+id_newtype!(MatrixKey, validate_matrix_key);
+id_newtype!(PlanId, validate_plan_id);
+id_newtype!(ReportId, validate_report_id);
+id_newtype!(TaskReportId, validate_task_report_id);
+id_newtype!(ArtifactId, artifact::validate_artifact_id);
+id_newtype!(TargetKey, artifact::validate_target_key);
+
 /// Build a CI run key `r<run-id>-a<attempt>` from numeric GitHub IDs.
 #[must_use]
 pub fn run_key_for_ci(run_id: u64, run_attempt: u64) -> String {
-    format!("r{run_id}-a{run_attempt}")
+    let key = format!("r{run_id}-a{run_attempt}");
+    debug_assert!(RunKey::parse(&key).is_ok());
+    key
 }
 
 /// Validate a run key (`local` or `r<digits>-a<digits>`).
@@ -48,7 +98,7 @@ pub fn manifest_key_for_cargo_manifest(manifest: &str) -> Result<String, Contrac
         ));
     }
     if manifest == "Cargo.toml" {
-        return Ok("root".to_owned());
+        return Ok(ManifestKey::parse("root")?.into_inner());
     }
     let Some(dir) = manifest.strip_suffix("/Cargo.toml") else {
         return Err(ContractError::identity(
@@ -60,7 +110,16 @@ pub fn manifest_key_for_cargo_manifest(manifest: &str) -> Result<String, Contrac
         return Err(ContractError::identity("manifest_key", "reserved_root_key"));
     }
     validate_path_segments(dir, "manifest_key")?;
-    Ok(dir.to_owned())
+    Ok(ManifestKey::parse(dir)?.into_inner())
+}
+
+/// Validate a manifest key (`root` or `/`-separated segments).
+/// # Errors
+pub fn validate_manifest_key(value: &str) -> Result<(), ContractError> {
+    if value == "root" {
+        return Ok(());
+    }
+    validate_path_segments(value, "manifest_key")
 }
 
 /// Build `stack/<stack>/<manifest-key>/<kind>/<config>[/shard-i-of-n]`.
@@ -73,11 +132,7 @@ pub fn task_id_for_stack(
     shard: Option<(u32, u32)>,
 ) -> Result<String, ContractError> {
     validate_component(stack, "stack_id")?;
-    if manifest_key == "root" {
-        // Root key is exact.
-    } else {
-        validate_path_segments(manifest_key, "manifest_key")?;
-    }
+    validate_manifest_key(manifest_key)?;
     validate_component(kind, "task_kind")?;
     validate_component(config, "configuration")?;
     let mut id = format!("stack/{stack}/{manifest_key}/{kind}/{config}");
@@ -85,7 +140,7 @@ pub fn task_id_for_stack(
         validate_shard(index, count)?;
         id = format!("{id}/shard-{index}-of-{count}");
     }
-    Ok(id)
+    Ok(TaskId::parse(&id)?.into_inner())
 }
 
 /// Build `internal/<kind>/<config>` for orchestration obligations.
@@ -93,7 +148,7 @@ pub fn task_id_for_stack(
 pub fn task_id_for_internal(kind: &str, config: &str) -> Result<String, ContractError> {
     validate_component(kind, "task_kind")?;
     validate_component(config, "configuration")?;
-    Ok(format!("internal/{kind}/{config}"))
+    Ok(TaskId::parse(&format!("internal/{kind}/{config}"))?.into_inner())
 }
 
 /// Validate a stack or internal task ID.
@@ -118,7 +173,7 @@ pub fn validate_task_id(value: &str) -> Result<(), ContractError> {
 pub fn matrix_id_for_task_group(stack: &str, task_group: &str) -> Result<String, ContractError> {
     validate_component(stack, "stack_id")?;
     validate_task_id(task_group)?;
-    Ok(format!("stack:{stack}|task:{task_group}"))
+    Ok(MatrixId::parse(&format!("stack:{stack}|task:{task_group}"))?.into_inner())
 }
 
 /// Validate a matrix `id` (charset plus `stack:`/`task:` shape).
@@ -143,7 +198,7 @@ pub fn validate_id(value: &str) -> Result<(), ContractError> {
 pub fn matrix_key_for_id(id: &str) -> Result<String, ContractError> {
     validate_id(id)?;
     let hex = blake3::hash(id.as_bytes()).to_hex();
-    Ok(format!("m-{}", &hex.to_string()[..16]))
+    Ok(MatrixKey::parse(&format!("m-{}", &hex.to_string()[..16]))?.into_inner())
 }
 
 /// Validate a `matrix_key` (`m-` + 16 lowercase hex).
@@ -169,7 +224,7 @@ pub fn validate_matrix_key(value: &str) -> Result<(), ContractError> {
 /// # Errors
 pub fn plan_id_for_run(run_key: &str) -> Result<String, ContractError> {
     validate_run_key(run_key)?;
-    Ok(format!("plan-{run_key}"))
+    Ok(PlanId::parse(&format!("plan-{run_key}"))?.into_inner())
 }
 
 /// Validate a `plan_id`.
@@ -186,17 +241,18 @@ pub fn validate_plan_id(value: &str) -> Result<(), ContractError> {
 pub fn report_id_for_matrix(run_key: &str, matrix_key: &str) -> Result<String, ContractError> {
     validate_run_key(run_key)?;
     validate_matrix_key(matrix_key)?;
-    Ok(format!("report-{run_key}-{matrix_key}"))
+    Ok(ReportId::parse(&format!("report-{run_key}-{matrix_key}"))?.into_inner())
 }
 
 /// Validate a `report_id`.
 /// # Errors
 pub fn validate_report_id(value: &str) -> Result<(), ContractError> {
+    let bad = || ContractError::identity("report_id", "malformed_report_id");
     let Some(rest) = value.strip_prefix("report-") else {
-        return Err(ContractError::identity("report_id", "malformed_report_id"));
+        return Err(bad());
     };
     let Some((run_key, hex)) = rest.rsplit_once("-m-") else {
-        return Err(ContractError::identity("report_id", "malformed_report_id"));
+        return Err(bad());
     };
     validate_run_key(run_key).map_err(|_| ContractError::identity("report_id", "bad_run_key"))?;
     validate_matrix_key(&format!("m-{hex}"))
@@ -215,26 +271,19 @@ pub fn task_report_id_for_task(
     validate_matrix_key(matrix_key)?;
     validate_digest(task_digest)
         .map_err(|_| ContractError::identity("task_digest", "bad_digest"))?;
-    Ok(format!(
-        "task-{run_key}-{matrix_key}-{}",
-        &task_digest[3..19]
-    ))
+    let id = format!("task-{run_key}-{matrix_key}-{}", &task_digest[3..19]);
+    Ok(TaskReportId::parse(&id)?.into_inner())
 }
 
 /// Validate a `task_report_id`.
 /// # Errors
 pub fn validate_task_report_id(value: &str) -> Result<(), ContractError> {
+    let bad = || ContractError::identity("task_report_id", "malformed_task_report_id");
     let Some(rest) = value.strip_prefix("task-") else {
-        return Err(ContractError::identity(
-            "task_report_id",
-            "malformed_task_report_id",
-        ));
+        return Err(bad());
     };
     let Some((head, prefix)) = rest.rsplit_once('-') else {
-        return Err(ContractError::identity(
-            "task_report_id",
-            "malformed_task_report_id",
-        ));
+        return Err(bad());
     };
     if prefix.len() != 16 || !is_lower_hex(prefix) {
         return Err(ContractError::identity(
@@ -243,10 +292,7 @@ pub fn validate_task_report_id(value: &str) -> Result<(), ContractError> {
         ));
     }
     let Some((run_key, hex)) = head.rsplit_once("-m-") else {
-        return Err(ContractError::identity(
-            "task_report_id",
-            "malformed_task_report_id",
-        ));
+        return Err(bad());
     };
     validate_run_key(run_key)
         .map_err(|_| ContractError::identity("task_report_id", "bad_run_key"))?;
@@ -287,9 +333,9 @@ fn is_ci_run_key(value: &str) -> bool {
         && attempt.bytes().all(|b| b.is_ascii_digit())
 }
 
-/// Validate one lowercase component name.
+/// Validate one lowercase component name (`.`/`..` are never components).
 fn validate_component(value: &str, field: &'static str) -> Result<(), ContractError> {
-    if !value.is_empty() && value.bytes().all(is_component_byte) {
+    if !value.is_empty() && value != "." && value != ".." && value.bytes().all(is_component_byte) {
         Ok(())
     } else {
         Err(ContractError::identity(field, "bad_component"))

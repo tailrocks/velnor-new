@@ -12,6 +12,7 @@ use velnor_actions_mise::GitRequest;
 use velnor_actions_rust::{DepKind, LocalEdge, STACK_ID, TaskGroup, TaskKind};
 
 use crate::discover::Discovery;
+use crate::git_paths::split_nul_paths;
 use crate::internal_plan::{component_id_of, manifest_for_key};
 use crate::schedule::resource_exclusions;
 use crate::select_affected::manifest_dir;
@@ -24,11 +25,17 @@ const MAX_BASE_MANIFEST_BATCH: usize = 512;
 ///
 /// Rename detection stays off so every head path missing at base reports as
 /// added; the changed set keeps its own rename behavior untouched.
+/// Validation gates the untrusted range (flag-injection defense); `-z` is
+/// our own trusted constant added after, so output is NUL-delimited with
+/// no C-quoting or trimming, like `changed_files`. Only validated manifests
+/// are ever matched against this set (non-ASCII names fail manifest-key
+/// validation at obligation time, before selection), so byte-exactness is
+/// enforced by construction and proven by the shared splitter unit tests.
 fn added_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, String> {
     validate_diff_rev(base, "bad_base")?;
     validate_diff_rev(head, "bad_head")?;
     let range = format!("{base}...{head}");
-    let args = vec![
+    let mut args = vec![
         OsString::from("--name-only"),
         OsString::from("--no-renames"),
         OsString::from("--diff-filter=A"),
@@ -36,19 +43,14 @@ fn added_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>, 
         OsString::from("--"),
     ];
     validate_select_diff_args(&args).map_err(|err| err.to_string())?;
+    args.insert(0, OsString::from("-z"));
     let output = GitRequest::diff(args)
         .run_in(root)
         .map_err(|err| err.to_string())?;
     output
         .require_success("git")
         .map_err(|err| err.to_string())?;
-    let text = output.stdout_text("git").map_err(|err| err.to_string())?;
-    Ok(text
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-        .map(str::to_owned)
-        .collect())
+    split_nul_paths(&output.stdout)
 }
 
 /// Head local-path edges from discovery records.

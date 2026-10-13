@@ -16,13 +16,19 @@ fn mbx_argv() -> Vec<String> {
 
 #[test]
 fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
-    let selected = mbx_step_for_driver(&mbx_pin(), CompileDriver::Mbx)?.expect("mbx step");
+    let selected =
+        mbx_step_for_driver(&mbx_pin(), CompileDriver::Mbx, "1.19.0")?.expect("mbx step");
     assert_eq!(selected.name, "Restore MBX objects");
-    assert!(mbx_step_for_driver(&mbx_pin(), CompileDriver::Cargo)?.is_none());
+    assert!(mbx_step_for_driver(&mbx_pin(), CompileDriver::Cargo, "1.19.0")?.is_none());
     assert!(
-        mbx_step_for_driver(&checkout_pin(), CompileDriver::Mbx)
+        mbx_step_for_driver(&checkout_pin(), CompileDriver::Mbx, "1.19.0")
             .is_err_and(|err| format!("{err:?}").contains("not_mbx_action")),
         "non-MBX action must fail"
+    );
+    assert!(
+        mbx_step_for_driver(&mbx_pin(), CompileDriver::Mbx, "latest")
+            .is_err_and(|err| format!("{err:?}").contains("bad_mbx_version")),
+        "floating action version must fail"
     );
     Ok(())
 }
@@ -47,7 +53,7 @@ fn mbx_gating_rejects_unselected_mbx() -> Result<(), RenderError> {
     );
     jobs.get_mut("velnor-cargo").expect("cargo job").steps.pop();
     check_mbx_gating(&jobs, &cargo_only)?;
-    let mbx = mbx_step_for_driver(&mbx_pin(), CompileDriver::Mbx)?.expect("mbx step");
+    let mbx = mbx_step_for_driver(&mbx_pin(), CompileDriver::Mbx, "1.19.0")?.expect("mbx step");
     jobs.get_mut("velnor-cargo")
         .expect("cargo job")
         .steps

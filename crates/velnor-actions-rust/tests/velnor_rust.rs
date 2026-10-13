@@ -21,10 +21,30 @@ mod impl_rust_gates;
 mod impl_rust_metadata;
 #[path = "impl_rust_negative.rs"]
 mod impl_rust_negative;
+#[path = "impl_rust_nested.rs"]
+mod impl_rust_nested;
+#[path = "impl_rust_p03_identity.rs"]
+mod impl_rust_p03_identity;
+#[path = "impl_rust_p06.rs"]
+mod impl_rust_p06;
+#[path = "impl_rust_release_emit.rs"]
+mod impl_rust_release_emit;
+#[path = "impl_rust_release_graph.rs"]
+mod impl_rust_release_graph;
+#[path = "impl_rust_release_modes.rs"]
+mod impl_rust_release_modes;
+#[path = "impl_rust_release_order.rs"]
+mod impl_rust_release_order;
+#[path = "impl_rust_release_select.rs"]
+mod impl_rust_release_select;
 #[path = "impl_rust_tasks.rs"]
 mod impl_rust_tasks;
+#[path = "impl_rust_test_targets.rs"]
+mod impl_rust_test_targets;
 #[path = "impl_rust_toolfiles.rs"]
 mod impl_rust_toolfiles;
+#[path = "release_support.rs"]
+mod release_support;
 
 /// Shared inline-fixture support (no fixture files outside `tests/`).
 mod support {

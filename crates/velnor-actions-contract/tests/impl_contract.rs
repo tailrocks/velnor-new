@@ -8,6 +8,7 @@ use velnor_actions_contract::{
 #[test]
 fn config_validation_reports_key_paths() {
     use velnor_actions_contract::config::ActionsConfig;
+    use velnor_actions_contract::config::RustReleaseConfig;
     use velnor_actions_contract::{
         DiscoveryConfig, ResourcesConfig, RustConfiguration, RustStackConfig, StacksConfig,
         TestShardingConfig, VelnorConfig, WorkflowConfig,
@@ -40,6 +41,7 @@ fn config_validation_reports_key_paths() {
                 }],
                 compile_driver: None,
                 test_runner: None,
+                release: RustReleaseConfig::default(),
             }),
         },
         discovery: DiscoveryConfig {
@@ -49,10 +51,13 @@ fn config_validation_reports_key_paths() {
     };
     assert_eq!(valid.validate(".velnor/config.toml"), Ok(()));
     let support = WorkflowPolicy::ConsumerV1.support_workflow(GeneratorValidation::Bootstrap);
-    assert!(support.policy_jobs.is_empty() && !support.candidate_validation);
+    assert!(support.validators.is_empty() && !support.candidate_validation);
     let support =
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
-    assert_eq!(support.policy_jobs.len(), 2);
+    assert_eq!(
+        support.validators,
+        velnor_actions_contract::ValidatorKind::repository_validators().to_vec()
+    );
     assert!(support.candidate_validation);
     let mut bad = valid.clone();
     bad.schema = 2;
@@ -131,6 +136,7 @@ fn runner_label_uses_exact_catalog_match() {
 #[test]
 fn uppercase_rust_config_name_rejected_with_key_path() {
     use velnor_actions_contract::config::ActionsConfig;
+    use velnor_actions_contract::config::RustReleaseConfig;
     use velnor_actions_contract::{
         ContractError, DiscoveryConfig, GeneratorValidation, ResourcesConfig, RustConfiguration,
         RustStackConfig, StacksConfig, TestShardingConfig, VelnorConfig, WorkflowConfig,
@@ -164,6 +170,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
                 }],
                 compile_driver: None,
                 test_runner: None,
+                release: RustReleaseConfig::default(),
             }),
         },
         discovery: DiscoveryConfig { exclude: vec![] },
@@ -198,6 +205,16 @@ fn actions_overrides_validate_allowlist_and_pin_shape() {
     };
     assert_eq!(good.validate("cfg"), Ok(()));
     assert_eq!(ActionsConfig::default().validate("cfg"), Ok(()));
+    let alint = ActionsConfig {
+        overrides: BTreeMap::from([(
+            "asamarts/alint".to_owned(),
+            ActionPinOverride {
+                sha: "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb".to_owned(),
+                version: "v0.16.1".to_owned(),
+            },
+        )]),
+    };
+    assert_eq!(alint.validate("cfg"), Ok(()));
     for (action, pin, problem) in [
         (
             "bogus/action",
@@ -206,14 +223,6 @@ fn actions_overrides_validate_allowlist_and_pin_shape() {
                 version: "v1.2.3".to_owned(),
             },
             "unknown_action",
-        ),
-        (
-            "asamarts/alint",
-            ActionPinOverride {
-                sha: sha.to_owned(),
-                version: "v0.16.1".to_owned(),
-            },
-            "alint_not_overridable",
         ),
         (
             "actions/checkout",

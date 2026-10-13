@@ -140,6 +140,22 @@ pub enum OrchestratorError {
         /// Operating-system error detail.
         problem: String,
     },
+    /// An operation was cancelled; never report as success or cache miss.
+    #[error("cancelled: {operation}: {detail}")]
+    Cancelled {
+        /// Cancelled operation name.
+        operation: String,
+        /// Machine-readable detail.
+        detail: String,
+    },
+    /// A capability or schema is unsupported on this input or platform.
+    #[error("unsupported: {capability}: {detail}")]
+    Unsupported {
+        /// Unsupported capability or schema name.
+        capability: String,
+        /// Machine-readable detail.
+        detail: String,
+    },
 }
 
 impl OrchestratorError {
@@ -165,6 +181,36 @@ impl OrchestratorError {
             problem: problem.into(),
         }
     }
+
+    /// Build a cancellation error for one operation.
+    #[must_use]
+    pub fn cancelled(operation: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self::Cancelled {
+            operation: operation.into(),
+            detail: detail.into(),
+        }
+    }
+
+    /// Build an unsupported-capability error.
+    #[must_use]
+    pub fn unsupported(capability: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self::Unsupported {
+            capability: capability.into(),
+            detail: detail.into(),
+        }
+    }
+
+    /// Whether this error is a cancellation (not a success or cache miss).
+    #[must_use]
+    pub fn is_cancelled(&self) -> bool {
+        matches!(self, Self::Cancelled { .. })
+    }
+
+    /// Whether this error is an unsupported capability or schema.
+    #[must_use]
+    pub fn is_unsupported(&self) -> bool {
+        matches!(self, Self::Unsupported { .. })
+    }
 }
 
 impl From<velnor_actions_contract::ContractError> for OrchestratorError {
@@ -178,6 +224,14 @@ impl From<velnor_actions_contract::ContractError> for OrchestratorError {
                 file,
                 key_path,
                 problem,
+            },
+            velnor_actions_contract::ContractError::UnsupportedSchema {
+                field,
+                found,
+                expected,
+            } => Self::Unsupported {
+                capability: field.to_owned(),
+                detail: format!("version {found}, expected {expected}"),
             },
             other => Self::Contract {
                 problem: other.to_string(),
@@ -199,5 +253,45 @@ impl From<velnor_actions_actionlint::ActionlintError> for OrchestratorError {
         Self::Actionlint {
             problem: error.to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OrchestratorError;
+    use velnor_actions_contract::ContractError;
+
+    #[test]
+    fn cancelled_and_unsupported_stay_distinct() {
+        // `retrieve`, not `fetch`: impl_orch_f2a forbids the fetch verb
+        // anywhere in orchestrator sources (offline analysis guarantee).
+        let cancelled = OrchestratorError::cancelled("retrieve", "signal");
+        assert!(cancelled.is_cancelled());
+        assert!(!cancelled.is_unsupported());
+        assert_eq!(cancelled.to_string(), "cancelled: retrieve: signal");
+        let unsupported = OrchestratorError::unsupported("schema", "version 9");
+        assert!(unsupported.is_unsupported());
+        assert!(!unsupported.is_cancelled());
+        assert_eq!(unsupported.to_string(), "unsupported: schema: version 9");
+        let io = OrchestratorError::io("plan.json", "missing");
+        assert!(!io.is_cancelled() && !io.is_unsupported());
+    }
+
+    #[test]
+    fn unsupported_schema_maps_to_unsupported() {
+        let err = ContractError::UnsupportedSchema {
+            field: "schema",
+            found: "9".to_owned(),
+            expected: "1",
+        };
+        let mapped = OrchestratorError::from(err);
+        assert!(mapped.is_unsupported());
+        assert_eq!(
+            mapped.to_string(),
+            "unsupported: schema: version 9, expected 1"
+        );
+        let conflict = ContractError::Collision("matrix key m-00".to_owned());
+        let mapped = OrchestratorError::from(conflict);
+        assert!(!mapped.is_unsupported() && !mapped.is_cancelled());
     }
 }

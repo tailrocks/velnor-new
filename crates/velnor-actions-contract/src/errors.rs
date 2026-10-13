@@ -40,6 +40,14 @@ pub enum ContractError {
     /// Two distinct inputs produced the same derived key.
     #[error("key collision: {0}")]
     Collision(String),
+    /// An untrusted document exceeds the caller's size bound.
+    #[error("document_too_large: {size} bytes exceeds limit {limit}")]
+    DocumentTooLarge {
+        /// Observed document size in bytes.
+        size: usize,
+        /// Enforced limit in bytes.
+        limit: usize,
+    },
 }
 
 impl ContractError {

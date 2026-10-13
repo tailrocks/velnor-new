@@ -1,39 +1,18 @@
 //! `cargo metadata` JSON parsing and the conservative local graph.
 //!
 //! Parse failures are errors; this crate never falls back to manifest parsing.
+//! Path targets naming known manifests outside the parsed workspace are
+//! skipped as cross-workspace and recorded on the record; unknown targets
+//! still fail.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fmt;
 use std::path::Path;
 
+use crate::metadata_edges::{EdgeResolution, RawPackage, convert_edge, manifest_dirs};
+
 /// Expected `cargo metadata --format-version` value.
 pub const METADATA_FORMAT_VERSION: u32 = 1;
-
-/// Dependency edge kind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum DepKind {
-    /// Normal dependency.
-    Normal,
-    /// Build dependency.
-    Build,
-    /// Development dependency.
-    Dev,
-}
-
-/// One declared local path edge between first-party packages.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct LocalEdge {
-    /// Cargo package id of the dependent.
-    pub from: String,
-    /// Cargo package id of the path dependency.
-    pub to: String,
-    /// Dependency kind.
-    pub kind: DepKind,
-    /// Whether the edge is optional.
-    pub optional: bool,
-    /// Target filter when target-specific.
-    pub target: Option<String>,
-}
 
 /// One Cargo target kind entry.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -83,7 +62,9 @@ pub struct WorkspaceRecord {
     /// Packages sorted by manifest path.
     pub packages: Vec<PackageRecord>,
     /// Local path edges in sorted order.
-    pub edges: Vec<LocalEdge>,
+    pub edges: Vec<crate::metadata_edges::LocalEdge>,
+    /// Cross-workspace path edges skipped in sorted order.
+    pub skipped_edges: Vec<crate::metadata_edges::SkippedPathEdge>,
 }
 
 /// `cargo metadata` parse failure.
@@ -110,7 +91,7 @@ pub enum MetadataError {
         /// Offending path.
         path: String,
     },
-    /// A declared path edge matches no reported package.
+    /// A declared path edge matches no reported package or known manifest.
     UnresolvedPathEdge {
         /// Candidate manifest being parsed.
         manifest: String,
@@ -130,7 +111,7 @@ pub enum MetadataError {
 
 impl MetadataError {
     /// Build an invalid-input error.
-    fn invalid(manifest: &str, detail: String) -> Self {
+    pub(crate) fn invalid(manifest: &str, detail: String) -> Self {
         Self::InvalidJson {
             manifest: manifest.to_owned(),
             detail,
@@ -166,59 +147,14 @@ impl fmt::Display for MetadataError {
 
 impl std::error::Error for MetadataError {}
 
-/// Raw `cargo metadata` document (unlisted fields ignored).
-#[derive(Debug, serde::Deserialize)]
-struct RawMetadata {
-    version: u32,
-    workspace_root: String,
-    #[serde(default)]
-    workspace_members: Vec<String>,
-    #[serde(default)]
-    packages: Vec<RawPackage>,
-}
-
-/// Raw package entry.
-#[derive(Debug, serde::Deserialize)]
-struct RawPackage {
-    name: String,
-    version: String,
-    id: String,
-    manifest_path: String,
-    #[serde(default)]
-    targets: Vec<RawTarget>,
-    #[serde(default)]
-    features: BTreeMap<String, Vec<String>>,
-    #[serde(default)]
-    dependencies: Vec<RawDependency>,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct RawTarget {
-    #[serde(default)]
-    kind: Vec<String>,
-    #[serde(default)]
-    name: String,
-    #[serde(default)]
-    test: bool,
-    #[serde(default)]
-    doctest: bool,
-    #[serde(default)]
-    required_features: Vec<String>,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct RawDependency {
-    #[serde(default)]
-    kind: Option<String>,
-    #[serde(default)]
-    optional: bool,
-    #[serde(default)]
-    target: Option<serde_json::Value>,
-    #[serde(default)]
-    path: Option<String>,
-}
-
 /// Parse one `cargo metadata` document (`repo_root` must be canonical).
+///
+/// `known_manifests` holds repository-relative POSIX manifest paths
+/// discovered in the repository. A declared path target absent from the
+/// document but present in `known_manifests` is a real package outside
+/// this workspace (nested, parent, or sibling member): skipped and
+/// recorded on [`WorkspaceRecord::skipped_edges`], never failed. Any
+/// other absent target fails; member inventory is never filtered.
 ///
 /// # Errors
 ///
@@ -227,8 +163,9 @@ pub fn parse_metadata_json(
     json: &str,
     repo_root: &Path,
     manifest_hint: &str,
+    known_manifests: &BTreeSet<String>,
 ) -> Result<WorkspaceRecord, MetadataError> {
-    let raw: RawMetadata = serde_json::from_str(json)
+    let raw: crate::metadata_edges::RawMetadata = serde_json::from_str(json)
         .map_err(|err| MetadataError::invalid(manifest_hint, err.to_string()))?;
     if raw.version != METADATA_FORMAT_VERSION {
         return Err(MetadataError::UnsupportedVersion {
@@ -244,14 +181,25 @@ pub fn parse_metadata_json(
     packages.sort_by(|left, right| left.manifest.cmp(&right.manifest));
     let dirs = manifest_dirs(&raw.packages);
     let mut edges = Vec::new();
+    let mut skipped = Vec::new();
     for package in &raw.packages {
         for dependency in &package.dependencies {
-            if let Some(edge) = convert_edge(&package.id, dependency, &dirs, manifest_hint)? {
-                edges.push(edge);
+            match convert_edge(
+                &package.id,
+                dependency,
+                &dirs,
+                manifest_hint,
+                repo_root,
+                known_manifests,
+            )? {
+                EdgeResolution::Ignored => {}
+                EdgeResolution::Edge(edge) => edges.push(edge),
+                EdgeResolution::Skipped(edge) => skipped.push(edge),
             }
         }
     }
     edges.sort();
+    skipped.sort();
     let mut member_ids = raw.workspace_members;
     member_ids.sort();
     Ok(WorkspaceRecord {
@@ -259,6 +207,7 @@ pub fn parse_metadata_json(
         members: member_ids,
         packages,
         edges,
+        skipped_edges: skipped,
     })
 }
 
@@ -296,78 +245,6 @@ fn convert_package(raw: &RawPackage, repo_root: &Path, members: &BTreeSet<&str>)
     }
 }
 
-/// Map each package manifest directory to its package id.
-fn manifest_dirs(packages: &[RawPackage]) -> BTreeMap<String, String> {
-    let mut dirs = BTreeMap::new();
-    for package in packages {
-        let normalized = package.manifest_path.replace('\\', "/");
-        let dir = match normalized.rsplit_once('/') {
-            Some((dir, _)) => dir.to_owned(),
-            None => normalized,
-        };
-        dirs.entry(dir).or_insert_with(|| package.id.clone());
-    }
-    dirs
-}
-
-/// Convert one dependency declaration to a local edge when it has a path.
-fn convert_edge(
-    from: &str,
-    dependency: &RawDependency,
-    dirs: &BTreeMap<String, String>,
-    hint: &str,
-) -> Result<Option<LocalEdge>, MetadataError> {
-    let Some(path) = dependency.path.as_deref() else {
-        return Ok(None);
-    };
-    let dir = path.replace('\\', "/");
-    let dir = dir
-        .strip_suffix('/')
-        .map_or_else(|| dir.clone(), str::to_owned);
-    let Some(to) = dirs.get(&dir) else {
-        return Err(MetadataError::UnresolvedPathEdge {
-            manifest: hint.to_owned(),
-            from: from.to_owned(),
-            path: path.to_owned(),
-        });
-    };
-    Ok(Some(LocalEdge {
-        from: from.to_owned(),
-        to: to.clone(),
-        kind: dep_kind(dependency.kind.as_deref(), hint)?,
-        optional: dependency.optional,
-        target: dep_target(dependency.target.as_ref(), hint)?,
-    }))
-}
-
-/// Map a raw dependency kind (`null` means normal).
-fn dep_kind(raw: Option<&str>, hint: &str) -> Result<DepKind, MetadataError> {
-    match raw {
-        None => Ok(DepKind::Normal),
-        Some("build") => Ok(DepKind::Build),
-        Some("dev") => Ok(DepKind::Dev),
-        Some(other) => Err(MetadataError::UnknownDepKind {
-            manifest: hint.to_owned(),
-            kind: other.to_owned(),
-        }),
-    }
-}
-
-/// Map a raw target filter (`null` or string).
-fn dep_target(
-    raw: Option<&serde_json::Value>,
-    hint: &str,
-) -> Result<Option<String>, MetadataError> {
-    match raw {
-        None | Some(serde_json::Value::Null) => Ok(None),
-        Some(serde_json::Value::String(cfg)) => Ok(Some(cfg.clone())),
-        Some(_) => Err(MetadataError::invalid(
-            hint,
-            "dependency target must be string-or-null".to_owned(),
-        )),
-    }
-}
-
 /// Relativize a reported file path; out-of-root paths stay absolute.
 fn relativize_file(repo_root: &Path, absolute: &str) -> (String, bool) {
     match Path::new(absolute).strip_prefix(repo_root) {
@@ -389,7 +266,7 @@ fn relativize_dir(repo_root: &Path, absolute: &str, hint: &str) -> Result<String
 }
 
 /// Render a relative path with POSIX separators.
-fn posix(relative: &Path) -> String {
+pub(crate) fn posix(relative: &Path) -> String {
     relative
         .components()
         .map(|component| component.as_os_str().to_string_lossy())

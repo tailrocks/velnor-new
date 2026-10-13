@@ -38,6 +38,8 @@ fn uses_validation_rejects_moving_refs_and_forbidden_actions() {
     assert!(validate_uses(&pin("actions/checkout")).is_ok());
     assert!(validate_uses("actions/checkout@main").is_err());
     assert!(validate_uses("actions/checkout@v4").is_err());
+    assert!(validate_uses("asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb").is_ok());
+    assert!(validate_uses("asamarts/alint@v0.16.1").is_err());
     assert!(validate_uses("actions/checkout@ABCDEF").is_err());
     assert!(validate_uses("actions/checkout").is_err());
     assert!(validate_uses("just-a-name").is_err());
@@ -271,9 +273,10 @@ fn emit_ctx() -> RenderContext {
         staged_binary: format!("{STAGED_BINARY_PREFIX}{EMIT_VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: pin("actions/checkout"),
-        policy_commands: Vec::new(),
+        validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
+        plan_consumer_env: std::collections::BTreeMap::new(),
     }
 }
 
@@ -285,6 +288,8 @@ fn emit_triggers() -> Trigger {
             .collect(),
         push_branches: vec!["main".to_owned()],
         merge_group: true,
+        workflow_dispatch: None,
+        schedule: None,
     }
 }
 
@@ -299,12 +304,14 @@ fn emit_concurrency() -> Concurrency {
 fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
     let mut jobs = BTreeMap::new();
     jobs.insert(
-        "velnor-plan".to_owned(),
+        "plan".to_owned(),
         Job {
-            display_name: "Velnor Plan".to_owned(),
+            display_name: "Plan".to_owned(),
             runs_on: EMIT_LABEL.to_owned(),
             needs: Vec::new(),
             condition: None,
+            permissions: None,
+            environment: None,
             steps: vec![
                 checkout_step(&pin("actions/checkout"))?,
                 shell_step(
@@ -319,10 +326,7 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
     let ir = WorkflowIr {
         name: "CI".to_owned(),
         triggers: emit_triggers(),
-        permissions: Permissions {
-            contents: "read".to_owned(),
-            actions: "read".to_owned(),
-        },
+        permissions: Permissions::default(),
         concurrency: emit_concurrency(),
         jobs,
     };

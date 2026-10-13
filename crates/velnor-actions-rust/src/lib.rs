@@ -9,11 +9,21 @@ mod argv;
 pub mod cargo_env;
 pub mod detect;
 pub mod evidence;
+mod evidence_text;
 pub mod graph;
 pub mod identity;
 pub mod index;
+mod index_glob;
 pub mod metadata;
+pub mod metadata_edges;
 pub mod profile;
+mod profile_select;
+pub mod release_config;
+pub mod release_error;
+pub mod release_facts;
+pub mod release_graph;
+pub mod release_select;
+pub mod release_semver;
 pub mod scan;
 pub mod stability;
 pub mod tasks;
@@ -28,23 +38,40 @@ pub use detect::{
     to_detected_projects,
 };
 pub use evidence::{
-    Evidence, EvidenceFile, EvidenceStrength, NEXTEST_RECOMMENDATION, PERSIST_EVIDENCE,
-    evidence_scan_excluded, is_generated_output,
+    Evidence, EvidenceFile, EvidenceStrength, MiseWrapperInput, NEXTEST_RECOMMENDATION,
+    NextestConfigInput, PERSIST_EVIDENCE, SHADOWED_NEXTEST_CONFIG, evidence_scan_excluded,
+    is_generated_output,
 };
 pub use graph::{dedupe_workspaces, reverse_closure};
 pub use identity::{GroupExtensionInputs, adapter_entry_metadata, expand_shards_for_group};
 pub use index::{
-    BUILTIN_EXCLUSIONS, FileIndex, IndexError, build_index, build_index_from_list,
-    build_index_walk, is_excluded, matches_glob, validate_pattern,
+    BUILTIN_EXCLUSIONS, FileIndex, IndexError, build_index, build_index_from_list, build_index_walk,
 };
+pub use index_glob::{is_excluded, matches_glob, validate_pattern};
 pub use metadata::{
-    DepKind, LocalEdge, METADATA_FORMAT_VERSION, MetadataError, PackageRecord, TargetRecord,
-    WorkspaceRecord, parse_metadata_json,
+    METADATA_FORMAT_VERSION, MetadataError, PackageRecord, TargetRecord, WorkspaceRecord,
+    parse_metadata_json,
 };
+pub use metadata_edges::{DepKind, LocalEdge, SkippedPathEdge};
 pub use profile::{
-    AMBIGUOUS_RUNNER_CODE, CompileDriver, PROFILE_CONFLICT_CODE, ProfileError, ProfileFinding,
-    ProfileInputs, ProfileOutcome, ProfileSource, Recommendation, RustExecutionProfile,
-    TRANSIENT_EVIDENCE_CODE, TestRunner, detect_profile,
+    AMBIGUOUS_DRIVER_CODE, AMBIGUOUS_RUNNER_CODE, CompileDriver, NextestProfile,
+    PROFILE_CONFLICT_CODE, ProfileError, ProfileFinding, ProfileInputs, ProfileOutcome,
+    ProfileSource, Recommendation, RustExecutionProfile, TRANSIENT_EVIDENCE_CODE, TestRunner,
+    detect_profile,
+};
+pub use release_config::{
+    DEFAULT_TAG_PATTERN, EmitOptions, ExistingTag, TagOutcome, TagState, VersionGroup,
+    classify_tag, emit_bootstrap_config, emit_release_plz_config, resolve_version_groups,
+};
+pub use release_error::ReleaseError;
+pub use release_facts::{DepFact, DepSource, PublishSetting, ReleaseFacts};
+pub use release_graph::{PackagingEdge, PublicationGraph, RegistryState, publication_graph};
+pub use release_select::{
+    DEFAULT_REGISTRY, ReleaseRequest, ReleaseScope, ReleaseSelection, ResolvedScope,
+    SelectedPackage, select_release_set,
+};
+pub use release_semver::{
+    PreIdent, SemVersion, VersionReq, parse_req, parse_version, req_matches, version_satisfies,
 };
 pub use stability::{
     CommittedProfile, committed_profile_differs, read_committed_profile_for_comparison,

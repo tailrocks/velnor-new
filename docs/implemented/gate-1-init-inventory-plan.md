@@ -1,6 +1,6 @@
 # Gate 1: repository root, config, inventory, and plan
 
-- State: recorded-pending-merge (branch `docs/velnor-actions-spec`; becomes implemented only on merge; required checks green on HEAD — run `36569723507`, `https://github.com/tailrocks/velnor-new/actions/runs/36569723507`)
+- State: recorded-pending-merge (branch `docs/velnor-actions-spec`; becomes implemented only on merge; required checks green at `bdfffb9` — run `36569723507`, `https://github.com/tailrocks/velnor-new/actions/runs/36569723507`)
 - Proof vocabulary: policy-on-source (CLI surface, config schema, detector ordering asserted over repo files and fixtures) + qualification-of-generator (generated workflow carries the same init/plan behavior in CI)
 - Specification: [implementation-plan.md](../proposed/implementation-plan.md) Gate 1 + [cli-contract.md](../proposed/cli-contract.md) + [architecture.md](../proposed/architecture.md) (discovery/config)
 - Landed by: unmerged branch `docs/velnor-actions-spec`, HEAD `bdfffb9`

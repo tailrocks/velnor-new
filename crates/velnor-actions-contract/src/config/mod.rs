@@ -4,12 +4,14 @@
 
 mod actions;
 mod discovery;
+mod release;
 mod resources;
 mod stacks;
 mod workflow;
 
-pub use actions::{ALINT_ACTION_KEY, ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
+pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
 pub use discovery::DiscoveryConfig;
+pub use release::{BootstrapRelease, ReleaseAuthentication, RustReleaseConfig};
 pub use resources::{
     ResourcesConfig, ShardTimingEvidence, TestShardingConfig, validate_shard_changes_need_evidence,
 };
@@ -17,7 +19,7 @@ pub use stacks::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
 };
 pub use workflow::{
-    GeneratorValidation, LATEST_RUNNER_LABEL, PolicyJob, RUNNER_LABEL_CATALOG, RunnerSelection,
+    GeneratorValidation, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, RunnerSelection,
     VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
 };
 

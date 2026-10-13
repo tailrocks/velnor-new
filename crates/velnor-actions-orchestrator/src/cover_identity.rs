@@ -1,10 +1,30 @@
-//! Generator identity resolution and baseline coverage application.
+//! Baseline coverage application over verified task identities.
+//!
+//! Coverage grants only when the obligation's digests match, the task
+//! group is discovered, its extension bytes validate, and its input
+//! closure resolves completely against the checkout.
+
+// Wired here so generator resolution compiles without touching `lib.rs`.
+#[path = "generator.rs"]
+pub(crate) mod generator;
+// Unit tests live here so `cover_identity.rs` keeps its size gate.
+#[cfg(test)]
+#[path = "cover_identity_tests.rs"]
+mod cover_identity_tests;
+// Test fixtures live apart so the test module keeps its size gate.
+#[cfg(test)]
+#[path = "cover_identity_fixtures.rs"]
+mod cover_identity_fixtures;
+
+use std::collections::BTreeSet;
 
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::{BaselineProof, ObligationDecision, Plan};
 use velnor_actions_mise::catalog::lock::{load_text, parse_generator_lock};
 
+use crate::cover_baseline::BaselineInputs;
+use crate::cover_baseline::provenance_check::ValidatedProvenance;
 use crate::discover::Discovery;
 use crate::extension_schemas::coverage_schema_known;
 use crate::external_data::{
@@ -14,68 +34,114 @@ use crate::internal::plan_obligation::{changed_keys, member_changed};
 use crate::internal_plan::extension_bundle;
 use crate::merge::BaselineManifest;
 
-/// Bootstrap lock resolving release generator identity for source builds.
-const GENERATOR_LOCK_REL: &str = ".velnor/generator.lock";
+pub(crate) use self::generator::{
+    SOURCE_BUILD_REASON, is_source_build, resolve_generator_identity,
+};
 
-/// Lookup-skipped reason for an unverifiable source-build generator.
-pub(crate) const SOURCE_BUILD_REASON: &str = "generator_unverifiable_source_build";
-
-/// True for generator SHAs that prove nothing: all-zero or empty.
+/// Cover-time closure digest for one group, or the refusal reason.
 ///
-/// An all-zero SHA is the source-build marker: no release binary stands
-/// behind it, so baseline evidence bound to it is unverifiable.
-pub(crate) fn is_source_build(sha: &str) -> bool {
-    sha.is_empty() || (sha.len() == 64 && sha.bytes().all(|b| b == b'0'))
+/// Undeclared reads and conservative execution refuse as before;
+/// extension bytes must validate (schema plus slots, not just the
+/// task-ID prefix); and the input closure must resolve completely
+/// against the checkout, with unknown inputs forbidding coverage.
+/// Graph digests come from the once-built snapshot index, never a
+/// per-group rescan. The caller compares the returned live digest
+/// against the baseline entry: only an exact match covers, so a source
+/// edit refuses even when the changed-work hint misses it.
+fn cover_closure_digest(
+    snapshot: &ExecutionSnapshot,
+    discovery: &Discovery,
+    group: &velnor_actions_rust::TaskGroup,
+    root: &std::path::Path,
+    catalog: &velnor_actions_mise::ToolCatalog,
+    label: &str,
+) -> Result<String, String> {
+    if group.undeclared_reads {
+        return Err("undeclared_inputs".to_owned());
+    }
+    let bundle = extension_bundle_with_snapshot(
+        snapshot,
+        discovery,
+        group,
+        Some(root),
+        nextest_config_for(discovery, group).as_deref(),
+    );
+    let ext = group.identity_extension(&bundle.inputs());
+    if ext.coverage_eligible().is_err() || ext.conservative_execution_required() {
+        return Err("undeclared_inputs".to_owned());
+    }
+    if let Err(err) = validate_rust_extension(&ext.to_stack_extension()) {
+        return Err(format!("extension_unverified:{err}"));
+    }
+    let Ok(toolchain) = toolchain_id(group, catalog) else {
+        return Err("toolchain_unresolvable".to_owned());
+    };
+    let platform = platform_id_for_group(label, group);
+    let closure = resolve_closure_at_root(
+        root,
+        group,
+        nextest_config_for(discovery, group).as_deref(),
+        bundle.graph_digest(),
+        &toolchain,
+        &platform,
+    );
+    if closure.verify_complete().is_err() {
+        return Err(format!(
+            "incomplete_inputs:{}",
+            closure.unknown_inputs().join(",")
+        ));
+    }
+    canonical_digest(&closure).map_err(|_| "closure_digest_failed".to_owned())
 }
 
-/// Fill an unverifiable generator SHA from the release lock when it pins
-/// this exact version and target; otherwise keep the source-build marker.
+/// Live closure digest verified against the baseline entry.
 ///
-/// Explicit caller-supplied SHAs win over the lock; any unreadable or
-/// mismatched lock quietly leaves the marker, skipping live lookup.
-pub(crate) fn resolve_generator_identity(plan: &mut Plan, root: &std::path::Path) {
-    if !is_source_build(&plan.generator.sha256) {
-        return;
-    }
-    let path = root.join(GENERATOR_LOCK_REL);
-    if !path.is_file() {
-        return;
-    }
-    let Ok(text) = load_text(&path) else {
-        return;
-    };
-    let Ok(lock) = parse_generator_lock(&text) else {
-        return;
-    };
-    let Some(target) = release_target(&plan.generator.target) else {
-        return;
-    };
-    if lock.generator.version != plan.generator.version {
-        return;
-    }
-    if let Some(record) = lock.binary_for_target(target) {
-        plan.generator.sha256.clone_from(&record.sha256);
+/// Resolves the cover-time closure (refusing unknown inputs, undeclared
+/// reads, and unverified extensions) and requires an exact match with
+/// the recorded entry digest; any drift executes instead of covering.
+fn verified_closure_digest(
+    snapshot: &ExecutionSnapshot,
+    discovery: &Discovery,
+    group: &velnor_actions_rust::TaskGroup,
+    entry_digest: &str,
+    root: &std::path::Path,
+    catalog: &velnor_actions_mise::ToolCatalog,
+    label: &str,
+) -> Result<String, String> {
+    let live = cover_closure_digest(snapshot, discovery, group, root, catalog, label)?;
+    if entry_digest == live {
+        Ok(live)
+    } else {
+        Err("closure_mismatch".to_owned())
     }
 }
 
-/// True when the adapter extension refuses baseline coverage (PAR-4.10).
+/// Mark one obligation covered from validated provenance only.
 ///
-/// Undeclared reads and conservative execution both force execution;
-/// obligations without adapter inputs keep the other coverage checks.
-fn coverage_refused(discovery: &Discovery, task_id: &str) -> bool {
-    let Some(group) = discovery
-        .task_groups
-        .iter()
-        .find(|group| group.task_id == task_id)
-    else {
+/// Returns false when the proof constructor rejects its inputs; the
+/// caller keeps the obligation executing instead of storing a forged
+/// or partial proof.
+fn mark_covered(
+    obligation: &mut PlanObligation,
+    task: &crate::merge::required_evidence::BaselineTaskEntry,
+    provenance: &ValidatedProvenance,
+) -> bool {
+    let Ok(proof) = BaselineProof::new(
+        &provenance.source_commit,
+        task.proof_run_id,
+        provenance.artifact_id,
+        &provenance.artifact_name,
+        &provenance.manifest_digest,
+    ) else {
         return false;
     };
-    let bundle = extension_bundle(discovery, group);
-    let ext = group.identity_extension(&bundle.inputs());
-    ext.coverage_eligible().is_err() || ext.conservative_execution_required()
+    obligation.decision = ObligationDecision::CoveredByTrustedBaseline;
+    obligation.reason = String::from("covered_by_trusted_baseline");
+    obligation.baseline_proof = Some(proof);
+    true
 }
 
-/// Release triple for a generator target: triples pass through, else map.
+/// Mark covered obligations and prune the matrix; returns covered count.
 ///
 /// Source builds record `{arch}-{os}`; release locks pin full triples.
 fn release_target(target: &str) -> Option<&str> {
@@ -125,11 +191,27 @@ pub(crate) fn apply_coverage(
                 .push(format!("baseline_miss:{}:no_entry", obligation.task_id));
             continue;
         };
-        if coverage_refused(discovery, &obligation.task_id) {
+        let Some(group) = group else {
             plan.warnings.push(format!(
-                "baseline_miss:{}:undeclared_inputs",
+                "baseline_miss:{}:undiscovered_task_group",
                 obligation.task_id
             ));
+            continue;
+        };
+        if member_changed(group, changed, &keys) {
+            continue;
+        }
+        if let Err(reason) = verified_closure_digest(
+            &snapshot,
+            discovery,
+            group,
+            &task.closure_digest,
+            inputs.root,
+            inputs.catalog,
+            &plan.runner.label,
+        ) {
+            plan.warnings
+                .push(format!("baseline_miss:{}:{reason}", obligation.task_id));
             continue;
         }
         if !coverage_schema_known(&obligation.task_id) {
@@ -163,6 +245,12 @@ pub(crate) fn apply_coverage(
         });
         covered += 1;
     }
+    prune_to_execute(plan);
+    covered
+}
+
+/// Drop covered matrix entries and deselect fully-covered packages.
+fn prune_to_execute(plan: &mut Plan) {
     plan.matrix.include.retain(|entry| {
         plan.obligations
             .iter()

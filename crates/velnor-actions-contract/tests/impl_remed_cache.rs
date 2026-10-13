@@ -126,19 +126,24 @@ fn cache_entry_records_five_identity_digests() -> Result<(), ContractError> {
     let mut entry = sample_entry(&run_key)?;
     assert!(entry.cache_ids.is_none());
     entry.validate(&run_key)?;
-    entry.cache_ids = Some(EntryCacheIds {
-        workspace_id: digest_b3(b"w"),
-        lane_id: digest_b3(b"lane"),
-        platform_id: digest_b3(b"plat"),
-        toolchain_id: digest_b3(b"tool"),
-        cache_format_id: digest_b3(b"fmt"),
-    });
+    entry.cache_ids = Some(EntryCacheIds::new(
+        &digest_b3(b"w"),
+        &digest_b3(b"lane"),
+        &digest_b3(b"plat"),
+        &digest_b3(b"tool"),
+        &digest_b3(b"fmt"),
+    )?);
     entry.validate(&run_key)?;
     let text = serde_json::to_string(&entry).expect("serialize");
     assert!(text.contains("cache_format_id"));
-    let mut bad = entry.clone();
-    bad.cache_ids.as_mut().expect("ids").lane_id = "nope".to_owned();
-    assert!(bad.validate(&run_key).is_err());
+    let bad = EntryCacheIds::new(
+        &digest_b3(b"w"),
+        "nope",
+        &digest_b3(b"plat"),
+        &digest_b3(b"tool"),
+        &digest_b3(b"fmt"),
+    );
+    assert!(bad.is_err());
     Ok(())
 }
 

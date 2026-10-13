@@ -1,18 +1,19 @@
-//! Plan- and task-job Cargo source preparation ahead of locked/offline consumers.
+//! P08 Cargo source preparation: shared snapshot, offline skip, single writer.
 //!
-//! Gate 1 orders resolution after preparation: `cargo fetch --locked`
-//! populates every target's sources from the network once, so the later
-//! locked/offline qualification inside `generate` (and `plan`) succeeds
-//! from a cold runner. Steps are gated on lockfile presence: lockless
-//! workspaces have nothing pinned, so `fetch --locked` (which refuses to
-//! create a lock) is omitted exactly where qualification is skipped.
+//! Gate 1 orders resolution after preparation, but P08 restores the shared
+//! sources snapshot and configures MBX BEFORE any fetch: when the metadata
+//! probe proves all locked sources present, the step skips online fetch and
+//! obligations run `--offline`; a cold/incomplete cache fetches through this
+//! explicit path and records the miss in the job log. Steps are gated on
+//! lockfile presence (lockless emits nothing). The plan job is the single
+//! race-safe trusted writer (owned homes, saves once); crate jobs restore
+//! read-only and never save the shared key.
 
 use std::collections::BTreeMap;
-use std::ffi::OsString;
 use std::path::Path;
 
 use velnor_actions_contract::{Step, StepKind};
-use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use crate::OrchestratorError;
 use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
@@ -38,39 +39,54 @@ pub(crate) fn lockful_roots(root: &Path, workspaces: &[PlannedWorkspace]) -> Vec
     roots
 }
 
-/// One `cargo fetch --locked` step per lockful workspace root.
+/// Fetch steps for crate jobs (readers): probe, skip when warm, else fetch.
 ///
-/// The root workspace keeps the minimal argv; nested workspaces name
-/// their manifest explicitly and carry it in the step name. The caller
-/// supplies the step env, which MUST equal the cargo-consumer env of
-/// the same job: fetched sources land in the `MISE_CARGO_HOME` this
-/// step runs with, so a divergent home hides them from the readers.
-/// Task jobs pass the owned-homes triple their `Run task` step reads;
-/// plan jobs pass the empty map their ambient-home helper inherits.
+/// Env is the validated obligation contract, so fetch and consumer match
+/// by construction.
 /// # Errors
 ///
-/// Returns a contract error when the Mise adapter rejects the request.
-pub(crate) fn fetch_steps(
+/// Returns contract errors for rejected roots or step-env failures.
+pub(crate) fn fetch_steps_for_crate(
+    catalog: &ToolCatalog,
+    roots: &[String],
+) -> Result<Vec<Step>, OrchestratorError> {
+    let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new())?;
+    fetch_steps_with(catalog, roots, &env)
+}
+
+/// Fetch steps for the plan job (trusted writer): same owned homes.
+///
+/// The writer seeds the shared snapshot at the same Cargo-home expression
+/// readers restore, so save and restore never disagree on location.
+/// # Errors
+///
+/// Returns contract errors for rejected roots or step-env failures.
+pub(crate) fn fetch_steps_for_plan(
+    catalog: &ToolCatalog,
+    roots: &[String],
+) -> Result<Vec<Step>, OrchestratorError> {
+    let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new())?;
+    fetch_steps_with(catalog, roots, &env)
+}
+
+/// One probe-and-fetch `sh -c` step per lockful root.
+///
+/// The script runs `cargo metadata --locked --offline` first: success
+/// skips online fetch (warm path); failure fetches explicitly and echoes
+/// the miss reason. Nested roots name their manifest in argv and step name.
+/// # Errors
+///
+/// Returns contract errors for unsafe roots or rejected vectors.
+fn fetch_steps_with(
     catalog: &ToolCatalog,
     roots: &[String],
     env: &BTreeMap<String, String>,
 ) -> Result<Vec<Step>, OrchestratorError> {
     let mut steps = Vec::with_capacity(roots.len());
     for root in roots {
+        validate_root(root)?;
+        let script = fetch_script(catalog, root);
         let manifest = workspace_manifest(root);
-        let mut args = vec![OsString::from("fetch"), OsString::from("--locked")];
-        if !root.is_empty() {
-            args.push(OsString::from("--manifest-path"));
-            args.push(OsString::from(&manifest));
-        }
-        let program = OsString::from("cargo");
-        let exec = PinnedToolExec::new(vec![PinnedTool::Rust], &program, args).map_err(|err| {
-            OrchestratorError::Contract {
-                problem: err.to_string(),
-            }
-        })?;
-        let run = strings_of(exec.argv(catalog))
-            .map_err(|problem| OrchestratorError::Contract { problem })?;
         let name = if root.is_empty() {
             FETCH_SOURCES_STEP.to_owned()
         } else {
@@ -79,7 +95,7 @@ pub(crate) fn fetch_steps(
         steps.push(Step {
             name,
             kind: StepKind::Shell {
-                run,
+                run: vec!["sh".to_owned(), "-c".to_owned(), script],
                 env: env.clone(),
             },
         });
@@ -87,85 +103,151 @@ pub(crate) fn fetch_steps(
     Ok(steps)
 }
 
-/// Convert fixed argv to UTF-8 strings.
-fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
-    let mut out = Vec::with_capacity(argv.len());
-    for arg in argv {
-        match arg.into_string() {
-            Ok(text) => out.push(text),
-            Err(_) => return Err("non_utf8_argv".to_owned()),
-        }
+/// Fixed probe-and-fetch script for one root (manifest quoted, no injection).
+fn fetch_script(catalog: &ToolCatalog, root: &str) -> String {
+    let spec = catalog.tool_spec(PinnedTool::Rust);
+    let base = format!("mise --no-config --no-env --no-hooks exec {spec} -- cargo");
+    let manifest = if root.is_empty() {
+        String::new()
+    } else {
+        format!(" --manifest-path '{}'", workspace_manifest(root))
+    };
+    let probe = format!("{base} metadata --locked --offline{manifest} >/dev/null 2>&1");
+    let fetch = format!("{base} fetch --locked{manifest}");
+    format!(
+        "if {probe}; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; {fetch}; fi"
+    )
+}
+
+/// Reject roots unsafe for shell interpolation or cache keys.
+pub(crate) fn validate_root(root: &str) -> Result<(), OrchestratorError> {
+    let bad = root.contains("..")
+        || root.contains('\'')
+        || root.contains('"')
+        || root.contains('$')
+        || root.contains('`')
+        || root.contains('\\')
+        || root.contains('\n')
+        || root.starts_with('/');
+    if bad {
+        return Err(OrchestratorError::Contract {
+            problem: format!("unsafe_fetch_root:{root}"),
+        });
     }
-    Ok(out)
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn root_step_vector_is_byte_exact() {
-        let catalog = ToolCatalog::pinned();
-        let steps = fetch_steps(&catalog, &[String::new()], &BTreeMap::new()).expect("fetch steps");
-        assert_eq!(steps.len(), 1);
-        assert_eq!(steps[0].name, FETCH_SOURCES_STEP);
-        let want: Vec<String> = [
-            "mise",
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "exec",
-            &catalog.tool_spec(PinnedTool::Rust),
-            "--",
-            "cargo",
-            "fetch",
-            "--locked",
-        ]
-        .iter()
-        .map(ToString::to_string)
-        .collect();
-        let StepKind::Shell { run, env } = &steps[0].kind else {
-            panic!("fetch must be a shell step");
-        };
-        assert_eq!(run, &want);
-        assert!(env.is_empty(), "plan fetch keeps ambient homes");
+    fn shell_parts(kind: &StepKind) -> Option<(&Vec<String>, &BTreeMap<String, String>)> {
+        match kind {
+            StepKind::Shell { run, env } => Some((run, env)),
+            _ => None,
+        }
     }
 
     #[test]
-    fn caller_env_is_carried_verbatim() {
+    fn root_step_probes_before_fetch_with_miss_record() {
         let catalog = ToolCatalog::pinned();
-        let env = BTreeMap::from([
-            ("MISE_RUSTUP_HOME".to_owned(), "rustup".to_owned()),
-            ("MISE_CARGO_HOME".to_owned(), "cargo".to_owned()),
-            ("RUSTUP_TOOLCHAIN".to_owned(), "1.98.1".to_owned()),
-        ]);
-        let steps = fetch_steps(&catalog, &[String::new()], &env).expect("fetch steps");
-        let StepKind::Shell { env: got, .. } = &steps[0].kind else {
-            panic!("fetch must be a shell step");
-        };
-        assert_eq!(got, &env, "task fetch must match Run task homes");
+        let steps = fetch_steps_for_plan(&catalog, &[String::new()]).expect("fetch steps");
+        assert_eq!(steps.len(), 1);
+        assert_eq!(steps[0].name, FETCH_SOURCES_STEP);
+        let (run, env) = shell_parts(&steps[0].kind).expect("fetch must be a shell step");
+        assert_eq!(&run[..2], ["sh", "-c"]);
+        let spec = catalog.tool_spec(PinnedTool::Rust);
+        for need in [
+            format!("mise --no-config --no-env --no-hooks exec {spec} -- cargo"),
+            "metadata --locked --offline".to_owned(),
+            "cargo fetch --locked".to_owned(),
+            "sources hit, skipping fetch".to_owned(),
+            "sources miss (source_missing)".to_owned(),
+        ] {
+            assert!(run[2].contains(&need), "script misses {need}: {}", run[2]);
+        }
+        assert!(
+            env.get("MISE_CARGO_HOME").is_some_and(|v| !v.is_empty()),
+            "writer uses owned homes"
+        );
+    }
+
+    #[test]
+    fn crate_fetch_carries_full_validated_contract() {
+        let catalog = ToolCatalog::pinned();
+        let steps = fetch_steps_for_crate(&catalog, &[String::new()]).expect("fetch steps");
+        let (_, got) = shell_parts(&steps[0].kind).expect("fetch must be a shell step");
+        for (key, value) in [
+            ("MISE_NO_CONFIG", "1"),
+            ("MISE_NO_ENV", "1"),
+            ("MISE_NO_HOOKS", "1"),
+            ("MISE_LOCKFILE", "0"),
+            ("MISE_AUTO_INSTALL", "false"),
+            ("MISE_EXEC_AUTO_INSTALL", "false"),
+        ] {
+            assert_eq!(
+                got.get(key).map(String::as_str),
+                Some(value),
+                "crate fetch must carry the validated policy pair {key}"
+            );
+        }
+        for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
+            assert!(
+                got.get(key).is_some_and(|value| !value.is_empty()),
+                "crate fetch must carry a non-empty {key}"
+            );
+        }
+        for key in [
+            "MISE_GITHUB_TOKEN",
+            "GITHUB_TOKEN",
+            "GH_TOKEN",
+            "ACTIONS_RUNTIME_TOKEN",
+        ] {
+            assert!(
+                !got.contains_key(key),
+                "crate fetch must never carry a credential {key}"
+            );
+        }
+        let shared = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new())
+            .expect("shared crate env");
+        assert_eq!(
+            got, &shared,
+            "fetch must match obligation steps by construction"
+        );
+    }
+
+    #[test]
+    fn plan_fetch_uses_owned_homes_for_shared_snapshot() {
+        let catalog = ToolCatalog::pinned();
+        let steps = fetch_steps_for_plan(&catalog, &[String::new()]).expect("fetch steps");
+        let (_, got) = shell_parts(&steps[0].kind).expect("fetch must be a shell step");
+        let shared =
+            crate::matrix_step::task_step_env(&catalog, &BTreeMap::new()).expect("shared env");
+        assert_eq!(
+            got, &shared,
+            "writer and readers share one Cargo home expression"
+        );
     }
 
     #[test]
     fn nested_step_names_its_manifest() {
         let catalog = ToolCatalog::pinned();
-        let steps =
-            fetch_steps(&catalog, &["nested".to_owned()], &BTreeMap::new()).expect("fetch steps");
+        let steps = fetch_steps_for_plan(&catalog, &["nested".to_owned()]).expect("fetch steps");
         assert_eq!(steps.len(), 1);
         assert_eq!(steps[0].name, "Fetch Cargo sources (nested/Cargo.toml)");
-        let StepKind::Shell { run, .. } = &steps[0].kind else {
-            panic!("fetch must be a shell step");
-        };
-        assert_eq!(
-            &run[run.len() - 2..],
-            ["--manifest-path", "nested/Cargo.toml"]
+        let (run, _) = shell_parts(&steps[0].kind).expect("fetch must be a shell step");
+        assert!(
+            run[2].contains("--manifest-path 'nested/Cargo.toml'"),
+            "script names manifest: {}",
+            run[2]
         );
     }
 
     #[test]
     fn lockless_roots_emit_no_steps() {
         let catalog = ToolCatalog::pinned();
-        let steps = fetch_steps(&catalog, &[], &BTreeMap::new()).expect("fetch steps");
-        assert!(steps.is_empty());
+        let crates = fetch_steps_for_crate(&catalog, &[]).expect("crate fetch steps");
+        let plan = fetch_steps_for_plan(&catalog, &[]).expect("plan fetch steps");
+        assert!(crates.is_empty() && plan.is_empty());
     }
 }

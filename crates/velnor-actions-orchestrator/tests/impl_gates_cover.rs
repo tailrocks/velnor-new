@@ -14,6 +14,10 @@ fn plan_with_manifest(
 ) -> Result<(tempfile::TempDir, Plan), Box<dyn std::error::Error>> {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
+    git(
+        &["remote", "add", "origin", "https://github.com/o/r.git"],
+        root,
+    )?;
     git(&["add", "."], root)?;
     git(&["commit", "-m", "one"], root)?;
     std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\npub fn g() {}\n")?;
@@ -51,13 +55,14 @@ fn plan_at(
 /// Minimal manifest JSON for one base commit; tasks filled by callers.
 fn manifest_for(plan: &Plan, base: &str, tasks: &serde_json::Value) -> serde_json::Value {
     let compat = velnor_actions_contract::digest_b3(b"compat");
+    let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
     serde_json::json!({
-        "schema": 1,
-        "repository_id": velnor_actions_contract::digest_b3(b"repo"),
+        "schema": 2,
+        "repository_id": velnor_actions_contract::digest_b3(b"github.com/o/r"),
         "source_commit": base,
         "ref": "refs/heads/testmain",
         "event": "push",
-        "workflow_ref": "o/r/.github/workflows/velnor.yml@refs/heads/testmain",
+        "workflow_ref": format!("o/r/{workflow}@refs/heads/testmain"),
         "run_id": 7,
         "run_attempt": 1,
         "final_status": "passed",
@@ -80,6 +85,7 @@ fn entries_for(plan: &Plan) -> serde_json::Value {
                 "task_id": ob.task_id,
                 "task_digest": ob.task_digest,
                 "input_digest": ob.input_digest,
+                "closure_digest": ob.closure_digest,
                 "proof_run_id": 7,
                 "observed_run_id": 7,
             })
@@ -111,7 +117,7 @@ fn wrong_base_manifest_schedules_everything() -> TestResult {
         plan.warnings
     );
     assert_eq!(
-        plan.baseline.status,
+        plan.baseline.status(),
         velnor_actions_contract::BaselineStatus::Unavailable
     );
     Ok(())
@@ -137,7 +143,7 @@ fn malformed_manifest_is_a_miss_not_a_failure() -> TestResult {
     let (repo, seed) = plan_with_manifest(None)?;
     let base = seed.base.clone().expect("base");
     let mut stale = manifest_for(&seed, &base, &entries_for(&seed));
-    stale["schema"] = serde_json::json!(2);
+    stale["schema"] = serde_json::json!(1);
     let plan = plan_at(repo.path(), &base, &seed.head, Some(stale))?;
     assert!(
         plan.warnings
@@ -181,7 +187,7 @@ fn tampered_task_entry_executes_with_miss_warning() -> TestResult {
         plan.warnings
     );
     assert_eq!(
-        plan.baseline.status,
+        plan.baseline.status(),
         velnor_actions_contract::BaselineStatus::Used
     );
     Ok(())
@@ -220,7 +226,7 @@ fn valid_manifest_covers_exact_obligations() -> TestResult {
     );
     plan.validate()?;
     assert_eq!(
-        plan.baseline.status,
+        plan.baseline.status(),
         velnor_actions_contract::BaselineStatus::Used
     );
     Ok(())
@@ -248,13 +254,14 @@ fn merge_rejects_covered_claims_without_manifest() -> TestResult {
     let first = 0;
     plan.obligations[first].decision = ObligationDecision::CoveredByTrustedBaseline;
     plan.obligations[first].reason = "covered_by_trusted_baseline".to_owned();
-    plan.obligations[first].baseline_proof = Some(velnor_actions_contract::BaselineProof {
-        source_commit: plan.base.clone().expect("base"),
-        run_id: 7,
-        artifact_id: 9,
-        artifact_name: "velnor-plan-local".to_owned(),
-        manifest_digest: velnor_actions_contract::digest_b3(b"manifest"),
-    });
+    let proof_base = plan.base.clone().expect("base");
+    plan.obligations[first].baseline_proof = Some(velnor_actions_contract::BaselineProof::new(
+        &proof_base,
+        7,
+        9,
+        "velnor-plan-local",
+        &velnor_actions_contract::digest_b3(b"manifest"),
+    )?);
     plan.validate()?;
     let reports = passing_reports(&plan)?;
     let request = serde_json::json!({

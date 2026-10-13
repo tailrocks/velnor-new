@@ -5,13 +5,12 @@ use velnor_actions_contract::{
 };
 use velnor_actions_orchestrator::merge_internal;
 
-use crate::impl_common::{
-    TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,
-    plan_for_source_change,
-};
+use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 
 /// Merge one request and parse the final report.
-fn merge(request: &serde_json::Value) -> Result<FinalReport, Box<dyn std::error::Error>> {
+pub(crate) fn merge(
+    request: &serde_json::Value,
+) -> Result<FinalReport, Box<dyn std::error::Error>> {
     Ok(serde_json::from_str(&merge_internal(
         &request.to_string(),
     )?)?)
@@ -42,9 +41,85 @@ fn merge_request(
     })
 }
 
+/// Consistent per-task files for a plan plus its matrix reports.
+///
+/// Mirrors every matrix task entry into the `TaskReport` file the merge
+/// requires: same report ID, task, status, and exit, with the plan
+/// obligation's digest. Entries without an obligation digest are
+/// skipped; the merge fails those legs closed on incoherence.
+pub(crate) fn task_reports_for(
+    plan: &serde_json::Value,
+    reports: &serde_json::Value,
+) -> serde_json::Value {
+    let mut digests = std::collections::BTreeMap::new();
+    let obligations = plan
+        .get("obligations")
+        .and_then(serde_json::Value::as_array);
+    for obligation in obligations.into_iter().flatten() {
+        let id = obligation
+            .get("task_id")
+            .and_then(serde_json::Value::as_str);
+        let digest = obligation
+            .get("task_digest")
+            .and_then(serde_json::Value::as_str);
+        if let (Some(id), Some(digest)) = (id, digest) {
+            digests.insert(id, digest);
+        }
+    }
+    let mut out = Vec::new();
+    for report in reports.as_array().into_iter().flatten() {
+        let tasks = report.get("tasks").and_then(serde_json::Value::as_array);
+        for task in tasks.into_iter().flatten() {
+            let id = task.get("task_id").and_then(serde_json::Value::as_str);
+            let report_id = task
+                .get("task_report_id")
+                .and_then(serde_json::Value::as_str);
+            let (Some(id), Some(report_id)) = (id, report_id) else {
+                continue;
+            };
+            let Some(digest) = digests.get(id) else {
+                continue;
+            };
+            let blocked =
+                task.get("status").and_then(serde_json::Value::as_str) == Some("not_selected");
+            out.push(serde_json::json!({
+                "schema": 1,
+                "task_report_id": report_id,
+                "run_key": plan.get("run_key").and_then(serde_json::Value::as_str).unwrap_or("local"),
+                "event": "pull_request",
+                "trust": "pr",
+                "matrix_id": report.get("matrix_id"),
+                "matrix_key": report.get("matrix_key"),
+                "task_id": id,
+                "task_digest": digest,
+                "status": task.get("status"),
+                "not_selected_reason": if blocked {
+                    serde_json::json!("upstream_failed")
+                } else {
+                    serde_json::Value::Null
+                },
+                "cache": {"layer": "task", "key": "", "result": "not_attempted"},
+                "exit_code": task.get("exit_code"),
+                "duration_ms": 0,
+                "outputs": [],
+            }));
+        }
+    }
+    out.sort_by(|left, right| {
+        let l = left
+            .get("task_report_id")
+            .and_then(serde_json::Value::as_str);
+        let r = right
+            .get("task_report_id")
+            .and_then(serde_json::Value::as_str);
+        l.cmp(&r)
+    });
+    serde_json::Value::Array(out)
+}
+
 /// One successful required job.
-fn success_jobs() -> serde_json::Value {
-    serde_json::json!([{"job_id": "velnor-plan", "conclusion": "success"}])
+pub(crate) fn success_jobs() -> serde_json::Value {
+    serde_json::json!([{"job_id": "plan", "conclusion": "success"}])
 }
 
 /// Rewrite the single task of a passing report, keeping counts coherent.
@@ -150,6 +225,37 @@ fn round_trip_passed_with_counts() -> TestResult {
 }
 
 #[test]
+fn one_failed_crate_fails_required_with_counts() -> TestResult {
+    let (_repo, plan) = crate::impl_orch_core::plan_for_partial_change()?;
+    let mut reports = passing_reports(&plan)?;
+    let mut failed = 0;
+    for report in reports
+        .iter_mut()
+        .filter(|report| report.tasks.iter().any(|task| task.task_id.contains("/a/")))
+    {
+        set_task(report, TaskStatus::Failed, MatrixStatus::Failed)?;
+        failed += 1;
+    }
+    assert!(failed > 0 && failed < reports.len(), "one crate fails");
+    let request = merge_request(
+        &plan,
+        &serde_json::to_value(&plan.matrix)?,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(),
+    );
+    let final_report = merge(&request)?;
+    assert_eq!(final_report.status, FinalStatus::Failed);
+    assert_eq!(final_report.counts.failed as usize, failed);
+    assert_eq!(
+        final_report.counts.executed as usize,
+        reports.len() - failed,
+        "sibling crate still proves its work"
+    );
+    assert_eq!(final_report.counts.not_run, 0);
+    Ok(())
+}
+
+#[test]
 fn precedence_matrix() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let matrix = serde_json::to_value(&plan.matrix)?;
@@ -204,11 +310,11 @@ fn precedence_matrix() -> TestResult {
 
     // Required-job conclusions join the same precedence.
     let reports = passing_reports(&plan)?;
-    let failed_job = serde_json::json!([{"job_id": "velnor-plan", "conclusion": "failure"}]);
+    let failed_job = serde_json::json!([{"job_id": "plan", "conclusion": "failure"}]);
     assert_eq!(run(reports.clone(), failed_job)?, FinalStatus::Failed);
-    let cancelled_job = serde_json::json!([{"job_id": "velnor-plan", "conclusion": "cancelled"}]);
+    let cancelled_job = serde_json::json!([{"job_id": "plan", "conclusion": "cancelled"}]);
     assert_eq!(run(reports.clone(), cancelled_job)?, FinalStatus::Cancelled);
-    let skipped_job = serde_json::json!([{"job_id": "velnor-plan", "conclusion": "skipped"}]);
+    let skipped_job = serde_json::json!([{"job_id": "plan", "conclusion": "skipped"}]);
     assert_eq!(run(reports.clone(), skipped_job)?, FinalStatus::NotRun);
 
     // Duplicate reports are not-run, never success.

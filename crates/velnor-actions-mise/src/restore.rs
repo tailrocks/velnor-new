@@ -7,6 +7,7 @@
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
 use crate::cache::{TaskCacheMode, verify_reused_outputs};
+use crate::command::is_cancel_or_timeout;
 use crate::error::MiseError;
 use crate::reuse::{ReuseGrant, ReuseQualification};
 
@@ -36,10 +37,12 @@ pub struct RestoreEvidence {
 }
 
 impl RestoreEvidence {
-    /// All checks passing.
+    /// Build evidence from five real observations (no `intact()` shortcut).
+    ///
+    /// Order follows [`RestoreCheck`]: presence, digest, compat, owner, inputs.
     #[must_use]
-    pub fn intact() -> Self {
-        Self { checks: [true; 5] }
+    pub fn verify(checks: [bool; 5]) -> Self {
+        Self { checks }
     }
 
     /// Record one failing check.
@@ -216,11 +219,20 @@ impl ReuseFallback {
     }
 }
 
-/// Map any mise failure to the miss reason reported while executing
-/// anyway (REUSE-6). The mapping is total over [`MiseError`].
-#[must_use]
-pub fn fallback_for_error(error: &MiseError) -> MissReason {
-    match error {
+/// Map a mise failure to its miss reason, or propagate cancellation.
+///
+/// Cancel/timeout is checked BEFORE the mapping and returned as the
+/// typed [`MiseError`]: a hung or cancelled child never degrades into
+/// a normal cache miss (P07-5). All other failures map totally.
+///
+/// # Errors
+///
+/// Returns the original error when it is cancellation or timeout.
+pub fn fallback_for_error(error: &MiseError) -> Result<MissReason, MiseError> {
+    if is_cancel_or_timeout(error) {
+        return Err(error.clone());
+    }
+    Ok(match error {
         MiseError::CacheNotEligible { reason, .. } => match reason.as_str() {
             "task_result_incomplete" => MissReason::TASK_RESULT_INCOMPLETE,
             "forced_uncached" => MissReason::FORCED_UNCACHED,
@@ -247,7 +259,7 @@ pub fn fallback_for_error(error: &MiseError) -> MissReason {
         | MiseError::InvalidNextestInput { .. }
         | MiseError::InvalidStepInput { .. }
         | MiseError::ArtifactEscapesRoot { .. } => MissReason::TASK_NOT_ELIGIBLE,
-    }
+    })
 }
 
 /// Pinned-tool availability for the reuse decision (REUSE-7).
@@ -255,8 +267,30 @@ pub fn fallback_for_error(error: &MiseError) -> MissReason {
 pub enum ToolAvailability {
     /// Pinned tools passed qualification and are runnable.
     Ready,
+    /// Task-cache feature present but Gate-6 qualification unpassed.
+    Unqualified,
     /// Pinned tools failed qualification or are missing.
     Missing,
+}
+
+/// Honest Gate-6 qualification status (P04-10): task-cache NOT qualified.
+///
+/// No experiment has proven the opaque transport round-trips outputs
+/// on the real backend. Probes report `Unqualified` until then.
+pub const TASK_CACHE_QUALIFICATION_GATE: &str =
+    "unpassed:gate6_mise_task_cache_requires_backend_proof";
+
+/// Probe availability: `Ready` only with Gate-6 evidence, else explicit
+/// `Unqualified` (default) or `Missing` when the probe itself failed.
+#[must_use]
+pub fn probe_tool_availability(qualified: bool, probe_failed: bool) -> ToolAvailability {
+    if probe_failed {
+        ToolAvailability::Missing
+    } else if qualified {
+        ToolAvailability::Ready
+    } else {
+        ToolAvailability::Unqualified
+    }
 }
 
 /// Reuse plan: reuse under a grant, or execute with a fallback reason.
@@ -276,12 +310,25 @@ pub fn plan_reuse(
     qualification: &ReuseQualification,
     mode: TaskCacheMode,
 ) -> ReusePlan {
-    if availability != ToolAvailability::Ready {
-        return ReusePlan::Execute(ReuseFallback::execute_with(MissReason::CACHE_UNAVAILABLE));
+    match availability {
+        ToolAvailability::Ready => {}
+        ToolAvailability::Unqualified => {
+            return ReusePlan::Execute(ReuseFallback::execute_with(MissReason::FORCED_UNCACHED));
+        }
+        ToolAvailability::Missing => {
+            return ReusePlan::Execute(ReuseFallback::execute_with(MissReason::CACHE_UNAVAILABLE));
+        }
     }
     match qualification.check(mode) {
         Ok(grant) => ReusePlan::Reuse(grant),
-        Err(error) => ReusePlan::Execute(ReuseFallback::execute_with(fallback_for_error(&error))),
+        Err(error) => {
+            debug_assert!(
+                !is_cancel_or_timeout(&error),
+                "pure qualification never cancels"
+            );
+            let reason = fallback_for_error(&error).unwrap_or(MissReason::FORCED_UNCACHED);
+            ReusePlan::Execute(ReuseFallback::execute_with(reason))
+        }
     }
 }
 

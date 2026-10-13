@@ -51,6 +51,8 @@ pub enum FinalStatus {
     Failed,
     /// A required task was cancelled.
     Cancelled,
+    /// A required task was blocked (`not_selected`), below cancelled.
+    Blocked,
     /// A selected entry lacks a valid report.
     NotRun,
     /// Planning or validation failed.

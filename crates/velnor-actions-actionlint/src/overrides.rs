@@ -5,8 +5,8 @@
 
 use crate::ActionlintError;
 use crate::actions::{
-    ALINT_ACTION, ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef, is_full_sha, is_version_tag,
-    split_key,
+    ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef, RUST_CACHE_ACTION, is_full_sha,
+    is_version_tag, split_key,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -58,7 +58,7 @@ impl ApprovedPinCatalog {
         sha: &str,
         version: &str,
     ) -> Result<(), ActionlintError> {
-        if !ALLOWED_ACTIONS.contains(&action) || action == ALINT_ACTION {
+        if !ALLOWED_ACTIONS.contains(&action) {
             return Err(ActionlintError::OverrideRejected {
                 action: action.to_owned(),
                 problem: "action_not_overridable".to_owned(),
@@ -84,18 +84,12 @@ impl ApprovedPinCatalog {
     ///
     /// # Errors
     ///
-    /// Returns [`ActionlintError`] for unknown or Alint actions, malformed
+    /// Returns [`ActionlintError`] for unknown actions, malformed
     /// pairs, and pairs absent from the catalog.
     pub fn validate_override(
         &self,
         request: &ActionPinOverride,
     ) -> Result<PinnedActionRef, ActionlintError> {
-        if request.action == ALINT_ACTION {
-            return Err(ActionlintError::OverrideRejected {
-                action: request.action.clone(),
-                problem: "alint_not_overridable".to_owned(),
-            });
-        }
         if !ALLOWED_ACTIONS.contains(&request.action.as_str()) {
             return Err(ActionlintError::UnknownAction {
                 uses: request.action.clone(),
@@ -161,6 +155,30 @@ pub fn checkout_inputs_schema() -> ActionInputSchema {
         action: CHECKOUT_ACTION.to_owned(),
         required: vec!["persist-credentials".to_owned()],
         optional: vec!["ref".to_owned(), "fetch-depth".to_owned()],
+    }
+}
+
+/// Canonical input schema for the Cargo-only `rust-cache` step (P08-7).
+///
+/// Required (always explicit, never defaulted): `shared-key` (one shared
+/// registry identity, no job-id suffix), `save-if` (`true` only for the
+/// trusted writer, `false` for readers), `cache-targets` (always `false`
+/// in V1: registry only, targets stay per-lane ephemeral),
+/// `cache-on-failure` (always `false`: producer-successful saves only).
+/// Optional: `prefix-key`, `add-job-id-key` (always `false` when set).
+/// Every other upstream input (`workspaces`, `cache-all-crates`, ...) is
+/// rejected: V1 never sets per-job target caches over MBX-owned paths.
+#[must_use]
+pub fn rust_cache_inputs_schema() -> ActionInputSchema {
+    ActionInputSchema {
+        action: RUST_CACHE_ACTION.to_owned(),
+        required: vec![
+            "shared-key".to_owned(),
+            "save-if".to_owned(),
+            "cache-targets".to_owned(),
+            "cache-on-failure".to_owned(),
+        ],
+        optional: vec!["prefix-key".to_owned(), "add-job-id-key".to_owned()],
     }
 }
 

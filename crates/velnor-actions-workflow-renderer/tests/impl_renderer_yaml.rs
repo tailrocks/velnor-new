@@ -51,7 +51,7 @@ fn yaml_preserves_mapping_order() {
 fn yaml_quotes_only_when_required() {
     let cases = [
         ("plain", "plain"),
-        ("velnor-plan", "velnor-plan"),
+        ("plan", "plan"),
         ("ubuntu-26.04", "ubuntu-26.04"),
         ("a: b", "\"a: b\""),
         ("trailing:", "\"trailing:\""),

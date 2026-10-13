@@ -3,8 +3,8 @@ use crate::impl_contract_ids::{GROUP, MANIFEST, TASK, sample_entry};
 use std::collections::BTreeMap;
 use velnor_actions_contract::config::ActionsConfig;
 use velnor_actions_contract::{
-    BaselineStatus, ContractError, DECLARED_GITHUB_FORMATS, DiscoveryConfig, ObligationDecision,
-    Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner,
+    ContractError, DECLARED_GITHUB_FORMATS, DiscoveryConfig, ObligationDecision, Plan,
+    PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner,
     ResourcesConfig, RunnerSelection, RustStackConfig, StacksConfig, TestShardingConfig, Trust,
     VelnorConfig, WorkflowConfig, WorkflowEvent, WorkflowPolicy, digest_b3, find_github_format,
     is_declared_github_format, plan_id_for_run, run_key_for_ci,
@@ -54,15 +54,7 @@ pub(crate) fn sample_plan(run_key: &str) -> Result<Plan, ContractError> {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline {
-            status: BaselineStatus::Unavailable,
-            base_commit: None,
-            run_id: None,
-            artifact_id: None,
-            artifact_name: None,
-            manifest_digest: None,
-            reason: Some("no_entry".to_owned()),
-        },
+        baseline: PlanBaseline::unavailable(Some("no_entry"))?,
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -82,6 +74,7 @@ pub(crate) fn sample_plan(run_key: &str) -> Result<Plan, ContractError> {
             reason: "changed".to_owned(),
             task_digest: digest_b3(b"task"),
             input_digest: digest_b3(b"inputs"),
+            closure_digest: digest_b3(b"closure"),
             baseline_proof: None,
         }],
         matrix: PlanMatrix {
@@ -186,7 +179,7 @@ fn gen_declared_github_formats_gate_new_writers() {
     assert_eq!(DECLARED_GITHUB_FORMATS.len(), 2);
     let actionlint = find_github_format(".github/actionlint.yaml").expect("actionlint");
     assert_eq!(actionlint.owner, "velnor-actions-actionlint");
-    let workflow = find_github_format(".github/workflows/velnor.yml").expect("workflow");
+    let workflow = find_github_format(".github/workflows/ci.yml").expect("workflow");
     assert_eq!(workflow.owner, "velnor-actions-workflow-renderer");
     assert!(find_github_format(".github/workflows/other.yml").is_none());
     assert!(is_declared_github_format(".github/actionlint.yaml"));

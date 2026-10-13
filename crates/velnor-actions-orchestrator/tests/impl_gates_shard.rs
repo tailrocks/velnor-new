@@ -158,6 +158,9 @@ fn merge_with(
     proofs: &[serde_json::Value],
     extra: &serde_json::Value,
 ) -> Result<FinalStatus, Box<dyn std::error::Error>> {
+    let plan_value = serde_json::to_value(plan).unwrap_or(serde_json::Value::Null);
+    let reports_value = serde_json::to_value(reports).unwrap_or(serde_json::Value::Null);
+    let task_files = crate::impl_merge::task_reports_for(&plan_value, &reports_value);
     let mut request = serde_json::json!({
         "schema": 1,
         "run_key": "local",

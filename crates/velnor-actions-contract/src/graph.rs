@@ -31,6 +31,66 @@ pub enum ResourceClass {
     Exclusive,
 }
 
+/// Validated CPU bound in milli-cores: finite and positive (`Some(0)` is
+/// unrepresentable; use `None` for unbounded).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "u32")]
+pub struct CpuMilli(u32);
+
+impl CpuMilli {
+    /// Build a positive CPU bound.
+    /// # Errors
+    pub fn new(value: u32) -> Result<Self, ContractError> {
+        if value == 0 {
+            return Err(ContractError::identity("resource.cpu_milli", "zero_bound"));
+        }
+        Ok(Self(value))
+    }
+
+    /// Unwrap the bound.
+    #[must_use]
+    pub fn get(self) -> u32 {
+        self.0
+    }
+}
+
+impl TryFrom<u32> for CpuMilli {
+    type Error = ContractError;
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
+/// Validated memory bound in MiB: finite and positive (`Some(0)` is
+/// unrepresentable; use `None` for unbounded).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "u32")]
+pub struct MemoryMb(u32);
+
+impl MemoryMb {
+    /// Build a positive memory bound.
+    /// # Errors
+    pub fn new(value: u32) -> Result<Self, ContractError> {
+        if value == 0 {
+            return Err(ContractError::identity("resource.memory_mb", "zero_bound"));
+        }
+        Ok(Self(value))
+    }
+
+    /// Unwrap the bound.
+    #[must_use]
+    pub fn get(self) -> u32 {
+        self.0
+    }
+}
+
+impl TryFrom<u32> for MemoryMb {
+    type Error = ContractError;
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        Self::new(value)
+    }
+}
+
 /// Bounded resource demand for one node.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -39,10 +99,10 @@ pub struct ResourceDemand {
     pub class: ResourceClass,
     /// CPU bound in milli-cores, when bounded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cpu_milli: Option<u32>,
+    pub cpu_milli: Option<CpuMilli>,
     /// Memory bound in MiB, when bounded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub memory_mb: Option<u32>,
+    pub memory_mb: Option<MemoryMb>,
     /// Whether the task needs network access.
     #[serde(default)]
     pub needs_network: bool,
@@ -132,7 +192,7 @@ pub struct TaskGraph {
 }
 
 impl ResourceDemand {
-    /// Validate bounds and the service name.
+    /// Validate the service name (bounds are pre-validated newtypes).
     /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
         if self.class != ResourceClass::Service && self.service.is_some() {

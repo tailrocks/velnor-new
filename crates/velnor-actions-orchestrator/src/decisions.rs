@@ -309,12 +309,15 @@ pub fn dedupe_sorted(ids: &[String]) -> (Vec<String>, Vec<String>) {
     (unique, duplicates)
 }
 
-/// Select the exact-base successful push run; newest-other-commit forbidden.
+/// Select the newest exact-base successful push run.
+///
+/// The service lists newest first, so the first entry matching the base
+/// SHA, branch, push event, and success conclusion wins; any other
+/// commit, event, or conclusion never selects.
 ///
 /// # Errors
 ///
-/// Returns `baseline_unavailable` unless exactly one run matches the
-/// base SHA, branch, push event, and success conclusion.
+/// Returns `baseline_unavailable` unless at least one run matches.
 pub fn select_exact_base_run(text: &str, base: &str, branch: &str) -> Result<u64, String> {
     let runs: Vec<serde_json::Value> =
         serde_json::from_str(text).map_err(|_| "baseline_unavailable".to_owned())?;

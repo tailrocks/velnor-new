@@ -30,6 +30,7 @@ fn group() -> TaskGroup {
         uses_network: false,
         uses_clock: false,
         uses_random: false,
+        nextest_profile: "default".to_owned(),
     }
 }
 
@@ -39,7 +40,7 @@ fn committed_header_read_is_comparison_only() {
     assert!(is_generated_output(generated));
     let inputs = ProfileInputs {
         executables: vec![EvidenceFile {
-            path: ".github/workflows/velnor.yml",
+            path: ".github/workflows/ci.yml",
             content: generated,
         }],
         ..ProfileInputs::default()

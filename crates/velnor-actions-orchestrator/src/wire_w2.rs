@@ -1,37 +1,30 @@
-//! FLOW-half wiring: reuse, graph, archive, and baseline-download helpers.
+//! FLOW-half wiring: reuse qualification, archive identity (PAR-8.3).
 //!
-//! Pure coordination glue for the cross-crate TODO notes: task-cache reuse
-//! qualification (REUSE-1..3, REUSE-6..7), plan-graph construction (PAR-3.1,
-//! PAR-3.2), archive identity (PAR-8.3), and exact-name baseline downloads
-//! (PAR-5.10, PAR-5.5). Declared via `#[path]` from `internal_plan.rs`.
+//! Pure coordination glue, declared via `#[path]` from `internal_plan.rs`.
 
-use std::collections::BTreeMap;
+// Wired here so reuse stages compile without touching `lib.rs`.
+#[path = "reuse_stages.rs"]
+pub(crate) mod reuse_stages;
 
 use velnor_actions_contract::{
-    ObligationDecision, PlanGenerator, WorkflowEvent, cachekey, digest_b3,
-};
-use velnor_actions_mise::cache::mode_for_event;
-use velnor_actions_mise::restore::{
-    MissReason, RestoreEvidence, ReusePlan, fallback_for_error, plan_reuse,
-    verify_restored_task_result,
+    ObligationDecision, PlanGenerator, WorkflowEvent, digest_b3, validate_digest,
 };
 use velnor_actions_mise::{
-    ArchiveIdentityInputs, CachedTaskDescriptor, NextestArchive, NextestDriver, PinnedTool,
-    ReuseQualification, ReuseSignal, TaskCacheKey, TaskReuseRequest, ToolAvailability, ToolCatalog,
-    archive_identity,
+    ArchiveIdentityInputs, NextestArchive, NextestDriver, PinnedTool, ReuseQualification,
+    ReuseSignal, ToolAvailability, ToolCatalog, archive_identity,
+};
+use velnor_actions_mise::{
+    cache::mode_for_event,
+    restore::{MissReason, ReusePlan, plan_reuse},
 };
 use velnor_actions_rust::{TaskGroup, TaskKind};
 
-use crate::OrchestratorError;
-use crate::internal::{internal, internal_contract};
-use crate::internal_plan::manifest_for_key;
-
+use self::reuse_stages::verify_reused_pipeline;
+use crate::{OrchestratorError, internal::internal};
 /// Wiring inputs for one group: event plus generator identity.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct GroupWire<'a> {
-    /// Workflow event driving reuse.
     pub(crate) event: WorkflowEvent,
-    /// Generator identity for digests.
     pub(crate) generator: &'a PlanGenerator,
 }
 
@@ -42,14 +35,6 @@ pub(crate) fn reuse_event_name(event: WorkflowEvent) -> &'static str {
         WorkflowEvent::Push => "push",
         WorkflowEvent::MergeGroup => "merge_group",
         WorkflowEvent::Local => "local",
-    }
-}
-
-/// Cache-key trust scope for one workflow event.
-fn trust_name(event: WorkflowEvent) -> &'static str {
-    match event {
-        WorkflowEvent::Push | WorkflowEvent::MergeGroup => "trusted",
-        WorkflowEvent::PullRequest | WorkflowEvent::Fork | WorkflowEvent::Local => "pr",
     }
 }
 
@@ -71,13 +56,9 @@ pub(crate) fn reuse_qualification(group: &TaskGroup, event: WorkflowEvent) -> Re
 
 /// Reuse outcome for one plan obligation.
 pub(crate) struct ReuseOutcome {
-    /// Obligation decision.
     pub(crate) decision: ObligationDecision,
-    /// Precise decision reason.
     pub(crate) reason: String,
-    /// Task-cache key digest, when reuse was granted.
     pub(crate) task_cache_key: Option<String>,
-    /// Gate-6 task-layer enablement for the obligation.
     pub(crate) task_cache_enabled: bool,
 }
 
@@ -106,13 +87,12 @@ pub(crate) fn plan_reuse_outcome(
     input_digest: &str,
     reuse_eligible: bool,
 ) -> Result<ReuseOutcome, OrchestratorError> {
+    validate_digest(toolchain_id).map_err(|err| internal(&err.to_string()))?;
+    validate_digest(input_digest).map_err(|err| internal(&err.to_string()))?;
     if !reuse_eligible {
-        return Ok(ReuseOutcome {
-            decision: ObligationDecision::Execute,
-            reason: MissReason::TASK_NOT_ELIGIBLE.as_str().to_owned(),
-            task_cache_key: None,
-            task_cache_enabled: false,
-        });
+        return Ok(ReuseOutcome::execute_with(
+            MissReason::TASK_NOT_ELIGIBLE.as_str().to_owned(),
+        ));
     }
     if availability != ToolAvailability::Ready {
         return Ok(ReuseOutcome {
@@ -125,84 +105,85 @@ pub(crate) fn plan_reuse_outcome(
     let mode = mode_for_event(reuse_event_name(event))
         .map_err(|err| internal(&format!("reuse_mode_rejected:{err}")))?;
     match plan_reuse(availability, &reuse_qualification(group, event), mode) {
-        ReusePlan::Reuse(grant) => {
-            let descriptor = reuse_descriptor(group);
-            let request = TaskReuseRequest::new(descriptor, &[], grant)
-                .map_err(|err| internal(&format!("task_reuse_rejected:{err}")))?;
-            let key = TaskCacheKey::derive(request.grant(), request.descriptor());
-            let digest = match key {
-                Ok(key) => key.digest().to_owned(),
-                Err(err) => {
-                    let fallback = fallback_for_error(&err);
-                    return Ok(ReuseOutcome {
-                        decision: ObligationDecision::Execute,
-                        reason: fallback.as_str().to_owned(),
-                        task_cache_key: None,
-                        task_cache_enabled: false,
-                    });
-                }
-            };
-            let _read_key =
-                cachekey::cache_key("task", trust_name(event), toolchain_id, input_digest)
-                    .map_err(internal_contract)?;
-            Ok(ReuseOutcome {
-                decision: ObligationDecision::ReusedFromTaskCache,
-                reason: "reused_from_task_cache".to_owned(),
-                task_cache_key: Some(digest),
-                task_cache_enabled: true,
-            })
-        }
-        ReusePlan::Execute(fallback) => Ok(ReuseOutcome {
-            decision: ObligationDecision::Execute,
-            reason: fallback.reason().as_str().to_owned(),
-            task_cache_key: None,
-            task_cache_enabled: false,
-        }),
+        ReusePlan::Reuse(_) => Ok(ReuseOutcome::execute_with(
+            MissReason::NO_ENTRY.as_str().to_owned(),
+        )),
+        ReusePlan::Execute(fallback) => Ok(ReuseOutcome::execute_with(
+            fallback.reason().as_str().to_owned(),
+        )),
     }
 }
 
-/// Declared cache-key inputs: the kind-addressed task keyed by its manifest.
-fn reuse_descriptor(group: &TaskGroup) -> CachedTaskDescriptor {
-    CachedTaskDescriptor {
-        task_name: group.kind.as_str().to_owned(),
-        sources: vec![manifest_for_key(&group.manifest_key)],
-        outputs: Vec::new(),
-        command_inputs: Vec::new(),
-        env: BTreeMap::new(),
-        tools: Vec::new(),
-        dep_keys: Vec::new(),
+/// Shard index/count from a `/shard-<index>-of-<count>` task-ID suffix.
+fn parse_shard_suffix(task_id: &str) -> Option<(u32, u32)> {
+    let (_, shard) = task_id.split_once("/shard-")?;
+    if shard.contains('/') {
+        return None;
     }
+    let (index, count) = shard.split_once("-of-")?;
+    let (index, count) = (index.parse::<u32>().ok()?, count.parse::<u32>().ok()?);
+    if index == 0 || count == 0 || index > count {
+        return None;
+    }
+    Some((index, count))
 }
 
-/// Archive identity gate for sharded Nextest groups (PAR-8.3).
+/// Archive-gate verdict for one group.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ArchiveGate {
+    /// No archive to verify, or the archive identity verified.
+    Clear,
+    /// Sharded archive with unbound source: execute with reason, never abort.
+    SourceUnbound,
+}
+
+/// Archive gate with an explicit content-bound source digest.
 ///
-/// Unsharded groups run in place and need no archive; sharded groups must
-/// carry well-formed archive inputs over the real platform/config digests.
-pub(crate) fn check_archive_identity(
+/// Sharded Nextest groups clear only on a content-bound source; unbound
+/// sources refuse the task (execute with reason) instead of aborting
+/// the plan.
+pub(crate) fn check_archive_identity_with_source(
     group: &TaskGroup,
     toolchain_id: &str,
     platform_id: &str,
     config_digest: &str,
-) -> Result<(), OrchestratorError> {
-    if group.kind != TaskKind::Nextest || !group.task_id.contains("/shard-") {
-        return Ok(());
+    source_digest: Option<&str>,
+) -> Result<ArchiveGate, OrchestratorError> {
+    if group.kind != TaskKind::Nextest {
+        return Ok(ArchiveGate::Clear);
+    }
+    if !group.task_id.contains("/shard-") {
+        return Ok(ArchiveGate::Clear);
+    }
+    if parse_shard_suffix(&group.task_id).is_none() {
+        return Err(internal(&format!(
+            "malformed_shard_suffix:{}",
+            group.task_id
+        )));
     }
     let driver = match group.compile_driver.as_str() {
         "cargo" => NextestDriver::Cargo,
         "mbx" => NextestDriver::Mbx,
         other => return Err(internal(&format!("unknown_archive_driver:{other}"))),
     };
-    let target = if group.target == "host" {
-        None
-    } else {
-        Some(group.target.as_str())
+    let marker = digest_b3(crate::internal_plan::snapshot::UNKNOWN_ARCHIVE_SOURCE.as_bytes());
+    let Some(source) =
+        source_digest.filter(|digest| validate_digest(digest).is_ok() && *digest != marker)
+    else {
+        return Ok(ArchiveGate::SourceUnbound);
     };
-    let archive = NextestArchive::new(driver, &group.package_name, &group.features, target)
-        .map_err(|err| internal(&format!("archive_inputs_rejected:{err}")))?;
+    let target = (group.target != "host").then_some(group.target.as_str());
+    let archive = NextestArchive::with_profile(
+        driver,
+        &group.package_name,
+        &group.features,
+        target,
+        &group.nextest_profile,
+    )
+    .map_err(|err| internal(&format!("archive_inputs_rejected:{err}")))?;
     let catalog = ToolCatalog::pinned();
-    let source_digest = digest_b3(manifest_for_key(&group.manifest_key).as_bytes());
     let inputs = ArchiveIdentityInputs {
-        source_digest: &source_digest,
+        source_digest: source,
         profile: &group.configuration,
         toolchain_id,
         runtime: &group.compile_driver,
@@ -212,7 +193,7 @@ pub(crate) fn check_archive_identity(
         config_digest,
     };
     archive_identity(&archive, &inputs)
-        .map(|_| ())
+        .map(|_| ArchiveGate::Clear)
         .map_err(|err| internal(&format!("archive_identity_rejected:{err}")))
 }
 
@@ -232,7 +213,6 @@ pub(crate) fn verify_reused_task(
     }
     verify_restored_task_result(task_id, RestoreEvidence::intact(), declared, observed)
 }
-
 #[cfg(test)]
 mod tests {
     use velnor_actions_mise::restore::RestoreCheck;

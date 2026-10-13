@@ -95,8 +95,9 @@ pub(crate) struct PlanResponse {
 /// Returns [`OrchestratorError::Internal`] for malformed requests and
 /// discovery, selection, or validation failures.
 pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
+    let envelope = parse_strict_json(request_json).map_err(internal_contract)?;
     let mut request: PlanRequest =
-        serde_json::from_str(request_json).map_err(|err| OrchestratorError::Internal {
+        serde_json::from_value(envelope).map_err(|err| OrchestratorError::Internal {
             problem: format!("malformed_request:{err}"),
         })?;
     check_schema(request.schema)?;
@@ -297,15 +298,7 @@ fn build_plan(
             WorkflowEvent::PullRequest | WorkflowEvent::Fork | WorkflowEvent::Local => Trust::Pr,
             WorkflowEvent::Push | WorkflowEvent::MergeGroup => Trust::Trusted,
         },
-        baseline: PlanBaseline {
-            status: BaselineStatus::Unavailable,
-            base_commit: None,
-            run_id: None,
-            artifact_id: None,
-            artifact_name: None,
-            manifest_digest: None,
-            reason: Some("baseline_lookup_deferred".to_owned()),
-        },
+        baseline: PlanBaseline::unavailable(Some("baseline_lookup_deferred"))?,
         generator,
         packages: plan_packages(discovery, &selected_ids),
         obligations,
