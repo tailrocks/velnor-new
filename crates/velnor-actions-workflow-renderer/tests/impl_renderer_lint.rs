@@ -1,5 +1,6 @@
 //! Always-on lint job cases: emitted from typed IR for both policies.
 use std::collections::BTreeMap;
+use velnor_actions_contract::workflow::ir::PermissionLevel;
 use velnor_actions_contract::{
     Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Trigger, ValidatorKind,
     VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy, workflow::permissions::PermissionLevel,

@@ -1,5 +1,6 @@
 //! Shared fixtures for the strict-emission test family.
 use std::collections::BTreeMap;
+use velnor_actions_contract::workflow::ir::PermissionLevel;
 use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind, WorkflowIr,
     WorkflowPolicy, workflow::permissions::PermissionLevel,
