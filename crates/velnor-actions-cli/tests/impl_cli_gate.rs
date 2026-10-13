@@ -167,6 +167,42 @@ fn missing_gate_pieces_match_bare() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn qualification_admission_requires_runner_scope_and_read_only_github_context()
+-> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("gate-qualification-admission")?;
+    let dir = tmp.join("request");
+    let staged = stage_request(&dir, "plan-v1-request.json", "{}")?;
+    let path = staged.to_str().unwrap_or("/");
+    let temp = tmp.to_str().unwrap_or("/");
+    let bare = spawn_isolated(&[], &[], &tmp)?;
+    for vars in [
+        vec![
+            ("VELNOR_INTERNAL_OP", "resolve-qualification-admission-v1"),
+            ("VELNOR_REQUEST_FILE", path),
+            ("GH_REPO", "tailrocks/velnor-new"),
+            ("GH_TOKEN", "read-only-test-token"),
+        ],
+        vec![
+            ("VELNOR_INTERNAL_OP", "resolve-qualification-admission-v1"),
+            ("VELNOR_REQUEST_FILE", path),
+            ("RUNNER_TEMP", temp),
+            ("GH_TOKEN", "read-only-test-token"),
+        ],
+        vec![
+            ("VELNOR_INTERNAL_OP", "resolve-qualification-admission-v1"),
+            ("VELNOR_REQUEST_FILE", path),
+            ("RUNNER_TEMP", temp),
+            ("GH_REPO", "tailrocks/velnor-new"),
+        ],
+    ] {
+        let gated = spawn_isolated(&[], &vars, &tmp)?;
+        assert_identical(&bare, &gated);
+    }
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
 fn help_and_version_identical_with_env() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("gate-help")?;
     let dir = tmp.join("request");

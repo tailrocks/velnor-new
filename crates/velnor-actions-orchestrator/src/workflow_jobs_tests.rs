@@ -312,6 +312,7 @@ fn plan_tools_follow_role_in_all_order() {
         plan_tools(needs(PlanRustNeed::CompilerAndComponents)),
         vec![
             PinnedTool::Rust,
+            PinnedTool::Gh,
             PinnedTool::Actionlint,
             PinnedTool::Shellcheck,
             PinnedTool::Zizmor,
@@ -323,6 +324,7 @@ fn plan_tools_follow_role_in_all_order() {
             ..needs(PlanRustNeed::None)
         }),
         vec![
+            PinnedTool::Gh,
             PinnedTool::Actionlint,
             PinnedTool::Shellcheck,
             PinnedTool::Zizmor,
@@ -411,6 +413,7 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
         let install_at = run.iter().position(|arg| arg == "install");
         let mut specs = vec![
             catalog.tool_spec(PinnedTool::Rust),
+            catalog.tool_spec(PinnedTool::Gh),
             catalog.tool_spec(PinnedTool::Actionlint),
             catalog.tool_spec(PinnedTool::Shellcheck),
             catalog.tool_spec(PinnedTool::Zizmor),

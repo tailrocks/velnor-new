@@ -4,6 +4,8 @@
 
 use std::collections::BTreeMap;
 use std::fs;
+#[path = "baseline_publish_request_tests.rs"]
+mod request_tests;
 
 use super::*;
 use velnor_actions_contract::{

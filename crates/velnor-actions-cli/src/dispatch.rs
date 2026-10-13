@@ -87,7 +87,7 @@ struct InternalRequest {
 /// to Clap; bare invocations then fail with the usage diagnostic (exit 2),
 /// keeping public behavior byte-identical with or without the environment.
 pub(crate) fn try_internal() -> Option<ExitCode> {
-    let request = gate_request()?;
+    let request = crate::dispatch_internal::gate_request()?;
     Some(run_internal(&request))
 }
 
@@ -229,6 +229,14 @@ fn run_plan_internal(path: &Path) -> ExitCode {
     };
     let response = match plan_internal(&text) {
         Ok(response) => response,
+        Err(error) => return fail_internal(&error.to_string()),
+    };
+    let admission = match crate::dispatch_qualification::admission_for_plan(&response, path) {
+        Ok(admission) => admission,
+        Err(problem) => return fail_internal(problem),
+    };
+    let outputs = match plan_outputs_with_admission(&response, mode, admission.as_ref()) {
+        Ok(outputs) => outputs,
         Err(error) => return fail_internal(&error.to_string()),
     };
     let sibling = match response_path_for(path) {

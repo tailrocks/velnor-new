@@ -10,6 +10,9 @@ use velnor_actions_contract::StepKind;
 use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
+#[path = "impl_orch_p08_save_cases.rs"]
+mod save_cases;
+
 use super::impl_common::{TestResult, config_with_branch, make_repo};
 
 type ToolsCacheIdentity = (String, String);

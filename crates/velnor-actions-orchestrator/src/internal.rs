@@ -57,6 +57,8 @@ pub const REQUEST_FILE_ENV: &str = "VELNOR_REQUEST_FILE";
 pub const WRITE_REQUEST_OP: &str = "write-request-v1";
 /// Plan operation tag.
 pub const PLAN_OP: &str = "plan-v1";
+/// Qualification predecessor verification operation tag.
+pub const RESOLVE_QUALIFICATION_ADMISSION_OP: &str = "resolve-qualification-admission-v1";
 /// Merge operation tag.
 pub const MERGE_OP: &str = "merge-v1";
 

@@ -5,12 +5,13 @@
 //! unchanged (eligible for verified reuse/baseline coverage). Nothing is
 //! ever removed for being unaffected: without proof, everything executes.
 
+#[path = "select_changes.rs"]
+mod changes;
+
 use std::collections::BTreeSet;
-use std::ffi::OsString;
 use std::path::Path;
 
 use velnor_actions_contract::{ProposedTask, WorkflowEvent};
-use velnor_actions_mise::GitRequest;
 use velnor_actions_rust::SelectionBroadening;
 
 use crate::decisions::{broadening_for_path, selection_broadens_for_path};
@@ -18,7 +19,7 @@ use crate::discover::Discovery;
 use crate::git_paths::{NON_UTF8_PATH, split_nul_paths};
 use crate::select_affected::{affected_packages, has_unowned_file};
 use crate::select_edges::{base_edges, head_edges};
-use crate::validators::{validate_diff_rev, validate_select_diff_args};
+use crate::validators::validate_diff_rev;
 
 #[path = "select_checkout.rs"]
 mod checkout;
@@ -81,7 +82,7 @@ pub(crate) fn classify_changed(
         return None;
     }
     if event == WorkflowEvent::Local {
-        return classify_local(root, discovery, warnings);
+        return changes::classify_local(root, discovery, warnings);
     }
     let Some(base) = base else {
         if matches!(
@@ -95,28 +96,9 @@ pub(crate) fn classify_changed(
         }
         return None;
     };
-    let (changed, toolfiles) = change_sets(root, base, head, warnings)?;
+    let (changed, toolfiles) = changes::change_sets(root, base, head, warnings)?;
     Some(affected_from_changed(
         discovery, &changed, toolfiles, root, base, head, warnings,
-    ))
-}
-
-/// Local pre-push classification: the working tree against `HEAD`.
-fn classify_local(
-    root: &Path,
-    discovery: &Discovery,
-    warnings: &mut Vec<String>,
-) -> Option<BTreeSet<String>> {
-    let sha = match head_sha(root) {
-        Ok(sha) => sha,
-        Err(problem) => {
-            warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
-            return None;
-        }
-    };
-    let (changed, toolfiles) = local_change_set(root, warnings)?;
-    Some(affected_from_changed(
-        discovery, &changed, toolfiles, root, &sha, &sha, warnings,
     ))
 }
 

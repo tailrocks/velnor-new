@@ -31,6 +31,9 @@ pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), 
     {
         return Ok((operation, operation));
     }
+    if operation == QUALIFICATION_ADMISSION_OPERATION {
+        return Ok((operation, PLAN_OPERATION));
+    }
     let rest = operation
         .strip_prefix(WRITE_REQUEST_OPERATION)
         .and_then(|rest| rest.strip_prefix(':'));

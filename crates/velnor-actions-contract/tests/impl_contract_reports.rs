@@ -1,5 +1,5 @@
 //! Contract plan, report, and workflow cases.
-use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
+use crate::impl_contract_ids::{TASK, sample_entry};
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
     BaselineProof, CacheLayer, CacheOutcome, CacheResult, Concurrency, ContractError, Job,

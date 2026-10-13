@@ -16,6 +16,9 @@ use velnor_actions_mise::{cache_sources, cache_trust};
 use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
+#[path = "impl_cache_service_report.rs"]
+mod service_report_cases;
+
 use super::impl_common::{TestResult, config_with_branch, fixture_manifest_json, git};
 
 #[path = "impl_cache_report_fixtures.rs"]

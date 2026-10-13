@@ -161,7 +161,7 @@ fn discover_inner(
         mise_checks,
         statuses,
         workspaces,
-        proposals,
+        proposals: proposals.to_vec(),
         feature_fallbacks: fallbacks,
         tool_checks,
         clippy_memory,
