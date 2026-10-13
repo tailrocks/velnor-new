@@ -189,14 +189,15 @@ fn sources_subset_ok(path: &str) -> bool {
 
 /// Check restore-before/save-after ordering over cache action steps.
 ///
-/// Every `actions/cache/restore` step (plus MBX objects restore) must
-/// precede every `actions/cache/save` step within one job.
+/// Every cache download and MBX objects restore must precede every save.
+/// A lookup-only restore is an exact-key existence check; it may follow a
+/// save because it does not download or mutate the archived path.
 /// # Errors
 pub fn check_cache_step_order(steps: &[Step]) -> Result<(), RenderError> {
     let mut last_restore: Option<usize> = None;
     let mut first_save: Option<usize> = None;
     for (index, step) in steps.iter().enumerate() {
-        let StepKind::Action { uses, .. } = &step.kind else {
+        let StepKind::Action { uses, with, .. } = &step.kind else {
             continue;
         };
         if uses == TOOLS_RESTORE_USES

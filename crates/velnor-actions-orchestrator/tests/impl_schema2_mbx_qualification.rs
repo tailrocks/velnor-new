@@ -190,8 +190,16 @@ fn assert_reader(reader: &str) {
         "{reader}"
     );
     assert!(
-        reader.contains("test \\\"$CACHE_HIT\\\" = 'false'"),
+        reader.contains(&format!("cache-key: {exact_key}")),
         "{reader}"
+    );
+    assert!(
+        reader.contains("isolate-objects-cache: \"true\""),
+        "{reader}"
+    );
+    assert!(
+        reader.contains("test \\\"$CACHE_HIT\\\" = 'true'"),
+        "reader must require an exact warm hit: {reader}"
     );
     assert!(
         reader.contains("save-on-workflow-dispatch: \"false\""),
