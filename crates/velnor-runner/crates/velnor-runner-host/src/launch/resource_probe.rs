@@ -1,6 +1,7 @@
 //! Controller-only guest resource probe. Runner projections stay untouched.
 
 use bollard::Docker;
+use std::path::Path;
 
 use crate::journal::Journal;
 use crate::scale_set::EnsureError;
@@ -96,9 +97,12 @@ struct ArtifactImageProvider<'a> {
 }
 
 impl<'a> ArtifactImageProvider<'a> {
-    fn from_rest(pat: &'a str) -> Result<Self, crate::error::HostError> {
-        crate::artifact_admission::NativeArtifactProvider::from_compiled_release_identity(pat)
-            .map(|inner| Self { inner })
+    fn from_rest(pat: &'a str, state_directory: &Path) -> Result<Self, crate::error::HostError> {
+        crate::artifact_admission::NativeArtifactProvider::from_compiled_release_identity(
+            pat,
+            state_directory,
+        )
+        .map(|inner| Self { inner })
     }
 }
 
@@ -107,8 +111,10 @@ async fn collect(
     journal: &Journal,
     pat: &str,
 ) -> Result<Option<sample::Observation>, crate::error::HostError> {
+    let state_directory = journal.state_directory()?;
     let provider = provider_for_build(
         pat,
+        state_directory,
         crate::compile_identity::compiled_release_identity().is_some(),
     )?;
     let Some(provider) = provider else {
@@ -122,12 +128,13 @@ async fn collect(
     Box::pin(lifecycle::collect(docker, journal, &provider)).await
 }
 
-fn provider_for_build(
-    pat: &str,
+fn provider_for_build<'a>(
+    pat: &'a str,
+    state_directory: &Path,
     has_compiled_identity: bool,
-) -> Result<Option<ArtifactImageProvider<'_>>, crate::error::HostError> {
+) -> Result<Option<ArtifactImageProvider<'a>>, crate::error::HostError> {
     if has_compiled_identity {
-        ArtifactImageProvider::from_rest(pat).map(Some)
+        ArtifactImageProvider::from_rest(pat, state_directory).map(Some)
     } else {
         Ok(None)
     }
@@ -193,10 +200,11 @@ fn docker_identity_error() -> EnsureError {
 mod provider_selection_tests {
     use super::provider_for_build;
     use crate::error::HostError;
+    use std::path::Path;
 
     #[test]
     fn missing_compiled_identity_selects_only_the_unavailable_provider() -> Result<(), HostError> {
-        if provider_for_build("local-only", false)?.is_some() {
+        if provider_for_build("local-only", Path::new("/tmp/velnor-state"), false)?.is_some() {
             return Err(HostError::Identity);
         }
         Ok(())
@@ -205,7 +213,7 @@ mod provider_selection_tests {
     #[test]
     fn provider_factory_errors_are_not_converted_to_unavailable() {
         assert_eq!(
-            provider_for_build("", true).err(),
+            provider_for_build("", Path::new("/tmp/velnor-state"), true).err(),
             Some(HostError::Identity)
         );
     }
