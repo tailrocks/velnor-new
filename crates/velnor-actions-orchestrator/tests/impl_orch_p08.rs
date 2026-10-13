@@ -274,7 +274,7 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
         save_condition.contains("success() && github.event_name == 'push'"),
         "the canonical push-only save gate already denies dispatch:\n{yaml}"
     );
-    assert_tools_saves_push_gated_per_key(&yaml);
+    tools::assert_tools_saves_push_gated_per_key(&yaml);
     Ok(())
 }
 

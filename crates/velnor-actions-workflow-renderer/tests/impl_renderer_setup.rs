@@ -86,9 +86,8 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
         format!("sha256: {MISE_SHA256}"),
         "install: \"false\"".to_owned(),
         "env: \"false\"".to_owned(),
-        "cache: \"true\"".to_owned(),
+        "cache: \"false\"".to_owned(),
         "cache_save: \"false\"".to_owned(),
-        "cache_key: mise-v1-".to_owned(),
     ] {
         assert!(text.contains(&line), "missing {line}:\n{text}");
     }
@@ -109,11 +108,31 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
     );
     for line in [
         "- name: Save Mise tools".to_owned(),
-        "key: mise-v1-".to_owned(),
-        "if: success() && github.event_name == 'push'".to_owned(),
+        "key: mise-tools-v2-".to_owned(),
     ] {
         assert!(text.contains(&line), "sole owner saves {line}:\n{text}");
     }
+    let save_at = text
+        .find("- name: Save Mise tools")
+        .expect("tools save step");
+    let save_step = text[save_at..]
+        .split("      - name:")
+        .next()
+        .expect("tools save step boundary");
+    assert!(
+        save_step.contains("github.event_name == 'push'")
+            && save_step.contains("github.event_name != 'workflow_dispatch'"),
+        "sole owner saves on push and blocks unvalidated dispatch:\n{save_step}"
+    );
+    let setup = text
+        .split("      - name: Setup Mise")
+        .nth(1)
+        .unwrap_or_default();
+    let setup = setup.split("      - name:").next().unwrap_or_default();
+    assert!(
+        !setup.contains("cache_key:"),
+        "Mise has no archive key:\n{setup}"
+    );
     Ok(())
 }
 

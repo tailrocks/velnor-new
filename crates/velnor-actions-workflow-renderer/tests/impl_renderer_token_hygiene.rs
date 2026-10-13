@@ -345,6 +345,24 @@ fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderEr
 }
 
 #[test]
+fn validator_execs_cannot_keep_ambient_credentials() -> Result<(), RenderError> {
+    for name in ["Run cargo-machete", "Run zizmor", "Run actionlint"] {
+        let exposed = job(
+            "plan",
+            "Plan",
+            Vec::new(),
+            vec![
+                checkout_step(&checkout_pin())?,
+                ambient_shell_step(name, vec!["true".to_owned()], BTreeMap::new())?,
+                plan_step(),
+            ],
+        );
+        render_fails_with(vec![exposed], "missing_scrub");
+    }
+    Ok(())
+}
+
+#[test]
 fn unset_wrapper_passes_but_exfil_behind_it_fails() -> Result<(), RenderError> {
     // The step constructor applies the argv wrapper itself; bare payloads
     // must scan clean while exfil behind the wrapper still fails.

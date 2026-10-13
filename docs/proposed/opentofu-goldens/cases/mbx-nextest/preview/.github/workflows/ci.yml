@@ -39,6 +39,24 @@ jobs:
     name: Actionlint
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -211,6 +229,18 @@ jobs:
       - actionlint
     if: always()
     steps:
+      - name: V2 identity
+        id: v2
+        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        with:
+          d: 7e3d4db8a565e5bbdd358ccdd5b80c13f6d352fd3dcf39d3a81d9470689a7d24
+      - name: Restore Mise tools
+        if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-7e3d4db8a565e5bbdd358ccdd5b80c13f6d352fd3dcf39d3a81d9470689a7d24-${{steps.v2.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
@@ -318,10 +348,9 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
-      - name: Verify Rust before MBX action
+      - name: Verify MBX and Rust toolchains
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -332,15 +361,11 @@ jobs:
         with:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          save-on-protected-branch: "false"
-          save-on-pull-request: "false"
-          save-on-workflow-dispatch: "false"
+          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
           toolchain: 1.98.1
-          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup

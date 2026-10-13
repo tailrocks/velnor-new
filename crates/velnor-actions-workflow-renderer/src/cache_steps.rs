@@ -58,6 +58,16 @@ pub(crate) fn validate_tools_restore_call(step: &Step) -> Result<&str, RenderErr
     tools::validate_restore_call(step)
 }
 
+/// Build one V2 tools-cache action over the fixed path set.
+/// # Errors
+pub(crate) fn tools_cache_step(
+    restore: bool,
+    key: &str,
+    condition: Option<String>,
+) -> Result<Step, RenderError> {
+    tools::cache_step(restore, key, condition)
+}
+
 /// Pinned mr-boxington action name (objects mode).
 pub const MBX_ACTION_NAME: &str = "jdx/mr-boxington-action";
 /// Cache restore/save action names.

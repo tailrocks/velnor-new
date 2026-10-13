@@ -186,9 +186,8 @@ fn after_prepare(steps: &[Step]) -> usize {
 
 /// Insert the native MBX owner before the pre-seed build.
 ///
-/// Lockful Cargo-only plans replace their registry-only fallback with the
-/// canonical shared-sources cache, then restore MBX after that action.
-/// Lockless plans have no source cache and install MBX after Rust setup.
+/// Lockful plans already carry the shared sources cache from the plan job;
+/// lockless plans have no source cache and install MBX after Rust setup.
 fn insert_plan_mbx_restore(
     catalog: &ToolCatalog,
     steps: &mut Vec<Step>,

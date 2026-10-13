@@ -347,17 +347,16 @@ pub(crate) fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError
     if !tag_op_step(jobs, PLAN_JOB_ID, steps::PLAN_OPERATION, PLAN_STEP_ID) {
         return Ok(());
     }
-    insert_job_key(
-        jobs,
-        PLAN_JOB_ID,
-        "outputs",
-        Yaml::Map(vec![(
-            COVERED_TASKS_OUTPUT.to_owned(),
-            Yaml::str(format!(
-                "${{{{ steps.{PLAN_STEP_ID}.outputs.{COVERED_TASKS_OUTPUT} }}}}"
-            )),
-        )]),
-    )
+    let outputs = std::iter::once(COVERED_TASKS_OUTPUT)
+        .chain(QUALIFICATION_OUTPUTS)
+        .map(|name| {
+            (
+                name.to_owned(),
+                Yaml::str(format!("${{{{ steps.{PLAN_STEP_ID}.outputs.{name} }}}}")),
+            )
+        })
+        .collect();
+    insert_job_key(jobs, PLAN_JOB_ID, "outputs", Yaml::Map(outputs))
 }
 
 /// Tag the publish job's publish step with its step ID.

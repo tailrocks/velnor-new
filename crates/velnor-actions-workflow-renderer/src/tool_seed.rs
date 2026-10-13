@@ -167,7 +167,7 @@ fn action_yaml(step_name: &str, env: &BTreeMap<String, String>, run: &str) -> Ya
                 Yaml::Map(vec![
                     (
                         "description".to_owned(),
-                        Yaml::str("Exact Mise cache key.".to_owned()),
+                        Yaml::str("Exact immutable host-seed key.".to_owned()),
                     ),
                     ("required".to_owned(), Yaml::Bool(true)),
                 ]),

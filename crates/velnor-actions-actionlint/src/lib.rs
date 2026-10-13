@@ -33,7 +33,7 @@ pub use metadata::{
 };
 pub use overrides::{
     ActionInputSchema, ActionPinOverride, ApprovedPin, ApprovedPinCatalog, checkout_inputs_schema,
-    rust_cache_inputs_schema, validate_action_inputs,
+    validate_action_inputs,
 };
 pub use tools::{
     ActionlintToolchain, SHELLCHECK_VERSION, ShellcheckToolchain, WorkflowLintTools,

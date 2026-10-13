@@ -240,12 +240,13 @@ fn run_plan_internal(path: &Path) -> ExitCode {
     if let Err(error) = fs::write(&sibling, &response) {
         return fail_internal(&format!("write response: {error}"));
     }
-    let outputs = match plan_outputs(&response, mode) {
-        Ok(outputs) => outputs,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
     let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
         return fail_internal("missing runner temp");
+    };
+    let outputs = match plan_outputs_from_staged_admission(&response, mode, Path::new(&runner_temp))
+    {
+        Ok(outputs) => outputs,
+        Err(error) => return fail_internal(&error.to_string()),
     };
     let Some(output_path) = env::var_os(GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty()) else {
         return fail_internal("missing github output");

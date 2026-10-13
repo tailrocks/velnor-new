@@ -16,6 +16,9 @@ use crate::tree::RenderedFile;
 #[path = "lane_share_runtime.rs"]
 mod runtime;
 
+#[path = "lane_share_runtime.rs"]
+mod runtime;
+
 /// CI workflow plus composite actions for duplicated lanes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedWorkflow {

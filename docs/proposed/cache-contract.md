@@ -141,9 +141,11 @@ only that directory.
 
 Velnor's cache steps MAY archive only `CARGO_SOURCE_PATHS` and qualified
 `MISE_TASK_ARTIFACTS`; they MUST NOT archive MBX objects or manual bundles.
-The protected-push writer rule applies to ordinary task workflows. A separately
-authorized `workflow_dispatch` qualification job grants `actions:write`, enables
-its action save, and uses a run/attempt/source-SHA-bound generation.
+The protected-push writer rule applies to ordinary task workflows. On
+`workflow_dispatch`, generated cache restore/import and save operations remain
+disabled until a producer validates the exact selected cache object before use;
+plan outputs or a run-bound receipt alone do not grant cache access or
+`actions:write`.
 
 Velnor MUST NOT configure Mise `task.cache.remote_url`, remote namespaces, remote tokens, or OIDC task-cache
 credentials in V1. There is no Velnor cache server. The selected task-result transport is an opaque GitHub

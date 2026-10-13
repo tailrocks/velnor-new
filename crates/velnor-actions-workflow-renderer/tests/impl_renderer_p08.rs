@@ -274,7 +274,7 @@ fn step_conditions_serialize_as_if_with_upload_default()
     let save_at = text.find("Save Cargo sources").expect("save step");
     assert!(
         text[save_at..].starts_with(
-            "Save Cargo sources\n        if: success() && github.event_name == 'push'",
+            "Save Cargo sources\n        if: (success() && github.event_name == 'push') && github.event_name != 'workflow_dispatch'",
         ),
         "the canonical push-only save gate already denies dispatch:\n{text}"
     );

@@ -67,6 +67,7 @@ mod prepare;
 mod preseed_manifest;
 mod product_release_pins;
 mod provenance;
+mod public_api;
 mod publish_job;
 mod qualification_resolver;
 mod qualify;

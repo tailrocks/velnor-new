@@ -59,6 +59,24 @@ jobs:
     name: Actionlint
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -152,6 +170,24 @@ jobs:
     name: Cargo Machete
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -180,7 +216,7 @@ jobs:
       - name: Prepare pinned tools
         run: mise --no-config --no-env --no-hooks install 'http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2'
       - name: Run cargo-machete
-        run: mise --no-config --no-env --no-hooks exec ubi:bnjbvr/cargo-machete@0.9.2 -- cargo machete crates/velnor-actions-contract crates/velnor-actions-rust crates/velnor-actions-tofu crates/velnor-actions-mise crates/velnor-actions-actionlint crates/velnor-actions-workflow-renderer crates/velnor-actions-orchestrator crates/velnor-actions-cli
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec ubi:bnjbvr/cargo-machete@0.9.2 -- cargo machete crates/velnor-actions-contract crates/velnor-actions-rust crates/velnor-actions-tofu crates/velnor-actions-mise crates/velnor-actions-actionlint crates/velnor-actions-workflow-renderer crates/velnor-actions-orchestrator crates/velnor-actions-cli
       - name: Save Mise tools
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -296,10 +332,9 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Verify Rust before MBX action
+      - name: Verify MBX and Rust toolchains
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -310,15 +345,11 @@ jobs:
         with:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          save-on-protected-branch: "false"
-          save-on-pull-request: "false"
-          save-on-workflow-dispatch: "false"
+          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
           toolchain: 1.98.1
-          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -346,19 +377,19 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions
       - name: Verify MBX compile (pre-seed trust-on-review)
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; test -x target/release/velnor-actions && mkdir -p \"$RUNNER_TEMP/velnor\" && mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version > \"$RUNNER_TEMP/velnor/preseed-mbx-version\" && grep -qxF \"mbx 1.22.0\" \"$RUNNER_TEMP/velnor/preseed-mbx-version\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; test -x target/release/velnor-actions && mkdir -p \"$RUNNER_TEMP/velnor\" && mise --no-config --no-env --no-hooks exec mr-boxington@1.21.1 -- mbx --version > \"$RUNNER_TEMP/velnor/preseed-mbx-version\" && grep -qxF \"mbx 1.21.1\" \"$RUNNER_TEMP/velnor/preseed-mbx-version\"'"
       - name: Write helper manifest (pre-seed trust-on-review)
         env:
           VELNOR_INTERNAL_OP: write-preseed-manifest-v1
           VELNOR_PRESEED_BINARY: target/release/velnor-actions
           VELNOR_PRESEED_OUT: ${{ runner.temp }}/velnor/preseed-output
           VELNOR_PRESEED_TARGET: x86_64-unknown-linux-gnu
-          VELNOR_PRESEED_TOOLCHAIN: rust@1.98.1
+          VELNOR_PRESEED_TOOLCHAIN: rust@1.98.1+mr-boxington@1.21.1
         run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR target/release/velnor-actions
       - name: Upload helper (pre-seed trust-on-review)
         if: always()
@@ -371,7 +402,7 @@ jobs:
       - name: Stage helper (pre-seed trust-on-review)
         run: sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p $RUNNER_TEMP/velnor/bin && cp target/release/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.8 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.8'
       - name: Save Cargo sources
-        if: success() && github.event_name == 'push'
+        if: (success() && github.event_name == 'push') && github.event_name != 'workflow_dispatch'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
@@ -500,6 +531,18 @@ jobs:
       - zizmor
     if: always()
     steps:
+      - name: V2 identity
+        id: v2
+        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        with:
+          d: 7e3d4db8a565e5bbdd358ccdd5b80c13f6d352fd3dcf39d3a81d9470689a7d24
+      - name: Restore Mise tools
+        if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-7e3d4db8a565e5bbdd358ccdd5b80c13f6d352fd3dcf39d3a81d9470689a7d24-${{steps.v2.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
@@ -625,10 +668,9 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Verify Rust before MBX action
+      - name: Verify MBX and Rust toolchains
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -639,15 +681,11 @@ jobs:
         with:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          save-on-protected-branch: "false"
-          save-on-pull-request: "false"
-          save-on-workflow-dispatch: "false"
+          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
           toolchain: 1.98.1
-          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -823,10 +861,9 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Verify Rust before MBX action
+      - name: Verify MBX and Rust toolchains
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -837,15 +874,11 @@ jobs:
         with:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          save-on-protected-branch: "false"
-          save-on-pull-request: "false"
-          save-on-workflow-dispatch: "false"
+          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
           toolchain: 1.98.1
-          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1011,10 +1044,9 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Verify Rust before MBX action
+      - name: Verify MBX and Rust toolchains
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1025,15 +1057,11 @@ jobs:
         with:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          save-on-protected-branch: "false"
-          save-on-pull-request: "false"
-          save-on-workflow-dispatch: "false"
+          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
           toolchain: 1.98.1
-          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1203,10 +1231,9 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Verify Rust before MBX action
+      - name: Verify MBX and Rust toolchains
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1217,15 +1244,11 @@ jobs:
         with:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          save-on-protected-branch: "false"
-          save-on-pull-request: "false"
-          save-on-workflow-dispatch: "false"
+          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
           toolchain: 1.98.1
-          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1401,10 +1424,9 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Verify Rust before MBX action
+      - name: Verify MBX and Rust toolchains
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1415,15 +1437,11 @@ jobs:
         with:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          save-on-protected-branch: "false"
-          save-on-pull-request: "false"
-          save-on-workflow-dispatch: "false"
+          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
           toolchain: 1.98.1
-          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1593,10 +1611,9 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Verify Rust before MBX action
+      - name: Verify MBX and Rust toolchains
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1607,15 +1624,11 @@ jobs:
         with:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          save-on-protected-branch: "false"
-          save-on-pull-request: "false"
-          save-on-workflow-dispatch: "false"
+          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
           toolchain: 1.98.1
-          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1785,10 +1798,9 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Verify Rust before MBX action
+      - name: Verify MBX and Rust toolchains
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1799,15 +1811,11 @@ jobs:
         with:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          save-on-protected-branch: "false"
-          save-on-pull-request: "false"
-          save-on-workflow-dispatch: "false"
+          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
           toolchain: 1.98.1
-          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1977,10 +1985,9 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Verify Rust before MBX action
+      - name: Verify MBX and Rust toolchains
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1991,15 +1998,11 @@ jobs:
         with:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          save-on-protected-branch: "false"
-          save-on-pull-request: "false"
-          save-on-workflow-dispatch: "false"
+          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
           toolchain: 1.98.1
-          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -2169,10 +2172,9 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Verify Rust before MBX action
+      - name: Verify MBX and Rust toolchains
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -2183,15 +2185,11 @@ jobs:
         with:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          save-on-protected-branch: "false"
-          save-on-pull-request: "false"
-          save-on-workflow-dispatch: "false"
+          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
           toolchain: 1.98.1
-          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -2553,10 +2551,9 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Verify Rust before MBX action
+      - name: Verify MBX and Rust toolchains
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -2567,15 +2564,11 @@ jobs:
         with:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          save-on-protected-branch: "false"
-          save-on-pull-request: "false"
-          save-on-workflow-dispatch: "false"
+          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
           toolchain: 1.98.1
-          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -2745,10 +2738,9 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Verify Rust before MBX action
+      - name: Verify MBX and Rust toolchains
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -2759,15 +2751,11 @@ jobs:
         with:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          save-on-protected-branch: "false"
-          save-on-pull-request: "false"
-          save-on-workflow-dispatch: "false"
+          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
           toolchain: 1.98.1
-          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -2937,10 +2925,9 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Verify Rust before MBX action
+      - name: Verify MBX and Rust toolchains
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -2951,15 +2938,11 @@ jobs:
         with:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          save-on-protected-branch: "false"
-          save-on-pull-request: "false"
-          save-on-workflow-dispatch: "false"
+          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
           toolchain: 1.98.1
-          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -3065,6 +3048,24 @@ jobs:
     name: Zizmor
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
