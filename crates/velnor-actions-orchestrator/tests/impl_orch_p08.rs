@@ -19,12 +19,12 @@ type ToolsCacheIdentities = (
 );
 
 /// Hand-written lock for a no-deps fixture package: hermetic, no network.
-fn demo_lock(name: &str) -> String {
+pub(super) fn demo_lock(name: &str) -> String {
     format!("version = 4\n\n[[package]]\nname = \"{name}\"\nversion = \"0.1.0\"\n")
 }
 
 /// Select MBX for the fixture crate via `rustc-wrapper` evidence.
-fn with_mbx(root: &std::path::Path) -> TestResult {
+pub(super) fn with_mbx(root: &std::path::Path) -> TestResult {
     let cargo_dir = root.join(".cargo");
     fs::create_dir_all(&cargo_dir)?;
     fs::write(
