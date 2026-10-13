@@ -66,9 +66,17 @@ fn verify_vectors_carry_pins_and_payloads() {
     assert!(frontmatter.contains("node@24.21.0"), "{frontmatter}");
     assert!(frontmatter.contains("name-dir-mismatch:"), "{frontmatter}");
     let links = joined(ValidatorKind::LinkCheck);
-    for token in ["ubi:lycheeverse/lychee@0.15.1", "lychee", "--no-progress"] {
+    for token in [
+        "http:lychee[url=https://github.com/lycheeverse/lychee/releases/download/v0.15.1/lychee-v0.15.1-x86_64-unknown-linux-gnu.tar.gz,checksum=sha256:9afdf0f48064fdcd8a8815ca6d2d9fcd43a0ef4c2edf9da23d6f7bf46a764eb8]@0.15.1",
+        "lychee",
+        "--no-progress",
+    ] {
         assert!(links.contains(token), "{token}: {links}");
     }
+    assert!(
+        !links.contains("api.github.com/repos/lycheeverse/lychee/releases"),
+        "Lychee acquisition uses its hash-pinned direct release asset"
+    );
     let native = verify_command(
         ValidatorKind::NativeValidators,
         &VerifyConfig::default(),
