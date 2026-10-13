@@ -47,6 +47,8 @@ struct FirstMetadataError {
     wall_unix_ns: Option<u128>,
     elapsed_ns: u128,
     writer_phase: String,
+    phase_before: usize,
+    phase_after: usize,
     path: PathBuf,
     kind: io::ErrorKind,
     raw_errno: Option<i32>,
@@ -64,6 +66,8 @@ impl FirstMetadataError {
         parent: &Path,
         error: &io::Error,
         phase: usize,
+        phase_before: usize,
+        phase_after: usize,
         started: &Instant,
     ) -> Self {
         let wall_unix_ns = SystemTime::now()
@@ -85,6 +89,8 @@ impl FirstMetadataError {
             wall_unix_ns,
             elapsed_ns,
             writer_phase,
+            phase_before,
+            phase_after,
             path,
             kind,
             raw_errno,
@@ -103,6 +109,10 @@ impl FirstMetadataError {
             self.observer,
             self.iteration,
             self.writer_phase,
+            self.phase_before,
+            atomic_phase_label(self.phase_before),
+            self.phase_after,
+            atomic_phase_label(self.phase_after),
             self.path.display(),
             self.kind,
             self.raw_errno,
@@ -111,6 +121,19 @@ impl FirstMetadataError {
             self.target_probe,
             self.root_fd_probe
         );
+    }
+}
+
+fn atomic_phase_label(phase: usize) -> String {
+    if phase == 0 {
+        return "writer_idle".to_owned();
+    }
+    let rewrite = phase.div_ceil(4);
+    match phase % 4 {
+        1 => format!("rewrite_{rewrite}_exchange_in_progress"),
+        2 => format!("rewrite_{rewrite}_exchange_returned_pre_cleanup"),
+        3 => format!("rewrite_{rewrite}_cleanup_in_progress"),
+        _ => format!("rewrite_{}_cleanup_completed", phase / 4),
     }
 }
 
@@ -178,7 +201,10 @@ fn observe_until_done(
     let mut first_error = None;
     while done.load(Ordering::Relaxed) == 0 {
         iteration += 1;
-        if let Err(error) = target.symlink_metadata() {
+        let phase_before = DEBUG_GENERATE_PHASE.load(Ordering::SeqCst);
+        let metadata = target.symlink_metadata();
+        let phase_after = DEBUG_GENERATE_PHASE.load(Ordering::SeqCst);
+        if let Err(error) = metadata {
             counts.record(&error);
             if first_error.is_none() {
                 first_error = Some(FirstMetadataError::capture(
@@ -188,6 +214,8 @@ fn observe_until_done(
                     parent,
                     &error,
                     writer_phase.load(Ordering::Relaxed),
+                    phase_before,
+                    phase_after,
                     started,
                 ));
             }
@@ -210,6 +238,7 @@ fn atomic_commit_never_exposes_missing_tree() -> TestResult {
     let counts = ErrorCounts::default();
     let done = AtomicUsize::new(0);
     let writer_phase = AtomicUsize::new(0);
+    DEBUG_GENERATE_PHASE.store(0, Ordering::SeqCst);
     let started = Instant::now();
     let defer_cleanup = std::env::var("VELNOR_ATOMIC_DEFER_CLEANUP").as_deref() == Ok("1");
     let (trace_sender, trace_receiver) = mpsc::sync_channel(1);

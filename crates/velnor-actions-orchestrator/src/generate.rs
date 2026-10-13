@@ -587,6 +587,11 @@ fn atomic_diagnostic_event(kind: AtomicDiagnosticKind) {
     atomic_diagnostic_finish(index, true, None);
 }
 
+/// Temporary debug-build phase counter for the atomic replacement repro.
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub static DEBUG_GENERATE_PHASE: AtomicUsize = AtomicUsize::new(0);
+
 /// Filesystem guards: snapshots, destination validation, and ownership.
 #[path = "generate_guards.rs"]
 pub(crate) mod guards;
