@@ -10,6 +10,17 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[test]
+fn release_manifest_version_matches_the_workspace_package_version() {
+    let current_binary = format!("velnor-actions-{}", super::VERSION);
+    assert_eq!(super::VERSION, env!("CARGO_PKG_VERSION"));
+    for asset in super::ASSETS {
+        assert!(asset.binary.starts_with(&current_binary));
+        assert!(asset.sidecar.starts_with(&current_binary));
+        assert!(asset.provenance.starts_with(&current_binary));
+    }
+}
+
 struct Scratch(PathBuf);
 
 impl Drop for Scratch {
