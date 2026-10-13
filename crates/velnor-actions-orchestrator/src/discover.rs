@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use velnor_actions_contract::config::NextestTestSelection;
 use velnor_actions_contract::{
     DETECTION_SCHEMA, DetectionStatus, FileIndex, ProposedTask, RustStackConfig, VelnorConfig,
     apply_stack_ignores, check_candidate_outcomes, check_duplicates, selected_projects,
@@ -14,11 +15,13 @@ use registry::{DETECTORS, detected_projects};
 
 use velnor_actions_mise::ArchivePlan;
 use velnor_actions_rust::{
-    Recommendation, RustExecutionProfile, WorkspaceRecord, dedupe_workspaces, propose_task,
+    PackageRecord, Recommendation, RustExecutionProfile, TaskGroup, TaskKind, VelnorV1TaskOwner,
+    WorkspaceRecord, dedupe_workspaces, propose_nextest_selection, propose_task,
 };
 
 use crate::OrchestratorError;
 use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
+use crate::config::CONFIG_REL;
 use crate::discover_index::build_file_index;
 use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::inventory::{qualify_workspaces, run_inventories, run_inventories_with_phase_timings};
@@ -245,6 +248,12 @@ fn derive_all(
         .rust
         .clone()
         .unwrap_or_else(RustStackConfig::default_config);
+    validate_selector_targets(
+        workspaces
+            .iter()
+            .flat_map(|workspace| workspace.record.packages.iter()),
+        &rust.nextest_test_selectors,
+    )?;
     let explicit_fmt = index.contains("rustfmt.toml") || index.contains(".rustfmt.toml");
     let union = crate::derive_groups::declared_union(workspaces, index, config.workflow.policy);
     let mut groups = Vec::new();
@@ -265,15 +274,95 @@ fn derive_all(
             fallbacks.extend(narrowed);
         }
     }
-    let mut proposals = Vec::with_capacity(groups.len());
-    for group in &groups {
-        let task = propose_task(group)?;
-        task.validate()?;
-        proposals.push(task);
-    }
+    let mut proposals = propose_rust_groups(&groups, &rust.nextest_test_selectors)?;
     proposals.extend(crate::select_tofu::derive_tofu(statuses, index.files())?);
     proposals.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     Ok((proposals, fallbacks))
+}
+
+/// Require every configured selector to name one selected package test binary.
+fn validate_selector_targets<'a>(
+    packages: impl Iterator<Item = &'a PackageRecord>,
+    selectors: &[NextestTestSelection],
+) -> Result<(), OrchestratorError> {
+    let packages: Vec<&PackageRecord> = packages.collect();
+    for selector in selectors {
+        let matches: Vec<_> = packages
+            .iter()
+            .copied()
+            .filter(|package| {
+                package.name == selector.package
+                    && package.in_workspace
+                    && !package.external
+                    && package.v1_task_owner == VelnorV1TaskOwner::Project
+            })
+            .collect();
+        let package = match matches.as_slice() {
+            [package] => *package,
+            [] => {
+                return Err(OrchestratorError::config(
+                    CONFIG_REL,
+                    "stacks.rust.nextest_test_selectors",
+                    format!("selector_package_not_found:{}", selector.package),
+                ));
+            }
+            _ => {
+                return Err(OrchestratorError::config(
+                    CONFIG_REL,
+                    "stacks.rust.nextest_test_selectors",
+                    format!("selector_package_ambiguous:{}", selector.package),
+                ));
+            }
+        };
+        if !package
+            .targets
+            .iter()
+            .any(|target| target.name == selector.binary && target.test)
+        {
+            return Err(OrchestratorError::config(
+                CONFIG_REL,
+                "stacks.rust.nextest_test_selectors",
+                format!(
+                    "selector_test_binary_not_found:{}:{}",
+                    selector.package, selector.binary
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Propose ordinary groups unchanged and select only the matching Nextest group.
+fn propose_rust_groups(
+    groups: &[TaskGroup],
+    selectors: &[NextestTestSelection],
+) -> Result<Vec<ProposedTask>, OrchestratorError> {
+    let mut matched = BTreeSet::new();
+    let mut proposals = Vec::with_capacity(groups.len());
+    for group in groups {
+        let selection = selectors.iter().find(|selection| {
+            group.kind == TaskKind::Nextest && group.package_name == selection.package
+        });
+        let task = if let Some(selection) = selection {
+            matched.insert(selection.package.as_str());
+            propose_nextest_selection(group, selection)?
+        } else {
+            propose_task(group)?
+        };
+        task.validate()?;
+        proposals.push(task);
+    }
+    if let Some(selector) = selectors
+        .iter()
+        .find(|selector| !matched.contains(selector.package.as_str()))
+    {
+        return Err(OrchestratorError::config(
+            CONFIG_REL,
+            "stacks.rust.nextest_test_selectors",
+            format!("selector_requires_nextest_task:{}", selector.package),
+        ));
+    }
+    Ok(proposals)
 }
 
 /// Workspace-root manifest path for a workspace root.
