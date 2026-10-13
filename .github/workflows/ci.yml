@@ -79,7 +79,7 @@ jobs:
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-75c77caa4018556f
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
           cache_save: "true"
           env: "false"
           install: "false"
@@ -146,7 +146,7 @@ jobs:
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-1e88d9dde00a53da
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-1e88d9dde00a53da
           cache_save: "true"
           env: "false"
           install: "false"
@@ -184,7 +184,7 @@ jobs:
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-507563a85b3135e7
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-507563a85b3135e7
           cache_save: "true"
           env: "false"
           install: "false"
@@ -292,7 +292,7 @@ jobs:
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-e9592c9b35b763fa
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-6270601fa454da91
           cache_save: "true"
           env: "false"
           install: "false"
@@ -530,7 +530,7 @@ jobs:
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-976d3023f73c2670
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c
           cache_save: "true"
           env: "false"
           install: "false"
@@ -1859,7 +1859,7 @@ jobs:
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.16-8f52c1fc1d8f90d8
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-8f52c1fc1d8f90d8
           cache_save: "true"
           env: "false"
           install: "false"
