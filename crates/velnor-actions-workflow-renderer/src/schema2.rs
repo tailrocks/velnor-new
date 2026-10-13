@@ -17,6 +17,50 @@ use crate::yaml::Yaml;
 #[path = "../../test_support/git_fixture.rs"]
 pub(crate) mod git_fixture;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum RunnerLane {
+    Hosted,
+    ScaleSet,
+}
+
+pub(super) struct RunnerSpec {
+    pub(super) runs_on: Yaml,
+    lane: RunnerLane,
+}
+
+impl RunnerSpec {
+    fn hosted(label: &str) -> Result<Self, RenderError> {
+        if !is_hosted_catalog(label) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "schema2_hosted_runner_not_catalog:{label}"
+            )));
+        }
+        Ok(Self {
+            runs_on: Yaml::str(label),
+            lane: RunnerLane::Hosted,
+        })
+    }
+
+    fn scale_set(runs_on: Yaml) -> Self {
+        Self {
+            runs_on,
+            lane: RunnerLane::ScaleSet,
+        }
+    }
+
+    pub(super) fn push_default_shell(&self, fields: &mut Vec<(String, Yaml)>, has_container: bool) {
+        if has_container {
+            fields.push(crate::runs_on::run_shell_defaults_field(
+                crate::runs_on::CONTAINER_RUN_SHELL,
+            ));
+        } else if self.lane == RunnerLane::ScaleSet {
+            fields.push(crate::runs_on::run_shell_defaults_field(
+                crate::runs_on::SCALE_SET_RUN_SHELL,
+            ));
+        }
+    }
+}
+
 /// Qualification workflow path.
 pub const QUALIFICATION_WORKFLOW: &str = ".github/workflows/qualification.yml";
 /// Shared product-release workflow path.
@@ -87,6 +131,10 @@ mod resource_probe_image_tests;
 #[cfg(test)]
 #[path = "schema2_product_release_test_pins.rs"]
 pub(super) mod product_release_test_pins;
+
+#[cfg(test)]
+#[path = "schema2_runner_shell_tests.rs"]
+mod runner_shell_tests;
 
 /// Which schema 2 workflows to emit, plus the selectors they use.
 #[derive(Debug, Clone, PartialEq, Eq)]

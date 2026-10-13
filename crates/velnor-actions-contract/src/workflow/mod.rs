@@ -5,6 +5,7 @@ pub mod cache_ids;
 pub mod crate_job;
 pub mod dispatch;
 pub mod execute;
+pub mod generator_release;
 pub mod ir;
 pub mod jobs;
 pub mod lanes;
