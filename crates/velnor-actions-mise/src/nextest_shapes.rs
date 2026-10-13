@@ -1,12 +1,9 @@
 //! Archive, inventory, and execution shapes for pinned Nextest runs.
-//!
-//! The three [`crate::nextest::NextestDriver`] shapes share one resolved
-//! profile and the validated archive path; routing, partitions, and
-//! payload helpers stay in [`crate::nextest`].
+//! Routing and partition helpers stay in [`crate::nextest`].
 
 use std::ffi::OsString;
 
-use velnor_actions_contract::is_valid_feature_name;
+use velnor_actions_contract::{is_valid_feature_name, normalize_posix_path};
 
 use crate::catalog::ToolCatalog;
 use crate::command::IsolatedCommand;
@@ -16,10 +13,51 @@ use crate::nextest::{
     NextestPartition, argv_of, check_token, fixed_payload, nextest_exec,
 };
 
+/// Append typed filter and ignored-mode arguments after Mise's `--`.
+/// # Errors
+pub fn append_selection_arguments(
+    argv: &mut Vec<OsString>,
+    run_ignored: Option<&str>,
+    filterset: Option<&str>,
+) -> Result<(), MiseError> {
+    let Some(separator) = argv.iter().position(|arg| arg == "--") else {
+        return Err(MiseError::InvalidNextestInput {
+            field: "argv".to_owned(),
+            value: "missing_payload_separator".to_owned(),
+        });
+    };
+    let payload = &argv[separator + 1..];
+    for flag in ["--run-ignored", "--filterset"] {
+        if payload.iter().any(|arg| arg == flag) {
+            return Err(MiseError::InvalidNextestInput {
+                field: "selection".to_owned(),
+                value: format!("duplicate:{flag}"),
+            });
+        }
+    }
+    if let Some(mode) = run_ignored {
+        if !matches!(mode, "all" | "only" | "ignored-only") {
+            return Err(MiseError::InvalidNextestInput {
+                field: "run_ignored".to_owned(),
+                value: mode.to_owned(),
+            });
+        }
+        argv.extend([OsString::from("--run-ignored"), OsString::from(mode)]);
+    }
+    if let Some(filter) = filterset {
+        if filter.is_empty() || filter.bytes().any(|byte| byte.is_ascii_control()) {
+            return Err(MiseError::InvalidNextestInput {
+                field: "filterset".to_owned(),
+                value: filter.to_owned(),
+            });
+        }
+        argv.extend([OsString::from("--filterset"), OsString::from(filter)]);
+    }
+    Ok(())
+}
+
 /// Archive creation for one exact package/configuration.
-///
-/// Runs once per package/configuration; appends sorted `--features` and an
-/// explicit `--target` (omitted for host builds).
+/// Features are sorted; host builds omit `--target`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NextestArchive {
     /// Compile-driver prefix.
@@ -30,17 +68,15 @@ pub struct NextestArchive {
     features: Vec<String>,
     /// Explicit target triple; none omits `--target`.
     target: Option<String>,
+    /// Workspace manifest for a nested Cargo workspace, when supplied.
+    manifest_path: Option<String>,
     /// Resolved Nextest profile passed to `--profile`.
     profile: String,
 }
 
 impl NextestArchive {
-    /// Build an archive request; features are sorted inside.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidNextestInput`] for an empty or malformed
-    /// package, feature, or target value.
+    /// Build an archive request; features are sorted.
+    /// # Errors: rejects malformed package, feature, or target values.
     pub fn new(
         driver: NextestDriver,
         package: &str,
@@ -52,15 +88,9 @@ impl NextestArchive {
 
     /// Build an archive request with a resolved Nextest profile.
     ///
-    /// The profile is the detected selection (`ci` when the project
-    /// declares `[profile.ci]`, else Nextest's documented `default`).
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidNextestInput`] for an empty or malformed
-    /// package, feature, target, or profile value. Feature values use the
-    /// contract feature-name charset, so config-accepted weak-dependency
-    /// syntax (`dep?/feat`, `dep:feat`) survives archive construction.
+    /// Build an archive request with a resolved profile.
+    /// Features use the contract charset, including weak-dependency syntax.
+    /// # Errors: rejects malformed package, feature, target, or profile values.
     pub fn with_profile(
         driver: NextestDriver,
         package: &str,
@@ -88,8 +118,21 @@ impl NextestArchive {
             package: package.to_owned(),
             features: sorted,
             target: triple,
+            manifest_path: None,
             profile: profile.to_owned(),
         })
+    }
+
+    /// Bind archive creation to its workspace manifest.
+    /// # Errors: rejects absolute or traversing paths.
+    pub fn with_manifest_path(mut self, manifest_path: &str) -> Result<Self, MiseError> {
+        self.manifest_path = Some(normalize_posix_path(manifest_path).map_err(|_| {
+            MiseError::InvalidNextestInput {
+                field: "manifest_path".to_owned(),
+                value: manifest_path.to_owned(),
+            }
+        })?);
+        Ok(self)
     }
 
     /// Resolved Nextest profile passed to `--profile`.
@@ -130,6 +173,12 @@ impl NextestArchive {
                 ARCHIVE_FILE,
             ],
         );
+        if let Some(manifest) = &self.manifest_path {
+            payload.splice(
+                5..5,
+                [OsString::from("--manifest-path"), OsString::from(manifest)],
+            );
+        }
         if !self.features.is_empty() {
             payload.push(OsString::from("--features"));
             payload.push(OsString::from(self.features.join(",")));
@@ -148,19 +197,13 @@ impl NextestArchive {
     }
 
     /// Isolated command running this archive creation.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
-    /// empty, which construction rules out.
+    /// # Errors: returned only if the fixed payload is empty.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         nextest_exec(self.driver, &self.payload()[1..])?.command(catalog)
     }
 }
 
-/// Partition inventory over the validated archive.
-///
-/// Records sorted test identities for one partition; compiles nothing.
+/// Inventory sorted test identities in one archive partition.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NextestList {
     /// Compile-driver prefix.
@@ -182,12 +225,8 @@ impl NextestList {
         }
     }
 
-    /// Build an inventory request with a resolved Nextest profile.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidNextestInput`] for an empty or malformed
-    /// profile value.
+    /// Build an inventory request with a resolved profile.
+    /// # Errors: rejects malformed profiles.
     pub fn with_profile(
         driver: NextestDriver,
         partition: NextestPartition,
@@ -236,21 +275,14 @@ impl NextestList {
     }
 
     /// Isolated command running this inventory.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
-    /// empty, which construction rules out.
+    /// # Errors: returned only if the fixed payload is empty.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         nextest_exec(self.driver, &self.payload()[1..])?.command(catalog)
     }
 }
 
-/// Partition execution from the validated archive.
-///
-/// Extracts to a unique directory and runs with `--no-tests fail`; an
-/// empty full inventory fails unless metadata proves no tests exist.
-/// Compiles nothing.
+/// Extract and execute one archive partition without compiling.
+/// Empty partitions fail through `--no-tests fail`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NextestRun {
     /// Compile-driver prefix.
@@ -267,11 +299,7 @@ pub struct NextestRun {
 
 impl NextestRun {
     /// Build an execution request for one partition and extraction scope.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidNextestInput`] for an empty or malformed
-    /// matrix key or partition id.
+    /// # Errors: rejects malformed matrix keys or partition IDs.
     pub fn new(
         driver: NextestDriver,
         partition: NextestPartition,
@@ -281,12 +309,8 @@ impl NextestRun {
         Self::with_profile(driver, partition, matrix_key, partition_id, NEXTEST_PROFILE)
     }
 
-    /// Build an execution request with a resolved Nextest profile.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidNextestInput`] for an empty or malformed
-    /// matrix key, partition id, or profile value.
+    /// Build an execution request with a resolved profile.
+    /// # Errors: rejects malformed matrix keys, partition IDs, or profiles.
     pub fn with_profile(
         driver: NextestDriver,
         partition: NextestPartition,
@@ -347,11 +371,7 @@ impl NextestRun {
     }
 
     /// Isolated command running this partition.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
-    /// empty, which construction rules out.
+    /// # Errors: returned only if the fixed payload is empty.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         nextest_exec(self.driver, &self.payload()[1..])?.command(catalog)
     }
