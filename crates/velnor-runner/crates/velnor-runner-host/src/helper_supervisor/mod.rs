@@ -1,6 +1,5 @@
 //! Cancellation-safe boundary to the pinned offline attestation verifier.
 
-use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 
@@ -14,6 +13,7 @@ use crate::error::HostError;
 
 mod path;
 mod request;
+mod snapshot;
 pub(super) use request::ChecksumTarget;
 
 const HELPER_DEADLINE: Duration = Duration::from_secs(90);
@@ -39,15 +39,16 @@ pub(super) async fn verify_checksum_target(
 ) -> Result<(), HostError> {
     let input = request::encode(&target)?;
     let helper = path::open_verified(expected_helper_sha256)?;
-    run_helper(&helper, input).await
+    let helper = snapshot::prepare(target.state_directory, helper, expected_helper_sha256).await?;
+    run_helper(helper, input).await
 }
 
-async fn run_helper(helper: &Path, input: Vec<u8>) -> Result<(), HostError> {
+async fn run_helper(helper: snapshot::SnapshotLease, input: Vec<u8>) -> Result<(), HostError> {
     let (cancel_sender, cancel_receiver) = oneshot::channel();
     #[cfg(test)]
-    let task = tokio::spawn(supervise(helper.to_owned(), input, cancel_receiver, None));
+    let task = tokio::spawn(supervise(helper, input, cancel_receiver, None));
     #[cfg(not(test))]
-    let task = tokio::spawn(supervise(helper.to_owned(), input, cancel_receiver));
+    let task = tokio::spawn(supervise(helper, input, cancel_receiver));
     await_helper(task, cancel_sender).await
 }
 
@@ -62,19 +63,20 @@ async fn await_helper(
 }
 
 async fn supervise(
-    helper: std::path::PathBuf,
+    helper: snapshot::SnapshotLease,
     input: Vec<u8>,
     mut cancelled: oneshot::Receiver<()>,
     #[cfg(test)] mut observer: Option<tests::TestObserver>,
 ) -> Result<(), HostError> {
     let result = supervise_inner(
-        helper,
+        &helper,
         input,
         &mut cancelled,
         #[cfg(test)]
         &mut observer,
     )
     .await;
+    drop(helper);
     #[cfg(test)]
     if let Some(sender) = observer
         .as_mut()
@@ -86,34 +88,46 @@ async fn supervise(
 }
 
 async fn supervise_inner(
-    helper: std::path::PathBuf,
+    helper: &snapshot::SnapshotLease,
     input: Vec<u8>,
     cancelled: &mut oneshot::Receiver<()>,
     #[cfg(test)] observer: &mut Option<tests::TestObserver>,
 ) -> Result<(), HostError> {
     let deadline = Instant::now() + HELPER_DEADLINE;
-    let mut command = Command::new(helper);
-    command
-        .env_clear()
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
-    #[cfg(target_os = "macos")]
-    if let Some(value) = std::env::var_os("__CF_USER_TEXT_ENCODING") {
-        command.env("__CF_USER_TEXT_ENCODING", value);
-    }
-    let mut child = command.spawn().map_err(|_| HostError::Identity)?;
-    let stdout = spawn_capture(child.stdout.take().ok_or(HostError::Identity)?);
-    let stderr = spawn_capture(child.stderr.take().ok_or(HostError::Identity)?);
+    let mut child = spawn_helper(helper)?;
+    let (Some(stdout_pipe), Some(stderr_pipe)) = (child.stdout.take(), child.stderr.take()) else {
+        kill_and_reap(&mut child).await?;
+        return Err(HostError::Identity);
+    };
+    let stdout = spawn_capture(stdout_pipe);
+    let stderr = spawn_capture(stderr_pipe);
     #[cfg(test)]
     if let Some(sender) = observer
         .as_mut()
         .and_then(|observer| observer.child_pid.take())
     {
-        sender
-            .send(child.id().ok_or(HostError::Identity)?)
-            .map_err(|_| HostError::Identity)?;
+        let Some(pid) = child.id() else {
+            cleanup_cancelled_child(
+                &mut child,
+                stdout,
+                stderr,
+                #[cfg(test)]
+                observer,
+            )
+            .await?;
+            return Err(HostError::Identity);
+        };
+        if sender.send(pid).is_err() {
+            cleanup_cancelled_child(
+                &mut child,
+                stdout,
+                stderr,
+                #[cfg(test)]
+                observer,
+            )
+            .await?;
+            return Err(HostError::Identity);
+        }
     }
     let write = write_request(&mut child, &input, deadline, cancelled);
     if write.await.is_err() {
@@ -150,6 +164,22 @@ async fn supervise_inner(
         return Err(HostError::Identity);
     }
     Ok(())
+}
+
+fn spawn_helper(helper: &snapshot::SnapshotLease) -> Result<Child, HostError> {
+    helper.validate_path()?;
+    let mut command = Command::new(helper.path());
+    command
+        .env_clear()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    #[cfg(target_os = "macos")]
+    if let Some(value) = std::env::var_os("__CF_USER_TEXT_ENCODING") {
+        command.env("__CF_USER_TEXT_ENCODING", value);
+    }
+    command.spawn().map_err(|_| HostError::Identity)
 }
 
 async fn cleanup_cancelled_child(

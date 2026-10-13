@@ -1,7 +1,7 @@
 //! Fixed adjacent verifier resolution and byte-identity checks.
 
 use std::fs::{File, OpenOptions};
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Component, Path, PathBuf};
 
 use sha2::{Digest, Sha256};
@@ -9,14 +9,23 @@ use sha2::{Digest, Sha256};
 use crate::error::HostError;
 
 pub(super) const HELPER_NAME: &str = "velnor-runner-attestation-helper";
-const MAX_HELPER_BYTES: u64 = 128 * 1024 * 1024;
+pub(super) const MAX_HELPER_BYTES: u64 = 128 * 1024 * 1024;
 
-pub(super) fn open_verified(expected_sha256: &[u8; 32]) -> Result<PathBuf, HostError> {
+#[derive(Debug)]
+pub(super) struct VerifiedHelper {
+    pub(super) file: File,
+    pub(super) length: u64,
+}
+
+pub(super) fn open_verified(expected_sha256: &[u8; 32]) -> Result<VerifiedHelper, HostError> {
     let executable = std::env::current_exe().map_err(|_| HostError::Identity)?;
     open_verified_from(&executable, expected_sha256)
 }
 
-fn open_verified_from(executable: &Path, expected_sha256: &[u8; 32]) -> Result<PathBuf, HostError> {
+pub(super) fn open_verified_from(
+    executable: &Path,
+    expected_sha256: &[u8; 32],
+) -> Result<VerifiedHelper, HostError> {
     let canonical = std::fs::canonicalize(executable).map_err(|_| HostError::Identity)?;
     if executable != canonical.as_path() || !safe_components(&canonical) {
         return Err(HostError::Identity);
@@ -47,7 +56,12 @@ fn open_verified_from(executable: &Path, expected_sha256: &[u8; 32]) -> Result<P
     if read_total != metadata.len() || digest.finalize().as_slice() != expected_sha256 {
         return Err(HostError::Identity);
     }
-    Ok(helper)
+    file.seek(SeekFrom::Start(0))
+        .map_err(|_| HostError::Identity)?;
+    Ok(VerifiedHelper {
+        file,
+        length: metadata.len(),
+    })
 }
 
 fn safe_components(path: &Path) -> bool {

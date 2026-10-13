@@ -5,11 +5,14 @@ use std::path::{Path, PathBuf};
 use std::process::Command as OsCommand;
 use std::time::Duration;
 
+use sha2::{Digest, Sha256};
 use tokio::sync::oneshot;
 
 use crate::error::HostError;
 
+use super::path::{self, HELPER_NAME};
 use super::run_helper;
+use super::snapshot::{self, SnapshotLease};
 
 pub(super) struct TestObserver {
     pub(super) child_pid: Option<oneshot::Sender<u32>>,
@@ -18,13 +21,13 @@ pub(super) struct TestObserver {
 }
 
 async fn run_helper_with_observer(
-    helper: &Path,
+    helper: SnapshotLease,
     input: Vec<u8>,
     observer: TestObserver,
 ) -> Result<(), HostError> {
     let (cancel_sender, cancel_receiver) = oneshot::channel();
     let task = tokio::spawn(super::supervise(
-        helper.to_owned(),
+        helper,
         input,
         cancel_receiver,
         Some(observer),
@@ -35,16 +38,22 @@ async fn run_helper_with_observer(
 struct TestScript {
     directory: PathBuf,
     path: PathBuf,
+    executable: PathBuf,
+    digest: [u8; 32],
 }
 
 impl TestScript {
     fn new(contents: &str) -> Result<Self, HostError> {
-        let directory =
-            std::env::temp_dir().join(format!("velnor-helper-test-{}", uuid::Uuid::new_v4()));
+        let root = std::env::temp_dir()
+            .canonicalize()
+            .map_err(|_| HostError::Path)?;
+        let directory = root.join(format!("velnor-helper-test-{}", uuid::Uuid::new_v4()));
         fs::create_dir(&directory).map_err(|_| HostError::Path)?;
         fs::set_permissions(&directory, fs::Permissions::from_mode(0o700))
             .map_err(|_| HostError::Path)?;
-        let path = directory.join("helper.sh");
+        let executable = directory.join("host");
+        write_private_executable(&executable, b"host fixture")?;
+        let path = directory.join(HELPER_NAME);
         let mut file = OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -55,11 +64,21 @@ impl TestScript {
         file.sync_all().map_err(|_| HostError::Path)?;
         fs::set_permissions(&path, fs::Permissions::from_mode(0o700))
             .map_err(|_| HostError::Path)?;
-        Ok(Self { directory, path })
+        Ok(Self {
+            directory,
+            path,
+            executable,
+            digest: Sha256::digest(contents.as_bytes()).into(),
+        })
     }
 
     fn path(&self) -> &Path {
         &self.path
+    }
+
+    async fn snapshot(&self) -> Result<SnapshotLease, HostError> {
+        let source = path::open_verified_from(&self.executable, &self.digest)?;
+        snapshot::prepare(&self.directory, source, &self.digest).await
     }
 }
 
@@ -76,7 +95,7 @@ async fn accepts_only_the_exact_success_response() -> Result<(), HostError> {
     let helper = TestScript::new(
         "#!/bin/sh\nrequest=$(cat) || exit 1\n[ \"$request\" = '{}' ] || exit 1\nprintf '%s' '{\"schema\":2,\"result\":\"verified\"}'\n",
     )?;
-    run_helper(helper.path(), b"{}".to_vec()).await
+    run_helper(helper.snapshot().await?, b"{}".to_vec()).await
 }
 
 #[tokio::test]
@@ -85,7 +104,7 @@ async fn rejects_success_with_extra_response_fields() -> Result<(), HostError> {
         "#!/bin/sh\nrequest=$(cat) || exit 1\n[ \"$request\" = '{}' ] || exit 1\nprintf '%s' '{\"schema\":2,\"result\":\"verified\",\"ok\":true}'\n",
     )?;
     assert_eq!(
-        run_helper(helper.path(), b"{}".to_vec()).await,
+        run_helper(helper.snapshot().await?, b"{}".to_vec()).await,
         Err(HostError::Identity)
     );
     Ok(())
@@ -94,13 +113,13 @@ async fn rejects_success_with_extra_response_fields() -> Result<(), HostError> {
 #[tokio::test]
 async fn cancelling_the_caller_kills_and_reaps_the_helper() -> Result<(), HostError> {
     let helper = TestScript::new("#!/bin/sh\nexec /bin/sleep 30\n")?;
+    let lease = helper.snapshot().await?;
     let (pid_sender, mut pid_receiver) = oneshot::channel();
     let (cleanup_sender, cleanup_receiver) = oneshot::channel();
     let (finished_sender, finished_receiver) = oneshot::channel();
-    let path = helper.path().to_owned();
     let task = tokio::spawn(async move {
         run_helper_with_observer(
-            &path,
+            lease,
             b"{}".to_vec(),
             TestObserver {
                 child_pid: Some(pid_sender),
@@ -140,12 +159,13 @@ async fn cancelling_the_caller_kills_and_reaps_the_helper() -> Result<(), HostEr
 #[tokio::test]
 async fn failed_spawn_finishes_without_child_cleanup() -> Result<(), HostError> {
     let helper = TestScript::new("#!/bin/sh\nexit 0\n")?;
-    fs::remove_file(helper.path()).map_err(|_| HostError::Path)?;
+    let lease = helper.snapshot().await?;
+    fs::remove_file(lease.path()).map_err(|_| HostError::Path)?;
     let (pid_sender, pid_receiver) = oneshot::channel();
     let (cleanup_sender, cleanup_receiver) = oneshot::channel();
     let (finished_sender, finished_receiver) = oneshot::channel();
     let result = run_helper_with_observer(
-        helper.path(),
+        lease,
         b"{}".to_vec(),
         TestObserver {
             child_pid: Some(pid_sender),
@@ -154,12 +174,20 @@ async fn failed_spawn_finishes_without_child_cleanup() -> Result<(), HostError> 
         },
     )
     .await;
-    assert_eq!(result, Err(HostError::Identity));
+    assert_eq!(result, Err(HostError::Path));
     assert!(pid_receiver.await.is_err());
     assert!(cleanup_receiver.await.is_err());
-    assert_eq!(finished_receiver.await, Ok(Err(HostError::Identity)));
+    assert_eq!(finished_receiver.await, Ok(Err(HostError::Path)));
     Ok(())
 }
+
+fn write_private_executable(path: &Path, bytes: &[u8]) -> Result<(), HostError> {
+    fs::write(path, bytes).map_err(|_| HostError::Path)?;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|_| HostError::Path)
+}
+
+#[path = "snapshot_tests.rs"]
+mod snapshot_tests;
 
 async fn cancel_and_observe(
     task: tokio::task::JoinHandle<Result<(), HostError>>,

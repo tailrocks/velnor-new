@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Read;
 use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 
@@ -56,13 +57,20 @@ fn write_private_executable(path: &Path, bytes: &[u8]) -> Result<(), HostError> 
 #[test]
 fn opens_only_the_adjacent_helper_with_the_exact_compiled_digest() -> Result<(), HostError> {
     let fixture = Fixture::new()?;
+    let mut verified = open_verified_from(&fixture.executable, &Fixture::expected_sha256())?;
+    let mut bytes = Vec::new();
+    verified
+        .file
+        .read_to_end(&mut bytes)
+        .map_err(|_| HostError::Identity)?;
+    assert_eq!(bytes, HELPER_BYTES);
     assert_eq!(
-        open_verified_from(&fixture.executable, &Fixture::expected_sha256())?,
-        fixture.helper
+        verified.length,
+        u64::try_from(HELPER_BYTES.len()).map_err(|_| HostError::Identity)?
     );
     assert_eq!(
-        open_verified_from(&fixture.executable, &[0; 32]),
-        Err(HostError::Identity)
+        open_verified_from(&fixture.executable, &[0; 32]).err(),
+        Some(HostError::Identity)
     );
     Ok(())
 }
@@ -74,15 +82,15 @@ fn rejects_helper_symlinks_and_symlinked_executable_paths() -> Result<(), HostEr
     fs::rename(&fixture.helper, &target).map_err(|_| HostError::Path)?;
     symlink(&target, &fixture.helper).map_err(|_| HostError::Path)?;
     assert_eq!(
-        open_verified_from(&fixture.executable, &Fixture::expected_sha256()),
-        Err(HostError::Identity)
+        open_verified_from(&fixture.executable, &Fixture::expected_sha256()).err(),
+        Some(HostError::Identity)
     );
 
     let alias = fixture.directory.join("alias");
     symlink(&fixture.directory, &alias).map_err(|_| HostError::Path)?;
     assert_eq!(
-        open_verified_from(&alias.join("host"), &Fixture::expected_sha256()),
-        Err(HostError::Identity)
+        open_verified_from(&alias.join("host"), &Fixture::expected_sha256()).err(),
+        Some(HostError::Identity)
     );
     Ok(())
 }
@@ -116,8 +124,8 @@ fn enforces_helper_owner_executable_mode_and_private_parent() -> Result<(), Host
         Err(HostError::Identity)
     );
     assert_eq!(
-        open_verified_from(&fixture.executable, &Fixture::expected_sha256()),
-        Err(HostError::Identity)
+        open_verified_from(&fixture.executable, &Fixture::expected_sha256()).err(),
+        Some(HostError::Identity)
     );
     Ok(())
 }
