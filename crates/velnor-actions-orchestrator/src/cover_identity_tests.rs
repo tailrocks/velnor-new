@@ -264,6 +264,42 @@ fn baseline_application_returns_the_exact_manifest_used_for_coverage() {
 }
 
 #[test]
+fn baseline_application_returns_the_exact_manifest_used_for_coverage() {
+    let rust = "stack/rust/root/clippy/default";
+    let mut plan = plan_with(&[rust]);
+    plan.base = Some("a".repeat(40));
+    let tmp = tempfile::tempdir().expect("tempdir");
+    seed_sources(tmp.path());
+    let catalog = ToolCatalog::pinned();
+    let discovery = discovery_with(&[rust]);
+    let live = live_closure_digest(tmp.path(), &discovery, rust, &catalog);
+    let manifest = manifest_with(&[(rust, &live)]);
+    let expected = canonical_json_bytes(&manifest).expect("manifest bytes");
+    let inputs = BaselineInputs {
+        branch: "testmain",
+        root: tmp.path(),
+        workflow: ".github/workflows/ci.yml",
+        catalog: &catalog,
+        repository: Some("o/r"),
+    };
+    let used = crate::cover::apply_baseline(
+        &mut plan,
+        WorkflowEvent::PullRequest,
+        inputs,
+        Some(manifest),
+        &discovery,
+        Some(&BTreeSet::new()),
+    )
+    .expect("apply baseline")
+    .expect("coverage source retained");
+    assert_eq!(canonical_json_bytes(&used).expect("used bytes"), expected);
+    assert_eq!(
+        plan.obligations[0].decision,
+        ObligationDecision::CoveredByTrustedBaseline
+    );
+}
+
+#[test]
 fn stale_closure_with_empty_changed_set_executes() {
     let rust = "stack/rust/root/clippy/default";
     let unchanged = Some(BTreeSet::new());
