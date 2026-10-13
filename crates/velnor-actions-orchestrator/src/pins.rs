@@ -48,6 +48,13 @@ pub(crate) const RELEASE_MANIFEST_ENV: &str = "VELNOR_RELEASE_MANIFEST_JSON";
 pub(crate) const MISSING_MANIFEST_PROBLEM: &str =
     "consumer_requires_release_install:install an official velnor-actions release";
 
+/// Step-env key carrying the release manifest into Check/Plan steps.
+pub(crate) const RELEASE_MANIFEST_ENV: &str = "VELNOR_RELEASE_MANIFEST_JSON";
+
+/// Fail-closed diagnostic when no release manifest exists anywhere.
+pub(crate) const MISSING_MANIFEST_PROBLEM: &str =
+    "consumer_requires_release_install:install an official velnor-actions release";
+
 /// Resolve typed Mise setup pins: overrides plus the compiled catalog.
 ///
 /// The `uses` ref comes from `[actions.overrides]` when present (approved

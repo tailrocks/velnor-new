@@ -192,7 +192,9 @@ NOT decide the graph that builds or promotes itself.
 
 1. The protected lock points to an already published bootstrap release. Seed
    the first release with a manually reviewed binary built through pinned Mise
-   and MBX; no Velnor binary is needed for this seed.
+   and MBX; no Velnor binary is needed for this seed, and the seed binary
+   needs no manifest bake: the manifest flows at runtime from the committed
+   workflow's Check/Plan step env into every staged regeneration.
 2. The bootstrap selects the matching host-target lock record, verifies its
    digest, and produces the plan and matrix. Candidate changes cannot alter
    these obligations.
