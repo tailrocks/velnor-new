@@ -15,7 +15,7 @@ use velnor_actions_workflow_renderer::tree::render_tree_with_extra;
 
 use crate::OrchestratorError;
 use crate::finalized::owned_preparation;
-use crate::pins::resolve_mise_setup;
+use crate::pins::{resolve_mise_setup, resolve_mise_setup_set};
 use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
 use crate::validate::validate_staged;
@@ -775,6 +775,7 @@ fn render_all(
 ) -> Result<RenderedTree, OrchestratorError> {
     let version = env!("CARGO_PKG_VERSION");
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
+    let mise_set = resolve_mise_setup_set(&prep.config, &prep.runner_label, &mise)?;
     let ir = expand_workflow(&prep.workflow.ir, &prep.config, dispatch).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),

@@ -20,6 +20,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::impl_repo_policy::p12_harness as freshness;
 
+use crate::impl_repo_policy::p12_harness as freshness;
+
 /// Workspace root derived from this crate's manifest dir.
 fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")

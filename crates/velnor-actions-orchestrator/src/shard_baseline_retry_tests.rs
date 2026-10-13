@@ -11,11 +11,18 @@ fn retry_parent() -> BaselineManifest {
     parent
 }
 
+/// Lookup outcome plus the text and archive transports it exercised.
+type RetryLookupOutcome = (
+    Result<Vec<BaselineManifest>, String>,
+    Vec<Vec<String>>,
+    Vec<Vec<String>>,
+);
+
 fn normal_retry_lookup(
     parent: &BaselineManifest,
     current_conclusion: &str,
     original_conclusion: &str,
-) -> (Result<Vec<BaselineManifest>, String>, Vec<Vec<String>>) {
+) -> RetryLookupOutcome {
     let lookup = BaselineLookup::new(
         &parent.source_commit,
         ".github/workflows/ci.yml",
@@ -81,7 +88,7 @@ fn replayed_publication_remains_usable_for_next_plan_coverage() {
     let original_bytes = canonical_json_bytes(&retained).expect("original bytes");
     // The T16 publisher retains this immutable attempt-1 artifact when
     // attempt 2 succeeds. Normal lookup sees the latest summary attempt 2.
-    let (found, calls) = normal_retry_lookup(&retained, "success", "success");
+    let (found, calls, archive_calls) = normal_retry_lookup(&retained, "success", "success");
     let found = found
         .expect("normal lookup")
         .pop()
@@ -95,6 +102,13 @@ fn replayed_publication_remains_usable_for_next_plan_coverage() {
         calls
             .iter()
             .any(|args| args[1].ends_with("/runs/7/attempts/1"))
+    );
+    assert_eq!(
+        archive_calls,
+        [vec![
+            "api".to_owned(),
+            format!("repos/o/r/actions/artifacts/{}/zip", retained.artifact_id)
+        ]]
     );
     let next_plan = plan_for(&found, Some(&found.source_commit));
     assert!(crate::covered_tasks::plan_has_covered(&next_plan));

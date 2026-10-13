@@ -326,6 +326,11 @@ const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
         "{\"crate\": {\"max_version\": \"0.3.172\"}}",
     ),
     (
+        "https://crates.io/api/v1/crates/release-plz",
+        "release-plz.json",
+        "{\"crate\": {\"max_version\": \"0.3.169\"}}",
+    ),
+    (
         "https://api.github.com/repos/opentofu/opentofu/releases/latest",
         "opentofu.json",
         "{\"tag_name\": \"v1.13.1\"}",

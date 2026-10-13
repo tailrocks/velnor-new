@@ -216,7 +216,7 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
         velnor_actions_contract::WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
-        &mise(),
+        &mise_set()?,
     )?;
     let text = &rendered.yaml;
     let names = step_names(text, "actionlint");

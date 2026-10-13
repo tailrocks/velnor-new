@@ -118,6 +118,20 @@ impl BaselineLookup {
         ])
     }
 
+    /// Fixed `gh api` args for one exact service artifact ZIP endpoint.
+    pub(crate) fn artifact_zip_args(&self, artifact_id: u64) -> Result<Vec<OsString>, String> {
+        if artifact_id == 0 {
+            return Err("baseline_unavailable".to_owned());
+        }
+        Ok(vec![
+            OsString::from("api"),
+            OsString::from(format!(
+                "repos/{}/actions/artifacts/{artifact_id}/zip",
+                self.repo
+            )),
+        ])
+    }
+
     /// Run fixed `gh` args under the pinned catalog in `root`.
     pub(crate) fn run(
         catalog: &ToolCatalog,

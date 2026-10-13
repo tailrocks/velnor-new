@@ -65,7 +65,7 @@ fn every_emitted_step_has_name() -> Result<(), RenderError> {
         WorkflowPolicy::VelnorRepositoryV1,
         Some(&support),
         &ctx,
-        &mise(),
+        &mise_set()?,
     )?;
     for line in text.lines() {
         let trimmed = line.trim_start();

@@ -45,7 +45,7 @@ pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
 };
-pub use crate::setup::MiseSetup;
+pub use crate::setup::{MiseSetup, MiseSetupSet};
 
 /// Generated workflow path inside the repository.
 ///
@@ -244,7 +244,7 @@ pub fn render_workflow_ir_strict(
     policy: WorkflowPolicy,
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
-    mise: &MiseSetup,
+    mise: &MiseSetupSet,
 ) -> Result<String, RenderError> {
     Ok(render_workflow_ir_strict_shared(ir, policy, support, ctx, mise)?.yaml)
 }
@@ -260,7 +260,7 @@ pub fn render_workflow_ir_strict_shared(
     policy: WorkflowPolicy,
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
-    mise: &MiseSetup,
+    mise: &MiseSetupSet,
 ) -> Result<RenderedWorkflow, RenderError> {
     let jobs = finalize_jobs(ir, policy, support, ctx, mise)?;
     render_merged::render_merged(ir, &jobs, ctx)
@@ -282,9 +282,8 @@ pub fn finalize_jobs(
     policy: WorkflowPolicy,
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
-    mise: &MiseSetup,
+    mise: &MiseSetupSet,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
-    mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     for (id, job) in &mut jobs {
         if ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id)) {
