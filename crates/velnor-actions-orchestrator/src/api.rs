@@ -26,6 +26,8 @@ pub use super::generate::{
     begin_atomic_diagnostic_capture, generate, generate_dispatched, render_staged_tree,
     render_staged_tree_with, take_atomic_diagnostic_events,
 };
+#[doc(hidden)]
+pub use super::generate::{RetiredTreeOwners, generate_with_retired_tree_owners};
 pub use super::init::{InitReport, init_config};
 #[doc(hidden)]
 pub use super::internal::phase_timing::{PlanPhaseTimings, plan_internal_with_phase_timings};
