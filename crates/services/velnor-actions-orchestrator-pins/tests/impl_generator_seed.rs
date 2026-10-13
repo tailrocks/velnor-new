@@ -12,6 +12,8 @@ use velnor_actions_orchestrator_pins::pins::acquire_script_argv;
 
 use crate::impl_common::test_path_with_sbin;
 
+use crate::impl_common::test_path_with_sbin;
+
 #[test]
 fn generator_seed_hit_skips_curl_and_a_bad_hash_does_not_copy()
 -> Result<(), Box<dyn std::error::Error>> {

@@ -352,7 +352,8 @@ mod cli_tests;
 #[path = "schema2_generator_release_publish_fixtures.rs"]
 mod publish_fixtures;
 use publish_fixtures::{
-    copy_release_helpers, release_json, sha256, write_attestation_files, write_candidate_records,
+    copy_release_helpers, release_json, sha256, test_path_with_sbin, write_attestation_files,
+    write_candidate_records,
 };
 
 #[path = "schema2_generator_release_fake_commands.rs"]

@@ -22,6 +22,11 @@ mod path;
 
 pub(crate) use path::test_path_with_sbin;
 
+#[path = "impl_common_path.rs"]
+mod path;
+
+pub(crate) use path::test_path_with_sbin;
+
 /// Test error shortcut.
 pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;
 
