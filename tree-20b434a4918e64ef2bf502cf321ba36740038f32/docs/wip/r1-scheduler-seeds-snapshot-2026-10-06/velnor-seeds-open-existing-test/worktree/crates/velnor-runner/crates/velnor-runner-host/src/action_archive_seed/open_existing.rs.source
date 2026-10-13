@@ -1,0 +1,175 @@
+use std::ffi::OsStr;
+use std::fs::{self, Metadata};
+use std::path::{Path, PathBuf};
+
+use super::{ActionArchiveSeedError, ActionArchiveStore};
+
+impl ActionArchiveStore {
+    /// Open an existing publisher store without creating or changing filesystem state.
+    ///
+    /// The root must be the `action-archives` child of a real, private directory. The root,
+    /// `objects`, and `leases` must be real directories owned by the same user.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the store or a required directory is missing, unsafe, or corrupt.
+    pub(crate) fn open_existing(root: impl AsRef<Path>) -> Result<Self, ActionArchiveSeedError> {
+        open_existing_root(root.as_ref(), None)
+    }
+
+    #[cfg(all(test, unix))]
+    pub(crate) fn open_existing_with_owner_for_test(
+        root: impl AsRef<Path>,
+        expected_owner: u32,
+    ) -> Result<Self, ActionArchiveSeedError> {
+        open_existing_root(root.as_ref(), Some(expected_owner))
+    }
+}
+
+#[cfg(unix)]
+type OwnerId = u32;
+
+#[cfg(not(unix))]
+type OwnerId = ();
+
+fn open_existing_root(
+    requested_root: &Path,
+    expected_owner: Option<OwnerId>,
+) -> Result<ActionArchiveStore, ActionArchiveSeedError> {
+    if requested_root.file_name() != Some(OsStr::new("action-archives")) {
+        return Err(ActionArchiveSeedError::StoreIntegrity);
+    }
+    let requested_parent = requested_root
+        .parent()
+        .ok_or(ActionArchiveSeedError::StoreIntegrity)?;
+    let parent_metadata = real_directory(requested_parent, ActionArchiveSeedError::Io)?;
+    check_parent_permissions(&parent_metadata)?;
+    let canonical_parent =
+        fs::canonicalize(requested_parent).map_err(|_| ActionArchiveSeedError::Io)?;
+    let canonical_parent_metadata = real_directory(&canonical_parent, ActionArchiveSeedError::Io)?;
+    require_same_owner(&canonical_parent_metadata, &parent_metadata)?;
+    let owner = expected_owner.unwrap_or_else(|| owner_id(&canonical_parent_metadata));
+
+    let root_metadata = real_directory(requested_root, ActionArchiveSeedError::MissingArchive)?;
+    require_owner(&root_metadata, owner)?;
+    check_private_permissions(&root_metadata)?;
+    let canonical_root =
+        fs::canonicalize(requested_root).map_err(|_| ActionArchiveSeedError::MissingArchive)?;
+    if canonical_root.parent() != Some(canonical_parent.as_path()) {
+        return Err(ActionArchiveSeedError::StoreIntegrity);
+    }
+    let objects = required_child(&canonical_root, "objects", owner)?;
+    let leases = required_child(&canonical_root, "leases", owner)?;
+    check_root_entries(&canonical_root)?;
+    Ok(ActionArchiveStore { objects, leases })
+}
+
+fn real_directory(
+    path: &Path,
+    missing_error: ActionArchiveSeedError,
+) -> Result<Metadata, ActionArchiveSeedError> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            missing_error
+        } else {
+            ActionArchiveSeedError::Io
+        }
+    })?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Err(ActionArchiveSeedError::StoreIntegrity);
+    }
+    Ok(metadata)
+}
+
+fn required_child(
+    root: &Path,
+    name: &str,
+    owner: OwnerId,
+) -> Result<PathBuf, ActionArchiveSeedError> {
+    let child = root.join(name);
+    let metadata = real_directory(&child, ActionArchiveSeedError::StoreIntegrity)?;
+    require_owner(&metadata, owner)?;
+    check_private_permissions(&metadata)?;
+    let canonical = fs::canonicalize(&child).map_err(|_| ActionArchiveSeedError::StoreIntegrity)?;
+    if canonical.parent() != Some(root) || canonical.file_name() != Some(OsStr::new(name)) {
+        return Err(ActionArchiveSeedError::StoreIntegrity);
+    }
+    Ok(canonical)
+}
+
+fn check_root_entries(root: &Path) -> Result<(), ActionArchiveSeedError> {
+    for entry in fs::read_dir(root).map_err(|_| ActionArchiveSeedError::Io)? {
+        let name = entry.map_err(|_| ActionArchiveSeedError::Io)?.file_name();
+        if name != OsStr::new("objects") && name != OsStr::new("leases") {
+            return Err(ActionArchiveSeedError::StoreIntegrity);
+        }
+    }
+    Ok(())
+}
+
+fn require_same_owner(
+    actual: &Metadata,
+    expected: &Metadata,
+) -> Result<(), ActionArchiveSeedError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        require_owner(actual, expected.uid())?;
+    }
+    #[cfg(not(unix))]
+    let _ = (actual, expected);
+    Ok(())
+}
+
+#[cfg(unix)]
+fn owner_id(metadata: &Metadata) -> OwnerId {
+    use std::os::unix::fs::MetadataExt;
+    metadata.uid()
+}
+
+#[cfg(not(unix))]
+fn owner_id(_metadata: &Metadata) -> OwnerId {}
+
+fn require_owner(metadata: &Metadata, expected: OwnerId) -> Result<(), ActionArchiveSeedError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if metadata.uid() != expected {
+            return Err(ActionArchiveSeedError::StoreIntegrity);
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = (metadata, expected);
+    Ok(())
+}
+
+fn check_parent_permissions(metadata: &Metadata) -> Result<(), ActionArchiveSeedError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let mode = metadata.mode() & 0o777;
+        if mode & 0o700 != 0o700 || mode & 0o022 != 0 {
+            return Err(ActionArchiveSeedError::StoreIntegrity);
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = metadata;
+    Ok(())
+}
+
+fn check_private_permissions(metadata: &Metadata) -> Result<(), ActionArchiveSeedError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if metadata.mode() & 0o777 != 0o700 {
+            return Err(ActionArchiveSeedError::StoreIntegrity);
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        if metadata.permissions().readonly() {
+            return Err(ActionArchiveSeedError::StoreIntegrity);
+        }
+    }
+    Ok(())
+}

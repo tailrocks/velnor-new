@@ -1,0 +1,353 @@
+//! Identity constructors and validators.
+//!
+//! Derivation formulas are normative; example strings are illustrative.
+//! `artifact_id` values are derived GitHub artifact names. Numeric run IDs
+//! appear only inside `run_key`/baseline proofs, never as identity inputs.
+//! Task, input, and compatibility identities never include cwd, absolute
+//! paths, or `run_key`.
+
+pub mod artifact;
+
+pub use artifact::{
+    artifact_id_for_candidate, artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan,
+    target_key, validate_artifact_id,
+};
+
+use crate::canonical::validate_digest;
+use crate::errors::ContractError;
+
+/// Build a CI run key `r<run-id>-a<attempt>` from numeric GitHub IDs.
+#[must_use]
+pub fn run_key_for_ci(run_id: u64, run_attempt: u64) -> String {
+    format!("r{run_id}-a{run_attempt}")
+}
+
+/// Validate a run key (`local` or `r<digits>-a<digits>`).
+/// # Errors
+pub fn validate_run_key(value: &str) -> Result<(), ContractError> {
+    if value == "local" || is_ci_run_key(value) {
+        Ok(())
+    } else {
+        Err(ContractError::identity("run_key", "malformed_run_key"))
+    }
+}
+
+/// Derive a manifest key from a repo-relative Cargo manifest path.
+///
+/// Strips the trailing `/Cargo.toml`; the root manifest maps to `root`.
+/// # Errors
+pub fn manifest_key_for_cargo_manifest(manifest: &str) -> Result<String, ContractError> {
+    if manifest.is_empty()
+        || manifest.starts_with('/')
+        || manifest.contains('\\')
+        || manifest.split('/').any(|seg| seg.is_empty() || seg == "..")
+    {
+        return Err(ContractError::identity(
+            "manifest_key",
+            "non_relative_manifest",
+        ));
+    }
+    if manifest == "Cargo.toml" {
+        return Ok("root".to_owned());
+    }
+    let Some(dir) = manifest.strip_suffix("/Cargo.toml") else {
+        return Err(ContractError::identity(
+            "manifest_key",
+            "missing_cargo_toml",
+        ));
+    };
+    if dir == "root" {
+        return Err(ContractError::identity("manifest_key", "reserved_root_key"));
+    }
+    validate_path_segments(dir, "manifest_key")?;
+    Ok(dir.to_owned())
+}
+
+/// Build `stack/<stack>/<manifest-key>/<kind>/<config>[/shard-i-of-n]`.
+/// # Errors
+pub fn task_id_for_stack(
+    stack: &str,
+    manifest_key: &str,
+    kind: &str,
+    config: &str,
+    shard: Option<(u32, u32)>,
+) -> Result<String, ContractError> {
+    validate_component(stack, "stack_id")?;
+    if manifest_key == "root" {
+        // Root key is exact.
+    } else {
+        validate_path_segments(manifest_key, "manifest_key")?;
+    }
+    validate_component(kind, "task_kind")?;
+    validate_component(config, "configuration")?;
+    let mut id = format!("stack/{stack}/{manifest_key}/{kind}/{config}");
+    if let Some((index, count)) = shard {
+        validate_shard(index, count)?;
+        id = format!("{id}/shard-{index}-of-{count}");
+    }
+    Ok(id)
+}
+
+/// Build `internal/<kind>/<config>` for orchestration obligations.
+/// # Errors
+pub fn task_id_for_internal(kind: &str, config: &str) -> Result<String, ContractError> {
+    validate_component(kind, "task_kind")?;
+    validate_component(config, "configuration")?;
+    Ok(format!("internal/{kind}/{config}"))
+}
+
+/// Validate a stack or internal task ID.
+/// # Errors
+pub fn validate_task_id(value: &str) -> Result<(), ContractError> {
+    if let Some(rest) = value.strip_prefix("stack/") {
+        return validate_stack_task_id(rest);
+    }
+    if let Some(rest) = value.strip_prefix("internal/") {
+        let parts: Vec<&str> = rest.split('/').collect();
+        if parts.len() == 2 {
+            validate_component(parts[0], "task_kind")?;
+            validate_component(parts[1], "configuration")?;
+            return Ok(());
+        }
+    }
+    Err(ContractError::identity("task_id", "malformed_task_id"))
+}
+
+/// Build a matrix `id` as `stack:<sid>|task:<task-group-id>`.
+/// # Errors
+pub fn matrix_id_for_task_group(stack: &str, task_group: &str) -> Result<String, ContractError> {
+    validate_component(stack, "stack_id")?;
+    validate_task_id(task_group)?;
+    Ok(format!("stack:{stack}|task:{task_group}"))
+}
+
+/// Validate a matrix `id` (charset plus `stack:`/`task:` shape).
+/// # Errors
+pub fn validate_id(value: &str) -> Result<(), ContractError> {
+    if !value.bytes().all(is_id_byte) {
+        return Err(ContractError::identity("id", "bad_charset"));
+    }
+    let Some(rest) = value.strip_prefix("stack:") else {
+        return Err(ContractError::identity("id", "missing_stack_prefix"));
+    };
+    let Some((stack, group)) = rest.split_once("|task:") else {
+        return Err(ContractError::identity("id", "missing_task_separator"));
+    };
+    validate_component(stack, "stack_id")?;
+    validate_task_id(group)?;
+    Ok(())
+}
+
+/// Derive `matrix_key` as `m-` + first 16 hex of BLAKE3 over `id` bytes.
+/// # Errors
+pub fn matrix_key_for_id(id: &str) -> Result<String, ContractError> {
+    validate_id(id)?;
+    let hex = blake3::hash(id.as_bytes()).to_hex();
+    Ok(format!("m-{}", &hex.to_string()[..16]))
+}
+
+/// Validate a `matrix_key` (`m-` + 16 lowercase hex).
+/// # Errors
+pub fn validate_matrix_key(value: &str) -> Result<(), ContractError> {
+    let Some(hex) = value.strip_prefix("m-") else {
+        return Err(ContractError::identity(
+            "matrix_key",
+            "malformed_matrix_key",
+        ));
+    };
+    if hex.len() == 16 && is_lower_hex(hex) {
+        Ok(())
+    } else {
+        Err(ContractError::identity(
+            "matrix_key",
+            "malformed_matrix_key",
+        ))
+    }
+}
+
+/// Derive `plan_id` as `plan-<run-key>`.
+/// # Errors
+pub fn plan_id_for_run(run_key: &str) -> Result<String, ContractError> {
+    validate_run_key(run_key)?;
+    Ok(format!("plan-{run_key}"))
+}
+
+/// Validate a `plan_id`.
+/// # Errors
+pub fn validate_plan_id(value: &str) -> Result<(), ContractError> {
+    let Some(run_key) = value.strip_prefix("plan-") else {
+        return Err(ContractError::identity("plan_id", "malformed_plan_id"));
+    };
+    validate_run_key(run_key).map_err(|_| ContractError::identity("plan_id", "malformed_plan_id"))
+}
+
+/// Derive `report_id` as `report-<run-key>-<matrix-key>`.
+/// # Errors
+pub fn report_id_for_matrix(run_key: &str, matrix_key: &str) -> Result<String, ContractError> {
+    validate_run_key(run_key)?;
+    validate_matrix_key(matrix_key)?;
+    Ok(format!("report-{run_key}-{matrix_key}"))
+}
+
+/// Validate a `report_id`.
+/// # Errors
+pub fn validate_report_id(value: &str) -> Result<(), ContractError> {
+    let Some(rest) = value.strip_prefix("report-") else {
+        return Err(ContractError::identity("report_id", "malformed_report_id"));
+    };
+    let Some((run_key, hex)) = rest.rsplit_once("-m-") else {
+        return Err(ContractError::identity("report_id", "malformed_report_id"));
+    };
+    validate_run_key(run_key).map_err(|_| ContractError::identity("report_id", "bad_run_key"))?;
+    validate_matrix_key(&format!("m-{hex}"))
+        .map_err(|_| ContractError::identity("report_id", "bad_matrix_key"))?;
+    Ok(())
+}
+
+/// Derive `task_report_id` as `task-<run-key>-<matrix-key>-<digest[0:16]>`.
+/// # Errors
+pub fn task_report_id_for_task(
+    run_key: &str,
+    matrix_key: &str,
+    task_digest: &str,
+) -> Result<String, ContractError> {
+    validate_run_key(run_key)?;
+    validate_matrix_key(matrix_key)?;
+    validate_digest(task_digest)
+        .map_err(|_| ContractError::identity("task_digest", "bad_digest"))?;
+    Ok(format!(
+        "task-{run_key}-{matrix_key}-{}",
+        &task_digest[3..19]
+    ))
+}
+
+/// Validate a `task_report_id`.
+/// # Errors
+pub fn validate_task_report_id(value: &str) -> Result<(), ContractError> {
+    let Some(rest) = value.strip_prefix("task-") else {
+        return Err(ContractError::identity(
+            "task_report_id",
+            "malformed_task_report_id",
+        ));
+    };
+    let Some((head, prefix)) = rest.rsplit_once('-') else {
+        return Err(ContractError::identity(
+            "task_report_id",
+            "malformed_task_report_id",
+        ));
+    };
+    if prefix.len() != 16 || !is_lower_hex(prefix) {
+        return Err(ContractError::identity(
+            "task_report_id",
+            "bad_digest_prefix",
+        ));
+    }
+    let Some((run_key, hex)) = head.rsplit_once("-m-") else {
+        return Err(ContractError::identity(
+            "task_report_id",
+            "malformed_task_report_id",
+        ));
+    };
+    validate_run_key(run_key)
+        .map_err(|_| ContractError::identity("task_report_id", "bad_run_key"))?;
+    validate_matrix_key(&format!("m-{hex}"))
+        .map_err(|_| ContractError::identity("task_report_id", "bad_matrix_key"))?;
+    Ok(())
+}
+
+/// Check whether a byte is allowed in a matrix `id`.
+fn is_id_byte(byte: u8) -> bool {
+    byte.is_ascii_lowercase()
+        || byte.is_ascii_digit()
+        || matches!(byte, b':' | b'|' | b'/' | b'.' | b'-' | b'_')
+}
+
+/// Check whether a byte is allowed in a single path/name component.
+pub(crate) fn is_component_byte(byte: u8) -> bool {
+    byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'.' | b'-' | b'_')
+}
+
+/// Check lowercase hex.
+fn is_lower_hex(text: &str) -> bool {
+    text.bytes()
+        .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+}
+
+/// Check the `r<digits>-a<digits>` CI run-key shape.
+fn is_ci_run_key(value: &str) -> bool {
+    let Some(rest) = value.strip_prefix('r') else {
+        return false;
+    };
+    let Some((run, attempt)) = rest.split_once("-a") else {
+        return false;
+    };
+    !run.is_empty()
+        && !attempt.is_empty()
+        && run.bytes().all(|b| b.is_ascii_digit())
+        && attempt.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// Validate one lowercase component name.
+fn validate_component(value: &str, field: &'static str) -> Result<(), ContractError> {
+    if !value.is_empty() && value.bytes().all(is_component_byte) {
+        Ok(())
+    } else {
+        Err(ContractError::identity(field, "bad_component"))
+    }
+}
+
+/// Validate `/`-separated manifest-key segments.
+fn validate_path_segments(path: &str, field: &'static str) -> Result<(), ContractError> {
+    if path.is_empty() {
+        return Err(ContractError::identity(field, "empty_path"));
+    }
+    for segment in path.split('/') {
+        validate_component(segment, field)?;
+    }
+    Ok(())
+}
+
+/// Validate shard index/count (`shard-<index>-of-<count>` inputs).
+fn validate_shard(index: u32, count: u32) -> Result<(), ContractError> {
+    if count >= 1 && index >= 1 && index <= count {
+        Ok(())
+    } else {
+        Err(ContractError::identity("shard", "bad_shard_range"))
+    }
+}
+
+/// Validate the tail of a `stack/` task ID.
+fn validate_stack_task_id(rest: &str) -> Result<(), ContractError> {
+    let parts: Vec<&str> = rest.split('/').collect();
+    if parts.len() < 4 {
+        return Err(ContractError::identity("task_id", "too_few_segments"));
+    }
+    validate_component(parts[0], "stack_id")?;
+    let mut tail = parts.as_slice();
+    if let Some(last) = tail.last()
+        && let Some(shard) = last.strip_prefix("shard-")
+    {
+        validate_shard_suffix(shard)?;
+        tail = &tail[..tail.len() - 1];
+    }
+    if tail.len() < 4 {
+        return Err(ContractError::identity("task_id", "too_few_segments"));
+    }
+    let config = tail[tail.len() - 1];
+    let kind = tail[tail.len() - 2];
+    validate_component(kind, "task_kind")?;
+    validate_component(config, "configuration")?;
+    validate_path_segments(&tail[1..tail.len() - 2].join("/"), "manifest_key")?;
+    Ok(())
+}
+
+/// Validate a `shard-<index>-of-<count>` suffix body.
+fn validate_shard_suffix(shard: &str) -> Result<(), ContractError> {
+    let Some((index, count)) = shard.split_once("-of-") else {
+        return Err(ContractError::identity("task_id", "bad_shard_suffix"));
+    };
+    let (Ok(index), Ok(count)) = (index.parse::<u32>(), count.parse::<u32>()) else {
+        return Err(ContractError::identity("task_id", "bad_shard_suffix"));
+    };
+    validate_shard(index, count).map_err(|_| ContractError::identity("task_id", "bad_shard_range"))
+}

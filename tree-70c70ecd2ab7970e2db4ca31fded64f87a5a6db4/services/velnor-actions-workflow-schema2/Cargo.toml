@@ -1,0 +1,21 @@
+[package]
+name = "velnor-actions-workflow-schema2"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-workflow-cache = { version = "=0.1.1", path = "../velnor-actions-workflow-cache" }
+velnor-actions-workflow-generator = { version = "=0.1.1", path = "../velnor-actions-workflow-generator" }
+velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-workflow-steps" }
+velnor-actions-workflow-tree = { version = "=0.1.1", path = "../velnor-actions-workflow-tree" }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "velnor_workflow_schema2"
+path = "tests/main.rs"

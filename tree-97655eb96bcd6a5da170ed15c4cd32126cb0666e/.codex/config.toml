@@ -1,0 +1,15 @@
+# This trusted project uses Luna for coordination and implementation.
+model = "gpt-6-luna"
+model_reasoning_effort = "max"
+developer_instructions = """
+For any commit, use the repository-local identity Alexey Zhokhov <alexey@zhokhov.com> and include these exact trailers in this order:
+Co-authored-by: Codex <codex@openai.com>
+Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>
+Do not rewrite pushed commits to change trailers; make a follow-up commit and describe historical metadata corrections truthfully.
+"""
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 15
+default_subagent_model = "gpt-6-luna"
+default_subagent_reasoning_effort = "max"

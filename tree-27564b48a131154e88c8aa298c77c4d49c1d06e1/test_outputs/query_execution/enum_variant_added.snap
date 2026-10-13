@@ -1,0 +1,49 @@
+---
+source: src/query.rs
+expression: "&query_execution_results"
+snapshot_kind: text
+---
+{
+  "./test_crates/enum_discriminant_no_longer_defined/": [
+    {
+      "enum_name": String("GainsStructVariant"),
+      "path": List([
+        String("enum_discriminant_no_longer_defined"),
+        String("GainsStructVariant"),
+      ]),
+      "span_begin_line": Uint64(69),
+      "span_end_line": Uint64(69),
+      "span_filename": String("src/lib.rs"),
+      "variant_name": String("Some"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/enum_variant_added/": [
+    {
+      "enum_name": String("EnumWithNewVariant"),
+      "path": List([
+        String("enum_variant_added"),
+        String("EnumWithNewVariant"),
+      ]),
+      "span_begin_line": Uint64(6),
+      "span_end_line": Uint64(6),
+      "span_filename": String("src/lib.rs"),
+      "variant_name": String("NewVariant"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/enum_variant_hidden_from_public_api/": [
+    {
+      "enum_name": String("AddedVariant"),
+      "path": List([
+        String("enum_variant_hidden_from_public_api"),
+        String("AddedVariant"),
+      ]),
+      "span_begin_line": Uint64(18),
+      "span_end_line": Uint64(18),
+      "span_filename": String("src/lib.rs"),
+      "variant_name": String("Added"),
+      "visibility_limit": String("public"),
+    },
+  ],
+}

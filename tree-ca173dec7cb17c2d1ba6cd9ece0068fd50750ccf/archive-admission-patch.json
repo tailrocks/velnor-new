@@ -1,0 +1,38 @@
+{
+  "path": "node_modules/@actions/cache/lib/cache.js",
+  "upstreamSha256": "258ab7dcfe2424ab849ebe42cba42f7d5ee586bc077c894cd5e45803c5b2ba11",
+  "replacements": [
+    {
+      "from": "import { createTar, extractTar, listTar } from './internal/tar.js';",
+      "to": "import { createTar, extractTar } from './internal/tar.js';"
+    },
+    {
+      "from": "import { HttpClientError } from '@actions/http-client';",
+      "to": "import { HttpClientError } from '@actions/http-client';\nimport { ArchiveAdmissionError, ArchiveConfigurationError } from './internal/archive-admission.mjs';"
+    },
+    {
+      "from": "            if (core.isDebug()) {\n                yield listTar(archivePath, compressionMethod);\n            }\n            const archiveFileSize = utils.getArchiveFileSizeInBytes(archivePath);\n            core.info(`Cache Size: ~${Math.round(archiveFileSize / (1024 * 1024))} MB (${archiveFileSize} B)`);\n            yield extractTar(archivePath, compressionMethod);",
+      "to": "            const archiveFileSize = utils.getArchiveFileSizeInBytes(archivePath);\n            core.info(`Cache Size: ~${Math.round(archiveFileSize / (1024 * 1024))} MB (${archiveFileSize} B)`);\n            yield extractTar(archivePath, compressionMethod, { roots: paths, quarantinePath: options === null || options === void 0 ? void 0 : options.quarantinePath });"
+    },
+    {
+      "from": "            if (core.isDebug()) {\n                yield listTar(archivePath, compressionMethod);\n            }\n            yield extractTar(archivePath, compressionMethod);",
+      "to": "            yield extractTar(archivePath, compressionMethod, { roots: paths, quarantinePath: options === null || options === void 0 ? void 0 : options.quarantinePath });"
+    },
+    {
+      "from": "            yield createTar(archiveFolder, cachePaths, compressionMethod);\n            if (core.isDebug()) {\n                yield listTar(archivePath, compressionMethod);\n            }\n            const fileSizeLimit = 10 * 1024 * 1024 * 1024; // 10GB per repo limit",
+      "to": "            yield createTar(archiveFolder, cachePaths, compressionMethod);\n            const fileSizeLimit = 10 * 1024 * 1024 * 1024; // 10GB per repo limit"
+    },
+    {
+      "from": "            yield createTar(archiveFolder, cachePaths, compressionMethod);\n            if (core.isDebug()) {\n                yield listTar(archivePath, compressionMethod);\n            }\n            const archiveFileSize = utils.getArchiveFileSizeInBytes(archivePath);",
+      "to": "            yield createTar(archiveFolder, cachePaths, compressionMethod);\n            const archiveFileSize = utils.getArchiveFileSizeInBytes(archivePath);"
+    },
+    {
+      "from": "            const typedError = error;\n            if (typedError.name === ValidationError.name) {\n                throw error;\n            }\n            else {\n                // warn on cache restore failure and continue build",
+      "to": "            const typedError = error;\n            if (typedError.name === ValidationError.name ||\n                typedError instanceof ArchiveAdmissionError ||\n                typedError instanceof ArchiveConfigurationError) {\n                throw error;\n            }\n            else {\n                // warn on cache restore failure and continue build"
+    },
+    {
+      "from": "            const typedError = error;\n            if (typedError.name === ValidationError.name) {\n                throw error;\n            }\n            else {\n                // Supress all non-validation cache related errors because caching should be optional",
+      "to": "            const typedError = error;\n            if (typedError.name === ValidationError.name ||\n                typedError instanceof ArchiveAdmissionError ||\n                typedError instanceof ArchiveConfigurationError) {\n                throw error;\n            }\n            else {\n                // Supress all non-validation cache related errors because caching should be optional"
+    }
+  ]
+}

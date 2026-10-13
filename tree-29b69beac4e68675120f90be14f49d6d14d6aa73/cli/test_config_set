@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+echo '[tools.node]
+version = "latest"' >mise.toml
+
+assert "cat mise.toml" '[tools.node]
+version = "latest"'
+
+mise config set tools.node.postinstall 'corepack enable'
+assert "mise config get tools.node.postinstall" "corepack enable"
+assert "mise config get tools.node.version" "latest"
+mise config set env._.python.venv.path '.venv'
+assert "mise config get env._.python.venv.path" ".venv"
+mise config set env._.python.venv.create true
+assert "mise config get env._.python.venv.create" "true"
+
+# test "config set key=value" format
+mise config set env._.python.venv.path=.venv2
+assert "mise config get env._.python.venv.path" ".venv2"
+
+# test "config set" with no value and no = fails
+assert_fail "mise config set tools.node"

@@ -1,0 +1,951 @@
+use crate::backend::platform_target::PlatformTarget;
+use crate::backend::static_helpers::fetch_checksum_from_shasums;
+use crate::backend::{Backend, VersionCacheManager, VersionInfo};
+use crate::build_time::built_info;
+use crate::cache::{CacheManager, CacheManagerBuilder};
+use crate::cli::args::BackendArg;
+use crate::cmd::CmdLineRunner;
+use crate::config::{Config, Settings};
+use crate::file::{TarFormat, TarOptions, display_path};
+use crate::git::{CloneOptions, Git};
+use crate::http::{HTTP, HTTP_FETCH};
+use crate::install_context::InstallContext;
+use crate::lockfile::{PlatformInfo, ProvenanceType};
+use crate::toolset::{ToolRequest, ToolVersion, Toolset};
+use crate::ui::progress_report::SingleReport;
+use crate::{Result, lock_file::LockFile};
+use crate::{dirs, env, file, plugins, sysconfig};
+use async_trait::async_trait;
+use eyre::{bail, eyre};
+use flate2::read::GzDecoder;
+use itertools::Itertools;
+use std::collections::BTreeMap;
+use std::io::Read;
+use std::path::{Path, PathBuf};
+use std::sync::LazyLock as Lazy;
+use std::sync::{Arc, OnceLock};
+use tokio::sync::Mutex;
+use versions::Versioning;
+use xx::regex;
+
+const ATTESTATION_HELP: &str = "To disable attestation verification, set MISE_PYTHON_GITHUB_ATTESTATIONS=false\n\
+    or add `python.github_attestations = false` to your mise config";
+
+#[derive(Debug)]
+pub struct PythonPlugin {
+    ba: Arc<BackendArg>,
+}
+
+pub fn python_path(tv: &ToolVersion) -> PathBuf {
+    if cfg!(windows) {
+        tv.install_path().join("python.exe")
+    } else {
+        tv.install_path().join("bin/python")
+    }
+}
+
+/// Sort key for Python versions that handles miniconda's two versioning schemes correctly.
+///
+/// Miniconda has two formats:
+/// - Old format: `miniconda3-{conda_version}` (e.g., `miniconda3-3.16.0`, `miniconda3-4.7.12`)
+/// - New format: `miniconda3-{python_version}-{conda_version}` (e.g., `miniconda3-3.7-4.8.2`)
+///
+/// Returns a tuple for sorting: (distro_priority, prefix_order, is_not_latest, conda_version, python_version)
+/// distro_priority: 0 = other distros, 1 = miniconda, 2 = CPython (bare version numbers)
+fn python_version_sort_key(
+    version: &str,
+) -> (u8, u8, bool, Option<Versioning>, Option<Versioning>) {
+    // Check if this is a miniconda version and get prefix order
+    let (prefix_order, version_part) = if let Some(v) = version.strip_prefix("miniconda3-") {
+        (2u8, v)
+    } else if let Some(v) = version.strip_prefix("miniconda2-") {
+        (1u8, v)
+    } else if let Some(v) = version.strip_prefix("miniconda-") {
+        (0u8, v)
+    } else {
+        // Not miniconda - put other distros first (0), CPython (digit-starting) last (2)
+        let starts_with_digit = regex!(r"^\d").is_match(version);
+        return (if starts_with_digit { 2 } else { 0 }, 0, false, None, None);
+    };
+
+    // Handle "latest" specially - put first in each miniconda group
+    if version_part == "latest" {
+        return (1, prefix_order, false, None, None);
+    }
+
+    // Parse miniconda version: old format vs new format
+    // Old format has no dash in version part: "3.16.0"
+    // New format has dash separating python and conda: "3.7-4.8.2"
+    let (conda_version, python_version) = if let Some(dash_pos) = version_part.find('-') {
+        // New format: "3.7-4.8.2" -> python=3.7, conda=4.8.2
+        let python = &version_part[..dash_pos];
+        let conda = &version_part[dash_pos + 1..];
+        (Versioning::new(conda), Versioning::new(python))
+    } else {
+        // Old format: "3.16.0" -> conda=3.16.0, no python version
+        (Versioning::new(version_part), None)
+    };
+
+    (1, prefix_order, true, conda_version, python_version)
+}
+
+impl PythonPlugin {
+    pub fn new() -> Self {
+        let ba = Arc::new(plugins::core::new_backend_arg("python"));
+        Self { ba }
+    }
+
+    fn python_build_path(&self) -> PathBuf {
+        self.ba.cache_path.join("pyenv")
+    }
+    fn python_build_bin(&self) -> PathBuf {
+        self.python_build_path()
+            .join("plugins/python-build/bin/python-build")
+    }
+    fn lock_pyenv(&self) -> Result<fslock::LockFile> {
+        LockFile::new(&self.python_build_path())
+            .with_callback(|l| {
+                trace!("install_or_update_pyenv {}", l.display());
+            })
+            .lock()
+    }
+    fn install_or_update_python_build(&self, ctx: Option<&InstallContext>) -> eyre::Result<()> {
+        ensure_not_windows()?;
+        let _lock = self.lock_pyenv();
+        if self.python_build_bin().exists() {
+            self.update_python_build()
+        } else {
+            self.install_python_build(ctx)
+        }
+    }
+    fn install_python_build(&self, ctx: Option<&InstallContext>) -> eyre::Result<()> {
+        if self.python_build_bin().exists() {
+            return Ok(());
+        }
+        let python_build_path = self.python_build_path();
+        debug!("Installing python-build to {}", python_build_path.display());
+        file::remove_all(&python_build_path)?;
+        file::create_dir_all(self.python_build_path().parent().unwrap())?;
+        let git = Git::new(self.python_build_path());
+        let pr = ctx.map(|ctx| ctx.pr.as_ref());
+        let mut clone_options = CloneOptions::default();
+        if let Some(pr) = pr {
+            clone_options = clone_options.pr(pr);
+        }
+        git.clone(&Settings::get().python.pyenv_repo, clone_options)?;
+        Ok(())
+    }
+    fn update_python_build(&self) -> eyre::Result<()> {
+        // TODO: do not update if recently updated
+        debug!(
+            "Updating python-build in {}",
+            self.python_build_path().display()
+        );
+        let pyenv_path = self.python_build_path();
+        let git = Git::new(pyenv_path.clone());
+        match plugins::core::run_fetch_task_with_timeout(move || git.update(None)) {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                warn!(
+                    "failed to update python-build repo ({}), attempting self-repair by recloning",
+                    err
+                );
+                // The cached pyenv repo can get corrupted (e.g. unable to read sha1 file).
+                // Repair by removing the cache and performing a fresh clone.
+                file::remove_all(&pyenv_path)?;
+                // Safe to reinstall without a context; progress reporting is optional here.
+                self.install_python_build(None)
+            }
+        }
+    }
+
+    async fn fetch_precompiled_remote_versions(
+        &self,
+    ) -> eyre::Result<&Vec<(String, String, String)>> {
+        static PRECOMPILED_CACHE: Lazy<CacheManager<Vec<(String, String, String)>>> =
+            Lazy::new(|| {
+                CacheManagerBuilder::new(dirs::CACHE.join("python").join("precompiled.msgpack.z"))
+                    .with_fresh_duration(Settings::get().fetch_remote_versions_cache())
+                    .with_cache_key(python_precompiled_platform())
+                    .build()
+            });
+        PRECOMPILED_CACHE
+            .get_or_try_init_async(async || {
+                let settings = Settings::get();
+                let url_path = python_precompiled_url_path(&settings);
+                let rsp = HTTP_FETCH
+                    .get_bytes(format!("https://mise-versions.jdx.dev/tools/{url_path}"))
+                    .await?;
+                let mut decoder = GzDecoder::new(rsp.as_ref());
+                let mut raw = String::new();
+                decoder.read_to_string(&mut raw)?;
+                let platform = python_precompiled_platform();
+                let flavor = settings.python.precompiled_flavor.clone();
+                // order by version, whether it is a release candidate, date, and in the preferred order of install types
+                let rank = |v: &str, date: &str, name: &str| {
+                    let rc = if regex!(r"rc\d+$").is_match(v) { 0 } else { 1 };
+                    let v = Versioning::new(v);
+                    let date = date.parse::<i64>().unwrap_or_default();
+                    let install_type = if let Some(ref flavor) = flavor {
+                        // When flavor is set, prefer exact match
+                        let name_without_ext = name.trim_end_matches(".tar.gz");
+                        if name_without_ext.ends_with(flavor.as_str()) {
+                            0
+                        } else {
+                            1
+                        }
+                    } else if name.contains("install_only_stripped") {
+                        0
+                    } else if name.contains("install_only") {
+                        1
+                    } else {
+                        2
+                    };
+                    (v, rc, -date, install_type)
+                };
+                let versions = raw
+                    .lines()
+                    .filter(|v| v.contains(&platform))
+                    .filter(|v| filter_freethreaded(v, &flavor))
+                    .flat_map(|v| {
+                        // cpython-3.9.5+20210525 or cpython-3.9.5rc3+20210525
+                        regex!(r"^cpython-(\d+\.\d+\.[\da-z]+)\+(\d+).*")
+                            .captures(v)
+                            .map(|caps| {
+                                (
+                                    caps[1].to_string(),
+                                    caps[2].to_string(),
+                                    caps[0].to_string(),
+                                )
+                            })
+                    })
+                    // multiple dates can have the same version, so sort by date and remove duplicates by unique
+                    .sorted_by_cached_key(|(v, date, name)| rank(v, date, name))
+                    .unique_by(|(v, _, _)| v.to_string())
+                    .collect_vec();
+                Ok(versions)
+            })
+            .await
+    }
+
+    async fn install_precompiled(
+        &self,
+        ctx: &InstallContext,
+        tv: &mut ToolVersion,
+    ) -> eyre::Result<()> {
+        let precompiled_versions = self.fetch_precompiled_remote_versions().await?;
+        let precompile_info = precompiled_versions
+            .iter()
+            .rev()
+            .find(|(v, _, _)| &tv.version == v);
+        let (tag, filename) = match precompile_info {
+            Some((_, tag, filename)) => (tag, filename),
+            None => {
+                if cfg!(windows) || Settings::get().python.compile == Some(false) {
+                    if !cfg!(windows) {
+                        hint!(
+                            "python_compile",
+                            "To compile python from source, run",
+                            "mise settings python.compile=1"
+                        );
+                    }
+                    let platform = python_precompiled_platform();
+                    bail!("no precompiled python found for {tv} on {platform}");
+                }
+                let available = precompiled_versions.iter().map(|(v, _, _)| v).collect_vec();
+                if available.is_empty() {
+                    debug!("no precompiled python found for {}", tv.version);
+                } else {
+                    warn!(
+                        "no precompiled python found for {}, force mise to use a precompiled version with `mise settings set python.compile false`",
+                        tv.version
+                    );
+                }
+                trace!(
+                    "available precompiled versions: {}",
+                    available.into_iter().join(", ")
+                );
+                return self.install_compiled(ctx, tv).await;
+            }
+        };
+
+        if cfg!(unix) {
+            hint!(
+                "python_precompiled",
+                "installing precompiled python from astral-sh/python-build-standalone\n\
+                if you experience issues with this python (e.g.: running poetry), switch to python-build by running",
+                "mise settings python.compile=1"
+            );
+        }
+
+        let url = format!(
+            "https://github.com/astral-sh/python-build-standalone/releases/download/{tag}/{filename}"
+        );
+        let filename = url.split('/').next_back().unwrap();
+        let install = tv.install_path();
+        let download = tv.download_path();
+        let tarball_path = download.join(filename);
+
+        ctx.pr.set_message(format!("download {filename}"));
+        HTTP.download_file(&url, &tarball_path, Some(ctx.pr.as_ref()))
+            .await?;
+
+        // Record the URL in lock_platforms so verify_checksum can find it
+        let platform_key = self.get_platform_key();
+        tv.lock_platforms
+            .entry(platform_key.clone())
+            .or_default()
+            .url = Some(url.to_string());
+
+        self.verify_checksum(ctx, tv, &tarball_path)?;
+
+        // Check lockfile provenance expectation before verification
+        let locked_provenance = tv
+            .lock_platforms
+            .get_mut(&platform_key)
+            .and_then(|pi| pi.provenance.take());
+
+        // Verify GitHub artifact attestations for precompiled binaries
+        // Returns Ok(true) if verified, Ok(false) if skipped, Err if failed
+        let verified = self
+            .verify_github_artifact_attestations(ctx, &tarball_path, &tv.version)
+            .await?;
+
+        // Record provenance only if verification actually succeeded (not skipped)
+        if verified {
+            let pi = tv.lock_platforms.entry(platform_key.clone()).or_default();
+            pi.provenance = Some(ProvenanceType::GithubAttestations);
+        }
+
+        // Enforce lockfile provenance
+        if let Some(ref expected) = locked_provenance {
+            let got = tv
+                .lock_platforms
+                .get(&platform_key)
+                .and_then(|pi| pi.provenance.as_ref());
+            if !got.is_some_and(|g| std::mem::discriminant(g) == std::mem::discriminant(expected)) {
+                let got_str = got
+                    .map(|g| g.to_string())
+                    .unwrap_or_else(|| "no verification".to_string());
+                return Err(eyre!(
+                    "Lockfile requires {expected} provenance for {tv} but {got_str} was used. \
+                     This may indicate a downgrade attack. Enable the corresponding verification setting \
+                     or update the lockfile."
+                ));
+            }
+        }
+
+        file::remove_all(&install)?;
+        file::untar(
+            &tarball_path,
+            &install,
+            &TarOptions {
+                strip_components: 1,
+                pr: Some(ctx.pr.as_ref()),
+                ..TarOptions::new(TarFormat::from_file_name(filename))
+            },
+        )?;
+        if !install.join("bin").exists() {
+            // debug builds of indygreg binaries have a different structure
+            for entry in file::ls(&install.join("install"))? {
+                let filename = entry.file_name().unwrap();
+                file::remove_all(install.join(filename))?;
+                file::rename(&entry, install.join(filename))?;
+            }
+        }
+
+        let re_digits = regex!(r"\d+");
+        let version_parts = tv.version.split('.').collect_vec();
+        let major = re_digits
+            .find(version_parts[0])
+            .and_then(|m| m.as_str().parse().ok());
+        let minor = re_digits
+            .find(version_parts[1])
+            .and_then(|m| m.as_str().parse().ok());
+        let suffix = version_parts
+            .get(2)
+            .map(|s| re_digits.replace(s, "").to_string());
+        if cfg!(unix) {
+            if let (Some(major), Some(minor), Some(suffix)) = (major, minor, suffix) {
+                if tv.request.options().get("patch_sysconfig") != Some("false") {
+                    sysconfig::update_sysconfig(&install, major, minor, &suffix)?;
+                }
+            } else {
+                debug!("failed to update sysconfig with version {}", tv.version);
+            }
+        }
+
+        if !install.join("bin").join("python").exists() {
+            #[cfg(unix)]
+            file::make_symlink(&install.join("bin/python3"), &install.join("bin/python"))?;
+        }
+
+        Ok(())
+    }
+
+    async fn install_compiled(&self, ctx: &InstallContext, tv: &ToolVersion) -> eyre::Result<()> {
+        self.install_or_update_python_build(Some(ctx))?;
+        if matches!(&tv.request, ToolRequest::Ref { .. }) {
+            return Err(eyre!("Ref versions not supported for python"));
+        }
+        ctx.pr.set_message("python-build".into());
+        let mut cmd = CmdLineRunner::new(self.python_build_bin())
+            .with_pr(ctx.pr.as_ref())
+            .arg(tv.version.as_str())
+            .arg(tv.install_path())
+            .env("PIP_REQUIRE_VIRTUALENV", "false")
+            .envs(ctx.config.env().await?);
+        if Settings::get().verbose {
+            cmd = cmd.arg("--verbose");
+        }
+        if let Some(patch_url) = &Settings::get().python.patch_url {
+            ctx.pr
+                .set_message(format!("with patch file from: {patch_url}"));
+            let patch = HTTP.get_text(patch_url).await?;
+            cmd = cmd.arg("--patch").stdin_string(patch)
+        }
+        if let Some(patches_dir) = &Settings::get().python.patches_directory {
+            let patch_file = patches_dir.join(format!("{}.patch", &tv.version));
+            if patch_file.exists() {
+                ctx.pr
+                    .set_message(format!("with patch file: {}", patch_file.display()));
+                let contents = file::read_to_string(&patch_file)?;
+                cmd = cmd.arg("--patch").stdin_string(contents);
+            } else {
+                warn!("patch file not found: {}", patch_file.display());
+            }
+        }
+        cmd.execute()?;
+        Ok(())
+    }
+
+    async fn install_default_packages(
+        &self,
+        config: &Arc<Config>,
+        packages_file: &Path,
+        tv: &ToolVersion,
+        pr: &dyn SingleReport,
+    ) -> eyre::Result<()> {
+        if !packages_file.exists() {
+            return Ok(());
+        }
+        pr.set_message("install default packages".into());
+        CmdLineRunner::new(tv.install_path().join("bin/python"))
+            .with_pr(pr)
+            .arg("-m")
+            .arg("pip")
+            .arg("install")
+            .arg("--upgrade")
+            .arg("-r")
+            .arg(packages_file)
+            .env("PIP_REQUIRE_VIRTUALENV", "false")
+            .envs(config.env().await?)
+            .execute()
+    }
+
+    async fn get_virtualenv(
+        &self,
+        config: &Arc<Config>,
+        tv: &ToolVersion,
+    ) -> eyre::Result<Option<PathBuf>> {
+        if let Some(virtualenv) = tv.request.options().get("virtualenv") {
+            if !Settings::get().experimental {
+                warn!(
+                    "please enable experimental mode with `mise settings experimental=true` \
+                    to use python virtualenv activation"
+                );
+            }
+            let mut virtualenv: PathBuf = file::replace_path(Path::new(virtualenv));
+            if !virtualenv.is_absolute() {
+                // TODO: use the path of the config file that specified python, not the top one like this
+                if let Some(project_root) = &config.project_root {
+                    virtualenv = project_root.join(virtualenv);
+                }
+            }
+            if !virtualenv.exists() {
+                warn!(
+                    "no venv found at: {p}\n\n\
+                    To create a virtualenv manually, run:\n\
+                    python -m venv {p}",
+                    p = display_path(&virtualenv)
+                );
+                return Ok(None);
+            }
+            // TODO: enable when it is more reliable
+            // self.check_venv_python(&virtualenv, tv)?;
+            Ok(Some(virtualenv))
+        } else {
+            Ok(None)
+        }
+    }
+
+    // fn check_venv_python(&self, virtualenv: &Path, tv: &ToolVersion) -> eyre::Result<()> {
+    //     let symlink = virtualenv.join("bin/python");
+    //     let target = python_path(tv);
+    //     let symlink_target = symlink.read_link().unwrap_or_default();
+    //     ensure!(
+    //         symlink_target == target,
+    //         "expected venv {} to point to {}.\nTry deleting the venv at {}.",
+    //         display_path(&symlink),
+    //         display_path(&target),
+    //         display_path(virtualenv)
+    //     );
+    //     Ok(())
+    // }
+
+    async fn test_python(
+        &self,
+        config: &Arc<Config>,
+        tv: &ToolVersion,
+        pr: &dyn SingleReport,
+    ) -> eyre::Result<()> {
+        pr.set_message("python --version".into());
+        CmdLineRunner::new(python_path(tv))
+            .with_pr(pr)
+            .arg("--version")
+            .envs(config.env().await?)
+            .execute()
+    }
+
+    /// Fetch the best precompiled release for a specific version and platform target.
+    /// Unlike `fetch_precompiled_remote_versions` which uses compile-time cfg!() macros,
+    /// this takes a PlatformTarget to support cross-platform lockfile generation.
+    /// Respects precompiled_arch, precompiled_os, and precompiled_flavor settings
+    /// when the target matches the current platform.
+    async fn fetch_precompiled_for_target(
+        &self,
+        version: &str,
+        target: &PlatformTarget,
+    ) -> eyre::Result<Option<(String, String)>> {
+        let settings = Settings::get();
+
+        // Use settings-aware arch/os for the current platform,
+        // target-based defaults for other platforms
+        let (arch, os) = if target.is_current() {
+            (python_arch(&settings).to_string(), python_os(&settings))
+        } else {
+            (
+                python_arch_for_target(target).to_string(),
+                python_os_for_target(target).to_string(),
+            )
+        };
+
+        let platform = format!("{arch}-{os}");
+        let url_path = format!("python-precompiled-{arch}-{os}.gz");
+        let rsp = HTTP_FETCH
+            .get_bytes(format!("https://mise-versions.jdx.dev/tools/{url_path}"))
+            .await?;
+        let mut decoder = GzDecoder::new(rsp.as_ref());
+        let mut raw = String::new();
+        decoder.read_to_string(&mut raw)?;
+
+        let flavor = settings.python.precompiled_flavor.clone();
+
+        // Find all entries matching this version, then pick the best one
+        let result = raw
+            .lines()
+            .filter(|v| v.contains(&platform))
+            .filter(|v| filter_freethreaded(v, &flavor))
+            .flat_map(|v| {
+                regex!(r"^cpython-(\d+\.\d+\.[\da-z]+)\+(\d+).*")
+                    .captures(v)
+                    .map(|caps| {
+                        (
+                            caps[1].to_string(),
+                            caps[2].to_string(),
+                            caps[0].to_string(),
+                        )
+                    })
+            })
+            .filter(|(v, _, _)| v == version)
+            .min_by_key(|(_, date, name)| {
+                let install_type = if let Some(ref flavor) = flavor {
+                    // When flavor is set, prefer exact match
+                    let name_without_ext = name.trim_end_matches(".tar.gz");
+                    if name_without_ext.ends_with(flavor.as_str()) {
+                        0
+                    } else {
+                        1
+                    }
+                } else {
+                    // Default: prefer install_only_stripped > install_only > other
+                    if name.contains("install_only_stripped") {
+                        0
+                    } else if name.contains("install_only") {
+                        1
+                    } else {
+                        2
+                    }
+                };
+                let date = date.parse::<i64>().unwrap_or_default();
+                (install_type, -date)
+            })
+            .map(|(_, tag, filename)| (tag, filename));
+        Ok(result)
+    }
+
+    fn github_attestations_enabled() -> bool {
+        let settings = Settings::get();
+        settings
+            .python
+            .github_attestations
+            .unwrap_or(settings.github_attestations)
+    }
+
+    fn detect_precompiled_provenance(&self) -> Option<ProvenanceType> {
+        // Provenance only applies to precompiled binaries, not compiled-from-source.
+        // On Windows, precompiled is always used regardless of compile setting.
+        let uses_precompiled = cfg!(windows) || Settings::get().python.compile != Some(true);
+        if !uses_precompiled || !Self::github_attestations_enabled() {
+            return None;
+        }
+        Some(ProvenanceType::GithubAttestations)
+    }
+
+    async fn verify_github_artifact_attestations(
+        &self,
+        ctx: &InstallContext,
+        tarball_path: &std::path::Path,
+        version: &str,
+    ) -> Result<bool> {
+        if !Self::github_attestations_enabled() {
+            debug!("GitHub artifact attestations verification disabled for Python");
+            return Ok(false);
+        }
+
+        ctx.pr
+            .set_message("verify GitHub artifact attestations".to_string());
+
+        match sigstore_verification::verify_github_attestation(
+            tarball_path,
+            "astral-sh",
+            "python-build-standalone",
+            env::GITHUB_TOKEN.as_deref(),
+            None, // Accept any workflow from repo
+        )
+        .await
+        {
+            Ok(true) => {
+                ctx.pr
+                    .set_message("✓ GitHub artifact attestations verified".to_string());
+                debug!(
+                    "GitHub artifact attestations verified successfully for python@{}",
+                    version
+                );
+                Ok(true)
+            }
+            Ok(false) => Err(eyre!(
+                "GitHub artifact attestations verification failed for python@{version}\n{ATTESTATION_HELP}"
+            )),
+            Err(sigstore_verification::AttestationError::NoAttestations) => Err(eyre!(
+                "No GitHub artifact attestations found for python@{version}\n{ATTESTATION_HELP}"
+            )),
+            Err(e) => Err(eyre!(
+                "GitHub artifact attestations verification failed for python@{version}: {e}\n{ATTESTATION_HELP}"
+            )),
+        }
+    }
+}
+
+#[async_trait]
+impl Backend for PythonPlugin {
+    fn ba(&self) -> &Arc<BackendArg> {
+        &self.ba
+    }
+
+    async fn _list_remote_versions(&self, _config: &Arc<Config>) -> eyre::Result<Vec<VersionInfo>> {
+        if cfg!(windows) || Settings::get().python.compile == Some(false) {
+            Ok(self
+                .fetch_precompiled_remote_versions()
+                .await?
+                .iter()
+                .map(|(v, _, _)| VersionInfo {
+                    version: v.clone(),
+                    ..Default::default()
+                })
+                .collect())
+        } else {
+            self.install_or_update_python_build(None)?;
+            let python_build_bin = self.python_build_bin();
+            let python_build_str = python_build_bin.to_string_lossy().to_string();
+            plugins::core::run_fetch_task_with_timeout_async(async move || {
+                let output = crate::cmd::cmd_read_async_inherited_env(
+                    &python_build_str,
+                    &["--definitions"],
+                    std::iter::empty::<(&str, &std::ffi::OsStr)>(),
+                )
+                .await?;
+                let versions = output
+                    .split('\n')
+                    // remove free-threaded pythons like 3.13t and 3.14t-dev
+                    .filter(|s| !regex!(r"\dt(-dev)?$").is_match(s))
+                    .map(|s| VersionInfo {
+                        version: s.to_string(),
+                        ..Default::default()
+                    })
+                    .sorted_by_cached_key(|v| python_version_sort_key(&v.version))
+                    .collect();
+                Ok(versions)
+            })
+            .await
+        }
+    }
+
+    async fn _idiomatic_filenames(&self) -> eyre::Result<Vec<String>> {
+        Ok(vec![
+            ".python-version".to_string(),
+            ".python-versions".to_string(),
+        ])
+    }
+
+    async fn security_info(&self) -> Vec<crate::backend::SecurityFeature> {
+        use crate::backend::SecurityFeature;
+
+        let mut features = vec![SecurityFeature::Checksum {
+            algorithm: Some("sha256".to_string()),
+        }];
+
+        if self.detect_precompiled_provenance().is_some() {
+            features.push(SecurityFeature::GithubAttestations {
+                signer_workflow: None,
+            });
+        }
+
+        features
+    }
+
+    async fn install_version_(
+        &self,
+        ctx: &InstallContext,
+        mut tv: ToolVersion,
+    ) -> Result<ToolVersion> {
+        if cfg!(windows) || Settings::get().python.compile != Some(true) {
+            self.install_precompiled(ctx, &mut tv).await?;
+        } else {
+            self.install_compiled(ctx, &tv).await?;
+        }
+        self.test_python(&ctx.config, &tv, ctx.pr.as_ref()).await?;
+        if let Err(e) = self.get_virtualenv(&ctx.config, &tv).await {
+            warn!("failed to get virtualenv: {e:#}");
+        }
+        if let Some(default_file) = &Settings::get().python.default_packages_file {
+            let default_file = file::replace_path(default_file);
+            if let Err(err) = self
+                .install_default_packages(&ctx.config, &default_file, &tv, ctx.pr.as_ref())
+                .await
+            {
+                warn!("failed to install default python packages: {err:#}");
+            }
+        }
+        Ok(tv)
+    }
+
+    #[cfg(windows)]
+    async fn list_bin_paths(
+        &self,
+        _config: &Arc<Config>,
+        tv: &ToolVersion,
+    ) -> eyre::Result<Vec<PathBuf>> {
+        Ok(vec![tv.install_path()])
+    }
+
+    async fn exec_env(
+        &self,
+        config: &Arc<Config>,
+        _ts: &Toolset,
+        tv: &ToolVersion,
+    ) -> eyre::Result<BTreeMap<String, String>> {
+        let mut hm = BTreeMap::new();
+        match self.get_virtualenv(config, tv).await {
+            Err(e) => warn!("failed to get virtualenv: {e}"),
+            Ok(Some(virtualenv)) => {
+                let bin = virtualenv.join("bin");
+                hm.insert("VIRTUAL_ENV".into(), virtualenv.to_string_lossy().into());
+                hm.insert("MISE_ADD_PATH".into(), bin.to_string_lossy().into());
+            }
+            Ok(None) => {}
+        };
+        Ok(hm)
+    }
+
+    fn get_remote_version_cache(&self) -> Arc<Mutex<VersionCacheManager>> {
+        static CACHE: OnceLock<Arc<Mutex<VersionCacheManager>>> = OnceLock::new();
+        CACHE
+            .get_or_init(|| {
+                Arc::new(Mutex::new(
+                    CacheManagerBuilder::new(
+                        self.ba().cache_path.join("remote_versions.msgpack.z"),
+                    )
+                    .with_fresh_duration(Settings::get().fetch_remote_versions_cache())
+                    .with_cache_key((Settings::get().python.compile == Some(false)).to_string())
+                    .build(),
+                ))
+            })
+            .clone()
+    }
+
+    fn resolve_lockfile_options(
+        &self,
+        _request: &ToolRequest,
+        target: &PlatformTarget,
+    ) -> BTreeMap<String, String> {
+        let mut opts = BTreeMap::new();
+        let settings = Settings::get();
+        let is_current_platform = target.is_current();
+
+        // Only include compile option if true (non-default)
+        let compile = if is_current_platform {
+            settings.python.compile.unwrap_or(false)
+        } else {
+            false
+        };
+        if compile {
+            opts.insert("compile".to_string(), "true".to_string());
+        }
+
+        // Include precompiled options for all platforms to avoid splitting
+        // lockfile entries between host and non-host platforms (#8390)
+        if !compile {
+            if let Some(arch) = settings.python.precompiled_arch.clone() {
+                opts.insert("precompiled_arch".to_string(), arch);
+            }
+            if let Some(os) = settings.python.precompiled_os.clone() {
+                opts.insert("precompiled_os".to_string(), os);
+            }
+            if let Some(flavor) = settings.python.precompiled_flavor.clone() {
+                opts.insert("precompiled_flavor".to_string(), flavor);
+            }
+        }
+
+        opts
+    }
+
+    async fn resolve_lock_info(
+        &self,
+        tv: &ToolVersion,
+        target: &PlatformTarget,
+    ) -> Result<PlatformInfo> {
+        let version = &tv.version;
+
+        // Look up the precompiled release for this version and target platform
+        let Some((tag, filename)) = self.fetch_precompiled_for_target(version, target).await?
+        else {
+            return Ok(PlatformInfo::default());
+        };
+
+        let url = format!(
+            "https://github.com/astral-sh/python-build-standalone/releases/download/{tag}/{filename}"
+        );
+
+        // Fetch SHA256SUMS from the release to get the checksum
+        let shasums_url = format!(
+            "https://github.com/astral-sh/python-build-standalone/releases/download/{tag}/SHA256SUMS"
+        );
+        let checksum = fetch_checksum_from_shasums(&shasums_url, &filename).await;
+
+        // Detect provenance for precompiled binaries
+        let provenance = self.detect_precompiled_provenance();
+
+        Ok(PlatformInfo {
+            url: Some(url),
+            checksum,
+            provenance,
+            ..Default::default()
+        })
+    }
+}
+
+fn python_precompiled_url_path(settings: &Settings) -> String {
+    if cfg!(windows) || cfg!(linux) || cfg!(macos) {
+        format!(
+            "python-precompiled-{}-{}.gz",
+            python_arch(settings),
+            python_os(settings)
+        )
+    } else {
+        "python-precompiled.gz".into()
+    }
+}
+
+fn python_os(settings: &Settings) -> String {
+    if let Some(os) = &settings.python.precompiled_os {
+        return os.clone();
+    }
+    if cfg!(windows) {
+        "pc-windows-msvc".into()
+    } else if cfg!(target_os = "macos") {
+        "apple-darwin".into()
+    } else {
+        ["unknown", built_info::CFG_OS, built_info::CFG_ENV]
+            .iter()
+            .filter(|s| !s.is_empty())
+            .join("-")
+    }
+}
+
+fn python_arch(settings: &Settings) -> &str {
+    if let Some(arch) = &settings.python.precompiled_arch {
+        return arch.as_str();
+    }
+    let arch = match settings.arch() {
+        "x64" => "x86_64",
+        "arm64" => "aarch64",
+        other => other,
+    };
+    if cfg!(windows) {
+        "x86_64"
+    } else if cfg!(linux) && arch == "x86_64" {
+        if cfg!(target_feature = "avx512f") {
+            "x86_64_v4"
+        } else if cfg!(target_feature = "avx2") {
+            "x86_64_v3"
+        } else if cfg!(target_feature = "sse4.1") {
+            "x86_64_v2"
+        } else {
+            "x86_64"
+        }
+    } else {
+        arch
+    }
+}
+
+fn python_precompiled_platform() -> String {
+    let settings = Settings::get();
+    let os = python_os(&settings);
+    let arch = python_arch(&settings);
+    if let Some(flavor) = &settings.python.precompiled_flavor {
+        format!("{arch}-{os}-{flavor}")
+    } else {
+        format!("{arch}-{os}")
+    }
+}
+
+/// Map a PlatformTarget OS to the python-build-standalone OS string.
+fn python_os_for_target(target: &PlatformTarget) -> &'static str {
+    match target.os_name() {
+        "macos" => "apple-darwin",
+        "windows" => "pc-windows-msvc",
+        _ => "unknown-linux-gnu",
+    }
+}
+
+/// Map a PlatformTarget arch to the python-build-standalone arch string.
+fn python_arch_for_target(target: &PlatformTarget) -> &'static str {
+    match target.arch_name() {
+        "arm64" => "aarch64",
+        _ => "x86_64",
+    }
+}
+
+fn ensure_not_windows() -> eyre::Result<()> {
+    if cfg!(windows) {
+        bail!(
+            "python can not currently be compiled on windows with core:python, use vfox:python instead"
+        );
+    }
+    Ok(())
+}
+
+fn filter_freethreaded(v: &str, flavor: &Option<String>) -> bool {
+    flavor.as_ref().is_some_and(|f| f.contains("freethreaded")) || !v.contains("freethreaded")
+}

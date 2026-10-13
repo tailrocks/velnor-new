@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+install_dir="$MISE_DATA_DIR/installs/npm-cowsay/1.6.0"
+
+# npm: tools install via the embedded aube package manager in-process — no
+# aube binary on PATH is required, only node to run the tool.
+assert_contains "mise x node@20.11.1 npm:cowsay@1.6.0 -- cowsay hello" "hello"
+
+# Embedded aube installs into a per-tool project dir: node_modules holds the
+# package + bin shims, and an aube lockfile is written at the project root.
+assert_succeed "test -d '$install_dir/node_modules'"
+assert_succeed "test -x '$install_dir/node_modules/.bin/cowsay'"
+assert_succeed "test -f '$install_dir/aube-lock.yaml'"
+assert_contains "cat '$install_dir/aube-lock.yaml'" "cowsay@1.6.0"
+
+# Regenerable aube state stays under mise's npm cache root, where
+# `mise cache prune npm` owns its lifecycle.
+assert_succeed "test -d '$MISE_CACHE_DIR/npm/aube/cache/packuments-full-v1'"
+assert_succeed "test -d '$MISE_CACHE_DIR/npm/aube/store/v1/files'"

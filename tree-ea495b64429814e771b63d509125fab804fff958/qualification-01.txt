@@ -1,0 +1,186 @@
+    needs:
+      - cache-scale-set
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Restore cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: g4-cache.txt
+          key: g4-cache-${{ github.run_id }}
+          fail-on-cache-miss: "true"
+      - name: Check restore
+        run: grep -qx cache-ok g4-cache.txt
+  empty-cache-hosted:
+    name: Empty cache / GitHub hosted
+    if: inputs.mode == 'empty-cache'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Restore absent cache
+        id: empty
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: g4-cache.txt
+          key: g4-empty-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+          fail-on-cache-miss: "false"
+      - name: Require cache miss
+        env:
+          HIT: ${{ steps.empty.outputs.cache-hit }}
+        run: "test -z \"$HIT\" || test \"$HIT\" = false"
+      - name: Write spaced path
+        run: "mkdir -p \"g4 cache\" && printf '%s\n' cache-ok > \"g4 cache/note.txt\""
+      - name: Save spaced path
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: "g4 cache/note.txt"
+          key: g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+      - name: Remove spaced path
+        run: "rm -f \"g4 cache/note.txt\""
+      - name: Restore spaced path
+        id: space
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: "g4 cache/note.txt"
+          key: g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+          fail-on-cache-miss: "true"
+      - name: Require spaced restore
+        env:
+          HIT: ${{ steps.space.outputs.cache-hit }}
+        run: "grep -qx cache-ok \"g4 cache/note.txt\" && test \"$HIT\" = true"
+  empty-cache-scale-set:
+    name: Empty cache / Velnor Scale Set
+    if: inputs.mode == 'empty-cache'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Restore absent cache
+        id: empty
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: g4-cache.txt
+          key: g4-empty-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+          fail-on-cache-miss: "false"
+      - name: Require cache miss
+        env:
+          HIT: ${{ steps.empty.outputs.cache-hit }}
+        run: "test -z \"$HIT\" || test \"$HIT\" = false"
+      - name: Write spaced path
+        run: "mkdir -p \"g4 cache\" && printf '%s\n' cache-ok > \"g4 cache/note.txt\""
+      - name: Save spaced path
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: "g4 cache/note.txt"
+          key: g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+      - name: Remove spaced path
+        run: "rm -f \"g4 cache/note.txt\""
+      - name: Restore spaced path
+        id: space
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: "g4 cache/note.txt"
+          key: g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+          fail-on-cache-miss: "true"
+      - name: Require spaced restore
+        env:
+          HIT: ${{ steps.space.outputs.cache-hit }}
+        run: "grep -qx cache-ok \"g4 cache/note.txt\" && test \"$HIT\" = true"
+  oidc-hosted:
+    name: OIDC / GitHub hosted
+    if: inputs.mode == 'oidc'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Require OIDC request URL
+        run: "test -n \"$ACTIONS_ID_TOKEN_REQUEST_URL\""
+  oidc-scale-set:
+    name: OIDC / Velnor Scale Set
+    if: inputs.mode == 'oidc'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Require OIDC request URL
+        run: "test -n \"$ACTIONS_ID_TOKEN_REQUEST_URL\""
+  post-fail-hosted:
+    name: Post failure / GitHub hosted
+    if: inputs.mode == 'post-fail'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Main fails post runs
+        uses: ./qualification/actions/post-fail # zizmor: ignore[self-repository]
+  post-fail-scale-set:
+    name: Post failure / Velnor Scale Set
+    if: inputs.mode == 'post-fail'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Main fails post runs
+        uses: ./qualification/actions/post-fail # zizmor: ignore[self-repository]
+  cancel-hosted:
+    name: Cancel / GitHub hosted
+    if: inputs.mode == 'cancel'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Sleep until cancelled
+        run: sleep 180
+  cancel-scale-set:
+    name: Cancel / Velnor Scale Set
+    if: inputs.mode == 'cancel'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Sleep until cancelled
+        run: sleep 180
+  compose-hosted:
+    name: Compose / GitHub hosted
+    if: inputs.mode == 'compose'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Start compose
+        run: docker compose -f qualification/compose/stack.yml up -d --wait
+      - name: Prove both services
+        run: "docker compose -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\""
+      - name: Remove compose
+        run: docker compose -f qualification/compose/stack.yml down --volumes
+      - name: Record compose
+        run: echo compose-ok

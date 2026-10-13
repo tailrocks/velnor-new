@@ -1,0 +1,44 @@
+---
+title: "Owned archive preflight"
+description: "Repository tools that inspect candidate or Cargo package archives must run the native guard against the exact immutable bytes before opening them with a tar parser. The guard reads standard input,"
+---
+
+Repository tools that inspect candidate or Cargo package archives must run the
+native guard against the exact immutable bytes before opening them with a tar
+parser. The guard reads standard input, enforces profile-specific encoding,
+member, payload, and metadata bounds, and exits nonzero on malformed or
+unsupported input. Release candidates are the raw TAR emitted by `tar -cf`;
+Cargo package archives are gzip-compressed TAR. Each mode accepts only its
+declared encoding.
+
+Provision the locked native executable from a clean checkout with:
+
+```sh
+bash scripts/build-owned-archive-guard.sh
+```
+
+For a consumer command, use the wrapper so provisioning finishes before the
+parser starts:
+
+```sh
+bash scripts/with-owned-archive-guard.sh -- python3 path/to/consumer.py ...
+```
+
+The wrapper builds with the repository's pinned Mise and Rust 1.98.1, uses an
+isolated Cargo home and target directory, and copies the executable into the
+checkout-owned `.velnor/archive-guard/bin/` directory. The Python bridge never
+builds or downloads executable code. Direct bridge calls fail closed unless
+that checkout-local executable matches the current native source fingerprint.
+
+Only `candidate` and `cargo-package` are supported modes. The builder resolves
+the locked transitive normal/build dependency graph before compiling and
+admits local package paths only under the fingerprinted guard crate. New local
+dependencies or unknown Cargo package identities fail before compilation. The
+shared input manifest fingerprints the workspace manifests, the guard source
+tree, build support, toolchain pins, and optional checkout Cargo/Rust toolchain
+configuration. Source traversal is bounded to 512 entries, 512 files and
+directories, 16 MiB per file, and 32 MiB total.
+
+`velnor-archive-guard` is a repository security utility, not a ninth V1 stack
+or generator product. It has no local product dependencies and does not
+participate in workflow generation.

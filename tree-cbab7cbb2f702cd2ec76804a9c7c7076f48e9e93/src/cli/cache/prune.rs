@@ -1,0 +1,98 @@
+use crate::cache;
+use crate::cache::{PruneOptions, PruneResults};
+use crate::config::Settings;
+use crate::dirs::CACHE;
+use crate::toolset::env_cache::CachedEnv;
+use eyre::Result;
+use heck::ToKebabCase;
+use number_prefix::NumberPrefix;
+use std::time::Duration;
+
+/// Removes stale mise cache files
+///
+/// By default, this command will remove files that have not been accessed in 30 days.
+/// Change this with the MISE_CACHE_PRUNE_AGE environment variable.
+#[derive(Debug, clap::Args)]
+#[clap(verbatim_doc_comment, visible_alias = "p")]
+pub struct CachePrune {
+    /// Plugin(s) to prune cache for
+    /// e.g.: node, python
+    plugin: Option<Vec<String>>,
+
+    /// Show pruned files
+    #[clap(long, short, action = clap::ArgAction::Count)]
+    verbose: u8,
+
+    /// Just show what would be pruned
+    #[clap(long)]
+    dry_run: bool,
+}
+
+impl CachePrune {
+    pub fn run(self) -> Result<()> {
+        let settings = Settings::get();
+        let opts = PruneOptions {
+            dry_run: self.dry_run,
+            verbose: self.verbose > 0,
+            age: settings
+                .cache_prune_age_duration()
+                .unwrap_or(Duration::from_secs(30 * 24 * 60 * 60)),
+        };
+        let mut results = PruneResults { size: 0, count: 0 };
+
+        let cache_dirs = match &self.plugin {
+            Some(plugins) => plugins
+                .iter()
+                .filter_map(|plugin| {
+                    let kebab = plugin.to_kebab_case();
+                    if kebab.is_empty() {
+                        warn!("invalid plugin name: {plugin}");
+                        None
+                    } else {
+                        Some(CACHE.join(kebab))
+                    }
+                })
+                .collect(),
+            None => vec![CACHE.to_path_buf()],
+        };
+
+        for p in cache_dirs {
+            if p.exists() {
+                let r = cache::prune(&p, &opts)?;
+                results.size += r.size;
+                results.count += r.count;
+            }
+        }
+
+        // Prune env cache using env_cache_ttl
+        let env_cache_dir = CachedEnv::cache_dir();
+        if self.plugin.is_none() && env_cache_dir.exists() {
+            let env_opts = PruneOptions {
+                dry_run: self.dry_run,
+                verbose: self.verbose > 0,
+                age: settings.env_cache_ttl(),
+            };
+            let r = cache::prune(&env_cache_dir, &env_opts)?;
+            results.size += r.size;
+            results.count += r.count;
+        }
+
+        let count = results.count;
+        let size = bytes_str(results.size);
+        match &self.plugin {
+            Some(plugins) => info!(
+                "cache pruned for {}: {count} files, {size}",
+                plugins.join(", ")
+            ),
+            None => info!("cache pruned {count} files, {size}"),
+        }
+        Ok(())
+    }
+}
+
+fn bytes_str(bytes: u64) -> String {
+    match NumberPrefix::binary(bytes as f64) {
+        NumberPrefix::Standalone(bytes) => format!("{bytes} bytes"),
+        NumberPrefix::Prefixed(prefix, n) => format!("{n:.1} {prefix}B"),
+    }
+}

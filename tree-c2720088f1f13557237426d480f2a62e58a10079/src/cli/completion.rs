@@ -1,0 +1,87 @@
+use clap::builder::PossibleValue;
+use clap::ValueEnum;
+use color_eyre::eyre::Result;
+use std::fmt::Display;
+
+use crate::config::Config;
+use crate::output::Output;
+
+/// Generate shell completions
+#[derive(Debug, clap::Args)]
+#[clap(aliases = ["complete", "completions"], verbatim_doc_comment, after_long_help = AFTER_LONG_HELP)]
+pub struct Completion {
+    /// Shell type to generate completions for
+    #[clap(required_unless_present = "shell_type")]
+    shell: Option<Shell>,
+
+    /// Shell type to generate completions for
+    #[clap(long = "shell", short = 's', hide = true)]
+    shell_type: Option<Shell>,
+}
+
+impl Completion {
+    pub fn run(self, _config: Config, out: &mut Output) -> Result<()> {
+        let c = match self.shell.or(self.shell_type).unwrap() {
+            Shell::Bash => include_str!("../../completions/rtx.bash"),
+            Shell::Fish => include_str!("../../completions/rtx.fish"),
+            Shell::Zsh => include_str!("../../completions/_rtx"),
+        };
+        rtxprintln!(out, "{}", c.trim());
+
+        Ok(())
+    }
+}
+
+static AFTER_LONG_HELP: &str = color_print::cstr!(
+    r#"<bold><underline>Examples:</underline></bold>
+  $ <bold>rtx completion bash > /etc/bash_completion.d/rtx</bold>
+  $ <bold>rtx completion zsh  > /usr/local/share/zsh/site-functions/_rtx</bold>
+  $ <bold>rtx completion fish > ~/.config/fish/completions/rtx.fish</bold>
+"#
+);
+
+#[derive(Debug, Clone)]
+enum Shell {
+    Bash,
+    Fish,
+    Zsh,
+}
+
+impl ValueEnum for Shell {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[Self::Bash, Self::Fish, Self::Zsh]
+    }
+    fn from_str(input: &str, _ignore_case: bool) -> std::result::Result<Self, String> {
+        match input {
+            "bash" => Ok(Self::Bash),
+            "fish" => Ok(Self::Fish),
+            "zsh" => Ok(Self::Zsh),
+            _ => Err(format!("unknown shell type: {}", input)),
+        }
+    }
+    fn to_possible_value(&self) -> Option<PossibleValue> {
+        Some(PossibleValue::new(self.to_string()))
+    }
+}
+
+impl Display for Shell {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Bash => write!(f, "bash"),
+            Self::Fish => write!(f, "fish"),
+            Self::Zsh => write!(f, "zsh"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::assert_cli;
+
+    #[test]
+    fn test_completion() {
+        assert_cli!("completion", "zsh");
+        assert_cli!("completion", "bash");
+        assert_cli!("completion", "fish");
+    }
+}

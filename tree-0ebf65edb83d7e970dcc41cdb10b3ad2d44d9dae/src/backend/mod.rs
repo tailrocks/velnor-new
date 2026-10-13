@@ -1,0 +1,1807 @@
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ffi::OsString;
+use std::fmt::{Debug, Display, Formatter};
+use std::fs::File;
+use std::hash::Hash;
+use std::ops::Deref;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex as TokioMutex;
+
+use jiff::Timestamp;
+
+use crate::cli::args::{BackendArg, ToolVersionType};
+use crate::cmd::CmdLineRunner;
+use crate::config::{Config, Settings};
+use crate::file::{display_path, remove_all, remove_all_with_warning};
+use crate::install_context::InstallContext;
+use crate::lockfile::{PlatformInfo, ProvenanceType};
+use crate::path_env::PathEnv;
+use crate::platform::Platform;
+use crate::plugins::core::CORE_PLUGINS;
+use crate::plugins::{PluginType, VERSION_REGEX};
+use crate::registry::{REGISTRY, full_to_url, normalize_remote, tool_enabled};
+use crate::runtime_symlinks::is_runtime_symlink;
+use crate::toolset::outdated_info::OutdatedInfo;
+use crate::toolset::{
+    ResolveOptions, ToolRequest, ToolVersion, Toolset, install_state, is_outdated_version,
+};
+use crate::ui::progress_report::SingleReport;
+use crate::{
+    cache::{CacheManager, CacheManagerBuilder},
+    plugins::PluginEnum,
+};
+use crate::{dirs, env, file, hash, lock_file, versions_host};
+use async_trait::async_trait;
+use backend_type::BackendType;
+use console::style;
+use eyre::{Result, WrapErr, bail, eyre};
+use indexmap::IndexSet;
+use itertools::Itertools;
+use platform_target::PlatformTarget;
+use regex::Regex;
+use std::sync::LazyLock as Lazy;
+
+pub mod aqua;
+pub mod asdf;
+pub mod asset_matcher;
+pub mod backend_type;
+pub mod cargo;
+pub mod conda;
+pub mod dotnet;
+mod external_plugin_cache;
+pub mod gem;
+pub mod github;
+pub mod go;
+pub mod http;
+pub mod jq;
+pub mod npm;
+pub mod pipx;
+pub mod platform_target;
+pub mod s3;
+pub mod spm;
+pub mod static_helpers;
+pub mod ubi;
+pub mod version_list;
+pub mod vfox;
+
+pub type ABackend = Arc<dyn Backend>;
+pub type BackendMap = BTreeMap<String, ABackend>;
+pub type BackendList = Vec<ABackend>;
+pub type VersionCacheManager = CacheManager<Vec<VersionInfo>>;
+
+/// Information about a GitHub/GitLab release for platform-specific tools
+#[derive(Debug, Clone)]
+pub struct GitHubReleaseInfo {
+    pub repo: String,
+    pub asset_pattern: Option<String>,
+    pub api_url: Option<String>,
+    pub release_type: ReleaseType,
+}
+
+#[derive(Debug, Clone)]
+pub enum ReleaseType {
+    GitHub,
+    GitLab,
+}
+
+/// Information about a tool version including optional metadata like creation time
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct VersionInfo {
+    pub version: String,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub created_at: Option<String>,
+    /// URL to the release page (e.g., GitHub/GitLab release page)
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub release_url: Option<String>,
+    /// If true, this is a rolling release (like "nightly") that should always
+    /// be considered potentially outdated for `mise up` purposes
+    #[serde(default)]
+    pub rolling: bool,
+    /// Checksum of the release asset, used to detect changes in rolling releases
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub checksum: Option<String>,
+}
+
+impl VersionInfo {
+    /// Filter versions to only include those released before the given timestamp.
+    /// Versions without a created_at timestamp are included by default.
+    pub fn filter_by_date(versions: Vec<Self>, before: Timestamp) -> Vec<Self> {
+        use crate::duration::parse_into_timestamp;
+        versions
+            .into_iter()
+            .filter(|v| {
+                match &v.created_at {
+                    Some(ts) => {
+                        // Parse the timestamp using parse_into_timestamp which handles
+                        // RFC3339, date-only (YYYY-MM-DD), and other formats
+                        match parse_into_timestamp(ts) {
+                            Ok(created) => created < before,
+                            Err(_) => {
+                                // If we can't parse the timestamp, include the version
+                                trace!("Failed to parse timestamp: {}", ts);
+                                true
+                            }
+                        }
+                    }
+                    // Include versions without timestamps
+                    None => true,
+                }
+            })
+            .collect()
+    }
+}
+
+/// Security feature information for a tool
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SecurityFeature {
+    Checksum {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        algorithm: Option<String>,
+    },
+    GithubAttestations {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        signer_workflow: Option<String>,
+    },
+    Slsa {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        level: Option<u8>,
+    },
+    Cosign,
+    Minisign {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        public_key: Option<String>,
+    },
+    Gpg,
+}
+
+static TOOLS: Mutex<Option<Arc<BackendMap>>> = Mutex::new(None);
+
+pub async fn load_tools() -> Result<Arc<BackendMap>> {
+    if let Some(memo_tools) = TOOLS.lock().unwrap().clone() {
+        return Ok(memo_tools);
+    }
+    install_state::init().await?;
+    time!("load_tools start");
+    let core_tools = CORE_PLUGINS.values().cloned().collect::<Vec<ABackend>>();
+    let mut tools = core_tools;
+    // add tools with idiomatic files so they get parsed even if no versions are installed
+    tools.extend(
+        REGISTRY
+            .values()
+            .filter(|rt| !rt.idiomatic_files.is_empty() && rt.is_supported_os())
+            .filter_map(|rt| arg_to_backend(rt.short.into())),
+    );
+    time!("load_tools core");
+    tools.extend(
+        install_state::list_tools()
+            .values()
+            .filter(|ist| ist.full.is_some())
+            .flat_map(|ist| arg_to_backend(ist.clone().into())),
+    );
+    time!("load_tools install_state");
+    tools.retain(|backend| {
+        tool_enabled(
+            &Settings::get().enable_tools(),
+            &Settings::get().disable_tools(),
+            &backend.id().to_string(),
+        )
+    });
+    tools.retain(|backend| {
+        !Settings::get()
+            .disable_backends
+            .contains(&backend.get_type().to_string())
+    });
+
+    let tools: BackendMap = tools
+        .into_iter()
+        .map(|backend| (backend.ba().short.clone(), backend))
+        .collect();
+    let tools = Arc::new(tools);
+    *TOOLS.lock().unwrap() = Some(tools.clone());
+    time!("load_tools done");
+    Ok(tools)
+}
+
+pub fn list() -> BackendList {
+    TOOLS
+        .lock()
+        .unwrap()
+        .as_ref()
+        .unwrap()
+        .values()
+        .cloned()
+        .collect()
+}
+
+pub fn get(ba: &BackendArg) -> Option<ABackend> {
+    let mut tools = TOOLS.lock().unwrap();
+    let tools_ = tools.as_ref().unwrap();
+    if let Some(backend) = tools_.get(&ba.short) {
+        Some(backend.clone())
+    } else if let Some(backend) = arg_to_backend(ba.clone()) {
+        let mut tools_ = tools_.deref().clone();
+        tools_.insert(ba.short.clone(), backend.clone());
+        *tools = Some(Arc::new(tools_));
+        Some(backend)
+    } else {
+        None
+    }
+}
+
+pub fn remove(short: &str) {
+    let mut tools = TOOLS.lock().unwrap();
+    let mut tools_ = tools.as_ref().unwrap().deref().clone();
+    tools_.remove(short);
+    *tools = Some(Arc::new(tools_));
+}
+
+pub fn arg_to_backend(ba: BackendArg) -> Option<ABackend> {
+    match ba.backend_type() {
+        BackendType::Core => {
+            CORE_PLUGINS
+                .get(&ba.short)
+                .or_else(|| {
+                    // this can happen if something like "corenode" is aliased to "core:node"
+                    ba.full()
+                        .strip_prefix("core:")
+                        .and_then(|short| CORE_PLUGINS.get(short))
+                })
+                .cloned()
+        }
+        BackendType::Aqua => Some(Arc::new(aqua::AquaBackend::from_arg(ba))),
+        BackendType::Asdf => Some(Arc::new(asdf::AsdfBackend::from_arg(ba))),
+        BackendType::Cargo => Some(Arc::new(cargo::CargoBackend::from_arg(ba))),
+        BackendType::Conda => Some(Arc::new(conda::CondaBackend::from_arg(ba))),
+        BackendType::Dotnet => Some(Arc::new(dotnet::DotnetBackend::from_arg(ba))),
+        BackendType::Forgejo => Some(Arc::new(github::UnifiedGitBackend::from_arg(ba))),
+        BackendType::Gem => Some(Arc::new(gem::GemBackend::from_arg(ba))),
+        BackendType::Github => Some(Arc::new(github::UnifiedGitBackend::from_arg(ba))),
+        BackendType::Gitlab => Some(Arc::new(github::UnifiedGitBackend::from_arg(ba))),
+        BackendType::Go => Some(Arc::new(go::GoBackend::from_arg(ba))),
+        BackendType::Npm => Some(Arc::new(npm::NPMBackend::from_arg(ba))),
+        BackendType::Pipx => Some(Arc::new(pipx::PIPXBackend::from_arg(ba))),
+        BackendType::Spm => Some(Arc::new(spm::SPMBackend::from_arg(ba))),
+        BackendType::Http => Some(Arc::new(http::HttpBackend::from_arg(ba))),
+        BackendType::S3 => Some(Arc::new(s3::S3Backend::from_arg(ba))),
+        BackendType::Ubi => Some(Arc::new(ubi::UbiBackend::from_arg(ba))),
+        BackendType::Vfox => Some(Arc::new(vfox::VfoxBackend::from_arg(ba, None))),
+        BackendType::VfoxBackend(plugin_name) => Some(Arc::new(vfox::VfoxBackend::from_arg(
+            ba,
+            Some(plugin_name.to_string()),
+        ))),
+        BackendType::Unknown => None,
+    }
+}
+
+/// Returns install-time-only option keys for a backend type.
+/// These are options that only affect installation/download, not post-install behavior.
+/// Used to filter cached options when config provides its own options.
+pub fn install_time_option_keys_for_type(backend_type: &BackendType) -> Vec<String> {
+    match backend_type {
+        BackendType::Http => http::install_time_option_keys(),
+        BackendType::S3 => s3::install_time_option_keys(),
+        BackendType::Github | BackendType::Gitlab => github::install_time_option_keys(),
+        BackendType::Ubi => ubi::install_time_option_keys(),
+        BackendType::Cargo => cargo::install_time_option_keys(),
+        BackendType::Go => go::install_time_option_keys(),
+        BackendType::Pipx => pipx::install_time_option_keys(),
+        _ => vec![],
+    }
+}
+
+/// Normalize idiomatic file contents by removing comments and empty lines.
+/// Full-line and inline comments are supported by .python-version, .nvmrc, etc.
+pub(crate) fn normalize_idiomatic_contents(contents: &str) -> String {
+    contents
+        .lines()
+        .filter_map(|line| {
+            let trimmed = line.trim();
+
+            // Skip empty lines or lines that are entirely comments
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                return None;
+            }
+
+            // Find an inline comment marked by a `#` preceded by whitespace, preserving valid `#` chars in versions like `tool#tag`
+            let comment_idx = trimmed.char_indices().find_map(|(i, c)| {
+                if c == '#' && trimmed[..i].ends_with(char::is_whitespace) {
+                    Some(i)
+                } else {
+                    None
+                }
+            });
+
+            // Strip the inline comment if found, otherwise retain the whole trimmed string
+            let without_inline = if let Some(idx) = comment_idx {
+                trimmed[..idx].trim()
+            } else {
+                trimmed
+            };
+
+            // Double check the line hasn't become empty after stripping the comment
+            if without_inline.is_empty() {
+                None
+            } else {
+                Some(without_inline)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_idiomatic_contents() {
+        assert_eq!(normalize_idiomatic_contents("tool # and a comment"), "tool");
+        assert_eq!(normalize_idiomatic_contents("tool#tag"), "tool#tag");
+        assert_eq!(
+            normalize_idiomatic_contents("tool#tag # comment"),
+            "tool#tag"
+        );
+        assert_eq!(normalize_idiomatic_contents("   # full line comment"), "");
+        assert_eq!(
+            normalize_idiomatic_contents("3.12.3\n3.11.11"),
+            "3.12.3\n3.11.11"
+        );
+        assert_eq!(
+            normalize_idiomatic_contents("3.12.3 # inline\n# comment\n3.11.11"),
+            "3.12.3\n3.11.11"
+        );
+        assert_eq!(
+            normalize_idiomatic_contents("# full line comment\n3.14.2 # inline comment\n   \n\n"),
+            "3.14.2"
+        );
+    }
+}
+
+#[async_trait]
+pub trait Backend: Debug + Send + Sync {
+    fn id(&self) -> &str {
+        &self.ba().short
+    }
+    fn tool_name(&self) -> String {
+        self.ba().tool_name()
+    }
+    fn get_type(&self) -> BackendType {
+        BackendType::Core
+    }
+    fn ba(&self) -> &Arc<BackendArg>;
+
+    /// Generates a platform key for lockfile storage.
+    /// Default implementation uses the current platform key (os-arch or os-arch-qualifier),
+    /// which includes the libc qualifier on musl systems.
+    fn get_platform_key(&self) -> String {
+        Platform::current().to_key()
+    }
+
+    /// Resolves the lockfile options for a tool request on a target platform.
+    /// These options affect artifact identity and must match exactly for lockfile lookup.
+    ///
+    /// For the current platform: resolves from Settings and ToolRequest options
+    /// For other platforms (cross-platform mise lock): uses sensible defaults
+    ///
+    /// Backends should override this to return options that affect which artifact is downloaded.
+    fn resolve_lockfile_options(
+        &self,
+        _request: &ToolRequest,
+        _target: &PlatformTarget,
+    ) -> BTreeMap<String, String> {
+        BTreeMap::new() // Default: no options affect artifact identity
+    }
+
+    /// Returns all platform variants that should be locked for a given base platform.
+    ///
+    /// Some tools have compile-time variants (e.g., bun has baseline/musl variants)
+    /// that result in different download URLs and checksums. This method allows
+    /// backends to declare all variants so `mise lock` can fetch checksums for each.
+    ///
+    /// Default returns just the base platform. Backends should override this to
+    /// return additional variants when applicable.
+    ///
+    /// Example: For bun on linux-x64, this might return:
+    /// - linux-x64 (default, AVX2)
+    /// - linux-x64-baseline (no AVX2)
+    /// - linux-x64-musl (musl libc)
+    /// - linux-x64-musl-baseline (musl + no AVX2)
+    fn platform_variants(&self, platform: &Platform) -> Vec<Platform> {
+        vec![platform.clone()] // Default: just the base platform
+    }
+
+    /// Whether this backend supports URL-based locking in locked mode.
+    /// Backends that use external installers (like rustup for Rust) should override
+    /// this to return false, since they don't have downloadable artifacts with lockable URLs.
+    fn supports_lockfile_url(&self) -> bool {
+        true
+    }
+
+    async fn description(&self) -> Option<String> {
+        None
+    }
+    async fn security_info(&self) -> Vec<SecurityFeature> {
+        vec![]
+    }
+    fn get_plugin_type(&self) -> Option<PluginType> {
+        None
+    }
+    /// If any of these tools are installing in parallel, we should wait for them to finish
+    /// before installing this tool.
+    fn get_dependencies(&self) -> Result<Vec<&str>> {
+        Ok(vec![])
+    }
+    /// dependencies which wait for install but do not warn, like cargo-binstall
+    fn get_optional_dependencies(&self) -> Result<Vec<&str>> {
+        Ok(vec![])
+    }
+    fn get_all_dependencies(&self, optional: bool) -> Result<IndexSet<BackendArg>> {
+        let all_fulls = self.ba().all_fulls();
+        if all_fulls.is_empty() {
+            // this can happen on windows where we won't be able to install this os/arch so
+            // the fact there might be dependencies is meaningless
+            return Ok(Default::default());
+        }
+        let mut deps: Vec<&str> = self.get_dependencies()?;
+        if optional {
+            deps.extend(self.get_optional_dependencies()?);
+        }
+        let mut deps: IndexSet<_> = deps.into_iter().map(BackendArg::from).collect();
+        if let Some(rt) = REGISTRY.get(self.ba().short.as_str()) {
+            // add dependencies from registry/
+            deps.extend(rt.depends.iter().map(BackendArg::from));
+        }
+        deps.retain(|ba| &**self.ba() != ba);
+        deps.retain(|ba| !all_fulls.contains(&ba.full()));
+        for ba in deps.clone() {
+            if let Ok(backend) = ba.backend() {
+                deps.extend(backend.get_all_dependencies(optional)?);
+            }
+        }
+        Ok(deps)
+    }
+
+    async fn list_remote_versions(&self, config: &Arc<Config>) -> eyre::Result<Vec<String>> {
+        Ok(self
+            .list_remote_versions_with_info(config)
+            .await?
+            .into_iter()
+            .map(|v| v.version)
+            .collect())
+    }
+
+    /// List remote versions with additional metadata like created_at timestamps.
+    /// Results are cached. Backends can override `_list_remote_versions_with_info`
+    /// to provide timestamp information.
+    ///
+    /// This method first tries the versions host (mise-versions.jdx.dev) which provides
+    /// version info with created_at timestamps. If that fails, it falls back to the
+    /// backend's `_list_remote_versions_with_info` implementation.
+    async fn list_remote_versions_with_info(
+        &self,
+        config: &Arc<Config>,
+    ) -> eyre::Result<Vec<VersionInfo>> {
+        let remote_versions = self.get_remote_version_cache();
+        let remote_versions = remote_versions.lock().await;
+        let ba = self.ba().clone();
+        let id = self.id();
+
+        // Check if this is an external plugin with a custom remote - skip versions host if so
+        let use_versions_host = if let Some(plugin) = self.plugin()
+            && let Ok(Some(remote_url)) = plugin.get_remote_url()
+        {
+            // Check if remote matches the registry default
+            let normalized_remote =
+                normalize_remote(&remote_url).unwrap_or_else(|_| "INVALID_URL".into());
+            let shorthand_remote = REGISTRY
+                .get(plugin.name())
+                .and_then(|rt| rt.backends().first().map(|b| full_to_url(b)))
+                .unwrap_or_default();
+            let matches =
+                normalized_remote == normalize_remote(&shorthand_remote).unwrap_or_default();
+            if !matches {
+                trace!(
+                    "Skipping versions host for {} because it has a non-default remote",
+                    ba.short
+                );
+            }
+            matches
+        } else {
+            // For non-plugin backends (e.g. github:, cargo:), check if the backend matches
+            // the registry's default. When a user aliases a tool to a different backend
+            // (e.g. `php = "github:verzly/php"`), the versions host would return versions
+            // from the registry's default backend which may not match the aliased backend.
+            let full = ba.full();
+            if let Some(rt) = REGISTRY.get(ba.short.as_str()) {
+                let is_registry_backend = rt.backends().iter().any(|b| *b == full);
+                if !is_registry_backend {
+                    trace!(
+                        "Skipping versions host for {} because backend {} is not the registry default",
+                        ba.short, full
+                    );
+                }
+                is_registry_backend
+            } else {
+                true // Not in registry, safe to use versions host
+            }
+        };
+
+        if Settings::get().offline() {
+            trace!(
+                "Skipping remote version listing for {} due to offline mode",
+                ba.to_string()
+            );
+            return Ok(vec![]);
+        }
+
+        let versions = remote_versions
+            .get_or_try_init_async(|| async {
+                trace!("Listing remote versions for {}", ba.to_string());
+                // Try versions host first (now returns VersionInfo with timestamps)
+                if use_versions_host {
+                    match versions_host::list_versions(&ba.short).await {
+                        Ok(Some(versions)) => {
+                            trace!(
+                                "Got {} versions from versions host for {}",
+                                versions.len(),
+                                ba.to_string()
+                            );
+                            return Ok(versions);
+                        }
+                        Ok(None) => {}
+                        Err(e) => {
+                            debug!("Error getting versions from versions host: {:#}", e);
+                        }
+                    }
+                }
+                trace!(
+                    "Calling backend to list remote versions for {}",
+                    ba.to_string()
+                );
+                let versions = self
+                    ._list_remote_versions(config)
+                    .await?
+                    .into_iter()
+                    .filter(|v| match v.version.parse::<ToolVersionType>() {
+                        Ok(ToolVersionType::Version(_)) => true,
+                        _ => {
+                            warn!("Invalid version: {id}@{}", v.version);
+                            false
+                        }
+                    })
+                    .collect_vec();
+                if versions.is_empty() && self.get_type() != BackendType::Http {
+                    warn!("No versions found for {id}");
+                }
+                Ok(versions)
+            })
+            .await?;
+        Ok(versions.clone())
+    }
+
+    /// Backend implementation for fetching remote versions with metadata.
+    /// Override this to provide version listing with optional timestamp information.
+    /// Return `VersionInfo` with `created_at: None` if timestamps are not available.
+    async fn _list_remote_versions(&self, config: &Arc<Config>) -> eyre::Result<Vec<VersionInfo>>;
+
+    async fn latest_stable_version(&self, config: &Arc<Config>) -> eyre::Result<Option<String>> {
+        self.latest_version(config, Some("latest".into())).await
+    }
+    fn list_installed_versions(&self) -> Vec<String> {
+        install_state::list_versions(&self.ba().short)
+    }
+    fn is_version_installed(
+        &self,
+        config: &Arc<Config>,
+        tv: &ToolVersion,
+        check_symlink: bool,
+    ) -> bool {
+        let check_path = |install_path: &Path, check_symlink: bool| {
+            let is_installed = install_path.exists();
+            let is_not_incomplete = !self.incomplete_file_path(tv).exists();
+            let is_valid_symlink = !check_symlink || !is_runtime_symlink(install_path);
+
+            let installed = is_installed && is_not_incomplete && is_valid_symlink;
+            if log::log_enabled!(log::Level::Trace) && !installed {
+                let mut msg = format!(
+                    "{} is not installed, path: {}",
+                    self.ba(),
+                    display_path(install_path)
+                );
+                if !is_installed {
+                    msg += " (not installed)";
+                }
+                if !is_not_incomplete {
+                    msg += " (incomplete)";
+                }
+                if !is_valid_symlink {
+                    msg += " (runtime symlink)";
+                }
+                trace!("{}", msg);
+            }
+            installed
+        };
+        match tv.request {
+            ToolRequest::System { .. } => true,
+            _ => {
+                if let Some(install_path) = tv.request.install_path(config)
+                    && check_path(&install_path, true)
+                {
+                    // For Prefix requests, install_path finds any installed dir
+                    // matching the prefix (e.g., "1.0.0" for prefix "1"), but if
+                    // the ToolVersion resolved to a different version (e.g., "1.1.0"),
+                    // we must not treat it as installed.
+                    if let ToolRequest::Prefix { .. } = &tv.request
+                        && install_path
+                            .file_name()
+                            .is_some_and(|f| f.to_string_lossy() != tv.version)
+                    {
+                        return check_path(&tv.install_path(), check_symlink);
+                    }
+                    return true;
+                }
+                check_path(&tv.install_path(), check_symlink)
+            }
+        }
+    }
+    async fn is_version_outdated(&self, config: &Arc<Config>, tv: &ToolVersion) -> bool {
+        let latest = match tv.latest_version(config).await {
+            Ok(latest) => latest,
+            Err(e) => {
+                warn!(
+                    "Error getting latest version for {}: {:#}",
+                    self.ba().to_string(),
+                    e
+                );
+                return false;
+            }
+        };
+        !self.is_version_installed(config, tv, true) || is_outdated_version(&tv.version, &latest)
+    }
+    fn symlink_path(&self, tv: &ToolVersion) -> Option<PathBuf> {
+        let path = tv.install_path();
+        if !path.is_symlink() {
+            return None;
+        }
+        // Only skip symlinks pointing within installs (user aliases, not backend-managed)
+        if let Ok(Some(target)) = file::resolve_symlink(&path) {
+            let target = if target.is_absolute() {
+                target
+            } else {
+                path.parent().unwrap_or(&path).join(&target)
+            };
+            // Canonicalize to resolve any ".." components before checking.
+            // If target doesn't exist (canonicalize fails), don't skip - treat as needing install
+            let Ok(target) = target.canonicalize() else {
+                return None;
+            };
+            // Canonicalize INSTALLS too for consistent comparison (handles symlinked data dirs)
+            let installs = dirs::INSTALLS
+                .canonicalize()
+                .unwrap_or(dirs::INSTALLS.to_path_buf());
+            if target.starts_with(&installs) {
+                return Some(path);
+            }
+            // Also check shared install directories
+            for shared_dir in env::shared_install_dirs() {
+                let shared = shared_dir
+                    .canonicalize()
+                    .unwrap_or(shared_dir.to_path_buf());
+                if target.starts_with(&shared) {
+                    return Some(path);
+                }
+            }
+        }
+        None
+    }
+    fn create_symlink(&self, version: &str, target: &Path) -> Result<Option<(PathBuf, PathBuf)>> {
+        let link = self.ba().installs_path.join(version);
+        if link.exists() {
+            return Ok(None);
+        }
+        file::create_dir_all(link.parent().unwrap())?;
+        let link = file::make_symlink(target, &link)?;
+        Ok(Some(link))
+    }
+    fn list_installed_versions_matching(&self, query: &str) -> Vec<String> {
+        let versions = self.list_installed_versions();
+        self.fuzzy_match_filter(versions, query)
+    }
+    async fn list_versions_matching(
+        &self,
+        config: &Arc<Config>,
+        query: &str,
+    ) -> eyre::Result<Vec<String>> {
+        let versions = self.list_remote_versions(config).await?;
+        Ok(self.fuzzy_match_filter(versions, query))
+    }
+
+    /// List versions matching a query, optionally filtered by release date.
+    /// Use this when you have a `before_date` from ResolveOptions.
+    async fn list_versions_matching_with_opts(
+        &self,
+        config: &Arc<Config>,
+        query: &str,
+        before_date: Option<Timestamp>,
+    ) -> eyre::Result<Vec<String>> {
+        let versions = match before_date {
+            Some(before) => {
+                // Use version info to filter by date
+                let versions_with_info = self.list_remote_versions_with_info(config).await?;
+                let filtered = VersionInfo::filter_by_date(versions_with_info, before);
+                // Warn if no versions have timestamps
+                if filtered.iter().all(|v| v.created_at.is_none()) && !filtered.is_empty() {
+                    debug!(
+                        "Backend {} does not provide release dates; --before filter may not work as expected",
+                        self.id()
+                    );
+                }
+                filtered.into_iter().map(|v| v.version).collect()
+            }
+            None => self.list_remote_versions(config).await?,
+        };
+        Ok(self.fuzzy_match_filter(versions, query))
+    }
+
+    async fn latest_version(
+        &self,
+        config: &Arc<Config>,
+        query: Option<String>,
+    ) -> eyre::Result<Option<String>> {
+        match query {
+            Some(query) => {
+                let mut matches = self.list_versions_matching(config, &query).await?;
+                if matches.is_empty() && query == "latest" {
+                    matches = self.list_remote_versions(config).await?;
+                }
+                Ok(find_match_in_list(&matches, &query))
+            }
+            None => self.latest_stable_version(config).await,
+        }
+    }
+
+    /// Get the latest version, optionally filtered by release date.
+    /// Use this when you have a `before_date` from ResolveOptions.
+    async fn latest_version_with_opts(
+        &self,
+        config: &Arc<Config>,
+        query: Option<String>,
+        before_date: Option<Timestamp>,
+    ) -> eyre::Result<Option<String>> {
+        match query {
+            Some(query) => {
+                let mut matches = self
+                    .list_versions_matching_with_opts(config, &query, before_date)
+                    .await?;
+                if matches.is_empty() && query == "latest" {
+                    // Fall back to all versions if no match
+                    matches = match before_date {
+                        Some(before) => {
+                            let versions_with_info =
+                                self.list_remote_versions_with_info(config).await?;
+                            VersionInfo::filter_by_date(versions_with_info, before)
+                                .into_iter()
+                                .map(|v| v.version)
+                                .collect()
+                        }
+                        None => self.list_remote_versions(config).await?,
+                    };
+                }
+                Ok(find_match_in_list(&matches, &query))
+            }
+            None => {
+                // For stable version, apply date filter if provided
+                match before_date {
+                    Some(before) => {
+                        let matches = self
+                            .list_versions_matching_with_opts(config, "latest", Some(before))
+                            .await?;
+                        Ok(find_match_in_list(&matches, "latest"))
+                    }
+                    None => self.latest_stable_version(config).await,
+                }
+            }
+        }
+    }
+    fn latest_installed_version(&self, query: Option<String>) -> eyre::Result<Option<String>> {
+        match query {
+            Some(query) => {
+                let matches = self.list_installed_versions_matching(&query);
+                Ok(find_match_in_list(&matches, &query))
+            }
+            None => {
+                let installed_symlink = self.ba().installs_path.join("latest");
+                if installed_symlink.exists() {
+                    let Some(target) = file::resolve_symlink(&installed_symlink)? else {
+                        return Ok(Some("latest".to_string()));
+                    };
+                    let version = target
+                        .file_name()
+                        .ok_or_else(|| eyre!("Invalid symlink target"))?
+                        .to_string_lossy()
+                        .to_string();
+                    Ok(Some(version))
+                } else {
+                    Ok(None)
+                }
+            }
+        }
+    }
+
+    /// Check if a version is a rolling release (like "nightly") that should
+    /// always be considered potentially outdated for `mise up` purposes
+    async fn is_version_rolling(&self, config: &Arc<Config>, version: &str) -> bool {
+        let versions = match self.list_remote_versions_with_info(config).await {
+            Ok(v) => v,
+            Err(_) => return false,
+        };
+        versions.iter().any(|v| v.version == version && v.rolling)
+    }
+
+    /// Get version info for a specific version (including checksum for rolling releases)
+    async fn get_version_info(&self, config: &Arc<Config>, version: &str) -> Option<VersionInfo> {
+        let versions = match self.list_remote_versions_with_info(config).await {
+            Ok(v) => v,
+            Err(_) => return None,
+        };
+        versions.into_iter().find(|v| v.version == version)
+    }
+
+    /// Check if a rolling version has changed (by comparing checksums)
+    /// Returns true if the version should be updated
+    async fn is_rolling_version_outdated(&self, config: &Arc<Config>, version: &str) -> bool {
+        use crate::toolset::install_state;
+
+        // Get the latest version info
+        let version_info = match self.get_version_info(config, version).await {
+            Some(v) if v.rolling => v,
+            _ => return false, // Not rolling or not found
+        };
+
+        // If no checksum available, we can't detect changes - don't assume outdated
+        let Some(latest_checksum) = version_info.checksum else {
+            trace!(
+                "No checksum available for rolling version {}, cannot detect updates",
+                version
+            );
+            return false;
+        };
+
+        // Compare with stored checksum
+        let stored_checksum = install_state::read_checksum(&self.ba().short, version);
+        match stored_checksum {
+            Some(stored) if stored == latest_checksum => {
+                trace!("Rolling version {} checksum unchanged", version);
+                false
+            }
+            Some(stored) => {
+                trace!(
+                    "Rolling version {} checksum changed: {} -> {}",
+                    version, stored, latest_checksum
+                );
+                true
+            }
+            None => {
+                trace!(
+                    "No stored checksum for rolling version {}, assuming outdated",
+                    version
+                );
+                true
+            }
+        }
+    }
+
+    async fn warn_if_dependencies_missing(&self, config: &Arc<Config>) -> eyre::Result<()> {
+        let deps = self
+            .get_all_dependencies(false)?
+            .into_iter()
+            .filter(|ba| &**self.ba() != ba)
+            .map(|ba| ba.short)
+            .collect::<HashSet<_>>();
+        if !deps.is_empty() {
+            trace!("Ensuring dependencies installed for {}", self.id());
+            let ts = config.get_tool_request_set().await?.filter_by_tool(deps);
+            let missing = ts.missing_tools(config).await;
+            if !missing.is_empty() {
+                warn_once!(
+                    "missing dependency: {}",
+                    missing.iter().map(|d| d.to_string()).join(", "),
+                );
+            }
+        }
+        Ok(())
+    }
+    fn purge(&self, pr: &dyn SingleReport) -> eyre::Result<()> {
+        rmdir(&self.ba().installs_path, pr)?;
+        rmdir(&self.ba().cache_path, pr)?;
+        rmdir(&self.ba().downloads_path, pr)?;
+        Ok(())
+    }
+    fn get_aliases(&self) -> eyre::Result<BTreeMap<String, String>> {
+        Ok(BTreeMap::new())
+    }
+
+    /// Returns a list of idiomatic filenames for this tool.
+    ///
+    /// This method is additive:
+    /// 1. It calls `_idiomatic_filenames` to get backend-specific filenames.
+    /// 2. It checks the Registry for any additional filenames defined there.
+    async fn idiomatic_filenames(&self) -> Result<Vec<String>> {
+        let mut filenames = self._idiomatic_filenames().await?;
+        if let Some(rt) = REGISTRY.get(self.id()) {
+            filenames.extend(rt.idiomatic_files.iter().map(|s| s.to_string()));
+        }
+        filenames = filenames.into_iter().unique().collect();
+        Ok(filenames)
+    }
+
+    /// Backend-specific implementation for `idiomatic_filenames`.
+    /// Override this to provide native idiomatic filenames for the backend.
+    async fn _idiomatic_filenames(&self) -> Result<Vec<String>> {
+        Ok(vec![])
+    }
+
+    /// Parses an idiomatic version file to extract the version.
+    ///
+    /// This handles special files like `package.json` which are parsed natively to avoid
+    /// every backend needing to implement `package.json` support. For other files, it
+    /// delegates to `_parse_idiomatic_file`.
+    async fn parse_idiomatic_file(&self, path: &Path) -> eyre::Result<Vec<String>> {
+        if path.file_name().is_some_and(|f| f == "package.json") {
+            return crate::config::config_file::idiomatic_version::package_json::parse(
+                path,
+                self.id(),
+            );
+        }
+        self._parse_idiomatic_file(path).await
+    }
+
+    /// Backend-specific implementation for `parse_idiomatic_file`.
+    /// Default implementation reads the file and treats each whitespace-separated token as a version.
+    /// Override to provide format-specific parsing; return `Err` on real failures so the plugin is skipped.
+    async fn _parse_idiomatic_file(&self, path: &Path) -> eyre::Result<Vec<String>> {
+        let contents = file::read_to_string(path)?;
+        let normalized = normalize_idiomatic_contents(&contents);
+        if normalized.is_empty() {
+            return Ok(vec![]);
+        }
+        Ok(normalized
+            .split_whitespace()
+            .map(|s| s.to_string())
+            .collect())
+    }
+
+    fn plugin(&self) -> Option<&PluginEnum> {
+        None
+    }
+
+    async fn install_version(
+        &self,
+        ctx: InstallContext,
+        mut tv: ToolVersion,
+    ) -> eyre::Result<ToolVersion> {
+        // Check for --locked mode: if enabled and no lockfile URL exists, fail early
+        // Exempt tool stubs from lockfile requirements since they are ephemeral
+        // Also exempt backends that don't support URL locking (e.g., Rust uses rustup)
+        // This must run before the dry-run check so that --locked --dry-run still validates
+        let settings = Settings::get();
+        if (ctx.locked || settings.locked) && settings.lockfile == Some(false) {
+            bail!(
+                "locked mode requires lockfile to be enabled\n\
+                hint: Remove `lockfile = false` or set `lockfile = true`, or disable locked mode"
+            );
+        }
+        if ctx.locked && !tv.request.source().is_tool_stub() && self.supports_lockfile_url() {
+            let platform_key = self.get_platform_key();
+            let has_lockfile_url = tv
+                .lock_platforms
+                .get(&platform_key)
+                .and_then(|p| p.url.as_ref())
+                .is_some();
+            if !has_lockfile_url {
+                bail!(
+                    "No lockfile URL found for {} on platform {} (--locked mode)\n\
+                    hint: Run `mise lock` to generate lockfile URLs, or disable locked mode",
+                    tv.style(),
+                    platform_key
+                );
+            }
+        }
+
+        // Handle dry-run mode early to avoid plugin installation
+        if ctx.dry_run {
+            use crate::ui::progress_report::ProgressIcon;
+            if self.is_version_installed(&ctx.config, &tv, true) {
+                ctx.pr
+                    .finish_with_icon("already installed".into(), ProgressIcon::Skipped);
+            } else {
+                ctx.pr
+                    .finish_with_icon("would install".into(), ProgressIcon::Skipped);
+            }
+            return Ok(tv);
+        }
+
+        if let Some(plugin) = self.plugin() {
+            plugin.is_installed_err()?;
+        }
+
+        // If --force and the install path resolved to a shared dir (but wasn't explicitly
+        // set via --system/--shared), redirect to primary dir to avoid modifying shared installs.
+        if ctx.force
+            && tv.install_path.is_none()
+            && env::install_path_category(&tv.install_path()) != env::InstallPathCategory::Local
+        {
+            tv.install_path = Some(tv.ba().installs_path.join(tv.tv_pathname()));
+        }
+
+        let will_uninstall = ctx.force && self.is_version_installed(&ctx.config, &tv, true);
+
+        // Query backend for operation count and set up progress tracking
+        let install_ops = self.install_operation_count(&tv, &ctx).await;
+        let total_ops = if will_uninstall {
+            install_ops + 1
+        } else {
+            install_ops
+        };
+        ctx.pr.start_operations(total_ops);
+
+        if will_uninstall {
+            self.uninstall_version(&ctx.config, &tv, ctx.pr.as_ref(), false)
+                .await?;
+            ctx.pr.next_operation();
+        } else if self.is_version_installed(&ctx.config, &tv, true) {
+            return Ok(tv);
+        }
+
+        // Track the installation asynchronously (fire-and-forget)
+        // Do this before install so the request has time to complete during installation
+        versions_host::track_install(tv.short(), &tv.ba().full(), &tv.version);
+
+        ctx.pr.set_message("install".into());
+        let _lock = lock_file::get(&tv.install_path(), ctx.force)?;
+
+        // Double-checked (locking) that it wasn't installed while we were waiting for the lock
+        if self.is_version_installed(&ctx.config, &tv, true) && !ctx.force {
+            return Ok(tv);
+        }
+
+        self.create_install_dirs(&tv)?;
+
+        let old_tv = tv.clone();
+        let tv = match self.install_version_(&ctx, tv).await {
+            Ok(tv) => tv,
+            Err(e) => {
+                self.cleanup_install_dirs_on_error(&old_tv);
+                // Pass through the error - it will be wrapped at a higher level
+                return Err(e);
+            }
+        };
+
+        let install_path = tv.install_path();
+        if install_path.starts_with(*dirs::INSTALLS) {
+            install_state::write_backend_meta(self.ba())?;
+        } else if env::install_path_category(&install_path) != env::InstallPathCategory::Local {
+            // For --system/--shared installs, write manifest to the target installs dir
+            if let Some(installs_dir) = install_path.parent().and_then(|p| p.parent()) {
+                let manifest = installs_dir.join(".mise-installs.toml");
+                install_state::write_backend_meta_to(self.ba(), &manifest)?;
+            }
+        }
+
+        self.cleanup_install_dirs(&tv);
+        // attempt to touch all the .tool-version files to trigger updates in hook-env
+        let mut touch_dirs = vec![dirs::DATA.to_path_buf()];
+        touch_dirs.extend(ctx.config.config_files.keys().cloned());
+        for path in touch_dirs {
+            let err = file::touch_dir(&path);
+            if let Err(err) = err {
+                trace!("error touching config file: {:?} {:?}", path, err);
+            }
+        }
+        let incomplete_path = self.incomplete_file_path(&tv);
+        if let Err(err) = file::remove_file(&incomplete_path) {
+            debug!("error removing incomplete file: {:?}", err);
+        } else {
+            // Sync parent directory to ensure file removal is immediately visible
+            if let Some(parent) = incomplete_path.parent()
+                && let Err(err) = file::sync_dir(parent)
+            {
+                debug!("error syncing incomplete file parent directory: {:?}", err);
+            }
+        }
+        if let Some(script) = tv.request.options().get("postinstall") {
+            ctx.pr
+                .finish_with_message("running custom postinstall hook".to_string());
+            self.run_postinstall_hook(&ctx, &tv, script).await?;
+        }
+        ctx.pr.finish_with_message("installed".to_string());
+        Ok(tv)
+    }
+
+    async fn run_postinstall_hook(
+        &self,
+        ctx: &InstallContext,
+        tv: &ToolVersion,
+        script: &str,
+    ) -> eyre::Result<()> {
+        // Get pre-tools environment variables from config
+        let mut env_vars = self.exec_env(&ctx.config, &ctx.ts, tv).await?;
+
+        // Add pre-tools environment variables from config if available
+        if let Some(config_env) = ctx.config.env_maybe() {
+            for (k, v) in config_env {
+                env_vars.entry(k).or_insert(v);
+            }
+        }
+
+        // Use the backend's list_bin_paths to get the correct binary directories
+        // instead of hardcoding install_path/bin, which may not match the actual
+        // binary location for backends like aqua
+        let bin_paths = self.list_bin_paths(&ctx.config, tv).await?;
+        let mut path_env = PathEnv::from_iter(env::PATH.clone());
+        for p in bin_paths {
+            path_env.add(p);
+        }
+
+        CmdLineRunner::new(&*env::SHELL)
+            .env(&*env::PATH_KEY, path_env.join())
+            .env("MISE_TOOL_INSTALL_PATH", tv.install_path())
+            .env("MISE_TOOL_NAME", tv.ba().short.clone())
+            .env("MISE_TOOL_VERSION", tv.version.clone())
+            .with_pr(ctx.pr.as_ref())
+            .arg(env::SHELL_COMMAND_FLAG)
+            .arg(script)
+            .envs(env_vars)
+            .execute()?;
+        Ok(())
+    }
+
+    /// Returns the number of operations for installation progress tracking.
+    /// Override this if your backend has a different number of operations.
+    /// Default is 3: download, checksum, extract
+    async fn install_operation_count(&self, _tv: &ToolVersion, _ctx: &InstallContext) -> usize {
+        3
+    }
+
+    async fn install_version_(&self, ctx: &InstallContext, tv: ToolVersion) -> Result<ToolVersion>;
+    async fn uninstall_version(
+        &self,
+        config: &Arc<Config>,
+        tv: &ToolVersion,
+        pr: &dyn SingleReport,
+        dryrun: bool,
+    ) -> eyre::Result<()> {
+        pr.set_message("uninstall".into());
+
+        if !dryrun {
+            self.uninstall_version_impl(config, pr, tv).await?;
+        }
+        let rmdir = |dir: &Path| {
+            if !dir.exists() {
+                return Ok(());
+            }
+            pr.set_message(format!("remove {}", display_path(dir)));
+            if dryrun {
+                return Ok(());
+            }
+            remove_all_with_warning(dir)
+        };
+        rmdir(&tv.install_path())?;
+        if !Settings::get().always_keep_download {
+            rmdir(&tv.download_path())?;
+        }
+        rmdir(&tv.cache_path())?;
+        Ok(())
+    }
+    async fn uninstall_version_impl(
+        &self,
+        _config: &Arc<Config>,
+        _pr: &dyn SingleReport,
+        _tv: &ToolVersion,
+    ) -> Result<()> {
+        Ok(())
+    }
+    async fn list_bin_paths(
+        &self,
+        _config: &Arc<Config>,
+        tv: &ToolVersion,
+    ) -> Result<Vec<PathBuf>> {
+        match tv.request {
+            ToolRequest::System { .. } => Ok(vec![]),
+            _ => Ok(vec![tv.install_path().join("bin")]),
+        }
+    }
+
+    async fn exec_env(
+        &self,
+        _config: &Arc<Config>,
+        _ts: &Toolset,
+        _tv: &ToolVersion,
+    ) -> Result<BTreeMap<String, String>> {
+        Ok(BTreeMap::new())
+    }
+
+    async fn which(
+        &self,
+        config: &Arc<Config>,
+        tv: &ToolVersion,
+        bin_name: &str,
+    ) -> eyre::Result<Option<PathBuf>> {
+        let bin_paths = self
+            .list_bin_paths(config, tv)
+            .await?
+            .into_iter()
+            .filter(|p| p.parent().is_some());
+        for bin_path in bin_paths {
+            let paths_with_ext = if cfg!(windows) {
+                vec![
+                    bin_path.clone(),
+                    bin_path.join(bin_name).with_extension("exe"),
+                    bin_path.join(bin_name).with_extension("cmd"),
+                    bin_path.join(bin_name).with_extension("bat"),
+                    bin_path.join(bin_name).with_extension("ps1"),
+                ]
+            } else {
+                vec![bin_path.join(bin_name)]
+            };
+            for bin_path in paths_with_ext {
+                if bin_path.exists() && file::is_executable(&bin_path) {
+                    return Ok(Some(bin_path));
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    fn create_install_dirs(&self, tv: &ToolVersion) -> eyre::Result<()> {
+        let _ = remove_all_with_warning(tv.install_path());
+        if !Settings::get().always_keep_download {
+            let _ = remove_all_with_warning(tv.download_path());
+        }
+        let _ = remove_all_with_warning(tv.cache_path());
+        let _ = file::remove_file(tv.install_path()); // removes if it is a symlink
+        file::create_dir_all(tv.install_path())?;
+        file::create_dir_all(tv.download_path())?;
+        file::create_dir_all(tv.cache_path())?;
+        File::create(self.incomplete_file_path(tv))?;
+        Ok(())
+    }
+    fn cleanup_install_dirs_on_error(&self, tv: &ToolVersion) {
+        if !Settings::get().always_keep_install {
+            let _ = remove_all_with_warning(tv.install_path());
+            // Clean up the incomplete marker from cache
+            let _ = file::remove_file(self.incomplete_file_path(tv));
+            // Remove parent installs dir if it's now empty (no other versions present)
+            let installs_path = &self.ba().installs_path;
+            if installs_path.exists()
+                && let Ok(entries) = file::dir_subdirs(installs_path)
+                && entries.is_empty()
+            {
+                let _ = remove_all_with_warning(installs_path);
+            }
+            self.cleanup_install_dirs(tv);
+        }
+    }
+    fn cleanup_install_dirs(&self, tv: &ToolVersion) {
+        if !Settings::get().always_keep_download {
+            let _ = remove_all_with_warning(tv.download_path());
+        }
+    }
+    fn incomplete_file_path(&self, tv: &ToolVersion) -> PathBuf {
+        install_state::incomplete_file_path(&tv.ba().short, &tv.tv_pathname())
+    }
+
+    async fn path_env_for_cmd(&self, config: &Arc<Config>, tv: &ToolVersion) -> Result<OsString> {
+        let path = self
+            .list_bin_paths(config, tv)
+            .await?
+            .into_iter()
+            .chain(
+                self.dependency_toolset(config)
+                    .await?
+                    .list_paths(config)
+                    .await,
+            )
+            .chain(env::PATH.clone());
+        Ok(env::join_paths(path)?)
+    }
+
+    async fn dependency_toolset(&self, config: &Arc<Config>) -> eyre::Result<Toolset> {
+        let dependencies = self
+            .get_all_dependencies(true)?
+            .into_iter()
+            .map(|ba| ba.short)
+            .collect();
+        let mut ts: Toolset = config
+            .get_tool_request_set()
+            .await?
+            .filter_by_tool(dependencies)
+            .into();
+        ts.resolve(config).await?;
+        Ok(ts)
+    }
+
+    async fn dependency_which(&self, config: &Arc<Config>, bin: &str) -> Option<PathBuf> {
+        if let Some(bin) = file::which_non_pristine(bin) {
+            return Some(bin);
+        }
+        let Ok(ts) = self.dependency_toolset(config).await else {
+            return None;
+        };
+        let (b, tv) = ts.which(config, bin).await?;
+        b.which(config, &tv, bin).await.ok().flatten()
+    }
+
+    /// Check if a required dependency is available and show a warning if not.
+    /// This provides a consistent warning message format across all backends.
+    /// Changed to warning instead of error to avoid CI failures on Windows.
+    async fn warn_if_dependency_missing(
+        &self,
+        config: &Arc<Config>,
+        program: &str,
+        install_instructions: &str,
+    ) {
+        let found = if self.dependency_which(config, program).await.is_some() {
+            true
+        } else if cfg!(windows) {
+            // On Windows, also check for program with Windows executable extensions
+            let settings = Settings::get();
+            let mut found = false;
+            for ext in &settings.windows_executable_extensions {
+                if self
+                    .dependency_which(config, &format!("{}.{}", program, ext))
+                    .await
+                    .is_some()
+                {
+                    found = true;
+                    break;
+                }
+            }
+            found
+        } else {
+            false
+        };
+
+        if !found {
+            warn!(
+                "{} may be required but was not found.\n\n{}",
+                program, install_instructions
+            );
+        }
+    }
+
+    async fn dependency_env(&self, config: &Arc<Config>) -> eyre::Result<BTreeMap<String, String>> {
+        let mut env = self
+            .dependency_toolset(config)
+            .await?
+            .full_env(config)
+            .await?;
+
+        // Remove mise shims from PATH to prevent infinite shim recursion when a
+        // dependency tool (e.g., go) is configured but not installed. Without this,
+        // the shim for the dependency would call `mise exec` which would call the
+        // shim again infinitely.
+        if let Some(path_val) = env.get(&*env::PATH_KEY) {
+            let paths: Vec<_> = env::split_paths(path_val).collect();
+            let original_len = paths.len();
+            #[cfg(not(windows))]
+            let filtered: Vec<_> = paths
+                .into_iter()
+                .filter(|p| p.as_path() != *dirs::SHIMS)
+                .collect();
+            #[cfg(windows)]
+            let filtered: Vec<_> = {
+                // Pre-compute once; case-insensitive + separator-normalised to handle
+                // path variations such as ~/.local/share/mise\shims vs
+                // C:\Users\user\.local\share\mise\shims
+                let shims_normalized = dirs::SHIMS
+                    .to_string_lossy()
+                    .to_lowercase()
+                    .replace('/', "\\");
+                paths
+                    .into_iter()
+                    .filter(|p| {
+                        let expanded = file::replace_path(p);
+                        expanded.to_string_lossy().to_lowercase().replace('/', "\\")
+                            != shims_normalized
+                    })
+                    .collect()
+            };
+            if filtered.len() != original_len {
+                let joined = env::join_paths(&filtered)?;
+                env.insert(
+                    env::PATH_KEY.to_string(),
+                    joined.to_string_lossy().into_owned(),
+                );
+            }
+        }
+
+        Ok(env)
+    }
+
+    fn fuzzy_match_filter(&self, versions: Vec<String>, query: &str) -> Vec<String> {
+        let escaped_query = regex::escape(query);
+        let query_pattern = if query == "latest" {
+            "v?[0-9].*"
+        } else {
+            &escaped_query
+        };
+        // For numeric-ish prefixes like "1.2" we want to match "1.2.3" / "1.2-rc1" etc,
+        // but NOT "1.20". The old pattern achieved this by requiring a separator after the query.
+        // However, vendor-prefixed queries like "temurin-" need to match digits immediately after
+        // the prefix (e.g. "temurin-25.0.1").
+        let query_regex = if query != "latest" && query.ends_with('-') {
+            Regex::new(&format!("^{query_pattern}.*$")).unwrap()
+        } else {
+            Regex::new(&format!("^{query_pattern}([+\\-.].+)?$")).unwrap()
+        };
+
+        // Also create a regex without the 'v' prefix if query starts with 'v'
+        // This allows "v1.0.0" to match "1.0.0" in registries that don't use v-prefix
+        let query_without_v_regex = if query.starts_with('v') || query.starts_with('V') {
+            let without_v = regex::escape(&query[1..]);
+            let re = if query.ends_with('-') {
+                Regex::new(&format!("^{without_v}.*$")).unwrap()
+            } else {
+                Regex::new(&format!("^{without_v}([+\\-.].+)?$")).unwrap()
+            };
+            Some(re)
+        } else {
+            None
+        };
+
+        versions
+            .into_iter()
+            .filter(|v| {
+                if query == v {
+                    return true;
+                }
+                if VERSION_REGEX.is_match(v) {
+                    return false;
+                }
+                if query_regex.is_match(v) {
+                    return true;
+                }
+                // Try matching without the 'v' prefix
+                if let Some(ref re) = query_without_v_regex
+                    && re.is_match(v)
+                {
+                    return true;
+                }
+                false
+            })
+            .collect()
+    }
+
+    fn get_remote_version_cache(&self) -> Arc<TokioMutex<VersionCacheManager>> {
+        // use a mutex to prevent deadlocks that occurs due to reentrant cache access
+        static REMOTE_VERSION_CACHE: Lazy<
+            Mutex<HashMap<String, Arc<TokioMutex<VersionCacheManager>>>>,
+        > = Lazy::new(Default::default);
+
+        REMOTE_VERSION_CACHE
+            .lock()
+            .unwrap()
+            .entry(self.ba().full())
+            .or_insert_with(|| {
+                let mut cm = CacheManagerBuilder::new(
+                    self.ba().cache_path.join("remote_versions.msgpack.z"),
+                )
+                .with_fresh_duration(Settings::get().fetch_remote_versions_cache());
+                if let Some(plugin_path) = self.plugin().map(|p| p.path()) {
+                    cm = cm
+                        .with_fresh_file(plugin_path.clone())
+                        .with_fresh_file(plugin_path.join("bin/list-all"))
+                }
+
+                TokioMutex::new(cm.build()).into()
+            })
+            .clone()
+    }
+
+    fn verify_checksum(
+        &self,
+        ctx: &InstallContext,
+        tv: &mut ToolVersion,
+        file: &Path,
+    ) -> Result<()> {
+        let settings = Settings::get();
+        let filename = file.file_name().unwrap().to_string_lossy().to_string();
+        let lockfile_enabled = settings.lockfile_enabled();
+
+        // Get the platform key for this tool and platform
+        let platform_key = self.get_platform_key();
+
+        // Get or create asset info for this platform
+        let platform_info = tv.lock_platforms.entry(platform_key.clone()).or_default();
+
+        if let Some(checksum) = &platform_info.checksum {
+            ctx.pr.set_message(format!("checksum {filename}"));
+            if let Some((algo, check)) = checksum.split_once(':') {
+                hash::ensure_checksum(file, check, Some(ctx.pr.as_ref()), algo)?;
+            } else {
+                bail!("Invalid checksum: {checksum}");
+            }
+        } else if lockfile_enabled {
+            ctx.pr.set_message(format!("generate checksum {filename}"));
+            let hash = hash::file_hash_blake3(file, Some(ctx.pr.as_ref()))?;
+            platform_info.checksum = Some(format!("blake3:{hash}"));
+        }
+
+        // Handle size verification and generation
+        if let Some(expected_size) = platform_info.size {
+            ctx.pr.set_message(format!("verify size {filename}"));
+            let actual_size = file.metadata()?.len();
+            if actual_size != expected_size {
+                bail!(
+                    "Size mismatch for {}: expected {}, got {}",
+                    filename,
+                    expected_size,
+                    actual_size
+                );
+            }
+        } else if lockfile_enabled {
+            platform_info.size = Some(file.metadata()?.len());
+        }
+        Ok(())
+    }
+
+    async fn outdated_info(
+        &self,
+        _config: &Arc<Config>,
+        _tv: &ToolVersion,
+        _bump: bool,
+        _opts: &ResolveOptions,
+    ) -> Result<Option<OutdatedInfo>> {
+        Ok(None)
+    }
+
+    // ========== Lockfile Metadata Fetching Methods ==========
+
+    /// Optional: Provide tarball URL for platform-specific tool installation
+    /// Backends can implement this for simple tarball-based tools
+    async fn get_tarball_url(
+        &self,
+        _tv: &ToolVersion,
+        _target: &PlatformTarget,
+    ) -> Result<Option<String>> {
+        Ok(None) // Default: no tarball URL available
+    }
+
+    /// Optional: Provide GitHub/GitLab release info for platform-specific tool installation
+    /// Backends can implement this for GitHub/GitLab release-based tools
+    async fn get_github_release_info(
+        &self,
+        _tv: &ToolVersion,
+        _target: &PlatformTarget,
+    ) -> Result<Option<GitHubReleaseInfo>> {
+        Ok(None) // Default: no GitHub release info available
+    }
+
+    /// Resolve platform-specific lock information without installation
+    async fn resolve_lock_info(
+        &self,
+        tv: &ToolVersion,
+        target: &PlatformTarget,
+    ) -> Result<PlatformInfo> {
+        // Try simple tarball approach first
+        if let Some(tarball_url) = self.get_tarball_url(tv, target).await? {
+            return self
+                .resolve_lock_info_from_tarball(&tarball_url, tv, target)
+                .await;
+        }
+
+        // Try GitHub/GitLab release approach second
+        if let Some(release_info) = self.get_github_release_info(tv, target).await? {
+            return self
+                .resolve_lock_info_from_github_release(&release_info, tv, target)
+                .await;
+        }
+
+        // Fall back to basic platform info without URLs/metadata
+        self.resolve_lock_info_fallback(tv, target).await
+    }
+
+    /// Shared logic for processing tarball-based tools
+    /// Downloads tarball headers, extracts size and URL info, and populates PlatformInfo
+    async fn resolve_lock_info_from_tarball(
+        &self,
+        tarball_url: &str,
+        _tv: &ToolVersion,
+        _target: &PlatformTarget,
+    ) -> Result<PlatformInfo> {
+        // For now, just return basic info with the URL
+        // In a full implementation, this would:
+        // 1. Make HEAD request to get content-length
+        // 2. Potentially download to get checksum
+        // 3. Handle any URL-specific logic
+        Ok(PlatformInfo {
+            checksum: None, // TODO: Implement checksum fetching
+            size: None,     // TODO: Implement size fetching via HEAD request
+            url: Some(tarball_url.to_string()),
+            url_api: None,
+            conda_deps: None,
+            ..Default::default()
+        })
+    }
+
+    /// Shared logic for processing GitHub/GitLab release-based tools
+    /// Queries release API, finds platform-specific assets, and populates PlatformInfo
+    async fn resolve_lock_info_from_github_release(
+        &self,
+        release_info: &GitHubReleaseInfo,
+        _tv: &ToolVersion,
+        target: &PlatformTarget,
+    ) -> Result<PlatformInfo> {
+        // For now, just return basic info
+        // In a full implementation, this would:
+        // 1. Query GitHub/GitLab release API
+        // 2. Find matching asset for the target platform
+        // 3. Extract download URL, size, and checksums
+        let asset_name = release_info.asset_pattern.as_ref().map(|pattern| {
+            pattern
+                .replace("{os}", target.os_name())
+                .replace("{arch}", target.arch_name())
+        });
+
+        // Combine api_url (base URL) with asset_name to get full download URL
+        let asset_url = match (&release_info.api_url, &asset_name) {
+            (Some(base_url), Some(name)) => Some(format!("{}/{}", base_url, name)),
+            _ => asset_name.clone(),
+        };
+
+        Ok(PlatformInfo {
+            checksum: None, // TODO: Implement checksum fetching from releases
+            size: None,     // TODO: Implement size fetching from GitHub API
+            url: asset_url,
+            url_api: None,
+            conda_deps: None,
+            ..Default::default()
+        })
+    }
+
+    /// Fallback method when no specific metadata resolution is available
+    /// Returns minimal PlatformInfo without external URLs
+    async fn resolve_lock_info_fallback(
+        &self,
+        _tv: &ToolVersion,
+        _target: &PlatformTarget,
+    ) -> Result<PlatformInfo> {
+        // This is the fallback - no external metadata available
+        // The tool would need to be installed to generate platform info
+        Ok(PlatformInfo {
+            checksum: None,
+            size: None,
+            url: None,
+            url_api: None,
+            conda_deps: None,
+            ..Default::default()
+        })
+    }
+}
+
+/// Helper function for calculating install operation count in HTTP/S3-style backends.
+/// Used by HttpBackend and S3Backend to avoid code duplication.
+pub fn http_install_operation_count(
+    has_checksum_opt: bool,
+    platform_key: &str,
+    tv: &ToolVersion,
+) -> usize {
+    let settings = Settings::get();
+    let mut count = 2; // download + extraction
+    if has_checksum_opt {
+        count += 1;
+    }
+    let lockfile_enabled = settings.lockfile_enabled();
+    let has_lockfile_checksum = tv
+        .lock_platforms
+        .get(platform_key)
+        .and_then(|p| p.checksum.as_ref())
+        .is_some();
+    if lockfile_enabled || has_lockfile_checksum {
+        count += 1;
+    }
+    count
+}
+
+/// Check that the provenance type recorded in the lockfile is still enabled in settings.
+/// `is_disabled` receives the provenance type and returns `Ok(true)` when the corresponding
+/// setting is off, or `Err` for provenance types unexpected in the calling backend.
+pub fn ensure_provenance_setting_enabled(
+    tv: &ToolVersion,
+    platform_key: &str,
+    is_disabled: impl FnOnce(&ProvenanceType) -> Result<bool>,
+) -> Result<()> {
+    let provenance = tv
+        .lock_platforms
+        .get(platform_key)
+        .and_then(|pi| pi.provenance.as_ref());
+    let Some(provenance) = provenance else {
+        return Ok(());
+    };
+    if is_disabled(provenance)? {
+        return Err(eyre!(
+            "Lockfile requires {provenance} provenance for {tv} but the corresponding \
+             verification setting is disabled. This may indicate a downgrade attack. \
+             Enable the setting or update the lockfile."
+        ));
+    }
+    Ok(())
+}
+
+fn find_match_in_list(list: &[String], query: &str) -> Option<String> {
+    match list.contains(&query.to_string()) {
+        true => Some(query.to_string()),
+        false => list.last().map(|s| s.to_string()),
+    }
+}
+
+fn rmdir(dir: &Path, pr: &dyn SingleReport) -> eyre::Result<()> {
+    if !dir.exists() {
+        return Ok(());
+    }
+    pr.set_message(format!("remove {}", &dir.to_string_lossy()));
+    remove_all(dir).wrap_err_with(|| {
+        format!(
+            "Failed to remove directory {}",
+            style(&dir.to_string_lossy()).cyan().for_stderr()
+        )
+    })
+}
+
+pub fn unalias_backend(backend: &str) -> &str {
+    match backend {
+        "nodejs" => "node",
+        "golang" => "go",
+        _ => backend.trim_start_matches("core:"),
+    }
+}
+
+#[test]
+fn test_unalias_backend() {
+    assert_eq!(unalias_backend("node"), "node");
+    assert_eq!(unalias_backend("nodejs"), "node");
+    assert_eq!(unalias_backend("core:node"), "node");
+    assert_eq!(unalias_backend("golang"), "go");
+}
+
+impl Display for dyn Backend {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.id())
+    }
+}
+
+impl Eq for dyn Backend {}
+
+impl PartialEq for dyn Backend {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_plugin_type() == other.get_plugin_type() && self.id() == other.id()
+    }
+}
+
+impl Hash for dyn Backend {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.id().hash(state)
+    }
+}
+
+impl PartialOrd for dyn Backend {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for dyn Backend {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.id().cmp(other.id())
+    }
+}
+
+pub async fn reset() -> Result<()> {
+    install_state::reset();
+    *TOOLS.lock().unwrap() = None;
+    load_tools().await?;
+    Ok(())
+}

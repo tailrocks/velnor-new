@@ -1,0 +1,243 @@
+//! Explicit pre-seed mode: build-once helper for unseeded Velnor CI.
+//!
+//! Velnor policy without `.velnor/generator.lock` has no release digest to
+//! verify (bootstrap §4.1 pre-seed is trust-on-review). Pre-seed mode makes
+//! that explicit: the plan job builds the helper ONCE from the checked-out
+//! source with the fixed §4 candidate vector, records the source commit in
+//! a manifest, and shares the binary via an exactly-named artifact. Task
+//! and final jobs download that artifact; nothing rebuilds it (Gap A).
+//! Every pre-seed step name carries the trust-on-review marker so the
+//! weaker provenance is visible in CI logs, not silently implied.
+
+use velnor_actions_contract::{Job, Step};
+
+use crate::{
+    RenderError,
+    render::{FINAL_JOB_ID, PLAN_JOB_ID, TASK_JOB_ID},
+    steps,
+};
+
+/// Exact pre-seed helper artifact name (run-scoped, no wildcards).
+pub const PRESEED_ARTIFACT_NAME: &str = "velnor-preseed-helper";
+/// Directory holding the built helper binary plus its manifest.
+pub const PRESEED_OUTPUT_DIR: &str = "$RUNNER_TEMP/velnor/preseed-output";
+/// Directory receiving the downloaded pre-seed helper.
+pub const PRESEED_STAGE_DIR: &str = "$RUNNER_TEMP/velnor/preseed";
+/// Manifest filename inside the pre-seed artifact.
+pub const PRESEED_MANIFEST_FILE: &str = "preseed-manifest.json";
+/// Fixed `mbx build --release` output, mirrored from the candidate path.
+pub const PRESEED_BUILD_OUTPUT: &str = "target/release/velnor-actions";
+/// Downloaded helper binary inside the pre-seed stage directory.
+pub const PRESEED_DOWNLOADED_BINARY: &str = "$RUNNER_TEMP/velnor/preseed/velnor-actions";
+
+/// Trust marker suffixed to every pre-seed step name.
+const TRUST_MARK: &str = " (pre-seed trust-on-review)";
+/// Display name of the one pre-seed helper build step.
+pub const PRESEED_BUILD_NAME: &str = "Build helper (pre-seed trust-on-review)";
+/// Display name of the MBX-compile verification step.
+pub const PRESEED_VERIFY_NAME: &str = "Verify MBX compile (pre-seed trust-on-review)";
+/// Display name of the pre-seed manifest step.
+pub const PRESEED_MANIFEST_NAME: &str = "Write helper manifest (pre-seed trust-on-review)";
+/// Display name of the pre-seed helper upload step.
+pub const PRESEED_UPLOAD_NAME: &str = "Upload helper (pre-seed trust-on-review)";
+/// Display name of the pre-seed helper download step.
+pub const PRESEED_DOWNLOAD_NAME: &str = "Download helper (pre-seed trust-on-review)";
+/// Display name of the pre-seed helper staging step.
+pub const PRESEED_STAGE_NAME: &str = "Stage helper (pre-seed trust-on-review)";
+
+/// Pre-seed staging source: local build output or downloaded artifact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreseedStageSource {
+    /// Plan job: the binary just built by the fixed §4 vector.
+    LocalBuild,
+    /// Task/final jobs: the binary downloaded from the plan artifact.
+    DownloadedArtifact,
+}
+
+impl PreseedStageSource {
+    /// Fixed source path for this staging origin.
+    #[must_use]
+    pub const fn path(self) -> &'static str {
+        match self {
+            Self::LocalBuild => PRESEED_BUILD_OUTPUT,
+            Self::DownloadedArtifact => PRESEED_DOWNLOADED_BINARY,
+        }
+    }
+}
+
+/// Pre-seed build step over the caller-supplied fixed §4 vector.
+///
+/// Argv arrives from the orchestrator's shared candidate-build constructor,
+/// so the pre-seed build is byte-identical to the candidate build.
+/// # Errors
+pub fn preseed_build_step(build: Vec<String>) -> Result<Step, RenderError> {
+    debug_assert!(PRESEED_BUILD_NAME.ends_with(TRUST_MARK));
+    steps::shell_step(PRESEED_BUILD_NAME, build, std::collections::BTreeMap::new())
+}
+
+/// Fixed MBX-compile verification: the build output must exist and execute.
+///
+/// The fixed build vector runs ONLY `mbx build` (never cargo), so an
+/// executable output proves MBX handled the compile; anything else fails
+/// the step instead of uploading a missing binary.
+/// # Errors
+pub fn preseed_verify_step() -> Result<Step, RenderError> {
+    debug_assert!(PRESEED_VERIFY_NAME.ends_with(TRUST_MARK));
+    steps::shell_step(
+        PRESEED_VERIFY_NAME,
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            format!("test -x {PRESEED_BUILD_OUTPUT}"),
+        ],
+        std::collections::BTreeMap::new(),
+    )
+}
+
+/// Fixed script writing the pre-seed helper manifest JSON.
+///
+/// Emits exactly the §4.4 keys: recorded source commit, target triple,
+/// toolchain identity, and binary SHA-256 (computed at runtime). The script
+/// carries NO single quotes (double-quoted printf format, `read` instead
+/// of `cut`): inner quotes would break whole-script quoting and expose
+/// `$sha` to shellcheck as SC2154.
+#[must_use]
+pub fn preseed_manifest_script(target: &str, toolchain: &str) -> String {
+    format!(
+        "mkdir -p {PRESEED_OUTPUT_DIR} && cp {PRESEED_BUILD_OUTPUT} {PRESEED_OUTPUT_DIR}/velnor-actions && sha256sum {PRESEED_OUTPUT_DIR}/velnor-actions > {PRESEED_OUTPUT_DIR}/sha.txt && read sha rest < {PRESEED_OUTPUT_DIR}/sha.txt && printf \"{{\"schema\":1,\"commit\":\"%s\",\"target\":\"{target}\",\"toolchain\":\"{toolchain}\",\"sha256\":\"%s\"}}\" \"$GITHUB_SHA\" \"$sha\" > {PRESEED_OUTPUT_DIR}/{PRESEED_MANIFEST_FILE}"
+    )
+}
+
+/// Pre-seed manifest step: toolchain from the fixed build vector.
+///
+/// Toolchain identity derives from the `tool@exact` specs in `build`
+/// (never guessed); the target must be a supported release triple.
+/// # Errors
+pub fn preseed_manifest_step(build: &[String], target: &str) -> Result<Step, RenderError> {
+    debug_assert!(PRESEED_MANIFEST_NAME.ends_with(TRUST_MARK));
+    if !velnor_actions_contract::is_supported_target(target) {
+        return Err(RenderError::BadCommand(format!(
+            "preseed_unsupported_target:{target}"
+        )));
+    }
+    let toolchain = crate::candidate::toolchain_identity(build)?;
+    let script = preseed_manifest_script(target, &toolchain);
+    steps::shell_step(
+        PRESEED_MANIFEST_NAME,
+        vec!["sh".to_owned(), "-c".to_owned(), script],
+        std::collections::BTreeMap::new(),
+    )
+}
+
+/// Pre-seed helper upload step (exact artifact name, fails loud).
+/// # Errors
+pub fn preseed_upload_step() -> Result<Step, RenderError> {
+    debug_assert!(PRESEED_UPLOAD_NAME.ends_with(TRUST_MARK));
+    steps::action_step(
+        PRESEED_UPLOAD_NAME,
+        steps::UPLOAD_ARTIFACT_USES,
+        std::collections::BTreeMap::from([
+            ("name".to_owned(), PRESEED_ARTIFACT_NAME.to_owned()),
+            ("path".to_owned(), PRESEED_OUTPUT_DIR.to_owned()),
+            ("if-no-files-found".to_owned(), "error".to_owned()),
+        ]),
+    )
+}
+
+/// Pre-seed helper download step (exact artifact name, no wildcards).
+/// # Errors
+pub fn preseed_download_step() -> Result<Step, RenderError> {
+    debug_assert!(PRESEED_DOWNLOAD_NAME.ends_with(TRUST_MARK));
+    steps::action_step(
+        PRESEED_DOWNLOAD_NAME,
+        steps::DOWNLOAD_ARTIFACT_USES,
+        std::collections::BTreeMap::from([
+            ("name".to_owned(), PRESEED_ARTIFACT_NAME.to_owned()),
+            ("path".to_owned(), PRESEED_STAGE_DIR.to_owned()),
+        ]),
+    )
+}
+
+/// Pre-seed staging step: copy the helper to the staged binary path.
+///
+/// The staged path is the same fixed path internal steps invoke, so plan,
+/// merge, and freshness steps work unchanged. Only the two fixed origins
+/// exist; anything else is not a pre-seed stage.
+/// # Errors
+pub fn preseed_stage_step(source: PreseedStageSource, staged: &str) -> Result<Step, RenderError> {
+    debug_assert!(PRESEED_STAGE_NAME.ends_with(TRUST_MARK));
+    validate_staged_path(staged)?;
+    let dir = staged.rsplit_once('/').map_or(staged, |(head, _)| head);
+    let script = format!(
+        "mkdir -p {dir} && cp {} {staged} && chmod +x {staged}",
+        source.path()
+    );
+    steps::shell_step(
+        PRESEED_STAGE_NAME,
+        vec!["sh".to_owned(), "-c".to_owned(), script],
+        std::collections::BTreeMap::new(),
+    )
+}
+
+/// Staged paths stay under the fixed helper prefix without traversal.
+fn validate_staged_path(staged: &str) -> Result<(), RenderError> {
+    match staged.strip_prefix(steps::STAGED_BINARY_PREFIX) {
+        Some(rest)
+            if !rest.is_empty()
+                && !rest.split('/').any(|seg| seg.is_empty() || seg == "..")
+                && !rest.chars().any(|ch| ch.is_whitespace() || ch.is_control())
+                && !rest.contains("${{") =>
+        {
+            Ok(())
+        }
+        _ => Err(RenderError::BadCommand(format!(
+            "preseed_unstaged_binary:{staged}"
+        ))),
+    }
+}
+
+/// Pre-seed closure: single plan build plus artifact sharing (Gap A).
+///
+/// In pre-seed mode the plan job must build, upload, and stage the helper
+/// while every present task/final job downloads and stages it; anything
+/// less would rebuild per job or invoke an unstaged helper. Outside
+/// pre-seed mode there is nothing to close over.
+/// # Errors
+pub(crate) fn check_preseed_closure(
+    jobs: &std::collections::BTreeMap<String, Job>,
+    preseed: bool,
+) -> Result<(), RenderError> {
+    if !preseed {
+        return Ok(());
+    }
+    let Some(plan) = jobs.get(PLAN_JOB_ID) else {
+        return Ok(());
+    };
+    for (name, kind) in [
+        (PRESEED_BUILD_NAME, "build"),
+        (PRESEED_UPLOAD_NAME, "upload"),
+        (PRESEED_STAGE_NAME, "stage"),
+    ] {
+        if !plan.steps.iter().any(|step| step.name == name) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "preseed_incomplete:{PLAN_JOB_ID}:{kind}"
+            )));
+        }
+    }
+    for (id, job) in jobs {
+        if id != TASK_JOB_ID && id != FINAL_JOB_ID {
+            continue;
+        }
+        for (name, kind) in [
+            (PRESEED_DOWNLOAD_NAME, "download"),
+            (PRESEED_STAGE_NAME, "stage"),
+        ] {
+            if !job.steps.iter().any(|step| step.name == name) {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "preseed_incomplete:{id}:{kind}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}

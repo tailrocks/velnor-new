@@ -1,0 +1,85 @@
+[package]
+name = "cargo-semver-checks"
+version = "0.35.0"
+edition = "2021"
+authors = ["Predrag Gruevski <obi1kenobi82@gmail.com>"]
+license = "Apache-2.0 OR MIT"
+description = "Scan your Rust crate for semver violations."
+repository = "https://github.com/obi1kenobi/cargo-semver-checks"
+readme = "./README.md"
+keywords = ["semver", "linter", "check", "crate", "cargo"]
+categories = ["command-line-utilities", "development-tools::cargo-plugins"]
+rust-version = "1.77"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+trustfall = "0.7.1"
+trustfall_rustdoc = { version = "0.16.2", default-features = false, features = ["v28", "v29", "v30", "v32", "v33", "v34", "rayon", "rustc-hash"] }
+clap = { version = "4.5.17", features = ["derive", "cargo"] }
+serde_json = "1.0.128"
+anyhow = "1.0.89"
+ron = "0.8.1"
+serde = { version = "1.0.210", features = ["derive"] }
+semver = "1.0.23"
+handlebars = "6.1.0"
+atty = "0.2.14"
+cargo_metadata = "0.18.1"
+clap-cargo = { version = "0.14.1", features = ["cargo_metadata"] }
+ignore = "0.4.23"
+clap-verbosity-flag = "2.2.1"
+log = "0.4.22"
+# Note that `tame-index` and `gix` must be upgraded in lock-step to retain the same `gix`
+# minor version. Otherwise, one will compile `gix` two times in different minor versions.
+gix = { version = "0.66", default-features = false, features = ["max-performance", "revision"] }
+tame-index = { version = "0.13", features = ["sparse"] }
+
+human-panic = "2.0.1"
+bugreport = "0.5.0"
+itertools = "0.13.0"
+cargo_toml = "0.20.4"
+toml = "0.8.19"
+directories = "5.0.1"
+sha2 = "0.10.8"
+rustc_version = "0.4.1"
+rayon = "1.10.0"
+anstyle = "1.0.8"
+anstream = "0.6.15"
+urlencoding = "2.1.3"
+cargo-config2 = "0.1.29"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+similar-asserts = { version = "1.6.0", features = ["serde"] }
+predicates = "3.1.2"
+insta = { version = "1.40.0", features = ["ron", "filters"] }
+fs-err = "2.11.0"
+regex = "1.10.6"
+insta-cmd = "0.6.0"
+
+# In dev and test profiles, compile all dependencies with optimizations enabled,
+# but still checking debug assertions and overflows.
+#
+# This produces a more than 10x speedup on tests, since the tests
+# check dozens of test crates with dozens of trustfall queries.
+[profile.dev.package."*"]
+opt-level = 3
+debug-assertions = true
+overflow-checks = true
+codegen-units = 16
+
+[profile.test.package."*"]
+opt-level = 3
+debug-assertions = true
+overflow-checks = true
+codegen-units = 16
+
+[features]
+default = ["gix-reqwest"]
+
+# Gix has mutually exclusive features that are exposed through tame-index. Hard-coding either of
+# these features can lead to compile errors when another crate enables the other feature through
+# workspace feature unification. We therefore allow downstream users to choose which feature to
+# enable:
+gix-reqwest = ["tame-index/gix-reqwest"]
+gix-curl = ["tame-index/gix-curl"]

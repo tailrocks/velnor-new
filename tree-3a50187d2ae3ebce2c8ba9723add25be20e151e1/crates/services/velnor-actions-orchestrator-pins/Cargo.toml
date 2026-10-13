@@ -1,0 +1,25 @@
+[package]
+name = "velnor-actions-orchestrator-pins"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+velnor-actions-actionlint = { version = "=0.1.1", path = "../../adapters/velnor-actions-actionlint" }
+velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
+velnor-actions-contract-release = { version = "=0.1.1", path = "../../core/velnor-actions-contract-release" }
+velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-mise = { version = "=0.1.1", path = "../../adapters/velnor-actions-mise" }
+velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-discovery = { version = "=0.1.1", path = "../velnor-actions-orchestrator-discovery" }
+velnor-actions-workflow-jobs = { version = "=0.1.1", path = "../velnor-actions-workflow-jobs" }
+velnor-actions-workflow-steps = { version = "=0.1.1", path = "../velnor-actions-workflow-steps" }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "velnor_orchestrator_pins"
+path = "tests/main.rs"

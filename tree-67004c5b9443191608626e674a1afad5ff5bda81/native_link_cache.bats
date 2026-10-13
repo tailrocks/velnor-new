@@ -1,0 +1,243 @@
+#!/usr/bin/env bats
+
+setup() {
+  load "test_helper/common_setup"
+  local developer_home="$HOME"
+  export RUSTUP_HOME="${RUSTUP_HOME:-$developer_home/.rustup}"
+  export CARGO_HOME="${CARGO_HOME:-$developer_home/.cargo}"
+  _common_setup
+
+  # MBX_CACHE_LINKS above all: two cases here state what an unconfigured
+  # machine does, and an inherited value would answer for it -- a leftover
+  # 1 hiding a regression in the default, a leftover 0 failing the counts.
+  unset CARGO_TARGET_DIR MBX_INCREMENTAL CARGO_INCREMENTAL CI MBX_CACHE_LINKS
+  export MBX_CACHE_DIR="$BATS_TEST_TMPDIR/store"
+
+  export PROJECT="$BATS_TEST_TMPDIR/project"
+  mkdir -p "$PROJECT/src"
+  # Debug info is what makes a macOS link unportable, and rustc records it by
+  # default in the test profile. Turning it off is what the predicate asks for,
+  # and keeps this test the same on both platforms.
+  cat >"$PROJECT/Cargo.toml" <<'EOF'
+[package]
+name = "native-fixture"
+version = "0.1.0"
+edition = "2021"
+
+[profile.test]
+debug = false
+EOF
+  cat >"$PROJECT/src/lib.rs" <<'EOF'
+pub fn double(value: u32) -> u32 {
+    value * 2
+}
+
+#[test]
+fn doubles() {
+    assert_eq!(double(21), 42);
+}
+EOF
+
+  run cargo generate-lockfile --offline --manifest-path "$PROJECT/Cargo.toml"
+  assert_success
+}
+
+# The test binary in `deps/`, which has no extension to match on.
+test_binary() {
+  find "$1/debug/deps" -type f -name 'native_fixture-*' ! -name '*.d' | head -1
+}
+
+@test "a linked test binary restores into a distinct target directory" {
+  local first_target="$BATS_TEST_TMPDIR/first-target"
+  local second_target="$BATS_TEST_TMPDIR/second-target"
+  local cold_report="$BATS_TEST_TMPDIR/cold.json"
+  local warm_report="$BATS_TEST_TMPDIR/warm.json"
+
+  run env \
+    CARGO_TARGET_DIR="$first_target" \
+    MBX_CACHE_LINKS=1 \
+    MBX_STATS_REPORT="$cold_report" \
+    "$MBX_BIN" test --offline --no-run --manifest-path "$PROJECT/Cargo.toml"
+  assert_success
+  run grep -E '"hits"[[:space:]]*:[[:space:]]*0' "$cold_report"
+  assert_success
+
+  run env \
+    CARGO_TARGET_DIR="$second_target" \
+    MBX_CACHE_LINKS=1 \
+    MBX_STATS_REPORT="$warm_report" \
+    "$MBX_BIN" test --offline --no-run --manifest-path "$PROJECT/Cargo.toml"
+  assert_success
+  # Two hits, not merely one: the library and the linked test binary. A host
+  # whose linker mbx cannot identify bypasses the link and still restores the
+  # library, so a laxer assertion would pass while the feature did nothing.
+  run grep -E '"hits"[[:space:]]*:[[:space:]]*[2-9]' "$warm_report"
+  assert_success
+  # And it bypassed nothing beyond the probes cargo always makes.
+  run grep -E '"(other|unsupported-crate-type|unportable-native-link)"' "$warm_report"
+  assert_failure
+
+  local first second
+  first="$(test_binary "$first_target")"
+  second="$(test_binary "$second_target")"
+  assert_file_exists "$first"
+  assert_file_exists "$second"
+
+  # Byte-identical, still executable, and it still runs: a restored program
+  # that cannot be executed would be a cache hit worth nothing.
+  run cmp "$first" "$second"
+  assert_success
+  assert_file_executable "$second"
+  run "$second"
+  assert_success
+}
+
+@test "a linked test binary is cached without being asked for" {
+  local first_target="$BATS_TEST_TMPDIR/default-first"
+  local second_target="$BATS_TEST_TMPDIR/default-second"
+  local warm_report="$BATS_TEST_TMPDIR/default-warm.json"
+
+  # No MBX_CACHE_LINKS anywhere: this is what an unconfigured machine does.
+  run env \
+    CARGO_TARGET_DIR="$first_target" \
+    "$MBX_BIN" test --offline --no-run --manifest-path "$PROJECT/Cargo.toml"
+  assert_success
+
+  run env \
+    CARGO_TARGET_DIR="$second_target" \
+    MBX_STATS_REPORT="$warm_report" \
+    "$MBX_BIN" test --offline --no-run --manifest-path "$PROJECT/Cargo.toml"
+  assert_success
+  # The library and the linked test binary, as in the asked-for case above.
+  run grep -E '"hits"[[:space:]]*:[[:space:]]*[2-9]' "$warm_report"
+  assert_success
+
+  local restored
+  restored="$(test_binary "$second_target")"
+  assert_file_exists "$restored"
+  assert_file_executable "$restored"
+  run "$restored"
+  assert_success
+}
+
+@test "a -fuse-ld selection restores a linked test binary" {
+  # Any alternate linker proves the path: the selection must resolve, join
+  # the linker identity, and still restore. Skip where none is installed.
+  local selection
+  if command -v ld.mold >/dev/null; then
+    selection=mold
+  elif command -v ld.lld >/dev/null; then
+    selection=lld
+  else
+    skip "no alternate linker (ld.mold or ld.lld) on PATH"
+  fi
+
+  local first_target="$BATS_TEST_TMPDIR/fuse-ld-first"
+  local second_target="$BATS_TEST_TMPDIR/fuse-ld-second"
+  local warm_report="$BATS_TEST_TMPDIR/fuse-ld-warm.json"
+  local bypasses="$BATS_TEST_TMPDIR/fuse-ld-bypasses.tsv"
+
+  run env \
+    CARGO_TARGET_DIR="$first_target" \
+    RUSTFLAGS="-C link-arg=-fuse-ld=$selection" \
+    "$MBX_BIN" test --offline --no-run --manifest-path "$PROJECT/Cargo.toml"
+  assert_success
+
+  run env \
+    CARGO_TARGET_DIR="$second_target" \
+    RUSTFLAGS="-C link-arg=-fuse-ld=$selection" \
+    MBX_STATS_REPORT="$warm_report" \
+    MBX_BYPASS_LOG="$bypasses" \
+    "$MBX_BIN" test --offline --no-run --manifest-path "$PROJECT/Cargo.toml"
+  assert_success
+  # The library and the linked test binary, as in the default-linker case.
+  run grep -E '"hits"[[:space:]]*:[[:space:]]*[2-9]' "$warm_report"
+  assert_success
+  # The selection is modeled, so nothing may bypass as unmodeled.
+  run grep -E '^unmodeled-link-argument' "$bypasses"
+  assert_failure
+
+  local restored
+  restored="$(test_binary "$second_target")"
+  assert_file_exists "$restored"
+  assert_file_executable "$restored"
+  run "$restored"
+  assert_success
+}
+
+@test "MBX_CACHE_LINKS=0 keeps native links outside the cache" {
+  local target="$BATS_TEST_TMPDIR/refused-target"
+  local bypasses="$BATS_TEST_TMPDIR/bypasses.tsv"
+
+  run env \
+    CARGO_TARGET_DIR="$target" \
+    MBX_CACHE_LINKS=0 \
+    MBX_BYPASS_LOG="$bypasses" \
+    "$MBX_BIN" test --offline --no-run --manifest-path "$PROJECT/Cargo.toml"
+  assert_success
+
+  run grep -E '^unsupported-crate-type' "$bypasses"
+  assert_success
+}
+
+@test "macOS proc macros and their consumers verify across checkouts" {
+  [[ "$(uname -s)" == Darwin ]] || skip "Mach-O install names are macOS-specific"
+  local first="$BATS_TEST_TMPDIR/macro-a" second="$BATS_TEST_TMPDIR/macro-b"
+  mkdir -p "$first/macros/src" "$first/src"
+  cat >"$first/Cargo.toml" <<'TOML'
+[package]
+name = "macro-consumer"
+version = "0.1.0"
+edition = "2021"
+[dependencies]
+audit-macro = { path = "macros" }
+[profile.dev]
+debug = false
+TOML
+  cat >"$first/macros/Cargo.toml" <<'TOML'
+[package]
+name = "audit-macro"
+version = "0.1.0"
+edition = "2021"
+[lib]
+proc-macro = true
+TOML
+  cat >"$first/macros/src/lib.rs" <<'RUST'
+extern crate proc_macro;
+use proc_macro::TokenStream;
+#[proc_macro]
+pub fn identity(input: TokenStream) -> TokenStream { input }
+RUST
+  echo 'audit_macro::identity! { fn main() { println!("macro works"); } }' >"$first/src/main.rs"
+  cp -R "$first" "$second"
+  # pwd -P avoids macOS /var versus /private/var aliases in rustc remapping.
+  first="$(cd "$first" && pwd -P)"
+  second="$(cd "$second" && pwd -P)"
+  cd "$first"
+  run env MBX_CACHE_LINKS=1 RUSTFLAGS="--remap-path-prefix=$first=/workspace" "$MBX_BIN" build --offline
+  assert_success
+  cd "$second"
+  local report="$BATS_TEST_TMPDIR/macro-verify.json"
+  run env MBX_CACHE_LINKS=1 MBX_VERIFY=1 MBX_STATS_REPORT="$report" RUSTFLAGS="--remap-path-prefix=$second=/workspace" "$MBX_BIN" build --offline
+  assert_success
+  refute_output --partial 'has different contents'
+  run grep -E '"verifications"[[:space:]]*:[[:space:]]*2' "$report"
+  assert_success
+  run grep -E '"divergences"[[:space:]]*:[[:space:]]*0' "$report"
+  assert_success
+  run grep -E '"misses"[[:space:]]*:[[:space:]]*0' "$report"
+  assert_success
+  local dylib_a dylib_b
+  dylib_a="$(find -L "$first/target" -name 'libaudit_macro-*.dylib' | head -1)"
+  dylib_b="$(find -L "$second/target" -name 'libaudit_macro-*.dylib' | head -1)"
+  run cmp "$dylib_a" "$dylib_b"
+  assert_success
+  run codesign --verify "$dylib_b"
+  assert_success
+  run otool -D "$dylib_b"
+  assert_success
+  assert_output --partial "@rpath/$(basename "$dylib_b")"
+  run "$second/target/debug/macro-consumer"
+  assert_success
+  assert_output 'macro works'
+}

@@ -1,0 +1,93 @@
+# Contributing
+
+> [!CAUTION]
+> **AI replies to Discussions and Issues are restricted.** Only use AI to reply to a thread if you
+> created it, opened a PR that fixes it, or have already had a contribution, attributed to your GitHub account, merged into the default branch of mr-boxington.
+> Everyone else is not allowed to, including with lightly edited, reviewed, or disclosed model
+> output. Doing this is an instant ban across all of jdx's projects.
+> Using AI to help write and file your own Discussion or Issue is fine. Review it before posting, and
+> disclose that AI contributed.
+
+Start with [Discussions](https://github.com/jdx/mr-boxington/discussions) for
+questions and proposed changes. For a suspected vulnerability, use the private
+reporting process in [SECURITY.md](SECURITY.md).
+
+## Set up the repository
+
+Install [mise](https://mise.jdx.dev) and a Rust toolchain through
+[rustup](https://rustup.rs), then run from the repository root:
+
+```sh
+git submodule update --init --recursive
+mise install
+rustup target add wasm32-unknown-unknown
+mise run build
+```
+
+mise provides the repository's tools. Rust is not among them: the toolchain is
+whichever one rustup makes current, and any stable release from 1.91, the
+workspace's `rust-version`, builds it. CI builds on whatever Rust its runner
+image ships, so a new stable shows up there first.
+
+The submodules provide Bats and its assertion helpers. The WebAssembly target
+is required by the end-to-end tests. `mise run build` first builds a bootstrap
+mbx, then uses it to build the workspace.
+
+## Make a change
+
+Keep the change focused and explain the behavior it improves. Use conventional
+commit subjects and pull request titles such as `docs: clarify cache setup` or
+`fix: preserve target paths`. See [AGENTS.md](AGENTS.md) for allowed types and
+repository rules.
+
+Do not bump crate versions or edit changelogs in ordinary pull requests.
+Release-plz generates both. Breaking markers apply to the whole commit, not
+just the named scope. Isolate a breaking API change in a pre-1.0 subcrate from
+changes to `mbx` before adding `!` and a `BREAKING CHANGE:` footer. A CLI break
+requires explicit maintainer agreement. See [AGENTS.md](AGENTS.md) for the
+complete rule and [RELEASING.md](RELEASING.md) for the release process.
+
+## Check your work
+
+```sh
+mise run format
+mise run ci
+```
+
+`ci` runs formatting and Clippy checks, builds the workspace, verifies generated
+docs and site links, and runs Rust and platform behavioral tests. For a focused
+iteration, use `mise run test:cargo` or `mise run test:e2e`. See
+[test/README.md](test/README.md) for individual Bats cases,
+[benchmarks/README.md](benchmarks/README.md) for performance measurements, and
+[fuzz/README.md](fuzz/README.md) for parser fuzzing.
+
+## Work on documentation
+
+The README introduces the project. `docs/` contains the VitePress website:
+start at `docs/guide.md` for its reading paths and `docs/index.md` for the
+landing page. Navigation is in `docs/.vitepress/config.mts`; components and
+styles are in `docs/.vitepress/theme/`.
+
+```sh
+mise run docs          # generate reference pages and start VitePress
+mise run check:docs    # verify generated pages match their declarations
+mise run check:links   # build the site and check internal pages and anchors
+```
+
+`docs/cli/` is generated. Edit command help in `crates/mbx/src/cli/` or settings
+in `crates/mbx/src/config.rs`, run `mise run render:docs`, and include the result
+in the change. Do not hand-edit generated pages.
+
+Lead guides with the task and a runnable example. Keep command reference,
+conceptual detail, and troubleshooting easy to find without repeating them
+across pages. Preserve published anchors when moving sections, and check the
+site on a narrow screen as well as a desktop.
+
+### Social previews
+
+The documentation build generates a 1200×630 PNG for each page title using
+`docs/.vitepress/social-images.mjs`, the project logo, and the bundled
+[Space Grotesk font](docs/.vitepress/fonts/README.md). Rendering needs no remote
+service or system fonts. Hashed image URLs refresh when titles or artwork
+change. The build tests the renderer and verifies that every page references
+an emitted image.

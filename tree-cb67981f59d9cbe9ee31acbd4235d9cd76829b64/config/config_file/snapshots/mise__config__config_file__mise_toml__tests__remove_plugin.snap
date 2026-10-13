@@ -1,0 +1,15 @@
+---
+source: src/config/config_file/mise_toml.rs
+expression: cf.to_toolset().unwrap()
+---
+Toolset {
+    versions: {},
+    source: Some(
+        MiseToml(
+            "/tmp/.mise.toml",
+        ),
+    ),
+    disable_tools: {},
+    tool_filter: None,
+    installed_only: false,
+}

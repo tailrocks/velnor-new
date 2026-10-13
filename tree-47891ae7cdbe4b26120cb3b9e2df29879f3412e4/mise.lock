@@ -1,0 +1,150 @@
+[tools.actionlint]
+version = "1.7.6"
+backend = "aqua:rhysd/actionlint"
+
+[tools.actionlint.checksums]
+actionlint-linux-x86_64 = "sha256:bf567ce887b8b045fdd6001411aea1971e90a49e4f5172801fb648902843c9ec"
+actionlint-macos-aarch64 = "sha256:baa69aa6ae140310d9d86127d916abd42cd2ad446aef0a04f2a7fe7f54da7d67"
+"actionlint_1.7.6_darwin_arm64.tar.gz" = "sha256:9a7c9cb2b627bb137ef68742eead2dd5b78f3ddc44876e84c37d323ba28b4710"
+"actionlint_1.7.6_linux_amd64.tar.gz" = "sha256:5d1a70d9de15fee5371e6f9e20cc29b284e814d6ee1b882f9749e91caf716eba"
+
+[tools.bun]
+version = "1.1.42"
+backend = "core:bun"
+
+[tools.bun.checksums]
+"bun-darwin-aarch64.zip" = "sha256:64a70fe290bd6391a09d555d4e4e1a8df56543e526bb1381ab344a385348572c"
+"bun-linux-x64-baseline.zip" = "sha256:19584af4189e6434124a556e830427f0f44b7ebed8530eacf4fe369bd14b93d6"
+
+[tools.cargo-binstall]
+version = "1.10.17"
+backend = "aqua:cargo-bins/cargo-binstall"
+
+[tools.cargo-binstall.checksums]
+"cargo-binstall-aarch64-apple-darwin.zip" = "sha256:81abb7de75ef130844bb58965bdb93969afadd0821cf5e1e1bd0517e48963199"
+"cargo-binstall-x86_64-unknown-linux-musl.tgz" = "sha256:d073d4e8901e176b0f625845f9a0bbd926a063017991d7cc0c863e6b884d2d59"
+
+[tools."cargo:cargo-edit"]
+version = "0.13.0"
+backend = "cargo:cargo-edit"
+
+[tools."cargo:cargo-insta"]
+version = "1.42.0"
+backend = "cargo:cargo-insta"
+
+[tools."cargo:git-cliff"]
+version = "2.7.0"
+backend = "cargo:git-cliff"
+
+[tools."cargo:toml-cli"]
+version = "0.2.3"
+backend = "cargo:toml-cli"
+
+[tools."cargo:usage-cli"]
+version = "2.0.0"
+backend = "cargo:usage-cli"
+
+[tools.cosign]
+version = "2.4.1"
+backend = "aqua:sigstore/cosign"
+
+[tools.cosign.checksums]
+cosign-darwin-arm64 = "sha256:13343856b69f70388c4fe0b986a31dde5958e444b41be22d785d3dc5e1a9cc62"
+cosign-linux-amd64 = "sha256:8b24b946dd5809c6bd93de08033bcf6bc0ed7d336b7785787c080f574b89249b"
+cosign-linux-arm64 = "sha256:3b2e2e3854d0356c45fe6607047526ccd04742d20bd44afb5be91fa2a6e7cb4a"
+"cosign-windows-amd64.exe" = "sha256:8d57f8a42a981d27290c4227271fa9f0f62ca6630eb4a21d316bd6b01405b87c"
+
+[tools.jq]
+version = "1.7.1"
+backend = "aqua:jqlang/jq"
+
+[tools.jq.checksums]
+jq-linux-amd64 = "sha256:5942c9b0934e510ee61eb3e30273f1b3fe2590df93933a93d7c58b81d19c8ff5"
+jq-linux-arm64 = "sha256:4dd2d8a0661df0b22f1bb9a1f9830f06b6f3b8f7d91211a1ef5d7c4f06a8b4a5"
+jq-macos-arm64 = "sha256:0bbe619e663e0de2c550be2fe0d240d076799d6f8a652b70fa04aea8a8362e8a"
+"jq-windows-amd64.exe" = "sha256:7451fbbf37feffb9bf262bd97c54f0da558c63f0748e64152dd87b0a07b6d6ab"
+
+[tools.minisign]
+version = "0.11"
+backend = "aqua:jedisct1/minisign"
+
+[tools.minisign.checksums]
+"minisign-0.11-linux.tar.gz" = "sha256:f0a0954413df8531befed169e447a66da6868d79052ed7e892e50a4291af7ae0"
+"minisign-0.11-macos.zip" = "sha256:e7c410ae8b8960d7087392472b040bda9b2f307c76df0384ac37f9ad103fc893"
+
+[tools."npm:markdownlint-cli"]
+version = "0.43.0"
+backend = "npm:markdownlint-cli"
+
+[tools."npm:prettier"]
+version = "3.4.2"
+backend = "npm:prettier"
+
+[tools."pipx:toml-sort"]
+version = "0.24.2"
+backend = "pipx:toml-sort"
+
+[tools.pre-commit]
+version = "4.0.1"
+backend = "aqua:pre-commit/pre-commit"
+
+[tools.pre-commit.checksums]
+"pre-commit-4.0.1.pyz" = "sha256:f3e65c943795be7879e7ea2beda248321b6c8ae851dabc785522a432fb8ce003"
+
+[tools.ripgrep]
+version = "14.1.1"
+backend = "aqua:BurntSushi/ripgrep"
+
+[tools.ripgrep.checksums]
+"ripgrep-14.1.1-aarch64-apple-darwin.tar.gz" = "sha256:24ad76777745fbff131c8fbc466742b011f925bfa4fffa2ded6def23b5b937be"
+"ripgrep-14.1.1-aarch64-unknown-linux-gnu.tar.gz" = "sha256:c827481c4ff4ea10c9dc7a4022c8de5db34a5737cb74484d62eb94a95841ab2f"
+"ripgrep-14.1.1-x86_64-pc-windows-msvc.zip" = "sha256:d0f534024c42afd6cb4d38907c25cd2b249b79bbe6cc1dbee8e3e37c2b6e25a1"
+"ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz" = "sha256:4cf9f2741e6c465ffdb7c26f38056a59e2a2544b51f7cc128ef28337eeae4d8e"
+
+[tools.shellcheck]
+version = "0.10.0"
+backend = "aqua:koalaman/shellcheck"
+
+[tools.shellcheck.checksums]
+shellcheck-linux-x86_64 = "sha256:f35ae15a4677945428bdfe61ccc297490d89dd1e544cc06317102637638c6deb"
+shellcheck-macos-aarch64 = "sha256:b9e420df8c78ec7d261d66277d5767cbd4cf6da4e4a9f8b02ea4811cd4cc1109"
+"shellcheck-v0.10.0.darwin.x86_64.tar.xz" = "sha256:ef27684f23279d112d8ad84e0823642e43f838993bbb8c0963db9b58a90464c2"
+"shellcheck-v0.10.0.linux.aarch64.tar.xz" = "sha256:324a7e89de8fa2aed0d0c28f3dab59cf84c6d74264022c00c22af665ed1a09bb"
+"shellcheck-v0.10.0.linux.x86_64.tar.xz" = "sha256:6c881ab0698e4e6ea235245f22832860544f17ba386442fe7e9d629f8cbedf87"
+
+[tools.shfmt]
+version = "3.10.0"
+backend = "aqua:mvdan/sh"
+
+[tools.shfmt.checksums]
+"shfmt_v3.10.0_linux_amd64" = "sha256:1f57a384d59542f8fac5f503da1f3ea44242f46dff969569e80b524d64b71dbc"
+"shfmt_v3.10.0_linux_arm64" = "sha256:9d23013d56640e228732fd2a04a9ede0ab46bc2d764bf22a4a35fb1b14d707a8"
+
+[tools.slsa-verifier]
+version = "2.6.0"
+backend = "ubi:slsa-framework/slsa-verifier"
+
+[tools.slsa-verifier.checksums]
+slsa-verifier-linux-x86_64 = "sha256:1c9c0d6a272063f3def6d233fa3372adbaff1f5a3480611a07c744e73246b62d"
+slsa-verifier-macos-aarch64 = "sha256:8740e66832fd48bbaa479acd5310986b876ff545460add0cb4a087aec056189c"
+"slsa-verifier.exe-windows-x86_64" = "sha256:37ca29ad748e8ea7be76d3ae766e8fa505362240431f6ea7f0648c727e2f2507"
+
+[tools.taplo]
+version = "0.9.3"
+backend = "ubi:tamasfe/taplo[matching=full]"
+
+[tools.taplo.checksums]
+taplo-full-linux-aarch64 = "sha256:9ffa2a799ff0ca601a0e7ff93dcae64a34c81c677916e6f0d3c81d62e0670d83"
+taplo-full-linux-x86_64 = "sha256:e89d2303ea9a5ec07971feec807fa493dc9ab6624c19b313ff90fdede247ee08"
+taplo-full-macos-aarch64 = "sha256:cf55aa3e4c9b631c1fbb3f8a4adac59ca2ecc7898d26e749cd9b62d5ed858fce"
+"taplo.exe-full-windows-aarch64" = "sha256:13eaa7f30f321a02a43bcc476450b9a79307f12addc25df132613cbb76d03f86"
+
+[tools.wait-for-gh-rate-limit]
+version = "0.1.8"
+backend = "ubi:jdx/wait-for-gh-rate-limit"
+
+[tools.wait-for-gh-rate-limit.checksums]
+wait-for-gh-rate-limit-linux-aarch64 = "sha256:a7e2fbbaa745dd33b94d8e530deb0f450e4ef3e994916a7394dac36d01ab79e4"
+wait-for-gh-rate-limit-linux-x86_64 = "sha256:a3e7e966a8d681f30bb7887e471740607074ab7f28580dd926efc307b0d35c20"
+wait-for-gh-rate-limit-macos-aarch64 = "sha256:94975cf4b05c29d1a2bf42ead5c07f297ab80169a3c1813bcbbbac35d9acf7cb"
+"wait-for-gh-rate-limit.exe-windows-aarch64" = "sha256:2b6a48bc8f31388e1b8d66ccd6dd19c450a42e6ae0edb4b3072f3348735e4056"

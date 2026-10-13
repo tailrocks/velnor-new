@@ -1,0 +1,17 @@
+#:schema ./schema/rtx.json
+env_file = '.env'
+[env]
+FOO = "bar"
+THIS_PROJECT = "{{config_root}}-{{env.PWD}}"
+
+[tools]
+nodejs = 'lts'
+tiny = { version = "1", foo = "bar" }
+golang = { version = "latest", foo = "bar" }
+python = { version = "latest", virtualenv = "$HOME/.cache/venv" }
+
+[plugins]
+node = 'https://github.com/rtx-plugins/rtx-nodejs'
+
+[alias.tiny]
+abc = '1'

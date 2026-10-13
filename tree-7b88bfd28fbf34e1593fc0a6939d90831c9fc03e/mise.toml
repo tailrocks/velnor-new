@@ -1,0 +1,38 @@
+#:schema ./schema/mise.json
+min_version = "2024.1.1"
+
+[env]
+_.path = ["./target/debug", "./node_modules/.bin"]
+
+[tools]
+"actionlint" = "latest"
+age = "latest"
+bun = "latest"
+cargo-binstall = "latest"
+"cargo:cargo-edit" = "latest"
+"cargo:cargo-insta" = "latest"
+"cargo:cargo-release" = "latest"
+"cargo:git-cliff" = "latest"
+"cargo:toml-cli" = "latest"
+"cargo:usage-cli" = { version = "latest", os = ["linux", "macos"] }
+cosign = "latest"
+gh = "2.62.0"
+hk = "latest"
+"jq" = "latest"
+"npm:markdownlint-cli" = "latest"
+"npm:prettier" = "3"
+"npm:ajv-cli" = "latest"
+"pipx:toml-sort" = "latest"
+pkl = "latest"
+pre-commit = "latest"
+#"python" = { version = "latest", virtualenv = "{{env.HOME}}/.cache/venv" }
+"ripgrep" = "latest"
+"shellcheck" = "latest"
+"shfmt" = "latest"
+slsa-verifier = "latest"
+taplo = "latest"
+wait-for-gh-rate-limit = "latest"
+sops = "latest"
+
+[task_config]
+includes = ["tasks.toml", "xtasks"]

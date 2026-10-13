@@ -1,0 +1,6 @@
+backends = [
+  "aqua:concourse/concourse/fly",
+  "asdf:mise-plugins/tanzu-plug-in-for-asdf",
+]
+bins = ["fly"]
+description = "fly cli for concourse ci"

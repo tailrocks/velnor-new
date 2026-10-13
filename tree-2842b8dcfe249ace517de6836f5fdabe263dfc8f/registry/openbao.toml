@@ -1,0 +1,8 @@
+description = "OpenBao exists to provide a software solution to manage, store, and distribute sensitive data including secrets, certificates, and keys"
+test = { cmd = "bao version", expected = "OpenBao v{{version}}" }
+version_order = "semver"
+
+backends = [
+  "aqua:openbao/openbao/bao",
+  { full = "github:openbao/openbao", attestations_since = "2.7.0-beta20260909" },
+]

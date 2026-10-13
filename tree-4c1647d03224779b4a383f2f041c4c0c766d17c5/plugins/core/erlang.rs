@@ -1,0 +1,395 @@
+use std::collections::BTreeMap;
+use std::{path::PathBuf, sync::Arc};
+
+use crate::backend::Backend;
+use crate::backend::VersionInfo;
+use crate::backend::platform_target::PlatformTarget;
+use crate::cli::args::BackendArg;
+use crate::config::{Config, Settings};
+#[cfg(unix)]
+use crate::file::TarOptions;
+use crate::file::display_path;
+use crate::http::{HTTP, HTTP_FETCH};
+use crate::install_context::InstallContext;
+use crate::lock_file::LockFile;
+use crate::toolset::{ToolRequest, ToolVersion};
+use crate::{file, github, plugins};
+use async_trait::async_trait;
+use eyre::Result;
+use xx::regex;
+
+#[cfg(linux)]
+use crate::cmd::CmdLineRunner;
+#[cfg(linux)]
+use std::fs;
+
+#[derive(Debug)]
+pub struct ErlangPlugin {
+    ba: Arc<BackendArg>,
+}
+
+const KERL_VERSION: &str = "4.4.0";
+
+impl ErlangPlugin {
+    pub fn new() -> Self {
+        Self {
+            ba: Arc::new(plugins::core::new_backend_arg("erlang")),
+        }
+    }
+
+    fn kerl_path(&self) -> PathBuf {
+        self.ba.cache_path.join(format!("kerl-{KERL_VERSION}"))
+    }
+
+    fn kerl_base_dir(&self) -> PathBuf {
+        self.ba.cache_path.join("kerl")
+    }
+
+    fn lock_build_tool(&self) -> Result<fslock::LockFile> {
+        LockFile::new(&self.kerl_path())
+            .with_callback(|l| {
+                trace!("install_or_update_kerl {}", l.display());
+            })
+            .lock()
+    }
+
+    async fn update_kerl(&self) -> Result<()> {
+        let _lock = self.lock_build_tool();
+        if self.kerl_path().exists() {
+            // TODO: find a way to not have to do this #1209
+            file::remove_all(self.kerl_base_dir())?;
+            return Ok(());
+        }
+        self.install_kerl().await?;
+        let output = cmd!(self.kerl_path(), "update", "releases")
+            .env("KERL_BASE_DIR", self.kerl_base_dir())
+            .stdout_capture()
+            .stderr_capture()
+            .run()?;
+        trace!("kerl stdout: {}", String::from_utf8_lossy(&output.stdout));
+        trace!("kerl stderr: {}", String::from_utf8_lossy(&output.stderr));
+        Ok(())
+    }
+
+    async fn install_kerl(&self) -> Result<()> {
+        debug!("Installing kerl to {}", display_path(self.kerl_path()));
+        HTTP_FETCH
+            .download_file(
+                format!("https://raw.githubusercontent.com/kerl/kerl/{KERL_VERSION}/kerl"),
+                &self.kerl_path(),
+                None,
+            )
+            .await?;
+        file::make_executable(self.kerl_path())?;
+        Ok(())
+    }
+
+    #[cfg(linux)]
+    async fn install_precompiled(
+        &self,
+        ctx: &InstallContext,
+        tv: ToolVersion,
+    ) -> Result<Option<ToolVersion>> {
+        if Settings::get().erlang.compile == Some(true) {
+            return Ok(None);
+        }
+        let release_tag = format!("OTP-{}", tv.version);
+
+        let settings = Settings::get();
+        let arch: String = match settings.arch() {
+            "x64" => "amd64".to_string(),
+            "arm64" => "arm64".to_string(),
+            other => {
+                debug!("Unsupported architecture: {}", other);
+                return Ok(None);
+            }
+        };
+
+        let os_ver: String;
+        if let Ok(os) = std::env::var("ImageOS") {
+            os_ver = match os.as_str() {
+                "ubuntu24" => "ubuntu-24.04".to_string(),
+                "ubuntu22" => "ubuntu-22.04".to_string(),
+                "ubuntu20" => "ubuntu-20.04".to_string(),
+                _ => os,
+            };
+        } else if let Ok(os_release) = &*os_release::OS_RELEASE {
+            os_ver = format!("{}-{}", os_release.id, os_release.version_id);
+        } else {
+            return Ok(None);
+        };
+
+        // Currently, Bob only builds for Ubuntu, so we have to check that we're on ubuntu, and on a supported version
+        if !["ubuntu-20.04", "ubuntu-22.04", "ubuntu-24.04"].contains(&os_ver.as_str()) {
+            debug!("Unsupported OS version: {}", os_ver);
+            return Ok(None);
+        }
+
+        let url: String =
+            format!("https://builds.hex.pm/builds/otp/{arch}/{os_ver}/{release_tag}.tar.gz");
+
+        let filename = url.split('/').next_back().unwrap();
+        let tarball_path = tv.download_path().join(filename);
+
+        ctx.pr.set_message(format!("Downloading {filename}"));
+        if !tarball_path.exists() {
+            HTTP.download_file(&url, &tarball_path, Some(ctx.pr.as_ref()))
+                .await?;
+        }
+        ctx.pr.set_message(format!("Extracting {filename}"));
+        file::untar(
+            &tarball_path,
+            &tv.download_path(),
+            &TarOptions {
+                pr: Some(ctx.pr.as_ref()),
+                ..TarOptions::new(file::TarFormat::TarGz)
+            },
+        )?;
+
+        self.move_to_install_path(&tv)?;
+
+        CmdLineRunner::new(tv.install_path().join("Install"))
+            .with_pr(ctx.pr.as_ref())
+            .arg("-minimal")
+            .arg(tv.install_path())
+            .execute()?;
+
+        Ok(Some(tv))
+    }
+
+    #[cfg(linux)]
+    fn move_to_install_path(&self, tv: &ToolVersion) -> Result<()> {
+        let base_dir = tv
+            .download_path()
+            .read_dir()?
+            .find(|e| e.as_ref().unwrap().file_type().unwrap().is_dir())
+            .unwrap()?
+            .path();
+        file::remove_all(tv.install_path())?;
+        file::create_dir_all(tv.install_path())?;
+        for entry in fs::read_dir(base_dir)? {
+            let entry = entry?;
+            let dest = tv.install_path().join(entry.file_name());
+            trace!("moving {:?} to {:?}", entry.path(), &dest);
+            file::rename(entry.path(), dest)?;
+        }
+
+        Ok(())
+    }
+
+    #[cfg(macos)]
+    async fn install_precompiled(
+        &self,
+        ctx: &InstallContext,
+        mut tv: ToolVersion,
+    ) -> Result<Option<ToolVersion>> {
+        if Settings::get().erlang.compile == Some(true) {
+            return Ok(None);
+        }
+        let release_tag = format!("OTP-{}", tv.version);
+        let gh_release = match github::get_release("erlef/otp_builds", &release_tag).await {
+            Ok(release) => release,
+            Err(e) => {
+                debug!("Failed to get release: {}", e);
+                return Ok(None);
+            }
+        };
+        let settings = Settings::get();
+        let arch = match settings.arch() {
+            "x64" => "x86_64",
+            "arm64" => "aarch64",
+            other => other,
+        };
+        let os = match settings.os() {
+            "macos" => "apple-darwin",
+            other => other,
+        };
+        let tarball_name = format!("otp-{arch}-{os}.tar.gz");
+        let asset = match gh_release.assets.iter().find(|a| a.name == tarball_name) {
+            Some(asset) => asset,
+            None => {
+                debug!("No asset found for {}", release_tag);
+                return Ok(None);
+            }
+        };
+        ctx.pr.set_message(format!("Downloading {tarball_name}"));
+        let tarball_path = tv.download_path().join(&tarball_name);
+        HTTP.download_file(
+            &asset.browser_download_url,
+            &tarball_path,
+            Some(ctx.pr.as_ref()),
+        )
+        .await?;
+        self.verify_checksum(ctx, &mut tv, &tarball_path)?;
+        ctx.pr.set_message(format!("Extracting {tarball_name}"));
+        file::untar(
+            &tarball_path,
+            &tv.install_path(),
+            &TarOptions {
+                pr: Some(ctx.pr.as_ref()),
+                ..TarOptions::new(file::TarFormat::TarGz)
+            },
+        )?;
+        Ok(Some(tv))
+    }
+
+    #[cfg(windows)]
+    async fn install_precompiled(
+        &self,
+        ctx: &InstallContext,
+        mut tv: ToolVersion,
+    ) -> Result<Option<ToolVersion>> {
+        if Settings::get().erlang.compile == Some(true) {
+            return Ok(None);
+        }
+        let release_tag = format!("OTP-{}", tv.version);
+        let gh_release = match github::get_release("erlang/otp", &release_tag).await {
+            Ok(release) => release,
+            Err(e) => {
+                debug!("Failed to get release: {}", e);
+                return Ok(None);
+            }
+        };
+        let settings = Settings::get();
+        let os = match settings.os() {
+            "windows" => "win64",
+            other => other,
+        };
+        let zip_name = format!("otp_{os}_{version}.zip", version = tv.version);
+        let asset = match gh_release.assets.iter().find(|a| a.name == zip_name) {
+            Some(asset) => asset,
+            None => {
+                debug!("No asset found for {}", release_tag);
+                return Ok(None);
+            }
+        };
+        ctx.pr.set_message(format!("Downloading {}", zip_name));
+        let zip_path = tv.download_path().join(&zip_name);
+        HTTP.download_file(
+            &asset.browser_download_url,
+            &zip_path,
+            Some(ctx.pr.as_ref()),
+        )
+        .await?;
+        self.verify_checksum(ctx, &mut tv, &zip_path)?;
+        ctx.pr.set_message(format!("Extracting {}", zip_name));
+        file::unzip(&zip_path, &tv.install_path(), &Default::default())?;
+        Ok(Some(tv))
+    }
+
+    #[cfg(not(any(linux, macos, windows)))]
+    async fn install_precompiled(
+        &self,
+        ctx: &InstallContext,
+        tv: ToolVersion,
+    ) -> Result<Option<ToolVersion>> {
+        Ok(None)
+    }
+
+    async fn install_via_kerl(
+        &self,
+        _ctx: &InstallContext,
+        tv: ToolVersion,
+    ) -> Result<ToolVersion> {
+        self.update_kerl().await?;
+
+        file::remove_all(tv.install_path())?;
+        match &tv.request {
+            ToolRequest::Ref { .. } => {
+                unimplemented!("erlang does not yet support refs");
+            }
+            _ => {
+                cmd!(
+                    self.kerl_path(),
+                    "build-install",
+                    &tv.version,
+                    &tv.version,
+                    tv.install_path()
+                )
+                .env("KERL_BASE_DIR", self.ba.cache_path.join("kerl"))
+                .env("MAKEFLAGS", format!("-j{}", num_cpus::get()))
+                .run()?;
+            }
+        }
+
+        Ok(tv)
+    }
+}
+
+#[async_trait]
+impl Backend for ErlangPlugin {
+    fn ba(&self) -> &Arc<BackendArg> {
+        &self.ba
+    }
+
+    async fn _list_remote_versions(&self, _config: &Arc<Config>) -> Result<Vec<VersionInfo>> {
+        let versions = if Settings::get().erlang.compile == Some(false) {
+            github::list_releases("erlef/otp_builds")
+                .await?
+                .into_iter()
+                .filter_map(|r| {
+                    r.tag_name
+                        .strip_prefix("OTP-")
+                        .map(|s| (s.to_string(), Some(r.created_at)))
+                })
+                .map(|(version, created_at)| VersionInfo {
+                    version,
+                    created_at,
+                    ..Default::default()
+                })
+                .collect()
+        } else {
+            self.update_kerl().await?;
+            let kerl_path = self.kerl_path().to_string_lossy().to_string();
+            let kerl_base_dir = self.ba.cache_path.join("kerl");
+            plugins::core::run_fetch_task_with_timeout_async(async move || {
+                let output = crate::cmd::cmd_read_async_inherited_env(
+                    &kerl_path,
+                    &["list", "releases", "all"],
+                    [("KERL_BASE_DIR", kerl_base_dir.as_os_str())],
+                )
+                .await?;
+                let versions = output
+                    .split('\n')
+                    .filter(|s| regex!(r"^[0-9].+$").is_match(s))
+                    .map(|s| VersionInfo {
+                        version: s.to_string(),
+                        ..Default::default()
+                    })
+                    .collect();
+                Ok(versions)
+            })
+            .await?
+        };
+        Ok(versions)
+    }
+
+    async fn install_version_(&self, ctx: &InstallContext, tv: ToolVersion) -> Result<ToolVersion> {
+        if let Some(tv) = self.install_precompiled(ctx, tv.clone()).await? {
+            return Ok(tv);
+        }
+        self.install_via_kerl(ctx, tv).await
+    }
+
+    fn resolve_lockfile_options(
+        &self,
+        _request: &ToolRequest,
+        target: &PlatformTarget,
+    ) -> BTreeMap<String, String> {
+        let mut opts = BTreeMap::new();
+        let settings = Settings::get();
+        let is_current_platform = target.is_current();
+
+        // Only include compile option if true (non-default)
+        let compile = if is_current_platform {
+            settings.erlang.compile.unwrap_or(false)
+        } else {
+            false
+        };
+        if compile {
+            opts.insert("compile".to_string(), "true".to_string());
+        }
+
+        opts
+    }
+}

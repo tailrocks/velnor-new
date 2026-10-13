@@ -1,0 +1,354 @@
+# Deps <Badge type="warning" text="experimental" />
+
+The `mise deps` command manages project dependencies by hashing source files
+(e.g., `package-lock.json`) and running install commands when changes are detected.
+It can also add and remove individual packages.
+
+## Quick Start
+
+```bash
+# Enable experimental features
+export MISE_EXPERIMENTAL=1
+
+# Install all project dependencies
+mise deps
+
+# Add a package
+mise deps add npm:react
+
+# Add a dev dependency
+mise deps add -D npm:vitest
+
+# Remove a package
+mise deps remove npm:lodash
+```
+
+## Configuration
+
+Configure deps providers in `mise.toml`:
+
+```toml
+# Built-in npm provider (auto-detects lockfile)
+[deps.npm]
+auto = true  # Auto-run before mise x/run
+
+# Built-in providers for other package managers
+[deps.yarn]
+[deps.pnpm]
+[deps.bun]
+[deps.deno]
+[deps.aube]
+[deps.go]
+[deps.pip]
+[deps.poetry]
+[deps.uv]
+[deps.bundler]
+[deps.composer]
+
+# Disable specific providers
+[deps]
+disable = ["npm"]
+```
+
+## Built-in Providers
+
+mise includes built-in providers for common package managers:
+
+| Provider   | Sources                                                | Outputs               | Command                              |
+| ---------- | ------------------------------------------------------ | --------------------- | ------------------------------------ |
+| `npm`      | `package.json`, `package-lock.json`                    | `node_modules/`       | `npm install`                        |
+| `yarn`     | `package.json`, `yarn.lock`                            | `node_modules/`       | `yarn install`                       |
+| `pnpm`     | `package.json`, `pnpm-lock.yaml`                       | `node_modules/`       | `pnpm install`                       |
+| `bun`      | `package.json`, `bun.lock`, `bun.lockb`                | `node_modules/`       | `bun install`                        |
+| `deno`     | `deno.json`, `deno.jsonc`, `package.json`, `deno.lock` | `node_modules/`       | `deno install`                       |
+| `aube`     | `package.json`, `aube-lock.yaml`                       | `node_modules/`       | `aube install`                       |
+| `go`       | `go.mod`                                               | `vendor/` or `go.sum` | `go mod vendor` or `go mod download` |
+| `pip`      | `requirements.txt`                                     | `.venv/`              | `pip install -r requirements.txt`    |
+| `poetry`   | `pyproject.toml`, `poetry.lock`                        | `.venv/`              | `poetry install`                     |
+| `uv`       | `pyproject.toml`, `uv.lock`                            | `.venv/`              | `uv sync`                            |
+| `bundler`  | `Gemfile`, `Gemfile.lock`                              | `vendor/bundle/`      | `bundle install`                     |
+| `composer` | `composer.json`, `composer.lock`                       | `vendor/`             | `composer install`                   |
+| `dart`     | `pubspec.yaml`, `pubspec.lock`                         | `.dart_tool/`         | `dart pub get`                       |
+| `flutter`  | `pubspec.yaml`, `pubspec.lock`                         | `.dart_tool/`         | `flutter pub get`                    |
+
+Built-in providers are only active when explicitly configured in `mise.toml` and their lockfile exists.
+
+## Monorepos
+
+By default, `mise deps` only runs providers from the current config root. To run
+providers from every explicitly configured monorepo root, use `--monorepo`:
+
+```toml
+monorepo_root = true
+
+[monorepo]
+config_roots = ["apps/*", "packages/*"]
+```
+
+```bash
+mise deps --monorepo
+```
+
+This requires explicit [`[monorepo].config_roots`](/tasks/monorepo.html#explicit-config-roots);
+mise does not search arbitrary subdirectories for dependency providers.
+Providers in the monorepo root config are also included because that config is
+part of every selected config root's hierarchy, matching the behavior of
+`mise install --monorepo`.
+
+Monorepo provider IDs include their config root so the same provider can appear
+in multiple projects. For example, two uv providers are named `//apps/api:uv`
+and `//apps/worker:uv`. Use the qualified name with `--only`, `--skip`, or the
+positional provider argument:
+
+```bash
+mise deps --monorepo --only //apps/api:uv
+mise deps install //apps/worker:uv --monorepo
+```
+
+Provider dependencies without a `//` prefix are resolved within the same config
+root. A provider in `apps/api` with `depends = ["uv"]` therefore depends on
+`//apps/api:uv`.
+
+For a single nested project, the `dir` option remains a simpler alternative:
+
+```toml
+[deps.uv]
+dir = "apps/api"
+```
+
+## Adding and Removing Packages
+
+The `mise deps add` and `mise deps remove` commands let you manage individual packages
+using the `ecosystem:package` syntax:
+
+```bash
+# Add packages
+mise deps add npm:react
+mise deps add npm:@types/react@19
+mise deps add -D npm:vitest        # dev dependency
+
+# Remove packages
+mise deps remove npm:lodash
+```
+
+The ecosystem prefix tells mise which package manager to use. Currently supported
+ecosystems for add/remove: `npm`, `yarn`, `pnpm`, `bun`, `deno`, `aube`, `dart`, `flutter`.
+
+## Custom Providers
+
+Create custom providers for project-specific build steps:
+
+```toml
+[deps.codegen]
+sources = ["schema/*.graphql", "codegen.yml"]
+outputs = ["src/generated/"]
+run = "npm run codegen"
+description = "Generate GraphQL types"
+
+[deps.prisma]
+sources = ["prisma/schema.prisma"]
+outputs = ["node_modules/.prisma/"]
+run = "npx prisma generate"
+```
+
+### Provider Options
+
+| Option        | Type     | Description                                                               |
+| ------------- | -------- | ------------------------------------------------------------------------- |
+| `auto`        | bool     | Auto-run before `mise x` and `mise run` (default: false)                  |
+| `sources`     | string[] | Files/patterns to check for changes                                       |
+| `outputs`     | string[] | Files/directories that must exist for the provider to be considered fresh |
+| `run`         | string   | Command to run when stale                                                 |
+| `env`         | table    | Environment variables to set                                              |
+| `dir`         | string   | Base directory for sources, outputs, and the command                      |
+| `description` | string   | Description shown in output                                               |
+| `depends`     | string[] | Other provider names that must complete before this one runs              |
+| `timeout`     | string   | Timeout for the run command, e.g., `"30s"`, `"5m"` (default: no timeout)  |
+
+Built-in providers use their documented sources and outputs when these options are
+omitted. Setting `sources` or `outputs` replaces that provider's defaults rather
+than adding to them. An empty array, such as `outputs = []`, explicitly disables
+that kind of path tracking; it also disables any optional outputs supplied by the
+built-in provider.
+
+Relative paths and glob patterns are resolved from the provider's config root after
+applying `dir`. Absolute paths are used as written. For example, a pnpm workspace
+that keeps installed packages below an application directory can override the
+root-level defaults:
+
+```toml
+[deps.pnpm]
+sources = ["pnpm-lock.yaml", "packages/app/package.json"]
+outputs = ["packages/app/node_modules"]
+```
+
+### Templates and Environment Variables
+
+String values in provider configuration support Tera templates such as
+`{{ config_root }}`, `{{ env.NAME }}`, and `{{ vars.name }}`. Shell-style environment variables
+such as `$NAME` and `${NAME:-default}` are expanded after Tera templates, using the same
+`env_shell_expand` setting as `[env]` values.
+
+```toml
+[vars]
+package = "api"
+
+[deps.codegen]
+sources = ["{{ config_root }}/schemas/$SCHEMA_NAME.graphql"]
+outputs = ["{{ config_root }}/generated/${SCHEMA_NAME:-default}/"]
+dir = "{{ config_root }}"
+env = { OUTPUT_PACKAGE = "{{ vars.package }}-$BUILD_MODE" }
+run = "npm run codegen -- $OUTPUT_PACKAGE"
+```
+
+`$VAR` expressions in `run` are left for the provider's shell to expand at execution time. This
+allows `run` to use values from the provider's `env` table. Tera expressions in `run` are rendered
+when the provider configuration is loaded.
+
+Provider IDs and environment-variable names are not templated. Invalid Tera templates are reported
+as configuration errors before a provider command starts. An undefined shell-style variable is left
+unchanged with a warning; use `${NAME:-}` to explicitly default it to an empty string.
+
+## Freshness Checking
+
+mise uses blake3 hashing to determine if sources or the effective provider command have
+changed since the last successful run. Hashes are stored in
+`$MISE_STATE_DIR/deps/<hash>.toml`, keyed by project root (so nothing is written inside
+the project directory). Command hashes include the run command, shell, provider `env`,
+and working directory; raw command and environment values are not stored in state.
+
+1. Compute blake3 hashes of all source files
+2. Compute a blake3 hash of the effective provider command
+3. Compare against stored hashes from the last successful run
+4. If a source or the effective command was added, removed, or changed, the provider is stale
+
+This means:
+
+- If you modify `package-lock.json`, `node_modules/` will be considered stale
+- If `node_modules/` doesn't exist, the provider is always stale
+- If sources don't exist, the provider is considered fresh (nothing to do)
+- On first run (no stored state), the provider is always considered stale
+- State created before command hashing is migrated by running each provider once
+
+## Auto-Install
+
+When `auto = true` is set on a provider, it will automatically run before:
+
+- `mise run` (task execution)
+- `mise x` (exec command)
+
+This ensures dependencies are always up-to-date before running tasks or commands.
+
+To skip auto-install for a single invocation:
+
+```bash
+mise run --no-deps build
+mise x --no-deps -- npm test
+```
+
+## Staleness Warnings
+
+When using `mise activate`, mise will warn you if any auto-enabled providers have stale dependencies:
+
+```
+mise WARN deps: npm may need update, run `mise deps`
+```
+
+This can be disabled with:
+
+```toml
+[settings]
+status.show_deps_stale = false
+```
+
+## CLI Usage
+
+```bash
+# Install all project dependencies
+mise deps
+
+# Install only a specific provider
+mise deps install npm
+
+# Show why a provider is fresh or stale
+mise deps install npm --explain
+
+# Show what would run without executing
+mise deps install --dry-run
+
+# Force run even if outputs are fresh
+mise deps install --force
+
+# List available deps providers
+mise deps install --list
+
+# Skip specific providers
+mise deps install --skip npm
+
+# Add/remove packages
+mise deps add npm:react
+mise deps remove npm:lodash
+```
+
+## Dependencies
+
+Providers can declare dependencies on other providers using the `depends` field. A provider
+will wait for all its dependencies to complete successfully before running.
+
+```toml
+[deps.uv]
+auto = true
+
+[deps.ansible-galaxy]
+auto = true
+depends = ["uv"]
+run = "ansible-galaxy install -r requirements.yml && touch .galaxy-installed"
+sources = ["requirements.yml"]
+outputs = [".galaxy-installed"]
+```
+
+In this example, `ansible-galaxy` will wait for `uv` to finish before starting.
+
+Providers without `depends` run in parallel as before. If a dependency fails, all providers
+that depend on it are skipped. Circular dependencies are detected and the affected providers
+are skipped with a warning.
+
+## Parallel Execution
+
+Deps providers run in parallel, respecting the `jobs` setting for concurrency limits.
+This speeds up installation when multiple providers need to run (e.g., both npm and pip).
+Providers with `depends` will wait for their dependencies to complete before starting,
+while independent providers run concurrently.
+
+```toml
+[settings]
+jobs = 4  # Run up to 4 providers in parallel
+```
+
+## Example: Full-Stack Project
+
+```toml
+# mise.toml for a project with Node.js frontend and Python backend
+
+[deps.npm]
+auto = true
+
+[deps.poetry]
+auto = true
+
+[deps.prisma]
+auto = true
+depends = ["npm"]  # needs node_modules first
+sources = ["prisma/schema.prisma"]
+outputs = ["node_modules/.prisma/"]
+run = "npx prisma generate"
+
+[deps.frontend-codegen]
+depends = ["npm"]  # needs node_modules first
+sources = ["schema.graphql", "codegen.ts"]
+outputs = ["src/generated/"]
+run = "npm run codegen"
+```
+
+Running `mise deps` will install npm and poetry dependencies in parallel, then run prisma
+and frontend-codegen (also in parallel, since they only depend on npm, not each other).

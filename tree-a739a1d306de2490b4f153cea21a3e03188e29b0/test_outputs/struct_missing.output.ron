@@ -1,0 +1,39 @@
+{
+    "./test_crates/struct_missing/": [
+        {
+            "name": String("WillBeRemovedStruct"),
+            "path": List([
+                String("struct_missing"),
+                String("WillBeRemovedStruct"),
+            ]),
+            "span_begin_line": Uint64(1),
+            "span_filename": String("src/lib.rs"),
+            "struct_type": String("unit"),
+            "visibility_limit": String("public"),
+        },
+        {
+            "name": String("PubUseRemovedStruct"),
+            "path": List([
+                String("struct_missing"),
+                String("PubUseRemovedStruct"),
+            ]),
+            "span_begin_line": Uint64(4),
+            "span_filename": String("src/lib.rs"),
+            "struct_type": String("unit"),
+            "visibility_limit": String("public"),
+        },
+    ],
+    "./test_crates/struct_pub_field_missing/": [
+        {
+            "name": String("StructRemoved"),
+            "path": List([
+                String("struct_pub_field_missing"),
+                String("StructRemoved"),
+            ]),
+            "span_begin_line": Uint64(11),
+            "span_filename": String("src/lib.rs"),
+            "struct_type": String("plain"),
+            "visibility_limit": String("public"),
+        },
+    ],
+}

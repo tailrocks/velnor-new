@@ -1,0 +1,40 @@
+name: "List modified registry tools"
+description: "List tools in registry/ that have been modified between commits"
+
+inputs:
+  base_sha:
+    description: "The base commit SHA to compare against"
+    required: true
+  head_sha:
+    description: "The head commit SHA to compare against"
+    required: true
+outputs:
+  modified_tools:
+    description: "Space-separated list of all modified tools"
+    value: ${{ steps.diff.outputs.modified_tools }}
+  new_tools:
+    description: "Space-separated list of only new tools"
+    value: ${{ steps.diff.outputs.new_tools }}
+
+runs:
+  using: "composite"
+  steps:
+    - id: diff
+      shell: bash
+      env:
+        BASE_SHA: ${{ inputs.base_sha }}
+        HEAD_SHA: ${{ inputs.head_sha }}
+      run: |
+        # Get added/copied/modified/renamed registry files and extract tool names
+        # (deleted files are excluded — they can't be tested)
+        modified=$(git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$HEAD_SHA" -- 'registry/*.toml' \
+          | xargs -I{} basename {} .toml \
+          | tr '\n' ' ')
+
+        # Get newly added registry files
+        new=$(git diff --name-only --diff-filter=A "$BASE_SHA" "$HEAD_SHA" -- 'registry/*.toml' \
+          | xargs -I{} basename {} .toml \
+          | tr '\n' ' ')
+
+        echo "modified_tools=$modified" >> "$GITHUB_OUTPUT"
+        echo "new_tools=$new" >> "$GITHUB_OUTPUT"

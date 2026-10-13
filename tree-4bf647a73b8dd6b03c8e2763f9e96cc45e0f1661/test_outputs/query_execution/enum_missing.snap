@@ -1,0 +1,142 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/enum_changed_kind/": [
+    {
+      "name": String("EnumToFunction"),
+      "path": List([
+        String("enum_changed_kind"),
+        String("EnumToFunction"),
+      ]),
+      "span_begin_line": Uint64(15),
+      "span_end_line": Uint64(17),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("EnumToModule"),
+      "path": List([
+        String("enum_changed_kind"),
+        String("EnumToModule"),
+      ]),
+      "span_begin_line": Uint64(24),
+      "span_end_line": Uint64(26),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/enum_missing/": [
+    {
+      "name": String("WillBeRemovedEnum"),
+      "path": List([
+        String("enum_missing"),
+        String("WillBeRemovedEnum"),
+      ]),
+      "span_begin_line": Uint64(3),
+      "span_end_line": Uint64(3),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("PubUseRemovedEnum"),
+      "path": List([
+        String("enum_missing"),
+        String("PubUseRemovedEnum"),
+      ]),
+      "span_begin_line": Uint64(6),
+      "span_end_line": Uint64(6),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/enum_must_use_removed/": [
+    {
+      "name": String("MustUseRemovedEnum"),
+      "path": List([
+        String("enum_must_use_removed"),
+        String("MustUseRemovedEnum"),
+      ]),
+      "span_begin_line": Uint64(56),
+      "span_end_line": Uint64(58),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/enum_tuple_variant_field_added/": [
+    {
+      "name": String("BecomesPrivateEnum"),
+      "path": List([
+        String("enum_tuple_variant_field_added"),
+        String("BecomesPrivateEnum"),
+      ]),
+      "span_begin_line": Uint64(31),
+      "span_end_line": Uint64(33),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/enum_tuple_variant_field_missing/": [
+    {
+      "name": String("BecomesPrivateEnum"),
+      "path": List([
+        String("enum_tuple_variant_field_missing"),
+        String("BecomesPrivateEnum"),
+      ]),
+      "span_begin_line": Uint64(23),
+      "span_end_line": Uint64(25),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/enum_variant_missing/": [
+    {
+      "name": String("ShouldNotMatch"),
+      "path": List([
+        String("enum_variant_missing"),
+        String("ShouldNotMatch"),
+      ]),
+      "span_begin_line": Uint64(28),
+      "span_end_line": Uint64(30),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/repr_align_added_removed/": [
+    {
+      "name": String("EnumBecomesAlignedAndPrivate"),
+      "path": List([
+        String("repr_align_added_removed"),
+        String("EnumBecomesAlignedAndPrivate"),
+      ]),
+      "span_begin_line": Uint64(43),
+      "span_end_line": Uint64(45),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("EnumBecomesUnalignedAndPrivate"),
+      "path": List([
+        String("repr_align_added_removed"),
+        String("EnumBecomesUnalignedAndPrivate"),
+      ]),
+      "span_begin_line": Uint64(49),
+      "span_end_line": Uint64(51),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/switch_to_reexport_as_underscore/": [
+    {
+      "name": String("Enum"),
+      "path": List([
+        String("switch_to_reexport_as_underscore"),
+        String("Enum"),
+      ]),
+      "span_begin_line": Uint64(8),
+      "span_end_line": Uint64(10),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+}

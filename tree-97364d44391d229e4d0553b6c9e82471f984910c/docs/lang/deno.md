@@ -1,0 +1,38 @@
+# Deno
+
+`mise` can be used to install and manage multiple versions of [deno](https://deno.land/) on the same system.
+
+> The following are instructions for using the deno mise core plugin. This is used when there isn't a
+> git plugin installed named "deno". If you want to use [asdf-deno](https://github.com/asdf-community/asdf-deno)
+> then run `mise plugins install deno https://github.com/asdf-community/asdf-deno`.
+
+The code for this is inside the mise repository at
+[`./src/plugins/core/deno.rs`](https://github.com/jdx/mise/blob/main/src/plugins/core/deno.rs).
+
+## Usage
+
+The following installs deno and makes it the global default:
+
+```sh
+mise use -g deno@1       # install deno 1.x
+mise use -g deno@latest  # install latest deno
+```
+
+See available versions with `mise ls-remote deno`.
+
+> [!NOTE]
+> Avoid using `deno upgrade` to upgrade `deno` as `mise` will not be aware of the change.
+
+## Tool Options
+
+The following [tool-options](/dev-tools/#tool-options) are available for the `deno` backend.
+These options go in the `[tools]` section in `mise.toml`.
+
+### `install_env`
+
+Set environment variables for install-time commands run by the core `deno` backend:
+
+```toml
+[tools]
+deno = { version = "latest", install_env = { HTTPS_PROXY = "http://proxy.example" } }
+```

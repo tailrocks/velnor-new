@@ -1,0 +1,12 @@
+{
+  "folders": [
+    {
+      "path": ".",
+    },
+  ],
+  "settings": {
+    "shellcheck.ignorePatterns": {
+      "completions/mise.bash": true,
+    },
+  },
+}

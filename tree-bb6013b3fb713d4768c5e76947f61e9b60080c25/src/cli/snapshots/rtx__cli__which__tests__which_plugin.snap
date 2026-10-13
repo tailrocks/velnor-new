@@ -1,0 +1,5 @@
+---
+source: src/cli/which.rs
+expression: output
+---
+dummy

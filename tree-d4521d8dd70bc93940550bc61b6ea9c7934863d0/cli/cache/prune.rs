@@ -1,0 +1,106 @@
+use crate::cache;
+use crate::cache::{PruneOptions, PruneResults};
+use crate::config::{Settings, SettingsExt};
+use crate::dirs::CACHE;
+use crate::toolset::env_cache::CachedEnv;
+use bytesize::ByteSize;
+use eyre::Result;
+use heck::ToKebabCase;
+
+/// Remove stale cache files
+///
+/// By default, this command will remove files that have not been accessed in 30 days.
+/// Change this with the MISE_CACHE_PRUNE_AGE environment variable.
+#[derive(Debug, usage_rs::Args)]
+#[usage(verbatim_doc_comment, visible_alias = "p")]
+pub(super) struct CachePrune {
+    /// Tool(s) to prune cache for
+    /// e.g.: node, python
+    tool: Option<Vec<String>>,
+
+    /// Show pruned files
+    #[usage(long, short, action = usage_rs::ArgAction::Count)]
+    verbose: u8,
+
+    /// Show what would be pruned without deleting anything
+    #[usage(long)]
+    dry_run: bool,
+}
+
+impl CachePrune {
+    pub(super) fn run(self) -> Result<()> {
+        let settings = Settings::get();
+        let mut results = PruneResults { size: 0, count: 0 };
+
+        // `cache_prune_age = "0s"` is documented as keeping cache files
+        // indefinitely, and the automatic prune stops for it. Falling back to
+        // the default age instead would make the documented way to turn pruning
+        // off hold for the background pass but not for this command. It governs
+        // the age sweep of the cache roots only — the env cache lives in the
+        // state directory under its own TTL and is pruned below either way.
+        match settings.cache_prune_age_duration() {
+            None => info!(
+                "cache_prune_age is 0s, so cache files are kept indefinitely. Set MISE_CACHE_PRUNE_AGE to prune by age."
+            ),
+            Some(age) => {
+                let opts = PruneOptions {
+                    dry_run: self.dry_run,
+                    verbose: self.verbose > 0,
+                    age,
+                };
+
+                let cache_dirs = match &self.tool {
+                    Some(tools) => tools
+                        .iter()
+                        .filter_map(|tool| {
+                            let kebab = tool.to_kebab_case();
+                            if kebab.is_empty() {
+                                warn!("invalid tool name: {tool}");
+                                None
+                            } else {
+                                Some(CACHE.join(kebab))
+                            }
+                        })
+                        .collect(),
+                    None => cache::cache_dirs()?,
+                };
+
+                for p in cache_dirs {
+                    if p.exists() {
+                        let r = cache::prune(&p, &opts)?;
+                        results.size += r.size;
+                        results.count += r.count;
+                    }
+                }
+            }
+        }
+
+        // Prune env cache using env_cache_ttl
+        let env_cache_dir = CachedEnv::cache_dir();
+        if self.tool.is_none() && env_cache_dir.exists() {
+            let env_opts = PruneOptions {
+                dry_run: self.dry_run,
+                verbose: self.verbose > 0,
+                age: settings.env_cache_ttl(),
+            };
+            let r = cache::prune(&env_cache_dir, &env_opts)?;
+            results.size += r.size;
+            results.count += r.count;
+        }
+
+        let count = results.count;
+        let size = bytes_str(results.size);
+        match &self.tool {
+            Some(tools) => info!(
+                "cache pruned for {}: {count} files, {size}",
+                tools.join(", ")
+            ),
+            None => info!("cache pruned {count} files, {size}"),
+        }
+        Ok(())
+    }
+}
+
+fn bytes_str(bytes: u64) -> String {
+    ByteSize::b(bytes).display().iec().to_string()
+}

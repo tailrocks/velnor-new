@@ -1,0 +1,17 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/attribute_proc_macro_missing/": [
+    {
+      "name": String("logging"),
+      "path": List([
+        String("attribute_proc_macro_missing"),
+        String("logging"),
+      ]),
+      "span_begin_line": Uint64(6),
+      "span_end_line": Uint64(8),
+      "span_filename": String("src/lib.rs"),
+    },
+  ],
+}

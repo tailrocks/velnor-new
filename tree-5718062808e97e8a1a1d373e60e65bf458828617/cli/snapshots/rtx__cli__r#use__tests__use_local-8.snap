@@ -1,0 +1,5 @@
+---
+source: src/cli/use.rs
+expression: "file::read_to_string(&cf_path).unwrap()"
+---
+

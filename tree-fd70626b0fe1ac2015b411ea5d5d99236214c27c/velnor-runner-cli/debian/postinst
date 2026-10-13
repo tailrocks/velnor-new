@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+fail() {
+    printf 'velnor-host: refusing package activation: %s\n' "$1" >&2
+    exit 1
+}
+
+# cargo-deb does not newly enable the unit on first install or start it.
+# On reconfiguration it may preserve prior enablement; an operator starts it
+# only after config, credential, readiness, and durable admission checks pass.
+#DEBHELPER#
+
+case "${1:-}" in
+    configure)
+        # Creation-only rules make config/state directories when absent but do
+        # not repair an operator-owned path with unsafe metadata.
+        systemd-tmpfiles --create --prefix=/etc/velnor-host
+        systemd-tmpfiles --create --prefix=/var/lib/velnor-host
+        /usr/lib/velnor-host/account-check --initialize
+        if [ ! -d /etc/velnor-host ] || [ -L /etc/velnor-host ]; then
+            fail 'config directory is missing or a symlink'
+        fi
+        velnor_gid=$(getent group velnor | cut -d: -f3) || fail 'velnor group is unavailable'
+        config_owner_group_mode=$(stat -Lc '%u:%g:%a' /etc/velnor-host) || fail 'cannot inspect config directory'
+        [ "$config_owner_group_mode" = "0:${velnor_gid}:750" ] || fail 'config directory owner or mode is unsafe'
+        # Refresh the installed unit definition without activating the service.
+        if [ -d /run/systemd/system ]; then
+            systemctl daemon-reload
+        fi
+        ;;
+esac

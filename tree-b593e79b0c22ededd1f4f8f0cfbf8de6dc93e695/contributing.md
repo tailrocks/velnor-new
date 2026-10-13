@@ -1,0 +1,1056 @@
+---
+outline: [1, 3]
+---
+
+# Contributing
+
+## Contribution Expectations
+
+mise has a specific scope and design taste. Unless the change is obvious,
+start a [discussion](https://github.com/jdx/mise/discussions) or mention what
+you plan to do in [Discord](https://discord.gg/UBa7pJUN7Z) before opening a PR.
+The important part is to settle the direction before much implementation or
+review happens. PRs are often rejected or need to change significantly after
+submission, so make sure the idea fits before you invest too much time.
+
+Before I review a PR, CI must be passing, the PR title must follow
+[Conventional Commits](#conventional-commits), and all automated AI review
+comments must be addressed. If any of those are still open, assume I will wait
+to look at the PR.
+
+If I am on the fence about a contribution, I will probably reject it for that
+reason alone. If I did not do this, mise would suffer from feature bloat. I
+may also reject a PR if the quality is poor enough that I do not have confidence
+the contributor can get it across the finish line. I do not have time to coach
+contributors.
+
+I get hundreds of PRs per week across my projects, so I do not have time to
+respond to every PR with detailed context. A rejection may be brief.
+
+## Pull Request Checklist
+
+1. **Discuss first**: Use GitHub Discussions or Discord for non-obvious changes
+2. **Use a conventional title**: PR titles are validated automatically
+   - For new tools in registry: Use `registry: add tool-name (backend:full/name)`
+3. **Run local checks**: Run `mise run render` and `mise run lint-fix` before
+   opening a PR when relevant
+4. **Test thoroughly**: Ensure the relevant unit and E2E tests pass
+5. **Update documentation**: Add or update docs for user-facing changes
+6. **Keep dependencies healthy**: New dependencies are validated with cargo-deny
+
+### Development Tips
+
+1. **Disable mise during development**: If you use mise in your shell, disable
+   it when running tests to avoid conflicts
+2. **Test specific features**: Use `cargo test test_name` for targeted testing
+3. **Update snapshots**: Use `mise run snapshots` when changing test outputs
+4. **Rate limiting**: Set `MISE_GITHUB_TOKEN` to avoid GitHub API rate limits
+   during development
+
+## Packaging and Self-Update Instructions
+
+When mise is installed via a package manager, `mise self-update` should not replace the binary the package manager owns; users should update through the package manager instead. This is opt-in: a package that does none of the following keeps self-update fully enabled. Packagers have three ways to turn it off, and any of them makes `mise doctor` report `self_update_available: no`.
+
+The paths below are relative to the install prefix, which mise derives from its own binary: the path is canonicalized (symlinks resolved) and then taken two levels up, so `/usr/bin/mise` gives `/usr`.
+
+### Disable at build time
+
+Build without the `self_update` Cargo feature, as the Arch Linux package does:
+
+```bash
+cargo build --release --no-default-features --features native-tls
+```
+
+The subcommand still exists, so scripts that call it get a clear error rather than "unknown command", but it always fails with `mise's self-update feature has been disabled at build time, cannot update`.
+
+### Disable with a marker file
+
+Install an empty `.disable-self-update` file at any one of:
+
+- `lib/.disable-self-update` (used by Homebrew)
+- `lib/mise/.disable-self-update` (used by the AUR `mise-bin` package)
+- `lib64/mise/.disable-self-update`
+
+### Ship update instructions
+
+Installing a TOML file with platform-specific instructions also disables self-update; mise prints the file's message when `mise self-update` runs and when it detects a newer release. Install it at any one of:
+
+- `lib/mise-self-update-instructions.toml`
+- `lib/mise/mise-self-update-instructions.toml`
+- `lib64/mise/mise-self-update-instructions.toml`
+
+Example contents:
+
+```toml
+# Debian/Ubuntu (APT)
+message = "To update mise from the APT repository, run:\n\n  sudo apt update && sudo apt install --only-upgrade mise\n"
+```
+
+```toml
+# Fedora/CentOS Stream (DNF)
+message = "To update mise from COPR, run:\n\n  sudo dnf upgrade mise\n"
+```
+
+Setting `MISE_SELF_UPDATE_INSTRUCTIONS` to a file path overrides the search.
+
+### Overriding the outcome
+
+`MISE_SELF_UPDATE_AVAILABLE=false` disables self-update without installing anything, and `MISE_SELF_UPDATE_AVAILABLE=true` re-enables it even when a marker or instructions file is present. Both are useful for testing a package build. Neither has any effect on a binary built without the `self_update` feature, where self-update is always unavailable.
+
+`mise self-update --force` also bypasses the availability check, so a user who passes it updates the binary in place even when a marker file, an instructions file, or `MISE_SELF_UPDATE_AVAILABLE=false` is in effect. Treat the runtime mechanisms as "do not update by default" rather than a hard block. A build without the `self_update` feature is the only variant `--force` cannot get past.
+
+## Testing
+
+mise has a comprehensive test suite with several types of tests that check
+reliability and functionality across platforms and scenarios.
+
+### Unit Tests
+
+Unit tests are fast, focused tests for individual components and functions:
+
+```bash
+# Run all unit tests
+cargo test --all-features
+
+# Run specific unit tests
+cargo test <test_name>
+```
+
+**Unit test structure:**
+
+- Located in `src/` directory alongside source code
+- Use Rust's built-in test framework
+- Test individual functions and modules
+- Fast execution (used for quick feedback during development)
+
+### E2E Tests
+
+End-to-end tests validate the complete functionality of mise in realistic
+scenarios:
+
+```bash
+# Run all E2E tests
+mise run test:e2e
+
+# Run specific E2E tests (preferred; always use this mise task)
+mise run test:e2e e2e/cli/test_version
+
+# Run E2E tests under a feature directory
+mise run test:e2e e2e/tasks
+
+# Run all tests including slow ones (`*_slow`)
+TEST_ALL=1 mise run test:e2e
+```
+
+**E2E test structure:**
+
+- Located in `e2e/` directory
+- Organized by functionality:
+  - `e2e/cli/` - Command-line interface tests
+  - `e2e/core/` - Core functionality tests
+  - `e2e/env/` - Environment variable tests
+  - `e2e/tasks/` - Task runner tests
+  - `e2e/config/` - Configuration tests
+  - `e2e/tools/` - Tool management tests
+  - `e2e/shell/` - Shell integration tests
+  - `e2e/backend/` - Backend tests
+  - `e2e/plugins/` - Plugin tests
+
+**E2E test categories:**
+
+- **Fast tests** (`test_*`): Run in normal test suites
+- **Slow tests** (`test_*_slow`): Only run when `TEST_ALL=1` is set
+- **Isolated environment**: Each test runs in a clean, isolated environment
+
+Do not execute files under `e2e/` directly; `mise run test:e2e` is the supported entry point (it depends on `build` and uses `e2e/run_all_tests`). Set `MISE_GITHUB_TOKEN` (or `GITHUB_TOKEN`) to avoid GitHub API rate limits.
+
+### Coverage Tests
+
+Coverage tests measure how much of the codebase is covered by tests:
+
+```bash
+# Run coverage tests
+mise run test:coverage
+
+# Coverage tests run in parallel tranches for CI
+TEST_TRANCHE=0 TEST_TRANCHE_COUNT=8 mise run test:coverage
+```
+
+### Windows E2E Tests
+
+Windows has its own test suite written in PowerShell:
+
+```powershell
+# Run all Windows E2E tests
+pwsh e2e-win\run.ps1
+
+# Run specific Windows tests
+pwsh e2e-win\run.ps1 task  # run tests matching *task*
+```
+
+### Plugin Tests
+
+Test plugin functionality across different backends:
+
+```bash
+# Test specific plugin
+mise test-tool ripgrep
+
+# Test all plugins in registry
+mise test-tool --all
+
+# Test all plugins in config files
+mise test-tool --all-config
+
+# Test with parallel jobs
+mise test-tool --all --jobs 4
+```
+
+### Test Environment Setup
+
+Tests run in isolated environments to avoid conflicts:
+
+```bash
+# Disable mise during development testing
+export MISE_DISABLE_TOOLS=1
+
+# Run tests with specific environment
+MISE_TRUSTED_CONFIG_PATHS=$PWD cargo test
+```
+
+### Test Assertions
+
+The E2E tests use a custom assertion framework (`e2e/assert.sh`):
+
+```bash
+# Basic assertions
+assert "command" "expected_output"
+assert_contains "command" "substring"
+assert_fail "command" "expected_error"
+
+# JSON assertions
+assert_json "command" '{"key": "value"}'
+assert_json_partial_array "command" "fields" '[{...}]'
+
+# File/directory assertions
+assert_directory_exists "/path/to/dir"
+assert_directory_not_exists "/path/to/dir"
+assert_empty "command"
+```
+
+### Running Specific Test Categories
+
+```bash
+# Run all tests (unit + e2e)
+mise run test
+
+# Run only unit tests
+mise run test:unit
+
+# Run only e2e tests
+mise run test:e2e
+
+# Run tests with shuffle (for detecting order dependencies)
+mise run test:shuffle
+
+# Run nightly tests (with bleeding edge Rust)
+rustup default nightly && mise run test
+```
+
+### Running Individual Tests
+
+#### Running Single Unit Tests
+
+```bash
+# Run a specific unit test by name
+cargo test test_name
+
+# Run tests matching a pattern
+cargo test pattern
+
+# Run tests in a specific module
+cargo test module_name
+
+# Run a single test with output
+cargo test test_name -- --nocapture
+```
+
+#### Running Focused E2E Tests
+
+```bash
+# Run a specific E2E test with an anchored filename pattern
+mise run test:e2e '^test_name$'
+
+# Run E2E tests matching a pattern
+mise run test:e2e pattern
+
+# Examples:
+mise run test:e2e '^test_use$'             # Run one specific test
+mise run test:e2e '^test_config_set$'       # Run one config-related test
+mise run test:e2e task                     # Run all tests matching "task"
+```
+
+#### Testing Individual Plugins
+
+```bash
+# Test a specific plugin
+mise test-tool ripgrep
+
+# Test a plugin with verbose output
+mise test-tool ripgrep --raw
+
+# Test multiple plugins
+mise test-tool ripgrep jq terraform
+```
+
+### Performance Testing
+
+```bash
+# Run performance benchmarks
+mise run test:perf
+
+# Build performance test workspace
+mise run test:build-perf-workspace
+```
+
+### Snapshot Testing
+
+Used for testing output consistency:
+
+```bash
+# Update test snapshots when output changes
+mise run snapshots
+
+# Use cargo-insta for snapshot testing
+cargo insta test --accept --unreferenced delete
+```
+
+## Development Setup
+
+### Prerequisites
+
+- [Rust](https://www.rust-lang.org/) (latest stable; we don't use mise to
+  manage Rust)
+- mise
+
+### Getting Started
+
+```bash
+# Clone the repository
+git clone https://github.com/jdx/mise.git
+cd mise
+
+# Install dependencies
+mise install
+
+# Build the project
+mise run build
+```
+
+### Development Shim
+
+Create a development shim to run mise easily during development:
+
+```bash
+# Create ~/.local/bin/@mise
+#!/bin/sh
+exec cargo run -q --all-features --manifest-path ~/src/mise/Cargo.toml -- "$@"
+```
+
+Then use `@mise` to run the development version:
+
+```bash
+@mise --help
+eval "$(@mise activate zsh)"
+```
+
+## Project Structure
+
+```text
+mise/
+├── src/           # Main Rust source code
+├── e2e/           # End-to-end tests
+├── docs/          # Documentation
+├── tasks.toml     # Development tasks
+├── mise.toml      # Project configuration
+├── Cargo.toml     # Rust project configuration
+└── xtasks/        # Additional build scripts
+```
+
+## Available Development Tasks
+
+Use `mise tasks` to see all available development tasks.
+
+### Common Tasks
+
+- `mise run build` - Build the project
+- `mise run test` - Run all tests (unit + E2E)
+- `mise run test:unit` - Run unit tests only
+- `mise run test:e2e` - Run E2E tests only
+- `mise run lint` - Run linting
+- `mise run lint-fix` - Run linting with fixes
+- `mise run format` - Format code
+- `mise run clean` - Clean build artifacts
+- `mise run snapshots` - Update test snapshots
+- `mise run render` - Generate documentation and completions
+
+### Documentation Tasks
+
+- `mise run docs` - Start documentation development server
+- `mise run docs:build` - Build documentation
+- `mise run render:help` - Generate help documentation
+- `mise run render:completions` - Generate shell completions
+
+### Release Tasks
+
+- `mise run release-plz` - Create a release
+- `mise run ci` - Run CI tasks (format, build, test)
+
+## Setup
+
+Nothing special should be required, but `mise run build` is a good sanity
+check that everything is working.
+
+## Pre-commit Hooks & Code Quality
+
+mise uses [hk](https://hk.jdx.dev) as its git hook manager for
+linting and code quality checks. hk is a modern alternative to lefthook written
+by the same author as mise.
+
+### hk Configuration
+
+The project uses `hk.pkl` (written in the Pkl configuration language) to define
+linting rules:
+
+```bash
+# Run all linting checks
+hk check --all
+
+# Run linting with fixes
+hk fix --all
+
+# Run specific linter
+hk check --step shellcheck
+```
+
+### Available Linters in hk
+
+- **prettier**: Code formatting for multiple languages
+- **clippy**: Rust linting with `cargo clippy`
+- **shellcheck**: Shell script linting
+- **shfmt**: Shell script formatting
+- **pkl**: Pkl configuration file validation
+
+### Using hk in Development
+
+`hk.pkl` currently defines `check` and `fix` steps only (no git `pre-commit` hook).
+`hk install --mise` may report that nothing is installed; that is expected. Use
+the mise tasks:
+
+```bash
+# Run linting (used in CI)
+mise run lint  # This runs hk check --all
+
+# Run linting with fixes
+mise run lint-fix
+
+# Check specific file types
+hk check --step prettier
+hk check --step shellcheck
+```
+
+### Running Checks Manually
+
+```bash
+# Run all checks
+hk check --all
+
+# Run checks with fixes
+hk fix --all
+
+# Run checks on specific files
+hk check --files="src/**/*.rs"
+```
+
+## Running the CLI
+
+I use the following shim in `~/.local/bin/@mise`:
+
+```sh
+#!/bin/sh
+exec cargo run -q --all-features --manifest-path ~/src/mise/Cargo.toml -- "$@"
+```
+
+::: info
+Don't forget to change the manifest path to the correct path for your setup.
+:::
+
+If that directory is on PATH, `@mise` runs mise, compiling it on the fly.
+
+```sh
+@mise --help
+eval "$(@mise activate zsh)"
+@mise activate fish | source
+```
+
+## Releasing
+
+Releases are cut automatically by the `release-plz` GitHub Actions workflow
+(`mise run release-plz` in CI). Do not run that task locally.
+
+## Linting
+
+- Lint codebase: `mise run lint`
+- Lint and fix codebase: `mise run lint-fix`
+
+## Generating readme and shell completion files
+
+```sh
+mise run render
+```
+
+## Dependency Management
+
+mise uses several tools to validate dependencies and code quality:
+
+- **cargo-deny**: Validates licenses, security advisories, and dependency
+  duplicates
+- **cargo-msrv**: Verifies minimum supported Rust version compatibility
+- **cargo-machete**: Detects unused dependencies in Cargo.toml
+
+These checks run automatically in CI; run them locally with:
+
+```bash
+# Run checks (tools are automatically available via mise.toml)
+cargo deny check
+cargo msrv verify
+cargo machete --with-metadata
+```
+
+## Conventional Commits
+
+mise uses [Conventional Commits](https://www.conventionalcommits.org/) for
+consistent commit messages and automated changelog generation. All commits
+should follow this format:
+
+```text
+<type>[optional scope]: <description>
+
+[optional body]
+
+[optional footer(s)]
+```
+
+### Commit Types
+
+- **feat**: New features (🚀 Features)
+- **fix**: Bug fixes (🐛 Bug Fixes)
+- **refactor**: Code refactoring (🚜 Refactor)
+- **docs**: Documentation changes (📚 Documentation)
+- **style**: Code style changes (🎨 Styling)
+- **perf**: Performance improvements (⚡ Performance)
+- **test**: Testing changes (🧪 Testing)
+- **chore**: Maintenance tasks, dependency updates
+- **revert**: Reverting previous changes (◀️ Revert)
+
+### Examples
+
+```bash
+feat(cli): add new command for listing plugins
+fix(parser): handle edge case in version parsing
+refactor(config): simplify configuration loading logic
+docs(readme): update installation instructions
+test(e2e): add tests for new plugin functionality
+chore(deps): update dependencies to latest versions
+```
+
+### Scopes
+
+Common scopes used in mise:
+
+- `cli` - Command line interface changes
+- `config` - Configuration system changes
+- `task` - Task runner changes (use `task`, not `run`)
+- `backend` - Tool backend changes
+- `ci` - CI / Cloud Agent / infrastructure
+- `deps` - Dependency updates
+- `security` - Security-related changes
+- `registry` - Registry entries (usually used as the **type**, not a scope)
+
+### Breaking Changes
+
+#### Breaking Change Policy
+
+Breaking changes are rarely accepted into mise and are only performed in
+exceptional situations where there is no better alternative. When a breaking
+change is necessary, the process includes:
+
+1. **CLI warnings**: Users receive deprecation warnings in the CLI
+2. **Migration period**: Several months are provided for users to migrate
+3. **Documentation**: Clear migration guides are provided
+4. **Community notice**: Announcements in Discord and GitHub discussions
+
+For breaking changes, add `!` after the type or include `BREAKING CHANGE:` in
+the footer:
+
+```bash
+feat(api)!: remove deprecated configuration options
+# OR
+feat(api): remove deprecated configuration options
+
+BREAKING CHANGE: The old configuration format is no longer supported
+```
+
+## CI/CD & Pull Request Automation
+
+mise uses several automated workflows to maintain code quality and streamline
+development:
+
+### Formatting and Linting
+
+- Run `mise run render` and `mise run lint-fix` before opening a PR
+- Generated docs, completions, and snapshots should be committed with the
+  change that requires them
+- The contributor is responsible for fixing formatting or lint failures
+
+### PR Title Validation
+
+- **semantic-pr-lint**: Validates that PR titles follow the conventional commit format
+- PR titles must match: `<type>[optional scope]: <description>`
+- Example: `feat(cli): add new command for listing plugins`
+
+### Continuous Integration
+
+- **Cross-platform testing**: Ubuntu, macOS, and Windows
+- **Unit tests**: Fast component-level tests
+- **E2E tests**: Full integration testing with multiple test tranches
+- **Dependency validation**: `cargo deny`, `cargo msrv`, `cargo machete`
+
+### Release Automation
+
+- **release-plz**: Automated release management based on conventional commits
+- Automatically creates release PRs and publishes releases
+- Runs on every push to `main` and daily via scheduled workflow
+- Handles version bumping and changelog generation
+- The release PR's dry run (`release.yml`) only builds the release tarballs
+  once auto-merge is enabled on that PR. Until then its required `release`
+  check fails with a message saying so, which keeps the PR from merging
+  without a dry run while avoiding a full tarball build on every push to
+  `main`.
+
+## Adding a new setting
+
+To add a new setting, add it to
+[`settings.toml`](https://github.com/jdx/mise/blob/main/settings.toml) in the
+root of the project and run `mise run render` to update the codebase.
+
+## Adding Tools
+
+Adding tools to mise involves adding a TOML file to the
+[registry/](https://github.com/jdx/mise/blob/main/registry/) directory. This
+allows users to install tools using short names like `mise use ripgrep` instead
+of the full backend specification.
+
+### Quick Start
+
+1. **Choose the right backend** for your tool:
+
+   - **[packslip](dev-tools/backends/packslip.md)** - Preferred when the project
+     publishes signed release manifests
+   - **[aqua](dev-tools/backends/aqua.md)** - Curated metadata and security
+     features for tools without packslips
+   - **[github](dev-tools/backends/github.md)** - Simple GitHub releases following
+     standard conventions
+   - **[gitlab](dev-tools/backends/gitlab.md)** - Tools released through GitLab
+   - **Language package managers** - `npm`, `pipx`, `cargo`, `gem`, etc. for
+     ecosystem-specific tools
+   - **[Core tools](core-tools.md)** - Built-in support for major languages
+     (not user-contributed)
+
+2. **Add to registry/**:
+
+   ```toml
+   version_order = "semver"
+   description = "Brief description of the tool"
+   backends = ["packslip:github.com/owner/repo", "aqua:owner/repo", "github:owner/repo"]
+   bins = ["your-tool"]
+   test = { cmd = "your-tool --version", expected = "{{version}}" }
+   ```
+
+3. **Test the tool** with `mise test-tool your-tool` to confirm it works
+
+### Guidelines and Requirements
+
+When adding a new tool, the following requirements apply:
+
+- **A test is required in `registry/`** - Must include a `test` field to
+  verify installation. This is automatically enforced by the
+  [`validate-new-tools` job](https://github.com/jdx/mise/blob/main/.github/workflows/registry.yml)
+  in the registry workflow.
+- **Tools may be rejected if they are not notable** - The tool should be
+  reasonably popular and well-maintained. Notability is decided by maintainer
+  review (not CI). There are no specific guidelines for this; many factors are
+  taken into account. @jdx won't explain why a given tool wasn't accepted.
+  Include a brief popularity summary (stars, downloads, recent release date) in
+  the PR description so the policy can be applied without re-doing the research.
+
+#### Backend acceptance tiers
+
+Which backend you choose for a registry entry matters as much as which tool you
+add. Backends fall into the following tiers:
+
+**Tier 1 — preferred, routinely accepted:** [`packslip`](/dev-tools/backends/packslip.html).
+
+Use `packslip` when the project publishes signed release manifests. mise verifies
+the signer and artifact digests without a plugin or separate package manager.
+
+**Tier 2 — routinely accepted:** [`aqua`](/dev-tools/backends/aqua.html),
+[`github`](/dev-tools/backends/github.html), and [`gitlab`](/dev-tools/backends/gitlab.html).
+
+- When the project does not publish packslips, prefer `aqua` if the tool is in the [aqua registry](https://github.com/aquaproj/aqua-registry) —
+  it has better UX, SLSA verification, and per-version logic.
+- Use `github` when the tool isn't in aqua but ships GitHub releases.
+- Use `gitlab` for tools released through GitLab.
+
+**Tier 3 — high bar, but lower than tier 4:** [`conda`](/dev-tools/backends/conda.html).
+
+Potentially accepted for tools that can't reasonably be supported via packslip/aqua/github/gitlab.
+The bar is lower than tier 4 because **mise's conda backend does not require a
+separately-installed package manager** — packages are downloaded and extracted
+directly from anaconda.org, with no `conda`/`mamba`/`micromamba` needed on the
+user's PATH. The tool still needs to be popular and well-maintained.
+
+**Tier 4 — very high bar, rarely accepted:** `npm`, `pipx`, `gem`, `cargo`, `go`, `dotnet`.
+
+These all depend on a separately installed runtime or toolchain being present on
+the user's PATH (`node`, `python`, `ruby`, `cargo`, `go`, `dotnet`), which is
+fragile. `npm`/`pipx`/`gem` in particular silently bind tools to whichever
+`node`/`python`/`ruby` happened to be on PATH at install time, which breaks when
+versions change or the runtime isn't installed. These backends are accepted only
+when no packslip/aqua/github/gitlab option exists and the tool is widely used. Discuss with @jdx
+before submitting.
+
+**Not accepted:** `asdf`, `vfox`, `ubi`.
+
+- **New `asdf` plugins** — rejected for supply-chain security reasons. Use [packslip](/dev-tools/backends/packslip.html), [aqua](/dev-tools/backends/aqua.html), [github](/dev-tools/backends/github.html), or [gitlab](/dev-tools/backends/gitlab.html) instead.
+- **New `vfox` plugins** — same reason. Use packslip/aqua/github/gitlab instead.
+- **`ubi`** is deprecated and is not accepted for new registry entries.
+
+Users can still install via any backend themselves with explicit syntax
+(`mise use vfox:owner/repo`, `mise use cargo:name`, etc.) — they just don't get
+a registry shorthand for it.
+
+### Registry Format
+
+Each `registry/<tool>.toml` file uses this format:
+
+```toml
+# Tool name "your-tool" (becomes the short name for `mise use`)
+version_order = "semver"
+description = "Tool description"
+backends = [
+    "packslip:github.com/owner/repo", # Preferred when the project publishes packslips
+    "aqua:owner/repo",               # Fallback backend
+    "github:owner/repo",             # Fallback backend
+]
+bins = ["your-tool"]
+test = { cmd = "your-tool --version", expected = "{{version}}" }
+aliases = ["alt-name"] # Optional alternative names
+os = ["linux", "macos"] # Optional OS restrictions
+```
+
+Only list backends that support the tool: `packslip` requires signed release
+manifests, and `aqua` requires an entry in the aqua registry.
+
+Every registry entry must explicitly set `version_order` to `semver` or
+`source`. Use `semver` only when the tool's stable releases consistently use
+strict `MAJOR.MINOR.PATCH` semantic versions. Use `source` for date versions,
+two-component versions, channels, refs, tool-specific formats, mixed histories,
+or whenever the convention is uncertain. Semantic ordering currently affects
+the Aqua, GitHub, GitLab, Forgejo, and HTTP backends; the field still documents
+the policy for tools whose current backend owns version ordering itself.
+
+Set `bins` to the tool's executable names so mise can create shims for
+[lazy installation](/dev-tools/shims.html#lazy-tools) before downloading the tool. When
+`packslip` or another non-Aqua backend is first, mise cannot infer these names
+from the registry entry; list them explicitly as in the examples above.
+
+When `aqua` is the first backend, mise derives the command names from the Aqua
+registry's file metadata. Omit `bins` when that inferred list is correct. Set it
+explicitly when the shorthand needs a different backend-independent command set,
+such as commands bundled by a fallback backend that Aqua does not describe.
+
+#### Minimum backend versions
+
+When a backend supports only newer releases, set `min_version` on that backend.
+For example, hk publishes Packslip manifests starting at 1.58.1:
+
+```toml
+version_order = "semver"
+backends = [
+  { full = "packslip:github.com/jdx/hk", min_version = "1.58.1" },
+  "aqua:jdx/hk",
+]
+bins = ["hk"]
+```
+
+The minimum is inclusive and must be a complete semantic version. It is only
+supported for registry tools with `version_order = "semver"`; do not add it to
+tools with opaque or source-ordered versions. `mise use hk@1.57` and
+`mise use hk@1.58.0` select Aqua, while `mise use hk@1.58.1` selects Packslip.
+A prefix overlapping the boundary, such as `1.58`, keeps the preferred backend.
+`latest`, channels, and unresolved aliases retain normal backend priority;
+aliases are checked again after resolution.
+
+Selection still respects platform support and disabled backends. Explicit
+backend identifiers, backend overrides, and a matching lockfile's recorded
+backend remain authoritative. A failed download or signature verification does
+not trigger fallback. A backend without `min_version` has no lower bound.
+
+#### Idiomatic version files
+
+Registry tools can opt into [idiomatic version files](/configuration.html#idiomatic-version-files)
+with `idiomatic_files`. A filename string uses mise's default plain-text parser:
+
+```toml
+backends = ["aqua:owner/repo"]
+idiomatic_files = [".your-tool-version"]
+```
+
+For structured or tool-specific files, use a table with the same parsing options supported by the
+[HTTP backend's version listing](/dev-tools/backends/http.html#version-listing):
+
+```toml
+idiomatic_files = [
+  { path = "your-tool.json", version_json_path = ".toolchain.version" },
+  { path = "your-tool.conf", version_regex = 'version\s*=\s*"([^"]+)"' },
+]
+```
+
+The supported parser fields are:
+
+- `version_regex`: extract every regex match, using the first capture group when present.
+- `version_json_path`: extract values using mise's jq-like JSON path syntax.
+- `version_expr`: extract or post-process versions using an
+  [expr-lang](https://expr-lang.org/) expression. The original contents are available as `body`,
+  and versions produced by `version_regex` or `version_json_path` are available as `versions`.
+
+These parsers are evaluated in-process and cannot run shell commands. Plain string entries remain
+compatible with existing registry entries and backend-native parsers.
+
+Only extract a value that states the version the project is built with. Good candidates are an
+exact version or a configuration-format major that is intentionally coupled to the CLI major. Do
+not extract a **minimum compatible version** — a floor such as `cmake_minimum_required` or
+`package.json`'s `engines` describes what a consumer needs, not what the project is developed
+against, and resolving it pins users to the oldest supported release (see
+[which fields mise reads](/configuration.html#which-fields-mise-reads)).
+Also do not extract unrelated project versions, dependency versions, lockfile schema revisions, or
+generic `version` fields that do not constrain the tool itself.
+
+An existing entry that reads a floor can be retired with `deprecated = "<reason>"` on the file,
+which keeps it resolving while warning users to move the version into `mise.toml`.
+
+Include all filenames that the tool officially searches, including documented nested paths such as
+`.config/tool.yml`. When suffixes overlap, mise uses the most specific matching path.
+
+Idiomatic files are disabled by default. Users enable them for a registry shorthand with:
+
+```sh
+mise settings add idiomatic_version_file_enable_tools your-tool
+```
+
+### Backend Priority
+
+List backends in order of preference. Users get the first available backend
+but can override it with explicit syntax such as `mise use aqua:owner/repo`.
+Only include `npm` as a fallback for a tool that already has a non-npm primary
+backend when the npm package works with lifecycle scripts disabled.
+
+### Tool Testing
+
+All tools must include a test to verify proper installation:
+
+```toml
+test = { cmd = "command-to-run", expected = "expected-output-pattern" }
+```
+
+The test command should be reliable, and the output pattern should use
+<code v-pre>{{version}}</code> to match any version number.
+
+If `test.cmd` needs extra mise-managed tools on PATH, declare them with
+`test.tools`. This is used only by `mise test-tool`; it does not affect normal
+tool installation.
+
+```toml
+test = { cmd = "gradle -V", expected = "Gradle", tools = ["java"] }
+```
+
+### Registry Examples
+
+Recent tool additions:
+
+- **DuckDB**: Simple github backend ([#4248](https://github.com/jdx/mise/pull/4248))
+
+  ```toml
+  # registry/duckdb.toml
+  version_order = "semver"
+  backends = ["aqua:duckdb/duckdb"]
+  test = { cmd = "duckdb --version", expected = "{{version}}" }
+  ```
+
+- **Biome**: Multiple backends ([#4283](https://github.com/jdx/mise/pull/4283))
+
+  ```toml
+  # registry/biome.toml
+  version_order = "semver"
+  backends = ["aqua:biomejs/biome", "npm:@biomejs/biome"]
+  test = { cmd = "biome --version", expected = "Version: {{version}}" }
+  ```
+
+## Adding Backends
+
+:::warning Backend vs Tool Confusion
+**Most contributors want to add tools, not backends.** Before reading this
+section, make sure you actually need a new backend. Tools are individual
+software packages (like `node` or `ripgrep`), while backends are installation
+mechanisms (like `aqua` or `github`). If you want to add a specific tool to mise,
+see [Adding Tools](#adding-tools) instead.
+:::
+
+:::warning Core Backend Acceptance Policy
+**New backends are unlikely to be accepted into mise core.** They require
+a lot of maintenance, so it's generally better to use the
+[backend plugin system](backend-plugin-development.md) to add backends without
+core changes. A new backend would be accepted only for a major package manager
+or tool that would greatly enhance mise's capabilities.
+
+If you need a custom backend:
+
+1. **Discuss with jdx first** in [Discord](https://discord.gg/UBa7pJUN7Z) or by
+   creating a [discussion](https://github.com/jdx/mise/discussions)
+2. **Consider whether existing backends** (github, aqua, npm, pipx, etc.) can meet
+   your needs
+3. **Create a plugin** - use the [plugin system](tool-plugin-development.md) to create plugins for private/custom tools without core changes. Start with the [mise-tool-plugin-template](https://github.com/jdx/mise-tool-plugin-template) for a quick setup
+
+Most tool installation needs can be met by existing backends, especially
+[github](dev-tools/backends/github.md) for GitHub releases and
+[aqua](dev-tools/backends/aqua.md) for comprehensive package management.
+:::
+
+Backends are mise's abstraction for different tool installation methods. Each
+backend implements the `Backend` trait to provide consistent functionality
+across different installation systems.
+
+### Backend Types
+
+- **Core Tools** (`src/plugins/core/`) - Built-in language runtimes like
+  Node.js, Python, Ruby
+- **Package Manager Backends** (`src/backend/`) - npm, pipx, cargo, gem, go
+  modules
+- **Universal Installers** (`src/backend/`) - github, aqua for GitHub releases and
+  package management
+- **Plugin Backends** (`src/backend/`) - plugins can provide custom backends or individual tools
+
+### Implementation Steps
+
+1. **Create the backend module** in `src/backend/` (e.g., `my_backend.rs`)
+
+2. **Implement the Backend trait**:
+
+   ```rust
+   use crate::backend::{Backend, BackendType};
+   use crate::install_context::InstallContext;
+
+   #[derive(Debug)]
+   pub struct MyBackend {
+       // backend-specific fields
+   }
+
+   impl Backend for MyBackend {
+       fn get_type(&self) -> BackendType { BackendType::MyBackend }
+
+       async fn list_remote_versions(&self) -> Result<Vec<String>> {
+           // Implementation for listing available versions
+       }
+
+       async fn install_version(&self, ctx: &InstallContext,
+                                 tv: &ToolVersion) -> Result<()> {
+           // Implementation for installing a specific version
+       }
+
+       async fn uninstall_version(&self, tv: &ToolVersion) -> Result<()> {
+           // Implementation for uninstalling a version
+       }
+
+       // ... other required methods
+   }
+   ```
+
+3. **Register the backend** in `src/backend/mod.rs`:
+
+   - Add your backend to the imports
+   - Add it to the backend registry/factory function
+   - Add the `BackendType` enum variant
+
+4. **Add CLI argument parsing** in `src/cli/args/backend_arg.rs` if needed
+
+5. **Update the registry** in `registry/` if it should be available as a
+   shorthand
+
+### Testing Requirements
+
+- **Integration tests** in `e2e/backend/test_my_backend`
+- **Test both installation and usage** of tools from your backend
+- **Windows testing** if the backend supports Windows
+
+### Documentation
+
+- **Update backend documentation** in `docs/dev-tools/backends/`
+- **Add usage examples** showing how to install tools with your backend
+- **Update the registry documentation** if adding new shorthand tools
+
+### Implementation Examples
+
+Look at existing backends for patterns:
+
+- `src/backend/github.rs` - Simple GitHub release installer
+- `src/backend/npm.rs` - Package manager integration
+- `src/plugins/core/node.rs` - Full language runtime implementation
+
+For detailed architecture information, see
+[Backend Architecture](dev-tools/backend_architecture.md).
+
+## Testing packaging
+
+This is only necessary when changing the packaging setup.
+
+### Ubuntu (apt)
+
+This example is for arm64; change the arch to amd64 if needed.
+
+```sh
+docker run -ti --rm ubuntu
+apt update -y
+apt install -y curl
+install -dm 755 /etc/apt/keyrings
+curl -fSso /etc/apt/keyrings/mise-archive-keyring.pub https://mise.jdx.dev/gpg-key.pub
+echo "deb [signed-by=/etc/apt/keyrings/mise-archive-keyring.pub arch=arm64] \
+https://mise.jdx.dev/deb stable main" >/etc/apt/sources.list.d/mise.list
+apt update -y
+apt install -y mise
+mise -V
+```
+
+### Fedora (dnf)
+
+```sh
+docker run -ti --rm fedora
+dnf copr enable -y jdxcode/mise && dnf install -y mise && mise -v
+```
+
+### RHEL (dnf)
+
+```sh
+docker run -ti --rm registry.access.redhat.com/ubi9/ubi:latest
+dnf copr enable -y jdxcode/mise && dnf install -y mise && mise -v
+```

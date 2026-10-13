@@ -1,0 +1,5 @@
+---
+source: src/cli/local.rs
+expression: output
+---
+~/cwd/.test-tool-versions

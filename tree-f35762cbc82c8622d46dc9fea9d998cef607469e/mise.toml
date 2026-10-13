@@ -1,0 +1,173 @@
+[env]
+_.path = ["test/bats/bin"]
+
+[tasks.bootstrap]
+hide = true
+run = [
+  "cargo build --package mbx --target-dir target/mbx-bootstrap-build",
+  "mkdir -p target/mbx-bootstrap",
+  "cp target/mbx-bootstrap-build/debug/mbx target/mbx-bootstrap/mbx",
+]
+run_windows = [
+  "cargo build --package mbx --target-dir target/mbx-bootstrap-build",
+  "New-Item -ItemType Directory -Force target/mbx-bootstrap | Out-Null",
+  "Copy-Item -Force target/mbx-bootstrap-build/debug/mbx.exe target/mbx-bootstrap/mbx.exe",
+]
+
+[tasks.build]
+alias = "b"
+depends = ["bootstrap"]
+run = "./target/mbx-bootstrap/mbx build --workspace --all-targets"
+run_windows = "./target/mbx-bootstrap/mbx.exe build --workspace --all-targets"
+
+[tasks.test]
+alias = "t"
+description = "Run Rust and behavioral tests"
+depends = ["test:cargo", "test:e2e"]
+
+[tasks."test:cargo"]
+description = "Run Rust tests"
+depends = ["bootstrap"]
+run = "./target/mbx-bootstrap/mbx test --workspace"
+run_windows = "./target/mbx-bootstrap/mbx.exe test --workspace"
+
+[tasks."test:e2e"]
+description = "Run platform behavioral tests"
+depends = ["build"]
+run = "MBX_BIN=$PWD/target/mbx-bootstrap/mbx bats test"
+run_windows = "pwsh e2e-win/run.ps1"
+
+[tasks."test:bats"]
+description = "Run behavioral tests"
+depends = ["build"]
+run = "MBX_BIN=$PWD/target/mbx-bootstrap/mbx bats test"
+
+[tasks.format]
+depends = ["bootstrap"]
+run = "./target/mbx-bootstrap/mbx fmt --all"
+run_windows = "./target/mbx-bootstrap/mbx.exe fmt --all"
+
+[tasks.lint]
+depends = ["bootstrap"]
+run = [
+  "./target/mbx-bootstrap/mbx fmt --all --check",
+  "./target/mbx-bootstrap/mbx clippy --workspace --all-features --all-targets -- -D warnings",
+]
+run_windows = [
+  "./target/mbx-bootstrap/mbx.exe fmt --all --check",
+  "./target/mbx-bootstrap/mbx.exe clippy --workspace --all-features --all-targets -- -D warnings",
+]
+
+[tasks.lint-fix]
+depends = ["bootstrap"]
+run = [
+  "./target/mbx-bootstrap/mbx fmt --all",
+  "./target/mbx-bootstrap/mbx clippy --workspace --all-features --all-targets --fix --allow-dirty --allow-staged -- -D warnings",
+]
+run_windows = [
+  "./target/mbx-bootstrap/mbx.exe fmt --all",
+  "./target/mbx-bootstrap/mbx.exe clippy --workspace --all-features --all-targets --fix --allow-dirty --allow-staged -- -D warnings",
+]
+
+[tasks.ci]
+depends = ["lint", "build", "check:docs", "check:links", "test"]
+
+[tasks.docs]
+description = "Start the documentation development server"
+depends = ["render:docs"]
+dir = "docs"
+run = "aube install && exec aube run docs:dev"
+
+[tasks."build:docs"]
+description = "Build the documentation website"
+depends = ["render:docs"]
+dir = "docs"
+run = "aube install && exec aube run docs:build"
+
+[tasks."render:docs"]
+description = "Generate reference documentation from the usage spec"
+depends = ["bootstrap"]
+# The configuration reference is not its own page: /configuration embeds it
+# with an @include, so its headings are demoted to sit under that page's
+# "Settings" section and the generated index links there instead.
+run = [
+  "rm -rf docs/cli && ./target/mbx-bootstrap/mbx __usage_spec__ | usage generate markdown --file - --multi --replace-pre-with-code-fences --url-prefix /cli --out-dir docs/cli",
+  "sed -i.bak -e 's/^## /### /' docs/cli/configuration.md && rm docs/cli/configuration.md.bak",
+  "sed -i.bak -e 's|(/cli/configuration.md)|(/configuration#settings)|' docs/cli/index.md && rm docs/cli/index.md.bak",
+]
+run_windows = [
+  "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue docs/cli; ./target/mbx-bootstrap/mbx.exe __usage_spec__ | usage generate markdown --file - --multi --replace-pre-with-code-fences --url-prefix /cli --out-dir docs/cli",
+  "[IO.File]::WriteAllText('docs/cli/configuration.md', ([IO.File]::ReadAllText('docs/cli/configuration.md') -replace '(?m)^## ', '### '))",
+  "[IO.File]::WriteAllText('docs/cli/index.md', ([IO.File]::ReadAllText('docs/cli/index.md') -replace [regex]::Escape('(/cli/configuration.md)'), '(/configuration#settings)'))",
+]
+
+[tasks."check:docs"]
+description = "Check that generated documentation is current"
+depends = ["render:docs"]
+run = "git diff --exit-code -- docs/cli && test -z \"$(git status --porcelain --untracked-files=all -- docs/cli)\""
+run_windows = "git diff --exit-code -- docs/cli; if (git status --porcelain --untracked-files=all -- docs/cli) { exit 1 }"
+
+# VitePress validates page links at build time but not #fragments, so a
+# renamed heading rots its inbound anchors silently. --offline keeps external
+# URLs out of it: this checks the site against itself, not the internet.
+[tasks."check:links"]
+description = "Check internal links and anchors in the built documentation"
+depends = ["build:docs"]
+run = "lychee --offline --include-fragments --root-dir \"$PWD/docs/.vitepress/dist\" --fallback-extensions html 'docs/.vitepress/dist/**/*.html'"
+
+[tasks."perf:prepare"]
+description = "Build the fixed benchmark subject"
+run = "mbx build --release --locked -p mbx"
+
+[tasks."build:pgo"]
+description = "Build a profile-guided mbx release binary"
+run = "benchmarks/pgo.bash"
+
+[tasks.perf]
+description = "Measure instruction-counted performance benchmarks"
+depends = ["perf:prepare"]
+run = "tak run"
+
+# Real-world comparison against raw cargo and kache, on a pinned third-party
+# project. Long-running by nature: every cell is a full build of somebody
+# else's workspace. See benchmarks/README.md.
+[tasks.bench]
+description = "Compare cargo, mbx, and kache on a pinned real-world project"
+depends = ["perf:prepare"]
+run = """
+python3 benchmarks/real_world.py \
+  --mbx target/release/mbx \
+  --scenarios cold,warm,commit \
+  --output target/benchmarks
+"""
+
+# What CI runs. Adds the scenarios that need a second checkout or a second
+# toolchain, and rewrites the results file the documentation site reads.
+[tasks."bench:refresh"]
+description = "Rerun the real-world benchmark and rewrite benchmarks/results.json"
+depends = ["perf:prepare"]
+run = """
+python3 benchmarks/real_world.py \
+  --mbx target/release/mbx \
+  --scenarios cold,warm,commit,worktree,toolchain,contention \
+  --output target/benchmarks \
+  --write-results benchmarks/results.json
+"""
+
+[tasks."perf:record"]
+description = "Record performance benchmarks in local git notes"
+depends = ["perf:prepare"]
+run = "tak run --record"
+
+[tools]
+# Perf jobs build the current source with the latest released mbx so the
+# appliance cache is usable without bootstrapping from the branch under test.
+mr-boxington = "1.4.1"
+"github:kunobi-ninja/kache" = { version = "0.16.0", lazy = true, lazy_bins = ["kache"] }
+"github:jdx/tak" = "0.0.9"
+aube = { version = "latest", lazy = true, lazy_bins = ["aube"] }
+communique = "latest"
+lychee = "0.24.2"
+node = "24"
+rust = "1.97.1"
+usage = "6.5.0"

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# shellcheck source-path=SCRIPTDIR
+source "$(dirname "$0")/assert.sh"
+
+export MISE_EXPERIMENTAL=1
+export MISE_PYTHON_DEFAULT_PACKAGES_FILE="$ROOT/e2e/.default-python-packages"
+
+cat >.e2e.mise.toml <<EOF
+[tools]
+python = {version = "3.12.0", virtualenv=".venv"}
+EOF
+
+mise i
+mise x -- python -m venv .venv
+assert_contains "mise x python@3.12.0 -- python --version" "Python 3.12.0"
+assert_contains "mise env -s bash | grep VIRTUAL_ENV" "$PWD/.venv"
+assert "mise x -- which python" "$PWD/.venv/bin/python"
+
+if [ "${TEST_ALL:-}" != 1 ]; then
+	exit
+fi
+
+export MISE_ALL_COMPILE=1
+mise i python -f
+assert_contains "mise x python@3.12.0 -- python --version" "Python 3.12"

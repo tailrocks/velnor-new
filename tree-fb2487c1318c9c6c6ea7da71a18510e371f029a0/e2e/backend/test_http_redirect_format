@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+
+FIXTURE_DIR=$(mktemp -d "${TMPDIR:-/tmp}/http-redirect-format.XXXXXX")
+mkdir -p "$FIXTURE_DIR/archive/bin"
+
+cat >"$FIXTURE_DIR/archive/bin/redirect-tool" <<'EOF'
+#!/usr/bin/env sh
+echo redirected archive
+EOF
+chmod +x "$FIXTURE_DIR/archive/bin/redirect-tool"
+tar -C "$FIXTURE_DIR/archive" -czf "$FIXTURE_DIR/artifact.tar.gz" bin
+
+cat >"$FIXTURE_DIR/raw-tool" <<'EOF'
+#!/usr/bin/env sh
+echo redirected raw file
+EOF
+chmod +x "$FIXTURE_DIR/raw-tool"
+
+start_http_server --dir "$FIXTURE_DIR" --handler - <<'PY'
+import http.server
+
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_GET(self):
+        path = self.path.split("?", 1)[0]
+        redirects = {
+            "/download": "/artifact.tar.gz",
+            "/explicit": "/artifact.zip",
+            "/raw": "/raw-tool",
+        }
+        if path in redirects:
+            self.send_response(302)
+            self.send_header("Location", redirects[path])
+            self.end_headers()
+            return
+
+        files = {
+            "/artifact.tar.gz": "artifact.tar.gz",
+            # Deliberately misleading suffix: explicit format must win.
+            "/artifact.zip": "artifact.tar.gz",
+            "/raw-tool": "raw-tool",
+            "/download/": "raw-tool",
+        }
+        filename = files.get(path)
+        if filename is None:
+            self.send_error(404)
+            return
+        with open(filename, "rb") as file:
+            body = file.read()
+        self.send_response(200)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("ETag", '"redirect-fixture"')
+        self.end_headers()
+        self.wfile.write(body)
+PY
+
+cat >mise.toml <<EOF
+[tools]
+"http:redirect-archive" = { version = "1.0.0", url = "http://127.0.0.1:$HTTP_PORT/download?arch=x64", bin_path = "bin" }
+EOF
+
+export MISE_EXPERIMENTAL=1
+export MISE_LOCKFILE=1
+touch mise.lock
+mise install
+assert_contains "mise x -- redirect-tool" "redirected archive"
+assert_contains "cat mise.lock" "http://127.0.0.1:$HTTP_PORT/download?arch=x64"
+assert_not_contains "cat mise.lock" "/artifact.tar.gz"
+
+cat >mise.toml <<EOF
+[tools]
+"http:redirect-explicit" = { version = "1.0.0", url = "http://127.0.0.1:$HTTP_PORT/explicit", format = "tar.gz", bin_path = "bin" }
+EOF
+
+mise install
+assert_contains "mise x -- redirect-tool" "redirected archive"
+
+cat >mise.toml <<EOF
+[tools]
+"http:redirect-raw" = { version = "1.0.0", url = "http://127.0.0.1:$HTTP_PORT/raw", bin = "redirect-raw" }
+EOF
+
+mise install
+assert_contains "mise x -- redirect-raw" "redirected raw file"
+
+# Query-selected downloads may have no filename in the URL path.
+cat >mise.toml <<EOF
+[tools]
+"http:query-raw" = { version = "1.0.0", url = "http://127.0.0.1:$HTTP_PORT/download/?file=raw-tool", bin = "redirect-raw" }
+EOF
+
+mise install
+assert_contains "mise x -- redirect-raw" "redirected raw file"

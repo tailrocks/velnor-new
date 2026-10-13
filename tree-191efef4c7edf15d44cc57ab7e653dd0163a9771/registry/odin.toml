@@ -1,0 +1,10 @@
+description = "Odin Programming Language"
+
+[[backends]]
+full = "github:odin-lang/Odin"
+
+[backends.options]
+exe = "odin"
+
+[[backends]]
+full = "asdf:jtakakura/asdf-odin"

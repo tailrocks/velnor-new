@@ -1,0 +1,50 @@
+---
+source: src/shell/bash.rs
+expression: "bash.activate(exe, \" --status\".into())"
+---
+export PATH="/some/dir:$PATH"
+export RTX_SHELL=bash
+export __RTX_ORIG_PATH="$PATH"
+
+rtx() {
+  local command
+  command="${1:-}"
+  if [ "$#" = 0 ]; then
+    command /some/dir/rtx
+    return
+  fi
+  shift
+
+  case "$command" in
+  deactivate|s|shell)
+    # if argv doesn't contains -h,--help
+    if [[ ! " $@ " =~ " --help " ]] && [[ ! " $@ " =~ " -h " ]]; then
+      eval "$(command /some/dir/rtx "$command" "$@")"
+      return $?
+    fi
+    ;;
+  esac
+  command /some/dir/rtx "$command" "$@"
+}
+
+_rtx_hook() {
+  local previous_exit_status=$?;
+  eval "$(rtx hook-env --status -s bash)";
+  return $previous_exit_status;
+};
+if [[ ";${PROMPT_COMMAND:-};" != *";_rtx_hook;"* ]]; then
+  PROMPT_COMMAND="_rtx_hook${PROMPT_COMMAND:+;$PROMPT_COMMAND}"
+fi
+eval 'command_not_found_handle() {
+local ret
+  if (( ! IN_CNFH++)) && /some/dir/rtx hook-not-found -s bash "$1"; then
+    _rtx_hook
+    "$@"
+    ret=$?
+    (( IN_CNFH-- ))
+    return "$ret"
+  fi
+  (( IN_CNFH-- ))
+  '"$(typeset -f command_not_found_handle | tail -n +2)"'
+}'
+

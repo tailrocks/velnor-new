@@ -1,0 +1,17 @@
+[package]
+name = "velnor-actions-orchestrator-run-select"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "velnor_orchestrator_run_select"
+path = "tests/main.rs"

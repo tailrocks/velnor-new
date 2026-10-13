@@ -1,0 +1,134 @@
+{
+  "schema": 1,
+  "authority": false,
+  "scope": "strict-source-extracted-research-artifact",
+  "canonical_rust_export_executed": false,
+  "source_files": [
+    {
+      "path": "fresh-gh-sdk/cache_receipt_api.py",
+      "bytes": 7038,
+      "sha256": "e2210910b85530113e8c07f7ba6d434d49bb927b4376ec39b763c46ccd6728e6"
+    },
+    {
+      "path": "fresh-gh-sdk/cache_receipt_common.py",
+      "bytes": 2813,
+      "sha256": "37872ec90cec3b74469738e2c780468fa81a20c9a1c0e3e9bb38098b5d7f32ee"
+    },
+    {
+      "path": "fresh-gh-sdk/cache_receipt_gh.py",
+      "bytes": 9702,
+      "sha256": "46568818e50eac7fee0b3e631ace28984d34da34c40c5670e7045282b302d4f9"
+    },
+    {
+      "path": "fresh-gh-sdk/cache_receipt_trust_root.rs",
+      "bytes": 4235,
+      "sha256": "c0bb0f2a846646b22d4ba8ae6ecaa08997c44ebb7ca7aa234c5ec09b8b592e61"
+    },
+    {
+      "path": "fresh-gh-sdk/catalog_qualification_gh.rs",
+      "bytes": 6338,
+      "sha256": "641b7fa7ff49e75555f6ab1a713306821cdb5be651943f14f129eb8131a187e5"
+    },
+    {
+      "path": "fresh-gh-sdk/catalog_qualification_identity.rs",
+      "bytes": 5815,
+      "sha256": "08a132e9295164852e04dfc2ca60eac2dcc39944c07a602686064ec2163c43d4"
+    },
+    {
+      "path": "fresh-gh-sdk/catalog_qualification_types.rs",
+      "bytes": 3573,
+      "sha256": "b5a4a0dab73ad5daa6fa173903e0089a0dd590a48c8b9d6e800a0212cf417dc1"
+    },
+    {
+      "path": "fresh-gh-sdk/receipt_fresh_gh.py",
+      "bytes": 3797,
+      "sha256": "fc70a3df71a164c6577d3024d3ef83dd1ed1bafbe04f6246fee1686c7c75a288"
+    },
+    {
+      "path": "fresh-gh-sdk/receipt_fresh_gh_archive.py",
+      "bytes": 3144,
+      "sha256": "34487f651950ee9cb7fd29b1227d70a89caaa632157e01ab43c4c75afa2c476a"
+    },
+    {
+      "path": "fresh-gh-sdk/receipt_fresh_gh_download.py",
+      "bytes": 4013,
+      "sha256": "9ee5b35498ab26d60a89098e19dd31b3bf1a9658eaf99a8acb4d5248f6828a4b"
+    },
+    {
+      "path": "fresh-gh-sdk/root/14.targets.json",
+      "bytes": 4942,
+      "sha256": "6a697f7f8908c8ab26c11786ecb490b54acec97fa8c802e399f065f8a0cc1acd"
+    },
+    {
+      "path": "fresh-gh-sdk/root/15.root.json",
+      "bytes": 5630,
+      "sha256": "73747011d0857ada15479a16c4cae0f3ed03aac698b523b97e1de314ac9d9ca8"
+    },
+    {
+      "path": "fresh-gh-sdk/root/165.snapshot.json",
+      "bytes": 1760,
+      "sha256": "8f784ab614ec62bfdd5f568eb2a2e3011668449ba235ed4eb7befa99f8469933"
+    },
+    {
+      "path": "fresh-gh-sdk/root/798.timestamp.json",
+      "bytes": 451,
+      "sha256": "12ff8634dd593bf446c734e941266a68cc822f6950e7d9f73cb9f6fe7097d2c1"
+    },
+    {
+      "path": "fresh-gh-sdk/root/bootstrap_root.json",
+      "bytes": 5491,
+      "sha256": "a0dfcc5d51c1ce4a66b541a3fff0afa97225ccc40456b21140bb2e2f113122e2"
+    },
+    {
+      "path": "fresh-gh-sdk/root/public_release_bundle.json",
+      "bytes": 13943,
+      "sha256": "b05db30dbcf69f6df8edcc5c71951a2a1429674520b480a5001890706e3976e5"
+    },
+    {
+      "path": "fresh-gh-sdk/root/public_release_verification.json",
+      "bytes": 19184,
+      "sha256": "aeb3fde11f3a295c0d8daf933f33c2bc306761d9d49632075511d467944a1f7f"
+    },
+    {
+      "path": "fresh-gh-sdk/root/qualification.json",
+      "bytes": 6464,
+      "sha256": "2e1e1cf4777b23dd0eaa755508165d7a12d49dac0ef71b9179a62c45c0b144d9"
+    },
+    {
+      "path": "fresh-gh-sdk/root/trusted_root.json",
+      "bytes": 6787,
+      "sha256": "6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66"
+    },
+    {
+      "path": "fresh-gh-sdk/root/trusted_root.jsonl",
+      "bytes": 5748,
+      "sha256": "3c2cc7f357dc064ec527fdcd78da6e9245c21a381e1abaa0f2b62b186bcac1a1"
+    },
+    {
+      "path": "fresh-gh-sdk/sdk-gh-distributions.mjs",
+      "bytes": 1391,
+      "sha256": "e4f71c2639ea6708208cbe7898c681699237a1f0ee19550ffa289e0b3a204087"
+    }
+  ],
+  "match_counts": {
+    "linux_host_tuples": 2,
+    "linux_launch_records": 2,
+    "root_evidence": 10,
+    "each_constant": {
+      "VERSION": 1,
+      "LINUX_SELECTOR": 1,
+      "SOURCE_REPOSITORY": 1,
+      "SOURCE_COMMIT": 1,
+      "SOURCE_TREE": 1,
+      "OWNER": 1,
+      "ABI": 1,
+      "RAW_SHA256": 1,
+      "VERIFIER_SHA256": 1,
+      "QUALIFICATION_SHA256": 1
+    },
+    "each_host_abi": {
+      "LinuxAmd64": 1,
+      "LinuxArm64": 1
+    }
+  }
+}

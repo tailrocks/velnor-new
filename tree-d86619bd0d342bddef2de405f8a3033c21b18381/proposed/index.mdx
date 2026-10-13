@@ -1,0 +1,82 @@
+---
+title: "Proposed implementation: Velnor V1"
+description: "Status: Proposed. No implementation is claimed by this"
+---
+
+**Status:** Proposed. No implementation is claimed by this specification.
+
+Velnor Actions is a stack-generic GitHub Actions workflow generator. The CLI
+auto-detects every registered project stack. V1
+registers only Rust/Cargo detectors, so unregistered stacks receive no
+validation claim. Future TypeScript and Bun detectors add coverage under the
+same command tree. Configuration is in `.velnor/config.toml`:
+`[stacks].ignore` disables exact registered stack IDs, `[stacks.<name>]` holds
+stack-specific settings, and `[discovery].exclude` holds repository path
+globs. These are not CLI flags.
+
+## Responsibility boundaries
+
+| Component | Owns | Does not own |
+|---|---|---|
+| Rust adapter | Cargo inventory, local package graph, affected Rust task proposals | Mise config/commands, workflow YAML, process execution |
+| Mise adapter | Tool selection, pinned command/environment construction, tool-file inspection, task-result cache integration | Rust package graph or GitHub YAML |
+| Actionlint adapter | Pinned actionlint capability, generated `.github/actionlint.yaml`, workflow-lint validation | Mise execution, Rust scanning, generic workflow rendering |
+| Orchestrator | Combines stack proposals, Mise execution, selection, cache evidence, scheduling, and outputs | Stack/tool parsing or rendering implementation |
+| Workflow renderer | Generic GitHub Actions YAML | Stack and Mise semantics |
+| CLI | Clap arguments, typed dispatch, output and exit codes | Orchestration and stack/tool rules |
+| MBX | Reusable Rust compilation work and compiler resource coordination | Test pass/fail results |
+| GitHub Actions | Scheduling generated jobs and reporting required check status | Velnor's project discovery and cache validity rules |
+
+`generate` replaces `.github/` as one complete tree. `init` separately creates
+the user-owned `.velnor/config.toml` sample. The path is
+`GitHub step → pinned tools → Mise command → stack task`; Velnor Actions scans
+the repo and renders that workflow. `plan` shows a text summary; `generate
+--output-dir PATH` writes the same `.github/` tree to a caller-selected fresh
+preview directory.
+
+The public command surface is deliberately small:
+
+```text
+velnor-actions init
+velnor-actions plan
+velnor-actions generate [--output-dir PATH]
+```
+
+`plan` prints a concise, human-readable summary from the same analysis and
+workflow rendering path as `generate`. It prints no YAML and writes no files.
+
+V1 contains seven purpose-scoped Cargo packages: `velnor-actions-contract`,
+`velnor-actions-rust`, `velnor-actions-mise`, `velnor-actions-actionlint`,
+`velnor-actions-workflow-renderer`, `velnor-actions-orchestrator`, and
+`velnor-actions-cli`. Rust and Mise are separate crates; only the orchestrator
+composes them. The CLI package declares the `velnor-actions` binary. Generic
+package names such as `velnor-model`, `velnor-core`, and `velnor-rust` are
+forbidden.
+
+The generator crates MUST NOT implement a runner, a Scale Set client, or an Actions interpreter. That work lives in the nested `crates/velnor-runner` workspace under the [macOS Scale Set runner](/docs/proposed/macos-scaleset-runner) specification. Kubernetes, a web server, a TUI, a remote cache service, and a deployment system remain out of scope. Generated workflows MAY use a small allowlist of full-SHA-pinned setup actions; Velnor does not execute arbitrary `uses:` actions itself.
+
+## Normative specifications
+
+1. [Architecture](/docs/proposed/architecture) defines workspace crates, configuration, discovery, data contracts, and generated-file ownership.
+2. [Bootstrap and release contract](/docs/proposed/bootstrap-and-release-contract) defines consumer bootstrap assets, the compiled version catalog, Velnor's bootstrap lock, and release promotion.
+3. [Generated-file contract](/docs/proposed/generated-file-contract) defines task names, file ownership, safe rendering, and atomic output replacement.
+4. [CLI contract](/docs/proposed/cli-contract) fixes the stack-generic `velnor-actions` Clap command tree (`init`, `plan`, and `generate`), automatic detection, TOML ignore settings, and V1 Rust behavior.
+5. [Workflow contract](/docs/proposed/workflow-contract) defines triggers, jobs, and matrix data.
+6. [Task execution contract](/docs/proposed/task-execution-contract) defines task steps, Mise invocation, execution, and reports.
+7. [Cache and report contract](/docs/proposed/cache-contract) defines task identities, cache ownership/trust, reports, and final status aggregation.
+8. [Host-image seed admission contract](/docs/proposed/host-seed-contract) defines trusted preinstalled seed inputs and fail-cold admission.
+9. [Parallelism and affected-work contract](/docs/proposed/parallelism-and-selection-contract) defines dependency-aware selection, trusted baseline coverage, native background/wait steps, bounded concurrency, and complete test partitioning.
+10. [Rust quality contract](/docs/proposed/rust-quality-contract) defines tests, lints, file limits, dependencies, verification and policy protection.
+11. [Agent and performance contract](/docs/proposed/agent-and-performance-contract) defines agent instructions, performance measurements, acceptance budgets, and readiness evidence.
+12. [Tooling input contract](/docs/proposed/tooling-input-contract) defines read-only inspection and human recommendations for Rust/Mise tool files.
+13. [Version policy](/docs/proposed/version-policy) defines latest-stable tool pins, freshness checks, exception expiry, and V2 version inventory.
+14. [Implementation plan](/docs/proposed/implementation-plan) defines the ordered work packages and merge gates.
+15. [Release contract](/docs/proposed/release-contract) defines consumer release-plz preparation, validation, protected publishing, and reconciliation.
+16. [Release config schema](/docs/proposed/release-config-schema) defines the exact `[stacks.rust.release]` fields, defaults, and validation errors.
+17. [Release coverage](/docs/proposed/release-coverage) maps release behaviors to their tests and snapshots.
+18. [OpenTofu contract](/docs/proposed/opentofu-contract) defines the native `tofu` stack extension, tracked in `../reviews/opentofu-evidence.md`.
+19. [Rust dependency policy](/docs/proposed/rust-dependency-policy) defines dependency narrowness, the initial crate set, and deny/machete supply-chain gates (companion to the quality contract §7).
+20. [Rust test policy](/docs/proposed/rust-test-policy) defines test layout, integration entry points, doctest separation, fixture independence, and snapshot review (companion to the quality contract §4).
+20. [macOS Scale Set runner](/docs/proposed/macos-scaleset-runner) is the active runner specification. It supersedes conflicting deferred roadmap clauses.
+
+The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.

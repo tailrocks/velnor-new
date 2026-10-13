@@ -1,0 +1,339 @@
+//! Fail-closed Linux daemon coordination over one validated host snapshot.
+
+use std::fmt;
+use std::num::NonZeroU32;
+use std::path::{Component, Path, PathBuf};
+use std::time::{Duration, Instant};
+
+use tokio::sync::watch;
+use zeroize::Zeroizing;
+
+use velnor_runner_host::worker::{DiagnosticsStore, ProtectedStateDirectory};
+use velnor_runner_host::{HostPlatform, ValidatedHostConfigSnapshot};
+use velnor_runner_journal::journal::Journal;
+
+mod admission;
+mod capacity;
+mod outcome;
+mod session;
+mod shutdown;
+mod worker;
+pub use admission::{PolicyGap, PolicyMismatch, PoolAdmissionEvidence, VerifiedPoolPolicy};
+pub use outcome::{LinuxAdmissionState, LinuxDaemonOutcome, LinuxShutdownGap};
+#[cfg(test)]
+#[path = "linux/tests.rs"]
+mod tests;
+
+pub(super) const SIGNAL_POLL: Duration = Duration::from_millis(250);
+
+/// State owned by one Linux daemon invocation, derived from the immutable config read.
+#[derive(Debug)]
+pub struct LinuxLaunchContext {
+    pub(super) snapshot: ValidatedHostConfigSnapshot,
+    pub(super) state_directory: PathBuf,
+    pub(super) docker_endpoint: String,
+    drain_timeout: Duration,
+    max_jobs: NonZeroU32,
+}
+
+impl LinuxLaunchContext {
+    /// Bind one validated snapshot to the protected systemd state directory.
+    ///
+    /// The journal is always `state_directory/launch.db`; diagnostics are
+    /// opened beneath this same service-owned directory by the host facade.
+    ///
+    /// # Errors
+    ///
+    /// Returns `InvalidContext` for another platform, a relative path, a path
+    /// containing parent traversal, or missing finite host limits.
+    pub fn from_snapshot(
+        snapshot: ValidatedHostConfigSnapshot,
+        state_directory: &Path,
+    ) -> Result<Self, LinuxDaemonError> {
+        if snapshot.platform() != HostPlatform::Linux
+            || !state_directory.is_absolute()
+            || state_directory
+                .components()
+                .any(|component| component == Component::ParentDir)
+        {
+            return Err(LinuxDaemonError::InvalidContext);
+        }
+        let config = snapshot.config();
+        let drain_timeout = config
+            .drain_timeout_secs()
+            .map(Duration::from_secs)
+            .map_err(|_| LinuxDaemonError::InvalidContext)?;
+        let max_jobs =
+            NonZeroU32::new(config.max_jobs()).ok_or(LinuxDaemonError::InvalidContext)?;
+        Ok(Self {
+            docker_endpoint: config.docker.endpoint.clone(),
+            state_directory: state_directory.to_path_buf(),
+            snapshot,
+            drain_timeout,
+            max_jobs,
+        })
+    }
+
+    /// Exact digest from the protected config bytes used to create this context.
+    #[must_use]
+    pub fn policy_digest(&self) -> &str {
+        self.snapshot.policy_digest()
+    }
+
+    /// Host-wide launch ceiling read from the same validated snapshot.
+    #[must_use]
+    pub const fn max_jobs(&self) -> NonZeroU32 {
+        self.max_jobs
+    }
+
+    /// Validated maximum shutdown interval from this immutable host snapshot.
+    #[must_use]
+    pub const fn drain_timeout(&self) -> Duration {
+        self.drain_timeout
+    }
+}
+
+/// Separate role inputs for the host PAT and Actions-read REST requests.
+///
+/// One configured PAT may be supplied for both roles only when its scopes are
+/// authorized for their union. The short-lived Actions Service admin token is
+/// never accepted here.
+pub struct LinuxLaunchCredentials {
+    pub(super) controller: Zeroizing<String>,
+    pub(super) actions_read: Zeroizing<String>,
+}
+
+impl LinuxLaunchCredentials {
+    /// Construct role-separated host credential inputs.
+    ///
+    /// # Errors
+    ///
+    /// Returns `InvalidCredentials` for an empty token or control characters.
+    pub fn new(controller: String, actions_read: String) -> Result<Self, LinuxDaemonError> {
+        let controller = Zeroizing::new(controller);
+        let actions_read = Zeroizing::new(actions_read);
+        if invalid_token(&controller) || invalid_token(&actions_read) {
+            return Err(LinuxDaemonError::InvalidCredentials);
+        }
+        Ok(Self {
+            controller,
+            actions_read,
+        })
+    }
+}
+
+impl fmt::Debug for LinuxLaunchCredentials {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("LinuxLaunchCredentials")
+            .field("controller", &"[redacted]")
+            .field("actions_read", &"[redacted]")
+            .finish()
+    }
+}
+
+/// Run the fail-closed Linux daemon loop and perform exact proof-backed cleanup on stop.
+///
+/// This path owns the journal, preflight transport, credential-intent store,
+/// and cleanup proof adapter. It never calls the legacy Scale Set creator or
+/// legacy worker starter. Even `Verified` pool policy remains blocked until a
+/// fenced zero-population observation and per-offer trust path are connected.
+///
+/// The receiver's first `Some` cutoff is retained even when its sender closes.
+/// If a prior process left the durable drain bit set, recovery uses an
+/// immediate cutoff instead of silently extending the old stop window.
+///
+/// # Errors
+///
+/// Returns an error only when the initial journal cannot be opened or the
+/// caller supplied an invalid context. Runtime cleanup uncertainty is returned
+/// as a typed [`LinuxDaemonOutcome`] and leaves durable rows occupied.
+pub async fn run_linux_daemon(
+    context: LinuxLaunchContext,
+    credentials: Option<LinuxLaunchCredentials>,
+    protected_state: ProtectedStateDirectory,
+    mut shutdown: watch::Receiver<Option<Instant>>,
+) -> Result<LinuxDaemonOutcome, LinuxDaemonError> {
+    let (journal, diagnostics) =
+        open_runtime_state(&context.state_directory, &protected_state).await?;
+    let mut startup =
+        prepare_daemon(&context, &journal, credentials.as_ref(), &mut shutdown).await?;
+    let blocked = if startup.cutoff.is_none() {
+        Box::pin(drive_or_wait(
+            &context,
+            &journal,
+            &diagnostics,
+            credentials.as_ref(),
+            &mut startup,
+            &mut shutdown,
+        ))
+        .await
+    } else {
+        None
+    };
+    if let Some(gap) = blocked {
+        // Leave the delivered message and active session untouched. In
+        // particular, do not set a drain fence, issue another poll, close the
+        // session, or retry any uncertain side effect here.
+        let deadline = deadline_after(Instant::now(), context.drain_timeout);
+        return Ok(shutdown::unresolved_outcome(
+            &journal,
+            startup.admission,
+            gap,
+            0,
+            None,
+            deadline,
+        )
+        .await);
+    }
+    let admission = startup.admission;
+    let cutoff = startup.cutoff;
+    let deadline = cutoff.unwrap_or_else(Instant::now);
+    if !shutdown::confirm_drain(&journal, deadline).await {
+        return Ok(shutdown::unresolved_outcome(
+            &journal,
+            admission,
+            LinuxShutdownGap::DrainFenceUnconfirmed,
+            0,
+            None,
+            deadline,
+        )
+        .await);
+    }
+    if let Some(active) = startup.active_session.as_mut() {
+        session::close_if_quiescent(&journal, active, deadline).await;
+    }
+    shutdown::reconcile_shutdown(&context, &journal, &diagnostics, admission, deadline).await
+}
+
+struct DaemonStartup {
+    cutoff: Option<Instant>,
+    admission: LinuxAdmissionState,
+    active_session: Option<session::ActiveSession>,
+}
+
+async fn prepare_daemon(
+    context: &LinuxLaunchContext,
+    journal: &Journal,
+    credentials: Option<&LinuxLaunchCredentials>,
+    shutdown: &mut watch::Receiver<Option<Instant>>,
+) -> Result<DaemonStartup, LinuxDaemonError> {
+    let mut cutoff = *shutdown.borrow_and_update();
+    let was_draining =
+        shutdown::read_startup_drain(journal, shutdown, &mut cutoff, context.drain_timeout)
+            .await
+            .unwrap_or(true);
+    if was_draining && cutoff.is_none() {
+        cutoff = Some(Instant::now());
+    }
+    let preparation = if cutoff.is_some() || was_draining {
+        admission::AdmissionPreparation {
+            state: LinuxAdmissionState::ShutdownBeforePreflight,
+            verified_admin: None,
+        }
+    } else {
+        admission::prepare_admission(context, credentials, journal, shutdown, &mut cutoff).await
+    };
+    let (active_session, creation_state) = session::create_session_if_verified(
+        context,
+        journal,
+        preparation.verified_admin,
+        shutdown,
+        &mut cutoff,
+    )
+    .await;
+    let admission = creation_state.unwrap_or(preparation.state);
+    Ok(DaemonStartup {
+        cutoff,
+        admission,
+        active_session,
+    })
+}
+
+async fn drive_or_wait(
+    context: &LinuxLaunchContext,
+    journal: &Journal,
+    diagnostics: &DiagnosticsStore,
+    credentials: Option<&LinuxLaunchCredentials>,
+    startup: &mut DaemonStartup,
+    shutdown: &mut watch::Receiver<Option<Instant>>,
+) -> Option<LinuxShutdownGap> {
+    if let Some(active) = startup.active_session.as_mut() {
+        let Some(credentials) = credentials else {
+            startup.admission = LinuxAdmissionState::CredentialsUnavailable;
+            startup.cutoff = Some(deadline_after(Instant::now(), context.drain_timeout));
+            return None;
+        };
+        let outcome = Box::pin(session::drive_session(
+            context,
+            journal,
+            diagnostics,
+            active,
+            credentials,
+            shutdown,
+            &mut startup.cutoff,
+        ))
+        .await;
+        shutdown_gap_after_session(outcome)
+    } else {
+        startup.cutoff =
+            Some(shutdown::wait_for_shutdown(journal, shutdown, context.drain_timeout).await);
+        None
+    }
+}
+
+fn shutdown_gap_after_session(outcome: session::SessionDriveOutcome) -> Option<LinuxShutdownGap> {
+    match outcome {
+        session::SessionDriveOutcome::Stopped => None,
+        session::SessionDriveOutcome::AvailableOffersHeld => {
+            Some(LinuxShutdownGap::AvailableOffersHeld)
+        }
+    }
+}
+
+async fn open_runtime_state(
+    state_directory: &Path,
+    protected_state: &ProtectedStateDirectory,
+) -> Result<(Journal, DiagnosticsStore), LinuxDaemonError> {
+    // Use the same retained descriptor that the CLI used to create daemon.lock.
+    // The journal additionally pins the leaf's parent dev/inode before bootstrap.
+    let identity = protected_state
+        .identity()
+        .map_err(|_| LinuxDaemonError::StateDirectoryUnavailable)?;
+    let journal = Journal::open_protected_at(
+        &state_directory.join("launch.db"),
+        identity.device(),
+        identity.inode(),
+    )
+    .await
+    .map_err(|_| LinuxDaemonError::JournalUnavailable)?;
+    let diagnostics = protected_state
+        .open_diagnostics_store()
+        .map_err(|_| LinuxDaemonError::StateDirectoryUnavailable)?;
+    Ok((journal, diagnostics))
+}
+
+/// Errors that prevent the daemon from establishing its initial trusted inputs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum LinuxDaemonError {
+    /// The immutable snapshot or protected state-directory binding was invalid.
+    #[error("invalid Linux launch context")]
+    InvalidContext,
+    /// A role-specific credential was empty or malformed.
+    #[error("invalid Linux launch credential")]
+    InvalidCredentials,
+    /// The daemon could not validate its service-owned state directory.
+    #[error("Linux service state directory unavailable or unsafe")]
+    StateDirectoryUnavailable,
+    /// The daemon could not securely open or initialize its durable journal.
+    #[error("Linux launch journal unavailable or unsafe")]
+    JournalUnavailable,
+}
+
+fn invalid_token(token: &str) -> bool {
+    token.trim().is_empty() || token.chars().any(char::is_control)
+}
+
+fn deadline_after(now: Instant, duration: Duration) -> Instant {
+    now.checked_add(duration).unwrap_or(now)
+}

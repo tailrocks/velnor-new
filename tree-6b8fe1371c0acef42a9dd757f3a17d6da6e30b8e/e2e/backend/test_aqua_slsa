@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Test that unconfigured Aqua SLSA provenance is skipped
+
+set -euo pipefail
+
+export MISE_EXPERIMENTAL=1
+export MISE_AQUA_SLSA=true
+export MISE_AQUA_COSIGN=false
+
+echo "=== Testing Aqua SLSA Without Signer Metadata ==="
+
+# Sops has an SLSA provenance source, but no expected signer metadata.
+echo "Installing sops without an SLSA signer identity..."
+
+# Capture installation output to verify SLSA is skipped.
+output=$(mise install --verbose aqua:getsops/sops@3.9.0 2>&1)
+echo "$output"
+
+if echo "$output" | grep -q "verify slsa"; then
+  echo "SLSA verification ran without a configured signer identity"
+  exit 1
+fi
+
+# Verify the tool works
+assert_contains "mise x aqua:getsops/sops@3.9.0 -- sops --version" "3.9.0"
+echo "✓ sops installed and working correctly"
+
+# Cleanup
+mise uninstall aqua:getsops/sops@3.9.0 || true
+
+echo ""
+echo "=== Unconfigured Aqua SLSA Was Skipped ✓ ==="

@@ -1,0 +1,35 @@
+---
+source: src/snapshot_tests.rs
+expression: check
+---
+Check(
+  scope: Scope(
+    mode: DenyList(PackageSelection(
+      selection: DefaultMembers,
+      explicitly_included_packages: [],
+      excluded_packages: [],
+    )),
+  ),
+  current: Rustdoc(
+    source: Root("test_crates/semver_trick_self_referential/new/"),
+  ),
+  baseline: Rustdoc(
+    source: Root("test_crates/semver_trick_self_referential/old/"),
+  ),
+  release_type: None,
+  current_feature_config: FeatureConfig(
+    features_group: Heuristic,
+    extra_features: [],
+    is_baseline: false,
+  ),
+  baseline_feature_config: FeatureConfig(
+    features_group: Heuristic,
+    extra_features: [],
+    is_baseline: true,
+  ),
+  build_target: None,
+  witness_generation: WitnessGeneration(
+    show_hints: false,
+    run_consistency_checks: false,
+  ),
+)

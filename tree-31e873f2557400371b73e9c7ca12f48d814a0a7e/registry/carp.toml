@@ -1,0 +1,11 @@
+description = "Carp Language"
+test = { cmd = "which carp", expected = "" } # hangs in non-interactive shells
+
+[[backends]]
+full = "github:carp-lang/Carp"
+
+[backends.options]
+exe = "carp"
+
+[[backends]]
+full = "asdf:susurri/asdf-carp"

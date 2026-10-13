@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+. ./assert.sh
+
+rtx i nodejs@16.0.0
+eval "$(rtx env -s bash nodejs@16.0.0)"
+assert "node -v" "v16.0.0"
+
+assert_end

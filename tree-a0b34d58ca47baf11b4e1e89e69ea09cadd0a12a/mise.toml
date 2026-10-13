@@ -1,0 +1,34 @@
+#:schema ./schema/mise.json
+min_version = "2024.1.1"
+
+[env]
+_.path = ["./target/debug", "./node_modules/.bin"]
+
+[tools]
+actionlint = "latest"
+age = "latest"
+aube = "latest"
+bun = "latest"
+cargo-binstall = "latest"
+communique = "latest"
+cargo-insta = "latest"
+git-cliff = "latest"
+usage = "latest"
+gh = "latest"
+hk = "latest"
+jq = "latest"
+lua-language-server = "latest"
+stylua = "latest"
+"npm:markdownlint-cli" = "latest"
+prettier = "3.9.5"
+"npm:ajv-cli" = "latest"
+pkl = "latest"
+shellcheck = "latest"
+shfmt = "latest"
+taplo = "latest"
+wait-for-gh-rate-limit = "latest"
+sops = "latest"
+node = "24"
+
+[task_config]
+includes = ["tasks.toml", "xtasks"]

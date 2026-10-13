@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readlinkSync, symlinkSync, lstatSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { createTar, extractTar } from '../node_modules/@actions/cache/lib/internal/tar.js';
+import { getCompressionMethod } from '../node_modules/@actions/cache/lib/internal/cacheUtils.js';
+const root = mkdtempSync(path.join(tmpdir(), 'velnor-cache-codec-'));
+const workspace = path.join(root, 'workspace with spaces');
+const payload = path.join(workspace, 'payload');
+mkdirSync(payload, { recursive: true, mode: 0o700 });
+writeFileSync(path.join(payload, 'file with space\nand newline'), 'fixed Node24 codec payload\n', { mode: 0o755 });
+symlinkSync('file with space\nand newline', path.join(payload, 'link'));
+process.env.GITHUB_WORKSPACE = workspace;
+process.env.RUNNER_TEMP = root;
+const method = await getCompressionMethod();
+assert.equal(method, 'zstd-without-long');
+const rounds = [];
+for (let index = 0; index < 3; index++) {
+  const archive = path.join(root, `archive-${index}`);
+  mkdirSync(archive);
+  await createTar(archive, ['payload'], method);
+  const archivePath = path.join(archive, 'cache.tzst');
+  const quarantine = path.join(root, 'velnor', 'cache-staging', String(index + 1).repeat(64));
+  const result = await extractTar(archivePath, method, { roots: [payload], quarantinePath: quarantine });
+  const staged = path.join(quarantine, 'roots', '0');
+  assert.equal(readFileSync(path.join(staged, 'file with space\nand newline'), 'utf8'), 'fixed Node24 codec payload\n');
+  assert.equal(lstatSync(path.join(staged, 'file with space\nand newline')).mode & 0o777, 0o755);
+  assert.equal(readlinkSync(path.join(staged, 'link')), 'file with space\nand newline');
+  const digest = createHash('sha256').update(readFileSync(archivePath)).digest('hex');
+  rounds.push({ index, archiveSha256: digest, manifestSha256: createHash('sha256').update(readFileSync(result.manifestPath)).digest('hex') });
+}
+assert.equal(readFileSync(path.join(payload, 'file with space\nand newline'), 'utf8'), 'fixed Node24 codec payload\n');
+console.log(JSON.stringify({ node: process.version, method, root, rounds, canonicalPayloadUnchanged: true }));

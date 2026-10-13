@@ -1,0 +1,3 @@
+variable "w" {
+  default = "b"
+}

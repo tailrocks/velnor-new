@@ -1,0 +1,139 @@
+use std::sync::Arc;
+
+use crate::errors::Error;
+use crate::toolset::tool_request::ToolRequest;
+use crate::toolset::tool_version::ResolveOptions;
+use crate::toolset::{ToolSource, ToolVersion};
+use crate::{args::BackendArg, config::Config};
+
+/// represents several versions of a tool for a particular plugin
+#[derive(Debug, Clone)]
+pub struct ToolVersionList {
+    pub backend: Arc<BackendArg>,
+    pub versions: Vec<ToolVersion>,
+    pub requests: Vec<ToolRequest>,
+    pub source: ToolSource,
+}
+
+impl ToolVersionList {
+    pub(crate) fn new(backend: Arc<BackendArg>, source: ToolSource) -> Self {
+        Self {
+            backend,
+            versions: Vec::new(),
+            requests: vec![],
+            source,
+        }
+    }
+    pub(crate) async fn resolve(
+        &mut self,
+        config: &Arc<Config>,
+        opts: &ResolveOptions,
+    ) -> eyre::Result<()> {
+        self.versions.clear();
+        for tvr in &mut self.requests {
+            // Only use special options (latest_versions) for requests that
+            // explicitly specify "latest". This ensures `mise x node@20 npm@latest` only
+            // fetches latest for npm, not node.
+            // However, we always respect the caller's use_locked_version setting.
+            let version = tvr.version();
+            let backend = tvr.ba().backend();
+            // An installed version equal to the request is an exact pin, which
+            // resolves to itself; looking for newer releases of it could only
+            // fail. Runtime symlinks such as `22` are not listed as installed.
+            let bump_request = opts.latest_versions_for_all_requests
+                && !backend
+                    .as_ref()
+                    .is_ok_and(|backend| backend.list_installed_versions().contains(&version));
+            let request_opts = if bump_request
+                || version == "latest"
+                || backend
+                    .as_ref()
+                    .is_ok_and(|backend| backend.is_rolling_channel(&version))
+            {
+                opts.clone()
+            } else {
+                ResolveOptions {
+                    latest_versions: false,
+                    use_locked_version: opts.use_locked_version,
+                    ..opts.clone()
+                }
+            };
+            match tvr.resolve(config, &request_opts).await {
+                Ok(v) => self.versions.push(v),
+                Err(err) => {
+                    return Err(Error::FailedToResolveVersion {
+                        tr: Box::new(tvr.clone()),
+                        ts: self.source.clone(),
+                        source: err,
+                    }
+                    .into());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn os_supported_versions(&self) -> impl Iterator<Item = &ToolVersion> {
+        self.versions
+            .iter()
+            .filter(|tv| tv.request.is_os_supported())
+    }
+
+    pub fn os_supported_requests(&self) -> impl Iterator<Item = &ToolRequest> {
+        self.requests.iter().filter(|tvr| tvr.is_os_supported())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+
+    use crate::{dirs, env, file};
+
+    use super::*;
+
+    #[tokio::test]
+    #[cfg(unix)]
+    async fn test_tool_version_list() {
+        let config = Config::get().await.unwrap();
+        let ba: Arc<BackendArg> = Arc::new("tiny".into());
+        let mut tvl = ToolVersionList::new(ba.clone(), ToolSource::Argument);
+        tvl.requests
+            .push(ToolRequest::new(ba, "latest", ToolSource::Argument).unwrap());
+        tvl.resolve(
+            &config,
+            &ResolveOptions {
+                latest_versions: true,
+                use_locked_version: false,
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(tvl.versions.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_tool_version_list_failure() {
+        env::set_var("MISE_FAILURE", "1");
+        file::remove_all(dirs::CACHE.join("dummy")).unwrap();
+        let config = Config::reset().await.unwrap();
+        let ba: Arc<BackendArg> = Arc::new("dummy".into());
+        let mut tvl = ToolVersionList::new(ba.clone(), ToolSource::Argument);
+        tvl.requests
+            .push(ToolRequest::new(ba, "latest", ToolSource::Argument).unwrap());
+        let _ = tvl
+            .resolve(
+                &config,
+                &ResolveOptions {
+                    latest_versions: true,
+                    use_locked_version: false,
+                    ..Default::default()
+                },
+            )
+            .await;
+        assert_eq!(tvl.versions.len(), 0);
+        env::remove_var("MISE_FAILURE");
+        Config::reset().await.unwrap();
+    }
+}

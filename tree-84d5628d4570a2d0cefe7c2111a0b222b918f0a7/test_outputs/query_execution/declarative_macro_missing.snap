@@ -1,0 +1,29 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/declarative_macro_missing/": [
+    {
+      "name": String("will_be_removed"),
+      "path": List([
+        String("declarative_macro_missing"),
+        String("will_be_removed"),
+      ]),
+      "span_begin_line": Uint64(4),
+      "span_end_line": Uint64(6),
+      "span_filename": String("src/lib.rs"),
+    },
+  ],
+  "./test_crates/macro_no_longer_exported/": [
+    {
+      "name": String("will_be_hidden_and_not_exported"),
+      "path": List([
+        String("macro_no_longer_exported"),
+        String("will_be_hidden_and_not_exported"),
+      ]),
+      "span_begin_line": Uint64(11),
+      "span_end_line": Uint64(15),
+      "span_filename": String("src/lib.rs"),
+    },
+  ],
+}

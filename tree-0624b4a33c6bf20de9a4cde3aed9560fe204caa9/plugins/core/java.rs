@@ -1,0 +1,615 @@
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::fmt::Display;
+use std::fs::{self};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
+use crate::backend::{Backend, VersionInfo, normalize_idiomatic_contents};
+use crate::cache::{CacheManager, CacheManagerBuilder};
+use crate::cli::args::BackendArg;
+use crate::cli::version::OS;
+use crate::cmd::CmdLineRunner;
+use crate::config::{Config, Settings};
+use crate::file::{TarFormat, TarOptions};
+use crate::http::{HTTP, HTTP_FETCH};
+use crate::install_context::InstallContext;
+use crate::toolset::{ToolVersion, Toolset};
+use crate::ui::progress_report::SingleReport;
+use crate::{file, plugins};
+use async_trait::async_trait;
+use color_eyre::eyre::{Result, eyre};
+use indoc::formatdoc;
+use itertools::Itertools;
+use regex::Regex;
+use serde_derive::{Deserialize, Serialize};
+use std::str::FromStr;
+use std::sync::LazyLock as Lazy;
+use versions::Versioning;
+use xx::regex;
+
+static VERSION_REGEX: Lazy<regex::Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?i)(^Available versions:|-src|-dev|-latest|-stm|[-\\.]rc|-milestone|-alpha|-beta|[-\\.]pre|-next|-test|snapshot|SNAPSHOT|master)"
+    )
+        .unwrap()
+});
+
+#[derive(Debug)]
+pub struct JavaPlugin {
+    ba: Arc<BackendArg>,
+    java_metadata_ea_cache: CacheManager<HashMap<String, JavaMetadata>>,
+    java_metadata_ga_cache: CacheManager<HashMap<String, JavaMetadata>>,
+}
+
+impl JavaPlugin {
+    pub fn new() -> Self {
+        let settings = Settings::get();
+        let ba = Arc::new(plugins::core::new_backend_arg("java"));
+        Self {
+            java_metadata_ea_cache: CacheManagerBuilder::new(
+                ba.cache_path.join("java_metadata_ea.msgpack.z"),
+            )
+            .with_fresh_duration(settings.fetch_remote_versions_cache())
+            .build(),
+            java_metadata_ga_cache: CacheManagerBuilder::new(
+                ba.cache_path.join("java_metadata_ga.msgpack.z"),
+            )
+            .with_fresh_duration(settings.fetch_remote_versions_cache())
+            .build(),
+            ba,
+        }
+    }
+
+    async fn fetch_java_metadata(
+        &self,
+        release_type: &str,
+    ) -> Result<&HashMap<String, JavaMetadata>> {
+        let cache = if release_type == "ea" {
+            &self.java_metadata_ea_cache
+        } else {
+            &self.java_metadata_ga_cache
+        };
+        let release_type = release_type.to_string();
+        cache
+            .get_or_try_init_async(async || {
+                let mut metadata = HashMap::new();
+
+                for m in self.download_java_metadata(&release_type).await? {
+                    // add openjdk short versions like "java@17.0.0" which default to openjdk
+                    if m.vendor == Settings::get().java.shorthand_vendor {
+                        metadata.insert(m.version.to_string(), m.clone());
+                    }
+                    metadata.insert(m.to_string(), m);
+                }
+
+                Ok(metadata)
+            })
+            .await
+    }
+
+    fn java_bin(&self, tv: &ToolVersion) -> PathBuf {
+        tv.install_path().join("bin/java")
+    }
+
+    fn test_java(&self, tv: &ToolVersion, pr: &dyn SingleReport) -> Result<()> {
+        CmdLineRunner::new(self.java_bin(tv))
+            .with_pr(pr)
+            .env("JAVA_HOME", tv.install_path())
+            .arg("-version")
+            .execute()
+    }
+
+    async fn download(
+        &self,
+        ctx: &InstallContext,
+        tv: &mut ToolVersion,
+        pr: &dyn SingleReport,
+        m: &JavaMetadata,
+    ) -> Result<PathBuf> {
+        let filename = m.url.split('/').next_back().unwrap();
+        let tarball_path = tv.download_path().join(filename);
+
+        pr.set_message(format!("download {filename}"));
+        HTTP.download_file(&m.url, &tarball_path, Some(pr)).await?;
+
+        let platform_key = self.get_platform_key();
+        if !tv.lock_platforms.contains_key(&platform_key) {
+            let platform_info = tv.lock_platforms.entry(platform_key).or_default();
+            platform_info.url = Some(m.url.clone());
+            if m.checksum.is_some() {
+                platform_info.checksum = m.checksum.clone();
+            }
+        }
+        self.verify_checksum(ctx, tv, &tarball_path)?;
+
+        Ok(tarball_path)
+    }
+
+    fn install(
+        &self,
+        tv: &ToolVersion,
+        pr: &dyn SingleReport,
+        tarball_path: &Path,
+        m: &JavaMetadata,
+    ) -> Result<()> {
+        let filename = tarball_path.file_name().unwrap().to_string_lossy();
+        pr.set_message(format!("extract {filename}"));
+        match m.file_type.as_deref() {
+            Some("zip") => file::unzip(tarball_path, &tv.download_path(), &Default::default())?,
+            _ => file::untar(
+                tarball_path,
+                &tv.download_path(),
+                &TarOptions {
+                    pr: Some(pr),
+                    ..TarOptions::new(TarFormat::from_file_name(
+                        &tarball_path.file_name().unwrap().to_string_lossy(),
+                    ))
+                },
+            )?,
+        }
+        self.move_to_install_path(tv, m)
+    }
+
+    fn move_to_install_path(&self, tv: &ToolVersion, m: &JavaMetadata) -> Result<()> {
+        let basedir = tv
+            .download_path()
+            .read_dir()?
+            .find(|e| e.as_ref().unwrap().file_type().unwrap().is_dir())
+            .unwrap()?
+            .path();
+        let contents_dir = basedir.join("Contents");
+        let source_dir = match m.vendor.as_str() {
+            "zulu" | "liberica" => basedir,
+            _ if os() == "macosx" => basedir.join("Contents").join("Home"),
+            _ => basedir,
+        };
+        file::remove_all(tv.install_path())?;
+        file::create_dir_all(tv.install_path())?;
+        for entry in fs::read_dir(source_dir)? {
+            let entry = entry?;
+            let dest = tv.install_path().join(entry.file_name());
+            trace!("moving {:?} to {:?}", entry.path(), &dest);
+            file::rename(entry.path(), dest)?;
+        }
+
+        if cfg!(target_os = "macos") {
+            self.handle_macos_integration(&contents_dir, tv, m)?;
+        }
+
+        Ok(())
+    }
+
+    fn handle_macos_integration(
+        &self,
+        contents_dir: &Path,
+        tv: &ToolVersion,
+        m: &JavaMetadata,
+    ) -> Result<()> {
+        // move Contents dir to install path for macOS, if it exists
+        if contents_dir.exists() {
+            file::create_dir_all(tv.install_path().join("Contents"))?;
+            for entry in fs::read_dir(contents_dir)? {
+                let entry = entry?;
+                // skip Home dir, so we can symlink it later
+                if entry.file_name() == "Home" {
+                    continue;
+                }
+                let dest = tv.install_path().join("Contents").join(entry.file_name());
+                trace!("moving {:?} to {:?}", entry.path(), &dest);
+                file::rename(entry.path(), dest)?;
+            }
+            file::make_symlink(
+                tv.install_path().as_path(),
+                &tv.install_path().join("Contents").join("Home"),
+            )?;
+        }
+
+        // if vendor is Zulu, symlink zulu-{major_version}.jdk/Contents to install path for macOS
+        if m.vendor.as_str() == "zulu" {
+            let (major_version, _) = m
+                .version
+                .split_once('.')
+                .unwrap_or_else(|| (&m.version, ""));
+            file::make_symlink(
+                tv.install_path()
+                    .join(format!("zulu-{major_version}.jdk"))
+                    .join("Contents")
+                    .as_path(),
+                &tv.install_path().join("Contents"),
+            )?;
+        }
+
+        if tv.install_path().join("Contents").exists() {
+            info!(
+                "{}",
+                formatdoc! {r#"
+                To enable macOS integration, run the following commands:
+                sudo mkdir /Library/Java/JavaVirtualMachines/{version}.jdk
+                sudo ln -s {path}/Contents /Library/Java/JavaVirtualMachines/{version}.jdk/Contents
+                "#,
+                    version = tv.version,
+                    path = tv.install_path().display(),
+                }
+            );
+        }
+        Ok(())
+    }
+
+    fn verify(&self, tv: &ToolVersion, pr: &dyn SingleReport) -> Result<()> {
+        pr.set_message("java -version".into());
+        self.test_java(tv, pr)
+    }
+
+    fn tv_release_type(&self, tv: &ToolVersion) -> String {
+        tv.request
+            .options()
+            .get("release_type")
+            .map(|s| s.to_string())
+            .unwrap_or(String::from("ga"))
+    }
+
+    fn tv_to_java_version(&self, tv: &ToolVersion) -> String {
+        if regex!(r"^\d").is_match(&tv.version) {
+            // undo openjdk shorthand
+            format!("{}-{}", Settings::get().java.shorthand_vendor, tv.version)
+        } else {
+            tv.version.clone()
+        }
+    }
+
+    async fn tv_to_metadata(&self, tv: &ToolVersion) -> Result<&JavaMetadata> {
+        let v: String = self.tv_to_java_version(tv);
+        let release_type = self.tv_release_type(tv);
+        let m = self
+            .fetch_java_metadata(&release_type)
+            .await?
+            .get(&v)
+            .ok_or_else(|| eyre!("no metadata found for version {}", tv.version))?;
+        Ok(m)
+    }
+
+    async fn download_java_metadata(&self, release_type: &str) -> Result<Vec<JavaMetadata>> {
+        let settings = Settings::get();
+        let url = format!(
+            "https://mise-java.jdx.dev/jvm/{}/{}/{}.json",
+            release_type,
+            os(),
+            arch(&settings)
+        );
+
+        let metadata = HTTP_FETCH
+            .json::<Vec<JavaMetadata>, _>(url)
+            .await?
+            .into_iter()
+            .filter(|m| {
+                m.file_type
+                    .as_ref()
+                    .is_some_and(|file_type| JAVA_FILE_TYPES.contains(file_type))
+            })
+            .collect();
+        Ok(metadata)
+    }
+}
+
+#[async_trait]
+impl Backend for JavaPlugin {
+    fn ba(&self) -> &Arc<BackendArg> {
+        &self.ba
+    }
+
+    async fn _list_remote_versions(&self, config: &Arc<Config>) -> Result<Vec<VersionInfo>> {
+        let release_type = config
+            .get_tool_request_set()
+            .await?
+            .list_tools()
+            .iter()
+            .find(|ba| ba.short == "java")
+            .and_then(|ba| ba.opts().get("release_type").map(|s| s.to_string()))
+            .unwrap_or_else(|| "ga".to_string());
+
+        let versions = self
+            .fetch_java_metadata(&release_type)
+            .await?
+            .iter()
+            .sorted_by_cached_key(|(v, m)| {
+                let is_shorthand = regex!(r"^\d").is_match(v);
+                let vendor = &m.vendor;
+                let is_jdk = match is_shorthand {
+                    true => true,
+                    false => m
+                        .image_type
+                        .as_ref()
+                        .is_some_and(|image_type| image_type == "jdk"),
+                };
+                let features = 10 - m.features.as_ref().map_or(0, |f| f.len());
+                let version = Versioning::new(v);
+                // Extract build suffix after a '+', '.' if present. If not present, treat as 0.
+                let build_num = v
+                    .rsplit_once('+')
+                    .or_else(|| v.rsplit_once('.'))
+                    .and_then(|(_, tail)| {
+                        // take leading digits of tail
+                        let digits: String =
+                            tail.chars().take_while(|c| c.is_ascii_digit()).collect();
+                        if digits.is_empty() {
+                            None
+                        } else {
+                            u64::from_str(&digits).ok()
+                        }
+                    })
+                    .unwrap_or(0u64);
+                (
+                    is_shorthand,
+                    vendor,
+                    is_jdk,
+                    features,
+                    version,
+                    build_num,
+                    v.to_string(),
+                )
+            })
+            .map(|(v, m)| VersionInfo {
+                version: v.clone(),
+                created_at: m.created_at.clone(),
+                ..Default::default()
+            })
+            .unique_by(|v| v.version.clone())
+            .collect();
+
+        Ok(versions)
+    }
+
+    /// Override to bypass the shared remote_versions cache since Java has separate
+    /// caches for GA and EA release types in fetch_java_metadata.
+    async fn list_remote_versions_with_info(
+        &self,
+        config: &Arc<Config>,
+    ) -> Result<Vec<VersionInfo>> {
+        self._list_remote_versions(config).await
+    }
+
+    fn list_installed_versions_matching(&self, query: &str) -> Vec<String> {
+        let versions = self.list_installed_versions();
+        self.fuzzy_match_filter(versions, query)
+    }
+
+    async fn list_versions_matching(
+        &self,
+        config: &Arc<Config>,
+        query: &str,
+    ) -> eyre::Result<Vec<String>> {
+        let versions = self.list_remote_versions(config).await?;
+        Ok(self.fuzzy_match_filter(versions, query))
+    }
+
+    fn get_aliases(&self) -> Result<BTreeMap<String, String>> {
+        let aliases = BTreeMap::from([("lts".into(), "25".into())]);
+        Ok(aliases)
+    }
+
+    async fn _idiomatic_filenames(&self) -> Result<Vec<String>> {
+        Ok(vec![".java-version".into(), ".sdkmanrc".into()])
+    }
+
+    async fn _parse_idiomatic_file(&self, path: &Path) -> Result<Vec<String>> {
+        let contents = file::read_to_string(path)?;
+        if path.file_name() == Some(".sdkmanrc".as_ref()) {
+            let version = contents
+                .lines()
+                .find(|l| l.starts_with("java"))
+                .unwrap_or("java=")
+                .split_once('=')
+                .unwrap_or_default()
+                .1;
+            if !version.contains('-') {
+                return Ok(vec![version.to_string()]);
+            }
+            let (version, vendor) = version.rsplit_once('-').unwrap_or_default();
+            let vendor = match vendor {
+                "amzn" => "corretto",
+                "albba" => "dragonwell",
+                "graalce" => "graalvm-community",
+                "librca" => "liberica",
+                "open" => "openjdk",
+                "ms" => "microsoft",
+                "sapmchn" => "sapmachine",
+                "sem" => "semeru-openj9",
+                "tem" => "temurin",
+                _ => vendor, // either same vendor name or unsupported
+            };
+            let mut version = version.split(['+', '-'].as_ref()).collect::<Vec<&str>>()[0];
+            // if vendor is zulu, we can only match the major version
+            if vendor == "zulu" {
+                version = version.split_once('.').unwrap_or_default().0;
+            }
+            Ok(vec![format!("{vendor}-{version}")])
+        } else {
+            Ok(normalize_idiomatic_contents(&contents)
+                .lines()
+                .map(|s| s.to_string())
+                .collect())
+        }
+    }
+
+    async fn install_version_(
+        &self,
+        ctx: &InstallContext,
+        mut tv: ToolVersion,
+    ) -> eyre::Result<ToolVersion> {
+        // Check if URL already exists in lockfile platforms first
+        let platform_key = self.get_platform_key();
+        let (metadata, tarball_path) =
+            if let Some(platform_info) = tv.lock_platforms.get(&platform_key) {
+                if let Some(ref url) = platform_info.url {
+                    // Use the filename from the URL, not the platform key
+                    let filename = url.split('/').next_back().unwrap();
+                    debug!("Using existing URL from lockfile for {}: {}", filename, url);
+                    let tarball_path = tv.download_path().join(filename);
+
+                    // If the file does not exist, download using the lockfile URL
+                    if !tarball_path.exists() {
+                        debug!("File not found, downloading from cached URL: {}", url);
+                        // Download using the lockfile URL, not JavaMetadata
+                        HTTP.download_file(url, &tarball_path, Some(ctx.pr.as_ref()))
+                            .await?;
+                        // Optionally verify checksum if present
+                        self.verify_checksum(ctx, &mut tv, &tarball_path)?;
+                    }
+
+                    // Fetch metadata for installation (for install/move logic)
+                    let metadata = self.tv_to_metadata(&tv).await?;
+                    (metadata, tarball_path)
+                } else {
+                    // No URL in lockfile, fallback to metadata
+                    let metadata = self.tv_to_metadata(&tv).await?;
+                    let tarball_path = self
+                        .download(ctx, &mut tv, ctx.pr.as_ref(), metadata)
+                        .await?;
+                    (metadata, tarball_path)
+                }
+            } else {
+                let metadata = self.tv_to_metadata(&tv).await?;
+                let tarball_path = self
+                    .download(ctx, &mut tv, ctx.pr.as_ref(), metadata)
+                    .await?;
+                (metadata, tarball_path)
+            };
+
+        ctx.pr.next_operation();
+        self.install(&tv, ctx.pr.as_ref(), &tarball_path, metadata)?;
+        ctx.pr.next_operation();
+        self.verify(&tv, ctx.pr.as_ref())?;
+
+        Ok(tv)
+    }
+
+    async fn exec_env(
+        &self,
+        _config: &Arc<Config>,
+        _ts: &Toolset,
+        tv: &ToolVersion,
+    ) -> eyre::Result<BTreeMap<String, String>> {
+        let map = BTreeMap::from([(
+            "JAVA_HOME".into(),
+            tv.install_path().to_string_lossy().into(),
+        )]);
+        Ok(map)
+    }
+
+    fn fuzzy_match_filter(&self, versions: Vec<String>, query: &str) -> Vec<String> {
+        let is_vendor_prefix = query != "latest" && query.ends_with('-');
+        let query_escaped = regex::escape(query);
+        let query = match query {
+            "latest" => "[0-9].*",
+            // else; use escaped query
+            _ => &query_escaped,
+        };
+        // Same semantics as Backend::fuzzy_match_filter:
+        // - "1.2" should match "1.2.3" but not "1.20"
+        // - vendor prefixes like "temurin-" should match "temurin-25..."
+        let query_regex = if is_vendor_prefix {
+            Regex::new(&format!("^{query}.*$")).unwrap()
+        } else {
+            Regex::new(&format!("^{query}([+\\-.].+)?$")).unwrap()
+        };
+
+        versions
+            .into_iter()
+            .filter(|v| {
+                if query == v {
+                    return true;
+                }
+                if VERSION_REGEX.is_match(v) {
+                    return false;
+                }
+                query_regex.is_match(v)
+            })
+            .collect()
+    }
+}
+
+fn os() -> &'static str {
+    if cfg!(target_os = "macos") {
+        "macosx"
+    } else if OS.as_str() == "freebsd" {
+        "linux"
+    } else {
+        &OS
+    }
+}
+
+fn arch(settings: &Settings) -> &str {
+    match settings.arch() {
+        "x64" => "x86_64",
+        "arm64" => "aarch64",
+        "arm" => "arm32-vfp-hflt",
+        other => other,
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
+struct JavaMetadata {
+    // architecture: String,
+    checksum: Option<String>,
+    // checksum_url: Option<String>,
+    created_at: Option<String>,
+    features: Option<Vec<String>>,
+    file_type: Option<String>,
+    // filename: String,
+    image_type: Option<String>,
+    java_version: String,
+    jvm_impl: String,
+    // os: String,
+    // release_type: String,
+    // size: Option<i32>,
+    url: String,
+    vendor: String,
+    version: String,
+}
+
+impl Display for JavaMetadata {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut v = vec![self.vendor.clone()];
+        if self
+            .image_type
+            .as_ref()
+            .is_some_and(|image_type| image_type == "jre")
+        {
+            v.push(self.image_type.clone().unwrap());
+        } else if self.image_type.is_none() {
+            v.push("unknown".to_string());
+        }
+        if let Some(features) = &self.features {
+            for f in features {
+                if JAVA_FEATURES.contains(f) {
+                    v.push(f.clone());
+                }
+            }
+        }
+        if self.jvm_impl == "openj9" {
+            v.push(self.jvm_impl.clone());
+        }
+        if self.vendor == "liberica-nik" {
+            let major = self
+                .java_version
+                .split('.')
+                .next()
+                .unwrap_or(&self.java_version);
+            v.push(format!("openjdk{}", major));
+        }
+        v.push(self.version.clone());
+        write!(f, "{}", v.join("-"))
+    }
+}
+
+// only care about these features
+static JAVA_FEATURES: Lazy<HashSet<String>> = Lazy::new(|| {
+    HashSet::from(["crac", "javafx", "jcef", "leyden", "lite", "musl"].map(|s| s.to_string()))
+});
+#[cfg(unix)]
+static JAVA_FILE_TYPES: Lazy<HashSet<String>> =
+    Lazy::new(|| HashSet::from(["tar.gz", "tar.xz"].map(|s| s.to_string())));
+#[cfg(windows)]
+static JAVA_FILE_TYPES: Lazy<HashSet<String>> =
+    Lazy::new(|| HashSet::from(["zip"].map(|s| s.to_string())));

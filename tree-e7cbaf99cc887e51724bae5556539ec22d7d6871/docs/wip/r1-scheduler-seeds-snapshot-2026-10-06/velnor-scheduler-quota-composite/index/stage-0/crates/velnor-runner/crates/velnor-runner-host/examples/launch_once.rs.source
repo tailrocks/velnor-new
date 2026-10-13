@@ -1,0 +1,105 @@
+//! Acquire scale-set jobs up to capacity and start one official worker each.
+//! The PAT comes from `gh auth token` and is not printed. JIT is not printed.
+
+use std::path::PathBuf;
+use std::process::{Command, ExitCode};
+
+use velnor_runner_host::{HostConfig, Journal, Started, connect_unix, launch_once};
+use zeroize::Zeroize;
+
+#[tokio::main]
+async fn main() -> ExitCode {
+    let mut pat = match read_pat() {
+        Ok(pat) => pat,
+        Err(code) => return code,
+    };
+    let outcome = run(&pat).await;
+    pat.zeroize();
+    outcome
+}
+
+async fn run(pat: &str) -> ExitCode {
+    let config = match host_config() {
+        Ok(config) => config,
+        Err(code) => return code,
+    };
+    let docker = match connect_unix(&config.docker.endpoint) {
+        Ok(docker) => docker,
+        Err(err) => {
+            eprintln!("launch_once: {err}");
+            return ExitCode::from(1);
+        }
+    };
+    let path = match journal_path() {
+        Ok(path) => path,
+        Err(code) => return code,
+    };
+    let journal = match Journal::open(&path).await {
+        Ok(journal) => journal,
+        Err(err) => {
+            eprintln!("launch_once: {err}");
+            return ExitCode::from(1);
+        }
+    };
+    let Some((owner, repo)) = config.github.repository.split_once('/') else {
+        eprintln!("launch_once: invalid repository binding");
+        return ExitCode::from(1);
+    };
+    match launch_once(pat, owner, repo, &docker, &journal, &config).await {
+        Ok(report) => {
+            print_workers(report.set_id, &report.workers);
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("launch_once: {err}");
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn print_workers(set_id: i64, workers: &[Started]) {
+    if workers.is_empty() {
+        println!("set_id={set_id} started=false runner_id= dind_id=");
+        return;
+    }
+    for worker in workers {
+        println!(
+            "set_id={set_id} started=true runner_id={} dind_id={}",
+            worker.runner_id, worker.dind_id
+        );
+    }
+}
+
+fn journal_path() -> Result<PathBuf, ExitCode> {
+    let home = std::env::var("HOME").map_err(|_| ExitCode::from(1))?;
+    let dir = PathBuf::from(home).join("Library/Application Support/Velnor");
+    std::fs::create_dir_all(&dir).map_err(|_| ExitCode::from(1))?;
+    Ok(dir.join("launch.db"))
+}
+
+fn host_config() -> Result<HostConfig, ExitCode> {
+    let home = std::env::var("HOME").map_err(|_| ExitCode::from(1))?;
+    let path = PathBuf::from(home).join("Library/Application Support/Velnor/host.toml");
+    let text = std::fs::read_to_string(path).map_err(|_| ExitCode::from(1))?;
+    HostConfig::parse(&text).map_err(|error| {
+        eprintln!("launch_once: {error}");
+        ExitCode::from(1)
+    })
+}
+
+fn read_pat() -> Result<String, ExitCode> {
+    let output = Command::new("gh")
+        .args(["auth", "token"])
+        .output()
+        .map_err(|_| ExitCode::from(1))?;
+    if !output.status.success() {
+        return Err(ExitCode::from(1));
+    }
+    let text = String::from_utf8(output.stdout).map_err(|_| ExitCode::from(1))?;
+    let pat = text.trim().to_owned();
+    if pat.is_empty() {
+        Err(ExitCode::from(1))
+    } else {
+        Ok(pat)
+    }
+}

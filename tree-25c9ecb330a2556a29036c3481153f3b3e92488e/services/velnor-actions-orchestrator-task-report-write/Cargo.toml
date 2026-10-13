@@ -1,0 +1,24 @@
+[package]
+name = "velnor-actions-orchestrator-task-report-write"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-covered-tasks = { version = "=0.1.1", path = "../velnor-actions-orchestrator-covered-tasks" }
+velnor-actions-orchestrator-noop-report = { version = "=0.1.1", path = "../velnor-actions-orchestrator-noop-report" }
+velnor-actions-orchestrator-task-report = { version = "=0.1.1", path = "../velnor-actions-orchestrator-task-report" }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[[test]]
+name = "velnor_orchestrator_task_report_write"
+path = "tests/main.rs"

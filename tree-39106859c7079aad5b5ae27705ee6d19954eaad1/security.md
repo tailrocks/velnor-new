@@ -1,0 +1,155 @@
+# Security
+
+mise includes several supply-chain controls for installing and managing tools. These controls have
+different coverage depending on the backend and the metadata available from upstream.
+
+## Software verification
+
+mise provides native software verification without requiring external dependencies.
+For aqua tools, Cosign/Minisign signatures, SLSA provenance, and GitHub artifact attestations are
+verified automatically using mise's built-in implementation. OpenPGP signature verification for
+Node.js and Swift downloads is likewise built in and requires no external `gpg` binary.
+
+To configure aqua verification, which is enabled by default:
+
+```sh
+# Disable specific verification methods if needed
+export MISE_AQUA_COSIGN=false
+export MISE_AQUA_SLSA=false
+export MISE_AQUA_GITHUB_ATTESTATIONS=false
+export MISE_AQUA_MINISIGN=false
+```
+
+For lockfile checksum and provenance behavior, see [mise.lock](/dev-tools/mise-lock.html).
+
+## Safe mode
+
+Safe mode (`MISE_SAFE=1`, or the [`safe`](/configuration/settings.html#safe) setting) is a hard
+boundary against **project configuration executing code**. It is intended for running mise against
+configuration you do not control — most notably automation that refreshes `mise.lock` on pull
+request branches, such as a scheduled `mise lock --bump` job (see
+[Bumping Locked Versions](/dev-tools/mise-lock.html#bumping-locked-versions)).
+
+```sh
+# resolve tool versions from untrusted config without executing any of it
+MISE_SAFE=1 mise lock --bump --dry-run --json
+```
+
+When enabled, mise **refuses with an error** (never a silent fallback) to:
+
+- run `exec()` or `read_file()` in config templates
+- run hooks (suppressed like `--no-hooks`, since hooks fire ambiently from `mise env`/`hook-env`)
+- run tool-level `postinstall` hooks or apply tool-level `install_env` during installation
+- run tasks
+- execute asdf plugin scripts
+- install plugins
+
+It also **ignores environment and shell configuration from project (non-global) config** — `[env]`
+values, `_.path`, `_.file`, and `[shell_alias]` entries. These would otherwise be applied to your
+shell environment (env vars and aliases are emitted through `hook-env`) and to the
+subprocesses mise spawns during version resolution (for example `go list` or a vfox plugin hook),
+which is an indirect code-execution vector (`PATH`, `LD_PRELOAD`, `DYLD_INSERT_LIBRARIES`,
+`NODE_OPTIONS`, …) that safe mode is meant to close. Global and system config (e.g.
+`~/.config/mise/config.toml`) is operator-owned and still applies, mirroring the
+[trust](/cli/trust.html) model.
+
+`_.source` is treated as code execution rather than environment injection, so it is ignored in safe
+mode regardless of where it is defined — including operator-owned global config.
+
+`[settings]` from project (non-global) config are also ignored, so an untrusted repo cannot change
+mise's behavior during resolution (for example disabling verification or redirecting a backend).
+Global/system settings still apply. Specific project settings may be allowlisted in the future if
+they are both safe and necessary.
+
+Because a config loaded in safe mode is inert — it can neither execute code nor inject environment —
+**safe mode does not require configs to be trusted.** mise loads untrusted configs without a
+[trust](/cli/trust.html) prompt or error when `safe` is set, since there is nothing a config can do
+to compromise the host. This is what lets automation run `mise lock` against pull-request config
+without a preceding `mise trust`.
+
+Version resolution still works for every HTTP-based backend — `core`, `aqua`, `github`, `gitlab`,
+`http`, `cargo`, `pipx`, `gem`, `dotnet`, and `npm` — as well as `go` (which runs with
+`GOTOOLCHAIN=local` so a project `go.mod` cannot trigger a toolchain download). Refreshing
+`mise.lock` and listing installed tools work normally.
+
+Already-installed and embedded vfox plugins also keep working: their code was chosen by the
+operator, not by the repository being processed, and version resolution short-circuits on
+plugins that are not installed without executing anything.
+
+::: tip
+Safe mode is a code-execution boundary; it does not replace the [trust](/cli/trust.html)
+system. Untrusted configs still require `mise trust` (or a
+[trusted config path](/configuration/settings.html#trusted_config_paths)). Safe mode limits what a
+config can do; trust limits which configs are loaded.
+:::
+
+`MISE_SAFE` is `global_only`, so it can only be set via the environment or global config — a project
+`mise.toml` cannot turn it off for itself.
+
+## Minimum release age
+
+To limit supply-chain risk, you can restrict mise to only install versions released before a
+certain date or duration. This is similar to Renovate's
+[minimum release age](https://docs.renovatebot.com/key-concepts/minimum-release-age/) concept:
+newly published versions are ignored until they have been available for a configurable amount of
+time.
+
+```toml
+# mise.toml
+[settings]
+minimum_release_age = "7d"  # only install versions released more than 7 days ago
+```
+
+The setting supports relative durations (`7d`, `6mo`, `1y`) and absolute dates (`2024-06-01`). For most
+backends, it only affects fuzzy version resolution, such as `node@20` or `latest`.
+Explicitly pinned versions like `node@22.5.0` bypass the filter.
+During ordinary toolset resolution, already-installed fuzzy matches remain eligible:
+`minimum_release_age` limits remote version selection and does not make an installed version
+inactive. Lockfile generation may re-check fuzzy installed matches against release metadata.
+
+Capability depends on the backend:
+
+| Capability                                     | Backends                                                                                                                               |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Top-level version filtering                    | Backends that provide release timestamps, such as `aqua:`, `cargo:`, `github:`, `gitlab:`, `go:`, `npm:`, `pipx:`, and many core tools |
+| Transitive dependency filtering during install | `npm:` and `pipx:`                                                                                                                     |
+
+Versions without timestamps are included by default. Backends without transitive dependency support
+may still select an older top-level tool version, but they do not constrain dependencies fetched by
+the tool's installer/compiler.
+
+For details on `npm:` and `pipx:` transitive dependency support, see the
+[npm backend docs](/dev-tools/backends/npm.html) and
+[pipx backend docs](/dev-tools/backends/pipx.html).
+
+You can also set `minimum_release_age` per-tool to override the global setting:
+
+```toml
+# mise.toml
+[settings]
+minimum_release_age = "7d"  # default for all tools
+
+[tools.trivy]
+version = "latest"
+minimum_release_age = "1d"  # trivy updates are time-sensitive, use a shorter window
+```
+
+Precedence: `--minimum-release-age` CLI flag > per-tool `minimum_release_age` > global
+`minimum_release_age` setting.
+
+Use `minimum_release_age_excludes` to exclude tools or backends from the global/default setting:
+
+```toml
+[settings]
+minimum_release_age = "7d"
+minimum_release_age_excludes = ["trivy", "npm:*"]
+```
+
+Exclusions can match backend wildcards like `npm:*`, tool shorthands like `trivy`, or full backend
+IDs like `npm:prettier`. Matching tools skip the global setting and built-in default. Per-tool
+`minimum_release_age` options and the CLI flag still apply even when a tool matches the exclusion
+list. Exclusions from multiple config files are merged and deduplicated, so project
+configuration can add exclusions without repeating those from the global configuration.
+
+See [`minimum_release_age`](/configuration/settings.html#minimum_release_age) for the setting
+reference.

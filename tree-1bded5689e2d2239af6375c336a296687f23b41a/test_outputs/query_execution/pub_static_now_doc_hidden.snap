@@ -1,0 +1,42 @@
+---
+source: src/query.rs
+expression: "&query_execution_results"
+snapshot_kind: text
+---
+{
+  "./test_crates/pub_static_mut_now_immutable/": [
+    {
+      "path": List([
+        String("pub_static_mut_now_immutable"),
+        String("DOC_HIDDEN_STATIC_B"),
+      ]),
+      "span_begin_line": Uint64(15),
+      "span_end_line": Uint64(15),
+      "span_filename": String("src/lib.rs"),
+      "static_name": String("DOC_HIDDEN_STATIC_B"),
+    },
+  ],
+  "./test_crates/pub_static_now_doc_hidden/": [
+    {
+      "path": List([
+        String("pub_static_now_doc_hidden"),
+        String("GlobalStaticB"),
+      ]),
+      "span_begin_line": Uint64(6),
+      "span_end_line": Uint64(6),
+      "span_filename": String("src/lib.rs"),
+      "static_name": String("GlobalStaticB"),
+    },
+    {
+      "path": List([
+        String("pub_static_now_doc_hidden"),
+        String("PublicModule"),
+        String("PublicModuleStaticB"),
+      ]),
+      "span_begin_line": Uint64(20),
+      "span_end_line": Uint64(20),
+      "span_filename": String("src/lib.rs"),
+      "static_name": String("PublicModuleStaticB"),
+    },
+  ],
+}

@@ -1,0 +1,17 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/pub_static_now_mutable/": [
+    {
+      "path": List([
+        String("pub_static_now_mutable"),
+        String("STATIC_A"),
+      ]),
+      "span_begin_line": Uint64(4),
+      "span_end_line": Uint64(4),
+      "span_filename": String("src/lib.rs"),
+      "static_name": String("STATIC_A"),
+    },
+  ],
+}

@@ -1,0 +1,19 @@
+[package]
+name = "velnor-actions-mise-cache"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lints]
+workspace = true
+
+[dependencies]
+velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-mise-core = { version = "=0.1.1", path = "../velnor-actions-mise-core" }
+serde = { workspace = true }
+
+[[test]]
+name = "velnor_mise_cache"
+path = "tests/main.rs"

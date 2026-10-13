@@ -1,0 +1,223 @@
+# Sourced by tar-shim.sh. BusyBox strips leading "/" and ".." and rejects -P.
+# GNU tar cannot stat or open those paths under qemu-user (openat2 ENOSYS).
+# -P extract: let BusyBox strip, then move each member to the path GNU -P
+# would have opened. -P create: write the caller's names with velnor-tar-pax.
+
+strip_unsafe() {
+  local s="$1"
+  while true; do
+    if [[ "$s" == /* ]]; then
+      s="${s#/}"
+      continue
+    fi
+    if [[ "$s" == ../* ]]; then
+      s="${s#../}"
+      continue
+    fi
+    case "$s" in
+      */../*)
+        s="${s#*/../}"
+        continue
+        ;;
+    esac
+    break
+  done
+  printf '%s' "$s"
+}
+
+norm_path() {
+  local input="$1"
+  local abs=0
+  local -a stack=()
+  local rest="$input"
+  local part
+  [[ "$input" == /* ]] && abs=1
+  while [ -n "$rest" ]; do
+    part="${rest%%/*}"
+    if [ "$rest" = "$part" ]; then
+      rest=""
+    else
+      rest="${rest#*/}"
+    fi
+    case "$part" in
+      "" | ".") ;;
+      "..")
+        if [ "${#stack[@]}" -gt 0 ] && [ "${stack[$((${#stack[@]} - 1))]}" != ".." ]; then
+          stack=("${stack[@]:0:$((${#stack[@]} - 1))}")
+        elif [ "$abs" -eq 0 ]; then
+          stack+=("..")
+        fi
+        ;;
+      *) stack+=("$part") ;;
+    esac
+  done
+  if [ "$abs" -eq 1 ]; then
+    if [ "${#stack[@]}" -eq 0 ]; then
+      printf '/'
+      return
+    fi
+    local out="" p
+    for p in "${stack[@]}"; do
+      out="$out/$p"
+    done
+    printf '%s' "$out"
+    return
+  fi
+  if [ "${#stack[@]}" -eq 0 ]; then
+    printf '.'
+    return
+  fi
+  local IFS=/
+  printf '%s' "${stack[*]}"
+}
+
+member_actual() {
+  local stripped base
+  stripped="$(strip_unsafe "$1")"
+  [ -n "$stripped" ] || return 0
+  base="${chdir:-$PWD}"
+  norm_path "$base/$stripped"
+}
+
+member_intended() {
+  local base
+  if [[ "$1" == /* ]]; then
+    norm_path "$1"
+    return
+  fi
+  base="${chdir:-$PWD}"
+  norm_path "$base/$1"
+}
+
+run_busybox() {
+  if [ -n "$program" ]; then
+    if [ "$mode" = c ]; then
+      "${bb[@]}" | bash -c "$program" >"$archive"
+    else
+      bash -c "$program" <"$archive" | "${bb[@]}"
+    fi
+  else
+    "${bb[@]}"
+  fi
+}
+
+write_pax_archive() {
+  local pax list
+  pax="${_velnor_tar_here}/velnor-tar-pax"
+  [ -x "$pax" ] || die "absolute names need $pax"
+  [ -n "$archive" ] || die "missing archive"
+  list="$(mktemp)"
+  printf '%s\n' "${filtered[@]}" >"$list"
+  if [ -n "$program" ]; then
+    "$pax" --chdir "$chdir" --files-from "$list" | bash -c "$program" >"$archive"
+  elif [ "$gzip" -eq 1 ]; then
+    "$pax" --chdir "$chdir" --files-from "$list" | gzip -c >"$archive"
+  else
+    "$pax" --chdir "$chdir" --files-from "$list" >"$archive"
+  fi
+  rm -f "$list"
+}
+
+list_members() {
+  local out="$1"
+  local raw=""
+  # BusyBox tar -t strips "../" before it prints the name. GNU tar lists the
+  # stored name and does not open the member, so openat2 is not involved.
+  if [ -n "$program" ]; then
+    raw="$(mktemp)"
+    bash -c "$program" <"$archive" >"$raw"
+    tar.gnu t -f "$raw" >"$out"
+    rm -f "$raw"
+  elif [ "$gzip" -eq 1 ]; then
+    tar.gnu t -z -f "$archive" >"$out"
+  else
+    tar.gnu t -f "$archive" >"$out"
+  fi
+}
+
+move_member() {
+  local actual="$1"
+  local intended="$2"
+  if [ -d "$intended" ] && [ ! -L "$intended" ] && [ ! -d "$actual" ]; then
+    die "destination is a directory: $intended"
+  fi
+  mkdir -p -- "$(dirname -- "$intended")"
+  if [ -d "$actual" ] && [ ! -L "$actual" ] && [ -d "$intended" ] && [ ! -L "$intended" ]; then
+    local child
+    for child in "$actual"/* "$actual"/.[!.]* "$actual"/..?*; do
+      [ -e "$child" ] || [ -L "$child" ] || continue
+      mv -f -- "$child" "$intended"/
+    done
+    rmdir -- "$actual"
+    return
+  fi
+  mv -f -- "$actual" "$intended"
+}
+
+prune_actual() {
+  local parent="$1"
+  local base="${chdir:-$PWD}"
+  while [ "$parent" != "$base" ] && [ "$parent" != "/" ] && [ "$parent" != "." ]; do
+    rmdir -- "$parent" 2>/dev/null || break
+    parent="$(dirname -- "$parent")"
+  done
+}
+
+relocate_absolute() {
+  local list member actual intended base
+  list="$(mktemp)"
+  list_members "$list"
+  local -a pairs=()
+  while IFS= read -r member || [ -n "$member" ]; do
+    [ -n "$member" ] || continue
+    case "$member" in
+      ./PaxHeaders.* | ./PaxHeaders.*/* | ././@LongLink | ././@LongName) continue ;;
+    esac
+    case "$member" in
+      *$'\t'*) die "member name contains a tab" ;;
+    esac
+    [ "$(strip_unsafe "$member")" = "$member" ] && continue
+    actual="$(member_actual "$member")"
+    intended="$(member_intended "$member")"
+    [ -n "$actual" ] || continue
+    [ "$actual" = "$intended" ] && continue
+    pairs+=("${actual}"$'\t'"${intended}")
+  done <"$list"
+  rm -f "$list"
+  [ "${#pairs[@]}" -gt 0 ] || return 0
+  base="${chdir:-$PWD}"
+  while IFS=$'\t' read -r actual intended; do
+    [ -n "$actual" ] || continue
+    if [ -e "$actual" ] || [ -L "$actual" ]; then
+      move_member "$actual" "$intended"
+      prune_actual "$(dirname -- "$actual")"
+    elif [[ "$intended" == */ ]]; then
+      mkdir -p -- "$intended"
+    fi
+  done < <(printf '%s\n' "${pairs[@]}" | awk -F '\t' '{ print length($1) "\t" $0 }' | sort -t "$(printf '\t')" -k1,1nr | cut -f2-)
+  [ -n "$base" ]
+}
+
+finish_tar() {
+  local needs_pax=0 path stripped
+  if [ "$absolute" -eq 1 ] && [ -n "$strip" ]; then
+    die "unsupported -P with --strip-components"
+  fi
+  if [ "$absolute" -eq 1 ] && [ "$mode" = c ] && [ "${#filtered[@]}" -gt 0 ]; then
+    for path in "${filtered[@]}"; do
+      stripped="$(strip_unsafe "$path")"
+      if [ "$stripped" != "$path" ]; then
+        needs_pax=1
+        break
+      fi
+    done
+  fi
+  if [ "$needs_pax" -eq 1 ]; then
+    write_pax_archive
+  else
+    run_busybox
+  fi
+  if [ "$absolute" -eq 1 ] && [ "$mode" = x ]; then
+    relocate_absolute
+  fi
+}

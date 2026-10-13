@@ -1,0 +1,400 @@
+# Velnor V1 Workflow Contract
+
+Status: proposed implementation specification; none is implemented. Completion requires acceptance and Velnor
+dogfooding.
+
+This document fixes V1 defaults; unsupported configuration MUST be rejected.
+
+## 1. Product boundary
+
+Velnor Actions is a stack-generic GitHub Actions workflow generator and focused task executor. V1 registers
+only the Rust/Cargo detector and adapter. It runs locally and on GitHub-hosted runners. Self-hosted runners,
+Docker supervision, a workflow interpreter, and a distributed cache service are deferred.
+
+Each registered stack adapter owns its discovery and task proposals. The Mise adapter owns tool selection,
+command construction and execution, and cache integration. The actionlint crate owns actionlint configuration
+and capabilities. The orchestrator composes stack/tool proposals, selection, cache evidence, and scheduling.
+The workflow renderer emits generic GitHub Actions YAML. V1 Rust work selects Cargo versus MBX and Cargo test
+versus Nextest independently from explicit repository evidence; it does not impose MBX or Nextest on consumers.
+
+The V1 workspace MUST contain these seven purpose-specific crates under `crates/`: `velnor-actions-contract`,
+`velnor-actions-rust`, `velnor-actions-mise`, `velnor-actions-actionlint`, `velnor-actions-workflow-renderer`,
+`velnor-actions-orchestrator`, and `velnor-actions-cli`. Generic package names such as `velnor-model`,
+`velnor-core`, `velnor-rust`, `velnor-util`, and `velnor-common` are forbidden.
+
+```text
+velnor-actions-contract            Stack-neutral workflow and task contracts
+velnor-actions-rust                All Rust/Cargo scanning and task proposals
+velnor-actions-mise                Mise tool, command, and cache adapter
+velnor-actions-actionlint          actionlint config, pin metadata, and workflow validation
+velnor-actions-workflow-renderer   Generic GitHub Actions YAML renderer
+velnor-actions-orchestrator        Combines stack, tool, contract, and renderer crates
+velnor-actions-cli                 Clap frontend; declares the velnor-actions binary
+```
+
+The CLI delegates to the orchestrator. Rust, Mise, and actionlint crates are independent; only the orchestrator
+composes them. The Rust crate does not construct Mise commands or files. The Mise crate does not parse Cargo
+metadata or implement Rust selection. The actionlint crate does not execute tools; the Mise crate does that.
+The workflow renderer does not know Rust, Mise, or actionlint configuration syntax. The contract crate
+contains only stack-neutral generator types and MUST NOT become a generic utility or application-model
+package.
+
+The public CLI MUST expose exactly these commands:
+
+```text
+velnor-actions init
+velnor-actions plan
+velnor-actions generate [--output-dir PATH]
+```
+
+`init` resolves the Git repository root with `git rev-parse --show-toplevel` from the current working
+directory and writes the sample `.velnor/config.toml` there. It MUST never create configuration in a child
+directory. `plan` and `generate` resolve the same root and run the same
+analysis. `plan` prints the human summary without writes; `generate` writes the
+rendered `.github` tree.
+With no `--output-dir`, it stages all output and replaces the repository's entire `.github` tree from scratch.
+With `--output-dir PATH`, PATH is the exact fresh preview root; it MUST be absent or empty, and the command
+writes `PATH/.github` without modifying the repository. CI and local callers MUST choose a unique directory
+under `/tmp` or the runner temp directory.
+
+The CLI has no public scan, doctor, task, report, root, stack, profile, format, or check options. `plan`
+prints only the concise human report specified in the CLI contract; it does not expose internal JSON
+plan/report formats or execute tasks. The generated GitHub job named `velnor-plan` is an internal workflow
+job, distinct from the local `velnor-actions plan` command. The public CLI MUST never hide an unbounded
+collection of commands behind a user-facing `run` subcommand.
+
+The orchestrator MUST run every registered detector in deterministic registry order. Each detector returns
+zero or more typed detections and task proposals. The orchestrator applies `.velnor/config.toml`'s
+`[stacks].ignore` list, then composes every remaining selected detection into one plan: stack-neutral
+preparation and policy obligations are deduplicated by identity, stack tasks are namespaced by stack ID, and
+the required final gate includes every selected obligation. A selected detection MUST contribute proposals or
+an explicit no-work result; it MUST NOT be silently discarded.
+
+V1 registers only the Rust/Cargo detector, so V1 output contains Rust obligations only. Unregistered stacks
+receive no validation claim. A repository with no selected Rust detection produces a valid empty scan and
+no-work workflow. An invalid discovered Cargo manifest fails with its path and Cargo's diagnostic. Future
+adapters add detectors and proposals to this same composition model; they do not add stack subcommands.
+`generate` performs detection, scan, plan, validation, and rendering in one command. Internal plan and report
+values are typed artifacts, not a public JSON API. Stack ignores have no CLI override.
+
+## 2. Repository inputs and generated outputs
+
+The following files are authoritative:
+
+| File | Authority |
+|---|---|
+| `Cargo.toml`, member manifests, `Cargo.lock` | Packages, targets, dependencies, and resolution |
+| `.velnor/version-policy.toml` | Exact latest tool versions used by Velnor-generated commands |
+| `rust-toolchain.toml`, `mise.toml`, `mise.lock` | Optional repository-owned inspection inputs; Velnor never writes them |
+| `.velnor/config.toml` | Stack-neutral workflow policy, selected-stack exclusions, and explicit exceptions |
+| `.velnor/generator.lock` | Velnor repository bootstrap binary and mirror of bundled action pins; not required or generated for consumers |
+| `.github/**` | Complete generated workflow tree |
+
+The supported configuration boundary is:
+
+```toml
+[workflow]
+policy = "consumer-v1" # or "velnor-repository-v1"
+name = "CI"
+default_branch = "main"
+generator_validation = "bootstrap"
+max_parallel_jobs = 2
+
+[stacks]
+ignore = []
+
+[stacks.rust]
+configurations = [{ name = "default", features = ["default"], target = "host" }]
+```
+
+`workflow.policy` is stack-neutral: `consumer-v1` is the only valid policy for consumer repositories;
+`velnor-repository-v1` is accepted only when the canonical repository identity is `tailrocks/velnor-new`.
+Use `GITHUB_REPOSITORY` in CI and normalized `origin` locally; mismatch or unavailable identity fails closed.
+The reserved policy enables Velnor's Alint/dependency-security jobs and candidate validation. `stacks.ignore`
+contains exact registered stack IDs and has no CLI override. Rust `configurations` control generated Rust
+task variants after detection. Unknown keys, duplicate configurations, unknown stack IDs, and invalid values
+MUST fail before workflow output is written.
+
+The generator MUST render deterministically, reject raw YAML fragments, and fail on invalid generated output.
+Tool-file findings are advisory; generation never writes them. Without `--output-dir`, it atomically replaces
+the entire `.github` tree; with `--output-dir PATH`, PATH is a fresh exact preview root containing the same
+tree and the repository is unchanged.
+
+The generator MUST discover workspaces through Git file enumeration followed by Cargo metadata. It MUST handle
+nested workspaces, standalone packages, additions, deletions, renames, path dependencies, build scripts,
+feature requirements, doctests, and shared configuration. It MUST select reverse dependents of changed local
+packages. When the comparison base or graph is uncertain, it MUST broaden the plan.
+
+## 3. Workflow topology
+
+The generator MUST emit these triggers:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [the-default-branch]
+  merge_group:
+```
+
+The default branch name MUST come from explicit repository configuration or the local
+`refs/remotes/origin/HEAD` symbolic ref. If neither is available, generation fails with an instruction to set
+`workflow.default_branch`; it never assumes `main` or fetches a remote. The generator MUST NOT combine broad
+branch pushes with pull-request path filters. A valid planning job MUST run even when no stack task is
+selected.
+
+Every generated workflow MUST set:
+
+```yaml
+permissions:
+  contents: read
+  actions: read
+```
+
+All other permissions MUST be absent or `none`. `actions: read` is only for the exact trusted baseline
+artifact. Release publication uses a separate workflow with explicit permissions; fork pull requests receive
+no write access.
+
+The workflow concurrency group MUST be:
+
+```yaml
+group: velnor-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+```
+
+For `workflow.policy = "consumer-v1"`, compose detections into `velnor-plan`, `velnor-task`,
+`velnor-workflow-lint`, and `velnor-final`. V1 permits only Rust, so the selected set is empty or `{rust}`;
+future adapters add namespaced task entries to this composed task job without CLI selectors.
+
+The following `velnor-*` labels are GitHub Actions job IDs only. They are not Cargo packages, executable
+names, generated command labels, or CLI subcommands. The sole Velnor executable is `velnor-actions`.
+
+1. `velnor-plan`: checkout; initialize Mise with `jdx/mise-action` pinned by
+the compiled-in action registry (`install: false`, `env: false`); acquire the
+exact Velnor binary from `.velnor/generator.lock` and verify SHA-256; install locked tools, including GitHub CLI for exact
+trusted-baseline lookup; run formatting checks; discover selected stack obligations; resolve an exact trusted
+base artifact where available; classify obligations as execute, cached-reuse, or baseline-covered; emit the
+bounded matrix and complete plan report. When `workflow.generator_validation = "bootstrap"`, it also checks
+generated files with that locked binary. When the value is `candidate`, it MUST NOT invoke the candidate or
+require the bootstrap binary to reproduce a new generator output.
+2. `velnor-task`: one matrix entry per selected stack task-group/configuration
+obligation. It runs the focused steps in the [task execution contract](task-execution-contract.md) and uploads
+one stack-neutral report even after failure.
+3. `velnor-workflow-lint`: checkout with `persist-credentials: false`; initialize Mise with the pinned `jdx/mise-action`; install exact
+`actionlint` and `shellcheck` versions through Mise with project config, environment, and hooks disabled;
+run `mise exec --no-config actionlint@<exact> shellcheck@<exact> -- actionlint -color` from the repository
+root. Actionlint reads `.github/actionlint.yaml`, discovers all generated workflow files, and invokes the
+Mise-provided ShellCheck integration. This job runs for every
+consumer and is a required obligation, including when no Rust stack is detected.
+4. `velnor-final`: `if: always()`, depends on the base and enabled policy jobs, validates reports/conclusions,
+and is the required status check.
+
+Only for `workflow.policy = "velnor-repository-v1"`, emit two additional independent jobs. `velnor-alint`
+checks out source with `persist-credentials: false` and runs `uses: asamarts/alint@v0.16.1` with `path: .`,
+`config: .alint.yml`, `format: github`, and `fail-on-warning: true`. `velnor-policy` runs the remaining
+dependency/security checks. The Alint tag is the explicit exception to Velnor's normal full-SHA action rule.
+Its job conclusion is the required evidence; Velnor does not assume an Alint-specific report artifact.
+Both repository-policy job conclusions are required even with an empty task matrix. `consumer-v1` MUST
+NOT assume `.alint.yml`, `deny.toml`, or Velnor's layout and MUST NOT emit `velnor-alint`. GitHub Action
+steps use Velnor's compiled-in registry and exact config overrides; they are not Mise-managed tools.
+
+When `workflow.generator_validation = "candidate"`, the generator MUST also emit `velnor-candidate` between
+`velnor-plan` and `velnor-final`. It runs the fixed candidate-build Mise invocation specified in the
+architecture contract; that invocation is a workflow step, not a separately named task or executable. The job
+uploads the candidate binary, runs generation/fixture qualification against that exact artifact, and uploads
+one candidate report. The candidate job MUST depend on `velnor-plan` but MUST NOT provide the matrix consumed
+by `velnor-task`; the matrix is always computed by the locked bootstrap binary. Consumer repositories do not
+emit this job.
+
+Under `workflow.policy = "velnor-repository-v1"`, `velnor-policy` MUST run cargo-deny, cargo-machete, and
+zizmor, even when no stack task is selected; `velnor-alint` follows the separate contract above. actionlint
+remains in the always-on `velnor-workflow-lint` job. `velnor-plan` runs
+formatting for each selected stack configuration. Rust documentation warnings run in each Rust task matrix
+after doctests. Clippy, the detected test runner, and rustdoc are package-scoped in the Rust adapter; a workspace-wide compile
+is not a default pull-request check. MSRV verification runs in the pinned toolchain-update qualification
+workflow, tests every product crate against the exact declared `rust-version`, and is not repeated on every
+pull request. `Velnor / Required` depends on the plan, every selected task result, exact baseline coverage
+validation, and the candidate report when candidate mode is enabled.
+
+The final job MUST have stable display name `Velnor / Required`; branch protection requires that exact check.
+Every generated job MUST use the same single literal, versioned Ubuntu label in `runs-on`. With no
+`workflow.runner_label` override, Velnor MUST use the latest pinned x64 label from [version
+policy](version-policy.md); the current snapshot selects `ubuntu-26.04`. An explicit older label is allowed
+only when listed in the policy's supported-label set and named in `.velnor/config.toml`. Velnor MUST reject
+`ubuntu-latest`, every `*-latest` alias, unversioned labels, unsupported labels, expressions, matrices, and
+aliases in every generated `runs-on` field. V1 emits no self-hosted labels. The plan records the selected
+label and whether it came from `latest_default` or `config_override`.
+
+`velnor-plan` MUST upload its plan report with `if: always()`. It MUST fail when its matrix JSON exceeds 256
+KiB. It MUST report a clear planning error and request a broadened or reduced plan instead of truncating
+entries.
+
+The generated jobs MUST use these step sequences and commands. Action steps are the pinned allowlisted actions
+above; every shell step is generated with fixed arguments and may not contain repository-provided shell text.
+
+Workflow shell may invoke Mise directly for exact tool installation, generated command steps, and the fixed
+candidate-build bootstrap. Every command step MUST use a fixed `mise exec --no-config` invocation with exact
+tool pins, except a qualified Gate 6 task-cache step, which uses a Velnor-versioned task TOML under
+`$RUNNER_TEMP`. It MUST NOT invoke private or removed `velnor-actions` subcommands or look up a repository
+Mise task file. Checkout, artifact transfer, and Alint are fixed GitHub Actions primitives. Planning and
+report aggregation are fixed internal workflow steps. Any helper binary is staged in runner temporary storage
+and never written to the repo.
+
+`velnor-plan` steps, in order:
+
+1. `Checkout`: `actions/checkout` at the event's intended commit with
+`persist-credentials: false`.
+2. `Setup Mise`: use the bundled full-SHA-pinned `jdx/mise-action` with
+`install: false` and `env: false`; project tool files, task definitions, and hooks must not run.
+3. `Prepare pinned tools`: run `MISE_LOCKFILE=0 mise install --no-config
+--no-env --no-hooks <tool>@<exact>...` from `.velnor/version-policy.toml`; set Velnor-owned
+`MISE_RUSTUP_HOME`/`MISE_CARGO_HOME`. Project config, env, hooks, and lockfile writes are disabled.
+4. `Acquire Velnor`: download the target-matching locked binary and verify its
+SHA-256.
+5. `Format`: run the generated fixed format command through pinned Mise; use
+the detected Rust compile driver (MBX only when project evidence selects it).
+6. `Check generated files`: invoke the public `velnor-actions generate
+--output-dir "$RUNNER_TEMP/velnor-actions-\${GITHUB_RUN_ID}-\${GITHUB_RUN_ATTEMPT}"` in bootstrap mode;
+compare its `.github` tree byte-for-byte with the committed tree. Candidate mode performs the same check with
+the candidate binary.
+7. `Plan`: run the generated fixed planner step with the exact event
+comparison refs. It writes the schema-1 plan to `$RUNNER_TEMP/velnor/<run-key>/plan.json`. Both refs MUST
+identify the exact event comparison, including the pull request merge result where applicable. The step uses
+direct pinned Mise commands or a locked helper staged under the runner's temporary directory.
+8. `Publish plan`: validate the plan, emit the bounded `matrix.include` output,
+and upload `velnor-plan-<run-key>` with `if: always()`.
+
+Under `velnor-repository-v1`, Alint uses the exact `asamarts/alint@v0.16.1` tag against Velnor's `.alint.yml`;
+the final gate checks its job conclusion. `velnor-policy` runs remaining dependency/security commands through
+pinned Mise. `consumer-v1` emits neither job and needs no policy-only files.
+
+`velnor-task` steps are the named steps in the task execution contract. Each selected matrix entry consumes
+the exact matrix object from `velnor-plan`; it MUST NOT rediscover stacks or packages. `velnor-final` steps
+are: `Download plan`, `Download every expected matrix artifact`, `Merge reports` through a fixed internal
+workflow step, and `Publish final report` with `if: always()`. The merge step MUST run even when a matrix job
+failed or was cancelled. It uses direct pinned Mise commands or a locked helper staged under the runner's
+temporary directory.
+
+The workflow run key is `r<github.run_id>-a<github.run_attempt>`, created by `velnor-plan` and passed
+unchanged to every job. Local runs use `local` and do not upload artifacts. The key MUST NOT enter task or
+cache identities.
+
+Actions MUST be selected only from this allowlist:
+
+```text
+jdx/mise-action
+jdx/mr-boxington-action
+actions/checkout
+actions/cache/restore
+actions/cache/save
+actions/upload-artifact
+actions/download-artifact
+asamarts/alint
+```
+
+Velnor's compiled-in action registry supplies the latest stable release, full
+40-character SHA, matching `# vX.Y.Z` comment, and action metadata. Per-project
+exact overrides are permitted only through `.velnor/config.toml` and must
+validate against the registry contract. The default current pins are listed in
+the [version policy](version-policy.md). The workflow renderer MUST emit
+`jdx/mise-action` for Mise setup, `actions/checkout` for source access,
+cache restore/save for their respective cache phases, and upload/download
+artifact actions for required reports or transferred outputs. It MUST emit
+`jdx/mr-boxington-action` only when the Rust detector selects MBX.
+`asamarts/alint` is limited to Velnor's own repository-policy job. Branches,
+moving refs, `pull_request_target`, `actions/setup-*`, and
+`taiki-e/install-action` MUST NOT appear. `actionlint` and `zizmor` MUST
+validate generated workflows. The Alint tag exception applies only to that
+action in `velnor-alint`; it MUST NOT weaken pin validation for other actions.
+
+`velnor-actions generate` MUST render a staging tree containing `.github/`,
+run the exact pinned actionlint binary through Mise with the staging tree as
+its working directory (so it loads that tree's `.github/actionlint.yaml`), and
+validate action/action-input schemas before replacing repository output.
+Any diagnostic fails generation and leaves the existing `.github` tree
+unchanged. The generated `velnor-workflow-lint` job repeats actionlint in CI.
+
+## 4. Generic matrix contract and V1 Rust payload
+
+`velnor-plan` MUST emit a JSON array named `matrix.include`. Each entry MUST contain the generic fields below;
+adapter metadata and task references are opaque to the planner and renderer. The example is V1's Rust payload;
+future stack adapters define their own versioned metadata:
+
+```json
+{
+  "id": "stack:rust|task:stack/rust/crates/velnor-actions-contract/validation/default",
+  "matrix_key": "m-<16 lowercase hex characters>",
+  "stack_id": "rust",
+  "task_id": "stack/rust/crates/velnor-actions-contract/validation/default",
+  "adapter_metadata": {
+    "package_id": "path+file:///repo#velnor-actions-contract@0.1.0",
+    "package_name": "velnor-actions-contract",
+    "manifest": "crates/velnor-actions-contract/Cargo.toml",
+    "workspace": ".",
+    "features": [],
+    "target": "host",
+    "cargo_profile": "test",
+    "compile_driver": "mbx",
+    "test_runner": "cargo_nextest",
+    "doctests": true
+  },
+  "execute_task_ids": {
+    "clippy": "stack/rust/crates/velnor-actions-contract/clippy/default",
+    "test_build": "stack/rust/crates/velnor-actions-contract/test-build/default",
+    "test_inventory": "stack/rust/crates/velnor-actions-contract/test-inventory/default",
+    "test_run": ["stack/rust/crates/velnor-actions-contract/test-run/default/shard-1-of-1"],
+    "doctest": "stack/rust/crates/velnor-actions-contract/doctest/default"
+  },
+  "input_digest": "b3-<64 lowercase hex characters>",
+  "report_id": "report-r123-a1-m-<16 lowercase hex characters>",
+  "artifact_id": "velnor-matrix-r123-a1-m-<16 lowercase hex characters>"
+}
+```
+
+The example's `mbx`/`cargo_nextest` values describe the Velnor repository's own
+dogfood profile. Every generated entry MUST carry the detected
+`compile_driver`, `test_runner`, and evidence IDs. For Cargo-test profiles,
+omit Nextest build/inventory/shard task IDs and emit one `test` obligation;
+the renderer MUST NOT invent Nextest work. Cargo-doctest remains separate in
+either profile.
+
+`id` MUST be stable for the same stack, task group, configuration, and adapter inputs. `stack_id` MUST be a
+registered detector ID. `task_id` is the stable matrix task-group ID; individual executable obligations remain
+in `execute_task_ids`. It MUST contain only lowercase ASCII letters, digits, `:`, `|`, `/`, `.`, `-`, and `_`.
+`matrix_key` is `m-` followed by the first 16 lowercase hexadecimal characters of BLAKE3 over the UTF-8 bytes
+of `id`. A collision is a planning error. Adapter metadata is owned by the selected stack adapter; the generic
+orchestrator MUST preserve it without interpreting stack-specific fields. Matrix entries MUST be sorted by
+`id`; duplicate IDs are a planning error.
+
+`report_id` is `report-<run-key>-<matrix-key>`. `artifact_id` is `velnor-matrix-<run-key>-<matrix-key>`. These
+values are derived, not chosen by repository input. The plan artifact is `velnor-plan-<run-key>`. The optional
+candidate artifact is `velnor-candidate-<run-key>-<target-key>`, where `target-key` is the lowercase target
+triple with non-alphanumeric runs replaced by `-`. Artifact names MUST be unique within the run and MUST use
+only the derived values above.
+
+The default matrix policy is one entry per selected stack task-group/configuration with at least one `execute`
+obligation. Its `execute_task_ids` contains only obligations that this matrix entry must run; `test_run` is an
+array of shard task IDs, including `shard-1-of-1` when not sharded. The complete plan retains covered/reused
+obligations separately. The V1 Rust adapter MUST NOT generate `--all-features` configurations. Cross-package
+or cross-component integration tasks MUST be represented by explicit matrix entries. An intentionally empty
+test target MUST remain visible in the plan.
+
+The plan file written by `velnor-plan` MUST be `$RUNNER_TEMP/velnor/<run-key>/plan.json` and MUST contain the
+same `matrix.include` array that is sent through `GITHUB_OUTPUT`. Its schema-1 shape is defined by the
+[architecture contract](architecture.md); baseline and obligation fields use the exact proof format in the
+[parallelism and affected-work contract](parallelism-and-selection-contract.md).
+
+`plan_id` is `plan-<run-key>`. `detections`, `obligations`, `matrix.include`, and `task_ids` MUST be sorted as
+defined by the architecture contract. `task_ids` contains every obligation; matrix `execute_task_ids` contains
+only `execute` decisions. A baseline miss MUST populate the reason and broaden execution. A baseline proof
+MUST identify the exact manifest/run/task/input digests. The plan job MUST publish `plan_id`, `run_key`, and
+compact `matrix` JSON as named step outputs; the task job MUST consume that exact JSON and MUST NOT rediscover
+stacks. The plan artifact MUST contain `plan.json` and `matrix.json`, where `matrix.json` is exactly
+`{"include": [...]}`; the final job MUST validate byte-for-byte agreement after canonical JSON encoding.
+
+## 5. Task execution
+
+Per-matrix steps, exact generated commands, Mise invocation, cache mode, and task-report requirements for V1
+Rust tasks are fixed in the [Rust task execution contract](task-execution-contract.md). Future stack adapters
+provide their own typed task execution profiles.

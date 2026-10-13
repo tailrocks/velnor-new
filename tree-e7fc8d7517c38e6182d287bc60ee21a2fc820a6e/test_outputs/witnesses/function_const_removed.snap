@@ -1,0 +1,30 @@
+---
+source: src/query.rs
+description: "Lint `function_const_removed` did not have the expected witness output.\nSee https://github.com/obi1kenobi/cargo-semver-checks/blob/main/CONTRIBUTING.md#testing-witnesses\nfor more information."
+---
+[["./test_crates/function_const_removed/"]]
+filename = "src/lib.rs"
+begin_line = 3
+hint = """
+const fn witness() {
+    function_const_removed::add(...);
+}
+"""
+
+[["./test_crates/stability_aware_mode/"]]
+filename = "src/lib.rs"
+begin_line = 12
+hint = """
+const fn witness() {
+    stability_aware_mode::const_stable_to_non_const(...);
+}
+"""
+
+[["./test_crates/stability_aware_mode/"]]
+filename = "src/lib.rs"
+begin_line = 17
+hint = """
+const fn witness() {
+    stability_aware_mode::const_unstable_to_non_const(...);
+}
+"""

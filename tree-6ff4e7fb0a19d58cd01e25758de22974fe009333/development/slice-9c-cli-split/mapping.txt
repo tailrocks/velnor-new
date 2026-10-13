@@ -1,0 +1,5 @@
+before=3381 after=3381 removed=148 added=148
+All removed tests reappear under velnor-actions-repo-policy (binary rename only),
+except workspace_lists_eight_product_crates_and_archive_guard renamed to
+workspace_lists_members_runner_and_archive_guard (count generalized to
+MEMBERS.len() + runner + guard; now passes). No test added or dropped.

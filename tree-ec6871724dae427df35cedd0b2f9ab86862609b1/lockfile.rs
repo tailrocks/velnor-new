@@ -1,0 +1,2434 @@
+use crate::backend::backend_type::BackendType;
+use crate::backend::conda::CondaBackend;
+use crate::backend::platform_target::PlatformTarget;
+use crate::config::{Config, Settings};
+use crate::env;
+use crate::file;
+use crate::file::display_path;
+use crate::path::PathExt;
+use crate::platform::Platform;
+use crate::toolset::{ToolSource, ToolVersion, ToolVersionList, Toolset};
+use eyre::{Report, Result, bail, eyre};
+use itertools::Itertools;
+use serde_derive::{Deserialize, Serialize};
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::LazyLock as Lazy;
+use std::sync::Mutex;
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    sync::Arc,
+};
+use tokio::sync::Semaphore;
+use tokio::task::JoinSet;
+use toml_edit::DocumentMut;
+use xx::regex;
+
+/// Global caches for lockfile data - declared here so invalidation can access them
+static ALL_LOCKFILES_CACHE: Lazy<Mutex<HashMap<Vec<PathBuf>, Arc<Lockfile>>>> =
+    Lazy::new(Default::default);
+static SINGLE_LOCKFILE_CACHE: Lazy<Mutex<HashMap<PathBuf, Arc<Lockfile>>>> =
+    Lazy::new(Default::default);
+
+/// Invalidate all lockfile caches. Call this after modifying a lockfile.
+pub fn invalidate_caches() {
+    if let Ok(mut cache) = ALL_LOCKFILES_CACHE.lock() {
+        cache.clear();
+    }
+    if let Ok(mut cache) = SINGLE_LOCKFILE_CACHE.lock() {
+        cache.clear();
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Lockfile {
+    #[serde(skip)]
+    tools: BTreeMap<String, Vec<LockfileTool>>,
+    /// Shared conda packages: platform -> basename -> CondaPackageInfo
+    /// Basename includes version+build (e.g., "ncurses-6.4-h7ea286d_0")
+    #[serde(skip)]
+    conda_packages: BTreeMap<String, BTreeMap<String, CondaPackageInfo>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LockfileTool {
+    pub version: String,
+    pub backend: Option<String>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+    pub options: BTreeMap<String, String>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty", default)]
+    pub platforms: BTreeMap<String, PlatformInfo>,
+}
+
+/// Type of provenance verification, ordered by priority (lowest to highest).
+/// The ordering is significant: during verification, higher-priority mechanisms
+/// are tried first, and the lockfile records whichever succeeds.
+/// SLSA carries an optional URL for the provenance file (.intoto.jsonl).
+///
+/// If adding or reordering variants, also update `VerifiedAttestation` in
+/// `crates/vfox/src/hooks/pre_install.rs`.
+#[derive(Debug, Clone, strum::Display, strum::EnumIs)]
+#[strum(serialize_all = "kebab-case")]
+pub enum ProvenanceType {
+    Minisign,
+    Cosign,
+    #[strum(serialize = "slsa")]
+    Slsa {
+        url: Option<String>,
+    },
+    GithubAttestations,
+}
+
+impl std::str::FromStr for ProvenanceType {
+    type Err = String;
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "minisign" => Ok(Self::Minisign),
+            "cosign" => Ok(Self::Cosign),
+            "slsa" => Ok(Self::Slsa { url: None }),
+            "github-attestations" => Ok(Self::GithubAttestations),
+            other => Err(format!("unknown provenance type: {other}")),
+        }
+    }
+}
+
+/// PartialEq, Eq, Hash, and Ord all compare by ordinal (variant priority) only.
+/// `Slsa { url: None } == Slsa { url: Some("x") }` — this is intentional so that
+/// variant priority determines equality and ordering, not inner data.
+/// Do NOT use `ProvenanceType` as a `BTreeMap`/`HashSet` key for this reason.
+/// Use `merge()` instead of `max()` when both values may carry data to preserve.
+impl PartialEq for ProvenanceType {
+    fn eq(&self, other: &Self) -> bool {
+        self.ordinal() == other.ordinal()
+    }
+}
+
+impl Eq for ProvenanceType {}
+
+impl std::hash::Hash for ProvenanceType {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.ordinal().hash(state);
+    }
+}
+
+impl ProvenanceType {
+    /// Discriminant for ordering (lowest = lowest priority)
+    fn ordinal(&self) -> u8 {
+        match self {
+            Self::Minisign => 0,
+            Self::Cosign => 1,
+            Self::Slsa { .. } => 2,
+            Self::GithubAttestations => 3,
+        }
+    }
+
+    /// Merge two provenance values, keeping the higher-priority variant.
+    /// When both are `Slsa`, preserves the URL from whichever has one.
+    fn merge(self, other: Self) -> Self {
+        match (&self, &other) {
+            (Self::Slsa { url: a }, Self::Slsa { url: b }) => Self::Slsa {
+                url: a.clone().or_else(|| b.clone()),
+            },
+            _ => std::cmp::max(self, other),
+        }
+    }
+}
+
+impl PartialOrd for ProvenanceType {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ProvenanceType {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.ordinal().cmp(&other.ordinal())
+    }
+}
+
+impl serde::Serialize for ProvenanceType {
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> std::result::Result<S::Ok, S::Error> {
+        match self {
+            Self::Slsa { url: Some(u) } => {
+                // Serialize as { slsa = { url = "..." } } only when URL is present
+                use serde::ser::SerializeMap;
+                let mut slsa_map = std::collections::BTreeMap::new();
+                slsa_map.insert("url", u.as_str());
+                let mut outer = serializer.serialize_map(Some(1))?;
+                outer.serialize_entry("slsa", &slsa_map)?;
+                outer.end()
+            }
+            // Slsa without URL serializes as plain string, like other variants
+            _ => serializer.serialize_str(&self.to_string()),
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for ProvenanceType {
+    fn deserialize<D: serde::Deserializer<'de>>(
+        deserializer: D,
+    ) -> std::result::Result<Self, D::Error> {
+        use serde::de;
+
+        struct ProvenanceVisitor;
+        impl<'de> de::Visitor<'de> for ProvenanceVisitor {
+            type Value = ProvenanceType;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "a provenance string or table")
+            }
+            fn visit_str<E: de::Error>(self, s: &str) -> std::result::Result<Self::Value, E> {
+                s.parse().map_err(de::Error::custom)
+            }
+            fn visit_map<A: de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> std::result::Result<Self::Value, A::Error> {
+                let key: String = map
+                    .next_key()?
+                    .ok_or_else(|| de::Error::custom("empty provenance table"))?;
+                let result = match key.as_str() {
+                    "slsa" => {
+                        #[derive(serde_derive::Deserialize)]
+                        struct SlsaInner {
+                            url: Option<String>,
+                        }
+                        let inner: SlsaInner = map.next_value()?;
+                        Ok(ProvenanceType::Slsa { url: inner.url })
+                    }
+                    other => Err(de::Error::custom(format!(
+                        "unknown provenance table key: {other}"
+                    ))),
+                }?;
+                // Drain any remaining entries to satisfy strict deserializers
+                while map.next_entry::<String, de::IgnoredAny>()?.is_some() {}
+                Ok(result)
+            }
+        }
+        deserializer.deserialize_any(ProvenanceVisitor)
+    }
+}
+
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PlatformInfo {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checksum: Option<String>,
+    /// Size in bytes (read-only field, preserved from existing lockfiles but not written)
+    #[serde(skip_serializing, default)]
+    pub size: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url_api: Option<String>,
+    /// References to conda packages in the shared conda-packages section (by basename)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conda_deps: Option<Vec<String>>,
+    /// Type of provenance verification that succeeded (SLSA carries its URL)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provenance: Option<ProvenanceType>,
+}
+
+// Re-export CondaPackageInfo from conda backend for lockfile serialization
+pub use crate::backend::conda::CondaPackageInfo;
+
+impl PlatformInfo {
+    /// Returns true if this PlatformInfo has no meaningful data (for serde skip)
+    pub fn is_empty(&self) -> bool {
+        self.checksum.is_none()
+            && self.url.is_none()
+            && self.url_api.is_none()
+            && self.conda_deps.is_none()
+            && self.provenance.is_none()
+    }
+
+    /// Merge this PlatformInfo with another, preserving important data.
+    /// - Prefers sha256 checksums over blake3 (more portable/verifiable)
+    /// - Preserves URL if missing in self
+    /// - Preserves url_api if missing in self
+    pub fn merge_with(&self, other: &PlatformInfo) -> PlatformInfo {
+        // For checksums, prefer sha256 over blake3 since sha256 comes from
+        // official releases and is more portable/verifiable
+        let checksum = match (&self.checksum, &other.checksum) {
+            (Some(self_cs), Some(other_cs)) => {
+                let self_is_sha256 = self_cs.starts_with("sha256:");
+                let other_is_sha256 = other_cs.starts_with("sha256:");
+                match (self_is_sha256, other_is_sha256) {
+                    (true, _) => Some(self_cs.clone()),
+                    (false, true) => Some(other_cs.clone()),
+                    (false, false) => Some(self_cs.clone()), // both blake3, use self
+                }
+            }
+            (Some(cs), None) | (None, Some(cs)) => Some(cs.clone()),
+            (None, None) => None,
+        };
+
+        PlatformInfo {
+            checksum,
+            size: self.size.or(other.size),
+            url: self.url.clone().or_else(|| other.url.clone()),
+            url_api: self.url_api.clone().or_else(|| other.url_api.clone()),
+            conda_deps: self.conda_deps.clone().or_else(|| other.conda_deps.clone()),
+            provenance: match (self.provenance.clone(), other.provenance.clone()) {
+                (Some(a), Some(b)) => Some(a.merge(b)),
+                (a, b) => a.or(b),
+            },
+        }
+    }
+}
+
+impl TryFrom<toml::Value> for PlatformInfo {
+    type Error = Report;
+    fn try_from(value: toml::Value) -> Result<Self> {
+        match value {
+            toml::Value::String(checksum) => Ok(PlatformInfo {
+                checksum: Some(checksum),
+                ..Default::default()
+            }),
+            toml::Value::Table(mut t) => {
+                let checksum = match t.remove("checksum") {
+                    Some(toml::Value::String(s)) => Some(s),
+                    _ => None,
+                };
+                let size = t
+                    .remove("size")
+                    .and_then(|v| v.as_integer())
+                    .map(|i| i.try_into())
+                    .transpose()?;
+                let url = match t.remove("url") {
+                    Some(toml::Value::String(s)) => Some(s),
+                    _ => None,
+                };
+                let url_api = match t.remove("url_api") {
+                    Some(toml::Value::String(s)) => Some(s),
+                    _ => None,
+                };
+                let conda_deps = match t.remove("conda_deps") {
+                    Some(toml::Value::Array(arr)) => Some(
+                        arr.into_iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect(),
+                    ),
+                    _ => None,
+                };
+                // Legacy: read provenance_url for backwards compat with old lockfiles
+                let legacy_provenance_url = match t.remove("provenance_url") {
+                    Some(toml::Value::String(s)) => Some(s),
+                    _ => None,
+                };
+                let provenance = match t.remove("provenance") {
+                    Some(toml::Value::String(s)) => {
+                        let mut prov: ProvenanceType = s
+                            .parse()
+                            .map_err(|_| eyre!("unrecognized provenance type {s:?} in lockfile"))?;
+                        // Attach legacy provenance_url to SLSA if present
+                        if let ProvenanceType::Slsa { ref mut url } = prov {
+                            *url = legacy_provenance_url;
+                        }
+                        Some(prov)
+                    }
+                    Some(toml::Value::Table(mut prov_table)) => {
+                        if let Some(slsa_val) = prov_table.remove("slsa") {
+                            let slsa_url = match slsa_val {
+                                toml::Value::Table(mut st) => match st.remove("url") {
+                                    Some(toml::Value::String(u)) => Some(u),
+                                    _ => None,
+                                },
+                                _ => None,
+                            };
+                            Some(ProvenanceType::Slsa { url: slsa_url })
+                        } else {
+                            // Unknown table variant
+                            let keys: Vec<_> = prov_table.keys().cloned().collect();
+                            bail!(
+                                "unrecognized provenance table format in lockfile: {:?}",
+                                keys
+                            );
+                        }
+                    }
+                    _ => None,
+                };
+                Ok(PlatformInfo {
+                    checksum,
+                    size,
+                    url,
+                    url_api,
+                    conda_deps,
+                    provenance,
+                })
+            }
+            _ => bail!("unsupported asset info format"),
+        }
+    }
+}
+
+impl From<PlatformInfo> for toml::Value {
+    fn from(platform_info: PlatformInfo) -> Self {
+        let mut table = toml::Table::new();
+        if let Some(checksum) = platform_info.checksum {
+            table.insert("checksum".to_string(), checksum.into());
+        }
+        if let Some(url) = platform_info.url {
+            table.insert("url".to_string(), url.into());
+        }
+        if let Some(url_api) = platform_info.url_api {
+            table.insert("url_api".to_string(), url_api.into());
+        }
+        if let Some(conda_deps) = platform_info.conda_deps {
+            let deps: toml::Value = conda_deps
+                .into_iter()
+                .map(toml::Value::String)
+                .collect::<Vec<_>>()
+                .into();
+            table.insert("conda_deps".to_string(), deps);
+        }
+        if let Some(ref provenance) = platform_info.provenance {
+            match provenance {
+                ProvenanceType::Slsa { url: Some(url) } => {
+                    let mut slsa_table = toml::Table::new();
+                    slsa_table.insert("url".to_string(), url.clone().into());
+                    let mut prov_table = toml::Table::new();
+                    prov_table.insert("slsa".to_string(), toml::Value::Table(slsa_table));
+                    table.insert("provenance".to_string(), toml::Value::Table(prov_table));
+                }
+                // Slsa without URL and all other variants serialize as plain string
+                _ => {
+                    table.insert("provenance".to_string(), provenance.to_string().into());
+                }
+            }
+        }
+        toml::Value::Table(table)
+    }
+}
+
+impl TryFrom<toml::Value> for CondaPackageInfo {
+    type Error = Report;
+    fn try_from(value: toml::Value) -> Result<Self> {
+        match value {
+            toml::Value::Table(mut t) => {
+                let url = t
+                    .remove("url")
+                    .and_then(|v| match v {
+                        toml::Value::String(s) => Some(s),
+                        _ => None,
+                    })
+                    .ok_or_else(|| eyre::eyre!("missing url in conda package info"))?;
+                let checksum = match t.remove("checksum") {
+                    Some(toml::Value::String(s)) => Some(s),
+                    _ => None,
+                };
+                Ok(CondaPackageInfo { url, checksum })
+            }
+            _ => bail!("unsupported conda package info format"),
+        }
+    }
+}
+
+impl Lockfile {
+    pub fn read<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let path = path.as_ref();
+        if !path.exists() {
+            return Ok(Lockfile::default());
+        }
+        trace!("reading lockfile {}", path.display_user());
+        let content = file::read_to_string(path)?;
+        let mut table: toml::Table = toml::from_str(&content)?;
+
+        let tools: toml::Table = table
+            .remove("tools")
+            .unwrap_or(toml::Table::new().into())
+            .try_into()?;
+
+        let mut lockfile = Lockfile::default();
+
+        for (short, value) in tools {
+            let versions = match value {
+                toml::Value::Array(arr) => arr
+                    .into_iter()
+                    .map(LockfileTool::try_from)
+                    .collect::<Result<Vec<_>>>()?,
+                _ => bail!(
+                    "invalid lockfile format for tool {short}: expected array ([[tools.{short}]])"
+                ),
+            };
+            lockfile.tools.insert(short, versions);
+        }
+
+        // Parse conda-packages section: platform -> basename -> CondaPackageInfo
+        if let Some(conda_packages) = table.remove("conda-packages") {
+            let platforms: toml::Table = conda_packages.try_into()?;
+            for (platform, packages) in platforms {
+                let packages_table: toml::Table = packages.try_into()?;
+                for (basename, info) in packages_table {
+                    let info: CondaPackageInfo = info.try_into()?;
+                    lockfile
+                        .conda_packages
+                        .entry(platform.clone())
+                        .or_default()
+                        .insert(basename, info);
+                }
+            }
+        }
+
+        Ok(lockfile)
+    }
+
+    fn save<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let mut lockfile = toml::Table::new();
+
+        // Write conda-packages section first (before tools for nicer ordering)
+        if !self.conda_packages.is_empty() {
+            let mut conda_packages = toml::Table::new();
+            for (platform, packages) in &self.conda_packages {
+                let mut platform_table = toml::Table::new();
+                for (basename, info) in packages {
+                    let mut pkg_table = toml::Table::new();
+                    pkg_table.insert("url".to_string(), info.url.clone().into());
+                    if let Some(checksum) = &info.checksum {
+                        pkg_table.insert("checksum".to_string(), checksum.clone().into());
+                    }
+                    platform_table.insert(basename.clone(), pkg_table.into());
+                }
+                conda_packages.insert(platform.clone(), platform_table.into());
+            }
+            lockfile.insert("conda-packages".to_string(), conda_packages.into());
+        }
+
+        // Write tools section
+        let mut tools = toml::Table::new();
+        for (short, versions) in &self.tools {
+            // Always write Multi-Version format (array format) for consistency
+            let value: toml::Value = versions
+                .iter()
+                .cloned()
+                .map(|version| version.into_toml_value())
+                .collect::<Vec<toml::Value>>()
+                .into();
+            tools.insert(short.clone(), value);
+        }
+        lockfile.insert("tools".to_string(), tools.into());
+
+        let content = toml::to_string_pretty(&toml::Value::Table(lockfile))?;
+        let content = format(content.parse()?);
+        let content = format!(
+            "# @generated - this file is auto-generated by `mise lock` https://mise.jdx.dev/dev-tools/mise-lock.html\n\
+                 \n\
+                 {content}"
+        );
+
+        let path = path.as_ref();
+        // Resolve the symlink target first, before writing the temp file
+        let target = if path.is_symlink() {
+            // If the existing lockfile is a symlink, resolve it and update the target instead
+            // of replacing the symlink
+            trace!(
+                "lockfile {} is a symlink, updating target instead of replacing",
+                display_path(path)
+            );
+
+            match fs::canonicalize(path) {
+                Ok(link_target) => {
+                    trace!(
+                        "resolved lockfile symlink {} to {}",
+                        display_path(path),
+                        display_path(&link_target)
+                    );
+                    link_target
+                }
+                Err(e) => {
+                    // Dangling symlink – fall back to overwriting the symlink itself
+                    // TODO: Maybe instead of overwriting, we should create the new lockfile at
+                    // the symlink's target path?
+                    warn!(
+                        "lockfile {} is a dangling symlink ({}), overwriting the symlink itself",
+                        display_path(path),
+                        e
+                    );
+                    path.to_path_buf()
+                }
+            }
+        } else {
+            path.to_path_buf()
+        };
+        // Use atomic write: write to temp file, then rename
+        // This prevents partial writes from corrupting the lockfile
+        // Write temp file alongside the real target (guarantees same-filesystem rename)
+        let temp_path = target.with_extension("lock.tmp");
+        file::write(&temp_path, &content)?;
+        fs::rename(&temp_path, target)?;
+
+        invalidate_caches();
+        Ok(())
+    }
+
+    /// Add or update a conda package in the shared section
+    /// `basename` is without extension, e.g., "ncurses-6.4-h7ea286d_0"
+    pub fn set_conda_package(&mut self, platform: &str, basename: &str, info: CondaPackageInfo) {
+        self.conda_packages
+            .entry(platform.to_string())
+            .or_default()
+            .insert(basename.to_string(), info);
+    }
+
+    /// Get a conda package from the shared section by basename
+    pub fn get_conda_package(&self, platform: &str, basename: &str) -> Option<&CondaPackageInfo> {
+        self.conda_packages.get(platform)?.get(basename)
+    }
+
+    /// Remove unreferenced conda packages from the shared section.
+    /// A package is unreferenced if no tool's conda_deps references it.
+    fn cleanup_unreferenced_conda_packages(&mut self) {
+        // Collect all referenced conda packages (platform -> set of basenames)
+        let mut referenced: HashMap<String, HashSet<String>> = HashMap::new();
+        for tools in self.tools.values() {
+            for tool in tools {
+                for (platform, info) in &tool.platforms {
+                    if let Some(deps) = &info.conda_deps {
+                        for dep in deps {
+                            referenced
+                                .entry(platform.clone())
+                                .or_default()
+                                .insert(dep.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Remove unreferenced packages
+        for (platform, packages) in &mut self.conda_packages {
+            let referenced_for_platform = referenced.get(platform);
+            packages.retain(|basename, _| {
+                referenced_for_platform
+                    .map(|refs| refs.contains(basename))
+                    .unwrap_or(false)
+            });
+        }
+
+        // Remove empty platform entries
+        self.conda_packages
+            .retain(|_, packages| !packages.is_empty());
+    }
+
+    /// Get all platform keys present in the lockfile
+    pub fn all_platform_keys(&self) -> BTreeSet<String> {
+        let mut platforms = BTreeSet::new();
+        for tools in self.tools.values() {
+            for tool in tools {
+                for platform_key in tool.platforms.keys() {
+                    platforms.insert(platform_key.clone());
+                }
+            }
+        }
+        platforms
+    }
+
+    /// Keep only tools matching configured short names or backend identifiers.
+    /// Also removes conda packages that become unreferenced.
+    pub fn retain_tools_by_short_or_backend(
+        &mut self,
+        keep_shorts: &BTreeSet<String>,
+        keep_backends: &BTreeSet<String>,
+    ) {
+        self.tools.retain(|short, versions| {
+            Self::should_keep_tool(short, versions, keep_shorts, keep_backends)
+        });
+        self.cleanup_unreferenced_conda_packages();
+    }
+
+    /// Return tool keys that would be removed by `retain_tools_by_short_or_backend`.
+    pub fn stale_tool_shorts(
+        &self,
+        keep_shorts: &BTreeSet<String>,
+        keep_backends: &BTreeSet<String>,
+    ) -> BTreeSet<String> {
+        self.tools
+            .iter()
+            .filter_map(|(short, versions)| {
+                (!Self::should_keep_tool(short, versions, keep_shorts, keep_backends))
+                    .then_some(short.clone())
+            })
+            .collect()
+    }
+
+    fn should_keep_tool(
+        short: &str,
+        versions: &[LockfileTool],
+        keep_shorts: &BTreeSet<String>,
+        keep_backends: &BTreeSet<String>,
+    ) -> bool {
+        keep_shorts.contains(short)
+            || versions
+                .iter()
+                .filter_map(|v| v.backend.as_ref())
+                .any(|backend| keep_backends.contains(backend))
+    }
+
+    /// Update or add platform info for a tool version
+    /// Merges with existing info, preserving fields we don't have new values for
+    pub fn set_platform_info(
+        &mut self,
+        short: &str,
+        version: &str,
+        backend: Option<&str>,
+        options: &BTreeMap<String, String>,
+        platform_key: &str,
+        platform_info: PlatformInfo,
+    ) {
+        let tools = self.tools.entry(short.to_string()).or_default();
+        // Find existing tool version with matching options or create new one
+        if let Some(tool) = tools
+            .iter_mut()
+            .find(|t| t.version == version && &t.options == options)
+        {
+            // Merge with existing platform info, preferring new values when present
+            let merged = if let Some(existing) = tool.platforms.get(platform_key) {
+                PlatformInfo {
+                    checksum: platform_info.checksum.or_else(|| existing.checksum.clone()),
+                    size: platform_info.size.or(existing.size),
+                    url: platform_info.url.or_else(|| existing.url.clone()),
+                    url_api: platform_info.url_api.or_else(|| existing.url_api.clone()),
+                    // For conda_deps, always use the new value - None means "no dependencies"
+                    // rather than "not computed", so we shouldn't preserve stale deps
+                    conda_deps: platform_info.conda_deps,
+                    provenance: match (platform_info.provenance, existing.provenance.clone()) {
+                        (Some(a), Some(b)) => Some(a.merge(b)),
+                        (a, b) => a.or(b),
+                    },
+                }
+            } else {
+                platform_info
+            };
+            // Only insert non-empty platform info to avoid `"platforms.linux-x64" = {}`
+            if !merged.is_empty() {
+                tool.platforms.insert(platform_key.to_string(), merged);
+            }
+        } else {
+            let mut platforms = BTreeMap::new();
+            // Only insert non-empty platform info
+            if !platform_info.is_empty() {
+                platforms.insert(platform_key.to_string(), platform_info);
+            }
+            tools.push(LockfileTool {
+                version: version.to_string(),
+                backend: backend.map(|s| s.to_string()),
+                options: options.clone(),
+                platforms,
+            });
+        }
+    }
+
+    /// Save the lockfile to disk (public for mise lock command)
+    pub fn write<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        self.save(path)
+    }
+}
+
+/// Determines the lockfile path for a given config file path
+/// Returns (lockfile_path, is_local)
+///
+/// Lockfiles are placed alongside their config files:
+/// - `mise.toml` -> `mise.lock`
+/// - `.config/mise.toml` -> `.config/mise.lock`
+/// - `.mise/config.toml` -> `.mise/mise.lock`
+/// - `.mise/conf.d/foo.toml` -> `.mise/mise.lock` (conf.d files share parent's lockfile)
+pub fn lockfile_path_for_config(config_path: &Path) -> (PathBuf, bool) {
+    let is_local = is_local_config(config_path);
+    let env = extract_env_from_config_path(config_path);
+    let lockfile_name = match (&env, is_local) {
+        (Some(e), true) => format!("mise.{e}.local.lock"),
+        (Some(e), false) => format!("mise.{e}.lock"),
+        (None, true) => "mise.local.lock".to_string(),
+        (None, false) => "mise.lock".to_string(),
+    };
+
+    let parent = config_path.parent().unwrap_or(Path::new("."));
+    let parent_name = parent
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+
+    // For conf.d files, place lockfile at parent of conf.d so all conf.d files share one lockfile
+    let lockfile_dir = if parent_name == "conf.d" {
+        parent.parent().unwrap_or(parent)
+    } else {
+        parent
+    };
+
+    (lockfile_dir.join(lockfile_name), is_local)
+}
+
+/// Checks if a config path is a "local" config (should go to mise.local.lock)
+fn is_local_config(path: &Path) -> bool {
+    let filename = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+    filename.contains(".local.")
+}
+
+/// Extracts environment name from config filename
+/// e.g., "mise.test.toml" -> Some("test"), "mise.test.local.toml" -> Some("test"), "mise.toml" -> None
+pub fn extract_env_from_config_path(path: &Path) -> Option<String> {
+    let filename = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+
+    // Pattern matches:
+    // - mise.{env}.toml -> captures env
+    // - mise.{env}.local.toml -> captures env (env-specific local config)
+    // - .mise.{env}.toml -> captures env
+    // - config.{env}.toml -> captures env
+    // Does NOT match (returns None):
+    // - mise.toml, .mise.toml, config.toml (base configs)
+    // - mise.local.toml (local without env - filtered by "local" check)
+    let re = regex!(r"^(?:\.?mise|config)\.([^.]+)(?:\.local)?\.toml$");
+    re.captures(filename)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str().to_string())
+        .filter(|s| s != "local")
+}
+
+pub fn update_lockfiles(config: &Config, ts: &Toolset, new_versions: &[ToolVersion]) -> Result<()> {
+    if !Settings::get().lockfile_enabled() || Settings::get().locked {
+        return Ok(());
+    }
+
+    // Collect tools by source (config file)
+    let mut tools_by_source: HashMap<ToolSource, HashMap<String, ToolVersionList>> = HashMap::new();
+    for (source, group) in &ts.versions.iter().chunk_by(|(_, tvl)| &tvl.source) {
+        for (ba, tvl) in group {
+            tools_by_source
+                .entry(source.clone())
+                .or_default()
+                .insert(ba.short.to_string(), tvl.clone());
+        }
+    }
+
+    // Add versions added within this session (from `mise use` or `mise up`)
+    for (backend, group) in &new_versions.iter().chunk_by(|tv| tv.ba()) {
+        let tvs = group.cloned().collect_vec();
+        let source = tvs[0].request.source().clone();
+        let source_tools = tools_by_source.entry(source.clone()).or_default();
+
+        if let Some(existing_tvl) = source_tools.get_mut(&backend.short) {
+            for new_tv in tvs {
+                existing_tvl
+                    .versions
+                    .retain(|tv| tv.request.version() != new_tv.request.version());
+                existing_tvl.versions.push(new_tv);
+            }
+        } else {
+            let mut tvl = ToolVersionList::new(Arc::new(backend.clone()), source.clone());
+            tvl.versions.extend(tvs);
+            source_tools.insert(backend.short.to_string(), tvl);
+        }
+    }
+
+    // Group config files by target lockfile path
+    let mut lockfile_configs: HashMap<PathBuf, Vec<PathBuf>> = HashMap::new();
+    for (config_path, cf) in config.config_files.iter().rev() {
+        if !cf.source().is_mise_toml() {
+            continue;
+        }
+        if crate::config::is_global_config(config_path) {
+            continue;
+        }
+        let (lockfile_path, _is_local) = lockfile_path_for_config(config_path);
+        lockfile_configs
+            .entry(lockfile_path)
+            .or_default()
+            .push(config_path.clone());
+    }
+
+    debug!("updating {} lockfiles", lockfile_configs.len());
+
+    // Process each lockfile, deferring provenance errors until all lockfiles are saved.
+    let mut provenance_errors: Vec<String> = Vec::new();
+
+    for (lockfile_path, configs) in lockfile_configs {
+        // Only update existing lockfiles - creation is done elsewhere (e.g., by `mise lock`)
+        if !lockfile_path.exists() {
+            continue;
+        }
+
+        trace!(
+            "updating lockfile {} from {} config files",
+            display_path(&lockfile_path),
+            configs.len()
+        );
+
+        let mut existing_lockfile = Lockfile::read(&lockfile_path)
+            .unwrap_or_else(|err| handle_lockfile_read_error(err, &lockfile_path));
+
+        // Collect all tools from all contributing configs
+        let mut tools_by_short: HashMap<String, Vec<LockfileTool>> = HashMap::new();
+
+        for config_path in &configs {
+            let tool_source = ToolSource::MiseToml(config_path.clone());
+            if let Some(tools) = tools_by_source.get(&tool_source) {
+                for (short, tvl) in tools {
+                    let lockfile_tools: Vec<LockfileTool> = tvl.clone().into();
+                    for tool in lockfile_tools {
+                        tools_by_short.entry(short.clone()).or_default().push(tool);
+                    }
+                }
+            }
+        }
+
+        // Check for provenance regression before merging (which drops old version entries).
+        // For github backend tools, error if the highest prior version had provenance but
+        // the new version does not — this could indicate a supply chain attack.
+        // Regressing tools are excluded from merge to preserve the old provenance entry.
+        let (regressing_tools, regression_errors) =
+            check_provenance_regression(&existing_lockfile, &tools_by_short);
+        provenance_errors.extend(regression_errors);
+
+        // Process each tool with deduplication, skipping regressing tools
+        for (short, entries) in tools_by_short {
+            if regressing_tools.contains(&short) {
+                continue;
+            }
+            let merged_tools = merge_tool_entries(entries, existing_lockfile.tools.get(&short));
+            existing_lockfile.tools.insert(short, merged_tools);
+        }
+
+        // Merge conda packages from new_versions into the lockfile
+        for tv in new_versions {
+            for ((platform, basename), pkg_info) in &tv.conda_packages {
+                existing_lockfile.set_conda_package(platform, basename, pkg_info.clone());
+            }
+        }
+
+        // Clean up any conda packages that are no longer referenced by any tool
+        existing_lockfile.cleanup_unreferenced_conda_packages();
+
+        existing_lockfile.save(&lockfile_path)?;
+    }
+
+    // Return all provenance errors after all lockfiles have been saved
+    if !provenance_errors.is_empty() {
+        return Err(eyre!("{}", provenance_errors.join("\n")));
+    }
+
+    Ok(())
+}
+
+/// Check if a single tool version is losing provenance relative to prior lockfile entries.
+///
+/// Returns an error message if a github backend tool upgrade loses provenance,
+/// or None if the check passes. Used by both `check_provenance_regression` and
+/// `apply_lock_result` to avoid duplicating the detection logic.
+fn check_single_tool_provenance(
+    existing_tools: Option<&Vec<LockfileTool>>,
+    short: &str,
+    version: &str,
+    backend: &str,
+    platform_key: &str,
+    new_provenance: Option<&ProvenanceType>,
+) -> Option<String> {
+    if new_provenance.is_some() || !backend.starts_with("github:") {
+        return None;
+    }
+
+    let tools = existing_tools?;
+
+    // Find the highest prior github version with provenance on this platform
+    let prior = tools
+        .iter()
+        .filter(|t| t.version != version)
+        .filter(|t| t.backend.as_ref().is_some_and(|b| b.starts_with("github:")))
+        .filter(|t| {
+            t.platforms
+                .get(platform_key)
+                .is_some_and(|pi| pi.provenance.is_some())
+        })
+        .max_by(|a, b| {
+            versions::Versioning::new(&a.version).cmp(&versions::Versioning::new(&b.version))
+        })?;
+
+    // Only flag upgrades — intentional downgrades are allowed
+    if versions::Versioning::new(version) <= versions::Versioning::new(&prior.version) {
+        return None;
+    }
+
+    let prov = prior.platforms[platform_key].provenance.as_ref().unwrap();
+    Some(format!(
+        "{short}@{version} has no provenance verification on {platform_key}, \
+         but {short}@{} had {prov}. This could indicate a supply chain \
+         attack. Verify the release is authentic before proceeding.",
+        prior.version,
+    ))
+}
+
+/// Check if any github backend tool is losing provenance when upgrading versions.
+///
+/// Only checks the current platform because new `LockfileTool` entries (from
+/// `ToolVersionList`) only have `lock_platforms` populated for the platform where
+/// installation ran. Checking other platforms would produce false positives.
+///
+/// Returns the set of regressing tool short names and their error messages.
+/// Regressing tools should be excluded from merge/save to preserve the old
+/// provenance-verified entry in the lockfile.
+fn check_provenance_regression(
+    existing_lockfile: &Lockfile,
+    new_tools: &HashMap<String, Vec<LockfileTool>>,
+) -> (HashSet<String>, Vec<String>) {
+    let current_platform = Platform::current().to_key();
+    let mut regressing = HashSet::new();
+    let mut errors = Vec::new();
+
+    for (short, new_entries) in new_tools {
+        for new_entry in new_entries {
+            let backend = new_entry.backend.as_deref().unwrap_or("");
+            let new_provenance = new_entry
+                .platforms
+                .get(&current_platform)
+                .and_then(|pi| pi.provenance.as_ref());
+
+            if let Some(err) = check_single_tool_provenance(
+                existing_lockfile.tools.get(short),
+                short,
+                &new_entry.version,
+                backend,
+                &current_platform,
+                new_provenance,
+            ) {
+                regressing.insert(short.clone());
+                errors.push(err);
+            }
+        }
+    }
+    (regressing, errors)
+}
+
+/// Determine target platforms using an already-loaded lockfile (used by auto-lock).
+/// Returns all common platforms + current platform + any existing platforms in the lockfile.
+fn determine_target_platforms_from_lockfile(lockfile: Option<&Lockfile>) -> Vec<Platform> {
+    let mut platforms: BTreeSet<Platform> = Platform::common_platforms().into_iter().collect();
+    platforms.insert(Platform::current());
+    if let Some(lockfile) = lockfile {
+        for platform_key in lockfile.all_platform_keys() {
+            if let Ok(p) = Platform::parse(&platform_key)
+                && p.validate().is_ok()
+            {
+                platforms.insert(p);
+            }
+        }
+    }
+    platforms.into_iter().collect()
+}
+
+/// Determine target platforms from an existing lockfile for explicit `mise lock` calls.
+/// If the lockfile already has platform entries, only those are targeted.
+/// Otherwise, falls back to all common platforms + current platform.
+pub fn determine_existing_platforms(lockfile_path: &Path) -> Vec<Platform> {
+    if let Ok(lockfile) = Lockfile::read(lockfile_path) {
+        let existing_keys = lockfile.all_platform_keys();
+        if !existing_keys.is_empty() {
+            let mut platforms: BTreeSet<Platform> = BTreeSet::new();
+            for platform_key in existing_keys {
+                if let Ok(p) = Platform::parse(&platform_key)
+                    && p.validate().is_ok()
+                {
+                    platforms.insert(p);
+                }
+            }
+            if !platforms.is_empty() {
+                return platforms.into_iter().collect();
+            }
+        }
+    }
+    // No lockfile, no platforms yet, or no valid platform keys — use common defaults
+    let mut platforms: BTreeSet<Platform> = Platform::common_platforms().into_iter().collect();
+    platforms.insert(Platform::current());
+    platforms.into_iter().collect()
+}
+
+/// After installing new tool versions, resolve checksums/URLs for all common platforms
+/// so the lockfile is complete and doesn't change when other developers on different
+/// platforms run `mise install`.
+pub async fn auto_lock_new_versions(_config: &Config, new_versions: &[ToolVersion]) -> Result<()> {
+    if !Settings::get().lockfile_enabled() || Settings::get().locked || new_versions.is_empty() {
+        return Ok(());
+    }
+
+    // Group new_versions by lockfile path (only mise.toml sources, matching update_lockfiles)
+    let mut versions_by_lockfile: HashMap<PathBuf, Vec<&ToolVersion>> = HashMap::new();
+    for tv in new_versions {
+        if !tv.request.source().is_mise_toml() {
+            continue;
+        }
+        if let Some(source_path) = tv.request.source().path() {
+            if crate::config::is_global_config(source_path) {
+                continue;
+            }
+            let (lockfile_path, _) = lockfile_path_for_config(source_path);
+            versions_by_lockfile
+                .entry(lockfile_path)
+                .or_default()
+                .push(tv);
+        }
+    }
+
+    let settings = Settings::get();
+    let jobs = settings.jobs;
+    let mut all_provenance_errors: Vec<String> = Vec::new();
+
+    for (lockfile_path, versions) in versions_by_lockfile {
+        // Only update existing lockfiles (consistent with update_lockfiles)
+        if !lockfile_path.exists() {
+            continue;
+        }
+
+        let mut lockfile = Lockfile::read(&lockfile_path)
+            .unwrap_or_else(|err| handle_lockfile_read_error(err, &lockfile_path));
+
+        let target_platforms = determine_target_platforms_from_lockfile(Some(&lockfile));
+
+        let semaphore = Arc::new(Semaphore::new(jobs));
+        let mut jset: JoinSet<LockResolutionResult> = JoinSet::new();
+
+        for tv in &versions {
+            let ba = tv.ba().clone();
+            let backend = crate::backend::get(&ba);
+
+            for platform in &target_platforms {
+                // Expand platform variants from the backend
+                let variants = if let Some(ref backend) = backend {
+                    backend.platform_variants(platform)
+                } else {
+                    vec![platform.clone()]
+                };
+
+                for variant in variants {
+                    let platform_key = variant.to_key();
+
+                    // Skip if this tool/version/platform already has both checksum and URL
+                    if let Some(tools) = lockfile.tools.get(&ba.short)
+                        && let Some(tool) = tools.iter().find(|t| t.version == tv.version)
+                        && let Some(info) = tool.platforms.get(&platform_key)
+                        && info.checksum.is_some()
+                        && info.url.is_some()
+                    {
+                        continue;
+                    }
+
+                    let semaphore = semaphore.clone();
+                    let ba = ba.clone();
+                    let tv = (*tv).clone();
+                    let backend = backend.clone();
+
+                    jset.spawn(async move {
+                        let _permit = semaphore.acquire().await;
+                        resolve_tool_lock_info(ba, tv, variant, backend).await
+                    });
+                }
+            }
+        }
+
+        // Collect results and update lockfile
+        // Defer provenance errors until after saving so unaffected tools' entries aren't lost.
+        let mut provenance_errors: Vec<String> = Vec::new();
+        while let Some(result) = jset.join_next().await {
+            match result {
+                Ok(resolution) => {
+                    if let Err(msg) = &resolution.4 {
+                        debug!("auto-lock: {msg}");
+                    }
+                    if let Err(e) = apply_lock_result(&mut lockfile, resolution) {
+                        provenance_errors.push(e.to_string());
+                    }
+                }
+                Err(e) => {
+                    debug!("auto-lock task failed: {}", e);
+                }
+            }
+        }
+
+        lockfile.save(&lockfile_path)?;
+
+        all_provenance_errors.extend(provenance_errors);
+    }
+
+    if !all_provenance_errors.is_empty() {
+        return Err(eyre!("{}", all_provenance_errors.join("\n")));
+    }
+
+    Ok(())
+}
+
+/// Result type for lock resolution tasks (shared by `mise lock` and auto-lock).
+///
+/// Fields: (short_name, version, backend_full, platform, info_or_error, options, conda_packages).
+/// The `info_or_error` field is `Ok(info)` on success or `Err(message)` on failure,
+/// allowing callers to log at the appropriate level.
+pub type LockResolutionResult = (
+    String,
+    String,
+    String,
+    Platform,
+    Result<PlatformInfo, String>,
+    BTreeMap<String, String>,
+    BTreeMap<String, CondaPackageInfo>,
+);
+
+/// Resolve lock info for a single tool/platform combination.
+///
+/// Returns a tuple of (short_name, version, backend_full, platform, info_or_error, options, conda_packages).
+/// Does not log errors — callers decide the appropriate log level.
+pub async fn resolve_tool_lock_info(
+    ba: crate::cli::args::BackendArg,
+    tv: ToolVersion,
+    platform: Platform,
+    backend: Option<crate::backend::ABackend>,
+) -> LockResolutionResult {
+    let target = PlatformTarget::new(platform.clone());
+
+    let (info, options, conda_packages) = if let Some(backend) = backend {
+        let options = backend.resolve_lockfile_options(&tv.request, &target);
+        match backend.resolve_lock_info(&tv, &target).await {
+            Ok(info) => {
+                let conda_packages = if backend.get_type() == BackendType::Conda {
+                    let conda_backend = CondaBackend::from_arg(ba.clone());
+                    match conda_backend.resolve_conda_packages(&tv, &target).await {
+                        Ok(packages) => packages,
+                        Err(e) => {
+                            debug!(
+                                "failed to resolve conda packages for {} on {}: {}",
+                                ba.short,
+                                platform.to_key(),
+                                e
+                            );
+                            BTreeMap::new()
+                        }
+                    }
+                } else {
+                    BTreeMap::new()
+                };
+                (Ok(info), options, conda_packages)
+            }
+            Err(e) => (
+                Err(format!(
+                    "failed to resolve {} for {}: {}",
+                    ba.short,
+                    platform.to_key(),
+                    e
+                )),
+                options,
+                BTreeMap::new(),
+            ),
+        }
+    } else {
+        (
+            Err(format!("backend not found for {}", ba.short)),
+            BTreeMap::new(),
+            BTreeMap::new(),
+        )
+    };
+
+    (
+        ba.short.clone(),
+        tv.version.clone(),
+        ba.full(),
+        platform,
+        info,
+        options,
+        conda_packages,
+    )
+}
+
+/// Apply a lock resolution result to a lockfile, updating platform info and conda packages.
+/// Only applies data when the resolution succeeded (info is `Ok`).
+///
+/// Returns an error if a github backend tool loses provenance on version upgrade,
+/// which could indicate a supply chain attack.
+pub fn apply_lock_result(lockfile: &mut Lockfile, result: LockResolutionResult) -> Result<()> {
+    let (short, version, backend, platform, info, options, conda_packages) = result;
+    let platform_key = platform.to_key();
+    if let Ok(ref info) = info {
+        if let Some(err) = check_single_tool_provenance(
+            lockfile.tools.get(&short),
+            &short,
+            &version,
+            &backend,
+            &platform_key,
+            info.provenance.as_ref(),
+        ) {
+            return Err(eyre!("{err}"));
+        }
+        lockfile.set_platform_info(
+            &short,
+            &version,
+            Some(&backend),
+            &options,
+            &platform_key,
+            info.clone(),
+        );
+    }
+    for (basename, pkg_info) in conda_packages {
+        lockfile.set_conda_package(&platform_key, &basename, pkg_info);
+    }
+    Ok(())
+}
+
+/// Merge tool entries with deduplication by (version, options).
+/// Merges platform info for entries with the same key.
+/// Preserves existing platform info for matching entries.
+fn merge_tool_entries(
+    entries: Vec<LockfileTool>,
+    existing_tools: Option<&Vec<LockfileTool>>,
+) -> Vec<LockfileTool> {
+    // Group by (version, options) - the key for deduplication
+    let mut by_key: HashMap<(String, BTreeMap<String, String>), LockfileTool> = HashMap::new();
+
+    for tool in entries {
+        let key = (tool.version.clone(), tool.options.clone());
+        let entry = by_key.entry(key).or_insert_with(|| tool.clone());
+
+        // Merge platforms - properly combine platform info to preserve URLs and prefer sha256
+        for (platform, info) in tool.platforms {
+            entry
+                .platforms
+                .entry(platform)
+                .and_modify(|existing| *existing = info.merge_with(existing))
+                .or_insert(info);
+        }
+    }
+
+    // Merge with existing tools to preserve platform info
+    if let Some(existing) = existing_tools {
+        for existing_tool in existing {
+            let key = (existing_tool.version.clone(), existing_tool.options.clone());
+            if let Some(entry) = by_key.get_mut(&key) {
+                // Merge platform info from existing - preserve URLs and prefer sha256
+                for (platform, info) in &existing_tool.platforms {
+                    entry
+                        .platforms
+                        .entry(platform.clone())
+                        .and_modify(|existing| *existing = existing.merge_with(info))
+                        .or_insert(info.clone());
+                }
+            }
+        }
+    }
+
+    // Convert to final list
+    by_key
+        .into_values()
+        .sorted_by(|a, b| a.version.cmp(&b.version))
+        .collect()
+}
+
+fn read_all_lockfiles(config: &Config) -> Arc<Lockfile> {
+    // Create a cache key from the config file paths
+    let cache_key: Vec<PathBuf> = config.config_files.keys().cloned().collect();
+
+    // Use unwrap_or_else to recover from poisoned mutex (thread panicked while holding lock)
+    let mut cache = ALL_LOCKFILES_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if let Some(cached) = cache.get(&cache_key) {
+        return Arc::clone(cached);
+    }
+
+    let mut seen_roots: HashSet<PathBuf> = HashSet::new();
+    let mut all: Vec<Lockfile> = Vec::new();
+
+    for (path, cf) in config.config_files.iter().rev() {
+        if !cf.source().is_mise_toml() {
+            continue;
+        }
+
+        let (lockfile_path, _) = lockfile_path_for_config(path);
+        let root = lockfile_path.parent().unwrap_or(path).to_path_buf();
+        if seen_roots.contains(&root) {
+            continue;
+        }
+        seen_roots.insert(root.clone());
+
+        // Read lockfiles in priority order (highest first):
+        // 1. mise.<env>.local.lock (if MISE_ENV is set)
+        // 2. mise.local.lock
+        // 3. mise.<env>.lock (if MISE_ENV is set)
+        // 4. mise.lock
+        for env_name in env::MISE_ENV.iter() {
+            let p = root.join(format!("mise.{env_name}.local.lock"));
+            if let Ok(l) = Lockfile::read(&p) {
+                all.push(l);
+            }
+        }
+        let local_path = root.join("mise.local.lock");
+        if let Ok(local) = Lockfile::read(&local_path) {
+            all.push(local);
+        }
+        for env_name in env::MISE_ENV.iter() {
+            let p = root.join(format!("mise.{env_name}.lock"));
+            if let Ok(l) = Lockfile::read(&p) {
+                all.push(l);
+            }
+        }
+        let main_path = root.join("mise.lock");
+        if let Ok(main) = Lockfile::read(&main_path) {
+            all.push(main);
+        }
+    }
+
+    let result = all.into_iter().fold(Lockfile::default(), |mut acc, l| {
+        for (short, tools) in l.tools {
+            let existing = acc.tools.entry(short).or_default();
+            for tool in tools {
+                // Avoid duplicates (same version+options)
+                if !existing
+                    .iter()
+                    .any(|t| t.version == tool.version && t.options == tool.options)
+                {
+                    existing.push(tool);
+                }
+            }
+        }
+        acc
+    });
+
+    let result = Arc::new(result);
+    cache.insert(cache_key, Arc::clone(&result));
+    result
+}
+
+fn read_lockfile_for(path: &Path) -> Arc<Lockfile> {
+    // Use unwrap_or_else to recover from poisoned mutex (thread panicked while holding lock)
+    let mut cache = SINGLE_LOCKFILE_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if let Some(cached) = cache.get(path) {
+        return Arc::clone(cached);
+    }
+
+    // Only compute lockfile path when not cached
+    let (lockfile_path, _is_local) = lockfile_path_for_config(path);
+    let lockfile = Lockfile::read(&lockfile_path)
+        .unwrap_or_else(|err| handle_lockfile_read_error(err, &lockfile_path));
+
+    let lockfile = Arc::new(lockfile);
+    cache.insert(path.to_path_buf(), Arc::clone(&lockfile));
+    lockfile
+}
+
+pub fn get_locked_version(
+    config: &Config,
+    path: Option<&Path>,
+    short: &str,
+    prefix: &str,
+    request_options: &BTreeMap<String, String>,
+) -> Result<Option<LockfileTool>> {
+    let settings = Settings::get();
+    if !settings.lockfile_enabled() {
+        return Ok(None);
+    }
+
+    let lockfile = match path {
+        Some(path) => {
+            trace!(
+                "[{short}@{prefix}] reading lockfile for {}",
+                display_path(path)
+            );
+            read_lockfile_for(path)
+        }
+        None => {
+            trace!("[{short}@{prefix}] reading all lockfiles");
+            read_all_lockfiles(config)
+        }
+    };
+
+    if let Some(tools) = lockfile.tools.get(short) {
+        // Filter by version prefix and options
+        let mut matching: Vec<_> = tools
+            .iter()
+            .filter(|v| {
+                let norm_prefix = prefix
+                    .strip_prefix('v')
+                    .or(prefix.strip_prefix('V'))
+                    .unwrap_or(prefix);
+                let norm_version = v
+                    .version
+                    .strip_prefix('v')
+                    .or(v.version.strip_prefix('V'))
+                    .unwrap_or(&v.version);
+                let version_matches = prefix == "latest" || norm_version.starts_with(norm_prefix);
+                let options_match = &v.options == request_options;
+                version_matches && options_match
+            })
+            .collect();
+
+        // Only sort when prefix is "latest" and we have multiple matches
+        // This is expensive, so avoid it for specific version prefixes
+        if prefix == "latest" && matching.len() > 1 {
+            matching.sort_by(|a, b| {
+                versions::Versioning::new(&b.version).cmp(&versions::Versioning::new(&a.version))
+            });
+        }
+
+        if let Some(found) = matching.first() {
+            trace!("[{short}@{prefix}] found {} in lockfile", found.version);
+            return Ok(Some((*found).clone()));
+        }
+    }
+
+    Ok(None)
+}
+
+/// Get the backend for a tool from the lockfile, ignoring options.
+/// This is used for backend discovery where we just need any entry's backend.
+pub fn get_locked_backend(config: &Config, short: &str) -> Option<String> {
+    let settings = Settings::get();
+    if !settings.lockfile_enabled() {
+        return None;
+    }
+
+    let lockfile = read_all_lockfiles(config);
+
+    lockfile
+        .tools
+        .get(short)
+        .and_then(|tools| tools.first())
+        .and_then(|tool| tool.backend.clone())
+}
+
+fn handle_lockfile_read_error(err: Report, lockfile_path: &Path) -> Lockfile {
+    // Differentiate between "file not found" (fine) and "parse error" (problem)
+    // File not found is expected when lockfile doesn't exist yet
+    if let Some(io_err) = err.downcast_ref::<std::io::Error>()
+        && io_err.kind() == std::io::ErrorKind::NotFound
+    {
+        trace!(
+            "lockfile {} not found, using empty lockfile",
+            display_path(lockfile_path)
+        );
+        return Lockfile::default();
+    }
+    // For other errors (parse errors, permission issues), warn the user
+    // as this could indicate data loss or corruption
+    warn!(
+        "failed to read lockfile {} (possible corruption): {err:?}",
+        display_path(lockfile_path)
+    );
+    Lockfile::default()
+}
+
+impl TryFrom<toml::Value> for LockfileTool {
+    type Error = Report;
+    fn try_from(value: toml::Value) -> Result<Self> {
+        let tool = match value {
+            toml::Value::String(v) => LockfileTool {
+                version: v,
+                backend: Default::default(),
+                options: Default::default(),
+                platforms: Default::default(),
+            },
+            toml::Value::Table(mut t) => {
+                let mut platforms = BTreeMap::new();
+                // Handle nested platforms table format: [tools.X.platforms.linux-x64]
+                if let Some(platforms_table) = t.remove("platforms") {
+                    let platforms_table: toml::Table = platforms_table.try_into()?;
+                    for (platform, platform_info) in platforms_table {
+                        platforms.insert(platform, platform_info.try_into()?);
+                    }
+                }
+                // Handle inline table format: "platforms.linux-x64" = { ... }
+                let platform_keys: Vec<_> = t
+                    .keys()
+                    .filter(|k| k.starts_with("platforms."))
+                    .cloned()
+                    .collect();
+                for key in platform_keys {
+                    if let Some(platform_info) = t.remove(&key) {
+                        let platform_name = key.strip_prefix("platforms.").unwrap().to_string();
+                        platforms.insert(platform_name, platform_info.try_into()?);
+                    }
+                }
+                let mut options = BTreeMap::new();
+                if let Some(opts) = t.remove("options") {
+                    let opts_table: toml::Table = opts.try_into()?;
+                    for (key, value) in opts_table {
+                        if let toml::Value::String(s) = value {
+                            options.insert(key, s);
+                        }
+                    }
+                }
+                // Silently discard env field from old lockfiles for backwards compat
+                t.remove("env");
+                LockfileTool {
+                    version: t
+                        .remove("version")
+                        .map(|v| v.try_into())
+                        .transpose()?
+                        .unwrap_or_default(),
+                    backend: t
+                        .remove("backend")
+                        .map(|v| v.try_into())
+                        .transpose()?
+                        .unwrap_or_default(),
+                    options,
+                    platforms,
+                }
+            }
+            _ => bail!("unsupported lockfile format {}", value),
+        };
+        Ok(tool)
+    }
+}
+
+impl LockfileTool {
+    fn into_toml_value(self) -> toml::Value {
+        let mut table = toml::Table::new();
+        table.insert("version".to_string(), self.version.into());
+        if let Some(backend) = self.backend {
+            table.insert("backend".to_string(), backend.into());
+        }
+        if !self.options.is_empty() {
+            let opts_table: toml::Table = self
+                .options
+                .into_iter()
+                .map(|(k, v)| (k, toml::Value::String(v)))
+                .collect();
+            table.insert("options".to_string(), toml::Value::Table(opts_table));
+        }
+        if !self.platforms.is_empty() {
+            table.insert("platforms".to_string(), self.platforms.clone().into());
+        }
+        table.into()
+    }
+}
+
+impl From<ToolVersionList> for Vec<LockfileTool> {
+    fn from(tvl: ToolVersionList) -> Self {
+        use crate::backend::platform_target::PlatformTarget;
+
+        tvl.versions
+            .iter()
+            .map(|tv| {
+                let mut platforms = BTreeMap::new();
+
+                // Convert tool version lock_platforms to lockfile platforms
+                for (platform, platform_info) in &tv.lock_platforms {
+                    platforms.insert(platform.clone(), platform_info.clone());
+                }
+
+                // Resolve lockfile options from the backend
+                let options = if let Ok(backend) = tv.request.backend() {
+                    let target = PlatformTarget::from_current();
+                    backend.resolve_lockfile_options(&tv.request, &target)
+                } else {
+                    BTreeMap::new()
+                };
+
+                LockfileTool {
+                    version: tv.version.clone(),
+                    backend: Some(tv.ba().stored_full()),
+                    options,
+                    platforms,
+                }
+            })
+            .collect()
+    }
+}
+
+fn format(mut doc: DocumentMut) -> String {
+    if let Some(tools) = doc.get_mut("tools") {
+        for (_k, v) in tools.as_table_mut().unwrap().iter_mut() {
+            if let toml_edit::Item::ArrayOfTables(art) = v {
+                for t in art.iter_mut() {
+                    t.sort_values_by(|a, _, b, _| {
+                        if a == "version" {
+                            return std::cmp::Ordering::Less;
+                        }
+                        if b == "version" {
+                            return std::cmp::Ordering::Greater;
+                        }
+                        a.to_string().cmp(&b.to_string())
+                    });
+                    // TODO: use TOML 1.1 multiline inline tables once toml_edit supports
+                    // InlineTable::set_multiline(). See https://github.com/toml-rs/toml/issues/1027
+                    // Convert platforms to dotted-key subtables (multi-line)
+                    if let Some(toml_edit::Item::Table(platforms_table)) = t.remove("platforms") {
+                        for (platform_key, platform_value) in platforms_table.iter() {
+                            if let toml_edit::Item::Table(platform_info) = platform_value {
+                                let dotted_key = format!("platforms.{}", platform_key);
+                                let mut subtable = toml_edit::Table::new();
+                                let mut keys: Vec<_> =
+                                    platform_info.iter().map(|(k, _)| k.to_string()).collect();
+                                keys.sort_by_key(|k| match k.as_str() {
+                                    "checksum" => 0,
+                                    "size" => 1,
+                                    "url" => 2,
+                                    "url_api" => 3,
+                                    "provenance" => 4,
+                                    _ => 5,
+                                });
+                                for k in &keys {
+                                    if let Some(item) = platform_info.get(k) {
+                                        subtable.insert(k, item.clone());
+                                    }
+                                }
+                                subtable.set_implicit(true);
+                                t.insert(&dotted_key, toml_edit::Item::Table(subtable));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    doc.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::{BTreeMap, BTreeSet};
+
+    fn basic_tool(version: &str, backend: &str) -> LockfileTool {
+        LockfileTool {
+            version: version.to_string(),
+            backend: Some(backend.to_string()),
+            options: BTreeMap::new(),
+            platforms: BTreeMap::new(),
+        }
+    }
+
+    fn tool_with_conda_dep(
+        version: &str,
+        backend: &str,
+        platform: &str,
+        dep: &str,
+    ) -> LockfileTool {
+        let mut platforms = BTreeMap::new();
+        platforms.insert(
+            platform.to_string(),
+            PlatformInfo {
+                checksum: None,
+                size: None,
+                url: None,
+                url_api: None,
+                conda_deps: Some(vec![dep.to_string()]),
+                ..Default::default()
+            },
+        );
+        LockfileTool {
+            version: version.to_string(),
+            backend: Some(backend.to_string()),
+            options: BTreeMap::new(),
+            platforms,
+        }
+    }
+
+    fn add_test_conda_package(lockfile: &mut Lockfile, platform: &str, basename: &str) {
+        lockfile.set_conda_package(
+            platform,
+            basename,
+            CondaPackageInfo {
+                url: format!("https://example.com/{basename}.conda"),
+                checksum: Some(format!("sha256:{basename}")),
+            },
+        );
+    }
+
+    #[test]
+    fn test_array_format_required() {
+        // Test that multi-version (array) format is read correctly
+        let multi_version_toml = r#"
+[[tools.node]]
+version = "20.10.0"
+backend = "core:node"
+
+[[tools.python]]
+version = "3.11.0"
+backend = "core:python"
+"#;
+
+        let table: toml::Table = toml::from_str(multi_version_toml).unwrap();
+        let tools: toml::Table = table.get("tools").unwrap().clone().try_into().unwrap();
+
+        let mut lockfile = Lockfile::default();
+        for (short, value) in tools {
+            let versions = match value {
+                toml::Value::Array(arr) => arr
+                    .into_iter()
+                    .map(LockfileTool::try_from)
+                    .collect::<Result<Vec<_>>>()
+                    .unwrap(),
+                _ => panic!("expected array format"),
+            };
+            lockfile.tools.insert(short, versions);
+        }
+
+        // Verify that we have the expected tools
+        assert_eq!(lockfile.tools.len(), 2);
+        assert!(lockfile.tools.contains_key("node"));
+        assert!(lockfile.tools.contains_key("python"));
+
+        // Verify node
+        let node_versions = &lockfile.tools["node"];
+        assert_eq!(node_versions.len(), 1);
+        assert_eq!(node_versions[0].version, "20.10.0");
+        assert_eq!(node_versions[0].backend, Some("core:node".to_string()));
+
+        // Verify python
+        let python_versions = &lockfile.tools["python"];
+        assert_eq!(python_versions.len(), 1);
+        assert_eq!(python_versions[0].version, "3.11.0");
+    }
+
+    #[test]
+    fn test_save_uses_array_format() {
+        let mut lockfile = Lockfile::default();
+        let mut platforms = BTreeMap::new();
+        platforms.insert(
+            "macos-arm64".to_string(),
+            PlatformInfo {
+                checksum: Some("sha256:abc123".to_string()),
+                size: Some(12345678),
+                url: Some("https://example.com/node.tar.gz".to_string()),
+                url_api: Some("https://api.github.com.com/repos/test/1234".to_string()),
+                conda_deps: None,
+                ..Default::default()
+            },
+        );
+
+        let tool = LockfileTool {
+            version: "20.10.0".to_string(),
+            backend: Some("core:node".to_string()),
+            options: BTreeMap::new(),
+            platforms,
+        };
+
+        lockfile.tools.insert("node".to_string(), vec![tool]);
+
+        // Create a temporary file to test saving
+        let temp_dir = std::env::temp_dir();
+        let test_lockfile = temp_dir.join("test_lockfile.lock");
+
+        // Save and verify it uses multi-version format
+        lockfile.save(&test_lockfile).unwrap();
+
+        let content = std::fs::read_to_string(&test_lockfile).unwrap();
+
+        // Should use [[tools.node]] array syntax, not [tools.node] single version
+        assert!(content.contains("[[tools.node]]"));
+        // Verify it doesn't use single-version format (but allow platforms sections)
+        assert!(!content.lines().any(|line| line.trim() == "[tools.node]"));
+
+        // Clean up
+        let _ = std::fs::remove_file(&test_lockfile);
+    }
+
+    #[test]
+    fn test_options_field_parsing_and_serialization() {
+        // Test parsing lockfile with options
+        let toml_with_options = r#"
+[[tools.ripgrep]]
+version = "14.0.0"
+backend = "ubi:BurntSushi/ripgrep"
+options = { exe = "rg", matching = "musl" }
+
+[tools.ripgrep.platforms.linux-x64]
+checksum = "blake3:abc123"
+"#;
+
+        let table: toml::Table = toml::from_str(toml_with_options).unwrap();
+        let tools: toml::Table = table.get("tools").unwrap().clone().try_into().unwrap();
+
+        let mut lockfile = Lockfile::default();
+        for (short, value) in tools {
+            let versions = match value {
+                toml::Value::Array(arr) => arr
+                    .into_iter()
+                    .map(LockfileTool::try_from)
+                    .collect::<Result<Vec<_>>>()
+                    .unwrap(),
+                _ => vec![LockfileTool::try_from(value).unwrap()],
+            };
+            lockfile.tools.insert(short, versions);
+        }
+
+        // Verify options were parsed correctly
+        let ripgrep = &lockfile.tools["ripgrep"][0];
+        assert_eq!(ripgrep.options.get("exe"), Some(&"rg".to_string()));
+        assert_eq!(ripgrep.options.get("matching"), Some(&"musl".to_string()));
+    }
+
+    #[test]
+    fn test_options_field_not_serialized_when_empty() {
+        let mut lockfile = Lockfile::default();
+        let tool = LockfileTool {
+            version: "14.0.0".to_string(),
+            backend: Some("ubi:BurntSushi/ripgrep".to_string()),
+            options: BTreeMap::new(), // Empty options
+            platforms: BTreeMap::new(),
+        };
+        lockfile.tools.insert("ripgrep".to_string(), vec![tool]);
+
+        let temp_dir = std::env::temp_dir();
+        let test_lockfile = temp_dir.join("test_lockfile_no_options.lock");
+
+        lockfile.save(&test_lockfile).unwrap();
+        let content = std::fs::read_to_string(&test_lockfile).unwrap();
+
+        // Should NOT contain "options" when it's empty
+        assert!(!content.contains("options"));
+
+        let _ = std::fs::remove_file(&test_lockfile);
+    }
+
+    #[test]
+    fn test_options_field_serialized_when_present() {
+        let mut lockfile = Lockfile::default();
+        let mut options = BTreeMap::new();
+        options.insert("exe".to_string(), "rg".to_string());
+        options.insert("matching".to_string(), "musl".to_string());
+
+        let tool = LockfileTool {
+            version: "14.0.0".to_string(),
+            backend: Some("ubi:BurntSushi/ripgrep".to_string()),
+            options,
+            platforms: BTreeMap::new(),
+        };
+        lockfile.tools.insert("ripgrep".to_string(), vec![tool]);
+
+        let temp_dir = std::env::temp_dir();
+        let test_lockfile = temp_dir.join("test_lockfile_with_options.lock");
+
+        lockfile.save(&test_lockfile).unwrap();
+        let content = std::fs::read_to_string(&test_lockfile).unwrap();
+
+        // Should contain options
+        assert!(content.contains("options"));
+        assert!(content.contains("exe"));
+        assert!(content.contains("rg"));
+
+        let _ = std::fs::remove_file(&test_lockfile);
+    }
+
+    #[test]
+    fn test_options_matching_in_get_locked_version() {
+        // This tests that get_locked_version requires exact options match
+        let toml_with_options = r#"
+[[tools.ripgrep]]
+version = "14.0.0"
+backend = "ubi:BurntSushi/ripgrep"
+options = { exe = "rg", matching = "musl" }
+
+[[tools.ripgrep]]
+version = "14.0.0"
+backend = "ubi:BurntSushi/ripgrep"
+options = { exe = "rg" }
+"#;
+
+        let table: toml::Table = toml::from_str(toml_with_options).unwrap();
+        let tools: toml::Table = table.get("tools").unwrap().clone().try_into().unwrap();
+
+        let mut lockfile = Lockfile::default();
+        for (short, value) in tools {
+            let versions = match value {
+                toml::Value::Array(arr) => arr
+                    .into_iter()
+                    .map(LockfileTool::try_from)
+                    .collect::<Result<Vec<_>>>()
+                    .unwrap(),
+                _ => vec![LockfileTool::try_from(value).unwrap()],
+            };
+            lockfile.tools.insert(short, versions);
+        }
+
+        // Verify we have 2 entries for ripgrep with different options
+        assert_eq!(lockfile.tools["ripgrep"].len(), 2);
+        assert_eq!(lockfile.tools["ripgrep"][0].options.len(), 2);
+        assert_eq!(lockfile.tools["ripgrep"][1].options.len(), 1);
+    }
+
+    #[test]
+    fn test_lockfile_path_for_config() {
+        // Simple case: mise.toml in project root
+        let (path, is_local) = lockfile_path_for_config(Path::new("/foo/bar/mise.toml"));
+        assert_eq!(path, PathBuf::from("/foo/bar/mise.lock"));
+        assert!(!is_local);
+
+        // Local config
+        let (path, is_local) = lockfile_path_for_config(Path::new("/foo/bar/mise.local.toml"));
+        assert_eq!(path, PathBuf::from("/foo/bar/mise.local.lock"));
+        assert!(is_local);
+
+        // Config in .config directory
+        let (path, is_local) = lockfile_path_for_config(Path::new("/foo/bar/.config/mise.toml"));
+        assert_eq!(path, PathBuf::from("/foo/bar/.config/mise.lock"));
+        assert!(!is_local);
+
+        // Config in .mise directory
+        let (path, is_local) = lockfile_path_for_config(Path::new("/foo/bar/.mise/config.toml"));
+        assert_eq!(path, PathBuf::from("/foo/bar/.mise/mise.lock"));
+        assert!(!is_local);
+
+        // Config in conf.d directory - should go to parent of conf.d
+        let (path, is_local) =
+            lockfile_path_for_config(Path::new("/foo/bar/.mise/conf.d/foo.toml"));
+        assert_eq!(path, PathBuf::from("/foo/bar/.mise/mise.lock"));
+        assert!(!is_local);
+
+        // Config in .config/mise/conf.d directory
+        let (path, is_local) =
+            lockfile_path_for_config(Path::new("/foo/bar/.config/mise/conf.d/foo.toml"));
+        assert_eq!(path, PathBuf::from("/foo/bar/.config/mise/mise.lock"));
+        assert!(!is_local);
+    }
+
+    #[test]
+    fn test_conda_packages_parsing() {
+        let toml_with_conda = r#"
+[conda-packages."macos-arm64"]
+"ncurses-6.4-h7ea286d_0" = { url = "https://conda.anaconda.org/conda-forge/osx-arm64/ncurses-6.4-h7ea286d_0.conda", checksum = "sha256:abc123" }
+"readline-8.2-h92ec313_1" = { url = "https://conda.anaconda.org/conda-forge/osx-arm64/readline-8.2-h92ec313_1.conda" }
+
+[[tools.jq]]
+version = "1.7.1"
+backend = "conda:jq"
+"platforms.macos-arm64" = { url = "https://example.com/jq.conda", checksum = "sha256:def456", conda_deps = ["ncurses-6.4-h7ea286d_0", "readline-8.2-h92ec313_1"] }
+"#;
+
+        let temp_dir = std::env::temp_dir();
+        let test_lockfile = temp_dir.join("test_conda_parse.lock");
+        std::fs::write(&test_lockfile, toml_with_conda).unwrap();
+
+        let lockfile = Lockfile::read(&test_lockfile).unwrap();
+
+        // Verify conda packages were parsed
+        let macos_packages = lockfile.conda_packages.get("macos-arm64").unwrap();
+        assert_eq!(macos_packages.len(), 2);
+
+        let ncurses = macos_packages.get("ncurses-6.4-h7ea286d_0").unwrap();
+        assert_eq!(
+            ncurses.url,
+            "https://conda.anaconda.org/conda-forge/osx-arm64/ncurses-6.4-h7ea286d_0.conda"
+        );
+        assert_eq!(ncurses.checksum, Some("sha256:abc123".to_string()));
+
+        let readline = macos_packages.get("readline-8.2-h92ec313_1").unwrap();
+        assert!(readline.checksum.is_none());
+
+        // Verify tool with conda_deps was parsed
+        let jq = &lockfile.tools["jq"][0];
+        let platform_info = jq.platforms.get("macos-arm64").unwrap();
+        assert_eq!(
+            platform_info.conda_deps,
+            Some(vec![
+                "ncurses-6.4-h7ea286d_0".to_string(),
+                "readline-8.2-h92ec313_1".to_string()
+            ])
+        );
+
+        let _ = std::fs::remove_file(&test_lockfile);
+    }
+
+    #[test]
+    fn test_conda_packages_serialization() {
+        let mut lockfile = Lockfile::default();
+
+        // Add conda packages
+        lockfile.set_conda_package(
+            "macos-arm64",
+            "ncurses-6.4-h7ea286d_0",
+            CondaPackageInfo {
+                url: "https://example.com/ncurses.conda".to_string(),
+                checksum: Some("sha256:abc123".to_string()),
+            },
+        );
+
+        // Add a tool with conda_deps
+        let mut platforms = BTreeMap::new();
+        platforms.insert(
+            "macos-arm64".to_string(),
+            PlatformInfo {
+                url: Some("https://example.com/jq.conda".to_string()),
+                checksum: Some("sha256:def456".to_string()),
+                size: None,
+                url_api: None,
+                conda_deps: Some(vec!["ncurses-6.4-h7ea286d_0".to_string()]),
+                ..Default::default()
+            },
+        );
+        lockfile.tools.insert(
+            "jq".to_string(),
+            vec![LockfileTool {
+                version: "1.7.1".to_string(),
+                backend: Some("conda:jq".to_string()),
+                options: BTreeMap::new(),
+                platforms,
+            }],
+        );
+
+        let temp_dir = std::env::temp_dir();
+        let test_lockfile = temp_dir.join("test_conda_serialize.lock");
+
+        lockfile.save(&test_lockfile).unwrap();
+        let content = std::fs::read_to_string(&test_lockfile).unwrap();
+
+        // Verify content contains conda-packages section (TOML formats it as nested tables)
+        assert!(
+            content.contains("conda-packages"),
+            "content should contain conda-packages section: {content}"
+        );
+        assert!(
+            content.contains("ncurses-6.4-h7ea286d_0"),
+            "content should contain package name: {content}"
+        );
+        assert!(
+            content.contains("https://example.com/ncurses.conda"),
+            "content should contain URL: {content}"
+        );
+
+        // Verify tool section contains conda_deps
+        assert!(
+            content.contains("conda_deps"),
+            "content should contain conda_deps: {content}"
+        );
+
+        // Round-trip test: read it back
+        let reloaded = Lockfile::read(&test_lockfile).unwrap();
+        let packages = reloaded.conda_packages.get("macos-arm64").unwrap();
+        assert!(packages.contains_key("ncurses-6.4-h7ea286d_0"));
+
+        let _ = std::fs::remove_file(&test_lockfile);
+    }
+
+    #[test]
+    fn test_cleanup_unreferenced_conda_packages() {
+        let mut lockfile = Lockfile::default();
+
+        // Add some conda packages
+        lockfile.set_conda_package(
+            "macos-arm64",
+            "referenced-pkg",
+            CondaPackageInfo {
+                url: "https://example.com/referenced.conda".to_string(),
+                checksum: Some("sha256:abc123".to_string()),
+            },
+        );
+        lockfile.set_conda_package(
+            "macos-arm64",
+            "unreferenced-pkg",
+            CondaPackageInfo {
+                url: "https://example.com/unreferenced.conda".to_string(),
+                checksum: Some("sha256:def456".to_string()),
+            },
+        );
+        lockfile.set_conda_package(
+            "linux-x64",
+            "orphan-platform-pkg",
+            CondaPackageInfo {
+                url: "https://example.com/orphan.conda".to_string(),
+                checksum: None,
+            },
+        );
+
+        // Add a tool that only references one package
+        let mut platforms = BTreeMap::new();
+        platforms.insert(
+            "macos-arm64".to_string(),
+            PlatformInfo {
+                url: Some("https://example.com/tool.conda".to_string()),
+                checksum: None,
+                size: None,
+                url_api: None,
+                conda_deps: Some(vec!["referenced-pkg".to_string()]),
+                ..Default::default()
+            },
+        );
+        lockfile.tools.insert(
+            "mytool".to_string(),
+            vec![LockfileTool {
+                version: "1.0.0".to_string(),
+                backend: Some("conda:mytool".to_string()),
+                options: BTreeMap::new(),
+                platforms,
+            }],
+        );
+
+        // Verify we have all packages before cleanup
+        assert_eq!(lockfile.conda_packages.len(), 2);
+        assert_eq!(lockfile.conda_packages["macos-arm64"].len(), 2);
+        assert_eq!(lockfile.conda_packages["linux-x64"].len(), 1);
+
+        // Run cleanup
+        lockfile.cleanup_unreferenced_conda_packages();
+
+        // Verify only referenced package remains
+        assert_eq!(lockfile.conda_packages.len(), 1);
+        assert!(lockfile.conda_packages.contains_key("macos-arm64"));
+        assert!(!lockfile.conda_packages.contains_key("linux-x64"));
+        assert_eq!(lockfile.conda_packages["macos-arm64"].len(), 1);
+        assert!(lockfile.conda_packages["macos-arm64"].contains_key("referenced-pkg"));
+        assert!(!lockfile.conda_packages["macos-arm64"].contains_key("unreferenced-pkg"));
+    }
+
+    #[test]
+    fn test_retain_tools_by_short_prunes_removed_tools() {
+        let mut lockfile = Lockfile::default();
+        lockfile
+            .tools
+            .insert("dummy".to_string(), vec![basic_tool("1.0.0", "asdf:dummy")]);
+        lockfile
+            .tools
+            .insert("tiny".to_string(), vec![basic_tool("2.1.0", "asdf:tiny")]);
+
+        let keep_shorts = BTreeSet::from(["tiny".to_string()]);
+        lockfile.retain_tools_by_short_or_backend(&keep_shorts, &BTreeSet::new());
+
+        assert!(!lockfile.tools.contains_key("dummy"));
+        assert!(lockfile.tools.contains_key("tiny"));
+    }
+
+    #[test]
+    fn test_stale_tool_shorts_identifies_removed_tools() {
+        let mut lockfile = Lockfile::default();
+        lockfile
+            .tools
+            .insert("dummy".to_string(), vec![basic_tool("1.0.0", "asdf:dummy")]);
+        lockfile
+            .tools
+            .insert("tiny".to_string(), vec![basic_tool("2.1.0", "asdf:tiny")]);
+
+        let keep_shorts = BTreeSet::from(["tiny".to_string()]);
+        let stale = lockfile.stale_tool_shorts(&keep_shorts, &BTreeSet::new());
+        assert_eq!(stale, BTreeSet::from(["dummy".to_string()]));
+    }
+
+    #[test]
+    fn test_stale_tool_shorts_respects_backend_identifiers() {
+        let mut lockfile = Lockfile::default();
+        lockfile.tools.insert(
+            "jq".to_string(),
+            vec![basic_tool("1.7.1", "aqua:jqlang/jq")],
+        );
+
+        let keep_backends = BTreeSet::from(["aqua:jqlang/jq".to_string()]);
+        let stale = lockfile.stale_tool_shorts(&BTreeSet::new(), &keep_backends);
+        assert!(stale.is_empty());
+    }
+
+    #[test]
+    fn test_retain_tools_by_short_cleans_unreferenced_conda_packages() {
+        let mut lockfile = Lockfile::default();
+
+        add_test_conda_package(&mut lockfile, "linux-x64", "keep-pkg");
+        add_test_conda_package(&mut lockfile, "linux-x64", "drop-pkg");
+
+        lockfile.tools.insert(
+            "tiny".to_string(),
+            vec![tool_with_conda_dep(
+                "2.1.0",
+                "conda:tiny",
+                "linux-x64",
+                "keep-pkg",
+            )],
+        );
+        lockfile.tools.insert(
+            "dummy".to_string(),
+            vec![tool_with_conda_dep(
+                "1.0.0",
+                "conda:dummy",
+                "linux-x64",
+                "drop-pkg",
+            )],
+        );
+
+        let keep_shorts = BTreeSet::from(["tiny".to_string()]);
+        lockfile.retain_tools_by_short_or_backend(&keep_shorts, &BTreeSet::new());
+
+        assert!(lockfile.tools.contains_key("tiny"));
+        assert!(!lockfile.tools.contains_key("dummy"));
+
+        let linux_packages = lockfile.conda_packages.get("linux-x64").unwrap();
+        assert!(linux_packages.contains_key("keep-pkg"));
+        assert!(!linux_packages.contains_key("drop-pkg"));
+    }
+
+    #[test]
+    fn test_retain_tools_by_short_or_backend_preserves_legacy_keyed_entries() {
+        let mut lockfile = Lockfile::default();
+        lockfile.tools.insert(
+            "jq".to_string(),
+            vec![LockfileTool {
+                version: "1.7.1".to_string(),
+                backend: Some("aqua:jqlang/jq".to_string()),
+                options: BTreeMap::new(),
+
+                platforms: BTreeMap::new(),
+            }],
+        );
+
+        let keep_shorts = BTreeSet::from(["aqua:jqlang/jq".to_string()]);
+        let keep_backends = BTreeSet::from(["aqua:jqlang/jq".to_string()]);
+        lockfile.retain_tools_by_short_or_backend(&keep_shorts, &keep_backends);
+
+        assert!(lockfile.tools.contains_key("jq"));
+    }
+
+    #[test]
+    fn test_platform_info_merge_prefers_sha256() {
+        // Test that merge_with prefers sha256 over blake3
+        let sha256_info = PlatformInfo {
+            checksum: Some("sha256:abc123".to_string()),
+            url: Some("https://example.com/a".to_string()),
+            ..Default::default()
+        };
+        let blake3_info = PlatformInfo {
+            checksum: Some("blake3:def456".to_string()),
+            url: Some("https://example.com/b".to_string()),
+            ..Default::default()
+        };
+
+        // sha256 + blake3 -> sha256
+        let merged = sha256_info.merge_with(&blake3_info);
+        assert_eq!(merged.checksum, Some("sha256:abc123".to_string()));
+
+        // blake3 + sha256 -> sha256
+        let merged = blake3_info.merge_with(&sha256_info);
+        assert_eq!(merged.checksum, Some("sha256:abc123".to_string()));
+
+        // blake3 + blake3 -> self (first)
+        let another_blake3 = PlatformInfo {
+            checksum: Some("blake3:ghi789".to_string()),
+            ..Default::default()
+        };
+        let merged = blake3_info.merge_with(&another_blake3);
+        assert_eq!(merged.checksum, Some("blake3:def456".to_string()));
+
+        // Preserves URL from other if self is missing
+        let no_url = PlatformInfo {
+            checksum: Some("sha256:abc123".to_string()),
+            url: None,
+            ..Default::default()
+        };
+        let merged = no_url.merge_with(&blake3_info);
+        assert_eq!(merged.url, Some("https://example.com/b".to_string()));
+    }
+
+    #[test]
+    fn test_provenance_fields_roundtrip() {
+        let info = PlatformInfo {
+            checksum: Some("sha256:abc123".to_string()),
+            url: Some("https://example.com/tool.tar.gz".to_string()),
+            provenance: Some(ProvenanceType::Slsa {
+                url: Some("https://example.com/tool.intoto.jsonl".to_string()),
+            }),
+            ..Default::default()
+        };
+
+        // Test toml roundtrip — SLSA serializes as a table with url inside
+        let toml_val: toml::Value = info.clone().into();
+        let table = toml_val.as_table().unwrap();
+        let prov_table = table.get("provenance").unwrap().as_table().unwrap();
+        let slsa_table = prov_table.get("slsa").unwrap().as_table().unwrap();
+        assert_eq!(
+            slsa_table.get("url").unwrap().as_str().unwrap(),
+            "https://example.com/tool.intoto.jsonl"
+        );
+        let parsed: PlatformInfo = toml_val.try_into().unwrap();
+        assert!(parsed.provenance.as_ref().unwrap().is_slsa());
+        match &parsed.provenance {
+            Some(ProvenanceType::Slsa { url }) => {
+                assert_eq!(
+                    url.as_deref(),
+                    Some("https://example.com/tool.intoto.jsonl")
+                );
+            }
+            _ => panic!("expected Slsa provenance"),
+        }
+    }
+
+    #[test]
+    fn test_provenance_legacy_provenance_url_compat() {
+        // Old lockfile format: provenance = "slsa" + provenance_url = "..."
+        // Must go through TryFrom<toml::Value> which handles the legacy field
+        let mut table = toml::Table::new();
+        table.insert("provenance".to_string(), "slsa".into());
+        table.insert(
+            "provenance_url".to_string(),
+            "https://example.com/tool.intoto.jsonl".into(),
+        );
+        let parsed = PlatformInfo::try_from(toml::Value::Table(table)).unwrap();
+        assert!(parsed.provenance.as_ref().unwrap().is_slsa());
+        match &parsed.provenance {
+            Some(ProvenanceType::Slsa { url }) => {
+                assert_eq!(
+                    url.as_deref(),
+                    Some("https://example.com/tool.intoto.jsonl")
+                );
+            }
+            _ => panic!("expected Slsa provenance"),
+        }
+    }
+
+    #[test]
+    fn test_provenance_merge_preserves_existing() {
+        let with_provenance = PlatformInfo {
+            provenance: Some(ProvenanceType::GithubAttestations),
+            ..Default::default()
+        };
+        let without = PlatformInfo::default();
+
+        // Merging with empty preserves provenance
+        let merged = with_provenance.merge_with(&without);
+        assert_eq!(merged.provenance, Some(ProvenanceType::GithubAttestations));
+
+        // Merging empty (new) with provenance (old) preserves existing provenance
+        let merged = without.merge_with(&with_provenance);
+        assert_eq!(merged.provenance, Some(ProvenanceType::GithubAttestations));
+
+        // Merging Slsa { url: None } with Slsa { url: Some(...) } preserves URL
+        let with_url = PlatformInfo {
+            provenance: Some(ProvenanceType::Slsa {
+                url: Some("https://example.com/provenance.intoto.jsonl".to_string()),
+            }),
+            ..Default::default()
+        };
+        let without_url = PlatformInfo {
+            provenance: Some(ProvenanceType::Slsa { url: None }),
+            ..Default::default()
+        };
+        let merged = without_url.merge_with(&with_url);
+        assert!(merged.provenance.as_ref().unwrap().is_slsa());
+        match &merged.provenance {
+            Some(ProvenanceType::Slsa { url }) => {
+                assert_eq!(
+                    url.as_deref(),
+                    Some("https://example.com/provenance.intoto.jsonl")
+                );
+            }
+            _ => panic!("expected Slsa provenance"),
+        }
+        // Also in reverse order
+        let merged = with_url.merge_with(&without_url);
+        match &merged.provenance {
+            Some(ProvenanceType::Slsa { url }) => {
+                assert_eq!(
+                    url.as_deref(),
+                    Some("https://example.com/provenance.intoto.jsonl")
+                );
+            }
+            _ => panic!("expected Slsa provenance"),
+        }
+    }
+
+    #[test]
+    fn test_provenance_not_empty() {
+        let info = PlatformInfo {
+            provenance: Some(ProvenanceType::Slsa { url: None }),
+            ..Default::default()
+        };
+        assert!(!info.is_empty());
+    }
+}

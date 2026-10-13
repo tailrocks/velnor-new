@@ -1,0 +1,74 @@
+{
+  "schema": 1,
+  "kind": "phasec-registered-source-fixes",
+  "base_checkpoint": {
+    "commit": "13fb3a8e6cce4d44f5c8afc1dca8e6e3a5f05fc6",
+    "tree": "77dbd82bf3b00609c9cb8e9ac47f13e3c1f6b630",
+    "manifest": "docs/reviews/phasec-registered-source-fixes-v31.json",
+    "manifest_sha256": "2adf9a2f7c4e8c7251f902088424fb2096e6430c2885be8c85e2a1fd63a8cc75"
+  },
+  "checkpoint": {
+    "commit": "5fcfc7c53e78a99e184ca19c850bc46d6657073a",
+    "tree": "fd49fa5b8183c2fe78d09b41215d82f87ed50070",
+    "clean_worktree": true,
+    "private_detached_author_worktree": "/private/tmp/velnor-phasec-registered-assembly-v30",
+    "remote_operations": false
+  },
+  "fix": {
+    "subject": "fix(renderer): repair split probe module paths",
+    "stat": {"files": 4, "insertions": 4, "deletions": 4},
+    "changes": [
+      "Scope the fake transport constant to the cancellation test module so its existing parent re-export is valid.",
+      "Resolve the skipped-receipt fixture through its actual observer-test parent to the shared controller fixture module.",
+      "Use the cancellation probe module's direct private_io child from the steps child module.",
+      "Give the parallel observer assertion the map-slice type returned by the existing step selector; preserve all assertions."
+    ],
+    "preserved": [
+      "No test, assertion, failure path, fixture, or function was removed, stubbed, or weakened.",
+      "No casts were added.",
+      "The e074 ENOSPC save-readiness test and the cancellation Save predicate assertion remain unchanged."
+    ],
+    "source_hashes_sha256": [
+      {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_observer_skipped_receipt_tests.rs", "sha256": "a3b9d7853ed68a9d553ab91eb6c61be5de61369c9fcf198830b3684f54d5c845"},
+      {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_steps.rs", "sha256": "762bdbd7b32b4fe846cbf14bb2e4fb6fd1de8c8b4d489e33a0f432fd018af6c5"},
+      {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_cancel_probe_transport_fixture_tests.rs", "sha256": "1590251439ea2288f4072d916b453fd2a054a446ab2b07cd0b8525e65e2e89d5"},
+      {"path": "crates/velnor-actions-workflow-renderer/src/schema2_mbx_parallel_probe_tests_observer_assertions.rs", "sha256": "1108f8b7126fc7fea26dd2655894dd82f9953c67b423a3fbf2c08a2f690db695"}
+    ]
+  },
+  "toolchain": {
+    "mise_path": "/private/tmp/velnor-mise-official-2026.9.18/mise",
+    "mise_version": "2026.9.18 macos-arm64 (2026-09-30)",
+    "mise_sha256": "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f",
+    "rustc": "1.98.1 (48a229cea 2026-09-01)",
+    "cargo": "1.98.1 (797e8a9bc 2026-08-05)",
+    "nextest_path": "/Users/donbeave/.local/share/mise/installs/aqua-nextest-rs-nextest-cargo-nextest/0.9.146/cargo-nextest",
+    "nextest": "0.9.146 (8af696ddc 2026-09-21)",
+    "mbx": "1.22.0",
+    "build_jobs": 2,
+    "target_dir": "/private/tmp/velnor-phasec-registered-target-13fb-v31"
+  },
+  "verification": [
+    {
+      "command": "mise 2026.9.18 exec -- cargo fmt --all -- --check",
+      "result": "passed on the private author worktree; Rust 1.98.1"
+    },
+    {"command": "rtk git diff --check", "result": "passed"},
+    {
+      "checkpoint": "13fb3a8e6cce4d44f5c8afc1dca8e6e3a5f05fc6",
+      "command": "cargo-nextest 0.9.146 nextest list --locked --package velnor-actions-workflow-renderer --lib --target-dir /private/tmp/velnor-phasec-registered-target-13fb-v31 --build-jobs 2 --message-format oneline -E 'test(/mbx_bundle|schema2_mbx_(cancel_probe|parallel_probe|resource_probe|corrupt_probe|stock_restore)/)'",
+      "exit_code": 101,
+      "result": "pre-test compile failed; zero tests executed",
+      "diagnostics": [
+        "E0364: FAKE_CURL was too private for its parent-module re-export.",
+        "E0432: nested skipped-receipt fixture looked for controller_fixtures in the wrong parent module.",
+        "E0433: cancellation steps used an incorrect private_io module path.",
+        "E0603: private FAKE_CURL import followed from the invalid re-export.",
+        "E0308 x3: observer assertion helper accepted &Yaml where its caller passes the selected job's map slice."
+      ]
+    },
+    {
+      "checkpoint": "5fcfc7c53e78a99e184ca19c850bc46d6657073a",
+      "result": "registered tests and strict Clippy pending coordinator-created immutable build tree"
+    }
+  ]
+}

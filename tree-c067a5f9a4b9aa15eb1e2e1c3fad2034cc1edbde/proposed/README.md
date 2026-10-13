@@ -1,0 +1,70 @@
+# Proposed implementation: Velnor V1
+
+**Status:** Proposed. No implementation is claimed by this specification.
+
+Velnor Actions is a stack-generic GitHub Actions workflow generator. The CLI
+auto-detects every registered project stack. V1
+registers only Rust/Cargo detectors, so unregistered stacks receive no
+validation claim. Future TypeScript and Bun detectors add coverage under the
+same command tree. Configuration is in `.velnor/config.toml`:
+`[stacks].ignore` disables exact registered stack IDs, `[stacks.<name>]` holds
+stack-specific settings, and `[discovery].exclude` holds repository path
+globs. These are not CLI flags.
+
+## Responsibility boundaries
+
+| Component | Owns | Does not own |
+|---|---|---|
+| Rust adapter | Cargo inventory, local package graph, affected Rust task proposals | Mise config/commands, workflow YAML, process execution |
+| Mise adapter | Tool selection, pinned command/environment construction, tool-file inspection, task-result cache integration | Rust package graph or GitHub YAML |
+| Actionlint adapter | Pinned actionlint capability, generated `.github/actionlint.yaml`, workflow-lint validation | Mise execution, Rust scanning, generic workflow rendering |
+| Orchestrator | Combines stack proposals, Mise execution, selection, cache evidence, scheduling, and outputs | Stack/tool parsing or rendering implementation |
+| Workflow renderer | Generic GitHub Actions YAML | Stack and Mise semantics |
+| CLI | Clap arguments, typed dispatch, output and exit codes | Orchestration and stack/tool rules |
+| MBX | Reusable Rust compilation work and compiler resource coordination | Test pass/fail results |
+| GitHub Actions | Scheduling generated jobs and reporting required check status | Velnor's project discovery and cache validity rules |
+
+`generate` replaces `.github/` as one complete tree. `init` separately creates
+the user-owned `.velnor/config.toml` sample. The path is
+`GitHub step → pinned tools → Mise command → stack task`; Velnor Actions scans
+the repo and renders that workflow. `plan` shows a text summary; `generate
+--output-dir PATH` writes the same `.github/` tree to a caller-selected fresh
+preview directory.
+
+The public command surface is deliberately small:
+
+```text
+velnor-actions init
+velnor-actions plan
+velnor-actions generate [--output-dir PATH]
+```
+
+`plan` prints a concise, human-readable summary from the same analysis and
+workflow rendering path as `generate`. It prints no YAML and writes no files.
+
+V1 contains seven purpose-scoped Cargo packages: `velnor-actions-contract`,
+`velnor-actions-rust`, `velnor-actions-mise`, `velnor-actions-actionlint`,
+`velnor-actions-workflow-renderer`, `velnor-actions-orchestrator`, and
+`velnor-actions-cli`. Rust and Mise are separate crates; only the orchestrator
+composes them. The CLI package declares the `velnor-actions` binary. Generic
+package names such as `velnor-model`, `velnor-core`, and `velnor-rust` are
+forbidden.
+
+V1 MUST NOT implement Docker, self-hosted runner registration, GitHub runner protocol, Scale Sets, Kubernetes, a database, web server, TUI, remote cache service, general workflow interpreter, or deployment system. Generated workflows MAY use a small allowlist of full-SHA-pinned setup actions; Velnor does not execute arbitrary `uses:` actions itself.
+
+## Normative specifications
+
+1. [Architecture](architecture.md) defines workspace crates, configuration, discovery, data contracts, and generated-file ownership.
+2. [Generated-file contract](generated-file-contract.md) defines task names, file ownership, safe rendering, and atomic output replacement.
+3. [CLI contract](cli-contract.md) fixes the stack-generic `velnor-actions` Clap command tree (`init`, `plan`, and `generate`), automatic detection, TOML ignore settings, and V1 Rust behavior.
+4. [Workflow contract](workflow-contract.md) defines triggers, jobs, and matrix data.
+5. [Task execution contract](task-execution-contract.md) defines task steps, Mise invocation, execution, and reports.
+6. [Cache and report contract](cache-contract.md) defines task identities, cache ownership/trust, reports, and final status aggregation.
+7. [Parallelism and affected-work contract](parallelism-and-selection-contract.md) defines dependency-aware selection, trusted baseline coverage, native background/wait steps, bounded concurrency, and complete test partitioning.
+8. [Rust quality contract](rust-quality-contract.md) defines tests, lints, file limits, dependencies, verification and policy protection.
+9. [Agent and performance contract](agent-and-performance-contract.md) defines agent instructions, performance measurements, acceptance budgets, and readiness evidence.
+10. [Tooling input contract](tooling-input-contract.md) defines read-only inspection and human recommendations for Rust/Mise tool files.
+11. [Version policy](version-policy.md) defines latest-stable tool pins, freshness checks, exception expiry, and V2 version inventory.
+12. [Implementation plan](implementation-plan.md) defines the ordered work packages and merge gates.
+
+The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.

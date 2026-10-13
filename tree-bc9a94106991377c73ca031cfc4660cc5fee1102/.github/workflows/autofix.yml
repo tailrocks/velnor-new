@@ -1,0 +1,43 @@
+name: autofix.ci
+
+on:
+  workflow_call:
+  pull_request:
+#  push:
+#    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+  MISE_EXPERIMENTAL: 1
+  RUST_BACKTRACE: 1
+  NPM_CONFIG_FUND: false
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: test-ubuntu-latest
+          save-if: false
+      - run: |
+          cargo build --all-features
+          echo "$PWD/target/debug" >> "$GITHUB_PATH"
+      - run: mise install
+      - run: npm install
+      - run: mise run render
+      - run: mise run lint-fix
+      - run: mise run snapshots
+      - uses: autofix-ci/action@v1.3.1
+        if: ${{ always() }}

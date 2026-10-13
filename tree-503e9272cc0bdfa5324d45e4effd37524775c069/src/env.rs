@@ -1,0 +1,1173 @@
+use crate::Result;
+use crate::config::env_directive::EnvValue;
+use crate::config::{SettingsExt, miserc};
+use crate::env_diff::{EnvDiff, EnvMap};
+use crate::file::replace_path;
+use crate::shell::ShellType;
+use crate::{cli::args::ToolArg, file::display_path};
+use eyre::Context;
+use indexmap::{IndexMap, IndexSet};
+use itertools::Itertools;
+pub(crate) use mise_util::env::*;
+use std::collections::{HashMap, HashSet};
+use std::sync::LazyLock as Lazy;
+use std::sync::RwLock;
+use std::{path::Path, string::ToString};
+use std::{path::PathBuf, sync::atomic::AtomicBool};
+
+tokio::task_local! {
+    static INSTALL_ENV: IndexMap<String, EnvValue>;
+}
+
+/// Overlays a tool's `install_env` on the process env for the duration of `future`,
+/// so anything it does reads that tool's values through [`scoped_var`].
+pub(crate) async fn with_install_env<T>(
+    env: IndexMap<String, EnvValue>,
+    future: impl std::future::Future<Output = T>,
+) -> T {
+    INSTALL_ENV.scope(env, future).await
+}
+
+/// Reads an env var through the active [`with_install_env`] overlay, falling back to the
+/// process env. Blank reads as unset, as does an `install_env` entry set to `false`.
+pub(crate) fn scoped_var(key: &str) -> Option<String> {
+    match INSTALL_ENV.try_with(|env| env.get(key).cloned()) {
+        Ok(Some(value)) => value.into_string(),
+        _ => std::env::var(key).ok(),
+    }
+    .map(|value| value.trim().to_string())
+    .filter(|value| !value.is_empty())
+}
+
+pub(crate) static TOOL_ARGS: RwLock<Vec<ToolArg>> = RwLock::new(vec![]);
+pub(crate) static MISE_SHELL: Lazy<Option<ShellType>> =
+    Lazy::new(|| detect_shell(var("MISE_SHELL").ok(), var("SHELL").ok(), &SHELL));
+
+/// Which shell mise should speak, from the environment.
+///
+/// `SHELL` is consulted here but deliberately *not* through [`SHELL`], which on Windows reads
+/// `COMSPEC`. Git Bash, MSYS2 and Cygwin all set `SHELL` to a real shell there, and
+/// [`ShellType::from_str`] already understands the form they use, but nothing ever looked. Reading
+/// it through [`SHELL`] instead would be wrong: [`SHELL_COMMAND_FLAG`] is `/c` on Windows and
+/// `mise exec -c` and `mise en` pair the two, so `bash.exe /c …` is what that would run.
+///
+/// Split out from the `Lazy` because that is process-wide and reads the real environment, so the
+/// precedence below cannot be exercised from a test any other way.
+fn detect_shell(
+    mise_shell: Option<String>,
+    shell_var: Option<String>,
+    fallback: &str,
+) -> Option<ShellType> {
+    // What `mise activate` exports, so it decides on its own. Set but unparseable is an answer,
+    // not a reason to start guessing.
+    if let Some(s) = mise_shell {
+        return s.parse().ok();
+    }
+    // On unix `SHELL` *is* the fallback, so consulting it separately would be the same lookup
+    // twice. On Windows it is the one the fallback cannot reach.
+    if cfg!(windows)
+        && let Some(st) = shell_var.and_then(|s| s.parse().ok())
+    {
+        return Some(st);
+    }
+    fallback.parse().ok()
+}
+
+// paths and directories
+
+// data subdirs
+
+/// Returns the list of shared install directories to search.
+/// Includes the system installs dir (`MISE_SYSTEM_DATA_DIR/installs`) plus any
+/// user-configured dirs from Settings (config files) or the environment variable.
+/// The user's primary install dir is NOT included here — it is checked separately.
+pub(crate) fn shared_install_dirs() -> Vec<PathBuf> {
+    use crate::config::Settings;
+    let user_dirs = if let std::result::Result::Ok(settings) = Settings::try_get()
+        && let Some(ref dirs) = settings.shared_install_dirs
+        && !dirs.is_empty()
+    {
+        dirs.clone()
+    } else {
+        MISE_SHARED_INSTALL_DIRS_ENV.clone()
+    };
+    let system = Settings::try_get()
+        .map(|settings| settings.system_installs_dir().to_path_buf())
+        .unwrap_or_else(|_| MISE_SYSTEM_INSTALLS_DIR.clone());
+    // System dir first (if it exists and isn't the user's own install dir),
+    // then user-configured dirs.
+    let mut result = Vec::new();
+    if system.is_dir() && system != *MISE_INSTALLS_DIR {
+        result.push(system);
+    }
+    result.extend(user_dirs);
+    result
+}
+
+/// Categorize an install path as system, shared, or local.
+pub(crate) fn install_path_category(path: &Path) -> InstallPathCategory {
+    let system_installs = crate::config::Settings::try_get()
+        .map(|settings| settings.system_installs_dir().to_path_buf())
+        .unwrap_or_else(|_| MISE_SYSTEM_INSTALLS_DIR.clone());
+    if system_installs != *MISE_INSTALLS_DIR && path.starts_with(system_installs) {
+        InstallPathCategory::System
+    } else if shared_install_dirs().iter().any(|d| path.starts_with(d)) {
+        InstallPathCategory::Shared
+    } else {
+        InstallPathCategory::Local
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum InstallPathCategory {
+    /// Primary user install dir
+    Local,
+    /// System-level (/usr/local/share/mise/installs)
+    System,
+    /// User-configured shared dir
+    Shared,
+}
+
+/// Look up a tool version in shared install directories.
+/// `tool_dir_name` should be the kebab-cased directory name (e.g. from `ba.installs_path`).
+/// Returns the first shared path where `<shared_dir>/<tool_dir_name>/<pathname>` exists,
+/// or `primary_path` if not found in any shared directory.
+pub(crate) fn find_in_shared_installs(
+    primary_path: PathBuf,
+    tool_dir_name: &str,
+    pathname: &str,
+) -> PathBuf {
+    if !primary_path.exists() {
+        for shared_dir in shared_install_dirs() {
+            let shared_path = shared_dir.join(tool_dir_name).join(pathname);
+            if shared_path.exists() {
+                return shared_path;
+            }
+        }
+    }
+    primary_path
+}
+
+pub(crate) static MISE_DEFAULT_TOOL_VERSIONS_FILENAME: Lazy<String> = Lazy::new(|| {
+    var("MISE_DEFAULT_TOOL_VERSIONS_FILENAME")
+        .ok()
+        .or(MISE_OVERRIDE_TOOL_VERSIONS_FILENAMES
+            .as_ref()
+            .and_then(|v| v.first().cloned()))
+        .or(var("MISE_DEFAULT_TOOL_VERSIONS_FILENAME").ok())
+        .unwrap_or_else(|| ".tool-versions".into())
+});
+pub(crate) static MISE_DEFAULT_CONFIG_FILENAME: Lazy<String> = Lazy::new(|| {
+    var("MISE_DEFAULT_CONFIG_FILENAME")
+        .ok()
+        .or(MISE_OVERRIDE_CONFIG_FILENAMES.first().cloned())
+        .unwrap_or_else(|| "mise.toml".into())
+});
+pub(crate) static MISE_OVERRIDE_TOOL_VERSIONS_FILENAMES: Lazy<Option<IndexSet<String>>> =
+    Lazy::new(|| match var("MISE_OVERRIDE_TOOL_VERSIONS_FILENAMES") {
+        Ok(v) if v == "none" => Some([].into()),
+        Ok(v) => Some(split_colon_list(&v)),
+        Err(_) => {
+            miserc::get_override_tool_versions_filenames().map(|v| v.iter().cloned().collect())
+        }
+    });
+pub(crate) static MISE_OVERRIDE_CONFIG_FILENAMES: Lazy<IndexSet<String>> =
+    Lazy::new(|| match var("MISE_OVERRIDE_CONFIG_FILENAMES") {
+        Ok(v) => split_colon_list(&v),
+        Err(_) => miserc::get_override_config_filenames()
+            .map(|v| v.iter().cloned().collect())
+            .unwrap_or_default(),
+    });
+pub(crate) static MISE_ENV: Lazy<Vec<String>> = Lazy::new(|| environment(&ARGS.read().unwrap()));
+
+/// The tri-state auto_env setting: MISE_AUTO_ENV env var > .miserc.toml > unset
+pub(crate) fn auto_env_setting() -> Option<bool> {
+    if var_is_true("MISE_AUTO_ENV") {
+        Some(true)
+    } else if var_is_false("MISE_AUTO_ENV") {
+        Some(false)
+    } else {
+        miserc::get_auto_env()
+    }
+}
+
+/// The tri-state env_conf_d setting: MISE_ENV_CONF_D env var > .miserc.toml > unset.
+pub(crate) fn env_conf_d_setting() -> Option<bool> {
+    if var_is_true("MISE_ENV_CONF_D") {
+        Some(true)
+    } else if var_is_false("MISE_ENV_CONF_D") {
+        Some(false)
+    } else {
+        miserc::get_env_conf_d()
+    }
+}
+
+/// Keep dotted conf.d fragments unconditional through the deprecation window.
+pub(crate) fn env_conf_d_default_for_version(v: &versions::Versioning) -> bool {
+    *v >= versions::Versioning::new("2027.8.10").unwrap()
+}
+
+/// Whether `conf.d` filenames carry environment suffixes, resolving the
+/// setting against the version-gated default.
+pub(crate) fn env_conf_d() -> bool {
+    env_conf_d_setting().unwrap_or_else(|| env_conf_d_default_for_version(&crate::version::V))
+}
+
+/// Default for auto_env when the setting is unset: off until mise 2027.6.0
+pub(crate) fn auto_env_default_for_version(v: &versions::Versioning) -> bool {
+    *v >= versions::Versioning::new("2027.6.0").unwrap()
+}
+
+/// Platform-derived environment names, regardless of whether auto_env is enabled.
+/// Ordered least to most specific: os family ("unix"), os, "{os}-{arch}".
+/// On Windows the family equals the os so it dedupes to ["windows", "windows-{arch}"].
+pub(crate) fn platform_env_names() -> Vec<String> {
+    let mut names: Vec<String> = vec![];
+    for name in [
+        consts::FAMILY.to_string(),
+        crate::platform::OS.to_string(),
+        format!("{}-{}", *crate::platform::OS, *crate::platform::ARCH),
+    ] {
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    names
+}
+
+/// Platform environments active for config file discovery and lockfile selection.
+/// Empty unless auto_env is enabled. Names already in MISE_ENV are excluded so
+/// explicit environments keep their user-specified (higher) precedence.
+/// These are deliberately not part of MISE_ENV: they do not affect the
+/// `{{ mise_env }}` template variable or MISE_ENV propagation to subprocesses.
+pub(crate) static AUTO_ENV_NAMES: Lazy<Vec<String>> = Lazy::new(|| {
+    let enabled =
+        auto_env_setting().unwrap_or_else(|| auto_env_default_for_version(&crate::version::V));
+    if !enabled {
+        return vec![];
+    }
+    platform_env_names()
+        .into_iter()
+        .filter(|name| !MISE_ENV.contains(name))
+        .collect()
+});
+
+/// Auto platform envs followed by explicit MISE_ENV entries, for "later wins"
+/// consumers like config filename enumeration.
+pub(crate) static MISE_ENV_WITH_AUTO: Lazy<Vec<String>> = Lazy::new(|| {
+    AUTO_ENV_NAMES
+        .iter()
+        .chain(MISE_ENV.iter())
+        .cloned()
+        .collect()
+});
+
+pub(crate) static MISE_IGNORED_CONFIG_PATHS: Lazy<Vec<PathBuf>> = Lazy::new(|| {
+    env_ignored_config_paths()
+        .or_else(|| miserc::get_ignored_config_paths().map(|paths| paths.iter().cloned().collect()))
+        .unwrap_or_default()
+});
+/// `ignored_config_paths` without project `.miserc.toml` files, for operations
+/// over every tracked config whose result must not depend on the working directory.
+pub(crate) static MISE_GLOBAL_IGNORED_CONFIG_PATHS: Lazy<Vec<PathBuf>> = Lazy::new(|| {
+    env_ignored_config_paths()
+        .or_else(|| {
+            miserc::get_global_ignored_config_paths().map(|paths| paths.iter().cloned().collect())
+        })
+        .unwrap_or_default()
+});
+fn env_ignored_config_paths() -> Option<Vec<PathBuf>> {
+    let invocation_cwd = miserc::invocation_cwd()
+        .map(Path::to_path_buf)
+        .or_else(|| current_dir().ok())
+        .unwrap_or_default();
+    var_os("MISE_IGNORED_CONFIG_PATHS").map(|v| {
+        split_paths(&v)
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(|p| miserc::resolve_ignored_config_path(p, &invocation_cwd))
+            .collect()
+    })
+}
+pub(crate) static MISE_CEILING_PATHS: Lazy<HashSet<PathBuf>> = Lazy::new(|| {
+    var_os("MISE_CEILING_PATHS")
+        .map(|v| {
+            split_paths(&v)
+                .filter(|p| !p.as_os_str().is_empty())
+                .map(replace_path)
+                .collect()
+        })
+        .or_else(|| {
+            miserc::get_ceiling_paths()
+                .map(|paths| paths.iter().cloned().map(replace_path).collect())
+        })
+        .unwrap_or_default()
+});
+
+#[cfg(feature = "self_update")]
+pub(crate) static MISE_SELF_UPDATE_AVAILABLE: Lazy<Option<bool>> = Lazy::new(|| {
+    if var_is_true("MISE_SELF_UPDATE_AVAILABLE") {
+        Some(true)
+    } else if var_is_false("MISE_SELF_UPDATE_AVAILABLE") {
+        Some(false)
+    } else {
+        None
+    }
+});
+#[cfg(feature = "self_update")]
+pub(crate) static MISE_SELF_UPDATE_DISABLED_PATH: Lazy<Option<PathBuf>> = Lazy::new(|| {
+    let base = mise_install_base()?;
+    find_in_tree(
+        &base,
+        &[
+            &["lib", ".disable-self-update"],
+            &["lib", "mise", ".disable-self-update"],
+            &["lib64", "mise", ".disable-self-update"],
+        ],
+    )
+});
+
+// true if running inside a shim
+
+// true if the current process is running as a shim (not direct mise invocation)
+
+pub(crate) static __MISE_DIFF: Lazy<EnvDiff> = Lazy::new(get_env_diff);
+pub(crate) static LINUX_DISTRO: Lazy<Option<String>> = Lazy::new(linux_distro);
+pub(crate) static PREFER_OFFLINE: Lazy<AtomicBool> =
+    Lazy::new(|| prefer_offline(&ARGS.read().unwrap()).into());
+/// Commands whose explicit purpose is to enumerate remote versions/tags. Under
+/// `prefer_offline`, remote-version lookups are otherwise capped to a single
+/// ~3s attempt with no retries so fast/interactive commands (shims, activation)
+/// never stall. These commands opt out of that cap so they honor the full
+/// configured `fetch_remote_versions_timeout` even when `prefer_offline` is set
+/// (https://github.com/jdx/mise/discussions/11185).
+pub(crate) static REMOTE_FETCH_COMMAND: Lazy<AtomicBool> =
+    Lazy::new(|| remote_fetch_command(&ARGS.read().unwrap()).into());
+/// essentially, this is whether we show spinners or build output on runtime install
+pub(crate) static PRISTINE_ENV: Lazy<EnvMap> =
+    Lazy::new(|| get_pristine_env(&__MISE_DIFF, vars_safe().collect()));
+
+pub(crate) static PATH: Lazy<Vec<PathBuf>> = Lazy::new(|| match PRISTINE_ENV.get(&*PATH_KEY) {
+    Some(path) => split_paths(path).collect(),
+    None => vec![],
+});
+
+/// Whether terminal-width presentation output should be truncated.
+pub(crate) fn should_truncate() -> bool {
+    crate::config::Settings::get().truncate && !*AI_AGENT
+}
+
+// python
+
+fn get_env_diff() -> EnvDiff {
+    let env = vars_safe().collect::<HashMap<_, _>>();
+    match env.get("__MISE_DIFF") {
+        Some(raw) => EnvDiff::deserialize(raw).unwrap_or_else(|err| {
+            warn!("Failed to deserialize __MISE_DIFF: {:#}", err);
+            EnvDiff::default()
+        }),
+        None => EnvDiff::default(),
+    }
+}
+
+/// this returns the environment as if __MISE_DIFF was reversed.
+/// putting the shell back into a state before hook-env was run
+fn get_pristine_env(mise_diff: &EnvDiff, orig_env: EnvMap) -> EnvMap {
+    let mut env = reverse_diff_preserving_overrides(mise_diff, orig_env);
+
+    // get the current path as a vector
+    let path = match env.get(&*PATH_KEY) {
+        Some(path) => split_paths(path).collect(),
+        None => vec![],
+    };
+    // get the paths that were removed by mise as a hashset
+    let mut to_remove = mise_diff.path.iter().collect::<HashSet<_>>();
+
+    // remove those paths that were added by mise, but only once (the first time)
+    let path = path
+        .into_iter()
+        .filter(|p| !to_remove.remove(p))
+        .collect_vec();
+
+    // put the pristine PATH back into the environment
+    env.insert(
+        PATH_KEY.to_string(),
+        join_paths(path).unwrap().to_string_lossy().to_string(),
+    );
+    env
+}
+
+/// Reverse values that are still in the state mise recorded, while preserving
+/// values changed or removed by the caller after mise applied the environment.
+fn reverse_diff_preserving_overrides(mise_diff: &EnvDiff, mut env: EnvMap) -> EnvMap {
+    for (key, old_value) in &mise_diff.old {
+        match env_diff_get(&mise_diff.new, key) {
+            Some(new_value) if env_map_get(&env, key) == Some(new_value) => {
+                let key = env_map_key(&env, key)
+                    .cloned()
+                    .unwrap_or_else(|| key.clone());
+                env.insert(key, old_value.clone());
+            }
+            None if env_map_get(&env, key).is_none() => {
+                env.insert(key.clone(), old_value.clone());
+            }
+            _ => {}
+        }
+    }
+
+    for (key, new_value) in &mise_diff.new {
+        if env_diff_get(&mise_diff.old, key).is_none()
+            && env_map_get(&env, key) == Some(new_value)
+            && let Some(key) = env_map_key(&env, key).cloned()
+        {
+            env.remove(&key);
+        }
+    }
+
+    env
+}
+
+#[cfg(not(windows))]
+fn env_map_key<'a>(env: &'a EnvMap, key: &str) -> Option<&'a String> {
+    env.get_key_value(key).map(|(key, _)| key)
+}
+
+#[cfg(windows)]
+fn env_map_key<'a>(env: &'a EnvMap, key: &str) -> Option<&'a String> {
+    env.keys()
+        .find(|candidate| windows_env_key_eq(candidate, key))
+}
+
+fn env_map_get<'a>(env: &'a EnvMap, key: &str) -> Option<&'a String> {
+    env_map_key(env, key).and_then(|key| env.get(key))
+}
+
+#[cfg(not(windows))]
+fn env_diff_get<'a>(env: &'a IndexMap<String, String>, key: &str) -> Option<&'a String> {
+    env.get(key)
+}
+
+#[cfg(windows)]
+fn env_diff_get<'a>(env: &'a IndexMap<String, String>, key: &str) -> Option<&'a String> {
+    env.iter()
+        .find(|(candidate, _)| windows_env_key_eq(candidate, key))
+        .map(|(_, value)| value)
+}
+
+#[cfg(windows)]
+fn windows_env_key_eq(left: &str, right: &str) -> bool {
+    use windows_sys::Win32::Globalization::{CSTR_EQUAL, CompareStringOrdinal};
+
+    let left = left.encode_utf16().collect::<Vec<_>>();
+    let right = right.encode_utf16().collect::<Vec<_>>();
+    let (Ok(left_len), Ok(right_len)) = (i32::try_from(left.len()), i32::try_from(right.len()))
+    else {
+        return false;
+    };
+
+    unsafe {
+        CompareStringOrdinal(left.as_ptr(), left_len, right.as_ptr(), right_len, 1) == CSTR_EQUAL
+    }
+}
+
+/// returns true if new runtime versions should not be fetched
+fn prefer_offline(args: &[String]) -> bool {
+    // First check if MISE_PREFER_OFFLINE is set
+    if var_is_true("MISE_PREFER_OFFLINE") {
+        return true;
+    }
+
+    let settings_args_end = first_non_global_arg_idx(args).unwrap_or(args.len());
+    if args[..settings_args_end]
+        .iter()
+        .any(|arg| arg == "--prefer-offline")
+    {
+        return true;
+    }
+
+    prefer_offline_command(args)
+}
+
+/// Commands that should not fetch remote versions.
+const PREFER_OFFLINE_COMMANDS: &[&str] = &[
+    "activate", "current", "direnv", "env", "exec", "hook-env", "ls", "where", "which", "x",
+];
+
+/// Commands whose whole purpose is to enumerate remote versions. See
+/// [`REMOTE_FETCH_COMMAND`].
+const REMOTE_FETCH_COMMANDS: &[&str] = &[
+    "lock",
+    "ls-remote",
+    "list-all",
+    "list-remote",
+    "outdated",
+    "upgrade",
+    "up",
+];
+
+fn first_non_global_arg_idx(args: &[String]) -> Option<usize> {
+    // Uses the cached global-flag list rather than building a fresh clap tree.
+    // This runs from `Lazy` statics during startup, so on essentially every
+    // invocation; building the tree here cost ~6.3M instructions per run.
+    crate::cli::first_non_global_arg_idx_cached(args)
+}
+
+/// Whether the subcommand at `command_idx` is one of `names`.
+fn is_command(args: &[String], command_idx: Option<usize>, names: &[&str]) -> bool {
+    command_idx
+        .and_then(|idx| args.get(idx))
+        .map(|a| names.contains(&a.as_str()))
+        .unwrap_or_default()
+}
+
+fn prefer_offline_command(args: &[String]) -> bool {
+    is_command(
+        args,
+        first_non_global_arg_idx(args),
+        PREFER_OFFLINE_COMMANDS,
+    )
+}
+
+/// See [`REMOTE_FETCH_COMMAND`].
+fn remote_fetch_command(args: &[String]) -> bool {
+    is_command(args, first_non_global_arg_idx(args), REMOTE_FETCH_COMMANDS)
+}
+
+fn environment(args: &[String]) -> Vec<String> {
+    let arg_defs = HashSet::from(["--profile", "-P", "--env", "-E"]);
+
+    // Get environment value from args or env vars
+    // Precedence: CLI args > env vars > .miserc.toml
+    let from_args = if *IS_RUNNING_AS_SHIM {
+        // When running as shim, ignore command line args and use env vars only
+        vec![]
+    } else {
+        // Subcommands where positional args accept hyphen values, so -E after the
+        // first positional would be a task arg, not a global flag.
+        let run_subcommands: HashSet<&str> = HashSet::from(["run", "r"]);
+        // Try to get from command line args first
+        // Handles `--env production`, `--env=production`, `-E production`, `-E=production`,
+        // and `-Eproduction`.
+        let mut values = Vec::new();
+        let mut it = args.iter().take_while(|a| a.as_str() != "--");
+        let mut in_run_subcommand = false;
+        while let Some(arg) = it.next() {
+            if arg.starts_with('-') {
+                if arg_defs.contains(arg.as_str()) {
+                    // Case: `-E production` or `--env production`
+                    if let Some(next) = it.next() {
+                        values.push(next.to_string());
+                    }
+                } else if let Some((prefix, rest)) = arg.split_at_checked(2)
+                    && !rest.starts_with('=')
+                    && arg_defs.contains(prefix)
+                {
+                    // Case: `-Eproduction`
+                    values.push(rest.to_string());
+                } else if let Some((flag, value)) = arg.split_once('=') {
+                    // Case: `-E=production` or `--env=production`
+                    if arg_defs.contains(flag) {
+                        values.push(value.to_string());
+                    }
+                }
+            } else {
+                // After `run`/`r`, the first positional is the task name — everything
+                // after that belongs to the task, so stop scanning for env flags.
+                if in_run_subcommand {
+                    break;
+                }
+                if run_subcommands.contains(arg.as_str()) {
+                    in_run_subcommand = true;
+                }
+            }
+        }
+        values
+            .into_iter()
+            .flat_map(|s| {
+                s.split(',')
+                    .filter(|s| !s.is_empty())
+                    .map(String::from)
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    };
+    if !from_args.is_empty() {
+        return from_args;
+    }
+    var("MISE_ENV")
+        .ok()
+        .or_else(|| var("MISE_PROFILE").ok())
+        .or_else(|| var("MISE_ENVIRONMENT").ok())
+        .map(|s| {
+            s.split(',')
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect()
+        })
+        .or_else(|| miserc::get_env().cloned())
+        .unwrap_or_default()
+}
+
+fn linux_distro() -> Option<String> {
+    crate::platform::linux_os_release().map(|release| release.id.clone())
+}
+
+/// Split a colon-separated string into a set, filtering empty segments.
+/// Empty segments arise from empty strings, leading/trailing colons, or
+/// consecutive colons — all of which should be ignored rather than
+/// injected as empty paths into config discovery.
+fn split_colon_list(value: &str) -> IndexSet<String> {
+    value
+        .split(':')
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect()
+}
+
+pub(crate) fn set_current_dir<P: AsRef<Path>>(path: P) -> Result<()> {
+    let path = path.as_ref();
+    trace!("cd {}", display_path(path));
+    std::env::set_current_dir(path)
+        .wrap_err_with(|| format!("failed to set current directory to {}", display_path(path)))?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use pretty_assertions::assert_eq;
+
+    use crate::config::Config;
+
+    use super::*;
+
+    #[test]
+    fn test_reverse_diff_preserves_runtime_overrides() {
+        let diff = EnvDiff {
+            old: [
+                ("CHANGED".into(), "before".into()),
+                ("REMOVED".into(), "before".into()),
+            ]
+            .into(),
+            new: [
+                ("ADDED".into(), "managed".into()),
+                ("CHANGED".into(), "managed".into()),
+            ]
+            .into(),
+            ..Default::default()
+        };
+        let current = [
+            ("ADDED".into(), "override".into()),
+            ("CHANGED".into(), "override".into()),
+            ("REMOVED".into(), "override".into()),
+        ]
+        .into();
+
+        assert_eq!(
+            reverse_diff_preserving_overrides(&diff, current),
+            [
+                ("ADDED".into(), "override".into()),
+                ("CHANGED".into(), "override".into()),
+                ("REMOVED".into(), "override".into()),
+            ]
+            .into()
+        );
+    }
+
+    #[test]
+    fn test_reverse_diff_restores_unchanged_managed_values() {
+        let diff = EnvDiff {
+            old: [
+                ("CHANGED".into(), "before".into()),
+                ("REMOVED".into(), "before".into()),
+            ]
+            .into(),
+            new: [
+                ("ADDED".into(), "managed".into()),
+                ("CHANGED".into(), "managed".into()),
+            ]
+            .into(),
+            ..Default::default()
+        };
+        let current = [
+            ("ADDED".into(), "managed".into()),
+            ("CHANGED".into(), "managed".into()),
+        ]
+        .into();
+
+        assert_eq!(
+            reverse_diff_preserving_overrides(&diff, current),
+            [
+                ("CHANGED".into(), "before".into()),
+                ("REMOVED".into(), "before".into()),
+            ]
+            .into()
+        );
+    }
+
+    #[test]
+    fn test_reverse_diff_preserves_runtime_removals() {
+        let diff = EnvDiff {
+            old: [("CHANGED".into(), "before".into())].into(),
+            new: [
+                ("ADDED".into(), "managed".into()),
+                ("CHANGED".into(), "managed".into()),
+            ]
+            .into(),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            reverse_diff_preserving_overrides(&diff, EnvMap::new()),
+            EnvMap::new()
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_reverse_diff_matches_environment_keys_case_insensitively_on_windows() {
+        let diff = EnvDiff {
+            old: [
+                ("Changed".into(), "before".into()),
+                ("MÎSE_FOO".into(), "before-unicode".into()),
+            ]
+            .into(),
+            new: [
+                ("Added".into(), "managed".into()),
+                ("Changed".into(), "managed".into()),
+                ("MÎSE_FOO".into(), "managed-unicode".into()),
+            ]
+            .into(),
+            ..Default::default()
+        };
+        let current = [
+            ("ADDED".into(), "managed".into()),
+            ("CHANGED".into(), "managed".into()),
+            ("mîse_foo".into(), "managed-unicode".into()),
+        ]
+        .into();
+
+        assert_eq!(
+            reverse_diff_preserving_overrides(&diff, current),
+            [
+                ("CHANGED".into(), "before".into()),
+                ("mîse_foo".into(), "before-unicode".into()),
+            ]
+            .into()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_var_path() {
+        let _config = Config::get().await.unwrap();
+        set_var("MISE_TEST_PATH", "/foo/bar");
+        assert_eq!(
+            var_path("MISE_TEST_PATH").unwrap(),
+            PathBuf::from("/foo/bar")
+        );
+        remove_var("MISE_TEST_PATH");
+    }
+
+    /// An empty value is not a directory. Callers all join onto the result, so returning
+    /// `Some("")` would hand them a relative path resolved against the cwd — e.g. an empty
+    /// `XDG_CONFIG_HOME` turning `MISE_CONFIG_DIR` into the relative `mise`.
+    #[tokio::test]
+    async fn test_var_path_treats_empty_as_unset() {
+        let _config = Config::get().await.unwrap();
+        set_var("MISE_TEST_EMPTY_PATH", "");
+        assert_eq!(var_path("MISE_TEST_EMPTY_PATH"), None);
+        remove_var("MISE_TEST_EMPTY_PATH");
+    }
+
+    /// vars_safe() must skip pairs whose key or value is not valid UTF-8 rather
+    /// than panicking the way std::env::vars() does (#5370).
+    #[cfg(unix)]
+    #[test]
+    fn test_vars_safe_skips_invalid_utf8() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+
+        // 0xff can never appear in valid UTF-8.
+        let bad_value_key = "MISE_TEST_VARS_SAFE_BAD_VALUE";
+        let bad_key = OsString::from_vec(b"MISE_TEST_VARS_SAFE_BAD_KEY_\xff".to_vec());
+        let good_key = "MISE_TEST_VARS_SAFE_GOOD";
+
+        // the guard restores the previous environment on drop, so even a failing
+        // assertion below cannot leak a non-UTF-8 var into the test process
+        let mut guard = crate::test::EnvVarGuard::new();
+        guard
+            .set(bad_value_key, OsString::from_vec(vec![0xff]))
+            .set(&bad_key, "ok")
+            .set(good_key, "1");
+
+        // Both malformed vars really are in the process environment...
+        assert!(vars_os().any(|(k, _)| k == bad_value_key));
+        assert!(vars_os().any(|(k, _)| k == bad_key));
+        // ...and vars_safe() returns without panicking.
+        let safe: Vec<(String, String)> = vars_safe().collect();
+
+        assert!(!safe.iter().any(|(k, _)| k == bad_value_key));
+        assert!(
+            !safe
+                .iter()
+                .any(|(k, _)| k.starts_with("MISE_TEST_VARS_SAFE_BAD_KEY_"))
+        );
+        // Valid neighbours are still returned.
+        assert!(safe.iter().any(|(k, v)| k == good_key && v == "1"));
+    }
+
+    #[test]
+    fn test_auto_env_default_for_version() {
+        let v = |s: &str| versions::Versioning::new(s).unwrap();
+        assert!(!auto_env_default_for_version(&v("2026.6.2")));
+        assert!(!auto_env_default_for_version(&v("2026.12.0")));
+        assert!(!auto_env_default_for_version(&v("2027.5.9")));
+        assert!(auto_env_default_for_version(&v("2027.6.0")));
+        assert!(auto_env_default_for_version(&v("2028.1.0")));
+    }
+
+    #[test]
+    fn test_env_conf_d_default_for_version() {
+        let v = |s: &str| versions::Versioning::new(s).unwrap();
+        assert!(!env_conf_d_default_for_version(&v("2026.8.10")));
+        assert!(!env_conf_d_default_for_version(&v("2027.8.9")));
+        assert!(env_conf_d_default_for_version(&v("2027.8.10")));
+    }
+
+    #[test]
+    fn test_remote_fetch_command_skips_global_option_values() {
+        let args = |args: &[&str]| {
+            args.iter()
+                .map(|arg| (*arg).to_string())
+                .collect::<Vec<_>>()
+        };
+
+        assert!(remote_fetch_command(&args(&[
+            "mise", "--cd", "/tmp", "lock"
+        ])));
+        assert!(remote_fetch_command(&args(&[
+            "mise",
+            "--profile",
+            "development",
+            "ls-remote",
+        ])));
+        assert!(remote_fetch_command(&args(&[
+            "mise",
+            "--cd=/tmp",
+            "--profile=development",
+            "outdated",
+        ])));
+    }
+
+    #[test]
+    fn test_prefer_offline_command_skips_global_option_values() {
+        let args = |args: &[&str]| {
+            args.iter()
+                .map(|arg| (*arg).to_string())
+                .collect::<Vec<_>>()
+        };
+
+        assert!(prefer_offline_command(&args(&[
+            "mise", "--cd", "/tmp", "activate"
+        ])));
+        assert!(prefer_offline_command(&args(&[
+            "mise",
+            "--profile",
+            "development",
+            "hook-env",
+        ])));
+        assert!(prefer_offline_command(&args(&["mise", "-C/tmp", "env",])));
+        assert!(!prefer_offline_command(&args(&[
+            "mise", "--cd", "/tmp", "lock"
+        ])));
+        assert!(prefer_offline(&args(&[
+            "mise",
+            "--cd",
+            "/tmp",
+            "--prefer-offline",
+            "lock",
+        ])));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_platform_env_names_unix() {
+        let names = platform_env_names();
+        assert_eq!(names.len(), 3);
+        assert_eq!(names[0], "unix");
+        assert_eq!(names[1], *crate::platform::OS);
+        assert_eq!(
+            names[2],
+            format!("{}-{}", *crate::platform::OS, *crate::platform::ARCH)
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_platform_env_names_windows() {
+        // os family == os on windows, so the list dedupes to two entries
+        let names = platform_env_names();
+        assert_eq!(
+            names,
+            vec![
+                "windows".to_string(),
+                format!("windows-{}", *crate::platform::ARCH)
+            ]
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn test_is_path_key_accepts_any_casing_on_windows() {
+        for spelling in ["PATH", "Path", "path", "pAtH"] {
+            assert!(is_path_key(spelling), "{spelling}");
+            assert_eq!(normalize_path_key(spelling.to_string()), *PATH_KEY);
+        }
+
+        assert!(!is_path_key("PATHEXT"));
+        assert!(!is_path_key("TEMP"));
+        assert!(!is_path_key(""));
+        // A name that is not PATH keeps the spelling the config gave it.
+        assert_eq!(normalize_path_key("Temp".to_string()), "Temp");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_is_path_key_is_exact_on_unix() {
+        assert!(is_path_key("PATH"));
+        assert_eq!(normalize_path_key("PATH".to_string()), "PATH");
+
+        // `Path` is a variable of its own here, so folding it would drop what was asked for.
+        assert!(!is_path_key("Path"));
+        assert!(!is_path_key("path"));
+        assert_eq!(normalize_path_key("Path".to_string()), "Path");
+
+        assert!(!is_path_key("PATHEXT"));
+        assert!(!is_path_key(""));
+    }
+
+    #[test]
+    fn test_split_colon_list() {
+        let cases: Vec<(&str, Vec<&str>)> = vec![
+            ("", vec![]),    // empty string — was causing panic
+            (":", vec![]),   // colon only
+            (":::", vec![]), // multiple colons
+            ("mise.toml", vec!["mise.toml"]),
+            ("a:b", vec!["a", "b"]),
+            (":a:b:", vec!["a", "b"]), // leading/trailing colons
+            ("a::b", vec!["a", "b"]),  // consecutive colons
+        ];
+        for (input, expected) in cases {
+            let result = split_colon_list(input);
+            let expected: IndexSet<String> = expected.into_iter().map(|s| s.to_string()).collect();
+            assert_eq!(result, expected, "input: {input:?}");
+        }
+    }
+
+    #[test]
+    fn test_is_mise_binary() {
+        // The spellings mise is actually invoked under, on every platform.
+        assert!(is_mise_binary("mise"));
+        assert!(is_mise_binary("mise.exe"));
+        assert!(is_mise_binary("mise.cmd"));
+        assert!(is_mise_binary("mise-doctor"));
+        // The controls. Real shim names must stay shims, or this stops being a test of anything:
+        // a version that always returned true would pass every assertion above.
+        assert!(!is_mise_binary("node"));
+        assert!(!is_mise_binary("node.exe"));
+        assert!(!is_mise_binary("misex"));
+        assert!(!is_mise_binary("misex.exe"));
+    }
+
+    /// Windows resolves `MISE.EXE` to the same file as `mise.exe` and hands the process `argv[0]`
+    /// with the casing the caller wrote, so the test has to ignore case there. See the pair below.
+    #[cfg(windows)]
+    #[test]
+    fn test_is_mise_binary_ignores_case_on_windows() {
+        assert!(is_mise_binary("MISE.EXE"));
+        assert!(is_mise_binary("Mise.exe"));
+        assert!(is_mise_binary("MISE"));
+        assert!(is_mise_binary("MISE-DOCTOR"));
+        // Case-insensitivity must not widen what counts as mise.
+        assert!(!is_mise_binary("NODE.EXE"));
+        assert!(!is_mise_binary("MISEX.EXE"));
+    }
+
+    /// The other half. On unix `MISE` is a different file from `mise`, so a shim by that name has
+    /// to keep being treated as a shim; ignoring case here would make mise run itself instead.
+    #[cfg(unix)]
+    #[test]
+    fn test_is_mise_binary_is_case_sensitive_on_unix() {
+        assert!(!is_mise_binary("MISE"));
+        assert!(!is_mise_binary("Mise"));
+        assert!(!is_mise_binary("MISE-DOCTOR"));
+    }
+
+    fn detect(mise_shell: Option<&str>, shell_var: Option<&str>, fallback: &str) -> String {
+        detect_shell(
+            mise_shell.map(str::to_string),
+            shell_var.map(str::to_string),
+            fallback,
+        )
+        .map(|st| st.to_string())
+        .unwrap_or_else(|| "(none)".to_string())
+    }
+
+    /// `mise activate` exports `MISE_SHELL`, so it decides on its own — including deciding that
+    /// the answer is nothing. Falling back after an unparseable value would start guessing at a
+    /// shell the session has already named.
+    #[test]
+    fn mise_shell_wins_and_an_unparseable_one_is_still_the_answer() {
+        assert_eq!(detect(Some("zsh"), Some("/bin/bash"), "/bin/bash"), "zsh");
+        assert_eq!(
+            detect(Some("nonsense"), Some("/bin/bash"), "/bin/bash"),
+            "(none)"
+        );
+    }
+
+    /// The fix: Git Bash, MSYS2 and Cygwin set `SHELL` on Windows, where the fallback reads
+    /// `COMSPEC` and so can never see it.
+    #[cfg(windows)]
+    #[test]
+    fn shell_is_consulted_on_windows() {
+        for shell_var in [
+            r"C:\Program Files\Git\bin\bash.exe",
+            "/bin/bash.exe",
+            r"C:\msys64\usr\bin\zsh.exe",
+        ] {
+            let expected = match shell_var.contains("zsh") {
+                true => "zsh",
+                false => "bash",
+            };
+            assert_eq!(
+                detect(None, Some(shell_var), r"C:\WINDOWS\system32\cmd.exe"),
+                expected,
+                "{shell_var}"
+            );
+        }
+        // Unchanged where there is nothing to find: cmd.exe is not a shell mise generates for.
+        assert_eq!(detect(None, None, r"C:\WINDOWS\system32\cmd.exe"), "(none)");
+    }
+
+    /// The control. On unix `SHELL` *is* the fallback, so the extra lookup must not exist —
+    /// otherwise this test would pass for the wrong reason on every platform.
+    #[cfg(unix)]
+    #[test]
+    fn the_fallback_is_the_only_second_source_on_unix() {
+        // A `SHELL` that disagrees with the fallback is ignored: unix passes the same value as
+        // both, so anything else would mean the Windows branch had leaked.
+        assert_eq!(detect(None, Some("/bin/zsh"), "/bin/bash"), "bash");
+        assert_eq!(detect(None, None, "/bin/zsh"), "zsh");
+        assert_eq!(detect(None, None, "sh"), "bash");
+    }
+
+    /// The names `self-replace` generates, which mise used to report as broken shims. Measured with
+    /// `TEMP` at 199 and 201 characters, where the copy's own init hook stops recognising itself.
+    #[test]
+    fn a_self_replace_copy_of_this_binary_is_recognised() {
+        let rand = "qzcdgqhxhqwhzdwyqchsmdxcqouxxche";
+        assert!(is_self_replace_helper(
+            &format!(".mise.{rand}.__selfdelete__.exe"),
+            "mise"
+        ));
+        assert!(is_self_replace_helper(
+            &format!(".mise.{rand}.__relocated__.exe"),
+            "mise"
+        ));
+        // The stem follows the binary, so a renamed mise is still recognised.
+        assert!(is_self_replace_helper(
+            &format!(".mise-dev.{rand}.__selfdelete__.exe"),
+            "mise-dev"
+        ));
+    }
+
+    /// The controls. Two of them are the reason the stem is a parameter at all.
+    #[test]
+    fn ordinary_names_and_other_applications_are_not() {
+        let rand = "qzcdgqhxhqwhzdwyqchsmdxcqouxxche";
+        // mise itself, and a genuine shim.
+        assert!(!is_self_replace_helper("mise.exe", "mise"));
+        assert!(!is_self_replace_helper("node.exe", "mise"));
+        // Another application's orphan, sitting in the same TEMP. Matching the suffix alone would
+        // claim it — and the sweep would delete it.
+        assert!(!is_self_replace_helper(
+            &format!(".node.{rand}.__selfdelete__.exe"),
+            "mise"
+        ));
+        // Ours by name, but not one of these copies.
+        assert!(!is_self_replace_helper(".mise.something.exe", "mise"));
+    }
+
+    /// The segment between the stem and the suffix has to be the one `self-replace` generates —
+    /// 32 characters from `fastrand`'s `lowercase()`. The caller acting on a `true` here **deletes
+    /// the file**, so a name that merely looks similar must not qualify.
+    #[test]
+    fn a_name_that_only_resembles_a_generated_one_is_left_alone() {
+        let ok = "qzcdgqhxhqwhzdwyqchsmdxcqouxxche";
+        assert_eq!(ok.len(), SELF_REPLACE_RANDOM_LEN, "premise");
+        assert!(is_self_replace_helper(
+            &format!(".mise.{ok}.__selfdelete__.exe"),
+            "mise"
+        ));
+
+        // No segment at all.
+        assert!(!is_self_replace_helper(".mise..__selfdelete__.exe", "mise"));
+        assert!(!is_self_replace_helper(".mise.__selfdelete__.exe", "mise"));
+        // Too short, and too long.
+        assert!(!is_self_replace_helper(
+            ".mise.abc.__selfdelete__.exe",
+            "mise"
+        ));
+        assert!(!is_self_replace_helper(
+            &format!(".mise.{ok}x.__selfdelete__.exe"),
+            "mise"
+        ));
+        // Right length, wrong alphabet — a digit and an uppercase letter.
+        let digits = format!("{}1", &ok[..SELF_REPLACE_RANDOM_LEN - 1]);
+        assert!(!is_self_replace_helper(
+            &format!(".mise.{digits}.__selfdelete__.exe"),
+            "mise"
+        ));
+        let upper = format!("{}A", &ok[..SELF_REPLACE_RANDOM_LEN - 1]);
+        assert!(!is_self_replace_helper(
+            &format!(".mise.{upper}.__selfdelete__.exe"),
+            "mise"
+        ));
+    }
+
+    /// The stem carries whatever casing the caller used to start mise — measured: `current_exe()`
+    /// returns `CASEPROBE` for a `caseprobe.exe` started as `CASEPROBE.EXE`. So an update launched
+    /// one way writes an orphan the next one, launched the other way, has to still recognise.
+    #[cfg(windows)]
+    #[test]
+    fn an_orphan_from_a_differently_cased_launch_is_still_ours() {
+        let rand = "qzcdgqhxhqwhzdwyqchsmdxcqouxxche";
+        for stem in ["mise", "MISE", "Mise"] {
+            for written in ["mise", "MISE", "Mise"] {
+                assert!(
+                    is_self_replace_helper(&format!(".{written}.{rand}.__selfdelete__.exe"), stem),
+                    "stem {stem} should claim an orphan written as {written}"
+                );
+            }
+        }
+        // Still not another application's, however it is cased.
+        assert!(!is_self_replace_helper(
+            &format!(".NODE.{rand}.__selfdelete__.exe"),
+            "mise"
+        ));
+    }
+
+    /// The control for the rule above: unix filesystems are case-sensitive, so `MISE` and `mise`
+    /// are different files and an orphan of one is not an orphan of the other.
+    #[cfg(unix)]
+    #[test]
+    fn casing_still_separates_names_on_unix() {
+        let rand = "qzcdgqhxhqwhzdwyqchsmdxcqouxxche";
+        assert!(is_self_replace_helper(
+            &format!(".mise.{rand}.__selfdelete__.exe"),
+            "mise"
+        ));
+        assert!(!is_self_replace_helper(
+            &format!(".MISE.{rand}.__selfdelete__.exe"),
+            "mise"
+        ));
+    }
+}

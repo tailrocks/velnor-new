@@ -1,0 +1,33 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/enum_struct_variant_field_missing/": [
+    {
+      "enum_name": String("Enum"),
+      "field_name": String("bar"),
+      "path": List([
+        String("enum_struct_variant_field_missing"),
+        String("Enum"),
+      ]),
+      "span_begin_line": Uint64(8),
+      "span_end_line": Uint64(8),
+      "span_filename": String("src/lib.rs"),
+      "variant_name": String("FieldWillBeMissing"),
+    },
+  ],
+  "./test_crates/repr_c_enum_struct_variant_fields_reordered/": [
+    {
+      "enum_name": String("EnumWithRemoval"),
+      "field_name": String("a"),
+      "path": List([
+        String("repr_c_enum_struct_variant_fields_reordered"),
+        String("EnumWithRemoval"),
+      ]),
+      "span_begin_line": Uint64(68),
+      "span_end_line": Uint64(68),
+      "span_filename": String("src/lib.rs"),
+      "variant_name": String("StructVariant"),
+    },
+  ],
+}

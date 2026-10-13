@@ -1,0 +1,16 @@
+---
+source: src/config/mod.rs
+expression: config
+---
+Config {
+    Config Files: [
+        "~/cwd/.test-tool-versions",
+        "~/.test-tool-versions",
+        "~/config/config.toml",
+    ],
+    Aliases: {
+        ForgeArg("tiny"): {
+            "my/alias": "3.0",
+        },
+    },
+}

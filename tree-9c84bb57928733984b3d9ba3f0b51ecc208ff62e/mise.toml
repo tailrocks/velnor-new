@@ -1,0 +1,26 @@
+#:schema ./schema/mise.json
+min_version = "2024.1.1"
+
+[env]
+_.path = ["./target/debug", "./node_modules/.bin"]
+
+[tools]
+shellcheck = "0.10"
+shfmt = "3"
+jq = "latest"
+cargo-binstall = "latest"
+"cargo:cargo-edit" = "latest"
+"cargo:cargo-show" = { version = "latest", os = ["linux", "macos"] }
+"cargo:cargo-insta" = "latest"
+"cargo:git-cliff" = "latest"
+"npm:markdownlint-cli" = "latest"
+"npm:prettier" = "3"
+actionlint = "latest"
+ripgrep = "latest"
+"pipx:toml-sort" = "latest"
+"cargo:usage-cli" = { version = "latest", os = ["linux", "macos"] }
+bun = "latest"
+#python = { version = "latest", virtualenv = "{{env.HOME}}/.cache/venv" }
+
+[task_config]
+includes = ["tasks.toml", "tasks"]

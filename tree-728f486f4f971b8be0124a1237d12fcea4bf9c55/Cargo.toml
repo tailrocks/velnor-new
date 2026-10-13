@@ -1,0 +1,144 @@
+[package]
+name = "mise"
+version = "2024.1.14"
+edition = "2021"
+description = "The front-end to your dev env"
+authors = ["Jeff Dickey (@jdx)"]
+homepage = "https://mise.jdx.dev"
+documentation = "https://mise.jdx.dev"
+repository = "https://github.com/jdx/mise"
+readme = "README.md"
+license = "MIT"
+keywords = ["mise"]
+categories = ["command-line-utilities"]
+include = [
+    "src/**/*.rs",
+    "src/plugins/core/assets/**",
+    "/completions/*",
+    "/Cargo.lock",
+    "/LICENSE",
+    "/README.md",
+    "/build.rs",
+    "/zipsign.pub",
+]
+rust-version = "1.70.0"
+build = "build.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "mise"
+path = "src/main.rs"
+
+#[[bench]]
+#name = "config_bench"
+#harness = false
+
+[profile.release]
+lto = true
+
+[dependencies]
+base64 = "0.21"
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+clap = { version = "4", features = ["env", "derive", "string"] }
+clap_complete = { version = "4", optional = true }
+clap_mangen = { version = "0.2", optional = true }
+color-print = "0.3"
+confique = { version = "0.2", default-features = false }
+console = "0.15"
+ctrlc = "3"
+demand = "0.3"
+dirs-next = "2"
+dotenvy = "0.15"
+duct = "0.13"
+either = "1"
+filetime = "0.2"
+flate2 = "1"
+fslock = "0.2"
+globwalk = "0.9"
+humantime = "2"
+indenter = "0.3"
+indexmap = { version = "2", features = ["serde"] }
+indicatif = { version = "0.17", features = ["default", "improved_unicode"] }
+indoc = "<3"
+itertools = "0.12"
+log = "0.4"
+miette = { version = "5", features = ["fancy"] }
+num_cpus = "1"
+once_cell = "1"
+openssl = { version = "0.10", optional = true }
+path-absolutize = "3"
+petgraph = "0.6"
+rand = "0.8"
+rayon = "1"
+regex = "1"
+reqwest = { version = "0.11", default-features = false, features = ["blocking", "json", "gzip"] }
+rmp-serde = "1"
+self_update = { version = "0.39", default-features = false, features = [
+    "archive-tar",
+    "compression-flate2",
+    "signatures",
+] }
+serde = "1"
+serde_derive = "1"
+serde_json = { version = "1", features = [] }
+sha2 = "0.10"
+shell-escape = "0.1"
+shell-words = "1"
+simplelog = { version = "0.12" }
+strum = { version = "0.25", features = ["derive"] }
+sys-info = "0.9"
+tabled = { version = "0.15", features = ["ansi"] }
+tar = "0.4"
+tempfile = "3"
+tera = { version = "1", default-features = false }
+terminal_size = "0.3"
+thiserror = "1"
+toml = { version = "0.8", features = ["parse"] }
+toml_edit = { version = "0.21", features = ["parse"] }
+url = "2"
+versions = "6"
+which = "5"
+zip = { version = "0.6", default-features = false, features = ["deflate"] }
+
+[target.'cfg(unix)'.dependencies]
+exec = "0.3"
+
+[build-dependencies]
+built = { version = "0.7", features = ["chrono", "git2"] }
+
+[dev-dependencies]
+ctor = "0.2"
+insta = { version = "1", features = ["filters", "json"] }
+pretty_assertions = "1"
+
+[features]
+default = ["native-tls"]
+native-tls = ["reqwest/native-tls"]
+rustls = ["reqwest/rustls-tls", "self_update/rustls"]
+rustls-native-roots = ["reqwest/rustls-tls-native-roots", "self_update/rustls"]
+
+[package.metadata.release]
+allow-branch = ["main"]
+sign-tag = true
+sign-commit = true
+pre-release-hook = "./scripts/pre-release-hook.sh"
+pre-release-replacements = [
+    { file = "README.md", search = "^mise [0-9]+.[0-9]+.[0-9]+(-rc.[0-9]+)?$", replace = "mise {{version}}", exactly = 1 },
+    { file = "packaging/rpm/mise.spec", search = "^Version: [0-9]+.[0-9]+.[0-9]+(-rc.[0-9]+)?$", replace = "Version: {{version}}", exactly = 1 },
+    { file = "default.nix", search = "version = \"[0-9]+.[0-9]+.[0-9]+(-rc.[0-9]+)?\";$", replace = "version = \"{{version}}\";", exactly = 1 },
+]
+
+[package.metadata.binstall]
+bin-dir = "mise/bin/mise"
+[package.metadata.binstall.overrides.aarch64-apple-darwin]
+pkg-url = "{ repo }/releases/download/v{ version }/mise-v{version}-macos-arm64{ archive-suffix }"
+[package.metadata.binstall.overrides.x86_64-apple-darwin]
+pkg-url = "{ repo }/releases/download/v{ version }/mise-v{version}-macos-x64{ archive-suffix }"
+[package.metadata.binstall.overrides.aarch64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{ version }/mise-v{version}-linux-arm64{ archive-suffix }"
+[package.metadata.binstall.overrides.x86_64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{ version }/mise-v{version}-linux-x64{ archive-suffix }"
+
+[package.metadata.cargo-machete]
+ignored = ["built", "openssl"]

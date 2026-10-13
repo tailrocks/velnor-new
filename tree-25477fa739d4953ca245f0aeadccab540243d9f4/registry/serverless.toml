@@ -1,0 +1,11 @@
+description = "Serverless Framework"
+
+[[backends]]
+full = "npm:serverless"
+
+[backends.options]
+aube_args = "--allow-build=serverless"
+pnpm_args = "--allow-build=serverless"
+
+[[backends]]
+full = "asdf:mise-plugins/mise-serverless"

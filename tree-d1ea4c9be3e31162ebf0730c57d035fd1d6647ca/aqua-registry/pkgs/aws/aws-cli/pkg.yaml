@@ -1,0 +1,2 @@
+packages:
+  - name: aws/aws-cli@2.29.1

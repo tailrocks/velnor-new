@@ -1,0 +1,7 @@
+---
+source: src/cli/plugins/ls.rs
+expression: output
+---
+dummy
+tiny
+mise hint see available plugins with mise registry

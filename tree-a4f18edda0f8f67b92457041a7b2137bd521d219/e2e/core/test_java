@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+# Enable idiomatic version files for java
+mise settings set idiomatic_version_file_enable_tools java
+
+cat <<EOF >.sdkmanrc
+java=17.0.2
+EOF
+mise i java
+assert_contains "mise x java -- java -version 2>&1" 'openjdk version "17.0.2"'
+rm .sdkmanrc
+
+cat <<EOF >.java-version
+17.0.2
+EOF
+assert_contains "mise x java -- java -version 2>&1" 'openjdk version "17.0.2"'
+rm .java-version

@@ -1,0 +1,292 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+    branches: ["release"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref_name }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  DRY_RUN: ${{ startsWith(github.event.ref, 'refs/tags/v') && '0' || '1' }}
+
+jobs:
+  build-tarball:
+    name: build-tarball-${{matrix.name}}
+    runs-on: ${{matrix.runs-on}}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu
+            name: linux-x64
+            target: x86_64-unknown-linux-gnu
+            runs-on: ubuntu-latest
+          - os: ubuntu
+            name: linux-x64-musl
+            target: x86_64-unknown-linux-musl
+            runs-on: ubuntu-latest
+          - os: ubuntu
+            name: linux-arm64
+            target: aarch64-unknown-linux-gnu
+            runs-on: ubuntu-latest
+          - os: ubuntu
+            name: linux-arm64-musl
+            target: aarch64-unknown-linux-musl
+            runs-on: ubuntu-latest
+          - os: ubuntu
+            name: linux-armv7
+            target: armv7-unknown-linux-gnueabi
+            runs-on: ubuntu-latest
+          - os: ubuntu
+            name: linux-armv7-musl
+            target: armv7-unknown-linux-musleabi
+            runs-on: ubuntu-latest
+          - os: ubuntu
+            name: linux-armv6
+            target: arm-unknown-linux-gnueabi
+            runs-on: ubuntu-latest
+          - os: ubuntu
+            name: linux-armv6-musl
+            target: arm-unknown-linux-musleabi
+            runs-on: ubuntu-latest
+          - os: macos
+            name: macos-x64
+            target: x86_64-apple-darwin
+            runs-on: macos-14
+          - os: macos
+            name: macos-arm64
+            target: aarch64-apple-darwin
+            runs-on: macos-14
+    #          - os: macos
+    #            name: macos
+    #            target: universal2-apple-darwin
+    #            runs-on: macos-12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/zipsign
+          key: ${{ runner.os }}-cargo-zipsign
+      - run: rustup target add ${{matrix.target}}
+      - run: rustup toolchain install stable --profile minimal
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: build-tarball-${{matrix.name}}
+      - if: matrix.os == 'ubuntu'
+        uses: taiki-e/install-action@cross
+      - run: scripts/setup-zipsign.sh
+        env:
+          ZIPSIGN: ${{ secrets.ZIPSIGN }}
+      - run: scripts/build-tarball.sh mise --release --features openssl/vendored --target ${{matrix.target}}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tarball-${{matrix.target}}
+          path: |
+            dist/mise-*.tar.xz
+            dist/mise-*.tar.gz
+          if-no-files-found: error
+  e2e-linux:
+    name: e2e-linux-${{matrix.tranche}}
+    runs-on: ubuntu-latest
+    #container: ghcr.io/jdx/mise:github-actions
+    needs: [build-tarball]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        tranche: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install zsh/fish/direnv
+        run: sudo apt-get update; sudo apt-get install zsh fish direnv
+      - uses: actions/download-artifact@v4
+        with:
+          name: tarball-x86_64-unknown-linux-gnu
+          path: dist
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: usage-cli
+      - run: tar -C "$HOME" -xvJf "dist/mise-$(./scripts/get-version.sh)-linux-x64.tar.xz"
+      - run: echo "$HOME/mise/bin" >> "$GITHUB_PATH"
+      - run: mise -v
+      - name: Run e2e tests
+        uses: nick-fields/retry@v3
+        env:
+          GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUST_BACKTRACE: "1"
+          TEST_TRANCHE: ${{matrix.tranche}}
+          TEST_TRANCHE_COUNT: 4
+          TEST_ALL: 1
+        with:
+          timeout_minutes: 20
+          max_attempts: 3
+          command: ./e2e/run_all_tests
+  rpm:
+    runs-on: ubuntu-22.04
+    needs: [build-tarball]
+    timeout-minutes: 10
+    container: ghcr.io/jdx/mise:rpm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.MISE_GPG_KEY }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: tarball-x86_64-unknown-linux-gnu
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: tarball-aarch64-unknown-linux-gnu
+          path: dist
+      - run: scripts/build-rpm.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rpm
+          path: dist/rpmrepo
+          if-no-files-found: error
+  deb:
+    runs-on: ubuntu-22.04
+    container: ghcr.io/jdx/mise:deb
+    timeout-minutes: 10
+    needs: [build-tarball]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.MISE_GPG_KEY }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: tarball-x86_64-unknown-linux-gnu
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: tarball-aarch64-unknown-linux-gnu
+          path: dist
+      - run: scripts/build-deb.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: dist/deb
+          if-no-files-found: error
+  release:
+    runs-on: ubuntu-latest
+    #container: ghcr.io/jdx/mise:github-actions
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    needs:
+      - e2e-linux
+      - build-tarball
+      - rpm
+      - deb
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: mise
+      - uses: actions/checkout@v4
+        with:
+          repository: jdx/mise-docs
+          path: mise-docs
+          token: ${{ secrets.RTX_GITHUB_BOT_TOKEN }}
+      - name: Install fd-find
+        run: |
+          sudo apt-get update
+          sudo apt-get install fd-find
+          mkdir -p "$HOME/.local/bin"
+          ln -s "$(which fdfind)" "$HOME/.local/bin/fd"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          registry-url: "https://registry.npmjs.org"
+      - uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.RTX_SSH_KEY }}
+          known_hosts: ${{ secrets.RTX_KNOWN_HOSTS_AUR }}
+      - uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.MISE_GPG_KEY }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+          workdir: mise-docs
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - run: mise/scripts/release.sh
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          CLOUDFLARE_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
+          CLOUDFLARE_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
+      - name: mise-docs push
+        if: startsWith(github.event.ref, 'refs/tags/v')
+        run: git push
+        working-directory: mise-docs
+      - name: GitHub Release Assets
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.event.ref, 'refs/tags/v')
+        with:
+          fail_on_unmatched_files: true
+          draft: false
+          files: releases/${{github.ref_name}}/*
+          generate_release_notes: true
+          token: ${{ secrets.RTX_GITHUB_BOT_TOKEN }}
+  bump-homebrew-formula:
+    runs-on: macos-14
+    timeout-minutes: 10
+    needs: [release]
+    continue-on-error: true
+    if: startsWith(github.event.ref, 'refs/tags/v')
+    steps:
+      - name: Bump Homebrew formula
+        uses: dawidd6/action-homebrew-bump-formula@v3
+        with:
+          token: ${{ secrets.RTX_GITHUB_BOT_TOKEN }}
+          formula: mise
+  bump-aur:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    needs: [e2e-linux]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.RTX_SSH_KEY }}
+          known_hosts: ${{ secrets.RTX_KNOWN_HOSTS_AUR }}
+      - name: Bump aur
+        run: ./scripts/release-aur.sh
+  bump-aur-bin:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    needs: [release]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.RTX_SSH_KEY }}
+          known_hosts: ${{ secrets.RTX_KNOWN_HOSTS_AUR }}
+      - name: Bump aur-bin
+        run: ./scripts/release-aur-bin.sh
+  bump-alpine:
+    runs-on: ubuntu-22.04
+    container: ghcr.io/jdx/rtx:alpine
+    timeout-minutes: 30
+    needs: [e2e-linux]
+    if: startsWith(github.event.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Bump APKBUILD
+        run: sudo -Eu packager ./scripts/release-alpine.sh
+        env:
+          ALPINE_PUB_KEY: ${{ secrets.ALPINE_PUB_KEY }}
+          ALPINE_PRIV_KEY: ${{ secrets.ALPINE_PRIV_KEY }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}

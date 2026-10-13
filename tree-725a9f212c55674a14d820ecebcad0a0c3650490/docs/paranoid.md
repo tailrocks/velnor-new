@@ -1,0 +1,84 @@
+# Paranoid
+
+Paranoid is an optional behavior that locks mise down more to make it harder
+for a bad actor to compromise your system. These are settings that I
+personally do not use on my own system because I find the behavior too
+restrictive for the benefits.
+
+Paranoid mode can be enabled with either `MISE_PARANOID=1` or a setting:
+
+```sh
+mise settings paranoid=1
+```
+
+## Config files
+
+Normally `mise` will make sure some config files are "trusted" before loading
+them. This will prompt you to confirm that you want to load the file, e.g.:
+
+```sh
+$ mise install
+mise ~/src/mise/.tool-versions is not trusted. Trust it [y/n]?
+```
+
+In normal mode, mise checks trust before parsing `mise.toml` files because they
+can contain behavior that executes code or affects the environment. Some
+discovery paths that look at previously tracked configs may skip untrusted files
+instead of prompting. Commands that directly need an untrusted config, such as
+`mise lock`, can fail with an untrusted-config error when mise cannot prompt.
+When mise detects that it is running in CI, configs are assumed to be trusted
+unless paranoid mode is enabled.
+
+Under paranoid, all config files must be trusted first, including formats that
+normally do not require trust.
+
+Also, in normal mode, a config file only needs to be trusted a single time.
+In paranoid, the contents of the file are hashed to check if the file changes.
+If you change your config file, you'll need to trust it again.
+
+Note that global and system config files (e.g., `~/.config/mise/config.toml`) are implicitly trusted and exempt from this check. This allows paranoid mode to be enabled in a global config without requiring a trust prompt for that file itself.
+
+## Community plugins
+
+Community plugins can not be directly installed via short-name under paranoid.
+You can install plugins that are either core, maintained by the mise team,
+or plugins that mise has marked as "first-party"—meaning plugins developed by
+the same team that builds the tool the plugin installs.
+
+Other than that, say for "shfmt", you'll need to specify the full git repo
+to install:
+
+```sh
+mise plugin install shfmt https://github.com/luizm/asdf-shfmt
+```
+
+Unlike in normal mode where `mise plugin install shfmt` would be sufficient.
+
+## Always uses HTTPS
+
+Some endpoints in mise are fetched over HTTP such as checking for the latest mise
+version and pulling version lists of tools. These are not security risks and a
+malicious actor injecting false data would not introduce a security risk.
+Normally mise uses HTTP because loading the TLS module takes about 10ms and this
+affects commonly used commands so it is a noticeably delay.
+In paranoid mode, all endpoints will be fetched over HTTPS.
+
+## Provenance re-verification
+
+Normally, when a lockfile contains both a checksum and a provenance entry for a tool,
+`mise install` trusts the lockfile and skips provenance re-verification to avoid
+redundant API calls (e.g., to GitHub). This is safe when you trust the lockfile was
+generated correctly.
+
+In paranoid mode, `mise install` always re-verifies provenance (SLSA, cosign, minisign,
+GitHub artifact attestations) at install time, even when the lockfile already has a
+provenance entry. This ensures that cryptographic verification happens on every install,
+not just when the lockfile is first generated.
+
+This behavior can also be enabled independently via the
+[`locked_verify_provenance`](/configuration/settings.html#locked_verify_provenance) setting.
+
+## More?
+
+If you have suggestions for more that could be added to paranoid, please let
+me know.

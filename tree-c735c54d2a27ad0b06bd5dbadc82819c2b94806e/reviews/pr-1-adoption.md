@@ -1,0 +1,89 @@
+# PR #1 contract adoption record
+
+Source of requirements: `docs/reviews/pr-1.md` (PR #1 feedback proposal).
+Supersedes conflicting rules in `docs/proposed/*.md` (old spec).
+
+Status: **IMPLEMENTATION DECISION** under the remediation goal — this
+proposal is accepted as working requirements per pr-1 §5 ("Any later
+implementation review starts only after this feedback proposal is
+accepted as the source of requirements"). This is NOT a claim of
+HUMAN APPROVAL: no maintainer review is asserted; pending maintainer
+review, treat this record as the binding contract for implementation.
+
+## 1. Crate jobs vs task jobs — adopt pr-1
+
+- Old: `velnor-plan` + `velnor-task` matrix (one entry per
+  task-group/config) + `velnor-final` gate (workflow §3, §4 matrix);
+  produced the 47-job run.
+- New (pr-1 §1): one `Rust / <crate>` job per crate (fmt+clippy+test
+  steps inside); one job per repo-wide validator; no per-task fan-out.
+- Decision: delete task-matrix topology entirely, incl. umbrella
+  `Policy` / `Workflow Lint` groupings.
+- Affects: workflow renderer, planner/matrix code, all generator tests
+  and fixtures, workflow docs.
+
+## 2. `ci.yml` vs `velnor.yml` — adopt pr-1
+
+- Old: emits `velnor.yml`, `velnor-release.yml`,
+  `velnor-qualification.yml`, `velnor-*` job IDs, `Velnor / Required`.
+- New (pr-1 §1–§2): `.github/workflows/ci.yml`, display `CI`, purpose
+  IDs (`alint`, `actionlint`, `rust_<crate>`); no `Velnor` prefix.
+- Decision: rename all generated workflows; purpose-based IDs only.
+- Affects: generated-file tree, workflow renderer, fixtures, docs.
+
+## 3. Detection vs advisory-only — adopt pr-1
+
+- Old: tool files advisory-only, Velnor pins always win
+  (`RUSTUP_TOOLCHAIN` override); transient-only evidence fails closed.
+- New (pr-1 §3): detect repo-local evidence (nextest.toml, Mise
+  config, MBX wrapper), ecosystem default when absent, explicit
+  `.velnor/config.toml` wins; never detect machine-global state.
+- Decision: adopt detection/override model; keep read-only file
+  ownership (never write tool files); keep old evidence-strength
+  rigor for what counts as a signal.
+- Affects: detection adapters, config schema, CLI plan/generate,
+  tooling-input and task-exec docs.
+
+## 4. Edition assertion vs `edition.workspace` — adopt intent, fix rule
+
+- Old: members inherit via `edition.workspace = true`, root
+  `[workspace.package]` sets `edition = "2024"` (verified in repo).
+- New (pr-1 §1): literal `$.package.edition == "2024"` in
+  `crates/*/Cargo.toml` — matches nothing, would fail.
+- Decision: pr-1 wins on enforcement, old spec wins on structure.
+  Rewrite: assert root `[workspace.package].edition == "2024"` plus
+  per-member `edition.workspace = true`.
+- Affects: Alint config generation, rust-quality docs.
+
+## 5. Shared cache vs role archives — adopt pr-1
+
+- Old: per-matrix archives (unique run/matrix digest in key),
+  unconditional fetch-before-restore, no size budget.
+- New (pr-1 §1): one stored copy per layer, single Mise identity for
+  same inputs, one-writer shared registry, measured choice of
+  per-crate `target` vs `objects`+registry vs remote+registry; cache
+  setup before any Cargo command; offline on complete restore.
+- Decision: retire per-role/per-matrix duplicate archives; measure.
+- Affects: cache key/paths design, workflow renderer step order,
+  cache docs and qualification fixtures.
+
+## 6. Complete evidence vs permissive defaults — adopt pr-1
+
+- Old: mechanisms specified but no measurement or size-budget gate;
+  degraded caching tolerated silently (miss/save-failure never
+  surface).
+- New (pr-1 §1, §5): warm-run acceptance gate, measured hit/miss,
+  sizes, bytes, durations, eviction/churn, quota headroom; one owner
+  per check; no silent signal-discard.
+- Decision: keep "cold cache must still pass" as correctness;
+  require pr-1's measured proof for the cache design.
+- Affects: cache qualification harness, CI evidence collection,
+  cache/arch docs.
+
+## 7. MBX + Nextest combined command — adopt old-spec row
+
+pr-1 §3 leaves the combined command unresolved ("Runner interaction
+to resolve"). Old task-exec command table defines it:
+`mbx nextest run`. Adopt that row. Both signals are live here (MBX
+wrapper in `mise.toml`, `.config/nextest.toml` exists).
+Affects: Rust command-table code, detection-interaction rule, docs.

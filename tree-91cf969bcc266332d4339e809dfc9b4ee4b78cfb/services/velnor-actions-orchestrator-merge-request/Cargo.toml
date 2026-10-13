@@ -1,0 +1,27 @@
+[package]
+name = "velnor-actions-orchestrator-merge-request"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+serde_json = { workspace = true }
+velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-orchestrator-check-evidence = { version = "=0.1.1", path = "../velnor-actions-orchestrator-check-evidence" }
+velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-merge-request-ports = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge-request-ports" }
+velnor-actions-orchestrator-request-event = { version = "=0.1.1", path = "../velnor-actions-orchestrator-request-event" }
+velnor-actions-workflow-jobs = { version = "=0.1.1", path = "../velnor-actions-workflow-jobs" }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[[test]]
+name = "velnor_orchestrator_merge_request"
+path = "tests/main.rs"

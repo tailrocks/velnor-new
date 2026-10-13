@@ -1,0 +1,4 @@
+---
+source: src/cli/plugins/uninstall.rs
+expression: stdout
+---

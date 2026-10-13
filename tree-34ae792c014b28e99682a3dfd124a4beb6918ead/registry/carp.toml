@@ -1,0 +1,10 @@
+description = "Carp Language"
+
+[[backends]]
+full = "github:carp-lang/Carp"
+
+[backends.options]
+exe = "carp"
+
+[[backends]]
+full = "asdf:susurri/asdf-carp"

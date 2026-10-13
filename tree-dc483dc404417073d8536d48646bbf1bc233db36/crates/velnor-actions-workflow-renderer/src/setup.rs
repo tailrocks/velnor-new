@@ -1,0 +1,133 @@
+//! Pinned Mise setup pins and the cache-disabled action template.
+//!
+//! Pins arrive as typed [`MiseSetup`] from the orchestrator's compiled
+//! catalog; the renderer never invents them. Strict insertion of the
+//! typed V2 tools archive lives in `cache_p08`; this module keeps the pin
+//! type, its validation, and the cache-disabled action used to install Mise.
+
+use velnor_actions_contract::{Step, StepRole};
+
+use crate::{RenderError, steps};
+
+/// Pinned Mise setup action name.
+pub const MISE_ACTION_NAME: &str = "jdx/mise-action";
+/// Contract-fixed display name of the setup step.
+pub const SETUP_MISE_NAME: &str = "Setup Mise";
+
+/// Typed Mise setup pins: action ref plus exact binary identity.
+///
+/// The orchestrator resolves `[actions.overrides]` and the compiled
+/// catalog before constructing this; `sha256` is the digest of the
+/// extracted `mise` binary for the single runner platform (the action
+/// compares the input against the installed binary, not the archive).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MiseSetup {
+    /// Full-SHA `jdx/mise-action` ref.
+    pub uses: String,
+    /// Exact Mise release (`MISE_VERSION` catalog format, never `latest`).
+    pub version: String,
+    /// Lowercase hex SHA-256 of the installed `mise` binary.
+    pub sha256: String,
+}
+
+/// Official raw Linux x64 binary SHA-256 for Mise 2026.10.4.
+pub const MISE_BINARY_SHA256_LINUX_X64: &str =
+    "2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75";
+/// Official raw macOS ARM64 binary SHA-256 for Mise 2026.10.4.
+pub const MISE_BINARY_SHA256_MACOS_ARM64: &str =
+    "5c530143fc750e8a98c9a36be8d361e5dd953fa0b004d58f7577783f7cf2ac24";
+/// Official raw macOS x86-64 binary SHA-256 for Mise 2026.10.4.
+pub const MISE_BINARY_SHA256_MACOS_X64: &str =
+    "9f58d924a4d7b47aeb1610cd981beca2125907b2591d805237efbca8aae4308e";
+
+impl MiseSetup {
+    /// Resolve a compiled binary pin for one job's target.
+    /// # Errors
+    /// Unsupported targets or versions have no qualified artifact.
+    pub fn for_target(&self, target: &str) -> Result<Self, RenderError> {
+        self.validate()?;
+        if self.version != "2026.10.4" {
+            return Err(RenderError::BadCommand(format!(
+                "mise_setup_unqualified_version:{}",
+                self.version
+            )));
+        }
+        let sha256 = match target {
+            "x86_64-unknown-linux-gnu" => MISE_BINARY_SHA256_LINUX_X64,
+            "aarch64-apple-darwin" => MISE_BINARY_SHA256_MACOS_ARM64,
+            "x86_64-apple-darwin" => MISE_BINARY_SHA256_MACOS_X64,
+            _ => {
+                return Err(RenderError::BadCommand(format!(
+                    "mise_setup_unsupported_target:{target}"
+                )));
+            }
+        };
+        Ok(Self {
+            sha256: sha256.to_owned(),
+            ..self.clone()
+        })
+    }
+
+    /// Validate every pin before any step is built from it.
+    /// # Errors
+    pub fn validate(&self) -> Result<(), RenderError> {
+        steps::validate_uses(&self.uses)?;
+        if !self.uses.starts_with(&format!("{MISE_ACTION_NAME}@")) {
+            return Err(RenderError::BadActionRef(format!(
+                "not_mise_action:{}",
+                self.uses
+            )));
+        }
+        if !is_catalog_version(&self.version) {
+            return Err(RenderError::BadCommand(format!(
+                "bad_mise_version:{}",
+                self.version
+            )));
+        }
+        if !velnor_actions_contract::ids::is_lower_hex_len(&self.sha256, 64) {
+            return Err(RenderError::BadCommand("bad_mise_sha256".to_owned()));
+        }
+        Ok(())
+    }
+}
+
+/// `Setup Mise` step with exact pins and the action-owned cache disabled.
+///
+/// `install: false` keeps project tool files, tasks, and hooks from
+/// running; `env: false` keeps Mise env out of subsequent steps.
+/// Retained for fixtures and as the upgrade input that strict rendering
+/// replaces with explicit V2 tools-cache steps for the owned paths. This
+/// action installs Mise itself and loads no repository environment.
+/// The `with` map is exactly these six keys. In the pinned
+/// `jdx/mise-action` v5.1.1, `persist_github_token` defaults to false; leave
+/// it unset so the action's token cannot be carried into later workflow steps.
+/// # Errors
+pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
+    setup.validate()?;
+    let mut step = steps::action_step(
+        SETUP_MISE_NAME,
+        &setup.uses,
+        std::collections::BTreeMap::from([
+            ("version".to_owned(), setup.version.clone()),
+            ("sha256".to_owned(), setup.sha256.clone()),
+            ("install".to_owned(), "false".to_owned()),
+            ("env".to_owned(), "false".to_owned()),
+            ("cache".to_owned(), "false".to_owned()),
+            ("cache_save".to_owned(), "false".to_owned()),
+        ]),
+    )?;
+    step.role = Some(StepRole::MiseSetup);
+    Ok(step)
+}
+
+/// True for catalog version spellings (`2026.10.4`); never `latest`.
+fn is_catalog_version(value: &str) -> bool {
+    !value.is_empty()
+        && value != "latest"
+        && !value.contains("latest")
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_'))
+        && value.contains('.')
+        && !value.contains("${{")
+}

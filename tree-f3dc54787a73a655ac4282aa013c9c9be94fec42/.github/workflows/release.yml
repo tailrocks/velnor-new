@@ -1,0 +1,402 @@
+name: release
+
+# Builds a binary per target and attaches them to an existing release.
+#
+# Normally called by release-plz.yml against the draft it just created, so the
+# release is only published once its assets are in place. `workflow_dispatch`
+# is there for re-running a build that failed after the tag already existed.
+
+permissions: {}
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+    secrets:
+      CERTIFICATES_P12:
+        required: true
+      CERTIFICATES_P12_PASS:
+        required: true
+      APPLE_API_KEY_P8:
+        required: true
+      APPLE_API_KEY_ID:
+        required: true
+      APPLE_API_ISSUER_ID:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to attach binaries to, e.g. v0.1.0"
+        required: true
+        type: string
+
+# One asset upload per tag. `release-plz.yml` already serializes the runs it
+# starts itself, so this is about the dispatch entry point: re-running a failed
+# build by hand while the automated release is still uploading would have two
+# runs writing the same asset names. `--clobber` keeps that from erroring, but
+# the release would briefly carry a mix of two builds' files.
+#
+# Keyed by tag so re-running v0.1.0 never waits on v0.2.0, and not cancelling,
+# because a half-uploaded set of assets is the thing being avoided.
+concurrency:
+  group: release-assets-${{ inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      # One target failing should not deny the others their artifacts.
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            runner: namespace-profile-endev-linux-amd64;overrides.cache-tag=cache
+            bin: mbx
+            cross: true
+            pgo: true
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            runner: namespace-profile-endev-linux-amd64;overrides.cache-tag=cache
+            bin: mbx
+            pgo: true
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            runner: namespace-profile-endev-linux-amd64;overrides.cache-tag=cache
+            bin: mbx
+            cross: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            runner: namespace-profile-endev-linux-arm64;overrides.cache-tag=cache
+            bin: mbx
+            pgo: true
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            runner: namespace-profile-endev-macos-arm64;overrides.cache-tag=cache
+            bin: mbx
+            pgo: true
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            runner: windows-latest
+            bin: mbx.exe
+          - target: aarch64-pc-windows-msvc
+            os: windows-11-arm
+            runner: windows-11-arm
+            bin: mbx.exe
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+
+      # A manual recovery deliberately runs today's workflow against an older
+      # tag. Build helpers belong to the workflow revision, not necessarily to
+      # that tag: v0.7.1, for example, predates the PGO scripts. Keep the
+      # product checkout pinned to the release while loading only the trusted
+      # helpers from the commit that defined this workflow.
+      - name: Load release build helpers
+        if: matrix.pgo
+        shell: bash
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          automation_dir="$RUNNER_TEMP/mbx-release-automation"
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          mkdir -p "$automation_dir"
+          git show "$WORKFLOW_SHA:benchmarks/pgo.bash" > "$automation_dir/pgo.bash"
+          git show "$WORKFLOW_SHA:benchmarks/train-pgo.bash" > "$automation_dir/train-pgo.bash"
+          chmod +x "$automation_dir"/*.bash
+
+      - name: Install Rust target
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: rustup target add "$TARGET"
+
+      - uses: taiki-e/install-action@e67fa11c4b9316fa714ddf0abed07a0c3143b95b # v2
+        if: matrix.cross
+        with:
+          tool: cross
+
+      - name: Install LLVM profiling tools
+        if: matrix.pgo
+        run: rustup component add llvm-tools
+
+      - name: Import macOS signing certificate
+        if: runner.os == 'macOS'
+        uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7
+        with:
+          p12-file-base64: ${{ secrets.CERTIFICATES_P12 }}
+          p12-password: ${{ secrets.CERTIFICATES_P12_PASS }}
+
+      - name: Bootstrap mbx
+        shell: bash
+        run: |
+          cargo build --package mbx --target-dir target/mbx-bootstrap-build
+          mkdir -p target/mbx-bootstrap
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            cp target/mbx-bootstrap-build/debug/mbx.exe target/mbx-bootstrap/mbx.exe
+          else
+            cp target/mbx-bootstrap-build/debug/mbx target/mbx-bootstrap/mbx
+          fi
+
+      - name: Install the musl toolchain
+        if: endsWith(matrix.target, '-musl')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Build
+        if: ${{ !matrix.cross && !matrix.pgo }}
+        shell: bash
+        # rustls brings in aws-lc-sys, which compiles C: cc-rs looks for a
+        # target-prefixed compiler, and Debian's musl-tools only ships
+        # `musl-gcc`. Naming it for both musl targets is harmless elsewhere,
+        # since nothing else consults these variables.
+        env:
+          # workflow_call preserves the caller's branch context, so tell mbx
+          # explicitly that this artifact build must bypass its cache.
+          MBX_RELEASE: 1
+          CC_x86_64_unknown_linux_musl: musl-gcc
+          CC_aarch64_unknown_linux_musl: musl-gcc
+        run: ./target/mbx-bootstrap/mbx${{ runner.os == 'Windows' && '.exe' || '' }} build --release --locked --package mbx --target ${{ matrix.target }}
+
+      # Cross's pinned images give GNU artifacts a deliberate glibc 2.23
+      # baseline. Building them directly on the rolling runner would silently
+      # raise that floor whenever the runner image changes.
+      - name: Build GNU release
+        if: ${{ matrix.cross && !matrix.pgo }}
+        run: cross build --release --locked --package mbx --target ${{ matrix.target }}
+
+      - name: Build PGO release
+        if: matrix.pgo
+        shell: bash
+        env:
+          MBX_PGO_BUILD_TOOL: ${{ matrix.cross && 'cross' || 'cargo' }}
+          MBX_PGO_TARGET: ${{ matrix.target }}
+          MBX_PGO_REPO_ROOT: ${{ github.workspace }}
+          CC_x86_64_unknown_linux_musl: musl-gcc
+          CC_aarch64_unknown_linux_musl: musl-gcc
+          # cc-rs mirrors Rust's PGO flags into the C compiler. Apple clang's
+          # profiling ABI follows Xcode rather than rustc, so keep vendored C
+          # dependencies out of this Rust profile on macOS.
+          CFLAGS: ${{ runner.os == 'macOS' && '-fno-profile-generate -fno-profile-use' || '' }}
+          CXXFLAGS: ${{ runner.os == 'macOS' && '-fno-profile-generate -fno-profile-use' || '' }}
+        run: |
+          "$RUNNER_TEMP/mbx-release-automation/pgo.bash"
+
+      - name: Sign macOS binary
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          IDENTITY: "Developer ID Application: Jeffrey Dickey (4993Y37DX6)"
+          BINARY: target/${{ matrix.target }}/release/${{ matrix.bin }}
+        run: |
+          codesign --force --sign "$IDENTITY" --options runtime --timestamp \
+            --prefix dev.jdx. "$BINARY"
+          codesign --verify --verbose=2 "$BINARY"
+
+      # Signing alone is not enough for an archive a browser downloaded:
+      # quarantine makes Gatekeeper demand a notarization ticket, and without
+      # one it blocks the binary behind a "cannot be verified" dialog that only
+      # a deliberate override gets past. A `curl`-installed tarball is never
+      # quarantined and never consults a ticket either way, so this covers the
+      # release-page download rather than the documented install.
+      #
+      # The ticket stays on Apple's side: `stapler` writes tickets into
+      # bundles, disk images, and installer packages, and a bare Mach-O is none
+      # of those. Gatekeeper resolves it online instead, which is why nothing
+      # here staples and why the shipped archive is byte-identical to the
+      # signed binary above -- touching it after notarization would invalidate
+      # the signature the ticket is keyed to.
+      - name: Notarize macOS binary
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          BINARY: target/${{ matrix.target }}/release/${{ matrix.bin }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$APPLE_API_KEY_P8" ] || [ -z "$APPLE_API_KEY_ID" ] || [ -z "$APPLE_API_ISSUER_ID" ]; then
+            echo "::error title=Notarization credentials missing::App Store Connect credentials are required for macOS releases. See RELEASING.md."
+            exit 1
+          fi
+
+          # Outside the workspace, so no later step can sweep the key into an
+          # artifact, and removed even when notarization fails.
+          key="$(mktemp -t mbx-notary-key)"
+          submission="$(mktemp -d -t mbx-notary)/mbx.zip"
+          trap 'rm -rf "$key" "$(dirname "$submission")"' EXIT
+          printf '%s' "$APPLE_API_KEY_P8" | base64 --decode > "$key"
+
+          # notarytool takes a container, never a bare executable. Dropping
+          # resource forks and xattrs keeps the zip to the one entry that
+          # matters; the ticket is keyed to the Mach-O's cdhash, which this
+          # cannot change.
+          ditto -c -k --norsrc --noextattr "$BINARY" "$submission"
+
+          # `--wait` alone is not a gate: parse the reported status rather than
+          # trusting the exit code to distinguish Accepted from Invalid.
+          # plutil reads JSON and ships with macOS, so this needs no jq.
+          result="$(xcrun notarytool submit "$submission" \
+            --key "$key" \
+            --key-id "$APPLE_API_KEY_ID" \
+            --issuer "$APPLE_API_ISSUER_ID" \
+            --output-format json \
+            --timeout 30m \
+            --wait)"
+          echo "$result"
+
+          status="$(printf '%s' "$result" | plutil -extract status raw -o - -)"
+          id="$(printf '%s' "$result" | plutil -extract id raw -o - -)"
+          if [ "$status" != "Accepted" ]; then
+            echo "::error::notarization returned $status for submission $id"
+            xcrun notarytool log "$id" \
+              --key "$key" \
+              --key-id "$APPLE_API_KEY_ID" \
+              --issuer "$APPLE_API_ISSUER_ID" || true
+            exit 1
+          fi
+          echo "notarized: submission $id"
+
+          # Informational. A ticket takes a moment to reach the service spctl
+          # asks, so a fresh negative here is not evidence of a bad build --
+          # the submission status above is the gate.
+          spctl --assess --type exec -vv "$BINARY" || true
+
+      - name: Check the binary runs
+        # The x86_64 GNU PGO binary is host-runnable too. Execute the finished
+        # artifact directly so a smoke-test build cannot replace it.
+        if: ${{ !matrix.cross || matrix.pgo }}
+        shell: bash
+        run: ./target/${{ matrix.target }}/release/${{ matrix.bin }} --version
+
+      # The ARM64 GNU artifact is cross-compiled on the AMD64 release runner;
+      # let cross provide its matching execution environment for the smoke test.
+      # cross 0.2.5 consumes a trailing --version instead of forwarding it.
+      - name: Check the GNU binary runs
+        if: ${{ matrix.cross && !matrix.pgo }}
+        run: cross run --release --locked --package mbx --target ${{ matrix.target }} -- --help
+
+      # The archive is flat and holds only the binary, so extracting it
+      # straight into a directory on PATH is the whole install. Names carry no
+      # version, which is what makes `releases/latest/download/…` a stable URL.
+      - name: Archive
+        if: runner.os != 'Windows'
+        run: tar -czf "mbx-${{ matrix.target }}.tar.gz" -C "target/${{ matrix.target }}/release" ${{ matrix.bin }}
+
+      - name: Archive
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          cd "target/${{ matrix.target }}/release"
+          7z a "$GITHUB_WORKSPACE/mbx-${{ matrix.target }}.zip" ${{ matrix.bin }}
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: binary-${{ matrix.target }}
+          path: mbx-${{ matrix.target }}.*
+          # Only needed long enough for the attach job to collect them.
+          retention-days: 1
+          if-no-files-found: error
+
+  attach:
+    name: Attach to release
+    # Needs every target: a release carrying only some of its archives is worse
+    # than one that arrives late, and the draft stays unpublished either way.
+    needs: build
+    runs-on: namespace-profile-endev-linux-amd64;overrides.cache-tag=cache
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      # The packslip is signed with this job's OIDC identity and its
+      # artifacts are attested; neither is possible without these.
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: artifacts
+          pattern: binary-*
+          merge-multiple: true
+
+      - name: Collect assets
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' \) \
+            -exec mv {} release-assets/ \;
+          ls -la release-assets/
+          # An empty upload would silently produce a release with no binaries.
+          [ -n "$(ls -A release-assets/)" ] || {
+            echo "::error::no binaries were produced"; exit 1; }
+
+      - name: Generate checksums
+        run: |
+          cd release-assets
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+
+      # Called from release-plz.yml the release always exists, drafted, and
+      # `gh` resolves a draft by tag fine. Dispatched by hand it may not: the
+      # documented recovery is for a tag that exists whose release does not,
+      # because release-plz failed after tagging or someone deleted the draft.
+      # Uploading into nothing would fail there, so create it first. Same guard
+      # as jdx/mbx-cache. `--verify-tag` keeps a mistyped tag from conjuring a
+      # release for a ref that does not exist.
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if ! gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release create "$TAG" \
+              --repo "${{ github.repository }}" \
+              --draft \
+              --generate-notes \
+              --title "$TAG" \
+              --verify-tag
+          fi
+          if [[ $(gh release view "$TAG" --repo "${{ github.repository }}" --json isDraft --jq .isDraft) != true ]]; then
+            echo "::error::refusing to replace assets on published release $TAG"
+            exit 1
+          fi
+          gh release upload "$TAG" release-assets/* --repo "${{ github.repository }}" --clobber
+
+      # SHA256SUMS says the files did not change in transit; the packslip
+      # says who built them. It is one signed document holding every
+      # archive's digest, the executable inside it, the shared objects it
+      # needs from the host, and the build provenance of each file, signed
+      # keylessly with this job's identity, so a download is checked against
+      # jdx/mr-boxington's identity with no key to distribute. Runs after the
+      # upload above, which is what guarantees the release exists.
+      # See https://packslip.dev.
+      - uses: jdx/packslip@a6eddff2d884891faa2efbec374b48e7053df2c4 # v1.0.1
+        with:
+          tag: ${{ inputs.tag }}
+          artifacts: release-assets/mbx-*.tar.gz release-assets/mbx-*.zip
+          bin: mbx
+
+      # Called from release-plz.yml, undrafting is that workflow's job — it
+      # happens after this one returns. Run by hand, nothing else will do it,
+      # and the release would sit drafted forever. Since manual dispatch is the
+      # documented recovery for a build that failed after the tag existed, that
+      # would leave the recovery path itself broken.
+      - name: Publish the release
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: gh release edit "$TAG" --repo "${{ github.repository }}" --draft=false

@@ -1,0 +1,24 @@
+---
+source: src/shell/xonsh.rs
+expression: replace_path(&deactivate)
+snapshot_kind: text
+---
+import os
+from xonsh.built_ins import XSH
+
+hooks = {
+  'on_pre_prompt' : ['mise_hook'],
+  'on_chdir': ['mise_hook'],
+}
+for hook_type, hook_fns in hooks.items():
+  for hook_fn in hook_fns:
+    hndl = getattr(XSH.builtins.events, hook_type)
+    for fn in hndl:
+      if fn.__name__ == hook_fn:
+        hndl.remove(fn)
+        break
+
+del XSH.aliases['mise']
+del XSH.env['MISE_SHELL']
+del XSH.env['__MISE_DIFF']
+del XSH.env['__MISE_SESSION']

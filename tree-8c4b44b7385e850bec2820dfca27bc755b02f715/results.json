@@ -1,0 +1,193 @@
+{
+  "schema": 1,
+  "subject": "hk",
+  "revision": "fc29ead1456ba7c1f62826c284126410a4014b00",
+  "toolchain": "1.97.1",
+  "platform": "Linux-7.1.4-x86_64-with-glibc2.39",
+  "runner": "nsc-runner-rpuuni2lj7frg",
+  "workflow_run": "33939106019",
+  "commit": "95808b3a6358d1caf988e14f2c2075fcc0714ea0",
+  "versions": {
+    "mbx": "1.8.1",
+    "cargo": "cargo 1.97.1 (c980f4866 2026-06-30)",
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "kache": "kache 0.16.0"
+  },
+  "passed": true,
+  "failures": [],
+  "scenarios": [
+    {
+      "scenario": "cold",
+      "description": "empty store, fresh target -- a first build on a new machine",
+      "timed": true,
+      "kind": "build",
+      "results": [
+        {
+          "tool": "cargo",
+          "wall_duration_ns": 25367107879
+        },
+        {
+          "tool": "mbx",
+          "wall_duration_ns": 24724192585,
+          "stats": {
+            "lookups": 2,
+            "hits": 2,
+            "misses": 0,
+            "unconsulted": 901,
+            "predictions_loaded": 0,
+            "restored_output_files": 2,
+            "restored_output_bytes": 2624
+          }
+        },
+        {
+          "tool": "kache",
+          "wall_duration_ns": 23824478416
+        }
+      ],
+      "skipped": []
+    },
+    {
+      "scenario": "warm",
+      "description": "warm store, fresh target -- CI restoring the same commit; plain Cargo has no cache to restore",
+      "timed": true,
+      "kind": "build",
+      "results": [
+        {
+          "tool": "mbx",
+          "wall_duration_ns": 6687816406,
+          "stats": {
+            "lookups": 722,
+            "hits": 721,
+            "misses": 1,
+            "unconsulted": 6,
+            "predictions_loaded": 927,
+            "restored_output_files": 1559,
+            "restored_output_bytes": 1392845003
+          }
+        },
+        {
+          "tool": "kache",
+          "wall_duration_ns": 7661810018
+        }
+      ],
+      "skipped": []
+    },
+    {
+      "scenario": "commit",
+      "description": "cache tools warmed at the parent commit, build the child -- Cargo is the uncached push-to-push baseline",
+      "timed": true,
+      "kind": "build",
+      "results": [
+        {
+          "tool": "cargo",
+          "wall_duration_ns": 19185639903
+        },
+        {
+          "tool": "mbx",
+          "wall_duration_ns": 14045550227,
+          "stats": {
+            "lookups": 723,
+            "hits": 720,
+            "misses": 3,
+            "unconsulted": 6,
+            "predictions_loaded": 927,
+            "restored_output_files": 1557,
+            "restored_output_bytes": 1206318875
+          }
+        },
+        {
+          "tool": "kache",
+          "wall_duration_ns": 21444121867
+        }
+      ],
+      "skipped": []
+    },
+    {
+      "scenario": "worktree",
+      "description": "warm store, second checkout at a different path; plain Cargo cannot reuse the first checkout's target",
+      "timed": true,
+      "kind": "build",
+      "results": [
+        {
+          "tool": "mbx",
+          "wall_duration_ns": 9199424262,
+          "stats": {
+            "lookups": 928,
+            "hits": 926,
+            "misses": 2,
+            "unconsulted": 7,
+            "predictions_loaded": 927,
+            "restored_output_files": 1462,
+            "restored_output_bytes": 1380235168
+          }
+        },
+        {
+          "tool": "kache",
+          "wall_duration_ns": 8586729558
+        }
+      ],
+      "skipped": []
+    },
+    {
+      "scenario": "toolchain",
+      "description": "store warmed on the pinned toolchain, rebuild on another",
+      "timed": false,
+      "kind": "build",
+      "results": [
+        {
+          "tool": "mbx",
+          "wall_duration_ns": 25833936716,
+          "stats": {
+            "lookups": 2,
+            "hits": 2,
+            "misses": 0,
+            "unconsulted": 901,
+            "predictions_loaded": 927,
+            "restored_output_files": 2,
+            "restored_output_bytes": 2624
+          }
+        }
+      ],
+      "skipped": []
+    },
+    {
+      "scenario": "contention",
+      "description": "six overlapping check, Clippy, and test jobs -- sequential for context, then parallel with and without mbx's machine-wide compiler limit",
+      "timed": true,
+      "kind": "contention",
+      "results": [
+        {
+          "tool": "mbx-sequential",
+          "wall_duration_ns": 53507185918,
+          "peak_compilers": 31,
+          "min_available_bytes": 62831960064,
+          "permits": null,
+          "stats": {
+            "hits": 8
+          }
+        },
+        {
+          "tool": "mbx-unscheduled",
+          "wall_duration_ns": 46512858030,
+          "peak_compilers": 167,
+          "min_available_bytes": 54061379584,
+          "permits": null,
+          "stats": {
+            "hits": 12
+          }
+        },
+        {
+          "tool": "mbx",
+          "wall_duration_ns": 35877718517,
+          "peak_compilers": 32,
+          "min_available_bytes": 61355208704,
+          "permits": 32,
+          "stats": {
+            "hits": 4280
+          }
+        }
+      ],
+      "skipped": []
+    }
+  ]
+}

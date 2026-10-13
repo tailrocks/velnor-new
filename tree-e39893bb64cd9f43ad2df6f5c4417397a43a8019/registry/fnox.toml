@@ -1,0 +1,8 @@
+backends = [
+  { full = "packslip:github.com/jdx/fnox", min_version = "1.35.1" },
+  { full = "github:jdx/fnox", attestations_since = "1.27.1" },
+]
+bins = ["fnox"]
+description = "Fort Knox for your secrets"
+test = { cmd = "fnox --version", expected = "fnox {{version}}" }
+version_order = "semver"

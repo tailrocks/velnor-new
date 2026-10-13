@@ -1,0 +1,19 @@
+---
+source: tests/integration_snapshots.rs
+info:
+  program: cargo-semver-checks
+  args:
+    - semver-checks
+    - "--consistency-check"
+  env:
+    CARGO_TERM_COLOR: never
+    CARGO_TERM_UNICODE: "false"
+    RUST_BACKTRACE: "0"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+error: the following options are not supported without `-Z unstable-options`:
+ - `--consistency-check`

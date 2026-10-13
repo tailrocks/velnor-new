@@ -1,0 +1,56 @@
+---
+source: src/query.rs
+expression: "&query_execution_results"
+---
+{
+  "./test_crates/union_field_added/": [
+    {
+      "field_name": String("b"),
+      "path": List([
+        String("union_field_added"),
+        String("FieldBecameNonPublicAPI"),
+      ]),
+      "span_begin_line": Uint64(65),
+      "span_end_line": Uint64(72),
+      "span_filename": String("src/lib.rs"),
+      "union_name": String("FieldBecameNonPublicAPI"),
+    },
+  ],
+  "./test_crates/union_now_doc_hidden/": [
+    {
+      "field_name": String("my_field"),
+      "path": List([
+        String("union_now_doc_hidden"),
+        String("PublicUnionHiddenField"),
+      ]),
+      "span_begin_line": Uint64(7),
+      "span_end_line": Uint64(13),
+      "span_filename": String("src/lib.rs"),
+      "union_name": String("PublicUnionHiddenField"),
+    },
+  ],
+  "./test_crates/union_pub_field_now_doc_hidden/": [
+    {
+      "field_name": String("my_field"),
+      "path": List([
+        String("union_pub_field_now_doc_hidden"),
+        String("PublicUnionDocHiddenField"),
+      ]),
+      "span_begin_line": Uint64(9),
+      "span_end_line": Uint64(13),
+      "span_filename": String("src/lib.rs"),
+      "union_name": String("PublicUnionDocHiddenField"),
+    },
+    {
+      "field_name": String("f1"),
+      "path": List([
+        String("union_pub_field_now_doc_hidden"),
+        String("PublicUnionBothFieldAndUnionDocHidden"),
+      ]),
+      "span_begin_line": Uint64(30),
+      "span_end_line": Uint64(34),
+      "span_filename": String("src/lib.rs"),
+      "union_name": String("PublicUnionBothFieldAndUnionDocHidden"),
+    },
+  ],
+}

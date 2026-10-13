@@ -1,0 +1,113 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/inherent_associated_pub_const_missing/": [
+    {
+      "name": String("TraitA"),
+      "path": List([
+        String("inherent_associated_pub_const_missing"),
+        String("TraitA"),
+      ]),
+      "span_begin_line": Uint64(61),
+      "span_end_line": Uint64(63),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("TraitB"),
+      "path": List([
+        String("inherent_associated_pub_const_missing"),
+        String("TraitB"),
+      ]),
+      "span_begin_line": Uint64(70),
+      "span_end_line": Uint64(72),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/pub_api_sealed_trait_method_return_value_added/": [
+    {
+      "name": String("BecomeAsyncReturnsUnit"),
+      "path": List([
+        String("pub_api_sealed_trait_method_return_value_added"),
+        String("public_api_sealed_async_return_value_added"),
+        String("BecomeAsyncReturnsUnit"),
+      ]),
+      "span_begin_line": Uint64(35),
+      "span_end_line": Uint64(37),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_method_default_impl_removed/": [
+    {
+      "name": String("TraitD"),
+      "path": List([
+        String("trait_method_default_impl_removed"),
+        String("TraitD"),
+      ]),
+      "span_begin_line": Uint64(23),
+      "span_end_line": Uint64(25),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_no_longer_dyn_compatible/": [
+    {
+      "name": String("RefTrait"),
+      "path": List([
+        String("trait_no_longer_dyn_compatible"),
+        String("RefTrait"),
+      ]),
+      "span_begin_line": Uint64(4),
+      "span_end_line": Uint64(6),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("WillGainAssociatedConstWithDefault"),
+      "path": List([
+        String("trait_no_longer_dyn_compatible"),
+        String("WillGainAssociatedConstWithDefault"),
+      ]),
+      "span_begin_line": Uint64(12),
+      "span_end_line": Uint64(14),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("WillGainAssociatedConstWithoutDefault"),
+      "path": List([
+        String("trait_no_longer_dyn_compatible"),
+        String("WillGainAssociatedConstWithoutDefault"),
+      ]),
+      "span_begin_line": Uint64(16),
+      "span_end_line": Uint64(18),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("SealedWillGainAssociatedConstWithDefault"),
+      "path": List([
+        String("trait_no_longer_dyn_compatible"),
+        String("SealedWillGainAssociatedConstWithDefault"),
+      ]),
+      "span_begin_line": Uint64(20),
+      "span_end_line": Uint64(22),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("SealedWillGainAssociatedConstWithoutDefault"),
+      "path": List([
+        String("trait_no_longer_dyn_compatible"),
+        String("SealedWillGainAssociatedConstWithoutDefault"),
+      ]),
+      "span_begin_line": Uint64(24),
+      "span_end_line": Uint64(26),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+}

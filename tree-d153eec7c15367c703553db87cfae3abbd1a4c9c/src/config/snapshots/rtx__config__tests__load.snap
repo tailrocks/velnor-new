@@ -1,0 +1,23 @@
+---
+source: src/config/mod.rs
+expression: config
+---
+Config {
+    Config Files: [
+        "~/cwd/.test-tool-versions",
+        "~/.test-tool-versions",
+        "~/config/config.toml",
+    ],
+    Installed Plugins: [
+        "dummy",
+        "tiny",
+    ],
+    Env: {
+        "TEST_ENV_VAR": "test-123",
+    },
+    Aliases: {
+        "tiny": {
+            "my/alias": "3.0",
+        },
+    },
+}

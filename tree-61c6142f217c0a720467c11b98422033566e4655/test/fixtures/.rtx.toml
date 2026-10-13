@@ -1,0 +1,22 @@
+[env]
+NODE_ENV = 'production'
+
+[tools]
+terraform = '1.0.0'
+node = ['18', 'prefix:20', 'ref:master', 'path:~/.nodes/18']
+jq = { prefix = '1.6' }
+shellcheck = { version = '0.9.0' }
+python = [
+  { version = '3.10.0', venv = '.venv' },
+  { version = '3.9.0' },
+]
+
+[plugins]
+node = 'https://github.com/jdxcode/rtx-node'
+
+[settings]
+verbose = true
+missing_runtime_behavior = 'warn'
+
+[alias.node]
+my_custom_node = '18'

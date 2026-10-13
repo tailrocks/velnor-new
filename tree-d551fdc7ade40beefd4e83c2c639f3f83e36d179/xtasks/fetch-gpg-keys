@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+#MISE description="Fetch GPG keys for signing or verification"
+# shellcheck disable=SC2129
+set -euxo pipefail
+
+# Fetch all Node.js release keys from the official nodejs/release-keys repository
+# This includes all current and legacy release maintainer keys
+rm -rf src/assets/gpg
+mkdir -p src/assets/gpg
+
+# Download each key file from nodejs/release-keys repository
+NODE_KEYS_URL="https://raw.githubusercontent.com/nodejs/release-keys/main/keys"
+NODE_KEYS_LIST_URL="https://raw.githubusercontent.com/nodejs/release-keys/main/keys.list"
+
+echo "Fetching Node.js release keys list..."
+if ! keys_list=$(curl -fsSL "$NODE_KEYS_LIST_URL"); then
+	echo "ERROR: Failed to download keys.list from nodejs/release-keys" >&2
+	exit 1
+fi
+
+key_count=0
+for fingerprint in $keys_list; do
+	echo "Fetching key: $fingerprint"
+	if ! curl -fLSs "${NODE_KEYS_URL}/${fingerprint}.asc" >>"src/assets/gpg/node.asc"; then
+		echo "ERROR: Failed to download key $fingerprint" >&2
+		exit 1
+	fi
+	echo "" >>"src/assets/gpg/node.asc"
+	key_count=$((key_count + 1))
+done
+echo "Successfully fetched $key_count Node.js release keys"
+
+# Swift release keys
+SWIFT_KEYS=(
+	"https://swift.org/keys/automatic-signing-key-4.asc"
+	"https://swift.org/keys/release-key-swift-5.x.asc"
+	"https://swift.org/keys/release-key-swift-6.x.asc"
+)
+for url in "${SWIFT_KEYS[@]}"; do
+	echo "Fetching Swift key: $url"
+	if ! curl -fLSs --compressed "$url" >>src/assets/gpg/swift.asc; then
+		echo "ERROR: Failed to download $url" >&2
+		exit 1
+	fi
+	echo "" >>src/assets/gpg/swift.asc
+done
+echo "Successfully fetched ${#SWIFT_KEYS[@]} Swift release keys"

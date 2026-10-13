@@ -1,0 +1,17 @@
+[package]
+name = "velnor-actions-actionlint"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lints]
+workspace = true
+
+[dependencies]
+velnor-actions-contract = { version = "=0.1.1", path = "../velnor-actions-contract" }
+
+[[test]]
+name = "velnor_actionlint"
+path = "tests/velnor_actionlint.rs"

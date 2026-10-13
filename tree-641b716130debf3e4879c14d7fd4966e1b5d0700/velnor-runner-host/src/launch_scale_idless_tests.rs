@@ -1,0 +1,137 @@
+//! Idless and partially-bound uncertain rows retain their reservation.
+
+use crate::launch::drive_offer;
+use crate::launch_harness::{Mode, Script, absent, assigned_wait, ctx, open};
+use crate::{EnsureError, HostError, IntentState, Outcome, Started};
+
+#[tokio::test]
+async fn idless_uncertain_subject_keeps_its_reservation() -> Result<(), String> {
+    let (scratch, journal) = open("idless-uncertain").await?;
+    let row = journal
+        .begin("launch", "m9")
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .finish(row, Outcome::Uncertain)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut script = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+
+    let result = drive_offer(
+        &mut script,
+        &ctx(),
+        &assigned_wait(9, 1),
+        &journal,
+        |_name, _jit, _bind| async { Err(HostError::Docker) },
+    )
+    .await;
+
+    assert_eq!(result, Err(EnsureError::Uncertain));
+    assert!(script.calls.is_empty());
+    let rows = journal.rows().await.map_err(|error| error.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, row);
+    assert_eq!(rows[0].state, IntentState::Uncertain);
+    assert!(rows[0].docker_id.is_none());
+    assert!(rows[0].dind_id.is_none());
+    assert!(rows[0].worker_volume.is_none());
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn partially_bound_uncertain_subject_does_not_mint() -> Result<(), String> {
+    let (scratch, journal) = open("partial-uncertain").await?;
+    let row = journal
+        .begin("launch", "m9")
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .bind_worker(row, None, Some("dind-kept"))
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .finish(row, Outcome::Uncertain)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut script = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+
+    let result = drive_offer(
+        &mut script,
+        &ctx(),
+        &assigned_wait(9, 1),
+        &journal,
+        |_name, _jit, _bind| async {
+            Ok(Started {
+                dind_id: "unexpected-dind".to_owned(),
+                runner_id: "unexpected-runner".to_owned(),
+            })
+        },
+    )
+    .await;
+
+    assert_eq!(result, Err(EnsureError::Uncertain));
+    assert!(script.calls.is_empty());
+    let rows = journal.rows().await.map_err(|error| error.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state, IntentState::Uncertain);
+    assert_eq!(rows[0].dind_id.as_deref(), Some("dind-kept"));
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn uncertain_jit_failure_redelivery_stays_queued() -> Result<(), String> {
+    let (scratch, journal) = open("scale-retry").await?;
+    let mut failed = Script {
+        calls: Vec::new(),
+        mode: Mode::JitFail,
+    };
+    let first = drive_offer(
+        &mut failed,
+        &ctx(),
+        &assigned_wait(7, 1),
+        &journal,
+        |_name, _jit, _bind| async { Err(HostError::Docker) },
+    )
+    .await;
+    assert_eq!(
+        first,
+        Err(EnsureError::Unexpected {
+            status: 0,
+            step: "session",
+        })
+    );
+    assert_eq!(failed.calls, ["jit"]);
+
+    let mut replay = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+    let second = drive_offer(
+        &mut replay,
+        &ctx(),
+        &assigned_wait(7, 1),
+        &journal,
+        |_name, _jit, _bind| async {
+            Ok(Started {
+                dind_id: "unexpected-dind".to_owned(),
+                runner_id: "unexpected-runner".to_owned(),
+            })
+        },
+    )
+    .await;
+    assert_eq!(second, Err(EnsureError::Uncertain));
+    assert!(replay.calls.is_empty());
+    let rows = journal.rows().await.map_err(|error| error.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state, IntentState::Uncertain);
+    assert!(rows[0].docker_id.is_none());
+    assert!(rows[0].dind_id.is_none());
+    assert!(rows[0].worker_volume.is_none());
+    absent(&scratch.file())
+}

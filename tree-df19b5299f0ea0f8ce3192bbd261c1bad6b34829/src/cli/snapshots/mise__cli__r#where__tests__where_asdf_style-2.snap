@@ -1,0 +1,5 @@
+---
+source: src/cli/where.rs
+expression: output
+---
+~/data/installs/tiny/3.1.0

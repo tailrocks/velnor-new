@@ -1,0 +1,8 @@
+description = "Codebuff is a CLI tool that writes code for you"
+
+bins = ["cb", "codebuff"]
+[[backends]]
+full = "npm:codebuff"
+
+[backends.options]
+allow_builds = ["codebuff"]

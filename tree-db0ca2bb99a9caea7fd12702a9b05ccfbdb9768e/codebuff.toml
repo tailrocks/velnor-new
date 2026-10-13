@@ -1,0 +1,8 @@
+description = "Codebuff is a CLI tool that writes code for you"
+
+[[backends]]
+full = "npm:codebuff"
+
+[backends.options]
+aube_args = "--allow-build=codebuff"
+pnpm_args = "--allow-build=codebuff"

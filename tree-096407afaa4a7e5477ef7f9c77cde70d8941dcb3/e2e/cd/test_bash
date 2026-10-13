@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC2088
+set -euo pipefail
+
+orig_path="$PATH"
+
+# shellcheck disable=SC1090
+eval "$(rtx activate bash --status)" && _rtx_hook
+
+assert() {
+	local actual="$1"
+	local expected="$2"
+	if [[ "$actual" != "$expected" ]]; then
+		echo "actual: $actual"
+		echo "expected: $expected"
+		exit 1
+	fi
+}
+
+assert_path() {
+  local expected="${1//$RTX_DATA_DIR/\~\/.rtx}"
+  local actual="${PATH/%$orig_path/}"
+  actual="${actual/%:/}"
+  actual="${actual//$RTX_DATA_DIR/\~\/.rtx}"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "Invalid PATH:  $actual"
+    echo "Expected PATH: $expected"
+    exit 1
+  fi
+}
+
+test "$(node -v)" = "v18.0.0"
+assert_path "~/.rtx/installs/nodejs/18.0.0/bin:~/.rtx/installs/tiny/3.1.0/bin:~/.rtx/installs/shellcheck/0.9.0/bin:~/.rtx/installs/shfmt/3.6.0/bin"
+assert "$FOO" "cd"
+
+cd 16 && _rtx_hook
+test "$(node -v)" = "v16.0.0"
+assert_path "~/.rtx/installs/nodejs/16.0.0/bin:~/.rtx/installs/tiny/3.1.0/bin:~/.rtx/installs/shellcheck/0.9.0/bin:~/.rtx/installs/shfmt/3.6.0/bin"
+assert "$FOO" "16"
+
+cd .. && _rtx_hook
+test "$(node -v)" = "v18.0.0"
+assert_path "~/.rtx/installs/nodejs/18.0.0/bin:~/.rtx/installs/tiny/3.1.0/bin:~/.rtx/installs/shellcheck/0.9.0/bin:~/.rtx/installs/shfmt/3.6.0/bin"
+
+rtx shell nodejs@16.0.0 && _rtx_hook
+test "$(node -v)" = "v16.0.0"
+
+rtx deactivate
+assert_path ""

@@ -1,0 +1,122 @@
+---
+source: src/config/config_file/rtx_toml.rs
+expression: cf.toolset
+---
+Toolset {
+    versions: {
+        "terraform": ToolVersionList {
+            versions: [
+                ToolVersion {
+                    plugin_name: "terraform",
+                    type: Version(
+                        "1.0.0",
+                    ),
+                    rtv: None,
+                    options: {},
+                },
+            ],
+            source: RtxToml(
+                "/Users/jdx/src/rtx/test/fixtures/.rtx.toml",
+            ),
+        },
+        "nodejs": ToolVersionList {
+            versions: [
+                ToolVersion {
+                    plugin_name: "nodejs",
+                    type: Version(
+                        "16",
+                    ),
+                    rtv: None,
+                    options: {},
+                },
+                ToolVersion {
+                    plugin_name: "nodejs",
+                    type: Prefix(
+                        "18",
+                    ),
+                    rtv: None,
+                    options: {},
+                },
+                ToolVersion {
+                    plugin_name: "nodejs",
+                    type: Ref(
+                        "master",
+                    ),
+                    rtv: None,
+                    options: {},
+                },
+                ToolVersion {
+                    plugin_name: "nodejs",
+                    type: Path(
+                        "~/.nodes/14",
+                    ),
+                    rtv: None,
+                    options: {},
+                },
+            ],
+            source: RtxToml(
+                "/Users/jdx/src/rtx/test/fixtures/.rtx.toml",
+            ),
+        },
+        "jq": ToolVersionList {
+            versions: [
+                ToolVersion {
+                    plugin_name: "jq",
+                    type: Prefix(
+                        "1.6",
+                    ),
+                    rtv: None,
+                    options: {},
+                },
+            ],
+            source: RtxToml(
+                "/Users/jdx/src/rtx/test/fixtures/.rtx.toml",
+            ),
+        },
+        "shellcheck": ToolVersionList {
+            versions: [
+                ToolVersion {
+                    plugin_name: "shellcheck",
+                    type: Version(
+                        "0.9.0",
+                    ),
+                    rtv: None,
+                    options: {},
+                },
+            ],
+            source: RtxToml(
+                "/Users/jdx/src/rtx/test/fixtures/.rtx.toml",
+            ),
+        },
+        "python": ToolVersionList {
+            versions: [
+                ToolVersion {
+                    plugin_name: "python",
+                    type: Version(
+                        "3.10.0",
+                    ),
+                    rtv: None,
+                    options: {
+                        "venv": ".venv",
+                    },
+                },
+                ToolVersion {
+                    plugin_name: "python",
+                    type: Version(
+                        "3.9.0",
+                    ),
+                    rtv: None,
+                    options: {},
+                },
+            ],
+            source: RtxToml(
+                "/Users/jdx/src/rtx/test/fixtures/.rtx.toml",
+            ),
+        },
+    },
+    source: Some(
+        RtxToml(
+            "/Users/jdx/src/rtx/test/fixtures/.rtx.toml",
+        ),
+    ),
+}

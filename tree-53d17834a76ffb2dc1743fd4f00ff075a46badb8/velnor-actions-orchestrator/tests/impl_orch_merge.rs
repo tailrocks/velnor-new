@@ -1,0 +1,234 @@
+//! Orchestrator core rows: merge accounting, status tokens, budgets.
+
+use std::collections::BTreeSet;
+
+use velnor_actions_contract::{ExecuteTaskRef, FinalStatus, MatrixStatus, Plan, TaskStatus};
+use velnor_actions_orchestrator::plan_internal;
+
+use crate::impl_common::{
+    TestResult, err_of, git, git_line, passing_reports, plan_for_source_change,
+};
+use crate::impl_orch_core::{
+    committed_repo, covered_plan, merge, merge_request, plan_for_partial_change, push_request,
+    set_task, success_jobs, wide_repo,
+};
+
+#[test]
+fn orch_core_merge_counts_cover_all_six_states() -> TestResult {
+    let repo = wide_repo(2)?;
+    let root = repo.path();
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "wide"], root)?;
+    let head = git_line(&["rev-parse", "HEAD"], root)?;
+    let response = plan_internal(&push_request(root, &head).to_string())?;
+    let value: serde_json::Value = serde_json::from_str(&response)?;
+    let plan: Plan = serde_json::from_value(value["plan"].clone())?;
+    plan.validate()?;
+    let mut reports = passing_reports(&plan)?;
+    assert!(reports.len() >= 6, "fixture needs six entries");
+    let cases = [
+        (TaskStatus::Reused, MatrixStatus::Passed),
+        (TaskStatus::Executed, MatrixStatus::Passed),
+        (TaskStatus::EmptyPartition, MatrixStatus::Passed),
+        (TaskStatus::NotSelected, MatrixStatus::NotRun),
+        (TaskStatus::Failed, MatrixStatus::Failed),
+        (TaskStatus::Cancelled, MatrixStatus::Cancelled),
+    ];
+    for (report, (status, aggregate)) in reports.iter_mut().zip(cases) {
+        set_task(report, status, aggregate)?;
+    }
+    let matrix = serde_json::to_value(&plan.matrix)?;
+    let request = merge_request(
+        &serde_json::to_value(&plan)?,
+        &matrix,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(),
+    );
+    let final_report = merge(&request)?;
+    let counts = &final_report.counts;
+    let extra = u32::try_from(reports.len() - cases.len()).unwrap_or(u32::MAX);
+    assert_eq!(counts.reused, 1);
+    assert_eq!(counts.executed, 1 + extra);
+    assert_eq!(counts.empty_partition, 1);
+    assert_eq!(counts.blocked, 1);
+    assert_eq!(counts.failed, 1);
+    assert_eq!(counts.cancelled, 1);
+    assert_eq!(counts.not_run, 0);
+    assert_eq!(
+        counts.reused
+            + counts.executed
+            + counts.empty_partition
+            + counts.blocked
+            + counts.failed
+            + counts.cancelled,
+        u32::try_from(reports.len()).unwrap_or(u32::MAX),
+        "each obligation ends in exactly one state"
+    );
+    assert_eq!(final_report.status, FinalStatus::Failed);
+    Ok(())
+}
+
+#[test]
+fn orch_core_all_covered_merges_passed() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    assert!(!plan.task_ids.is_empty(), "fixture must select work");
+    let (plan_json, manifest) = covered_plan(&plan)?;
+    let matrix = plan_json["matrix"].clone();
+    let mut request = merge_request(&plan_json, &matrix, &serde_json::json!([]), &success_jobs());
+    request["baseline_manifest"] = manifest;
+    let final_report = merge(&request)?;
+    assert_eq!(final_report.status, FinalStatus::Passed);
+    assert_eq!(final_report.counts.covered as usize, plan.task_ids.len());
+    assert_eq!(final_report.counts.not_run, 0);
+    Ok(())
+}
+
+#[test]
+fn orch_core_covered_claim_binds_original_proof_run() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    let (mut plan_json, manifest) = covered_plan(&plan)?;
+    plan_json["obligations"][0]["baseline_proof"]["run_id"] = serde_json::json!(8);
+    let matrix = plan_json["matrix"].clone();
+    let mut request = merge_request(&plan_json, &matrix, &serde_json::json!([]), &success_jobs());
+    request["baseline_manifest"] = manifest;
+    assert_eq!(merge(&request)?.status, FinalStatus::PlanningFailed);
+    Ok(())
+}
+
+#[test]
+fn orch_core_status_tokens_stay_distinct() -> TestResult {
+    let tokens: BTreeSet<String> = [
+        TaskStatus::Reused,
+        TaskStatus::Executed,
+        TaskStatus::EmptyPartition,
+        TaskStatus::NotSelected,
+        TaskStatus::Failed,
+        TaskStatus::Cancelled,
+    ]
+    .iter()
+    .map(serde_json::to_string)
+    .collect::<Result<_, _>>()?;
+    assert_eq!(tokens.len(), 6);
+    let (_repo, plan) = plan_for_source_change()?;
+    let text = serde_json::to_string(&plan)?;
+    assert!(!text.contains("unaffected"), "explanation only");
+    Ok(())
+}
+
+#[test]
+fn orch_core_entries_emit_single_only() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    assert!(!plan.matrix.include.is_empty(), "fixture must select work");
+    for entry in &plan.matrix.include {
+        for task_ref in entry.execute_task_ids.tasks.values() {
+            assert!(
+                matches!(task_ref, ExecuteTaskRef::Single(_)),
+                "no inferred fan-out"
+            );
+        }
+    }
+    let text = serde_json::to_string(&plan.matrix)?;
+    assert!(!text.contains("test_run"), "no test_run array");
+    Ok(())
+}
+
+#[test]
+fn orch_core_plan_is_deterministic() -> TestResult {
+    let (repo, head) = committed_repo()?;
+    let request = push_request(repo.path(), &head).to_string();
+    assert_eq!(plan_internal(&request)?, plan_internal(&request)?);
+    Ok(())
+}
+
+#[test]
+fn orch_core_matrix_budget_guides_broaden_or_reduce() -> TestResult {
+    let repo = wide_repo(60)?;
+    let root = repo.path();
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "wide"], root)?;
+    let head = git_line(&["rev-parse", "HEAD"], root)?;
+    let request = push_request(root, &head);
+    let err = err_of(plan_internal(&request.to_string()), "budget exceeded")?;
+    let text = err.to_string();
+    assert!(text.contains("matrix_budget_exceeded"), "{text}");
+    assert!(text.contains("broaden"), "{text}");
+    assert!(text.contains("reduce"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn orch_core_plan_retains_all_package_tasks() -> TestResult {
+    let (_repo, plan) = plan_for_partial_change()?;
+    let selected: BTreeSet<&str> = plan.task_ids.iter().map(String::as_str).collect();
+    for package in &plan.packages {
+        assert!(!package.tasks.is_empty(), "{}", package.package_id);
+        if package.selected {
+            for task in &package.tasks {
+                assert!(selected.contains(task.as_str()), "{task}");
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn orch_core_adapter_metadata_round_trips() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    assert!(!plan.matrix.include.is_empty(), "fixture must select work");
+    for entry in &plan.matrix.include {
+        let meta = &entry.adapter_metadata;
+        assert!(meta.is_object(), "opaque object");
+        for key in ["package_id", "kind", "configuration", "target"] {
+            assert!(meta.get(key).is_some(), "{key} in {}", entry.id);
+        }
+    }
+    plan.validate()?;
+    Ok(())
+}
+
+#[test]
+fn orch_core_final_counts_cover_nine_slots() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    let reports = passing_reports(&plan)?;
+    let matrix = serde_json::to_value(&plan.matrix)?;
+    let request = merge_request(
+        &serde_json::to_value(&plan)?,
+        &matrix,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(),
+    );
+    let final_report = merge(&request)?;
+    assert_eq!(final_report.status, FinalStatus::Passed);
+    let counts = serde_json::to_value(&final_report.counts)?;
+    for key in [
+        "selected",
+        "reused",
+        "executed",
+        "empty_partition",
+        "covered",
+        "failed",
+        "cancelled",
+        "blocked",
+        "not_run",
+    ] {
+        assert!(counts.get(key).is_some(), "{key}");
+    }
+    assert_eq!(final_report.counts.selected as usize, plan.task_ids.len());
+    Ok(())
+}
+
+#[test]
+fn orch_core_final_report_carries_no_cache_inputs() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    let reports = passing_reports(&plan)?;
+    let matrix = serde_json::to_value(&plan.matrix)?;
+    let request = merge_request(
+        &serde_json::to_value(&plan)?,
+        &matrix,
+        &serde_json::to_value(&reports)?,
+        &success_jobs(),
+    );
+    let text = serde_json::to_string(&merge(&request)?)?;
+    assert!(!text.contains("cache"), "aggregate only:\n{text}");
+    Ok(())
+}

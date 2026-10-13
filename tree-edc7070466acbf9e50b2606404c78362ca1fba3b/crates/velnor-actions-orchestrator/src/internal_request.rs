@@ -1,0 +1,312 @@
+//! Request-file materialization and response splitting for internal ops.
+
+use std::collections::BTreeMap;
+use std::env;
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+use velnor_actions_contract::{
+    NAMED_CHECK_LANES_ENV, NamedCheckLane, WorkflowEvent, canonical_json_bytes, parse_strict_json,
+    run_key_for_ci, validate_run_key,
+};
+
+use crate::OrchestratorError;
+use crate::internal::{MERGE_OP, PLAN_OP, SCHEMA, internal, internal_contract};
+use crate::request_event::{request_refs, workflow_event_for};
+
+#[path = "internal_request_outputs.rs"]
+mod outputs;
+pub use outputs::{
+    PlanOutputs, merge_passed, plan_outputs, publish_final_report, publish_plan_files,
+};
+
+/// Plan-time request: `{schema, op, event, base, head, root}` (schema 1).
+#[derive(Debug, Serialize)]
+struct EventRequest {
+    /// Request schema; always 1.
+    schema: u32,
+    /// Consuming operation (`plan-v1` or `merge-v1`).
+    op: String,
+    /// Triggering event.
+    event: WorkflowEvent,
+    /// Base commit or null.
+    base: Option<String>,
+    /// Head commit.
+    head: String,
+    /// Repository root; always `.` (the job checkout).
+    root: String,
+    /// Runner-owned repository slug (`owner/repo`) for provenance.
+    ///
+    /// Captured from `GITHUB_REPOSITORY` at the env boundary so the
+    /// planner consumes an explicit capability instead of ambient env.
+    /// Omitted when unset (local runs fall back to the git origin).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    repository: Option<String>,
+    /// Exact emitted named-check job and report identities, when schema 2
+    /// expands checks across execution lanes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
+}
+
+/// `plan-v1` request: run scope plus optional repo root.
+///
+/// The request carries no generator identity: the plan always names the
+/// running binary, so a hand-written request cannot claim a release pin
+/// for a source build. Unknown fields (including `generator`) reject.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct PlanRequest {
+    /// Request schema; must be 1.
+    pub(crate) schema: u32,
+    /// Consuming operation; must be `plan-v1` when present.
+    #[serde(default)]
+    pub(crate) op: Option<String>,
+    /// Run key; empty derives from the GitHub environment.
+    #[serde(default)]
+    pub(crate) run_key: String,
+    /// Base commit or null.
+    pub(crate) base: Option<String>,
+    /// Head commit.
+    pub(crate) head: String,
+    /// Triggering event.
+    pub(crate) event: WorkflowEvent,
+    /// Repository root override; defaults to the resolved root.
+    #[serde(default)]
+    pub(crate) root: Option<PathBuf>,
+    /// Trusted baseline evidence for coverage classification.
+    #[serde(default)]
+    pub(crate) baseline_manifest: Option<serde_json::Value>,
+    /// Runner-owned repository slug (`owner/repo`) for provenance.
+    ///
+    /// The request writer captures this from `GITHUB_REPOSITORY`; the
+    /// planner never reads ambient env itself, keeping classification a
+    /// function of request plus checkout. Absent means local run, where
+    /// the git origin is the fallback.
+    #[serde(default)]
+    pub(crate) repository: Option<String>,
+    /// Exact named-check job identities carried by the generated workflow.
+    #[serde(default)]
+    pub(crate) named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
+}
+
+/// Materialize the canonical request file from the GitHub environment.
+///
+/// Reads the exact path from `VELNOR_REQUEST_FILE`, the event name from
+/// `GITHUB_EVENT_NAME`, and the payload from `GITHUB_EVENT_PATH`, then
+/// delegates to [`write_request_parts`]. The request file must sit under
+/// `RUNNER_TEMP`: the runner owns that directory, so it anchors the
+/// symlink-safe parent creation.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] for missing env, malformed
+/// payloads, anchor escapes, or unwritable paths;
+/// [`OrchestratorError::Io`] for IO failures.
+pub fn write_request() -> Result<PathBuf, OrchestratorError> {
+    let path = env::var_os(crate::internal::REQUEST_FILE_ENV)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| internal("missing_request_file"))?;
+    let anchor = env::var_os("RUNNER_TEMP")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| internal("missing_runner_temp"))?;
+    let event_name = env::var("GITHUB_EVENT_NAME").unwrap_or_default();
+    let payload_path = env::var_os("GITHUB_EVENT_PATH").filter(|value| !value.is_empty());
+    let Some(payload_path) = payload_path else {
+        return Err(internal("missing_event_payload"));
+    };
+    let payload_json = crate::safe_read::read_event_file(
+        Path::new(&payload_path),
+        crate::safe_read::MAX_REPO_FILE_BYTES,
+    )?;
+    let sha = env::var("GITHUB_SHA").ok().filter(|sha| !sha.is_empty());
+    let repository = env::var(crate::origin::GITHUB_REPOSITORY_ENV)
+        .ok()
+        .filter(|slug| !slug.is_empty());
+    let named_check_lanes = env::var(NAMED_CHECK_LANES_ENV)
+        .ok()
+        .map(|value| {
+            serde_json::from_str(&value).map_err(|_| internal("malformed_named_check_lanes"))
+        })
+        .transpose()?;
+    write_request_parts_with_lanes(
+        &path,
+        &event_name,
+        &payload_json,
+        sha.as_deref(),
+        repository.as_deref(),
+        &anchor,
+        named_check_lanes,
+    )
+}
+
+/// Materialize one canonical request file from explicit inputs.
+///
+/// The consuming op comes from the `<op>-request.json` file name; the file
+/// is written exclusively (a pre-existing file errors, never overwritten).
+/// The merge target assembles its request from downloaded artifacts and
+/// ignores the event payload; the publish target records the push
+/// refs plus the protected-branch evidence for the publish gate.
+/// Parent directories are created under `anchor` with symlink refusal;
+/// the caller passes the runner-owned directory the request path must
+/// stay inside.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] for unknown ops, unsupported
+/// events, malformed payloads, anchor escapes, or unwritable paths.
+pub fn write_request_parts(
+    request_path: &Path,
+    event_name: &str,
+    payload_json: &str,
+    github_sha: Option<&str>,
+    repository: Option<&str>,
+    anchor: &Path,
+) -> Result<PathBuf, OrchestratorError> {
+    write_request_parts_with_lanes(
+        request_path,
+        event_name,
+        payload_json,
+        github_sha,
+        repository,
+        anchor,
+        None,
+    )
+}
+
+fn write_request_parts_with_lanes(
+    request_path: &Path,
+    event_name: &str,
+    payload_json: &str,
+    github_sha: Option<&str>,
+    repository: Option<&str>,
+    anchor: &Path,
+    named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
+) -> Result<PathBuf, OrchestratorError> {
+    let path = request_path.to_path_buf();
+    let op = request_op(&path)?;
+    if op == MERGE_OP {
+        return crate::merge_request::write_merge_request(&path);
+    }
+    if op == crate::baseline_publish::PUBLISH_OP {
+        return crate::baseline_publish::write_publish_request(
+            &path,
+            event_name,
+            payload_json,
+            github_sha,
+            repository,
+            anchor,
+        );
+    }
+    let payload: serde_json::Value =
+        serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
+    let event = workflow_event_for(event_name, &payload)?;
+    let (base, head) = request_refs(event, &payload, github_sha)?;
+    let request = EventRequest {
+        schema: SCHEMA,
+        op,
+        event,
+        base,
+        head,
+        root: ".".to_owned(),
+        repository: repository
+            .filter(|slug| !slug.is_empty())
+            .map(str::to_owned),
+        named_check_lanes,
+    };
+    let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
+    if let Some(parent) = path.parent() {
+        crate::exclusive_write::create_dir_no_symlink(anchor, parent)?;
+    }
+    crate::exclusive_write::write_exclusive(&path, &bytes, "request")?;
+    Ok(path)
+}
+
+/// Derive the sibling `<op>-response.json` path for one request path.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Internal`] unless the file name is exactly
+/// `<op>-request.json` with a non-empty op.
+pub fn response_path_for(request_path: &Path) -> Result<PathBuf, OrchestratorError> {
+    let name = request_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    let Some(op) = name
+        .strip_suffix("-request.json")
+        .filter(|op| !op.is_empty())
+    else {
+        return Err(internal("bad_request_file_name"));
+    };
+    let parent = request_path.parent().unwrap_or_else(|| Path::new("."));
+    Ok(parent.join(format!("{op}-response.json")))
+}
+
+/// Explicit run key, else `r<run-id>-a<attempt>` from the GitHub environment.
+pub(crate) fn resolve_run_key(explicit: Option<&str>) -> Result<String, OrchestratorError> {
+    if let Some(key) = explicit.filter(|key| !key.trim().is_empty()) {
+        validate_run_key(key).map_err(internal_contract)?;
+        return Ok(key.to_owned());
+    }
+    let id = env::var("GITHUB_RUN_ID").ok().filter(|v| !v.is_empty());
+    let attempt = env::var("GITHUB_RUN_ATTEMPT")
+        .ok()
+        .filter(|v| !v.is_empty());
+    let (Some(id), Some(attempt)) = (id, attempt) else {
+        return Err(internal("missing_run_key"));
+    };
+    let id: u64 = id.parse().map_err(|_| internal("bad_run_id"))?;
+    let attempt: u64 = attempt.parse().map_err(|_| internal("bad_run_attempt"))?;
+    Ok(run_key_for_ci(id, attempt))
+}
+
+/// Parse and validate one internal plan request and its checkout root.
+pub(crate) fn checked_plan_request(
+    request_json: &str,
+) -> Result<(PlanRequest, PathBuf), OrchestratorError> {
+    let envelope = parse_strict_json(request_json).map_err(internal_contract)?;
+    let mut request: PlanRequest =
+        serde_json::from_value(envelope).map_err(|err| OrchestratorError::Internal {
+            problem: format!("malformed_request:{err}"),
+        })?;
+    crate::internal::check_schema(request.schema)?;
+    if request.op.as_deref().is_some_and(|op| op != PLAN_OP) {
+        return Err(internal("op_mismatch"));
+    }
+    request.run_key = resolve_run_key(Some(request.run_key.as_str()))?;
+    if request.head.trim().is_empty() {
+        return Err(internal("empty_head"));
+    }
+    let root = plan_root(request.root.as_deref())?;
+    crate::select::verify_checkout(&root, request.event, &request.head)?;
+    Ok((request, root))
+}
+
+/// Repository root: explicit override or resolved from the current directory.
+fn plan_root(override_root: Option<&Path>) -> Result<PathBuf, OrchestratorError> {
+    if let Some(root) = override_root {
+        return root
+            .canonicalize()
+            .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()));
+    }
+    let cwd = env::current_dir().map_err(|err| OrchestratorError::RootDiscovery {
+        problem: err.to_string(),
+    })?;
+    crate::root::resolve_root(&cwd)
+}
+
+/// Consuming op from one `<op>-request.json` file name.
+fn request_op(path: &Path) -> Result<String, OrchestratorError> {
+    let name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    let op = name.strip_suffix("-request.json").unwrap_or_default();
+    if op == PLAN_OP || op == MERGE_OP || op == crate::baseline_publish::PUBLISH_OP {
+        Ok(op.to_owned())
+    } else {
+        Err(internal("unknown_request_op"))
+    }
+}

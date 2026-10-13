@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Install and build ruby using ruby-install
+
+export MISE_RUBY_INSTALL=1
+latest=$(mise latest ruby)
+assert_contains "mise x ruby@$latest -- ruby --version" "ruby $latest"

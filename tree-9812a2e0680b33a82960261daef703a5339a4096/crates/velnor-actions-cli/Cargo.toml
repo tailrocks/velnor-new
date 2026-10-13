@@ -1,0 +1,27 @@
+[package]
+name = "velnor-actions-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[[bin]]
+name = "velnor-actions"
+path = "src/main.rs"
+
+[dependencies]
+velnor-actions-orchestrator = { version = "=0.1.1", path = "../velnor-actions-orchestrator" }
+clap = { version = "=4.6.7", features = ["derive"] }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "velnor_cli"
+path = "tests/velnor_cli.rs"
+
+[dev-dependencies]
+proc-macro2 = "=1.0.107"
+serde_json = { workspace = true }
+syn = { version = "=3.0.6", features = ["full", "visit"] }

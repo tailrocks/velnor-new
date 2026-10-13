@@ -1,0 +1,296 @@
+{
+  "schema": 1,
+  "generator": "tailrocks/velnor-new",
+  "repository_count": 47,
+  "consumer_count": 46,
+  "provenance": {
+    "reconstructed": true,
+    "source": "repository-evidence.csv",
+    "cross_checked_against": "velnor-actions-ci-performance-goal.md exact ordered 46 consumers",
+    "reason": "Requested scope.json and repositories.txt absent in checkout and targeted project/evidence/attachment roots"
+  },
+  "repositories": [
+    {
+      "number": 0,
+      "wave": "G",
+      "repository": "tailrocks/velnor-new",
+      "role": "generator"
+    },
+    {
+      "number": 1,
+      "wave": "A",
+      "repository": "jackin-project/jackin",
+      "role": "consumer"
+    },
+    {
+      "number": 2,
+      "wave": "A",
+      "repository": "jackin-project/jackin-agent-smith",
+      "role": "consumer"
+    },
+    {
+      "number": 3,
+      "wave": "A",
+      "repository": "jackin-project/homebrew-tap",
+      "role": "consumer"
+    },
+    {
+      "number": 4,
+      "wave": "A",
+      "repository": "jackin-project/jackin-role-action",
+      "role": "consumer"
+    },
+    {
+      "number": 5,
+      "wave": "A",
+      "repository": "jackin-project/jackin-sentinel",
+      "role": "consumer"
+    },
+    {
+      "number": 6,
+      "wave": "A",
+      "repository": "jackin-project/jackin-dev",
+      "role": "consumer"
+    },
+    {
+      "number": 7,
+      "wave": "A",
+      "repository": "jackin-project/jackin-github-terraform",
+      "role": "consumer"
+    },
+    {
+      "number": 8,
+      "wave": "A",
+      "repository": "jackin-project/jackin-the-architect",
+      "role": "consumer"
+    },
+    {
+      "number": 9,
+      "wave": "B",
+      "repository": "tailrocks/github-terraform",
+      "role": "consumer"
+    },
+    {
+      "number": 10,
+      "wave": "B",
+      "repository": "tailrocks/termpane",
+      "role": "consumer"
+    },
+    {
+      "number": 11,
+      "wave": "B",
+      "repository": "tailrocks/tui-snap",
+      "role": "consumer"
+    },
+    {
+      "number": 12,
+      "wave": "B",
+      "repository": "tailrocks/velnor",
+      "role": "consumer"
+    },
+    {
+      "number": 13,
+      "wave": "B",
+      "repository": "tailrocks/termrock",
+      "role": "consumer"
+    },
+    {
+      "number": 14,
+      "wave": "B",
+      "repository": "tailrocks/parallax",
+      "role": "consumer"
+    },
+    {
+      "number": 15,
+      "wave": "B",
+      "repository": "tailrocks/terminal-components-claude",
+      "role": "consumer"
+    },
+    {
+      "number": 16,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-repository-skills",
+      "role": "consumer"
+    },
+    {
+      "number": 17,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-skills",
+      "role": "consumer"
+    },
+    {
+      "number": 18,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-pull-request-skills",
+      "role": "consumer"
+    },
+    {
+      "number": 19,
+      "wave": "B",
+      "repository": "tailrocks/homebrew-velnor",
+      "role": "consumer"
+    },
+    {
+      "number": 20,
+      "wave": "B",
+      "repository": "tailrocks/velnor-apt",
+      "role": "consumer"
+    },
+    {
+      "number": 21,
+      "wave": "B",
+      "repository": "tailrocks/parallax-telemetry-playground",
+      "role": "consumer"
+    },
+    {
+      "number": 22,
+      "wave": "B",
+      "repository": "tailrocks/velnor-actions-fixture",
+      "role": "consumer"
+    },
+    {
+      "number": 23,
+      "wave": "B",
+      "repository": "tailrocks/holla",
+      "role": "consumer"
+    },
+    {
+      "number": 24,
+      "wave": "B",
+      "repository": "tailrocks/tracing-request-level",
+      "role": "consumer"
+    },
+    {
+      "number": 25,
+      "wave": "B",
+      "repository": "tailrocks/pg-bigdecimal",
+      "role": "consumer"
+    },
+    {
+      "number": 26,
+      "wave": "B",
+      "repository": "tailrocks/ruxel",
+      "role": "consumer"
+    },
+    {
+      "number": 27,
+      "wave": "B",
+      "repository": "tailrocks/schemalane",
+      "role": "consumer"
+    },
+    {
+      "number": 28,
+      "wave": "B",
+      "repository": "tailrocks/holla-apt",
+      "role": "consumer"
+    },
+    {
+      "number": 29,
+      "wave": "B",
+      "repository": "tailrocks/homebrew-parallax",
+      "role": "consumer"
+    },
+    {
+      "number": 30,
+      "wave": "B",
+      "repository": "tailrocks/homebrew-ruxel",
+      "role": "consumer"
+    },
+    {
+      "number": 31,
+      "wave": "B",
+      "repository": "tailrocks/homebrew-tablerock",
+      "role": "consumer"
+    },
+    {
+      "number": 32,
+      "wave": "B",
+      "repository": "tailrocks/homebrew-holla",
+      "role": "consumer"
+    },
+    {
+      "number": 33,
+      "wave": "B",
+      "repository": "tailrocks/tablerock",
+      "role": "consumer"
+    },
+    {
+      "number": 34,
+      "wave": "B",
+      "repository": "tailrocks/cloudflare-tofu",
+      "role": "consumer"
+    },
+    {
+      "number": 35,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-typescript-skills",
+      "role": "consumer"
+    },
+    {
+      "number": 36,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-skill-authoring-skills",
+      "role": "consumer"
+    },
+    {
+      "number": 37,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-rust-skills",
+      "role": "consumer"
+    },
+    {
+      "number": 38,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-roadmap-skills",
+      "role": "consumer"
+    },
+    {
+      "number": 39,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-open-source-skills",
+      "role": "consumer"
+    },
+    {
+      "number": 40,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-macos-skills",
+      "role": "consumer"
+    },
+    {
+      "number": 41,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-code-quality-skills",
+      "role": "consumer"
+    },
+    {
+      "number": 42,
+      "wave": "C",
+      "repository": "ChainArgos/blockchain-nodes",
+      "role": "consumer"
+    },
+    {
+      "number": 43,
+      "wave": "C",
+      "repository": "ChainArgos/java-monorepo",
+      "role": "consumer"
+    },
+    {
+      "number": 44,
+      "wave": "C",
+      "repository": "ChainArgos/jackin-agent-brown",
+      "role": "consumer"
+    },
+    {
+      "number": 45,
+      "wave": "C",
+      "repository": "ChainArgos/cloudflare-tofu",
+      "role": "consumer"
+    },
+    {
+      "number": 46,
+      "wave": "C",
+      "repository": "ChainArgos/github-terraform",
+      "role": "consumer"
+    }
+  ]
+}

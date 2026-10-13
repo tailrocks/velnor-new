@@ -1,0 +1,91 @@
+---
+source: src/query.rs
+expression: "&query_execution_results"
+snapshot_kind: text
+---
+{
+  "./test_crates/enum_no_repr_variant_discriminant_changed/": [
+    {
+      "enum_name": String("FieldlessWithDiscrimants"),
+      "new_attr": String("#[repr(u8)]"),
+      "new_value": String("21"),
+      "old_attr": String("#[repr(u8)]"),
+      "old_value": String("20"),
+      "path": List([
+        String("enum_no_repr_variant_discriminant_changed"),
+        String("FieldlessWithDiscrimants"),
+      ]),
+      "span_begin_line": Uint64(70),
+      "span_end_line": Uint64(70),
+      "span_filename": String("src/lib.rs"),
+      "variant_name": String("Last"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/enum_repr_variant_discriminant_changed/": [
+    {
+      "enum_name": String("ExplicitAndImplicitDiscriminantsAreChanged"),
+      "new_attr": String("#[repr(isize)]"),
+      "new_value": String("2"),
+      "old_attr": String("#[repr(isize)]"),
+      "old_value": String("1"),
+      "path": List([
+        String("enum_repr_variant_discriminant_changed"),
+        String("ExplicitAndImplicitDiscriminantsAreChanged"),
+      ]),
+      "span_begin_line": Uint64(7),
+      "span_end_line": Uint64(7),
+      "span_filename": String("src/lib.rs"),
+      "variant_name": String("First"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "enum_name": String("ExplicitAndImplicitDiscriminantsAreChanged"),
+      "new_attr": String("#[repr(isize)]"),
+      "new_value": String("3"),
+      "old_attr": String("#[repr(isize)]"),
+      "old_value": String("2"),
+      "path": List([
+        String("enum_repr_variant_discriminant_changed"),
+        String("ExplicitAndImplicitDiscriminantsAreChanged"),
+      ]),
+      "span_begin_line": Uint64(8),
+      "span_end_line": Uint64(8),
+      "span_filename": String("src/lib.rs"),
+      "variant_name": String("Second"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "enum_name": String("DiscriminantIsChanged"),
+      "new_attr": String("#[repr(i16)]"),
+      "new_value": String("1"),
+      "old_attr": String("#[repr(i16)]"),
+      "old_value": String("0"),
+      "path": List([
+        String("enum_repr_variant_discriminant_changed"),
+        String("DiscriminantIsChanged"),
+      ]),
+      "span_begin_line": Uint64(17),
+      "span_end_line": Uint64(17),
+      "span_filename": String("src/lib.rs"),
+      "variant_name": String("First"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "enum_name": String("DiscriminantIsChangedButAVariantIsNonExhaustive"),
+      "new_attr": String("#[repr(u32)]"),
+      "new_value": String("2"),
+      "old_attr": String("#[repr(u32)]"),
+      "old_value": String("1"),
+      "path": List([
+        String("enum_repr_variant_discriminant_changed"),
+        String("DiscriminantIsChangedButAVariantIsNonExhaustive"),
+      ]),
+      "span_begin_line": Uint64(26),
+      "span_end_line": Uint64(26),
+      "span_filename": String("src/lib.rs"),
+      "variant_name": String("Second"),
+      "visibility_limit": String("public"),
+    },
+  ],
+}

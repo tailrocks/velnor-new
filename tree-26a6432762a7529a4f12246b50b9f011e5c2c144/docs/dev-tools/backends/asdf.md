@@ -1,0 +1,95 @@
+# asdf Backend
+
+::: warning
+asdf plugins are considered legacy. **New asdf and vfox plugins are not accepted into the [mise registry](https://github.com/jdx/mise/blob/main/registry/) for supply-chain security reasons** — for registry submissions use the [aqua](/dev-tools/backends/aqua.html) (preferred) or [github](/dev-tools/backends/github.html) backend instead.
+
+If you are writing a private/custom plugin (not for registry submission), prefer [vfox plugins](/dev-tools/backends/vfox.html) over asdf — they're written in Lua, work cross-platform (including Windows), and have access to built-in modules for HTTP, JSON, HTML parsing, and more.
+:::
+
+`asdf` is the original backend for mise.
+
+It relies on asdf plugins for each tool. asdf plugins are riskier to use because they're typically written by a single developer unrelated to the tool vendor. They also generally do not work on Windows because they're written
+in bash, which is often not available on Windows, and the scripts are generally not written to be cross-platform.
+
+Tools in the [registry](https://github.com/jdx/mise/blob/main/registry/) avoid asdf plugins whenever possible. Sometimes more secure backends like aqua/github cannot be used because a tool has a complex install setup or needs to export env vars.
+
+All asdf plugins in the registry are hosted in the mise-plugins org to secure the supply chain, so you do not need to rely on plugins maintained by anyone except me.
+
+Because of the extra complexity of asdf tools and the security concerns, we are actively moving tools in
+the registry away from asdf where possible to backends like aqua and github, which don't require plugins.
+That said, not all tools can work with github/aqua: some have a unique installation process or
+need to set env vars other than `PATH`.
+
+## Feature Comparison: asdf vs vfox
+
+| Feature                         | asdf Plugins       | vfox Plugins         |
+| ------------------------------- | ------------------ | -------------------- |
+| **Language**                    | Bash scripts       | Lua                  |
+| **Windows Support**             | ❌                 | ✅                   |
+| **Built-in HTTP module**        | ❌ (requires curl) | ✅                   |
+| **Built-in JSON module**        | ❌ (requires jq)   | ✅                   |
+| **Built-in HTML parsing**       | ❌                 | ✅                   |
+| **Built-in archive extraction** | ❌                 | ✅                   |
+| **Built-in semver module**      | ❌                 | ✅                   |
+| **Built-in logging**            | ❌                 | ✅                   |
+| **Post-install hooks**          | ❌                 | ✅                   |
+| **Security attestations**       | ❌                 | ✅ (cosign, SLSA)    |
+| **Multi-tool plugins**          | ❌                 | ✅ (backend plugins) |
+| **Lock file support**           | ❌                 | ✅                   |
+| **Rolling version checksums**   | ❌                 | ✅                   |
+
+## Hook Migration: asdf to vfox
+
+| asdf Script                 | vfox Hook                | Notes                                                            |
+| --------------------------- | ------------------------ | ---------------------------------------------------------------- |
+| `bin/list-all`              | `Available`              | Return structured version objects instead of plain text          |
+| `bin/download`              | `PreInstall`             | Return URL and checksum; mise handles the download               |
+| `bin/install`               | `PostInstall`            | Runs after mise downloads and extracts the tool                  |
+| `bin/exec-env`              | `EnvKeys`                | Return structured key/value pairs instead of `export` statements |
+| `bin/list-legacy-filenames` | `PLUGIN.legacyFilenames` | Set in `metadata.lua` instead of a script                        |
+| `bin/parse-legacy-file`     | `ParseLegacyFile`        | Return structured result instead of plain text                   |
+
+## Writing asdf (legacy) plugins for mise
+
+See the asdf documentation for more information on [writing plugins](https://asdf-vm.com/plugins/create.html).
+
+The `bin/list-all` and `bin/latest-stable` version scripts receive environment variables and PATH
+additions resolved from mise configuration before tools are loaded. This allows private plugins to
+use credentials, helper executables from `_.path`, or other project-specific values from `[env]`
+while listing versions. Because these values can change the available versions, mise stores
+version-list caches separately for each resolved configuration environment without writing the
+original values or paths to the cache.
+
+## Tool Options
+
+The following [tool-options](/dev-tools/#tool-options) are available for the `asdf` backend—these
+go in `[tools]` in `mise.toml`.
+
+### `install_env`
+
+Set environment variables for asdf plugin install scripts:
+
+```toml
+[tools]
+"asdf:owner/plugin" = { version = "latest", install_env = { MAKEFLAGS = "-j8" } }
+```
+
+### Install dependencies
+
+Matching tools selected in the same install operation and declared with the
+[`depends` option](/dev-tools/#tool-dependencies) are installed before the asdf tool. Their paths
+are added to the `PATH` used by its `bin/download` and `bin/install` scripts:
+
+```toml
+[tools]
+python = "3.12"
+"asdf:owner/plugin" = { version = "latest", depends = ["python"] }
+```
+
+This allows an asdf plugin to invoke an executable supplied by another mise-managed tool during
+the same `mise install`. Other active mise tools are not added implicitly; declare every
+mise-managed install requirement with `depends`. Executables already available on the ambient
+system or configuration `PATH` remain available.
+
+The `depends` option does not add or install a missing tool. A configured dependency must already
+be installed or selected in the same install operation.

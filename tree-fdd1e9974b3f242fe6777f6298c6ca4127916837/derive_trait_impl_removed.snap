@@ -1,0 +1,134 @@
+---
+source: src/query.rs
+expression: "&query_execution_results"
+snapshot_kind: text
+---
+{
+  "./test_crates/derive_trait_impl_removed/": [
+    {
+      "name": String("DebugFoo"),
+      "path": List([
+        String("derive_trait_impl_removed"),
+        String("DebugFoo"),
+      ]),
+      "span_begin_line": Uint64(4),
+      "span_end_line": Uint64(4),
+      "span_filename": String("src/lib.rs"),
+      "trait_name": String("Debug"),
+      "trait_path": List([
+        String("core"),
+        String("fmt"),
+        String("Debug"),
+      ]),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("CopyBar"),
+      "path": List([
+        String("derive_trait_impl_removed"),
+        String("CopyBar"),
+      ]),
+      "span_begin_line": Uint64(7),
+      "span_end_line": Uint64(9),
+      "span_filename": String("src/lib.rs"),
+      "trait_name": String("Copy"),
+      "trait_path": List([
+        String("core"),
+        String("marker"),
+        String("Copy"),
+      ]),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("EqFoo"),
+      "path": List([
+        String("derive_trait_impl_removed"),
+        String("EqFoo"),
+      ]),
+      "span_begin_line": Uint64(12),
+      "span_end_line": Uint64(12),
+      "span_filename": String("src/lib.rs"),
+      "trait_name": String("Eq"),
+      "trait_path": List([
+        String("core"),
+        String("cmp"),
+        String("Eq"),
+      ]),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/partial_ord_enum_struct_variant_fields_reordered/": [
+    {
+      "name": String("NoLongerPartialOrd"),
+      "path": List([
+        String("partial_ord_enum_struct_variant_fields_reordered"),
+        String("NoLongerPartialOrd"),
+      ]),
+      "span_begin_line": Uint64(75),
+      "span_end_line": Uint64(77),
+      "span_filename": String("src/lib.rs"),
+      "trait_name": String("PartialOrd"),
+      "trait_path": List([
+        String("core"),
+        String("cmp"),
+        String("PartialOrd"),
+      ]),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/partial_ord_enum_variants_reordered/": [
+    {
+      "name": String("NoLongerPartialOrd"),
+      "path": List([
+        String("partial_ord_enum_variants_reordered"),
+        String("NoLongerPartialOrd"),
+      ]),
+      "span_begin_line": Uint64(113),
+      "span_end_line": Uint64(117),
+      "span_filename": String("src/lib.rs"),
+      "trait_name": String("PartialOrd"),
+      "trait_path": List([
+        String("core"),
+        String("cmp"),
+        String("PartialOrd"),
+      ]),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/partial_ord_struct_fields_reordered/": [
+    {
+      "name": String("NoLongerPartialOrd"),
+      "path": List([
+        String("partial_ord_struct_fields_reordered"),
+        String("NoLongerPartialOrd"),
+      ]),
+      "span_begin_line": Uint64(82),
+      "span_end_line": Uint64(86),
+      "span_filename": String("src/lib.rs"),
+      "trait_name": String("PartialOrd"),
+      "trait_path": List([
+        String("core"),
+        String("cmp"),
+        String("PartialOrd"),
+      ]),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("NoLongerPartialOrd"),
+      "path": List([
+        String("partial_ord_struct_fields_reordered"),
+        String("NoLongerPartialOrd"),
+      ]),
+      "span_begin_line": Uint64(82),
+      "span_end_line": Uint64(86),
+      "span_filename": String("src/lib.rs"),
+      "trait_name": String("PartialEq"),
+      "trait_path": List([
+        String("core"),
+        String("cmp"),
+        String("PartialEq"),
+      ]),
+      "visibility_limit": String("public"),
+    },
+  ],
+}

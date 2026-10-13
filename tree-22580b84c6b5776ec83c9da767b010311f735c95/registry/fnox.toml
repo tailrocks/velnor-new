@@ -1,0 +1,5 @@
+backends = ["github:jdx/fnox"]
+bins = ["fnox"]
+description = "Fort Knox for your secrets"
+test = { cmd = "fnox --version", expected = "fnox {{version}}" }
+version_order = "semver"

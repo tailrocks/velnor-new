@@ -1,0 +1,63 @@
+SemverQuery(
+    id: "enum_variant_marked_non_exhaustive",
+    human_readable_name: "enum variant marked #[non_exhaustive]",
+    description: "An exhaustive enum variant has been marked #[non_exhaustive].",
+    reference: Some("An exhaustive enum variant has been marked #[non_exhaustive], preventing it from being constructed using a literal from outside its own crate."),
+    required_update: Major,
+    lint_level: Deny,
+    reference_link: Some("https://doc.rust-lang.org/cargo/reference/semver.html#attr-adding-non-exhaustive"),
+    query: r#"
+    {
+        CrateDiff {
+            baseline {
+                item {
+                    ... on Enum {
+                        visibility_limit @filter(op: "=", value: ["$public"]) @output
+
+                        importable_path {
+                            path @output @tag
+                            public_api @filter(op: "=", value: ["$true"])
+                        }
+
+                        variant {
+                            variant_name: name @output @tag
+                            public_api_eligible @filter(op: "=", value: ["$true"])
+                            attrs @filter(op: "not_contains", value: ["$non_exhaustive"])
+                        }
+                    }
+                }
+            }
+            current {
+                item {
+                    ... on Enum {
+                        visibility_limit @filter(op: "=", value: ["$public"])
+                        name @output
+
+                        importable_path {
+                            path @filter(op: "=", value: ["%path"])
+                            public_api @filter(op: "=", value: ["$true"])
+                        }
+
+                        variant {
+                            name @filter(op: "=", value: ["%variant_name"])
+                            public_api_eligible @filter(op: "=", value: ["$true"])
+                            attrs @filter(op: "contains", value: ["$non_exhaustive"])
+
+                            span_: span @optional {
+                                filename @output
+                                begin_line @output
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }"#,
+    arguments: {
+        "public": "public",
+        "non_exhaustive": "#[non_exhaustive]",
+        "true": true,
+    },
+    error_message: "A public enum's variant has been marked #[non_exhaustive], which will prevent it from being constructed using a literal outside of its crate.",
+    per_result_error_template: Some("variant {{name}}:{{variant_name}} in {{span_filename}}:{{span_begin_line}}"),
+)

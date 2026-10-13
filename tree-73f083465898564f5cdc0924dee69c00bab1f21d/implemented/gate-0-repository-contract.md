@@ -1,0 +1,10 @@
+# Gate 0: repository contract
+
+- State: recorded-pending-merge (branch `docs/velnor-actions-spec`; becomes implemented only on merge with required checks passing)
+- Specification: [implementation-plan.md](../proposed/implementation-plan.md) Gate 0 + [rust-quality-contract.md](../proposed/rust-quality-contract.md) §1/§4/§5
+- Landed by: unmerged branch `docs/velnor-actions-spec`, HEAD `f725a87`
+- Merge date: TBD
+- Delivered: virtual Cargo workspace with exactly the seven product crates (`velnor-actions-contract`, `-rust`, `-mise`, `-actionlint`, `-workflow-renderer`, `-orchestrator`, `-cli`; CLI declares the `velnor-actions` binary); `.alint.yml` enforcing generic file/path, required-file, and line-count rules only, consumed by a separate required `velnor-alint` job pinned to exactly `asamarts/alint@v0.16.1`; workspace lints (Clippy `too_many_lines = "deny"`, `unwrap_used`/`expect_used`/`panic` denied, `unsafe_code` forbidden).
+- Acceptance evidence: local workspace suite green (933 integration `#[test]` + 64 src-unit `#[test]` by grep; implementation agent reports 981 green, clippy 0, fmt clean at HEAD); dogfood CI round 5 (`f725a87`) pending — run link to be filled by parent. Key tests: `workspace_lists_exactly_seven_members`, `generic_names_forbidden`, `velnor_name_never_published` (`crates/velnor-actions-cli/tests/impl_repo_policy.rs`); `arch110_product_roots_live_under_crates`, `arch112_alint_scopes_product_paths`, `rq53_limits_discipline_no_baseline` (`impl_repo_shape.rs`); `alint_config_holds_generic_rules_only` (`crates/velnor-actions-rust/tests/impl_rust_f2b.rs`).
+- Deviations: test-layout SHOULD rows recorded in [deviations.md](deviations.md) (RQ-4.1, RQ-4.3, RQ-4.7); Alint scope honestly disclaimed (no dependency-architecture, Rust-syntax, or layout enforcement).
+- Follow-up: honest gap — no local negative-fixture tests proving each enabled Alint rule rejects a violation were found in the suite; that proof currently rides the real `asamarts/alint@v0.16.1` binary in the generated `velnor-alint` CI job (round 5 pending). A follow-up SHOULD add negative fixtures or record why the live-job proof suffices.

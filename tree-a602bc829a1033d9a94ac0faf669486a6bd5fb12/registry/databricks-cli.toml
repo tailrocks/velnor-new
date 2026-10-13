@@ -1,0 +1,11 @@
+description = "Databricks CLI"
+test = { cmd = "databricks --version", expected = "Databricks CLI v{{version}}" }
+version_order = "semver"
+
+bins = ["databricks"]
+[[backends]]
+full = "aqua:databricks/cli"
+
+[[backends]]
+attestations_since = "1.0.0"
+full = "github:databricks/cli"

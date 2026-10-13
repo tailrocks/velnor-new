@@ -1,0 +1,357 @@
+//! Policy gating and Velnor support-job construction.
+//!
+//! Consumer policy rejects support IR; Velnor policy merges typed Alint,
+//! policy, and optional candidate jobs. No toolchain-qualification job exists.
+//! The always-on `velnor-workflow-lint` job arrives via typed IR and is
+//! emitted for both policies; it is never support IR.
+
+use std::collections::BTreeMap;
+
+use velnor_actions_contract::{Job, PolicyJob, Step, StepKind, VelnorSupportWorkflow};
+
+use crate::{
+    RenderError,
+    candidate::{candidate_job, release_job},
+    render::{
+        ALINT_JOB_ID, ALINT_USES, CANDIDATE_JOB_ID, FINAL_CONDITION, FINAL_DISPLAY_NAME,
+        FINAL_JOB_ID, PLAN_JOB_ID, POLICY_JOB_ID, RenderContext,
+    },
+    steps,
+};
+
+/// Always-on workflow-lint job ID, emitted for both policies.
+pub(crate) const LINT_JOB_ID: &str = "actionlint";
+
+/// Display name of the always-on workflow-lint job.
+pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
+
+/// Protected release job ID (Velnor policy, candidate mode only).
+pub(crate) const RELEASE_JOB_ID: &str = "release";
+
+/// Display name of the protected release job.
+pub(crate) const RELEASE_DISPLAY_NAME: &str = "Release";
+
+/// Release ref gate: the job runs only on protected refs (tags/branches).
+pub(crate) const RELEASE_REF_CONDITION: &str = "github.ref_protected == true";
+
+/// Consumer policy: reject support IR and Velnor-only job IDs.
+///
+/// The lint job is a base IR job, not support IR, so it passes through.
+pub(crate) fn reject_consumer_support(
+    jobs: &BTreeMap<String, Job>,
+    support: Option<&VelnorSupportWorkflow>,
+) -> Result<(), RenderError> {
+    if let Some(workflow) = support
+        && (!workflow.policy_jobs.is_empty() || workflow.candidate_validation)
+    {
+        return Err(RenderError::PolicyRejected {
+            policy: "consumer-v1".to_owned(),
+            problem: "support_ir_rejected".to_owned(),
+        });
+    }
+    for id in [
+        ALINT_JOB_ID,
+        POLICY_JOB_ID,
+        CANDIDATE_JOB_ID,
+        RELEASE_JOB_ID,
+    ] {
+        if jobs.contains_key(id) {
+            return Err(RenderError::PolicyRejected {
+                policy: "consumer-v1".to_owned(),
+                problem: format!("forbidden_job:{id}"),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Velnor policy: merge typed Alint, policy, and optional candidate jobs.
+/// The exhaustive `PolicyJob` match is the whole support set: Alint plus
+/// policy only, with no toolchain-qualification job.
+pub(crate) fn merge_support_jobs(
+    jobs: &mut BTreeMap<String, Job>,
+    support: Option<&VelnorSupportWorkflow>,
+    ctx: &RenderContext,
+) -> Result<(), RenderError> {
+    let Some(workflow) = support else {
+        return Ok(());
+    };
+    let mut want_alint = false;
+    let mut want_policy = false;
+    for job in &workflow.policy_jobs {
+        match job {
+            PolicyJob::Alint if !want_alint => want_alint = true,
+            PolicyJob::Policy if !want_policy => want_policy = true,
+            _ => {
+                return Err(RenderError::PolicyRejected {
+                    policy: "velnor-repository-v1".to_owned(),
+                    problem: "duplicate_policy_job".to_owned(),
+                });
+            }
+        }
+    }
+    if want_alint {
+        insert_support_job(jobs, ALINT_JOB_ID, alint_job(ctx)?)?;
+    }
+    if want_policy {
+        insert_support_job(jobs, POLICY_JOB_ID, policy_job(ctx)?)?;
+    }
+    if workflow.candidate_validation {
+        let Some(spec) = &ctx.candidate else {
+            return Err(RenderError::PolicyRejected {
+                policy: "velnor-repository-v1".to_owned(),
+                problem: "candidate_without_spec".to_owned(),
+            });
+        };
+        insert_support_job(jobs, CANDIDATE_JOB_ID, candidate_job(ctx, spec)?)?;
+        insert_support_job(jobs, RELEASE_JOB_ID, release_job(ctx)?)?;
+    }
+    extend_final_needs(jobs, want_alint, want_policy, workflow.candidate_validation);
+    Ok(())
+}
+
+/// Extend the final gate with merged support IDs (workflow-contract §4).
+///
+/// `Velnor / Required` needs plan + task + lint always, plus alint, policy,
+/// and candidate when those policy jobs exist. The release job never gates:
+/// it publishes after merge on protected refs only.
+fn extend_final_needs(
+    jobs: &mut BTreeMap<String, Job>,
+    alint: bool,
+    policy: bool,
+    candidate: bool,
+) {
+    let mut extra = Vec::new();
+    for (want, id) in [
+        (alint, ALINT_JOB_ID),
+        (policy, POLICY_JOB_ID),
+        (candidate, CANDIDATE_JOB_ID),
+    ] {
+        if want && jobs.contains_key(id) {
+            extra.push(id.to_owned());
+        }
+    }
+    let Some(final_job) = jobs.get_mut(FINAL_JOB_ID) else {
+        return;
+    };
+    for id in extra {
+        if !final_job.needs.contains(&id) {
+            final_job.needs.push(id);
+        }
+    }
+}
+
+/// Insert a support job, failing on ID collision with IR jobs.
+pub(crate) fn insert_support_job(
+    jobs: &mut BTreeMap<String, Job>,
+    id: &str,
+    job: Job,
+) -> Result<(), RenderError> {
+    if jobs.contains_key(id) {
+        return Err(RenderError::PolicyRejected {
+            policy: "velnor-repository-v1".to_owned(),
+            problem: format!("job_collision:{id}"),
+        });
+    }
+    jobs.insert(id.to_owned(), job);
+    Ok(())
+}
+
+/// Fixed Alint job: checkout plus the full-SHA Alint action.
+pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
+    let checkout = steps::checkout_step(&ctx.checkout_uses)?;
+    let mut with = BTreeMap::new();
+    with.insert("path".to_owned(), ".".to_owned());
+    with.insert("config".to_owned(), ".alint.yml".to_owned());
+    with.insert("format".to_owned(), "github".to_owned());
+    with.insert("fail-on-warning".to_owned(), "true".to_owned());
+    steps::scan_for_private_subcommands(ALINT_USES)?;
+    Ok(Job {
+        display_name: "Alint".to_owned(),
+        runs_on: ctx.runs_on.clone(),
+        needs: Vec::new(),
+        condition: None,
+        steps: vec![
+            checkout,
+            Step {
+                name: "Run Alint".to_owned(),
+                kind: StepKind::Action {
+                    uses: ALINT_USES.to_owned(),
+                    with,
+                },
+            },
+        ],
+    })
+}
+
+/// Fixed policy job: checkout plus caller-supplied validated commands.
+pub(crate) fn policy_job(ctx: &RenderContext) -> Result<Job, RenderError> {
+    if ctx.policy_commands.is_empty() {
+        return Err(RenderError::InvalidWorkflow(
+            "policy_without_commands".to_owned(),
+        ));
+    }
+    let mut rendered = Vec::with_capacity(ctx.policy_commands.len() + 1);
+    rendered.push(steps::checkout_step(&ctx.checkout_uses)?);
+    for command in &ctx.policy_commands {
+        rendered.push(steps::shell_step(
+            &command.name,
+            command.argv.clone(),
+            BTreeMap::new(),
+        )?);
+    }
+    Ok(Job {
+        display_name: "Policy".to_owned(),
+        runs_on: ctx.runs_on.clone(),
+        needs: Vec::new(),
+        condition: None,
+        steps: rendered,
+    })
+}
+
+/// Candidate never plans: it needs plan, holds no plan step, feeds no task.
+///
+/// Qualification downloads the built artifact; a candidate without a
+/// download step cannot prove the no-rebuild path and is rejected.
+pub(crate) fn check_candidate_invariants(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
+    if let Some(candidate) = jobs.get(CANDIDATE_JOB_ID) {
+        if !candidate.needs.contains(&PLAN_JOB_ID.to_owned()) {
+            return Err(RenderError::InvalidWorkflow(
+                "candidate_must_need_plan".to_owned(),
+            ));
+        }
+        for step in &candidate.steps {
+            if let StepKind::Internal { operation } = &step.kind
+                && operation == steps::PLAN_OPERATION
+            {
+                return Err(RenderError::InvalidWorkflow(
+                    "candidate_must_not_plan".to_owned(),
+                ));
+            }
+        }
+        let downloaded = candidate.steps.iter().any(|step| {
+            matches!(&step.kind, StepKind::Action { uses, .. } if uses == steps::DOWNLOAD_ARTIFACT_USES)
+        });
+        if !downloaded {
+            return Err(RenderError::InvalidWorkflow(
+                "candidate_must_download_artifact".to_owned(),
+            ));
+        }
+    }
+    for (id, job) in jobs {
+        if id.as_str() != FINAL_JOB_ID && job.needs.contains(&CANDIDATE_JOB_ID.to_owned()) {
+            return Err(RenderError::InvalidWorkflow(
+                "task_must_not_consume_candidate".to_owned(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Credential env keys that must never reach task execution.
+const STRIPPED_CREDENTIAL_KEYS: &[&str] = &["GITHUB_TOKEN", "ACTIONS_RUNTIME_TOKEN"];
+
+/// Token hygiene: `${{ github.token }}` only as plan/final `GH_TOKEN`.
+///
+/// Parallelism §5: the planning process receives the token only as
+/// `GH_TOKEN`, never printed or inherited by task execution; before any
+/// repository task starts, credential variables are stripped from the
+/// child environment. The final job's report fetch needs the same
+/// read-only token for exact `gh` artifact downloads. Enforced here:
+/// `GITHUB_TOKEN`/`ACTIONS_RUNTIME_TOKEN` fail everywhere, `GH_TOKEN` is
+/// allowed only in the plan/final jobs with the exact `${{ github.token }}`
+/// value, and no `run:` content or action input may name a token
+/// (nothing prints or forwards one).
+pub(crate) fn check_token_hygiene(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
+    for (id, job) in jobs {
+        for step in &job.steps {
+            check_step_tokens(id, step)?;
+        }
+    }
+    Ok(())
+}
+
+/// Reject credential leaks in one step's env, argv, and action inputs.
+fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
+    match &step.kind {
+        StepKind::Shell { run, env } => {
+            check_env_tokens(id, env)?;
+            for arg in run {
+                if names_token(arg) {
+                    return Err(RenderError::InvalidWorkflow(format!(
+                        "token_in_run:{id}:{}",
+                        step.name
+                    )));
+                }
+            }
+        }
+        StepKind::Action { with, .. } => {
+            for value in with.values() {
+                if names_token(value) {
+                    return Err(RenderError::InvalidWorkflow(format!(
+                        "token_in_action_input:{id}:{}",
+                        step.name
+                    )));
+                }
+            }
+        }
+        StepKind::Internal { .. } => {}
+    }
+    Ok(())
+}
+
+/// Reject stripped keys everywhere; scope `GH_TOKEN` to plan/final jobs.
+fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), RenderError> {
+    for (key, value) in env {
+        if STRIPPED_CREDENTIAL_KEYS.contains(&key.as_str()) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "credential_env:{id}:{key}"
+            )));
+        }
+        if key == "GH_TOKEN" {
+            let scoped =
+                (id == PLAN_JOB_ID || id == FINAL_JOB_ID) && value == "${{ github.token }}";
+            if !scoped {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "token_misplaced:{id}:GH_TOKEN"
+                )));
+            }
+        } else if names_token(value) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "token_in_env:{id}:{key}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// True when text names a token handle (never printed or forwarded).
+fn names_token(text: &str) -> bool {
+    text.contains("GH_TOKEN")
+        || text.contains("GITHUB_TOKEN")
+        || text.contains("ACTIONS_RUNTIME_TOKEN")
+        || text.contains("github.token")
+        || text.contains("secrets.GITHUB_TOKEN")
+}
+
+/// Final gate keeps the exact required-check name and `always()` condition.
+///
+/// The always-on lint job keeps its exact display name on both policies.
+pub(crate) fn check_final_gate(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
+    if let Some(final_job) = jobs.get(FINAL_JOB_ID) {
+        if final_job.display_name != FINAL_DISPLAY_NAME {
+            return Err(RenderError::InvalidWorkflow("bad_final_name".to_owned()));
+        }
+        if final_job.condition.as_deref() != Some(FINAL_CONDITION) {
+            return Err(RenderError::InvalidWorkflow(
+                "bad_final_condition".to_owned(),
+            ));
+        }
+    }
+    if let Some(lint) = jobs.get(LINT_JOB_ID)
+        && lint.display_name != LINT_DISPLAY_NAME
+    {
+        return Err(RenderError::InvalidWorkflow("bad_lint_name".to_owned()));
+    }
+    Ok(())
+}

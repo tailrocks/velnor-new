@@ -1,0 +1,12 @@
+.venv
+CHANGELOG.md
+aqua-registry/
+docs/.vitepress/cache
+docs/.vitepress/dist
+docs/cli
+docs/environments.md
+docs/public/site.webmanifest
+docs/registry.md
+tasks.md
+tmp
+xtasks/fig/src/mise.ts

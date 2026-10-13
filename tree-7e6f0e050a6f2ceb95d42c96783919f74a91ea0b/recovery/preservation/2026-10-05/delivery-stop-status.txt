@@ -1,0 +1,11 @@
+Preservation delivery status (2026-10-05)
+
+Existing remote checkpoints verified before this update:
+- codex/preserve-wip-20261005: aedd44dcc15579274085dbbd175db35d4e6bf079 (parent 0fb6405a1b3ce30d06673cf4387ddf3fb00197f2); this snapshot contains the renderer WIP and 32-file assertion WIP.
+- codex/pr92-schema-metadata-fix: 2991176e5c9d7810a0478e3d5f68f02c776b3418.
+- perf/cache-selection-qualification: 96556c18a0dc8b55753065a0daa4280cd8fbf369.
+- main: aae1ff63b492d33b7faee218c51799257664b4b1.
+
+At delivery time, `/root/.cache/velnor-task-targets` and the previously reported candidate paths beneath it were absent. The prior `/tmp/velnor-preservation-20261005` and `/tmp/velnor-git-steward-retirement-20261005` paths were also absent. This steward did not remove them and does not claim their source/evidence was preserved remotely. The remote preservation tree had no jactionlint snapshot when checked.
+
+Private consumer material at `/root/velnor-consumer-scratch-20261005` remains local and was not copied to the public Velnor remote. The original user checkout was left untouched.

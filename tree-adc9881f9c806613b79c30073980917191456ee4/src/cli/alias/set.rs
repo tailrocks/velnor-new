@@ -1,0 +1,47 @@
+use color_eyre::eyre::Result;
+
+use crate::config::config_file::ConfigFile;
+use crate::config::Config;
+
+/// Add/update an alias for a plugin
+///
+/// This modifies the contents of ~/.config/rtx/config.toml
+#[derive(Debug, clap::Args)]
+#[clap(visible_aliases = ["add", "create"], after_long_help = AFTER_LONG_HELP, verbatim_doc_comment)]
+pub struct AliasSet {
+    /// The plugin to set the alias for
+    pub plugin: String,
+    /// The alias to set
+    pub alias: String,
+    /// The value to set the alias to
+    pub value: String,
+}
+
+impl AliasSet {
+    pub fn run(self) -> Result<()> {
+        let mut global_config = Config::get().global_config.clone();
+        global_config.set_alias(&self.plugin, &self.alias, &self.value);
+        global_config.save()
+    }
+}
+
+static AFTER_LONG_HELP: &str = color_print::cstr!(
+    r#"<bold><underline>Examples:</underline></bold>
+  $ <bold>rtx alias set node lts-hydrogen 18.0.0</bold>
+"#
+);
+
+#[cfg(test)]
+pub mod tests {
+    use crate::test::reset_config;
+    use crate::{assert_cli, assert_cli_snapshot};
+
+    #[test]
+    fn test_alias_set() {
+        reset_config();
+        assert_cli!("alias", "set", "tiny", "my/alias", "3.0");
+
+        assert_cli_snapshot!("aliases");
+        reset_config();
+    }
+}

@@ -1,0 +1,19 @@
+---
+source: src/query.rs
+expression: "&query_execution_results"
+---
+{
+  "./test_crates/derive_helper_attr_removed/": [
+    {
+      "helper_name": String("helper"),
+      "name": String("MyDerive"),
+      "path": List([
+        String("derive_helper_attr_removed"),
+        String("MyDerive"),
+      ]),
+      "span_begin_line": Uint64(5),
+      "span_end_line": Uint64(7),
+      "span_filename": String("src/lib.rs"),
+    },
+  ],
+}

@@ -1,0 +1,8 @@
+description = "Free database schema discovery and comprehension tool"
+#test = ["schemacrawler.sh --version", "SchemaCrawler {{version}}"]
+
+[[backends]]
+full = "github:schemacrawler/SchemaCrawler"
+
+[backends.options]
+exe = "schemacrawler.sh"

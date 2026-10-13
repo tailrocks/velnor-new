@@ -1,0 +1,109 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "benchmarks/results*.json"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/mbx/**"
+      - "mise.toml"
+      - ".github/workflows/docs.yml"
+  # Pull requests run the same build, showreel render included, as a dry run;
+  # only main uploads and deploys.
+  pull_request:
+    paths:
+      - "docs/**"
+      - "benchmarks/results*.json"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/mbx/**"
+      - "mise.toml"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # Read-only: this job also runs pull request code. configure-pages only
+    # reads the site's settings; publishing needs write access, which only the
+    # deploy job below has, and it runs only on main.
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # check:docs builds the mbx bootstrap to regenerate the CLI reference.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          workspaces: ". -> target/mbx-bootstrap-build"
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+        if: github.ref == 'refs/heads/main'
+      # The landing page plays the showreel as an MP4 at 120 or 60 fps, and the
+      # 60 fps file is also its og:video. The render depends only on the reel
+      # and its renderer, the font, the benchmark numbers, the logo and the
+      # terminal mascot it redraws, and the locked tool versions, so it is
+      # cached on those and rendered again only when one of them changes. A
+      # miss also installs the Chromium that the reel's logo test draws in and
+      # requires it; a hit skips that test, whose inputs are all in the key and
+      # so already passed in the run that saved the cache. Reusing the video
+      # also keeps its versioned URLs stable for link previews, because two
+      # renders of the same inputs are not byte-identical.
+      - name: Restore the showreel video
+        id: showreel
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            docs/public/showreel-120.mp4
+            docs/public/showreel.mp4
+            docs/public/showreel-poster.jpg
+          key: showreel-${{ runner.os }}-${{ hashFiles('docs/.vitepress/showreel-video.mjs', 'docs/.vitepress/theme/showreel/**', 'docs/.vitepress/fonts/SpaceGrotesk.ttf', 'docs/public/logo.svg', 'crates/mbx/src/cli/mascot.rs', 'crates/mbx/src/cli/mascot_tests.rs', 'benchmarks/results.json', 'docs/aube-lock.yaml') }}
+      - name: Render the showreel video
+        if: steps.showreel.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg
+          (cd docs && aube install && aube exec playwright-core install --with-deps chromium-headless-shell)
+          echo "SHOWREEL_REQUIRE_CHROMIUM=1" >> "$GITHUB_ENV"
+          mise run render:showreel
+      - name: Build with VitePress
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mise run check:docs
+          mise run build:docs
+          touch docs/.vitepress/dist/.nojekyll
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5

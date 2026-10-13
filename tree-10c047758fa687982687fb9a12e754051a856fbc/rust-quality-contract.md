@@ -1,0 +1,399 @@
+# Velnor V1 Rust Quality Contract
+
+**Status:** Proposed specification. Nothing in this document is implemented by
+this document. Landed implementation records live in `docs/implemented/` and
+must be updated in the same pull request as the implementation.
+
+This contract governs the selected Rust stack in the Velnor V1 workflow
+generator. It specifies the Rust repository shape, tool selection, test
+recommendations, dependency use, and verification. Alint is the only
+repository-structure linter in V1; it is limited to configured generic
+file/path, required-file, and line-count rules. V1 has no custom Rust
+source-structure, Cargo-architecture, or test-layout linter. Automatic stack
+detection, composition, `[stacks].ignore`, and the stack-neutral
+`workflow.policy` belong to the workflow contract. The deferred macOS/Debian
+self-hosted runner is outside this contract.
+
+The words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
+
+## 1. Repository shape and authority
+
+The repository MUST start with this shape:
+
+```text
+Cargo.toml                 # virtual workspace and shared policy
+Cargo.lock                 # committed resolution
+rustfmt.toml
+clippy.toml
+deny.toml
+.mise-version
+.alint.yml
+.config/nextest.toml
+AGENTS.md
+.github/CODEOWNERS
+.velnor/config.toml
+.velnor/version-policy.toml
+crates/
+  velnor-actions-contract/
+  velnor-actions-rust/
+  velnor-actions-mise/
+  velnor-actions-actionlint/
+  velnor-actions-workflow-renderer/
+  velnor-actions-orchestrator/
+  velnor-actions-cli/
+# Optional, repository-owned, read-only Velnor inputs:
+rust-toolchain.toml
+mise.toml
+mise.lock
+```
+
+All first-party Rust packages MUST be under `crates/`. The root manifest MUST
+be a virtual workspace with exactly the seven product package names listed in
+the table below. Cargo metadata is authoritative for package membership and
+dependency relationships. V1 does not add a custom linter to reject package
+renames or validate the architecture dependency matrix; those decisions are
+reviewed from Cargo manifests and code. Rust/Cargo-specific symbols, Cargo
+metadata, and `rust-toolchain.toml` inspection are restricted to
+`velnor-actions-rust`; Mise syntax, environment, `mise.toml`/`mise.lock`
+inspection, and task metadata are restricted to `velnor-actions-mise`; actionlint
+metadata/configuration belongs to `velnor-actions-actionlint`. Alint enforces
+only its configured generic file/path, required-file, and line-count rules.
+The CLI package MUST
+declare binary `velnor-actions`, the only target name without the
+package-purpose suffix. Non-Rust directories MAY remain in their own
+conventional locations.
+
+The seven V1 crates have fixed boundaries. Every V1 Cargo package MUST use the
+`velnor-actions-<purpose>` namespace. Generic names such as `velnor-model`,
+`velnor-core`, `velnor-rust`, `velnor-common`, and `velnor-utils` are forbidden. The
+`velnor-actions` binary is owned by package `velnor-actions-cli`. Future
+stacks use dedicated names such as `velnor-actions-node`; they remain
+independent of other stack crates.
+
+| Crate | MUST own | MUST NOT own |
+| --- | --- | --- |
+| `velnor-actions-contract` | Stack-neutral workflow/task contracts, task graph, identities, reports, recommendations | Rust/Cargo, Mise, process, filesystem, YAML implementation, CLI, generic application models |
+| `velnor-actions-rust` | All Rust/Cargo discovery, metadata conversion, targets, graph, affected selection, Rust task proposals, `rust-toolchain.toml` inspection | Mise config/commands, workflow YAML, process execution, or non-Rust stack behavior |
+| `velnor-actions-mise` | Mise tool selection, pinned command construction, fixed subprocess/environment wrapper, `mise.toml`/`mise.lock` inspection, Mise cache integration | Cargo metadata, Rust graph/selection rules, `rust-toolchain.toml`, GitHub YAML, stack discovery |
+| `velnor-actions-actionlint` | actionlint pin/capability metadata, generated config, action-schema validation | Mise process execution, stack scanning, generic workflow rendering |
+| `velnor-actions-workflow-renderer` | Generic GitHub Actions workflow YAML from typed workflow IR | Rust/Cargo, Mise syntax, repository scanning, subprocesses, stack policy |
+| `velnor-actions-orchestrator` | Composition, obligation selection, cache evidence, scheduling, generation coordination | Parsing Cargo/Mise files, direct YAML templates, CLI parsing, OS process details |
+| `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules |
+
+The authority order MUST be:
+
+1. Cargo manifests and `Cargo.lock` define packages and dependencies.
+2. `.velnor/version-policy.toml` defines exact versions used by generated
+   workflows. `mise.toml`, `mise.lock`, and `rust-toolchain.toml`, when present,
+   are repository-owned inspection inputs only.
+3. `.velnor/config.toml` defines Velnor policy and explicit exceptions.
+4. The generator emits workflows and task definitions; generated files MUST NOT
+   be hand-maintained.
+5. The separate required Alint job and CI branch rules gate repository-policy
+   changes.
+
+Rust task configurations MUST live under `[stacks.rust]` in
+`.velnor/config.toml`. They describe feature, target, and task variants emitted
+after Rust detection. Rust detection does not require a Rust profile, and this
+document does not define a CLI stack selector. `workflow.policy` remains the
+stack-neutral choice between `consumer-v1` and `velnor-repository-v1`.
+
+## 2. Toolchain and update policy
+
+The workspace MUST use Rust 2024 and resolver 3. Gate 0 MUST select the latest
+patched stable release then available and record it; the 2026-09-27 research
+snapshot is Rust 1.98.1 with MSRV 1.98. Never use a placeholder MSRV.
+
+```toml
+[workspace]
+members = ["crates/velnor-actions-contract", "crates/velnor-actions-rust", "crates/velnor-actions-mise", "crates/velnor-actions-actionlint", "crates/velnor-actions-workflow-renderer", "crates/velnor-actions-orchestrator", "crates/velnor-actions-cli"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.98"
+```
+
+Mise MUST execute Rust tooling locally and in CI. Generated commands use exact
+Rust, MBX, and auxiliary-tool pins in `.velnor/version-policy.toml` through
+`mise exec`; they MUST NOT depend on project `mise.toml` or `mise.lock`. Gate 0
+rechecks current releases. Cargo `rust-version` declares MSRV and MUST be
+qualified for every product crate on dependency/toolchain/policy updates and
+release qualification, not every pull request. It MUST match the selected
+stable toolchain's major/minor unless compatibility requires otherwise. A
+pinned nightly MAY exist only for a check that needs it.
+
+Velnor MUST check for `rust-toolchain.toml`, `mise.toml`, and `mise.lock`; it
+MAY report their versions, components, tasks, lock coverage, and conflicts.
+They are never generated, synchronized, locked, rewritten, or used to override
+Velnor pins. Missing/malformed files produce manual recommendations, not
+automatic repair or generation failure. See the [tooling input contract](tooling-input-contract.md).
+
+Every member MUST inherit the workspace metadata and lints:
+
+```toml
+[package]
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+```
+
+`Cargo.lock` MUST be committed and normal commands MUST use `--locked`. The
+latest-stable selection, freshness inventory, update cadence, exceptions, and
+required policy behavior is normative in the [version policy](version-policy.md).
+`Cargo.lock` MUST NOT remain stale merely because its current build passes.
+Optional `mise.lock` is repository-owned; Velnor reports findings but never
+creates or refreshes it.
+
+## 3. Mise and MBX ownership
+
+`.mise-version` MUST pin the exact Mise release. GitHub CI MUST bootstrap this
+one binary from the immutable artifact and SHA-256 in `.velnor/generator.lock`
+before invoking it; local developers MUST use the same pinned release. The
+bootstrap verifies version and digest. Mise itself is the bootstrap exception;
+all subsequent tools MUST be installed and selected by Mise.
+
+Mise MUST be the installation and execution mechanism for Rust, components,
+MBX, Nextest when selected, `gh`, policy tools, and Rust-related binaries. Velnor's exact
+required tool pins MUST be recorded in its version-policy inventory and used
+through explicit Mise tool arguments. The project's `mise.toml` and `mise.lock`
+may provide inspection data but are optional, repository-owned, and read-only
+to Velnor. The tool policy is defined by the [version policy](version-policy.md).
+An illustrative hand-maintained project config is:
+
+```toml
+[tools]
+rust = { version = "<exact-version>", profile = "minimal", components = ["clippy", "rustfmt"], mr_boxington = true }
+mr-boxington = "<exact-version>"
+```
+
+If a project chooses to maintain this configuration, its owner may enable
+Mise's Rust/MBX integration and declare exact tools. Velnor may recommend this
+setup, but MUST NOT create or edit it. Generated tasks invoke the exact pinned
+MBX executable explicitly; a project's older selector cannot downgrade it.
+Use Velnor-owned persistent `MISE_RUSTUP_HOME` and `MISE_CARGO_HOME` paths.
+Every generated Cargo invocation sets `RUSTUP_TOOLCHAIN` to Velnor's exact
+Rust pin so an inspected project toolchain file cannot select another compiler.
+
+Normal validation MUST run through `mise run` or `mise exec`. Direct calls to
+an absolute rustup Cargo binary, `cargo install`, ad hoc component installation,
+or a second compiler-cache installer are forbidden. After preparation, Mise
+automatic installation MUST be disabled for verification so missing tools fail
+as preparation errors.
+
+The preflight MUST prove the effective route per workspace. For MBX profiles,
+report its selected Mise tool, version, and compiler invocation handled by MBX.
+For Cargo profiles, prove the exact Cargo toolchain and no MBX wrapper. Merely
+finding `mr_boxington` in a lockfile is insufficient. Each mutable concurrent
+Cargo lane MUST have its own target directory; MBX owns compiler reuse for MBX
+profiles, and no second cache may archive its store.
+
+## 4. Tests and source layout
+
+The preferred test layout keeps test implementations out of production files.
+For `parser.rs`:
+
+```rust
+#[cfg(test)]
+mod tests;
+```
+
+The implementation SHOULD be in `src/parser/tests.rs`; tests for `src/lib.rs`
+SHOULD be in `src/tests.rs`. V1 does not enforce this layout with a custom Rust
+source parser or test-placement linter. Alint cannot inspect Rust syntax, so it
+MUST NOT be described as enforcing these rules. Strict test-layout enforcement
+is deferred until a separate, approved mechanism is selected. Generated source
+MUST still be explicitly classified with an owner and verification rule; it
+MUST NOT become an unreviewed escape hatch.
+
+Integration tests SHOULD use a small declared entry point, such as
+`tests/integration.rs`, with related cases in `tests/cases/`. Do not create one
+Cargo test binary per case file. Doctests MUST run in a separate gate because
+Nextest does not execute them. Every Velnor product package MUST have at least
+one registered unit or integration test; V1 has no empty-suite exception. The
+generated Nextest task MUST pass `--no-tests fail`, so a selected feature
+configuration that discovers zero tests fails with Nextest's documented
+no-tests exit code.
+
+Tests MUST assert observable behavior, boundaries, and failure paths using
+independent fixtures. They MUST NOT merely call the same helper used by the
+implementation and compare its output with itself. Snapshot changes require
+review. `proptest` SHOULD cover parsers, planners, and invariants.
+
+## 5. Size and architecture limits
+
+The following limits are hard errors for new handwritten code:
+
+| Item | Limit |
+| --- | ---: |
+| Rust source, including tests | 400 physical lines |
+| `src/lib.rs` and `src/main.rs` | 150 physical lines |
+| Function or method | 80 lines using Clippy accounting |
+| Velnor configuration and instruction documents | 400 physical lines |
+
+Counts include comments and blank lines. Lockfiles, fixtures, vendored code,
+and generated output MUST have explicit classifications and owners. Agents MUST
+NOT raise limits, add arbitrary exclusions, relabel handwritten code as
+generated, or reduce test assertions to satisfy a limit.
+
+A crate MUST provide a real boundary: independently testable responsibility,
+optional heavyweight dependency, platform separation, stable API, or measured
+rebuild reduction. Pure model code MUST NOT depend on UI, database, HTTP,
+platform, or process crates. Do not create wrapper or `utils` crates only to
+meet a count. The allowed dependency directions are architectural requirements
+reviewed from Cargo metadata; V1 does not provide a custom dependency-edge
+linter.
+
+## 6. Compiler, Clippy, and formatting policy
+
+The root `Cargo.toml` MUST contain this baseline; members MUST inherit it:
+
+```toml
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+unexpected_cfgs = "deny"
+unfulfilled_lint_expectations = "deny"
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+too_many_lines = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+mem_forget = "deny"
+await_holding_lock = "deny"
+await_holding_refcell_ref = "deny"
+let_underscore_future = "deny"
+let_underscore_must_use = "deny"
+undocumented_unsafe_blocks = "deny"
+allow_attributes_without_reason = "deny"
+allow_attributes = "warn"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "deny"
+private_intra_doc_links = "deny"
+```
+
+`clippy.toml` MUST contain:
+
+```toml
+too-many-lines-threshold = 80
+allow-unwrap-in-tests = false
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+check-incompatible-msrv-in-tests = true
+```
+
+Pull-request CI MUST run Clippy once per selected package with
+`--package <name> --all-targets --locked -- -D warnings`. It MUST NOT use a
+workspace-wide compile as the default. A workspace-wide Clippy run MAY be a
+manual diagnostic.
+Do not enable all of Clippy's `restriction` or `nursery` groups. Exceptions
+MUST use narrow `#[expect(..., reason = "...")]` and be reviewed; broad allows
+are policy changes. `forbid(unsafe_code)` applies to all V1 crates. If an FFI
+need appears, change the policy deliberately, isolate unsafe code in one
+reviewed crate, and keep `forbid(unsafe_code)` in every safe crate.
+
+`rustfmt.toml` MUST contain `edition = "2024"`, `style_edition = "2024"`,
+and `newline_style = "Unix"`. Formatting MUST be checked with
+`cargo fmt --all -- --check` through Mise. Unstable formatter options are not
+part of this baseline.
+
+## 7. Dependencies and supply chain
+
+Dependencies MUST have a concrete responsibility and narrow features. The
+initial set MAY include `serde`, `serde_json`, `toml`, `cargo_metadata`,
+`globset`, `blake3`, `clap` (`derive`), `thiserror`, `anyhow`, and `tracing`.
+Development dependencies MAY include `tempfile`, `proptest`, and `insta`.
+Tokio requires a demonstrated asynchronous-I/O need. Prefer the standard
+library for one-use facilities. Shared versions belong in
+`[workspace.dependencies]`; members MUST opt in explicitly.
+
+`deny.toml` MUST reject yanked/unsound advisories, unknown registries, moving
+Git sources, and wildcard dependency versions. It MUST define the reviewed
+license allowlist. `cargo deny --locked check` and `cargo machete` MUST run in
+CI. Duplicate versions MAY warn initially and MUST be reviewed. Cargo-vet MAY
+be added when dependency audit provenance justifies it.
+
+## 8. Repository policy checks
+
+Velnor's own `.velnor/config.toml` MUST set
+`workflow.policy = "velnor-repository-v1"`, which emits a dedicated
+`velnor-alint` job. The job MUST use the configured Alint action, defaulting to:
+
+```yaml
+- uses: asamarts/alint@v0.16.1
+```
+
+It runs only the generic rules configured in `.alint.yml`: file/path rules,
+required-file rules, and line-count rules. Alint MUST run as its own job even
+when no product crate is selected. Dependency policy, Rust formatting/Clippy,
+and workflow-security checks remain separate verification jobs. The final
+required status depends on the Alint job and every other required job.
+
+Ordinary `consumer-v1` workflows MUST NOT emit the Alint job or require
+`.alint.yml`. Alint is enabled only for Velnor's own repository policy in V1.
+Policy changes to `.alint.yml`, the workflow, the Alint version, and approved
+exceptions require review and negative fixtures where the selected tool
+supports them.
+
+## 9. Required verification
+
+Mise MUST expose these focused task templates; each invocation MUST target one
+package/configuration and preserve the real exit status. `dependencies` is
+repository-wide because it inspects manifests without compiling every crate.
+Velnor's repository policy runs Alint in its own job; ordinary consumer CI
+does not require it. The generated Velnor CI MUST use one matrix
+entry per selected crate as specified in the workflow contract; it MUST NOT
+replace those entries with workspace-wide Clippy or test runs.
+
+The following are logical task definitions, not shell command templates.
+`velnor-actions-mise` emits and executes them through pinned Mise. Exact
+executable and argument vectors for generated Rust tasks are defined by the
+[task execution contract](task-execution-contract.md); each task uses the
+workspace's detected Cargo or MBX compile driver and Cargo-test or Nextest test
+runner. Generated workflow YAML does not invoke Rust commands outside Mise.
+
+```text
+fmt-check          Formatting validation once for the selected source tree
+dependencies       Dependency policy and unused direct dependency checks
+actionlint         Generated workflow syntax validation
+zizmor             Generated workflow security validation
+clippy <pkg>       Configured Clippy validation for one package
+test-build <pkg>   Build once for one package when selected runner needs an archive
+test <pkg>         Run Cargo test or the prepared Nextest configuration
+doctest <pkg>      Run documentation tests for one package
+doc <pkg>          Build package documentation with warnings denied
+msrv <pkg>         Check one package on the exact declared minimum Rust version
+```
+
+Every command above runs through Mise. Rust compiler invocations pass through
+MBX only for workspaces whose detected profile selects it. A full-workspace compile/test MAY run as an
+explicit release or diagnostic audit, but MUST NOT be the default PR task.
+
+The default feature/target matrix MUST be explicit. Do not use `--all-features`
+as a substitute for a supported matrix. `cargo-hack` MAY enumerate feature
+combinations in an isolated checkout. Each product crate MUST be checked on
+MSRV in the toolchain-update qualification workflow using the Mise-managed
+tool version equal to workspace `rust-version`; it MUST use `--locked`. Action workflows MUST also pass `actionlint`
+and `zizmor`, use full commit-SHA pins, least-privilege permissions, and avoid
+privileged execution of untrusted pull-request code.
+
+Risk-triggered verification MUST add `cargo-mutants` for important behavior,
+`cargo-fuzz` for untrusted parsers, Miri for unsafe/low-level code, Loom for
+custom synchronization, and `cargo-semver-checks` for published APIs. Coverage
+does not replace behavioral or mutation evidence. Retries are disabled by
+default; a retry requires a reviewed reason.
+
+Agent instructions, performance measurements, acceptance budgets, and readiness evidence are specified in the [agent and performance contract](agent-and-performance-contract.md).

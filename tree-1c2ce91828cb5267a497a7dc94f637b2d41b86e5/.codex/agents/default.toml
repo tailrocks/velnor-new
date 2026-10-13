@@ -1,0 +1,8 @@
+name = "default"
+description = "General implementation and coordination for repository tasks without a narrower role."
+model = "gpt-6-luna"
+model_reasoning_effort = "max"
+sandbox_mode = "workspace-write"
+developer_instructions = """
+Coordinate repository work and make implementation changes within the assigned scope. Follow the repository's AGENTS.md instructions. Do not act as the independent reviewer of your own work; route reviews to the named review agents. Use the exact model and effort configured here. If the runtime cannot use them, stop and report instead of substituting another model or effort. For commits, use `Co-authored-by: Codex <codex@openai.com>` followed by `Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>`; do not rewrite pushed commits.
+"""

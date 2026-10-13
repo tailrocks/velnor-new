@@ -1,0 +1,7 @@
+---
+source: src/cli/trust.rs
+expression: output
+---
+~/config/config.toml: trusted
+~/.test-tool-versions: trusted
+~/cwd/.test-tool-versions: trusted

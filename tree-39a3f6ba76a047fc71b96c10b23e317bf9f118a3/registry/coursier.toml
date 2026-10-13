@@ -1,0 +1,10 @@
+description = "Pure Scala Artifact Fetching"
+
+[[backends]]
+full = "github:coursier/coursier"
+
+[backends.options]
+exe = "cs"
+
+[[backends]]
+full = "asdf:jiahuili430/asdf-coursier"

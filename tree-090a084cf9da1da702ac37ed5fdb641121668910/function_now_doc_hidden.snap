@@ -1,0 +1,50 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/function_now_doc_hidden/": [
+    {
+      "function_name": String("my_function"),
+      "path": List([
+        String("function_now_doc_hidden"),
+        String("MyPublicMod"),
+        String("my_function"),
+      ]),
+      "span_begin_line": Uint64(15),
+      "span_end_line": Uint64(15),
+      "span_filename": String("src/lib.rs"),
+    },
+    {
+      "function_name": String("my_function"),
+      "path": List([
+        String("function_now_doc_hidden"),
+        String("MyNestedPublicMod"),
+        String("PublicInnerMod"),
+        String("my_function"),
+      ]),
+      "span_begin_line": Uint64(40),
+      "span_end_line": Uint64(40),
+      "span_filename": String("src/lib.rs"),
+    },
+    {
+      "function_name": String("my_function"),
+      "path": List([
+        String("function_now_doc_hidden"),
+        String("my_function"),
+      ]),
+      "span_begin_line": Uint64(49),
+      "span_end_line": Uint64(49),
+      "span_filename": String("src/lib.rs"),
+    },
+    {
+      "function_name": String("my_function_with_types"),
+      "path": List([
+        String("function_now_doc_hidden"),
+        String("my_function_with_types"),
+      ]),
+      "span_begin_line": Uint64(52),
+      "span_end_line": Uint64(54),
+      "span_filename": String("src/lib.rs"),
+    },
+  ],
+}

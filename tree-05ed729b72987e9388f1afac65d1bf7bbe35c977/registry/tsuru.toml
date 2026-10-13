@@ -1,0 +1,10 @@
+description = "tsuru-client is a tsuru command line tool for application developers"
+
+[[backends]]
+full = "github:tsuru/tsuru-client"
+
+[backends.options]
+exe = "tsuru"
+
+[[backends]]
+full = "asdf:virtualstaticvoid/asdf-tsuru"

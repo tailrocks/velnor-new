@@ -1,0 +1,617 @@
+use crate::exit;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::{
+    collections::{BTreeSet, HashSet},
+    sync::atomic::Ordering,
+};
+
+use crate::backend::Backend;
+use crate::cli::exec::Exec;
+use crate::config::{Config, Settings};
+use crate::file::display_path;
+use crate::lock_file::LockFile;
+use crate::toolset::{ToolVersion, Toolset, ToolsetBuilder};
+use crate::{backend, dirs, env, fake_asdf, file};
+use color_eyre::eyre::{Result, bail, eyre};
+use eyre::WrapErr;
+use indoc::formatdoc;
+use itertools::Itertools;
+use path_absolutize::Absolutize;
+use tokio::task::JoinSet;
+
+// executes as if it was a shim if the command is not "mise", e.g.: "node"
+pub async fn handle_shim() -> Result<()> {
+    // TODO: instead, check if bin is in shims dir
+    let bin_name = *env::MISE_BIN_NAME;
+    if env::is_mise_binary(bin_name) || cfg!(test) {
+        return Ok(());
+    }
+    let mut config = Config::get().await?;
+    let mut args = env::ARGS.read().unwrap().clone();
+    env::PREFER_OFFLINE.store(true, Ordering::Relaxed);
+    trace!("shim[{bin_name}] args: {}", args.join(" "));
+    args[0] = which_shim(&mut config, &env::MISE_BIN_NAME)
+        .await?
+        .to_string_lossy()
+        .to_string();
+    env::set_var("__MISE_SHIM", "1");
+    let exec = Exec {
+        tool: vec![],
+        c: None,
+        command: Some(args),
+        jobs: None,
+        raw: false,
+        no_prepare: true, // Skip prepare for shims to avoid performance impact
+        fresh_env: false,
+        deny_all: false,
+        deny_read: false,
+        deny_write: false,
+        deny_net: false,
+        deny_env: false,
+        allow_read: vec![],
+        allow_write: vec![],
+        allow_net: vec![],
+        allow_env: vec![],
+    };
+    time!("shim exec");
+    exec.run().await?;
+    exit(0);
+}
+
+async fn which_shim(config: &mut Arc<Config>, bin_name: &str) -> Result<PathBuf> {
+    let mut ts = ToolsetBuilder::new().build(config).await?;
+    if let Some((p, tv)) = ts.which(config, bin_name).await
+        && let Some(bin) = p.which(config, &tv, bin_name).await?
+    {
+        trace!(
+            "shim[{bin_name}] ToolVersion: {tv} bin: {bin}",
+            bin = display_path(&bin)
+        );
+        return Ok(bin);
+    }
+    if Settings::get().not_found_auto_install {
+        for tv in ts
+            .install_missing_bin(config, bin_name)
+            .await?
+            .unwrap_or_default()
+        {
+            let p = tv.backend()?;
+            if let Some(bin) = p.which(config, &tv, bin_name).await? {
+                trace!(
+                    "shim[{bin_name}] NOT_FOUND ToolVersion: {tv} bin: {bin}",
+                    bin = display_path(&bin)
+                );
+                return Ok(bin);
+            }
+        }
+    }
+    // fallback for "system"
+    let mise_bin = fs::canonicalize(&*env::MISE_BIN).unwrap_or_else(|_| env::MISE_BIN.clone());
+    let user_shims = fs::canonicalize(*dirs::SHIMS).unwrap_or_default();
+    let sys_shims = {
+        let p = env::MISE_SYSTEM_DATA_DIR.join("shims");
+        if p.exists() {
+            fs::canonicalize(&p).unwrap_or(p)
+        } else {
+            PathBuf::new()
+        }
+    };
+    for path in &*env::PATH {
+        let canon_path = fs::canonicalize(path).unwrap_or_default();
+        if canon_path == user_shims || canon_path == sys_shims {
+            continue;
+        }
+        let bin = path.join(bin_name);
+        if bin.exists() {
+            // Skip if this binary is a mise shim (symlink pointing to the mise binary)
+            if fs::canonicalize(&bin).unwrap_or_default() == mise_bin {
+                continue;
+            }
+            trace!("shim[{bin_name}] SYSTEM {bin}", bin = display_path(&bin));
+            return Ok(bin);
+        }
+    }
+    let tvs = ts.list_rtvs_with_bin(config, bin_name).await?;
+    err_no_version_set(config, ts, bin_name, tvs).await
+}
+
+pub async fn reshim(config: &Arc<Config>, ts: &Toolset, force: bool) -> Result<()> {
+    let _lock = LockFile::new(&dirs::SHIMS)
+        .with_callback(|l| {
+            trace!("reshim callback {}", l.display());
+        })
+        .lock();
+
+    let mise_bin = file::which("mise").unwrap_or(env::MISE_BIN.clone());
+    let mise_bin = mise_bin.absolutize()?; // relative paths don't work as shims
+
+    #[cfg(windows)]
+    let shim_mode = effective_shim_mode(&mise_bin);
+    #[cfg(not(windows))]
+    let shim_mode = String::new();
+    let shim_mode_changed = cfg!(windows) && {
+        let mode_file = dirs::SHIMS.join(".mode");
+        mode_file
+            .exists()
+            .then(|| fs::read_to_string(&mode_file).unwrap_or_default())
+            .is_some_and(|prev| prev.trim() != shim_mode)
+    };
+    if force || shim_mode_changed {
+        // On Windows, .exe shims may be locked by processes or the shell (they
+        // are on PATH).  Instead of removing the entire directory (which fails
+        // with "Access is denied"), remove individual files with a rename-first
+        // fallback so locked executables are moved out of the way.
+        if cfg!(windows) {
+            remove_shims_individually(&dirs::SHIMS)?;
+        } else {
+            file::remove_all(*dirs::SHIMS)?;
+        }
+    }
+    file::create_dir_all(*dirs::SHIMS)?;
+    if cfg!(windows) {
+        let mode_file = dirs::SHIMS.join(".mode");
+        file::write(&mode_file, &shim_mode)?;
+    }
+
+    let (shims_to_add, shims_to_remove) = if force || shim_mode_changed {
+        // After a full wipe, all desired shims need to be re-created.
+        let desired = get_desired_shims(config, &mise_bin, ts).await?;
+        (
+            desired.into_iter().collect::<BTreeSet<_>>(),
+            BTreeSet::new(),
+        )
+    } else {
+        get_shim_diffs(config, &mise_bin, ts).await?
+    };
+
+    for shim in shims_to_add {
+        let symlink_path = dirs::SHIMS.join(&shim);
+        // On Windows, remove the old shim first (with rename fallback for
+        // locked .exe files) so the new one can be written.
+        if cfg!(windows) && symlink_path.exists() {
+            remove_shim_with_rename_fallback(&symlink_path)?;
+        }
+        add_shim(&mise_bin, &symlink_path, &shim)?;
+    }
+    for shim in shims_to_remove {
+        let symlink_path = dirs::SHIMS.join(shim);
+        if cfg!(windows) {
+            remove_shim_with_rename_fallback(&symlink_path)?;
+        } else {
+            file::remove_all(&symlink_path)?;
+        }
+    }
+    let mut jset = JoinSet::new();
+    for plugin in backend::list() {
+        jset.spawn(async move {
+            if let Ok(files) = dirs::PLUGINS.join(plugin.id()).join("shims").read_dir() {
+                for bin in files {
+                    let bin = bin?;
+                    let bin_name = bin.file_name().into_string().unwrap();
+                    let symlink_path = dirs::SHIMS.join(bin_name);
+                    make_shim(&bin.path(), &symlink_path).await?;
+                }
+            }
+            Ok(())
+        });
+    }
+    jset.join_all()
+        .await
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?;
+
+    Ok(())
+}
+
+/// Remove all shim files from a directory individually, skipping dotfiles like
+/// `.mode`. Uses [`remove_shim_with_rename_fallback`] for each entry so locked
+/// `.exe` files on Windows are renamed out of the way instead of causing a
+/// hard error.
+fn remove_shims_individually(shims_dir: &Path) -> Result<()> {
+    let entries = match shims_dir.read_dir() {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => {
+            return Err(e).wrap_err_with(|| {
+                format!(
+                    "failed to read shims directory: {}",
+                    display_path(shims_dir)
+                )
+            });
+        }
+    };
+    for entry in entries {
+        let entry = entry?;
+        let name = entry.file_name();
+        // skip dotfiles (e.g. .mode) — these are metadata, not shims
+        if name.to_string_lossy().starts_with('.') {
+            continue;
+        }
+        let path = entry.path();
+        remove_shim_with_rename_fallback(&path)?;
+    }
+    Ok(())
+}
+
+/// Remove a single shim file. On Windows, if deletion fails (e.g. because the
+/// `.exe` is locked by another process), rename it to `<name>.old` so the path
+/// is freed for a new shim. The `.old` file will be cleaned up on the next
+/// reshim or when the lock is released.
+fn remove_shim_with_rename_fallback(path: &Path) -> Result<()> {
+    // First, try to clean up any leftover .old files from a previous run.
+    let old_path = path.with_extension("old");
+    if old_path.exists() {
+        let _ = fs::remove_file(&old_path); // best-effort
+    }
+
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if cfg!(windows) && matches!(e.raw_os_error(), Some(5) | Some(32)) => {
+            // ERROR_ACCESS_DENIED (5) or ERROR_SHARING_VIOLATION (32): file is
+            // locked by another process, rename it instead.
+            trace!(
+                "cannot delete locked shim {}, renaming to .old",
+                display_path(path)
+            );
+            fs::rename(path, &old_path).wrap_err_with(|| {
+                format!(
+                    "failed to rename locked shim {} to {}",
+                    display_path(path),
+                    display_path(&old_path)
+                )
+            })?;
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e).wrap_err_with(|| format!("failed to remove shim: {}", display_path(path))),
+    }
+}
+
+#[cfg(windows)]
+fn find_mise_shim_bin(mise_bin: &Path) -> Option<PathBuf> {
+    // Look next to the mise binary first
+    if let Some(parent) = mise_bin.parent() {
+        let candidate = parent.join("mise-shim.exe");
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    // Fall back to searching PATH
+    // Note: file::which on Windows checks extension only, not file existence,
+    // so we must verify the file actually exists.
+    file::which("mise-shim.exe").filter(|p| p.is_file())
+}
+
+/// Resolve the effective Windows shim mode, falling back to "file" if "exe" is
+/// requested but mise-shim.exe is not available.
+#[cfg(windows)]
+fn effective_shim_mode(mise_bin: &Path) -> String {
+    let mode = Settings::get().windows_shim_mode.clone();
+    if mode == "exe" && find_mise_shim_bin(mise_bin).is_none() {
+        warn!(
+            "mise-shim.exe not found next to {} or on PATH, falling back to \"file\" shim mode",
+            display_path(mise_bin)
+        );
+        return "file".to_string();
+    }
+    mode
+}
+
+#[cfg(windows)]
+fn add_shim(mise_bin: &Path, symlink_path: &Path, shim: &str) -> Result<()> {
+    match effective_shim_mode(mise_bin).as_ref() {
+        "exe" => {
+            if symlink_path.extension().and_then(|s| s.to_str()) == Some("exe") {
+                let mise_shim_bin =
+                    find_mise_shim_bin(mise_bin).ok_or_else(|| eyre!("mise-shim.exe not found"))?;
+                // Copy mise-shim.exe as <tool>.exe
+                fs::copy(&mise_shim_bin, symlink_path).wrap_err_with(|| {
+                    eyre!(
+                        "Failed to copy {} to {}",
+                        display_path(&mise_shim_bin),
+                        display_path(symlink_path)
+                    )
+                })?;
+                Ok(())
+            } else {
+                let shim_name = symlink_path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy();
+                // Create extensionless bash script for Git Bash/Cygwin
+                file::write(
+                    symlink_path,
+                    formatdoc! {r#"
+        #!/bin/bash
+
+        exec mise x -- {shim_name} "$@"
+        "#},
+                )
+                .wrap_err_with(|| {
+                    eyre!(
+                        "Failed to create shim script for {}",
+                        display_path(symlink_path)
+                    )
+                })
+            }
+        }
+        "file" => {
+            let shim = shim.trim_end_matches(".cmd");
+            // write a shim file without extension for use in Git Bash/Cygwin
+            file::write(
+                symlink_path.with_extension(""),
+                formatdoc! {r#"
+        #!/bin/bash
+
+        exec mise x -- {shim} "$@"
+        "#},
+            )
+            .wrap_err_with(|| {
+                eyre!(
+                    "Failed to create symlink from {} to {}",
+                    display_path(mise_bin),
+                    display_path(symlink_path)
+                )
+            })?;
+            file::write(
+                symlink_path.with_extension("cmd"),
+                formatdoc! {r#"
+        @echo off
+        setlocal
+        mise x -- {shim} %*
+        "#},
+            )
+            .wrap_err_with(|| {
+                eyre!(
+                    "Failed to create symlink from {} to {}",
+                    display_path(mise_bin),
+                    display_path(symlink_path)
+                )
+            })
+        }
+        "hardlink" => fs::hard_link(mise_bin, symlink_path).wrap_err_with(|| {
+            eyre!(
+                "Failed to create hardlink from {} to {}",
+                display_path(mise_bin),
+                display_path(symlink_path)
+            )
+        }),
+        "symlink" => {
+            std::os::windows::fs::symlink_file(mise_bin, symlink_path).wrap_err_with(|| {
+                eyre!(
+                    "Failed to create symlink from {} to {}",
+                    display_path(mise_bin),
+                    display_path(symlink_path)
+                )
+            })
+        }
+        _ => panic!("Unknown shim mode"),
+    }
+}
+
+#[cfg(unix)]
+fn add_shim(mise_bin: &Path, symlink_path: &Path, _shim: &str) -> Result<()> {
+    file::make_symlink(mise_bin, symlink_path).wrap_err_with(|| {
+        eyre!(
+            "Failed to create symlink from {} to {}",
+            display_path(mise_bin),
+            display_path(symlink_path)
+        )
+    })?;
+    Ok(())
+}
+
+// get_shim_diffs contrasts the actual shims on disk
+// with the desired shims specified by the Toolset
+// and returns a tuple of (missing shims, extra shims)
+pub async fn get_shim_diffs(
+    config: &Arc<Config>,
+    mise_bin: impl AsRef<Path>,
+    toolset: &Toolset,
+) -> Result<(BTreeSet<String>, BTreeSet<String>)> {
+    let mise_bin = mise_bin.as_ref();
+    let (actual_shims, desired_shims) = tokio::join!(
+        get_actual_shims(mise_bin),
+        get_desired_shims(config, mise_bin, toolset)
+    );
+    let (actual_shims, desired_shims) = (actual_shims?, desired_shims?);
+    let out: (BTreeSet<String>, BTreeSet<String>) = (
+        desired_shims.difference(&actual_shims).cloned().collect(),
+        actual_shims.difference(&desired_shims).cloned().collect(),
+    );
+    time!("get_shim_diffs sizes: ({},{})", out.0.len(), out.1.len());
+    Ok(out)
+}
+
+async fn get_actual_shims(mise_bin: impl AsRef<Path>) -> Result<HashSet<String>> {
+    let mise_bin = mise_bin.as_ref();
+
+    Ok(list_shims()?
+        .into_iter()
+        .filter(|bin| {
+            let path = dirs::SHIMS.join(bin);
+
+            !path.is_symlink() || path.read_link().is_ok_and(|p| p == mise_bin)
+        })
+        .collect::<HashSet<_>>())
+}
+
+fn list_executables_in_dir(dir: &Path) -> Result<HashSet<String>> {
+    Ok(dir
+        .read_dir()?
+        .map(|bin| {
+            let bin = bin?;
+            // files and symlinks which are executable
+            if file::is_executable(&bin.path())
+                && (bin.file_type()?.is_file() || bin.file_type()?.is_symlink())
+            {
+                Ok(Some(bin.file_name().into_string().unwrap()))
+            } else {
+                Ok(None)
+            }
+        })
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect())
+}
+
+fn list_shims() -> Result<HashSet<String>> {
+    Ok(dirs::SHIMS
+        .read_dir()?
+        .map(|bin| {
+            let bin = bin?;
+            let name = bin.file_name();
+            // skip dotfiles (e.g. .mode) — these are metadata, not shims
+            if name.to_string_lossy().starts_with('.') {
+                return Ok(None);
+            }
+            // files and symlinks which are executable or extensionless files (Git Bash/Cygwin)
+            if (file::is_executable(&bin.path()) || bin.path().extension().is_none())
+                && (bin.file_type()?.is_file() || bin.file_type()?.is_symlink())
+            {
+                Ok(Some(bin.file_name().into_string().unwrap()))
+            } else {
+                Ok(None)
+            }
+        })
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect())
+}
+
+async fn get_desired_shims(
+    config: &Arc<Config>,
+    mise_bin: &Path,
+    toolset: &Toolset,
+) -> Result<HashSet<String>> {
+    let _mise_bin = mise_bin; // used on Windows only
+    let mut shims = HashSet::new();
+    for (t, tv) in toolset.list_installed_versions(config).await? {
+        let bins = list_tool_bins(config, t.clone(), &tv)
+            .await
+            .unwrap_or_else(|e| {
+                warn!("Error listing bin paths for {}: {:#}", tv, e);
+                Vec::new()
+            });
+        if cfg!(windows) {
+            #[cfg(windows)]
+            let shim_mode = effective_shim_mode(_mise_bin);
+            #[cfg(not(windows))]
+            let shim_mode = String::new();
+            shims.extend(bins.into_iter().flat_map(|b| {
+                let p = PathBuf::from(&b);
+                match shim_mode.as_ref() {
+                    "hardlink" | "symlink" => {
+                        vec![p.with_extension("exe").to_string_lossy().to_string()]
+                    }
+                    "exe" => {
+                        vec![
+                            p.with_extension("exe").to_string_lossy().to_string(),
+                            p.with_extension("").to_string_lossy().to_string(),
+                        ]
+                    }
+                    "file" => {
+                        vec![
+                            p.with_extension("").to_string_lossy().to_string(),
+                            p.with_extension("cmd").to_string_lossy().to_string(),
+                        ]
+                    }
+                    _ => panic!("Unknown shim mode"),
+                }
+            }));
+        } else if cfg!(macos) {
+            // some bins might be uppercased but on mac APFS is case insensitive
+            shims.extend(bins.into_iter().map(|b| b.to_lowercase()));
+        } else {
+            shims.extend(bins);
+        }
+    }
+    Ok(shims)
+}
+
+// lists all the paths to bins in a tv that shims will be needed for
+async fn list_tool_bins(
+    config: &Arc<Config>,
+    t: Arc<dyn Backend>,
+    tv: &ToolVersion,
+) -> Result<Vec<String>> {
+    Ok(t.list_bin_paths(config, tv)
+        .await?
+        .into_iter()
+        .filter(|p| p.parent().is_some())
+        .filter(|path| path.exists())
+        .map(|dir| list_executables_in_dir(&dir))
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect())
+}
+
+async fn make_shim(target: &Path, shim: &Path) -> Result<()> {
+    if shim.exists() {
+        file::remove_file_async(shim).await?;
+    }
+    file::write_async(
+        shim,
+        formatdoc! {r#"
+        #!/bin/sh
+        export ASDF_DATA_DIR={data_dir}
+        export PATH="{fake_asdf_dir}:$PATH"
+        mise x -- {target} "$@"
+        "#,
+        data_dir = dirs::DATA.display(),
+        fake_asdf_dir = fake_asdf::setup()?.display(),
+        target = target.display()},
+    )
+    .await?;
+    file::make_executable_async(shim).await?;
+    trace!(
+        "shim created from {} to {}",
+        target.display(),
+        shim.display()
+    );
+    Ok(())
+}
+
+async fn err_no_version_set(
+    config: &Arc<Config>,
+    ts: Toolset,
+    bin_name: &str,
+    tvs: Vec<ToolVersion>,
+) -> Result<PathBuf> {
+    if tvs.is_empty() {
+        bail!(
+            "{bin_name} is not a valid shim. This likely means you uninstalled a tool and the shim does not point to anything. Run `mise use <TOOL>` to reinstall the tool."
+        );
+    }
+    let missing_plugins = tvs.iter().map(|tv| tv.ba()).collect::<HashSet<_>>();
+    let mut missing_tools = ts
+        .list_missing_versions(config)
+        .await
+        .into_iter()
+        .filter(|t| missing_plugins.contains(t.ba()))
+        .collect_vec();
+    if missing_tools.is_empty() {
+        let mut msg = format!("No version is set for shim: {bin_name}\n");
+        msg.push_str("Set a global default version with one of the following:\n");
+        for tv in tvs {
+            msg.push_str(&format!("mise use -g {}@{}\n", tv.ba(), tv.version));
+        }
+        Err(eyre!(msg.trim().to_string()))
+    } else {
+        let mut msg = format!(
+            "Tool{} not installed for shim: {}\n",
+            if missing_tools.len() > 1 { "s" } else { "" },
+            bin_name
+        );
+        for t in missing_tools.drain(..) {
+            msg.push_str(&format!("Missing tool version: {t}\n"));
+        }
+        msg.push_str("Install all missing tools with: mise install\n");
+        Err(eyre!(msg.trim().to_string()))
+    }
+}

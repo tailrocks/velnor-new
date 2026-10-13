@@ -1,0 +1,140 @@
+//! Workflow section of `.velnor/config.toml`: naming, policy, runner labels.
+use crate::errors::ContractError;
+use serde::{Deserialize, Serialize};
+
+/// Latest pinned runner label: the default when `workflow.runner_label` is absent.
+///
+/// Qualified 2026-09-28 (`ubuntu-latest` then pointed at 24.04; 26.04 is the
+/// latest versioned LTS with x64 and `-arm` variants).
+pub const LATEST_RUNNER_LABEL: &str = "ubuntu-26.04";
+/// Exact-match runner-label catalog: versioned LTS labels plus `-arm` variants.
+///
+/// Aliases (`ubuntu-latest`, `*-latest`) and unlisted labels are rejected.
+pub const RUNNER_LABEL_CATALOG: [&str; 6] = [
+    "ubuntu-22.04",
+    "ubuntu-24.04",
+    "ubuntu-26.04",
+    "ubuntu-22.04-arm",
+    "ubuntu-24.04-arm",
+    "ubuntu-26.04-arm",
+];
+
+/// Workflow section of `.velnor/config.toml`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowConfig {
+    /// Display name for the generated workflow.
+    pub name: String,
+    /// Workflow policy.
+    pub policy: WorkflowPolicy,
+    /// Default branch; required when `origin/HEAD` cannot be resolved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_branch: Option<String>,
+    /// Generator validation mode.
+    pub generator_validation: GeneratorValidation,
+    /// Maximum parallel matrix jobs.
+    pub max_parallel_jobs: u32,
+    /// Pinned older runner-label override; omit for latest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runner_label: Option<String>,
+}
+
+/// Workflow policy selector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WorkflowPolicy {
+    /// Default consumer policy; assumes no Velnor-specific files.
+    ConsumerV1,
+    /// Velnor-repository policy; canonical `tailrocks/velnor-new` only.
+    VelnorRepositoryV1,
+}
+
+/// Generator validation mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GeneratorValidation {
+    /// Validate with the locked bootstrap binary.
+    Bootstrap,
+    /// Validate with the built candidate binary (Velnor only).
+    Candidate,
+}
+
+/// Runner-label selection provenance recorded in the plan.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunnerSelection {
+    /// Latest pinned label; no override present.
+    LatestDefault,
+    /// Explicit `workflow.runner_label` override.
+    ConfigOverride,
+}
+
+/// Policy job enabled only under `velnor-repository-v1`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PolicyJob {
+    /// Repository-structure lint job.
+    Alint,
+    /// Dependency/security policy job.
+    Policy,
+}
+
+/// Support-job set derived from policy plus validation mode.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VelnorSupportWorkflow {
+    /// Extra policy jobs to emit.
+    pub policy_jobs: Vec<PolicyJob>,
+    /// Whether to emit candidate validation.
+    pub candidate_validation: bool,
+}
+
+impl WorkflowPolicy {
+    /// Derive the support-job set for this policy and validation mode.
+    #[must_use]
+    pub fn support_workflow(&self, validation: GeneratorValidation) -> VelnorSupportWorkflow {
+        let policy_jobs = match self {
+            Self::ConsumerV1 => Vec::new(),
+            Self::VelnorRepositoryV1 => vec![PolicyJob::Alint, PolicyJob::Policy],
+        };
+        VelnorSupportWorkflow {
+            policy_jobs,
+            candidate_validation: validation == GeneratorValidation::Candidate,
+        }
+    }
+}
+
+impl WorkflowConfig {
+    /// Validate the workflow section.
+    /// # Errors
+    pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        if self.name.trim().is_empty() {
+            return Err(ContractError::config(file, "workflow.name", "empty_name"));
+        }
+        if self.max_parallel_jobs < 1 {
+            return Err(ContractError::config(
+                file,
+                "workflow.max_parallel_jobs",
+                "must_be_at_least_one",
+            ));
+        }
+        if let Some(branch) = &self.default_branch
+            && (branch.trim().is_empty() || branch.contains(' ') || branch.contains(".."))
+        {
+            return Err(ContractError::config(
+                file,
+                "workflow.default_branch",
+                "malformed_branch",
+            ));
+        }
+        if let Some(label) = &self.runner_label
+            && !RUNNER_LABEL_CATALOG.contains(&label.as_str())
+        {
+            return Err(ContractError::config(
+                file,
+                "workflow.runner_label",
+                format!("unsupported_label:{label}"),
+            ));
+        }
+        Ok(())
+    }
+}

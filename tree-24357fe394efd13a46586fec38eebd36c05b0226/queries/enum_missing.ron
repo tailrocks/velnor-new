@@ -1,0 +1,47 @@
+SemverQuery(
+    id: "enum_missing",
+    human_readable_name: "pub enum removed or renamed",
+    description: "A publicly-visible enum is no longer available under its prior name, which is a major breaking change for code that depends on it.",
+    required_update: Major,
+    reference_link: Some("https://doc.rust-lang.org/cargo/reference/semver.html#item-remove"),
+    query: r#"
+    {
+        CrateDiff {
+            baseline {
+                item {
+                    ... on Enum {
+                        visibility_limit @filter(op: "=", value: ["$public"]) @output
+                        name @output @tag
+
+                        importable_path {
+                            path @output @tag
+                        }
+
+                        span_: span @optional {
+                            filename @output
+                            begin_line @output
+                        }
+                    }
+                }
+            }
+            current @fold @transform(op: "count") @filter(op: "=", value: ["$zero"]) {
+                item {
+                    ... on Enum {
+                        visibility_limit @filter(op: "=", value: ["$public"])
+                        name @filter(op: "=", value: ["%name"])
+
+                        importable_path {
+                            path @filter(op: "=", value: ["%path"])
+                        }
+                    }
+                }
+            }
+        }
+    }"#,
+    arguments: {
+        "public": "public",
+        "zero": 0,
+    },
+    error_message: "A publicly-visible enum is no longer available under its prior name. It may have been renamed or removed entirely.",
+    per_result_error_template: Some("enum {{name}}, previously in file {{span_filename}}:{{span_begin_line}}"),
+)

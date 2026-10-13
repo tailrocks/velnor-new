@@ -1,0 +1,112 @@
+SemverQuery(
+    id: "method_parameter_count_changed",
+    human_readable_name: "pub method parameter count changed",
+    description: "Parameter count of a method has changed.",
+    required_update: Major,
+    reference_link: Some("https://doc.rust-lang.org/cargo/reference/semver.html#fn-change-arity"),
+    query: r#"
+    {
+        CrateDiff {
+            baseline {
+                item {
+                    ... on ImplOwner {
+                        visibility_limit @filter(op: "=", value: ["$public"]) @output
+
+                        importable_path {
+                            path @output @tag
+                            public_api @filter(op: "=", value: ["$true"])
+                        }
+
+                        inherent_impl {
+                            method {
+                                method_visibility: visibility_limit @filter(op: "=", value: ["$public"]) @output
+                                method_name: name @output @tag
+                                public_api_eligible @filter(op: "=", value: ["$true"])
+
+                                old_parameter_: parameter @fold @transform(op: "count") @output @tag(name: "parameters")
+
+                                span_: span @optional {
+                                    filename @output
+                                    begin_line @output
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            current {
+                item {
+                    ... on ImplOwner {
+                        visibility_limit @filter(op: "=", value: ["$public"])
+                        name @output
+
+                        importable_path {
+                            path @filter(op: "=", value: ["%path"])
+                            public_api @filter(op: "=", value: ["$true"])
+                        }
+
+                        # We use "impl" instead of "inherent_impl" here because moving
+                        # an inherently-implemented method to a trait is not necessarily
+                        # a breaking change, but changing the parameter count is.
+                        #
+                        # Method names are not unique on an ImplOwner! It's perfectly valid to have
+                        # both an inherent method `foo()` as well as a trait-provided method
+                        # `<Self as Bar>::foo()` at the same time. Whenever possible, rustc
+                        # attempts to "do the right thing" and dispatch to the correct one.
+                        #
+                        # Because of the above, this check has to be written as
+                        # "there is no method with the correct name and number of arguments"
+                        # rather than the (incorrect!) alternative
+                        # "the named method does not have the correct number of arguments."
+                        #
+                        # The above by itself is still not enough: say if the method was removed,
+                        # that still makes the "there is no method ..." statement true.
+                        # So we add an additional clause demanding that a method by that name
+                        # with appropriate visibility actually exists.
+                        impl @fold @transform(op: "count") @filter(op: ">", value: ["$zero"]) {
+                            method {
+                                visibility_limit @filter(op: "one_of", value: ["$public_or_default"])
+                                name @filter(op: "=", value: ["%method_name"])
+                                public_api_eligible @filter(op: "=", value: ["$true"])
+                            }
+                        }
+                        impl @fold @transform(op: "count") @filter(op: "=", value: ["$zero"]) {
+                            method {
+                                visibility_limit @filter(op: "one_of", value: ["$public_or_default"])
+                                name @filter(op: "=", value: ["%method_name"])
+                                public_api_eligible @filter(op: "=", value: ["$true"])
+
+                                parameter @fold @transform(op: "count") @filter(op: "=", value: ["%parameters"])
+                            }
+                        }
+
+                        # Get the non-matching methods by that name so we can report them
+                        # in the lint error message.
+                        impl @fold {
+                            method {
+                                visibility_limit @filter(op: "one_of", value: ["$public_or_default"])
+                                name @filter(op: "=", value: ["%method_name"])
+                                public_api_eligible @filter(op: "=", value: ["$true"])
+
+                                current_parameter_: parameter @fold @transform(op: "count") @output
+
+                                non_matching_span_: span @optional {
+                                    filename @output
+                                    begin_line @output
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }"#,
+    arguments: {
+        "public": "public",
+        "public_or_default": ["public", "default"],
+        "true": true,
+        "zero": 0,
+    },
+    error_message: "A publicly-visible method now takes a different number of parameters.",
+    per_result_error_template: Some("{{join \"::\" path}}::{{method_name}} now takes {{unpack_if_singleton current_parameter_count}} parameters instead of {{old_parameter_count}}, in {{multiple_spans non_matching_span_filename non_matching_span_begin_line}}"),
+)

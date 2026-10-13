@@ -1,0 +1,66 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "benchmarks/results.json"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "crates/mbx/**"
+      - "mise.toml"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: namespace-profile-endev-linux-amd64;overrides.cache-tag=cache
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: namespacelabs/nscloud-cache-action@1124a6f3ce44e5cf84cc22111530961f4d2a15f9 # v1.7.0
+        with:
+          cache: rust
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
+        if: github.ref == 'refs/heads/main'
+      - name: Build with VitePress
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          mise run check:docs
+          mise run build:docs
+          touch docs/.vitepress/dist/.nojekyll
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    needs: build
+    runs-on: namespace-profile-endev-linux-amd64;overrides.cache-tag=cache
+    timeout-minutes: 10
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5

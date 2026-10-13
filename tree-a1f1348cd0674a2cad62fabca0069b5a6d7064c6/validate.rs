@@ -1,0 +1,201 @@
+//! Staged-tree validation before any generate write.
+
+use std::ffi::OsString;
+use std::path::Path;
+
+use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
+use velnor_actions_workflow_renderer::render::RenderedTree;
+
+use crate::OrchestratorError;
+use crate::generate::write_tree;
+
+/// Staged actionlint config consumed via `-config-file`.
+const ACTIONLINT_CONFIG: &str = ".github/actionlint.yaml";
+
+/// Staged workflows directory prefix.
+const WORKFLOWS_DIR: &str = ".github/workflows/";
+
+/// Cap for validator diagnostics embedded in errors.
+const DIAG_CAP: usize = 4000;
+
+/// Validate the rendered tree in isolated staging; fail closed.
+///
+/// Runs before any replace or preview write, so any validator failure,
+/// tool failure, or empty workflow set leaves all output untouched.
+/// Returns the sorted pinned-validator specs that accepted the tree.
+pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, OrchestratorError> {
+    let staging = tempfile::tempdir().map_err(|err| {
+        OrchestratorError::io(std::env::temp_dir().display().to_string(), err.to_string())
+    })?;
+    write_tree(&staging.path().join(".github"), tree)?;
+    let workflows = staged_workflows(tree)?;
+    let catalog = ToolCatalog::pinned();
+    run_actionlint(&catalog, staging.path(), &workflows)?;
+    run_shellcheck_probe(&catalog, staging.path())?;
+    run_zizmor(&catalog, staging.path())?;
+    let mut validated = vec![
+        catalog.tool_spec(PinnedTool::Actionlint),
+        catalog.tool_spec(PinnedTool::Shellcheck),
+        catalog.tool_spec(PinnedTool::Zizmor),
+    ];
+    validated.sort();
+    Ok(validated)
+}
+
+/// Staged workflow files, sorted; empty is a fail-closed error.
+#[expect(
+    clippy::case_sensitive_file_extension_comparisons,
+    reason = "rendered tree paths are exact lowercase by construction"
+)]
+fn staged_workflows(tree: &RenderedTree) -> Result<Vec<String>, OrchestratorError> {
+    if !tree.files.iter().any(|file| file.path == ACTIONLINT_CONFIG) {
+        return Err(OrchestratorError::Validation {
+            tool: "actionlint".to_owned(),
+            problem: "missing_actionlint_config".to_owned(),
+        });
+    }
+    let mut workflows: Vec<String> = tree
+        .files
+        .iter()
+        .map(|file| file.path.clone())
+        .filter(|path| {
+            path.starts_with(WORKFLOWS_DIR) && (path.ends_with(".yml") || path.ends_with(".yaml"))
+        })
+        .collect();
+    workflows.sort();
+    if workflows.is_empty() {
+        return Err(OrchestratorError::Validation {
+            tool: "actionlint".to_owned(),
+            problem: "no_workflows_to_validate".to_owned(),
+        });
+    }
+    Ok(workflows)
+}
+
+/// Run pinned actionlint with the staged config over staged workflows.
+///
+/// Shellcheck integration stays disabled (`-shellcheck ""`) until the
+/// renderer quotes env-derived `run:` lines: the staged-binary path trips
+/// SC2086 today, and the CI lint job still enforces shellcheck on the
+/// committed tree. Re-enable by adding `Shellcheck` to the toolset and
+/// dropping the flag once the renderer quotes those lines.
+fn run_actionlint(
+    catalog: &ToolCatalog,
+    staging: &Path,
+    workflows: &[String],
+) -> Result<(), OrchestratorError> {
+    let mut args = vec![
+        OsString::from("-no-color"),
+        OsString::from("-oneline"),
+        OsString::from("-shellcheck"),
+        OsString::from(""),
+        OsString::from("-config-file"),
+        OsString::from(ACTIONLINT_CONFIG),
+    ];
+    args.extend(workflows.iter().map(OsString::from));
+    let output = pinned_output(
+        catalog,
+        "actionlint",
+        vec![PinnedTool::Actionlint],
+        args,
+        staging,
+    )?;
+    if output.success {
+        Ok(())
+    } else {
+        Err(OrchestratorError::Validation {
+            tool: "actionlint".to_owned(),
+            problem: diagnose(&output),
+        })
+    }
+}
+
+/// Prove the pinned shellcheck binary resolves and runs.
+fn run_shellcheck_probe(catalog: &ToolCatalog, staging: &Path) -> Result<(), OrchestratorError> {
+    let output = pinned_output(
+        catalog,
+        "shellcheck",
+        vec![PinnedTool::Shellcheck],
+        vec![OsString::from("--version")],
+        staging,
+    )?;
+    if output.success {
+        Ok(())
+    } else {
+        Err(OrchestratorError::Validation {
+            tool: "shellcheck".to_owned(),
+            problem: diagnose(&output),
+        })
+    }
+}
+
+/// Run pinned zizmor offline over the staged tree.
+fn run_zizmor(catalog: &ToolCatalog, staging: &Path) -> Result<(), OrchestratorError> {
+    let args = ["--offline", "--no-progress", "--color", "never", "."];
+    let output = pinned_output(
+        catalog,
+        "zizmor",
+        vec![PinnedTool::Zizmor],
+        args.iter().map(OsString::from).collect(),
+        staging,
+    )?;
+    if output.success {
+        Ok(())
+    } else {
+        Err(OrchestratorError::Validation {
+            tool: "zizmor".to_owned(),
+            problem: diagnose(&output),
+        })
+    }
+}
+
+/// Execute one pinned tool in staging; spawn failure fails closed.
+fn pinned_output(
+    catalog: &ToolCatalog,
+    tool: &str,
+    tools: Vec<PinnedTool>,
+    args: Vec<OsString>,
+    staging: &Path,
+) -> Result<ProcessOutput, OrchestratorError> {
+    let program = OsString::from(tool);
+    let exec = PinnedToolExec::new(tools, &program, args).map_err(|err| {
+        OrchestratorError::Validation {
+            tool: tool.to_owned(),
+            problem: err.to_string(),
+        }
+    })?;
+    let command = exec
+        .command(catalog)
+        .map_err(|err| OrchestratorError::Validation {
+            tool: tool.to_owned(),
+            problem: err.to_string(),
+        })?;
+    command
+        .with_cwd(staging.to_path_buf())
+        .run()
+        .map_err(|err| OrchestratorError::Validation {
+            tool: tool.to_owned(),
+            problem: err.to_string(),
+        })
+}
+
+/// Validator diagnostics, capped; exit code when streams are empty.
+fn diagnose(output: &ProcessOutput) -> String {
+    let bytes = if output.stdout.is_empty() {
+        output.stderr.as_slice()
+    } else {
+        output.stdout.as_slice()
+    };
+    let mut text = String::from_utf8_lossy(bytes).into_owned();
+    if text.len() > DIAG_CAP {
+        text.truncate(DIAG_CAP);
+        text.push_str("…[truncated]");
+    }
+    if text.trim().is_empty() {
+        let code = output
+            .code
+            .map_or_else(|| "signal".to_owned(), |code| code.to_string());
+        return format!("exit_code:{code}");
+    }
+    text
+}

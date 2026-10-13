@@ -1,0 +1,55 @@
+name: "False-positive lint report"
+description: "A lint incorrectly flags code that doesn't have the issue the lint claims."
+labels: ['C-bug', 'A-lint']
+body:
+  - type: textarea
+    attributes:
+      label: "Which lint or lints are the issue"
+      description: "e.g. `enum_missing` or `struct_marked_non_exhaustive`"
+    validations:
+      required: true
+  - type: checkboxes
+    attributes:
+      label: "Known issues that might be causing this"
+      description: "Please look through this list and ensure you aren't opening a duplicate issue"
+      options:
+        - label: "Is the flagged item defined in another crate, or a re-export of such an item? ([#638](https://github.com/obi1kenobi/cargo-semver-checks/issues/638))"
+          required: false
+  - type: textarea
+    attributes:
+      label: "Steps to reproduce the bug with the above code"
+      description: "e.g. a link to a repo with a commit hash and the command being run."
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: "Actual Behaviour"
+      description: "When I do like *this*, *that* is happening and I think it shouldn't."
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: "Expected Behaviour"
+      description: "I think *this* should happen instead."
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: "Verbose Lint Output"
+      description: "Add `--verbose` to your `cargo semver-checks` invocation and copy-paste the output here."
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: "Generated System Information"
+      description: "Run `cargo semver-checks --bugreport` and copy-paste the output here."
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: "Build Configuration"
+      description: "Any local [Rust build configuration](https://doc.rust-lang.org/cargo/reference/config.html) in config.toml files, or in env vars prefixed with `CARGO_`? Paste them here, if you have any."
+  - type: textarea
+    attributes:
+      label: "Additional Context"
+      description: "Add any other context about the problem here."

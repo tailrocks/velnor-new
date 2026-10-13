@@ -1,0 +1,80 @@
+---
+source: src/query.rs
+expression: "&query_execution_results"
+---
+{
+  "./test_crates/function_unsafe_added/": [
+    {
+      "name": String("add"),
+      "path": List([
+        String("function_unsafe_added"),
+        String("add"),
+      ]),
+      "span_begin_line": Uint64(3),
+      "span_end_line": Uint64(5),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/safe_function_requires_more_target_features/": [
+    {
+      "name": String("becomes_unsafe"),
+      "path": List([
+        String("safe_function_requires_more_target_features"),
+        String("becomes_unsafe"),
+      ]),
+      "span_begin_line": Uint64(27),
+      "span_end_line": Uint64(27),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/safe_function_target_feature_added/": [
+    {
+      "name": String("will_become_unsafe"),
+      "path": List([
+        String("safe_function_target_feature_added"),
+        String("will_become_unsafe"),
+      ]),
+      "span_begin_line": Uint64(17),
+      "span_end_line": Uint64(19),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/safe_vs_unsafe_extern_fn/": [
+    {
+      "name": String("originally_safe_now_implicit_unsafe"),
+      "path": List([
+        String("safe_vs_unsafe_extern_fn"),
+        String("originally_safe_now_implicit_unsafe"),
+      ]),
+      "span_begin_line": Uint64(16),
+      "span_end_line": Uint64(16),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("originally_safe_now_explicit_unsafe"),
+      "path": List([
+        String("safe_vs_unsafe_extern_fn"),
+        String("originally_safe_now_explicit_unsafe"),
+      ]),
+      "span_begin_line": Uint64(18),
+      "span_end_line": Uint64(18),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("originally_safe_now_legacy"),
+      "path": List([
+        String("safe_vs_unsafe_extern_fn"),
+        String("originally_safe_now_legacy"),
+      ]),
+      "span_begin_line": Uint64(28),
+      "span_end_line": Uint64(28),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+}

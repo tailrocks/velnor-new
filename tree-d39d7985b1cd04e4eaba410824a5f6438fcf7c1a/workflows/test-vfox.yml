@@ -1,0 +1,44 @@
+name: test-vfox
+
+on:
+  pull_request:
+    paths:
+      - "crates/vfox/**"
+  push:
+    branches: [release]
+
+concurrency:
+  group: test-vfox-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+  MISE_EXPERIMENTAL: 1
+  MISE_LOCKFILE: 1
+  RUST_BACKTRACE: 1
+  GITHUB_TOKEN: ${{ secrets.MISE_GH_TOKEN || secrets.GITHUB_TOKEN }}
+
+jobs:
+  "test-vfox":
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          save-if: false
+      - run: |
+          cargo build --all-features
+          echo "$PWD/target/debug" >> "$GITHUB_PATH"
+      - run: mise -v
+      - run: mise --cd crates/vfox install
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        with:
+          key: ${{ runner.os }}-${{ runner.arch }}-mise-tools-vfox-${{ hashFiles('crates/vfox/mise.toml') }}
+          restore-keys: ${{ runner.os }}-${{ runner.arch }}-mise-tools-vfox-
+          path: |
+            ~/.local/share/mise
+            ~/.cache/mise
+      - run: mise --cd crates/vfox run build
+      - run: mise --cd crates/vfox run lint
+      - run: mise --cd crates/vfox run test

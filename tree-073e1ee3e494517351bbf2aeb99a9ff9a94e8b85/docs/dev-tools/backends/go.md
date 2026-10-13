@@ -1,0 +1,85 @@
+# Go Backend
+
+You can install packages directly via [go install](https://go.dev/doc/install) even if there
+isn't an asdf plugin for them.
+
+The code for this is inside the mise repository at [`./src/backend/go.rs`](https://github.com/jdx/mise/blob/main/src/backend/go.rs).
+
+## Dependencies
+
+This relies on having `go` installed, which you can do via mise:
+
+```sh
+mise use -g go
+```
+
+::: tip
+Any method of installing `go` is fine; mise uses whatever `go` is on PATH.
+:::
+
+## Usage
+
+The following installs the latest version of [hivemind](https://github.com/DarthSim/hivemind) and
+sets it as the active version on PATH:
+
+```sh
+$ mise use -g go:github.com/DarthSim/hivemind
+$ hivemind --help
+Hivemind version 1.1.0
+```
+
+Private modules use Go's normal VCS authentication. Export `GOPRIVATE`, or
+define it in mise's `[env]` configuration, so mise delegates version discovery
+to Go instead of querying the public module proxy itself. Values set only with
+`go env -w` are not read by mise when choosing the discovery path:
+
+```toml
+[env]
+GOPRIVATE = "github.com/acme/*"
+```
+
+Go uses `GOPRIVATE` as the default for both `GONOPROXY` and `GONOSUMDB`. If you
+configure those variables separately, set each one according to the proxy and
+checksum-database privacy you need.
+
+You can also pin a specific Go module version, including an unreleased
+pseudo-version:
+
+```toml
+[tools]
+"go:github.com/grafana/oats" = "v0.7.1-0.20260703092802-96201f1b8136"
+```
+
+If you need to resolve an unreleased revision directly from VCS instead of the
+module proxy, combine the pinned version with [`install_env`](#install_env):
+
+```toml
+[tools]
+"go:github.com/grafana/oats" = { version = "v0.7.1-0.20260703092802-96201f1b8136", install_env = { GOPROXY = "direct", GONOSUMDB = "github.com/grafana/oats" } }
+```
+
+## Tool Options
+
+The following [tool-options](/dev-tools/#tool-options) are available for the `go` backend—these
+go in `[tools]` in `mise.toml`.
+
+### `install_env`
+
+Set environment variables for the `go install` command. mise still sets `GOBIN`
+to the tool install directory after applying `install_env`.
+
+```toml
+[tools]
+"go:github.com/DarthSim/hivemind" = { version = "latest", install_env = { GOPRIVATE = "github.com/acme/*" } }
+```
+
+### `tags`
+
+Specify Go build tags (passed as `go install -tags`):
+
+```toml
+[tools]
+"go:github.com/golang-migrate/migrate/v4/cmd/migrate" = { version = "latest", tags = "postgres" }
+# equivalent array form:
+# "go:github.com/golang-migrate/migrate/v4/cmd/migrate" = { version = "latest", tags = ["postgres", "mysql"] }
+```

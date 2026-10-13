@@ -1,0 +1,120 @@
+---
+source: src/query.rs
+expression: "&query_execution_results"
+---
+{
+  "./test_crates/pub_api_sealed_trait_became_unconditionally_sealed/": [
+    {
+      "name": String("TraitExtendsUnconditionallyHiddenTrait"),
+      "path": List([
+        String("pub_api_sealed_trait_became_unconditionally_sealed"),
+        String("public_api_sealed_to_unconditionally_sealed"),
+        String("TraitExtendsUnconditionallyHiddenTrait"),
+      ]),
+      "span_begin_line": Uint64(10),
+      "span_end_line": Uint64(10),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("MethodReturningUnconditionallyHiddenToken"),
+      "path": List([
+        String("pub_api_sealed_trait_became_unconditionally_sealed"),
+        String("public_api_sealed_to_unconditionally_sealed"),
+        String("MethodReturningUnconditionallyHiddenToken"),
+      ]),
+      "span_begin_line": Uint64(12),
+      "span_end_line": Uint64(14),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("MethodTakingUnconditionallyHiddenToken"),
+      "path": List([
+        String("pub_api_sealed_trait_became_unconditionally_sealed"),
+        String("public_api_sealed_to_unconditionally_sealed"),
+        String("MethodTakingUnconditionallyHiddenToken"),
+      ]),
+      "span_begin_line": Uint64(16),
+      "span_end_line": Uint64(18),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("HiddenSealedWithWhereSelfBound"),
+      "path": List([
+        String("pub_api_sealed_trait_became_unconditionally_sealed"),
+        String("public_api_sealed_to_unconditionally_sealed"),
+        String("HiddenSealedWithWhereSelfBound"),
+      ]),
+      "span_begin_line": Uint64(20),
+      "span_end_line": Uint64(24),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/pub_api_sealed_trait_became_unsealed/": [
+    {
+      "name": String("TraitExtendsUnconditionallyHiddenTrait"),
+      "path": List([
+        String("pub_api_sealed_trait_became_unsealed"),
+        String("public_api_sealed_to_unconditionally_sealed"),
+        String("TraitExtendsUnconditionallyHiddenTrait"),
+      ]),
+      "span_begin_line": Uint64(32),
+      "span_end_line": Uint64(32),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("MethodReturningUnconditionallyHiddenToken"),
+      "path": List([
+        String("pub_api_sealed_trait_became_unsealed"),
+        String("public_api_sealed_to_unconditionally_sealed"),
+        String("MethodReturningUnconditionallyHiddenToken"),
+      ]),
+      "span_begin_line": Uint64(34),
+      "span_end_line": Uint64(36),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("MethodTakingUnconditionallyHiddenToken"),
+      "path": List([
+        String("pub_api_sealed_trait_became_unsealed"),
+        String("public_api_sealed_to_unconditionally_sealed"),
+        String("MethodTakingUnconditionallyHiddenToken"),
+      ]),
+      "span_begin_line": Uint64(38),
+      "span_end_line": Uint64(40),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_method_target_feature_removed/": [
+    {
+      "name": String("FeatureRemovedFromPubApiSealedToUnconditional"),
+      "path": List([
+        String("trait_method_target_feature_removed"),
+        String("FeatureRemovedFromPubApiSealedToUnconditional"),
+      ]),
+      "span_begin_line": Uint64(91),
+      "span_end_line": Uint64(93),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_newly_sealed/": [
+    {
+      "name": String("PublicAPISealed"),
+      "path": List([
+        String("trait_newly_sealed"),
+        String("PublicAPISealed"),
+      ]),
+      "span_begin_line": Uint64(31),
+      "span_end_line": Uint64(34),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+}

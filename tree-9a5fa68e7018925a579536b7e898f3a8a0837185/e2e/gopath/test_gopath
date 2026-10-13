@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -e
+
+export MISE_EXPERIMENTAL=1
+
+eval "$(mise activate bash)"
+_mise_hook
+
+assert_gopath() {
+  local expected="$1"
+  if [[ "$GOPATH" != "$expected" ]]; then
+    echo "Invalid GOPATH: $GOPATH, expected: $expected"
+    exit 1
+  fi
+}
+
+mise i golang@1.18.10 golang@1.19.5 && _mise_hook
+assert_gopath "$MISE_DATA_DIR/installs/go/1.19.5/packages"
+cd 18 && _mise_hook
+assert_gopath "$MISE_DATA_DIR/installs/go/1.18.10/packages"
+cd .. && _mise_hook
+assert_gopath "$MISE_DATA_DIR/installs/go/1.19.5/packages"

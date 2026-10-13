@@ -1,0 +1,30 @@
+# `mise alias set`
+
+- **Usage**: `mise alias set <ARGS>…`
+- **Aliases**: `add`, `create`
+- **Source code**: [`src/cli/alias/set.rs`](https://github.com/jdx/mise/blob/main/src/cli/alias/set.rs)
+
+Add/update an alias for a backend/plugin
+
+This modifies the contents of ~/.config/mise/config.toml
+
+## Arguments
+
+### `<PLUGIN>`
+
+The backend/plugin to set the alias for
+
+### `<ALIAS>`
+
+The alias to set
+
+### `[VALUE]`
+
+The value to set the alias to
+
+Examples:
+
+```
+mise alias set maven asdf:mise-plugins/mise-maven
+mise alias set node lts-jod 22.0.0
+```

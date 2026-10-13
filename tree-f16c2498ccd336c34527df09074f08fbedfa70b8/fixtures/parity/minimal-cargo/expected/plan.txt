@@ -1,0 +1,57 @@
+Velnor Actions plan 0.1.1
+Repository: <repo>
+
+Detected stacks
+  Rust: selected
+  Workspace crates: 1
+    - minimal-cargo (Cargo.toml) [lib]
+  Profile .: cargo compile driver (detected), cargo_test test runner (detected)
+
+Workflow to generate
+  .github/actionlint.yaml
+  .github/workflows/ci.yml
+  Workflow: CI (consumer-v1)
+  Push branch: main
+  Runner: ubuntu-26.04 (latest pinned default)
+  Jobs:
+    - actionlint (4 steps)
+    - plan (10 steps)
+    - publish-baseline (5 steps)
+    - required (9 steps)
+    - rust-minimal-cargo (11 steps)
+    - 1 Rust crate job
+      Each: Clippy -> run tests -> doctests -> doc build
+      Entries:
+        - rust-minimal-cargo
+      Obligations:
+        - stack/rust/root/clippy/default
+        - stack/rust/root/doc/default
+        - stack/rust/root/doctest/default
+        - stack/rust/root/test/default
+  Parallel: 1 independent crate job; no matrix fan-out
+  Critical path: stack/rust/root/clippy/default -> stack/rust/root/doctest/default -> stack/rust/root/doc/default (3 tasks)
+  Clippy memory groups: 1; barriers: 0
+  Cache layers: Mise tools
+  Actionlint: 1.7.12 pinned
+  Action pins: 5
+    - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+    - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+    - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+    - actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+    - jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+  Pull-request execution narrows crate obligations through its event-time affected-work plan.
+
+Required-check migration
+  Old: .github/workflows/velnor.yml (check: Velnor / Required)
+  New: .github/workflows/ci.yml (check: Required)
+  1. Merge the generator change so .github/workflows/ci.yml replaces .github/workflows/velnor.yml in one commit.
+  2. Let one .github/workflows/ci.yml run complete on the default branch so the Required check appears.
+  3. In branch protection, require Required and remove Velnor / Required; never remove the old check before the new one exists. [EXTERNAL: repository admin]
+
+Recommendations
+  mise.lock not found; Velnor will not create or refresh it
+  mise.toml not found; Velnor will use its pinned tools
+  nextest_recommendation: no explicit test-runner usage; defaulting to `cargo test`
+  persist_evidence: no MBX or Nextest usage detected; to adopt either, add a durable signal
+  rust-toolchain.toml not found; Velnor will not create it
+  tool_install_unverified:5 installs skip verification (no mise.lock): actionlint@1.7.12, gh@2.102.0, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock

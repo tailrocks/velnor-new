@@ -1,0 +1,58 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/type_requires_more_const_generic_params/": [
+    {
+      "name": String("NotGeneric"),
+      "new_required_const_count": Uint64(1),
+      "new_required_consts": List([
+        String("COUNT"),
+      ]),
+      "old_required_const_count": Uint64(0),
+      "old_required_consts": List([]),
+      "path": List([
+        String("type_requires_more_const_generic_params"),
+        String("NotGeneric"),
+      ]),
+      "span_begin_line": Uint64(4),
+      "span_end_line": Uint64(6),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("DefaultBecomesRequired"),
+      "new_required_const_count": Uint64(1),
+      "new_required_consts": List([
+        String("N"),
+      ]),
+      "old_required_const_count": Uint64(0),
+      "old_required_consts": List([]),
+      "path": List([
+        String("type_requires_more_const_generic_params"),
+        String("DefaultBecomesRequired"),
+      ]),
+      "span_begin_line": Uint64(9),
+      "span_end_line": Uint64(12),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("ConstGenericAdded"),
+      "new_required_const_count": Uint64(1),
+      "new_required_consts": List([
+        String("N"),
+      ]),
+      "old_required_const_count": Uint64(0),
+      "old_required_consts": List([]),
+      "path": List([
+        String("type_requires_more_const_generic_params"),
+        String("ConstGenericAdded"),
+      ]),
+      "span_begin_line": Uint64(14),
+      "span_end_line": Uint64(16),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+}

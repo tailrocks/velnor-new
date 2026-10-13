@@ -1,0 +1,88 @@
+[package]
+name = "vfox"
+version = "2026.3.0"
+edition = "2024"
+license = "MIT"
+description = "Interface to vfox plugins"
+documentation = "https://docs.rs/vfox"
+homepage = "https://github.com/jdx/mise"
+repository = "https://github.com/jdx/mise"
+include = [
+  "src",
+  "lua",
+  "embedded-plugins",
+  "build.rs",
+  "Cargo.toml",
+  "Cargo.lock",
+  "README.md",
+  "LICENSE",
+]
+build = "build.rs"
+
+[lib]
+name = "vfox"
+path = "src/lib.rs"
+
+[[bin]]
+name = "vfox-cli"
+path = "src/bin.rs"
+
+[dependencies]
+homedir = "0.3"
+indexmap = { version = "2", features = ["serde"] }
+itertools = "0.14"
+log = "0.4"
+mlua = { version = "0.11", features = [
+  "async",
+  "lua51",
+  "macros",
+  "serialize",
+  "send",
+] }
+once_cell = "1"
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+] } # TODO: replace with xx
+serde = "1"
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "fs", "io-util"] }
+url = "2"
+xx = { version = "2", default-features = false, features = ["archive", "hash"] }
+
+# cli dependencies
+env_logger = { version = "0.11", optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
+tempfile = "3"
+sigstore-verification = { version = "0.2", default-features = false }
+
+[dev-dependencies]
+insta = "1"
+wiremock = "0.6"
+#pretty_assertions = "1.4.0"
+
+[features]
+default = ["vendored-lua", "native-tls"]
+cli = ["clap", "tokio/full", "env_logger"]
+native-tls = [
+  "xx/native-tls",
+  "xx/http",
+  "reqwest/native-tls",
+  "sigstore-verification/native-tls",
+]
+rustls = [
+  "xx/rustls",
+  "xx/http",
+  "reqwest/rustls-tls",
+  "sigstore-verification/rustls",
+]
+rustls-native-roots = [
+  "reqwest/rustls-tls-native-roots",
+  "xx/http",
+  "xx/rustls-native-roots",
+  "sigstore-verification/rustls-native-roots",
+]
+vendored-lua = ["mlua/vendored"]
+
+# [workspace.metadata.release] - removed since this is now part of mise workspace
+# pre-release-hook = ["git", "cliff", "-o", "CHANGELOG.md", "--tag", "{{version}}"]

@@ -1,0 +1,768 @@
+velnor-actions-orchestrator attach::attach_tests::lock_acquire_inserts_digest_verified_stage
+  -> velnor-actions-orchestrator attach::tests::attach_tests::lock_acquire_inserts_digest_verified_stage
+velnor-actions-orchestrator attach::attach_tests::lock_acquire_records_source_commit
+  -> velnor-actions-orchestrator attach::tests::attach_tests::lock_acquire_records_source_commit
+velnor-actions-orchestrator attach::attach_tests::mbx_tests::preseed_restores_mbx_builds_after_sources_with_homes
+  -> velnor-actions-orchestrator attach::tests::mbx_tests::preseed_restores_mbx_builds_after_sources_with_homes
+velnor-actions-orchestrator attach::attach_tests::preseed_attach_builds_once_and_sets_mode
+  -> velnor-actions-orchestrator attach::tests::attach_tests::preseed_attach_builds_once_and_sets_mode
+velnor-actions-orchestrator attach::attach_tests::source_cache_tests::cargo_only_preseed_replaces_registry_cache_and_uses_native_helper_owner
+  -> velnor-actions-orchestrator attach::tests::source_cache_tests::cargo_only_preseed_replaces_registry_cache_and_uses_native_helper_owner
+velnor-actions-orchestrator baseline_publish::baseline_publish_tests::publish_never_overwrites_staged_evidence
+  -> velnor-actions-orchestrator baseline_publish::tests::baseline_publish_tests::publish_never_overwrites_staged_evidence
+velnor-actions-orchestrator baseline_publish::baseline_publish_tests::publish_refuses_every_unsafe_case
+  -> velnor-actions-orchestrator baseline_publish::tests::baseline_publish_tests::publish_refuses_every_unsafe_case
+velnor-actions-orchestrator baseline_publish::baseline_publish_tests::publish_rejects_unknown_request_fields
+  -> velnor-actions-orchestrator baseline_publish::tests::baseline_publish_tests::publish_rejects_unknown_request_fields
+velnor-actions-orchestrator baseline_publish::baseline_publish_tests::publish_request_writer_records_push_refs
+  -> velnor-actions-orchestrator baseline_publish::tests::baseline_publish_tests::publish_request_writer_records_push_refs
+velnor-actions-orchestrator baseline_publish::baseline_publish_tests::publish_skips_covered_without_carry_forward
+  -> velnor-actions-orchestrator baseline_publish::tests::baseline_publish_tests::publish_skips_covered_without_carry_forward
+velnor-actions-orchestrator baseline_publish::baseline_publish_tests::publish_stages_trusted_manifest_under_derived_name
+  -> velnor-actions-orchestrator baseline_publish::tests::baseline_publish_tests::publish_stages_trusted_manifest_under_derived_name
+velnor-actions-orchestrator baseline_publish::baseline_publish_tests::staged_manifest_passes_consumer_validation
+  -> velnor-actions-orchestrator baseline_publish::tests::baseline_publish_tests::staged_manifest_passes_consumer_validation
+velnor-actions-orchestrator check_evidence::gate::container::tests::constructor_validates_before_returning_and_receipt_is_strict_json
+  -> velnor-actions-orchestrator check_evidence::gate::container::tests::container_tests::constructor_validates_before_returning_and_receipt_is_strict_json
+velnor-actions-orchestrator check_evidence::gate::container::tests::container_presence_is_mandatory_and_non_container_is_empty
+  -> velnor-actions-orchestrator check_evidence::gate::container::tests::container_tests::container_presence_is_mandatory_and_non_container_is_empty
+velnor-actions-orchestrator check_evidence::gate::container::tests::exact_profile_and_execution_identity_are_bound
+  -> velnor-actions-orchestrator check_evidence::gate::container::tests::container_tests::exact_profile_and_execution_identity_are_bound
+velnor-actions-orchestrator check_evidence::gate::container::tests::orbstack_requires_the_sdk_projection_evidence
+  -> velnor-actions-orchestrator check_evidence::gate::container::tests::container_tests::orbstack_requires_the_sdk_projection_evidence
+velnor-actions-orchestrator check_evidence::gate::container::tests::orbstack_runtime_root_is_required_and_bound
+  -> velnor-actions-orchestrator check_evidence::gate::container::tests::container_tests::orbstack_runtime_root_is_required_and_bound
+velnor-actions-orchestrator check_evidence::gate::container::tests::owned_cli_and_runtime_inventory_are_exact
+  -> velnor-actions-orchestrator check_evidence::gate::container::tests::container_tests::owned_cli_and_runtime_inventory_are_exact
+velnor-actions-orchestrator check_evidence::gate::container::tests::runtime_snapshot_and_root_shape_are_bound
+  -> velnor-actions-orchestrator check_evidence::gate::container::tests::container_tests::runtime_snapshot_and_root_shape_are_bound
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::archive_source_symlink_is_rejected
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::archive_tests::archive_source_symlink_is_rejected
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::crate_archive_extracts_wrapper
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::archive_tests::crate_archive_extracts_wrapper
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::declared_entry_size_limit_is_checked_before_writing
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::archive_tests::declared_entry_size_limit_is_checked_before_writing
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::duplicate_paths_are_rejected
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::archive_tests::duplicate_paths_are_rejected
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::global_budget_is_admitted_before_output_creation
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::archive_tests::global_budget_is_admitted_before_output_creation
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::zip_admission_tests::zip32_count_disagreement_and_multidisk_are_rejected
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::zip_admission_tests::zip32_count_disagreement_and_multidisk_are_rejected
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::zip_admission_tests::zip64_entry_count_and_multidisk_are_bounded_before_parser_allocation
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::zip_admission_tests::zip64_entry_count_and_multidisk_are_bounded_before_parser_allocation
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::zip_admission_tests::zip64_extensible_data_has_a_fixed_admission_bound
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::zip_admission_tests::zip64_extensible_data_has_a_fixed_admission_bound
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::zip_admission_tests::zip64_fallback_directory_over_limit_is_rejected_before_parser_allocation
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::zip_admission_tests::zip64_fallback_directory_over_limit_is_rejected_before_parser_allocation
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::zip_admission_tests::zip_eocd_comment_without_trailing_data_is_admitted
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::zip_admission_tests::zip_eocd_comment_without_trailing_data_is_admitted
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::zip_admission_tests::zip_failed_latest_central_directory_falls_back_with_both_candidates_bounded
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::zip_admission_tests::zip_failed_latest_central_directory_falls_back_with_both_candidates_bounded
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::zip_admission_tests::zip_trailing_bytes_and_malformed_comment_eocd_follow_reader_fallback
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::zip_admission_tests::zip_trailing_bytes_and_malformed_comment_eocd_follow_reader_fallback
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::safe_in_root_symlink_is_staged_after_regular_files
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::archive_tests::safe_in_root_symlink_is_staged_after_regular_files
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::tar_hardlink_is_rejected
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::archive_tests::tar_hardlink_is_rejected
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::tar_parent_path_is_rejected_and_destination_removed
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::archive_tests::tar_parent_path_is_rejected_and_destination_removed
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::tar_symlink_is_rejected
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::archive_tests::tar_symlink_is_rejected
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::zip_extracts_wrapper_and_preserves_executable_bits
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::archive_tests::zip_extracts_wrapper_and_preserves_executable_bits
+velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::zip_symlink_mode_is_rejected
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::archive_tests::zip_symlink_mode_is_rejected
+velnor-actions-orchestrator check_runtime::preparation::acquisition::layout::cargo::tests::ancestor_and_source_cargo_configuration_are_rejected
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::layout::cargo::tests::cargo_tests::ancestor_and_source_cargo_configuration_are_rejected
+velnor-actions-orchestrator check_runtime::preparation::acquisition::layout::cargo::tests::dependency_identity_and_forged_checksum_receipts_are_rejected
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::layout::cargo::tests::cargo_tests::dependency_identity_and_forged_checksum_receipts_are_rejected
+velnor-actions-orchestrator check_runtime::preparation::acquisition::layout::cargo::tests::lock_drift_and_missing_archive_closure_fail_before_source_moves
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::layout::cargo::tests::cargo_tests::lock_drift_and_missing_archive_closure_fail_before_source_moves
+velnor-actions-orchestrator check_runtime::preparation::acquisition::layout::cargo::tests::verified_sources_move_into_an_owned_complete_vendor_tree
+  -> velnor-actions-orchestrator check_runtime::preparation::acquisition::layout::cargo::tests::cargo_tests::verified_sources_move_into_an_owned_complete_vendor_tree
+velnor-actions-orchestrator check_runtime::preparation::binary::budget_tests::each_platform_bound_matches_qualified_installed_bytes
+  -> velnor-actions-orchestrator check_runtime::preparation::binary::tests::each_platform_bound_matches_qualified_installed_bytes
+velnor-actions-orchestrator check_runtime::preparation::binary::budget_tests::in_bound_wrong_digest_still_refuses_copy
+  -> velnor-actions-orchestrator check_runtime::preparation::binary::tests::in_bound_wrong_digest_still_refuses_copy
+velnor-actions-orchestrator check_runtime::preparation::binary::budget_tests::one_byte_over_each_qualified_bound_fails_before_digest_or_copy
+  -> velnor-actions-orchestrator check_runtime::preparation::binary::tests::one_byte_over_each_qualified_bound_fails_before_digest_or_copy
+velnor-actions-orchestrator check_runtime::preparation::binary::budget_tests::verified_bytes_above_old_budget_copy_identically
+  -> velnor-actions-orchestrator check_runtime::preparation::binary::tests::verified_bytes_above_old_budget_copy_identically
+velnor-actions-orchestrator check_runtime::preparation::binary::tests::qualified_fixture_bytes_copy_exclusively_and_survive_source_replacement
+  -> velnor-actions-orchestrator check_runtime::preparation::binary::tests::binary_tests::qualified_fixture_bytes_copy_exclusively_and_survive_source_replacement
+velnor-actions-orchestrator check_runtime::preparation::binary::tests::source_symlink_and_existing_destination_refuse
+  -> velnor-actions-orchestrator check_runtime::preparation::binary::tests::binary_tests::source_symlink_and_existing_destination_refuse
+velnor-actions-orchestrator check_runtime::preparation::binary::tests::wrong_digest_refuses_wrapper_without_invocation_or_copy
+  -> velnor-actions-orchestrator check_runtime::preparation::binary::tests::binary_tests::wrong_digest_refuses_wrapper_without_invocation_or_copy
+velnor-actions-orchestrator check_runtime::preparation::container::bundle::tests::nested_symlinks_are_rejected
+  -> velnor-actions-orchestrator check_runtime::preparation::container::bundle::tests::bundle_tests::nested_symlinks_are_rejected
+velnor-actions-orchestrator check_runtime::preparation::container::bundle::tests::outer_hash_is_checked_before_projection
+  -> velnor-actions-orchestrator check_runtime::preparation::container::bundle::tests::bundle_tests::outer_hash_is_checked_before_projection
+velnor-actions-orchestrator check_runtime::preparation::container::bundle::tests::owned_tree_revalidation_detects_added_file_and_mode
+  -> velnor-actions-orchestrator check_runtime::preparation::container::bundle::tests::bundle_tests::owned_tree_revalidation_detects_added_file_and_mode
+velnor-actions-orchestrator check_runtime::preparation::container::bundle::tests::projects_full_tree_and_rejects_overwrite
+  -> velnor-actions-orchestrator check_runtime::preparation::container::bundle::tests::bundle_tests::projects_full_tree_and_rejects_overwrite
+velnor-actions-orchestrator check_runtime::preparation::container::bundle::tests::special_modes_are_rejected_in_source_and_owned_tree
+  -> velnor-actions-orchestrator check_runtime::preparation::container::bundle::tests::bundle_tests::special_modes_are_rejected_in_source_and_owned_tree
+velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix_tests::declared_socket_owner_is_required
+  -> velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix::declared_socket_owner_is_required
+velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix_tests::docker_projection_is_credential_free_and_revalidates_exact_tree
+  -> velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix::docker_projection_is_credential_free_and_revalidates_exact_tree
+velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix_tests::docker_revalidation_rejects_injected_context_files
+  -> velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix::docker_revalidation_rejects_injected_context_files
+velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix_tests::inventory_tests::orb_runtime_rejects_entry_sixty_five_before_admitting_its_path
+  -> velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::inventory::orb_runtime_rejects_entry_sixty_five_before_admitting_its_path
+velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix_tests::orb_projection_records_authority_and_owned_link
+  -> velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix::orb_projection_records_authority_and_owned_link
+velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix_tests::orb_rejects_long_owned_socket_path_before_runtime_link
+  -> velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix::orb_rejects_long_owned_socket_path_before_runtime_link
+velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix_tests::orb_rejects_root_runtime_owner_independently_of_fixture_uid
+  -> velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix::orb_rejects_root_runtime_owner_independently_of_fixture_uid
+velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix_tests::orb_runtime_metadata_size_is_bounded
+  -> velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix::orb_runtime_metadata_size_is_bounded
+velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix_tests::orb_runtime_root_mode_change_fails_continuity
+  -> velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix::orb_runtime_root_mode_change_fails_continuity
+velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix_tests::orb_runtime_root_mode_is_bound_and_not_writable
+  -> velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix::orb_runtime_root_mode_is_bound_and_not_writable
+velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix_tests::orb_runtime_symlinks_are_rejected_without_reading_targets
+  -> velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix::orb_runtime_symlinks_are_rejected_without_reading_targets
+velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix_tests::orb_runtime_workload_entries_may_change
+  -> velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix::orb_runtime_workload_entries_may_change
+velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix_tests::socket_replacement_fails_continuity_check
+  -> velnor-actions-orchestrator check_runtime::preparation::container::runtime::tests::unix::socket_replacement_fails_continuity_check
+velnor-actions-orchestrator config_stacks::tests::explicit_checks_load_and_minimal_config_omits_empty_checks
+  -> velnor-actions-orchestrator config_stacks::tests::config_stacks_tests::explicit_checks_load_and_minimal_config_omits_empty_checks
+velnor-actions-orchestrator config_stacks::tests::nextest_no_tests_overrides_are_rejected
+  -> velnor-actions-orchestrator config_stacks::tests::config_stacks_tests::nextest_no_tests_overrides_are_rejected
+velnor-actions-orchestrator config_stacks::tests::release_section_parses_and_defaults_disabled
+  -> velnor-actions-orchestrator config_stacks::tests::config_stacks_tests::release_section_parses_and_defaults_disabled
+velnor-actions-orchestrator config_stacks::tests::render_unsafe_stack_values_are_rejected
+  -> velnor-actions-orchestrator config_stacks::tests::config_stacks_tests::render_unsafe_stack_values_are_rejected
+velnor-actions-orchestrator config_stacks::tests::tofu_bad_roots_rejected_at_load
+  -> velnor-actions-orchestrator config_stacks::tests::config_stacks_tests::tofu_bad_roots_rejected_at_load
+velnor-actions-orchestrator config_stacks::tests::tofu_table_materializes_roots
+  -> velnor-actions-orchestrator config_stacks::tests::config_stacks_tests::tofu_table_materializes_roots
+velnor-actions-orchestrator config_stacks::tests::tofu_table_requires_roots
+  -> velnor-actions-orchestrator config_stacks::tests::config_stacks_tests::tofu_table_requires_roots
+velnor-actions-orchestrator config_stacks::tests::unknown_rust_keys_are_rejected
+  -> velnor-actions-orchestrator config_stacks::tests::config_stacks_tests::unknown_rust_keys_are_rejected
+velnor-actions-orchestrator config_stacks::tests::unknown_tofu_keys_are_rejected
+  -> velnor-actions-orchestrator config_stacks::tests::config_stacks_tests::unknown_tofu_keys_are_rejected
+velnor-actions-orchestrator config_stacks::tests::workflow_verification_tasks_parse_and_default_empty
+  -> velnor-actions-orchestrator config_stacks::tests::config_stacks_tests::workflow_verification_tasks_parse_and_default_empty
+velnor-actions-orchestrator cover::revalidate::cover_revalidate_entry_tests::merge_accepts_advisory_with_fresh_external_data
+  -> velnor-actions-orchestrator cover::revalidate::tests::cover_revalidate_entry_tests::merge_accepts_advisory_with_fresh_external_data
+velnor-actions-orchestrator cover::revalidate::cover_revalidate_entry_tests::merge_rejects_advisory_without_external_data
+  -> velnor-actions-orchestrator cover::revalidate::tests::cover_revalidate_entry_tests::merge_rejects_advisory_without_external_data
+velnor-actions-orchestrator cover::revalidate::cover_revalidate_entry_tests::merge_rejects_mismatched_structured_proof
+  -> velnor-actions-orchestrator cover::revalidate::tests::cover_revalidate_entry_tests::merge_rejects_mismatched_structured_proof
+velnor-actions-orchestrator cover::revalidate::cover_revalidate_entry_tests::merge_rejects_underived_numeric_id
+  -> velnor-actions-orchestrator cover::revalidate::tests::cover_revalidate_entry_tests::merge_rejects_underived_numeric_id
+velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::anchor_parts_map_env_values
+  -> velnor-actions-orchestrator cover::revalidate::tests::cover_revalidate_tests::anchor_parts_map_env_values
+velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::anchor_tokens_validate_against_contract_vocabulary
+  -> velnor-actions-orchestrator cover::revalidate::tests::cover_revalidate_tests::anchor_tokens_validate_against_contract_vocabulary
+velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::bound_coverage_revalidates
+  -> velnor-actions-orchestrator cover::revalidate::tests::cover_revalidate_tests::bound_coverage_revalidates
+velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::ci_missing_any_anchor_fails_closed
+  -> velnor-actions-orchestrator cover::revalidate::tests::cover_revalidate_tests::ci_missing_any_anchor_fails_closed
+velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::env_anchors_match_and_refuse_foreign
+  -> velnor-actions-orchestrator cover::revalidate::tests::cover_revalidate_tests::env_anchors_match_and_refuse_foreign
+velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::merge_rejects_expired_manifest
+  -> velnor-actions-orchestrator cover::revalidate::tests::cover_revalidate_tests::merge_rejects_expired_manifest
+velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::merge_rejects_plan_rejected_manifest_invariants
+  -> velnor-actions-orchestrator cover::revalidate::tests::cover_revalidate_tests::merge_rejects_plan_rejected_manifest_invariants
+velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::wrong_provenance_fails_per_field
+  -> velnor-actions-orchestrator cover::revalidate::tests::cover_revalidate_tests::wrong_provenance_fails_per_field
+velnor-actions-orchestrator cover_baseline::cover_baseline_lookup_tests::lookup_manifest_misses_without_base_or_obligations
+  -> velnor-actions-orchestrator cover_baseline::tests::cover_baseline_lookup_tests::lookup_manifest_misses_without_base_or_obligations
+velnor-actions-orchestrator cover_baseline::cover_baseline_lookup_tests::lookup_misses_before_spawn_without_exact_name
+  -> velnor-actions-orchestrator cover_baseline::tests::cover_baseline_lookup_tests::lookup_misses_before_spawn_without_exact_name
+velnor-actions-orchestrator cover_baseline::cover_baseline_lookup_tests::lookup_names_exact_baseline_artifact
+  -> velnor-actions-orchestrator cover_baseline::tests::cover_baseline_lookup_tests::lookup_names_exact_baseline_artifact
+velnor-actions-orchestrator cover_baseline::cover_baseline_tests::baseline_entry_needs_single_strict_payload
+  -> velnor-actions-orchestrator cover_baseline::tests::cover_baseline_tests::baseline_entry_needs_single_strict_payload
+velnor-actions-orchestrator cover_baseline::cover_baseline_tests::baseline_entry_pins_attempt_and_artifact
+  -> velnor-actions-orchestrator cover_baseline::tests::cover_baseline_tests::baseline_entry_pins_attempt_and_artifact
+velnor-actions-orchestrator cover_baseline::cover_baseline_tests::baseline_entry_rejects_links_and_oversize
+  -> velnor-actions-orchestrator cover_baseline::tests::cover_baseline_tests::baseline_entry_rejects_links_and_oversize
+velnor-actions-orchestrator cover_baseline::cover_baseline_tests::baseline_publish_and_download_rules
+  -> velnor-actions-orchestrator cover_baseline::tests::cover_baseline_tests::baseline_publish_and_download_rules
+velnor-actions-orchestrator cover_baseline::cover_baseline_tests::forwarded_proof_marks_baseline_unavailable
+  -> velnor-actions-orchestrator cover_baseline::tests::cover_baseline_tests::forwarded_proof_marks_baseline_unavailable
+velnor-actions-orchestrator cover_baseline::cover_baseline_tests::source_build_keeps_marker_without_lock_fill
+  -> velnor-actions-orchestrator cover_baseline::tests::cover_baseline_tests::source_build_keeps_marker_without_lock_fill
+velnor-actions-orchestrator cover_baseline::provenance_check::provenance_check_tests::every_wrong_dimension_fails_validation
+  -> velnor-actions-orchestrator cover_baseline::provenance_check::tests::provenance_check_tests::every_wrong_dimension_fails_validation
+velnor-actions-orchestrator cover_baseline::provenance_check::provenance_check_tests::include_defined_origin_resolves
+  -> velnor-actions-orchestrator cover_baseline::provenance_check::tests::provenance_check_tests::include_defined_origin_resolves
+velnor-actions-orchestrator cover_baseline::provenance_check::provenance_check_tests::linked_worktree_anchor_shares_remote_identity
+  -> velnor-actions-orchestrator cover_baseline::provenance_check::tests::provenance_check_tests::linked_worktree_anchor_shares_remote_identity
+velnor-actions-orchestrator cover_baseline::provenance_check::provenance_check_tests::missing_and_mismatched_origins_fail_closed
+  -> velnor-actions-orchestrator cover_baseline::provenance_check::tests::provenance_check_tests::missing_and_mismatched_origins_fail_closed
+velnor-actions-orchestrator cover_baseline::provenance_check::provenance_check_tests::repository_slug_and_origins_normalize
+  -> velnor-actions-orchestrator cover_baseline::provenance_check::tests::provenance_check_tests::repository_slug_and_origins_normalize
+velnor-actions-orchestrator cover_baseline::provenance_check::provenance_check_tests::task_entries_validate_identity_runs_freshness_and_proof_binding
+  -> velnor-actions-orchestrator cover_baseline::provenance_check::tests::provenance_check_tests::task_entries_validate_identity_runs_freshness_and_proof_binding
+velnor-actions-orchestrator cover_baseline::provenance_check::provenance_proof_tests::forwarded_proof_runs_fail_closed
+  -> velnor-actions-orchestrator cover_baseline::provenance_check::tests::provenance_proof_tests::forwarded_proof_runs_fail_closed
+velnor-actions-orchestrator cover_baseline::provenance_check::provenance_proof_tests::workflow_slug_binds_anchor_and_manifest
+  -> velnor-actions-orchestrator cover_baseline::provenance_check::tests::provenance_proof_tests::workflow_slug_binds_anchor_and_manifest
+velnor-actions-orchestrator cover_baseline::provenance_resolve::provenance_resolve_tests::conflicted_expectations_fail_closed
+  -> velnor-actions-orchestrator cover_baseline::provenance_resolve::tests::conflicted_expectations_fail_closed
+velnor-actions-orchestrator cover_baseline::provenance_resolve::provenance_resolve_tests::expected_repository_resolution_matrix
+  -> velnor-actions-orchestrator cover_baseline::provenance_resolve::tests::expected_repository_resolution_matrix
+velnor-actions-orchestrator cover_baseline::provenance_resolve::provenance_resolve_tests::malformed_env_with_evil_origin_trusts_neither
+  -> velnor-actions-orchestrator cover_baseline::provenance_resolve::tests::malformed_env_with_evil_origin_trusts_neither
+velnor-actions-orchestrator cover_compat::cover_compat_tests::compat_defined_for_empty_plans
+  -> velnor-actions-orchestrator cover_compat::tests::cover_compat_tests::compat_defined_for_empty_plans
+velnor-actions-orchestrator cover_compat::cover_compat_tests::compat_ignores_obligation_order
+  -> velnor-actions-orchestrator cover_compat::tests::cover_compat_tests::compat_ignores_obligation_order
+velnor-actions-orchestrator cover_compat::cover_compat_tests::compat_is_deterministic_digest
+  -> velnor-actions-orchestrator cover_compat::tests::cover_compat_tests::compat_is_deterministic_digest
+velnor-actions-orchestrator cover_compat::cover_compat_tests::compat_survives_source_edits_but_not_toolchain_or_shape
+  -> velnor-actions-orchestrator cover_compat::tests::cover_compat_tests::compat_survives_source_edits_but_not_toolchain_or_shape
+velnor-actions-orchestrator cover_compat::cover_compat_tests::numeric_id_is_deterministic_nonzero_and_name_bound
+  -> velnor-actions-orchestrator cover_compat::tests::cover_compat_tests::numeric_id_is_deterministic_nonzero_and_name_bound
+velnor-actions-orchestrator cover_identity::cover_identity_tests::advisory_needs_fresh_external_data
+  -> velnor-actions-orchestrator cover_identity::tests::cover_identity_tests::advisory_needs_fresh_external_data
+velnor-actions-orchestrator cover_identity::cover_identity_tests::changed_work_executes_despite_identity_match
+  -> velnor-actions-orchestrator cover_identity::tests::cover_identity_tests::changed_work_executes_despite_identity_match
+velnor-actions-orchestrator cover_identity::cover_identity_tests::incomplete_closure_refuses
+  -> velnor-actions-orchestrator cover_identity::tests::cover_identity_tests::incomplete_closure_refuses
+velnor-actions-orchestrator cover_identity::cover_identity_tests::matching_closure_covers
+  -> velnor-actions-orchestrator cover_identity::tests::cover_identity_tests::matching_closure_covers
+velnor-actions-orchestrator cover_identity::cover_identity_tests::stale_closure_with_empty_changed_set_executes
+  -> velnor-actions-orchestrator cover_identity::tests::cover_identity_tests::stale_closure_with_empty_changed_set_executes
+velnor-actions-orchestrator cover_identity::cover_identity_tests::tofu_cover_extension_refuses_drift
+  -> velnor-actions-orchestrator cover_identity::tests::cover_identity_tests::tofu_cover_extension_refuses_drift
+velnor-actions-orchestrator cover_identity::cover_identity_tests::tofu_cover_extension_refuses_undeclared_inputs
+  -> velnor-actions-orchestrator cover_identity::tests::cover_identity_tests::tofu_cover_extension_refuses_undeclared_inputs
+velnor-actions-orchestrator cover_identity::cover_identity_tests::tofu_cover_extension_verifies_valid_spellings
+  -> velnor-actions-orchestrator cover_identity::tests::cover_identity_tests::tofu_cover_extension_verifies_valid_spellings
+velnor-actions-orchestrator cover_identity::cover_identity_tests::tofu_tasks_bind_no_mbx_pin_across_catalogs
+  -> velnor-actions-orchestrator cover_identity::tests::cover_identity_tests::tofu_tasks_bind_no_mbx_pin_across_catalogs
+velnor-actions-orchestrator cover_identity::cover_identity_tests::undeclared_reads_refuse_with_warning
+  -> velnor-actions-orchestrator cover_identity::tests::cover_identity_tests::undeclared_reads_refuse_with_warning
+velnor-actions-orchestrator cover_identity::cover_identity_tests::undiscovered_and_unknown_groups_never_cover
+  -> velnor-actions-orchestrator cover_identity::tests::cover_identity_tests::undiscovered_and_unknown_groups_never_cover
+velnor-actions-orchestrator cover_identity::cover_named_checks_tests::exact_baseline_match_still_executes_named_check
+  -> velnor-actions-orchestrator cover_identity::tests::cover_named_checks_tests::exact_baseline_match_still_executes_named_check
+velnor-actions-orchestrator cover_identity::cover_proof_tests::live_mbx_binds_driver_and_pin
+  -> velnor-actions-orchestrator cover_identity::tests::cover_proof_tests::live_mbx_binds_driver_and_pin
+velnor-actions-orchestrator cover_identity::cover_proof_tests::structured_proof_drift_refuses_per_dimension
+  -> velnor-actions-orchestrator cover_identity::tests::cover_proof_tests::structured_proof_drift_refuses_per_dimension
+velnor-actions-orchestrator cover_identity::cover_proof_tests::structured_proof_match_covers_silently
+  -> velnor-actions-orchestrator cover_identity::tests::cover_proof_tests::structured_proof_match_covers_silently
+velnor-actions-orchestrator covered_tasks::covered_tasks_tests::covered_by_baseline_matches_decision_exactly
+  -> velnor-actions-orchestrator covered_tasks::tests::covered_by_baseline_matches_decision_exactly
+velnor-actions-orchestrator covered_tasks::covered_tasks_tests::encode_empty_matches_nothing
+  -> velnor-actions-orchestrator covered_tasks::tests::encode_empty_matches_nothing
+velnor-actions-orchestrator covered_tasks::covered_tasks_tests::encode_wraps_sorted_covered_only
+  -> velnor-actions-orchestrator covered_tasks::tests::encode_wraps_sorted_covered_only
+velnor-actions-orchestrator covered_tasks::covered_tasks_tests::skip_condition_gates_exact_id
+  -> velnor-actions-orchestrator covered_tasks::tests::skip_condition_gates_exact_id
+velnor-actions-orchestrator covered_tasks::covered_tasks_tests::skip_condition_rejects_malformed_ids
+  -> velnor-actions-orchestrator covered_tasks::tests::skip_condition_rejects_malformed_ids
+velnor-actions-orchestrator covered_tasks::covered_tasks_tests::wrapped_encoding_never_prefix_matches
+  -> velnor-actions-orchestrator covered_tasks::tests::wrapped_encoding_never_prefix_matches
+velnor-actions-orchestrator crate_jobs::crate_jobs_display_tests::id_and_display_prefixes_agree_per_partition
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_display_tests::id_and_display_prefixes_agree_per_partition
+velnor-actions-orchestrator crate_jobs::crate_jobs_tests::acquire_stages_before_report_wrappers
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tests::acquire_stages_before_report_wrappers
+velnor-actions-orchestrator crate_jobs::crate_jobs_tests::drivers_follow_per_crate_selection
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tests::drivers_follow_per_crate_selection
+velnor-actions-orchestrator crate_jobs::crate_jobs_tests::empty_groups_build_no_jobs
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tests::empty_groups_build_no_jobs
+velnor-actions-orchestrator crate_jobs::crate_jobs_tests::gates_keep_same_crate_edges_only
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tests::gates_keep_same_crate_edges_only
+velnor-actions-orchestrator crate_jobs::crate_jobs_tests::groups_obligations_into_one_ordered_job_per_crate
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tests::groups_obligations_into_one_ordered_job_per_crate
+velnor-actions-orchestrator crate_jobs::crate_jobs_tests::mbx_tests::drivers_follow_per_crate_selection
+  -> velnor-actions-orchestrator crate_jobs::tests::mbx_tests::drivers_follow_per_crate_selection
+velnor-actions-orchestrator crate_jobs::crate_jobs_tests::member_binding_agrees_with_built_jobs
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tests::member_binding_agrees_with_built_jobs
+velnor-actions-orchestrator crate_jobs::crate_jobs_tests::shards_name_their_index
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tests::shards_name_their_index
+velnor-actions-orchestrator crate_jobs::crate_jobs_tests::skips_testless_and_workspace_groups
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tests::skips_testless_and_workspace_groups
+velnor-actions-orchestrator crate_jobs::crate_jobs_tests::velnor_policy_trims_trio_except_validator_spawning_suites
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tests::velnor_policy_trims_trio_except_validator_spawning_suites
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::mixed_job_restores_both_sources_and_providers
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_cache_tests::mixed_job_restores_both_sources_and_providers
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::provider_key_rejects_leading_dash_roots
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_cache_tests::provider_key_rejects_leading_dash_roots
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::provider_key_rejects_loose_tofu_versions
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_cache_tests::provider_key_rejects_loose_tofu_versions
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::provider_key_rejects_overlong_keys_from_deep_roots
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_cache_tests::provider_key_rejects_overlong_keys_from_deep_roots
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::provider_key_rejects_unknown_targets
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_cache_tests::provider_key_rejects_unknown_targets
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::provider_key_rejects_unsafe_roots
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_cache_tests::provider_key_rejects_unsafe_roots
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::provider_restore_keys_are_per_root
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_cache_tests::provider_restore_keys_are_per_root
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::provider_restore_precedes_init_obligation
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_cache_tests::provider_restore_precedes_init_obligation
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::rust_jobs_carry_no_provider_restore
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_cache_tests::rust_jobs_carry_no_provider_restore
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::all_tofu_groups_take_tofu_ids_mixed_keep_rust
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_tests::all_tofu_groups_take_tofu_ids_mixed_keep_rust
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::first_tofu_obligation_declares_the_cap
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_tests::first_tofu_obligation_declares_the_cap
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::mixed_group_keeps_the_rust_union
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_tests::mixed_group_keeps_the_rust_union
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::pure_tofu_group_renders_without_rust_setup
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_tests::pure_tofu_group_renders_without_rust_setup
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::rust_jobs_never_stage
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_tests::rust_jobs_never_stage
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::tofu_obligations_order_fmt_init_validate
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_tests::tofu_obligations_order_fmt_init_validate
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::tofu_root_jobs_stage_lanes_by_max_parallel
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_tests::tofu_root_jobs_stage_lanes_by_max_parallel
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::tofu_tasks_bind_no_rust_tools_but_select_opentofu
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_tests::tofu_tasks_bind_no_rust_tools_but_select_opentofu
+velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::wide_cap_stages_nothing
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_tofu_tests::wide_cap_stages_nothing
+velnor-actions-orchestrator crate_jobs::crate_jobs_upload_tests::obligations_upload_one_artifact_per_job
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_upload_tests::obligations_upload_one_artifact_per_job
+velnor-actions-orchestrator crate_jobs::crate_jobs_upload_tests::obligations_wrap_report_capture
+  -> velnor-actions-orchestrator crate_jobs::tests::crate_jobs_upload_tests::obligations_wrap_report_capture
+velnor-actions-orchestrator decisions::decisions_tests::restore_checks_ownership_explicitly
+  -> velnor-actions-orchestrator decisions::tests::restore_checks_ownership_explicitly
+velnor-actions-orchestrator decisions::decisions_tests::runner_image_evidence_is_unobserved
+  -> velnor-actions-orchestrator decisions::tests::runner_image_evidence_is_unobserved
+velnor-actions-orchestrator decisions::decisions_tests::tofu_paths_never_broaden_selection
+  -> velnor-actions-orchestrator decisions::tests::tofu_paths_never_broaden_selection
+velnor-actions-orchestrator decisions::decisions_tests::trust_maps_to_live_scopes_only
+  -> velnor-actions-orchestrator decisions::tests::trust_maps_to_live_scopes_only
+velnor-actions-orchestrator discover_index::cache_tests::reserved_cache_prefix_matches_only_the_root_and_descendants
+  -> velnor-actions-orchestrator discover_index::tests::reserved_cache_prefix_matches_only_the_root_and_descendants
+velnor-actions-orchestrator internal::plan_obligation::tests::rust_tasks_keep_the_rust_envelope
+  -> velnor-actions-orchestrator internal::plan_obligation::tests::plan_obligation_tests::rust_tasks_keep_the_rust_envelope
+velnor-actions-orchestrator internal::plan_obligation::tests::tofu_drift_fails_the_bridge_closed
+  -> velnor-actions-orchestrator internal::plan_obligation::tests::plan_obligation_tests::tofu_drift_fails_the_bridge_closed
+velnor-actions-orchestrator internal::plan_obligation::tests::tofu_tasks_derive_the_tofu_envelope
+  -> velnor-actions-orchestrator internal::plan_obligation::tests::plan_obligation_tests::tofu_tasks_derive_the_tofu_envelope
+velnor-actions-orchestrator internal_plan::closure_tests::checkout_resolution_binds_content_and_absence
+  -> velnor-actions-orchestrator internal_plan::tests::closure_tests::checkout_resolution_binds_content_and_absence
+velnor-actions-orchestrator internal_plan::closure_tests::closure_dispatch_rejects_unregistered_stack
+  -> velnor-actions-orchestrator internal_plan::tests::closure_tests::closure_dispatch_rejects_unregistered_stack
+velnor-actions-orchestrator internal_plan::closure_tests::digest_slots_preserve_absence_distinctly
+  -> velnor-actions-orchestrator internal_plan::tests::closure_tests::digest_slots_preserve_absence_distinctly
+velnor-actions-orchestrator internal_plan::closure_tests::each_input_flips_the_closure_digest
+  -> velnor-actions-orchestrator internal_plan::tests::closure_tests::each_input_flips_the_closure_digest
+velnor-actions-orchestrator internal_plan::closure_tests::same_path_with_changed_source_flips
+  -> velnor-actions-orchestrator internal_plan::tests::closure_tests::same_path_with_changed_source_flips
+velnor-actions-orchestrator internal_plan::closure_tests::source_edits_flip_and_classes_exclude_explicitly
+  -> velnor-actions-orchestrator internal_plan::tests::closure_tests::source_edits_flip_and_classes_exclude_explicitly
+velnor-actions-orchestrator internal_plan::closure_tests::tofu_dispatch_rejects_unknown_kind
+  -> velnor-actions-orchestrator internal_plan::tests::closure_tests::tofu_dispatch_rejects_unknown_kind
+velnor-actions-orchestrator internal_plan::closure_tests::tofu_dispatch_resolves_closure
+  -> velnor-actions-orchestrator internal_plan::tests::closure_tests::tofu_dispatch_resolves_closure
+velnor-actions-orchestrator internal_plan::closure_tests::unrelated_tasks_stay_isolated
+  -> velnor-actions-orchestrator internal_plan::tests::closure_tests::unrelated_tasks_stay_isolated
+velnor-actions-orchestrator internal_plan::identities_tests::cache_format_identity_tracks_emitted_mbx_generation
+  -> velnor-actions-orchestrator internal_plan::tests::identities_tests::cache_format_identity_tracks_emitted_mbx_generation
+velnor-actions-orchestrator internal_plan::identities_tests::formats_stay_single_and_graphs_relocate
+  -> velnor-actions-orchestrator internal_plan::tests::identities_tests::formats_stay_single_and_graphs_relocate
+velnor-actions-orchestrator internal_plan::identities_tests::lanes_follow_responsibility_never_ordinals
+  -> velnor-actions-orchestrator internal_plan::tests::identities_tests::lanes_follow_responsibility_never_ordinals
+velnor-actions-orchestrator internal_plan::identities_tests::ordinary_stack_runner_platform_cannot_expand_with_named_check_catalog
+  -> velnor-actions-orchestrator internal_plan::tests::identities_tests::ordinary_stack_runner_platform_cannot_expand_with_named_check_catalog
+velnor-actions-orchestrator internal_plan::identities_tests::tofu_bundles_skip_rust_checkout_probes
+  -> velnor-actions-orchestrator internal_plan::tests::identities_tests::tofu_bundles_skip_rust_checkout_probes
+velnor-actions-orchestrator internal_plan::identities_tests::tofu_cache_format_is_distinct_and_valid
+  -> velnor-actions-orchestrator internal_plan::tests::identities_tests::tofu_cache_format_is_distinct_and_valid
+velnor-actions-orchestrator internal_plan::identities_tests::tofu_toolchain_flips_on_provider_surface
+  -> velnor-actions-orchestrator internal_plan::tests::identities_tests::tofu_toolchain_flips_on_provider_surface
+velnor-actions-orchestrator internal_plan::identities_tests::tofu_toolchain_pins_opentofu_plus_provider_surface
+  -> velnor-actions-orchestrator internal_plan::tests::identities_tests::tofu_toolchain_pins_opentofu_plus_provider_surface
+velnor-actions-orchestrator internal_plan::identities_tests::toolchain::compiler_spec_versions_flip_the_digest
+  -> velnor-actions-orchestrator internal_plan::tests::toolchain::compiler_spec_versions_flip_the_digest
+velnor-actions-orchestrator internal_plan::identities_tests::toolchains_bind_sorted_specs_driver_runner
+  -> velnor-actions-orchestrator internal_plan::tests::identities_tests::toolchains_bind_sorted_specs_driver_runner
+velnor-actions-orchestrator internal_plan::internal_plan_tests::envelope_binds_input_closure_digest
+  -> velnor-actions-orchestrator internal_plan::tests::internal_plan_tests::envelope_binds_input_closure_digest
+velnor-actions-orchestrator internal_plan::internal_plan_tests::envelope_binds_platform_toolchain_config_argv
+  -> velnor-actions-orchestrator internal_plan::tests::internal_plan_tests::envelope_binds_platform_toolchain_config_argv
+velnor-actions-orchestrator internal_plan::internal_plan_tests::envelope_normalizes_components_and_binds_env
+  -> velnor-actions-orchestrator internal_plan::tests::internal_plan_tests::envelope_normalizes_components_and_binds_env
+velnor-actions-orchestrator internal_plan::internal_plan_tests::tofu_metadata_and_cache_ids_derive
+  -> velnor-actions-orchestrator internal_plan::tests::internal_plan_tests::tofu_metadata_and_cache_ids_derive
+velnor-actions-orchestrator internal_plan::named_checks::tests::binary_declared_input_changes_digest_and_stays_executable
+  -> velnor-actions-orchestrator internal_plan::named_checks::tests::named_checks_tests::binary_declared_input_changes_digest_and_stays_executable
+velnor-actions-orchestrator internal_plan::named_checks::tests::check_platform_ignores_global_linux_label
+  -> velnor-actions-orchestrator internal_plan::named_checks::tests::named_checks_tests::check_platform_ignores_global_linux_label
+velnor-actions-orchestrator internal_plan::named_checks::tests::declared_source_and_native_task_edits_change_identity
+  -> velnor-actions-orchestrator internal_plan::named_checks::tests::named_checks_tests::declared_source_and_native_task_edits_change_identity
+velnor-actions-orchestrator internal_plan::named_checks::tests::named_check_hosted_label_and_target_must_agree
+  -> velnor-actions-orchestrator internal_plan::named_checks::tests::named_checks_tests::named_check_hosted_label_and_target_must_agree
+velnor-actions-orchestrator internal_plan::named_checks::tests::named_check_without_cargo_has_one_executing_obligation
+  -> velnor-actions-orchestrator internal_plan::named_checks::tests::named_checks_tests::named_check_without_cargo_has_one_executing_obligation
+velnor-actions-orchestrator internal_plan::named_checks::tests::opaque_closure_and_wrong_stack_never_qualify
+  -> velnor-actions-orchestrator internal_plan::named_checks::tests::named_checks_tests::opaque_closure_and_wrong_stack_never_qualify
+velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::reuse_stages_tests::changed_live_inputs_reject_reuse
+  -> velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::tests::reuse_stages_tests::changed_live_inputs_reject_reuse
+velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::reuse_stages_tests::full_restore_verifies_and_stages_stay_separate
+  -> velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::tests::reuse_stages_tests::full_restore_verifies_and_stages_stay_separate
+velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::reuse_stages_tests::identity_mismatches_fail_with_precise_reasons
+  -> velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::tests::reuse_stages_tests::identity_mismatches_fail_with_precise_reasons
+velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::reuse_stages_tests::missing_and_malformed_outputs_fail
+  -> velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::tests::reuse_stages_tests::missing_and_malformed_outputs_fail
+velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::reuse_stages_tests::restore_for_another_task_is_no_entry
+  -> velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::tests::reuse_stages_tests::restore_for_another_task_is_no_entry
+velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::reuse_stages_tests::zero_byte_outputs_fail_orchestrator_layer_as_incomplete
+  -> velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::tests::reuse_stages_tests::zero_byte_outputs_fail_orchestrator_layer_as_incomplete
+velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::archive_gate_binds_sources_and_refuses_unbound
+  -> velnor-actions-orchestrator internal_plan::wire_w2::tests::wire_w2_tests::archive_gate_binds_sources_and_refuses_unbound
+velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::archive_identity_binds_content_not_path
+  -> velnor-actions-orchestrator internal_plan::wire_w2::tests::wire_w2_tests::archive_identity_binds_content_not_path
+velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::observations_thread_to_verified_or_precise_miss
+  -> velnor-actions-orchestrator internal_plan::wire_w2::tests::wire_w2_tests::observations_thread_to_verified_or_precise_miss
+velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::reuse_event_names_match_mode_spellings
+  -> velnor-actions-orchestrator internal_plan::wire_w2::tests::wire_w2_tests::reuse_event_names_match_mode_spellings
+velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::reuse_outcomes_execute_with_precise_reasons
+  -> velnor-actions-orchestrator internal_plan::wire_w2::tests::wire_w2_tests::reuse_outcomes_execute_with_precise_reasons
+velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::reused_tasks_verify_outputs_then_fail_trust_closed
+  -> velnor-actions-orchestrator internal_plan::wire_w2::tests::wire_w2_tests::reused_tasks_verify_outputs_then_fail_trust_closed
+velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::tofu_init_and_validate_never_plan_reuse
+  -> velnor-actions-orchestrator internal_plan::wire_w2::tests::wire_w2_tests::tofu_init_and_validate_never_plan_reuse
+velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::verified_reuse_binds_task_and_live_inputs
+  -> velnor-actions-orchestrator internal_plan::wire_w2::tests::wire_w2_tests::verified_reuse_binds_task_and_live_inputs
+velnor-actions-orchestrator inventory::tests::incomplete_aborts_both_paths
+  -> velnor-actions-orchestrator inventory::tests::inventory_tests::incomplete_aborts_both_paths
+velnor-actions-orchestrator inventory::tests::metadata_subprocess_counts
+  -> velnor-actions-orchestrator inventory::tests::inventory_tests::metadata_subprocess_counts
+velnor-actions-orchestrator inventory::tests::reuse_matches_legacy_outcomes_and_inventories
+  -> velnor-actions-orchestrator inventory::tests::inventory_tests::reuse_matches_legacy_outcomes_and_inventories
+velnor-actions-orchestrator inventory::tests::tool_missing_markers_are_conservative
+  -> velnor-actions-orchestrator inventory::tests::inventory_tests::tool_missing_markers_are_conservative
+velnor-actions-orchestrator inventory::tests::tool_mutation_mid_run_fails_closed
+  -> velnor-actions-orchestrator inventory::tests::inventory_tests::tool_mutation_mid_run_fails_closed
+velnor-actions-orchestrator lock_audit::lock_audit_tests::bare_install_blocks
+  -> velnor-actions-orchestrator lock_audit::tests::lock_audit_tests::bare_install_blocks
+velnor-actions-orchestrator lock_audit::lock_audit_tests::deny_drift_blocks
+  -> velnor-actions-orchestrator lock_audit::tests::lock_audit_tests::deny_drift_blocks
+velnor-actions-orchestrator lock_audit::lock_audit_tests::deny_install_is_audited_by_name
+  -> velnor-actions-orchestrator lock_audit::tests::lock_audit_tests::deny_install_is_audited_by_name
+velnor-actions-orchestrator lock_audit::lock_audit_tests::drifted_spec_version_blocks
+  -> velnor-actions-orchestrator lock_audit::tests::lock_audit_tests::drifted_spec_version_blocks
+velnor-actions-orchestrator lock_audit::lock_audit_tests::empty_install_set_stays_silent
+  -> velnor-actions-orchestrator lock_audit::tests::lock_audit_tests::empty_install_set_stays_silent
+velnor-actions-orchestrator lock_audit::lock_audit_tests::foreign_spec_and_malformed_argv_block
+  -> velnor-actions-orchestrator lock_audit::tests::lock_audit_tests::foreign_spec_and_malformed_argv_block
+velnor-actions-orchestrator lock_audit::lock_audit_tests::oversized_tool_file_blocks
+  -> velnor-actions-orchestrator lock_audit::tests::lock_audit_tests::oversized_tool_file_blocks
+velnor-actions-orchestrator lock_audit::lock_audit_tests::unclassifiable_validator_vector_blocks
+  -> velnor-actions-orchestrator lock_audit::tests::lock_audit_tests::unclassifiable_validator_vector_blocks
+velnor-actions-orchestrator lock_audit::lock_audit_tests::unknown_label_skips_loudly_without_blocking
+  -> velnor-actions-orchestrator lock_audit::tests::lock_audit_tests::unknown_label_skips_loudly_without_blocking
+velnor-actions-orchestrator matrix_step::matrix_step_tests::doc_obligation_step_carries_typed_rustdocflags
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tests::doc_obligation_step_carries_typed_rustdocflags
+velnor-actions-orchestrator matrix_step::matrix_step_tests::every_workspace_member_is_classified
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tests::every_workspace_member_is_classified
+velnor-actions-orchestrator matrix_step::matrix_step_tests::identity_env_contract_enforces_in_every_build
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tests::identity_env_contract_enforces_in_every_build
+velnor-actions-orchestrator matrix_step::matrix_step_tests::non_doc_obligation_steps_carry_no_rustdocflags
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tests::non_doc_obligation_steps_carry_no_rustdocflags
+velnor-actions-orchestrator matrix_step::matrix_step_tests::obligation_step_carries_the_report_lookup_key
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tests::obligation_step_carries_the_report_lookup_key
+velnor-actions-orchestrator matrix_step::matrix_step_tests::obligation_step_skips_when_plan_covered_it
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tests::obligation_step_skips_when_plan_covered_it
+velnor-actions-orchestrator matrix_step::matrix_step_tests::outcome_and_deferred_share_one_start_file
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tests::outcome_and_deferred_share_one_start_file
+velnor-actions-orchestrator matrix_step::matrix_step_tests::report_wrapper_stamps_start_and_hands_env_to_helper
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tests::report_wrapper_stamps_start_and_hands_env_to_helper
+velnor-actions-orchestrator matrix_step::matrix_step_tests::tofu_obligation_steps_carry_the_automation_pair
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tests::tofu_obligation_steps_carry_the_automation_pair
+velnor-actions-orchestrator matrix_step::matrix_step_tests::validator_installs_follow_executed_suite_per_policy
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tests::validator_installs_follow_executed_suite_per_policy
+velnor-actions-orchestrator matrix_step::matrix_step_tofu_install_tests::every_workspace_member_is_classified_for_tofu
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tofu_install_tests::every_workspace_member_is_classified_for_tofu
+velnor-actions-orchestrator matrix_step::matrix_step_tofu_install_tests::mise_crate_job_prepare_installs_opentofu
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tofu_install_tests::mise_crate_job_prepare_installs_opentofu
+velnor-actions-orchestrator matrix_step::matrix_step_tofu_install_tests::tofu_install_follows_executed_suite_per_policy
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tofu_install_tests::tofu_install_follows_executed_suite_per_policy
+velnor-actions-orchestrator matrix_step::matrix_step_tofu_tests::stackless_obligation_task_ids_keep_malformed_vocabulary
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tofu_tests::stackless_obligation_task_ids_keep_malformed_vocabulary
+velnor-actions-orchestrator matrix_step::matrix_step_tofu_tests::tofu_obligation_step_carries_isolated_cache_dir
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tofu_tests::tofu_obligation_step_carries_isolated_cache_dir
+velnor-actions-orchestrator matrix_step::matrix_step_tofu_tests::tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tofu_tests::tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env
+velnor-actions-orchestrator matrix_step::matrix_step_tofu_tests::tofu_step_env_rejects_triple_and_reserved_keys
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tofu_tests::tofu_step_env_rejects_triple_and_reserved_keys
+velnor-actions-orchestrator matrix_step::matrix_step_tofu_tests::tofu_step_names_render_through_tofu_table
+  -> velnor-actions-orchestrator matrix_step::tests::matrix_step_tofu_tests::tofu_step_names_render_through_tofu_table
+velnor-actions-orchestrator merge_request::actual_event_strict_tests::duplicate_payload_keys_fail_closed
+  -> velnor-actions-orchestrator merge_request::tests::actual_event_strict_tests::duplicate_payload_keys_fail_closed
+velnor-actions-orchestrator merge_request::merge_event_tests::assembly_captures_actual_event
+  -> velnor-actions-orchestrator merge_request::tests::merge_event_tests::assembly_captures_actual_event
+velnor-actions-orchestrator merge_request::merge_event_tests::assembly_reads_attestation_in_candidate_mode
+  -> velnor-actions-orchestrator merge_request::tests::merge_event_tests::assembly_reads_attestation_in_candidate_mode
+velnor-actions-orchestrator merge_request::merge_request_tests::assembly_reads_expected_only_and_sorts_reports
+  -> velnor-actions-orchestrator merge_request::tests::merge_request_tests::assembly_reads_expected_only_and_sorts_reports
+velnor-actions-orchestrator merge_request::merge_request_tests::assembly_records_gaps_and_rejects_bad_report
+  -> velnor-actions-orchestrator merge_request::tests::merge_request_tests::assembly_records_gaps_and_rejects_bad_report
+velnor-actions-orchestrator merge_request::merge_request_tests::assembly_rejects_duplicate_keys_in_staged_json
+  -> velnor-actions-orchestrator merge_request::tests::merge_request_tests::assembly_rejects_duplicate_keys_in_staged_json
+velnor-actions-orchestrator merge_request::merge_request_tests::assembly_rejects_links_oversize_and_unreadable_inputs
+  -> velnor-actions-orchestrator merge_request::tests::merge_request_tests::assembly_rejects_links_oversize_and_unreadable_inputs
+velnor-actions-orchestrator merge_request::merge_request_tests::assembly_shape_carries_no_base
+  -> velnor-actions-orchestrator merge_request::tests::merge_request_tests::assembly_shape_carries_no_base
+velnor-actions-orchestrator merge_request::merge_request_tests::dropped_or_missing_expected_inventory_fails_closed
+  -> velnor-actions-orchestrator merge_request::tests::merge_request_tests::dropped_or_missing_expected_inventory_fails_closed
+velnor-actions-orchestrator merge_request::merge_request_tests::event_payload_refuses_symlink
+  -> velnor-actions-orchestrator merge_request::tests::merge_request_tests::event_payload_refuses_symlink
+velnor-actions-orchestrator merge_request::merge_request_tests::request_file_writes_exclusively
+  -> velnor-actions-orchestrator merge_request::tests::merge_request_tests::request_file_writes_exclusively
+velnor-actions-orchestrator noop_report::noop_report_tests::noop_digest_key_is_disjoint_from_exec_digest_key
+  -> velnor-actions-orchestrator noop_report::tests::noop_report_tests::noop_digest_key_is_disjoint_from_exec_digest_key
+velnor-actions-orchestrator noop_report::noop_report_tests::noop_op_contract_pins_wire_strings
+  -> velnor-actions-orchestrator noop_report::tests::noop_report_tests::noop_op_contract_pins_wire_strings
+velnor-actions-orchestrator noop_report::noop_report_tests::noop_rejects_contradictions
+  -> velnor-actions-orchestrator noop_report::tests::noop_report_tests::noop_rejects_contradictions
+velnor-actions-orchestrator noop_report::noop_report_tests::noop_rejects_malformed_run_key_before_path_join
+  -> velnor-actions-orchestrator noop_report::tests::noop_report_tests::noop_rejects_malformed_run_key_before_path_join
+velnor-actions-orchestrator noop_report::noop_report_tests::noop_report_writes_not_selected_with_reason
+  -> velnor-actions-orchestrator noop_report::tests::noop_report_tests::noop_report_writes_not_selected_with_reason
+velnor-actions-orchestrator noop_report::noop_report_tests::noop_request_parsing_is_strict
+  -> velnor-actions-orchestrator noop_report::tests::noop_report_tests::noop_request_parsing_is_strict
+velnor-actions-orchestrator pins::tests::acquisition_rejects_tampered_platform
+  -> velnor-actions-orchestrator pins::tests::pins_tests::acquisition_rejects_tampered_platform
+velnor-actions-orchestrator pins::tests::acquisition_template_selects_native_checksum_by_typed_target
+  -> velnor-actions-orchestrator pins::tests::pins_tests::acquisition_template_selects_native_checksum_by_typed_target
+velnor-actions-orchestrator pins::tests::consumer_acquire_uses_native_checksum_utility_for_each_target
+  -> velnor-actions-orchestrator pins::tests::pins_tests::consumer_acquire_uses_native_checksum_utility_for_each_target
+velnor-actions-orchestrator pins::tests::consumer_gate_rejects_attacker_manifests
+  -> velnor-actions-orchestrator pins::tests::pins_tests::consumer_gate_rejects_attacker_manifests
+velnor-actions-orchestrator pins::tests::consumer_manifest_mismatch_and_bad_target_fail
+  -> velnor-actions-orchestrator pins::tests::pins_tests::consumer_manifest_mismatch_and_bad_target_fail
+velnor-actions-orchestrator pins::tests::consumer_manifest_without_commit_fails
+  -> velnor-actions-orchestrator pins::tests::pins_tests::consumer_manifest_without_commit_fails
+velnor-actions-orchestrator pins::tests::fixture_manifest_embeds_runner_target_record
+  -> velnor-actions-orchestrator pins::tests::pins_tests::fixture_manifest_embeds_runner_target_record
+velnor-actions-orchestrator pins::tests::lock_acquire_uses_native_checksum_utility_for_each_target
+  -> velnor-actions-orchestrator pins::tests::pins_tests::lock_acquire_uses_native_checksum_utility_for_each_target
+velnor-actions-orchestrator pins::tests::macos_helper_asset_and_native_digest_match_runner
+  -> velnor-actions-orchestrator pins::tests::pins_tests::macos_helper_asset_and_native_digest_match_runner
+velnor-actions-orchestrator pins::tests::mise_setup_accepts_approved_override_only
+  -> velnor-actions-orchestrator pins::tests::pins_tests::mise_setup_accepts_approved_override_only
+velnor-actions-orchestrator pins::tests::mise_setup_defaults_to_compiled_pins
+  -> velnor-actions-orchestrator pins::tests::pins_tests::mise_setup_defaults_to_compiled_pins
+velnor-actions-orchestrator pins::tests::mise_setup_rejects_non_linux_runners
+  -> velnor-actions-orchestrator pins::tests::pins_tests::mise_setup_rejects_non_linux_runners
+velnor-actions-orchestrator pins::tests::setup_uses_extracted_binary_digest_for_each_platform
+  -> velnor-actions-orchestrator pins::tests::pins_tests::setup_uses_extracted_binary_digest_for_each_platform
+velnor-actions-orchestrator pins::tests::source_build_consumer_generation_fails_with_provenance
+  -> velnor-actions-orchestrator pins::tests::pins_tests::source_build_consumer_generation_fails_with_provenance
+velnor-actions-orchestrator pins::tests::verification_mise_setup_pins_each_runner_architecture
+  -> velnor-actions-orchestrator pins::tests::pins_tests::verification_mise_setup_pins_each_runner_architecture
+velnor-actions-orchestrator preseed_manifest::tests::invalid_inputs_fail_closed
+  -> velnor-actions-orchestrator preseed_manifest::tests::preseed_manifest_tests::invalid_inputs_fail_closed
+velnor-actions-orchestrator preseed_manifest::tests::manifest_shape_is_exact_with_real_digest
+  -> velnor-actions-orchestrator preseed_manifest::tests::preseed_manifest_tests::manifest_shape_is_exact_with_real_digest
+velnor-actions-orchestrator preseed_manifest::tests::names_match_renderer_consts
+  -> velnor-actions-orchestrator preseed_manifest::tests::preseed_manifest_tests::names_match_renderer_consts
+velnor-actions-orchestrator publish_job::publish_job_tests::publish_job_needs_required_and_gates_push
+  -> velnor-actions-orchestrator publish_job::tests::publish_job_needs_required_and_gates_push
+velnor-actions-orchestrator publish_job::publish_job_tests::publish_job_rejects_malformed_branches
+  -> velnor-actions-orchestrator publish_job::tests::publish_job_rejects_malformed_branches
+velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::baseline_skips_bad_repo_before_branch_lookup
+  -> velnor-actions-orchestrator retrieve_baseline::tests::retrieve_baseline_tests::baseline_skips_bad_repo_before_branch_lookup
+velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::baseline_skips_invalid_base_before_branch_lookup
+  -> velnor-actions-orchestrator retrieve_baseline::tests::retrieve_baseline_tests::baseline_skips_invalid_base_before_branch_lookup
+velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::baseline_skips_plan_without_base
+  -> velnor-actions-orchestrator retrieve_baseline::tests::retrieve_baseline_tests::baseline_skips_plan_without_base
+velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::baseline_skips_unparsable_plan_without_spawning
+  -> velnor-actions-orchestrator retrieve_baseline::tests::retrieve_baseline_tests::baseline_skips_unparsable_plan_without_spawning
+velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::baseline_skips_when_nothing_covered
+  -> velnor-actions-orchestrator retrieve_baseline::tests::retrieve_baseline_tests::baseline_skips_when_nothing_covered
+velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::baseline_skips_when_staged_file_wins
+  -> velnor-actions-orchestrator retrieve_baseline::tests::retrieve_baseline_tests::baseline_skips_when_staged_file_wins
+velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::baseline_skips_when_staged_symlink_planted
+  -> velnor-actions-orchestrator retrieve_baseline::tests::retrieve_baseline_tests::baseline_skips_when_staged_symlink_planted
+velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::default_branch_args_pins_repo_and_rejects_bad_slug
+  -> velnor-actions-orchestrator retrieve_baseline::tests::retrieve_baseline_tests::default_branch_args_pins_repo_and_rejects_bad_slug
+velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::parse_default_branch_accepts_only_strict_names
+  -> velnor-actions-orchestrator retrieve_baseline::tests::retrieve_baseline_tests::parse_default_branch_accepts_only_strict_names
+velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::stage_manifest_writes_canonically_and_never_overwrites
+  -> velnor-actions-orchestrator retrieve_baseline::tests::retrieve_baseline_tests::stage_manifest_writes_canonically_and_never_overwrites
+velnor-actions-orchestrator retrieve_reports::retrieve_reports_enumeration_tests::enumeration_dedupes_shared_job_artifacts
+  -> velnor-actions-orchestrator retrieve_reports::tests::retrieve_reports_enumeration_tests::enumeration_dedupes_shared_job_artifacts
+velnor-actions-orchestrator retrieve_reports::retrieve_reports_enumeration_tests::enumeration_follows_plan_order
+  -> velnor-actions-orchestrator retrieve_reports::tests::retrieve_reports_enumeration_tests::enumeration_follows_plan_order
+velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::malformed_ids_skip_before_join_and_mkdir
+  -> velnor-actions-orchestrator retrieve_reports::tests::retrieve_reports_tests::malformed_ids_skip_before_join_and_mkdir
+velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::missing_plan_retrieves_zero_without_spawning
+  -> velnor-actions-orchestrator retrieve_reports::tests::retrieve_reports_tests::missing_plan_retrieves_zero_without_spawning
+velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::oversize_and_duplicate_key_plans_retrieve_zero
+  -> velnor-actions-orchestrator retrieve_reports::tests::retrieve_reports_tests::oversize_and_duplicate_key_plans_retrieve_zero
+velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::retrieve_argv_names_exact_artifact
+  -> velnor-actions-orchestrator retrieve_reports::tests::retrieve_reports_tests::retrieve_argv_names_exact_artifact
+velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::retrieve_plan_read_is_bounded
+  -> velnor-actions-orchestrator retrieve_reports::tests::retrieve_reports_tests::retrieve_plan_read_is_bounded
+velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::staged_bytes_cover_every_failure_class
+  -> velnor-actions-orchestrator retrieve_reports::tests::retrieve_reports_tests::staged_bytes_cover_every_failure_class
+velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::staged_symlinks_reject_and_nested_layout_reads
+  -> velnor-actions-orchestrator retrieve_reports::tests::retrieve_reports_tests::staged_symlinks_reject_and_nested_layout_reads
+velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::staged_task_file_rejects_duplicate_keys
+  -> velnor-actions-orchestrator retrieve_reports::tests::retrieve_reports_tests::staged_task_file_rejects_duplicate_keys
+velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::staged_task_files_cover_success_and_tokens
+  -> velnor-actions-orchestrator retrieve_reports::tests::retrieve_reports_tests::staged_task_files_cover_success_and_tokens
+velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::staged_tokens_cover_every_failure_class
+  -> velnor-actions-orchestrator retrieve_reports::tests::retrieve_reports_tests::staged_tokens_cover_every_failure_class
+velnor-actions-orchestrator retrieve_retry::retrieve_retry_tests::retry_stops_at_first_success_and_at_the_bound
+  -> velnor-actions-orchestrator retrieve_retry::tests::retry_stops_at_first_success_and_at_the_bound
+velnor-actions-orchestrator select::group_selection_tests::unchanged_named_check_executes_without_fabricating_a_source_change
+  -> velnor-actions-orchestrator select::tests::unchanged_named_check_executes_without_fabricating_a_source_change
+velnor-actions-orchestrator select_affected::tests::declared_inputs_select_their_package
+  -> velnor-actions-orchestrator select_affected::tests::select_affected_tests::declared_inputs_select_their_package
+velnor-actions-orchestrator select_affected::tests::lone_root_package_classifies_everything
+  -> velnor-actions-orchestrator select_affected::tests::select_affected_tests::lone_root_package_classifies_everything
+velnor-actions-orchestrator select_affected::tests::nested_change_selects_deepest_beside_root
+  -> velnor-actions-orchestrator select_affected::tests::select_affected_tests::nested_change_selects_deepest_beside_root
+velnor-actions-orchestrator select_affected::tests::root_package_does_not_classify_stray_files
+  -> velnor-actions-orchestrator select_affected::tests::select_affected_tests::root_package_does_not_classify_stray_files
+velnor-actions-orchestrator select_affected::tests::shared_declared_input_selects_every_declarer
+  -> velnor-actions-orchestrator select_affected::tests::select_affected_tests::shared_declared_input_selects_every_declarer
+velnor-actions-orchestrator select_affected::tests::skipped_index_names_broaden_with_explicit_tag
+  -> velnor-actions-orchestrator select_affected::tests::select_affected_tests::skipped_index_names_broaden_with_explicit_tag
+velnor-actions-orchestrator select_affected::tests::union_of_base_and_head_graphs_selects_removed_consumers
+  -> velnor-actions-orchestrator select_affected::tests::select_affected_tests::union_of_base_and_head_graphs_selects_removed_consumers
+velnor-actions-orchestrator select_tofu::select_tofu_tests::chdir_findings_name_each_subdir_root_once
+  -> velnor-actions-orchestrator select_tofu::tests::select_tofu_tests::chdir_findings_name_each_subdir_root_once
+velnor-actions-orchestrator select_tofu::select_tofu_tests::derive_tofu_inits_once_per_root
+  -> velnor-actions-orchestrator select_tofu::tests::select_tofu_tests::derive_tofu_inits_once_per_root
+velnor-actions-orchestrator select_tofu::select_tofu_tests::derive_tofu_marks_empty_fmt_scopes_no_targets
+  -> velnor-actions-orchestrator select_tofu::tests::select_tofu_tests::derive_tofu_marks_empty_fmt_scopes_no_targets
+velnor-actions-orchestrator select_tofu::select_tofu_tests::derive_tofu_merges_nested_fmt_scopes
+  -> velnor-actions-orchestrator select_tofu::tests::select_tofu_tests::derive_tofu_merges_nested_fmt_scopes
+velnor-actions-orchestrator select_tofu::select_tofu_tests::derive_tofu_proposes_triples_with_fmt_scope_targets
+  -> velnor-actions-orchestrator select_tofu::tests::select_tofu_tests::derive_tofu_proposes_triples_with_fmt_scope_targets
+velnor-actions-orchestrator select_tofu::select_tofu_tests::no_tofu_roots_passes_through_without_git
+  -> velnor-actions-orchestrator select_tofu::tests::select_tofu_tests::no_tofu_roots_passes_through_without_git
+velnor-actions-orchestrator select_tofu::select_tofu_tests::rust_kind_predicates_and_tool_needs_stay_false_for_tofu
+  -> velnor-actions-orchestrator select_tofu::tests::select_tofu_tests::rust_kind_predicates_and_tool_needs_stay_false_for_tofu
+velnor-actions-orchestrator select_tofu::select_tofu_tests::selected_roots_derive_from_selected_statuses_only
+  -> velnor-actions-orchestrator select_tofu::tests::select_tofu_tests::selected_roots_derive_from_selected_statuses_only
+velnor-actions-orchestrator task_report::check_gate_tests::container_declaration_without_receipt_fails_after_assembly_errors_cleared
+  -> velnor-actions-orchestrator task_report::tests::check_gate_tests::container_declaration_without_receipt_fails_after_assembly_errors_cleared
+velnor-actions-orchestrator task_report::check_gate_tests::corrupted_deleted_skipped_and_foreign_evidence_fail_final_gate
+  -> velnor-actions-orchestrator task_report::tests::check_gate_tests::corrupted_deleted_skipped_and_foreign_evidence_fail_final_gate
+velnor-actions-orchestrator task_report::check_gate_tests::forged_receipt_hash_does_not_bypass_scenario_validation
+  -> velnor-actions-orchestrator task_report::tests::check_gate_tests::forged_receipt_hash_does_not_bypass_scenario_validation
+velnor-actions-orchestrator task_report::check_gate_tests::generic_report_producer_refuses_named_check_success
+  -> velnor-actions-orchestrator task_report::tests::check_gate_tests::generic_report_producer_refuses_named_check_success
+velnor-actions-orchestrator task_report::check_gate_tests::genuine_receipt_and_scenario_bytes_pass_assembled_final_gate
+  -> velnor-actions-orchestrator task_report::tests::check_gate_tests::genuine_receipt_and_scenario_bytes_pass_assembled_final_gate
+velnor-actions-orchestrator task_report::check_gate_tests::missing_qualified_observation_transport_fails_final_gate
+  -> velnor-actions-orchestrator task_report::tests::check_gate_tests::missing_qualified_observation_transport_fails_final_gate
+velnor-actions-orchestrator task_report::check_gate_tests::native_pin_without_matching_runtime_proof_fails_final_gate
+  -> velnor-actions-orchestrator task_report::tests::check_gate_tests::native_pin_without_matching_runtime_proof_fails_final_gate
+velnor-actions-orchestrator task_report::check_gate_tests::omitted_native_proof_field_is_not_an_empty_verified_set
+  -> velnor-actions-orchestrator task_report::tests::check_gate_tests::omitted_native_proof_field_is_not_an_empty_verified_set
+velnor-actions-orchestrator task_report::check_gate_tests::ordinary_matching_task_reports_without_receipt_cannot_pass
+  -> velnor-actions-orchestrator task_report::tests::check_gate_tests::ordinary_matching_task_reports_without_receipt_cannot_pass
+velnor-actions-orchestrator task_report::check_gate_tests::receipt_budget_tests::maximum_admitted_receipt_survives_the_staged_gate_reader
+  -> velnor-actions-orchestrator task_report::tests::receipt_budget_tests::maximum_admitted_receipt_survives_the_staged_gate_reader
+velnor-actions-orchestrator task_report::check_gate_tests::receipt_budget_tests::maximum_container_admitted_receipt_survives_the_staged_gate_reader
+  -> velnor-actions-orchestrator task_report::tests::receipt_budget_tests::maximum_container_admitted_receipt_survives_the_staged_gate_reader
+velnor-actions-orchestrator task_report::task_report_cover_tests::covered_downstream_skips_silently_behind_failure
+  -> velnor-actions-orchestrator task_report::tests::task_report_cover_tests::covered_downstream_skips_silently_behind_failure
+velnor-actions-orchestrator task_report::task_report_cover_tests::covered_obligation_reports_nothing_and_succeeds
+  -> velnor-actions-orchestrator task_report::tests::task_report_cover_tests::covered_obligation_reports_nothing_and_succeeds
+velnor-actions-orchestrator task_report::task_report_cover_tests::load_plan_strict_tests::plan_read_is_bounded_and_duplicate_rejecting
+  -> velnor-actions-orchestrator task_report::tests::load_plan_strict_tests::plan_read_is_bounded_and_duplicate_rejecting
+velnor-actions-orchestrator task_report::task_report_merge_tests::merge_blocks_all_skipped_noop_end_to_end
+  -> velnor-actions-orchestrator task_report::tests::task_report_merge_tests::merge_blocks_all_skipped_noop_end_to_end
+velnor-actions-orchestrator task_report::task_report_merge_tests::merge_fails_failing_obligation_and_blocks_downstream
+  -> velnor-actions-orchestrator task_report::tests::task_report_merge_tests::merge_fails_failing_obligation_and_blocks_downstream
+velnor-actions-orchestrator task_report::task_report_merge_tests::merge_flips_not_run_to_executed_end_to_end
+  -> velnor-actions-orchestrator task_report::tests::task_report_merge_tests::merge_flips_not_run_to_executed_end_to_end
+velnor-actions-orchestrator task_report::task_report_merge_tests::merge_lists_shared_job_artifact_once
+  -> velnor-actions-orchestrator task_report::tests::task_report_merge_tests::merge_lists_shared_job_artifact_once
+velnor-actions-orchestrator task_report::task_report_merge_tests::provider_hit_validate_execution_aggregates_executed
+  -> velnor-actions-orchestrator task_report::tests::task_report_merge_tests::provider_hit_validate_execution_aggregates_executed
+velnor-actions-orchestrator task_report::task_report_order_tests::empty_downstream_follows_execution_order_not_matrix_order
+  -> velnor-actions-orchestrator task_report::tests::task_report_order_tests::empty_downstream_follows_execution_order_not_matrix_order
+velnor-actions-orchestrator task_report::task_report_tests::ambiguous_entries_refuse_rather_than_guess
+  -> velnor-actions-orchestrator task_report::tests::task_report_tests::ambiguous_entries_refuse_rather_than_guess
+velnor-actions-orchestrator task_report::task_report_tests::downstream_ids_split_dedupe_and_drop_blanks
+  -> velnor-actions-orchestrator task_report::tests::task_report_tests::downstream_ids_split_dedupe_and_drop_blanks
+velnor-actions-orchestrator task_report::task_report_tests::executed_report_binds_plan_identities
+  -> velnor-actions-orchestrator task_report::tests::task_report_tests::executed_report_binds_plan_identities
+velnor-actions-orchestrator task_report::task_report_tests::exit_codes_accept_the_eight_bit_range
+  -> velnor-actions-orchestrator task_report::tests::task_report_tests::exit_codes_accept_the_eight_bit_range
+velnor-actions-orchestrator task_report::task_report_tests::failed_report_marks_entry_failed
+  -> velnor-actions-orchestrator task_report::tests::task_report_tests::failed_report_marks_entry_failed
+velnor-actions-orchestrator task_report::task_report_tests::failure_reports_downstream_skips_and_success_reports_none
+  -> velnor-actions-orchestrator task_report::tests::task_report_tests::failure_reports_downstream_skips_and_success_reports_none
+velnor-actions-orchestrator task_report::task_report_tests::planted_symlink_at_report_path_refuses_without_writing
+  -> velnor-actions-orchestrator task_report::tests::task_report_tests::planted_symlink_at_report_path_refuses_without_writing
+velnor-actions-orchestrator task_report::task_report_tests::start_stamps_parse_and_measure_or_fail_closed
+  -> velnor-actions-orchestrator task_report::tests::task_report_tests::start_stamps_parse_and_measure_or_fail_closed
+velnor-actions-orchestrator task_report::task_report_tests::tofu_executed_report_carries_measured_timing
+  -> velnor-actions-orchestrator task_report::tests::task_report_tests::tofu_executed_report_carries_measured_timing
+velnor-actions-orchestrator task_report::task_report_tests::unbound_inputs_fail_before_writing
+  -> velnor-actions-orchestrator task_report::tests::task_report_tests::unbound_inputs_fail_before_writing
+velnor-actions-orchestrator vectors::vectors_tests::candidate_build_delegates_to_mise_constructor
+  -> velnor-actions-orchestrator vectors::tests::vectors_tests::candidate_build_delegates_to_mise_constructor
+velnor-actions-orchestrator vectors::vectors_tests::mbx_probe_vector_is_byte_exact
+  -> velnor-actions-orchestrator vectors::tests::vectors_tests::mbx_probe_vector_is_byte_exact
+velnor-actions-orchestrator vectors::vectors_tests::policy_vectors_pin_specs_and_payloads
+  -> velnor-actions-orchestrator vectors::tests::vectors_tests::policy_vectors_pin_specs_and_payloads
+velnor-actions-orchestrator vectors::vectors_tests::section4_build_vector_is_byte_exact
+  -> velnor-actions-orchestrator vectors::tests::vectors_tests::section4_build_vector_is_byte_exact
+velnor-actions-orchestrator vectors::vectors_tests::task_payload_program_follows_route_driver
+  -> velnor-actions-orchestrator vectors::tests::vectors_tests::task_payload_program_follows_route_driver
+velnor-actions-orchestrator vectors::vectors_tests::task_runner_tools_follow_test_runner
+  -> velnor-actions-orchestrator vectors::tests::vectors_tests::task_runner_tools_follow_test_runner
+velnor-actions-orchestrator vectors::vectors_tests::tofu_subdir_payload_runs_under_chdir_first
+  -> velnor-actions-orchestrator vectors::tests::vectors_tests::tofu_subdir_payload_runs_under_chdir_first
+velnor-actions-orchestrator vectors::vectors_tests::tofu_task_argv_routes_through_pinned_opentofu
+  -> velnor-actions-orchestrator vectors::tests::vectors_tests::tofu_task_argv_routes_through_pinned_opentofu
+velnor-actions-orchestrator vectors::vectors_tests::zizmor_vector_is_pinned_and_offline
+  -> velnor-actions-orchestrator vectors::tests::vectors_tests::zizmor_vector_is_pinned_and_offline
+velnor-actions-orchestrator workflow::check_jobs::tests::fork_admission_skips_external_runner_and_required_rejects_skip
+  -> velnor-actions-orchestrator workflow::check_jobs::tests::check_jobs_tests::fork_admission_skips_external_runner_and_required_rejects_skip
+velnor-actions-orchestrator workflow::check_jobs::tests::generic_registry_id_generates_without_catalog_fallback_and_keeps_plan_identity
+  -> velnor-actions-orchestrator workflow::check_jobs::tests::check_jobs_tests::generic_registry_id_generates_without_catalog_fallback_and_keeps_plan_identity
+velnor-actions-orchestrator workflow::check_jobs::tests::ignored_rust_candidate_keeps_plan_inventory_toolchain
+  -> velnor-actions-orchestrator workflow::check_jobs::tests::check_jobs_tests::ignored_rust_candidate_keeps_plan_inventory_toolchain
+velnor-actions-orchestrator workflow::check_jobs::tests::mixed_platform_checks_keep_exact_tools_and_unconditional_reports
+  -> velnor-actions-orchestrator workflow::check_jobs::tests::check_jobs_tests::mixed_platform_checks_keep_exact_tools_and_unconditional_reports
+velnor-actions-orchestrator workflow::check_jobs::tests::native_check_without_catalog_tools_adds_no_rust_install
+  -> velnor-actions-orchestrator workflow::check_jobs::tests::check_jobs_tests::native_check_without_catalog_tools_adds_no_rust_install
+velnor-actions-orchestrator workflow::check_jobs::tests::no_cargo_checks_gate_required_without_becoming_rust_jobs
+  -> velnor-actions-orchestrator workflow::check_jobs::tests::check_jobs_tests::no_cargo_checks_gate_required_without_becoming_rust_jobs
+velnor-actions-orchestrator workflow::check_jobs::tests::required_rejects_failed_or_missing_named_check
+  -> velnor-actions-orchestrator workflow::check_jobs::tests::check_jobs_tests::required_rejects_failed_or_missing_named_check
+velnor-actions-orchestrator workflow::wire_w1::wire_w1_tests::checkout_full_provides_history_for_git_archaeology
+  -> velnor-actions-orchestrator workflow::wire_w1::tests::wire_w1_tests::checkout_full_provides_history_for_git_archaeology
+velnor-actions-orchestrator workflow::wire_w1::wire_w1_tests::checkout_pins_canonical_ref_and_validates_inputs
+  -> velnor-actions-orchestrator workflow::wire_w1::tests::wire_w1_tests::checkout_pins_canonical_ref_and_validates_inputs
+velnor-actions-orchestrator workflow::wire_w1::wire_w1_tests::crate_driver_tools_follow_role_selection
+  -> velnor-actions-orchestrator workflow::wire_w1::tests::wire_w1_tests::crate_driver_tools_follow_role_selection
+velnor-actions-orchestrator workflow::wire_w1::wire_w1_tests::crate_tools_follow_selection_with_validators
+  -> velnor-actions-orchestrator workflow::wire_w1::tests::wire_w1_tests::crate_tools_follow_selection_with_validators
+velnor-actions-orchestrator workflow::wire_w1::wire_w1_tests::crate_tools_install_exact_pinned_set
+  -> velnor-actions-orchestrator workflow::wire_w1::tests::wire_w1_tests::crate_tools_install_exact_pinned_set
+velnor-actions-orchestrator workflow::wire_w1::wire_w1_tests::syntax_gate_allows_matrix_and_rejects_native
+  -> velnor-actions-orchestrator workflow::wire_w1::tests::wire_w1_tests::syntax_gate_allows_matrix_and_rejects_native
+velnor-actions-orchestrator workflow::wire_w1::wire_w1_tests::task_cache_steps_need_fixture_and_live_mode
+  -> velnor-actions-orchestrator workflow::wire_w1::tests::wire_w1_tests::task_cache_steps_need_fixture_and_live_mode
+velnor-actions-orchestrator workflow_jobs::workflow_jobs_tests::final_job_needs_plan_crates_and_lint
+  -> velnor-actions-orchestrator workflow_jobs::tests::workflow_jobs_tests::final_job_needs_plan_crates_and_lint
+velnor-actions-orchestrator workflow_jobs::workflow_jobs_tests::final_job_writes_request_before_merge
+  -> velnor-actions-orchestrator workflow_jobs::tests::workflow_jobs_tests::final_job_writes_request_before_merge
+velnor-actions-orchestrator workflow_jobs::workflow_jobs_tests::plan_job_checks_out_full_history_for_archaeology
+  -> velnor-actions-orchestrator workflow_jobs::tests::workflow_jobs_tests::plan_job_checks_out_full_history_for_archaeology
+velnor-actions-orchestrator workflow_jobs::workflow_jobs_tests::plan_job_prepares_pinned_tools_before_generate_consumers
+  -> velnor-actions-orchestrator workflow_jobs::tests::workflow_jobs_tests::plan_job_prepares_pinned_tools_before_generate_consumers
+velnor-actions-orchestrator workflow_jobs::workflow_jobs_tests::plan_job_writes_request_before_plan
+  -> velnor-actions-orchestrator workflow_jobs::tests::workflow_jobs_tests::plan_job_writes_request_before_plan
+velnor-actions-orchestrator workflow_jobs::workflow_jobs_tests::plan_tools_follow_role_in_all_order
+  -> velnor-actions-orchestrator workflow_jobs::tests::workflow_jobs_tests::plan_tools_follow_role_in_all_order
+velnor-actions-orchestrator workflow_jobs::workflow_jobs_tests::pure_tofu_plan_drops_all_rust_setup
+  -> velnor-actions-orchestrator workflow_jobs::tests::workflow_jobs_tests::pure_tofu_plan_drops_all_rust_setup

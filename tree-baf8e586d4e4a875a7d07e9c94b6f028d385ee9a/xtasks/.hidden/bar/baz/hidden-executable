@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euxo pipefail
+
+cargo clippy -- -Dwarnings
+cargo fmt --all -- --check
+prettier -c $(git ls-files '*.yml' '*.yaml')
+markdownlint .
+actionlint

@@ -1,0 +1,163 @@
+# Vfox Backend
+
+::: tip
+vfox is the recommended plugin system for mise. It provides cross-platform support, built-in modules, and a modern hook-based architecture.
+:::
+
+Plugins for [vfox](https://github.com/version-fox/vfox) can be used in mise to install tools.
+
+## Why vfox?
+
+- **Cross-platform** — plugins work on Windows, macOS, and Linux without platform-specific code
+- **Built-in modules** — HTTP, JSON, HTML parsing, archive extraction, semver comparison, and logging are all available out of the box, with no external dependencies needed
+- **Security** — [tool plugins](../../tool-plugin-development.md) support attestation verification (GitHub artifact attestations, cosign signatures, SLSA provenance) for downloaded artifacts. When a tool plugin's `PreInstall` hook returns an `attestation` table, mise verifies it during install and records the result in `mise.lock`, protecting against downgrade attacks on subsequent installs. Backend plugins do not currently support attestation
+- **Modern architecture** — structured hooks with typed contexts, backend plugins for multi-tool management, rolling version checksums, and lock file support
+
+The code for this is inside the mise repository at [`./src/backend/vfox.rs`](https://github.com/jdx/mise/blob/main/src/backend/vfox.rs).
+
+## Dependencies
+
+No extra system packages are required to _run_ the vfox backend. vfox Lua code is executed by the interpreter built into mise.
+
+## Usage
+
+The following installs the latest version of cmake and sets it as the active version on PATH:
+
+```sh
+$ mise use -g vfox:version-fox/vfox-cmake
+$ cmake --version
+cmake version 3.21.3
+```
+
+The version will be set in `~/.config/mise/config.toml` with the following format:
+
+```toml
+[tools]
+"vfox:version-fox/vfox-cmake" = "latest"
+```
+
+## Default plugin backend
+
+On Windows, mise uses vfox plugins by default.
+To use vfox plugins by default on Linux/macOS as well, run the following:
+
+```sh
+mise settings add disable_backends asdf
+```
+
+Now you can list available plugins with `mise registry`:
+
+```sh
+$ mise registry | grep vfox:
+clang                         vfox:mise-plugins/vfox-clang
+cmake                         vfox:mise-plugins/vfox-cmake
+crystal                       vfox:mise-plugins/vfox-crystal
+dart                          vfox:mise-plugins/vfox-dart
+dotnet                        vfox:mise-plugins/vfox-dotnet
+etcd                          aqua:etcd-io/etcd vfox:mise-plugins/vfox-etcd
+flutter                       vfox:mise-plugins/vfox-flutter
+gradle                        aqua:gradle/gradle vfox:mise-plugins/vfox-gradle
+groovy                        vfox:mise-plugins/vfox-groovy
+kotlin                        vfox:mise-plugins/vfox-kotlin
+maven                         aqua:apache/maven vfox:mise-plugins/vfox-maven
+php                           vfox:mise-plugins/vfox-php
+scala                         vfox:mise-plugins/vfox-scala
+terraform                     aqua:hashicorp/terraform vfox:mise-plugins/vfox-terraform
+```
+
+They are installed when you run commands such as `mise use -g cmake`, without needing to
+specify `vfox:cmake`.
+
+## Plugins
+
+In addition to the standard vfox plugins, mise supports modern plugins that can manage multiple tools using the `plugin:tool` format. These plugins are well suited to:
+
+- Installing tools from private repositories
+- Package managers (npm, pip, etc.)
+- Custom tool families
+
+### Example: Plugin Usage
+
+```bash
+# Install a plugin
+mise plugin install my-plugin https://github.com/username/my-plugin
+
+# Use the plugin:tool format
+mise install my-plugin:some-tool@1.0.0
+mise use my-plugin:some-tool@latest
+```
+
+### Install from Zip File
+
+```bash
+# Install a plugin from a zip file over HTTPS
+mise plugin install <plugin-name> <zip-url>
+# Example: Installing a plugin from a zip file
+mise plugin install vfox-cmake https://github.com/mise-plugins/vfox-cmake/archive/refs/heads/main.zip
+```
+
+For more information, see:
+
+- [Using Plugins](../../plugin-usage.md) - End-user guide
+- [Plugin Development](../../tool-plugin-development.md) - Developer guide
+- [Plugin Template](https://github.com/jdx/mise-tool-plugin-template) - Quick start template for creating plugins
+
+## URL replacements
+
+The vfox backend honors mise's [`url_replacements`](/url-replacements.html) setting for both
+tool artifact downloads and requests made through the plugin's built-in Lua HTTP module. This
+includes `http.get`, `http.head`, `http.download_file`, and their `try_*` variants.
+
+After applying URL replacements, vfox also uses mise's [`netrc`](/configuration/settings.html#netrc)
+setting to add HTTP Basic authentication for the destination host. An explicit `Authorization`
+header supplied by a plugin takes precedence when the request stays on the same origin.
+
+## Tool Options
+
+The following [tool-options](/dev-tools/#tool-options) are available for the `vfox` backend—these
+go in `[tools]` in `mise.toml`.
+
+Traditional vfox `PreInstall` and `PostInstall` hooks receive custom options in the structured
+`ctx.options` table. Scalar values use mise's existing string representation, while arrays and
+tables remain structured:
+
+```toml
+[tools]
+"vfox:example/plugin" = { version = "1.0.0", bundled = false, channels = ["stable", "beta"] }
+```
+
+```lua
+function PLUGIN:PreInstall(ctx)
+    local bundled = ctx.options.bundled == "false"
+    local channels = ctx.options.channels
+    -- ...
+end
+```
+
+Existing plugins can continue reading custom options from their hook environment with the
+`MISE_TOOL_OPTS__` prefix. Those variables are available only while mise runs the plugin hook and
+are not exported to the user's shell. New plugins should use `ctx.options`.
+
+### `install_env`
+
+Set environment variables for commands that a vfox plugin starts with `cmd.exec`
+during install hooks. vfox's built-in Lua HTTP, archive, and JSON helpers do not
+use these variables directly.
+
+```toml
+[tools]
+"vfox:version-fox/vfox-cmake" = { version = "latest", install_env = { HTTPS_PROXY = "http://proxy.example" } }
+```
+
+### Install dependencies
+
+Plugin authors should declare intrinsic install requirements with `PLUGIN.depends` in
+`metadata.lua`. Users can supplement those declarations with the
+[`depends` tool option](/dev-tools/#tool-dependencies). Matching configured tools from both
+sources share one install dependency context: they are ordered before the dependent tool, and their
+paths and `tools = true` values are available to install hooks launched through `os.execute` or
+`cmd.exec`.
+
+Declarations do not configure or automatically install a tool. A matching configured dependency
+must resolve and be installed; an unconfigured dependency can still be supplied by the existing
+system or configuration `PATH`. `io.popen` does not receive this install environment.

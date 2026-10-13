@@ -1,0 +1,9 @@
+# Observer Cargo artifact closure
+
+The standalone negative-observer harness now derives the rustc input closure from the fresh Cargo resolution and `compiler-artifact` records. It binds artifacts to the resolved package and target, rejects stale, foreign, unbound, duplicate, symlinked, or changed files, stages the validated rlibs, then gives pinned rustc the staged root `--extern` and dependency search path. This removes the assumption that the root rlib's old parent directory contains every current dependency artifact.
+
+The focused Python suite passes 17 tests. A separate locked, offline Rust fixture with a root crate and `itoa` dependency emits observer outputs `9` then `10`; a control with only the old parent search path reproduces E0463 naming the root fixture crate. An injected E0308 compile failure produces no observer binary. The local fixture proof is a harness regression only. It does not qualify MBX runtime behavior, hosted CI, T06, or performance.
+
+The source review checked the 17-file import-closed unit, its 16 physical preimages, Python test and compileall records, and repository size limits. The test helper extraction keeps each file below 400 lines and each function below 80 lines. The review consumed recorded command outputs and did not rerun tests or Cargo.
+
+The PR12 Plan/Alint repair registers this fixture as a root-workspace Rust suite under `crates/`. The standalone `Cargo.toml` and `Cargo.lock` remain byte-bound JSON test data under that crate's `tests/fixtures/`; the harness materializes them with the crate's reviewed `src/lib.rs` inside a fresh private per-run `TMPDIR`. This keeps the standalone Cargo resolver available to the local artifact-closure regression while preventing a second tracked resolver and keeping its complete fixture input in the generated Rust test task closure. The source repair alone does not establish a green hosted run or qualify MBX behavior.

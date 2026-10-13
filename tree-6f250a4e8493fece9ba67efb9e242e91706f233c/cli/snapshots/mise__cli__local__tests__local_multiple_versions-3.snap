@@ -1,0 +1,8 @@
+---
+source: src/cli/local.rs
+expression: output
+---
+~/data/installs/tiny/2/bin
+~/data/installs/tiny/1/bin
+~/data/installs/tiny/3/bin
+~/data/installs/dummy/ref-master/bin

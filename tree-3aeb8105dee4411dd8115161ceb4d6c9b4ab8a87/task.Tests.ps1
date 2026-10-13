@@ -1,0 +1,360 @@
+
+Describe 'task' {
+    BeforeAll {
+        $originalPath = Get-Location
+        Set-Location TestDrive:
+        # Saved before overwriting, restored in AfterAll: Pester runs every suite in one process,
+        # so removing an inherited value here would leave the next suite without it.
+        $script:originalTrusted = [Environment]::GetEnvironmentVariable('MISE_TRUSTED_CONFIG_PATHS', 'Process')
+        # Trust the TestDrive config path - use $TestDrive for physical path, not PSDrive path
+        $env:MISE_TRUSTED_CONFIG_PATHS = $TestDrive
+
+        # Saved here, restored in AfterAll: the tests below set these and `BeforeEach` only clears
+        # them between tests in this file.
+        $script:originalShellEnv = @{}
+        foreach ($name in 'MISE_WINDOWS_EXECUTABLE_EXTENSIONS',
+            'MISE_WINDOWS_DEFAULT_FILE_SHELL_ARGS',
+            'MISE_USE_FILE_SHELL_FOR_EXECUTABLE_TASKS') {
+            $script:originalShellEnv[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+        }
+
+        # Create mise.toml that includes tasks directory
+        @'
+[task_config]
+includes = ["tasks"]
+'@ | Out-File -FilePath "mise.toml" -Encoding utf8NoBOM
+
+        # Create tasks directory
+        New-Item -ItemType Directory -Path "tasks" -Force | Out-Null
+
+        # Create filetask.bat
+        @'
+@echo off
+echo mytask
+'@ | Out-File -FilePath "tasks\filetask.bat" -Encoding ascii -NoNewline
+
+        # A task file with neither an extension nor a shebang. Deliberately *not* named
+        # `filetask`: that collapses to the same task name as `filetask.bat`, and the `.bat` is
+        # what runs, so nothing here would be exercised.
+        @'
+@echo off
+echo from-noext
+'@ | Out-File -FilePath "tasks\noexttask" -Encoding ascii -NoNewline
+
+        # Create testtask.ps1 for pwsh test
+        @'
+Write-Output "windows"
+'@ | Out-File -FilePath "tasks\testtask.ps1" -Encoding utf8NoBOM
+    }
+
+    AfterAll {
+        Set-Location $originalPath
+        if ($null -eq $script:originalTrusted) {
+            Remove-Item -Path Env:\MISE_TRUSTED_CONFIG_PATHS -ErrorAction SilentlyContinue
+        } else {
+            [Environment]::SetEnvironmentVariable('MISE_TRUSTED_CONFIG_PATHS', $script:originalTrusted, 'Process')
+        }
+        # `BeforeEach` clears these for tests *inside* this Describe, but Pester runs every suite
+        # in one process, so whatever the last test left set would leak into the next suite.
+        foreach ($name in $script:originalShellEnv.Keys) {
+            if ($null -eq $script:originalShellEnv[$name]) {
+                Remove-Item -Path "Env:\$name" -ErrorAction SilentlyContinue
+            } else {
+                [Environment]::SetEnvironmentVariable($name, $script:originalShellEnv[$name], 'Process')
+            }
+        }
+    }
+
+    BeforeEach {
+        Remove-Item -Path Env:\MISE_WINDOWS_EXECUTABLE_EXTENSIONS -ErrorAction SilentlyContinue
+        Remove-Item -Path Env:\MISE_WINDOWS_DEFAULT_FILE_SHELL_ARGS -ErrorAction SilentlyContinue
+        Remove-Item -Path Env:\MISE_USE_FILE_SHELL_FOR_EXECUTABLE_TASKS -ErrorAction SilentlyContinue
+    }
+
+    It 'executes a task' {
+        mise run filetask.bat | Select -Last 1 | Should -Be 'mytask'
+    }
+
+    # `windows_executable_extensions` is what decides whether a file with no extension and no
+    # shebang is a task at all -- there is no permission bit here for `is_executable` to consult.
+    # Nothing else in this suite covers that boundary, and it is the reason the extensionless
+    # fixture above is invisible by default.
+    It 'does not discover an extensionless file task by default' {
+        $out = mise tasks ls | Out-String
+        # Both guards matter for the negative assertion below: it would also hold if the command
+        # had failed outright, or listed nothing at all.
+        $LASTEXITCODE | Should -Be 0
+        $out | Should -BeLike '*filetask*'
+        $out | Should -Not -BeLike '*noexttask*'
+    }
+
+    It 'discovers an extensionless file task when the setting admits it' {
+        # The leading comma is the empty entry, which is what matches a file with no extension.
+        $env:MISE_WINDOWS_EXECUTABLE_EXTENSIONS = ",exe,bat,cmd"
+        $out = mise tasks ls | Out-String
+        $LASTEXITCODE | Should -Be 0
+        $out | Should -BeLike '*noexttask*'
+    }
+
+    It 'executes a shebang task with bash' {
+        # Create a file task with a bash shebang and no extension
+        @"
+#!/usr/bin/env bash
+echo "from-bash"
+"@ | Out-File -FilePath "tasks\shebangtask" -Encoding utf8NoBOM -NoNewline
+        mise run shebangtask | Select -Last 1 | Should -Be 'from-bash'
+    }
+
+    It 'executes a task in pwsh' {
+        $env:MISE_WINDOWS_EXECUTABLE_EXTENSIONS = "ps1"
+        $env:MISE_WINDOWS_DEFAULT_FILE_SHELL_ARGS = "pwsh.exe"
+        $env:MISE_USE_FILE_SHELL_FOR_EXECUTABLE_TASKS = "true"
+        mise run testtask | Select -Last 1 | Should -Be 'windows'
+    }
+
+    It 'converts PATH to MSYS Unix form for bash subshell tasks' {
+        # Repro for the per-task `tools = {...}` + `shell = "bash -c"` case.
+        # When mise on Windows spawns bash for a task, PATH must be `:`-separated
+        # `/c/...` form, not `;`-separated `C:\...` form, or bash cannot resolve
+        # any command, including the one mise just installed for the task.
+        #
+        # We assert on the PATH the task observes, not on a tool install, so the
+        # test runs without depending on rust/cargo or any toolchain backend.
+
+        if (-not (Get-Command bash.exe -ErrorAction SilentlyContinue)) {
+            Set-ItResult -Skipped -Because "bash.exe (Git Bash / MSYS) not on PATH"
+            return
+        }
+
+        @'
+[tasks.path_repro]
+shell = "bash -c"
+run = '''
+case "$PATH" in
+  *\;*)
+    echo "PATH-still-windows-style"
+    ;;
+  *)
+    echo "PATH-unix-style"
+    ;;
+esac
+'''
+'@ | Out-File -FilePath "mise.path_repro.toml" -Encoding utf8NoBOM
+
+        $env:MISE_CONFIG_FILE = "$TestDrive\mise.path_repro.toml"
+        try {
+            $output = mise run path_repro 2>&1 | Select -Last 1
+            $output | Should -Be 'PATH-unix-style'
+        }
+        finally {
+            Remove-Item -Path Env:\MISE_CONFIG_FILE -ErrorAction SilentlyContinue
+            Remove-Item -Path "$TestDrive\mise.path_repro.toml" -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'converts PATH to /cygdrive form for a Cygwin bash subshell task' {
+        # Cygwin resolves drives via `/cygdrive/c/...`, not Git Bash's `/c/...`.
+        # When mise detects a Cygwin bash (here pinned via MISE_BASH_PATH), the
+        # task's PATH must use the `/cygdrive/` form or commands won't resolve.
+        # Skipped unless Cygwin is actually installed, since CI runners lack it.
+
+        $cygwinBash = "C:\cygwin64\bin\bash.exe"
+        if (-not (Test-Path $cygwinBash)) {
+            Set-ItResult -Skipped -Because "Cygwin bash not installed at $cygwinBash"
+            return
+        }
+
+        @'
+[tasks.cygdrive_repro]
+shell = "bash -c"
+run = '''
+case "$PATH" in
+  */cygdrive/*)
+    echo "PATH-cygdrive-style"
+    ;;
+  *)
+    echo "PATH-not-cygdrive"
+    ;;
+esac
+'''
+'@ | Out-File -FilePath "mise.cygdrive_repro.toml" -Encoding utf8NoBOM
+
+        # Save and restore the env vars we override so a dev machine's real
+        # settings (a developer may export MISE_BASH_PATH / MISE_CYGDRIVE_PREFIX)
+        # and later tests are not disturbed. Pin MISE_CYGDRIVE_PREFIX to the
+        # default so the `/cygdrive` assertion holds even when the caller has
+        # exported a custom prefix such as `/mnt` (which the feature honors).
+        $oldConfig = $env:MISE_CONFIG_FILE
+        $oldBashPath = $env:MISE_BASH_PATH
+        $oldCygPrefix = $env:MISE_CYGDRIVE_PREFIX
+        $env:MISE_CONFIG_FILE = "$TestDrive\mise.cygdrive_repro.toml"
+        $env:MISE_BASH_PATH = $cygwinBash
+        $env:MISE_CYGDRIVE_PREFIX = "/cygdrive"
+        try {
+            $output = mise run cygdrive_repro 2>&1 | Select -Last 1
+            $output | Should -Be 'PATH-cygdrive-style'
+        }
+        finally {
+            if ($null -eq $oldConfig) {
+                Remove-Item -Path Env:\MISE_CONFIG_FILE -ErrorAction SilentlyContinue
+            } else {
+                $env:MISE_CONFIG_FILE = $oldConfig
+            }
+            if ($null -eq $oldBashPath) {
+                Remove-Item -Path Env:\MISE_BASH_PATH -ErrorAction SilentlyContinue
+            } else {
+                $env:MISE_BASH_PATH = $oldBashPath
+            }
+            if ($null -eq $oldCygPrefix) {
+                Remove-Item -Path Env:\MISE_CYGDRIVE_PREFIX -ErrorAction SilentlyContinue
+            } else {
+                $env:MISE_CYGDRIVE_PREFIX = $oldCygPrefix
+            }
+            Remove-Item -Path "$TestDrive\mise.cygdrive_repro.toml" -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'forwards args to a bash subshell task without shifting $0' {
+        # Repro for the Windows non-cmd POSIX-shell arg-swallow bug (#9355): with
+        # shell = "bash -c", a forwarded arg used to be passed as a separate argv
+        # to `bash -c`, so the user's first arg became $0. Inline TOML scripts
+        # append args to the command (like Unix), so $0 stays the shell (bash) and
+        # the arg is appended after it, not `using shell myarg`, where the arg had
+        # been swallowed into $0.
+        if (-not (Get-Command bash.exe -ErrorAction SilentlyContinue)) {
+            Set-ItResult -Skipped -Because "bash.exe (Git Bash / MSYS) not on PATH"
+            return
+        }
+
+        @'
+[tasks.args_repro]
+shell = "bash -c"
+run = 'echo "using shell $0"'
+'@ | Out-File -FilePath "mise.args_repro.toml" -Encoding utf8NoBOM
+
+        $oldConfig = $env:MISE_CONFIG_FILE
+        $env:MISE_CONFIG_FILE = "$TestDrive\mise.args_repro.toml"
+        try {
+            # $0 is the shell bash was invoked as: "bash" on some setups, a full
+            # path like "/usr/bin/bash" on Git Bash. Assert on the shape that
+            # proves the fix regardless of that form: $0 still names bash (not
+            # the forwarded arg) and "myarg" is appended as the trailing token,
+            # rather than being swallowed into $0 (the old bug printed
+            # "using shell myarg").
+            $output = mise run args_repro -- myarg 2>&1 | Select -Last 1
+            $output | Should -BeLike '*bash* myarg'
+        }
+        finally {
+            if ($null -eq $oldConfig) {
+                Remove-Item -Path Env:\MISE_CONFIG_FILE -ErrorAction SilentlyContinue
+            } else {
+                $env:MISE_CONFIG_FILE = $oldConfig
+            }
+            Remove-Item -Path "$TestDrive\mise.args_repro.toml" -ErrorAction SilentlyContinue
+        }
+    }
+
+    Context 'pwsh -NoProfile injection' {
+        # A pwsh inline shell should be spawned with -NoProfile so startup
+        # profiles (which can mutate PATH and shadow task tools) are skipped,
+        # matching the non-interactive behavior of `sh -c`/`zsh -c`. See
+        # discussion #10956. The task prints its own process argv so we can
+        # assert on how pwsh was actually invoked.
+        BeforeEach {
+            $script:noProfileTestEnv = @{}
+            foreach ($name in @('MISE_CONFIG_FILE', 'MISE_WINDOWS_POWERSHELL_NO_PROFILE')) {
+                $script:noProfileTestEnv[$name] = @{
+                    Exists = Test-Path "Env:\$name"
+                    Value = [Environment]::GetEnvironmentVariable($name, 'Process')
+                }
+            }
+            Remove-Item -Path Env:\MISE_WINDOWS_POWERSHELL_NO_PROFILE -ErrorAction SilentlyContinue
+            @'
+[task_config]
+includes = ["tasks"]
+
+[tasks.probe_argv]
+shell = "pwsh -c"
+run = 'Write-Output ([Environment]::GetCommandLineArgs() -join " ")'
+'@ | Out-File -FilePath "$TestDrive\mise.noprofile.toml" -Encoding utf8NoBOM
+            @'
+Write-Output ([Environment]::GetCommandLineArgs() -join " ")
+'@ | Out-File -FilePath "$TestDrive\tasks\probe_file_argv.ps1" -Encoding utf8NoBOM
+            $env:MISE_CONFIG_FILE = "$TestDrive\mise.noprofile.toml"
+        }
+
+        AfterEach {
+            foreach ($name in @('MISE_CONFIG_FILE', 'MISE_WINDOWS_POWERSHELL_NO_PROFILE')) {
+                $original = $script:noProfileTestEnv[$name]
+                if ($original.Exists) {
+                    [Environment]::SetEnvironmentVariable($name, $original.Value, 'Process')
+                } else {
+                    [Environment]::SetEnvironmentVariable($name, $null, 'Process')
+                }
+            }
+            $script:noProfileTestEnv = $null
+            Remove-Item -Path "$TestDrive\mise.noprofile.toml" -ErrorAction SilentlyContinue
+            Remove-Item -Path "$TestDrive\tasks\probe_file_argv.ps1" -ErrorAction SilentlyContinue
+        }
+
+        It 'injects -NoProfile into a pwsh task shell by default' {
+            $output = mise run probe_argv 2>&1 | Out-String
+            $LASTEXITCODE | Should -Be 0
+            $output | Should -BeLike '*-NoProfile*'
+        }
+
+        It 'omits -NoProfile when windows_powershell_no_profile is disabled' {
+            $env:MISE_WINDOWS_POWERSHELL_NO_PROFILE = "false"
+            $output = mise run probe_argv 2>&1 | Out-String
+            $LASTEXITCODE | Should -Be 0
+            $output | Should -Not -BeLike '*-NoProfile*'
+        }
+
+        It 'injects -NoProfile into a PowerShell file task' {
+            $output = mise run probe_file_argv 2>&1 | Out-String
+            $LASTEXITCODE | Should -Be 0
+            $output | Should -BeLike '*-NoProfile*'
+        }
+    }
+
+    Context 'a task file Windows cannot execute' {
+        BeforeAll {
+            $script:notExecDir = Join-Path $TestDrive ([System.Guid]::NewGuid().ToString())
+            New-Item -ItemType Directory -Path (Join-Path $script:notExecDir 'scripts') | Out-Null
+            # No shebang and no known extension, which is what `is_executable` looks at here --
+            # there is no permission bit involved on this platform.
+            Set-Content (Join-Path $script:notExecDir 'scripts\thing') 'echo hi' -NoNewline
+            @'
+[tasks.x]
+file = "scripts/thing"
+'@ | Out-File -FilePath (Join-Path $script:notExecDir 'mise.toml') -Encoding utf8NoBOM
+        }
+
+        It 'does not tell the user to run chmod' {
+            Push-Location $script:notExecDir
+            try {
+                $out = mise tasks validate 2>&1 | Out-String
+                $out | Should -BeLike '*not executable*'
+                # chmod does not exist here, and it is not the fix either: adding a shebang or a
+                # known extension is.
+                $out | Should -Not -BeLike '*chmod*'
+                $out | Should -BeLike '*shebang*'
+            } finally {
+                Pop-Location
+            }
+        }
+
+        It 'says how to fix it when the task is run' {
+            Push-Location $script:notExecDir
+            try {
+                $out = mise run x 2>&1 | Out-String
+                $LASTEXITCODE | Should -Not -Be 0
+                $out | Should -BeLike '*not executable*'
+                $out | Should -BeLike '*shebang*'
+                $out | Should -Not -BeLike '*chmod*'
+            } finally {
+                Pop-Location
+            }
+        }
+    }
+}

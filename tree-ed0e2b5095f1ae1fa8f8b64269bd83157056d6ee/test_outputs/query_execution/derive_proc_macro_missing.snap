@@ -1,0 +1,19 @@
+---
+source: src/query.rs
+expression: "&query_execution_results"
+snapshot_kind: text
+---
+{
+  "./test_crates/derive_proc_macro_missing/": [
+    {
+      "macro_name": String("MyDerive"),
+      "path": List([
+        String("derive_proc_macro_missing"),
+        String("MyDerive"),
+      ]),
+      "span_begin_line": Uint64(6),
+      "span_end_line": Uint64(8),
+      "span_filename": String("src/lib.rs"),
+    },
+  ],
+}

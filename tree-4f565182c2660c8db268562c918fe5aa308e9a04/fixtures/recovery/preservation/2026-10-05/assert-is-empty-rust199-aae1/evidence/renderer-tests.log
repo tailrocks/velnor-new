@@ -1,0 +1,172 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling syn v3.0.6
+   Compiling serde_core v1.0.229
+   Compiling find-msvc-tools v0.1.14
+   Compiling shlex v2.0.1
+   Compiling cc v1.5.1
+   Compiling zmij v1.0.23
+   Compiling blake3 v1.8.7
+   Compiling serde_json v1.0.151
+   Compiling thiserror v2.0.21
+   Compiling serde v1.0.229
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling memchr v2.8.3
+   Compiling cpufeatures v0.3.1
+   Compiling constant_time_eq v0.4.2
+   Compiling cfg-if v1.0.5
+   Compiling itoa v1.0.18
+   Compiling arrayvec v0.7.8
+   Compiling velnor-actions-contract v0.1.1 (/root/.cache/velnor-task-targets/20261005/assert-is-empty-rust199-aae1-candidate/crates/velnor-actions-contract)
+   Compiling velnor-actions-workflow-renderer v0.1.1 (/root/.cache/velnor-task-targets/20261005/assert-is-empty-rust199-aae1-candidate/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 24.24s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/assert-is-empty-rust199-target/debug/deps/velnor_actions_workflow_renderer-877c61174b6a3f97)
+
+running 79 tests
+test action_ref::tests::only_canonical_generated_provider_prelude_paths_are_local ... ok
+test composite::tests::shared_calls_use_only_canonical_repository_local_actions ... ok
+test document::verification_env_tests::report_fetch_requires_the_exact_read_permission ... ok
+test document::runner_shell_tests::rustdocflags_remain_scoped_to_the_documentation_step ... ok
+test freshness::tests::rejects_internal_steps_fail_closed ... ok
+test freshness::tests::rejects_bad_spec_scalars ... ok
+test document::runner_shell_tests::typed_scale_set_jobs_declare_bash_while_hosted_jobs_keep_default ... ok
+test cache_p08::setup_tests::configured_setup_pin_version_sha_condition_env_and_key_are_exact ... ok
+test freshness::tests::renders_schedule_only_read_only_probe ... ok
+test lane_share::tests::differing_lane_bodies_fail_closed ... ok
+test lane_share::tests::duplicate_lane_checkout_fails_closed ... ok
+test document::verification_env_tests::emitted_verification_job_scrubs_credentials_without_disabling_mise_config ... ok
+test lane_share::tests::unpaired_jobs_stay_inline ... ok
+test lane_share::tests::mismatched_lane_checkout_inputs_fail_closed ... ok
+test lane_share::tests::missing_lane_checkout_fails_closed ... ok
+test lane_share::tests::unsafe_logical_id_fails_closed ... ok
+test lane_share::tests::nonleading_lane_checkout_fails_closed ... ok
+test lane_share::unpinned_tests::shared_composite_keeps_pinned_remote_refs ... ok
+test lane_share::unpinned_tests::shared_composite_rejects_unpinned_remote_action_refs ... ok
+test lane_share::named_check_tests::named_check_identity_and_report_upload_stay_on_their_exact_lane ... ok
+test schema2::generator_release::archive::tests::extraction_preflights_the_same_immutable_bytes_before_tar_parsing ... ok
+test schema2::generator_release::archive::tests::generated_extraction_provisions_the_trusted_guard_first ... ok
+test schema2::generator_release::manifest::tests::manifest_bundle_uses_the_created_and_attested_file ... ok
+test schema2::generator_release::manifest::tests::renderer_uses_the_public_canonical_manifest_filename ... ok
+test schema2::generator_release::assets::tests::wrong_checksum_filename_stops_before_candidate_execution ... FAILED
+test schema2::generator_release::tests::publisher_receipt_tests::acceptance_inventory_uses_the_canonical_manifest_and_every_release_asset ... ok
+test schema2::generator_release::tests::cli_tests::fake_mise_rejects_an_unpinned_gh_without_dispatch ... ok
+test schema2::generator_release::tests::publisher_receipt_tests::publisher_observes_one_release_id_before_and_after_publication ... ok
+test schema2::release_eligibility::tests::script_uses_the_expected_paginated_selectors_and_bounded_wait ... ok
+test tofu_cache::tests::admission_script_discards_non_exact_or_missing_provider_entries ... ok
+test schema2::runner_shell_tests::public_hosted_label_rejects_scale_set_tokens_and_unknown_labels ... ok
+test schema2::release_eligibility::tests::job_renders_a_read_only_source_gate ... ok
+test schema2::generator_release::archive::tests::checksum_sidecar_must_name_the_exact_binary ... ok
+test tool_seed::tests::existing_seed_must_match_exact_job_key_and_payload ... ok
+test tool_seed::tests::local_seed_action_payload_and_order_are_not_name_authorized ... ok
+test tofu_cache::tests::composite_checks_the_actual_restore_before_exposing_provider_use ... ok
+test schema2::runner_shell_tests::qualification_and_monitoring_declare_shell_only_for_typed_scale_set ... ok
+test tool_seed::tests::action_composite_contains_the_guarded_fixed_root_and_exact_input ... ok
+test tool_seed::tests::step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload ... ok
+test verification_jobs::tests::all_declared_tasks_join_required_fan_in ... ok
+test schema2::generator_release::workflow_steps::tests::typed_gh_function_shadows_incompatible_cli_and_exports_to_script ... ok
+test verification_jobs::tests::task_job_is_unconditional_cache_off_and_credential_scrubbed ... ok
+test verification_jobs::tests::mixed_linux_and_apple_arm_tasks_keep_distinct_runners ... ok
+test verification_jobs::tests::task_job_contract_rejects_conditions_dependencies_and_extra_steps ... ok
+test verification_jobs::tests::paired_task_lanes_are_complete_and_join_required_together ... ok
+test schema2::release_eligibility::tests::edge::rejects_ambiguous_latest_run_number ... ok
+test workflow_size::tests::size_limit_ignores_non_workflow_files ... ok
+test workflow_size::tests::size_limit_recognizes_case_insensitive_workflow_extensions ... ok
+test schema2::generator_release::source::tests::mise_setup_tests::each_archive_consumer_has_target_pinned_mise_before_extraction ... ok
+test workflow_size::tests::workflow_size_limit_includes_exact_boundary ... ok
+test schema2::release_eligibility::tests::edge::rejects_ci_run_from_wrong_head_repository ... ok
+test lane_share::tests::matching_lane_checkout_inputs_are_carried_outside_the_composite ... ok
+test lane_share::shell_tests::paired_consumer_workflow_sets_shell_for_each_typed_scale_lane_only ... ok
+test lane_share::tests::elected_save_stays_on_the_winner_job ... ok
+test schema2::generator_release::source::tests::reject_invalid_source_identity_before_running_git ... ok
+test schema2::generator_release::tests::cli_tests::attestation_verification_uses_only_the_pinned_mock_cli ... ok
+test tool_seed_admission::tests::false_owner_and_mount_commands_fail_closed ... ok
+velnor-actions-0.1.1-x86_64-unknown-linux-gnu: OK
+test workflow_size::tests::utf8_workflow_limit_counts_marked_rendered_bytes ... ok
+test tool_seed_admission::tests::key_file_match_rejects_nul_extra_lines_and_oversize_inputs ... ok
+test lane_share::render_tests::paired_tofu_restore_output_owner_stays_in_outer_job_scope ... ok
+test schema2::release_eligibility::tests::edge::fails_closed_on_changed_tip_and_unfinished_latest_run ... ok
+test schema2::release_eligibility::tests::rejects_newer_failed_run_instead_of_reusing_old_success ... ok
+test schema2::generator_release::source::tests::fetch_uses_exact_public_commit_without_credentials_or_helpers ... ok
+velnor-actions-0.1.1-aarch64-apple-darwin: OK
+test tool_seed::tests::matching_tool_seed_copies_both_trees_after_admission_and_keeps_source ... ok
+test schema2::generator_release::manifest::tests::macos_attestation_fetch_uses_shasum_without_sha256sum ... ok
+test schema2::release_eligibility::tests::edge::rejects_events_repository_refs_authority_and_stale_ci_sources ... ok
+velnor-actions-0.1.1-x86_64-apple-darwin: OK
+test tool_seed_admission::tests::provenance_marker_rejects_oversize_nul_and_extra_lines ... ok
+test tool_seed_admission::tests::symlinks_and_non_root_entries_fail_tree_admission ... ok
+test tool_seed::tests::rejected_mount_and_mismatched_key_leave_destinations_untouched ... ok
+test schema2::generator_release::manifest::tests::tag_preflight_accepts_only_confirmed_not_found_responses ... ok
+test tool_seed_admission::tests::only_one_exact_read_only_non_overlay_mount_is_admitted ... ok
+archive guard build: build directory is writable by others: /root/.cache/velnor-task-targets/20261005/assert-is-empty-rust199-aae1-candidate/scripts
+test schema2::release_eligibility::tests::selects_latest_ci_attempt_across_paginated_results ... ok
+test schema2::generator_release::archive::tests::rejects_links_special_modes_order_duplicates_and_truncation ... FAILED
+test schema2::generator_release::archive::tests::extracts_only_an_exact_regular_archive ... FAILED
+test schema2::release_eligibility::tests::edge::rejects_main_tip_or_ci_attempt_changes_during_the_gate ... ok
+test schema2::release_eligibility::tests::edge::rejects_missing_duplicate_failed_and_wrong_attempt_required_jobs ... ok
+test lane_share::render_tests::shared_lanes_keep_ci_under_github_file_cap ... ok
+velnor-actions-0.1.1-x86_64-unknown-linux-gnu: OK
+velnor-actions-0.1.1-aarch64-apple-darwin: OK
+sha256sum: velnor-actions-0.1.1-x86_64-apple-darwin: No such file or directory
+velnor-actions-0.1.1-x86_64-apple-darwin: FAILED open or read
+sha256sum: WARNING: 1 listed file could not be read
+velnor-actions-0.1.1-x86_64-unknown-linux-gnu: OK
+velnor-actions-0.1.1-aarch64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-unknown-linux-gnu: OK
+velnor-actions-0.1.1-aarch64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-unknown-linux-gnu: OK
+velnor-actions-0.1.1-aarch64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-unknown-linux-gnu: OK
+velnor-actions-0.1.1-aarch64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-unknown-linux-gnu: OK
+velnor-actions-0.1.1-aarch64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-unknown-linux-gnu: OK
+velnor-actions-0.1.1-aarch64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-unknown-linux-gnu: OK
+velnor-actions-0.1.1-aarch64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-unknown-linux-gnu: OK
+velnor-actions-0.1.1-aarch64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-unknown-linux-gnu: OK
+velnor-actions-0.1.1-aarch64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-unknown-linux-gnu: OK
+velnor-actions-0.1.1-aarch64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-unknown-linux-gnu: OK
+velnor-actions-0.1.1-aarch64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-unknown-linux-gnu: OK
+velnor-actions-0.1.1-aarch64-apple-darwin: OK
+velnor-actions-0.1.1-x86_64-apple-darwin: OK
+test schema2::generator_release::tests::complete_publish_script_uses_parent_tag_and_checks_all_assets ... ok
+test tool_seed_admission::tests::tree_scan_rejects_depth_count_and_find_errors_without_truncation ... ok
+
+failures:
+
+---- schema2::generator_release::assets::tests::wrong_checksum_filename_stops_before_candidate_execution stdout ----
+Error: "cannot read candidate source SHA"
+
+---- schema2::generator_release::archive::tests::rejects_links_special_modes_order_duplicates_and_truncation stdout ----
+Error: Custom { kind: Other, error: "native archive guard provisioning failed: exit status: 1" }
+
+---- schema2::generator_release::archive::tests::extracts_only_an_exact_regular_archive stdout ----
+Error: Custom { kind: Other, error: "native archive guard provisioning failed: exit status: 1" }
+
+
+failures:
+    schema2::generator_release::archive::tests::extracts_only_an_exact_regular_archive
+    schema2::generator_release::archive::tests::rejects_links_special_modes_order_duplicates_and_truncation
+    schema2::generator_release::assets::tests::wrong_checksum_filename_stops_before_candidate_execution
+
+test result: FAILED. 76 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.73s
+
+error: test failed, to rerun pass `-p velnor-actions-workflow-renderer --lib`

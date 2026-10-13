@@ -1,0 +1,833 @@
+//! The mbx command line.
+
+use crate::config::Config;
+use crate::session::CacheSession;
+use crate::util::workspace_root;
+use crate::{policy, store, target};
+use bytesize::ByteSize;
+use eyre::{Context, Result};
+use std::collections::BTreeMap;
+use std::io::IsTerminal;
+use std::path::{Path, PathBuf};
+use std::process::{Command, ExitCode};
+
+#[derive(usage::Cli)]
+#[usage(
+    bin = "mbx",
+    version,
+    config = crate::config::RawConfig,
+    about = "A build cache for Rust projects",
+    long_about = "Run any Cargo subcommand with the build cache enabled. The subcommand and all of its arguments are passed through unchanged, including Cargo aliases and installed subcommands. `cache`, `gc`, and `setup` are reserved for mbx's own commands.\n\nExamples:\n  mbx build --release\n  mbx test --workspace\n  mbx clippy --all-targets -- -D warnings\n  mbx setup",
+    unknown_flags = "error"
+)]
+struct Cli {
+    #[usage(subcommand)]
+    command: Commands,
+}
+
+#[derive(usage::Subcommands)]
+enum Commands {
+    /// Run a Cargo command and explain every compilation mbx cannot cache.
+    Explain(ExplainArgs),
+    /// Install a persistent rustc wrapper for plain Cargo commands.
+    Setup,
+    /// Collect stale managed targets and evict cached objects until the store fits a size budget.
+    ///
+    /// A missing cached object is rebuilt when it is needed again.
+    Gc(GcArgs),
+    /// Inspect the local store.
+    Cache(CacheArgs),
+    #[usage(external_subcommand)]
+    Cargo(Vec<String>),
+}
+
+#[derive(usage::Args)]
+struct GcArgs {
+    /// Size the store may occupy afterwards, for example 20GiB. Defaults to the
+    /// configured budget.
+    #[usage(long, value_name = "SIZE")]
+    max_size: Option<ByteSize>,
+}
+
+#[derive(usage::Args)]
+#[usage(unknown_flags = "value")]
+struct ExplainArgs {
+    /// Cargo subcommand to run under diagnostics.
+    #[usage(value_name = "CARGO_COMMAND")]
+    cargo_command: String,
+    /// Arguments to pass to the Cargo subcommand.
+    #[usage(double_dash = "preserve", value_name = "CARGO_ARGS")]
+    cargo_args: Vec<String>,
+}
+
+impl ExplainArgs {
+    fn arguments(self) -> Vec<String> {
+        std::iter::once(self.cargo_command)
+            .chain(self.cargo_args)
+            .collect()
+    }
+}
+
+#[derive(usage::Args)]
+struct CacheArgs {
+    #[usage(subcommand)]
+    command: CacheCommands,
+}
+
+#[derive(usage::Subcommands)]
+enum CacheCommands {
+    /// Print the store directory.
+    Dir,
+    /// Summarize what the store holds.
+    Stats,
+}
+
+/// Parse the command line and run it.
+pub fn run() -> Result<ExitCode> {
+    let cli = Cli::parse();
+    let config = Config::load()?;
+    match cli.command {
+        Commands::Explain(args) => crate::explain::run(&config, &args.arguments()),
+        Commands::Setup => setup().map(|()| ExitCode::SUCCESS),
+        Commands::Gc(args) => gc(
+            &config,
+            args.max_size
+                .map_or(config.gc.max_bytes, |requested| requested.as_u64()),
+        )
+        .map(|()| ExitCode::SUCCESS),
+        Commands::Cache(args) => match args.command {
+            CacheCommands::Dir => {
+                println!("{}", config.store_dir().display());
+                Ok(ExitCode::SUCCESS)
+            }
+            CacheCommands::Stats => cache_stats(&config).map(|()| ExitCode::SUCCESS),
+        },
+        Commands::Cargo(arguments) => cargo(&config, &arguments),
+    }
+}
+
+fn setup() -> Result<()> {
+    let executable = std::env::current_exe().wrap_err("failed to locate the mbx executable")?;
+    let data = dirs::data_local_dir()
+        .ok_or_else(|| eyre::eyre!("the platform data directory could not be located"))?;
+    let install_dir = data.join("mbx").join("bin");
+    let cargo_home = std::env::var_os("CARGO_HOME")
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".cargo")))
+        .ok_or_else(|| eyre::eyre!("Cargo's configuration directory could not be located"))?;
+    let config_path =
+        if cargo_home.join("config.toml").exists() || !cargo_home.join("config").exists() {
+            cargo_home.join("config.toml")
+        } else {
+            cargo_home.join("config")
+        };
+    setup_at(&executable, &install_dir, &config_path)
+}
+
+fn setup_at(executable: &Path, install_dir: &Path, config_path: &Path) -> Result<()> {
+    let contents = match std::fs::read_to_string(config_path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(error.into()),
+    };
+    let mut document = contents
+        .parse::<toml_edit::DocumentMut>()
+        .wrap_err_with(|| format!("failed to parse {}", config_path.display()))?;
+    let shim_name = if cfg!(windows) {
+        format!("{}.exe", crate::session::RUSTC_SHIM_STEM)
+    } else {
+        crate::session::RUSTC_SHIM_STEM.into()
+    };
+    let shim = install_dir.join(shim_name);
+    if let Some(configured) = document
+        .get("build")
+        .and_then(toml_edit::Item::as_table_like)
+        .and_then(|build| build.get("rustc-wrapper"))
+    {
+        if configured.as_str() == Some(shim.to_string_lossy().as_ref()) {
+            std::fs::create_dir_all(install_dir)?;
+            crate::session::install_shim(executable, install_dir)?;
+            println!("refreshed {}; Cargo was already configured", shim.display());
+            return Ok(());
+        }
+        println!(
+            "left {} unchanged: build.rustc-wrapper is already {}",
+            config_path.display(),
+            configured
+        );
+        return Ok(());
+    }
+
+    std::fs::create_dir_all(install_dir)?;
+    let shim = crate::session::install_shim(executable, install_dir)?;
+    document["build"]["rustc-wrapper"] = toml_edit::value(shim.to_string_lossy().into_owned());
+    let parent = config_path
+        .parent()
+        .ok_or_else(|| eyre::eyre!("Cargo configuration path has no parent"))?;
+    std::fs::create_dir_all(parent)?;
+    crate::util::write_atomic(config_path, document.to_string().as_bytes())?;
+    println!(
+        "installed {} and configured {}",
+        shim.display(),
+        config_path.display()
+    );
+    println!("plain cargo commands now use mbx's local action cache");
+    Ok(())
+}
+
+fn cargo(config: &Config, arguments: &[String]) -> Result<ExitCode> {
+    cargo_with_bypass_log(config, arguments, None)
+}
+
+pub(crate) fn cargo_with_bypass_log(
+    config: &Config,
+    arguments: &[String],
+    bypass_log: Option<&Path>,
+) -> Result<ExitCode> {
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    // Release builds publish artifacts that must not depend on a cache, and a
+    // tag build has no later build to share with anyway.
+    if policy::release_context() {
+        log::warn!("the build cache is disabled for release builds");
+        return run_cargo(&cargo, arguments, BTreeMap::new());
+    }
+
+    let mut config = config.clone();
+    let incremental = policy::incremental_allowed(config.incremental);
+    if config.incremental && !incremental {
+        log::warn!(
+            "incremental compilation is disabled here; it needs an earlier build to build on"
+        );
+    }
+    // An enabled build stops overriding CARGO_INCREMENTAL rather than setting
+    // it, so a 0 already in the environment still wins -- which CI images and
+    // rust-cache set as a matter of course. Say so, because the alternative is
+    // a setting that silently does nothing.
+    if incremental && std::env::var("CARGO_INCREMENTAL").as_deref() == Ok("0") {
+        log::warn!(
+            "CARGO_INCREMENTAL=0 is set in the environment, so this build is not incremental after all"
+        );
+    }
+    config.incremental = incremental;
+    let config = &config;
+
+    let working_dir = std::env::current_dir()?;
+    let mut roots = resolve_roots(&cargo, arguments, &working_dir);
+    let migrate_existing = prompt_to_manage_existing_target(config, &roots, arguments)?;
+    // Placed before the session starts, because the target directory is what
+    // the shim maps out of its cache keys and it has to be the one cargo will
+    // actually write to.
+    let (placed, removed_target_bytes) = if migrate_existing {
+        let outcome = target::migrate_existing(
+            config,
+            &roots.workspace_root,
+            &roots.target_dir,
+            roots.target_dir_requested,
+        )?;
+        (outcome.managed, outcome.removed_bytes)
+    } else {
+        (
+            target::place(
+                config,
+                &roots.workspace_root,
+                &roots.target_dir,
+                roots.target_dir_requested,
+            ),
+            None,
+        )
+    };
+    if let Some(bytes) = removed_target_bytes {
+        crate::session::note(&format!(
+            "freed {} by removing the existing target/ directory",
+            ByteSize::b(bytes).display().iec()
+        ));
+    }
+    if let Some(directory) = &placed {
+        roots.target_dir = directory.clone();
+    }
+    let session_dir = tempfile::Builder::new().prefix("mbx-session-").tempdir()?;
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+
+    let status = runtime.block_on(async {
+        let session = CacheSession::start(session_dir.path(), config).await?;
+        let mut environment = inherited_environment(|name| std::env::var(name).ok(), &working_dir);
+        if let Some(path) = bypass_log {
+            let path = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                working_dir.join(path)
+            };
+            environment.insert(
+                crate::session::BYPASS_LOG_ENV.into(),
+                path.display().to_string(),
+            );
+        }
+        if let Some(directory) = &placed {
+            environment.insert(
+                CARGO_TARGET_DIR_ENV.into(),
+                directory.to_string_lossy().into_owned(),
+            );
+        }
+        let run = session
+            .begin(
+                &roots.workspace_root,
+                &roots.target_dir,
+                arguments,
+                &mut environment,
+            )
+            .await;
+
+        let status = run_cargo(&cargo, arguments, environment);
+
+        // The shim records a prediction only after a compilation has either
+        // been restored or published successfully. Preserve that completed
+        // portion even when a later compilation makes cargo fail: it is still
+        // useful to the retry, and the collector must know it is reachable.
+        if let Some(run) = run
+            && let Err(error) = run.commit().await
+        {
+            log::warn!("the build manifest was not committed: {error}");
+        }
+
+        match session.finish().await {
+            Ok(stats) => crate::session::display_stats(&stats, config),
+            Err(error) => log::warn!("the cache session did not shut down cleanly: {error}"),
+        }
+        status
+    });
+    // Outside the runtime, so a walk of the whole store cannot occupy a worker
+    // thread, and after cargo has exited, so it adds nothing to the build the
+    // user is waiting on.
+    sweep_store(config);
+    status
+}
+
+/// Offer to replace an existing default target directory with a managed one.
+///
+/// A non-interactive run must never wait for input. Refusing or cancelling the
+/// prompt leaves cargo's directory alone and the build continues normally.
+fn prompt_to_manage_existing_target(
+    config: &Config,
+    roots: &Roots,
+    arguments: &[String],
+) -> Result<bool> {
+    if cargo_help_requested(arguments)
+        || !std::io::stdin().is_terminal()
+        || !std::io::stderr().is_terminal()
+    {
+        return Ok(false);
+    }
+    prompt_to_manage_existing_target_with(config, roots, |directory| {
+        let description = format!(
+            "mbx can remove {} and replace it with a managed target that is pruned after this checkout is deleted.",
+            directory.display()
+        );
+        match demand::Confirm::new("Use a managed target directory?")
+            .description(&description)
+            .affirmative("Remove target/")
+            .negative("Keep it")
+            .selected(false)
+            .run()
+        {
+            Ok(answer) => Ok(answer),
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => Ok(false),
+            Err(error) => Err(error.into()),
+        }
+    })
+}
+
+fn cargo_help_requested(arguments: &[String]) -> bool {
+    arguments.first().is_some_and(|argument| argument == "help")
+        || arguments
+            .iter()
+            .any(|argument| argument == "--help" || argument == "-h")
+}
+
+fn prompt_to_manage_existing_target_with(
+    config: &Config,
+    roots: &Roots,
+    prompt: impl FnOnce(&Path) -> Result<bool>,
+) -> Result<bool> {
+    if !target::can_remove_existing(
+        config,
+        &roots.workspace_root,
+        &roots.target_dir,
+        roots.target_dir_requested,
+    ) {
+        return Ok(false);
+    }
+    prompt(&roots.target_dir)
+}
+
+fn run_cargo(
+    cargo: &std::ffi::OsStr,
+    arguments: &[String],
+    environment: BTreeMap<String, String>,
+) -> Result<ExitCode> {
+    let mut command = Command::new(cargo);
+    command.args(arguments);
+    command.envs(environment);
+    let status = command
+        .status()
+        .wrap_err_with(|| format!("failed to run {}", cargo.to_string_lossy()))?;
+    Ok(exit_code(status))
+}
+
+#[cfg(unix)]
+fn exit_code(status: std::process::ExitStatus) -> ExitCode {
+    use std::os::unix::process::ExitStatusExt as _;
+    // A signalled cargo has no exit code of its own; report the conventional
+    // 128 + signal so callers can tell it apart from a clean failure.
+    match (status.code(), status.signal()) {
+        (Some(code), _) => ExitCode::from(code as u8),
+        (None, Some(signal)) => ExitCode::from(128u8.saturating_add(signal as u8)),
+        (None, None) => ExitCode::FAILURE,
+    }
+}
+
+#[cfg(not(unix))]
+fn exit_code(status: std::process::ExitStatus) -> ExitCode {
+    match status.code() {
+        Some(code) => ExitCode::from(code as u8),
+        None => ExitCode::FAILURE,
+    }
+}
+
+fn gc(config: &Config, max_bytes: u64) -> Result<()> {
+    let store = config.store_dir();
+    let outcome = store::gc(&store, max_bytes);
+    // Independent collections: a broken action store must not prevent the
+    // command from freeing the usually much larger target directories.
+    let pruned = target::prune(&config.target.root);
+    let outcome = match outcome {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            match pruned {
+                Ok(pruned) if pruned.removed_views > 0 => {
+                    println!("{}", target_removals(&pruned));
+                }
+                Ok(_) => {}
+                Err(prune_error) => {
+                    log::warn!("target directories were not collected: {prune_error}");
+                }
+            }
+            return Err(error);
+        }
+    };
+    println!("{}", evictions(&outcome));
+    if outcome.removed_checkout_records > 0 {
+        println!(
+            "dropped {} stale checkout records",
+            outcome.removed_checkout_records
+        );
+    }
+    let pruned = pruned?;
+    if pruned.removed_views > 0 {
+        println!("{}", target_removals(&pruned));
+    }
+    Ok(())
+}
+
+/// One line describing the target directories a sweep freed.
+fn target_removals(outcome: &target::PruneOutcome) -> String {
+    format!(
+        "freed {} target directories of checkouts that are gone ({})",
+        outcome.removed_views,
+        ByteSize::b(outcome.removed_bytes).display().iec(),
+    )
+}
+
+/// One line describing what a sweep evicted.
+///
+/// Shared so the explicit command and the automatic sweep cannot drift into
+/// describing the same outcome two different ways.
+fn evictions(outcome: &store::GcOutcome) -> String {
+    format!(
+        "evicted {} objects and {} action results ({}); {} remain",
+        outcome.removed_objects,
+        outcome.removed_action_results,
+        ByteSize::b(outcome.removed_bytes).display().iec(),
+        ByteSize::b(outcome.remaining_bytes).display().iec(),
+    )
+}
+
+/// Keep the store inside its budget, at most once per configured interval.
+///
+/// Reported like the cache summary beside it: a sweep that evicted nothing says
+/// nothing. A sweep that fails is logged and forgotten -- the build is already
+/// over, and its exit status is the build's answer, not the collector's.
+fn sweep_store(config: &Config) {
+    if !config.gc.auto {
+        return;
+    }
+    match store::sweep_if_due(&config.store_dir(), config.gc.max_bytes, config.gc.interval) {
+        Ok(Some(outcome)) => {
+            if outcome.removed_bytes > 0 {
+                crate::session::note(&format!("gc: {}", evictions(&outcome)));
+            }
+            prune_targets(config);
+        }
+        Ok(None) => {}
+        Err(error) => {
+            log::warn!("the store was not swept: {error}");
+            // `sweep_if_due` stamps before collecting. If collection fails,
+            // target views are still due now and will otherwise wait through
+            // the full interval before getting another chance.
+            prune_targets(config);
+        }
+    }
+}
+
+/// Collect target views as the other half of a due automatic sweep.
+fn prune_targets(config: &Config) {
+    // A target directory whose checkout is gone is the largest thing
+    // collection ever frees, and walking for it on every build would be the
+    // slowest, so callers keep this inside the store sweep's throttle.
+    match target::prune(&config.target.root) {
+        Ok(pruned) if pruned.removed_views > 0 => {
+            crate::session::note(&format!("gc: {}", target_removals(&pruned)));
+        }
+        Ok(_) => {}
+        Err(error) => log::warn!("target directories were not collected: {error}"),
+    }
+}
+
+fn cache_stats(config: &Config) -> Result<()> {
+    let store = config.store_dir();
+    let stats = store::stats(&store)?;
+    println!("store: {}", store.display());
+    println!(
+        "objects: {} ({})",
+        stats.objects,
+        ByteSize::b(stats.object_bytes).display().iec()
+    );
+    println!(
+        "action results: {} ({})",
+        stats.action_results,
+        ByteSize::b(stats.action_result_bytes).display().iec()
+    );
+    println!(
+        "total: {}",
+        ByteSize::b(stats.total_bytes()).display().iec()
+    );
+    println!(
+        "checkouts: {} live, {} stale",
+        stats.live_checkouts, stats.stale_checkouts
+    );
+    let views = target::stats(&config.target.root)?;
+    println!(
+        "target directories: {} ({})",
+        views.views,
+        ByteSize::b(views.bytes).display().iec()
+    );
+    Ok(())
+}
+
+/// Settings the shim maps out of its cache keys.
+#[derive(Debug, PartialEq, Eq)]
+struct Roots {
+    workspace_root: PathBuf,
+    target_dir: PathBuf,
+    /// Whether a flag, environment variable, or Cargo configuration named the
+    /// target directory outright.
+    ///
+    /// Cargo prefers `--target-dir` over `CARGO_TARGET_DIR`, so a build carrying
+    /// that flag cannot be moved by setting the environment: cargo would write
+    /// where the flag says while the shim had been told the managed path, and
+    /// the whole build would stop keying against anything it could reuse. The
+    /// value can equal the default location and still have been asked for, so
+    /// comparing paths cannot answer this.
+    target_dir_requested: bool,
+}
+
+/// Carry a `RUSTC_WRAPPER` the caller already configured into the session.
+///
+/// The session records it so the shim can defer to it; without this it would be
+/// dropped silently and whatever it does would stop happening.
+fn inherited_environment(
+    get_env: impl Fn(&str) -> Option<String>,
+    working_dir: &Path,
+) -> BTreeMap<String, String> {
+    let mut environment = BTreeMap::new();
+    if let Some(wrapper) = get_env("RUSTC_WRAPPER").filter(|value| !value.is_empty()) {
+        environment.insert("RUSTC_WRAPPER".into(), wrapper);
+    }
+    // Cargo gives every shim its own working directory, so a relative
+    // destination would scatter records across crate directories -- or fail
+    // outright in a read-only registry checkout. Resolve it here, against the
+    // directory the user typed it in, like every other path the shim receives.
+    if let Some(log) = get_env(crate::session::BYPASS_LOG_ENV).filter(|value| !value.is_empty()) {
+        environment.insert(
+            crate::session::BYPASS_LOG_ENV.into(),
+            absolute(working_dir, &log).display().to_string(),
+        );
+    }
+    environment
+}
+
+/// Resolve the workspace root and target directory cargo will actually use.
+///
+/// Cargo is the only authority: the target directory can come from the
+/// environment, a flag, or cargo's own configuration, and `--manifest-path` can
+/// move the whole build elsewhere. Inference is kept as a fallback, and costs
+/// only cache hits when it is wrong, since an unmapped path bypasses.
+fn resolve_roots(cargo: &std::ffi::OsStr, arguments: &[String], working_dir: &Path) -> Roots {
+    resolve_roots_with(
+        cargo,
+        arguments,
+        working_dir,
+        std::env::var_os(CARGO_TARGET_DIR_ENV),
+    )
+}
+
+/// The environment name cargo reads for the target directory. It outranks a
+/// config-set `build.target-dir`, so both the probe and the fallback below have
+/// to agree on one value for it.
+const CARGO_TARGET_DIR_ENV: &str = "CARGO_TARGET_DIR";
+
+/// [`resolve_roots`] with the ambient `CARGO_TARGET_DIR` passed in rather than
+/// read here, so a caller can resolve as if the variable were unset.
+fn resolve_roots_with(
+    cargo: &std::ffi::OsStr,
+    arguments: &[String],
+    working_dir: &Path,
+    target_dir_env: Option<std::ffi::OsString>,
+) -> Roots {
+    // Everything below inspects cargo's own flags only; the real build still
+    // receives the full argument list untouched.
+    let arguments = cargo_arguments(arguments);
+    let reported = cargo_roots(cargo, arguments, target_dir_env.as_deref());
+    // `-C` moves the directory cargo resolves relative paths against, so the
+    // fallbacks below have to follow it rather than this process's cwd.
+    let invocation_dir = invocation_dir(arguments, working_dir);
+    let workspace_root = reported
+        .as_ref()
+        .map(|roots| roots.workspace_root.clone())
+        .unwrap_or_else(|| workspace_root(&invocation_dir));
+    let flagged = target_dir_argument(arguments);
+    let from_environment = target_dir_env.as_ref().is_some_and(|dir| !dir.is_empty());
+    let target_dir_requested = flagged.is_some()
+        || from_environment
+        || cargo_config_may_set_target_dir(arguments, &invocation_dir);
+    // An explicit flag outranks anything cargo reports from configuration.
+    let target_dir = flagged
+        .map(|value| absolute(&invocation_dir, value))
+        .or_else(|| reported.map(|roots| roots.target_dir))
+        .or_else(|| {
+            target_dir_env
+                .map(PathBuf::from)
+                .filter(|dir| !dir.as_os_str().is_empty())
+                .map(|dir| absolute(&invocation_dir, &dir.to_string_lossy()))
+        })
+        .unwrap_or_else(|| workspace_root.join("target"));
+    Roots {
+        workspace_root,
+        target_dir,
+        target_dir_requested,
+    }
+}
+
+/// Cargo resolves a relative directory against the invocation directory.
+fn absolute(working_dir: &Path, value: &str) -> PathBuf {
+    let path = PathBuf::from(value);
+    if path.is_absolute() {
+        path
+    } else {
+        working_dir.join(path)
+    }
+}
+
+/// Cargo options that belong before the subcommand and change what `cargo
+/// metadata` would report. `-C` moves the whole invocation, and `--config` can
+/// set `build.target-dir` outright, so a probe that drops them describes a
+/// different tree than the one being built.
+const PROBE_GLOBAL_FLAGS: [&str; 3] = ["-C", "--config", "-Z"];
+/// Options cargo accepts only after the subcommand. The network flags matter
+/// because a probe left to itself may reach the registry the build was told to
+/// stay away from.
+const PROBE_MANIFEST_TOGGLES: [&str; 3] = ["--offline", "--frozen", "--locked"];
+
+/// Cargo's own arguments, stopping at the `--` that hands the rest to rustc.
+///
+/// The separator matters more than it looks: past it, `-C` is a codegen option,
+/// not a directory for cargo to run in, and `-C opt-level=3` is ordinary. Reading
+/// one as the other would point the probe and the path mapping at a directory
+/// that does not exist, so every action would bypass.
+fn cargo_arguments(arguments: &[String]) -> &[String] {
+    let end = arguments
+        .iter()
+        .position(|argument| argument == "--")
+        .unwrap_or(arguments.len());
+    &arguments[..end]
+}
+
+/// Collect the occurrences of `flags` from `arguments`, preserving order and
+/// repeats. Cargo allows `--flag value`, `--flag=value`, and, for the short
+/// forms, `-Zvalue`.
+fn forwarded_flags(arguments: &[String], flags: &[&str]) -> Vec<String> {
+    let mut forwarded = Vec::new();
+    let mut remaining = arguments.iter();
+    while let Some(argument) = remaining.next() {
+        if let Some((flag, value)) = argument
+            .split_once('=')
+            .filter(|(flag, _)| flags.contains(flag))
+        {
+            forwarded.push(flag.to_string());
+            forwarded.push(value.to_string());
+        } else if flags.contains(&argument.as_str()) {
+            if let Some(value) = remaining.next() {
+                forwarded.push(argument.clone());
+                forwarded.push(value.clone());
+            }
+        } else if flags
+            .iter()
+            .any(|flag| flag.len() == 2 && argument.len() > 2 && argument.starts_with(flag))
+        {
+            forwarded.push(argument.clone());
+        }
+    }
+    forwarded
+}
+
+/// The directory cargo resolves relative paths against, which `-C` can move.
+fn invocation_dir(arguments: &[String], working_dir: &Path) -> PathBuf {
+    flag_value(arguments, "-C")
+        .map(|value| absolute(working_dir, value))
+        .unwrap_or_else(|| working_dir.to_path_buf())
+}
+
+fn cargo_roots(
+    cargo: &std::ffi::OsStr,
+    arguments: &[String],
+    target_dir_env: Option<&std::ffi::OsStr>,
+) -> Option<Roots> {
+    let mut command = Command::new(cargo);
+    // Say what the probe should see rather than letting it inherit: cargo lets
+    // this variable outrank configuration, so a probe that disagrees with the
+    // caller about it describes a different target directory than the build's.
+    match target_dir_env {
+        Some(dir) => command.env(CARGO_TARGET_DIR_ENV, dir),
+        None => command.env_remove(CARGO_TARGET_DIR_ENV),
+    };
+    // Globals come first; cargo rejects them after the subcommand.
+    command.args(forwarded_flags(arguments, &PROBE_GLOBAL_FLAGS));
+    command.args(["metadata", "--no-deps", "--format-version", "1"]);
+    // Describe the project the build will actually operate on.
+    if let Some(manifest) = flag_value(arguments, "--manifest-path") {
+        command.args(["--manifest-path", manifest]);
+    }
+    for toggle in arguments
+        .iter()
+        .filter(|argument| PROBE_MANIFEST_TOGGLES.contains(&argument.as_str()))
+    {
+        command.arg(toggle);
+    }
+    let output = command.output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    parse_cargo_roots(&output.stdout)
+}
+
+fn parse_cargo_roots(metadata: &[u8]) -> Option<Roots> {
+    let metadata: serde_json::Value = serde_json::from_slice(metadata).ok()?;
+    Some(Roots {
+        workspace_root: PathBuf::from(metadata.get("workspace_root")?.as_str()?),
+        target_dir: PathBuf::from(metadata.get("target_directory")?.as_str()?),
+        // What cargo reports has folded configuration in already, so it cannot
+        // say whether anyone asked. The caller's flags, environment, and Cargo
+        // configuration answer that, and `resolve_roots_with` reads them itself.
+        target_dir_requested: false,
+    })
+}
+
+fn target_dir_argument(arguments: &[String]) -> Option<&str> {
+    flag_value(arguments, "--target-dir")
+}
+
+/// Whether Cargo configuration may have named the target directory.
+///
+/// `cargo metadata` reports only the resolved path, so an explicit
+/// `build.target-dir = "target"` is otherwise indistinguishable from Cargo's
+/// default. Any explicit config file passed on the command line is treated
+/// conservatively because it may include another file.
+fn cargo_config_may_set_target_dir(arguments: &[String], invocation_dir: &Path) -> bool {
+    if std::env::var_os("CARGO_BUILD_TARGET_DIR").is_some_and(|value| !value.is_empty()) {
+        return true;
+    }
+    if config_arguments(arguments).any(|value| {
+        value
+            .split_once('=')
+            .is_none_or(|(key, _)| matches!(key.trim(), "build.target-dir" | "include"))
+    }) {
+        return true;
+    }
+
+    let project_configs = invocation_dir.ancestors().flat_map(|directory| {
+        let cargo = directory.join(".cargo");
+        [cargo.join("config.toml"), cargo.join("config")]
+    });
+    let home_configs = std::env::var_os("CARGO_HOME")
+        .map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".cargo")))
+        .into_iter()
+        .flat_map(|cargo| [cargo.join("config.toml"), cargo.join("config")]);
+    project_configs
+        .chain(home_configs)
+        .any(|path| cargo_config_file_may_set_target_dir(&path))
+}
+
+fn config_arguments(arguments: &[String]) -> impl Iterator<Item = &str> {
+    let mut values = Vec::new();
+    let mut remaining = arguments.iter();
+    while let Some(argument) = remaining.next() {
+        if let Some(value) = argument.strip_prefix("--config=") {
+            values.push(value);
+        } else if argument == "--config"
+            && let Some(value) = remaining.next()
+        {
+            values.push(value.as_str());
+        }
+    }
+    values.into_iter()
+}
+
+fn cargo_config_file_may_set_target_dir(path: &Path) -> bool {
+    let contents = match std::fs::read_to_string(path) {
+        Ok(contents) => contents,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return false,
+        Err(_) => return true,
+    };
+    let Ok(config) = toml::from_str::<toml::Value>(&contents) else {
+        // Cargo will reject it, but mbx must not mutate a target directory on
+        // the way to that error.
+        return true;
+    };
+    config
+        .get("build")
+        .and_then(|build| build.get("target-dir"))
+        .is_some()
+        // An included file may contain the setting; Cargo owns that merge.
+        || config.get("include").is_some()
+}
+
+/// Read `--flag <value>` or `--flag=<value>` out of cargo's arguments.
+fn flag_value<'a>(arguments: &'a [String], flag: &str) -> Option<&'a str> {
+    let joined = format!("{flag}=");
+    let mut arguments = arguments.iter();
+    while let Some(argument) = arguments.next() {
+        if let Some(value) = argument.strip_prefix(&joined) {
+            return Some(value);
+        }
+        if argument == flag {
+            return arguments.next().map(String::as_str);
+        }
+    }
+    None
+}
+
+#[cfg(test)]
+#[path = "cli_tests.rs"]
+mod tests;

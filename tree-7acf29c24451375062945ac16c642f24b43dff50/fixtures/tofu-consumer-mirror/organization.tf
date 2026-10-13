@@ -1,0 +1,3 @@
+locals {
+  org = "example-org"
+}

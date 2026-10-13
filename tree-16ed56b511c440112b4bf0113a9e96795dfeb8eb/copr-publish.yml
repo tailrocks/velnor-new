@@ -1,0 +1,78 @@
+name: copr-publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      chroots:
+        description: "COPR chroots to target (space-separated). Leave empty to use the default list from packaging/copr/build-copr.sh."
+        required: false
+        default: ""
+        type: string
+      use_serious_profile:
+        description: 'Use the "serious" profile for optimized builds (LTO enabled)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PACKAGE_NAME: mise
+
+jobs:
+  publish-copr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    container:
+      image: ghcr.io/jdx/mise:copr
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up environment variables
+        run: |
+          VERSION=$(./scripts/get-version.sh | sed 's/^v//')
+
+          {
+            echo "VERSION=${VERSION}"
+            echo "PACKAGE_NAME=${PACKAGE_NAME}"
+            echo "MAINTAINER_NAME=${{ vars.COPR_MAINTAINER_NAME || 'mise Release Bot' }}"
+            echo "MAINTAINER_EMAIL=${{ vars.COPR_MAINTAINER_EMAIL || 'noreply@mise.jdx.dev' }}"
+            echo "COPR_OWNER=${{ vars.COPR_OWNER || 'jdxcode' }}"
+            echo "COPR_PROJECT=${{ vars.COPR_PROJECT || 'mise' }}"
+          } >> "$GITHUB_ENV"
+
+          # Pass chroots through only when explicitly overridden via workflow_dispatch.
+          # Otherwise let build-copr.sh apply its own default list.
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.chroots }}" ]; then
+            echo "CHROOTS=${{ inputs.chroots }}" >> "$GITHUB_ENV"
+          fi
+
+          # Set build profile
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.use_serious_profile }}" = "true" ]; then
+            echo "BUILD_PROFILE=serious" >> "$GITHUB_ENV"
+          else
+            echo "BUILD_PROFILE=release" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build and submit to COPR
+        run: |
+          args=(
+            --version "${VERSION}"
+            --profile "${BUILD_PROFILE}"
+            --owner "${COPR_OWNER}"
+            --project "${COPR_PROJECT}"
+            --name "${PACKAGE_NAME}"
+            --maintainer-name "${MAINTAINER_NAME}"
+            --maintainer-email "${MAINTAINER_EMAIL}"
+          )
+          if [ -n "${CHROOTS:-}" ]; then
+            args+=(--chroots "${CHROOTS}")
+          fi
+          ./packaging/copr/build-copr.sh "${args[@]}"
+        env:
+          COPR_API_LOGIN: ${{ secrets.COPR_API_LOGIN }}
+          COPR_API_TOKEN: ${{ secrets.COPR_API_TOKEN }}

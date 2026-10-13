@@ -1,0 +1,62 @@
+name: docs
+
+on:
+  push:
+    paths:
+      - ".github/actions/**"
+      - ".github/workflows/docs.yml"
+      - "bun.lock"
+      - "docs/**"
+      - "mise.toml"
+      - "package.json"
+      - "registry/**"
+      - "schema/**"
+      - "settings.toml"
+      - "tasks.toml"
+      - "tasks/docs/**"
+      - "xtasks/docs/**"
+    branches:
+      - main
+  pull_request:
+    paths:
+      - ".github/actions/**"
+      - ".github/workflows/docs.yml"
+      - "bun.lock"
+      - "docs/**"
+      - "mise.toml"
+      - "package.json"
+      - "registry/**"
+      - "schema/**"
+      - "settings.toml"
+      - "tasks.toml"
+      - "tasks/docs/**"
+      - "xtasks/docs/**"
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: docs-${{ github.head_ref }}
+  cancel-in-progress: true
+
+env:
+  GITHUB_TOKEN: ${{ secrets.MISE_GH_TOKEN || secrets.GITHUB_TOKEN }}
+
+jobs:
+  docs:
+    if: github.repository == 'jdx/mise'
+    runs-on: namespace-profile-endev-linux-amd64;overrides.cache-tag=mise-pr-rust-linux
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # for lastUpdated
+      - uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4
+        with:
+          install_args: bun
+      - run: mise x wait-for-gh-rate-limit -- wait-for-gh-rate-limit
+      - run: bun i
+      - run: mise run docs:release
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_SECRET_ACCESS_KEY }}
+          DRY_RUN: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}

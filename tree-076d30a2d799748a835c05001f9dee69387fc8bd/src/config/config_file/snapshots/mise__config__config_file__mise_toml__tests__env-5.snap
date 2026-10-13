@@ -1,0 +1,9 @@
+---
+source: src/config/config_file/mise_toml.rs
+expression: cf
+---
+MiseToml(/tmp/.mise.toml):  {
+    env: {
+        "foo": "bar",
+    },
+}

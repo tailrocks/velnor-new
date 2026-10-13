@@ -1,0 +1,48 @@
+# Stability
+
+What an mbx upgrade can and cannot break.
+
+## The store is disposable
+
+The local store is a cache of work mbx can redo. Correctness never depends on
+its format: an entry a new version cannot read is a miss, and the compilation
+runs again. The worst case for any upgrade is a colder build, not a wrong one,
+and deleting the cache directory is always safe.
+
+Managed target directories live under a versioned root (`targets/v1/…`), and
+the `target` symlink in each checkout keeps working across upgrades.
+
+## JSON output is versioned
+
+`mbx doctor --json`, `mbx cache stats --json`, `mbx gc --json`, and
+`MBX_STATS_REPORT` emit versioned documents; fields are added compatibly and a
+shape change bumps the version. Scripts should read the version field and
+parse the JSON. The `mbx[...]` stderr lines are written for people and may be
+reworded at any time.
+
+### Session event streams are not
+
+The per-compilation streams under `sessions/v1/` that back
+[`mbx tui`](/tui) are an implementation detail of that command. Their records
+carry a version field, but the format may change in any release and nothing
+parses them but mbx itself. Scripts should read `MBX_STATS_REPORT`.
+
+## Configuration
+
+Unknown TOML keys and invalid values are errors, so an upgrade that renames or
+retires a setting fails instead of ignoring what you wrote.
+
+## Wire protocols and crates
+
+The local shim/agent protocol requires exact protocol and application-version
+equality. Embedders can connect to it, but must upgrade their client alongside
+mbx when that exact-match version changes. The remote cache protocol is
+versioned under `/v1/` with explicit evolution rules. Published Rust subcrates
+remain on `0.x`, so their APIs may change in a minor release. See
+[protocol compatibility](/protocol-compatibility) for the details.
+
+`mbx-cache-cargo`, `mbx-cache-store`, `mbx-cache-core`, `mbx-cache-rustc`, and
+`mbx-cache-cc` are supported building blocks for coordinated embedding.
+They stay on `0.x`: their public APIs can change in a new minor
+release, and embedders should pin a compatible minor. Store and wire formats
+remain independently versioned and treat unfamiliar records as cache misses.

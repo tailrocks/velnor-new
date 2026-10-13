@@ -1,0 +1,138 @@
+[tools.actionlint]
+version = "1.7.7"
+backend = "aqua:rhysd/actionlint"
+
+[tools.actionlint.checksums]
+"actionlint_1.7.7_darwin_arm64.tar.gz" = "sha256:2693315b9093aeacb4ebd91a993fea54fc215057bf0da2659056b4bc033873db"
+"actionlint_1.7.7_linux_amd64.tar.gz" = "sha256:023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
+"actionlint_1.7.7_linux_arm64.tar.gz" = "sha256:401942f9c24ed71e4fe71b76c7d638f66d8633575c4016efd2977ce7c28317d0"
+
+[tools.bun]
+version = "1.2.10"
+backend = "core:bun"
+
+[tools.bun.checksums]
+"bun-darwin-aarch64.zip" = "sha256:07895ef0fb661249b86b0b723b65b1cc4790c7f3685b63cda90122b00299972c"
+
+[tools.cargo-binstall]
+version = "1.12.3"
+backend = "aqua:cargo-bins/cargo-binstall"
+
+[tools.cargo-binstall.checksums]
+"cargo-binstall-aarch64-apple-darwin.zip" = "sha256:88467030db096ceddf97405750fe9e67cf25106da241db7a60900c58f192206f"
+
+[tools."cargo:cargo-edit"]
+version = "0.13.2"
+backend = "cargo:cargo-edit"
+
+[tools."cargo:cargo-insta"]
+version = "1.42.2"
+backend = "cargo:cargo-insta"
+
+[tools."cargo:git-cliff"]
+version = "2.8.0"
+backend = "cargo:git-cliff"
+
+[tools."cargo:toml-cli"]
+version = "0.2.3"
+backend = "cargo:toml-cli"
+
+[tools."cargo:usage-cli"]
+version = "2.0.7"
+backend = "cargo:usage-cli"
+
+[tools.cosign]
+version = "2.5.0"
+backend = "aqua:sigstore/cosign"
+
+[tools.cosign.checksums]
+cosign-darwin-arm64 = "sha256:780da3654d9601367b0d54686ac65cb9716578610cabe292d725c7008de4db85"
+
+[tools.hk]
+version = "0.8.5"
+backend = "aqua:jdx/hk"
+
+[tools.hk.checksums]
+"hk-aarch64-apple-darwin.tar.gz" = "sha256:4ff6277e9edde84b82cb5728195d64fa9adb48b13279657cc71abfada078a17c"
+
+[tools.jq]
+version = "1.7.1"
+backend = "aqua:jqlang/jq"
+
+[tools.jq.checksums]
+jq-linux-amd64 = "sha256:5942c9b0934e510ee61eb3e30273f1b3fe2590df93933a93d7c58b81d19c8ff5"
+jq-linux-arm64 = "sha256:4dd2d8a0661df0b22f1bb9a1f9830f06b6f3b8f7d91211a1ef5d7c4f06a8b4a5"
+jq-macos-arm64 = "sha256:0bbe619e663e0de2c550be2fe0d240d076799d6f8a652b70fa04aea8a8362e8a"
+"jq-windows-amd64.exe" = "sha256:7451fbbf37feffb9bf262bd97c54f0da558c63f0748e64152dd87b0a07b6d6ab"
+
+[tools."npm:markdownlint-cli"]
+version = "0.44.0"
+backend = "npm:markdownlint-cli"
+
+[tools."npm:prettier"]
+version = "3.5.3"
+backend = "npm:prettier"
+
+[tools."pipx:toml-sort"]
+version = "0.24.2"
+backend = "pipx:toml-sort"
+
+[tools.pkl]
+version = "0.28.2"
+backend = "aqua:apple/pkl"
+
+[tools.pkl.checksums]
+pkl-macos-aarch64 = "sha256:452c75769d85c07714356f223a9d99a02bdc0bf360c0741765958e9aa080a50c"
+
+[tools.pre-commit]
+version = "4.2.0"
+backend = "aqua:pre-commit/pre-commit"
+
+[tools.pre-commit.checksums]
+"pre-commit-4.2.0.pyz" = "sha256:0d4d80fd598dd1f7c268569de49e7c7a692a3de6f7a97cf14ad4e6cce993bbdf"
+
+[tools.ripgrep]
+version = "14.1.1"
+backend = "aqua:BurntSushi/ripgrep"
+
+[tools.ripgrep.checksums]
+"ripgrep-14.1.1-aarch64-apple-darwin.tar.gz" = "sha256:24ad76777745fbff131c8fbc466742b011f925bfa4fffa2ded6def23b5b937be"
+"ripgrep-14.1.1-aarch64-unknown-linux-gnu.tar.gz" = "sha256:c827481c4ff4ea10c9dc7a4022c8de5db34a5737cb74484d62eb94a95841ab2f"
+"ripgrep-14.1.1-x86_64-pc-windows-msvc.zip" = "sha256:d0f534024c42afd6cb4d38907c25cd2b249b79bbe6cc1dbee8e3e37c2b6e25a1"
+"ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz" = "sha256:4cf9f2741e6c465ffdb7c26f38056a59e2a2544b51f7cc128ef28337eeae4d8e"
+
+[tools.shellcheck]
+version = "0.10.0"
+backend = "ubi:koalaman/shellcheck"
+
+[tools.shellcheck.checksums]
+shellcheck-macos-aarch64 = "sha256:b9e420df8c78ec7d261d66277d5767cbd4cf6da4e4a9f8b02ea4811cd4cc1109"
+"shellcheck-v0.10.0.darwin.aarch64.tar.xz" = "sha256:bbd2f14826328eee7679da7221f2bc3afb011f6a928b848c80c321f6046ddf81"
+
+[tools.shfmt]
+version = "3.11.0"
+backend = "aqua:mvdan/sh"
+
+[tools.slsa-verifier]
+version = "2.7.0"
+backend = "ubi:slsa-framework/slsa-verifier"
+
+[tools.slsa-verifier.checksums]
+slsa-verifier-macos-aarch64 = "sha256:84d9122ce12e0c79080844285fd5c4976407ed3463e434a1b21b0979c46b1e55"
+
+[tools.taplo]
+version = "0.9.3"
+backend = "ubi:tamasfe/taplo[matching=full]"
+
+[tools.taplo.checksums]
+taplo-full-linux-aarch64 = "sha256:9ffa2a799ff0ca601a0e7ff93dcae64a34c81c677916e6f0d3c81d62e0670d83"
+taplo-full-linux-x86_64 = "sha256:e89d2303ea9a5ec07971feec807fa493dc9ab6624c19b313ff90fdede247ee08"
+taplo-full-macos-aarch64 = "sha256:cf55aa3e4c9b631c1fbb3f8a4adac59ca2ecc7898d26e749cd9b62d5ed858fce"
+"taplo.exe-full-windows-aarch64" = "sha256:13eaa7f30f321a02a43bcc476450b9a79307f12addc25df132613cbb76d03f86"
+
+[tools.wait-for-gh-rate-limit]
+version = "1.0.0"
+backend = "ubi:jdx/wait-for-gh-rate-limit"
+
+[tools.wait-for-gh-rate-limit.checksums]
+wait-for-gh-rate-limit-macos-aarch64 = "sha256:a3a12519075fdb18eb933e8c369e78a6c27d2e17575fdd6a86ab26dbeba34247"

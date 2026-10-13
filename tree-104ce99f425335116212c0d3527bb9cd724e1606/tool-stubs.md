@@ -1,0 +1,390 @@
+# Tool Stubs
+
+Tool stubs let you create executable files with embedded TOML configuration for tool execution. They provide a convenient way to define tool versions, backends, and execution parameters directly within executable scripts. They are also a good way to lazy-load some tools, since a stubbed tool is fetched only when it is called, not when you run something like `mise install`.
+
+This feature is inspired by [dotslash](https://github.com/facebook/dotslash), which pioneered the concept of executable files with embedded configuration for portable tool execution.
+
+## Overview
+
+A tool stub is an executable file that begins with a shebang line pointing to `mise tool-stub` and contains TOML configuration specifying which tool to execute and how to execute it. When the stub runs, mise installs the specified tool version (if needed) and executes it with the provided arguments.
+
+Tool stubs can use any mise backend, but because they default to the http backend—whose tools have URLs and don't require a version—http stubs look a bit different from non-http stubs.
+
+For a machine-wide catalogue of ordinary tools, prefer
+[`lazy = true` in `[tools]`](/dev-tools/shims.html#lazy-tools). Standalone tool
+stub scripts remain useful when the executable file itself should carry a
+portable, self-contained tool definition.
+
+::: tip
+Tool stubs are particularly useful for adding less commonly used tools to your mise setup. Since a tool is installed only when its stub is first executed, you can define many tools without the overhead of installing them all up front. This is ideal for specialized tools, testing utilities, or project-specific binaries that you don't use every day.
+:::
+
+## Tool (non-http) Stubs
+
+```bash
+#!/usr/bin/env -S mise tool-stub
+# Optional comment describing the tool
+
+version = "1.0.0"
+tool = "python"
+bin = "python"
+```
+
+::: info Why use `env -S`?
+The `-S` flag tells `env` to split the command line on spaces, so multiple arguments can be passed to the interpreter. This is necessary because shebangs on Unix systems traditionally support only a single argument after the interpreter path. `env -S mise tool-stub` makes the shebang work by splitting it into `env` → `mise` → `tool-stub`.
+:::
+
+## Configuration Fields
+
+Tool stub configuration is essentially a subset of a `mise.toml` `[tools]` section, with the addition of a `tool` field to specify which tool to use. All the options available for tool configuration in `mise.toml` are also supported in tool stubs.
+
+### Optional Fields
+
+- `tool` - Explicit tool name or backend specification (e.g., "python", "github:cli/cli"). This is the only field unique to tool stubs; it specifies which tool to use. If it is omitted and a `url` field is present, the stub defaults to the HTTP backend.
+- `version` - The version of the tool to use
+- `bin` - The binary name to execute within the tool (defaults to the stub filename)
+
+## HTTP Stubs
+
+For multi-platform tarballs:
+
+```toml
+#!/usr/bin/env -S mise tool-stub
+url = "https://example.com/releases/1.0.0/tool-linux-x64.tar.gz"
+```
+
+For platform-specific tarballs:
+
+```toml
+#!/usr/bin/env -S mise tool-stub
+[platforms.linux-x64]
+url = "https://example.com/releases/1.0.0/tool-linux-x64.tar.gz"
+
+[platforms.darwin-arm64]
+url = "https://example.com/releases/1.0.0/tool-macos-arm64.tar.gz"
+```
+
+### Platform-Specific Binary Paths
+
+Different platforms may have different binary structures or names. You can specify platform-specific `bin` fields when the binary path differs between platforms:
+
+```toml
+#!/usr/bin/env -S mise tool-stub
+# Global bin field used when platforms have the same structure
+bin = "bin/tool"
+
+[platforms.linux-x64]
+url = "https://example.com/tool-linux.tar.gz"
+# Uses global bin field: "bin/tool"
+
+[platforms.windows-x64]
+url = "https://example.com/tool-windows.zip"
+bin = "tool.exe"  # Platform-specific binary for Windows
+```
+
+The tool stub generator detects when platforms have different binary paths and generates platform-specific `bin` fields when needed, or a single global `bin` field when all platforms share the same binary structure.
+
+::: tip
+Tool stubs default to the HTTP backend if no `tool` field is specified and a `url` field is present.
+See the [HTTP backend documentation](/dev-tools/backends/http) for full details on configuring HTTP-based tools.
+:::
+
+## Generating Tool Stubs (http)
+
+While you can create tool stubs manually, mise provides a [`mise generate tool-stub`](/cli/generate/tool-stub) command that generates stubs for HTTP-based tools.
+
+::: tip Incremental Building
+When using platform-specific URLs, the tool stub generator appends new platforms to existing stub files rather than overwriting them. This lets you build cross-platform tool stubs incrementally by running the command multiple times with different platforms.
+:::
+
+### Basic Generation
+
+Generate a tool stub for a tool distributed via HTTP:
+
+```bash
+mise generate tool-stub ./bin/gh --url "https://github.com/cli/cli/releases/download/v2.96.0/gh_2.96.0_linux_amd64.tar.gz"
+```
+
+This will:
+
+- Download the archive to compute checksums (for security)
+- Extract it to auto-detect the binary path
+- Generate an executable stub with complete TOML configuration
+
+### Platform-Specific Generation
+
+For tools with different URLs per platform, you can generate all platforms at once:
+
+```bash
+mise generate tool-stub ./bin/rg \
+  --platform-url linux-x64:https://github.com/BurntSushi/ripgrep/releases/download/14.0.3/ripgrep-14.0.3-x86_64-unknown-linux-musl.tar.gz \
+  --platform-url darwin-arm64:https://github.com/BurntSushi/ripgrep/releases/download/14.0.3/ripgrep-14.0.3-aarch64-apple-darwin.tar.gz
+```
+
+**Auto-Platform Detection**: If the URL contains platform information, you can omit the platform prefix and let mise auto-detect it:
+
+```bash
+# Auto-detect platform from URL (detects as 'macos-arm64')
+mise generate tool-stub ./bin/node \
+  --platform-url https://nodejs.org/dist/v22.17.1/node-v22.17.1-darwin-arm64.tar.gz
+
+# Auto-detect platform from URL (detects as 'linux-x64')
+mise generate tool-stub ./bin/node \
+  --platform-url https://nodejs.org/dist/v22.17.1/node-v22.17.1-linux-x64.tar.gz
+```
+
+Or build them incrementally by adding platforms one at a time:
+
+```bash
+# Start with Linux support (explicit platform)
+mise generate tool-stub ./bin/rg \
+  --platform-url linux-x64:https://github.com/BurntSushi/ripgrep/releases/download/14.0.3/ripgrep-14.0.3-x86_64-unknown-linux-musl.tar.gz
+
+# Later, add macOS support using auto-detection (appends to existing file)
+mise generate tool-stub ./bin/rg \
+  --platform-url https://github.com/BurntSushi/ripgrep/releases/download/14.0.3/ripgrep-14.0.3-aarch64-apple-darwin.tar.gz
+
+# Add Windows support using auto-detection (appends to existing file)
+mise generate tool-stub ./bin/rg \
+  --platform-url https://github.com/BurntSushi/ripgrep/releases/download/14.0.3/ripgrep-14.0.3-x86_64-pc-windows-msvc.zip
+```
+
+The generator preserves existing configuration and merges new platforms into the `[platforms]` table. If you specify a platform that already exists, its URL is updated.
+
+### Generation Options
+
+- `--version VERSION` - Specify the tool version (defaults to "latest")
+- `--bin PATH` - Override the auto-detected binary path
+- `--platform-url PLATFORM:URL` - Add a platform-specific URL (can be repeated)
+- `--platform-url URL` - Add a platform-specific URL, auto-detecting the platform from the URL filename
+- `--platform-bin PLATFORM:PATH` - Set a platform-specific binary path
+- `--checksum-algorithm ALGORITHM` - Generate `blake3` (default) or `sha256` checksums
+- `--skip-download` - Skip downloading for faster generation (no checksums or binary detection)
+- `--lock` - Resolve and embed lockfile data (pinned version + platform URLs/checksums) into an existing stub
+
+`--checksum-algorithm` cannot be combined with `--lock` or `--skip-download`, because those modes do not calculate checksums.
+
+For consumers such as Bazel that require SHA256 checksums, select that algorithm when generating the stub:
+
+```bash
+mise generate tool-stub ./bin/tool \
+  --url "https://example.com/tool.tar.gz" \
+  --checksum-algorithm sha256
+```
+
+The selected algorithm also applies to missing checksums populated by `--fetch`. Existing checksums are preserved.
+
+### Supported Archive Formats
+
+The generator automatically detects and extracts various archive formats:
+
+- `.tar.gz` / `.tgz` (gzip compressed tarballs)
+- `.tar.xz` / `.txz` (xz compressed tarballs)
+- `.tar.bz2` / `.tbz2` (bzip2 compressed tarballs)
+- `.tar.zst` / `.tzst` (zstd compressed tarballs)
+- `.zip` (zip archives)
+- `.7z` (7-zip archives)
+
+### Generated Stub Example
+
+Running the generation command produces an executable stub like this:
+
+```bash
+#!/usr/bin/env -S mise tool-stub
+
+version = "latest"
+bin = "bin/gh"
+url = "https://github.com/cli/cli/releases/download/v2.96.0/gh_2.96.0_linux_amd64.tar.gz"
+checksum = "blake3:a1b2c3d4e5f6..."
+size = 12345678
+```
+
+The generator automatically:
+
+- Calculates BLAKE3 checksums by default, or SHA256 when requested
+- Detects file sizes
+- Identifies the correct binary path within archives
+- Uses the output filename as the tool name
+
+## Examples
+
+### Basic Node.js Stub
+
+```bash
+#!/usr/bin/env -S mise tool-stub
+# Node.js v20 tool stub
+
+tool = "node"
+version = "20.0.0"
+bin = "node"
+```
+
+### Python with Custom Binary Name
+
+```bash
+#!/usr/bin/env -S mise tool-stub
+# Python tool accessible as 'py'
+
+tool = "python"
+version = "3.11"
+bin = "python"
+```
+
+### GitHub Release Backend
+
+```bash
+#!/usr/bin/env -S mise tool-stub
+# GitHub CLI tool
+
+tool = "github:cli/cli"
+version = "latest"
+```
+
+### Locked Tool Stub
+
+```bash
+#!/usr/bin/env -S mise tool-stub
+
+tool = "node"
+version = "20.18.1"
+bin = "node"
+
+[lock.platforms.linux-x64]
+url = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-linux-x64.tar.xz"
+checksum = "sha256:abc123..."
+
+[lock.platforms.macos-arm64]
+url = "https://nodejs.org/dist/v20.18.1/node-v20.18.1-darwin-arm64.tar.gz"
+checksum = "sha256:def456..."
+```
+
+The `[lock]` section is generated by `mise generate tool-stub --lock` and provides
+reproducible downloads with checksum verification. The `tool` and `version` fields are still
+used for backend resolution, while the lock data provides download shortcuts.
+
+::: tip
+Locking is especially useful for avoiding GitHub API rate limits when users don't have a `GITHUB_TOKEN` set. With locked stubs, tools can be installed without any API calls at runtime.
+:::
+
+#### Locking a Stub
+
+```bash
+# Create a stub with a fuzzy version
+mise generate tool-stub ./bin/node --version 20
+
+# Lock it to pin the exact version and add platform URLs/checksums
+mise generate tool-stub ./bin/node --lock
+```
+
+This resolves the version, fetches URLs for all common platforms (linux-x64, linux-arm64, macos-x64, macos-arm64, windows-x64), and writes them into a `[lock]` section in the stub.
+
+#### Bumping a Locked Version
+
+To bump the version of a locked stub, pass `--version` along with `--lock`:
+
+```bash
+# Bump to the latest node 22.x and re-lock
+mise generate tool-stub ./bin/node --lock --version 22
+```
+
+### HTTP Backend with Platform Support
+
+```bash
+#!/usr/bin/env -S mise tool-stub
+# Custom HTTP tool with platform-specific downloads
+
+version = "1.0.0"
+
+[platforms.linux-x64]
+url = "https://releases.example.com/v{{version}}/tool-linux-x64.tar.gz"
+
+[platforms.darwin-arm64]
+url = "https://releases.example.com/v{{version}}/tool-macos-arm64.tar.gz"
+```
+
+## Usage
+
+### Direct Execution
+
+Make the stub executable and run it directly:
+
+```bash
+chmod +x ./bin/my-tool
+./bin/my-tool --version
+```
+
+#### On Windows
+
+Windows cannot execute a shebang script, so `mise generate tool-stub` writes a `.cmd` launcher
+beside the stub. Run the stub by name and Windows picks it up through `PATHEXT`:
+
+```powershell
+.\bin\my-tool.cmd --version
+```
+
+The launcher is generated whenever the stub could run on Windows — either it lists a
+`[platforms.windows-*]` entry, or it names no platforms at all. A stub that ships only for, say,
+Linux and macOS does not get one, and neither does a stub whose own name already ends in `.cmd`,
+`.bat` or `.exe`. The launcher is written on every platform, not just Windows, so a stub generated on Linux
+and committed to a repository still works for someone who clones it on Windows.
+
+If a stub later stops shipping for Windows, regenerating it removes the launcher, so it cannot keep
+running against platforms the stub no longer declares. Only a launcher mise generated is removed —
+one you wrote yourself is left alone.
+
+The extension-less stub is kept as well: Git Bash and Cygwin run it through the shebang, the same
+way [shims](/dev-tools/shims) place both an extension-less script and a native launcher on Windows.
+
+### Via mise Command
+
+Run the stub through the [`mise tool-stub`](/cli/tool-stub) command—useful for debugging when something isn't working:
+
+```bash
+mise tool-stub ./bin/my-tool --version
+```
+
+## Caching
+
+Tool stubs cache lookups to reduce the overhead mise adds when running them:
+
+- Binary paths are cached based on the stub file path and modification time
+- The cache is invalidated automatically when the stub file changes
+- Missing binaries trigger cache cleanup automatically
+
+Cached stubs have ~4ms of overhead.
+
+## Pruning
+
+Executing a stub tracks it in `~/.local/state/mise/tracked-stubs`, the same way
+config files are tracked when they are used. [`mise prune`](/cli/prune) treats
+tool versions referenced by a tracked stub as needed and will not delete them,
+just like versions required by a tracked config file.
+
+A stub must have been executed at least once on the machine for its tool to be
+protected. If the stub file is later deleted, its tool versions become prunable
+again (unless something else needs them).
+
+## Alternative: Creating Simple Stubs with `mise x`
+
+For basic use cases, you can create simple stubs with the [`mise x`](/cli/exec) command instead of writing TOML configuration:
+
+```bash
+# Create bin directory
+mkdir -p ./bin
+
+# Create a simple Node.js stub
+cat > ./bin/node << 'EOF'
+#!/usr/bin/env bash
+exec mise x node@20 -- "$@"
+EOF
+chmod +x ./bin/node
+
+# Create a Python stub with specific version
+cat > ./bin/python << 'EOF'
+#!/usr/bin/env bash
+exec mise x python@3.11 -- "$@"
+EOF
+chmod +x ./bin/python
+```
+
+This approach is ideal for simple tool execution that needs no custom options, environment variables, or platform-specific settings. For more complex configurations, use the TOML format described above.

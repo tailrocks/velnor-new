@@ -1,0 +1,222 @@
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { defineConfig } from "vitepress";
+import { tabsMarkdownPlugin } from "vitepress-plugin-tabs";
+import { socialCard, writeSocialCard } from "./social-images.mjs";
+
+const configDir = dirname(fileURLToPath(import.meta.url));
+const cargoToml = readFileSync(
+  resolve(configDir, "../../crates/mbx/Cargo.toml"),
+  "utf8",
+);
+const versionMatch = cargoToml.match(
+  /^\[package\][\s\S]*?^\s*version\s*=\s*"([^"]+)"/m,
+);
+if (!versionMatch) {
+  throw new Error("could not read the mbx version from crates/mbx/Cargo.toml");
+}
+const latestVersion = versionMatch[1];
+const siteUrl = "https://mr-boxington.jdx.dev";
+
+export default defineConfig({
+  title: "mr boxington",
+  description:
+    "Put mbx in front of any cargo command. Every build on the machine shares one self-pruning cache, and you can run multiple Cargo builds in parallel.",
+  lang: "en-US",
+  lastUpdated: true,
+  appearance: "force-dark",
+  cleanUrls: true,
+  // The configuration reference is embedded into /configuration with an
+  // @include rather than shipped as its own page.
+  srcExclude: ["cli/configuration.md"],
+  rewrites: {
+    "cli/cache.md": "cli/cache/index.md",
+  },
+  sitemap: {
+    hostname: "https://mr-boxington.jdx.dev",
+  },
+  markdown: {
+    config(md) {
+      md.use(tabsMarkdownPlugin);
+    },
+  },
+  themeConfig: {
+    logo: "/logo.svg",
+    nav: [
+      { text: "Get Started", link: "/getting-started" },
+      { text: "Configuration", link: "/configuration" },
+      { text: "GitHub Action", link: "/github-action" },
+      { text: "CLI", link: "/cli/" },
+      {
+        text: `v${latestVersion}`,
+        link: "https://github.com/jdx/mr-boxington/releases",
+      },
+    ],
+    sidebar: [
+      {
+        text: "Getting started",
+        items: [
+          { text: "Introduction", link: "/" },
+          { text: "Install and run", link: "/getting-started" },
+          { text: "FAQ", link: "/faq" },
+        ],
+      },
+      {
+        text: "Use mbx",
+        items: [
+          { text: "Configuration", link: "/configuration" },
+          { text: "GitHub Action", link: "/github-action" },
+          { text: "Remote cache", link: "/remote-cache" },
+          { text: "Cache server", link: "/cache-server" },
+          { text: "Managed targets", link: "/managed-targets" },
+          { text: "Standalone C and C++", link: "/standalone-builds" },
+          { text: "Watching builds", link: "/tui" },
+          { text: "Savings and statistics", link: "/stats" },
+        ],
+      },
+      {
+        text: "Cookbook",
+        items: [
+          { text: "Local development", link: "/cookbook/local-development" },
+          { text: "CI with fork pull requests", link: "/cookbook/fork-prs" },
+          {
+            text: "Migrate from rust-cache or sccache",
+            link: "/cookbook/migrate",
+          },
+        ],
+      },
+      {
+        text: "Understand mbx",
+        items: [
+          { text: "How it works", link: "/how-it-works" },
+          { text: "How mbx compares", link: "/compared" },
+          { text: "Acknowledgements", link: "/acknowledgements" },
+          { text: "Benchmarks", link: "/benchmarks" },
+          { text: "Stability", link: "/stability" },
+          { text: "Protocol compatibility", link: "/protocol-compatibility" },
+          { text: "Cache results", link: "/cache-results" },
+          { text: "Limits", link: "/limits" },
+        ],
+      },
+      {
+        text: "Reference",
+        items: [
+          { text: "CLI overview", link: "/cli/" },
+          { text: "doctor", link: "/cli/doctor" },
+          { text: "explain", link: "/cli/explain" },
+          { text: "gc", link: "/cli/gc" },
+          {
+            text: "cache",
+            link: "/cli/cache",
+            collapsed: true,
+            items: [
+              { text: "dir", link: "/cli/cache/dir" },
+              { text: "stats", link: "/cli/cache/stats" },
+              { text: "projects", link: "/cli/cache/projects" },
+              { text: "largest", link: "/cli/cache/largest" },
+              { text: "verify", link: "/cli/cache/verify" },
+              { text: "remove", link: "/cli/cache/remove" },
+            ],
+          },
+          { text: "tui", link: "/cli/tui" },
+          { text: "stats", link: "/cli/stats" },
+          { text: "prefetch", link: "/cli/prefetch" },
+          { text: "Settings", link: "/configuration#settings" },
+        ],
+      },
+    ],
+    outline: { level: [2, 3] },
+    socialLinks: [
+      { icon: "github", link: "https://github.com/jdx/mr-boxington" },
+      { icon: "discord", link: "https://discord.gg/UBa7pJUN7Z" },
+    ],
+    editLink: {
+      pattern: ({ filePath }) =>
+        `https://github.com/jdx/mr-boxington/edit/main/docs/${filePath}`,
+      text: "Edit this page on GitHub",
+    },
+    search: { provider: "local" },
+    footer: false,
+  },
+  head: [
+    [
+      "script",
+      {
+        async: "",
+        src: "https://www.googletagmanager.com/gtag/js?id=G-0MDX8ZJYFY",
+      },
+    ],
+    [
+      "script",
+      {},
+      `window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-0MDX8ZJYFY');`,
+    ],
+    ["link", { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" }],
+    [
+      "link",
+      { rel: "icon", href: "/favicon.png", type: "image/png", sizes: "64x64" },
+    ],
+    ["link", { rel: "apple-touch-icon", href: "/favicon.png" }],
+    ["link", { rel: "manifest", href: "/site.webmanifest" }],
+    ["link", { rel: "preconnect", href: "https://fonts.googleapis.com" }],
+    [
+      "link",
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "" },
+    ],
+    [
+      "link",
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;600&display=swap",
+      },
+    ],
+    ["meta", { name: "theme-color", content: "#d69b42" }],
+    ["meta", { property: "og:type", content: "website" }],
+    ["meta", { property: "og:site_name", content: "mr boxington" }],
+    ["meta", { property: "og:locale", content: "en_US" }],
+    ["meta", { property: "og:image:width", content: "1200" }],
+    ["meta", { property: "og:image:height", content: "630" }],
+    ["meta", { name: "twitter:card", content: "summary_large_image" }],
+    ["meta", { name: "twitter:site", content: "@jdxcode" }],
+  ],
+  transformHead({ pageData, title, description, siteConfig }) {
+    const heading = pageData.title || "mr boxington";
+    const card = socialCard(heading);
+    writeSocialCard(siteConfig.outDir, card);
+    const image = new URL(card.path, `${siteUrl}/`).toString();
+    const imageAlt = `${heading} — mr boxington docs`;
+    const url = new URL(
+      pageData.relativePath.replace(/index\.md$/, "").replace(/\.md$/, ""),
+      `${siteUrl}/`,
+    ).toString();
+
+    return [
+      ["link", { rel: "canonical", href: url }],
+      ["meta", { property: "og:url", content: url }],
+      ["meta", { property: "og:image", content: image }],
+      ["meta", { property: "og:image:alt", content: imageAlt }],
+      ["meta", { name: "twitter:image", content: image }],
+      ["meta", { name: "twitter:image:alt", content: imageAlt }],
+      ["meta", { property: "og:title", content: title }],
+      ["meta", { property: "og:description", content: description }],
+      ["meta", { name: "twitter:title", content: title }],
+      ["meta", { name: "twitter:description", content: description }],
+      [
+        "script",
+        { type: "application/ld+json" },
+        JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebPage",
+          name: title,
+          description,
+          url,
+          isPartOf: { "@type": "WebSite", name: "mr boxington", url: siteUrl },
+        }),
+      ],
+    ];
+  },
+});

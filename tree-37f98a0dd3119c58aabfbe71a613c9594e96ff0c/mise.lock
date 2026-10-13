@@ -1,0 +1,162 @@
+[tools.actionlint]
+version = "1.7.7"
+backend = "aqua:rhysd/actionlint"
+
+[tools.actionlint.platforms.linux-x64]
+checksum = "sha256:023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757"
+size = 2080472
+url = "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz"
+
+[tools.bun]
+version = "1.2.19"
+backend = "core:bun"
+
+[tools.bun.platforms.linux-x64]
+checksum = "blake3:59b98062e8014acf0bebfccbae2825fb88ac4486269f2b04e596862f07b01c86"
+size = 38401482
+
+[tools.cargo-binstall]
+version = "1.14.1"
+backend = "aqua:cargo-bins/cargo-binstall"
+
+[tools.cargo-binstall.platforms.linux-x64]
+checksum = "blake3:f7e2fda3111092730a03feec1fabf436a89ddab1ffa8ae51b953f3183c8617e3"
+size = 6821106
+url = "https://github.com/cargo-bins/cargo-binstall/releases/download/v1.14.1/cargo-binstall-x86_64-unknown-linux-musl.tgz"
+
+[tools."cargo:cargo-edit"]
+version = "0.13.6"
+backend = "cargo:cargo-edit"
+
+[tools."cargo:cargo-insta"]
+version = "1.43.1"
+backend = "cargo:cargo-insta"
+
+[tools."cargo:cargo-release"]
+version = "0.25.18"
+backend = "cargo:cargo-release"
+
+[tools."cargo:git-cliff"]
+version = "2.9.1"
+backend = "cargo:git-cliff"
+
+[tools."cargo:toml-cli"]
+version = "0.2.3"
+backend = "cargo:toml-cli"
+
+[tools."cargo:usage-cli"]
+version = "2.2.2"
+backend = "cargo:usage-cli"
+
+[tools.cosign]
+version = "2.5.3"
+backend = "aqua:sigstore/cosign"
+
+[tools.cosign.platforms.linux-x64]
+checksum = "sha256:783b5d6c74105401c63946c68d9b2a4e1aab3c8abce043e06b8510b02b623ec9"
+size = 154068646
+url = "https://github.com/sigstore/cosign/releases/download/v2.5.3/cosign-linux-amd64"
+
+[tools.gh]
+version = "2.62.0"
+backend = "aqua:cli/cli"
+
+[tools.gh.platforms.linux-x64]
+checksum = "sha256:41c8b0698ad3003cb5c44bde672a1ffd5f818595abd80162fbf8cc999418446a"
+size = 13065800
+url = "https://github.com/cli/cli/releases/download/v2.62.0/gh_2.62.0_linux_amd64.tar.gz"
+
+[tools.hk]
+version = "1.2.2"
+backend = "aqua:jdx/hk"
+
+[tools.hk.platforms.linux-x64]
+checksum = "blake3:9aac0892f6f18af3d14fbabc04c29cd65e115865d30f590b03ad00c54beb2786"
+size = 6200865
+url = "https://github.com/jdx/hk/releases/download/v1.2.2/hk-x86_64-unknown-linux-gnu.tar.gz"
+
+[tools.jq]
+version = "1.8.1"
+backend = "aqua:jqlang/jq"
+
+[tools.jq.platforms.linux-x64]
+checksum = "sha256:020468de7539ce70ef1bceaf7cde2e8c4f2ca6c3afb84642aabc5c97d9fc2a0d"
+size = 2255816
+url = "https://github.com/jqlang/jq/releases/download/jq-1.8.1/jq-linux-amd64"
+
+[tools."npm:markdownlint-cli"]
+version = "0.45.0"
+backend = "npm:markdownlint-cli"
+
+[tools."npm:prettier"]
+version = "3.6.2"
+backend = "npm:prettier"
+
+[tools."pipx:toml-sort"]
+version = "0.24.2"
+backend = "pipx:toml-sort"
+
+[tools.pkl]
+version = "0.28.2"
+backend = "aqua:apple/pkl"
+
+[tools.pkl.platforms.linux-x64]
+checksum = "blake3:307c4fe33a13f5293dce699b1544d292537caa2c1b711f984f7d3ecc9e729ed2"
+size = 101155760
+url = "https://github.com/apple/pkl/releases/download/0.28.2/pkl-linux-amd64"
+
+[tools.pre-commit]
+version = "4.2.0"
+backend = "aqua:pre-commit/pre-commit"
+
+[tools.pre-commit.platforms.linux-x64]
+checksum = "sha256:0d4d80fd598dd1f7c268569de49e7c7a692a3de6f7a97cf14ad4e6cce993bbdf"
+size = 6544274
+url = "https://github.com/pre-commit/pre-commit/releases/download/v4.2.0/pre-commit-4.2.0.pyz"
+
+[tools.ripgrep]
+version = "14.1.1"
+backend = "aqua:BurntSushi/ripgrep"
+
+[tools.ripgrep.platforms.linux-x64]
+checksum = "sha256:4cf9f2741e6c465ffdb7c26f38056a59e2a2544b51f7cc128ef28337eeae4d8e"
+size = 2566310
+url = "https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz"
+
+[tools.shellcheck]
+version = "0.10.0"
+backend = "aqua:koalaman/shellcheck"
+
+[tools.shellcheck.platforms.linux-x64]
+checksum = "blake3:729ad9734a3d9ecaf613b25714d6c70812e8808270c13cbe19eca2412f0ffc2d"
+size = 2404716
+url = "https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.linux.x86_64.tar.xz"
+
+[tools.shfmt]
+version = "3.12.0"
+backend = "aqua:mvdan/sh"
+
+[tools.shfmt.platforms.linux-x64]
+checksum = "sha256:d9fbb2a9c33d13f47e7618cf362a914d029d02a6df124064fff04fd688a745ea"
+size = 2916536
+url = "https://github.com/mvdan/sh/releases/download/v3.12.0/shfmt_v3.12.0_linux_amd64"
+
+[tools.slsa-verifier]
+version = "2.7.1"
+backend = "ubi:slsa-framework/slsa-verifier"
+
+[tools.slsa-verifier.platforms.linux-x64-slsa-verifier]
+checksum = "blake3:6b7c72ece3e3cbd9db12dd8e261e594bb24721db140692d4f5cbdf508df45156"
+
+[tools.taplo]
+version = "0.10.0"
+backend = "aqua:tamasfe/taplo"
+
+[tools.taplo.platforms.linux-x64]
+checksum = "blake3:4871fab0e60275a1eb46e7190726e144f56c9a9527f59b0d1da5a042baead8e2"
+size = 5116068
+url = "https://github.com/tamasfe/taplo/releases/download/0.10.0/taplo-linux-x86_64.gz"
+
+[tools.wait-for-gh-rate-limit]
+version = "1.0.0"
+backend = "ubi:jdx/wait-for-gh-rate-limit"

@@ -1,0 +1,21 @@
+---
+title: "macOS Scale Set decisions"
+description: "macOS Scale Set decisions"
+---
+
+| ID | Decision |
+|---|---|
+| D1 | Schema 2 is free. `VelnorConfig::SCHEMA` stays 1. Schema-1 inputs keep hosted-only generation. |
+| D2 | Runner code is a nested workspace at `crates/velnor-runner`, not a root workspace member. Root `Cargo.toml` excludes that directory so Cargo does not treat it as a broken member. |
+| D3 | Primary profile is `linux/amd64` even when the Docker VM is `aarch64`. Emulation is reported. ARM64 is never relabeled as the x64 baseline. |
+| D4 | One host-wide capacity authority. `max_jobs` defaults to 1. `N>1` is a qualification case, not a second authority. |
+| D5 | The official runner is not patched. No `/proc` spoof to bypass `AssertCompatibleOS`. |
+| D6 | The journal uses the embedded `turso` crate, local file only. Not Turso Cloud and not the `libsql` crate. `0.8.1` may require Rust newer than the repo MSRV 1.98. If it fails to compile, pin `0.7.2` and record the compiler error. Do not invent a version. |
+| D7 | Docker client is Bollard `0.21.1`, constructed with an explicit Unix socket. Never `connect_with_local_defaults`. |
+| D8 | Comparison fails closed. `NOT_PROVEN` is not success. |
+| D9 | `~/Library/Application Support/Velnor` from before `velnor-new` is legacy. The operator authorized wiping it. Fresh state is correct. |
+| D10 | Protocol pin remains `actions/scaleset` `e6daac7` because that commit is still the default-branch HEAD. Wire tags, including Pascal-case `RunnerSetting`, come from that tree. |
+| D11 | No Java adapter for ChainArgos. Pinned CI does not run Java or frontend tests. |
+| D12 | Legacy runner sources are Apache-2.0 only. Do not relabel copied text as MIT. Prefer reimplementation of invariants over copying files. |
+| D13 | `tokio =1.47.1` is not in the registry. Bollard 0.21.1 resolves `^1.47` to 1.49.0 as the oldest available non-yanked release. Pin `=1.49.0`. |
+| D14 | Nested `deny.toml` allows `Zlib` because `foldhash` 0.2 (pulled by `turso` 0.8.1 via `tantivy`) declares that license. Path dependencies carry `version = "=0.1.0"` so cargo-deny does not treat them as wildcards. The generator allowlist is unchanged. |

@@ -1,0 +1,157 @@
+[package]
+name = "mise"
+version = "2024.2.17"
+edition = "2021"
+description = "The front-end to your dev env"
+authors = ["Jeff Dickey (@jdx)"]
+homepage = "https://mise.jdx.dev"
+documentation = "https://mise.jdx.dev"
+repository = "https://github.com/jdx/mise"
+readme = "README.md"
+license = "MIT"
+keywords = ["mise"]
+categories = ["command-line-utilities"]
+include = [
+    "src/**/*.rs",
+    "src/plugins/core/assets/**",
+    "src/assets/**",
+    "/completions/*",
+    "/Cargo.lock",
+    "/LICENSE",
+    "/README.md",
+    "/build.rs",
+    "/zipsign.pub",
+]
+rust-version = "1.74.0"
+build = "build.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "mise"
+path = "src/main.rs"
+
+#[[bench]]
+#name = "config_bench"
+#harness = false
+
+[profile.release]
+lto = true
+
+[dependencies]
+base64 = "0.21.7"
+calm_io = "0.1.1"
+chrono = { version = "0.4.34", default-features = false, features = ["std", "clock"] }
+clap = { version = "4.5.1", features = ["env", "derive", "string"] }
+clap_mangen = { version = "0.2.20", optional = true }
+color-eyre = "0.6.2"
+color-print = "0.3.5"
+confique = { version = "0.2.5", default-features = false }
+console = "0.15.8"
+contracts = "0.6.3"
+demand = "1.1.0"
+dotenvy = "0.15.7"
+duct = "0.13.7"
+either = { version = "1.10.0", features = ["serde"] }
+eyre = "0.6.12"
+filetime = "0.2.23"
+flate2 = "1.0.28"
+fslock = "0.2.1"
+globset = "0.4.14"
+globwalk = "0.9.1"
+home = "0.5.9"
+humantime = "2.1.0"
+indenter = "0.3.3"
+indexmap = { version = "2.2.3", features = ["serde"] }
+indicatif = { version = "0.17.8", features = ["default", "improved_unicode"] }
+indoc = "2.0.4"
+itertools = "0.12.1"
+log = "0.4.20"
+num_cpus = "1.16.0"
+once_cell = "1.19.0"
+openssl = { version = "0.10.64", optional = true }
+path-absolutize = "3.1.1"
+petgraph = "0.6.4"
+rand = "0.8.5"
+rayon = "1.8.1"
+regex = "1.10.3"
+reqwest = { version = "0.11.24", default-features = false, features = ["blocking", "json", "gzip"] }
+rmp-serde = "1.1.2"
+self_update = { version = "0.39.0", default-features = false, features = [
+    "archive-tar",
+    "compression-flate2",
+    "signatures",
+] }
+serde = "1.0.197"
+serde_derive = "1.0.197"
+serde_json = { version = "1.0.114", features = [] }
+sha2 = "0.10.8"
+shell-escape = "0.1.5"
+shell-words = "1.1.0"
+signal-hook = "0.3.17"
+simplelog = { version = "0.12.1" }
+strum = { version = "0.26.1", features = ["derive"] }
+sys-info = "0.9.1"
+tabled = { version = "0.15.0", features = ["ansi"] }
+tar = "0.4.40"
+tempfile = "3.10.0"
+tera = { version = "1.19.1", default-features = false }
+terminal_size = "0.3.0"
+thiserror = "1.0.57"
+toml = { version = "0.8.10", features = ["parse"] }
+toml_edit = { version = "0.22.6", features = ["parse"] }
+url = "2.5.0"
+usage-lib = { version="0.1.9", features = ["clap"] }
+versions = { version = "6.1.0" , features=["serde"]}
+walkdir = "2.4.0"
+which = "6.0.0"
+zip = { version = "0.6.6", default-features = false, features = ["deflate"] }
+
+[target.'cfg(unix)'.dependencies]
+exec = "0.3.1"
+
+[build-dependencies]
+built = { version = "0.7.1", features = ["chrono", "git2"] }
+
+[dev-dependencies]
+assert_cmd = "2.0.14"
+ctor = "0.2.6"
+insta = { version = "1.34.0", features = ["filters", "json"] }
+predicates = "3.1.0"
+pretty_assertions = "1.4.0"
+test-case = "3.3.1"
+
+[features]
+default = ["native-tls"]
+native-tls = ["reqwest/native-tls"]
+rustls = ["reqwest/rustls-tls", "self_update/rustls"]
+rustls-native-roots = ["reqwest/rustls-tls-native-roots", "self_update/rustls"]
+
+[package.metadata.release]
+allow-branch = ["main"]
+sign-tag = true
+sign-commit = true
+pre-release-hook = "./scripts/pre-release-hook.sh"
+pre-release-replacements = [
+    { file = "README.md", search = "^mise [0-9]+.[0-9]+.[0-9]+(-rc.[0-9]+)?$", replace = "mise {{version}}", exactly = 1 },
+    { file = "packaging/rpm/mise.spec", search = "^Version: [0-9]+.[0-9]+.[0-9]+(-rc.[0-9]+)?$", replace = "Version: {{version}}", exactly = 1 },
+    { file = "default.nix", search = "version = \"[0-9]+.[0-9]+.[0-9]+(-rc.[0-9]+)?\";$", replace = "version = \"{{version}}\";", exactly = 1 },
+]
+
+[package.metadata.binstall]
+bin-dir = "mise/bin/mise"
+[package.metadata.binstall.overrides.aarch64-apple-darwin]
+pkg-url = "{ repo }/releases/download/v{ version }/mise-v{version}-macos-arm64{ archive-suffix }"
+[package.metadata.binstall.overrides.x86_64-apple-darwin]
+pkg-url = "{ repo }/releases/download/v{ version }/mise-v{version}-macos-x64{ archive-suffix }"
+[package.metadata.binstall.overrides.aarch64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{ version }/mise-v{version}-linux-arm64{ archive-suffix }"
+[package.metadata.binstall.overrides.x86_64-unknown-linux-gnu]
+pkg-url = "{ repo }/releases/download/v{ version }/mise-v{version}-linux-x64{ archive-suffix }"
+[package.metadata.binstall.overrides.armv7-unknown-linux-gnueabihf]
+pkg-url = "{ repo }/releases/download/v{ version }/mise-v{version}-linux-armv7{ archive-suffix }"
+[package.metadata.binstall.overrides.armv6-unknown-linux-gnueabihf]
+pkg-url = "{ repo }/releases/download/v{ version }/mise-v{version}-linux-armv6{ archive-suffix }"
+
+[package.metadata.cargo-machete]
+ignored = ["built", "openssl"]

@@ -1,0 +1,19 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/function_abi_no_longer_unwind/": [
+    {
+      "abi_raw_name": String("C"),
+      "name": String("non_unwind_function_becomes_unwind"),
+      "new_abi_raw_name": String("C-unwind"),
+      "path": List([
+        String("function_abi_no_longer_unwind"),
+        String("non_unwind_function_becomes_unwind"),
+      ]),
+      "span_begin_line": Uint64(5),
+      "span_end_line": Uint64(5),
+      "span_filename": String("src/lib.rs"),
+    },
+  ],
+}

@@ -1,0 +1,112 @@
+use super::{EnsureError, require_group_policy_evidence, validate_binding, validate_group};
+use crate::{RegistrationScope, ScaleSetBinding};
+use velnor_runner_github::RunnerGroup;
+
+fn binding() -> ScaleSetBinding {
+    ScaleSetBinding {
+        scope: RegistrationScope::Repository {
+            owner: "ChainArgos".to_owned(),
+            repository: "java-monorepo".to_owned(),
+        },
+        owner: "ChainArgos".to_owned(),
+        repository: "java-monorepo".to_owned(),
+        scale_set_name: "ubuntu-26.04-scale-set".to_owned(),
+        runner_group_id: 1,
+        runner_group_name: "Default".to_owned(),
+        runner_image_profile: None,
+    }
+}
+
+#[test]
+fn registration_requires_the_exact_scope_group_and_supported_profile() {
+    assert!(validate_binding("token", &binding()).is_ok());
+
+    let mut mismatch = binding();
+    mismatch.scale_set_name = "ubuntu-24.04-scale-set".to_owned();
+    assert_eq!(
+        validate_binding("token", &mismatch),
+        Err(EnsureError::Rejected)
+    );
+
+    let mut invalid_group = binding();
+    invalid_group.runner_group_id = 0;
+    assert_eq!(
+        validate_binding("token", &invalid_group),
+        Err(EnsureError::Rejected)
+    );
+    assert_eq!(validate_binding("", &binding()), Err(EnsureError::Rejected));
+}
+
+#[test]
+fn group_resolution_requires_one_exact_id_and_name_match() {
+    let binding = binding();
+    let groups = [RunnerGroup {
+        id: 1,
+        name: "Default".to_owned(),
+        is_default: true,
+    }];
+    assert!(validate_group(&groups, &binding).is_ok());
+
+    let wrong_id = [RunnerGroup {
+        id: 2,
+        name: "Default".to_owned(),
+        is_default: true,
+    }];
+    assert_eq!(
+        validate_group(&wrong_id, &binding),
+        Err(EnsureError::Rejected)
+    );
+
+    let ambiguous_name = [
+        RunnerGroup {
+            id: 1,
+            name: "Default".to_owned(),
+            is_default: true,
+        },
+        RunnerGroup {
+            id: 2,
+            name: "Default".to_owned(),
+            is_default: false,
+        },
+    ];
+    assert_eq!(
+        validate_group(&ambiguous_name, &binding),
+        Err(EnsureError::Rejected)
+    );
+}
+
+#[test]
+fn ubuntu24_profile_is_rejected_before_any_registration_transport() {
+    let mut linux = binding();
+    linux.scale_set_name = "ubuntu-24.04-scale-set".to_owned();
+    linux.runner_image_profile = Some("ubuntu-24.04-amd64".to_owned());
+
+    assert_eq!(
+        validate_binding("credential", &linux),
+        Err(EnsureError::Rejected)
+    );
+    assert_eq!(require_group_policy_evidence(&binding()), Ok(()));
+}
+
+#[test]
+fn organization_binding_stays_fenced_without_matching_scope_proof() {
+    let mut organization = binding();
+    organization.scope = RegistrationScope::Organization {
+        organization: "ChainArgos".to_owned(),
+    };
+    organization.scale_set_name = "ubuntu-26.04-scale-set".to_owned();
+    organization.runner_image_profile = None;
+
+    assert_eq!(
+        require_group_policy_evidence(&organization),
+        Err(EnsureError::GroupPolicyUnavailable)
+    );
+
+    organization.scope = RegistrationScope::Organization {
+        organization: "another-org".to_owned(),
+    };
+    assert_eq!(
+        validate_binding("credential", &organization),
+        Err(EnsureError::Rejected)
+    );
+}

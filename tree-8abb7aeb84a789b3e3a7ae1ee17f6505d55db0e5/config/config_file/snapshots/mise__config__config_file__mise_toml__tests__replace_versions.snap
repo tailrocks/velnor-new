@@ -1,0 +1,32 @@
+---
+source: src/config/config_file/mise_toml.rs
+expression: cf.to_toolset().unwrap()
+---
+Toolset {
+    versions: {
+        ForgeArg("node"): ToolVersionList {
+            forge: ForgeArg("node"),
+            versions: [],
+            requests: [
+                Version {
+                    forge: ForgeArg("node"),
+                    version: "16.0.1",
+                    options: {},
+                },
+                Version {
+                    forge: ForgeArg("node"),
+                    version: "18.0.1",
+                    options: {},
+                },
+            ],
+            source: MiseToml(
+                "/tmp/.mise.toml",
+            ),
+        },
+    },
+    source: Some(
+        MiseToml(
+            "/tmp/.mise.toml",
+        ),
+    ),
+}

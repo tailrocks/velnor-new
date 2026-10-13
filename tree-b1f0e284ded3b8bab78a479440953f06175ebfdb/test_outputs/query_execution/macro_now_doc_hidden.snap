@@ -1,0 +1,29 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/declarative_macro_missing/": [
+    {
+      "name": String("became_doc_hidden"),
+      "path": List([
+        String("declarative_macro_missing"),
+        String("became_doc_hidden"),
+      ]),
+      "span_begin_line": Uint64(9),
+      "span_end_line": Uint64(11),
+      "span_filename": String("src/lib.rs"),
+    },
+  ],
+  "./test_crates/macro_now_doc_hidden/": [
+    {
+      "name": String("will_be_hidden"),
+      "path": List([
+        String("macro_now_doc_hidden"),
+        String("will_be_hidden"),
+      ]),
+      "span_begin_line": Uint64(6),
+      "span_end_line": Uint64(10),
+      "span_filename": String("src/lib.rs"),
+    },
+  ],
+}

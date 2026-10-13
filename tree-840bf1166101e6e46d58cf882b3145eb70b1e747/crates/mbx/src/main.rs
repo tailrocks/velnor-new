@@ -1,0 +1,72 @@
+use std::process::ExitCode;
+
+fn main() -> ExitCode {
+    if let Some(code) = mbx::supervision::dispatch() {
+        return code;
+    }
+    if let Some(code) = mbx::cli::launch::dispatch() {
+        return code;
+    }
+    if let Some(code) = mbx::cli::test_runner::dispatch() {
+        return code;
+    }
+    mbx::phase_timing::initialize();
+    if mbx::session::is_build_script_shim() {
+        return mbx::session::run_build_script_shim();
+    }
+    // Cargo invokes the rustc shim thousands of times per build. Dispatch on
+    // argv0 before any runtime, logging, or configuration setup.
+    if mbx::session::is_rustc_shim() {
+        return mbx::session::run_rustc_shim();
+    }
+    if mbx::session::is_rustdoc_shim() {
+        return mbx::session::run_rustdoc_shim();
+    }
+    if let Some(code) = mbx::session::cmake::dispatch() {
+        return code;
+    }
+    if let Some(language) = mbx::session::is_cc_shim() {
+        return mbx::session::run_cc_shim(language);
+    }
+
+    match mbx::cli::launch::recover_cli() {
+        Ok(Some(code)) => return code,
+        Ok(None) => {}
+        Err(error) => {
+            eprintln!("mbx[error]: failed to recover build environment: {error:#}");
+            return ExitCode::FAILURE;
+        }
+    }
+    mbx::cli::launch::remember_caller();
+    let cargo_shim = mbx::cli::is_cargo_shim();
+
+    // Top-level help and version terminate during argument parsing. Avoid
+    // constructing the logger for those read-only paths: it cannot emit
+    // anything before the parser exits, so the setup is unnecessary work.
+    if cargo_shim
+        || !matches!(
+            std::env::args_os().nth(1).as_deref(),
+            Some(arg) if arg == "--help" || arg == "-h" || arg == "--version" || arg == "-V"
+        )
+    {
+        mbx::logging::init();
+    }
+
+    if cargo_shim {
+        return match mbx::cli::run_cargo_shim() {
+            Ok(code) => code,
+            Err(error) => {
+                eprintln!("mbx[error]: {error:#}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+
+    match mbx::cli::run() {
+        Ok(code) => code,
+        Err(error) => {
+            eprintln!("mbx[error]: {error:#}");
+            ExitCode::FAILURE
+        }
+    }
+}

@@ -1,0 +1,168 @@
+---
+title: "T25 tofu budgets, telemetry, and waste removal (spec §9)"
+description: "T25 measures the contract runtime/planning budgets against the T24 harness, emits the first real tofu timing slots, and removes the avoidable repeated tofu reads behind one shared cache. Verdicts extend the T24 record (`perf-tofu-t24.md`, untouched); nothing here rewrites an earlier verdict."
+---
+
+T25 measures the contract runtime/planning budgets against the T24
+harness, emits the first real tofu timing slots, and removes the
+avoidable repeated tofu reads behind one shared cache. Verdicts
+extend the T24 record (`perf-tofu-t24.md`, untouched); nothing here
+rewrites an earlier verdict.
+
+Commit measured: `c2a77b7` (local T25 measurement commit —
+DANGLING after the fold, contained in no branch; the pushed T25
+commit adds only this doc file over it, code tree identical —
+verify with `git diff c2a77b7 &lt;pushed> -- .
+':!docs/implemented/perf-tofu-t25.md'`, which must be empty).
+Machine: `arm64`, macOS 27.0, 128 GiB RAM.
+Toolchain: rustc/cargo 1.98.1 (48a229cea/797e8a9bc), mise
+2026.9.16, nextest 0.9.146 (pinned
+`aqua:nextest-rs/nextest/cargo-nextest@0.9.146`), git 2.56.0,
+python 3.14.8. Fixture pins: `tofu_repo` N-root builder
+(`tofu_perf_fixtures_t24.rs`), `BENCH_ROOTS = 10`, opentofu
+selector unchanged (T15 pin, no install performed locally).
+
+Method: serial filtered runs (`--test-threads=1`, one case filter
+per invocation, `--nocapture`), five samples per case; figures are
+run1..run5 sorted with the median. A same-machine A/B worktree at
+base `9a1b297` ran the identical commands minutes apart; the
+`base` column below is that control. `plan_ms` is the
+`plan_internal` wall, `metadata_ms` the direct-`git ls-files`
+lower-bound proxy, `rss_kb` the whole-test-binary peak RSS of the
+filtered run (not comparable to the T24 full-suite RSS). The
+corrupt-cache row's `plan_ms` includes the `commit_two_tofu`
+fixture commit inside the timed wall (plan+fixture-commit, not a
+pure `plan_internal` wall). Queue and transfer are local no-ops.
+Hosted runs: none (local-only evidence, no run links).
+
+## 1. Benchmark matrix (n=5 per case, A/B controlled)
+
+Digests are identical across base, T25, and the T24 record in every
+case: the same obligation sets throughout, so the cache changes no
+selection.
+
+| Case | plan_ms T25 (sorted, med) | plan_ms base med | Digest |
+| --- | --- | --- | --- |
+| tofu-cold (first plan) | 358, 365, 375, 395, 440 (375) | 352 | 1f4af9af486002c4 |
+| tofu-warm (second plan) | 280, 280, 280, 282, 288 (280) | 298 | same |
+| tofu-docs (README touch) | 332, 352, 352, 356, 432 (352) | 346 | same |
+| tofu-root (r003 touch) | 337, 339, 351, 354, 368 (351) | 348 | same |
+| tofu-module (shared touch) | 249, 255, 261, 267, 272 (261) | 259 | bd79216a2db0378c |
+| tofu-lock (lockfile touch) | 247, 256, 260, 262, 276 (260) | 247 | c5f4a62ead7e3479 |
+| tofu-mixed (rust touch) | 292, 296, 304, 307, 325 (304) | 302 | 7f64b156bd26269e |
+| tofu-fork (fork event) | 280, 281, 282, 282, 283 (282) | 292 | same-as-PR |
+| tofu-corrupt-cache (new) | 244, 245, 247, 260, 262 (247) | — | c5f4a62ead7e3479 |
+
+`setup_ms` ranges 12–93 (first-run git-template warmth, not plan
+behavior); `metadata_ms` is 3–5 everywhere; `rss_kb` spans
+49360–51040. The corrupt-cache case plans the lockful root (3
+obligations, all `affected_by_change`, lock digest) while the
+provider restore verifier rejects tampered bytes with
+`cache_corrupt` and accepts the recorded bytes as control
+(`note=restore=cache_corrupt`).
+
+Finding, not a speedup claim: base-vs-T25 medians differ by at most
+23 ms (±7%), inside run-to-run noise. Tofu file IO is not the plan
+wall driver at this fixture scale (walls are git, snapshot, and
+digest dominated); the read elimination below is proven
+structurally, not by walls. The T24-vs-here gap (e.g. cold 501 vs
+375) is contention/method, not the change: T24 ran unpinned
+parallelism, here runs serial.
+
+## 2. Synthetic scaling (n=5 per width, A/B at the top points)
+
+| Roots | prepare_ms (sorted, med) | plan_ms (sorted, med) | generate_ms (sorted, med) |
+| --- | --- | --- | --- |
+| 1 | 12, 15, 17, 17, 17 (17) | 198, 202, 205, 209, 209 (205) | 195, 196, 213, 220, 227 (213) |
+| 10 | 19, 20, 21, 22, 22 (21) | 281, 296, 298, 303, 307 (298) | 345, 351, 361, 361, 384 (361) |
+| 40 | — | 568, 610, 618, 620, 627 (618) | — |
+| 100 | 75, 77, 77, 80, 80 (77) | budget (unrun past 40) | 1903, 1910, 2009, 2041, 2145 (2009) |
+
+Base A/B at the top points: prepare-100 med 76 (T25 77),
+plan-40 med 620 (T25 618) — identical within noise. At the measured
+head, plan failed closed past 40 roots on the then-current 320 KiB matrix budget (the
+1/10/40 plan shape stands; prepare/generate scale 1/10/100).
+
+## 3. Budget verdicts
+
+- 10 s warm plan: PARTIAL — local analysis PASSED with 30x
+  headroom (warm med 280 ms at `c2a77b7`, named env plus pins
+  above), hosted plan-job wall (checkout, runner setup) UNMEASURED
+  (no tofu-consumer CI exists; producer rust-plan runs are not a
+  valid proxy and are not cited).
+- 120 s warm critical path: UNMEASURED (no hosted runs; cannot
+  claim without end-to-end CI numbers).
+- Two-minute warm SMALL-FIXTURE path: still UNPASSED (unchanged;
+  no small-fixture CI run exists — not redefined).
+- In-plan parsed-fact caching (T24 open item): PASSED — one
+  `FileCache` per phase; walks, bytes, and parsed models memoize
+  within the owning call (pins: `impl_tofu_t25`,
+  `impl_tofu_file_cache`).
+- Telemetry population (`TaskTiming` slots): PARTIAL — executed
+  task reports now carry the measured wall in `task_ms`
+  (`accounted_total == duration_ms`, remaining slots zero);
+  queue/runner/cache/prep/download/compiler/mbx/test/lock slots
+  are unmeasured (the wrapper captures one stamp), and
+  `aggregate_timings` has no merge sink (no schema change made).
+- Baselines: MUST NOT update automatically — untouched, and
+  `rq53_limits_discipline_no_baseline` stays green.
+
+## 4. Waste removed (with read counts)
+
+One `velnor-actions-tofu::FileCache` per top-level phase, hoisted
+(not per call): `discover` owns the prepare-phase instance across
+detection, inventory, and diagnostics; `build_plan` owns the
+plan-phase instance across every task; cover owns one across its
+closure plus extension check. A construction-site scan pins exactly
+these three (`cover_identity.rs`, `discover.rs`, `internal.rs`)
+and zero constructions in tofu product code.
+
+Per-root reads per `plan_internal` (single-file root), before →
+after:
+
+| Pass | Before | After |
+| --- | --- | --- |
+| Prepare: inventory (pinned) | 1 read/file | 1 read/file (shared on nested/table-less overlap) |
+| Prepare: diagnostics (raw) | 2 walks, 2 lock reads, 2 config reads, 2 parses | 1 walk, 1 lock read, 1 config read, 1 parse |
+| Plan: 3 task closures + identities | 7 walks, ~16 reads, 2 parses, 6 lock reads | 1 walk, ~4 reads, 1 parse, 1 lock read |
+
+At width 10 that is roughly 90 fewer directory walks and 180 fewer
+file reads per plan; every eliminated read is a cache hit serving
+bytes identical to the live read (deletion tests prove hits serve
+post-deletion bytes; failure kind/message rebuild verbatim;
+oversize files over `MAX_FILE_BYTES` read through uncached so no
+giant file pins memory).
+
+Kept intentionally, each justified:
+
+- Per-job plan-artifact downloads stay: every hosted job runs on
+  its own runner and needs its own copy. Pinned minimal instead:
+  at most one `Download plan` step per job, exactly one in every
+  crate job and publish (`impl_tofu_t25`).
+- `MAX_METADATA_LANES = 1` (Cargo-lock contention) and T18 lane
+  staging stay: intentional serialization, untouched.
+- `TofuLockSnapshot` capture/verify re-reads stay live: the
+  second read is the drift proof; caching it would vacuous-proof
+  the read-only contract.
+- Pinned vs raw compartments never mix: orchestrator
+  `read_repo_file` outcomes (handle-pinned, symlink-rejecting)
+  and raw tofu bytes share one instance but separate maps, so the
+  W6a-G2 pinned-handle guarantee never weakens.
+- `files_for_prefix` still scans per unit: already once per unit;
+  prefix bucketing without an index is still O(units x files),
+  CPU-negligible, and pure.
+- Cross-phase (prepare vs plan) instances stay separate:
+  `prepare` keeps its stable signature (~200 call sites plus a
+  source-text pin); each phase shares fully within itself.
+
+## 5. Behavior-identical evidence
+
+- Obligation digests equal base == T25 == T24 record in all 8
+  carried cases (§1).
+- Full suite green at the measured tree (see the T25 report for
+  the final gate counts); zero removed assertions; the only
+  assertion edits are added timing-slot asserts on the measured
+  report path (unmeasured-`None` pins untouched).
+- `TaskTiming`/`accounted_total`/`slots` math pins, timeout
+  consts, shard budgets, parser budgets, and all T18/T19 tofu
+  suites green without modification to their asserts.

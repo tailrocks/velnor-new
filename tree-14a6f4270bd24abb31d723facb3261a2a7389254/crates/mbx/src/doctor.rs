@@ -1,0 +1,601 @@
+//! Installation and connectivity diagnostics.
+
+use crate::config::Config;
+use crate::policy;
+use eyre::{Context, Result};
+use std::ffi::{OsStr, OsString};
+use std::path::{Path, PathBuf};
+use std::process::{Command, ExitCode};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
+enum Severity {
+    Pass,
+    Warn,
+    Fail,
+}
+
+#[derive(Debug, PartialEq, Eq, serde::Serialize)]
+struct Check {
+    severity: Severity,
+    name: &'static str,
+    detail: String,
+}
+
+impl Check {
+    fn pass(name: &'static str, detail: impl Into<String>) -> Self {
+        Self {
+            severity: Severity::Pass,
+            name,
+            detail: detail.into(),
+        }
+    }
+
+    fn warn(name: &'static str, detail: impl Into<String>) -> Self {
+        Self {
+            severity: Severity::Warn,
+            name,
+            detail: detail.into(),
+        }
+    }
+
+    fn fail(name: &'static str, detail: impl Into<String>) -> Self {
+        Self {
+            severity: Severity::Fail,
+            name,
+            detail: detail.into(),
+        }
+    }
+}
+
+/// Run all diagnostics and fail only when mbx cannot operate as configured.
+pub fn run(config: &Config) -> Result<ExitCode> {
+    run_formatted(config, false, None)
+}
+
+pub(crate) fn run_formatted(
+    config: &Config,
+    json: bool,
+    toolchain: Option<&str>,
+) -> Result<ExitCode> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()?;
+    let checks = runtime.block_on(check(config, toolchain));
+    render(&checks, json)
+}
+
+fn render(checks: &[Check], json: bool) -> Result<ExitCode> {
+    let failures = checks
+        .iter()
+        .filter(|check| check.severity == Severity::Fail)
+        .count();
+    let warnings = checks
+        .iter()
+        .filter(|check| check.severity == Severity::Warn)
+        .count();
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&DoctorReport {
+                version: 1,
+                checks,
+                failures,
+                warnings,
+            })?
+        );
+    } else {
+        for check in checks {
+            let marker = match check.severity {
+                Severity::Pass => "ok",
+                Severity::Warn => "warn",
+                Severity::Fail => "FAIL",
+            };
+            println!("{marker:>4}  {:<12} {}", check.name, check.detail);
+        }
+        println!("\n{failures} failures, {warnings} warnings");
+    }
+    Ok(if failures == 0 {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    })
+}
+
+pub(crate) fn run_loaded(
+    config: Result<Config>,
+    json: bool,
+    toolchain: Option<&str>,
+) -> Result<ExitCode> {
+    match config {
+        Ok(config) => run_formatted(&config, json, toolchain),
+        Err(error) => render(&[Check::fail("config", format!("{error:#}"))], json),
+    }
+}
+
+#[derive(serde::Serialize)]
+struct DoctorReport<'a> {
+    version: u8,
+    checks: &'a [Check],
+    failures: usize,
+    warnings: usize,
+}
+
+async fn check(config: &Config, toolchain: Option<&str>) -> Vec<Check> {
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"));
+    let rustc = std::env::var_os("RUSTC").unwrap_or_else(|| OsString::from("rustc"));
+    let mut checks = vec![
+        command_check("cargo", &cargo, toolchain),
+        command_check("rustc", &rustc, toolchain),
+    ];
+    checks.push(cache_check(&config.cache_dir));
+    checks.push(Check::pass(
+        "config",
+        format!(
+            "{} budget, automatic gc {}, managed targets {} at {}",
+            bytesize::ByteSize::b(config.gc.max_bytes).display().iec(),
+            enabled(config.gc.auto),
+            enabled(config.target.views),
+            config.target.root.display(),
+        ),
+    ));
+    checks.push(reflink_check(&config.cache_dir));
+    checks.push(setup_check());
+    checks.extend(remote_checks(config).await);
+    checks
+}
+
+fn enabled(value: bool) -> &'static str {
+    if value { "enabled" } else { "disabled" }
+}
+
+/// The arguments that ask a command for its version, under a toolchain when one
+/// was named.
+///
+/// `mbx +1.91 doctor` is a question about 1.91, so the answer has to come from
+/// 1.91's compiler rather than from whichever one the shim resolves by default.
+/// A `CARGO` or `RUSTC` that is not a rustup shim rejects the `+`, and the
+/// check reports that failure rather than quietly describing another toolchain.
+fn version_arguments(toolchain: Option<&str>) -> Vec<String> {
+    match toolchain {
+        Some(toolchain) => vec![format!("+{toolchain}"), "--version".into()],
+        None => vec!["--version".into()],
+    }
+}
+
+fn command_check(name: &'static str, command: &OsStr, toolchain: Option<&str>) -> Check {
+    let arguments = version_arguments(toolchain);
+    match Command::new(command).args(&arguments).output() {
+        Ok(output) if output.status.success() => Check::pass(
+            name,
+            String::from_utf8_lossy(&output.stdout).trim().to_string(),
+        ),
+        Ok(output) => Check::fail(
+            name,
+            failure_detail(&arguments, output.status, &output.stderr),
+        ),
+        Err(error) => Check::fail(
+            name,
+            format!("could not execute {}: {error}", command.to_string_lossy()),
+        ),
+    }
+}
+
+/// Why a version query failed, in one line.
+///
+/// The arguments are named because a named toolchain is among them, and the
+/// reason a toolchain query fails — most often that the toolchain is not
+/// installed — is on stderr. Reporting the exit status alone leaves the reader
+/// with a diagnostic that diagnoses nothing.
+///
+/// The status is taken as anything printable rather than as an `ExitStatus`,
+/// which has no portable constructor: a test would otherwise have to spawn a
+/// process that fails on every platform this runs on to reach one line of
+/// formatting.
+fn failure_detail(arguments: &[String], status: impl std::fmt::Display, stderr: &[u8]) -> String {
+    let stderr = String::from_utf8_lossy(stderr);
+    let reason = stderr
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or_default();
+    let arguments = arguments.join(" ");
+    if reason.is_empty() {
+        format!("{arguments} exited with {status}")
+    } else {
+        format!("{arguments} exited with {status}: {reason}")
+    }
+}
+
+fn cache_check(cache_dir: &Path) -> Check {
+    if let Err(error) = std::fs::create_dir_all(cache_dir) {
+        return Check::fail("cache", format!("{}: {error}", cache_dir.display()));
+    }
+    match tempfile::NamedTempFile::new_in(cache_dir) {
+        Ok(_) => Check::pass("cache", format!("{} is writable", cache_dir.display())),
+        Err(error) => Check::fail(
+            "cache",
+            format!("{} is not writable: {error}", cache_dir.display()),
+        ),
+    }
+}
+
+fn reflink_check(cache_dir: &Path) -> Check {
+    let Ok(directory) = tempfile::tempdir_in(cache_dir) else {
+        return Check::warn("reflink", "not tested because the cache is not writable");
+    };
+    let source = directory.path().join("source");
+    let destination = directory.path().join("destination");
+    if let Err(error) = std::fs::write(&source, b"mbx reflink probe") {
+        return Check::warn("reflink", format!("probe could not be written: {error}"));
+    }
+    match reflink_copy::reflink(&source, &destination) {
+        Ok(()) => Check::pass("reflink", "supported by the cache filesystem"),
+        Err(error) => Check::warn(
+            "reflink",
+            format!("unavailable ({error}); restored outputs will be copied"),
+        ),
+    }
+}
+
+/// Report the persistent Cargo shim installed by `mbx setup`.
+fn setup_check() -> Check {
+    let Some(expected_shim) = setup_path() else {
+        return Check::warn(
+            "setup",
+            "the platform data directory could not be determined",
+        );
+    };
+    let Ok(executable) = std::env::current_exe() else {
+        return Check::warn("setup", "could not locate the running mbx executable");
+    };
+    setup_check_at(
+        &executable,
+        &expected_shim,
+        crate::cli::cargo_activation_path().as_deref(),
+    )
+}
+
+fn setup_check_at(executable: &Path, expected_shim: &Path, path: Option<&OsStr>) -> Check {
+    if !expected_shim.is_file() {
+        return Check::warn(
+            "setup",
+            "Cargo shim is not installed; plain Cargo bypasses mbx, while explicit `mbx <cargo-command>` still works",
+        );
+    }
+    match crate::cli::cargo_shim_is_current(executable, expected_shim) {
+        Ok(false) => {
+            return Check::warn("setup", "Cargo shim is outdated; run `mbx setup`");
+        }
+        Err(error) => {
+            return Check::warn("setup", format!("Cargo shim could not be checked: {error}"));
+        }
+        Ok(true) => {}
+    }
+
+    let active_cargo = path.and_then(cargo_on_path);
+    if active_cargo
+        .as_deref()
+        .is_none_or(|cargo| !same_path(cargo, expected_shim))
+    {
+        let resolved = active_cargo
+            .as_deref()
+            .map(|cargo| cargo.display().to_string())
+            .unwrap_or_else(|| "nothing".into());
+        return Check::warn(
+            "setup",
+            format!(
+                "Cargo shim is current but not active; PATH resolves cargo to {resolved}; prepend {} to PATH",
+                expected_shim.parent().unwrap_or(expected_shim).display()
+            ),
+        );
+    }
+
+    Check::pass(
+        "setup",
+        format!(
+            "Cargo shim is active and current at {}",
+            expected_shim.display()
+        ),
+    )
+}
+
+fn cargo_on_path(path: &OsStr) -> Option<PathBuf> {
+    let name = if cfg!(windows) { "cargo.exe" } else { "cargo" };
+    std::env::split_paths(path)
+        .map(|directory| directory.join(name))
+        .find(|candidate| is_executable_file(candidate))
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = path.metadata() else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
+}
+
+fn same_path(left: &Path, right: &Path) -> bool {
+    match (std::fs::canonicalize(left), std::fs::canonicalize(right)) {
+        (Ok(left), Ok(right)) => {
+            #[cfg(windows)]
+            {
+                left.to_string_lossy()
+                    .eq_ignore_ascii_case(&right.to_string_lossy())
+            }
+            #[cfg(not(windows))]
+            {
+                left == right
+            }
+        }
+        _ => false,
+    }
+}
+
+fn setup_path() -> Option<PathBuf> {
+    Some(crate::cli::setup_install_dir()?.join(if cfg!(windows) { "cargo.exe" } else { "cargo" }))
+}
+
+async fn remote_checks(config: &Config) -> Vec<Check> {
+    let effective_mode = policy::effective_remote_cache_mode(config.remote.mode);
+    remote_checks_with_policy(config, effective_mode).await
+}
+
+async fn remote_checks_with_policy(
+    config: &Config,
+    effective_mode: Option<mbx_cache_core::RemoteCacheMode>,
+) -> Vec<Check> {
+    let Some(base_url) = config
+        .remote
+        .url
+        .as_deref()
+        .map(str::trim)
+        .filter(|url| !url.is_empty())
+    else {
+        return vec![Check::pass(
+            "remote",
+            "not configured; using the local cache",
+        )];
+    };
+    let effective = effective_mode.map_or_else(
+        || "disabled by cache write policy".to_string(),
+        |mode| mode.to_string(),
+    );
+    let policy = Check::pass(
+        "policy",
+        format!("configured {}, effective {effective}", config.remote.mode),
+    );
+    if effective_mode.is_none() {
+        return vec![
+            policy,
+            Check::pass("remote", "probe skipped because remote caching is disabled"),
+        ];
+    }
+    let namespace = config
+        .remote
+        .namespace
+        .as_deref()
+        .unwrap_or_default()
+        .trim();
+    // The build builds its client the same way, so a configuration it would
+    // refuse is reported here rather than discovered mid-compilation.
+    let client = match crate::remote::remote_client(config) {
+        Ok(Some(client)) => client,
+        Ok(None) => {
+            return vec![
+                policy,
+                Check::pass("remote", "not configured; using the local cache"),
+            ];
+        }
+        Err(error) => return vec![policy, Check::fail("remote", format!("{error:#}"))],
+    };
+    let remote = match client
+        .check_connection()
+        .await
+        .wrap_err("connection check failed")
+    {
+        Ok(()) => Check::pass("remote", format!("{base_url} ({namespace}) is compatible")),
+        Err(error) => Check::fail("remote", format!("{error:#}")),
+    };
+    vec![policy, remote]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn writable_cache_passes_and_leaves_no_probe() {
+        let directory = tempfile::tempdir().unwrap();
+        assert_eq!(cache_check(directory.path()).severity, Severity::Pass);
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn a_named_toolchain_is_the_one_the_version_checks_ask() {
+        assert_eq!(version_arguments(None), ["--version"]);
+        assert_eq!(version_arguments(Some("1.91")), ["+1.91", "--version"]);
+    }
+
+    #[test]
+    fn a_failed_version_query_reports_what_it_asked_and_why_it_failed() {
+        let arguments = version_arguments(Some("1.91"));
+        let status = "exit status: 1";
+
+        let detail = failure_detail(
+            &arguments,
+            status,
+            b"error: toolchain '1.91' is not installed\nnote: run rustup\n",
+        );
+
+        assert_eq!(
+            detail,
+            "+1.91 --version exited with exit status: 1: error: toolchain '1.91' is not installed"
+        );
+        // Nothing on stderr leaves the status to end the line, rather than a
+        // dangling separator.
+        assert_eq!(
+            failure_detail(&arguments, status, b"  \n"),
+            "+1.91 --version exited with exit status: 1"
+        );
+    }
+
+    #[test]
+    fn setup_requires_a_current_shim_that_wins_path_resolution() {
+        let directory = tempfile::tempdir().unwrap();
+        let executable = directory.path().join("mbx");
+        let shim_dir = directory.path().join("shim");
+        let shim = shim_dir.join(if cfg!(windows) { "cargo.exe" } else { "cargo" });
+        let real_dir = directory.path().join("real");
+        let real_cargo = real_dir.join(if cfg!(windows) { "cargo.exe" } else { "cargo" });
+        std::fs::create_dir_all(&shim_dir).unwrap();
+        std::fs::create_dir_all(&real_dir).unwrap();
+        std::fs::write(&executable, b"current mbx").unwrap();
+        std::fs::write(&real_cargo, b"real cargo").unwrap();
+        make_executable(&real_cargo);
+
+        let real_first = std::env::join_paths([&real_dir, &shim_dir]).unwrap();
+        assert_eq!(
+            setup_check_at(&executable, &shim, Some(&real_first)).detail,
+            "Cargo shim is not installed; plain Cargo bypasses mbx, while explicit `mbx <cargo-command>` still works"
+        );
+
+        std::fs::write(&shim, b"old mbx").unwrap();
+        assert_eq!(
+            setup_check_at(&executable, &shim, Some(&real_first)).detail,
+            "Cargo shim is outdated; run `mbx setup`"
+        );
+
+        crate::cli::doctor_setup_at_action(
+            &executable,
+            &shim_dir,
+            &crate::cli::DoctorMiseScope::None,
+            crate::cli::DoctorSetupAction::Install,
+        )
+        .unwrap();
+        let inactive = setup_check_at(&executable, &shim, Some(&real_first));
+        assert_eq!(inactive.severity, Severity::Warn);
+        assert!(inactive.detail.contains("current but not active"));
+        assert!(inactive.detail.contains(&real_cargo.display().to_string()));
+
+        let shim_first = std::env::join_paths([&shim_dir, &real_dir]).unwrap();
+        let active = setup_check_at(&executable, &shim, Some(&shim_first));
+        assert_eq!(active.severity, Severity::Pass);
+        assert!(active.detail.contains("active and current"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn setup_warns_when_the_shim_is_not_executable() {
+        let directory = tempfile::tempdir().unwrap();
+        let executable = directory.path().join("mbx");
+        let shim_dir = directory.path().join("shim");
+        let shim = shim_dir.join("cargo");
+        std::fs::create_dir_all(&shim_dir).unwrap();
+        std::fs::write(&executable, b"current mbx").unwrap();
+        std::fs::write(&shim, crate::cli::DOCTOR_CARGO_SHIM_LAUNCHER).unwrap();
+
+        let check = setup_check_at(&executable, &shim, Some(shim_dir.as_os_str()));
+        assert_eq!(check.severity, Severity::Warn);
+        assert!(check.detail.contains("current but not active"));
+        assert!(check.detail.contains("PATH resolves cargo to nothing"));
+    }
+
+    #[cfg(unix)]
+    fn make_executable(path: &Path) {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = path.metadata().unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(path, permissions).unwrap();
+    }
+
+    #[cfg(not(unix))]
+    fn make_executable(_path: &Path) {}
+
+    #[test]
+    fn missing_remote_namespace_fails() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut config = Config {
+            cache_dir: directory.path().to_path_buf(),
+            stats_report: None,
+            verify: false,
+            incremental: false,
+            share_out_dir: false,
+            build_script_execution: false,
+            events: false,
+            cc: false,
+            remote: Default::default(),
+            http: Default::default(),
+            gc: Default::default(),
+            scheduler: Default::default(),
+            target: crate::config::TargetSettings {
+                views: true,
+                root: directory.path().join("targets"),
+            },
+        };
+        config.remote.url = Some("https://cache.example".into());
+        config.remote.mode = mbx_cache_core::RemoteCacheMode::ReadWrite;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let checks = runtime.block_on(remote_checks_with_policy(
+            &config,
+            Some(mbx_cache_core::RemoteCacheMode::ReadOnly),
+        ));
+        let failure = checks
+            .iter()
+            .find(|check| check.severity == Severity::Fail)
+            .expect("the missing namespace should fail");
+        assert!(failure.detail.contains("namespace"));
+    }
+
+    #[test]
+    fn disabled_remote_does_not_require_a_namespace_or_client() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut config = Config {
+            cache_dir: directory.path().to_path_buf(),
+            stats_report: None,
+            verify: false,
+            incremental: false,
+            share_out_dir: false,
+            build_script_execution: false,
+            events: false,
+            cc: false,
+            remote: Default::default(),
+            http: Default::default(),
+            gc: Default::default(),
+            scheduler: Default::default(),
+            target: crate::config::TargetSettings {
+                views: true,
+                root: directory.path().join("targets"),
+            },
+        };
+        config.remote.url = Some("not a URL".into());
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let checks = runtime.block_on(remote_checks_with_policy(&config, None));
+
+        assert!(checks.iter().all(|check| check.severity == Severity::Pass));
+        assert!(checks.iter().any(|check| {
+            check.name == "policy" && check.detail.contains("disabled by cache write policy")
+        }));
+        assert!(
+            checks
+                .iter()
+                .any(|check| { check.name == "remote" && check.detail.contains("probe skipped") })
+        );
+    }
+}

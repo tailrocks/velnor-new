@@ -1,0 +1,4 @@
+registry/
+target/
+CHANGELOG.md
+docs/node_modules/

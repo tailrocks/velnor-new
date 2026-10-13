@@ -1,0 +1,34 @@
+[package]
+name = "velnor-actions-orchestrator-baseline-publish"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
+velnor-actions-orchestrator-cover-baseline = { version = "=0.1.1", path = "../velnor-actions-orchestrator-cover-baseline" }
+velnor-actions-orchestrator-cover-compat = { version = "=0.1.1", path = "../velnor-actions-orchestrator-cover-compat" }
+velnor-actions-orchestrator-graph = { version = "=0.1.1", path = "../velnor-actions-orchestrator-graph" }
+velnor-actions-orchestrator-merge = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge" }
+velnor-actions-orchestrator-merge-ports = { version = "=0.1.1", path = "../velnor-actions-orchestrator-merge-ports" }
+velnor-actions-orchestrator-request-event = { version = "=0.1.1", path = "../velnor-actions-orchestrator-request-event" }
+velnor-actions-orchestrator-retrieve = { version = "=0.1.1", path = "../velnor-actions-orchestrator-retrieve" }
+velnor-actions-orchestrator-task-report = { version = "=0.1.1", path = "../velnor-actions-orchestrator-task-report" }
+velnor-actions-workflow-renderer = { version = "=0.1.1", path = "../velnor-actions-workflow-renderer" }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }
+velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
+
+[[test]]
+name = "velnor_orchestrator_baseline_publish"
+path = "tests/main.rs"

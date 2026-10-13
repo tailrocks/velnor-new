@@ -1,0 +1,5 @@
+backends = ["aqua:aakso/ssh-inscribe/sshi"]
+bins = ["sshi"]
+description = "SSH CA Client/Server"
+test = { cmd = "sshi version", expected = "local: {{version}}" }
+version_order = "semver"

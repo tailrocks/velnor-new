@@ -1,0 +1,1477 @@
+use crate::session;
+use eyre::{Context, Result, bail};
+use mbx_cache_core::{
+    ActionPrediction, AgentRequest, AgentResponse, CacheDigest, CacheDirectory, CacheFileNode,
+    RemoteActionResult, RestoreStats, RustcMetadata, canonical_json,
+};
+use mbx_cache_rustc::{
+    ActionContext, CompilerIdentity, DiscoveredInputs, PathMapping, RustcAction, RustcDepInfo,
+    RustcInputPrediction, RustcInvocation, RustcOutputs, normalize_mapped_path,
+};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::{OsStr, OsString};
+use std::io::{Read as _, Write as _};
+use std::path::{Path, PathBuf};
+use std::process::{Command, ExitCode, ExitStatus, Output};
+use std::time::{Instant, SystemTime};
+
+struct CachedCompilation {
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+    outputs: Vec<CachedOutput>,
+    restore: RestoreStats,
+}
+
+struct CachedOutput {
+    path: PathBuf,
+    digest: CacheDigest,
+    mode: u32,
+}
+
+struct StagedOutputs {
+    directory: tempfile::TempDir,
+    files: Vec<(tempfile::TempPath, PathBuf)>,
+}
+
+pub(crate) fn compile(rustc: &OsStr, arguments: &[OsString]) -> Result<ExitCode> {
+    let working_dir = std::env::current_dir()?;
+    let portable = Portable::detect(&working_dir);
+    let arguments = portable.applied_to(arguments);
+    let invocation = RustcInvocation::parse(&arguments)?;
+    let outputs = invocation.outputs(&working_dir)?;
+
+    let verify = session::verify_requested();
+    let mut verification = None;
+    let mut action_lookup_attempted = false;
+    if outputs.dep_info.is_file()
+        && let Ok((candidates, discovered)) = action_from_current_dep_info(
+            rustc,
+            &invocation,
+            &outputs.dep_info,
+            &working_dir,
+            &portable,
+        )
+    {
+        action_lookup_attempted = true;
+        match restore_candidates(&candidates, &outputs, &discovered, !verify) {
+            Ok(Some((action, cached))) => {
+                record_prediction(
+                    rustc,
+                    &invocation,
+                    &action,
+                    &discovered,
+                    &working_dir,
+                    &portable,
+                );
+                if verify {
+                    verification = Some(cached);
+                } else {
+                    let _ = replay_bytes(&cached.stdout, &cached.stderr);
+                    return Ok(ExitCode::SUCCESS);
+                }
+            }
+            Ok(None) => {}
+            Err(error) => {
+                eprintln!("mbx warning: result was not restored: {error:#}");
+            }
+        }
+    }
+    if !action_lookup_attempted {
+        match restore_predicted_result(
+            rustc,
+            &invocation,
+            &outputs,
+            &working_dir,
+            &portable,
+            !verify,
+        ) {
+            Ok(Some(cached)) => {
+                if verify {
+                    verification = Some(cached);
+                } else {
+                    let _ = replay_bytes(&cached.stdout, &cached.stderr);
+                    return Ok(ExitCode::SUCCESS);
+                }
+            }
+            Ok(None) => {}
+            Err(error) => {
+                eprintln!("mbx warning: prediction was not restored: {error:#}");
+            }
+        }
+    }
+
+    let compilation_started = SystemTime::now();
+    let output = Command::new(rustc)
+        .args(&arguments)
+        .current_dir(&working_dir)
+        .output()
+        .wrap_err("failed to execute rustc")?;
+    let _ = replay_output(&output);
+    if let Some(cached) = verification {
+        let matched = cached_matches(&cached, &output);
+        record_verification(matched, cached.restore);
+        if !matched {
+            eprintln!("mbx warning: shadow verification diverged from cached output");
+        }
+        return Ok(exit_code(output.status));
+    }
+    if output.status.success() {
+        let publication: Result<()> = (|| {
+            let (candidates, discovered) = action_from_dep_info(
+                rustc,
+                &invocation,
+                &outputs.dep_info,
+                &working_dir,
+                &portable,
+            )?;
+            discovered.verify_not_modified_since(compilation_started)?;
+            discovered.verify()?;
+            let mut cacheable_outputs = outputs.files.clone();
+            cacheable_outputs.push(outputs.dep_info.clone());
+            let action = candidates.publishable(&portable, &outputs.files)?;
+            publish_result(&action.digest, &action.bytes, &cacheable_outputs, &output)?;
+            record_prediction(
+                rustc,
+                &invocation,
+                &action.digest,
+                &discovered,
+                &working_dir,
+                &portable,
+            );
+            Ok(())
+        })();
+        if let Err(error) = publication {
+            eprintln!("mbx warning: result was not stored: {error:#}");
+        }
+    }
+    Ok(exit_code(output.status))
+}
+
+fn restore_predicted_result(
+    rustc: &OsStr,
+    invocation: &RustcInvocation,
+    outputs: &RustcOutputs,
+    working_dir: &Path,
+    portable: &Portable,
+    restore_outputs: bool,
+) -> Result<Option<CachedCompilation>> {
+    let task = std::env::var(session::BUILD_ENV)
+        .wrap_err_with(|| format!("{} is not set", session::BUILD_ENV))?;
+    let mut context = base_action_context(rustc, working_dir, portable)?;
+    let invocation_digest = invocation.invocation_digest(&context)?;
+    let responses = session::request_agent(&[AgentRequest::FindActionPrediction {
+        task,
+        invocation: invocation_digest.clone(),
+    }])?;
+    let Some(response) = responses.into_iter().next() else {
+        bail!("cache agent did not return an action prediction response");
+    };
+    let prediction = match response {
+        AgentResponse::ActionPrediction {
+            prediction: Some(prediction),
+        } => prediction,
+        AgentResponse::ActionPrediction { prediction: None } => {
+            // No usable action key: either no dep-info from an earlier build or
+            // dep-info that did not yield one, and now no prediction either.
+            // This compilation runs without an action-result lookup ever being
+            // made, which is not a miss and has to be counted as its own thing
+            // or the summary reads as though a lookup happened and found
+            // nothing.
+            session::record_unconsulted();
+            return Ok(None);
+        }
+        AgentResponse::Error { message } => bail!(message),
+        _ => bail!("cache agent returned an unexpected action prediction response"),
+    };
+    if prediction.adapter != "rustc" || prediction.invocation != invocation_digest {
+        bail!("cache agent returned an incompatible rustc action prediction");
+    }
+    let input_prediction: RustcInputPrediction = serde_json::from_str(&prediction.payload)?;
+    if String::from_utf8(canonical_json(&input_prediction)?)? != prediction.payload {
+        bail!("cache agent returned a non-canonical rustc action prediction");
+    }
+    let discovered = input_prediction.discover(working_dir, &context.path_mappings)?;
+    discovered.clone().apply_to(&mut context)?;
+    let candidates = ActionCandidates::build(invocation, context)?;
+    let restored = restore_candidates(&candidates, outputs, &discovered, restore_outputs)?;
+    match restored {
+        Some((action, cached)) => {
+            record_prediction_value(invocation_digest, action, prediction.payload);
+            Ok(Some(cached))
+        }
+        None => Ok(None),
+    }
+}
+
+/// The keys one compilation may be published under, most portable first.
+///
+/// A compilation whose environment holds nothing portable has exactly one key,
+/// the literal one, which is what every action looked like before
+/// [`Portable`] existed.
+struct ActionCandidates {
+    /// Normalizes the portable environment values, so two checkouts agree.
+    portable: Option<RustcAction>,
+    /// What the compilation falls back to when an output carries one of those
+    /// values anyway.
+    literal: RustcAction,
+}
+
+impl ActionCandidates {
+    fn build(invocation: &RustcInvocation, context: ActionContext) -> Result<Self> {
+        // Only worth a second key if a portable name is actually an input here.
+        // Crates that never read one keep the key they always had.
+        let applies = context
+            .portable_environment
+            .iter()
+            .any(|name| context.environment.contains_key(name));
+        let literal_context = ActionContext {
+            portable_environment: BTreeSet::new(),
+            ..context.clone()
+        };
+        Ok(Self {
+            portable: applies.then(|| invocation.action(context)).transpose()?,
+            literal: invocation.action(literal_context)?,
+        })
+    }
+
+    /// The key this compilation is published under.
+    ///
+    /// The portable key is only honest if no output carries the value it
+    /// normalized away. `--remap-path-prefix` covers the paths rustc records
+    /// itself, but not one a crate reads through `env!` and keeps as a string,
+    /// and nothing in the inputs distinguishes the two shapes -- so the outputs
+    /// are read.
+    fn publishable(&self, portable: &Portable, outputs: &[PathBuf]) -> Result<&RustcAction> {
+        match &self.portable {
+            Some(action) if portable.outputs_are_clean(outputs)? => Ok(action),
+            _ => Ok(&self.literal),
+        }
+    }
+
+    /// Every key to look up, most portable first.
+    fn ordered(&self) -> impl Iterator<Item = &RustcAction> {
+        self.portable.iter().chain(std::iter::once(&self.literal))
+    }
+}
+
+/// Try each candidate key, returning the digest that hit alongside its result.
+///
+/// Both keys are tried because either shape may be on the other side of the
+/// lookup: a crate that keeps `OUT_DIR` in a string was published literally,
+/// and without the second lookup it would never hit, not even in the checkout
+/// that compiled it.
+fn restore_candidates(
+    candidates: &ActionCandidates,
+    outputs: &RustcOutputs,
+    discovered: &DiscoveredInputs,
+    restore_outputs: bool,
+) -> Result<Option<(CacheDigest, CachedCompilation)>> {
+    for action in candidates.ordered() {
+        if let Some(cached) = restore_result(action, outputs, discovered, restore_outputs)? {
+            return Ok(Some((action.digest.clone(), cached)));
+        }
+    }
+    Ok(None)
+}
+
+fn action_from_dep_info(
+    rustc: &OsStr,
+    invocation: &RustcInvocation,
+    dep_info: &Path,
+    working_dir: &Path,
+    portable: &Portable,
+) -> Result<(ActionCandidates, DiscoveredInputs)> {
+    let dep_info = RustcDepInfo::read(dep_info)?;
+    action_from_parsed_dep_info(rustc, invocation, &dep_info, working_dir, portable)
+}
+
+fn action_from_current_dep_info(
+    rustc: &OsStr,
+    invocation: &RustcInvocation,
+    dep_info: &Path,
+    working_dir: &Path,
+    portable: &Portable,
+) -> Result<(ActionCandidates, DiscoveredInputs)> {
+    let dep_info = RustcDepInfo::read(dep_info)?;
+    verify_environment(&dep_info.environment)?;
+    action_from_parsed_dep_info(rustc, invocation, &dep_info, working_dir, portable)
+}
+
+fn action_from_parsed_dep_info(
+    rustc: &OsStr,
+    invocation: &RustcInvocation,
+    dep_info: &RustcDepInfo,
+    working_dir: &Path,
+    portable: &Portable,
+) -> Result<(ActionCandidates, DiscoveredInputs)> {
+    let discovered = invocation.discover_inputs(dep_info, working_dir)?;
+    let mut context = base_action_context(rustc, working_dir, portable)?;
+    discovered.clone().apply_to(&mut context)?;
+    let candidates = ActionCandidates::build(invocation, context)?;
+    Ok((candidates, discovered))
+}
+
+fn base_action_context(
+    rustc: &OsStr,
+    working_dir: &Path,
+    portable: &Portable,
+) -> Result<ActionContext> {
+    Ok(ActionContext {
+        compiler: compiler_identity(rustc)?,
+        working_dir: working_dir.to_path_buf(),
+        path_mappings: portable.mappings.clone(),
+        environment: BTreeMap::new(),
+        portable_environment: portable.names.clone(),
+        inputs: Vec::new(),
+    })
+}
+
+fn record_prediction(
+    rustc: &OsStr,
+    invocation: &RustcInvocation,
+    action: &CacheDigest,
+    discovered: &DiscoveredInputs,
+    working_dir: &Path,
+    portable: &Portable,
+) {
+    let result = (|| {
+        let context = base_action_context(rustc, working_dir, portable)?;
+        let invocation_digest = invocation.invocation_digest(&context)?;
+        let prediction = invocation.prediction(&context, discovered)?;
+        let payload = String::from_utf8(canonical_json(&prediction)?)?;
+        record_prediction_value(invocation_digest, action.clone(), payload);
+        Result::<()>::Ok(())
+    })();
+    if let Err(error) = result {
+        eprintln!("mbx warning: action prediction was not recorded: {error:#}");
+    }
+}
+
+fn record_prediction_value(invocation: CacheDigest, action: CacheDigest, payload: String) {
+    let result = (|| {
+        let task = std::env::var(session::BUILD_ENV)
+            .wrap_err_with(|| format!("{} is not set", session::BUILD_ENV))?;
+        let responses = session::request_agent(&[AgentRequest::RecordActionPrediction {
+            task,
+            prediction: ActionPrediction {
+                invocation,
+                action,
+                adapter: "rustc".into(),
+                payload,
+            },
+        }])?;
+        match responses.into_iter().next() {
+            Some(AgentResponse::ActionPredictionRecorded) => Ok(()),
+            Some(AgentResponse::Error { message }) => bail!(message),
+            _ => bail!("cache agent returned an unexpected prediction response"),
+        }
+    })();
+    if let Err(error) = result {
+        eprintln!("mbx warning: action prediction was not recorded: {error:#}");
+    }
+}
+
+fn verify_environment(environment: &BTreeMap<String, Option<String>>) -> Result<()> {
+    for (name, expected) in environment {
+        let actual = std::env::var_os(name)
+            .map(|value| {
+                value.into_string().map_err(|_| {
+                    eyre::eyre!("compiler environment input is not valid UTF-8: {name}")
+                })
+            })
+            .transpose()?;
+        if &actual != expected {
+            bail!("compiler environment input changed: {name}");
+        }
+    }
+    Ok(())
+}
+
+fn restore_result(
+    action: &RustcAction,
+    outputs: &RustcOutputs,
+    discovered: &DiscoveredInputs,
+    restore_outputs: bool,
+) -> Result<Option<CachedCompilation>> {
+    let responses = session::request_agent(&[AgentRequest::FindActionResult {
+        action: action.digest.clone(),
+    }])?;
+    let Some(response) = responses.into_iter().next() else {
+        bail!("cache agent did not return an action lookup response");
+    };
+    let result = match response {
+        AgentResponse::ActionResult { result } => match result {
+            Some(result) => result,
+            None => return Ok(None),
+        },
+        AgentResponse::Error { message } => bail!(message),
+        _ => bail!("cache agent returned an unexpected action lookup response"),
+    };
+    if result.version != 1 || result.action != action.digest {
+        bail!("cached rustc action result has an invalid identity");
+    }
+    let metadata_digest = result
+        .metadata
+        .ok_or_else(|| eyre::eyre!("cached rustc action result has no metadata"))?;
+    let output_root_digest = result
+        .output_root
+        .ok_or_else(|| eyre::eyre!("cached rustc action result has no output root"))?;
+    let roots = find_blobs(&[
+        action.digest.clone(),
+        metadata_digest.clone(),
+        output_root_digest.clone(),
+    ])?;
+    let cached_action = read_verified_blob(&roots[0], &action.digest, "action descriptor")?;
+    if cached_action != action.bytes {
+        bail!("cached rustc action descriptor does not match the invocation");
+    }
+    let metadata: RustcMetadata =
+        read_canonical_blob(&roots[1], &metadata_digest, "rustc metadata")?;
+    if metadata.version != 1 || metadata.kind != "rustc" {
+        bail!("cached rustc metadata is unsupported");
+    }
+    let directory: CacheDirectory =
+        read_canonical_blob(&roots[2], &output_root_digest, "output directory")?;
+    let files = validated_outputs(directory, outputs)?;
+    let cached_outputs = files
+        .iter()
+        .map(|(node, destination)| CachedOutput {
+            path: destination.clone(),
+            digest: node.digest.clone(),
+            mode: node.mode,
+        })
+        .collect();
+    let restored_output_files = files.len().try_into().unwrap_or(u64::MAX);
+    let restored_output_bytes = files.iter().fold(0_u64, |total, (node, _)| {
+        total.saturating_add(node.digest.size)
+    });
+
+    let mut digests = vec![metadata.stdout.clone(), metadata.stderr.clone()];
+    digests.extend(files.iter().map(|(node, _)| node.digest.clone()));
+    let blobs = find_blobs(&digests)?;
+    let stdout = read_verified_blob(&blobs[0], &metadata.stdout, "stdout")?;
+    let stderr = read_verified_blob(&blobs[1], &metadata.stderr, "stderr")?;
+
+    let materialization_started = Instant::now();
+    std::fs::create_dir_all(&outputs.directory)?;
+    let staging = tempfile::tempdir_in(&outputs.directory)?;
+    let mut staged = Vec::with_capacity(files.len());
+    for (index, ((node, destination), source)) in files.into_iter().zip(&blobs[2..]).enumerate() {
+        let temporary = stage_cached_output(staging.path(), index, source, &node)?;
+        staged.push((temporary, destination));
+    }
+    let staged = StagedOutputs {
+        directory: staging,
+        files: staged,
+    };
+
+    discovered.verify()?;
+    verify_environment(&discovered.environment)?;
+    finalize_restored_outputs(staged, restore_outputs)?;
+    let restore = RestoreStats {
+        duration_ns: materialization_started
+            .elapsed()
+            .as_nanos()
+            .try_into()
+            .unwrap_or(u64::MAX),
+        output_files: restored_output_files,
+        output_bytes: restored_output_bytes,
+    };
+    if restore_outputs {
+        record_action_hit(&action.digest, restore);
+    }
+    Ok(Some(CachedCompilation {
+        stdout,
+        stderr,
+        outputs: cached_outputs,
+        restore,
+    }))
+}
+
+fn finalize_restored_outputs(staged: StagedOutputs, restore_outputs: bool) -> Result<()> {
+    if restore_outputs {
+        persist_outputs(staged)?;
+    }
+    Ok(())
+}
+
+fn stage_cached_output(
+    directory: &Path,
+    index: usize,
+    source: &Path,
+    node: &CacheFileNode,
+) -> Result<tempfile::TempPath> {
+    let temporary = directory.join(format!("output-{index}"));
+    reflink_copy::reflink_or_copy(source, &temporary)
+        .wrap_err_with(|| format!("failed to materialize cached rustc output {}", node.name))?;
+    let temporary = tempfile::TempPath::try_from_path(temporary)?;
+    make_owner_writable(&temporary)?;
+    // Deliberately not fsynced. These are build artifacts in a target
+    // directory, and cargo does not sync its own outputs either, so syncing
+    // here buys no durability the build relies on -- it only costs one fsync
+    // per restored file, which on a large workspace is most of the restore.
+    if !node.digest.matches_file(&temporary)? {
+        bail!(
+            "cached rustc output failed digest verification: {}",
+            node.name
+        );
+    }
+    apply_file_mode(&temporary, node.mode)?;
+    Ok(temporary)
+}
+
+fn cached_matches(cached: &CachedCompilation, output: &Output) -> bool {
+    output.status.success()
+        && cached.stdout == output.stdout
+        && cached.stderr == output.stderr
+        && cached.outputs.iter().all(|expected| {
+            std::fs::metadata(&expected.path).is_ok_and(|metadata| {
+                file_mode(&metadata) == expected.mode
+                    && expected
+                        .digest
+                        .matches_file(&expected.path)
+                        .unwrap_or(false)
+            })
+        })
+}
+
+fn record_verification(matched: bool, restore: RestoreStats) {
+    let responses =
+        session::request_agent(&[AgentRequest::RecordActionVerification { matched, restore }]);
+    match responses.map(|responses| responses.into_iter().next()) {
+        Ok(Some(AgentResponse::ActionVerificationRecorded)) => {}
+        Ok(Some(AgentResponse::Error { message })) => {
+            eprintln!("mbx warning: verification was not recorded: {message}");
+        }
+        Ok(_) => eprintln!("mbx warning: verification was not recorded"),
+        Err(error) => {
+            eprintln!("mbx warning: verification was not recorded: {error:#}");
+        }
+    }
+}
+
+fn persist_outputs(staged: StagedOutputs) -> Result<()> {
+    let StagedOutputs {
+        directory: _directory,
+        files,
+    } = staged;
+    let destinations = files
+        .iter()
+        .map(|(_, destination)| destination.clone())
+        .collect::<Vec<_>>();
+    for (temporary, destination) in files {
+        let persisted = temporary
+            .persist(&destination)
+            .map_err(|error| error.error)
+            .wrap_err_with(|| format!("failed to atomically restore {}", destination.display()));
+        if let Err(error) = persisted {
+            for destination in &destinations {
+                match std::fs::remove_file(destination) {
+                    Ok(()) => {}
+                    Err(remove_error) if remove_error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(remove_error) => eprintln!(
+                        "mbx warning: failed to roll back {}: {remove_error}",
+                        destination.display()
+                    ),
+                }
+            }
+            return Err(error);
+        }
+    }
+    Ok(())
+}
+
+fn record_action_hit(action: &CacheDigest, restore: RestoreStats) {
+    let responses = session::request_agent(&[AgentRequest::RecordActionHit {
+        action: action.clone(),
+        restore,
+    }]);
+    match responses.map(|responses| responses.into_iter().next()) {
+        Ok(Some(AgentResponse::ActionHitRecorded)) => {}
+        Ok(Some(AgentResponse::Error { message })) => {
+            eprintln!("mbx warning: hit was not recorded: {message}");
+        }
+        Ok(_) => eprintln!("mbx warning: hit was not recorded"),
+        Err(error) => {
+            eprintln!("mbx warning: hit was not recorded: {error:#}");
+        }
+    }
+}
+
+fn find_blobs(digests: &[CacheDigest]) -> Result<Vec<PathBuf>> {
+    let responses = session::request_agent(&[AgentRequest::FindBlobs {
+        digests: digests.to_vec(),
+    }])?;
+    let Some(response) = responses.into_iter().next() else {
+        bail!("cache agent did not return a blob lookup response");
+    };
+    match response {
+        AgentResponse::Blobs { paths } if paths.len() == digests.len() => paths
+            .into_iter()
+            .zip(digests)
+            .map(|(path, digest)| match path {
+                Some(path) => Ok(path),
+                None => bail!("cached rustc action is missing blob {}", digest.hash),
+            })
+            .collect(),
+        AgentResponse::Blobs { .. } => {
+            bail!("cache agent returned an incomplete blob lookup response")
+        }
+        AgentResponse::Blob { path: Some(path) } if digests.len() == 1 => Ok(vec![path]),
+        AgentResponse::Blob { path: None } if digests.len() == 1 => {
+            let digest = &digests[0];
+            bail!("cached rustc action is missing blob {}", digest.hash)
+        }
+        AgentResponse::Error { message } => bail!(message),
+        _ => bail!("cache agent returned an unexpected blob lookup response"),
+    }
+}
+
+fn read_canonical_blob<T>(path: &Path, digest: &CacheDigest, description: &str) -> Result<T>
+where
+    T: DeserializeOwned + Serialize,
+{
+    let bytes = read_verified_blob(path, digest, description)?;
+    let value = serde_json::from_slice(&bytes)
+        .wrap_err_with(|| format!("cached {description} is not valid JSON"))?;
+    if canonical_json(&value)? != bytes {
+        bail!("cached {description} is not canonical JSON");
+    }
+    Ok(value)
+}
+
+fn read_verified_blob(path: &Path, digest: &CacheDigest, description: &str) -> Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    std::fs::File::open(path)?.read_to_end(&mut bytes)?;
+    if !digest.matches_bytes(&bytes)? {
+        bail!("cached {description} failed digest verification");
+    }
+    Ok(bytes)
+}
+
+fn validated_outputs(
+    directory: CacheDirectory,
+    outputs: &RustcOutputs,
+) -> Result<Vec<(CacheFileNode, PathBuf)>> {
+    if directory.version != 1 || !directory.directories.is_empty() || !directory.symlinks.is_empty()
+    {
+        bail!("cached rustc output directory has unsupported entries");
+    }
+    let mut expected = outputs
+        .files
+        .iter()
+        .chain(std::iter::once(&outputs.dep_info))
+        .map(|path| {
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .ok_or_else(|| eyre::eyre!("expected rustc output name is not UTF-8"))?;
+            if path.parent() != Some(outputs.directory.as_path()) {
+                bail!("expected rustc output escapes its output directory");
+            }
+            Ok((name.to_string(), path.clone()))
+        })
+        .collect::<Result<BTreeMap<_, _>>>()?;
+    if directory.files.len() != expected.len() {
+        bail!("cached rustc output set does not match the invocation");
+    }
+    let mut files = Vec::with_capacity(directory.files.len());
+    for node in directory.files {
+        validate_file_mode(&node)?;
+        let destination = expected
+            .remove(&node.name)
+            .ok_or_else(|| eyre::eyre!("cached rustc output is unexpected: {}", node.name))?;
+        files.push((node, destination));
+    }
+    if !expected.is_empty() {
+        bail!("cached rustc output set is incomplete");
+    }
+    Ok(files)
+}
+
+fn compiler_identity(rustc: &OsStr) -> Result<CompilerIdentity> {
+    let executable = resolve_executable(rustc)?;
+    let environment = ["RUSTUP_HOME", "RUSTUP_TOOLCHAIN"]
+        .into_iter()
+        .map(|name| (name.into(), std::env::var(name).ok()))
+        .collect::<BTreeMap<_, _>>();
+    let responses = session::request_agent(&[AgentRequest::FindExecutableIdentity {
+        executable: executable.clone(),
+        environment: environment.clone(),
+    }])?;
+    let Some(AgentResponse::ExecutableIdentity { stdout }) = responses.into_iter().next() else {
+        bail!("cache agent did not return the rustc identity");
+    };
+    let stdout = if let Some(stdout) = stdout {
+        stdout
+    } else {
+        let mut command = Command::new(&executable);
+        command.arg("-vV");
+        for (name, value) in &environment {
+            if let Some(value) = value {
+                command.env(name, value);
+            } else {
+                command.env_remove(name);
+            }
+        }
+        let output = command
+            .output()
+            .wrap_err("failed to query the rustc identity")?;
+        if !output.status.success() {
+            bail!(
+                "rustc identity command failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        let responses = session::request_agent(&[AgentRequest::StoreExecutableIdentity {
+            executable,
+            environment,
+            stdout: output.stdout,
+        }])?;
+        let Some(AgentResponse::ExecutableIdentity {
+            stdout: Some(stdout),
+        }) = responses.into_iter().next()
+        else {
+            bail!("cache agent did not store the rustc identity");
+        };
+        stdout
+    };
+    let verbose = std::str::from_utf8(&stdout).wrap_err("rustc identity is not UTF-8")?;
+    let release = identity_field(verbose, "release")?;
+    let host = identity_field(verbose, "host")?;
+    let rustc_version = verbose
+        .lines()
+        .filter(|line| {
+            line.starts_with("rustc ")
+                || line.starts_with("commit-hash:")
+                || line.starts_with("commit-date:")
+                || line.starts_with("LLVM version:")
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    if rustc_version.is_empty() {
+        bail!("rustc identity is missing its version");
+    }
+    let toolchain = std::env::var("RUSTUP_TOOLCHAIN")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| release.to_string());
+    Ok(CompilerIdentity {
+        toolchain,
+        rustc_version,
+        host: host.to_string(),
+    })
+}
+
+fn identity_field<'a>(verbose: &'a str, field: &str) -> Result<&'a str> {
+    verbose
+        .lines()
+        .find_map(|line| line.strip_prefix(&format!("{field}: ")))
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| eyre::eyre!("rustc identity is missing {field}"))
+}
+
+/// Environment inputs eligible for remapping.
+///
+/// Deliberately just the one. `OUT_DIR` lives under the target directory, so
+/// remapping it confines the change to generated sources, and it is the value
+/// the plan identifies as the cross-checkout shortfall. Widening this list
+/// widens which paths disappear from debug info, which is its own decision.
+const PORTABLE_ENVIRONMENT: &[&str] = &["OUT_DIR"];
+
+/// The environment values whose absolute paths this compilation was made
+/// independent of.
+///
+/// `OUT_DIR` is the one that matters: every crate that includes build-script
+/// output reads it, its value differs per checkout, and keeping it in the key
+/// verbatim is what stops those compilations sharing between checkouts.
+///
+/// Two things must hold before a key may normalize such a value, and this type
+/// is responsible for both. `--remap-path-prefix` makes rustc record the
+/// placeholder instead of the real path, which covers debug info, spans, and
+/// diagnostics -- everything rustc writes itself. It does not cover a value the
+/// crate reads through `env!` and keeps as a string, so the outputs are read
+/// before publishing and the portable key is used only if none carries it.
+struct Portable {
+    /// Path mappings for this compilation, ordered as keys need them.
+    mappings: Vec<PathMapping>,
+    /// Flags appended to the real rustc invocation, one per remapped value.
+    arguments: Vec<OsString>,
+    /// Names whose values an action key may normalize.
+    names: BTreeSet<String>,
+    /// The literal values, for the check before publishing.
+    values: Vec<String>,
+}
+
+impl Portable {
+    fn detect(working_dir: &Path) -> Self {
+        let mut portable = Self {
+            mappings: PathMapping::ordered(&path_mappings(working_dir)),
+            arguments: Vec::new(),
+            names: BTreeSet::new(),
+            values: Vec::new(),
+        };
+        if !session::share_out_dir_requested() {
+            return portable;
+        }
+        for name in PORTABLE_ENVIRONMENT {
+            let Some(value) = std::env::var(name)
+                .ok()
+                .filter(|value| Path::new(value).is_absolute())
+            else {
+                continue;
+            };
+            // A value under no known root is one no key could agree on anyway,
+            // so there is nothing to remap and nothing to promise.
+            let Ok(placeholder) =
+                normalize_mapped_path(Path::new(&value), working_dir, &portable.mappings)
+            else {
+                continue;
+            };
+            let mut flag = OsString::from("--remap-path-prefix=");
+            flag.push(&value);
+            flag.push("=");
+            flag.push(&placeholder);
+            portable.arguments.push(flag);
+            portable.names.insert((*name).to_string());
+            portable.values.push(value);
+        }
+        portable
+    }
+
+    /// The compiler arguments, with the remapping flags appended.
+    fn applied_to(&self, arguments: &[OsString]) -> Vec<OsString> {
+        let mut applied = arguments.to_vec();
+        applied.extend(self.arguments.iter().cloned());
+        applied
+    }
+
+    /// Whether the outputs are free of every value a portable key normalized.
+    ///
+    /// The dep-info file is not one of them: it records absolute input paths by
+    /// construction, and is restored as written for every action that already
+    /// shares across checkouts today. Judging the artifact by it would reject
+    /// every compilation.
+    fn outputs_are_clean(&self, outputs: &[PathBuf]) -> Result<bool> {
+        if self.values.is_empty() {
+            return Ok(false);
+        }
+        for output in outputs {
+            let contents = std::fs::read(output)
+                .wrap_err_with(|| format!("failed to read rustc output {}", output.display()))?;
+            if self.values.iter().any(|value| carries(&contents, value)) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+}
+
+/// Whether `contents` holds `value` anywhere, in either separator spelling.
+///
+/// rustc writes paths with the platform separator in some places and forward
+/// slashes in others, and a value missed here becomes a wrong answer rather
+/// than a slow one, so both spellings are searched.
+fn carries(contents: &[u8], value: &str) -> bool {
+    if contains(contents, value.as_bytes()) {
+        return true;
+    }
+    value.contains('\\') && contains(contents, value.replace('\\', "/").as_bytes())
+}
+
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    let Some((first, rest)) = needle.split_first() else {
+        return false;
+    };
+    let mut offset = 0;
+    while let Some(index) = haystack[offset..].iter().position(|byte| byte == first) {
+        let start = offset + index;
+        if haystack[start + 1..].starts_with(rest) {
+            return true;
+        }
+        offset = start + 1;
+    }
+    false
+}
+
+fn path_mappings(working_dir: &Path) -> Vec<PathMapping> {
+    let mut mappings = Vec::new();
+    let mut roots = BTreeSet::new();
+    // The target directory comes first, and before the workspace that usually
+    // contains it: output paths are the ones that differ between checkouts, and
+    // mapping them explicitly also keeps keys stable when the target directory
+    // is moved out of the workspace.
+    //
+    // Cargo compiles a dependency with its working directory inside the
+    // registry, not in the workspace, so neither root can be inferred from the
+    // working directory -- the session passes both in.
+    for (name, placeholder) in [
+        (session::TARGET_DIR_ENV, "target"),
+        (session::WORKSPACE_ROOT_ENV, "workspace"),
+        ("CARGO_HOME", "cargo_home"),
+        ("RUSTUP_HOME", "rustup_home"),
+        ("HOME", "home"),
+        ("USERPROFILE", "home"),
+    ] {
+        if let Some(root) = std::env::var_os(name).map(PathBuf::from)
+            && root.is_absolute()
+        {
+            add_mapping(&mut mappings, &mut roots, root, placeholder);
+        }
+    }
+    // Without a session there is no workspace root to trust, so fall back to
+    // the working directory rather than bypassing every action.
+    if !roots.iter().any(|root| working_dir.starts_with(root)) {
+        add_mapping(
+            &mut mappings,
+            &mut roots,
+            working_dir.to_path_buf(),
+            "workspace",
+        );
+    }
+    mappings
+}
+
+fn add_mapping(
+    mappings: &mut Vec<PathMapping>,
+    roots: &mut BTreeSet<PathBuf>,
+    root: PathBuf,
+    placeholder: &str,
+) {
+    if roots.insert(root.clone())
+        && !mappings
+            .iter()
+            .any(|mapping| mapping.placeholder == placeholder)
+    {
+        mappings.push(PathMapping::new(root, placeholder));
+    }
+}
+
+fn replay_output(output: &Output) -> Result<()> {
+    replay_bytes(&output.stdout, &output.stderr)
+}
+
+fn replay_bytes(stdout_bytes: &[u8], stderr_bytes: &[u8]) -> Result<()> {
+    let mut stdout = std::io::stdout().lock();
+    stdout.write_all(stdout_bytes)?;
+    stdout.flush()?;
+    let mut stderr = std::io::stderr().lock();
+    stderr.write_all(stderr_bytes)?;
+    stderr.flush()?;
+    Ok(())
+}
+
+fn staging_directory() -> Result<tempfile::TempDir> {
+    let root = std::env::var_os(session::STAGING_ENV)
+        .map(PathBuf::from)
+        .ok_or_else(|| eyre::eyre!("{} is not set", session::STAGING_ENV))?;
+    Ok(tempfile::tempdir_in(root)?)
+}
+
+fn resolve_executable(executable: &OsStr) -> Result<PathBuf> {
+    let executable = PathBuf::from(executable);
+    if executable.is_absolute() {
+        return Ok(executable);
+    }
+    which::which(&executable).wrap_err_with(|| {
+        format!(
+            "failed to resolve compiler executable {}",
+            executable.display()
+        )
+    })
+}
+
+fn publish_result(
+    action: &CacheDigest,
+    action_bytes: &[u8],
+    outputs: &[PathBuf],
+    output: &Output,
+) -> Result<()> {
+    if outputs.is_empty() {
+        bail!("rustc produced no cacheable outputs");
+    }
+    let staging = staging_directory()?;
+    let mut blobs = vec![staged_bytes(staging.path(), "action.json", action_bytes)?];
+    let stdout = staged_bytes(staging.path(), "stdout", &output.stdout)?;
+    let stderr = staged_bytes(staging.path(), "stderr", &output.stderr)?;
+    blobs.extend([stdout.clone(), stderr.clone()]);
+
+    let mut files = Vec::with_capacity(outputs.len());
+    for path in outputs {
+        let metadata = std::fs::metadata(path)
+            .wrap_err_with(|| format!("failed to inspect rustc output {}", path.display()))?;
+        if !metadata.is_file() {
+            bail!("rustc output is not a regular file: {}", path.display());
+        }
+        let digest = CacheDigest::blake3_file(path)?;
+        blobs.push((digest.clone(), path.clone()));
+        files.push(CacheFileNode {
+            digest,
+            executable: false,
+            mode: file_mode(&metadata),
+            name: path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .ok_or_else(|| eyre::eyre!("rustc output name is not UTF-8"))?
+                .to_string(),
+        });
+    }
+    files.sort_by(|left, right| left.name.cmp(&right.name));
+
+    let metadata = canonical_json(&RustcMetadata {
+        version: 1,
+        kind: "rustc".into(),
+        stdout: stdout.0,
+        stderr: stderr.0,
+    })?;
+    let metadata = staged_bytes(staging.path(), "metadata.json", &metadata)?;
+    blobs.push(metadata.clone());
+    let directory = canonical_json(&CacheDirectory {
+        directories: Vec::new(),
+        files,
+        symlinks: Vec::new(),
+        version: 1,
+    })?;
+    let directory = staged_bytes(staging.path(), "directory.json", &directory)?;
+    blobs.push(directory.clone());
+
+    let mut requests = Vec::new();
+    let mut published = BTreeSet::new();
+    for (digest, source) in blobs {
+        if published.insert(digest.clone()) {
+            requests.push(AgentRequest::StoreBlob { digest, source });
+        }
+    }
+    requests.push(AgentRequest::StoreActionResult {
+        result: RemoteActionResult {
+            action: action.clone(),
+            metadata: Some(metadata.0),
+            output_root: Some(directory.0),
+            version: 1,
+        },
+    });
+    for response in session::request_agent(&requests)? {
+        match response {
+            AgentResponse::Stored { .. } | AgentResponse::ActionStored { .. } => {}
+            AgentResponse::Error { message } => bail!(message),
+            _ => bail!("cache agent returned an unexpected publish response"),
+        }
+    }
+    Ok(())
+}
+
+fn staged_bytes(directory: &Path, name: &str, bytes: &[u8]) -> Result<(CacheDigest, PathBuf)> {
+    let path = directory.join(name);
+    std::fs::write(&path, bytes)?;
+    Ok((CacheDigest::blake3(bytes), path))
+}
+
+#[cfg(unix)]
+fn file_mode(metadata: &std::fs::Metadata) -> u32 {
+    use std::os::unix::fs::PermissionsExt as _;
+    metadata.permissions().mode() & 0o644
+}
+
+#[cfg(windows)]
+fn file_mode(_metadata: &std::fs::Metadata) -> u32 {
+    0
+}
+
+#[cfg(unix)]
+fn validate_file_mode(node: &CacheFileNode) -> Result<()> {
+    if node.executable
+        || node.mode & !0o777 != 0
+        || node.mode & 0o111 != 0
+        || node.mode & 0o022 != 0
+    {
+        bail!("cached rustc output has an unsafe file mode: {}", node.name);
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn validate_file_mode(node: &CacheFileNode) -> Result<()> {
+    if node.executable || node.mode != 0 {
+        bail!("cached rustc output has an unsafe file mode: {}", node.name);
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn apply_file_mode(temporary: &Path, mode: u32) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt as _;
+    std::fs::set_permissions(temporary, std::fs::Permissions::from_mode(mode))?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn apply_file_mode(_temporary: &Path, _mode: u32) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(unix)]
+fn make_owner_writable(path: &Path) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt as _;
+    let mut permissions = std::fs::metadata(path)?.permissions();
+    permissions.set_mode(permissions.mode() | 0o200);
+    std::fs::set_permissions(path, permissions)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn make_owner_writable(path: &Path) -> Result<()> {
+    let mut permissions = std::fs::metadata(path)?.permissions();
+    permissions.set_readonly(false);
+    std::fs::set_permissions(path, permissions)?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn exit_code(status: ExitStatus) -> ExitCode {
+    use std::os::unix::process::ExitStatusExt as _;
+    ExitCode::from(
+        status
+            .code()
+            .unwrap_or_else(|| 128 + status.signal().unwrap_or(1)) as u8,
+    )
+}
+
+#[cfg(windows)]
+fn exit_code(status: ExitStatus) -> ExitCode {
+    // SAFETY: this process is only a compiler wrapper and must preserve the
+    // compiler's full Windows status code, which stable ExitCode cannot hold.
+    unsafe { windows_sys::Win32::System::Threading::ExitProcess(status.code().unwrap_or(1) as u32) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn portable_for(values: &[&str]) -> Portable {
+        Portable {
+            mappings: Vec::new(),
+            arguments: Vec::new(),
+            names: values.iter().map(|_| "OUT_DIR".to_string()).collect(),
+            values: values.iter().map(|value| (*value).to_string()).collect(),
+        }
+    }
+
+    /// `--remap-path-prefix` covers the paths rustc writes itself, so most
+    /// artifacts come out clean. A crate that keeps the value as a string does
+    /// not, and that is the case the outputs are read to catch.
+    #[test]
+    fn an_output_carrying_a_normalized_value_is_not_portable() {
+        let root = tempfile::tempdir().unwrap();
+        let out_dir = "/checkout/target/debug/build/widget-abc/out";
+        let clean = root.path().join("clean.rlib");
+        std::fs::write(
+            &clean,
+            b"rustc output naming ${target}/debug/build/widget-abc/out",
+        )
+        .unwrap();
+        let carries = root.path().join("carries.rlib");
+        std::fs::write(&carries, format!("compiled in {out_dir} at some offset")).unwrap();
+
+        let portable = portable_for(&[out_dir]);
+        assert!(
+            portable
+                .outputs_are_clean(std::slice::from_ref(&clean))
+                .unwrap()
+        );
+        assert!(
+            !portable
+                .outputs_are_clean(std::slice::from_ref(&carries))
+                .unwrap()
+        );
+        // One dirty output is enough: the artifact is published as a set.
+        assert!(!portable.outputs_are_clean(&[clean, carries]).unwrap());
+    }
+
+    /// Nothing was made portable, so there is no portable key to publish under
+    /// and no claim to check.
+    #[test]
+    fn nothing_portable_is_never_clean() {
+        assert!(!portable_for(&[]).outputs_are_clean(&[]).unwrap());
+    }
+
+    #[test]
+    fn a_value_is_found_at_any_offset_and_in_either_spelling() {
+        assert!(carries(b"/a/b", "/a/b"));
+        assert!(carries(b"...../a/b.....", "/a/b"));
+        assert!(carries(b"/a/a/b", "/a/b"));
+        assert!(!carries(b"/a/", "/a/b"));
+        assert!(!carries(b"", "/a/b"));
+        // A Windows value may have been written with forward slashes.
+        assert!(carries(b"c:/a/b", "c:\\a\\b"));
+        assert!(!carries(b"c:/a/c", "c:\\a\\b"));
+    }
+
+    fn staged_outputs(root: &Path, entries: Vec<(&[u8], PathBuf)>) -> StagedOutputs {
+        let directory = tempfile::tempdir_in(root).unwrap();
+        let files = entries
+            .into_iter()
+            .enumerate()
+            .map(|(index, (contents, destination))| {
+                let path = directory.path().join(format!("output-{index}"));
+                std::fs::write(&path, contents).unwrap();
+                (
+                    tempfile::TempPath::try_from_path(path).unwrap(),
+                    destination,
+                )
+            })
+            .collect();
+        StagedOutputs { directory, files }
+    }
+
+    fn test_outputs(root: &Path) -> RustcOutputs {
+        let directory = root.join("out");
+        RustcOutputs {
+            files: vec![directory.join("libdemo.rlib")],
+            dep_info: directory.join("demo.d"),
+            directory,
+        }
+    }
+
+    fn test_file(name: &str) -> CacheFileNode {
+        CacheFileNode {
+            digest: CacheDigest::blake3(b"artifact"),
+            executable: false,
+            mode: if cfg!(unix) { 0o644 } else { 0 },
+            name: name.into(),
+        }
+    }
+
+    fn test_directory(files: Vec<CacheFileNode>) -> CacheDirectory {
+        CacheDirectory {
+            directories: Vec::new(),
+            files,
+            symlinks: Vec::new(),
+            version: 1,
+        }
+    }
+
+    fn test_output_directory(file: CacheFileNode) -> CacheDirectory {
+        test_directory(vec![file, test_file("demo.d")])
+    }
+
+    #[test]
+    fn parses_verbose_rustc_identity() {
+        let verbose = "rustc 1.97.0 (abc 2026-08-01)\n\
+                       binary: rustc\n\
+                       commit-hash: abc\n\
+                       commit-date: 2026-08-01\n\
+                       host: x86_64-unknown-linux-gnu\n\
+                       release: 1.97.0\n\
+                       LLVM version: 22.0.0\n";
+        assert_eq!(identity_field(verbose, "release").unwrap(), "1.97.0");
+        assert_eq!(
+            identity_field(verbose, "host").unwrap(),
+            "x86_64-unknown-linux-gnu"
+        );
+    }
+
+    #[test]
+    fn mappings_do_not_duplicate_home_placeholders() {
+        let directory = tempfile::tempdir().unwrap();
+        let mappings = path_mappings(directory.path());
+        let placeholders = mappings
+            .iter()
+            .map(|mapping| &mapping.placeholder)
+            .collect::<BTreeSet<_>>();
+        assert_eq!(placeholders.len(), mappings.len());
+    }
+
+    #[test]
+    fn validates_exact_rustc_output_set() {
+        let root = tempfile::tempdir().unwrap();
+        let outputs = test_outputs(root.path());
+        let files =
+            validated_outputs(test_output_directory(test_file("libdemo.rlib")), &outputs).unwrap();
+
+        assert_eq!(files.len(), 2);
+        assert!(files.iter().any(|(_, path)| path == &outputs.files[0]));
+        assert!(files.iter().any(|(_, path)| path == &outputs.dep_info));
+    }
+
+    #[test]
+    fn rejects_cached_output_path_traversal() {
+        let root = tempfile::tempdir().unwrap();
+        let outputs = test_outputs(root.path());
+        assert!(
+            validated_outputs(
+                test_output_directory(test_file("../libdemo.rlib")),
+                &outputs,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_executable_rustc_outputs() {
+        let root = tempfile::tempdir().unwrap();
+        let outputs = test_outputs(root.path());
+        let mut file = test_file("libdemo.rlib");
+        file.executable = true;
+        assert!(validated_outputs(test_output_directory(file), &outputs).is_err());
+    }
+
+    #[test]
+    fn rejects_group_or_world_writable_rustc_outputs() {
+        let root = tempfile::tempdir().unwrap();
+        let outputs = test_outputs(root.path());
+        let mut file = test_file("libdemo.rlib");
+        file.mode = 0o666;
+        assert!(validated_outputs(test_output_directory(file), &outputs).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn publication_masks_unsafe_rustc_output_permissions() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let file = tempfile::NamedTempFile::new().unwrap();
+        file.as_file()
+            .set_permissions(std::fs::Permissions::from_mode(0o666))
+            .unwrap();
+        assert_eq!(file_mode(&file.as_file().metadata().unwrap()), 0o644);
+    }
+
+    #[test]
+    fn rolls_back_outputs_after_a_partial_persist() {
+        let root = tempfile::tempdir().unwrap();
+        let first_destination = root.path().join("first.rlib");
+        let blocked_destination = root.path().join("blocked.rmeta");
+        std::fs::create_dir(&blocked_destination).unwrap();
+        let staged = staged_outputs(
+            root.path(),
+            vec![
+                (b"first", first_destination.clone()),
+                (b"second", blocked_destination.clone()),
+            ],
+        );
+
+        assert!(persist_outputs(staged).is_err());
+        assert!(!first_destination.exists());
+        assert!(blocked_destination.is_dir());
+    }
+
+    #[test]
+    fn qualification_does_not_publish_cached_outputs() {
+        let root = tempfile::tempdir().unwrap();
+        let destination = root.path().join("cached.rlib");
+        let staged = staged_outputs(root.path(), vec![(b"cached", destination.clone())]);
+
+        finalize_restored_outputs(staged, false).unwrap();
+
+        assert!(!destination.exists());
+    }
+
+    #[test]
+    fn materialized_outputs_are_independent_from_the_cas() {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("cas-blob");
+        std::fs::write(&source, b"artifact").unwrap();
+        let staging = tempfile::tempdir_in(root.path()).unwrap();
+        let node = test_file("artifact.rlib");
+
+        let output = stage_cached_output(staging.path(), 0, &source, &node).unwrap();
+        std::fs::write(&output, b"modified").unwrap();
+
+        assert_eq!(std::fs::read(source).unwrap(), b"artifact");
+        assert_eq!(std::fs::read(output).unwrap(), b"modified");
+    }
+
+    #[test]
+    fn rejects_same_size_corrupt_cached_outputs() {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("cas-blob");
+        std::fs::write(&source, b"corrupt!").unwrap();
+        let staging = tempfile::tempdir_in(root.path()).unwrap();
+        let node = test_file("artifact.rlib");
+
+        assert!(stage_cached_output(staging.path(), 0, &source, &node).is_err());
+    }
+
+    #[test]
+    fn materializes_read_only_cached_outputs() {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("cas-blob");
+        std::fs::write(&source, b"artifact").unwrap();
+        let mut permissions = std::fs::metadata(&source).unwrap().permissions();
+        permissions.set_readonly(true);
+        std::fs::set_permissions(&source, permissions).unwrap();
+        let staging = tempfile::tempdir_in(root.path()).unwrap();
+        let node = test_file("artifact.rlib");
+
+        let output = stage_cached_output(staging.path(), 0, &source, &node).unwrap();
+
+        assert_eq!(std::fs::read(output).unwrap(), b"artifact");
+        assert!(std::fs::metadata(&source).unwrap().permissions().readonly());
+        make_owner_writable(&source).unwrap();
+    }
+
+    #[test]
+    fn rejects_same_size_corrupt_cached_metadata() {
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("cas-blob");
+        std::fs::write(&source, b"corrupt!").unwrap();
+        let digest = CacheDigest::blake3(b"artifact");
+
+        assert!(read_verified_blob(&source, &digest, "test blob").is_err());
+    }
+
+    #[test]
+    #[ignore = "local materialization benchmark"]
+    fn benchmark_cached_output_materialization() {
+        let size_mib = std::env::var("MBX_BENCH_MIB")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(128);
+        let iterations = std::env::var("MBX_BENCH_ITERATIONS")
+            .ok()
+            .and_then(|value| value.parse::<usize>().ok())
+            .unwrap_or(4);
+        let root = tempfile::tempdir().unwrap();
+        let source = root.path().join("cas-blob");
+        let mut source_file = std::fs::File::create(&source).unwrap();
+        let chunk = vec![0x5a; 1024 * 1024];
+        for _ in 0..size_mib {
+            source_file.write_all(&chunk).unwrap();
+        }
+        source_file.sync_all().unwrap();
+        drop(source_file);
+        let digest = CacheDigest::blake3_file(&source).unwrap();
+        let node = CacheFileNode {
+            digest: digest.clone(),
+            executable: false,
+            mode: if cfg!(unix) { 0o644 } else { 0 },
+            name: "artifact.rlib".into(),
+        };
+
+        let started = std::time::Instant::now();
+        for _ in 0..iterations {
+            let mut temporary = tempfile::NamedTempFile::new_in(root.path()).unwrap();
+            let mut input = std::fs::File::open(&source).unwrap();
+            std::io::copy(&mut input, temporary.as_file_mut()).unwrap();
+            temporary.flush().unwrap();
+            temporary.as_file().sync_all().unwrap();
+            assert!(digest.matches_file(temporary.path()).unwrap());
+            apply_file_mode(temporary.path(), node.mode).unwrap();
+        }
+        let copied = started.elapsed();
+
+        let staging = tempfile::tempdir_in(root.path()).unwrap();
+        let started = std::time::Instant::now();
+        for _ in 0..iterations {
+            stage_cached_output(staging.path(), 0, &source, &node).unwrap();
+        }
+        let materialized = started.elapsed();
+
+        println!(
+            "materialized {iterations} x {size_mib} MiB: copied={copied:.2?}, reflink_or_copy={materialized:.2?}, speedup={:.2}x",
+            copied.as_secs_f64() / materialized.as_secs_f64()
+        );
+    }
+}

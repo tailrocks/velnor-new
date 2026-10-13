@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+
+cat >"$MISE_CONFIG_DIR/config.toml" <<EOF
+[env]
+_.source = "{{ env.MISE_CONFIG_DIR }}/source.sh"
+EOF
+
+cat >"$MISE_CONFIG_DIR/source.sh" <<EOF
+export MISE_TEST_SOURCE=1234
+export PATH="$HOME/newbin:$PATH"
+EOF
+
+assert "mise env -s bash | grep MISE_TEST_SOURCE" "export MISE_TEST_SOURCE=1234"
+assert_contains "mise env -s bash | grep PATH" "export PATH='$HOME/newbin:"

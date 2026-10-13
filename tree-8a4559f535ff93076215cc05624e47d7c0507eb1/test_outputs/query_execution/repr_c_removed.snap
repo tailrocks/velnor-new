@@ -1,0 +1,100 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/repr_c_removed/": [
+    {
+      "name": String("CEnumToEnum"),
+      "old_attr": String("#[repr(C)]"),
+      "owner_type": String("Enum"),
+      "path": List([
+        String("repr_c_removed"),
+        String("CEnumToEnum"),
+      ]),
+      "span_begin_line": Uint64(3),
+      "span_end_line": Uint64(5),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("CStructToStruct"),
+      "old_attr": String("#[repr(C)]"),
+      "owner_type": String("Struct"),
+      "path": List([
+        String("repr_c_removed"),
+        String("CStructToStruct"),
+      ]),
+      "span_begin_line": Uint64(7),
+      "span_end_line": Uint64(9),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("CAlign16StructToAlign16Struct"),
+      "old_attr": String("#[repr(C, align(16))]"),
+      "owner_type": String("Struct"),
+      "path": List([
+        String("repr_c_removed"),
+        String("CAlign16StructToAlign16Struct"),
+      ]),
+      "span_begin_line": Uint64(12),
+      "span_end_line": Uint64(14),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("CUnionToUnion"),
+      "old_attr": String("#[repr(C)]"),
+      "owner_type": String("Union"),
+      "path": List([
+        String("repr_c_removed"),
+        String("CUnionToUnion"),
+      ]),
+      "span_begin_line": Uint64(16),
+      "span_end_line": Uint64(18),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("CAlign16UnionToAlign16Union"),
+      "old_attr": String("#[repr(C, align(16))]"),
+      "owner_type": String("Union"),
+      "path": List([
+        String("repr_c_removed"),
+        String("CAlign16UnionToAlign16Union"),
+      ]),
+      "span_begin_line": Uint64(21),
+      "span_end_line": Uint64(23),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/union_field_added/": [
+    {
+      "name": String("ReprCRemovedAllPublicFields"),
+      "old_attr": String("#[repr(C)]"),
+      "owner_type": String("Union"),
+      "path": List([
+        String("union_field_added"),
+        String("ReprCRemovedAllPublicFields"),
+      ]),
+      "span_begin_line": Uint64(33),
+      "span_end_line": Uint64(37),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("ReprCRemovedNonPublicFields"),
+      "old_attr": String("#[repr(C)]"),
+      "owner_type": String("Union"),
+      "path": List([
+        String("union_field_added"),
+        String("ReprCRemovedNonPublicFields"),
+      ]),
+      "span_begin_line": Uint64(41),
+      "span_end_line": Uint64(45),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+}

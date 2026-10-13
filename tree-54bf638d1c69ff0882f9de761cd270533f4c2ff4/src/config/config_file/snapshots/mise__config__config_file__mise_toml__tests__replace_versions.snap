@@ -1,0 +1,41 @@
+---
+source: src/config/config_file/mise_toml.rs
+expression: cf.to_toolset().unwrap()
+snapshot_kind: text
+---
+Toolset {
+    versions: {
+        BackendArg("node" -> "core:node"): ToolVersionList {
+            backend: BackendArg("node" -> "core:node"),
+            versions: [],
+            requests: [
+                Version {
+                    backend: BackendArg("node" -> "core:node"),
+                    version: "16.0.1",
+                    options: {},
+                    source: MiseToml(
+                        "/tmp/.mise.toml",
+                    ),
+                    os: None,
+                },
+                Version {
+                    backend: BackendArg("node" -> "core:node"),
+                    version: "18.0.1",
+                    options: {},
+                    source: MiseToml(
+                        "/tmp/.mise.toml",
+                    ),
+                    os: None,
+                },
+            ],
+            source: MiseToml(
+                "/tmp/.mise.toml",
+            ),
+        },
+    },
+    source: Some(
+        MiseToml(
+            "/tmp/.mise.toml",
+        ),
+    ),
+}

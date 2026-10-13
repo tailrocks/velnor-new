@@ -1,0 +1,155 @@
+{
+  "actions": [
+    {
+      "key": "jdx/mise-action",
+      "pinned_sha": "c2a87611a18de5b3828c5652fe268e992400cb5c",
+      "pinned_version": "v4.3.0",
+      "qualified_sha": "c2a87611a18de5b3828c5652fe268e992400cb5c",
+      "qualified_version": "v4.3.0",
+      "source": "https://api.github.com/repos/jdx/mise-action/releases/latest",
+      "status": "current"
+    },
+    {
+      "key": "actions/checkout",
+      "pinned_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "pinned_version": "v7.0.1",
+      "qualified_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "qualified_version": "v7.0.1",
+      "source": "https://api.github.com/repos/actions/checkout/releases/latest",
+      "status": "current"
+    },
+    {
+      "key": "actions/download-artifact",
+      "pinned_sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+      "pinned_version": "v8.0.1",
+      "qualified_sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+      "qualified_version": "v8.0.1",
+      "source": "https://api.github.com/repos/actions/download-artifact/releases/latest",
+      "status": "current"
+    },
+    {
+      "key": "actions/upload-artifact",
+      "pinned_sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+      "pinned_version": "v7.0.1",
+      "qualified_sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+      "qualified_version": "v7.0.1",
+      "source": "https://api.github.com/repos/actions/upload-artifact/releases/latest",
+      "status": "current"
+    },
+    {
+      "key": "actions/cache/restore",
+      "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+      "pinned_version": "v6.1.0",
+      "qualified_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+      "qualified_version": "v6.1.0",
+      "source": "https://api.github.com/repos/actions/cache/releases/latest",
+      "status": "current"
+    },
+    {
+      "key": "actions/cache/save",
+      "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+      "pinned_version": "v6.1.0",
+      "qualified_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+      "qualified_version": "v6.1.0",
+      "source": "https://api.github.com/repos/actions/cache/releases/latest",
+      "status": "current"
+    },
+    {
+      "key": "jdx/mr-boxington-action",
+      "pinned_sha": "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3",
+      "pinned_version": "v1.5.0",
+      "qualified_sha": "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3",
+      "qualified_version": "v1.5.0",
+      "source": "https://api.github.com/repos/jdx/mr-boxington-action/releases",
+      "status": "current"
+    },
+    {
+      "exception": {
+        "blessed_by": "docs/proposed/version-policy.md section 2 (Alint GitHub Action row + GitHub Action defaults)",
+        "kind": "reviewed_mutable_tag",
+        "note": "Standing spec-blessed exception: generation emits the reviewed tag, never a SHA. Changing the tag is a Velnor version-policy update, not a consumer config change. Not a temporary hold, so max_exception_days does not apply."
+      },
+      "key": "asamarts/alint",
+      "pinned_tag": "v0.16.1",
+      "qualified_tag": "v0.16.1",
+      "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
+      "status": "current"
+    }
+  ],
+  "check_interval_hours": 24,
+  "checked_at": "2026-09-28",
+  "exceptions": [
+    {
+      "blessed_by": "docs/proposed/version-policy.md section 2",
+      "expires": null,
+      "expiry_policy": "standing spec-blessed exception; changes require a reviewed Velnor version-policy update, not a 14-day renewal",
+      "key": "asamarts/alint",
+      "kind": "reviewed_mutable_tag",
+      "pinned_tag": "v0.16.1"
+    }
+  ],
+  "max_exception_days": 14,
+  "runner": {
+    "default": "ubuntu-26.04",
+    "source": "https://docs.github.com/en/actions/reference/runners/github-hosted-runners",
+    "status": "current",
+    "supported": [
+      "ubuntu-26.04",
+      "ubuntu-24.04",
+      "ubuntu-22.04"
+    ]
+  },
+  "schema": 1,
+  "temporary_holds": [],
+  "tools": [
+    {
+      "name": "mise",
+      "pinned": "2026.9.16",
+      "qualified": "2026.9.16",
+      "source": "https://api.github.com/repos/jdx/mise/releases/latest",
+      "status": "current"
+    },
+    {
+      "name": "rust",
+      "pinned": "1.98.1",
+      "qualified": "1.98.1",
+      "source": "https://static.rust-lang.org/dist/channel-rust-stable.toml",
+      "status": "current"
+    },
+    {
+      "name": "mr-boxington",
+      "pinned": "1.19.0",
+      "qualified": "1.19.0",
+      "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
+      "status": "current"
+    },
+    {
+      "name": "gh",
+      "pinned": "2.101.0",
+      "qualified": "2.101.0",
+      "source": "https://api.github.com/repos/cli/cli/releases/latest",
+      "status": "current"
+    },
+    {
+      "name": "actionlint",
+      "pinned": "1.7.12",
+      "qualified": "1.7.12",
+      "source": "https://api.github.com/repos/rhysd/actionlint/releases/latest",
+      "status": "current"
+    },
+    {
+      "name": "shellcheck",
+      "pinned": "0.11.0",
+      "qualified": "0.11.0",
+      "source": "https://api.github.com/repos/koalaman/shellcheck/releases/latest",
+      "status": "current"
+    },
+    {
+      "name": "zizmor",
+      "pinned": "1.30.1",
+      "qualified": "1.30.1",
+      "source": "https://api.github.com/repos/zizmorcore/zizmor/releases/latest",
+      "status": "current"
+    }
+  ]
+}

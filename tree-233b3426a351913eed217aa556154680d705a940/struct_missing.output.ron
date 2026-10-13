@@ -1,0 +1,126 @@
+{
+    "./test_crates/inherent_method_must_use_added/": [
+        // This test output will disappear when unions are added to the schema.
+        {
+            "name": String("StructToUnionWithMustUseMethods"),
+            "path": List([
+                String("inherent_method_must_use_added"),
+                String("item_type_changed_inherent_method_must_use_added"),
+                String("StructToUnionWithMustUseMethods"),
+            ]),
+            "span_begin_line": Uint64(89),
+            "span_filename": String("src/item_type_changed_inherent_method_must_use_added.rs"),
+            "struct_type": String("plain"),
+            "visibility_limit": String("public"),
+        },
+    ],
+    "./test_crates/move_item_and_reexport/": [
+        {
+            "name": String("NonEquivalentReorderedGenerics"),
+            "path": List([
+                String("move_item_and_reexport"),
+                String("NonEquivalentReorderedGenerics"),
+            ]),
+            "span_begin_line": Uint64(38),
+            "span_filename": String("src/lib.rs"),
+            "struct_type": String("plain"),
+            "visibility_limit": String("public"),
+        },
+        {
+            "name": String("NonEquivalentRemovedLifetime"),
+            "path": List([
+                String("move_item_and_reexport"),
+                String("NonEquivalentRemovedLifetime"),
+            ]),
+            "span_begin_line": Uint64(42),
+            "span_filename": String("src/lib.rs"),
+            "struct_type": String("plain"),
+            "visibility_limit": String("public"),
+        },
+        {
+            "name": String("NonEquivalentRemovedConst"),
+            "path": List([
+                String("move_item_and_reexport"),
+                String("NonEquivalentRemovedConst"),
+            ]),
+            "span_begin_line": Uint64(46),
+            "span_filename": String("src/lib.rs"),
+            "struct_type": String("plain"),
+            "visibility_limit": String("public"),
+        },
+        {
+            "name": String("NonEquivalentRemovedType"),
+            "path": List([
+                String("move_item_and_reexport"),
+                String("NonEquivalentRemovedType"),
+            ]),
+            "span_begin_line": Uint64(50),
+            "span_filename": String("src/lib.rs"),
+            "struct_type": String("plain"),
+            "visibility_limit": String("public"),
+        },
+    ],
+    "./test_crates/struct_missing/": [
+        {
+            "name": String("WillBeRemovedStruct"),
+            "path": List([
+                String("struct_missing"),
+                String("WillBeRemovedStruct"),
+            ]),
+            "span_begin_line": Uint64(1),
+            "span_filename": String("src/lib.rs"),
+            "struct_type": String("unit"),
+            "visibility_limit": String("public"),
+        },
+        {
+            "name": String("PubUseRemovedStruct"),
+            "path": List([
+                String("struct_missing"),
+                String("PubUseRemovedStruct"),
+            ]),
+            "span_begin_line": Uint64(4),
+            "span_filename": String("src/lib.rs"),
+            "struct_type": String("unit"),
+            "visibility_limit": String("public"),
+        },
+    ],
+    "./test_crates/struct_now_doc_hidden/": [
+        {
+            "name": String("PublicStructThatGoesPrivate"),
+            "path": List([
+                String("struct_now_doc_hidden"),
+                String("PublicStructThatGoesPrivate"),
+            ]),
+            "span_begin_line": Uint64(29),
+            "span_filename": String("src/lib.rs"),
+            "struct_type": String("unit"),
+            "visibility_limit": String("public"),
+        },
+    ],
+    "./test_crates/struct_pub_field_missing/": [
+        {
+            "name": String("StructRemoved"),
+            "path": List([
+                String("struct_pub_field_missing"),
+                String("StructRemoved"),
+            ]),
+            "span_begin_line": Uint64(11),
+            "span_filename": String("src/lib.rs"),
+            "struct_type": String("plain"),
+            "visibility_limit": String("public"),
+        },
+    ],
+    "./test_crates/switch_to_reexport_as_underscore/": [
+        {
+            "name": String("Struct"),
+            "path": List([
+                String("switch_to_reexport_as_underscore"),
+                String("Struct"),
+            ]),
+            "span_begin_line": Uint64(4),
+            "span_filename": String("src/lib.rs"),
+            "struct_type": String("plain"),
+            "visibility_limit": String("public"),
+        },
+    ],
+}

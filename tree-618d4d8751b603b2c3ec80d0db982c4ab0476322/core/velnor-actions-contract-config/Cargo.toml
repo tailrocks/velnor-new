@@ -1,0 +1,26 @@
+[package]
+name = "velnor-actions-contract-config"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lints]
+workspace = true
+
+[dependencies]
+velnor-actions-contract = { version = "=0.1.1", path = "../velnor-actions-contract" }
+velnor-actions-contract-release = { version = "=0.1.1", path = "../velnor-actions-contract-release" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[[test]]
+name = "velnor_contract_config"
+path = "tests/main.rs"
+
+[dev-dependencies]
+velnor-actions-contract-planning = { version = "=0.1.1", path = "../velnor-actions-contract-planning" }
+velnor-actions-contract-release = { version = "=0.1.1", path = "../velnor-actions-contract-release" }
+velnor-actions-contract-workflow = { version = "=0.1.1", path = "../velnor-actions-contract-workflow" }
+serde_json = { workspace = true }

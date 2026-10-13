@@ -1,0 +1,11 @@
+description = "Railway CLI"
+test = { cmd = "railway --version", expected = "railway {{version}}" }
+version_order = "semver"
+
+bins = ["railway"]
+[[backends]]
+attestations_since = "5.43.4"
+full = "github:railwayapp/cli"
+
+[[backends]]
+full = "cargo:railwayapp"

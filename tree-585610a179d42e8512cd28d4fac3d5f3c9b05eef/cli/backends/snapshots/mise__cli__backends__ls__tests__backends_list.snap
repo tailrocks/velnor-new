@@ -1,0 +1,15 @@
+---
+source: src/cli/backends/ls.rs
+expression: output
+snapshot_kind: text
+---
+aqua
+asdf
+cargo
+core
+go
+npm
+pipx
+spm
+ubi
+vfox

@@ -1,0 +1,9 @@
+7f396e138947a54b75002dd24afc1d8349f3235ae652401b9d22aaedf357b0f9  ./.github/AGENTS.md
+336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./.github/CLAUDE.md
+ded637fe951b84907475cfe83b6eeda2b1fcb5eebc14a30035029bc5b0f3e173  ./.github/actionlint.yaml
+fb14c2c87ae76ee232264efbbc99c0a9002a597a735424074f4f43ab059264e7  ./.github/actions/u26/action.yml
+a68e3022d65bd95abda5e104c805684e835f678832b0ced8ffc3db29c9abd15b  ./.github/actions/velnor-tool-seed/action.yml
+cfedb9cada2dd035fd9d8d2248c3097c6b8e63b43782baa58e7ec2d59410739e  ./.github/actions/velnor-tools-cache-restore/action.yml
+4371e7915fee230dfe784f44114f1cfdc96d0fd559335174c92d54e99d6c823f  ./.github/actions/velnor-tools-prelude-u26/action.yml
+98fc1957fad1ca092161bae796400ae52afc728596443a44792773e04a51c4c2  ./.github/scripts/velnor-tools-cache-identity.sh
+6a5397d4ee8ed6252ace0decdf7a3140a190e283d11ebcc3fe0d5805a5a94758  ./.github/workflows/ci.yml

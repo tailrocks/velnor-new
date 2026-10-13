@@ -1,0 +1,218 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mise.jdx.dev/schema/mise.json",
+  "title": "mise",
+  "description": "config file for mise version manager (.mise.toml)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "min_version": {
+      "description": "minimum version of mise required to use this config",
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "env": { "$ref": "#/$defs/env" },
+    "tools": {
+      "description": "dev tools to use",
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {
+            "type": "array",
+            "items": { "$ref": "#/$defs/tool" }
+          },
+          { "$ref": "#/$defs/tool" }
+        ]
+      }
+    },
+    "tasks": {
+      "description": "task runner tasks",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/task" }
+    },
+    "plugins": {
+      "description": "plugins to use",
+      "type": "object",
+      "additionalProperties": {
+        "description": "url to plugin repository",
+        "type": "string"
+      }
+    },
+    "alias": {
+      "description": "custom shorthands for versions",
+      "type": "object",
+      "additionalProperties": {
+        "description": "plugin to set aliases for",
+        "type": "object",
+        "additionalProperties": {
+          "description": "version alias points to",
+          "type": "string"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "env": {
+      "description": "environment variables",
+      "type": "object",
+      "properties": {
+        "mise": {
+          "type": "object",
+          "description": "environment modules",
+          "properties": {
+            "file": {
+              "oneOf": [
+                { "type": "string", "description": "dotenv file to load" },
+                {
+                  "type": "array",
+                  "description": "dotenv files to load",
+                  "items": {
+                    "type": "string",
+                    "description": "dotenv file to load"
+                  }
+                }
+              ]
+            },
+            "path": {
+              "oneOf": [
+                { "type": "string", "description": "PATH entry to add" },
+                {
+                  "type": "array",
+                  "description": "PATH entries to add",
+                  "items": {
+                    "type": "string",
+                    "description": "PATH entry to add"
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "string" },
+          { "type": "number" },
+          { "type": "boolean", "enum": [false] }
+        ]
+      }
+    },
+    "tool": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "version of the tool to install"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "description": "version of the tool to install",
+              "type": "string"
+            }
+          },
+          "required": ["version"]
+        }
+      ]
+    },
+    "task": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "script to run"
+        },
+        {
+          "description": "script to run",
+          "type": "array",
+          "items": {
+            "description": "script to run",
+            "type": "string"
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "run": {
+              "oneOf": [
+                {
+                  "description": "script to run",
+                  "type": "string"
+                },
+                {
+                  "description": "script to run",
+                  "type": "array",
+                  "items": {
+                    "description": "script to run",
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "description": {
+              "description": "description of task",
+              "type": "string"
+            },
+            "depends": {
+              "description": "other tasks to run before this task",
+              "type": "array",
+              "items": {
+                "description": "task to run before this task",
+                "type": "string"
+              }
+            },
+            "alias": {
+              "oneOf": [
+                {
+                  "description": "alias for this task",
+                  "type": "string"
+                },
+                {
+                  "description": "alias for this task",
+                  "type": "array",
+                  "items": {
+                    "description": "alias for this task",
+                    "type": "string"
+                  }
+                }
+              ]
+            },
+            "dir": {
+              "description": "directory to run script in, default is current working directory",
+              "type": "string"
+            },
+            "env": {
+              "description": "environment variables",
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            },
+            "quiet": {
+              "description": "do not display mise information for this task",
+              "type": "boolean"
+            },
+            "raw": {
+              "description": "directly connect task to stdin/stdout/stderr",
+              "type": "boolean"
+            },
+            "sources": {
+              "description": "files that this task depends on",
+              "type": "array",
+              "items": {
+                "description": "glob pattern for files that this task depends on",
+                "type": "string"
+              }
+            },
+            "outputs": {
+              "description": "files created by this task",
+              "type": "array",
+              "items": {
+                "description": "glob pattern for files created by this task",
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}

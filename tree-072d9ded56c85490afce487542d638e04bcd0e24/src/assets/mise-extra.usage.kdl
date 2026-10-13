@@ -1,0 +1,58 @@
+source_code_link_template "https://github.com/jdx/mise/blob/main/src/cli/{{path}}.rs"
+
+complete "alias" run="mise alias ls {{words[PREV]}} | awk '{print $2}'"
+complete "config_file" type="file"
+complete "new_plugin" run="mise plugins --all"
+complete "plugin" run="mise plugins --core --user"
+complete "prefix" run="mise ls-remote {{words[PREV]}}"
+complete "setting" run="mise settings --keys"
+complete "task" run=r#"
+mise tasks --json | jq '.[] | (.name | sub(":"; "\\:")) + ":" + (.description | sub(":"; "\\:"))'
+"# descriptions=true
+
+complete "tool@version" run=r#"
+cur="{{words[CURRENT]}}"
+case $cur in
+  *@*)
+    tool="$(echo "$cur" | cut -d'@' -f1)"
+    prefix="$(echo "$cur" | cut -d'@' -f2)"
+
+    versions=$(mise ls-remote $tool $prefix | sed '1!G;h;$!d')
+
+    for version in $versions; do
+      echo "$tool@$version"
+    done
+    ;;
+  *)
+    plugins=$(mise plugins --all)
+    for plugin in $plugins; do
+      echo "$plugin@"
+    done
+    ;;
+esac
+"#
+
+complete "installed_tool@version" run=r#"
+cur="{{words[CURRENT]}}"
+case $cur in
+  *@*)
+    tool="$(echo "$cur" | cut -d'@' -f1)"
+    prefix="$(echo "$cur" | cut -d'@' -f2)"
+
+    if [ ! -z "$prefix" ]; then
+      prefix="--prefix $prefix"
+    fi
+    versions=$(mise ls --installed $tool $prefix | awk '{print $2}' | sed '1!G;h;$!d')
+
+    for version in $versions; do
+      echo "$tool@$version"
+    done
+    ;;
+  *)
+    plugins=$(mise ls --installed | awk '{print $1}' | sed '1!G;h;$!d')
+    for plugin in $plugins; do
+      echo "$plugin@"
+    done
+    ;;
+esac
+"#

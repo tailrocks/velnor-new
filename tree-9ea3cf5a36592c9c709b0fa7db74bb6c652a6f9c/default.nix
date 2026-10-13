@@ -1,0 +1,70 @@
+{ pkgs, lib, rustPlatform, coreutils, bash, direnv, openssl, git }:
+
+rustPlatform.buildRustPackage {
+  pname = "mise";
+  version = "2026.7.17";
+
+  src = lib.cleanSource ./.;
+
+  cargoLock = {
+    lockFile = ./Cargo.lock;
+  };
+
+  nativeBuildInputs = with pkgs; [
+    cmakeMinimal
+    clang
+    llvmPackages.libclang
+    pkg-config
+    rustPlatform.bindgenHook
+  ];
+  nativeCheckInputs = with pkgs; [
+    git
+  ];
+  buildInputs = with pkgs; [
+    bash
+    coreutils
+    direnv
+    gawk
+    git
+    gnused
+    openssl
+  ];
+
+  LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+
+  # tera-contrib's now() resolves its timezone by name (TimeZone::get("UTC")),
+  # which requires a tzdb. The build sandbox provides none, so tests calling
+  # now() fail with "Unknown timezone: UTC".
+  TZDIR = "${pkgs.tzdata}/share/zoneinfo";
+
+  prePatch = ''
+    substituteInPlace ./src/test.rs ./test/data/plugins/**/bin/* \
+      --replace '/usr/bin/env bash' '${bash}/bin/bash'
+    substituteInPlace ./src/fake_asdf.rs ./src/cli/generate/git_pre_commit.rs ./src/cli/generate/snapshots/*.snap \
+      --replace '/bin/sh' '${bash}/bin/sh'
+    substituteInPlace ./src/env_diff.rs \
+      --replace '"bash"' '"${bash}/bin/bash"'
+    substituteInPlace ./src/cli/direnv/exec.rs \
+      --replace '"env"' '"${coreutils}/bin/env"' \
+      --replace 'cmd!("direnv"' 'cmd!("${direnv}/bin/direnv"'
+    substituteInPlace ./src/git.rs ./src/test.rs \
+      --replace '"git"' '"${git}/bin/git"'
+  '';
+
+  # Skip the test_plugin_list_urls as it uses the .git folder, which
+  # is excluded by default from Nix.
+  checkPhase = ''
+    RUST_BACKTRACE=full cargo test --all-features -- \
+      --skip cli::plugins::ls::tests::test_plugin_list_urls \
+      --skip tera::tests::test_last_modified \
+      --skip system::defaults::tests::test_status_missing_keys_are_unset \
+      --skip plugins::core::ruby::tests::test_list_versions_matching
+  '';
+
+  meta = with lib; {
+    description = "Dev tools, env vars, and tasks in one CLI";
+    homepage = "https://github.com/jdx/mise";
+    license = licenses.mit;
+    mainProgram = "mise";
+  };
+}

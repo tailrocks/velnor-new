@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# shellcheck source-path=SCRIPTDIR
+source "$(dirname "$0")/assert.sh"
+
+export RTX_EXPERIMENTAL=1
+
+cat <<EOF >.bun-version
+1.0.17
+EOF
+rtx i bun
+assert_contains "rtx x bun -- bun -v" "1.0.17"
+rm .bun-version

@@ -1,0 +1,10 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.28s
+────────────
+ Nextest run ID b8326858-1973-411c-bfad-602a8ea80341 with nextest profile: default
+    Starting 1 test across 1 binary (247 tests skipped)
+        PASS [  45.012s] (1/1) velnor-actions-cli::velnor_cli impl_cli_release_manifest::check_release_rejects_invalid_candidate_manifests
+────────────
+     Summary [  45.016s] 1 test run: 1 passed, 247 skipped
+mbx[gc]: removed 23 target directories (53.7 GiB logical, 23 abandoned and 0 live); 34.1 GiB logical remain
+mbx[gc]: evicted 0 objects and 0 action results (3.9 MiB logical); 12.6 GiB logical remain
+mbx[savings]: swept up 85.6 GiB logical so far. the broom is content-addressed.

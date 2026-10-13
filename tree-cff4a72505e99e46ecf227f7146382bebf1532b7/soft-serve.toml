@@ -1,0 +1,10 @@
+description = "The mighty, self-hostable Git server for the command line"
+
+[[backends]]
+full = "github:charmbracelet/soft-serve"
+
+[backends.options]
+exe = "soft"
+
+[[backends]]
+full = "asdf:chessmango/asdf-soft-serve"

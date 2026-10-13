@@ -1,0 +1,5 @@
+---
+source: src/cli/latest.rs
+expression: stdout
+---
+No repository found for plugin invalid_plugin

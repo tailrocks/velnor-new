@@ -1,0 +1,246 @@
+//! Extension-input resolution states and verified construction (P03).
+//!
+//! Declared via `#[path]` from `identity.rs` (no `lib.rs` edit).
+//! Reports which semantic inputs an extension leaves unresolved
+//! (`None`/empty is unknown, never proven absent) and validates
+//! identity paths before construction.
+
+use velnor_actions_contract::{ContractError, normalize_posix_path};
+
+use super::GroupExtensionInputs;
+use crate::argv::RustTaskIdentityExtension;
+use crate::tasks::TaskGroup;
+
+/// One semantic input an extension leaves unresolved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnresolvedInput {
+    /// Lockfile digest unknown.
+    Lockfile,
+    /// Nextest-config digest unknown for a Nextest task.
+    NextestConfig,
+    /// Archive source unknown for a Nextest `Build` task.
+    ArchiveSource,
+    /// Build-script `rerun-if-changed` inputs unknown.
+    RerunInputs,
+}
+
+/// Semantic inputs `ext` leaves unresolved, in stable order.
+///
+/// Unknown means unobserved: the orchestrator resolves each against
+/// the checkout (content digest or proven absence) before reuse or
+/// coverage may proceed.
+#[must_use]
+pub fn unresolved_inputs(ext: &RustTaskIdentityExtension) -> Vec<UnresolvedInput> {
+    let mut unresolved = Vec::new();
+    if ext.lock_digest.is_none() {
+        unresolved.push(UnresolvedInput::Lockfile);
+    }
+    if ext.kind == "nextest" && ext.nextest_digest.is_none() {
+        unresolved.push(UnresolvedInput::NextestConfig);
+    }
+    if ext.kind == "build" && ext.driver.contains("nextest") && ext.archive.is_none() {
+        unresolved.push(UnresolvedInput::ArchiveSource);
+    }
+    if ext.undeclared_reads {
+        unresolved.push(UnresolvedInput::RerunInputs);
+    }
+    unresolved
+}
+
+/// Stable component identity from a raw Cargo package ID plus manifest.
+///
+/// Raw Cargo IDs are diagnostic-only: absolute checkout paths embedded
+/// in `path+file://` or `registry+` qualifiers never enter an identity,
+/// so relocated checkouts keep every digest. Plain IDs pass through
+/// verbatim; qualified IDs reduce to their trailing `name@version`
+/// fragment; empty IDs anchor to the owning manifest.
+#[must_use]
+pub fn normalize_component_id(package_id: &str, manifest: &str) -> String {
+    if package_id.is_empty() {
+        let root = manifest
+            .rsplit_once('/')
+            .map_or("", |(dir, _)| if dir.is_empty() { "" } else { dir });
+        if root.is_empty() {
+            return "workspace".to_owned();
+        }
+        return root.to_owned();
+    }
+    if let Some(fragment) = package_id.rsplit('#').next()
+        && fragment.contains('@')
+        && package_id.contains("://")
+    {
+        return fragment.to_owned();
+    }
+    package_id.to_owned()
+}
+
+/// Normalize one identity path: repo-relative, explicit rejects.
+///
+/// Case and Unicode pass through byte-for-byte; empty, absolute,
+/// traversing, backslash, and NUL/control-carrying paths fail.
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for malformed checkout paths.
+pub fn normalize_identity_path(path: &str) -> Result<String, ContractError> {
+    if path.is_empty() {
+        return Err(ContractError::identity("path", "empty_path"));
+    }
+    if path.contains('\0') || path.chars().any(char::is_control) {
+        return Err(ContractError::identity("path", "control_characters"));
+    }
+    if path.contains('\\') {
+        return Err(ContractError::identity("path", "backslash_separator"));
+    }
+    normalize_posix_path(path)
+}
+
+impl TaskGroup {
+    /// Derive the identity extension, validating every identity path.
+    ///
+    /// The manifest, declared inputs, and rerun inputs must be
+    /// well-formed checkout paths; anything else fails instead of
+    /// entering the identity preimage silently.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContractError`] for malformed identity paths.
+    pub fn identity_extension_verified(
+        &self,
+        inputs: &GroupExtensionInputs<'_>,
+    ) -> Result<RustTaskIdentityExtension, ContractError> {
+        normalize_identity_path(inputs.manifest)?;
+        for path in self.declared_inputs.iter().chain(inputs.targets.iter()) {
+            normalize_identity_path(path)?;
+        }
+        if let Some(rerun) = inputs.rerun_inputs {
+            for path in rerun {
+                normalize_identity_path(path)?;
+            }
+        }
+        Ok(self.identity_extension(inputs))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Extension inputs with `lock`, `nextest`, and `rerun` supplied.
+    fn inputs<'a>(
+        lock: Option<&'a str>,
+        nextest: Option<&'a str>,
+        rerun: Option<&'a [String]>,
+        build_script: bool,
+    ) -> GroupExtensionInputs<'a> {
+        GroupExtensionInputs {
+            package_id: "demo",
+            workspace_id: "workspace",
+            profile: "default",
+            manifest: "Cargo.toml",
+            graph_digest: "graph",
+            targets: &[],
+            config_digest: "config",
+            lock_digest: lock,
+            nextest_digest: nextest,
+            archive_source: None,
+            rerun_inputs: rerun,
+            has_build_script: build_script,
+        }
+    }
+
+    /// Minimal group of `kind` with the Nextest runner.
+    fn group(kind: crate::tasks::TaskKind) -> TaskGroup {
+        TaskGroup {
+            task_id: "stack/rust/root/nextest/default".to_owned(),
+            package_id: "demo".to_owned(),
+            package_name: "demo".to_owned(),
+            manifest_key: "root".to_owned(),
+            kind,
+            configuration: "default".to_owned(),
+            features: Vec::new(),
+            target: "host".to_owned(),
+            gated_by: Vec::new(),
+            depends_on: Vec::new(),
+            target_flags: Vec::new(),
+            no_test_targets: false,
+            package_arg: None,
+            compile_driver: "cargo".to_owned(),
+            test_runner: "cargo_nextest".to_owned(),
+            declared_inputs: Vec::new(),
+            undeclared_reads: false,
+            uses_network: false,
+            uses_clock: false,
+            uses_random: false,
+        }
+    }
+
+    #[test]
+    fn unresolved_inventory_names_unknown_inputs() {
+        let ext = group(crate::tasks::TaskKind::Nextest).identity_extension(&inputs(
+            None,
+            None,
+            Some(&[]),
+            false,
+        ));
+        assert_eq!(
+            unresolved_inputs(&ext),
+            vec![UnresolvedInput::Lockfile, UnresolvedInput::NextestConfig]
+        );
+        let ext = group(crate::tasks::TaskKind::Test).identity_extension(&inputs(
+            Some("lock"),
+            None,
+            Some(&[]),
+            false,
+        ));
+        assert!(unresolved_inputs(&ext).is_empty());
+        let build = group(crate::tasks::TaskKind::Build).identity_extension(&inputs(
+            Some("lock"),
+            Some("nextest"),
+            Some(&[]),
+            false,
+        ));
+        assert_eq!(
+            unresolved_inputs(&build),
+            vec![UnresolvedInput::ArchiveSource]
+        );
+        let script = group(crate::tasks::TaskKind::Clippy).identity_extension(&inputs(
+            Some("lock"),
+            None,
+            None,
+            true,
+        ));
+        assert!(unresolved_inputs(&script).contains(&UnresolvedInput::RerunInputs));
+    }
+
+    #[test]
+    fn component_ids_shed_checkout_paths() {
+        assert_eq!(normalize_component_id("a-id", "a/Cargo.toml"), "a-id");
+        assert_eq!(
+            normalize_component_id("path+file:///tmp/x#a@0.1.0", "a/Cargo.toml"),
+            "a@0.1.0"
+        );
+        assert_eq!(normalize_component_id("", "Cargo.toml"), "workspace");
+    }
+
+    #[test]
+    fn verified_construction_rejects_bad_paths() {
+        let clippy = group(crate::tasks::TaskKind::Clippy);
+        assert!(
+            clippy
+                .identity_extension_verified(&inputs(Some("l"), None, Some(&[]), false))
+                .is_ok()
+        );
+        let group = TaskGroup {
+            declared_inputs: vec!["../escape".to_owned()],
+            ..clippy.clone()
+        };
+        assert!(
+            group
+                .identity_extension_verified(&inputs(Some("l"), None, Some(&[]), false))
+                .is_err()
+        );
+        assert!(normalize_identity_path("Crates/Äpfel/x.proto").is_ok());
+        assert!(normalize_identity_path("a\\b").is_err());
+    }
+}

@@ -1,0 +1,12 @@
+[env]
+TEST_ENV_VAR = 'test-123'
+
+[alias.tiny]
+"my/alias" = '3.0'
+
+[tasks.configtask]
+run = 'echo "configtask:"'
+[tasks.lint]
+run = 'echo "linting!"'
+[tasks.test]
+run = 'echo "testing!"'

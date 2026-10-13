@@ -1,0 +1,85 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["github>jdx/renovate-config", "helpers:pinGitHubActionDigests"],
+  "automerge": false,
+  "asdf": {
+    "enabled": false
+  },
+  "nodenv": {
+    "enabled": false
+  },
+  "packageRules": [
+    {
+      "description": "copr image is rebuilt from source on Dockerfile changes; pinning a digest would cause stale image regressions.",
+      "matchPackageNames": ["ghcr.io/jdx/mise"],
+      "matchCurrentValue": "copr",
+      "enabled": false
+    },
+    {
+      "description": "fedora major bumps only take effect when the rpm/copr images are rebuilt at release time, so a broken base image surfaces mid-release rather than in PR CI (see the fedora 40 rollback in 8184bc9). Bump manually against the release path; digest updates stay enabled.",
+      "matchPackageNames": ["fedora"],
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
+    },
+    {
+      "matchPackageNames": ["taiki-e/install-action"],
+      "matchManagers": ["github-actions"],
+      "enabled": false
+    },
+    {
+      "description": "rattler crates are tightly version-locked across the workspace; bump together.",
+      "matchPackageNames": ["/^rattler($|_)/"],
+      "matchManagers": ["cargo"],
+      "groupName": "rattler",
+      "separateMajorMinor": false
+    },
+    {
+      "description": "aube crates and the standalone development tool must stay on the same release. Renovate only bumps the direct aube and aube-registry entries in Cargo.lock; the other aube-* workspace crates stay behind (aube requires them only as \"2\") and break the build against the new API, so refresh them all, pinned to the version Renovate selected so a newer release cannot bypass its release-age delay. Runs per update (not per branch) so newVersion is always the version of the update being applied.",
+      "matchPackageNames": ["aube", "aube-registry"],
+      "matchManagers": ["cargo"],
+      "groupName": "aube",
+      "separateMajorMinor": false,
+      "postUpgradeTasks": {
+        "commands": [
+          "cargo update -p aube -p aube-registry -p aube-codes -p aube-lockfile -p aube-settings -p aube-linker -p aube-manifest -p aube-resolver -p aube-runtime -p aube-scripts -p aube-store -p aube-util -p aube-workspace --precise {{{newVersion}}}",
+          "mise lock --bump --minimum-release-age 0s aube"
+        ],
+        "executionMode": "update",
+        "fileFilters": ["Cargo.lock", "mise.lock"],
+        "installTools": {
+          "mise": {},
+          "rust": {}
+        },
+        "workingDirTemplate": "{{{packageFileDir}}}"
+      }
+    },
+    {
+      "description": "usage crates are released together and depend on each other's internals (usage-rs 6.11.0 broke against usage-argv 6.11.1); bump them together, without the release-age delay the shared preset only waives for usage-cli and usage-lib.",
+      "matchPackageNames": ["/^usage-/"],
+      "matchManagers": ["cargo"],
+      "groupName": "jdx crates",
+      "groupSlug": "jdx-crates",
+      "minimumReleaseAge": null,
+      "schedule": ["at any time"]
+    },
+    {
+      "description": "Sigstore crates are versioned together; bump together.",
+      "matchPackageNames": ["/^sigstore-/"],
+      "matchManagers": ["cargo"],
+      "groupName": "sigstore crates"
+    },
+    {
+      "description": "phf runtime and codegen must stay compatible for generated baked registry maps.",
+      "matchPackageNames": ["phf", "phf_codegen"],
+      "matchManagers": ["cargo"],
+      "groupName": "phf"
+    },
+    {
+      "description": "decmpfs 0.1.2 fails to compile for musl targets because its FICLONE ioctl request type does not match musl libc. Hold at 0.1.0 until upstream fixes it.",
+      "matchPackageNames": ["decmpfs"],
+      "matchManagers": ["cargo"],
+      "allowedVersions": "<=0.1.0"
+    }
+  ]
+}

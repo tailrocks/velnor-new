@@ -1,0 +1,17 @@
+[package]
+name = "velnor-actions-workflow-renderer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "velnor_workflow_renderer"
+path = "tests/velnor_workflow_renderer.rs"

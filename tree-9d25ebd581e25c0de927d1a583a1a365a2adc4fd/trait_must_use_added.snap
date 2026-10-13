@@ -1,0 +1,31 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/trait_must_use_added/": [
+    {
+      "name": String("TraitToMustUseTrait"),
+      "new_attr": String("#[must_use]"),
+      "path": List([
+        String("trait_must_use_added"),
+        String("TraitToMustUseTrait"),
+      ]),
+      "span_begin_line": Uint64(7),
+      "span_end_line": Uint64(7),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("TraitToMustUseMessageTrait"),
+      "new_attr": String("#[must_use = \"Foo\"]"),
+      "path": List([
+        String("trait_must_use_added"),
+        String("TraitToMustUseMessageTrait"),
+      ]),
+      "span_begin_line": Uint64(10),
+      "span_end_line": Uint64(10),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+}

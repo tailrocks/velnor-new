@@ -1,0 +1,24 @@
+[package]
+name = "velnor-actions-orchestrator-task-report"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[dependencies]
+velnor-actions-contract = { version = "=0.1.1", path = "../../core/velnor-actions-contract" }
+velnor-actions-contract-workflow = { version = "=0.1.1", path = "../../core/velnor-actions-contract-workflow" }
+velnor-actions-orchestrator-core = { version = "=0.1.1", path = "../velnor-actions-orchestrator-core" }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+velnor-actions-contract-config = { version = "=0.1.1", path = "../../core/velnor-actions-contract-config" }
+
+[lints]
+workspace = true
+
+[[test]]
+name = "velnor_orchestrator_task_report"
+path = "tests/main.rs"

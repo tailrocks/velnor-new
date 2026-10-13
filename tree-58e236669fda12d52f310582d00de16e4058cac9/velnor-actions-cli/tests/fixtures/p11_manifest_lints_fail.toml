@@ -1,0 +1,7 @@
+# Negative fixture: weakened lint inheritance (rejected: `[lints]` must
+# be exactly `workspace = true` with no local lint tables).
+[lints]
+workspace = true
+
+[lints.clippy]
+unwrap_used = "allow"

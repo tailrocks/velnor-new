@@ -1,0 +1,281 @@
+---
+title: "V1 performance acceptance — local + CI-observable measurements"
+description: "Commits measured: 75f150a (historical cases), bdfffb9 (counts), 347976d (cache seed/warm), 695752e (green CI run 36777030585), 69dcc90 (this lane: cold run, pinned case 2/4/5, preflight, local"
+---
+
+Commits measured: `75f150a` (historical cases), `bdfffb9`
+(counts), `347976d` (cache seed/warm), `695752e` (green CI run
+36777030585), `69dcc90` (this lane: cold run, pinned case 2/4/5,
+preflight, local nextest). Machine (local): `arm64` macOS 27.0,
+Apple M5 Max. Contention caveat: concurrent lanes held loadavg
+~60–120 during lane measurement — local walls are upper bounds,
+not quiet-machine figures. CI numbers are from dedicated
+`ubuntu-26.04` runners.
+
+Toolchain per number: historical cases ran rustc/cargo 1.98.1 +
+MBX 1.19.0 + nextest 0.9.143 (shim-resolved, off-pin — labeled,
+never presented as pinned). Lane numbers run exact pins:
+cargo/rustc 1.98.1 (48a229cea), MBX 1.21.0, nextest 0.9.146
+(pin-verified at use; the bare binary intermittently shadows to
+ambient 0.9.143), mise 2026.9.16 local (CI: 2026.9.18). Suite:
+1662 pass/0 fail (nextest ci 1662/1662 in 118.977 s, pinned).
+
+Mutations ran in pristine clones; the working tree was never
+modified for measurement. Former case 7 (lockfile touch) is
+REMOVED: the goal forbids touch-benchmarks; dependency-bump
+qualification is UNMEASURED (needs a scratch-clone version bump
++ MSRV-toolchain run + machete/deny timing).
+
+Reference: `docs/proposed/agent-and-performance-contract.md`
+(wall, queue, peak RSS, compiled targets, tool install, cache
+transfer, MBX hits/misses, task reuse). Verdict rule: PASSED
+only with exact pinned versions, a named env, and measured
+end-to-end numbers incl. queue/setup/transfer split; else
+UNMEASURED/UNPASSED with reason. Figures are measured `time -p`
+`real` unless a `Finished`/`Summary` line is cited; derived
+aggregates are labeled DERIVED.
+
+## 1. Cold run — 526.26 s green at `69dcc90` (fetch + compile + test)
+
+Fresh clone at `69dcc90`, empty `CARGO_HOME`, empty `target/`,
+direct rustup cargo 1.98.1 (MBX bypassed — the shared store cannot
+be emptied non-destructively, so the outer build avoids it; in-test
+cargo still resolves via shims), online fetch then offline test:
+
+```sh
+cargo fetch --locked                # 4.63 s, 65 Downloaded, 93.7 MiB home
+cargo test --workspace --locked --offline   # 526.26 s wall, exit 0
+```
+
+Split: compile 97 s (`Finished` 1 m 37 s, 65 locked packages + 7
+workspace crates, 0 downloads during test); test execution ~418 s
+(cli 100.05 s, orch lib 29.44 s, orch int 282.03 s, mise 2.59 s,
+rest &lt;1 s); ~11 s harness/link overhead. 1662/1662 pass. The cold
+registry slows test execution itself (in-test cargo work
+re-extracts: cli 100 s cold vs 18.82 s warm).
+Proves: from-zero local compile+test is green in ~9 min here
+(contention-inflated upper bound). Does not prove hosted cold
+time (other CPU/arch) or empty-MBX-store compile.
+Historical-partial (superseded): at `75f150a`, direct cargo with a warm 4.2 GiB
+registry (NOT emptied — the old "empty-cache cold" label was wrong) took 56.06 s / 28.61 s compile.
+CI datapoint: green run Plan `Build helper` 59 s (cold runner,
+fetch + helper release compile, 53 downloads); crate jobs
+compile cold-target/warm-sources (contract 14 s … orch 46 s).
+UNMEASURED: controlled cold compile on the named CI runner; cold
+registry download time on hosted runners.
+
+## 2. Warm MBX rebuild (fresh checkout, warm store) — 4.90 s
+
+Pinned (`mise exec` pins, MBX 1.21.0), fresh clone, empty target,
+warm shared registry + warm MBX store, `--offline`:
+
+```sh
+cargo build --workspace --locked --offline
+```
+
+Run 1: 34.04 s wall (cargo 30.46 s), `mbx[cache]: 82 hits,
+3 misses`, ~69 s compiler work avoided. Run 2 (second clone):
+**4.90 s wall** (cargo 4.17 s), `85 hits, 0 misses`, `0 B`
+transferred. The first touch paid 3 cold misses; the 0-miss
+number is the warm-store headline. Historical: 3.30 s at
+`75f150a` (MBX 1.19.0, 76 hits/1 miss).
+Proves: MBX object reuse across checkouts — a fresh tree
+materializes without compiling. Hits are not free (materialize +
+link ≈ 4 s at 85 hits). Does not prove the CI MBX path: no
+remote seed exists, so cache transfer/invalidation over the
+network is unexercised and every hosted crate job reports `No mbx
+cache found`.
+UNMEASURED: CI cache-transfer time and MBX miss reasons on hosted
+runners beyond `no_entry`.
+
+## 3. Unchanged rerun — pinned nextest 118.977 s, per-crate walls
+
+Lane branch, warm target + warm store, pinned toolchain:
+
+| Command | Wall |
+| --- | --- |
+| `cargo nextest run --workspace --locked --profile ci` (subcommand spelling; pin-verified 0.9.146) | 118.977 s, 1662/1662 pass (1 slow: `bench_concurrent_lanes_2_and_4` >60 s) |
+| `cargo test --locked -p velnor-actions-orchestrator` (3 binaries) | lib 4.10 s + validation 1.38 s + int 75.11 s (453 tests) |
+| `cargo test --locked -p velnor-actions-cli` | 18.82 s (213 tests) |
+| mise / rust / renderer / contract / actionlint integration | 1.01 / 0.08 / 0.23 / 0.00 / 0.00 s |
+
+Compile fingerprint alone is sub-second (`Finished` with no
+recompiles); everything else is test execution. MBX reports no
+test-execution reuse (test execution is never served from the
+compiler cache, per contract).
+Peak RSS: cargo supervisor max 126 MiB during a warm full test
+(`/usr/bin/time -l`, historical at `75f150a`); whole-tree peak
+UNMEASURED (needs tree-wide RSS sampling, e.g. sampled
+`ps`/`powermetrics` during a run).
+Proves: full-suite execution dominates all warm scenarios
+(~2 min pinned nextest, contention-inflated). Says nothing about
+the 2 s preflight budget (different operation) or CI wall times.
+Historical at `75f150a` (1048 tests, off-pin nextest): nextest
+11.21 s, cargo-test reruns 13–27 s (timing-sensitive suites vary).
+
+## 4. Leaf-crate one-file change — 0.87 s (compile, cli only)
+
+Pinned, warm test profile, comment appended to
+`crates/apps/velnor-actions-cli/src/main.rs` (cli is depended on by
+nothing — rebuild-set probe):
+
+```sh
+cargo test --workspace --locked --offline --no-run
+```
+
+Wall 1.07 s (cargo 0.87 s), exit 0. Recompiled crates:
+`velnor-actions-cli` only; MBX `0 hits, 1 miss, 2 incremental`.
+A full `cargo test` on the same mutation took 616.26 s green
+(compile 24.15 s on first test-profile build in that clone, then
+execution-dominated like case 3) — whole-suite execution, not
+compile, is the cost. Historical at `75f150a`: 0.51 s compile,
+25.18 s full-suite total.
+Proves: rebuild set is minimal (1 crate, sub-second compile).
+"Warm leaf validation in seconds" holds for compile but not for
+whole-workspace execution; per-crate obligations are the
+conforming scope (see verdicts).
+
+## 5. Shared-crate (contract) API change — 13.53 s (compile, 7 crates)
+
+Pinned, warm test profile, trivial `pub fn perf_probe_marker()
+-> u32` added to `velnor-actions-contract/src/lib.rs` (real
+public-API addition), same `--no-run` probe: wall 13.70 s (cargo
+13.53 s), exit 0. Recompiled: all 7 workspace crates; MBX `0
+hits, 2 misses, 22 incremental`. Historical at `75f150a`:
+17.43 s compile.
+Proves: a contract change rebuilds the whole workspace, as
+expected; ~16x the leaf compile.
+
+## 6. Budgeted concurrency — code bounds + historical lanes
+
+Bounds from code: the default crate-job path in
+`.github/workflows/ci.yml` carries no matrix strategy block (7
+concrete jobs, no `strategy:` key at all); the `max-parallel: 2`
+bound lives in config (`workflow.max_parallel_jobs`, default 2 in
+`crates/services/velnor-actions-orchestrator/src/config.rs`) and gates
+sharded fan-out only (renderer `matrix.rs` emits `fail-fast:
+false` plus a capped `max-parallel` when sharding);
+`.config/nextest.toml` `test-threads = "num-cpus"`; CI profile
+`--no-tests fail` via CLI.
+Historical local 2-lane run at `75f150a` (off-pin MBX 1.19.0):
+concurrent contract+cli lanes 7.86 s vs 9.28 s sequential
+(1.18x, setup-bound), both exit 0, `0 B` transferred — lane
+isolation held.
+Historical CI legs-era evidence: run 36528572043 serialized a
+~48-entry matrix 2-at-a-time at ~20–30 s per entry
+(setup-dominated) → 11 m 10 s. The bound caps cost but wall
+scales with entry count. Current topology (7 crate jobs, no
+strategy block) has no max-parallel serialization: green run
+36777030585 started 6 crate jobs within 2 s (the 7th, largest,
+37 s later — scheduling gap, cause undetermined).
+UNMEASURED: 4-lane local run (not attempted; no shipped path
+needs it); current-topology hosted lane timing beyond the green
+run below.
+
+## CI runs (crate-job topology, `ubuntu-26.04`)
+
+Green run
+[36777030585](https://github.com/tailrocks/velnor-new/actions/runs/36777030585)
+at `695752e` (success, 17 m 30 s created→updated, 21:04:36→21:22:06Z;
+toolchain mise 2026.9.18 / rust 1.98.1 / mbx 1.21.0 / nextest
+0.9.146 — exact pins). Fully accounted (residual 0 s):
+
+| Segment | Wall | Notes |
+| --- | --- | --- |
+| Queue (created → first job start) | 91 s | 21:04:36→21:06:07, all wave-1 jobs |
+| Plan | 88 s | tools 15 s (cold install, rust dominates) + Build helper 59 s (53 setup downloads, own cargo home) + restore/fetch 1 s + Check generated files 2.14 s (generate+diff) + Plan 0.27 s + Publish plan 0.66 s (22,860 B) |
+| Crate wave (plan end → orch end) | 818 s | 6 jobs start within 2 s; orchestrator 37 s later (scheduling gap, undetermined) |
+| Required | 46 s | fetch-reports 33 s (silent op, 41 reports) + write/merge/publish 2 s + setup 8 s + runner 3 s |
+| Validators (Zizmor/Actionlint/Machete/Deny/Alint) | ≤ 20 s each | parallel with Plan, off the critical path |
+
+Plan→crate gap 2 s, crate→Required gap 5 s, tail 0 s:
+91 + 88 + 2 + 818 + 5 + 46 = 1050 s = 17 m 30 s. ✓
+
+Per-crate obligations (cold target, warm sources, `No mbx cache
+found`, 0 fetch downloads — every compile below is a from-scratch
+local compile, ~165 s summed, 7× with zero cross-job reuse):
+
+| Crate | Tools | MBX restore | Clippy | Build | Tests (nextest) | Doc |
+| --- | --- | --- | --- | --- | --- | --- |
+| actionlint | 14 s | 12 s | 7 s | 6 s | 1 s (67/67) | 2 s |
+| contract | 13 s | 11 s | 8 s | 6 s | 3 s (118/118, 0.211 s) | 2 s |
+| mise | 12 s | 10 s | 10 s | 6 s | 3 s (257/257, 1.262 s) | 3 s |
+| rust | 18 s | 10 s | 10 s | 8 s | 3 s (168/168, 0.323 s) | 3 s |
+| renderer | 13 s | 11 s | 24 s | 4 s | 2 s (229/229, 0.298 s) | 1 s |
+| cli (no Doctests: bin-only) | 13 s | 14 s | 15 s | 15 s | 26 s (211/211, 23.910 s) | 4 s |
+| orchestrator | 13 s | 14 s | 32 s | 14 s | 686 s (610/610, 679.316 s; slow: `bench_concurrent_lanes_2_and_4` >60 s, `every_unsafe_manifest_executes` >120 s) | 4 s |
+
+MBX restore costs 10–14 s/job returning `No mbx cache found`
+(~80 s run-wide pure overhead); the only MBX hits are intra-job
+clippy→build reuse (7.73 s avoided contract, 9.67 s
+orchestrator). Sources HIT 17,568,922 B in all 8 restoring jobs
+(aggregate 140,551,376 B DERIVED — see
+[cache-measurements.md](/docs/implemented/cache-measurements)). Tools MISS every
+job (~114 s run-wide cold install). Final report: `status:
+passed`, 41/41 expected reports, 0 failed, 13/13 required jobs
+success (artifact-verified, not log-inferred).
+
+Legs-era historical runs (obsolete 42-entry topology; walls kept
+for the trail, never cited for current-topology verdicts): green
+36569723507 at `bdfffb9` (47 jobs, 21 m 20 s = queue 6 + Plan 81
++ gap 3 + tasks 1132 + gap 5 + Required 52 + tail 1 — the old
+21 m 19 s was off by one); red 36540401062 (91 s, Plan failed at
+`Check generated files`); outlier 36528572043 (11 m 10 s, see
+case 6). Merge-queue timing UNMEASURED (no samples).
+
+Warm-cache red run 36760724180 (6 m 46 s, orchestrator FAILED): cache-branch
+evidence + corrected 45 s accounting live in [cache-measurements.md](/docs/implemented/cache-measurements) §2.
+Red run: cache-hit evidence only, never a green verdict.
+
+## Budget verdicts
+
+- Provisioned structural preflight &lt; 2 s: PASSED. Hosted pinned
+  CI (ubuntu-26.04, exact pins): `Plan` step 0.27 s end-to-end
+  (21:07:31.348→31.622Z, binary + runner overhead; binary-only
+  time not isolated — bounded above by 0.27 s), no compilation,
+  no cache transfer. Local `./target/debug/velnor-actions plan`
+  (lane debug binary, warm): 0.22–0.23 s across 3 runs, exit 0,
+  byte-identical output, zero repo writes (one 9.95 s sample under
+  cargo package-lock contention with a concurrent build is
+  excluded as polluted and disclosed here).
+- Warm leaf validation in seconds: PASSED with stated scope.
+  Named env `ubuntu-26.04`, exact pins: contract-crate job 61 s
+  end-to-end = setup 6 s + cold tool install 13 s + sources
+  restore 1 s (HIT 17,568,922 B, 0 fetch downloads) + MBX
+  restore 11 s (MISS overhead) + validation 19 s (clippy 8,
+  build 6, tests 3 with nextest 0.211 for 118, format/doctests/
+  doc 2) + uploads 5 s + runner overhead 6 s; run queue 91 s
+  reported separately per contract. Warmth is warm-sources /
+  cold-target / no-MBX (no seed exists). Local pinned leaf
+  recompile 0.87 s (cli only) corroborates. Hosted leaf-edit
+  datapoint: run `36874320163` at `3a98511` (`pull_request`,
+  cli-only semantic edit — the `runner_velnor_dir` refactor):
+  `Rust / velnor-actions-cli` success, 87 s end-to-end
+  (14:13:10→14:14:37Z) = setup 2 s + checkout 1 s + mise 2 s +
+  helper/plan 1 s + pinned tools 13 s + sources restore 1 s +
+  MBX restore 10 s (MISS overhead) + fetch 1 s + format 0 s +
+  clippy 14 s + build 16 s + tests 13 s + doc 5 s + upload/post
+  2 s (step walls sum 81 s + 6 s runner overhead); 137 s
+  run-queue-to-job-start (includes the Plan gate) reported
+  separately. Local rebuild-set probe at the same commit:
+  touching `dispatch.rs` recompiles `velnor-actions-cli` only.
+  Whole-workspace test execution (~2 min local pinned nextest;
+  686 s hosted orchestrator) is explicitly outside this budget —
+  per-crate obligations are the conforming unit, and the
+  contract never defined "validation" beyond it.
+- Two-minute warm SMALL-FIXTURE path on a named runner: explicitly
+  UNPASSED — no small-fixture CI run exists. (Full-dogfood green run
+  is 17 m 30 s for 14 jobs; the contract budgets the small fixture,
+  not the full matrix.)
+- Doctest gate: green — `cargo test --doc --workspace --locked`
+  exits 0 (7 crates, 0 doctests; the former E0063 at
+  `orchestrator/src/config.rs` no longer reproduces). Vacuous: no
+  doctests exist yet.
+
+## P13 inventory reuse + bench harness
+
+Moved to [performance-p13.md](/docs/implemented/performance-p13) (file-size gate); budgets in [Budget verdicts](#budget-verdicts) govern.
+
+## P08 cache measurements + warm-reuse proof (R11/R12)
+
+Full evidence lives in [cache-measurements.md](/docs/implemented/cache-measurements).

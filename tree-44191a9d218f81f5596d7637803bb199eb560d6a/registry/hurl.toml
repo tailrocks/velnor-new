@@ -1,0 +1,7 @@
+backends = [
+  "aqua:Orange-OpenSource/hurl",
+  "asdf:raimon49/asdf-hurl",
+  "cargo:hurl",
+]
+bins = ["hurl", "hurlfmt"]
+description = "Hurl, run and test HTTP requests with plain text"

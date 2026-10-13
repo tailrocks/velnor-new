@@ -1,0 +1,3 @@
+backends = ["aqua:endevco/aube", "github:endevco/aube", "cargo:aube"]
+description = "A fast Node.js package manager"
+test = { cmd = "aube --version", expected = "{{version}}" }

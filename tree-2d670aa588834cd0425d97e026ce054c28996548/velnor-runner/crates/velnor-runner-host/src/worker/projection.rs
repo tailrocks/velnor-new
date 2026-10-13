@@ -1,0 +1,83 @@
+//! Durable launch projections for runner and DinD containers.
+
+use std::path::Path;
+
+use crate::docker_spec::{Mount, runner_plan};
+use crate::error::HostError;
+use crate::journal::LaunchIdentity;
+
+use super::{BindMount, CreateProjection, DIND_IMAGE, runner_create};
+
+/// Private `DinD` create. Privilege is not a flag on the runner plan.
+///
+/// Mounts include private socket, workspace, and VFS data volumes.
+///
+/// # Errors
+///
+/// Returns [`HostError::ForbiddenMount`] when the identity has an invalid volume.
+pub(crate) fn dind_create(identity: &LaunchIdentity) -> Result<CreateProjection, HostError> {
+    let runner = runner_plan(identity.private_volume())?;
+    let mut mounts = runner.mounts;
+    mounts.push(Mount {
+        source: format!("volume:{}-docker", identity.private_volume()),
+        target: "/var/lib/docker".to_owned(),
+    });
+    Ok(CreateProjection {
+        name: Some(container_name(identity, "dind")),
+        image: DIND_IMAGE.to_owned(),
+        platform: runner.platform,
+        env: Vec::new(),
+        cmd: Vec::new(),
+        labels: container_labels(identity, "dind"),
+        mounts,
+        bind_mounts: Vec::new(),
+        privileged: true,
+        open_stdin: false,
+        network_mode: None,
+    })
+}
+
+/// Build one runner projection with its launch labels and optional action cache.
+///
+/// # Errors
+///
+/// Returns [`HostError::Path`] when the cache path is not absolute or Unicode.
+/// Returns runner-plan errors from [`runner_create`].
+pub(super) fn runner_create_for_identity(
+    identity: &LaunchIdentity,
+    archive_cache_path: Option<&Path>,
+) -> Result<CreateProjection, HostError> {
+    let plan = runner_plan(identity.private_volume())?;
+    let mut spec = runner_create(&plan)?;
+    spec.name = Some(container_name(identity, "runner"));
+    spec.labels = container_labels(identity, "runner");
+    if let Some(path) = archive_cache_path {
+        if !path.is_absolute() {
+            return Err(HostError::Path);
+        }
+        let source = path.to_str().ok_or(HostError::Path)?;
+        spec.env
+            .push("ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/velnor/action-archives".to_owned());
+        spec.bind_mounts.push(BindMount {
+            source: source.to_owned(),
+            target: "/opt/velnor/action-archives".to_owned(),
+            read_only: true,
+        });
+    }
+    Ok(spec)
+}
+
+pub(super) fn container_name(identity: &LaunchIdentity, role: &str) -> String {
+    format!("velnor-{role}-{}", identity.launch_id())
+}
+
+pub(super) fn container_labels(identity: &LaunchIdentity, role: &str) -> Vec<String> {
+    vec![
+        "velnor.product=velnor".to_owned(),
+        format!("velnor.instance={}", identity.instance_id()),
+        format!("velnor.launch={}", identity.launch_id()),
+        format!("velnor.engine={}", identity.engine_id()),
+        format!("velnor.role={role}"),
+        format!("velnor.volume={}", identity.private_volume()),
+    ]
+}

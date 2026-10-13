@@ -1,0 +1,73 @@
+[package]
+name = "mbx"
+version = "0.7.0"
+description = "A build cache for Rust projects"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+keywords = ["cache", "build-cache", "cargo", "rustc", "build"]
+categories = ["development-tools::build-utils", "development-tools::cargo-plugins", "command-line-utilities", "caching"]
+readme.workspace = true
+documentation = "https://mr-boxington.jdx.dev"
+
+[package.metadata.docs.rs]
+all-features = true
+
+[dependencies]
+bytesize = "2"
+demand = "2"
+env_logger = "0.11"
+dirs = "6"
+eyre = "0.6"
+fslock = "0.2"
+log = "0.4"
+mbx-cache-core = { path = "../mbx-cache-core", version = "0.9.0", default-features = false }
+mbx-cache-cargo = { path = "../mbx-cache-cargo", version = "0.1.3", default-features = false }
+mbx-cache-cc = { path = "../mbx-cache-cc", version = "0.9.0", default-features = false }
+mbx-cache-rustc = { path = "../mbx-cache-rustc", version = "0.9.0", default-features = false }
+mbx-cache-store = { path = "../mbx-cache-store", version = "0.1.3", default-features = false }
+rand = "0.10"
+ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
+reflink-copy = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tempfile = "3"
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
+toml = "1.1"
+toml_edit = "0.25"
+url = "2"
+usage = { package = "usage-rs", version = "6.5", features = ["config"] }
+usage-config = { version = "6", features = ["toml"] }
+which = "8"
+
+[dev-dependencies]
+filetime = "0.2"
+serde_json = "1"
+tempfile = "3"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_Security_Authorization",
+  "Win32_Storage_FileSystem",
+  "Win32_System_SystemInformation",
+  "Win32_System_Threading",
+] }
+
+[features]
+default = ["rustls"]
+native-tls = ["mbx-cache-cargo/native-tls", "mbx-cache-cc/native-tls", "mbx-cache-core/native-tls", "mbx-cache-rustc/native-tls", "mbx-cache-store/native-tls"]
+rustls = ["mbx-cache-cargo/rustls", "mbx-cache-cc/rustls", "mbx-cache-core/rustls", "mbx-cache-rustc/rustls", "mbx-cache-store/rustls"]
+rustls-native-roots = [
+  "mbx-cache-cargo/rustls-native-roots",
+  "mbx-cache-cc/rustls-native-roots",
+  "mbx-cache-core/rustls-native-roots",
+  "mbx-cache-rustc/rustls-native-roots",
+  "mbx-cache-store/rustls-native-roots",
+]

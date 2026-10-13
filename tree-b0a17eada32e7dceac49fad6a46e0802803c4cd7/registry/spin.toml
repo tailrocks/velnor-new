@@ -1,0 +1,4 @@
+backends = ["aqua:spinnaker/spin", "asdf:pavloos/asdf-spin"]
+bins = ["spin"]
+description = "Spinnaker CLI"
+version_order = "semver"

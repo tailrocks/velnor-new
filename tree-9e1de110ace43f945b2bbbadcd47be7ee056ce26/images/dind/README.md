@@ -1,0 +1,32 @@
+# Private DinD image
+
+Platform: `linux/amd64`. ARM64 is not the baseline. One `dockerd` per worker.
+
+```sh
+docker build --platform linux/amd64 -t velnor-dind:29.8.2 images/dind
+```
+
+Listens only on `unix:///var/run/docker.sock` inside the worker namespace
+(`/var/run` is `/run` on Ubuntu). Data root is `/var/lib/docker`. Group
+`docker` is gid `999`. Storage driver is `vfs` because the containerd overlay
+snapshotter returns `EINVAL` when this amd64 daemon runs under emulation.
+The Dockerfile does not copy or mount a host socket and the entrypoint does
+not prune.
+
+The entrypoint starts `dockerd` on a private socket, pulls
+`rabbitmq:3.8.22-management` and `postgres:18-alpine` for `linux/arm64`,
+then links `/run/docker.sock`. Nested Rosetta crashes the RabbitMQ image's
+amd64 Erlang JIT before `Server startup complete; 4 plugins started.`
+An amd64 `postgres:18-alpine` on the vfs driver exceeds Testcontainers'
+60s startup wait. The daemon and the runner stay `linux/amd64`. ARM64 is
+not the runner baseline.
+
+The image does not set `privileged`. The controller must:
+
+- Run one container for one worker and grant only the privileges that
+  private dockerd needs. Do not publish a TCP port.
+- Mount a private named volume at `/run` so the socket is
+  `/var/run/docker.sock`, and another at `/var/lib/docker`.
+- Never mount the host or outer engine socket.
+- Share that socket (and the runner work paths) with the matching runner
+  container so both resolve `/var/run/docker.sock` to this worker only.

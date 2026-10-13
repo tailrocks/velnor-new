@@ -1,0 +1,190 @@
+//! W2 wiring tests.
+//!
+//! Declared via `#[path]` from `wire_w2.rs` under `cfg(test)`.
+
+use super::reuse_stages::{ExpectedReuseIdentity, ObservedRestoreMeta};
+use super::*;
+use velnor_actions_mise::CachedTaskDescriptor;
+
+/// Minimal group with kind, task ID, and nondeterminism flags.
+fn group(kind: TaskKind, task_id: &str) -> TaskGroup {
+    TaskGroup {
+        task_id: task_id.to_owned(),
+        package_id: "demo".to_owned(),
+        package_name: "demo".to_owned(),
+        manifest_key: "root".to_owned(),
+        kind,
+        configuration: "default".to_owned(),
+        features: Vec::new(),
+        target: "host".to_owned(),
+        gated_by: Vec::new(),
+        depends_on: Vec::new(),
+        target_flags: Vec::new(),
+        no_test_targets: false,
+        package_arg: None,
+        compile_driver: "cargo".to_owned(),
+        test_runner: "cargo_nextest".to_owned(),
+        declared_inputs: Vec::new(),
+        undeclared_reads: false,
+        uses_network: false,
+        uses_clock: false,
+        uses_random: false,
+        nextest_profile: "default".to_owned(),
+    }
+}
+
+#[test]
+fn reuse_outcomes_execute_with_precise_reasons() {
+    let group = group(TaskKind::Nextest, "stack/rust/root/nextest/default");
+    let digest = digest_b3(b"toolchain");
+    let outcome = |availability, eligible: bool| {
+        plan_reuse_outcome(
+            &group,
+            WorkflowEvent::PullRequest,
+            availability,
+            &digest,
+            &digest,
+            eligible,
+        )
+        .expect("outcome")
+    };
+    let missing = outcome(ToolAvailability::Missing, true);
+    assert_eq!(missing.reason, "unproven");
+    assert!(!missing.task_cache_enabled);
+    let gated = outcome(ToolAvailability::Unqualified, true);
+    assert_eq!(gated.reason, MissReason::FORCED_UNCACHED.as_str());
+    assert!(!gated.task_cache_enabled);
+    let eligible = outcome(ToolAvailability::Ready, true);
+    assert_eq!(eligible.reason, MissReason::NO_ENTRY.as_str());
+    assert!(!eligible.task_cache_enabled);
+    let refused = outcome(ToolAvailability::Ready, false);
+    assert_eq!(refused.reason, MissReason::TASK_NOT_ELIGIBLE.as_str());
+    for result in [&missing, &gated, &eligible, &refused] {
+        assert_eq!(result.decision, ObligationDecision::Execute);
+        assert!(result.task_cache_key.is_none());
+    }
+    let mut dirty = group;
+    dirty.undeclared_reads = true;
+    assert!(reuse_qualification(&dirty, WorkflowEvent::Push).always_run());
+    assert!(
+        plan_reuse_outcome(
+            &dirty,
+            WorkflowEvent::PullRequest,
+            ToolAvailability::Ready,
+            "bogus",
+            &digest,
+            true,
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn reused_tasks_verify_outputs_then_fail_trust_closed() {
+    assert_eq!(
+        verify_reused_task("t", &[], &[]).expect_err("no observations"),
+        MissReason::TASK_RESULT_INCOMPLETE
+    );
+    let declared = vec!["out/report.json".to_owned()];
+    assert_eq!(
+        verify_reused_task("t", &declared, &[]).expect_err("no payload"),
+        MissReason::TASK_RESULT_INCOMPLETE
+    );
+    let bytes = b"report-bytes".to_vec();
+    let digest = digest_b3(&bytes);
+    let observed = vec![("out/report.json".to_owned(), bytes.clone(), digest.clone())];
+    assert_eq!(
+        verify_reused_task("t", &[], &observed).expect_err("empty descriptor"),
+        MissReason::TASK_NOT_ELIGIBLE
+    );
+    let tampered = vec![("out/report.json".to_owned(), bytes, digest_b3(b"other"))];
+    assert_eq!(
+        verify_reused_task("t", &declared, &tampered).expect_err("tampered"),
+        MissReason::CACHE_CORRUPT
+    );
+    let empty = vec![("out/report.json".to_owned(), Vec::new(), digest.clone())];
+    assert_eq!(
+        verify_reused_task("t", &declared, &empty).expect_err("zero byte"),
+        MissReason::TASK_RESULT_INCOMPLETE
+    );
+    assert_eq!(
+        verify_reused_task("t", &declared, &observed).expect_err("no trust anchor"),
+        MissReason::TASK_RESULT_INCOMPLETE
+    );
+}
+
+#[test]
+fn archive_gate_binds_sources_and_refuses_unbound() {
+    let digest = digest_b3(b"d");
+    let source = digest_b3(b"package-sources");
+    let plain = group(TaskKind::Nextest, "stack/rust/root/nextest/default");
+    let gate = check_archive_identity(&plain, &digest, &digest, &digest);
+    assert!(matches!(gate, Ok(ArchiveGate::Clear)));
+    let mut sharded = group(
+        TaskKind::Nextest,
+        "stack/rust/root/nextest/default/shard-1-of-2",
+    );
+    sharded.compile_driver = "bogus".to_owned();
+    let err = check_archive_identity(&sharded, &digest, &digest, &digest).expect_err("driver");
+    assert!(err.to_string().contains("unknown_archive_driver"), "{err}");
+    sharded.compile_driver = "cargo".to_owned();
+    let check = |group: &TaskGroup, source: Option<&str>| {
+        check_archive_identity_with_source(group, &digest, &digest, &digest, source)
+    };
+    let unbound = check(&sharded, None);
+    assert!(matches!(unbound, Ok(ArchiveGate::SourceUnbound)));
+    let bound = check(&sharded, Some(&source));
+    assert!(matches!(bound, Ok(ArchiveGate::Clear)));
+    let bogus = check(&sharded, Some("bogus"));
+    assert!(matches!(bogus, Ok(ArchiveGate::SourceUnbound)));
+    let malformed = group(TaskKind::Nextest, "stack/rust/root/nextest/default/shard-x");
+    let err = check(&malformed, Some(&source)).expect_err("malformed");
+    assert!(err.to_string().contains("malformed_shard_suffix"), "{err}");
+}
+
+#[test]
+fn observations_thread_to_verified_or_precise_miss() {
+    let bytes = b"report-bytes".to_vec();
+    let digest = digest_b3(&bytes);
+    let observed = vec![("out/report.json".to_owned(), bytes, digest)];
+    let descriptor = CachedTaskDescriptor {
+        task_name: "clippy".to_owned(),
+        sources: vec!["Cargo.toml".to_owned()],
+        outputs: vec!["out/report.json".to_owned()],
+        command_inputs: Vec::new(),
+        env: std::collections::BTreeMap::new(),
+        tools: vec!["rust@1.98.1".to_owned()],
+        dep_keys: Vec::new(),
+    };
+    let (key, compat) = (digest_b3(b"key"), digest_b3(b"compat"));
+    let expected = ExpectedReuseIdentity {
+        cache_key: key.clone(),
+        compatibility_id: compat.clone(),
+        owner_scope: "trusted".to_owned(),
+    };
+    let declared = vec!["out/report.json".to_owned()];
+    let good = ObservedRestoreMeta {
+        key: key.clone(),
+        compat: compat.clone(),
+        owner: "trusted".to_owned(),
+    };
+    let bad = ObservedRestoreMeta {
+        key,
+        compat: digest_b3(b"other"),
+        owner: "trusted".to_owned(),
+    };
+    let run = |restore: &ObservedRestoreMeta| {
+        verify_reused_pipeline(
+            &declared,
+            &observed,
+            Some(&descriptor),
+            Some(&expected),
+            Some(restore),
+        )
+    };
+    assert!(run(&good).is_ok());
+    assert_eq!(
+        run(&bad).expect_err("compat"),
+        MissReason::COMPATIBILITY_MISMATCH
+    );
+}

@@ -1,0 +1,110 @@
+---
+source: src/config/config_file/mise_toml.rs
+expression: "replace_path(&format!(\"{:#?}\", cf.to_tool_request_set().unwrap()))"
+snapshot_kind: text
+---
+ToolRequestSet {
+    tools: {
+        BackendArg("terraform"): [
+            Version {
+                backend: BackendArg("terraform"),
+                version: "1.0.0",
+                options: {},
+                source: MiseToml(
+                    "~/fixtures/.mise.toml",
+                ),
+            },
+        ],
+        BackendArg("node"): [
+            Version {
+                backend: BackendArg("node"),
+                version: "18",
+                options: {},
+                source: MiseToml(
+                    "~/fixtures/.mise.toml",
+                ),
+            },
+            Prefix {
+                backend: BackendArg("node"),
+                prefix: "20",
+                options: {},
+                source: MiseToml(
+                    "~/fixtures/.mise.toml",
+                ),
+            },
+            Ref {
+                backend: BackendArg("node"),
+                ref_: "master",
+                ref_type: "ref",
+                options: {},
+                source: MiseToml(
+                    "~/fixtures/.mise.toml",
+                ),
+            },
+            Path(
+                BackendArg("node"),
+                "~/.nodes/18",
+                MiseToml(
+                    "~/fixtures/.mise.toml",
+                ),
+            ),
+        ],
+        BackendArg("jq"): [
+            Prefix {
+                backend: BackendArg("jq"),
+                prefix: "1.6",
+                options: {},
+                source: MiseToml(
+                    "~/fixtures/.mise.toml",
+                ),
+            },
+        ],
+        BackendArg("shellcheck" -> "ubi:koalaman/shellcheck"): [
+            Version {
+                backend: BackendArg("shellcheck" -> "ubi:koalaman/shellcheck"),
+                version: "0.9.0",
+                options: {},
+                source: MiseToml(
+                    "~/fixtures/.mise.toml",
+                ),
+            },
+        ],
+        BackendArg("python"): [
+            Version {
+                backend: BackendArg("python"),
+                version: "3.10.0",
+                options: {
+                    "venv": ".venv",
+                },
+                source: MiseToml(
+                    "~/fixtures/.mise.toml",
+                ),
+            },
+            Version {
+                backend: BackendArg("python"),
+                version: "3.9.0",
+                options: {},
+                source: MiseToml(
+                    "~/fixtures/.mise.toml",
+                ),
+            },
+        ],
+    },
+    sources: {
+        BackendArg("jq"): MiseToml(
+            "~/fixtures/.mise.toml",
+        ),
+        BackendArg("node"): MiseToml(
+            "~/fixtures/.mise.toml",
+        ),
+        BackendArg("python"): MiseToml(
+            "~/fixtures/.mise.toml",
+        ),
+        BackendArg("shellcheck" -> "ubi:koalaman/shellcheck"): MiseToml(
+            "~/fixtures/.mise.toml",
+        ),
+        BackendArg("terraform"): MiseToml(
+            "~/fixtures/.mise.toml",
+        ),
+    },
+}

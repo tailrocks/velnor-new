@@ -1,0 +1,103 @@
+//! Final fan-in: fetch placement, publish, tolerant downloads, no wildcards.
+use velnor_actions_workflow_renderer::{
+    RenderError, checkout_step, merge_step, plan_step, write_request_step,
+};
+
+use super::impl_renderer_fixtures::*;
+
+fn final_job() -> Result<(String, velnor_actions_contract::Job), RenderError> {
+    let (id, mut job) = job(
+        "velnor-final",
+        "Velnor / Required",
+        vec!["velnor-plan".to_owned()],
+        vec![
+            acquire_fixture()?,
+            write_request_step("merge-v1")?,
+            merge_step(),
+        ],
+    );
+    job.condition = Some("always()".to_owned());
+    Ok((id, job))
+}
+
+fn final_text() -> Result<String, RenderError> {
+    let plan = job(
+        "velnor-plan",
+        "Velnor Plan",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
+            plan_step(),
+        ],
+    );
+    strict(&fixture_ir(vec![plan, final_job()?]), &fixture_ctx())
+}
+
+/// Step block between its `- name:` line and the next step or job end.
+fn step_block<'a>(text: &'a str, name: &str) -> &'a str {
+    let start = text.find(&format!("- name: {name}")).unwrap_or(text.len());
+    let rest = &text[start..];
+    let end = rest[1..].find("- name:").map_or(rest.len(), |at| at + 1);
+    &rest[..end]
+}
+
+#[test]
+fn final_steps_follow_contract_order() -> Result<(), RenderError> {
+    let text = final_text()?;
+    let mut at = 0;
+    for name in [
+        "Download plan",
+        "Download every expected matrix artifact",
+        "Merge reports",
+        "Publish final report",
+    ] {
+        let next = text[at..]
+            .find(&format!("- name: {name}"))
+            .unwrap_or_else(|| panic!("missing {name}:\n{text}"));
+        at += next + name.len();
+    }
+    assert!(
+        !text.contains("pattern:"),
+        "no wildcard artifact matching:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn verdict_downloads_continue_and_publish_always_runs() -> Result<(), RenderError> {
+    let text = final_text()?;
+    assert_eq!(
+        text.matches("continue-on-error: true").count(),
+        2,
+        "plan plus fetch tolerate absence:\n{text}"
+    );
+    let publish = step_block(&text, "Publish final report");
+    assert!(publish.contains("if: always()"), "{publish}");
+    assert!(
+        publish.contains("velnor-final-r${{ github.run_id }}-a${{ github.run_attempt }}"),
+        "{publish}"
+    );
+    assert!(publish.contains("final-report.json"), "{publish}");
+    Ok(())
+}
+
+#[test]
+fn fetch_step_carries_auth_without_request_file() -> Result<(), RenderError> {
+    let text = final_text()?;
+    let fetch = step_block(&text, "Download every expected matrix artifact");
+    for want in [
+        "fetch-reports-v1",
+        "GH_REPO",
+        "github.repository",
+        "GH_TOKEN",
+        "github.token",
+    ] {
+        assert!(fetch.contains(want), "missing {want}:\n{fetch}");
+    }
+    assert!(
+        !fetch.contains("VELNOR_REQUEST_FILE"),
+        "fetch takes no request file:\n{fetch}"
+    );
+    Ok(())
+}

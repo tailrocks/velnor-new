@@ -1,0 +1,61 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/enum_struct_variant_field_missing/": [
+    {
+      "enum_name": String("IgnoredEnum"),
+      "kind": String("StructVariant"),
+      "path": List([
+        String("enum_struct_variant_field_missing"),
+        String("IgnoredEnum"),
+      ]),
+      "span_begin_line": Uint64(16),
+      "span_end_line": Uint64(16),
+      "span_filename": String("src/lib.rs"),
+      "variant_name": String("StructVariantWillBeMissing"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/enum_variant_missing/": [
+    {
+      "enum_name": String("PlainVariantWillBeRemoved"),
+      "kind": String("PlainVariant"),
+      "path": List([
+        String("enum_variant_missing"),
+        String("PlainVariantWillBeRemoved"),
+      ]),
+      "span_begin_line": Uint64(6),
+      "span_end_line": Uint64(6),
+      "span_filename": String("src/lib.rs"),
+      "variant_name": String("Bar"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "enum_name": String("TupleVariantWillBeRemoved"),
+      "kind": String("TupleVariant"),
+      "path": List([
+        String("enum_variant_missing"),
+        String("TupleVariantWillBeRemoved"),
+      ]),
+      "span_begin_line": Uint64(12),
+      "span_end_line": Uint64(12),
+      "span_filename": String("src/lib.rs"),
+      "variant_name": String("Bar"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "enum_name": String("StructVariantWillBeRemoved"),
+      "kind": String("StructVariant"),
+      "path": List([
+        String("enum_variant_missing"),
+        String("StructVariantWillBeRemoved"),
+      ]),
+      "span_begin_line": Uint64(20),
+      "span_end_line": Uint64(22),
+      "span_filename": String("src/lib.rs"),
+      "variant_name": String("Bar"),
+      "visibility_limit": String("public"),
+    },
+  ],
+}

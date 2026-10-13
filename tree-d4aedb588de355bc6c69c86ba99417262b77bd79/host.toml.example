@@ -1,0 +1,37 @@
+# ChainArgos Linux host example. It cannot start until repository/workflow
+# group access is restricted and capacity and drain timeouts are measured.
+# This pairs only the verified Ubuntu 24.04 profile with its matching set name.
+# Do not start unless that exact set exists and group access is restricted.
+# It cannot serve the existing ChainArgos ubuntu-26.04-scale-set lane.
+# Do not put a PAT, GitHub App key, or JIT data in this file.
+schema = 1
+
+[github]
+repository = "ChainArgos/java-monorepo"
+registration_scope = "repository"
+runner_group_id = 1
+runner_group_name = "Default"
+scale_set_name = "ubuntu-24.04-scale-set"
+credential_ref = "systemd-credential:github-token"
+
+[trust]
+allowed_repositories = ["ChainArgos/java-monorepo"]
+allowed_events = ["push", "pull_request"]
+# Illustrative only: verify this exact path against the live workflow before activation.
+allowed_workflow_paths = [".github/workflows/ci.yml"]
+allow_forks = false
+
+[runner]
+image_profile = "ubuntu-24.04-amd64"
+
+[host]
+platform = "linux"
+# Zero is intentionally invalid. Set a measured host-wide limit before starting.
+max_jobs = 0
+# Zero is intentionally invalid until drain/cleanup tests set a measured bound.
+drain_timeout_secs = 0
+
+[docker]
+context = "default"
+platform = "linux/amd64"
+endpoint = "unix:///var/run/docker.sock"

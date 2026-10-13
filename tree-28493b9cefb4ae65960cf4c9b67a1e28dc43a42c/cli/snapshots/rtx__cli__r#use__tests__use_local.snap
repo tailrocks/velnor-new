@@ -1,0 +1,5 @@
+---
+source: src/cli/use.rs
+expression: output
+---
+rtx ~/cwd/.test.rtx.toml tiny@2

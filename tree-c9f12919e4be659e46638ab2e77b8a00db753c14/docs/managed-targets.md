@@ -1,0 +1,452 @@
+---
+description: Understand target placement, disk budgets, automatic collection, and cleanup commands.
+---
+# Managed target directories
+
+Cargo normally writes build outputs to `<workspace>/target`. Deleting a
+worktree deletes useful outputs, while abandoning a checkout leaves gigabytes
+behind indefinitely.
+
+Managed targets are enabled by default. The first build is enough:
+
+```sh
+mbx build
+```
+
+mbx places the target directory under its cache root and leaves a symlink at
+`target`, so familiar paths continue to work:
+
+```text
+target -> <cache root>/targets/v1/<checkout digest>
+```
+
+A checkout that already has a real `target/` has it moved there on its first
+mbx build, with its outputs kept. See
+[Adoption during a build](#adoption-during-a-build).
+
+Cargo continues to report artifacts through the workspace's `target` path, so
+debugger launch configurations do not capture the private managed path that
+collection may later replace. In a Git checkout, mbx also adds the exact link
+path to `.git/info/exclude` when necessary. A directory-only `target/` pattern
+does not match a symlink; the local exclude keeps `git status` clean without
+changing the project's `.gitignore`.
+
+## When mbx leaves a target alone
+
+mbx does not override an explicit target directory supplied by:
+
+- `--target-dir`
+- `CARGO_TARGET_DIR`
+- Cargo's `build.target-dir` configuration
+
+## Checks run beside builds {#check-lanes}
+
+Cargo locks a target directory while it compiles, so a `cargo clippy` started
+next to a `cargo build` waits for the build to finish. In a managed target,
+`check` and `clippy` write to a directory of their own inside it, so the two
+run at the same time with nothing to configure:
+
+```sh
+mbx build &
+mbx clippy --workspace --all-targets -- -D warnings
+```
+
+```text
+target/            (linked to the managed target)
+├── debug/         build, test, run
+└── check/debug/   check, clippy
+```
+
+Aliases count: `mbx c`, and an alias such as `chk = "check"`, get the lane too.
+Builds keep writing to `target/debug`, so binaries stay where they always were.
+Both commands share one compile budget and one cache, so the second starts
+with whatever the first has already stored. The `check` directory is part of
+the managed target: it is collected, moved, and removed with it.
+
+The first `check` or `clippy` in a checkout after upgrading compiles into the
+new directory rather than reusing `target/debug`. The cache restores most of
+it. Proc macros and build scripts, which Cargo compiles for both, exist once in
+each directory.
+
+mbx leaves a command alone, and it uses `target/` as before, when:
+
+- the target directory is set by `--target-dir`, `CARGO_TARGET_DIR`, or
+  `build.target-dir`;
+- Cargo's build directory is set at all, with `build.build-dir`,
+  `CARGO_BUILD_BUILD_DIR`, or `--config`, because that is where the lock lives
+  and a lane cannot move it;
+- mbx is not placing the target, for example in CI or with
+  `target.views = false`.
+
+Set `target.lanes = false` (`MBX_TARGET_LANES=0`) to keep every command in
+`target/`. Two builds, or a build and a test run, still share `target/debug`
+and wait for each other; give them separate targets as described in
+[Parallel builds](/scheduling).
+
+## Change target placement
+
+Set `target.root` to place managed targets on another local disk:
+
+```sh
+mbx settings set target.root /path/to/local/build-targets
+```
+
+After any builds using the old target have finished, the next build can update
+an mbx-owned `target` link to the new managed location:
+
+- When the old directory can be renamed to the new location, mbx moves it and
+  preserves its outputs.
+- When a rename fails, including across filesystems, mbx creates the destination
+  and removes the old directory. It does not copy the old outputs. Matching
+  compilations can be restored from the shared cache; other work compiles again.
+
+The old collection record is retired after relocation. The target budget
+scales with the destination disk unless you set it explicitly.
+
+## Adopt existing target directories {#existing-target-directories}
+
+Use `mbx adopt` to bring existing `target/` directories under mbx management
+without deleting their contents. mbx moves each directory under the managed
+root and leaves a link at its original path. From then on, Cargo continues to
+use `target/`, while mbx applies the same collection policy as it does to any
+other managed target.
+
+Adopt the current checkout, name specific checkouts, or search below one or
+more directories:
+
+```sh
+mbx adopt                            # the current checkout
+mbx adopt ~/src/project              # one checkout
+mbx adopt --recursive ~/src          # checkouts anywhere below a directory
+mbx adopt --recursive --dry-run ~/src
+```
+
+Use `--dry-run` to see which directories are eligible without moving them.
+Each adopted result includes the logical size of the directory, a skipped
+checkout reports only why it was left alone, and runs over multiple checkouts
+end with a total:
+
+```text
+adopted /home/me/src/project/target (2.4 GiB logical)
+adopted /home/me/src/other/target (912.0 MiB logical)
+adopted 2 target directories (3.3 GiB logical)
+```
+
+Recursive searches look for directories containing both `Cargo.toml` and a
+real `target/`. They do not descend into hidden directories, `target/`
+directories, or symbolic links.
+
+### Adoption during a build
+
+A build that finds an existing real `target/` moves it under the managed root
+the same way and keeps its outputs:
+
+```text
+mbx[cache]: moved the existing target/ directory under the managed root (2.4 GiB logical)
+```
+
+This happens with or without a terminal, so builds run by agents and scripts
+adopt too. CI builds leave `target/` in place, because a CI cache step that
+saves `target/` would save only the link. If Cargo is still writing to the
+directory, the build continues in it and a later build moves it. Set
+`target.views = false` to keep every `target/` where Cargo puts it.
+
+If the managed root is on another filesystem, mbx cannot rename the directory
+into it. An interactive build then offers to remove the old outputs instead,
+with “Keep it” selected by default. Non-interactive builds never remove a
+directory, and the `mbx adopt` command never deletes or copies one.
+
+### Eligibility and recovery
+
+mbx leaves a checkout unchanged and explains why when:
+
+- `--target-dir`, `CARGO_TARGET_DIR`, or Cargo's `build.target-dir` names the
+  target directory;
+- it is a workspace member, whose outputs live in the workspace root's
+  `target/`;
+- managed targets are turned off for it;
+- its `target/` is on a different filesystem from the managed root, where a
+  rename would require copying;
+- `target/` is already a symbolic link.
+
+Set `target.root` to a location on the same filesystem when you want to adopt
+a directory that would otherwise be skipped. Before moving one, mbx takes its
+Cargo build locks; if a build is still writing there, `mbx adopt` refuses the
+move and asks you to try again later. It then renames the directory into the
+managed root before creating the link. If the link or collection record cannot
+be created, mbx moves the directory back. When a user accepts the build-time
+removal option, mbx deletes the old outputs only after their managed
+replacement is ready.
+
+Adoption preserves the files already in `target/`, but it does not make every
+plain Cargo artifact immediately reusable by mbx. Cargo keys builds run
+through mbx differently, so the first mbx build may compile artifacts that
+were produced without mbx. A target directory previously built through mbx
+remains fresh after adoption.
+
+## Start new checkouts from existing units
+
+With Cargo 1.100 or later, the first build of a profile in a new checkout
+copies the registry and Git dependency units that another checkout's managed
+target already built. Cargo treats the copies as fresh and skips those units,
+so the build compiles or restores only what differs:
+
+```text
+mbx[target]: copied 302 registry build units from /home/me/src/project
+```
+
+mbx tries other managed targets, most recently used first, and copies from the
+first one with units for this checkout's dependencies. It copies only the units
+that profile's latest build read. The same profile below each target triple
+the other checkout built is copied too, so a target chosen in Cargo
+configuration is covered. Copies are reflinks where the filesystem supports
+them. mbx skips this step when:
+
+- the profile already has a `build/` directory in this checkout;
+- the Cargo running this build is older than 1.100;
+- a build holds the Cargo lock of either profile;
+- no other checkout was built by Cargo 1.100 or later.
+
+Path dependencies and workspace members are never copied. Cargo trusts their
+source modification times, so a copied unit could pass as fresh with another
+checkout's contents. Copied units this checkout does not use are removed by
+[collection](#unused-build-units). Turn copying off for one command with
+`MBX_TARGET_SEED=0`, or from then on with:
+
+```sh
+mbx settings set target.seed false
+```
+
+## Collection
+
+mbx records the checkout associated with each target view. Collection runs
+after a build, at most once an hour, and needs no configuration. It normally
+runs in the background once the build has returned, so a walk of every managed
+directory never holds up the build that happened to come due, and the next
+build reports what it removed. If the background collector cannot be started,
+the build collects in the foreground instead.
+
+Every command you run through mbx, such as `mbx test`, `mbx run`, or
+`mbx nextest run`, holds a shared lease on its target directory from start to
+exit. Collection does not remove a directory while any command holds its lease.
+`mbx gc` and the next build's report list such directories as kept, for
+example `kept 1 target directories in use by running commands`. The lease ends
+when the mbx process exits or is killed, and the usual rules below then apply.
+The lease does not protect:
+
+- a binary you start directly from `target/` in a separate command, including
+  test binaries built earlier with `--no-run`;
+- Cargo run directly, without mbx, through the `target` link, which is
+  protected only while Cargo holds its build lock;
+- a child process that keeps running after its mbx process alone was killed.
+  Ctrl-C stops the whole process group, so it ends the command and its lease
+  together.
+
+A target directory is removed when any of these is true:
+
+- Its checkout is gone. This happens regardless of the limits below.
+- It has gone unused for `target.max_age`, 30 days by default. The next build
+  in that checkout can restore matching cached outputs. Evicted or unsupported
+  work must compile again.
+- The managed directories together exceed `target.max_size`. The least
+  recently used go first. The most recently used directory is never collected
+  for being over budget; if the budget cannot be met without it, mbx says so
+  and keeps it.
+- The disk is low on space. See [When the disk runs low](#when-the-disk-runs-low).
+
+Cached compilations shared with a live checkout remain protected throughout.
+[Keep or evict specific checkouts](#keep-or-evict-specific-checkouts) changes
+the order for checkouts you list.
+
+### Unused build units
+
+A checkout in regular use keeps its target directory, but Cargo leaves the
+previous build units behind whenever a lockfile update, feature change, or
+toolchain update moves its builds on to new ones. Collection also removes
+those units once no build has used them for `target.max_age` plus a day:
+
+- With Cargo 1.100 or later, each unit is its own directory,
+  `<profile>/build/<package>/<hash>/`, and each is removed on its own.
+- Earlier Cargo versions spread units across `deps/`, `.fingerprint/`, and
+  `build/`. mbx removes that layout as a whole once no build has used any of
+  it, which happens after a checkout moves to Cargo 1.100.
+
+Cargo reads the fingerprint of every unit a build uses, even when there is
+nothing to compile, and mbx judges use by that read's access time. The extra
+day covers Linux's default `relatime`, which refreshes an access time at most
+daily. mbx skips this step when the filesystem does not record access times,
+as under `noatime`, and leaves a target directory alone while a build holds
+its Cargo lock. The next build that needs a removed unit restores it from the
+cache or compiles it again. Unused units go before the size budget is weighed,
+so they are removed ahead of whole target directories. `target.max_age =
+"none"` keeps them.
+
+### Budgets scale with the disk
+
+All three budgets scale with the disk that holds the data. By default, targets,
+learned incremental state, and the action store share the cache disk. A custom
+`target.root` uses its own volume for the target budget:
+
+| Budget | Default | Bounds |
+| --- | --- | --- |
+| `gc.max_size` (action store) | 5% of the disk | 5 GiB to 500 GiB |
+| `target.max_size` (managed targets) | 10% of the disk | 10 GiB to 100 GiB |
+| `gc.incremental_max_size` (learned incremental) | 5% of the disk | 10 GiB to 100 GiB |
+
+Scaled budgets are rounded down to a whole 5 GiB. When the disk cannot be
+measured, mbx uses 20 GiB, 30 GiB, and 20 GiB respectively. An explicit budget
+overrides these defaults, and `mbx gc --dry-run` previews the effect of a policy
+without deleting anything.
+
+### Keep or evict specific checkouts
+
+`target.keep` lists checkouts whose targets are never collected for age or
+size, and whose unused build units are left alone. A kept target is still
+removed when its checkout is gone. `target.evict_first` lists checkouts whose
+targets go before any other when the managed targets are over budget:
+
+```sh
+mbx settings set target.keep '~/src/app'
+mbx settings set target.evict_first .claude/worktrees
+```
+
+An absolute entry, or one starting with `~`, covers the checkouts at or under
+that directory. A relative entry matches wherever its components appear
+together in a checkout's path, so `.claude/worktrees` covers the worktrees
+coding agents create under `.claude/worktrees` in any repository.
+
+When both lists match a checkout, the entry that names more of its path wins.
+With the example above, `~/src/app` is kept and its agent worktrees under
+`~/src/app/.claude/worktrees` are evicted first. A tie keeps.
+
+Evict-first targets are collected least recently used first, ahead of the rest.
+The most recently used target directory is still spared, whichever list it is
+on. Kept targets count toward `target.max_size`, so the other checkouts' targets
+make room for them. `mbx settings set` and the environment variables take
+comma-separated lists: `mbx settings set target.evict_first .claude/worktrees,scratch`
+or `MBX_TARGET_EVICT_FIRST=.claude/worktrees,scratch`.
+
+### When the disk runs low
+
+The budgets above are shares of the disk's size, so they hold even when
+something else fills the disk. `gc.min_free_size` sets how much free space mbx
+tries to keep: by default 10% of the disk, from 5 GiB to 50 GiB. The cache disk
+and a custom `target.root` volume are each measured against their own size.
+
+While a disk has less free space than that, collection runs after a build as
+often as every 5 minutes instead of once per `gc.interval`, and it frees the
+shortfall from per-checkout state regardless of the budgets:
+
+1. Learned incremental state and generated source trees, least recently used
+   first.
+2. Managed target directories, least recently used first, with
+   `target.evict_first` checkouts ahead of the rest and `target.keep` checkouts
+   left alone.
+
+The most recently used target directory, and anything a running mbx command
+is using, is kept as usual. The action store stays at `gc.max_size`, because
+every checkout rebuilds from it. If collection cannot free enough, mbx logs a
+warning and leaves the rest to you. The next build reports what was removed
+and why:
+
+```text
+mbx[gc]: 3.1 GiB free on the disk holding /home/me/.cache/mbx, under the 25.0 GiB minimum; collecting learned incremental state and managed targets past their budgets
+mbx[gc]: removed 4 target directories (18.2 GiB logical, 0 abandoned and 4 live); 6.0 GiB logical remain
+```
+
+Restored outputs that share blocks with the cache through reflinks free less
+disk than their logical size, so collection measures the disk again before
+each step rather than trusting the logical total. Set `gc.min_free_size` to a
+size such as `"20GiB"`, or to `"none"` to collect by the budgets alone.
+`mbx gc --dry-run` shows the most a low disk could remove: it cannot measure
+what each step would free, so a real run may remove fewer target directories.
+
+### Changing or disabling the limits
+
+For one setting covering all managed build data, use `gc.max_total_size` alone:
+
+```toml
+[gc]
+max_total_size = "50GiB"
+```
+
+This replaces implicit component size caps with a shared logical-byte budget.
+Explicit component caps still apply. See [single cache budget](/configuration#single-cache-budget)
+for allocation order, protected state, and physical-space limitations. The
+following example instead sets advanced overrides:
+
+```toml
+[target]
+max_size = "60GiB"
+max_age = "none"   # keep live checkouts' outputs indefinitely
+
+[gc]
+# Optional: one budget covering targets, learned incremental, and the action store.
+max_total_size = "50GiB"
+incremental_max_size = "20GiB"
+incremental_max_age = "30d"
+min_free_size = "20GiB"
+```
+
+`"none"` turns off `target.max_size`, `target.max_age`,
+`gc.incremental_max_size`, `gc.incremental_max_age`, `gc.max_total_size`, or
+`gc.min_free_size`.
+Invalid sizes and durations are errors, so a typo cannot disable collection.
+`gc.max_size` does not accept `"none"`; the action store is always bounded. To
+stop creating managed targets, see
+[Disable managed targets](#disable-managed-targets).
+
+## Inspect and clean up
+
+| Command | Effect |
+| --- | --- |
+| `mbx cache stats` | Inspect the action store, managed targets, and learned incremental state |
+| `mbx gc --dry-run` | Preview collection under the configured budgets |
+| `mbx gc` | Collect eligible targets, cached objects, and learned incremental state |
+| `mbx clean` | Remove this workspace's managed target, link, and learned incremental state |
+| `mbx adopt [--recursive] [PATH]...` | Adopt existing `target/` directories without deleting their contents |
+| `mbx cache remove /path/to/workspace` | Remove the target and incremental state, then forget that workspace's cache claims |
+
+`mbx clean` and `mbx cache remove` keep the target directory, with a warning,
+while a command run through mbx is using it. `mbx clean` also accepts a
+workspace path. It keeps shared cached objects and the workspace's cache
+claims, so a later build can restore matching outputs. `mbx cache remove`
+forgets those claims as well; objects used by other workspaces remain available
+and normal garbage collection reclaims unneeded objects.
+
+Cargo's `cargo clean` follows Cargo's own target-directory behavior and does not
+remove mbx's private incremental state.
+
+## Disable managed targets
+
+Set `MBX_TARGET_VIEWS=0` for one command, or turn placement off from then on:
+
+```sh
+mbx settings set target.views false
+```
+
+Turning placement off does not delete a target directory mbx already manages.
+The existing `target` link continues to work, and collection can still reclaim
+the directory after its checkout disappears.
+
+Use the [cleanup commands](#inspect-and-clean-up) to remove existing managed
+outputs immediately.
+
+::: warning Windows
+Creating the link requires Developer Mode or a privileged process on Windows.
+If Windows cannot create it, mbx lets Cargo use its ordinary target directory.
+:::
+
+## Collection byte counts
+
+Collection reports **logical bytes**: the sum of removed file lengths. The
+`removed_bytes` and `remaining_bytes` fields in `mbx gc --json` use this measure;
+`byte_accounting: "logical"` identifies it explicitly. The lifetime `savings`
+object in `mbx stats --json` also carries that marker. Lifetime savings totals
+and cleanup messages use the same measure. Existing `freed_*_bytes` fields in
+the saved lifetime tally retain their names for compatibility.
+
+Physical disk space released can differ. Reflinks and hard links may leave data
+referenced by another file; sparse files may occupy fewer blocks than their
+length. Filesystem snapshots and delayed allocation also affect reclamation.
+These counters do not estimate physical space released.

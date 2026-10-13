@@ -1,0 +1,343 @@
+//! P07/P09 regression cases: validated task-step env, preview and
+//! generate filesystem guarantees.
+//!
+//! Owned by the envfs builder; wired into `velnor_orchestrator` by the
+//! orchestrator-test owner with one `mod` line.
+
+use std::fs;
+
+use tempfile::TempDir;
+use velnor_actions_contract::StepKind;
+use velnor_actions_orchestrator::{
+    GenerateOptions, GenerateReport, GenerationPreparation, OrchestratorError, ToolSnapshot,
+    generate, prepare, render_staged_tree,
+};
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
+
+use super::impl_common::{TestResult, config_with_branch, err_of, make_repo, snapshot};
+
+/// Preview-generate helper: `Ok` report or the typed error.
+fn preview(
+    prep: &GenerationPreparation,
+    dir: &std::path::Path,
+) -> Result<GenerateReport, OrchestratorError> {
+    generate(
+        prep,
+        &GenerateOptions {
+            output_dir: Some(dir.to_path_buf()),
+        },
+    )
+}
+
+/// Rendered workflow text window between two job markers.
+fn window<'a>(yaml: &'a str, from: &str, to: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
+    let start = yaml
+        .find(from)
+        .ok_or_else(|| std::io::Error::other("missing window start"))?;
+    let end = yaml[start..].find(to).map_or(yaml.len(), |at| start + at);
+    Ok(&yaml[start..end])
+}
+
+#[test]
+fn preview_inside_repo_leaves_nothing() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    let prep = prepare(root)?;
+    for dest in [
+        root.to_path_buf(),
+        root.join("sub"),
+        root.join("new-nested/deep"),
+    ] {
+        let err = err_of(preview(&prep, &dest), "inside refused")?;
+        assert!(
+            matches!(err, OrchestratorError::PreviewRefused { .. }),
+            "got {err}"
+        );
+    }
+    assert!(!root.join("sub").exists(), "refused preview made sub/");
+    assert!(
+        !root.join("new-nested").exists(),
+        "refused preview made parents"
+    );
+    Ok(())
+}
+
+#[test]
+fn preview_dotdot_through_missing_refused_without_litter() -> TestResult {
+    // The kernel cannot resolve `..` past missing components, so a
+    // lexical pop would be unsound: fail closed and leave nothing.
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    let prep = prepare(root)?;
+    let dest = root.join("a").join("..").join("..").join("sibling-preview");
+    let err = err_of(preview(&prep, &dest), "dotdot refused")?;
+    assert!(err.to_string().contains("traversal"), "got {err}");
+    assert!(!root.join("a").exists(), "no litter from dotdot");
+    let parent = root
+        .parent()
+        .ok_or_else(|| std::io::Error::other("no parent"))?;
+    assert!(
+        !parent.join("sibling-preview").exists(),
+        "nothing outside either"
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn preview_symlink_chain_refused() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    let prep = prepare(root)?;
+    let parent = TempDir::new()?;
+    let link = parent.path().join("link");
+    std::os::unix::fs::symlink(root, &link)?;
+    let err = err_of(
+        preview(&prep, &link.join("preview")),
+        "chained link refused",
+    )?;
+    assert!(
+        matches!(err, OrchestratorError::PreviewRefused { .. }),
+        "got {err}"
+    );
+    assert!(!link.join("preview").exists(), "nothing through the link");
+    Ok(())
+}
+
+#[test]
+fn preview_twice_second_refused_nonempty() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    let prep = prepare(root)?;
+    let parent = TempDir::new()?;
+    let dest = parent.path().join("preview");
+    preview(&prep, &dest)?;
+    let err = err_of(preview(&prep, &dest), "second refused")?;
+    assert!(
+        matches!(err, OrchestratorError::PreviewRefused { .. }),
+        "got {err}"
+    );
+    Ok(())
+}
+
+#[test]
+fn rendered_task_steps_carry_validated_contract() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let prep = prepare(repo.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let yaml = tree
+        .get(WORKFLOW_PATH)
+        .ok_or_else(|| std::io::Error::other("missing workflow"))?;
+    let task = window(yaml, "  velnor-task:", "  velnor-workflow-lint:")?;
+    let run_at = task.find("- name: Run task").ok_or("run task")?;
+    let run_block = &task[run_at..];
+    for key in [
+        "MISE_NO_CONFIG:",
+        "MISE_NO_ENV:",
+        "MISE_NO_HOOKS:",
+        "MISE_LOCKFILE:",
+        "MISE_AUTO_INSTALL:",
+        "MISE_EXEC_AUTO_INSTALL:",
+        "MISE_RUSTUP_HOME:",
+        "MISE_CARGO_HOME:",
+        "RUSTUP_TOOLCHAIN:",
+    ] {
+        assert!(run_block.contains(key), "Run task misses {key}");
+    }
+    for key in [
+        "MISE_GITHUB_TOKEN",
+        "GITHUB_TOKEN:",
+        "GH_TOKEN:",
+        "ACTIONS_RUNTIME_TOKEN",
+    ] {
+        assert!(!task.contains(key), "task leaks {key}");
+    }
+    Ok(())
+}
+
+#[test]
+fn fetch_matches_run_task_contract_by_construction() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    fs::write(
+        root.join("Cargo.lock"),
+        "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n",
+    )?;
+    let prep = prepare(root)?;
+    let task = prep
+        .workflow
+        .ir
+        .jobs
+        .get("velnor-task")
+        .ok_or_else(|| std::io::Error::other("missing task job"))?;
+    let names: Vec<&str> = task.steps.iter().map(|step| step.name.as_str()).collect();
+    let at = |name: &str| names.iter().position(|seen| *seen == name);
+    let (Some(fetch_at), Some(run_at)) = (at("Fetch Cargo sources"), at("Run task")) else {
+        return Err("task steps miss fetch/run".into());
+    };
+    let StepKind::Shell { env: fetch_env, .. } = &task.steps[fetch_at].kind else {
+        return Err("fetch must be a shell step".into());
+    };
+    let StepKind::Shell { env: run_env, .. } = &task.steps[run_at].kind else {
+        return Err("Run task must be a shell step".into());
+    };
+    let mut keys: Vec<&str> = fetch_env.keys().map(String::as_str).collect();
+    keys.sort_unstable();
+    assert_eq!(
+        keys,
+        [
+            "MISE_AUTO_INSTALL",
+            "MISE_CARGO_HOME",
+            "MISE_EXEC_AUTO_INSTALL",
+            "MISE_LOCKFILE",
+            "MISE_NO_CONFIG",
+            "MISE_NO_ENV",
+            "MISE_NO_HOOKS",
+            "MISE_RUSTUP_HOME",
+            "RUSTUP_TOOLCHAIN",
+        ],
+        "fetch carries exactly the validated contract"
+    );
+    for (key, value) in fetch_env {
+        assert_eq!(
+            run_env.get(key),
+            Some(value),
+            "fetch key {key} must equal Run task"
+        );
+        assert!(!value.is_empty(), "fetch key {key} must be set");
+    }
+    Ok(())
+}
+
+#[test]
+fn denylist_pins_mise_strip_set() {
+    assert_eq!(
+        velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST,
+        [
+            "MISE_GITHUB_TOKEN",
+            "GITHUB_TOKEN",
+            "GH_TOKEN",
+            "ACTIONS_RUNTIME_TOKEN",
+        ]
+    );
+    for denied in velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST {
+        assert!(
+            velnor_actions_mise::command::is_reserved_env_key(denied),
+            "{denied} must be reserved in Mise too"
+        );
+    }
+}
+
+#[test]
+fn concurrent_generate_lock_refused() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    let github = root.join(".github");
+    fs::create_dir_all(github.join("workflows"))?;
+    fs::write(github.join("workflows/old.yml"), "old: true\n")?;
+    fs::create_dir(root.join(".github.velnor-generate.lock"))?;
+    let prep = prepare(root)?;
+    let err = err_of(
+        generate(&prep, &GenerateOptions { output_dir: None }),
+        "locked",
+    )?;
+    assert!(err.to_string().contains("concurrent_generate"), "got {err}");
+    assert_eq!(fs::read(github.join("workflows/old.yml"))?, b"old: true\n");
+    fs::remove_dir(root.join(".github.velnor-generate.lock"))?;
+    let report = generate(&prep, &GenerateOptions { output_dir: None })?;
+    assert_eq!(report.files_written.len(), 2, "lock removal unblocks");
+    Ok(())
+}
+
+#[test]
+fn success_leaves_no_lock_and_no_warnings() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    let prep = prepare(root)?;
+    let report = generate(&prep, &GenerateOptions { output_dir: None })?;
+    assert!(report.warnings.is_empty(), "clean commit warns nothing");
+    assert!(
+        !root.join(".github.velnor-generate.lock").exists(),
+        "lock released"
+    );
+    let parent = TempDir::new()?;
+    let report = preview(&prep, &parent.path().join("preview"))?;
+    assert!(report.warnings.is_empty(), "clean preview warns nothing");
+    Ok(())
+}
+
+#[test]
+fn generate_leaves_tool_files_untouched() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    fs::write(root.join("mise.toml"), "v1")?;
+    fs::write(root.join("mise.lock"), "lock-bytes")?;
+    let snap = ToolSnapshot::capture(root);
+    let prep = prepare(root)?;
+    generate(&prep, &GenerateOptions { output_dir: None })?;
+    assert!(snap.verify(root).is_ok(), "generate preserves tool files");
+    assert_eq!(fs::read(root.join("mise.toml"))?, b"v1");
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn tool_snapshot_unreadable_fails_closed() -> TestResult {
+    use std::os::unix::fs::PermissionsExt;
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    let tool = root.join("mise.toml");
+    fs::write(&tool, "v1")?;
+    let snap = ToolSnapshot::capture(root);
+    assert!(snap.verify(root).is_ok(), "readable verifies");
+    fs::set_permissions(&tool, fs::Permissions::from_mode(0o000))?;
+    let readable_despite_bits = fs::read(&tool).is_ok();
+    let snap = ToolSnapshot::capture(root);
+    let err = snap.verify(root);
+    fs::set_permissions(&tool, fs::Permissions::from_mode(0o644))?;
+    if readable_despite_bits {
+        return Ok(()); // Privileged runner: permission bits do not bind.
+    }
+    let err = err_of(err, "unreadable tool file")?;
+    assert!(
+        err.to_string().contains("tool_files_unreadable:mise.toml"),
+        "got {err}"
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn in_place_symlink_target_refused() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    let real = root.join("real-github");
+    fs::create_dir_all(real.join("workflows"))?;
+    fs::write(real.join("workflows/old.yml"), "old: true\n")?;
+    std::os::unix::fs::symlink(&real, root.join(".github"))?;
+    let prep = prepare(root)?;
+    let before = snapshot(root)?;
+    let err = err_of(
+        generate(&prep, &GenerateOptions { output_dir: None }),
+        "link refused",
+    )?;
+    assert!(err.to_string().contains("symlink_refused"), "{err}");
+    assert_eq!(before, snapshot(root)?, "refusal writes nothing");
+    assert!(fs::symlink_metadata(root.join(".github"))?.is_symlink());
+    Ok(())
+}
+
+#[test]
+fn in_place_file_target_refused() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    fs::write(root.join(".github"), "not a dir")?;
+    let prep = prepare(root)?;
+    let err = err_of(
+        generate(&prep, &GenerateOptions { output_dir: None }),
+        "file refused",
+    )?;
+    assert!(err.to_string().contains("not_a_directory"), "{err}");
+    assert_eq!(fs::read(root.join(".github"))?, b"not a dir");
+    Ok(())
+}

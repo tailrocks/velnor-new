@@ -1,0 +1,33 @@
+---
+source: src/query.rs
+assertion_line: 769
+expression: "&query_execution_results"
+---
+{
+  "./test_crates/enum_discriminant_no_longer_defined/": [
+    {
+      "enum_name": String("GainsNonExhaustiveVariant"),
+      "path": List([
+        String("enum_discriminant_no_longer_defined"),
+        String("GainsNonExhaustiveVariant"),
+      ]),
+      "span_begin_line": Uint64(22),
+      "span_end_line": Uint64(27),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/enum_no_repr_variant_discriminant_changed/": [
+    {
+      "enum_name": String("DiscriminantIsChangedAndMarkedNonExhaustive"),
+      "path": List([
+        String("enum_no_repr_variant_discriminant_changed"),
+        String("DiscriminantIsChangedAndMarkedNonExhaustive"),
+      ]),
+      "span_begin_line": Uint64(21),
+      "span_end_line": Uint64(25),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+}

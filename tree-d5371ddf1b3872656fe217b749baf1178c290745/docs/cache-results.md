@@ -1,0 +1,300 @@
+---
+description: Read cache counters, measure reuse with fresh targets, and diagnose hits, misses, bypasses, and remote failures.
+---
+# Cache results
+
+Use the build summary to see what mbx restored, compiled, or left uncached.
+Counts describe the compiler actions and cached build-script runs observed by
+mbx; they do not include work Cargo skipped because its outputs were already
+fresh. Each lookup ends as one hit or one miss, so the two add up to the
+lookup count. Under `MBX_VERIFY=1` a lookup that finds a result ends as a
+verification instead.
+
+```sh
+mbx explain --last          # inspect the most recent recorded build
+MBX_SUMMARY=full mbx build  # print a detailed report for a new build
+```
+
+| Outcome | Cache lookup? | Result stored? |
+| --- | --- | --- |
+| [Hit](#hit) | Found a result | Already stored |
+| [Miss](#miss) | No matching result | After successful compilation |
+| [Not looked up](#could-not-look-up) | No usable input prediction yet | After successful compilation |
+| [Bypass](#bypass) | Skipped | No shared result |
+
+## Measure cache reuse
+
+Running the same command twice in the same target directory often measures
+Cargo's freshness check: no compiler work is needed. To observe mbx reuse,
+build equivalent source with the same toolchain, profile, and features into
+two fresh target directories:
+
+```sh
+mbx build --target-dir target/cache-demo-first
+mbx build --target-dir target/cache-demo-second
+```
+
+Use directory names that do not already contain build outputs. This keeps your
+normal target intact and avoids deleting the shared cache. The second build
+can restore work recorded by the first; unsupported actions still run.
+These explicit targets are not managed, so remove the two example directories
+when you finish. For repeatable timings, use the [benchmark harness](/benchmarks).
+
+Compiler time avoided is summed across actions. It is not elapsed time saved;
+always compare wall-clock build time as well as the counters.
+
+## Hit
+
+mbx derived an action key, found its result, and restored the outputs. A hit can
+come from the local store or a configured remote.
+
+## Miss
+
+mbx derived a key and looked it up, but no result existed. The compilation ran
+and its successful result was stored.
+
+## Could not look up
+
+mbx did not yet have usable dep-info or a prediction from which to derive the
+key. This is common on a cold build. The action is still stored after
+compilation, so calling it a miss would overstate the number of failed lookups.
+The short summary counts these as `not looked up`; the full summary prints a
+`could not look up` line with the reason.
+
+## Bypass
+
+mbx recognized that it could not model the action exactly and ran the real
+compiler without caching it. The short summary's `bypassed` count leaves out
+routine compiler probes (`compiler-query`, `standard-input`, and their `cc-`
+counterparts). Reasons are grouped in the full summary (`MBX_SUMMARY=full`);
+set `MBX_BYPASS_LOG` to a file path for the per-action record.
+
+Run a Cargo command through `mbx explain` to collect those records temporarily,
+group identical causes, and print guidance for every bypass category:
+
+```sh
+mbx explain build --workspace
+```
+
+```text
+cache explanation: 8 compilations bypassed the cache
+
+compiler-query (2)
+Expected: Cargo asks rustc for toolchain information; there is no compilation to cache.
+  - rustc invocation is a compiler query, not a compilation (2 times)
+
+incremental (5)
+Cargo compiled this incrementally, which mbx cannot cache. `mbx settings set incremental false` (or `MBX_INCREMENTAL=0`) makes it cacheable again; mbx already gives a crate you are editing its own incremental state without giving up the rest of the cache.
+  - incremental compilation cannot be combined with action caching (5 times)
+
+standard-input (1)
+Expected for Cargo probes: source supplied on standard input cannot be rediscovered later.
+  - rustc invocation reads source from standard input
+```
+
+Categories marked expected are routine compiler probes, with no output to cache; here the
+`incremental` group is the one the build could act on. The command preserves
+Cargo's exit status after printing the explanation.
+
+Actionable bypasses carry their remediation with the reason that produced
+them. For example, links rejected because of `split-debuginfo=packed` point to
+the active Cargo profile or `RUSTFLAGS`, while C compilations affected by
+`CPATH` name the environment variable to unset.
+
+`mbx explain` also reports cacheability problems that prevent a compilation
+from reaching mbx at all. If `CC`, `CXX`, `HOST_CC`, or `HOST_CXX` was already
+set when the build began, the report names the variable and value and explains
+that host C and C++ compiles are invisible to the cache. These are warnings,
+not bypass counts, because mbx never observed the compiler invocations.
+
+## Remote failure
+
+A remote cache request failed and the build continued without that result:
+an unreachable host, refused credentials, or an invalid response can all reduce
+reuse. Build-time transport failures fall back to local compilation. Invalid
+configuration can still stop startup, and explicit `mbx prefetch` and
+`mbx doctor` commands report connection failures as errors. The summary
+counts them because a remote that is failing every request reports the same
+hits, misses, and bytes as one that was empty. The short summary includes the
+count inline; the full summary explains it:
+
+```text
+mbx[cache]: the remote cache failed 4 of its requests; this build ran without what it could not reach, and the warnings above say why
+```
+
+The individual warnings, printed as the build runs, say what failed. The count
+also appears as `remote_failures` in the JSON statistics report, so CI can alert
+on a cache that has quietly stopped serving.
+
+## Watching a build instead
+
+Everything above describes results reported after a build. To see the same
+outcomes as they are decided, one row per compilation with the crate it belongs
+to, run [`mbx tui`](/tui) in another terminal. It reads builds using the same
+local cache, including ones already running.
+
+## Reading the hit rate
+
+A build can report a high hit rate among attempted lookups while spending most
+of its time on actions that were not looked up or were bypassed. Read all the
+summary counts together, and compare wall-clock time when evaluating the
+cache. Set `MBX_SUMMARY=full` when the one-line counts need a breakdown.
+
+A link mbx cannot describe always runs, so its downstream crates may have work
+to do on an otherwise warm build. Native executables, tests, and proc macros on
+Linux, macOS, and Windows, host `cdylib`s on Linux, and binaries, tests, and
+`cdylib`s for supported self-contained WebAssembly targets may be restored as
+hits; see
+[limits](/limits#native-linking-is-cached-only-where-the-linker-can-be-described).
+
+## Troubleshooting a low hit rate
+
+Run the build through `mbx explain` first. It collects the per-action
+records, groups identical causes, and prints guidance for each category:
+
+```sh
+mbx explain build --workspace
+```
+
+The usual causes, roughly in the order they show up:
+
+- The store is cold. A first build has no dep-info to derive keys from, so
+  "could not look up" can dominate. Compare equivalent builds with fresh
+  targets as described [above](#measure-cache-reuse).
+- Incremental builds are enabled. With `MBX_INCREMENTAL=1`, workspace
+  members compile incrementally, those compilations bypass the cache, and the
+  changed artifacts make crates above them miss too. See
+  [limits](/limits#incremental-compilations-are-not-cached).
+- A link could not be described. Native executables, tests, and proc macros
+  are cached on Linux, macOS, and Windows, and self-contained WebAssembly
+  targets everywhere, but native links with custom or unmodeled inputs still
+  run. A rebuilt dylib can also change the keys of its downstream crates.
+  `mbx explain` reports why the link bypassed; see
+  [limits](/limits#native-linking-is-cached-only-where-the-linker-can-be-described).
+- The inputs differ. A different toolchain, feature set, profile, or
+  `RUSTFLAGS` between two checkouts is a different key, and the summary
+  reports it as an ordinary miss. Run `mbx explain --last` to replay the most
+  recent recorded build and list, per missed crate, the key inputs that
+  changed since its last recorded hit. Session history stores hashes, not
+  source contents or environment values.
+- Build-script output that differs. mbx can share Rust compilations that read
+  `OUT_DIR` when the generated output matches across checkouts. A build script
+  that embeds the checkout path in its output prevents that reuse. Sharing also
+  depends on whether mbx can detect the reference and copy the output;
+  `MBX_SHARE_OUT_DIR=0` disables it. See
+  [`OUT_DIR` sharing](/limits#out-dir-sharing).
+- A build chose its own C compiler, or is cross-compiling. Setting `CC`,
+  `HOST_CC`, `CXX`, or `HOST_CXX` leaves host compilations outside mbx.
+  Cross-compilations are cached when the build explicitly names a supported
+  compiler through `CC_<target>`, `CXX_<target>`, `TARGET_CC`, or `TARGET_CXX`. Bypass kinds beginning `cc-`
+  report anything the C adapter declined to model. See
+  [limits](/limits#c-and-c-caching-covers-the-host-compiles-mbx-drives).
+- CI restored nothing. On GitHub Actions, check that the cache step restored
+  an entry; a changed `cache-generation` or a fresh repository starts empty.
+  With a remote cache configured, check the [remote failure](#remote-failure)
+  count too: a remote that is failing every request reports the same zeros as
+  one that is empty.
+
+## Compiler time
+
+The full summary reports real compiler time by outcome and an estimate of
+the compiler time avoided by cache hits:
+
+```text
+mbx[cache]: compiler time: 4m 12s estimated avoided; 38.20s spent (161 miss in 31.00s, 7 unconsulted in 7.20s)
+mbx[cache]: slowest uncached crates: syn 8.90s, regex-syntax 4.90s, serde_derive 3.90s
+```
+
+Times of a minute or more are reported in whole units, as above; shorter ones
+keep their fraction.
+
+The estimate comes from the duration recorded with the successful compilation
+that populated the action prediction; older predictions without a timing hint
+contribute zero. The five crates with the largest cumulative uncached compiler
+time are listed so you can identify expensive uncached work. Parallel
+compilations overlap, so this ranking does not directly identify the critical path.
+
+The JSON statistics report exposes the same data in
+`estimated_compiler_duration_avoided_ns`, `compiler`, and
+`slow_compilations`.
+
+## Compare transported cache state
+
+The cache owner can record a versioned comparison baseline before an import
+consumes its directory bundle:
+
+```sh
+mbx cache import --comparison-state baseline.json --json restored-bundle
+mbx cache export --group ci --compare baseline.json --json --format directory updated-bundle
+```
+
+For a cold miss, `mbx cache comparison-state baseline.json --json` writes an
+empty baseline. Keep this file outside the bundle. Export JSON version 2 includes
+`emitted_bundle_useful_delta`, new and changed action-result counts, new prediction counts,
+new and changed workspace-variant counts, and a 64-character BLAKE3
+`semantic_digest`. A subset of the imported closure is not a useful delta. Deletion-only workspace changes remain reported as changed variants, but do not add reusable work or make `emitted_bundle_useful_delta` true.
+Changed results and predictions remain detectable when their counts stay equal.
+The digest identifies an inventory; unequal digests alone do not establish a
+useful delta. `emitted_bundle_useful_delta` names the transport decision.
+`workspace_usefulness` supports only status `unavailable`. Its closed reason
+codes are `scheduler_validity_not_proven`, `owner_coverage_unavailable`,
+`owner_proof_unavailable`, and `managed_overlap`; full diagnostic text is separate.
+A positive status requires native owner proof and a future schema migration. Retaining an unchanged historical bundle
+does not prove the current workspace unchanged. Export report version 1 is
+unsupported; no `useful_delta` alias remains.
+
+Workspace comparison includes relative path, entry type, file content digest,
+mode, and symlink target. It excludes the external workspace root and filesystem
+mtime metadata. Actual scheduler file contents can contain volatile values
+(including paths and timestamps); their differences are reported honestly and
+are not proof of additional cache hits. Restoration preserves its existing
+filesystem timestamps. Comparison requires directory export format. A variant is one complete semantic
+workspace inventory; changed variants have a previously known workspace signature.
+The owner compares before publication and reports `exported: false` when no useful
+delta exists, avoiding closure copying. `mbx cache comparison-state baseline.json
+--verify --json` validates an existing baseline without rewriting it.
+
+The reported inventory explicitly excludes the effective intermediate build root `.rustc_info.json` (the target root when both roots coincide)
+compiler-query cache from usefulness. Cargo fingerprints compiler and wrapper
+paths, file lengths, creation times, and modification times in this file;
+relocating an MBX shim can therefore rewrite it during a fully fresh build.
+The file remains captured and restored with its original bytes and timestamps.
+This is a qualification about compiled actions, predictions, and Cargo unit
+state, rather than all compiler-probe metadata. See the pinned
+[Cargo compiler-query cache implementation](https://github.com/rust-lang/cargo/blob/797e8a9bca276c1c9f9f738d2a20f484fa4eea9d/src/cargo/util/rustc.rs#L327-L347).
+
+Workspace transport records the full Cargo target and intermediate build root
+pair, including disjoint and nested layouts, with separate semantic root roles.
+The JSON report states
+`workspace_transport_scope: "recorded_target_and_build_directories"`.
+Import resolves the current roots through Cargo metadata, including Cargo
+configuration and environment. Pass the original build invocation after `--`
+when its command-specific options selected the roots:
+
+```sh
+mbx cache import --json restored-bundle -- build --target-dir artifacts --config 'build.build-dir="intermediates"'
+```
+
+Restoration selects an exact recorded root pair first, then permits a unique
+matching workspace variant after relocation. Multiple eligible pairs are an
+explicit `workspace_restore: "skipped_ambiguous"`, with `workspace_restored:
+false`. Neither target nor intermediate build roots with existing content are
+replaced. Transport preserves original file bytes, modes, links, and timestamps.
+
+Comparison exports retain the baseline's full action closure and prediction
+mappings. Current predictions replace older entries for the same task and
+invocation. Retention identifies snapshots by the exact workspace, target, and intermediate
+build root pair; separate pairs and omitted pairs remain distinct. A local
+cleanup must not turn an empty scheduler tree into newly reusable work, and
+freshness invalidation must not be mistaken for added or repaired work. Every retained CAS object is
+revalidated. Missing or corrupt retained state fails before publication or group
+receipt cleanup.
+
+An additive comparison snapshot must fit the configured action-store budget
+(`gc.max_size`, resolved internally to `Config.gc.max_bytes`); the owner measures its verified logical closure before copying
+it. An oversized optional snapshot returns an explicit refusal with the budget
+and actual byte count, publishes no bundle, and preserves its pending receipts.
+This does not certify persistence. Existing store GC may remove old unrooted
+baseline objects; their absence causes refusal rather than silently dropping
+previously useful work. Baseline integrity covers attachment references as well
+as action and semantic workspace inventories.

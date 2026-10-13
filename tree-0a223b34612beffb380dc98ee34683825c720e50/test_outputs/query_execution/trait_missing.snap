@@ -1,0 +1,229 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/switch_to_reexport_as_underscore/": [
+    {
+      "name": String("Trait"),
+      "path": List([
+        String("switch_to_reexport_as_underscore"),
+        String("Trait"),
+      ]),
+      "span_begin_line": Uint64(4),
+      "span_end_line": Uint64(4),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_associated_type_removed/": [
+    {
+      "name": String("RemovedTrait"),
+      "path": List([
+        String("trait_associated_type_removed"),
+        String("RemovedTrait"),
+      ]),
+      "span_begin_line": Uint64(24),
+      "span_end_line": Uint64(26),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_method_missing/": [
+    {
+      "name": String("RemovedTraitWithMethod"),
+      "path": List([
+        String("trait_method_missing"),
+        String("RemovedTraitWithMethod"),
+      ]),
+      "span_begin_line": Uint64(8),
+      "span_end_line": Uint64(10),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_method_unsafe_added/": [
+    {
+      "name": String("TraitBecomesPrivate"),
+      "path": List([
+        String("trait_method_unsafe_added"),
+        String("TraitBecomesPrivate"),
+      ]),
+      "span_begin_line": Uint64(19),
+      "span_end_line": Uint64(21),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_method_unsafe_removed/": [
+    {
+      "name": String("TraitBecomesPrivate"),
+      "path": List([
+        String("trait_method_unsafe_removed"),
+        String("TraitBecomesPrivate"),
+      ]),
+      "span_begin_line": Uint64(21),
+      "span_end_line": Uint64(23),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_missing/": [
+    {
+      "name": String("RemovedTrait"),
+      "path": List([
+        String("trait_missing"),
+        String("RemovedTrait"),
+      ]),
+      "span_begin_line": Uint64(3),
+      "span_end_line": Uint64(3),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("RemovedUnsafeTrait"),
+      "path": List([
+        String("trait_missing"),
+        String("RemovedUnsafeTrait"),
+      ]),
+      "span_begin_line": Uint64(5),
+      "span_end_line": Uint64(5),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("PubUseRemovedTrait"),
+      "path": List([
+        String("trait_missing"),
+        String("my_pub_mod"),
+        String("PubUseRemovedTrait"),
+      ]),
+      "span_begin_line": Uint64(8),
+      "span_end_line": Uint64(8),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("PubUseRemovedTrait"),
+      "path": List([
+        String("trait_missing"),
+        String("PubUseRemovedTrait"),
+      ]),
+      "span_begin_line": Uint64(8),
+      "span_end_line": Uint64(8),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_missing_with_major_bump/": [
+    {
+      "name": String("RemovedTrait"),
+      "path": List([
+        String("trait_missing_with_major_bump"),
+        String("RemovedTrait"),
+      ]),
+      "span_begin_line": Uint64(3),
+      "span_end_line": Uint64(3),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("RemovedUnsafeTrait"),
+      "path": List([
+        String("trait_missing_with_major_bump"),
+        String("RemovedUnsafeTrait"),
+      ]),
+      "span_begin_line": Uint64(5),
+      "span_end_line": Uint64(5),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("PubUseRemovedTrait"),
+      "path": List([
+        String("trait_missing_with_major_bump"),
+        String("my_pub_mod"),
+        String("PubUseRemovedTrait"),
+      ]),
+      "span_begin_line": Uint64(8),
+      "span_end_line": Uint64(8),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("PubUseRemovedTrait"),
+      "path": List([
+        String("trait_missing_with_major_bump"),
+        String("PubUseRemovedTrait"),
+      ]),
+      "span_begin_line": Uint64(8),
+      "span_end_line": Uint64(8),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_must_use_removed/": [
+    {
+      "name": String("MustUseRemovedTrait"),
+      "path": List([
+        String("trait_must_use_removed"),
+        String("MustUseRemovedTrait"),
+      ]),
+      "span_begin_line": Uint64(40),
+      "span_end_line": Uint64(40),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_newly_sealed/": [
+    {
+      "name": String("TraitBecomesPrivateAndSealed"),
+      "path": List([
+        String("trait_newly_sealed"),
+        String("TraitBecomesPrivateAndSealed"),
+      ]),
+      "span_begin_line": Uint64(20),
+      "span_end_line": Uint64(20),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_removed_associated_constant/": [
+    {
+      "name": String("RemovedTrait"),
+      "path": List([
+        String("trait_removed_associated_constant"),
+        String("RemovedTrait"),
+      ]),
+      "span_begin_line": Uint64(23),
+      "span_end_line": Uint64(25),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_unsafe_added/": [
+    {
+      "name": String("TraitBecomesPrivateAndUnsafe"),
+      "path": List([
+        String("trait_unsafe_added"),
+        String("TraitBecomesPrivateAndUnsafe"),
+      ]),
+      "span_begin_line": Uint64(13),
+      "span_end_line": Uint64(13),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_unsafe_removed/": [
+    {
+      "name": String("TraitBecomesPrivateAndSafe"),
+      "path": List([
+        String("trait_unsafe_removed"),
+        String("TraitBecomesPrivateAndSafe"),
+      ]),
+      "span_begin_line": Uint64(13),
+      "span_end_line": Uint64(13),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+}

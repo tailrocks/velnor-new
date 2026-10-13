@@ -1,0 +1,157 @@
+use super::{GeneratorValidation, VerifyConfig, WorkflowConfig, WorkflowPolicy};
+use crate::config::{
+    ArtifactBuildOutput, ArtifactBuildTask, VerificationRunner, VerificationTask,
+    VerificationTaskKind,
+};
+use velnor_actions_contract_release::targets::RUNNER_LABEL_CATALOG;
+
+/// Workflow config carrying `name`, all else default.
+fn named(name: &str) -> WorkflowConfig {
+    WorkflowConfig {
+        name: name.to_owned(),
+        policy: WorkflowPolicy::ConsumerV1,
+        default_branch: None,
+        generator_validation: GeneratorValidation::Bootstrap,
+        max_parallel_jobs: 2,
+        runner_label: None,
+        tasks: Vec::new(),
+        artifact_tasks: Vec::new(),
+        verify: VerifyConfig::default(),
+    }
+}
+
+#[test]
+fn verify_defaults_away_and_accepts_only_implemented_consumer_jobs() {
+    let mut config = named("CI");
+    assert!(config.validate("config.toml").is_ok());
+    let serialized = serde_json::to_value(&config).expect("serialize default workflow");
+    assert!(serialized.get("verify").is_none());
+
+    config.verify.jobs = vec!["zizmor".to_owned()];
+    assert!(config.validate("config.toml").is_ok());
+
+    config.verify.jobs = vec!["zizmor".to_owned(), "zizmor".to_owned()];
+    let duplicate = config.validate("config.toml").expect_err("duplicate fails");
+    assert!(
+        duplicate
+            .to_string()
+            .contains("duplicate_verify_job:zizmor")
+    );
+
+    for job in [
+        "alint",
+        "markdownlint",
+        "strict-json",
+        "frontmatter-id",
+        "link-check",
+        "native-validators",
+        "unknown",
+    ] {
+        config.verify.jobs = vec![job.to_owned()];
+        let error = config
+            .validate("config.toml")
+            .expect_err("unimplemented job fails");
+        assert!(
+            error
+                .to_string()
+                .contains(&format!("unsupported_verify_job:{job}")),
+            "{error}"
+        );
+    }
+
+    config.policy = WorkflowPolicy::VelnorRepositoryV1;
+    config.verify.jobs = vec!["zizmor".to_owned()];
+    let error = config
+        .validate("config.toml")
+        .expect_err("consumer-only selector rejected on Velnor policy");
+    assert!(error.to_string().contains("consumer_policy_required"));
+}
+
+#[test]
+fn workflow_name_rejects_expressions_and_controls() {
+    assert!(named("CI").validate("config.toml").is_ok());
+    for name in ["${{ github.ref }}", "a\nb", "a\rb", "a\tb"] {
+        let err = named(name)
+            .validate("config.toml")
+            .expect_err("bad name fails");
+        assert!(err.to_string().contains("bad_name"), "{err}");
+    }
+}
+
+#[test]
+fn generic_workflow_runner_catalog_is_linux_only() {
+    assert!(
+        RUNNER_LABEL_CATALOG
+            .iter()
+            .all(|label| label.starts_with("ubuntu-"))
+    );
+    let mut config = named("CI");
+    config.runner_label = Some("macos-15".to_owned());
+    assert!(
+        config
+            .validate("config.toml")
+            .expect_err("macOS checks use their separate typed runner config")
+            .to_string()
+            .contains("unsupported_label:macos-15")
+    );
+}
+
+#[test]
+fn workflow_tasks_require_sorted_unique_safe_ids() {
+    let make = |id: &str| VerificationTask {
+        id: id.to_owned(),
+        kind: VerificationTaskKind::Verification,
+        mise_task: format!("check-{id}"),
+        runner: VerificationRunner::LinuxX64,
+        timeout_minutes: 10,
+        outputs: Vec::new(),
+    };
+    let mut valid = named("CI");
+    valid.tasks = vec![make("native-format"), make("native-lint")];
+    assert!(valid.validate("config.toml").is_ok());
+
+    valid.tasks.reverse();
+    let error = valid.validate("config.toml").expect_err("unsorted fails");
+    assert!(error.to_string().contains("tasks_must_be_sorted_by_id"));
+
+    valid.tasks = vec![make("native-lint"), make("native-lint")];
+    let error = valid.validate("config.toml").expect_err("duplicate fails");
+    assert!(error.to_string().contains("duplicate_verification_task"));
+
+    valid.tasks = vec![make("required")];
+    let error = valid
+        .validate("config.toml")
+        .expect_err("reserved ID fails");
+    assert!(error.to_string().contains("bad_verification_task_id"));
+}
+
+#[test]
+fn artifact_task_ids_cannot_collide_with_verification_tasks() {
+    let mut config = named("CI");
+    config.tasks = vec![VerificationTask {
+        id: "native-check".to_owned(),
+        kind: VerificationTaskKind::Verification,
+        mise_task: "verify-native".to_owned(),
+        runner: VerificationRunner::LinuxX64,
+        timeout_minutes: 15,
+        outputs: Vec::new(),
+    }];
+    config.artifact_tasks = vec![ArtifactBuildTask {
+        id: "native-check".to_owned(),
+        mise_task: "build-native".to_owned(),
+        runner: VerificationRunner::LinuxX64,
+        timeout_minutes: 30,
+        outputs: vec![ArtifactBuildOutput {
+            id: "bundle".to_owned(),
+            path: "dist/bundle.tar".to_owned(),
+            max_bytes: 1024,
+        }],
+    }];
+    assert!(
+        config
+            .validate("config.toml")
+            .expect_err("overlapping logical IDs fail")
+            .to_string()
+            .contains("task_id_overlaps_verification_task:native-check")
+    );
+}

@@ -1,0 +1,18 @@
+---
+source: tests/integration_snapshots.rs
+info:
+  program: cargo-semver-checks
+  args:
+    - semver-checks
+    - "--witness-hints"
+  env:
+    CARGO_TERM_COLOR: never
+    RUST_BACKTRACE: "0"
+---
+success: false
+exit_code: 1
+----- stdout -----
+
+----- stderr -----
+error: the following options are not supported without `-Z unstable-options`:
+ - `--witness-hints`

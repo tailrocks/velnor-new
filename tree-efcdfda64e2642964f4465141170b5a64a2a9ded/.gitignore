@@ -1,0 +1,9 @@
+.e2e.rtx.toml
+.local
+.rtx
+.cache
+.config
+.asdf
+.default-go-packages
+ruby/Gemfile
+Library

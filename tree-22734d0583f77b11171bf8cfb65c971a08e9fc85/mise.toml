@@ -1,0 +1,64 @@
+[env]
+_.path = ["test/bats/bin", "{{ env.CARGO_TARGET_DIR | default(value='target') }}/debug"]
+
+[tasks.build]
+alias = "b"
+run = "cargo build --workspace --all-targets"
+
+[tasks.test]
+alias = "t"
+description = "Run cargo and Bats tests"
+depends = ["test:cargo", "test:bats"]
+
+[tasks."test:cargo"]
+description = "Run Rust tests"
+run = "cargo test --workspace"
+
+[tasks."test:bats"]
+description = "Run behavioral tests"
+depends = ["build"]
+run = "bats test"
+
+[tasks.format]
+run = "cargo fmt --all"
+
+[tasks.lint]
+run = [
+  "cargo fmt --all --check",
+  "cargo clippy --workspace --all-features --all-targets -- -D warnings",
+]
+
+[tasks.lint-fix]
+run = [
+  "cargo fmt --all",
+  "cargo clippy --workspace --all-features --all-targets --fix --allow-dirty --allow-staged -- -D warnings",
+]
+
+[tasks.ci]
+depends = ["lint", "build", "check:docs", "build:docs", "test"]
+
+[tasks.docs]
+description = "Start the documentation development server"
+depends = ["render:docs"]
+dir = "docs"
+run = "aube install && exec aube run docs:dev"
+
+[tasks."build:docs"]
+description = "Build the documentation website"
+depends = ["render:docs"]
+dir = "docs"
+run = "aube install && exec aube run docs:build"
+
+[tasks."render:docs"]
+description = "Generate reference documentation from the usage spec"
+run = "cargo run --quiet -p mbx -- __usage_spec__ | usage generate markdown --file - --replace-pre-with-code-fences --out-file docs/cli.md"
+
+[tasks."check:docs"]
+description = "Check that generated documentation is current"
+depends = ["render:docs"]
+run = "git diff --exit-code -- docs/cli.md"
+
+[tools]
+aube = "latest"
+node = "24"
+usage = "6.3.0"

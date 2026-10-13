@@ -1,0 +1,80 @@
+---
+source: src/query.rs
+---
+{
+  "./test_crates/trait_allows_fewer_generic_type_params/": [
+    {
+      "name": String("Example"),
+      "new_allowed_types": List([
+        String("A"),
+      ]),
+      "new_required_type_count": Uint64(1),
+      "old_allowed_type_count": Uint64(2),
+      "old_allowed_types": List([
+        String("A"),
+        String("B"),
+      ]),
+      "path": List([
+        String("trait_allows_fewer_generic_type_params"),
+        String("Example"),
+      ]),
+      "span_begin_line": Uint64(3),
+      "span_end_line": Uint64(3),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("NotGenericAnymore"),
+      "new_allowed_types": List([]),
+      "new_required_type_count": Uint64(0),
+      "old_allowed_type_count": Uint64(1),
+      "old_allowed_types": List([
+        String("T"),
+      ]),
+      "path": List([
+        String("trait_allows_fewer_generic_type_params"),
+        String("NotGenericAnymore"),
+      ]),
+      "span_begin_line": Uint64(5),
+      "span_end_line": Uint64(5),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("NotGenericEither"),
+      "new_allowed_types": List([]),
+      "new_required_type_count": Uint64(0),
+      "old_allowed_type_count": Uint64(1),
+      "old_allowed_types": List([
+        String("T"),
+      ]),
+      "path": List([
+        String("trait_allows_fewer_generic_type_params"),
+        String("NotGenericEither"),
+      ]),
+      "span_begin_line": Uint64(7),
+      "span_end_line": Uint64(7),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/trait_removed_supertrait/": [
+    {
+      "name": String("CorrectTraitChangingTheGenericTypeNonBreaking"),
+      "new_allowed_types": List([]),
+      "new_required_type_count": Uint64(0),
+      "old_allowed_type_count": Uint64(1),
+      "old_allowed_types": List([
+        String("T"),
+      ]),
+      "path": List([
+        String("trait_removed_supertrait"),
+        String("CorrectTraitChangingTheGenericTypeNonBreaking"),
+      ]),
+      "span_begin_line": Uint64(18),
+      "span_end_line": Uint64(18),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+}

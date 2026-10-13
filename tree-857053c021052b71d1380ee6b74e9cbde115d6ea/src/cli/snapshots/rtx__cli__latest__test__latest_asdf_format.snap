@@ -1,0 +1,5 @@
+---
+source: src/cli/latest.rs
+expression: stdout
+---
+12.22.12

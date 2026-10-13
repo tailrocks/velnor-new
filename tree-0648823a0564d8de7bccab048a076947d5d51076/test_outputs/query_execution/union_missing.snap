@@ -1,0 +1,128 @@
+---
+source: src/query.rs
+expression: "&query_execution_results"
+---
+{
+  "./test_crates/repr_align_added_removed/": [
+    {
+      "name": String("UnionBecomesAlignedAndPrivate"),
+      "path": List([
+        String("repr_align_added_removed"),
+        String("UnionBecomesAlignedAndPrivate"),
+      ]),
+      "span_begin_line": Uint64(87),
+      "span_end_line": Uint64(89),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("UnionBecomesUnalignedAndPrivate"),
+      "path": List([
+        String("repr_align_added_removed"),
+        String("UnionBecomesUnalignedAndPrivate"),
+      ]),
+      "span_begin_line": Uint64(93),
+      "span_end_line": Uint64(95),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/repr_packed_added_removed/": [
+    {
+      "name": String("UnionBecomesPackedAndPrivate"),
+      "path": List([
+        String("repr_packed_added_removed"),
+        String("UnionBecomesPackedAndPrivate"),
+      ]),
+      "span_begin_line": Uint64(43),
+      "span_end_line": Uint64(45),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("UnionBecomesUnpackedAndPrivate"),
+      "path": List([
+        String("repr_packed_added_removed"),
+        String("UnionBecomesUnpackedAndPrivate"),
+      ]),
+      "span_begin_line": Uint64(49),
+      "span_end_line": Uint64(51),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/repr_packed_changed/": [
+    {
+      "name": String("UnionPackedBecomesPrivate"),
+      "path": List([
+        String("repr_packed_changed"),
+        String("UnionPackedBecomesPrivate"),
+      ]),
+      "span_begin_line": Uint64(26),
+      "span_end_line": Uint64(28),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/union_field_missing/": [
+    {
+      "name": String("PubUnionBecomesPrivateAndPubFieldRemoved"),
+      "path": List([
+        String("union_field_missing"),
+        String("PubUnionBecomesPrivateAndPubFieldRemoved"),
+      ]),
+      "span_begin_line": Uint64(28),
+      "span_end_line": Uint64(31),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/union_missing/": [
+    {
+      "name": String("PubUnionRemoved"),
+      "path": List([
+        String("union_missing"),
+        String("PubUnionRemoved"),
+      ]),
+      "span_begin_line": Uint64(3),
+      "span_end_line": Uint64(5),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("PubUnionBecomesPrivate"),
+      "path": List([
+        String("union_missing"),
+        String("PubUnionBecomesPrivate"),
+      ]),
+      "span_begin_line": Uint64(7),
+      "span_end_line": Uint64(9),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+    {
+      "name": String("PubUnion"),
+      "path": List([
+        String("union_missing"),
+        String("PubUseUnionRemoved"),
+      ]),
+      "span_begin_line": Uint64(12),
+      "span_end_line": Uint64(14),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+  "./test_crates/union_must_use_removed/": [
+    {
+      "name": String("MustUseRemovedUnion"),
+      "path": List([
+        String("union_must_use_removed"),
+        String("MustUseRemovedUnion"),
+      ]),
+      "span_begin_line": Uint64(61),
+      "span_end_line": Uint64(63),
+      "span_filename": String("src/lib.rs"),
+      "visibility_limit": String("public"),
+    },
+  ],
+}
