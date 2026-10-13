@@ -60,8 +60,6 @@ pub const PRESEED_MANIFEST_NAME: &str = "Write helper manifest (pre-seed trust-o
 pub const PRESEED_UPLOAD_NAME: &str = "Upload helper (pre-seed trust-on-review)";
 /// Display name of the pre-seed helper download step.
 pub const PRESEED_DOWNLOAD_NAME: &str = "Download helper (pre-seed trust-on-review)";
-/// Display name of the pre-seed manifest verification step.
-pub const PRESEED_VERIFY_MANIFEST_NAME: &str = "Verify helper manifest (pre-seed trust-on-review)";
 /// Display name of the pre-seed helper staging step.
 pub const PRESEED_STAGE_NAME: &str = "Stage helper (pre-seed trust-on-review)";
 /// Env key carrying the fresh binary path to the manifest op.

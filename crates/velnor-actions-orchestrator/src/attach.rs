@@ -19,7 +19,7 @@ use velnor_actions_workflow_renderer::steps::{
 };
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
-    preseed_manifest_verify_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
+    preseed_stage_step, preseed_upload_step, preseed_verify_step,
 };
 
 use crate::OrchestratorError;

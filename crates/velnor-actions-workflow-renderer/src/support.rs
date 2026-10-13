@@ -23,6 +23,12 @@ mod tokens;
 
 pub(crate) use tokens::check_token_hygiene;
 
+// Token-hygiene gate lives beside the policy gates (`#[path]`, no `lib.rs` edit).
+#[path = "support_tokens.rs"]
+mod tokens;
+
+pub(crate) use tokens::check_token_hygiene;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{

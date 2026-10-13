@@ -112,7 +112,6 @@ pub(crate) fn preseed_final() -> Result<(String, Job), RenderError> {
         vec!["plan".to_owned()],
         vec![
             preseed_download_step()?,
-            preseed_manifest_verify_step(TARGET)?,
             preseed_stage_step(PreseedStageSource::DownloadedArtifact, STAGED)?,
             merge_step(),
         ],
@@ -136,7 +135,6 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
         manifest,
         preseed_upload_step()?,
         preseed_download_step()?,
-        preseed_manifest_verify_step(TARGET)?,
         preseed_stage_step(PreseedStageSource::LocalBuild, STAGED)?,
     ] {
         assert!(
