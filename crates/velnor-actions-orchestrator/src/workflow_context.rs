@@ -49,11 +49,17 @@ pub(super) fn render_context(
                 validator: ValidatorKind::CargoMachete,
                 name: MACHETE_STEP_NAME.to_owned(),
                 argv: machete_argv()?,
+                prepare_argv: Vec::new(),
+                source_units: Vec::new(),
+                tool_inputs: Vec::new(),
             },
             ValidatorCommand {
                 validator: ValidatorKind::Zizmor,
                 name: ZIZMOR_STEP_NAME.to_owned(),
                 argv: zizmor_argv(catalog)?,
+                prepare_argv: Vec::new(),
+                source_units: Vec::new(),
+                tool_inputs: Vec::new(),
             },
         ]);
     }

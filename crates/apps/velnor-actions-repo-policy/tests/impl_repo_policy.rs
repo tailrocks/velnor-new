@@ -33,8 +33,11 @@ mod p12_policy_b;
 #[path = "fixtures/p12_upstream.rs"]
 mod p12_upstream;
 
-/// Expected members as (directory, package name).
-pub(crate) const MEMBERS: [(&str, &str); 9] = [
+/// Explicit non-product registry fixture member.
+pub(crate) const REGISTRY_FIXTURE_DIR: &str = "crates/mbx-synchronous-registry-fixture";
+
+/// Expected workspace members as (directory, package name).
+pub(crate) const MEMBERS: [(&str, &str); 10] = [
     (
         "crates/velnor-actions-actionlint",
         "velnor-actions-actionlint",

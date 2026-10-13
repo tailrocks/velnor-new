@@ -233,6 +233,7 @@ pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
         (ValidatorKind::CargoDeny, "Run cargo-deny"),
         (ValidatorKind::CargoMachete, "Run cargo-machete"),
         (ValidatorKind::Zizmor, "Run zizmor"),
+        (ValidatorKind::PythonSourceTests, "Run Python source tests"),
     ]
     .iter()
     .map(|(validator, name)| ValidatorCommand {
