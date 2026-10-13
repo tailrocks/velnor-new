@@ -369,6 +369,99 @@ mod tests {
         );
     }
 
+    /// Discovery with the given `(id, manifest)` packages in one workspace.
+    fn discovery_with(packages: &[(&str, &str)]) -> Discovery {
+        let mut discovery = two_package_discovery();
+        discovery.workspaces[0].record.packages = packages
+            .iter()
+            .map(|(id, manifest)| PackageRecord {
+                id: (*id).to_owned(),
+                name: (*id).to_owned(),
+                version: "0.1.0".to_owned(),
+                manifest: (*manifest).to_owned(),
+                external: false,
+                in_workspace: true,
+                targets: Vec::new(),
+                features: Vec::new(),
+                has_build_script: false,
+            })
+            .collect();
+        discovery.workspaces[0].record.members =
+            packages.iter().map(|(id, _)| (*id).to_owned()).collect();
+        discovery
+    }
+
+    #[test]
+    fn root_package_does_not_classify_stray_files() {
+        let discovery = discovery_with(&[("root", "Cargo.toml"), ("a", "crates/a/Cargo.toml")]);
+        let stray: BTreeSet<String> = ["docs/shared.md".to_owned()].into_iter().collect();
+        assert!(
+            has_unowned_file(&discovery, &stray),
+            "root prefix must not mask stray files"
+        );
+        let nested: BTreeSet<String> = ["crates/a/src/lib.rs".to_owned()].into_iter().collect();
+        assert!(
+            !has_unowned_file(&discovery, &nested),
+            "nested paths stay classified"
+        );
+    }
+
+    #[test]
+    fn lone_root_package_classifies_everything() {
+        let discovery = discovery_with(&[("root", "Cargo.toml")]);
+        let changed: BTreeSet<String> = ["docs/shared.md".to_owned()].into_iter().collect();
+        assert!(
+            !has_unowned_file(&discovery, &changed),
+            "one package selects itself either way"
+        );
+        let selected = affected_packages(&discovery, &changed, &[], &[]);
+        assert_eq!(selected, ["root".to_owned()].into_iter().collect());
+    }
+
+    #[test]
+    fn nested_change_selects_deepest_beside_root() {
+        let discovery = discovery_with(&[("root", "Cargo.toml"), ("a", "crates/a/Cargo.toml")]);
+        let changed: BTreeSet<String> = ["crates/a/src/lib.rs".to_owned()].into_iter().collect();
+        let selected = affected_packages(&discovery, &changed, &[], &[]);
+        assert_eq!(selected, ["a".to_owned()].into_iter().collect());
+    }
+
+    #[test]
+    fn shared_declared_input_selects_every_declarer() {
+        use velnor_actions_rust::{TaskGroup, TaskKind};
+        let mut discovery = two_package_discovery();
+        let group = |package: &str| TaskGroup {
+            task_id: format!("stack/rust/{package}/clippy/default"),
+            package_id: package.to_owned(),
+            package_name: package.to_owned(),
+            manifest_key: package.to_owned(),
+            kind: TaskKind::Clippy,
+            configuration: "default".to_owned(),
+            features: Vec::new(),
+            target: "host".to_owned(),
+            gated_by: Vec::new(),
+            depends_on: Vec::new(),
+            target_flags: Vec::new(),
+            no_test_targets: false,
+            package_arg: None,
+            compile_driver: CompileDriver::Cargo,
+            test_runner: TestRunner::CargoTest,
+            declared_inputs: vec!["docs/shared.md".to_owned()],
+            undeclared_reads: false,
+            uses_network: false,
+            uses_clock: false,
+            uses_random: false,
+            nextest_profile: NextestProfile::Default,
+        };
+        discovery.task_groups = vec![group("a"), group("b")];
+        let changed: BTreeSet<String> = ["docs/shared.md".to_owned()].into_iter().collect();
+        let selected = affected_packages(&discovery, &changed, &[], &[]);
+        assert!(
+            selected.contains("a") && selected.contains("b"),
+            "both declarers affected: {selected:?}"
+        );
+    }
+
     #[test]
     fn union_of_base_and_head_graphs_selects_removed_consumers() {
         let discovery = two_package_discovery();
