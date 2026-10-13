@@ -1,0 +1,355 @@
+use super::*;
+use crate::verify::validator_install_pin;
+use velnor_actions_rust::{CompileDriver, TestRunner};
+
+/// Owned argv expectation from literals.
+fn argv_of(parts: &[&str]) -> Vec<String> {
+    parts.iter().map(ToString::to_string).collect()
+}
+
+#[test]
+fn policy_vectors_pin_specs_and_payloads() {
+    let roots = [String::new(), "crates/velnor-runner".to_owned()];
+    let deny = deny_argv(&roots).expect("deny argv");
+    assert_eq!(&deny[..2], ["sh", "-c"], "deny runs isolated, not bare");
+    let script = &deny[2];
+    for need in [
+        "mise --no-config --no-env --no-hooks install cargo-deny@0.20.2",
+        "unset ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "MISE_GITHUB_TOKEN",
+        "mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\"",
+        "cd \"$RUNNER_TEMP/velnor/cargo-clean\"",
+        "mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked",
+        "--manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"",
+        "--config \"$GITHUB_WORKSPACE/deny.toml\" check",
+        "--manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\"",
+        "--config \"$GITHUB_WORKSPACE/crates/velnor-runner/deny.toml\" check",
+    ] {
+        assert!(script.contains(need), "deny script misses {need}: {script}");
+    }
+    let at = |needle: &str| {
+        script
+            .find(needle)
+            .unwrap_or_else(|| panic!("deny script misses {needle}: {script}"))
+    };
+    assert!(
+        at("mise --no-config --no-env --no-hooks install") < at("unset ")
+            && at("unset ") < at("cargo deny"),
+        "deny must bootstrap, then drop creds, then run cargo: {script}"
+    );
+    assert!(
+        at("$GITHUB_WORKSPACE/Cargo.toml\" --config")
+            < at("$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" --config"),
+        "both workspaces must be checked in declared order: {script}"
+    );
+    let root_only = deny_argv(&[String::new()]).expect("root-only deny argv");
+    assert!(root_only[2].contains("$GITHUB_WORKSPACE/Cargo.toml"));
+    assert!(
+        !root_only[2].contains("velnor-runner"),
+        "discovery without a nested runner must not inject its manifest"
+    );
+    assert!(validator_argv("evil-tool", "1.2.3", "cargo", &["deny"]).is_err());
+    assert!(validator_argv("cargo-deny", "latest", "cargo", &["deny"]).is_err());
+}
+
+#[test]
+fn machete_validator_is_pinned_and_installed_before_execution() {
+    // Exec-form coverage lives in
+    // machete_cold_install_uses_verified_asset_and_preserves_scan_invocation
+    // (http-pinned asset); this test pins the install form.
+    let machete_install = machete_install_argv().expect("machete install argv");
+    assert_eq!(
+        machete_install,
+        argv_of(&[
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "install",
+            "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2",
+        ])
+    );
+    assert_eq!(
+        validator_install_pin(
+            "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2"
+        ),
+        Some((
+            "cargo-machete",
+            "0.9.2",
+            "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]"
+        ))
+    );
+    assert_eq!(
+        validator_install_pin("zizmor@1.30.1"),
+        Some(("zizmor", "1.30.1", "zizmor"))
+    );
+}
+
+#[test]
+fn machete_cold_install_uses_verified_asset_and_preserves_scan_invocation() {
+    let machete = machete_argv().expect("machete argv");
+    let tool_spec = &machete[5];
+    assert!(
+        tool_spec.starts_with(
+            "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/"
+        ),
+        "cold install must fetch the exact v0.9.2 asset: {tool_spec}"
+    );
+    assert!(
+        tool_spec.contains(
+            ",checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2"
+        ),
+        "cold install must verify the known digest and pin version: {tool_spec}"
+    );
+    assert!(
+        !tool_spec.contains("api.github.com/repos/bnjbvr/cargo-machete/releases")
+            && !tool_spec.contains("releases/latest"),
+        "cold install must not query the releases listing API: {tool_spec}"
+    );
+
+    let mut want = argv_of(&[
+        "mise",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "exec",
+        "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2",
+        "--",
+        "cargo",
+        "machete",
+    ]);
+    let expected_scan_crates = [
+        "crates/velnor-actions-contract",
+        "crates/velnor-actions-rust",
+        "crates/velnor-actions-tofu",
+        "crates/velnor-actions-mise",
+        "crates/velnor-actions-actionlint",
+        "crates/velnor-actions-workflow-renderer",
+        "crates/velnor-actions-orchestrator",
+        "crates/velnor-actions-cli",
+    ];
+    want.extend(expected_scan_crates.map(ToString::to_string));
+    assert_eq!(machete, want);
+}
+
+#[test]
+fn mbx_probe_vector_is_byte_exact() {
+    let catalog = ToolCatalog::pinned();
+    let probe = mbx_probe_argv(&catalog).expect("probe argv");
+    let mut want = argv_of(&[
+        "mise",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "exec",
+        "rust@catalog-pin",
+        "--",
+        "mbx",
+        "--version",
+    ]);
+    want[5] = catalog.tool_spec(PinnedTool::Rust);
+    assert_eq!(probe, want);
+}
+
+#[test]
+fn quoted_argv_rejects_malformed_parameter_expansion() {
+    assert!(join_quoted_argv(&argv_of(&["${RUNNER_TEMP!}"])).is_err());
+}
+
+/// Minimal proposal with one compile driver.
+fn group_with_driver(driver: velnor_actions_rust::CompileDriver) -> ProposedTask {
+    let group = velnor_actions_rust::TaskGroup {
+        task_id: "stack/rust/root/clippy/default".to_owned(),
+        package_id: String::new(),
+        package_name: String::new(),
+        manifest_key: "root".to_owned(),
+        kind: velnor_actions_rust::TaskKind::Clippy,
+        configuration: "default".to_owned(),
+        features: Vec::new(),
+        target: "host".to_owned(),
+        gated_by: Vec::new(),
+        depends_on: Vec::new(),
+        target_flags: Vec::new(),
+        no_test_targets: false,
+        package_arg: None,
+        compile_driver: driver,
+        test_runner: velnor_actions_rust::TestRunner::CargoTest,
+        declared_inputs: Vec::new(),
+        undeclared_reads: false,
+        uses_network: false,
+        uses_clock: false,
+        uses_random: false,
+        run_ignored: None,
+        nextest_profile: velnor_actions_rust::NextestProfile::Default,
+    };
+    let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
+    task.validate().expect("fixture valid");
+    task
+}
+
+#[test]
+fn task_payload_program_follows_route_driver() {
+    let catalog = ToolCatalog::pinned();
+    let rust_spec = catalog.tool_spec(PinnedTool::Rust);
+    for (driver, program) in [(CompileDriver::Cargo, "cargo"), (CompileDriver::Mbx, "mbx")] {
+        let argv = task_argv(&group_with_driver(driver), &catalog).expect("task argv");
+        let at = argv.iter().position(|arg| arg == "--").expect("separator");
+        assert_eq!(argv[at + 1], program, "{} program", driver.as_str());
+        assert_eq!(
+            &argv[5..at],
+            std::slice::from_ref(&rust_spec),
+            "{} selects only Rust through Mise; MBX is action-owned",
+            driver.as_str()
+        );
+        assert!(
+            !argv.iter().any(|arg| arg.contains("mr-boxington")),
+            "{} must not reinstall action-owned MBX: {argv:?}",
+            driver.as_str()
+        );
+    }
+}
+
+#[test]
+fn task_runner_tools_follow_test_runner() {
+    let catalog = ToolCatalog::pinned();
+    let nextest = catalog.tool_spec(PinnedTool::Nextest);
+    for (driver, program) in [(CompileDriver::Cargo, "cargo"), (CompileDriver::Mbx, "mbx")] {
+        for (runner, want) in [
+            (TestRunner::CargoTest, false),
+            (TestRunner::CargoNextest, true),
+        ] {
+            let mut task = group_with_driver(driver);
+            task.identity.test_runner = runner.as_str().to_owned();
+            let argv = task_argv(&task, &catalog).expect("task argv");
+            let at = argv.iter().position(|arg| arg == "--").expect("separator");
+            assert_eq!(argv[at + 1], program);
+            assert_eq!(argv.contains(&nextest), want, "{} nextest", runner.as_str());
+            if driver == CompileDriver::Mbx {
+                assert!(
+                    !argv.iter().any(|arg| arg.contains("mr-boxington")),
+                    "action-owned MBX must not become a Mise selector: {argv:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn unknown_compile_driver_fails_instead_of_defaulting_to_cargo() {
+    let mut task = group_with_driver(CompileDriver::Cargo);
+    task.identity.compile_driver = "future-driver".to_owned();
+    let error = task_argv(&task, &ToolCatalog::pinned()).expect_err("unknown route must fail");
+    assert!(
+        error
+            .to_string()
+            .contains("unknown_compile_driver:future-driver"),
+        "route miss reason: {error}"
+    );
+}
+
+#[test]
+fn zizmor_vector_is_pinned_and_offline() {
+    let argv = zizmor_argv(&ToolCatalog::pinned()).expect("zizmor argv");
+    assert_eq!(
+        argv.join(" "),
+        "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL \
+             -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST \
+             -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec zizmor@1.30.1 -- zizmor \
+             --no-online-audits --config .zizmor.yml .github/workflows"
+    );
+}
+
+#[test]
+fn section4_build_vector_is_byte_exact() {
+    let catalog = ToolCatalog::pinned();
+    let build = candidate_build_argv(&catalog).expect("build argv");
+    let mbx_rust_selector = format!("+{}", catalog.version(PinnedTool::Rust));
+    let mut want = argv_of(&[
+        "mise",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "exec",
+        "rust@catalog-pin",
+        "--",
+        "mbx",
+        mbx_rust_selector.as_str(),
+        "build",
+        "--release",
+        "--locked",
+        "--package",
+        "velnor-actions-cli",
+        "--bin",
+        "velnor-actions",
+    ]);
+    want[5] = catalog.tool_spec(PinnedTool::Rust);
+    assert_eq!(build, want);
+}
+
+#[test]
+fn tofu_task_argv_routes_through_pinned_opentofu() {
+    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    let group = TofuTaskGroup {
+        root: String::new(),
+        kind: TofuTaskKind::Validate,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    };
+    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    task.validate().expect("fixture valid");
+    let catalog = ToolCatalog::pinned();
+    let argv = task_argv(&task, &catalog).expect("task argv");
+    assert!(
+        argv.contains(&catalog.tool_spec(PinnedTool::Opentofu)),
+        "opentofu spec: {argv:?}"
+    );
+    assert!(
+        !argv
+            .iter()
+            .any(|arg| arg == "cargo" || arg.contains("nextest")),
+        "no rust tools: {argv:?}"
+    );
+    let at = argv.iter().position(|arg| arg == "--").expect("separator");
+    // Program `tofu` plus the fixed payload, wrapped never edited.
+    assert_eq!(&argv[at + 1..], ["tofu", "validate", "-no-color"]);
+}
+
+#[test]
+fn tofu_subdir_payload_runs_under_chdir_first() {
+    use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
+    let group = TofuTaskGroup {
+        root: "stacks/a".to_owned(),
+        kind: TofuTaskKind::Fmt,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    };
+    let task = velnor_actions_tofu::propose_task(&group).expect("fixture proposes");
+    let catalog = ToolCatalog::pinned();
+    let argv = task_argv(&task, &catalog).expect("task argv");
+    let at = argv.iter().position(|arg| arg == "--").expect("separator");
+    assert_eq!(
+        &argv[at + 1..],
+        [
+            "tofu",
+            "-chdir",
+            "stacks/a",
+            "fmt",
+            "-check",
+            "-recursive",
+            "-no-color"
+        ]
+    );
+}
+
+#[test]
+fn candidate_build_delegates_to_mise_constructor() {
+    let catalog = ToolCatalog::pinned();
+    let mine = candidate_build_argv(&catalog).expect("build argv");
+    let owned = CandidateBuild::new()
+        .expect("mise build")
+        .argv(&catalog)
+        .into_iter()
+        .map(|arg| arg.into_string().expect("utf8"))
+        .collect::<Vec<_>>();
+    assert_eq!(mine, owned);
+}
