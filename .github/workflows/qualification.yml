@@ -909,6 +909,10 @@ jobs:
           env: "false"
           cache: "false"
           cache_save: "false"
+          env: "false"
+          install: "false"
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          version: 2026.9.18
       - name: Install pinned Rust toolchain
         run: "mise install rust@1.99.0 && printf '%s/bin\\n' \"$(mise exec rust@1.99.0 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
       - name: Restore MBX objects
