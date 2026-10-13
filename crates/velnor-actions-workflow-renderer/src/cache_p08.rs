@@ -22,6 +22,8 @@ mod setup_pipeline;
 
 pub use crate::cache_elect::elect_cache_writers;
 
+pub use crate::cache_elect::elect_mise_cache_writers;
+
 /// Display name of the shared sources restore step.
 pub const RESTORE_SOURCES_NAME: &str = "Restore Cargo sources";
 /// Display name of the shared sources save step.
