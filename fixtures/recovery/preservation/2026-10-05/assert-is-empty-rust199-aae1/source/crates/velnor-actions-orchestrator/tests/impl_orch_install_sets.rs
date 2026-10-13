@@ -40,9 +40,9 @@ fn velnor_workspace() -> Result<TempDir, Box<dyn std::error::Error>> {
     fs::write(root.join(".velnor/generator.lock"), lock_text()?)?;
     fs::write(
         root.join("Cargo.toml"),
-        "[workspace]\nmembers = [\n  \"crates/velnor-actions-cli\",\n  \"crates/demo\",\n]\n",
+        "[workspace]\nmembers = [\n  \"crates/velnor-actions-cli\",\n  \"crates/velnor-actions-contract\",\n]\n",
     )?;
-    for name in ["velnor-actions-cli", "demo"] {
+    for name in ["velnor-actions-cli", "velnor-actions-contract"] {
         let dir = root.join("crates").join(name);
         fs::create_dir_all(dir.join("src"))?;
         fs::write(
@@ -138,17 +138,31 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
         for spec in trio {
             assert!(cli.contains(spec), "cli suite spawns validators: {cli}");
         }
-        let demo = runs.get("rust-demo").ok_or("demo crate job missing")?;
+        let contract = runs
+            .get("rust-velnor-actions-contract")
+            .ok_or("contract crate job missing")?;
         for spec in trio {
-            assert!(!demo.contains(spec), "demo must trim {spec}: {demo}");
+            assert!(
+                !contract.contains(spec),
+                "contract must trim {spec}: {contract}"
+            );
         }
-        assert!(demo.contains("rust@"), "demo keeps its driver: {demo}");
+        assert!(
+            contract.contains("rust@"),
+            "contract keeps its driver: {contract}"
+        );
         let required = runs.get("required").ok_or("required missing")?;
         assert!(required.contains("gh@"), "required installs gh: {required}");
         for spec in trio {
             assert!(!required.contains(spec), "required must not carry {spec}");
         }
-        for id in ["alint", "cargo-deny", "cargo-machete", "zizmor"] {
+        for id in [
+            "alint",
+            "cargo-deny",
+            "cargo-machete",
+            "zizmor",
+            "python-source-tests",
+        ] {
             assert!(
                 !runs.contains_key(id),
                 "dedicated {id} has no Prepare step to trim"

@@ -15,6 +15,7 @@ use super::{
     detected_projects,
 };
 use crate::safe_read::MAX_REPO_FILE_BYTES;
+use velnor_actions_contract::WorkflowPolicy;
 
 /// Present file returns its exact text.
 #[test]
@@ -58,6 +59,18 @@ fn assert_absent_consumer_admission(root: &Path) {
 fn assert_absent_consumer_admission(root: &Path) {
     assert_eq!(
         for_policy(root, WorkflowPolicy::ConsumerV1).expect("consumer absent"),
+        (None, false)
+    );
+}
+
+/// Velnor generation never reads the unrelated consumer manifest.
+#[test]
+fn velnor_policy_skips_consumer_manifest_input() {
+    let root = TempDir::new().expect("temp root");
+    let path = root.path().join(".velnor/release-manifest.json");
+    fs::create_dir_all(&path).expect("directory at manifest path");
+    assert_eq!(
+        for_policy(root.path(), WorkflowPolicy::VelnorRepositoryV1).expect("not consumed"),
         (None, false)
     );
 }

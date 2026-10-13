@@ -43,6 +43,7 @@ fn members() -> Vec<&'static str> {
         "crates/velnor-actions-cli",
         "crates/velnor-actions-contract",
         "crates/velnor-actions-mise",
+        "crates/velnor-actions-native",
         "crates/velnor-actions-orchestrator",
         "crates/velnor-actions-rust",
         "crates/velnor-actions-tofu",

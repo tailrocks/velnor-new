@@ -50,6 +50,7 @@ fn final_gate_needs_plan_lint_and_support() -> Result<(), RenderError> {
         "cargo-deny",
         "cargo-machete",
         "zizmor",
+        "python-source-tests",
         "candidate",
     ] {
         assert!(window.contains(need), "missing need {need}:\n{window}");

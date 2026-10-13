@@ -321,6 +321,7 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
             group("velnor-actions-orchestrator", TaskKind::Test, &[]),
             group("velnor-actions-cli", TaskKind::Test, &[]),
             group("velnor-actions-contract", TaskKind::Test, &[]),
+            group("velnor-actions-native", TaskKind::Test, &[]),
         ]),
         catalog: &catalog,
         fetch_roots: &[],
@@ -329,7 +330,7 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
         helper_version: env!("CARGO_PKG_VERSION"),
     })
     .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 3);
+    assert_eq!(found.jobs.len(), 4);
     for (id, job) in &found.jobs {
         let run = prepare_run(job);
         let spawning = id == "rust-velnor-actions-orchestrator" || id == "rust-velnor-actions-cli";

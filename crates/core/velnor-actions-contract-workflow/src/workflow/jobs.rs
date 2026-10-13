@@ -126,12 +126,13 @@ impl ValidatorKind {
     ///
     /// Actionlint is always-on base IR on both policies, never support.
     #[must_use]
-    pub fn repository_validators() -> [Self; 4] {
+    pub fn repository_validators() -> [Self; 5] {
         [
             Self::Alint,
             Self::CargoDeny,
             Self::CargoMachete,
             Self::Zizmor,
+            Self::PythonSourceTests,
         ]
     }
 }

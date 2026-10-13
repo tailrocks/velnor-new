@@ -67,7 +67,7 @@ pub struct Discovery {
     /// generation); release builds keep `None` so generation fails
     /// closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
-    /// Whether the manifest text above is the debug-only stand-in.
+    /// Whether the consumer policy uses the debug-only stand-in.
     ///
     /// False for Velnor policy and release builds. `generate` warns when
     /// consumer policy uses the debug stand-in; `plan` stays silent.

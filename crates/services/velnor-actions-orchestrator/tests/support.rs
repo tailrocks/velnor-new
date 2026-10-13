@@ -27,6 +27,10 @@ mod path;
 
 pub(crate) use path::test_path_with_sbin;
 
+#[path = "fixture_package.rs"]
+mod fixture_package;
+pub(crate) use fixture_package::root_manifest;
+
 /// Test error shortcut.
 pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;
 

@@ -129,18 +129,12 @@ pub fn tofu_cache_dir_under(base: &str, root: &str) -> Result<String, ContractEr
 ///
 /// # Errors
 ///
-/// Returns [`ContractError`] for empty, oversize, or HCL-unsafe input.
+/// Returns [`ContractError`] for empty or HCL-unsafe input.
 pub fn tofu_cli_config(cache_dir: &str) -> Result<String, ContractError> {
     if cache_dir.is_empty() {
         return Err(ContractError::identity(
             "tofu_cli_config",
             "empty_cache_dir",
-        ));
-    }
-    if cache_dir.len() > MAX_CLI_CONFIG_PATH_BYTES {
-        return Err(ContractError::identity(
-            "tofu_cli_config",
-            "oversize_cache_dir",
         ));
     }
     if cache_dir.contains("${") {

@@ -101,10 +101,7 @@ fn make_sample_repo(sample: &str, mise: &str) -> Result<TempDir, Box<dyn std::er
         root.join(".velnor/release-manifest.json"),
         fixture_manifest_json(),
     )?;
-    fs::write(
-        root.join("Cargo.toml"),
-        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-    )?;
+    fs::write(root.join("Cargo.toml"), root_manifest(sample))?;
     fs::create_dir_all(root.join("src"))?;
     fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
     git(&["add", "-A"], root)?;

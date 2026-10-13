@@ -6,6 +6,8 @@
 
 use crate::impl_common::git_fixture;
 
+use crate::impl_common::git_fixture;
+
 use std::fs;
 use std::path::Path;
 use std::time::Instant;

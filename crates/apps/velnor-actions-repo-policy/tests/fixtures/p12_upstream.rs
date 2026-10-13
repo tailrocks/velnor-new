@@ -19,6 +19,23 @@ type ProbeRow = (&'static str, &'static str, &'static str);
 /// (inventory source URL, canned file, canned body) for every probe row.
 fn probe_rows() -> Vec<ProbeRow> {
     let mut rows = probe_tool_rows();
+    rows.extend([
+        (
+            "https://pypi.org/pypi/reuse/json",
+            "reuse.json",
+            "{\"info\":{\"version\":\"6.2.0\"}}",
+        ),
+        (
+            "https://www.python.org/downloads/",
+            "python.html",
+            "<a>Download Python 3.14.8</a>",
+        ),
+        (
+            "https://api.github.com/repos/astral-sh/uv/releases/latest",
+            "uv.json",
+            "{\"tag_name\":\"0.12.22\"}",
+        ),
+    ]);
     rows.extend(probe_action_rows());
     rows
 }

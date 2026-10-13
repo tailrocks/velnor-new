@@ -3,12 +3,12 @@
 //! Run summaries discover candidates. Immutable baseline evidence is
 //! authenticated against its exact artifact and original attempt record.
 
-/// One selected exact-base run: run plus its successful attempt.
+/// Current successful analysis run selected from service summaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SelectedBaseRun {
     /// Numeric GitHub run ID.
     pub run_id: u64,
-    /// Successful attempt the baseline manifest must claim.
+    /// Successful current attempt for analysis evidence.
     pub attempt: u64,
 }
 
@@ -19,16 +19,20 @@ pub struct SelectedBaseRun {
 /// attempt wins. This does not authenticate an immutable baseline: baseline
 /// lookup uses [`select_exact_base_candidates`] and the attempt API record.
 ///
+/// Immutable baseline publication uses candidate discovery plus independent
+/// original-attempt authentication instead of this current-attempt policy.
 /// # Errors
-///
-/// Returns `baseline_unavailable` unless at least one run matches.
+/// Refuses listings without an exact successful push and recorded attempt.
 pub fn select_exact_base_run(
     text: &str,
     base: &str,
     branch: &str,
 ) -> Result<SelectedBaseRun, String> {
-    let runs: Vec<serde_json::Value> =
-        serde_json::from_str(text).map_err(|_| "baseline_unavailable".to_owned())?;
+    let value = velnor_actions_contract::parse_strict_json(text)
+        .map_err(|_| "baseline_unavailable".to_owned())?;
+    let runs = value
+        .as_array()
+        .ok_or_else(|| "baseline_unavailable".to_owned())?;
     runs.iter()
         .filter(|run| {
             run["headSha"] == base
@@ -37,9 +41,10 @@ pub fn select_exact_base_run(
                 && run["conclusion"] == "success"
         })
         .find_map(|run| {
-            let run_id = run["databaseId"].as_u64().filter(|id| *id > 0)?;
-            let attempt = run["attempt"].as_u64().filter(|n| *n > 0)?;
-            Some(SelectedBaseRun { run_id, attempt })
+            Some(SelectedBaseRun {
+                run_id: run["databaseId"].as_u64().filter(|id| *id > 0)?,
+                attempt: run["attempt"].as_u64().filter(|attempt| *attempt > 0)?,
+            })
         })
         .ok_or_else(|| "baseline_unavailable".to_owned())
 }

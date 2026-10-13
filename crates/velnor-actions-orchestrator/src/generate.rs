@@ -321,6 +321,15 @@ pub use guards::ToolSnapshot;
 use guards::{GenerateOwnership, same_filesystem};
 use leaf_links::check_no_symlink_or_emitted_leaf;
 
+/// Repository-owned content carried into the replacement transaction.
+#[path = "generate_preserve.rs"]
+mod preserve;
+
+#[path = "generate_output_commit.rs"]
+mod output_commit;
+
+use output_commit::swap_directories;
+
 /// Options for [`generate`].
 #[derive(Debug, Clone, Default)]
 pub struct GenerateOptions {

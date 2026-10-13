@@ -146,7 +146,7 @@ pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, 
         model.validate()?;
         let job = render_job(
             label,
-            policy,
+            crate::matrix_step::suite_tools_for_tasks(policy, tasks)?,
             &model,
             catalog,
             fetch_roots,
@@ -265,7 +265,7 @@ fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
 )]
 fn render_job(
     label: &str,
-    policy: WorkflowPolicy,
+    suite_tools: crate::matrix_step::SuiteTools,
     model: &CrateJob,
     catalog: &ToolCatalog,
     fetch_roots: &[String],

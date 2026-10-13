@@ -272,7 +272,13 @@ fn velnor_policy_renders_validators_only() -> Result<(), RenderError> {
         Some(&support),
         &ctx,
     )?;
-    for id in ["alint:", "cargo-deny:", "cargo-machete:", "zizmor:"] {
+    for id in [
+        "alint:",
+        "cargo-deny:",
+        "cargo-machete:",
+        "zizmor:",
+        "python-source-tests:",
+    ] {
         assert!(text.contains(id), "missing {id}:\n{text}");
     }
     assert!(text.contains(ALINT_USES));

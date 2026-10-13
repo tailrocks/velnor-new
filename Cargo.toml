@@ -4,12 +4,14 @@ members = [
     "crates/velnor-archive-guard",
     "crates/velnor-actions-rust",
     "crates/velnor-actions-mise",
+    "crates/velnor-actions-native",
     "crates/velnor-actions-actionlint",
     "crates/velnor-actions-workflow-renderer",
     "crates/velnor-actions-orchestrator",
     "crates/velnor-actions-cli",
     "crates/velnor-actions-freshness",
     "crates/velnor-actions-tofu",
+    "crates/mbx-synchronous-registry-fixture",
 ]
 resolver = "3"
 

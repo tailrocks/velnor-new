@@ -65,6 +65,8 @@ fn rq211_lock_staleness_probe() -> Result<(), Box<dyn Error>> {
         identity.contains("exact `=x.y.z` (VER-2.26)"),
         "Rust owner must enforce exact direct dependency versions"
     );
+    crate::impl_repo_policy::p12_harness::cleanup(&fixture);
+
     let procedure = read("docs/implemented/update-procedure.md")?;
     assert!(
         procedure.contains("MUST NOT remain stale"),

@@ -156,6 +156,9 @@ fn is_tool_spec(value: &str) -> bool {
     let Some((tool, version)) = value.split_once('@') else {
         return false;
     };
+    if tool.starts_with("http:") {
+        return value == ToolCatalog::pinned().tool_spec(PinnedTool::Python);
+    }
     !tool.is_empty()
         && !version.is_empty()
         && !value.contains(' ')

@@ -46,6 +46,7 @@ pub(crate) const MEMBERS: [(&str, &str); 9] = [
         "velnor-actions-freshness",
     ),
     ("crates/velnor-actions-mise", "velnor-actions-mise"),
+    ("crates/velnor-actions-native", "velnor-actions-native"),
     (
         "crates/velnor-actions-orchestrator",
         "velnor-actions-orchestrator",
@@ -56,6 +57,7 @@ pub(crate) const MEMBERS: [(&str, &str); 9] = [
         "crates/velnor-actions-workflow-renderer",
         "velnor-actions-workflow-renderer",
     ),
+    (REGISTRY_FIXTURE_DIR, "mbx-synchronous-registry-fixture"),
 ];
 
 pub(crate) const WORKSPACE_ROOTS: [&str; 2] = ["", "crates/velnor-runner"];
@@ -207,6 +209,10 @@ fn package_names_use_purpose_suffix() -> Result<(), Box<dyn Error>> {
         let package = package(dir);
         let body = manifest(dir)?;
         assert!(body.contains(&format!("name = \"{package}\"")), "{dir}");
+        if dir == REGISTRY_FIXTURE_DIR {
+            assert_eq!(package, "mbx-synchronous-registry-fixture");
+            continue;
+        }
         let purpose = package.strip_prefix("velnor-actions-").ok_or(package)?;
         assert!(!purpose.is_empty(), "{dir}");
     }

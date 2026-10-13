@@ -1,8 +1,8 @@
 //! Exact-base baseline lookup and manifest resolution.
 //!
-//! Finds the exact-base successful run through pinned `gh`, downloads the
+//! Finds exact-base candidates through pinned `gh`, downloads the
 //! single exact named artifact, and keeps temp entries matching the exact
-//! base, run, attempt, id, and shape.
+//! base, run, original successful attempt, id, and shape.
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
@@ -246,6 +246,8 @@ pub(crate) fn resolve_manifests(
     let Some(artifact) = artifact.filter(|name| !name.is_empty()) else {
         return Err("baseline_no_exact_artifact".to_owned());
     };
+    velnor_actions_contract::validate_artifact_id(artifact)
+        .map_err(|_| "baseline_no_exact_artifact".to_owned())?;
     let repo = resolve_lookup_repo(root, repository)?;
     let lookup = BaselineLookup::new(base, workflow, branch, &repo)?;
     resolve_with(
@@ -254,6 +256,36 @@ pub(crate) fn resolve_manifests(
         |args| BaselineLookup::run(catalog, root, args),
         |args| BaselineLookup::run_archive(catalog, root, args),
     )
+    .map_err(|_| "baseline_unavailable".to_owned())?;
+    let value = crate::internal_plan::snapshot::parse_canonical_json(&text)
+        .map_err(|_| "baseline_unavailable".to_owned())?;
+    let candidate: BaselineManifest =
+        serde_json::from_value(value).map_err(|_| "baseline_unavailable".to_owned())?;
+    let mut found = collect_manifests(
+        temp.path(),
+        &lookup.base_sha,
+        run_id,
+        candidate.run_attempt,
+        artifact,
+    )?;
+    let parent = found
+        .pop()
+        .ok_or_else(|| "baseline_unavailable".to_owned())?;
+    let endpoint = format!(
+        "repos/{}/actions/runs/{run_id}/attempts/{}",
+        lookup.repo, parent.run_attempt
+    );
+    let record = run(vec![OsString::from("api"), OsString::from(endpoint)])?;
+    if !crate::retrieve_baseline::authentic_attempt(
+        &record,
+        &parent,
+        &lookup.repo,
+        &lookup.branch,
+        &lookup.workflow,
+    ) {
+        return Err("baseline_unauthenticated".to_owned());
+    }
+    Ok(parent)
 }
 
 /// One transport-injected normal lookup, retaining original publication proof.

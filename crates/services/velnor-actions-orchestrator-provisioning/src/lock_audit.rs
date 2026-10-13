@@ -6,7 +6,7 @@
 //!
 //! Both install-class emissions are audited: `Prepare pinned tools`
 //! steps from the IR (catalog specs) and validator install commands
-//! from the typed render context (validator pins). Validator steps
+//! from the typed render context (catalog or validator pins). Validator steps
 //! materialize at render time, so scraping the IR alone would leave
 //! validator ambient installs invisible; the typed commands close that
 //! gap without string-matching rendered YAML.
@@ -47,35 +47,12 @@ pub struct LockAuditOutcome {
 /// unbounded into `prepare`/`generate`.
 const MAX_TOOL_FILE_BYTES: u64 = 1024 * 1024;
 
-/// What one validator command contributes to the install audit.
-enum CommandInstalls {
-    /// No `mise` vector needing audit: no `mise` token, or only
-    /// isolated `exec` vectors. Not audited.
-    NotInstall,
-    /// Emitted install specs, possibly empty (the caller blocks bare).
-    Specs(Vec<String>),
-    /// A `mise` token with an unclassifiable tail (the caller blocks
-    /// with the detail; silence would be a fail-open).
-    Unclassifiable(String),
-}
-
-/// Classification of the `mise` vectors in one argv token run.
-enum MiseVectors {
-    /// No `mise` token, or only isolated `exec` vectors.
-    NotInstall,
-    /// The first `install` vector's specs, possibly empty.
-    Install(Vec<String>),
-    /// A `mise` token with an unclassifiable tail (unknown subcommand
-    /// or truncated argv); detail feeds the blocking diagnostic.
-    Unclassifiable(String),
-}
-
 /// Audit emitted install sets against `root/mise.lock`.
 ///
 /// Install sets come from the built workflow (what CI will install,
 /// not intent): Prepare specs from the IR resolve through the
 /// catalog, validator install specs from the typed render context
-/// resolve through the validator pin, and anything else blocks as a
+/// resolve through the catalog or validator-specific pins, and anything else blocks as a
 /// generator bug, never silently. A `mise` vector that is neither an
 /// `install` nor an isolated `exec` blocks as unclassifiable.
 pub fn audit_prepare_installs(
@@ -108,7 +85,7 @@ pub fn audit_prepare_installs(
         }
     }
     for command in validator_commands {
-        audit_validator_command(command, &mut subjects, &mut blocking);
+        validator::audit_validator_command(command, &catalog, &mut subjects, &mut blocking);
     }
     subjects.sort_by(|left, right| left.display.cmp(&right.display));
     subjects.dedup();

@@ -16,12 +16,15 @@ use velnor_actions_orchestrator_generation::prepare::{GenerationPreparation, pre
 use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
 use crate::impl_common::{
-    TestResult, config_with_branch, fixture_manifest_json, git, make_repo, plan_for,
+    TestResult, config_with_branch, fixture_manifest_json, git, make_repo, plan_for, root_manifest,
     without_ambient_identity,
 };
 
 /// Minimal lockfile making a fixture lockful (fetch/restore emitted).
 const FAKE_LOCK: &str = "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n";
+
+/// Config for an audited repository fixture.
+const VELNOR_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n";
 
 /// Velnor-policy fixture with canonical origin plus release manifest.
 fn make_velnor_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
@@ -49,10 +52,7 @@ fn make_velnor_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
         root.join(".velnor/release-manifest.json"),
         fixture_manifest_json(),
     )?;
-    fs::write(
-        root.join("Cargo.toml"),
-        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-    )?;
+    fs::write(root.join("Cargo.toml"), root_manifest(VELNOR_CONFIG))?;
     fs::create_dir_all(root.join("src"))?;
     fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
     Ok(dir)
@@ -285,7 +285,13 @@ fn parity_velnor_policy_lists_validators() -> TestResult {
         let plan = plan_for(&prep)?;
         let yaml = workflow_yaml(&prep)?;
         assert_parity(&prep, &plan, &yaml)?;
-        for id in ["alint", "cargo-deny", "cargo-machete", "zizmor"] {
+        for id in [
+            "alint",
+            "cargo-deny",
+            "cargo-machete",
+            "zizmor",
+            "python-source-tests",
+        ] {
             assert!(
                 plan.contains(&format!("- {id} (")),
                 "plan lists {id}:\n{plan}"

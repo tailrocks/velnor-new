@@ -42,6 +42,8 @@ pub fn plan_text_checked(prep: &GenerationPreparation) -> Result<String, Orchest
 ///
 /// `jobs` must be [`finalized_jobs`] for `prep`: the attached IR plus
 /// merged support, setup insertion, closures, and the final fan-in.
+/// This pure formatter does not validate source publication or runtime admission;
+/// [`plan_text_checked`] renders and validates source identities before reporting.
 /// Passing pre-merge IR jobs would reintroduce the plan/YAML gaps
 /// (missing validators, stale step counts, partial pins).
 #[must_use]

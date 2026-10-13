@@ -2984,6 +2984,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "velnor-actions-native"
+version = "0.1.0"
+dependencies = [
+ "syn",
+ "velnor-actions-contract",
+]
+
+[[package]]
 name = "velnor-actions-orchestrator"
 version = "0.1.8"
 dependencies = [
