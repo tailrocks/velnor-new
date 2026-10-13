@@ -30,6 +30,8 @@ pub mod test_render_capture;
 
 #[path = "render_action_pins.rs"]
 mod action_pins_impl;
+#[path = "validator_tools.rs"]
+mod validator_tools;
 pub use action_pins_impl::action_pins;
 
 #[path = "validator_tools.rs"]
