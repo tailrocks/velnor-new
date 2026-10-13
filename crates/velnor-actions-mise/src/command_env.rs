@@ -251,6 +251,80 @@ pub(crate) fn strip_credentials(command: &mut Command, policy: EnvPolicy) {
     }
 }
 
+impl EnvPolicy {
+    /// Credential keys this policy keeps; every other
+    /// [`CREDENTIAL_ENV_KEYS`] entry is stripped before spawn.
+    #[must_use]
+    pub const fn allowed_credentials(&self) -> &'static [&'static str] {
+        match self {
+            Self::Bootstrap => &CREDENTIAL_ALLOWLIST_BOOTSTRAP,
+            Self::Baseline => &CREDENTIAL_ALLOWLIST_BASELINE,
+            Self::Verify | Self::Discovery | Self::RepoTask => &[],
+        }
+    }
+
+    /// Whether the child inherits the parent environment (filtered).
+    /// Only [`Self::RepoTask`] spawns cleared.
+    #[must_use]
+    pub const fn inherits_parent(&self) -> bool {
+        !matches!(self, Self::RepoTask)
+    }
+
+    /// Full child environment over an explicit parent snapshot.
+    ///
+    /// The pure contract behind the spawner: inheriting policies keep
+    /// the parent minus stripped credentials, repo-task keeps the
+    /// proxy passthrough only, and every policy appends `additions`
+    /// (the isolation overlay plus validated extras) last.
+    #[must_use]
+    pub fn child_env(
+        &self,
+        parent: &[(OsString, OsString)],
+        additions: &[(OsString, OsString)],
+    ) -> Vec<(OsString, OsString)> {
+        let mut env = Vec::with_capacity(parent.len() + additions.len());
+        if *self == Self::RepoTask {
+            env.extend(proxy_passthrough(parent));
+        } else {
+            let allowed = self.allowed_credentials();
+            for (key, value) in parent {
+                let name = key.to_string_lossy();
+                let stripped = CREDENTIAL_ENV_KEYS.contains(&name.as_ref())
+                    && !allowed.contains(&name.as_ref());
+                if !stripped {
+                    env.push((key.clone(), value.clone()));
+                }
+            }
+        }
+        env.extend(additions.iter().cloned());
+        env
+    }
+}
+
+/// Parent proxy entries in [`PROXY_ENV_KEYS`] order (P07-2).
+#[must_use]
+pub fn proxy_passthrough(parent: &[(OsString, OsString)]) -> Vec<(OsString, OsString)> {
+    let mut kept = Vec::new();
+    for key in PROXY_ENV_KEYS {
+        for (name, value) in parent {
+            if name == key {
+                kept.push((name.clone(), value.clone()));
+            }
+        }
+    }
+    kept
+}
+
+/// Remove every credential key the policy does not allow (P07-1).
+pub(crate) fn strip_credentials(command: &mut Command, policy: EnvPolicy) {
+    let allowed = policy.allowed_credentials();
+    for key in CREDENTIAL_ENV_KEYS {
+        if !allowed.contains(&key) {
+            command.env_remove(key);
+        }
+    }
+}
+
 /// Velnor-owned toolchain environment for one Cargo invocation.
 #[must_use]
 pub fn toolchain_env(rustup: &str, cargo: &str, toolchain: &str) -> Vec<(OsString, OsString)> {
