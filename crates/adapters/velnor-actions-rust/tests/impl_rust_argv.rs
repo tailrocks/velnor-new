@@ -8,7 +8,7 @@ use velnor_actions_rust_core::{
     CompileDriver, Evidence, EvidenceStrength, NextestProfile, TestRunner,
 };
 
-fn group(kind: TaskKind) -> TaskGroup {
+pub(crate) fn group(kind: TaskKind) -> TaskGroup {
     TaskGroup {
         task_id: "t".to_owned(),
         package_id: "p".to_owned(),
@@ -35,7 +35,7 @@ fn group(kind: TaskKind) -> TaskGroup {
     }
 }
 
-fn text(group: &TaskGroup) -> Result<Vec<String>, ContractError> {
+pub(crate) fn text(group: &TaskGroup) -> Result<Vec<String>, ContractError> {
     Ok(cargo_payload_argv(group)?
         .iter()
         .map(|s| s.to_string_lossy().into_owned())
@@ -43,7 +43,7 @@ fn text(group: &TaskGroup) -> Result<Vec<String>, ContractError> {
 }
 
 /// Profiled payload argv with the group's resolved profile.
-fn profiled(group: &TaskGroup) -> Result<Vec<String>, ContractError> {
+pub(crate) fn profiled(group: &TaskGroup) -> Result<Vec<String>, ContractError> {
     Ok(cargo_payload_with_profile(group)?
         .iter()
         .map(|s| s.to_string_lossy().into_owned())

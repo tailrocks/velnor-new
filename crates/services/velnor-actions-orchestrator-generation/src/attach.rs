@@ -265,8 +265,8 @@ fn is_mbx_action(step: &Step) -> bool {
 /// Insert index for the plan-job pre-seed build block.
 ///
 /// The build compiles code, so it runs after the source-probing steps
-/// that guarantee sources present (which is after every restore);
-/// without them it anchors after the last restore, and the fallback
+/// that guarantee sources present; without them it anchors after the
+/// last cache prelude, and the fallback
 /// covers lockless plans and hand-built fixtures without cache steps.
 fn preseed_anchor(steps: &[Step]) -> usize {
     let last_required = steps

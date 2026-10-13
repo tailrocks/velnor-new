@@ -182,9 +182,9 @@ fn action_mbx_reconcile_matches_pin_only() {
     let catalog = ToolCatalog::pinned();
     assert!(catalog.reconcile_action_mbx(MR_BOXINGTON_VERSION).is_ok());
     assert!(matches!(
-        catalog.reconcile_action_mbx("1.22.0"),
+        catalog.reconcile_action_mbx("1.21.1"),
         Err(MiseError::InvalidToolVersion { tool, version })
-            if tool == "mr-boxington" && version == "1.22.0"
+            if tool == "mr-boxington" && version == "1.21.1"
     ));
     for loose in ["latest", "v1.24.0", "1.19", ""] {
         assert!(
@@ -200,7 +200,7 @@ fn action_mbx_reconcile_matches_pin_only() {
     )
     .expect("exact catalog");
     assert!(moved.reconcile_action_mbx("1.22.0").is_ok());
-    assert!(moved.reconcile_action_mbx(MR_BOXINGTON_VERSION).is_err());
+    assert!(moved.reconcile_action_mbx("1.21.1").is_err());
 }
 
 /// Qualified `tofu_1.13.1_<platform>.tar.gz` sha256 digests (T15).

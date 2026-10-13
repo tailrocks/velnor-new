@@ -308,7 +308,7 @@ fn render_job(
         )?);
     }
     if use_mbx {
-        steps.extend(crate::mbx_preflight::steps_for_catalog(catalog)?);
+        steps.extend(mbx_setup::steps_for_catalog(catalog)?);
     }
     if use_rust {
         steps.extend(crate::source_prep::fetch_steps_for_crate(
