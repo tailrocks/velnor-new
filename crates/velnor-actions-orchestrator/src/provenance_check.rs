@@ -71,7 +71,18 @@ pub(crate) struct ValidatedProvenance {
     pub(crate) artifact_id: u64,
     /// Manifest content digest.
     pub(crate) manifest_digest: String,
+    /// True when any task carries a forwarded proof run whose
+    /// originating success the manifest cannot prove.
+    pub(crate) originating_runs_unverified: bool,
 }
+
+/// Explicit unpassed acceptance: a task entry whose `proof_run_id`
+/// differs from the carrying manifest's run claims success for an
+/// originating run the data model records nowhere. Same-run proofs are
+/// success-bound by the manifest's own trusted checks; forwarded proofs
+/// carry this acceptance openly instead of passing silently.
+pub(crate) const ORIGINATING_RUN_SUCCESS_GAP: &str =
+    "unpassed:originating_proof_run_success_unrecorded";
 
 /// Derive `velnor-baseline-<commit>-<compat>` with full IDs.
 ///
@@ -161,6 +172,7 @@ pub(crate) fn validate_provenance(
         artifact_name: manifest.artifact_name.clone(),
         artifact_id: manifest.artifact_id,
         manifest_digest: manifest_digest.to_owned(),
+        originating_runs_unverified: forwarded,
     })
 }
 
@@ -306,6 +318,29 @@ pub(crate) fn parse_workflow_ref(input: &str) -> Option<(String, String, String)
 /// follow Git semantics. Other hosts have no slug form comparable to
 /// `owner/repo`; those checkouts fail closed in [`validate_repository`],
 /// never warn-and-proceed.
+pub(crate) fn repository_slug_from_origin(root: &std::path::Path) -> Option<String> {
+    let url = crate::origin::origin_url_via_git(root)?;
+    normalize_origin_url(&url).and_then(|normalized| {
+        normalized
+            .strip_prefix("github.com/")
+            .map(str::to_owned)
+            .filter(|slug| {
+                let mut parts = slug.split('/');
+                matches!(
+                    (parts.next(), parts.next(), parts.next()),
+                    (Some(owner), Some(repo), None)
+                        if !owner.is_empty() && !repo.is_empty()
+                )
+            })
+    })
+}
+
+/// Lowercase `owner/repo` slug from the git origin URL, when the origin
+/// is a `github.com` remote a workflow slug can name.
+///
+/// Other hosts have no slug form comparable to `owner/repo`; those
+/// checkouts fail closed in [`validate_workflow_ref`], never
+/// warn-and-proceed.
 pub(crate) fn repository_slug_from_origin(root: &std::path::Path) -> Option<String> {
     let url = crate::origin::origin_url_via_git(root)?;
     normalize_origin_url(&url).and_then(|normalized| {
