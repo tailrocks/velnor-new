@@ -138,7 +138,11 @@ fn setup_is_early(job: &JobText, at: usize) -> bool {
 /// Setup Mise must leave restore and save ownership to the explicit V2 layer.
 fn check_setup_cache_disabled(job: &JobText) -> Result<(), String> {
     for step in job.steps.iter().filter(|s| s.name == "Setup Mise") {
-        for need in ["cache: \"false\"", "cache_save: \"false\""] {
+        for need in [
+            "cache: \"true\"",
+            "cache_save: \"true\"",
+            "cache_key: mise-v1-",
+        ] {
             if !step.body.contains(need) {
                 return Err(format!("{}: Setup Mise misses {need}", job.id));
             }
