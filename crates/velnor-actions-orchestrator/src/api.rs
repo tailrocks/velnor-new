@@ -21,6 +21,9 @@ pub use super::external_data::{
     external_data_kind, may_skip_external_data,
 };
 pub use super::finalized::finalized_jobs;
+#[cfg(debug_assertions)]
+#[doc(hidden)]
+pub use super::generate::DEBUG_GENERATE_PHASE;
 pub use super::generate::{
     AtomicDiagnosticTrace, GenerateOptions, GenerateReport, ToolSnapshot,
     begin_atomic_diagnostic_capture, generate, generate_dispatched, render_staged_tree,
