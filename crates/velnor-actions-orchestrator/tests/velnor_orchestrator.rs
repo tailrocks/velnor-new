@@ -72,6 +72,7 @@ mod impl_orch_intake_deps;
 mod impl_orch_lock_audit;
 mod impl_orch_merge;
 mod impl_orch_merge_final;
+mod impl_orch_nextest_archive;
 mod impl_orch_p08;
 mod impl_orch_p08_sources;
 mod impl_orch_plansel;

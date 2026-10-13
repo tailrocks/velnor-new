@@ -1,5 +1,6 @@
 //! Stack selection and per-stack options.
 use super::binary_release::RustBinaryReleaseConfig;
+use super::nextest_selection::NextestTestSelection;
 use super::release::RustReleaseConfig;
 use super::tofu::TofuStackConfig;
 use crate::discover::Stack;
@@ -59,6 +60,9 @@ pub struct RustStackConfig {
     /// Ignored test execution mode ("all", "only", "ignored-only", "default").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_ignored: Option<String>,
+    /// Exact per-package Nextest test allowlists.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub nextest_test_selectors: Vec<NextestTestSelection>,
     /// Rust release policy (`[stacks.rust.release]`); disabled by default.
     #[serde(default)]
     pub release: RustReleaseConfig,
@@ -130,6 +134,7 @@ impl RustStackConfig {
             compile_driver: None,
             test_runner: None,
             run_ignored: None,
+            nextest_test_selectors: Vec::new(),
             release: RustReleaseConfig::default(),
             binary_release: RustBinaryReleaseConfig::default(),
         }
@@ -238,6 +243,19 @@ impl RustStackConfig {
                 "stacks.rust.run_ignored",
                 format!("bad_run_ignored:{mode}"),
             ));
+        }
+        let mut previous_package: Option<&str> = None;
+        for (index, selector) in self.nextest_test_selectors.iter().enumerate() {
+            let key = format!("stacks.rust.nextest_test_selectors[{index}]");
+            selector.validate(file, &key)?;
+            if previous_package.is_some_and(|previous| previous >= selector.package.as_str()) {
+                return Err(ContractError::config(
+                    file,
+                    "stacks.rust.nextest_test_selectors",
+                    "must_be_sorted_unique_by_package",
+                ));
+            }
+            previous_package = Some(&selector.package);
         }
         self.release.validate(file)?;
         self.binary_release.validate(file)?;

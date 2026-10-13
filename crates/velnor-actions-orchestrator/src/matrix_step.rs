@@ -183,24 +183,15 @@ pub(crate) fn obligation_identity_env(
     identity
 }
 
-/// One obligation shell step: fixed argv wrapped with report capture.
+/// Build one report-wrapped obligation step.
 ///
-/// The wrapper runs the obligation, captures `$?`, invokes the staged
-/// helper's [`REPORT_OP`] with the exit code, then exits with the
-/// obligation's own code (a report failure surfaces only when the
-/// obligation itself passed, so failures never mask each other).
-/// Identity env doubles as the report lookup key; the plan binds the
-/// digests, never these baked values. Doc obligations additionally
-/// carry the adapter `payload_env_for_kind` pairs (`RUSTDOCFLAGS=-D
-/// warnings`) and tofu obligations the automation pair, matching the
-/// plan identity envelope. Tofu obligations run triple-less; every
-/// other stack keeps the owned-homes triple. The step skips via `if:`
-/// when the plan covered this obligation; unknown coverage executes.
+/// The wrapper preserves the task exit status while reporting completion.
+/// Covered work skips; unknown coverage executes. Tofu uses its dedicated
+/// environment, while Rust and docs keep their adapter environment.
 ///
 /// # Errors
 ///
-/// Returns contract errors for invalid argv, joins, wrapper shapes, or
-/// task IDs unfit for the generated skip gate.
+/// Fails when argv, task identity, joins, or wrapper inputs are invalid.
 pub(crate) fn obligation_step(
     obligation: &CrateObligation,
     catalog: &ToolCatalog,
@@ -368,6 +359,26 @@ pub(crate) fn crate_upload_step(job_id: &str) -> Result<Step, OrchestratorError>
             problem: err.to_string(),
         }
     })
+}
+
+pub(crate) fn nextest_archive_steps(
+    steps: &mut Vec<Step>,
+    catalog: &ToolCatalog,
+    argv: Vec<String>,
+    artifact_name: &str,
+    archive_path: &str,
+) -> Result<(), OrchestratorError> {
+    let env = task_step_env(catalog, &BTreeMap::new(), true)?;
+    steps.push(
+        velnor_actions_workflow_renderer::shell_step("Create Nextest archive", argv, env)
+            .map_err(OrchestratorError::from)?,
+    );
+    let mut upload =
+        velnor_actions_workflow_renderer::steps::upload_artifact_step(artifact_name, archive_path)
+            .map_err(OrchestratorError::from)?;
+    upload.name = "Upload Nextest archive".to_owned();
+    steps.push(upload);
+    Ok(())
 }
 
 #[cfg(test)]
