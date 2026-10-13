@@ -164,7 +164,7 @@ fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
         &request.candidate_action_uses[format!("{MBX_ACTION_NAME}@").len()..]
     );
     Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Restore MBX objects")),
+        ("name".to_owned(), Yaml::str(MBX_SETUP_NAME)),
         (
             "uses".to_owned(),
             Yaml::str(request.candidate_action_uses.clone()),

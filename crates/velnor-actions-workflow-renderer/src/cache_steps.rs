@@ -1,6 +1,6 @@
 //! Cache and lane step templates over validated action refs.
 //!
-//! Covers MBX objects-mode restore, `actions/cache` restore/save, and
+//! Covers MBX local setup, `actions/cache` restore/save, and
 //! per-lane target directories; pins arrive validated.
 
 use std::collections::BTreeMap;
@@ -75,7 +75,7 @@ pub(crate) fn validate_tools_restore_call(step: &Step) -> Result<&str, RenderErr
     tools::validate_restore_call(step)
 }
 
-/// Pinned mr-boxington action name (objects mode).
+/// Pinned mr-boxington action name (local setup backend).
 pub const MBX_ACTION_NAME: &str = "jdx/mr-boxington-action";
 /// Cache restore/save action names.
 pub const CACHE_RESTORE_NAME: &str = "actions/cache/restore";

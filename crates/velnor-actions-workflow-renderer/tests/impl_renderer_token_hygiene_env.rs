@@ -40,7 +40,7 @@ fn token_in_action_env_fails_render() -> Result<(), RenderError> {
     // Constructor-legal value (no expression spans) that names a
     // token: the render-time gate must still catch it in `env:`.
     let leaked = action_step_with_env(
-        "Restore MBX objects",
+        "Setup MBX",
         &mbx_pin(),
         BTreeMap::from([("github-cache-mode".to_owned(), "objects".to_owned())]),
         BTreeMap::from([(
