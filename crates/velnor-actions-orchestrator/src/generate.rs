@@ -627,6 +627,10 @@ use output_commit::swap_directories;
 #[path = "generate_guards.rs"]
 pub(crate) mod guards;
 
+/// Preserve repository-owned entries while replacing generated output.
+#[path = "generate_preserve.rs"]
+mod preserve;
+
 /// Re-exported snapshot: the `generate::ToolSnapshot` path is stable API.
 pub use guards::ToolSnapshot;
 
