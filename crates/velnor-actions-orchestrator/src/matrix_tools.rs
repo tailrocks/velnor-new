@@ -303,3 +303,57 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::Path;
+
+    use super::{SUITE_TOOL_OWNERS, suite_for_package};
+
+    #[test]
+    fn typed_tool_owner_table_matches_workspace_members() {
+        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let root = manifest_dir
+            .parent()
+            .and_then(Path::parent)
+            .expect("crate lives two levels under the workspace root");
+        let mut members = Vec::new();
+        for entry in fs::read_dir(root.join("crates")).expect("crates dir lists") {
+            let manifest = entry.expect("dir entry reads").path().join("Cargo.toml");
+            let text = fs::read_to_string(&manifest).expect("member manifest reads");
+            let mut in_package = false;
+            for line in text.lines() {
+                if line.trim() == "[package]" {
+                    in_package = true;
+                } else if line.starts_with('[') {
+                    in_package = false;
+                } else if in_package && line.trim_start().starts_with("name = ") {
+                    let name = line
+                        .trim_start()
+                        .trim_start_matches("name = ")
+                        .trim()
+                        .trim_matches('"');
+                    members.push(name.to_owned());
+                    break;
+                }
+            }
+        }
+        let mut registered: Vec<String> = SUITE_TOOL_OWNERS
+            .iter()
+            .map(|suite| suite.package_name().to_owned())
+            .collect();
+        members.sort();
+        registered.sort();
+        assert_eq!(
+            members, registered,
+            "typed owner rows must cover each crate"
+        );
+        assert!(
+            members
+                .iter()
+                .all(|member| suite_for_package(member).is_some()),
+            "every workspace package resolves to its typed suite"
+        );
+    }
+}
