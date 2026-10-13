@@ -59,6 +59,7 @@ successful generation.
 | .github/CLAUDE.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated pointer file with the single `@AGENTS.md` import line; replaced on generation |
 | .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Reserved generator-owned namespace; every path is replaced or retired on successful generation |
 | .github/release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated release-plz config paths; retired when no longer emitted |
+| .github/workflows/binary-release.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Emitted only for consumer-v1 with `[stacks.rust.binary_release].enabled = true`; retired when disabled |
 | .github/actions/<logical>/action.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated shared action path is owned when its first line has a Velnor generated marker; replaced or retired with dispatch output |
 | mise.toml, mise.lock, rust-toolchain.toml | None | None | Repository-owned read-only inputs; never create or modify |
 

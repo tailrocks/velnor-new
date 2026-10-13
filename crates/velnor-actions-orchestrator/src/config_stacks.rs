@@ -119,6 +119,15 @@ mod tests {
         let rust = config.stacks.rust.expect("rust stack");
         assert!(rust.release.enabled);
         assert_eq!(rust.release.packages, ["demo".to_owned()]);
+        assert!(!rust.binary_release.enabled);
+        let root = rooted(
+            "schema = 1\n[stacks.rust.binary_release]\nenabled = true\npackage = \"demo-cli\"\n",
+        );
+        let config = load(root.path()).expect("binary release config");
+        let rust = config.stacks.rust.expect("rust stack");
+        assert!(rust.binary_release.enabled);
+        assert_eq!(rust.binary_release.package, "demo-cli");
+        assert_eq!(rust.binary_release.binary_name(), "demo-cli");
         let root = rooted("schema = 1\n[stacks.rust]\n");
         let config = load(root.path()).expect("rust config");
         let rust = config.stacks.rust.expect("rust stack");

@@ -51,6 +51,7 @@ pub mod release_tree;
 pub mod render;
 mod render_cache_files;
 mod runs_on;
+pub mod rust_binary_release;
 pub mod schema2;
 pub mod setup;
 mod step_ids;

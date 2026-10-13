@@ -1,7 +1,12 @@
 # Release gates: source and external evidence
 
 This record separates checked-in release mechanics from hosted evidence and
-infrastructure. The renderer emits a source-bound, dispatch-only
+infrastructure. The official `v0.1.4` CLI release was published on
+2026-10-08 from main commit `d3590d321e51f7b99bfb0a92c11d3d6eb7af61cd`;
+its signed release manifest lists the Linux x86_64, macOS ARM64, and macOS
+x86_64 assets and their digests. This candidate prepares the next immutable
+CLI version, `v0.1.5`; its hosted qualification and publication remain
+pending. The renderer emits a source-bound, dispatch-only
 `.github/workflows/product-release.yml` coordinator with reusable image,
 binary, and generator modules. The generator module includes candidate
 qualification, a same-run manifest, source-bound attestations, and protected

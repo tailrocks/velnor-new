@@ -60,6 +60,7 @@ mod owned_tool_publication;
 mod pins;
 mod plan;
 mod plan_output_limits;
+mod plan_release_files;
 mod plan_stacks;
 mod prepare;
 mod preseed_manifest;

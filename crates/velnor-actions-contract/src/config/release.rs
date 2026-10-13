@@ -356,7 +356,7 @@ fn validate_version_groups(
 }
 
 /// Cargo package-name shape: start letter/`_`, rest alnum/`-`/`_`.
-fn is_package_name(name: &str) -> bool {
+pub(super) fn is_package_name(name: &str) -> bool {
     let mut bytes = name.bytes();
     let Some(first) = bytes.next() else {
         return false;

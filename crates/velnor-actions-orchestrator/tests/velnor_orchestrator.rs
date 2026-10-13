@@ -46,6 +46,7 @@ mod impl_merge_tamper;
 mod impl_merge_trust;
 mod impl_mise_min_version;
 mod impl_neg_pipeline_p13;
+mod impl_orch_binary_release;
 mod impl_orch_broaden;
 mod impl_orch_cold_validators;
 mod impl_orch_core;

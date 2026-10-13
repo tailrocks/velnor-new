@@ -121,8 +121,8 @@ pub fn is_valid_feature_name(feature: &str) -> bool {
 }
 
 impl RustStackConfig {
-    /// Documented default: one `default` configuration, no declarations,
-    /// release disabled.
+    /// Documented default: one `default` configuration, no declarations, and
+    /// both release policies disabled.
     #[must_use]
     pub fn default_config() -> Self {
         Self {
