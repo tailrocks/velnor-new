@@ -117,6 +117,10 @@ fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (St
     if writer {
         steps.push(run_step("Sample runner disk after cleanup", DISK_SAMPLE));
     }
+    steps.push(clean_workspace_step(request));
+    if writer {
+        steps.push(run_step("Sample runner disk after cleanup", DISK_SAMPLE));
+    }
 
     let when = format!("inputs.mode == '{mode}' && {MAIN_REF}");
     gated(finish(id, fields, steps), &when)
@@ -275,6 +279,20 @@ fn clean_workspace_step(request: &MbxQualificationPins) -> Yaml {
             "run".to_owned(),
             Yaml::str(format!(
                 "set -eu; {RESOLVE_ACTION_MBX_BIN}; mise --no-config --no-env --no-hooks exec rust@{} -- \"{ACTION_MBX_BIN}\" clean",
+                request.rust_version
+            )),
+        ),
+    ])
+}
+
+fn clean_workspace_step(request: &MbxQualificationPins) -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("Clean MBX workspace outputs")),
+        ("if".to_owned(), Yaml::str(MBX_WORKSPACE_CLEAN_CONDITION)),
+        (
+            "run".to_owned(),
+            Yaml::str(format!(
+                "mise --no-config --no-env --no-hooks exec rust@{} -- mbx clean",
                 request.rust_version
             )),
         ),
