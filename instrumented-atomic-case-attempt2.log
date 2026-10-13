@@ -1,0 +1,13 @@
+   Compiling velnor-actions-orchestrator v0.1.5 (/tmp/velnor-atomic-diagnostic-2a1d605/crates/velnor-actions-orchestrator)
+mbx[warning]: result was not stored: rustc search path kind is not cacheable yet: native
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.78s
+     Running tests/velnor_orchestrator.rs (/tmp/velnor-atomic-diagnostic-target/debug/deps/velnor_orchestrator-415bfc056be3df6d)
+
+running 1 test
+Initialized empty Git repository in /private/var/folders/8p/h376l_nn3375kyj72czdq2x80000gn/T/.tmperiIle/.git/
+test impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 728 filtered out; finished in 2.26s
+
+mbx[cache]: 0 hits, 1 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 2331584 compilations. rustc did each once; mbx did the rest of the showing up.
