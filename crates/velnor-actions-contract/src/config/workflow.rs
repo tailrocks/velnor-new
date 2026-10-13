@@ -169,7 +169,7 @@ impl WorkflowConfig {
             ));
         }
         if let Some(branch) = &self.default_branch
-            && !crate::is_valid_branch_name(branch)
+            && !crate::is_valid_branch_shorthand(branch)
         {
             return Err(ContractError::config(
                 file,

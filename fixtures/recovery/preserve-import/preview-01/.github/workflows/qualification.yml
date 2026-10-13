@@ -176,6 +176,9 @@ jobs:
     if: inputs.mode == 'composite'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -198,6 +201,9 @@ jobs:
     if: inputs.mode == 'js-pin'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Pinned script
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
@@ -220,6 +226,9 @@ jobs:
     if: inputs.mode == 'docker-action'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -232,6 +241,9 @@ jobs:
     if: inputs.mode == 'container'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: sh -e {0}
     container: alpine:3.22
     services:
       redis:
@@ -248,6 +260,9 @@ jobs:
     if: inputs.mode == 'container'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: sh -e {0}
     container: alpine:3.22
     services:
       redis:
@@ -264,6 +279,9 @@ jobs:
     if: inputs.mode == 'outputs'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     outputs:
       proof: ${{ steps.emit.outputs.proof }}
     steps:
@@ -297,6 +315,9 @@ jobs:
     if: inputs.mode == 'mask'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Mask canary
         run: "echo \"::add-mask::g4-mask-canary\" && echo g4-mask-canary"
@@ -305,6 +326,9 @@ jobs:
     if: inputs.mode == 'cache'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     permissions:
       contents: read
       actions: write
@@ -351,6 +375,9 @@ jobs:
     if: inputs.mode == 'oidc'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     permissions:
       id-token: write
       contents: read
@@ -374,6 +401,9 @@ jobs:
     if: inputs.mode == 'post-fail'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -394,6 +424,9 @@ jobs:
     if: inputs.mode == 'cancel'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Sleep until cancelled
         run: sleep 180
@@ -420,6 +453,9 @@ jobs:
     if: inputs.mode == 'compose'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -446,6 +482,9 @@ jobs:
     if: inputs.mode == 'bind'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Bind workspace file
         run: "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.22 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""

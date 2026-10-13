@@ -11,12 +11,11 @@
 //! opentofu crates, the MBX local setup on MBX crates, and one
 //! shell step per obligation in gate order.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig,
-    WorkflowPolicy, crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
-    tofu_display_name,
+    CrateJob, Job, JobTimeout, ProposedTask, Step, VelnorConfig, WorkflowPolicy,
+    crate_display_name, tofu_display_name,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
@@ -32,12 +31,16 @@ use crate::obligation_order::obligation_order_key;
 #[path = "crate_jobs_mbx_setup.rs"]
 mod mbx_setup;
 
+#[path = "crate_jobs_obligations.rs"]
+mod obligations;
+
 #[path = "crate_jobs_stage.rs"]
 mod stage;
 
 #[cfg(test)]
 pub(crate) use stage::needs;
 pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
+pub(crate) use obligations::{gates_for, obligation_rank, obligations_for};
 
 /// Built crate jobs plus their driver selections for MBX gating.
 pub(crate) struct CrateBuild {

@@ -17,7 +17,7 @@ pub(crate) fn check_triggers(triggers: &Trigger) -> Result<(), RenderError> {
         && triggers
             .push_branches
             .first()
-            .is_some_and(|branch| velnor_actions_contract::is_valid_branch_name(branch));
+            .is_some_and(|branch| velnor_actions_contract::is_valid_branch_shorthand(branch));
     if !branch_ok {
         return Err(RenderError::InvalidWorkflow("bad_push_branch".to_owned()));
     }

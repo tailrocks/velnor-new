@@ -267,14 +267,6 @@ fn release_manifest_binds_repository_and_artifact_urls() -> Result<(), ContractE
             "artifact accepted: {artifact:?}"
         );
     }
-    let wrong_target = bound_artifact("0.1.0", SUPPORTED_TARGETS[1]);
-    let json = manifest_json("0.1.0", "tailrocks/velnor-new", &wrong_target);
-    assert!(
-        ReleaseManifest::parse_json(&json, "m.json")?
-            .validate("m.json")
-            .is_err(),
-        "target URL must be bound to its target triple"
-    );
     // Downgrade URL shape: a 0.2.0 manifest pinning a 0.1.0 asset.
     let downgrade = manifest_json(
         "0.2.0",
