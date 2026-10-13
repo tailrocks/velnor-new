@@ -39,6 +39,7 @@ pub use canonical::{
     is_valid_digest, normalize_posix_path, validate_digest,
 };
 pub use closure::{ClosureBuilder, Provenance, TaskInputClosure};
+pub use config::NextestTestSelection;
 pub use config::{
     BuildTask, BuildTaskRunner, CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner,
     CheckSystemTool, CheckSystemToolKind, ContainerPlatform, DaemonIdentityPolicy,

@@ -1,6 +1,4 @@
-//! Workflow-IR, render-context, and actionlint-input construction.
-
-//! W1 emission wiring lives in the child module below.
+//! Workflow IR, render context, actionlint input, and W1 emission wiring.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
 #[path = "workflow_context.rs"]
@@ -26,6 +24,7 @@ use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
     PUBLISH_JOB_ID, RenderContext, WORKFLOW_PATH,
 };
+use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
 use crate::OrchestratorError;
@@ -136,6 +135,7 @@ pub(crate) fn build_workflow(
     }
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
     let built = crate::crate_jobs::build_for_workflow(
+        root,
         config,
         label,
         discovery,
@@ -143,17 +143,11 @@ pub(crate) fn build_workflow(
         fetch_roots,
         acquire.as_ref(),
     )?;
-    let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
-    for (id, job) in built.jobs {
-        jobs.insert(id, job);
-    }
-    for (id, job) in check_jobs::build_check_jobs(policy, discovery, &catalog)? {
-        required_ids.push(id.clone());
-        jobs.insert(id, job);
-    }
+    let (required_ids, crate_drivers) =
+        insert_crate_and_check_jobs(built, policy, discovery, &catalog, &mut jobs)?;
     crate::workflow_task_jobs::insert_jobs(&mut jobs, &workflow_tasks)?;
     insert_gate_jobs(&mut jobs, label, branch, &required_ids, acquire, &catalog)?;
-    wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
+    wire_w1::check_crate_mbx_gating(&jobs, &crate_drivers)?;
     let ir = workflow_ir(config, branch, jobs, policy);
     let context = workflow_context::render_context(
         config,
@@ -165,13 +159,30 @@ pub(crate) fn build_workflow(
         workflow_tasks,
         &verify,
     )?;
-    let actionlint = actionlint_input(config, &version, label);
     Ok(WorkflowPlan {
         ir,
         support,
         context,
-        actionlint,
+        actionlint: actionlint_input(config, &version, label),
     })
+}
+
+fn insert_crate_and_check_jobs(
+    built: crate::crate_jobs::CrateBuild,
+    policy: WorkflowPolicy,
+    discovery: &Discovery,
+    catalog: &ToolCatalog,
+    jobs: &mut BTreeMap<String, Job>,
+) -> Result<(Vec<String>, BTreeMap<String, RenderDriver>), OrchestratorError> {
+    let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
+    for (id, job) in built.jobs {
+        jobs.insert(id, job);
+    }
+    for (id, job) in check_jobs::build_check_jobs(policy, discovery, catalog)? {
+        required_ids.push(id.clone());
+        jobs.insert(id, job);
+    }
+    Ok((required_ids, built.drivers))
 }
 
 fn workflow_ir(
