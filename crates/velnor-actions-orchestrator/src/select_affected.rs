@@ -33,7 +33,9 @@ pub(crate) fn affected_packages(
         owned.extend(declared_owners(discovery, path));
     }
     let mut selected = owned.clone();
-    selected.extend(reverse_closure(base_edges, head_edges, &owned));
+    let base = local_edge_pairs(base_edges);
+    let head = local_edge_pairs(head_edges);
+    selected.extend(reverse_closure(&base, &head, &owned));
     selected
 }
 
@@ -453,7 +455,14 @@ mod tests {
             uses_random: false,
             nextest_profile: NextestProfile::Default,
         };
-        discovery.task_groups = vec![group("a"), group("b")];
+        let mut proposals = Vec::new();
+        for package in ["a", "b"] {
+            let task =
+                velnor_actions_rust::propose_task(&group(package)).expect("fixture proposes");
+            task.validate().expect("fixture valid");
+            proposals.push(task);
+        }
+        discovery.proposals = proposals;
         let changed: BTreeSet<String> = ["docs/shared.md".to_owned()].into_iter().collect();
         let selected = affected_packages(&discovery, &changed, &[], &[]);
         assert!(

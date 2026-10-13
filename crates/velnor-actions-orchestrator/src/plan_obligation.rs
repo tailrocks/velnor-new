@@ -184,7 +184,7 @@ fn planned_identity(
     })
 }
 
-/// Extension bundle plus closure-bound identity digests for one group.
+/// Extension bundle plus closure-bound identity digests for one task.
 struct PlannedIdentity {
     /// Snapshot-indexed bundle with checkout-bound lock/Nextest digests.
     bundle: ExtensionBundle,
@@ -194,7 +194,7 @@ struct PlannedIdentity {
     input_digest: String,
 }
 
-/// Snapshot bundle plus closure-bound identity digests for one group.
+/// Snapshot bundle plus closure-bound identity digests for one task.
 ///
 /// The closure resolves against the checkout and its digest binds into
 /// the identity envelope, so a source edit flips `input_digest` even
@@ -205,28 +205,29 @@ fn planned_identity(
     toolchain: &str,
     platform_id: &str,
 ) -> Result<PlannedIdentity, OrchestratorError> {
-    let group = inputs.group;
-    let manifest = manifest_for_key(&group.manifest_key);
-    let nextest_config = nextest_config_for(inputs.discovery, group);
+    let task = inputs.task;
+    let manifest = task.identity.unit_path.clone();
+    let nextest_config = nextest_config_for(inputs.discovery, task);
     let bundle = extension_bundle_with_snapshot(
         inputs.snapshot,
         inputs.discovery,
-        group,
+        task,
         Some(inputs.root),
         nextest_config.as_deref(),
     );
-    let ext = group.identity_extension(&bundle.inputs());
+    let ext = extension_for_proposal(task, &bundle.inputs()).map_err(internal_contract)?;
     let closure = resolve_closure_at_root(
         inputs.root,
-        group,
+        task,
         nextest_config.as_deref(),
         bundle.graph_digest(),
         toolchain,
         platform_id,
-    );
+    )
+    .map_err(internal_contract)?;
     let closure_digest = canonical_digest(&closure).map_err(internal_contract)?;
     let input_digest = task_identity_digest(&IdentityInputs {
-        group,
+        task,
         argv,
         toolchain_id: toolchain,
         platform_id,

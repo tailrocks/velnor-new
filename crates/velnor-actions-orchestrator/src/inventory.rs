@@ -153,6 +153,18 @@ fn manifest_for_rust(unit_root: &str) -> String {
     velnor_actions_rust::manifest_for_unit_root(unit_root)
 }
 
+/// Manifest path for one neutral candidate via closed stack dispatch.
+fn manifest_for_candidate(candidate: &StackCandidate) -> Result<String, OrchestratorError> {
+    match Stack::require_known(&candidate.stack_id) {
+        Ok(Stack::Rust) => Ok(velnor_actions_rust::manifest_for_unit_root(
+            &candidate.unit_root,
+        )),
+        Err(err) => Err(OrchestratorError::Detection {
+            problem: err.to_string(),
+        }),
+    }
+}
+
 /// Inventory loop over an immutable snapshot; `reuse=false` is legacy.
 /// A tool snapshot brackets the fetches, failing closed on tool drift.
 /// # Errors
