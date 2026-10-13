@@ -230,8 +230,8 @@ fn observe_until_done(
 #[test]
 fn atomic_commit_never_exposes_missing_tree() -> TestResult {
     let repo = make_repo(config_with_branch())?;
-    let root = repo.path();
-    let prep = prepare(root)?;
+    let root = repo.path().canonicalize()?;
+    let prep = prepare(&root)?;
     let opts = GenerateOptions { output_dir: None };
     generate(&prep, &opts)?;
     let live = root.join(".github");
