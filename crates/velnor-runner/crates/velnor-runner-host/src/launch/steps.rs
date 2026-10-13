@@ -9,9 +9,10 @@ use velnor_runner_github::{
 
 use crate::Offer;
 use crate::error::HostError;
-use crate::journal::{Journal, Outcome};
+use crate::journal::{Journal, LaunchIdentity, Outcome};
 use crate::listen::map_listen;
 use crate::offer;
+use crate::reconcile::LaunchPhase;
 use crate::scale_set::EnsureError;
 use crate::worker::Started;
 
@@ -152,7 +153,6 @@ where
     S: Fn(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
-    lane.on_admin()?;
     let subject = format!("m{}r{request_id}", batch.message_id);
     let name = format!("v{request_id}");
     let (id, fresh) = journal
@@ -188,6 +188,10 @@ where
     {
         return hold(journal, id, EnsureError::Uncertain).await;
     }
+    journal
+        .advance_launch_phase(id, LaunchPhase::AcquireRequested)
+        .await
+        .map_err(map_journal)?;
     match taken(lane, ctx, request_id) {
         Ok(AcquireOutcome::Acquired(ids)) if ids.as_slice() == [request_id] => {
             journal
@@ -306,6 +310,7 @@ async fn ack_bound<T>(
 where
     T: velnor_runner_github::Transport + Lane,
 {
+    advance_phase_if_known(journal, id, LaunchPhase::AcknowledgementRequested).await?;
     if let Err(error) = acknowledge(lane, ctx, batch) {
         return hold(journal, id, error).await;
     }
@@ -336,6 +341,7 @@ pub(super) async fn fail_jit(
 }
 
 async fn mark_done(journal: &Journal, id: i64) -> Result<(), EnsureError> {
+    advance_phase_if_known(journal, id, LaunchPhase::Complete).await?;
     if journal.read(id).await.map_err(map_journal)? == crate::IntentState::Done {
         return Ok(());
     }

@@ -352,6 +352,23 @@ fn ack_ready(
     steps::acknowledge(&mut lane, &ctx, &batch)
 }
 
+async fn engine_identity(docker: &bollard::Docker) -> Result<String, EnsureError> {
+    let info = crate::docker_client::docker_deadline(docker.info())
+        .await
+        .map_err(|_| docker_identity_error())?
+        .map_err(|_| docker_identity_error())?;
+    info.id
+        .filter(|id| !id.trim().is_empty())
+        .ok_or_else(docker_identity_error)
+}
+
+fn docker_identity_error() -> EnsureError {
+    EnsureError::Unexpected {
+        status: 0,
+        step: "docker identity",
+    }
+}
+
 struct HostLane<'a> {
     link: &'a mut Link,
     admin: String,
