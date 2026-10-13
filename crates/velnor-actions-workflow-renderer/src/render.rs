@@ -133,17 +133,6 @@ pub struct RenderContext {
     pub plan_consumer_env: BTreeMap<String, String>,
 }
 
-/// One fixed validator-job shell step: kind plus display name plus argv.
-#[derive(Debug, Clone)]
-pub struct ValidatorCommand {
-    /// Repository validator owning this step's job.
-    pub validator: ValidatorKind,
-    /// Step display name.
-    pub name: String,
-    /// Fixed argument vector.
-    pub argv: Vec<String>,
-}
-
 /// Fixed candidate-job vectors (Velnor policy only).
 #[derive(Debug, Clone)]
 pub struct CandidateSpec {
@@ -171,13 +160,7 @@ impl RenderContext {
         guard::validate_request_dir(&self.request_dir)?;
         steps::checkout_step(&self.checkout_uses).map(|_| ())?;
         for command in &self.validator_commands {
-            if command.validator == ValidatorKind::Actionlint {
-                return Err(RenderError::BadCommand("actionlint_not_support".to_owned()));
-            }
-            if command.name.trim().is_empty() {
-                return Err(RenderError::BadCommand("empty_validator_name".to_owned()));
-            }
-            commands::validate_command_argv(&command.argv)?;
+            crate::validator_command::validate(command)?;
         }
         if let Some(candidate) = &self.candidate {
             commands::validate_command_argv(&candidate.build)?;

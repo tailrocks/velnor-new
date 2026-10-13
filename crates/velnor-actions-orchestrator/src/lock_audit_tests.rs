@@ -41,6 +41,9 @@ fn deny_command(script: &str) -> ValidatorCommand {
         validator: ValidatorKind::CargoDeny,
         name: DENY_STEP_NAME.to_owned(),
         argv: vec!["sh".to_owned(), "-c".to_owned(), script.to_owned()],
+        prepare_argv: Vec::new(),
+        source_units: Vec::new(),
+        tool_inputs: Vec::new(),
     }
 }
 
@@ -265,6 +268,9 @@ fn deny_drift_blocks() {
             "-c".to_owned(),
             "cargo install foo && mise --no-env exec rust@1.99.0 -- cargo build".to_owned(),
         ],
+        prepare_argv: Vec::new(),
+        source_units: Vec::new(),
+        tool_inputs: Vec::new(),
     }];
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &commands);
     assert_eq!(outcome.blocking, [] as [String; 0]);

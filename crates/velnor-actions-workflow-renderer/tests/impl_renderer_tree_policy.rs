@@ -53,19 +53,7 @@ fn plan_job() -> Result<Job, RenderError> {
 }
 
 pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
-    // Production names: the scrub gate allowlists these exactly.
-    [
-        (ValidatorKind::CargoDeny, "Run cargo-deny"),
-        (ValidatorKind::CargoMachete, "Run cargo-machete"),
-        (ValidatorKind::Zizmor, "Run zizmor"),
-    ]
-    .iter()
-    .map(|(validator, name)| ValidatorCommand {
-        validator: *validator,
-        name: (*name).to_owned(),
-        argv: vec!["deny".to_owned()],
-    })
-    .collect()
+    super::impl_renderer_fixtures::validator_commands()
 }
 
 pub(crate) fn fixture_ir() -> Result<WorkflowIr, RenderError> {

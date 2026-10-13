@@ -239,7 +239,54 @@ pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
     .map(|(validator, name)| ValidatorCommand {
         validator: *validator,
         name: (*name).to_owned(),
-        argv: vec!["true".to_owned()],
+        argv: if *validator == ValidatorKind::PythonSourceTests {
+            vec!["sh".to_owned(), "-c".to_owned(), "set -eu; true".to_owned()]
+        } else {
+            vec!["true".to_owned()]
+        },
+        prepare_argv: if *validator == ValidatorKind::PythonSourceTests {
+            vec![
+                "mise".to_owned(),
+                "--no-config".to_owned(),
+                "--no-env".to_owned(),
+                "--no-hooks".to_owned(),
+                "install".to_owned(),
+                "python@3.14.8".to_owned(),
+            ]
+        } else {
+            Vec::new()
+        },
+        source_units: if *validator == ValidatorKind::PythonSourceTests {
+            vec![ValidatorSourceUnit {
+                id: "renderer-fixture".to_owned(),
+                discovery_root: "scripts".to_owned(),
+                pattern: None,
+                inputs: vec![ValidatorSourceInput {
+                    path: "scripts/test_source_suite.py".to_owned(),
+                    kind: ValidatorSourceInputKind::Test,
+                }],
+            }]
+        } else {
+            Vec::new()
+        },
+        tool_inputs: if *validator == ValidatorKind::PythonSourceTests {
+            vec![
+                ValidatorSourceInput {
+                    path: ".mise-version".to_owned(),
+                    kind: ValidatorSourceInputKind::Configuration,
+                },
+                ValidatorSourceInput {
+                    path: ".velnor/version-policy.toml".to_owned(),
+                    kind: ValidatorSourceInputKind::Configuration,
+                },
+                ValidatorSourceInput {
+                    path: "crates/velnor-actions-mise/src/catalog.rs".to_owned(),
+                    kind: ValidatorSourceInputKind::ToolchainPin,
+                },
+            ]
+        } else {
+            Vec::new()
+        },
     })
     .collect()
 }
