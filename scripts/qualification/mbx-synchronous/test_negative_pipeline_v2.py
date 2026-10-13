@@ -145,6 +145,7 @@ class PipelineTests(unittest.TestCase):
         args.linker = None
         sdk = RUN.INPUTS.context_inventory(args.sdk_root)
         args.expected_sdk_inventory_sha256 = RUN.BASE.write_json(sim.root / "sdk.json", sdk)["sha256"]
+        manifest = json.loads((ROOT / "manifest.json").read_bytes())
         baseline = sim.root / "baseline"
         positive_manifest = json.loads((ROOT / "manifest.json").read_bytes())
         RUN.BASE.BIND.materialize_fixture(baseline, positive_manifest)

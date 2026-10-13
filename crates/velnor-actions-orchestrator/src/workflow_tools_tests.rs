@@ -85,6 +85,7 @@ fn rust_proposals_require_rust_even_without_inventory_records() {
         driver_source: velnor_actions_rust::ProfileSource::Detected,
         runner_source: velnor_actions_rust::ProfileSource::Detected,
         nextest_profile: velnor_actions_rust::NextestProfile::Default,
+        run_ignored: None,
         nextest_config: None,
     };
     let group =

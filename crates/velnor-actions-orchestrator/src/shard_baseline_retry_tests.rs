@@ -118,18 +118,34 @@ fn replayed_publication_remains_usable_for_next_plan_coverage() {
 }
 
 #[test]
-fn current_summary_never_authorizes_original_attempt_success() {
+fn failed_summary_cannot_reuse_successful_original_attempt() {
     let parent = retry_parent();
-    // Failed retry does not invalidate independently proven original success.
-    assert!(normal_retry_lookup(&parent, "failure", "success").0.is_ok());
-    // A successful summary cannot turn the downloaded failed attempt into proof.
+    let (failed_summary, calls) = normal_retry_lookup(&parent, "failure", "success");
+    assert!(failed_summary.is_err());
+    assert_eq!(
+        calls.len(),
+        1,
+        "failed summary rejects before artifact lookup"
+    );
+}
+
+#[test]
+fn successful_summary_reuses_authenticated_attempt_one() {
+    let parent = retry_parent();
+    let (found, calls) = normal_retry_lookup(&parent, "success", "success");
+    assert_eq!(found.expect("selected summary")[0].run_attempt, 1);
+    assert!(
+        calls
+            .iter()
+            .any(|args| args[1].ends_with("/runs/7/attempts/1"))
+    );
+}
+
+#[test]
+fn successful_summary_cannot_authorize_failed_original_attempt() {
+    let parent = retry_parent();
     assert!(
         normal_retry_lookup(&parent, "success", "failure")
-            .0
-            .is_err()
-    );
-    assert!(
-        normal_retry_lookup(&parent, "failure", "failure")
             .0
             .is_err()
     );

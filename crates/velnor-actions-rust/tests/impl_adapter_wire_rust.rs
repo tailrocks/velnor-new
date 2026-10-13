@@ -197,7 +197,7 @@ fn doc_env_denies_warnings() {
         TaskKind::Test,
         TaskKind::Build,
     ] {
-        assert!(cargo_payload_env(kind).is_empty(), "{kind:?} carries env");
+        assert_eq!(cargo_payload_env(kind), Vec::new(), "{kind:?} carries env");
     }
 }
 

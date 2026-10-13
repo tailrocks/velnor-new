@@ -1,6 +1,6 @@
 # CI performance completion ledger
 
-Status: **OPEN**. Snapshot: 2026-10-03; recorded PR/source HEAD
+Status: **OPEN**. Frozen ledger snapshot: 2026-10-03; recorded PR/source HEAD
 `b0df793576d020ff5778bfce7efe9093469b7144` plus concurrent uncommitted work.
 This pushed commit has DCO signoff, no `gpgsig` header.
 No final source qualification, fresh hosted sequence, runtime promotion or consumer
@@ -21,6 +21,13 @@ historical.
 The [2026-10-04 source-progress recovery supplement](ci-performance-source-progress-recovery-20261004.md) records the observed recovery boundary, durable Audit47 and merge-source evidence, and pending integrated qualification. It grants no qualification.
 
 The [2026-10-04 actual hosted-run audit](ci-performance-actual-runs-20261004.md) records source-bound Jackin and generator jobs, raw-log hashes, a source-backed inference that differing restore/save paths explain the generator cache miss, and unavailable performance metrics. It leaves all47 statuses INCOMPLETE and grants no qualification.
+
+The [2026-10-05 evidence recapture](ci-performance-evidence-recapture-20261005.md)
+rechecks two historical runs and three attempts, six selected artifact-archive digests,
+the 47 current default-branch refs and the available qualification dispatch
+path. All47 statuses remain `INCOMPLETE`; all controlled experiments remain
+`NOT_PERFORMED`. The current-head snapshot does not replace the frozen W0 audit
+identities below.
 
 ## Evidence levels
 

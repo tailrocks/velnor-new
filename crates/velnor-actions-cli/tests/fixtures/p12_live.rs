@@ -198,11 +198,55 @@ fn script_covers_all_forms_scopes_and_namespaces() -> Result<(), Box<dyn Error>>
         "advisories",
         "fn fail_row",
     ] {
+        let expected_subject = format!("\"subject\":\"{subject}\"");
+        let expected_detail = format!("\"detail\":\"{detail}\"");
         assert!(
             owner.contains(marker),
             "Rust freshness owner misses {marker}"
         );
     }
+    for (subject, status, detail) in [
+        (
+            "(declared-summary)",
+            "info",
+            "9 match, 0 fail, 9 locked names retained",
+        ),
+        ("(lock-membership)", "pass", "2 members"),
+        ("(lock-graph)", "pass", "10 locked packages reachable"),
+    ] {
+        let expected_subject = format!("\"subject\":\"{subject}\"");
+        let expected_status = format!("\"status\":\"{status}\"");
+        assert!(
+            harness::rows(&run).iter().any(|row| {
+                row.contains("\"check\":\"lock-staleness\"")
+                    && row.contains(&expected_subject)
+                    && row.contains(&expected_status)
+                    && row.contains(detail)
+            }),
+            "missing lock summary {subject} ({detail}):\n{}",
+            run.stdout
+        );
+    }
+    assert!(
+        harness::rows(&run).iter().any(|row| {
+            row.contains("\"check\":\"lock-staleness\"")
+                && row.contains("\"status\":\"pass\"")
+                && row.contains("\"subject\":\"aaa:dependencies:local_only\"")
+                && row.contains("path-only, no registry identity")
+        }),
+        "missing path-only dependency pass:\n{}",
+        run.stdout
+    );
+    assert!(
+        run.stdout.contains("9 locked names retained"),
+        "{}",
+        run.stdout
+    );
+    assert!(
+        run.stdout.contains("10 locked packages reachable"),
+        "{}",
+        run.stdout
+    );
     harness::cleanup(&fixture);
     Ok(())
 }

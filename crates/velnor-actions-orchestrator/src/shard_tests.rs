@@ -36,6 +36,7 @@ fn lookup_args_are_fixed_and_validated() {
     let runs = serde_json::json!([
         {"databaseId": 1, "headSha": other, "headBranch": "t", "event": "push", "conclusion": "success", "attempt": 1},
         {"databaseId": 2, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success", "attempt": 2},
+        {"databaseId": 3, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "failure", "attempt": 3},
     ]);
     assert_eq!(
         select_exact_base_candidates(&runs.to_string(), &base, "t"),

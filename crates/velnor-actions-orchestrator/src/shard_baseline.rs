@@ -181,24 +181,18 @@ impl BaselineLookup {
     /// Single named artifacts extract directly into `--dir`; place that
     /// directory under the name expected by the manifest reader.
     /// # Errors
-    /// Rejects artifact names that could escape the staging directory.
-    pub(crate) fn download_args(
-        &self,
-        artifact: &str,
-        run_id: u64,
-        staging: &Path,
-    ) -> Result<Vec<OsString>, String> {
-        velnor_actions_contract::validate_artifact_id(artifact)
-            .map_err(|_| "baseline_no_exact_artifact".to_owned())?;
-        Ok(crate::cover_baseline::baseline_download_args(
-            &self.base_sha,
-            &self.workflow,
-            &self.branch,
-            Some(artifact),
-            run_id,
-            &staging.join(artifact),
-            &self.repo,
-        ))
+    /// Rejects zero, which cannot identify a service artifact.
+    pub(crate) fn artifact_zip_args(&self, artifact_id: u64) -> Result<Vec<OsString>, String> {
+        if artifact_id == 0 {
+            return Err("baseline_unavailable".to_owned());
+        }
+        Ok(vec![
+            OsString::from("api"),
+            OsString::from(format!(
+                "repos/{}/actions/artifacts/{artifact_id}/zip",
+                self.repo
+            )),
+        ])
     }
 
     /// Run fixed `gh` args under the pinned catalog in `root`.

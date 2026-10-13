@@ -22,6 +22,7 @@ Repository: <repo>
 .github/scripts/velnor-tools-cache-identity.sh
 .github/velnor/task-execution-manifest-v1.json
 .github/workflows/ci.yml
+.github/workflows/foundation-qualification.yml
 .github/workflows/freshness.yml
 .github/workflows/product-release-binary.yml
 .github/workflows/product-release-generator.yml

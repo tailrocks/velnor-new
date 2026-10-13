@@ -247,7 +247,7 @@ fn exact_base_candidates_require_later_provenance() {
     ]);
     assert_eq!(
         select_exact_base_candidates(&runs.to_string(), &base, "t"),
-        Ok(vec![2, 5])
+        Ok(vec![5])
     );
     assert!(select_exact_base_candidates(&runs.to_string(), &"c".repeat(40), "t").is_err());
     assert!(select_exact_base_candidates("not json", &base, "t").is_err());

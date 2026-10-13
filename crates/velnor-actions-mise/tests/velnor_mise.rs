@@ -34,6 +34,8 @@ mod impl_mise_gate6;
 mod impl_mise_git;
 #[path = "impl_mise_git_config.rs"]
 mod impl_mise_git_config;
+#[path = "impl_mise_git_optional_locks.rs"]
+mod impl_mise_git_optional_locks;
 #[path = "impl_mise_install.rs"]
 mod impl_mise_install;
 #[path = "impl_mise_isolation.rs"]

@@ -33,7 +33,7 @@ fn disabled_release_short_circuits_without_parsing() -> Outcome {
         affected: &affected,
         supported_registries: &[],
     })?;
-    assert!(selection.is_empty());
+    assert_eq!(selection.packages, Vec::new());
     assert_eq!(selection.scope, ResolvedScope::Disabled);
     let options = EmitOptions {
         tag_pattern: DEFAULT_TAG_PATTERN,

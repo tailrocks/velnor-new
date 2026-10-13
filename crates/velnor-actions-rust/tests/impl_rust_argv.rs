@@ -1,10 +1,12 @@
 //! Cargo payload argv shape cases (moved from the orchestrator).
 use velnor_actions_contract::ContractError;
 use velnor_actions_rust::tasks::{
-    TaskGroup, TaskKind, cargo_payload_argv, cargo_payload_with_profile, entry_metadata,
-    evidence_id,
+    TaskGroup, TaskKind, cargo_payload_argv, cargo_payload_with_profile,
 };
-use velnor_actions_rust::{CompileDriver, Evidence, EvidenceStrength, NextestProfile, TestRunner};
+use velnor_actions_rust::{CompileDriver, NextestProfile, TestRunner};
+
+#[path = "impl_rust_argv_metadata.rs"]
+mod metadata;
 
 pub(crate) fn group(kind: TaskKind) -> TaskGroup {
     TaskGroup {

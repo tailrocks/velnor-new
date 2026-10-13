@@ -6,10 +6,56 @@
 
 use std::error::Error;
 
-use crate::impl_repo_policy::{quoted_value, read};
+use crate::impl_repo_policy::{p12_harness, quoted_value, read};
 
 #[path = "fixtures/p12_property.rs"]
 mod p12_property;
+
+fn assert_lock_staleness_row(
+    run: &p12_harness::Run,
+    subject: &str,
+    status: &str,
+    detail: Option<&str>,
+) -> Result<(), Box<dyn Error>> {
+    let rows = run
+        .stdout
+        .lines()
+        .filter_map(|line| line.strip_prefix("row: "))
+        .map(serde_json::from_str::<serde_json::Value>)
+        .collect::<Result<Vec<_>, _>>()?;
+    let row = rows
+        .iter()
+        .find(|row| {
+            row["check"] == "lock-staleness" && row["subject"] == subject && row["status"] == status
+        })
+        .ok_or_else(|| {
+            format!(
+                "missing lock-staleness row for {subject} with status {status}:\n{}",
+                run.stdout
+            )
+        })?;
+    if let Some(detail) = detail {
+        assert!(
+            row["detail"]
+                .as_str()
+                .is_some_and(|value| value.contains(detail)),
+            "row detail misses {detail}: {row}"
+        );
+    }
+    Ok(())
+}
+
+fn assert_lock_staleness_failure(
+    run: &p12_harness::Run,
+    detail: &str,
+) -> Result<(), Box<dyn Error>> {
+    assert_ne!(
+        run.code, 0,
+        "expected lock-staleness failure: {}",
+        run.stdout
+    );
+    assert_lock_staleness_row(run, "aaa:dependencies:serde_json", "fail", Some(detail))
+}
 
 #[test]
 fn boot34_mise_version_matches_catalog() -> Result<(), Box<dyn Error>> {

@@ -33,23 +33,68 @@ def lock_identity(entry):
     return (name, version, source)
 
 
-def _read_workspace(ctx):
+def _load_manifest(ctx, relative):
+    path = ctx.path(relative)
     try:
-        with open(ctx.path("Cargo.toml"), "rb") as handle:
-            doc = tomllib.load(handle)
-        return (doc.get("workspace") or {}).get("dependencies", {})
+        with open(path, "rb") as handle:
+            return tomllib.load(handle)
     except (OSError, tomllib.TOMLDecodeError) as err:
-        ctx.fail_row("lock-staleness", "workspace Cargo.toml",
-                     f"unreadable ({err})")
+        ctx.fail_row("lock-staleness", relative, f"unreadable ({err})")
         return None
 
 
-def _read_lock(ctx):
+def _excluded_workspaces(ctx, relative, workspace):
+    excludes = workspace.get("exclude", [])
+    if not isinstance(excludes, list):
+        ctx.fail_row("lock-staleness", relative or "Cargo.toml",
+                     "workspace.exclude must be an array")
+        return []
+    discovered = []
+    base = os.path.join(ctx.root, relative)
+    for excluded in excludes:
+        if not isinstance(excluded, str):
+            ctx.fail_row("lock-staleness", relative or "Cargo.toml",
+                         f"workspace.exclude entry is not a string: {excluded!r}")
+            continue
+        pattern = os.path.join(base, excluded)
+        for hit in glob.glob(pattern, recursive=True):
+            manifest = hit if os.path.basename(hit) == "Cargo.toml" \
+                else os.path.join(hit, "Cargo.toml")
+            if not os.path.isfile(manifest):
+                continue
+            nested_relative = os.path.relpath(os.path.dirname(manifest), ctx.root)
+            nested = _load_manifest(ctx, os.path.relpath(manifest, ctx.root))
+            if nested and isinstance(nested.get("workspace"), dict):
+                discovered.append((nested_relative, nested))
+    return discovered
+
+
+def _discover_workspaces(ctx):
+    pending = [("", _load_manifest(ctx, "Cargo.toml"))]
+    roots = []
+    seen = set()
+    while pending:
+        relative, document = pending.pop(0)
+        if relative in seen or document is None:
+            continue
+        seen.add(relative)
+        workspace = document.get("workspace")
+        if not isinstance(workspace, dict):
+            ctx.fail_row("lock-staleness", relative or "Cargo.toml",
+                         "no [workspace] table")
+            continue
+        roots.append((relative, document))
+        pending.extend(_excluded_workspaces(ctx, relative, workspace))
+    return roots
+
+
+def _read_lock(ctx, relative):
+    lock_path = os.path.join(relative, "Cargo.lock") if relative else "Cargo.lock"
     try:
-        with open(ctx.path("Cargo.lock"), "rb") as handle:
+        with open(ctx.path(lock_path), "rb") as handle:
             return tomllib.load(handle).get("package", [])
     except (OSError, tomllib.TOMLDecodeError, AttributeError) as err:
-        ctx.fail_row("lock-staleness", "Cargo.lock", f"unreadable ({err})")
+        ctx.fail_row("lock-staleness", lock_path, f"unreadable ({err})")
         return None
 
 
@@ -96,32 +141,52 @@ def _workspace_dependency(ctx, subject, alias, real, inherited):
     return (subject, real, requirement, "workspace")
 
 
-def _read_manifests(ctx, inherited):
-    manifests = sorted(glob.glob(ctx.path("crates/*/Cargo.toml")))
-    if not manifests:
-        ctx.fail_row("lock-staleness", "crates/*/Cargo.toml",
-                     "no members found")
+def _member_manifests(ctx, relative, document):
+    workspace_dir = os.path.join(ctx.root, relative)
+    manifests = []
+    if isinstance(document.get("package"), dict):
+        manifests.append(os.path.join(workspace_dir, "Cargo.toml"))
+    members = (document.get("workspace") or {}).get("members", [])
+    if not isinstance(members, list):
+        ctx.fail_row("lock-staleness", f"{relative or '.'}/Cargo.toml",
+                     "workspace.members must be an array")
+        members = []
+    for member in members:
+        if not isinstance(member, str):
+            ctx.fail_row("lock-staleness", f"{relative or '.'}/Cargo.toml",
+                         f"workspace member is not a string: {member!r}")
+            continue
+        pattern = os.path.join(workspace_dir, member, "Cargo.toml")
+        matches = glob.glob(pattern, recursive=True)
+        if not matches:
+            ctx.fail_row("lock-staleness", f"{relative or '.'}/{member}",
+                         "workspace member manifest not found")
+        manifests.extend(matches)
+    return sorted(set(manifests))
+
+
+def _read_manifests(ctx, manifests, inherited):
     members = set()
     declared = []
     for manifest in manifests:
         try:
             with open(manifest, "rb") as handle:
-                doc = tomllib.load(handle)
+                document = tomllib.load(handle)
         except (OSError, tomllib.TOMLDecodeError) as err:
             ctx.fail_row("lock-staleness", manifest, f"unreadable ({err})")
             continue
-        package = doc.get("package")
+        package = document.get("package")
         if not isinstance(package, dict) or not package.get("name"):
+            ctx.fail_row("lock-staleness", manifest,
+                         "workspace member has no package name")
             continue
         crate = package["name"]
         members.add(crate)
-        for scope, alias, spec in walk_dep_tables(doc, ""):
+        for scope, alias, spec in walk_dep_tables(document, ""):
             item = _declared_dependency(ctx, crate, scope, alias, spec, inherited)
             if item is not None:
                 declared.append(item)
-    ctx.member_names = members
-    by_name = _index_lock(ctx.locked)
-    return manifests, declared, by_name
+    return members, declared
 
 
 def _index_lock(locked):
@@ -147,17 +212,16 @@ def _check_requirement(ctx, subject, real, requirement, by_name, members):
                      f"declared {requirement!r} has no locked identity "
                      f"(locked versions: {have})")
         return False
-    return _check_resolved_source(ctx, subject, real, want, requirement,
-                                  matches, members)
+    return _check_resolved_source(ctx, subject, real, requirement, matches,
+                                  members)
 
 
-def _check_resolved_source(ctx, subject, real, want, requirement,
-                           matches, members):
+def _check_resolved_source(ctx, subject, real, requirement, matches, members):
     sources = {entry.get("source") or "local" for entry in matches}
     if len(sources) > 1:
         ctx.fail_row("lock-staleness", subject,
-                     f"ambiguous identity: {real} {want} resolves from "
-                     f"{sorted(sources)}")
+                     f"ambiguous identity: {real} {requirement[1:]} "
+                     f"resolves from {sorted(sources)}")
         return False
     source = next(iter(sources))
     if real in members and source != "local":
@@ -175,29 +239,18 @@ def _check_resolved_source(ctx, subject, real, want, requirement,
     return True
 
 
-def _check_declared(ctx, declared, by_name, members):
+def _check_declared(ctx, relative, declared, by_name, members):
     passed = failed = 0
     for subject, real, requirement, _ in declared:
         if _check_requirement(ctx, subject, real, requirement, by_name, members):
             passed += 1
         else:
             failed += 1
-    ctx.info_row("lock-staleness", "(declared-summary)",
+    subject = f"{relative}/(declared-summary)" if relative \
+        else "(declared-summary)"
+    ctx.info_row("lock-staleness", subject,
                  f"{passed} match, {failed} fail, "
                  f"{len(by_name)} locked names retained")
-
-
-def _check_membership(ctx, locked, by_name, members):
-    local_names = {entry.get("name") for entry in locked
-                   if not entry.get("source")}
-    if local_names != members:
-        ctx.fail_row("lock-staleness", "(lock-membership)",
-                     f"local lock {sorted(local_names)} != "
-                     f"members {sorted(members)}")
-    else:
-        ctx.pass_row("lock-staleness", "(lock-membership)",
-                     f"{len(members)} members")
-    _check_lock_graph(ctx, locked, by_name, local_names & members)
 
 
 def _edge_candidates(edge, by_name):
@@ -213,55 +266,88 @@ def _edge_candidates(edge, by_name):
     return candidates
 
 
-def _walk_lock_graph(ctx, queue, by_name):
+def _check_lock_graph(ctx, relative, locked, by_name, members):
+    local = {entry.get("name") for entry in locked if not entry.get("source")}
+    queue = [entry for name in sorted(local & members)
+             for entry in by_name.get(name, [])]
     reachable = {lock_identity(entry) for entry in queue}
     while queue:
         entry = queue.pop()
         for edge in entry.get("dependencies", []) or []:
             candidates = _edge_candidates(edge, by_name)
             if not candidates:
-                ctx.fail_row("lock-staleness", "(lock-graph)",
+                subject = f"{relative}/(lock-graph)" if relative \
+                    else "(lock-graph)"
+                ctx.fail_row("lock-staleness", subject,
                              f"dangling edge {entry.get('name')} -> {edge}")
             for candidate in candidates:
                 identity = lock_identity(candidate)
                 if identity not in reachable:
                     reachable.add(identity)
                     queue.append(candidate)
-    return reachable
-
-
-def _check_lock_graph(ctx, locked, by_name, roots):
-    queue = [entry for name in sorted(roots) for entry in by_name.get(name, [])]
-    reachable = _walk_lock_graph(ctx, queue, by_name)
     stranded = [entry for entry in locked
                 if lock_identity(entry) not in reachable]
+    subject = f"{relative}/(lock-graph)" if relative else "(lock-graph)"
     if stranded:
         for entry in sorted(stranded, key=lambda row: row.get("name", "")):
-            ctx.fail_row("lock-staleness", "(lock-graph)",
+            ctx.fail_row("lock-staleness", subject,
                          f"unreachable locked package {entry.get('name')} "
                          f"{entry.get('version')}")
     else:
-        ctx.pass_row("lock-staleness", "(lock-graph)",
+        ctx.pass_row("lock-staleness", subject,
                      f"{len(locked)} locked packages reachable")
 
 
-def _check_lock_mtime(ctx, manifests):
+def _check_workspace(ctx, relative, document):
+    label = relative or "."
+    workspace_dir = os.path.join(ctx.root, relative)
+    workspace = document.get("workspace") or {}
+    inherited = workspace.get("dependencies", {})
+    if not isinstance(inherited, dict):
+        ctx.fail_row("lock-staleness", f"{label}/Cargo.toml",
+                     "workspace.dependencies must be a table")
+        return []
+    locked = _read_lock(ctx, relative)
+    if locked is None:
+        return []
+    manifests = _member_manifests(ctx, relative, document)
+    if not manifests:
+        ctx.fail_row("lock-staleness", f"{label}/Cargo.toml",
+                     "no workspace member manifests found")
+    members, declared = _read_manifests(ctx, manifests, inherited)
+    by_name = _index_lock(locked)
+    _check_declared(ctx, relative, declared, by_name, members)
+    local_names = {entry.get("name") for entry in locked
+                   if not entry.get("source")}
+    membership = f"{relative}/(lock-membership)" if relative \
+        else "(lock-membership)"
+    if local_names != members:
+        ctx.fail_row("lock-staleness", membership,
+                     f"local lock {sorted(local_names)} != members "
+                     f"{sorted(members)}")
+    else:
+        ctx.pass_row("lock-staleness", membership, f"{len(members)} members")
+    _check_lock_graph(ctx, relative, locked, by_name, members)
+    lock_path = os.path.join(relative, "Cargo.lock") if relative else "Cargo.lock"
+    _check_lock_mtime(ctx, lock_path, manifests)
+    return locked
+
+
+def _check_lock_mtime(ctx, lock_path, manifests):
     try:
-        lock_mtime = os.path.getmtime(ctx.path("Cargo.lock"))
+        lock_mtime = os.path.getmtime(ctx.path(lock_path))
         newest_manifest = max(os.path.getmtime(manifest) for manifest in manifests)
         stale = lock_mtime < newest_manifest
-        ctx.info_row("lock-mtime", "Cargo.lock",
+        ctx.info_row("lock-mtime", lock_path,
                      f"lock_is_newest={str(not stale).lower()}")
-    except OSError as err:
-        ctx.info_row("lock-mtime", "Cargo.lock", f"mtime unreadable ({err})")
+    except (OSError, ValueError) as err:
+        ctx.info_row("lock-mtime", lock_path, f"mtime unreadable ({err})")
 
 
 def check_effective_identity(ctx):
-    inherited = _read_workspace(ctx)
-    ctx.locked = _read_lock(ctx)
-    if ctx.locked is None or inherited is None:
-        return
-    manifests, declared, by_name = _read_manifests(ctx, inherited)
-    _check_declared(ctx, declared, by_name, ctx.member_names)
-    _check_membership(ctx, ctx.locked, by_name, ctx.member_names)
-    _check_lock_mtime(ctx, manifests)
+    ctx.workspace_roots = _discover_workspaces(ctx)
+    ctx.locked = []
+    ctx.member_names = set()
+    for relative, document in ctx.workspace_roots:
+        locked = _check_workspace(ctx, relative, document)
+        ctx.locked.extend(locked)

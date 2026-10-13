@@ -136,7 +136,7 @@ fn every_finding_names_supplying_file() {
         let Ok(inspection) = inspection else {
             panic!("inspection must not fail for {path}");
         };
-        assert!(!inspection.findings.is_empty(), "{path} must report");
+        assert_ne!(inspection.findings, Vec::new(), "{path} must report");
         for finding in &inspection.findings {
             assert_eq!(finding.file, path);
             assert_ne!(finding.code, "");

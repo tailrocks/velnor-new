@@ -60,10 +60,10 @@ pub fn select_exact_base_run(
         .ok_or_else(|| "baseline_unavailable".to_owned())
 }
 
-/// Discover bounded exact-base push runs in the service's newest-first order.
+/// Discover bounded successful exact-base push runs in service order.
 ///
-/// Summary conclusions confer no proof authority. A failed newer retry can
-/// retain an independently authenticated successful original publication.
+/// The selected summary must report success. The original attempt still
+/// needs independent authentication before its manifest can prove coverage.
 /// # Errors
 /// Refuses malformed or oversized listings and listings without candidates.
 pub fn select_exact_base_candidates(
@@ -84,6 +84,7 @@ pub fn select_exact_base_candidates(
             run["headSha"] == base
                 && run["headBranch"] == branch
                 && run["event"] == "push"
+                && run["conclusion"] == "success"
                 && run["attempt"].as_u64().is_some_and(|attempt| attempt > 0)
         })
         .filter_map(|run| {

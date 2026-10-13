@@ -103,7 +103,7 @@ fn wrapper_only_detects_mbx() -> TestResult {
             .contains("wrappers.cargo.command")
     );
     assert_eq!(
-        workspace.findings,
+        workspace.findings.as_slice(),
         [] as [velnor_actions_rust::ProfileFinding; 0]
     );
     let plan = plan_for(&prep)?;
@@ -141,7 +141,7 @@ fn nextest_config_selects_ci_or_default() -> TestResult {
         );
         assert_eq!(workspace.profile.compile_driver.as_str(), "cargo");
         assert_eq!(
-            workspace.findings,
+            workspace.findings.as_slice(),
             [] as [velnor_actions_rust::ProfileFinding; 0]
         );
         let plan = plan_for(&prep)?;
@@ -189,7 +189,7 @@ fn no_evidence_defaults_to_cargo() -> TestResult {
     assert_eq!(workspace.profile.nextest_profile.as_str(), "default");
     assert_eq!(workspace.profile.nextest_config, None);
     assert_eq!(
-        workspace.profile.evidence,
+        workspace.profile.evidence.as_slice(),
         [] as [velnor_actions_rust::Evidence; 0]
     );
     let text = prep.discovery.recommendations.join("\n");
@@ -287,7 +287,7 @@ fn misleading_names_and_comments_not_evidence() -> TestResult {
         workspace.profile.evidence
     );
     assert_eq!(
-        workspace.findings,
+        workspace.findings.as_slice(),
         [] as [velnor_actions_rust::ProfileFinding; 0]
     );
     Ok(())

@@ -17,6 +17,9 @@ use crate::impl_repo_policy::{
     MEMBERS, dep_key, dep_lines, manifest, p11_toml, read, repo_root, test_markers, tree_files,
 };
 
+#[path = "impl_repo_deps_layout.rs"]
+mod layout;
+
 /// Intra-workspace edges allowed per member package.
 fn expected_internal(dir: &str) -> Vec<&str> {
     if dir == crate::impl_repo_policy::REGISTRY_FIXTURE_DIR {
@@ -42,6 +45,142 @@ fn expected_internal(dir: &str) -> Vec<&str> {
         }
         _ => vec!["velnor-actions-contract"],
     }
+}
+
+const ALLOWED_EXTERNAL_DEPS: &[&str] = &[
+    "serde",
+    "serde_json",
+    "toml",
+    "cargo_metadata",
+    "globset",
+    "blake3",
+    "clap",
+    "thiserror",
+    "anyhow",
+    "tracing",
+    "tempfile",
+    // Reviewed OS shim for the P09 atomic directory exchange; already
+    // in the lockfile via tempfile, zero new crates.
+    "rustix",
+    // Reviewed hash impl for the pre-seed manifest writer (SHA-256 of
+    // the fresh helper) and generator SHA-256 identity (replaces
+    // hand-rolled SHA-256 so release-pin comparison cannot drift from
+    // the audited implementation); pure Rust, default features only.
+    "sha2",
+    // Test-only Rust scanners parse paths/imports; runtime adapters never
+    // depend on or invoke these analyzers. Syn 3 needs `printing` for spans.
+    "proc-macro2",
+    "syn",
+    // Reviewed HCL structural parser for the tofu stack (T10, S8):
+    // `hcl` renames `hcl-rs` 0.19.8 (Q1 pre-qualified; MSRV
+    // compile-gated at 1.98.1); default features only, facade-owned
+    // byte/count/depth caps, no expression evaluation.
+    "hcl",
+    // P12 baseline archives admit one bounded ZIP entry; raw DEFLATE
+    // must consume its full input. Both paths use only the zlib-rs backend.
+    "flate2",
+    "zip",
+];
+
+fn assert_test_scanner_is_test_only(
+    dir: &str,
+    body: &str,
+    key: &str,
+) -> Result<(), Box<dyn Error>> {
+    if key != "syn" && key != "proc-macro2" {
+        return Ok(());
+    }
+    let allowed_owner = if key == "syn" {
+        [
+            "crates/velnor-actions-native",
+            "crates/velnor-actions-orchestrator",
+        ]
+        .contains(&dir)
+    } else {
+        dir == "crates/velnor-actions-orchestrator"
+    };
+    assert!(allowed_owner, "{dir} may use test-only {key}");
+    let doc = p11_toml::parse(body)?;
+    assert!(
+        p11_toml::section(&doc, "dependencies")
+            .is_none_or(|deps| deps.pairs.iter().all(|pair| pair.0 != key)),
+        "{key} is test-only"
+    );
+    Ok(())
+}
+
+fn assert_narrow_features(dir: &str, key: &str, line: &str) {
+    if let Some(index) = line.find("features") {
+        let quoted: Vec<&str> = line[index..].split('"').collect();
+        for feature in quoted.into_iter().skip(1).step_by(2) {
+            // Only `derive` globally, plus `fs` on rustix for the P09 atomic
+            // directory exchange (no net/pty/terminal).
+            let narrow = feature == "derive"
+                || (key == "rustix" && feature == "fs")
+                || (key == "syn" && ["full", "parsing", "printing", "visit"].contains(&feature))
+                || (key == "proc-macro2" && feature == "span-locations")
+                || (key == "flate2" && feature == "zlib-rs")
+                || (key == "zip" && feature == "deflate-flate2-zlib-rs");
+            assert!(narrow, "{dir}/{key} feature {feature}");
+        }
+    }
+}
+
+fn assert_archive_dependency_is_narrow(
+    dir: &str,
+    body: &str,
+    key: &str,
+    line: &str,
+) -> Result<(), Box<dyn Error>> {
+    if key != "flate2" && key != "zip" {
+        return Ok(());
+    }
+    assert_eq!(
+        dir, "crates/velnor-actions-orchestrator",
+        "{key} is orchestrator-only"
+    );
+    let doc = p11_toml::parse(body)?;
+    assert!(
+        p11_toml::section(&doc, "dependencies")
+            .is_some_and(|dependencies| { dependencies.pairs.iter().any(|pair| pair.0 == key) }),
+        "{dir}/{key} must be a runtime dependency"
+    );
+    let feature = if key == "flate2" {
+        "zlib-rs"
+    } else {
+        "deflate-flate2-zlib-rs"
+    };
+    let selected_features: Vec<&str> = line
+        .find("features")
+        .map(|index| line[index..].split('"').skip(1).step_by(2).collect())
+        .unwrap_or_default();
+    assert!(
+        line.contains("default-features = false") && selected_features == [feature],
+        "{dir}/{key} must disable defaults and select only {feature}"
+    );
+    Ok(())
+}
+
+fn assert_external_dependency_is_narrow(
+    dir: &str,
+    body: &str,
+    line: &str,
+) -> Result<(), Box<dyn Error>> {
+    let key = dep_key(line);
+    if key.starts_with("velnor-actions") {
+        return Ok(());
+    }
+    assert!(ALLOWED_EXTERNAL_DEPS.contains(&key), "{dir} uses {key}");
+    assert_test_scanner_is_test_only(dir, body, key)?;
+    assert_narrow_features(dir, key, line);
+    assert_archive_dependency_is_narrow(dir, body, key, line)?;
+    let import_name = if key == "proc-macro2" {
+        "proc_macro2"
+    } else {
+        key
+    };
+    assert!(dep_referenced(dir, import_name)?, "{dir} never uses {key}");
+    Ok(())
 }
 
 #[test]
@@ -246,70 +385,5 @@ fn parse_tests_live_outside_src() -> Result<(), Box<dyn Error>> {
         );
     }
     assert!(read("crates/velnor-actions-cli/tests/impl_cli_args.rs")?.contains("#[test]"));
-    Ok(())
-}
-
-#[test]
-fn test_entries_match_layout_and_stay_far_below_cases() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in MEMBERS {
-        let body = manifest(dir)?;
-        let entries = body.matches("[[test]]").count();
-        let want = if dir.ends_with("orchestrator") { 2 } else { 1 };
-        assert_eq!(entries, want, "{dir} entry drift");
-        let mut in_test = false;
-        for line in body.lines() {
-            let trimmed = line.trim();
-            if trimmed.starts_with('[') {
-                in_test = trimmed == "[[test]]";
-            } else if in_test && trimmed.starts_with("path = ") {
-                let path = trimmed.split('"').nth(1).ok_or("test path")?;
-                let rest = path.strip_prefix("tests/").ok_or("test path")?;
-                assert!(!rest.contains('/'), "{dir} nests test binary {path}");
-            }
-        }
-        assert!(
-            entries * 10 <= test_markers(dir)?,
-            "{dir} nears one-binary-per-case"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn fixtures_stay_independent_and_cover_failures() -> Result<(), Box<dyn Error>> {
-    let tokens = [
-        "fail",
-        "invalid",
-        "missing",
-        "reject",
-        "err",
-        "denied",
-        "forbidden",
-        "empty",
-        "boundary",
-    ];
-    let mut tempdir_files = 0;
-    let mut failure_cases = 0;
-    for (dir, _) in MEMBERS {
-        for path in tree_files(&format!("{dir}/tests"), "rs")? {
-            let body = std::fs::read_to_string(&path)?;
-            if body.contains("TempDir") {
-                tempdir_files += 1;
-            }
-            for line in body.lines() {
-                let trimmed = line.trim_start();
-                if trimmed.starts_with("fn ") && tokens.iter().any(|token| trimmed.contains(token))
-                {
-                    failure_cases += 1;
-                }
-            }
-        }
-    }
-    assert!(tempdir_files >= 10, "only {tempdir_files} TempDir files");
-    assert!(failure_cases >= 50, "only {failure_cases} failure cases");
-    let helper = read("crates/velnor-actions-cli/tests/impl_cli_tmp.rs")?;
-    for token in ["std::process::id()", "fetch_add", "create_dir_all"] {
-        assert!(helper.contains(token), "fresh_tempdir loses {token}");
-    }
     Ok(())
 }

@@ -115,7 +115,7 @@ The catalog workstream reports its 46-fixture probe passed and root-local checks
 
 This later checkpoint supersedes counts and statuses in the preceding historical snapshots. Inventory now has **28 tool rows: 27 `PinnedTool` entries plus Mise**, and **four native source authority records covering 13 exact pins**. Eight stale tools remain: Bun, Java, Gradle, Python, Uv, Node, Boltffi and desktop Rust. Alint's previous hold was removed after the paired compatibility update; Rust and Mise action holds remain. No new hold or hosted performance qualification is claimed.
 
-Alint tool/action now both pin approved `0.17.0`; action/source commit `d93c0283b19dd78afcd8a4b303f1556a7759ba81`. Paired actual configuration and action-flag compatibility evidence is `/tmp/velnor-tool-pin-evidence/alint-qualification/qualification-report.json`: both versions validate the 53-rule config, and actual check/action outputs have identical five errors/four informational findings. This verifies upgrade compatibility, not a green repository check; the reported policy failures remain separate work.
+The Alint action now pins `v0.17.0` at source commit `d93c0283b19dd78afcd8a4b303f1556a7759ba81`. Paired configuration and exact workflow-flag compatibility evidence is [recorded here](alint-v0.17.0-qualification.md): both versions validate the same 53-rule config; the workflow-equivalent check exits 0 and emits the same four informational notices with no errors. This is local macOS ARM64 compatibility evidence, not hosted Linux installation or performance qualification.
 
 | Added source-current tool | Version | Peeled source commit | Evidence SHA256 |
 |---|---|---|---|
