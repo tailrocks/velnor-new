@@ -1,0 +1,5 @@
+b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./.github/actionlint.yaml
+a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
+59ad40cdc50c699e253906d01c6b5f8f822ecb715ef3a00e139c1c0d70d0f895  ./.github/workflows/ci.yml
+0d41b05d10d4da7b26a719f82908f2a47e7224ed93ef3383d81a6d45179fb5d8  ./.github/workflows/freshness.yml
+link ./.github/CLAUDE.md -> AGENTS.md
