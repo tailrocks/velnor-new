@@ -87,6 +87,7 @@ pub(crate) fn run_shellcheck_bodies(
     let mut args = vec![
         OsString::from("-S"),
         OsString::from("warning"),
+        OsString::from("--enable=SC2086"),
         OsString::from("--format=gcc"),
     ];
     args.extend(files.iter().cloned());

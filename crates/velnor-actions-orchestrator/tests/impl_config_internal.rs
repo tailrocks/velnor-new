@@ -10,8 +10,7 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_contract::{FinalReport, RunnerSelection};
 use velnor_actions_orchestrator::{
-    OrchestratorError, finalized_jobs, init_config, merge_internal, plan_internal, plan_text,
-    prepare, resolve_root,
+    OrchestratorError, init_config, merge_internal, plan_internal, prepare, resolve_root,
 };
 
 use crate::impl_common::{

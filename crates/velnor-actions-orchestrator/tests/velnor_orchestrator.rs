@@ -5,6 +5,7 @@ mod impl_cache_sources_exact;
 mod impl_cache_warm;
 mod impl_common;
 mod impl_config_internal;
+mod impl_config_internal_b;
 mod impl_consumer_manifest_file;
 mod impl_cover_pipeline;
 mod impl_crate_graph;
