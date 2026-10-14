@@ -33,15 +33,15 @@ pub(crate) use projection::{
     container_labels, container_name, dind_create_for_identity, identity_labels_match,
     launch_identity_labels_match, runner_create_for_identity,
 };
-pub(crate) use resources::{
-    confirmed_not_found, create_owned_volumes, list_launch, probe_dind, remove_owned_volumes,
-    verify_container, verify_engine,
-};
 pub(crate) use resource_budget::DockerResourceLimits;
 pub use resource_budget::ResourceBudget;
 pub(crate) use resource_budget::ResourceBudgetConfig;
 #[cfg(test)]
 pub(crate) use resource_budget::test_resource_budget;
+pub(crate) use resources::{
+    confirmed_not_found, create_owned_volumes, list_launch, probe_dind, remove_owned_volumes,
+    verify_container, verify_engine,
+};
 #[cfg(test)]
 mod projection_tests;
 

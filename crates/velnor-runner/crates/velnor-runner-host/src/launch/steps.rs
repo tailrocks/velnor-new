@@ -353,7 +353,10 @@ async fn advance_phase_if_known(
             status: 0,
             step: "journal",
         })?;
-    if row.launch_phase.is_some_and(|current| current.rank() < phase.rank()) {
+    if row
+        .launch_phase
+        .is_some_and(|current| current.rank() < phase.rank())
+    {
         journal
             .advance_launch_phase(id, phase)
             .await
