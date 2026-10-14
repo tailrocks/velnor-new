@@ -211,7 +211,7 @@ fn probe_rows_carry_source_and_check_time() -> Result<(), Box<dyn Error>> {
         .iter()
         .filter(|line| line.contains("\"check\":\"upstream-probe\""))
         .collect();
-    assert_eq!(probe.len(), 23, "22 rows + runner note:\n{}", run.stdout);
+    assert_eq!(probe.len(), 20, "19 rows + runner note:\n{}", run.stdout);
     for line in probe {
         if line.contains("\"subject\":\"runner\"") {
             assert!(
@@ -228,7 +228,7 @@ fn probe_rows_carry_source_and_check_time() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn tag_sha_mismatch_fails_while_latest_release_matches() -> Result<(), Box<dyn Error>> {
+fn unused_tag_file_does_not_change_the_release_probe() -> Result<(), Box<dyn Error>> {
     let fixture = probe_fixture("p12-tag-sha-mismatch")?;
     harness::write(
         &fixture.dir,
@@ -236,16 +236,7 @@ fn tag_sha_mismatch_fails_while_latest_release_matches() -> Result<(), Box<dyn E
         "{\"sha\": \"1234567890abcdef1234567890abcdef12345678\"}",
     )?;
     let run = harness::run_script(&fixture.dir, &["--check-upstream"])?;
-    harness::assert_fail(&run, "release tag SHA mismatch");
-    assert!(
-        harness::rows(&run).iter().any(|line| {
-            line.contains("\"subject\":\"actions/checkout\"")
-                && line.contains("\"status\":\"fail\"")
-                && line.contains("release tag SHA mismatch")
-        }),
-        "wrong release tag SHA passed:\n{}",
-        run.stdout
-    );
+    harness::assert_clean(&run);
     harness::cleanup(&fixture);
     Ok(())
 }
@@ -259,7 +250,7 @@ fn latest_release_movement_still_fails() -> Result<(), Box<dyn Error>> {
         "{\"tag_name\": \"v8.0.0\"}",
     )?;
     let run = harness::run_script(&fixture.dir, &["--check-upstream"])?;
-    harness::assert_fail(&run, "stale pin: pinned='v7.0.1' latest='v8.0.0'");
+    harness::assert_fail(&run, r#"stale pin: pinned=\"v7.0.1\" latest=\"v8.0.0\""#);
     assert!(
         harness::rows(&run).iter().any(|line| {
             line.contains("\"subject\":\"actions/checkout\"")
@@ -274,28 +265,13 @@ fn latest_release_movement_still_fails() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn rust_cache_tag_listing_is_rejected_as_latest_source() -> Result<(), Box<dyn Error>> {
-    let fixture = harness::passing("p12-tags-latest-source")?;
-    harness::mutate(
-        &fixture.dir,
-        INVENTORY,
-        "\"latest_source\":\"https://api.github.com/repos/Swatinem/rust-cache/releases/latest\"",
-        "\"latest_source\":\"https://api.github.com/repos/Swatinem/rust-cache/tags\"",
-    )?;
+fn removed_rust_cache_action_is_not_an_inventory_subject() -> Result<(), Box<dyn Error>> {
+    let fixture = harness::passing("p12-no-rust-cache")?;
+    let inventory = std::fs::read_to_string(fixture.dir.join(INVENTORY))?;
+    assert!(!inventory.contains("Swatinem/rust-cache"));
     let run = harness::run_script(&fixture.dir, &[])?;
-    harness::assert_fail(
-        &run,
-        "release latest_source must be an exact endpoint for its repository",
-    );
-    assert!(
-        harness::rows(&run).iter().any(|line| {
-            line.contains("\"subject\":\"Swatinem/rust-cache\"")
-                && line.contains("\"status\":\"fail\"")
-                && line.contains("release latest_source")
-        }),
-        "unordered tag listing passed as latest evidence:\n{}",
-        run.stdout
-    );
+    harness::assert_clean(&run);
+    assert!(!run.stdout.contains("Swatinem/rust-cache"));
     harness::cleanup(&fixture);
     Ok(())
 }

@@ -26,16 +26,13 @@ fn hold_version(key: &str, version: &str, granted: &str, expires: &str) -> Strin
 #[test]
 fn missing_action_row_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-missing-action")?;
-    let row = "{\"key\":\"actions/cache/save\",\"pin_kind\":\"release\",\
-        \"pinned_version\":\"v6.1.0\",\
+    let row = ",{\"key\":\"actions/cache/save\",\"pinned_version\":\"v6.1.0\",\
         \"pinned_sha\":\"55cc8345863c7cc4c66a329aec7e433d2d1c52a9\",\
         \"qualified_version\":\"v6.1.0\",\
         \"qualified_sha\":\"55cc8345863c7cc4c66a329aec7e433d2d1c52a9\",\
-        \"source\":\"https://api.github.com/repos/actions/cache/commits/v6.1.0\",\
-        \"status\":\"current\",\
-        \"latest_source\":\"https://api.github.com/repos/actions/cache/releases/latest\",\
-        \"latest\":\"v6.1.0\"}";
-    harness::mutate(&fixture.dir, INVENTORY, &format!(",{row}"), "")?;
+        \"source\":\"https://api.github.com/repos/actions/cache/releases/latest\",\
+        \"status\":\"current\"}";
+    harness::mutate(&fixture.dir, INVENTORY, row, "")?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_fail(&run, "action actions/cache/save");
     harness::assert_fail(&run, "inventory row missing");
@@ -61,12 +58,7 @@ fn local_pin_mismatch_fails() -> Result<(), Box<dyn Error>> {
 #[test]
 fn policy_mirror_drift_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-mirror")?;
-    harness::mutate(
-        &fixture.dir,
-        POLICY,
-        "rust = \"1.99.0\"",
-        "rust = \"1.98.1\"",
-    )?;
+    harness::mutate(&fixture.dir, POLICY, "gh = \"2.101.0\"", "gh = \"9.9.9\"")?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_fail(&run, "policy-mirror");
     harness::cleanup(&fixture);
@@ -229,23 +221,17 @@ fn held_status_needs_a_covering_hold() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn held_release_pin_keeps_tag_and_latest_upstream_checks() -> Result<(), Box<dyn Error>> {
+fn held_release_stays_clean_offline_and_fails_when_latest_moves() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-held-release")?;
     harness::mutate(
         &fixture.dir,
         INVENTORY,
-        "\"latest\":\"v4.3.0\"",
-        "\"latest\":\"v4.4.0\"",
-    )?;
-    harness::mutate(
-        &fixture.dir,
-        INVENTORY,
-        "\"source\":\"https://api.github.com/repos/jdx/mise-action/commits/v4.3.0\",\"status\":\"current\"",
-        "\"source\":\"https://api.github.com/repos/jdx/mise-action/commits/v4.3.0\",\"status\":\"held\"",
+        "\"source\":\"https://api.github.com/repos/jdx/mise-action/releases/latest\",\"status\":\"current\"",
+        "\"source\":\"https://api.github.com/repos/jdx/mise-action/releases/latest\",\"status\":\"held\"",
     )?;
     let granted = harness::days_iso(-1)?;
     let expires = harness::days_iso(5)?;
-    let hold = hold_version("jdx/mise-action", "v4.3.0", &granted, &expires);
+    let hold = hold_version("jdx/mise-action", "v5.1.2", &granted, &expires);
     harness::mutate(
         &fixture.dir,
         INVENTORY,
@@ -259,17 +245,17 @@ fn held_release_pin_keeps_tag_and_latest_upstream_checks() -> Result<(), Box<dyn
     harness::write(
         &fixture.dir,
         "upstream/mise-action.json",
-        "{\"tag_name\": \"v4.4.0\"}",
+        "{\"tag_name\": \"v5.2.0\"}",
     )?;
     let probe = harness::run_script(&fixture.dir, &["--check-upstream"])?;
-    harness::assert_fail(&probe, "stale pin: pinned='v4.3.0' latest='v4.4.0'");
+    harness::assert_fail(&probe, r#"stale pin: pinned=\"v5.1.2\" latest=\"v5.2.0\""#);
     assert!(
         harness::rows(&probe).iter().any(|line| {
             line.contains("\"subject\":\"jdx/mise-action\"")
-                && line.contains("\"status\":\"pass\"")
-                && line.contains("verified release tag v4.3.0 -> ")
+                && line.contains("\"status\":\"fail\"")
+                && line.contains(r#"latest=\"v5.2.0\""#)
         }),
-        "held release tag SHA was not verified:\n{}",
+        "held release skipped the latest probe:\n{}",
         probe.stdout
     );
     harness::cleanup(&fixture);
