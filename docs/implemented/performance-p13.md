@@ -47,9 +47,10 @@ sub-2 s; residual ~1.7 s is actionlint's single YAML pass.
 Direct `cargo metadata --no-deps --offline` on the 100-crate
 fixture: 0.04, 0.03, 0.04 s — a lower bound per eliminated
 subprocess; the mise-wrapped cost is UNMEASURED. A 100-crate
-full plan fails closed with `matrix_budget_exceeded:595321`
-(it exceeded the then-current 320 KiB cap and also exceeds the current
-512 KiB artifact cap, never truncates), so plan scales to 40 while
+full plan is `595321` canonical matrix bytes. That exceeded the
+historical 320 KiB and 512 KiB caps. The current 4 MiB cap accepts it
+and still fails closed, never truncating a pathological matrix. Plan
+scales through 150 crates while
 `prepare` scales to 100. Counts are O(workspaces) vs
 O(manifests) by construction; wall shapes (prepare 52→104 ms,
 plan rising with obligations, generate ~180 ms → ~1.7 s across

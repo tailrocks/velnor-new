@@ -74,7 +74,7 @@ const ENV_EXPRESSIONS: [&str; 11] = [
 /// push-gated cache-save flag, and the publish step's derived
 /// artifact name. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 21] = [
+const WITH_EXPRESSIONS: [&str; 22] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
@@ -96,6 +96,7 @@ const WITH_EXPRESSIONS: [&str; 21] = [
     "github.job",
     "steps.tofu-providers.outputs.cache-key",
     "steps.tofu-providers.outputs.cache-path",
+    "needs.plan.outputs.covered_tasks",
 ];
 
 /// True for a `matrix.*` field reference (both layers allow the family).

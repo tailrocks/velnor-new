@@ -49,7 +49,16 @@ pub(crate) const SCHEMA: u32 = 1;
 
 /// Maximum canonical `matrix.json` artifact bytes; oversize errors, never
 /// truncates. Job outputs have a separate UTF-16 aggregate budget.
-pub(crate) const MATRIX_BUDGET_BYTES: usize = 524_288;
+///
+/// Static crate jobs keep this document in the plan artifact. One hundred
+/// fifty crates with their `run` commands are about 2 MB, so the cap sits
+/// above that and still rejects a pathological matrix. Dynamic plans still
+/// fail on the 256-job and 900,000 UTF-16 output limits.
+pub(crate) const MATRIX_BUDGET_BYTES: usize = 4_194_304;
+
+#[cfg(test)]
+#[path = "internal_budget_tests.rs"]
+mod budget_tests;
 
 /// Env key carrying the exact request-file path.
 pub const REQUEST_FILE_ENV: &str = "VELNOR_REQUEST_FILE";

@@ -7,8 +7,7 @@ use velnor_actions_contract::{ExecuteTaskRef, FinalStatus, MatrixStatus, Plan, T
 use velnor_actions_orchestrator::{assemble_merge_request, plan_internal};
 
 use crate::impl_common::{
-    TestResult, err_of, git, git_line, passing_reports, plan_for_source_change,
-    without_ambient_ci_env,
+    TestResult, git, git_line, passing_reports, plan_for_source_change, without_ambient_ci_env,
 };
 use crate::impl_merge::task_reports_for;
 use crate::impl_orch_core::{
@@ -147,18 +146,23 @@ fn orch_core_plan_is_deterministic() -> TestResult {
 }
 
 #[test]
-fn orch_core_matrix_budget_guides_broaden_or_reduce() -> TestResult {
+fn orch_core_wide_plan_fits_matrix_budget() -> TestResult {
     let repo = wide_repo(60)?;
     let root = repo.path();
     git(&["add", "."], root)?;
     git(&["commit", "-m", "wide"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
     let request = push_request(root, &head);
-    let err = err_of(plan_internal(&request.to_string()), "budget exceeded")?;
-    let text = err.to_string();
-    assert!(text.contains("matrix_budget_exceeded"), "{text}");
-    assert!(text.contains("broaden"), "{text}");
-    assert!(text.contains("reduce"), "{text}");
+    let response = plan_internal(&request.to_string()).map_err(|err| err.to_string())?;
+    let value: serde_json::Value = serde_json::from_str(&response)?;
+    let include = value["matrix"]["include"]
+        .as_array()
+        .ok_or("matrix missing")?;
+    assert!(
+        include.len() >= 60,
+        "60 members produced {} matrix rows",
+        include.len()
+    );
     Ok(())
 }
 
