@@ -1,7 +1,6 @@
 //! Typed-IR to YAML rendering for CI, release, and freshness workflows.
 //!
-//! Validated IR plus fixed argv in, marked YAML out: no subprocesses, no
-//! stack or tool branching, quoting-only shell shaping.
+//! Validated IR plus fixed argv in, marked YAML out. No subprocesses.
 
 mod action_ref;
 pub mod agents_md;
