@@ -93,13 +93,13 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
         .strip_prefix("jdx/mr-boxington-action@")
         .expect("SHA ref");
     let expected_generation = format!(
-        "{}${{{{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}}}-action-{action_sha}",
+        "{}-gc-auto-off-final-clean-v1-action-{action_sha}-lane-${{{{ runner.environment }}}}-job-${{{{ github.job }}}}",
         mbx_cache_generation(TEST_MBX_VERSION)
     );
     assert_eq!(
         with.get("cache-generation").map(String::as_str),
         Some(expected_generation.as_str()),
-        "the provider's default Rust compiler hash stays intact while cache-generation separates jobs"
+        "cache-generation names the action pin and separates runner lanes and jobs"
     );
     assert_eq!(
         env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
