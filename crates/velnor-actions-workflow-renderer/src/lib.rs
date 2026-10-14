@@ -1,3 +1,8 @@
+#![expect(
+    dead_code,
+    reason = "integration keeps branch-local helpers until every caller is wired"
+)]
+
 //! Typed-IR to YAML rendering for CI, release, and freshness workflows.
 //!
 //! Validated IR plus fixed argv in, marked YAML out: no subprocesses, no

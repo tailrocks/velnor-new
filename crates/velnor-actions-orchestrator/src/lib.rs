@@ -1,3 +1,8 @@
+#![expect(
+    dead_code,
+    reason = "integration keeps branch-local helpers until every caller is wired"
+)]
+
 //! Generation coordination: discovery, planning, workflow IR, and writes.
 //! Execution belongs to Mise, vector requests to vectors, and YAML to the renderer.
 
