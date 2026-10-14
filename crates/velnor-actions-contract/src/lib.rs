@@ -34,7 +34,6 @@ pub mod workflow;
 mod workflow_reexports;
 pub use archive::{ArchiveInputs, archive_id};
 pub use branch::is_valid_branch_name;
-pub use vcs::is_valid_branch_shorthand;
 pub use canonical::{
     CompatibilityInputs, Digest, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity,
     TaskInput, canonical_json_bytes, canonical_json_str, compatibility_id, digest_b3, input_digest,
@@ -59,13 +58,13 @@ pub use config::{
     QualifiedToolBackend, QualifiedToolExecutable, QualifiedToolOptions, QualifiedToolPlatform,
     QualifiedToolProbe, ResourcesConfig, RootProblem, RoutingWorkflow, RunnerSelection, RunsOn,
     RustBinaryReleaseConfig, RustConfiguration, RustStackConfig, S3BackendConfig, SCALE_SET_NAME,
-    SCALE_SET_PROFILE_ID,
-    ScaleSetSelector, ShardTimingEvidence, StacksConfig, TestShardingConfig, TofuApplyConfig,
-    TofuStackConfig, Utf8RepoRelDir, VELNOR_LABEL, VelnorConfig, VelnorSupportWorkflow,
-    VerificationRunner, VerificationTask, VerifyConfig, WORKFLOW_TASK_JOB_PREFIX, WorkflowConfig,
-    WorkflowPolicy, WorkflowTask, check_execution_receipt_upper_bound, is_valid_build_tool_key,
-    is_valid_feature_name, is_valid_mise_task_name, is_valid_rust_target,
-    is_valid_workflow_task_id, validate_qualified_tools, validate_shard_changes_need_evidence,
+    SCALE_SET_PROFILE_ID, ScaleSetSelector, ShardTimingEvidence, StacksConfig, TestShardingConfig,
+    TofuApplyConfig, TofuStackConfig, Utf8RepoRelDir, VELNOR_LABEL, VelnorConfig,
+    VelnorSupportWorkflow, VerificationRunner, VerificationTask, VerifyConfig,
+    WORKFLOW_TASK_JOB_PREFIX, WorkflowConfig, WorkflowPolicy, WorkflowTask,
+    check_execution_receipt_upper_bound, is_valid_build_tool_key, is_valid_feature_name,
+    is_valid_mise_task_name, is_valid_rust_target, is_valid_workflow_task_id,
+    validate_qualified_tools, validate_shard_changes_need_evidence,
 };
 pub use discover::{
     BUILTIN_EXCLUSIONS, DETECTION_SCHEMA, DetectError, DetectedProject, DetectionStatus,
@@ -98,11 +97,12 @@ pub use graph::{
 };
 pub use ids::{
     artifact_id_for_baseline, artifact_id_for_crate_job, artifact_id_for_final,
-    artifact_id_for_matrix, artifact_id_for_plan, manifest_key_for_cargo_manifest, matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run,
-    report_id_for_matrix, run_key_for_ci, split_shard_suffix, target_key, task_id_for_internal,
-    task_id_for_stack, task_report_id_for_task, validate_artifact_id, validate_fetch_root,
-    validate_id, validate_matrix_key, validate_plan_id, validate_report_id, validate_run_key,
-    validate_task_id, validate_task_report_id,
+    artifact_id_for_matrix, artifact_id_for_plan, manifest_key_for_cargo_manifest,
+    matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run, report_id_for_matrix,
+    run_key_for_ci, split_shard_suffix, target_key, task_id_for_internal, task_id_for_stack,
+    task_report_id_for_task, validate_artifact_id, validate_fetch_root, validate_id,
+    validate_matrix_key, validate_plan_id, validate_report_id, validate_run_key, validate_task_id,
+    validate_task_report_id,
 };
 pub use manifest::{
     ActionPin, CandidateArtifactManifest, GeneratorBinary, GeneratorLock, LockedGenerator,
@@ -126,4 +126,5 @@ pub use targets::{
 };
 pub use tooling::ToolIdentity;
 pub use vcs::VcsInputs;
+pub use vcs::is_valid_branch_shorthand;
 pub use workflow_reexports::*;

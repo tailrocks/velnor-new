@@ -196,7 +196,6 @@ pub(crate) fn lookup_artifact_name(plan: &Plan, base: &str) -> Result<String, St
         .map_err(|_| "baseline_no_exact_artifact".to_owned())
 }
 
-
 /// Mark baseline evidence unavailable with an explicit reason.
 fn mark_unavailable(plan: &mut Plan, reason: &str) {
     if plan.baseline.mark_unavailable(reason).is_err() {

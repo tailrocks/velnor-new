@@ -108,7 +108,6 @@ fn runner_label_catalog_maps_or_fails_closed() {
     assert!(!is_valid_rust_target("aarch64-${{ x }}"));
 }
 
-
 #[test]
 fn release_manifest_json_round_trip_and_tamper() -> Result<(), ContractError> {
     let sha = "ab".repeat(32);

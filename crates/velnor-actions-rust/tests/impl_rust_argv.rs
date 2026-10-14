@@ -50,7 +50,6 @@ pub(crate) fn profiled(group: &TaskGroup) -> Result<Vec<String>, ContractError> 
         .collect())
 }
 
-
 #[test]
 fn payload_shapes_per_kind() -> Result<(), ContractError> {
     assert_eq!(
@@ -117,7 +116,6 @@ fn payload_features_and_target() -> Result<(), ContractError> {
     assert!(!text(&group(TaskKind::Fmt))?.contains(&"--no-default-features".to_owned()));
     Ok(())
 }
-
 
 #[test]
 fn clippy_keeps_feature_args_before_separator() -> Result<(), ContractError> {

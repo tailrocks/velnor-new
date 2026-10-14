@@ -44,9 +44,6 @@ pub use crate::schema2::{
     Schema2WorkflowRequest, render_schema2_workflows,
 };
 pub use crate::setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
-pub use crate::validator_command::{
-    ValidatorSourceInput, ValidatorSourceInputKind, ValidatorSourceUnit,
-};
 pub use crate::steps::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, BASELINE_PUBLISH_UPLOAD_NAME,
     CRATE_REPORT_UPLOAD_NAME, CompileDriver, DENY_STEP_NAME, FORBIDDEN_TOKENS, INTERNAL_OP_ENV,
@@ -65,6 +62,9 @@ pub use crate::tofu_apply::{
     TOFU_APPLY_WORKFLOW_NAME, TofuApplySpec, render_tofu_apply_workflow,
 };
 pub use crate::tree::{render_tree, render_tree_with_extra};
+pub use crate::validator_command::{
+    ValidatorSourceInput, ValidatorSourceInputKind, ValidatorSourceUnit,
+};
 pub use crate::verification_jobs::{
     INSTALL_VERIFICATION_TOOLS_NAME, RUN_VERIFICATION_TASK_NAME, VerificationTaskPolicy,
     build_verification_task_job,

@@ -1,18 +1,18 @@
 //! Shared fixtures for the strict-emission test family.
 use std::collections::BTreeMap;
-use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind, WorkflowIr,
     WorkflowPolicy, workflow::permissions::PermissionLevel,
 };
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::setup::MiseSetupSet;
+use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup,
     RELEASE_COMMIT_ENV, RenderContext, RenderError, STAGED_BINARY_PREFIX, ValidatorCommand,
     ValidatorSourceInput, ValidatorSourceInputKind, ValidatorSourceUnit, acquire_velnor_step,
     checkout_step, plan_step, render_workflow_ir, render_workflow_ir_strict, shell_step,
 };
-use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
 
 pub(crate) const VERSION: &str = "0.1.0";
 pub(crate) const LABEL: &str = "ubuntu-26.04";

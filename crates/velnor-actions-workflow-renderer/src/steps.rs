@@ -298,5 +298,3 @@ pub fn target_dir_for_lane(lane_id: &str) -> String {
 pub fn lane_cargo_target_env(lane_id: &str) -> (String, String) {
     ("CARGO_TARGET_DIR".to_owned(), target_dir_for_lane(lane_id))
 }
-
-

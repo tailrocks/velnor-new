@@ -116,7 +116,6 @@ fn assert_writer(writer: &str) {
     assert!(writer.contains("df -i -P \\\"$RUNNER_TEMP\\\""), "{writer}");
 }
 
-
 fn assert_reader(reader: &str) {
     assert!(
         reader.contains("inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true"),
@@ -141,10 +140,7 @@ fn assert_reader(reader: &str) {
         )),
         "{reader}"
     );
-    assert!(
-        reader.contains("cache-generation:"),
-        "{reader}"
-    );
+    assert!(reader.contains("cache-generation:"), "{reader}");
     assert!(
         reader.contains("isolate-objects-cache: \"true\""),
         "{reader}"

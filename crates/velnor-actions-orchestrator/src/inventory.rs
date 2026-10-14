@@ -153,7 +153,6 @@ fn manifest_for_rust(unit_root: &str) -> String {
     velnor_actions_rust::manifest_for_unit_root(unit_root)
 }
 
-
 /// Inventory loop over an immutable snapshot; `reuse=false` is legacy.
 /// A tool snapshot brackets the fetches, failing closed on tool drift.
 /// # Errors

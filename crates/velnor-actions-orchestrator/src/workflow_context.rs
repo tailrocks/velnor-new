@@ -57,7 +57,8 @@ pub(super) fn render_context(
                 argv: deny_argv(&workspaces)?,
                 prepare_argv: Vec::new(),
                 source_units: Vec::new(),
-                tool_inputs: Vec::new(),});
+                tool_inputs: Vec::new(),
+            });
         }
         validator_commands.extend([
             ValidatorCommand {

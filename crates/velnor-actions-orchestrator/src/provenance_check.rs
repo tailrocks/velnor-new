@@ -324,7 +324,6 @@ pub(crate) fn repository_slug_from_origin(root: &std::path::Path) -> Option<Stri
     })
 }
 
-
 /// Normalize an origin URL to `host/path` for identity comparison.
 ///
 /// Accepts `https://` (and `http://`) plus scp-like `user@host:path`

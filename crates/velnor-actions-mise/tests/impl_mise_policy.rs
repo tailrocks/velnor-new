@@ -53,4 +53,3 @@ fn python_artifact_policy_rejects_source_checksum_and_extraction_drift() {
     let missing = text.replace("[tool_artifacts.python]\n", "");
     assert!(verify_version_policy(&missing, &ToolCatalog::pinned()).is_err());
 }
-

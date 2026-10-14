@@ -284,7 +284,6 @@ fn clean_workspace_step(request: &MbxQualificationPins) -> Yaml {
     ])
 }
 
-
 fn qualification_env(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let home = "${{ github.workspace }}/.velnor-mbx-cache-qualification";
     mapping(&[

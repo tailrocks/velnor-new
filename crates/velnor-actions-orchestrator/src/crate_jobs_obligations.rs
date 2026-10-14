@@ -47,9 +47,11 @@ fn obligation_for(
         .map_err(|err| OrchestratorError::Contract {
             problem: err.to_string(),
         })?;
-    let toolchain = velnor_actions_contract::cachekey::toolchain_id(&toolchain_inputs)
-        .map_err(|err| OrchestratorError::Contract {
-            problem: err.to_string(),
+    let toolchain =
+        velnor_actions_contract::cachekey::toolchain_id(&toolchain_inputs).map_err(|err| {
+            OrchestratorError::Contract {
+                problem: err.to_string(),
+            }
         })?;
     let digest = crate::internal::plan_obligation::task_digest(&task.task_id, &argv, &toolchain)?;
     let matrix_id = matrix_id_for_task_group(&task.stack_id, &task.task_id)?;

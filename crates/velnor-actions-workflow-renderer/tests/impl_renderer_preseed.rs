@@ -7,8 +7,8 @@ use velnor_actions_workflow_renderer::{
     INTERNAL_OP_ENV, PRESEED_BUILD_OUTPUT, PRESEED_MANIFEST_BINARY_ENV, PRESEED_MANIFEST_OUT_ENV,
     PRESEED_MANIFEST_TARGET_ENV, PRESEED_MANIFEST_TOOLCHAIN_ENV, PreseedStageSource, RenderError,
     WRITE_PRESEED_MANIFEST_OPERATION, checkout_step, merge_step, plan_step, preseed_build_step,
-    preseed_download_step, preseed_manifest_step, preseed_stage_step,
-    preseed_upload_step, preseed_verify_step,
+    preseed_download_step, preseed_manifest_step, preseed_stage_step, preseed_upload_step,
+    preseed_verify_step,
 };
 
 use super::impl_renderer_fixtures::*;

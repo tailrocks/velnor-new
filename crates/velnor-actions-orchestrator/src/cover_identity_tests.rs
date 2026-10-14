@@ -181,9 +181,7 @@ fn structured_proof_dimensions_compare_live() {
     let (covered, warnings) = cover(live_proof(rust, &digest, &graph, &toolchain, &platform));
     assert_eq!(covered, 1);
     assert!(
-        warnings
-            .iter()
-            .all(|w| !w.contains("proof_")),
+        warnings.iter().all(|w| !w.contains("proof_")),
         "{warnings:?}"
     );
     for (label, proof) in [
@@ -262,9 +260,6 @@ fn baseline_application_returns_the_exact_manifest_used_for_coverage() {
         ObligationDecision::CoveredByTrustedBaseline
     );
 }
-
-
-
 
 #[test]
 fn stale_closure_with_empty_changed_set_executes() {

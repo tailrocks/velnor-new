@@ -42,10 +42,6 @@ fn release_manifest_version_matches_the_workspace_package_version() {
     }
 }
 
-
-
-
-
 struct Scratch(PathBuf);
 
 impl Scratch {

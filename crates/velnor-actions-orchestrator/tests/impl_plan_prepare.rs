@@ -239,7 +239,6 @@ fn non_rust_consumer_plan_omits_rust_bootstrap_in_generated_yaml() -> TestResult
     Ok(())
 }
 
-
 /// Velnor-policy fixture: canonical origin, no lock (pre-seed shape).
 fn make_velnor_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
     let repo = make_repo(
@@ -290,8 +289,6 @@ fn plan_fetch_check_and_plan_share_one_cargo_home() -> TestResult {
     }
     Ok(())
 }
-
-
 
 #[test]
 fn preseed_plan_installs_before_build_and_check_generated() -> TestResult {

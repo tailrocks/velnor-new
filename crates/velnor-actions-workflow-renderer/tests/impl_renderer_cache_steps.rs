@@ -1,10 +1,10 @@
 //! Gate 4 renderer cases: cache actions, lane target dirs, and V2 tools.
 
 use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_workflow_renderer::checkout_step;
 use velnor_actions_workflow_renderer::steps::{
     TOOLS_CACHE_PATHS, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME, cache_action_step,
 };
-use velnor_actions_workflow_renderer::checkout_step;
 
 use super::impl_renderer_fixtures::*;
 

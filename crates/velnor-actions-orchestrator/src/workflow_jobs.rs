@@ -179,8 +179,8 @@ fn actionlint_install_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorEr
     let mut step =
         velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
             .map_err(|err| OrchestratorError::Contract {
-                problem: err.to_string(),
-            })?;
+            problem: err.to_string(),
+        })?;
     step.role = Some(StepRole::PreparePinnedTools);
     Ok(step)
 }

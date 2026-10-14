@@ -225,7 +225,7 @@ fn lychee_cold_install_is_audited_by_exact_backend_key() {
         &format!("{LYCHEE_TOOL_SPEC}@{LYCHEE_VERSION}"),
         &ToolCatalog::pinned(),
     )
-        .expect("qualified Lychee subject");
+    .expect("qualified Lychee subject");
     assert_eq!(subject.lock_key, LYCHEE_TOOL_SPEC);
 }
 

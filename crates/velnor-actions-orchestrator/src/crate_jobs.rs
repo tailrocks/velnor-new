@@ -34,12 +34,12 @@ mod obligations;
 #[path = "crate_jobs_stage.rs"]
 mod stage;
 
+pub(crate) use obligations::obligations_for;
+#[cfg(test)]
+pub(crate) use obligations::{gates_for, obligation_rank};
 #[cfg(test)]
 pub(crate) use stage::needs;
 pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
-#[cfg(test)]
-pub(crate) use obligations::{gates_for, obligation_rank};
-pub(crate) use obligations::obligations_for;
 
 /// Built crate jobs plus their driver selections for MBX gating.
 pub(crate) struct CrateBuild {

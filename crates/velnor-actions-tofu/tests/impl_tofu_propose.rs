@@ -180,8 +180,6 @@ fn proposal_root_authorities_must_all_agree() {
     }
 }
 
-
-
 /// Proposals populate IDs, identity, resources, and the stub payload.
 #[test]
 fn proposals_populate_identity_and_validate() {

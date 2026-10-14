@@ -76,25 +76,29 @@ pub(crate) fn needs(rust: PlanRustNeed) -> PlanJobToolNeeds {
     }
 }
 
-
 #[test]
 fn consumer_plan_uses_rust_only_for_selected_rust_evidence_merged() {
-    assert!(!plan_uses_rust(&empty_discovery(), WorkflowPolicy::ConsumerV1));
+    assert!(!plan_uses_rust(
+        &empty_discovery(),
+        WorkflowPolicy::ConsumerV1
+    ));
 }
 
 #[test]
 fn generator_plan_skips_rust_without_rust_evidence() {
-    assert!(!plan_uses_rust(&empty_discovery(), WorkflowPolicy::ConsumerV1));
+    assert!(!plan_uses_rust(
+        &empty_discovery(),
+        WorkflowPolicy::ConsumerV1
+    ));
 }
-
-
 
 #[test]
 fn plan_uses_rust_only_for_selected_rust_evidence() {
-    assert!(!plan_uses_rust(&empty_discovery(), WorkflowPolicy::ConsumerV1));
+    assert!(!plan_uses_rust(
+        &empty_discovery(),
+        WorkflowPolicy::ConsumerV1
+    ));
 }
-
-
 
 /// Internal operation of one step, if any.
 fn operation_of(step: &Step) -> Option<&str> {

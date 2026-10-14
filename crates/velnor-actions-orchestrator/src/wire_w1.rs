@@ -99,7 +99,6 @@ pub(crate) fn checkout_step_full() -> Result<Step, OrchestratorError> {
     })
 }
 
-
 /// Reject workflow syntax the pinned actionlint cannot parse (PAR-6.1).
 ///
 /// Native step parallelism stays unqualified, so any future native-key

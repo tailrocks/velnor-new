@@ -315,8 +315,6 @@ fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
     plan.steps.splice(at..at, reports);
 }
 
-
-
 /// Insert the workspace `Format` step immediately before `Plan`.
 ///
 /// Mirrors the renderer plan-format anchoring at this stage: the

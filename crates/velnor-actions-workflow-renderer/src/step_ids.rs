@@ -23,7 +23,6 @@ mod tests {
     use super::{Yaml, push_step_id};
     use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
-
     #[test]
     fn runtime_cache_identity_has_one_renderer_owned_output_id() {
         let mut entries = Vec::new();

@@ -18,12 +18,12 @@ mod tools;
 #[path = "matrix_tofu_env.rs"]
 mod tofu_env;
 
+pub(crate) use tools::{
+    CrateSuite, crate_needs_generate_validators, prepare_crate_tools_step,
+    prepare_install_opentofu, suite_for_package,
+};
 #[cfg(test)]
 pub(crate) use tools::{crate_needs_tofu_install, task_driver_tools};
-pub(crate) use tools::{
-    CrateSuite, crate_needs_generate_validators, prepare_crate_tools_step, prepare_install_opentofu,
-    suite_for_package,
-};
 
 /// `Documentation` obligation step name.
 #[cfg(test)]

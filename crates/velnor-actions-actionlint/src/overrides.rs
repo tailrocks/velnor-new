@@ -5,7 +5,7 @@
 
 use crate::ActionlintError;
 use crate::actions::{
-    ALLOWED_ACTIONS, ALINT_ACTION, CHECKOUT_ACTION, PinnedActionRef, RUST_CACHE_ACTION,
+    ALINT_ACTION, ALLOWED_ACTIONS, CHECKOUT_ACTION, PinnedActionRef, RUST_CACHE_ACTION,
     is_full_sha, is_pin_label, split_key,
 };
 use std::collections::{BTreeMap, BTreeSet};

@@ -381,4 +381,3 @@ fn action_mbx_reconcile_matches_pin_only_merged() {
     assert!(moved.reconcile_action_mbx("1.22.0").is_ok());
     assert!(moved.reconcile_action_mbx(MR_BOXINGTON_VERSION).is_err());
 }
-

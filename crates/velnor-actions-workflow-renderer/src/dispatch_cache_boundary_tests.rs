@@ -207,11 +207,8 @@ fn dispatch_render_context(staged: String) -> RenderContext {
 }
 
 fn dispatch_mise_set() -> MiseSetupSet {
-    MiseSetupSet::new([(
-        "x86_64-unknown-linux-gnu".to_owned(),
-        dispatch_mise(),
-    )])
-    .expect("dispatch mise set")
+    MiseSetupSet::new([("x86_64-unknown-linux-gnu".to_owned(), dispatch_mise())])
+        .expect("dispatch mise set")
 }
 
 fn dispatch_mise() -> MiseSetup {

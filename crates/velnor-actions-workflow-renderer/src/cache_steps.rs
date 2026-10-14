@@ -147,18 +147,16 @@ fn configure_mbx_action(
         .checked_sub(1)
         .and_then(|index| job.steps.get(index))
         .ok_or_else(|| RenderError::InvalidWorkflow(format!("mbx_preflight_missing:{id}")))?;
-    if !mbx_preflight::matches_mbx_steps(
-        preflight,
-        &job.steps[action_index],
-        &version,
-        &toolchain,
-    ) {
+    if !mbx_preflight::matches_mbx_steps(preflight, &job.steps[action_index], &version, &toolchain)
+    {
         return Err(RenderError::InvalidWorkflow(format!(
             "mbx_preflight_mismatch:{id}"
         )));
     }
     let StepKind::Action { with, env, .. } = &mut job.steps[action_index].kind else {
-        return Err(RenderError::InvalidWorkflow(format!("mbx_action_invalid:{id}")));
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_action_invalid:{id}"
+        )));
     };
     validate_mbx_action_policy(with, env, id)?;
     with.insert("backend".to_owned(), "local".to_owned());
@@ -210,24 +208,20 @@ fn mbx_bundle_steps(
     let (version, toolchain) = identity;
     let compatibility = mbx_compatibility_digest(id, target, toolchain, version);
     let snapshot = mbx_snapshot_digest(job);
-    let trusted_key = cache_key("mbx", "trusted", &compatibility, &snapshot)
-        .map_err(RenderError::Contract)?;
-    let pr_key = cache_key("mbx", "pr", &compatibility, &snapshot)
-        .map_err(RenderError::Contract)?;
-    let trusted_prefix = restore_prefix("mbx", "trusted", &compatibility)
-        .map_err(RenderError::Contract)?;
-    let pr_prefix = restore_prefix("mbx", "pr", &compatibility)
-        .map_err(RenderError::Contract)?;
-    let trust_selector = "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected";
+    let trusted_key =
+        cache_key("mbx", "trusted", &compatibility, &snapshot).map_err(RenderError::Contract)?;
+    let pr_key =
+        cache_key("mbx", "pr", &compatibility, &snapshot).map_err(RenderError::Contract)?;
+    let trusted_prefix =
+        restore_prefix("mbx", "trusted", &compatibility).map_err(RenderError::Contract)?;
+    let pr_prefix = restore_prefix("mbx", "pr", &compatibility).map_err(RenderError::Contract)?;
+    let trust_selector =
+        "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected";
     let key = format!(
         "${{{{ {trust_selector} && '{trusted_key}' || '{pr_key}' }}}}-${{{{ github.sha }}}}"
     );
-    let prefix = format!(
-        "${{{{ {trust_selector} && '{trusted_prefix}' || '{pr_prefix}' }}}}"
-    );
-    let save_condition = format!(
-        "success() && {trust_selector}"
-    );
+    let prefix = format!("${{{{ {trust_selector} && '{trusted_prefix}' || '{pr_prefix}' }}}}");
+    let save_condition = format!("success() && {trust_selector}");
     let steps = crate::stock_mbx_bundle::lifecycle_steps(
         TOOLS_RESTORE_USES,
         TOOLS_SAVE_USES,
@@ -243,13 +237,7 @@ fn mbx_bundle_steps(
 
 fn mbx_compatibility_digest(id: &str, target: &str, toolchain: &str, version: &str) -> String {
     let mut bytes = Vec::new();
-    for value in [
-        "velnor-mbx-directory-v1",
-        id,
-        target,
-        toolchain,
-        version,
-    ] {
+    for value in ["velnor-mbx-directory-v1", id, target, toolchain, version] {
         append_identity_part(&mut bytes, value.as_bytes());
     }
     digest_b3(&bytes)
@@ -293,7 +281,9 @@ fn mbx_snapshot_digest(job: &Job) -> String {
                     append_identity_part(&mut bytes, value.as_bytes());
                 }
             }
-            StepKind::TaskExecution { argv, env, task_id, .. } => {
+            StepKind::TaskExecution {
+                argv, env, task_id, ..
+            } => {
                 append_identity_part(&mut bytes, b"task");
                 append_identity_part(&mut bytes, task_id.as_bytes());
                 for arg in argv {

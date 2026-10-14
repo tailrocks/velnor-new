@@ -16,10 +16,10 @@ use velnor_actions_orchestrator::{
     GenerationPreparation, OrchestratorError, finalized_jobs, plan_internal, plan_text,
 };
 
-#[path = "impl_common_path.rs"]
-mod path;
 #[path = "fixture_package.rs"]
 mod fixture_package;
+#[path = "impl_common_path.rs"]
+mod path;
 
 pub(crate) use fixture_package::root_manifest;
 pub(crate) use path::test_path_with_sbin;

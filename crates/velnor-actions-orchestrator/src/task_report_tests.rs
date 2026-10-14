@@ -375,5 +375,4 @@ fn planted_symlink_at_report_path_refuses_without_writing() {
     assert!(!loot.exists(), "producer bytes never followed the plant");
 }
 
-
 include!("task_report_tests.part2.rs");

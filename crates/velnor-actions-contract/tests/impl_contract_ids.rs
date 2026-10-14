@@ -338,5 +338,3 @@ fn fetch_roots_accept_safe_and_reject_hostile() {
         );
     }
 }
-
-

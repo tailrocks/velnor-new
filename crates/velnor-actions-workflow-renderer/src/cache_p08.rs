@@ -25,7 +25,6 @@ pub use crate::cache_elect::elect_mise_cache_writers;
 /// Prefix of a qualified Mise tools-cache key.
 pub const MISE_KEY_PREFIX: &str = "mise-v1";
 
-
 /// Display name of the shared sources restore step.
 pub const RESTORE_SOURCES_NAME: &str = "Restore Cargo sources";
 /// Display name of the shared sources save step.
@@ -158,10 +157,14 @@ impl MiseToolsCacheKey {
         specs: &[String],
     ) -> Result<Self, RenderError> {
         if !velnor_actions_contract::is_supported_target(target) {
-            return Err(RenderError::BadCommand(format!("bad_cache_target:{target}")));
+            return Err(RenderError::BadCommand(format!(
+                "bad_cache_target:{target}"
+            )));
         }
         if !is_catalog_version(mise_version) {
-            return Err(RenderError::BadCommand(format!("bad_mise_version:{mise_version}")));
+            return Err(RenderError::BadCommand(format!(
+                "bad_mise_version:{mise_version}"
+            )));
         }
         if specs.is_empty() {
             return Err(RenderError::BadCommand("empty_tool_specs".to_owned()));
@@ -232,7 +235,6 @@ pub(crate) fn is_cache_key(value: &str) -> bool {
 pub(crate) fn setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     setup::mise_setup_step(setup)
 }
-
 
 /// True only for the canonical typed V2 cache-key expression.
 pub(crate) fn is_v2_cache_key_expression(value: &str) -> bool {

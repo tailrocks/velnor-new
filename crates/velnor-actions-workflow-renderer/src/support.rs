@@ -300,11 +300,8 @@ pub(crate) fn validator_job(
         } else {
             "Prepare pinned tools"
         };
-        let mut prepare = steps::ambient_shell_step(
-            prepare_name,
-            command.prepare_argv.clone(),
-            BTreeMap::new(),
-        )?;
+        let mut prepare =
+            steps::ambient_shell_step(prepare_name, command.prepare_argv.clone(), BTreeMap::new())?;
         prepare.role = Some(StepRole::PreparePinnedTools);
         job_steps.push(prepare);
     }

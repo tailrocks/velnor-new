@@ -61,7 +61,9 @@ impl MiseSetupSet {
             }
         }
         if by_target.is_empty() {
-            return Err(RenderError::BadCommand("empty_mise_setup_targets".to_owned()));
+            return Err(RenderError::BadCommand(
+                "empty_mise_setup_targets".to_owned(),
+            ));
         }
         Ok(Self { by_target })
     }
