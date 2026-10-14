@@ -1,6 +1,6 @@
 //! Idempotent container create checks.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::time::Duration;
 
 use bollard::Docker;
@@ -8,12 +8,12 @@ use bollard::models::{ContainerSummaryStateEnum as ContainerState, HostConfigCgr
 use bollard::query_parameters::ListContainersOptionsBuilder;
 use tokio::time::timeout;
 
-use super::confirmed_not_found;
-use super::super::mounts::{label_map, mount_source};
+use super::super::mounts::label_map;
 use super::super::{
     CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, dind_create_for_identity, identity_labels_match,
     join_dind_net, launch_identity_labels_match, runner_create_for_identity,
 };
+use super::confirmed_not_found;
 use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
@@ -24,6 +24,9 @@ use environment::environment_matches;
 #[path = "containers_limits.rs"]
 mod limits;
 use limits::resource_limits_match;
+#[path = "containers_mounts.rs"]
+mod mounts_match;
+use mounts_match::{expected_mounts, observed_mounts};
 
 const DOCKER_CALL_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -232,7 +235,6 @@ async fn verify_existing(
     Err(HostError::Ownership)
 }
 
-
 fn dind_projection(runner: &CreateProjection) -> Result<CreateProjection, HostError> {
     let mut labels = runner.labels.clone();
     let role = labels
@@ -293,8 +295,6 @@ async fn inspect_container(
         Err(_) => Err(HostError::Docker),
     }
 }
-
-
 
 fn container_id(id: &str) -> bool {
     (12..=64).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
@@ -359,48 +359,6 @@ fn network_matches(expected: Option<&str>, actual: Option<&str>) -> bool {
         Some(mode) => actual == Some(mode),
         None => actual.is_none_or(|mode| mode.is_empty() || mode == "default"),
     }
-}
-
-fn expected_mounts(
-    spec: &CreateProjection,
-) -> Result<HashSet<(String, String, String, bool)>, HostError> {
-    let mut mounts = HashSet::with_capacity(spec.mounts.len() + spec.bind_mounts.len());
-    for mount in &spec.mounts {
-        let (_, source) = mount_source(&mount.source)?;
-        mounts.insert(("volume".to_owned(), source, mount.target.clone(), true));
-    }
-    for mount in &spec.bind_mounts {
-        mounts.insert((
-            "bind".to_owned(),
-            mount.source.clone(),
-            mount.target.clone(),
-            !mount.read_only,
-        ));
-    }
-    Ok(mounts)
-}
-
-fn observed_mounts(
-    found: &bollard::models::ContainerInspectResponse,
-) -> Result<HashSet<(String, String, String, bool)>, HostError> {
-    let records = found.mounts.as_ref().ok_or(HostError::Ownership)?;
-    let mut mounts = HashSet::with_capacity(records.len());
-    for mount in records {
-        let typ = mount.typ.as_ref().ok_or(HostError::Ownership)?;
-        let source = match typ.as_str() {
-            "volume" => mount.name.as_ref(),
-            "bind" => mount.source.as_ref(),
-            _ => return Err(HostError::Ownership),
-        }
-        .ok_or(HostError::Ownership)?;
-        mounts.insert((
-            typ.clone(),
-            source.clone(),
-            mount.destination.clone().ok_or(HostError::Ownership)?,
-            mount.rw.ok_or(HostError::Ownership)?,
-        ));
-    }
-    Ok(mounts)
 }
 
 #[cfg(test)]
