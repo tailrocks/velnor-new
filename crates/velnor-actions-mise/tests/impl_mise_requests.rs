@@ -38,7 +38,7 @@ fn discovery_argv_is_byte_exact() -> Result<(), String> {
         ])
     );
     let argv = request.argv(&pinned());
-    assert!(!argv.iter().any(|arg| arg == "mr-boxington@1.23.0"));
+    assert!(!argv.iter().any(|arg| arg == "mr-boxington@1.24.0"));
     assert!(argv.iter().any(|arg| arg == "mbx"));
     assert!(!argv.iter().any(|arg| arg == "cargo"));
     assert!(
@@ -110,7 +110,7 @@ fn qualification_argv_carries_locked_offline() -> Result<(), String> {
         ])
     );
     let argv = request.argv(&pinned());
-    assert!(!argv.iter().any(|arg| arg == "mr-boxington@1.23.0"));
+    assert!(!argv.iter().any(|arg| arg == "mr-boxington@1.24.0"));
     assert!(argv.iter().any(|arg| arg == "mbx"));
     assert!(!argv.iter().any(|arg| arg == "cargo"));
     assert!(
@@ -145,7 +145,7 @@ fn pinned_exec_selects_exact_tools() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.99.0",
-            "mr-boxington@1.23.0",
+            "mr-boxington@1.24.0",
             "--",
             "mbx",
             "clippy",
@@ -175,7 +175,7 @@ fn pinned_exec_accepts_all_catalog_tools() -> Result<(), String> {
     let argv = request.argv(&pinned());
     for spec in [
         "rust@1.99.0",
-        "mr-boxington@1.23.0",
+        "mr-boxington@1.24.0",
         "gh@2.102.0",
         "actionlint@1.7.12",
         "shellcheck@0.11.0",
@@ -217,7 +217,7 @@ fn pinned_exec_runs_nextest_without_preinstalled_tools() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.99.0",
-            "mr-boxington@1.23.0",
+            "mr-boxington@1.24.0",
             "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
             "--",
             "mbx",

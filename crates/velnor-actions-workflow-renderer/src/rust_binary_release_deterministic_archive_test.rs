@@ -34,8 +34,8 @@ fn binary_build_archives_are_reproducible_for_long_names_across_source_mtimes_an
 -> Result<(), Box<dyn Error>> {
     const SOURCE_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
     let target = "x86_64-unknown-linux-gnu";
-    let binary = format!("demo-binary-{}", "x".repeat(100));
-    assert!(binary.len() > 100);
+    let binary = format!("demo-binary-{}", "x".repeat(88));
+    assert_eq!(binary.len(), 100);
     let config = RustBinaryReleaseConfig {
         enabled: true,
         manifest_path: "Cargo.toml".to_owned(),

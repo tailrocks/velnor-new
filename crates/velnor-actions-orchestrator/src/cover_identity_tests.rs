@@ -141,11 +141,21 @@ fn live_proof(
     graph: &str,
     toolchain: &str,
     platform: &str,
+    mbx: &str,
 ) -> velnor_actions_contract::ManifestTaskProof {
     velnor_actions_contract::ManifestTaskProof::new(
-        task_id, digest, digest, graph, toolchain, digest, platform, "default", 7,
+        task_id, digest, digest, graph, toolchain, mbx, platform, "default", 7,
     )
     .expect("proof")
+}
+
+fn live_mbx(discovery: &Discovery, task_id: &str, catalog: &ToolCatalog) -> String {
+    let task = discovery
+        .proposals
+        .iter()
+        .find(|task| task.task_id == task_id)
+        .expect("task");
+    super::live_mbx_digest(task, catalog)
 }
 
 /// Structured proofs compare their carried identity against live
@@ -178,8 +188,11 @@ fn structured_proof_dimensions_compare_live() {
         );
         (covered, plan.warnings)
     };
-    let (covered, warnings) = cover(live_proof(rust, &digest, &graph, &toolchain, &platform));
-    assert_eq!(covered, 1);
+    let mbx = live_mbx(&discovery, rust, &catalog);
+    let (covered, warnings) = cover(live_proof(
+        rust, &digest, &graph, &toolchain, &platform, &mbx,
+    ));
+    assert_eq!(covered, 1, "{warnings:?}");
     assert!(
         warnings.iter().all(|w| !w.contains("proof_")),
         "{warnings:?}"
@@ -193,6 +206,7 @@ fn structured_proof_dimensions_compare_live() {
                 &velnor_actions_contract::digest_b3(b"other-graph"),
                 &toolchain,
                 &platform,
+                &mbx,
             ),
         ),
         (
@@ -203,6 +217,7 @@ fn structured_proof_dimensions_compare_live() {
                 &graph,
                 &velnor_actions_contract::digest_b3(b"other-toolchain"),
                 &platform,
+                &mbx,
             ),
         ),
         (
@@ -213,6 +228,7 @@ fn structured_proof_dimensions_compare_live() {
                 &graph,
                 &toolchain,
                 &velnor_actions_contract::digest_b3(b"other-platform"),
+                &mbx,
             ),
         ),
     ] {

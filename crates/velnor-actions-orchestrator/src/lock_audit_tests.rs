@@ -258,14 +258,14 @@ fn deny_drift_blocks() {
     // A catalog spec inside a validator command resolves through
     // nothing: commands audit validator pins only, never catalog tools.
     let commands = vec![deny_command(
-        "{ mise --no-env --no-hooks install rust@1.99.0 && unset FOO } && payload",
+        "{ mise --no-env --no-hooks install rust@1.2.3 && unset FOO } && payload",
     )];
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &commands);
     assert!(
         outcome
             .blocking
             .iter()
-            .any(|line| line.contains("unauditable_install_spec:rust@1.99.0")),
+            .any(|line| line.contains("unauditable_install_spec:rust@1.2.3")),
         "misplaced catalog spec must block: {:?}",
         outcome.blocking
     );

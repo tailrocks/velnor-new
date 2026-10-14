@@ -112,7 +112,7 @@ fn replayed_publication_remains_usable_for_next_plan_coverage() {
         archive_calls,
         [vec![
             "api".to_owned(),
-            format!("repos/o/r/actions/artifacts/{}/zip", retained.artifact_id)
+            "repos/o/r/actions/artifacts/99/zip".to_owned()
         ]]
     );
     let next_plan = plan_for(&found, Some(&found.source_commit));

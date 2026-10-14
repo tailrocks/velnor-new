@@ -100,8 +100,10 @@ fn emit_seq_item(item: &Yaml, indent: usize, width: usize, out: &mut String) {
             if let Some(((first_key, first_value), rest)) = entries.split_first() {
                 out.push_str("- ");
                 emit_first_entry(first_key, first_value, indent, width, out);
+                // `- ` is two columns. Width 2 is one extra level; width 1 needs two.
+                let continuation = indent + 2 / width;
                 for (key, child) in rest {
-                    emit_map_entry(key, child, indent + 1, width, out);
+                    emit_map_entry(key, child, continuation, width, out);
                 }
             }
         }

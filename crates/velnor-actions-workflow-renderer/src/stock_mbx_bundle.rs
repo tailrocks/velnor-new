@@ -153,7 +153,7 @@ mod tests {
     use velnor_actions_contract::StepKind;
 
     use super::*;
-    use crate::cache_steps::{TOOLS_RESTORE_USES, TOOLS_SAVE_USES};
+    use crate::cache_steps::{TOOLS_RESTORE_ACTION_USES, TOOLS_SAVE_USES};
 
     const KEY: &str = "velnor-v1-mbx-trusted-linux-x64-rust-1.98.1-mbx-1.21.1-directory-clippy-b3-compat-${{ hashFiles('Cargo.lock') }}";
     const PREFIX: &str =
@@ -163,7 +163,7 @@ mod tests {
 
     fn steps() -> Result<MbxBundleCacheSteps, RenderError> {
         lifecycle_steps(
-            TOOLS_RESTORE_USES,
+            TOOLS_RESTORE_ACTION_USES,
             TOOLS_SAVE_USES,
             KEY,
             PREFIX,
@@ -194,7 +194,7 @@ mod tests {
             .ok_or_else(|| RenderError::InvalidWorkflow("expected_save_action".to_owned()))?;
         assert_eq!(lifecycle.restore[0].name, RESTORE_STEP_NAME);
         assert_eq!(lifecycle.save[1].name, SAVE_STEP_NAME);
-        assert_eq!(restore.0, TOOLS_RESTORE_USES);
+        assert_eq!(restore.0, TOOLS_RESTORE_ACTION_USES);
         assert_eq!(save.0, TOOLS_SAVE_USES);
         assert_eq!(restore.1.get("key").map(String::as_str), Some(KEY));
         assert_eq!(save.1.get("key").map(String::as_str), Some(KEY));
@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn restore_and_save_must_use_the_same_cache_action_pin() {
         let result = lifecycle_steps(
-            TOOLS_RESTORE_USES,
+            TOOLS_RESTORE_ACTION_USES,
             "actions/cache/save@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             KEY,
             PREFIX,

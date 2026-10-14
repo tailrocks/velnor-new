@@ -101,8 +101,8 @@ fn run_cases(fixture: &Fixture) -> TestResult {
         ("wrong-command", "1.22.0", "version\n", false),
         ("wrong-request", "1.22.0", "version\n", false),
         ("invalid-rustup-selector", "1.23.0", "", false),
-        ("valid-command", "1.23.0", "version\nmetadata\n", true),
-        ("path-overlay", "1.23.0", "version\nmetadata\n", true),
+        ("valid-command", "1.24.0", "version\nmetadata\n", true),
+        ("path-overlay", "1.24.0", "version\nmetadata\n", true),
     ] {
         run_case(fixture, mode, version, expected_trace, metadata_runs)?;
     }

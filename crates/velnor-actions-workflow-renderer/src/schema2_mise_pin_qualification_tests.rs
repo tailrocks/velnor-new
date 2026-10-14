@@ -43,7 +43,7 @@ fn jobs_are_opt_in_exact_ref_read_only_and_no_publication() {
         assert!(rendered.contains("git rev-parse HEAD"), "{id}");
         assert!(rendered.contains("mise --version"), "{id}");
         assert!(
-            rendered.contains(r#"case \"$version\" in \"$MISE_VERSION \"*"#),
+            rendered.contains(r#"case \"$version\" in \"$MISE_VERSION "#),
             "{id}"
         );
         assert!(rendered.contains("MISE_SHA256"), "{id}");

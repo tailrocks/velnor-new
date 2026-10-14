@@ -223,7 +223,7 @@ fn mbx_bundle_steps(
     let prefix = format!("${{{{ {trust_selector} && '{trusted_prefix}' || '{pr_prefix}' }}}}");
     let save_condition = format!("success() && {trust_selector}");
     let steps = crate::stock_mbx_bundle::lifecycle_steps(
-        TOOLS_RESTORE_USES,
+        TOOLS_RESTORE_ACTION_USES,
         TOOLS_SAVE_USES,
         &key,
         &prefix,

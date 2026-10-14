@@ -229,7 +229,7 @@ fn catalog_selected_mbx_build_vector_uses_current_pins() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.99.0",
-            "mr-boxington@1.23.0",
+            "mr-boxington@1.24.0",
             "--",
             "mbx",
             "build",

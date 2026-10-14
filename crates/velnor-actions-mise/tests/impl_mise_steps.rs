@@ -47,7 +47,7 @@ fn prepare_pinned_tools_argv_is_fixed_install() -> Result<(), String> {
             "--no-hooks",
             "install",
             "rust@1.99.0",
-            "mr-boxington@1.23.0",
+            "mr-boxington@1.24.0",
         ])
     );
     Ok(())

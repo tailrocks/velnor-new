@@ -206,7 +206,12 @@ fn merge_no_work_plan_reports_no_work() -> Result<(), Box<dyn Error>> {
         ],
         &repo,
     )?;
-    assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
+    assert_eq!(
+        code(&output),
+        1,
+        "no_work stays red; stderr: {:?}",
+        output.stderr
+    );
     assert_eq!(output.stdout, [] as [u8; 0]);
     assert_no_leak(&output);
     let verdict = std::fs::read_to_string(repo.join("merge-v1-response.json"))?;

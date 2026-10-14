@@ -250,8 +250,9 @@ fn split_setting(code: &str, index: usize) -> Result<(&str, SettingValue), Strin
     } else {
         let integer = !trimmed.is_empty() && trimmed.bytes().all(|b| b.is_ascii_digit());
         let array = trimmed.starts_with('[') && trimmed.ends_with(']');
+        let inline_table = trimmed.starts_with('{') && trimmed.ends_with('}');
         let boolean = matches!(trimmed, "true" | "false");
-        (integer || array || boolean).then_some(SettingValue::Other)
+        (integer || array || boolean || inline_table).then_some(SettingValue::Other)
     };
     match (key.is_empty(), value) {
         (false, Some(value)) => Ok((key, value)),

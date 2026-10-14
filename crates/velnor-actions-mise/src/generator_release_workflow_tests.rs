@@ -1,7 +1,7 @@
 use velnor_actions_contract::{GeneratorReleaseTarget, Step, StepKind};
 
 use super::{generator_release_mise_binary_sha256, rust_exec_step, setup_rust_steps};
-use crate::catalog::{MISE_VERSION, ToolCatalog};
+use crate::catalog::{MISE_VERSION, RUST_VERSION, ToolCatalog};
 use crate::steps::ToolHomes;
 
 const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
@@ -61,7 +61,7 @@ fn assert_setup_steps(steps: &[Step], target: GeneratorReleaseTarget, expected_d
             "--no-env",
             "--no-hooks",
             "install",
-            "rust@1.98.1",
+            &format!("rust@{RUST_VERSION}"),
         ]
     );
     assert_eq!(
@@ -95,7 +95,11 @@ fn rust_exec_lowers_pinned_cargo_args_and_owned_environment() {
     let StepKind::Shell { run, env } = step.kind else {
         panic!("Cargo shell step expected");
     };
-    assert!(run.windows(2).any(|pair| pair == ["exec", "rust@1.98.1"]));
+    let pinned_rust = format!("rust@{RUST_VERSION}");
+    assert!(
+        run.windows(2)
+            .any(|pair| pair == ["exec", pinned_rust.as_str()])
+    );
     assert!(run.windows(2).any(|pair| pair == ["--", "cargo"]));
     assert!(
         run.windows(2)
@@ -107,7 +111,7 @@ fn rust_exec_lowers_pinned_cargo_args_and_owned_environment() {
     );
     assert_eq!(
         env.get("RUSTUP_TOOLCHAIN").map(String::as_str),
-        Some("1.98.1")
+        Some(RUST_VERSION)
     );
 }
 
