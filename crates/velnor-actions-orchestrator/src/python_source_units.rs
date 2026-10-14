@@ -20,73 +20,6 @@ struct SuiteSpec {
     inputs: &'static [(&'static str, InputKind)],
 }
 
-const OBSERVER_INPUTS: &[(&str, InputKind)] = &[
-    (
-        "scripts/qualification/mbx-synchronous/artifact_closure_v2.py",
-        InputKind::Module,
-    ),
-    (
-        "scripts/qualification/mbx-synchronous/bind_inputs.py",
-        InputKind::Module,
-    ),
-    (
-        "scripts/qualification/mbx-synchronous/cache_transport_v2.py",
-        InputKind::Module,
-    ),
-    (
-        "scripts/qualification/mbx-synchronous/manifest.json",
-        InputKind::Fixture,
-    ),
-    (
-        "scripts/qualification/mbx-synchronous/negative_inputs_v2.py",
-        InputKind::Module,
-    ),
-    (
-        "scripts/qualification/mbx-synchronous/run.py",
-        InputKind::Module,
-    ),
-    (
-        "scripts/qualification/mbx-synchronous/run_negative_v2.py",
-        InputKind::Module,
-    ),
-    (
-        "scripts/qualification/mbx-synchronous/run_same_root.py",
-        InputKind::Module,
-    ),
-    (
-        "scripts/qualification/mbx-synchronous/run_v2.py",
-        InputKind::Module,
-    ),
-    (
-        "scripts/qualification/mbx-synchronous/test_negative_pipeline_v2.py",
-        InputKind::Test,
-    ),
-    (
-        "scripts/qualification/mbx-synchronous/test_negative_v2.py",
-        InputKind::Test,
-    ),
-    (
-        "scripts/qualification/mbx-synchronous/test_observer_artifact_closure.py",
-        InputKind::Test,
-    ),
-    (
-        "scripts/qualification/mbx-synchronous/test_run_same_root.py",
-        InputKind::Test,
-    ),
-    (
-        "scripts/qualification/mbx-synchronous/test_run_v2.py",
-        InputKind::Test,
-    ),
-    (
-        "crates/mbx-synchronous-registry-fixture/src/lib.rs",
-        InputKind::Fixture,
-    ),
-    (
-        "crates/mbx-synchronous-registry-fixture/tests/fixtures/standalone-workspace-v1.json",
-        InputKind::Fixture,
-    ),
-];
-
 const COLLECTOR_INPUTS: &[(&str, InputKind)] = &[
     (
         "scripts/hosted_phase_measurement/__init__.py",
@@ -152,13 +85,7 @@ const FRESHNESS_PARSER_INPUTS: &[(&str, InputKind)] = &[
     ("scripts/test_freshness_probe_check.py", InputKind::Test),
 ];
 
-const SUITES: [SuiteSpec; 4] = [
-    SuiteSpec {
-        id: "mbx-synchronous-observer",
-        discovery_root: "scripts/qualification/mbx-synchronous",
-        pattern: None,
-        inputs: OBSERVER_INPUTS,
-    },
+const SUITES: [SuiteSpec; 3] = [
     SuiteSpec {
         id: "hosted-phase-measurement",
         discovery_root: "scripts/hosted_phase_measurement/tests",

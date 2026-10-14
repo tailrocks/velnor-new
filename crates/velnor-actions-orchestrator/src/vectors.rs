@@ -288,17 +288,6 @@ pub(crate) fn machete_argv() -> Result<Vec<String>, OrchestratorError> {
     )
 }
 
-/// Explicit pinned backend install for cold-cache cargo-machete execution.
-pub(crate) fn machete_install_argv() -> Result<Vec<String>, OrchestratorError> {
-    let install = IsolatedCommand::mise_install(&[format!(
-        "{CARGO_MACHETE_TOOL_SPEC}@{CARGO_MACHETE_VERSION}"
-    )])
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })?;
-    strings_of(install.argv()).map_err(|problem| OrchestratorError::Contract { problem })
-}
-
 /// One validator vector: an allowlisted tool spec plus a fixed payload.
 ///
 /// Built through the Mise adapter's isolated `exec` constructor, so the

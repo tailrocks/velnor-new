@@ -35,6 +35,29 @@ pub(crate) fn candidate_spec(catalog: &ToolCatalog) -> Result<CandidateSpec, Orc
     })
 }
 
+/// Explicit pinned install for the policy zizmor `exec`.
+pub(crate) fn zizmor_install_argv(
+    catalog: &ToolCatalog,
+) -> Result<Vec<String>, OrchestratorError> {
+    let install = IsolatedCommand::mise_install(&[catalog.tool_spec(PinnedTool::Zizmor)]).map_err(
+        |err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        },
+    )?;
+    strings_of(install.argv()).map_err(|problem| OrchestratorError::Contract { problem })
+}
+
+/// Explicit pinned install for cold-cache cargo-machete execution.
+pub(crate) fn machete_install_argv() -> Result<Vec<String>, OrchestratorError> {
+    let install = IsolatedCommand::mise_install(&[format!(
+        "{CARGO_MACHETE_TOOL_SPEC}@{CARGO_MACHETE_VERSION}"
+    )])
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
+    strings_of(install.argv()).map_err(|problem| OrchestratorError::Contract { problem })
+}
+
 /// Convert fixed argv to UTF-8 strings.
 fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
     argv.into_iter()

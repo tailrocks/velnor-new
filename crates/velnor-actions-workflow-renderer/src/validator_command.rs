@@ -81,10 +81,7 @@ pub(crate) fn validate(command: &ValidatorCommand) -> Result<(), RenderError> {
             ));
         }
         validate_source_closure(command)?;
-    } else if !command.prepare_argv.is_empty()
-        || !command.source_units.is_empty()
-        || !command.tool_inputs.is_empty()
-    {
+    } else if !command.source_units.is_empty() || !command.tool_inputs.is_empty() {
         return Err(RenderError::BadCommand(
             "validator_python_source_fields_not_supported".to_owned(),
         ));

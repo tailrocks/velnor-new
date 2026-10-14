@@ -13,7 +13,10 @@ use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
-use crate::vectors::{ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv};
+use crate::vectors::{
+    ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, machete_install_argv, zizmor_argv,
+    zizmor_install_argv,
+};
 
 use super::{CHECKOUT_USES, REQUEST_DIR};
 
@@ -61,7 +64,7 @@ pub(super) fn render_context(
                 validator: ValidatorKind::CargoMachete,
                 name: MACHETE_STEP_NAME.to_owned(),
                 argv: machete_argv()?,
-                prepare_argv: Vec::new(),
+                prepare_argv: machete_install_argv()?,
                 source_units: Vec::new(),
                 tool_inputs: Vec::new(),
             },
@@ -69,7 +72,7 @@ pub(super) fn render_context(
                 validator: ValidatorKind::Zizmor,
                 name: ZIZMOR_STEP_NAME.to_owned(),
                 argv: zizmor_argv(catalog)?,
-                prepare_argv: Vec::new(),
+                prepare_argv: zizmor_install_argv(catalog)?,
                 source_units: Vec::new(),
                 tool_inputs: Vec::new(),
             },

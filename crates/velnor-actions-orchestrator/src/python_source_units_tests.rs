@@ -29,18 +29,21 @@ fn source_suites_use_the_pinned_python_and_fixed_discovery_paths() {
     assert!(inner.contains("sha256sum --check --status"));
     assert!(inner.contains(PYTHON_BINARY_SHA256_LINUX_X64));
     for expected in [
-        "-s \"scripts/qualification/mbx-synchronous\" -v",
         "-s \"scripts/hosted_phase_measurement/tests\" -v",
         "-s \"scripts\" -p \"test_freshness_probe.py\" -v",
         "-s \"scripts\" -p \"test_freshness_probe_check.py\" -v",
     ] {
         assert!(inner.contains(expected), "missing {expected}: {inner}");
     }
+    assert!(
+        !inner.contains("scripts/qualification/mbx-synchronous"),
+        "observer suite needs the uncarried registry fixture"
+    );
     assert_eq!(
         inner
             .matches("\"$verified_python\" -B -m unittest discover")
             .count(),
-        4
+        3
     );
     assert!(!inner.contains("python -B -m unittest discover"));
     let python = ToolCatalog::pinned().tool_spec(PinnedTool::Python);
