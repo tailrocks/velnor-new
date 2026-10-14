@@ -27,10 +27,12 @@ name: Velnor Release
       plan:
         description: approved plan
         required: true
+        type: string
         default: plan-1
       source_sha:
         description: approved source
         required: true
+        type: string
         default: 0123456789abcdef0123456789abcdef01234567
 permissions:
   contents: read

@@ -18,7 +18,7 @@ fn collect_entries(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), Box<dyn Err
             // Product content is never hidden: skip build output, VCS state,
             // and ignored tool checkouts (nested worktrees carry their own
             // crates/*/Cargo.toml package roots that are not repo content).
-            if name == "target" || name.starts_with('.') {
+            if name == "target" || name == "preserved-unrelated" || name.starts_with('.') {
                 continue;
             }
             collect_entries(&entry.path(), out)?;

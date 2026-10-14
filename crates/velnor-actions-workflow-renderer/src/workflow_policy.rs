@@ -71,6 +71,7 @@ pub(crate) fn check_single_label(
                 .map(WorkflowTaskPolicy::runner_label);
             if job.runs_on != label
                 && task_label != Some(job.runs_on.as_str())
+                && job.runs_on != crate::job_runners::MACOS_RUNS_ON
                 && !velnor_actions_contract::RunsOn::parse(&job.runs_on)
                     .is_ok_and(|selector| selector.is_scale_set())
             {

@@ -87,9 +87,8 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
         format!("sha256: {MISE_SHA256}"),
         "install: \"false\"".to_owned(),
         "env: \"false\"".to_owned(),
-        "cache: \"true\"".to_owned(),
-        "cache_save: \"true\"".to_owned(),
-        "cache_key: mise-v1-".to_owned(),
+        "cache: \"false\"".to_owned(),
+        "cache_save: \"false\"".to_owned(),
     ] {
         assert!(text.contains(&line), "missing {line}:\n{text}");
     }
@@ -138,7 +137,7 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
     );
     for line in [
         "- name: Save Mise tools".to_owned(),
-        "key: mise-v1-".to_owned(),
+        "key: mise-tools-v2-".to_owned(),
         "if: success() && github.event_name == 'push'".to_owned(),
     ] {
         assert!(text.contains(&line), "sole owner saves {line}:\n{text}");
@@ -148,18 +147,17 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
 
 #[test]
 fn strict_selects_setup_digest_for_each_runner_target() -> Result<(), RenderError> {
-    let linux = job(
-        "linux",
-        "Linux",
-        Vec::new(),
-        vec![checkout_step(&checkout_pin())?],
-    );
-    let mut macos = job(
-        "macos",
-        "macOS",
-        Vec::new(),
-        vec![checkout_step(&checkout_pin())?],
-    );
+    let lint_steps = || -> Result<Vec<Step>, RenderError> {
+        Ok(vec![
+            checkout_step(&checkout_pin())?,
+            scrubbed_shell_step(
+                "Run lint",
+                mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
+            )?,
+        ])
+    };
+    let linux = job("linux", "Linux", Vec::new(), lint_steps()?);
+    let mut macos = job("macos", "macOS", Vec::new(), lint_steps()?);
     macos.1.runs_on = "macos-15".to_owned();
     let text = render_workflow_ir_strict(
         &fixture_ir(vec![linux, macos]),
@@ -168,12 +166,12 @@ fn strict_selects_setup_digest_for_each_runner_target() -> Result<(), RenderErro
         &fixture_ctx(),
         &mise_set()?,
     )?;
+    assert!(text.contains(&format!("sha256: {MISE_SHA256}")), "{text}");
     assert!(
-        text.contains(&format!("sha256: \"{MISE_SHA256}\"")),
-        "{text}"
-    );
-    assert!(
-        text.contains(&format!("sha256: \"{}\"", "b".repeat(64))),
+        text.contains(&format!(
+            "sha256: {}",
+            velnor_actions_workflow_renderer::setup::MISE_BINARY_SHA256_MACOS_ARM64
+        )),
         "{text}"
     );
     Ok(())
