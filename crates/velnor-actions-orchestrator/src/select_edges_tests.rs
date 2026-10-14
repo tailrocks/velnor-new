@@ -6,24 +6,26 @@
 
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use tempfile::TempDir;
 
 use super::*;
 
+#[path = "../../test_support/git_fixture.rs"]
+mod git_fixture;
+
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Run one git command in `root`, failing on nonzero exit.
 fn git(args: &[&str], root: &Path) -> TestResult {
-    let status = Command::new("git").args(args).current_dir(root).status()?;
+    let status = git_fixture::command(root)?.args(args).status()?;
     assert!(status.success(), "git {args:?} failed");
     Ok(())
 }
 
 /// One line of git output without the trailing newline.
 fn git_line(args: &[&str], root: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    let output = Command::new("git").args(args).current_dir(root).output()?;
+    let output = git_fixture::command(root)?.args(args).output()?;
     assert!(output.status.success(), "git {args:?} failed");
     let text = String::from_utf8(output.stdout)?;
     Ok(text.trim().to_owned())

@@ -161,13 +161,10 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
         prep.config.checks,
         [] as [velnor_actions_contract::MiseCheck; 0]
     );
-    // Retired `Swatinem/rust-cache` is not an overridable sample pin.
+    // Retired `Swatinem/rust-cache` stays overridable in the contract but
+    // the init sample does not advertise that pin.
     let overrides = &prep.config.actions.overrides;
     let keys: Vec<&str> = overrides.keys().map(String::as_str).collect();
-    assert_eq!(
-        overrides.len(),
-        velnor_actions_contract::config::OVERRIDABLE_ACTIONS.len()
-    );
     assert!(!overrides.contains_key("Swatinem/rust-cache"));
     assert_eq!(
         keys,

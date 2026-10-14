@@ -184,7 +184,7 @@ fn schema_placeholder_fixture_keeps_its_historical_release_schema() -> TestResul
         "fixtures/consumer-release-manifest.json",
     )?;
     manifest.validate("fixtures/consumer-release-manifest.json")?;
-    assert_eq!(manifest.version, "0.1.4");
+    assert_eq!(manifest.version, "0.1.5");
     assert_eq!(
         manifest.targets.len(),
         velnor_actions_contract::ReleaseTarget::ALL.len()

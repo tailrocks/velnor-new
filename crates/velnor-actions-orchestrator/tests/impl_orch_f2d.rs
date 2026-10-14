@@ -173,8 +173,8 @@ fn undetected_stacks_plan_no_work() -> TestResult {
     let final_report: velnor_actions_contract::FinalReport = serde_json::from_str(&merged)?;
     assert_eq!(final_report.status, FinalStatus::NoWork);
     assert!(
-        velnor_actions_orchestrator::merge_passed(&merged)?,
-        "no work with valid required checks passes"
+        !velnor_actions_orchestrator::merge_passed(&merged)?,
+        "no_work stays red"
     );
     Ok(())
 }

@@ -138,11 +138,7 @@ fn setup_is_early(job: &JobText, at: usize) -> bool {
 /// Setup Mise must leave restore and save ownership to the explicit V2 layer.
 fn check_setup_cache_disabled(job: &JobText) -> Result<(), String> {
     for step in job.steps.iter().filter(|s| s.name == "Setup Mise") {
-        for need in [
-            "cache: \"true\"",
-            "cache_save: \"true\"",
-            "cache_key: mise-v1-",
-        ] {
+        for need in ["cache: \"false\"", "cache_save: \"false\""] {
             if !step.body.contains(need) {
                 return Err(format!("{}: Setup Mise misses {need}", job.id));
             }
@@ -166,7 +162,7 @@ fn check_verify_mbx(plan: &JobText, mbx: &str) -> Result<(), String> {
         .ok_or("missing Verify MBX compile step")?;
     for need in [
         "test -x target/release/velnor-actions".to_owned(),
-        "mbx --version".to_owned(),
+        "-- \\\"$mbx_bin\\\" --version".to_owned(),
         format!("grep -qxF \\\"mbx {mbx}\\\" \\\"$RUNNER_TEMP/velnor/preseed-mbx-version\\\""),
     ] {
         if !verify.body.contains(&need) {

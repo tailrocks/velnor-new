@@ -176,10 +176,7 @@ pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Err
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(root.join(".velnor/config.toml"), config)?;
     install_fixture_release_manifest(root)?;
-    fs::write(
-        root.join("Cargo.toml"),
-        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-    )?;
+    fs::write(root.join("Cargo.toml"), root_manifest(config))?;
     fs::create_dir_all(root.join("src"))?;
     fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
     Ok(dir)

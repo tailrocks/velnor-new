@@ -10,7 +10,12 @@ fn consumer_tree_unaffected() -> TestResult {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written.len(), 4, "four consumer tree items");
+    assert_eq!(
+        report.files_written.len(),
+        11,
+        "consumer tree includes task assets: {:?}",
+        report.files_written
+    );
     let workflow_paths = generated_workflow_paths(&report.files_written);
     assert_eq!(
         workflow_paths,

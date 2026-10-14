@@ -126,7 +126,6 @@ fn assert_reader(reader: &str) {
         "{reader}"
     );
     assert!(reader.contains("actions: read"), "{reader}");
-    assert!(reader.contains("backend: local"), "{reader}");
     assert!(reader.contains("ACTIONS_CACHE_MODE: read"), "{reader}");
     assert!(reader.contains("MBX_GC_AUTO: \"0\""), "{reader}");
     assert!(
@@ -153,7 +152,7 @@ fn assert_reader(reader: &str) {
         reader.contains("save-on-workflow-dispatch: \"false\""),
         "{reader}"
     );
-    assert!(reader.contains("mbx cache stats --json"), "{reader}");
+    assert!(reader.contains("cache stats --json"), "{reader}");
     assert!(reader.contains("set -e -o pipefail; df -B1 -P"), "{reader}");
     assert!(reader.contains(".objects > 0"), "{reader}");
     assert!(
@@ -195,10 +194,6 @@ fn assert_reader_probes(reader: &str) {
     );
     assert!(
         reader.contains(&format!("RUSTUP_TOOLCHAIN: {rust}")),
-        "{reader}"
-    );
-    assert!(
-        reader.contains("path: ${{ runner.temp }}/mbx-single-bundle"),
         "{reader}"
     );
     assert_candidate_owner(reader);

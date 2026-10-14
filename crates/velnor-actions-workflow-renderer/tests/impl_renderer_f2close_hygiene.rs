@@ -1,6 +1,6 @@
 //! F2 closure: cache layers and forbidden content.
 use std::collections::BTreeMap;
-use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
+use velnor_actions_contract::{GeneratorValidation, Step, StepKind, WorkflowPolicy};
 use velnor_actions_workflow_renderer::cache_p08::{ToolsCacheInputs, ToolsCachePayload};
 use velnor_actions_workflow_renderer::steps::{TOOLS_RESTORE_ACTION_USES, cache_action_step};
 use velnor_actions_workflow_renderer::{
@@ -240,32 +240,48 @@ fn velnor_policy_renders_with_empty_matrix() -> Result<(), RenderError> {
 #[test]
 fn token_hygiene_allows_empty_scrub_and_rejects_all_seven_keys() -> Result<(), RenderError> {
     use velnor_actions_workflow_renderer::toolchain_env::STEP_CREDENTIAL_DENYLIST;
-    let scrub: BTreeMap<String, String> = STEP_CREDENTIAL_DENYLIST
-        .iter()
-        .map(|key| ((*key).to_owned(), String::new()))
-        .collect();
-    let scrubbed = job(
+    // The constructor owns the empty overlay. Caller-supplied keys fail closed.
+    let clean = job(
         "velnor-task",
         "Task",
         vec!["plan".to_owned()],
-        vec![shell_step("Run task", vec!["true".to_owned()], scrub)?],
+        vec![shell_step(
+            "Run task",
+            vec!["true".to_owned()],
+            BTreeMap::new(),
+        )?],
     );
     render_workflow_ir(
-        &fixture_ir(vec![minimal_plan_job()?, scrubbed]),
+        &fixture_ir(vec![minimal_plan_job()?, clean]),
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
     )?;
+    let scrub: BTreeMap<String, String> = STEP_CREDENTIAL_DENYLIST
+        .iter()
+        .map(|key| ((*key).to_owned(), String::new()))
+        .collect();
+    let err = shell_step("Run task", vec!["true".to_owned()], scrub)
+        .expect_err("empty caller keys stay rejected");
+    assert!(
+        format!("{err:?}").contains("credential_step_env"),
+        "{err:?}"
+    );
     for key in STEP_CREDENTIAL_DENYLIST {
         let leaked = job(
             "velnor-task",
             "Task",
             vec!["plan".to_owned()],
-            vec![shell_step(
-                "Run task",
-                vec!["true".to_owned()],
-                BTreeMap::from([(key.to_owned(), "x".to_owned())]),
-            )?],
+            vec![Step {
+                name: "Run task".to_owned(),
+                id: None,
+                role: None,
+                condition: None,
+                kind: StepKind::Shell {
+                    run: vec!["true".to_owned()],
+                    env: BTreeMap::from([(key.to_owned(), "x".to_owned())]),
+                },
+            }],
         );
         let want = if key == "GH_TOKEN" {
             "token_misplaced"

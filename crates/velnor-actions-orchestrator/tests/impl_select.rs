@@ -148,10 +148,9 @@ pub(crate) fn reasons_for<'a>(plan: &'a Plan, member: &str) -> Vec<&'a str> {
         .iter()
         .filter(|ob| {
             if ob.task_id.starts_with("stack/tofu/") {
-                ob.task_id.starts_with(&format!(
-                    "stack/tofu/{}/",
-                    velnor_actions_tofu::key_for_root(member),
-                ))
+                let keyed = format!("stack/tofu/{}/", velnor_actions_tofu::key_for_root(member));
+                let direct = format!("stack/tofu/{member}/");
+                ob.task_id.starts_with(&keyed) || ob.task_id.starts_with(&direct)
             } else {
                 ob.task_id.contains(member)
             }

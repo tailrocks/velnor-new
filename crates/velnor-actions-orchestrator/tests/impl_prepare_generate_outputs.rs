@@ -15,6 +15,10 @@ fn ignored_rust_plans_no_work() -> TestResult {
     assert!(text.contains("Rust: ignored"), "ignored:\n{text}");
     assert!(text.contains("no-work workflow"), "no-work:\n{text}");
     let report = generate(&prep, &GenerateOptions { output_dir: None })?;
-    assert_eq!(report.files_written.len(), 9);
+    assert_eq!(
+        report.files_written.len(),
+        9,
+        "no-work tree omits task assets"
+    );
     Ok(())
 }

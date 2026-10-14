@@ -163,7 +163,9 @@ fn mbx_evidence_keeps_plan_mise_free_and_uses_task_action() -> TestResult {
         "the non-compiling plan job must not install MBX:\n{}",
         steps[prepare_at].1
     );
-    let task_start = yaml.find("  rust-demo:").ok_or("missing MBX task job")?;
+    let task_start = yaml
+        .find("  rust-velnor-actions-contract:")
+        .ok_or("missing MBX task job")?;
     let task_tail = &yaml[task_start..];
     let mut task_end = 0;
     for line in task_tail.split_inclusive('\n') {
@@ -300,8 +302,6 @@ fn preseed_plan_installs_before_build_and_check_generated() -> TestResult {
             let steps = plan_steps(&yaml);
             let prepare_at =
                 step_index(&steps, "Prepare pinned tools").ok_or("missing Prepare step")?;
-            let _rust_at = step_index(&steps, "Prepare Rust components")
-                .ok_or("missing Rust components step")?;
             let build_at = steps
                 .iter()
                 .position(|(step, _)| step.contains("Build helper"))

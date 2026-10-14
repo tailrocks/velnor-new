@@ -7,8 +7,8 @@ runs:
     - name: Setup Mise
       uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
       with:
-        version: 2026.10.8
-        sha256: c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428
+        version: 2026.10.9
+        sha256: 6ab6646b52b83f6bbd51c9d0d3ae54264ffa90efd1ac6d7c0ec5a86bbc6a0030
         install: "false"
         env: "false"
         cache: "false"
@@ -17,10 +17,10 @@ runs:
       env:
         GITHUB_TOKEN: ${{ github.token }}
       shell: bash
-      run: "set -eu\n: \"${GITHUB_TOKEN:?missing workflow token}\"\nmise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1"
+      run: "set -eu\n: \"${GITHUB_TOKEN:?missing workflow token}\"\nmise --no-config --no-env --no-hooks install rust@1.99.0 mr-boxington@1.24.0"
     - name: Build velnor-actions with MBX
       shell: bash
-      run: "set -eu\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions\ncp target/release/velnor-actions velnor-actions-0.1.8-x86_64-unknown-linux-gnu\ntest -s velnor-actions-0.1.8-x86_64-unknown-linux-gnu"
+      run: "set -eu\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec rust@1.99.0 mr-boxington@1.24.0 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions\ncp target/release/velnor-actions velnor-actions-0.1.8-x86_64-unknown-linux-gnu\ntest -s velnor-actions-0.1.8-x86_64-unknown-linux-gnu"
     - name: Verify ELF architecture
       shell: bash
       run: "set -eu\ndesc=\"$(file -b velnor-actions-0.1.8-x86_64-unknown-linux-gnu)\"\ncase \"$desc\" in\n  *ELF*x86-64*) ;;\n  *) echo \"not an x86-64 ELF: $desc\" >&2; exit 1 ;;\nesac"
@@ -29,7 +29,7 @@ runs:
       run: "set -eu\nsha256sum velnor-actions-0.1.8-x86_64-unknown-linux-gnu > velnor-actions-0.1.8-x86_64-unknown-linux-gnu.sha256"
     - name: Record candidate provenance
       shell: bash
-      run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.8-x86_64-unknown-linux-gnu' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'velnor-actions-0.1.8-x86_64-unknown-linux-gnu.sha256')\"\njq -n --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"x86_64-unknown-linux-gnu\" --arg asset \"velnor-actions-0.1.8-x86_64-unknown-linux-gnu\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.21.1' '{\"schema\":1,\"version\":\"0.1.8\",\"repository\":$repository,\"commit\":$commit,\"target\":$target,\"asset\":$asset,\"sha256\":$sha256,\"toolchain\":{\"rust\":$rust,\"mr-boxington\":$mr_boxington}}' > velnor-actions-0.1.8-x86_64-unknown-linux-gnu.provenance.json\nchmod 755 velnor-actions-0.1.8-x86_64-unknown-linux-gnu\nchmod 644 velnor-actions-0.1.8-x86_64-unknown-linux-gnu.sha256 velnor-actions-0.1.8-x86_64-unknown-linux-gnu.provenance.json\ntest -s velnor-actions-0.1.8-x86_64-unknown-linux-gnu.provenance.json\ntest -s velnor-actions-0.1.8-x86_64-unknown-linux-gnu"
+      run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.8-x86_64-unknown-linux-gnu' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'velnor-actions-0.1.8-x86_64-unknown-linux-gnu.sha256')\"\njq -n --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"x86_64-unknown-linux-gnu\" --arg asset \"velnor-actions-0.1.8-x86_64-unknown-linux-gnu\" --arg sha256 \"$digest\" --arg rust '1.99.0' --arg mr_boxington '1.24.0' '{\"schema\":1,\"version\":\"0.1.8\",\"repository\":$repository,\"commit\":$commit,\"target\":$target,\"asset\":$asset,\"sha256\":$sha256,\"toolchain\":{\"rust\":$rust,\"mr-boxington\":$mr_boxington}}' > velnor-actions-0.1.8-x86_64-unknown-linux-gnu.provenance.json\nchmod 755 velnor-actions-0.1.8-x86_64-unknown-linux-gnu\nchmod 644 velnor-actions-0.1.8-x86_64-unknown-linux-gnu.sha256 velnor-actions-0.1.8-x86_64-unknown-linux-gnu.provenance.json\ntest -s velnor-actions-0.1.8-x86_64-unknown-linux-gnu.provenance.json\ntest -s velnor-actions-0.1.8-x86_64-unknown-linux-gnu"
     - name: Package candidate preserving executable mode
       shell: bash
       run: "set -eu\ntar -cf generator-linux-assets.tar velnor-actions-0.1.8-x86_64-unknown-linux-gnu velnor-actions-0.1.8-x86_64-unknown-linux-gnu.sha256 velnor-actions-0.1.8-x86_64-unknown-linux-gnu.provenance.json\ntest -s generator-linux-assets.tar"

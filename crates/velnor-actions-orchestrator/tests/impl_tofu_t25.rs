@@ -26,7 +26,10 @@ fn file_cache_constructions_are_hoisted_per_phase() -> TestResult {
     let orch = crate_src("");
     let mut sites: Vec<String> = token_hits(&orch, "FileCache::new()")?
         .into_iter()
-        .filter(|hit| !hit.starts_with("cover_identity_fixtures.rs:"))
+        .filter(|hit| {
+            let name = hit.split_once(':').map_or("", |(name, _)| name);
+            name != "cover_identity_fixtures.rs" && !name.contains("_tests")
+        })
         .collect();
     sites.sort();
     let files: Vec<&str> = sites

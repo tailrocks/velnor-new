@@ -38,16 +38,11 @@ pub(super) fn with_mbx(root: &std::path::Path) -> TestResult {
 pub(super) fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
     let prep = preparation_for(mbx)?;
     let tree = render_staged_tree(&prep)?;
-    let prune_helper = tree.get(".github/scripts/prune_hosted_cargo_sources.py");
-    assert_eq!(
-        prune_helper.is_some(),
-        mbx,
-        "helper follows hosted Linux MBX use"
+    assert!(
+        tree.get(".github/scripts/prune_hosted_cargo_sources.py")
+            .is_none(),
+        "hosted source prune stays outside the generated tree (mbx={mbx})"
     );
-    if let Some(helper) = prune_helper {
-        assert!(helper.contains("def prune_sources("), "{helper}");
-        assert!(helper.contains("mnt_id:"), "{helper}");
-    }
     Ok(tree
         .get(WORKFLOW_PATH)
         .ok_or_else(|| std::io::Error::other("missing workflow"))?
@@ -330,12 +325,16 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     );
     assert!(!yaml.contains("Export MBX single bundle"), "{yaml}");
     assert!(!yaml.contains("Save MBX single bundle"), "{yaml}");
-    assert!(yaml.contains("isolate-objects-cache: \"true\""), "{yaml}");
     assert!(
-        yaml.contains("cache-key-suffix: ${{ github.job }}"),
-        "{yaml}"
+        !yaml.contains("isolate-objects-cache: \"true\""),
+        "CI jobs do not force an isolated objects cache:\n{yaml}"
     );
-    assert!(!yaml.contains("ACTIONS_CACHE_MODE"), "{yaml}");
+    assert!(
+        yaml.contains(
+            "ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}"
+        ),
+        "MBX cache mode stays read except on a protected default-branch push:\n{yaml}"
+    );
     assert!(
         !yaml.contains("- name: Restore Cargo sources\n        if:")
             || yaml

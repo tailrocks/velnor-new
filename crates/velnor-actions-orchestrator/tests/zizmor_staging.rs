@@ -17,9 +17,7 @@ use velnor_actions_actionlint::config::{
 use velnor_actions_contract::FRESHNESS_WORKFLOW_PATH;
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
-use velnor_actions_workflow_renderer::{
-    foundation_qualification::WORKFLOW_PATH as FOUNDATION_WORKFLOW_PATH, render::WORKFLOW_PATH,
-};
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 #[path = "fixture_package.rs"]
 mod fixture_package;
@@ -51,7 +49,7 @@ fn manifest_json() -> String {
     .collect::<Vec<_>>()
     .join(",");
     format!(
-        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
         "a".repeat(40)
     )
 }
@@ -151,7 +149,22 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written.len(), 10, "ten generated files");
+    assert_eq!(
+        report.files_written.len(),
+        12,
+        "task assets join the policy tree: {:?}",
+        report.files_written
+    );
+    for required in [
+        ".github/actions/declared-task-0/action.yml",
+        ".github/velnor/task-execution-manifest-v1.json",
+    ] {
+        assert!(
+            report.files_written.iter().any(|path| path == required),
+            "{required} missing: {:?}",
+            report.files_written
+        );
+    }
     assert!(
         report
             .files_written
@@ -179,11 +192,7 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
         report.files_written
     );
     let workflow_paths = generated_workflow_paths(&report.files_written);
-    let expected_paths = vec![
-        WORKFLOW_PATH.to_owned(),
-        FOUNDATION_WORKFLOW_PATH.to_owned(),
-        FRESHNESS_WORKFLOW_PATH.to_owned(),
-    ];
+    let expected_paths = vec![WORKFLOW_PATH.to_owned(), FRESHNESS_WORKFLOW_PATH.to_owned()];
     assert_eq!(workflow_paths, expected_paths, "exact Velnor workflow set");
     let workflows = read_generated_workflows(&preview, &workflow_paths)?;
     let yaml = fs::read_to_string(preview.join(WORKFLOW_PATH))?;

@@ -156,6 +156,7 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
         std::collections::BTreeSet::from([
             "matrix_step_reports.rs".to_owned(),
             "pins_acquire.rs".to_owned(),
+            "python_source_units.rs".to_owned(),
             "qualify.rs".to_owned(),
             "source_prep.rs".to_owned(),
         ]),
@@ -165,7 +166,7 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
 }
 
 #[path = "impl_orch_prepare.rs"]
-mod prepare;
+pub(crate) mod prepare;
 
 #[test]
 fn v1_registers_three_stacks_and_detects_rust_and_tofu() {

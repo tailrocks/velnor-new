@@ -67,13 +67,10 @@ fn velnor_candidate_render_path_includes_release() -> TestResult {
             repo_policy()?,
         )?;
         let prep = prepare(repo.path())?;
-        let yaml = velnor_actions_workflow_renderer::render_workflow_ir(
-            &prep.workflow.ir,
-            prep.config.workflow.policy,
-            prep.workflow.support.as_ref(),
-            &prep.workflow.context,
-        )
-        .map_err(|err| format!("render: {err}"))?;
+        let tree = render_staged_tree(&prep).map_err(|err| format!("render: {err}"))?;
+        let yaml = tree
+            .get(".github/workflows/ci.yml")
+            .ok_or("missing ci workflow")?;
         for want in [
             "candidate:",
             "release:",

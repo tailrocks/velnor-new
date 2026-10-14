@@ -50,6 +50,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         config_calls,
         [
             "check_runtime.rs",
+            "foundation_qualification.rs",
             "owned_tool_preview.rs",
             "prepare.rs",
             "routing.rs",
@@ -58,7 +59,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
     );
     let internal = std::fs::read_to_string(orch_src().join("internal.rs"))?;
     assert!(internal.contains("prepare(&root)"), "plan runs preparation");
-    let generate = std::fs::read_to_string(orch_src().join("generate.rs"))?;
+    let generate = module_source(&orch_src().join("generate.rs"))?;
     assert!(
         generate.contains("prep: &GenerationPreparation"),
         "generate consumes preparation"
@@ -99,4 +100,23 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         "named obligations share runtime derivation"
     );
     Ok(())
+}
+
+/// `include!` parts are one module. Scan them with the parent file.
+pub(crate) fn module_source(path: &std::path::Path) -> Result<String, Box<dyn std::error::Error>> {
+    let text = std::fs::read_to_string(path)?;
+    let mut combined = text.clone();
+    let Some(dir) = path.parent() else {
+        return Ok(combined);
+    };
+    for line in text.lines() {
+        let Some(rest) = line.trim().strip_prefix("include!(\"") else {
+            continue;
+        };
+        let Some(name) = rest.strip_suffix("\");") else {
+            continue;
+        };
+        combined.push_str(&std::fs::read_to_string(dir.join(name))?);
+    }
+    Ok(combined)
 }

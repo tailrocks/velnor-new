@@ -127,7 +127,7 @@ fn every_fail_row_is_nonzero() -> Result<(), Box<dyn Error>> {
         (
             "t-mirror",
             POLICY,
-            Some(("rust = \"1.98.1\"", "rust = \"1.99.0\"")),
+            Some(("rust = \"1.99.0\"", "rust = \"1.98.1\"")),
             "policy-mirror",
         ),
         (

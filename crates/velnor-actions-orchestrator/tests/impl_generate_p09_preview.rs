@@ -314,7 +314,11 @@ fn in_place_file_target_refused() -> TestResult {
     let prep = prepare(root)?;
     let opts = GenerateOptions { output_dir: None };
     let err = err_of(generate(&prep, &opts), "file refused")?;
-    assert!(err.to_string().contains("not_a_directory"), "{err}");
+    let text = err.to_string();
+    assert!(
+        text.contains("not_a_directory") || text.contains("Not a directory"),
+        "{err}"
+    );
     assert_eq!(fs::read(root.join(".github"))?, b"not a dir");
     Ok(())
 }

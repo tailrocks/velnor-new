@@ -4,9 +4,19 @@ use std::fs;
 
 use velnor_actions_orchestrator::{plan_text_checked, prepare, render_staged_tree};
 
-use crate::impl_common::{TestResult, config_with_branch, make_repo, plan_for};
+use crate::impl_common::{TestResult, anchor_repo, config_with_branch, git, make_repo, plan_for};
 
-const CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.binary_release]\nenabled = true\nmanifest_path = \"Cargo.toml\"\npackage = \"demo\"\nbinary = \"demo\"\nsource_commit_env = \"REPO_SCAN_SOURCE_COMMIT\"\n";
+fn track_lock(root: &std::path::Path) -> TestResult {
+    fs::write(
+        root.join("Cargo.lock"),
+        "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n",
+    )?;
+    git(&["add", "Cargo.lock"], root)?;
+    anchor_repo(root)?;
+    Ok(())
+}
+
+const CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.binary_release]\nenabled = true\nmanifest_path = \"Cargo.toml\"\npackage = \"demo\"\nbin = \"demo\"\nsource_commit_env = \"REPO_SCAN_SOURCE_COMMIT\"\n";
 const CONFIG_WITH_ACTION_OVERRIDES: &str = r#"
 schema = 1
 [workflow]
@@ -16,7 +26,7 @@ default_branch = "testmain"
 enabled = true
 manifest_path = "Cargo.toml"
 package = "demo"
-binary = "demo"
+bin = "demo"
 source_commit_env = "REPO_SCAN_SOURCE_COMMIT"
 [actions.overrides]
 "actions/checkout" = { version = "v7.0.1", sha = "3d3c42e5aac5ba805825da76410c181273ba90b1" }
@@ -28,6 +38,7 @@ source_commit_env = "REPO_SCAN_SOURCE_COMMIT"
 fn binary_release_is_generated_and_planned_only_when_enabled() -> TestResult {
     let enabled = make_repo(CONFIG)?;
     fs::write(enabled.path().join("src/main.rs"), "fn main() {}\n")?;
+    track_lock(enabled.path())?;
     let prep = prepare(enabled.path())?;
     let tree = render_staged_tree(&prep)?;
     let workflow = tree
@@ -37,58 +48,41 @@ fn binary_release_is_generated_and_planned_only_when_enabled() -> TestResult {
         .expect("enabled binary release output");
     let yaml = &workflow.bytes;
     for expected in [
-        "cron: 17 * * * *",
-        "github.event_name == 'schedule'",
-        "needs.verify-source.outputs.should_release == 'true'",
-        "REPO_SCAN_SOURCE_COMMIT: ${{ env.SOURCE_SHA }}",
-        "artifact-ids: ${{ needs.build-linux.outputs.artifact_id }}",
-        "artifact-ids: ${{ needs.build-macos.outputs.artifact_id }}",
-        "git merge-base --is-ancestor",
-        "env -u GH_TOKEN",
+        "name: Rust binary release",
+        "workflow_dispatch: {}",
+        "consumer-binary-release-${{ github.repository }}",
+        "release-eligibility:",
+        "build-binary:",
+        "attest-binary:",
+        "publish-binary:",
+        "needs.release-eligibility.outputs.source_sha",
+        "cargo metadata --format-version 1 --locked --no-deps",
+        "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8",
         "contents: write",
-    ] {
-        assert!(yaml.contains(expected), "missing `{expected}`:\n{yaml}");
-    }
-
-    // Decode quoted run scalars before checking shell text, since YAML escapes
-    // the script's quotes and newlines in the serialized workflow.
-    let run_scripts = yaml
-        .lines()
-        .filter_map(|line| line.trim_start().strip_prefix("run: "))
-        .map(|scalar| {
-            if scalar.starts_with('"') {
-                serde_json::from_str::<String>(scalar)
-                    .expect("generated run script is a quoted YAML scalar")
-            } else {
-                scalar.to_owned()
-            }
-        })
-        .collect::<Vec<_>>();
-    assert!(
-        !run_scripts.is_empty(),
-        "workflow has generated run scripts"
-    );
-    let scripts = run_scripts.join("\n");
-    for expected in [
+        "attestations: write",
+        "name: consumer-binary-release",
+        "timeout-minutes: 75",
         "refs/tags/$tag",
-        "selected Cargo package or binary was not found",
-        "x86_64-unknown-linux-gnu",
         "aarch64-apple-darwin",
-        "sha256sum \"$linux_name\" \"$macos_name\" > SHA256SUMS",
-        "source is no longer reachable from captured default branch",
+        "gh release create",
+        "--verify-tag --draft --latest=false",
+        "require_absent",
+        "assert_protected_environment",
+        "IMMUTABILITY_READ_TOKEN",
+        "isImmutable == true",
+        "2026.10.9",
+        "rust@1.99.0",
     ] {
-        assert!(
-            scripts.contains(expected),
-            "missing `{expected}` in generated run scripts:\n{scripts}"
-        );
+        assert!(yaml.contains(expected), "missing `{expected}`");
     }
+    assert!(!yaml.contains("inputs:"), "dispatch has no inputs");
+    assert!(!yaml.contains("pull_request"), "release has no PR trigger");
+    assert!(!yaml.contains("push:"), "release has no push trigger");
+    assert!(!yaml.contains("cron:"), "release is not scheduled");
     assert!(
-        !yaml.contains("pull_request"),
-        "release has no PR trigger or job"
+        !yaml.contains("x86_64-unknown-linux-gnu"),
+        "consumer release builds one Apple Silicon binary"
     );
-    assert!(!yaml.contains("push:"), "release has no tag push trigger");
-    let publisher = &yaml[yaml.find("publish-release:").expect("publisher job")..];
-    assert!(!publisher.contains("Check out exact source"));
     let plan = plan_for(&prep)?;
     assert!(plan.contains(".github/workflows/binary-release.yml"));
 
@@ -110,9 +104,10 @@ fn disabled_binary_release_is_not_generated_or_planned() -> TestResult {
 }
 
 #[test]
-fn binary_release_uses_configured_action_pin_overrides() -> TestResult {
+fn binary_release_keeps_compiled_artifact_action_pins() -> TestResult {
     let repo = make_repo(CONFIG_WITH_ACTION_OVERRIDES)?;
     fs::write(repo.path().join("src/main.rs"), "fn main() {}\n")?;
+    track_lock(repo.path())?;
     let prep = prepare(repo.path())?;
     let tree = render_staged_tree(&prep)?;
     let workflow = tree
@@ -126,12 +121,16 @@ fn binary_release_uses_configured_action_pin_overrides() -> TestResult {
             3,
         ),
         (
-            "uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+            "uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333",
             2,
         ),
         (
-            "uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-            2,
+            "uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+            1,
+        ),
+        (
+            "uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8",
+            1,
         ),
     ] {
         assert_eq!(
@@ -140,18 +139,24 @@ fn binary_release_uses_configured_action_pin_overrides() -> TestResult {
             "{expected}"
         );
     }
+    assert!(
+        !workflow
+            .bytes
+            .contains("3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"),
+        "download-artifact override must not retarget the consumer release"
+    );
+    assert!(
+        !workflow
+            .bytes
+            .contains("043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"),
+        "upload-artifact override must not retarget the consumer release"
+    );
     Ok(())
 }
 
 #[test]
 fn unapproved_binary_release_action_pin_override_fails_generation() -> TestResult {
-    for (action, version) in [
-        ("actions/checkout", "v7.0.1"),
-        ("actions/download-artifact", "v8.0.1"),
-        ("actions/upload-artifact", "v7.0.1"),
-    ] {
-        let config = format!(
-            r#"
+    let config = r#"
 schema = 1
 [workflow]
 name = "CI"
@@ -160,16 +165,16 @@ default_branch = "testmain"
 enabled = true
 manifest_path = "Cargo.toml"
 package = "demo"
-binary = "demo"
+bin = "demo"
+source_commit_env = "REPO_SCAN_SOURCE_COMMIT"
 [actions.overrides]
-"{action}" = {{ version = "{version}", sha = "1111111111111111111111111111111111111111" }}
-"#
-        );
-        let repo = make_repo(&config)?;
-        fs::write(repo.path().join("src/main.rs"), "fn main() {}\n")?;
-        let prep = prepare(repo.path())?;
-        let error = render_staged_tree(&prep).expect_err("unapproved action ref must fail closed");
-        assert!(error.to_string().contains("unapproved_pair"), "{error}");
-    }
+"jdx/mise-action" = { version = "v5.1.2", sha = "1111111111111111111111111111111111111111" }
+"#;
+    let repo = make_repo(config)?;
+    fs::write(repo.path().join("src/main.rs"), "fn main() {}\n")?;
+    track_lock(repo.path())?;
+    let prep = prepare(repo.path())?;
+    let error = render_staged_tree(&prep).expect_err("unapproved mise action ref must fail closed");
+    assert!(error.to_string().contains("unapproved_pair"), "{error}");
     Ok(())
 }

@@ -54,8 +54,9 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
             .output()?;
         assert!(
             output.status.success(),
-            "scrubbed child failed: {}",
-            String::from_utf8_lossy(&output.stderr)
+            "scrubbed child failed: {}\n{}",
+            String::from_utf8_lossy(&output.stderr),
+            String::from_utf8_lossy(&output.stdout)
         );
         Ok(())
     }
@@ -187,19 +188,19 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
 
     /// Debug-only consumer-manifest fixture for the scrubbed repo.
     fn manifest_fixture() -> String {
-        let _version = env!("CARGO_PKG_VERSION");
+        let version = env!("CARGO_PKG_VERSION");
+        let sha = "a".repeat(64);
         let targets = velnor_actions_contract::SUPPORTED_TARGETS
-        .iter()
-        .map(|target| {
-            format!(
-                "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{target}\",\"sha256\":\"{}\"}}",
-                "a".repeat(64)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(",");
+            .iter()
+            .map(|target| {
+                format!(
+                    "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{sha}\"}}"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",");
         format!(
-            "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+            "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
             "a".repeat(40)
         )
     }

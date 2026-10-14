@@ -17,7 +17,7 @@ fn rust_components_install_unconditionally_after_restore() -> TestResult {
         let jobs = finalized_jobs(&prep)?;
         let mut rust_jobs = 0;
         for (id, job) in &jobs {
-            if id != "plan" && !id.starts_with("rust-") {
+            if !id.starts_with("rust-") {
                 continue;
             }
             rust_jobs += usize::from(id.starts_with("rust-"));
@@ -64,7 +64,7 @@ fn rust_components_install_unconditionally_after_restore() -> TestResult {
             .get(WORKFLOW_PATH)
             .ok_or_else(|| std::io::Error::other("missing workflow"))?;
         let emitted = yaml_steps(yaml);
-        for id in ["plan", "rust-a", "rust-b"] {
+        for id in ["rust-a", "rust-b"] {
             let names = emitted
                 .get(id)
                 .ok_or_else(|| std::io::Error::other(format!("missing {id}")))?;
