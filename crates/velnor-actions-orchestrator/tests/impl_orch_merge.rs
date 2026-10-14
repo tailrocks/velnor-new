@@ -148,7 +148,9 @@ fn orch_core_plan_is_deterministic() -> TestResult {
 
 #[test]
 fn orch_core_matrix_budget_guides_broaden_or_reduce() -> TestResult {
-    let repo = wide_repo(60)?;
+    // MATRIX_BUDGET_BYTES is 4 MiB: 60 members (≈1.7 MB of matrix) now fit,
+    // so the oversize fixture needs 200 members (≈5.8 MB) to stay over budget.
+    let repo = wide_repo(200)?;
     let root = repo.path();
     git(&["add", "."], root)?;
     git(&["commit", "-m", "wide"], root)?;
