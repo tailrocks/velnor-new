@@ -26,6 +26,7 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
         TOOL_SEED_USES | TOOLS_CACHE_RESTORE_USES | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
     ) || TOOLS_CACHE_PRELUDE_USES.contains(&uses)
         || is_generated_provider_prelude(uses)
+        || is_crate_obligation_action(uses)
     {
         return Ok(());
     }
@@ -47,6 +48,24 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
         return Err(RenderError::BadActionRef(format!("unpinned_ref:{uses}")));
     }
     Ok(())
+}
+
+/// Local composite that holds one crate job's obligation steps.
+///
+/// Provider-prelude paths stay on their own grammar. A `tofu-` crate job
+/// must not reopen a rejected prelude spelling.
+pub(crate) fn is_crate_obligation_action(uses: &str) -> bool {
+    let Some(id) = uses.strip_prefix("./.github/actions/") else {
+        return false;
+    };
+    if id.starts_with("tofu-provider-prelude") {
+        return false;
+    }
+    !id.is_empty()
+        && velnor_actions_contract::is_crate_job_id(id)
+        && id.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(byte, b'-' | b'_')
+        })
 }
 
 pub(crate) fn is_generated_provider_prelude(uses: &str) -> bool {
@@ -80,6 +99,8 @@ mod tests {
         }
         assert!(validate_uses("./.github/actions/tofu-provider-prelude-0").is_ok());
         assert!(validate_uses("./.github/actions/tofu-provider-prelude-12").is_ok());
+        assert!(validate_uses("./.github/actions/rust-demo").is_ok());
+        assert!(validate_uses("./.github/actions/tofu-stacks-r000").is_ok());
         for uses in [
             "./.github/actions/velnor-tools-prelude-u20",
             "./.github/actions/velnor-tools-prelude-u26/other",
