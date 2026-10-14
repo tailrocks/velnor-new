@@ -1,5 +1,6 @@
 //! Shared fixtures for the strict-emission test family.
 use std::collections::BTreeMap;
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind, WorkflowIr,
     WorkflowPolicy, workflow::permissions::PermissionLevel,
@@ -223,6 +224,7 @@ pub(crate) fn minimal_plan_job() -> Result<(String, Job), RenderError> {
 
 /// One dummy shell command per repository validator needing one.
 pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
+    let python = ToolCatalog::pinned().tool_spec(PinnedTool::Python);
     [
         (ValidatorKind::CargoDeny, "Run cargo-deny"),
         (ValidatorKind::CargoMachete, "Run cargo-machete"),
@@ -245,7 +247,7 @@ pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
                 "--no-env".to_owned(),
                 "--no-hooks".to_owned(),
                 "install".to_owned(),
-                "python@3.14.8".to_owned(),
+                python.clone(),
             ]
         } else {
             Vec::new()
@@ -275,6 +277,10 @@ pub(crate) fn validator_commands() -> Vec<ValidatorCommand> {
                 },
                 ValidatorSourceInput {
                     path: "crates/velnor-actions-mise/src/catalog.rs".to_owned(),
+                    kind: ValidatorSourceInputKind::ToolchainPin,
+                },
+                ValidatorSourceInput {
+                    path: "crates/velnor-actions-mise/src/catalog_versions.rs".to_owned(),
                     kind: ValidatorSourceInputKind::ToolchainPin,
                 },
             ]

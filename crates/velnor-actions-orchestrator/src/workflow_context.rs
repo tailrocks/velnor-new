@@ -74,6 +74,7 @@ pub(super) fn render_context(
                 tool_inputs: Vec::new(),
             },
         ]);
+        validator_commands.push(crate::python_source_units::validator_command(catalog)?);
     }
     crate::verify::push_verify_commands(&mut validator_commands, verify, verify_config, catalog)?;
     let candidate =

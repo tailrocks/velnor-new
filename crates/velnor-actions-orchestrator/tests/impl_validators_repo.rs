@@ -124,7 +124,11 @@ fn repo_config_sample_parses_through_prepare() -> TestResult {
         );
         assert_eq!(
             prep.config.discovery.exclude,
-            vec!["fixtures/**", "crates/**/tests/fixtures/**"]
+            vec![
+                "fixtures/**",
+                "crates/**/tests/fixtures/**",
+                "preserved-unrelated/**",
+            ]
         );
         // The live sample pins the branch: config wins over origin/HEAD so CI
         // checkouts (which create no origin/HEAD) still resolve the branch.

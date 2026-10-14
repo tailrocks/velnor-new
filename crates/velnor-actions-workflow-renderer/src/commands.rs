@@ -41,8 +41,12 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
         if arg.chars().any(|ch| ch == '\0' || ch == '\n' || ch == '\r') {
             return Err(RenderError::BadCommand(format!("control_char:{arg}")));
         }
-        let without_date = arg.replace("$(date +%s%3N)", "");
-        if without_date.contains("$(") || arg.contains('`') {
+        // Cache timing and the pinned Python interpreter lookup are fixed
+        // scripts, not caller-supplied substitution.
+        let without_allowed = arg
+            .replace("$(date +%s%3N)", "")
+            .replace("$(command -v python3.14)", "");
+        if without_allowed.contains("$(") || arg.contains('`') {
             return Err(RenderError::BadCommand(format!(
                 "command_substitution:{arg}"
             )));

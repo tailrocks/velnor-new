@@ -270,7 +270,12 @@ pub(crate) fn validator_job(
     validator: ValidatorKind,
 ) -> Result<Job, RenderError> {
     let command = find_validator_command(&ctx.validator_commands, validator)?;
-    let mut step = steps::ambient_shell_step(&command.name, command.argv.clone(), BTreeMap::new())?;
+    let argv = crate::validator_command::execution_argv(command)?;
+    let mut step = if validator == ValidatorKind::PythonSourceTests {
+        steps::shell_step(&command.name, argv, BTreeMap::new())?
+    } else {
+        steps::ambient_shell_step(&command.name, argv, BTreeMap::new())?
+    };
     step.role = match validator {
         ValidatorKind::CargoDeny => Some(StepRole::CargoDeny),
         ValidatorKind::CargoMachete => Some(StepRole::CargoMachete),
@@ -290,8 +295,13 @@ pub(crate) fn validator_job(
     };
     let mut job_steps = vec![steps::checkout_step(&ctx.checkout_uses)?];
     if !command.prepare_argv.is_empty() {
+        let prepare_name = if validator == ValidatorKind::PythonSourceTests {
+            crate::validator_command::PYTHON_SOURCE_PREPARE_NAME
+        } else {
+            "Prepare pinned tools"
+        };
         let mut prepare = steps::ambient_shell_step(
-            "Prepare pinned tools",
+            prepare_name,
             command.prepare_argv.clone(),
             BTreeMap::new(),
         )?;

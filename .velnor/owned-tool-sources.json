@@ -21,7 +21,7 @@
     "source_commit": "dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96",
     "source_tree": "d5eefb0470da013d4f524555df763f16a0faf22d",
     "tool": "mise",
-    "upstream_base_commit": "bc11f90c74eba23bf0d7350efb540e62fb7d9ffd",
+    "upstream_base_commit": "ac91d06fa6100935b7a07b08bebf03dd6dd9a0dd",
     "version": "2026.10.0-owned-cargo-wrapper"
   }
 ]

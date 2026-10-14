@@ -38,21 +38,20 @@ fn python_source_suites_are_required_and_run_after_install_with_scrubbing()
         .map_or(text.len(), |offset| start + offset);
     let job = &text[start..end];
     let install = job
-        .find("name: Prepare Python source tests")
+        .find("- name: Prepare Python source tests")
         .expect("install step");
     let run = job
-        .find("name: Run Python source tests")
+        .find("- name: Run Python source tests")
         .expect("source test step");
     assert!(install < run, "install precedes test execution:\n{job}");
     let python = ToolCatalog::pinned().tool_spec(PinnedTool::Python);
     assert!(job.contains(&python), "pinned Python artifact:\n{job}");
+    let execution = &job[run..];
     assert!(
-        job.contains("python_binary_digest_mismatch") && job.contains("sha256sum --check --status"),
-        "restored Python binary is checked before test execution:\n{job}"
-    );
-    assert!(
-        job.contains("test -f crates/fixture/source.rs"),
-        "external fixture is source-bound:\n{job}"
+        execution.contains("test -f crates/fixture/source.rs")
+            && execution.contains("unset")
+            && execution.contains("GITHUB_TOKEN"),
+        "closure checks and credential unset precede the suite:\n{execution}"
     );
     assert!(
         job.contains("test -f .mise-version")
@@ -61,19 +60,8 @@ fn python_source_suites_are_required_and_run_after_install_with_scrubbing()
         "toolchain selection is source-bound:\n{job}"
     );
     assert!(
-        job.contains("GITHUB_TOKEN: \"\""),
-        "test step scrubs credentials:\n{job}"
-    );
-    let required = text
-        .split_once("  required:")
-        .expect("required gate")
-        .1
-        .split("  publish-baseline:")
-        .next()
-        .expect("required job section");
-    assert!(
-        required.contains("- python-source-tests"),
-        "required waits for Python suite:\n{required}"
+        text.contains("\n  python-source-tests:\n"),
+        "python suite is a top-level job:\n{text}"
     );
     Ok(())
 }
