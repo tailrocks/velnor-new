@@ -44,6 +44,10 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         "ureq",
         // CLI trailer compatibility preserves Python Unicode word-boundary semantics.
         "unicode-general-category",
+        // Dev-only YAML event oracle for renderer quoting tests.
+        "granit-parser",
+        // Integer formatting for the synchronous registry fixture; default features off.
+        "itoa",
     ];
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;
@@ -97,6 +101,9 @@ fn allowed_feature(dir: &str, key: &str, feature: &str) -> bool {
         || (dir == "crates/velnor-actions-cli"
             && key == "syn"
             && matches!(feature, "full" | "visit"))
+        || (dir == "crates/velnor-actions-native"
+            && key == "syn"
+            && matches!(feature, "full" | "parsing" | "visit"))
         // F2A scanner tests (dev-deps): syn parse + span lines.
         || (dir == "crates/velnor-actions-orchestrator"
             && ((key == "syn" && matches!(feature, "full" | "parsing" | "printing" | "visit"))

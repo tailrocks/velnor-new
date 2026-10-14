@@ -13,12 +13,12 @@ struct ActionPinCase {
     sha: &'static str,
 }
 
-const CASES: [ActionPinCase; 8] = [
+const CASES: [ActionPinCase; 7] = [
     ActionPinCase {
         keys: &["jdx/mise-action"],
         prefix: "MISE_ACTION",
-        version: "v4.3.0",
-        sha: "c2a87611a18de5b3828c5652fe268e992400cb5c",
+        version: "v5.1.2",
+        sha: "08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8",
     },
     ActionPinCase {
         keys: &["actions/checkout"],
@@ -53,14 +53,8 @@ const CASES: [ActionPinCase; 8] = [
     ActionPinCase {
         keys: &["asamarts/alint"],
         prefix: "ALINT_ACTION",
-        version: "v0.17.0",
-        sha: "d93c0283b19dd78afcd8a4b303f1556a7759ba81",
-    },
-    ActionPinCase {
-        keys: &["Swatinem/rust-cache"],
-        prefix: "RUST_CACHE_ACTION",
-        version: "v2.9.2",
-        sha: "6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
+        version: "v0.18.1",
+        sha: "f558d76d076710312c54723d18e44d8cd95b3977",
     },
 ];
 

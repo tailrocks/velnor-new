@@ -326,11 +326,13 @@ fn ver_action_pin_fixtures_check_release_and_commit_identity() -> Result<(), Box
         String::from_utf8_lossy(&output.stderr)
     );
 
+    let pins = read("scripts/freshness_action_pins.py")?;
+    assert!(pins.contains("def validate_action_pin(entry)"));
+    assert!(pins.contains("def commit_sha_from_response(source, body)"));
+    assert!(pins.contains("def release_tag_matches("));
+    assert!(pins.contains("entry.get(\"latest_source\")"));
     let script = read("scripts/check-freshness.sh")?;
-    assert!(script.contains("validate_action_pin(entry)"));
-    assert!(script.contains("commit_sha_from_response(source, body)"));
-    assert!(script.contains("release_tag_matches(action, tag_body)"));
-    assert!(script.contains("action.get(\"latest_source\", \"\")"));
+    assert!(script.contains("VELNOR_REPO_POLICY_ACTION=freshness"));
     let policy = read("docs/proposed/version-policy.md")?;
     assert!(
         policy.contains("commit-<first-seven-SHA-chars>"),

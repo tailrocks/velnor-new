@@ -1,11 +1,6 @@
 //! Generation coordination: discovery, planning, workflow IR, and writes.
 //! Execution belongs to Mise, vector requests to vectors, and YAML to the renderer.
 
-#![allow(
-    dead_code,
-    reason = "integration keeps branch-local helpers that consolidated callers do not reference yet"
-)]
-
 mod api;
 mod attach;
 mod baseline_artifact_listing;
