@@ -20,7 +20,10 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
     let (scratch, journal) = journal("inspect-error").await?;
     let row_id = launch_row(&journal).await?;
     let before = journal.rows().await.map_err(|error| error.to_string())?;
-    let stub = DockerStub::open(vec![http(500, r#"{"message":"private runner-id detail"}"#)])?;
+    let stub = DockerStub::open(vec![
+        http(500, r#"{"message":"private runner-id detail"}"#),
+        http(500, r#"{"message":"private runner-id detail"}"#),
+    ])?;
 
     let busy = within(
         slot::busy_except(&journal, &stub.docker, 2, None),

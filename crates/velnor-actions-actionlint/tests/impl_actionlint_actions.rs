@@ -102,11 +102,11 @@ fn alint_tag_refs_rejected() {
 }
 
 #[test]
-fn mbx_action_uses_the_verified_v171_release_commit() {
-    assert_eq!(MR_BOXINGTON_ACTION_VERSION, "v1.7.1");
+fn mbx_action_uses_the_verified_v172_release_commit() {
+    assert_eq!(MR_BOXINGTON_ACTION_VERSION, "v1.7.2");
     assert_eq!(
         MR_BOXINGTON_ACTION_SHA,
-        "d0825fbaf3cc36ca2609aa38e71046265a1f1e37"
+        "47ce49b32025d93a7a2f4570815afaa2b7092240"
     );
     let uses = format!("jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}");
     let parsed = PinnedActionRef::parse_uses(&uses, MR_BOXINGTON_ACTION_VERSION);

@@ -51,15 +51,15 @@ impl ActionArchiveManifest {
     /// Returns an error for an invalid repository, ref, digest, duplicate archive, or budget.
     pub(crate) fn new(
         consumer_repository_id: u64,
-        archives: Vec<ActionArchiveIdentity>,
+        archives: &[ActionArchiveIdentity],
     ) -> Result<Self, ActionArchiveSeedError> {
         if consumer_repository_id == 0 || archives.len() > MAX_ACTIONS_PER_MANIFEST {
             return Err(ActionArchiveSeedError::InvalidIdentity);
         }
-        for archive in &archives {
+        for archive in archives {
             validate_identity(archive)?;
         }
-        let archives = normalized_allowlist(&archives)?;
+        let archives = normalized_allowlist(archives)?;
         let total_size = archives.iter().try_fold(0_u64, |total, archive| {
             total
                 .checked_add(archive.size)

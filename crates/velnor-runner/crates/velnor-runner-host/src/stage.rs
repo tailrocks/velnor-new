@@ -18,10 +18,11 @@ use crate::worker::{
 mod cleanup;
 pub(crate) mod pair;
 mod reconcile;
+#[cfg(test)]
 pub(crate) use cleanup::cleanup_worker;
-pub(crate) use pair::{
-    ContainerRecord, DindProbe, cleanup_prepared_dind, prepare_dind, start_runner,
-};
+pub(crate) use pair::{ContainerRecord, DindProbe};
+#[cfg(test)]
+pub(crate) use pair::{cleanup_prepared_dind, prepare_dind, start_runner};
 pub(crate) use reconcile::reconcile_worker;
 
 /// Where `start_pair_until` returns. Later steps are not started.

@@ -15,7 +15,7 @@ pub(crate) async fn container_running(docker: &Docker, id: &str) -> Result<bool,
 
 pub(crate) fn classify_inspect(
     response: Result<bollard::models::ContainerInspectResponse, DockerError>,
-) -> Result<ContainerState, EnsureError> {
+) -> Result<bool, EnsureError> {
     match response {
         Ok(info) => match info.state {
             Some(state) => still_live(&state),
@@ -23,7 +23,7 @@ pub(crate) fn classify_inspect(
         },
         Err(DockerError::DockerResponseServerError {
             status_code: 404, ..
-        }) => Ok(ContainerState::Missing),
+        }) => Ok(false),
         Err(DockerError::DockerResponseServerError { status_code, .. }) => {
             Err(inspect_error(status_code))
         }
@@ -61,7 +61,7 @@ const fn inspect_error(status: u16) -> EnsureError {
 mod tests {
     use bollard::errors::Error as DockerError;
 
-    use super::{ContainerState, classify_inspect, inspect_error};
+    use super::{classify_inspect, inspect_error};
 
     #[test]
     fn only_not_found_is_treated_as_absent() {
@@ -70,7 +70,7 @@ mod tests {
                 status_code: 404,
                 message: "missing runner-id".to_owned(),
             })),
-            Ok(ContainerState::Missing)
+            Ok(false)
         );
         assert_eq!(
             classify_inspect(Err(DockerError::DockerResponseServerError {

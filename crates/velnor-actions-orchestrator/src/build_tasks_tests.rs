@@ -11,7 +11,7 @@ const ROOT_CONFIG: &str = r#"
 min_version = "2026.10.7"
 
 [tools]
-mr-boxington = "1.23.0"
+mr-boxington = "1.24.0"
 rust = { version = "1.99.0", mr_boxington = true }
 
 [settings]
@@ -74,7 +74,7 @@ fn legacy_wrapper_and_selected_tool_drift_fail_closed() {
     let legacy = format!("{ROOT_CONFIG}\n[wrappers.cargo]\ncommand = \"mbx\"\n");
     assert!(validate_config_shape(&project(&legacy), "1.99.0").is_err());
 
-    let wrong_mbx = ROOT_CONFIG.replace("1.23.0", "1.22.0");
+    let wrong_mbx = ROOT_CONFIG.replace("1.24.0", "1.22.0");
     assert!(validate_config_shape(&project(&wrong_mbx), "1.99.0").is_err());
 
     let wrong_rust = ROOT_CONFIG.replace("1.99.0", "1.98.0");

@@ -89,6 +89,66 @@ impl Journal {
 }
 
 impl Journal {
+    /// Bind this journal to one validated, engine-scoped external lineage.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] for a changed engine or restored state.
+    pub(crate) async fn establish_engine_lineage(
+        &self,
+        engine_id: &str,
+        guard: EngineLineageGuard,
+    ) -> Result<(), HostError> {
+        if self
+            .engine_binding()
+            .await?
+            .is_some_and(|stored| stored != engine_id)
+        {
+            return Err(HostError::Journal);
+        }
+        let path = crate::daemon_lock::canonical_journal_path(self.path())?;
+        let instance_id = self.instance_id().await?;
+        let revision = self.revision().await?;
+        if self.lineage_pinned().await? {
+            guard.verify_existing_lineage(&path, &instance_id, revision)?;
+        } else {
+            guard.verify_lineage(&path, &instance_id, revision)?;
+        }
+        self.attach_lineage_guard(guard)?;
+        self.bind_engine(engine_id).await?;
+        self.pin_lineage().await
+    }
+
+    async fn engine_binding(&self) -> Result<Option<String>, HostError> {
+        let conn = self.connection().await?;
+        journal_schema::engine_id_optional(&conn).await
+    }
+
+    async fn lineage_pinned(&self) -> Result<bool, HostError> {
+        let conn = self.connection().await?;
+        journal_schema::lineage_pinned(&conn).await
+    }
+
+    async fn pin_lineage(&self) -> Result<(), HostError> {
+        let _write = self.write_guard().await;
+        self.sync_lineage().await?;
+        let conn = self.connection().await?;
+        let changed = conn
+            .execute(
+                "UPDATE journal_meta SET lineage_pinned = 1 WHERE singleton = 1 AND lineage_pinned = 0",
+                (),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        if changed == 1 {
+            self.sync_lineage().await
+        } else if self.lineage_pinned().await? {
+            Ok(())
+        } else {
+            Err(HostError::Journal)
+        }
+    }
+
     /// Bind this journal to one Docker engine. A changed engine fails closed.
     ///
     /// # Errors

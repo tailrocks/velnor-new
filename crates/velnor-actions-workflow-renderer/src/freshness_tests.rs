@@ -61,11 +61,11 @@ fn renders_schedule_only_read_only_probe() {
         "pinned Mise setup:\n{yaml}"
     );
     assert!(
-        yaml.contains("version: 2026.10.5"),
+        yaml.contains("version: 2026.10.4"),
         "current Mise release pin:\n{yaml}"
     );
     assert!(
-        yaml.contains("sha256: 8a223b5f8ca71100220a3e5bef259614c348e7b1d80e6b15c2a9c9aa3affe5e4"),
+        yaml.contains("sha256: 2b8ce21f550872807bcaabf45b6bc5c64bfbd6dc3bf49dd4e67de700ef3ceb75"),
         "current Mise binary digest:\n{yaml}"
     );
     assert!(

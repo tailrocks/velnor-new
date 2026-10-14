@@ -135,11 +135,6 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
     })?;
     let argv = strings_of(exec.argv(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let prepare = prepare_pinned_tools_step(
-        catalog,
-        vec![PinnedTool::Actionlint, PinnedTool::Shellcheck],
-        false,
-    )?;
     let mut lint =
         velnor_actions_workflow_renderer::shell_step("Run actionlint", argv, BTreeMap::new())
             .map_err(|err| OrchestratorError::Contract {
@@ -156,7 +151,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![checkout_action()?, install, prepare, lint],
+        steps: vec![checkout_action()?, install, lint],
     })
 }
 

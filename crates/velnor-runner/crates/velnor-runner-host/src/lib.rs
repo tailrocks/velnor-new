@@ -1,8 +1,14 @@
+#![expect(
+    dead_code,
+    reason = "restored runner APIs remain until every caller is wired"
+)]
+
 //! Host effects: journal, Docker ownership, launchd, and local IPC.
 //!
 //! Callers persist intent before an external effect and never hold a
 //! transaction across that effect.
 
+mod action_archive_seed;
 mod artifact_admission;
 mod assign;
 mod compile_identity;

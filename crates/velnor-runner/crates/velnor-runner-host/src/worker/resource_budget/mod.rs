@@ -170,7 +170,6 @@ fn docker_limits(
     })
 }
 
-#[cfg(test)]
 pub(crate) fn test_resource_budget() -> Result<ResourceBudget, HostError> {
     ResourceBudgetConfig {
         runner_cpu_millicores: 1_000,

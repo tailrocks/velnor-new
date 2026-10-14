@@ -13,6 +13,7 @@ use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_mounts, runner
 use crate::error::HostError;
 use crate::stage::PairStop;
 
+mod prepared;
 pub(crate) mod resources;
 mod volumes;
 #[cfg(test)]
@@ -27,10 +28,15 @@ mod projection_types;
 mod resource_budget;
 #[cfg(all(test, unix))]
 mod volumes_tests;
-#[cfg(test)]
-pub(crate) use projection::{dind_create_for_identity, runner_create_for_identity};
-#[cfg(test)]
-pub(crate) use projection::{identity_labels_match, launch_identity_labels_match};
+pub(crate) use prepared::PreparedDind;
+pub(crate) use projection::{
+    container_labels, container_name, dind_create_for_identity, identity_labels_match,
+    launch_identity_labels_match, runner_create_for_identity,
+};
+pub(crate) use resources::{
+    confirmed_not_found, create_owned_volumes, list_launch, probe_dind, remove_owned_volumes,
+    verify_container, verify_engine,
+};
 pub(crate) use resource_budget::DockerResourceLimits;
 pub use resource_budget::ResourceBudget;
 pub(crate) use resource_budget::ResourceBudgetConfig;
@@ -41,7 +47,6 @@ mod projection_tests;
 
 const PLATFORM: &str = "linux/amd64";
 const DIND_IMAGE: &str = "velnor-dind:29.8.2";
-#[cfg(test)]
 const DIND_ENTRYPOINT: [&str; 1] = ["/usr/local/bin/velnor-dind-entrypoint"];
 const IDENTITY_HEX: &[u8; 16] = b"0123456789abcdef";
 

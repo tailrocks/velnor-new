@@ -48,6 +48,6 @@ pub(super) fn one_row(changed: u64) -> Result<(), HostError> {
     }
 }
 
-pub(super) fn token_rejected(token: &str) -> bool {
+pub(crate) fn token_rejected(token: &str) -> bool {
     token.is_empty() || token.chars().any(|ch| matches!(ch, '\'' | '"'))
 }

@@ -9,7 +9,7 @@ use velnor_runner_github::{
 
 use crate::Offer;
 use crate::error::HostError;
-use crate::journal::{Journal, LaunchIdentity, Outcome};
+use crate::journal::{Journal, Outcome};
 use crate::listen::map_listen;
 use crate::offer;
 use crate::reconcile::LaunchPhase;
@@ -338,6 +338,28 @@ pub(super) async fn fail_jit(
     error: SessionError,
 ) -> Result<Option<Started>, EnsureError> {
     mint::fail_jit(journal, id, origin, error).await
+}
+
+async fn advance_phase_if_known(
+    journal: &Journal,
+    id: i64,
+    phase: LaunchPhase,
+) -> Result<(), EnsureError> {
+    let rows = journal.rows().await.map_err(map_journal)?;
+    let row = rows
+        .iter()
+        .find(|row| row.id == id)
+        .ok_or(EnsureError::Unexpected {
+            status: 0,
+            step: "journal",
+        })?;
+    if row.launch_phase.is_some_and(|current| current.rank() < phase.rank()) {
+        journal
+            .advance_launch_phase(id, phase)
+            .await
+            .map_err(map_journal)?;
+    }
+    Ok(())
 }
 
 async fn mark_done(journal: &Journal, id: i64) -> Result<(), EnsureError> {

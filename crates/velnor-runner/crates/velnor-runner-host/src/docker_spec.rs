@@ -64,9 +64,8 @@ const HOST_NEEDLES: &[&str] = &[
 
 /// Build the runner plan. `private_volume` is this worker's socket volume.
 ///
-/// The work tree uses `{private_volume}-work`. The archive cache env points
-/// at the shared read-only volume appended by `runner_mounts`. JIT is not
-/// accepted.
+/// The work tree uses `{private_volume}-work`. Archive cache env is added by
+/// the launch projection, not this plan. JIT is not accepted.
 ///
 /// # Errors
 ///
@@ -81,9 +80,7 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
         privileged: false,
         platform: RUNNER_PLATFORM.to_owned(),
         image: RUNNER_IMAGE.to_owned(),
-        env: vec![format!(
-            "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE={ACTION_ARCHIVE_TARGET}"
-        )],
+        env: Vec::new(),
         cmd: vec![ENTRYPOINT.to_owned()],
         labels: vec![
             "velnor.role=runner".to_owned(),

@@ -248,7 +248,7 @@ async fn assigned_launch_row(
     }
     connection
         .execute(
-            "INSERT INTO intents (kind, subject, state, scale_set_id, runner_request_id, runner_name) VALUES ('launch', ?1, 'pending', ?2, ?3, ?4)",
+            "INSERT INTO intents (kind, subject, state, scale_set_id, runner_request_id, runner_name, launch_phase) VALUES ('launch', ?1, 'pending', ?2, ?3, ?4, 'prepared')",
             (subject, scale_set_id, request_id, runner_name),
         )
         .await

@@ -152,6 +152,12 @@ pub fn tofu_cli_config(cache_dir: &str) -> Result<String, ContractError> {
             format!("rejected_byte:{bad:02x}"),
         ));
     }
+    if cache_dir.len() > MAX_CLI_CONFIG_PATH_BYTES {
+        return Err(ContractError::identity(
+            "tofu_cli_config",
+            "oversize_cache_dir",
+        ));
+    }
     Ok(format!(
         "plugin_cache_dir = \"{cache_dir}\"\ndisable_checkpoint = true\nprovider_installation {{\n  direct {{}}\n}}\n"
     ))

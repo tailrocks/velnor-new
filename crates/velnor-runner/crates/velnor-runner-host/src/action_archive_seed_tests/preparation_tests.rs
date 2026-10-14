@@ -105,7 +105,7 @@ fn identity(name: &str, bytes: &[u8]) -> Result<ActionArchiveIdentity, Box<dyn E
 }
 
 fn build_manifest(
-    archives: Vec<ActionArchiveIdentity>,
+    archives: &[ActionArchiveIdentity],
 ) -> Result<ActionArchiveManifest, ActionArchiveSeedError> {
     ActionArchiveManifest::new(202, archives)
 }
@@ -124,14 +124,14 @@ fn manifest_rejects_mutable_duplicate_and_over_budget_identities() -> Result<(),
     let mut mutable = identity("owner/action", &bytes)?;
     mutable.commit_sha = "main".to_owned();
     assert_eq!(
-        build_manifest(vec![mutable]).err(),
+        build_manifest(&[mutable]).err(),
         Some(ActionArchiveSeedError::InvalidIdentity)
     );
 
     let first = identity("Owner/action", &bytes)?;
     let alias = identity("owner/action", &bytes)?;
     assert_eq!(
-        build_manifest(vec![first, alias]).err(),
+        build_manifest(&[first, alias]).err(),
         Some(ActionArchiveSeedError::InvalidIdentity)
     );
 
@@ -142,7 +142,7 @@ fn manifest_rejects_mutable_duplicate_and_over_budget_identities() -> Result<(),
     let mut third = large.clone();
     third.name_with_owner = "owner/large-three".to_owned();
     assert_eq!(
-        build_manifest(vec![large, second, third]).err(),
+        build_manifest(&[large, second, third]).err(),
         Some(ActionArchiveSeedError::SizeLimit)
     );
     Ok(())
@@ -154,7 +154,7 @@ fn preparation_fetches_missing_bytes_once_and_replays_warm_lease() -> Result<(),
     let store = ActionArchiveStore::open(root.path().join("store"))?;
     let bytes = archive_bytes()?;
     let action = identity("owner/action", &bytes)?;
-    let manifest = build_manifest(vec![action.clone()])?;
+    let manifest = build_manifest(std::slice::from_ref(&action))?;
     let calls = Arc::new(AtomicUsize::new(0));
     let first = store.prepare_and_lease(
         "launch-1",
@@ -190,7 +190,7 @@ fn warm_preparation_syncs_after_an_interrupted_object_publication() -> Result<()
     let store = ActionArchiveStore::open(root.path().join("store"))?;
     let bytes = archive_bytes()?;
     let action = identity("owner/action", &bytes)?;
-    let manifest = build_manifest(vec![action.clone()])?;
+    let manifest = build_manifest(std::slice::from_ref(&action))?;
     assert_eq!(
         store.publish_with_sync_fault(&action, Cursor::new(&bytes), 1),
         Err(ActionArchiveSeedError::Io)
@@ -230,9 +230,9 @@ fn preparation_rejects_corrupt_or_oversized_source_without_a_lease() -> Result<(
     let store = ActionArchiveStore::open(root.path().join("store"))?;
     let bytes = archive_bytes()?;
     let action = identity("owner/action", &bytes)?;
-    let manifest = build_manifest(vec![action])?;
+    let manifest = build_manifest(&[action])?;
     let bad_bytes = archive_bytes()?;
-    let bad_identity = build_manifest(vec![identity("owner/other", &bad_bytes)?])?;
+    let bad_identity = build_manifest(&[identity("owner/other", &bad_bytes)?])?;
     let calls = Arc::new(AtomicUsize::new(0));
     assert_eq!(
         store
@@ -260,7 +260,7 @@ fn preparation_rejects_corrupt_or_oversized_source_without_a_lease() -> Result<(
 
     let oversized_root = TestRoot::new()?;
     let oversized_store = ActionArchiveStore::open(oversized_root.path().join("store"))?;
-    let oversized_manifest = build_manifest(vec![identity("owner/oversized", &bytes)?])?;
+    let oversized_manifest = build_manifest(&[identity("owner/oversized", &bytes)?])?;
     let mut oversized = bytes;
     oversized.push(b'x');
     assert_eq!(
@@ -287,7 +287,7 @@ fn concurrent_launches_share_one_exact_archive_fetch() -> Result<(), Box<dyn Err
     let store = ActionArchiveStore::open(root.path().join("store"))?;
     let bytes = archive_bytes()?;
     let action = identity("owner/action", &bytes)?;
-    let manifest = build_manifest(vec![action])?;
+    let manifest = build_manifest(&[action])?;
     let calls = Arc::new(AtomicUsize::new(0));
     let barrier = Arc::new(Barrier::new(3));
     let mut workers = Vec::new();

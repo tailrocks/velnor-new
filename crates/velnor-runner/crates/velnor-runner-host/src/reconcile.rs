@@ -29,6 +29,34 @@ pub enum LaunchPhase {
 }
 
 impl LaunchPhase {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Prepared => "prepared",
+            Self::AcquireRequested => "acquire_requested",
+            Self::Acquired => "acquired",
+            Self::JitRequested => "jit_requested",
+            Self::JitReceived => "jit_received",
+            Self::DockerProvisioning => "docker_provisioning",
+            Self::WorkerReady => "worker_ready",
+            Self::AcknowledgementRequested => "acknowledgement_requested",
+            Self::Complete => "complete",
+        }
+    }
+
+    pub(crate) fn rank(self) -> u8 {
+        match self {
+            Self::Prepared => 0,
+            Self::AcquireRequested => 1,
+            Self::Acquired => 2,
+            Self::JitRequested => 3,
+            Self::JitReceived => 4,
+            Self::DockerProvisioning => 5,
+            Self::WorkerReady => 6,
+            Self::AcknowledgementRequested => 7,
+            Self::Complete => 8,
+        }
+    }
+
     pub(crate) fn parse(text: &str) -> Result<Self, crate::HostError> {
         match text {
             "prepared" => Ok(Self::Prepared),
