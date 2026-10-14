@@ -309,7 +309,7 @@ fn bench_tofu_fork_event() -> TestResult {
 
 /// A wide full plan fails closed on the matrix budget, never truncates.
 #[test]
-fn plan_150_roots_reports_matrix_budget() -> TestResult {
+fn plan_150_roots_fits_matrix_budget() -> TestResult {
     let repo = tofu_repo(150)?;
     let root = repo.path();
     git(&["add", "."], root)?;
@@ -324,12 +324,11 @@ fn plan_150_roots_reports_matrix_budget() -> TestResult {
     git(&["add", "."], root)?;
     git(&["commit", "-m", "two"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
-    let Err(err) = plan_at_event(root, &base, &head, "pull_request") else {
-        return Err("150-root plan must fail closed".into());
-    };
-    assert!(
-        err.to_string().contains("matrix_budget_exceeded"),
-        "got {err}"
+    let (plan, _) = plan_at_event(root, &base, &head, "pull_request")?;
+    assert_eq!(
+        plan.obligations.len(),
+        3 * 150,
+        "every root stays in the plan"
     );
     Ok(())
 }

@@ -49,7 +49,12 @@ pub(crate) const SCHEMA: u32 = 1;
 
 /// Maximum canonical `matrix.json` artifact bytes; oversize errors, never
 /// truncates. Job outputs have a separate UTF-16 aggregate budget.
-pub(crate) const MATRIX_BUDGET_BYTES: usize = 524_288;
+///
+/// Static crate jobs keep this document in the plan artifact. One hundred
+/// fifty crates with their `run` commands are about 2 MB, so the cap sits
+/// above that and still rejects a pathological matrix. Dynamic plans still
+/// fail on the 256-job and 900,000 UTF-16 output limits.
+pub(crate) const MATRIX_BUDGET_BYTES: usize = 4_194_304;
 
 /// Env key carrying the exact request-file path.
 pub const REQUEST_FILE_ENV: &str = "VELNOR_REQUEST_FILE";
@@ -340,4 +345,52 @@ fn build_plan(
         warnings,
         edges,
     })
+}
+
+#[cfg(test)]
+mod budget_tests {
+    use std::collections::BTreeMap;
+
+    use velnor_actions_contract::{
+        ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, PlanMatrix, PlannedPlatform,
+    };
+
+    use super::{MATRIX_BUDGET_BYTES, check_matrix_budget};
+
+    #[test]
+    fn oversize_matrix_errors_and_does_not_truncate() {
+        let run = format!("echo {}", "x".repeat(MATRIX_BUDGET_BYTES));
+        let entry = MatrixEntry::derive(
+            "rust",
+            "stack/rust/demo/clippy/default",
+            &run,
+            &format!("b3-{}", "a".repeat(64)),
+            serde_json::json!({}),
+            ExecuteTaskIds {
+                tasks: BTreeMap::from([(
+                    "clippy".to_owned(),
+                    ExecuteTaskRef::Single("stack/rust/demo/clippy/default".to_owned()),
+                )]),
+            },
+            &format!("b3-{}", "b".repeat(64)),
+            "local",
+            "rust-demo",
+            PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("platform"),
+        )
+        .expect("entry");
+        let error = check_matrix_budget(&PlanMatrix {
+            include: vec![entry],
+        })
+        .expect_err("oversize matrix must fail closed");
+        let text = error.to_string();
+        assert!(text.contains("matrix_budget_exceeded"), "{text}");
+        assert!(!text.contains("truncat"), "{text}");
+        let size = text
+            .split("matrix_budget_exceeded:")
+            .nth(1)
+            .and_then(|rest| rest.split(':').next())
+            .and_then(|size| size.parse::<usize>().ok())
+            .expect("size");
+        assert!(size > MATRIX_BUDGET_BYTES, "{size}");
+    }
 }

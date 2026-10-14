@@ -10,7 +10,7 @@ use tempfile::TempDir;
 use velnor_actions_orchestrator::{GenerateOptions, generate, plan_internal, prepare};
 
 use crate::impl_common::{
-    TestResult, config_with_branch, err_of, fixture_manifest_json, git, make_repo, snapshot,
+    TestResult, config_with_branch, fixture_manifest_json, git, make_repo, snapshot,
 };
 
 /// Render `generate` into a fresh preview and read every file's bytes.
@@ -135,8 +135,10 @@ fn make_wide_repo(members: u32) -> Result<TempDir, Box<dyn std::error::Error>> {
     Ok(dir)
 }
 
+/// Sixty crate members fit the artifact budget. Oversize still fails closed
+/// in `internal::budget_tests` and is never truncated.
 #[test]
-fn matrix_budget_enforced_never_truncated() -> TestResult {
+fn wide_workspace_plan_fits_matrix_budget() -> TestResult {
     let repo = make_wide_repo(60)?;
     let root = repo.path();
     git(&["add", "."], root)?;
@@ -154,10 +156,15 @@ fn matrix_budget_enforced_never_truncated() -> TestResult {
         "event": "push",
         "root": root.display().to_string(),
     });
-    let err = err_of(plan_internal(&request.to_string()), "budget exceeded")?;
+    let response = plan_internal(&request.to_string()).map_err(|err| err.to_string())?;
+    let value: serde_json::Value = serde_json::from_str(&response)?;
+    let include = value["matrix"]["include"]
+        .as_array()
+        .ok_or("matrix missing")?;
     assert!(
-        err.to_string().contains("matrix_budget_exceeded"),
-        "budget error, got {err}"
+        include.len() >= 60,
+        "60 members produced {} matrix rows",
+        include.len()
     );
     Ok(())
 }
