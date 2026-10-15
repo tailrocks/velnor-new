@@ -64,10 +64,14 @@ golden_fingerprint() {
   (
     cd "$GOLDEN_DIR" || exit 2
     {
-      find . -type f -print | LC_ALL=C sort | while IFS= read -r path; do
-        digest="$(test_file_sha256 "$path")" || exit 2
-        printf 'file %s %s\n' "$path" "$digest"
-      done
+      files="$(find . -type f -print | LC_ALL=C sort)" || exit 2
+      if [ -n "$files" ]; then
+        if command -v sha256sum >/dev/null 2>&1; then
+          printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 sha256sum || exit 2
+        else
+          printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 shasum -a 256 || exit 2
+        fi
+      fi
       find . -type l -print | LC_ALL=C sort | while IFS= read -r path; do
         printf 'link %s -> %s\n' "$path" "$(readlink "$path")"
       done

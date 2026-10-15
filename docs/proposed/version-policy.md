@@ -13,9 +13,14 @@ schema = 1
 channel = "stable"
 check_interval_hours = 24
 max_exception_days = 14
+# Optional: default_cooldown_days = 3  # integer in 1..=90 (defaults to 3 when omitted)
 ```
 
 The checker MUST reject unknown keys and any value that weakens this policy.
+When `default_cooldown_days` is present, it MUST be an integer in `1..=90`
+(defaulting to `3` days when omitted, matching GitHub Dependabot's 3-day default
+package release cooldown contract). Security advisories and `cargo-deny` checks
+remain immediate and are never delayed by `default_cooldown_days`.
 
 ## 1. Normative rule
 

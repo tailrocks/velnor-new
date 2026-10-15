@@ -183,6 +183,7 @@ mod tests {
             needs: needs.iter().map(ToString::to_string).collect(),
             condition: None,
             permissions: None,
+            cache_mode: None,
             environment: None,
             steps: Vec::new(),
         }

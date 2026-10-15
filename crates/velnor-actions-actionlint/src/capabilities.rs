@@ -36,6 +36,8 @@ pub struct ActionlintCapabilities {
     job_parallelism: bool,
     /// Parses native `parallel:`/`background:`/`wait` step keys.
     native_step_parallelism: bool,
+    /// Parses workflow-level and job-level `cache-mode` keys (2026-09-10).
+    native_cache_mode: bool,
     /// Built-in hosted-label table contains `ubuntu-26.04`.
     recognizes_ubuntu_26_04_hosted_label: bool,
 }
@@ -48,6 +50,7 @@ impl ActionlintCapabilities {
             matrix_strategy: true,
             job_parallelism: true,
             native_step_parallelism: false,
+            native_cache_mode: false,
             recognizes_ubuntu_26_04_hosted_label: false,
         }
     }
@@ -68,6 +71,18 @@ impl ActionlintCapabilities {
     #[must_use]
     pub const fn native_step_parallelism_qualified(self) -> bool {
         self.native_step_parallelism
+    }
+
+    /// Whether native `cache-mode` syntax (2026-09-10) is supported and qualified.
+    #[must_use]
+    pub const fn supports_native_cache_mode(self) -> bool {
+        self.native_cache_mode
+    }
+
+    /// Whether native `cache-mode` emission is qualified.
+    #[must_use]
+    pub const fn native_cache_mode_qualified(self) -> bool {
+        self.native_cache_mode
     }
 
     /// Whether the pinned release natively recognizes `ubuntu-26.04`.
@@ -101,6 +116,14 @@ impl ActionlintCapabilities {
         self
     }
 
+    /// Qualify workflow-level and job-level `cache-mode` emission once a
+    /// newer pinned `actionlint` release recognizes `cache-mode` (2026-09-10).
+    #[must_use]
+    pub const fn qualify_native_cache_mode(mut self) -> Self {
+        self.native_cache_mode = true;
+        self
+    }
+
     /// Record that a newer pinned release recognizes `ubuntu-26.04`.
     ///
     /// Removes the runner-label bridge from generated config. Only valid
@@ -115,6 +138,23 @@ impl ActionlintCapabilities {
     #[must_use]
     pub const fn requires_runner_label_bridge(self) -> bool {
         !self.recognizes_ubuntu_26_04_hosted_label
+    }
+
+    /// Reject `cache-mode` emission when the pinned `actionlint` release has
+    /// not yet been qualified for `cache-mode` syntax.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ActionlintError::UnsupportedSyntax`] when `native_cache_mode`
+    /// is unqualified.
+    pub const fn check_native_cache_mode(self) -> Result<(), ActionlintError> {
+        if self.native_cache_mode {
+            Ok(())
+        } else {
+            Err(ActionlintError::UnsupportedSyntax {
+                syntax: "cache_mode",
+            })
+        }
     }
 
     /// Reject syntax the pinned release cannot parse and validate.
@@ -201,5 +241,30 @@ impl NativeParallelismConcerns {
     #[must_use]
     pub const fn qualified(&self) -> bool {
         self.joins && self.failures && self.cancel && self.outputs && self.timing
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pinned_actionlint_defaults_native_cache_mode_and_parallelism_to_false() {
+        let caps = ActionlintCapabilities::for_pinned();
+        assert!(caps.supports_matrix_strategy());
+        assert!(caps.supports_job_parallelism());
+        assert!(!caps.native_step_parallelism_qualified());
+        assert!(!caps.supports_native_cache_mode());
+        assert!(!caps.native_cache_mode_qualified());
+        assert_eq!(
+            caps.check_native_cache_mode(),
+            Err(ActionlintError::UnsupportedSyntax {
+                syntax: "cache_mode"
+            })
+        );
+        let qualified = caps.qualify_native_cache_mode();
+        assert!(qualified.supports_native_cache_mode());
+        assert!(qualified.native_cache_mode_qualified());
+        assert_eq!(qualified.check_native_cache_mode(), Ok(()));
     }
 }

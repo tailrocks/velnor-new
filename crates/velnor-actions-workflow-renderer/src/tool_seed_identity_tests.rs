@@ -167,6 +167,7 @@ fn job(steps: Vec<Step>) -> Job {
         environment: None,
         check_runner: None,
         steps,
+        cache_mode: None,
     }
 }
 

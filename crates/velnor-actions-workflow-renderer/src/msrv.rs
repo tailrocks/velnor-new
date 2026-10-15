@@ -107,6 +107,7 @@ pub fn msrv_job(
         needs: Vec::new(),
         condition: None,
         permissions: None,
+        cache_mode: None,
         environment: None,
         steps: vec![
             steps::checkout_step(checkout_uses)?,

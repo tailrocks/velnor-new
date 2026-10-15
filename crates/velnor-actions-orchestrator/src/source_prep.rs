@@ -54,6 +54,23 @@ pub(crate) fn workspace_root_for_manifest<'a>(
     matching
 }
 
+/// Scope `fetch_roots` for a single crate job unless it requires all repository workspaces.
+pub(crate) fn crate_fetch_roots(
+    manifest: &str,
+    fetch_roots: &[String],
+    needs_all_workspaces: bool,
+) -> Vec<String> {
+    if needs_all_workspaces {
+        return fetch_roots.to_vec();
+    }
+    let root = workspace_root_for_manifest(manifest, fetch_roots);
+    fetch_roots
+        .iter()
+        .filter(|candidate| candidate.as_str() == root)
+        .cloned()
+        .collect()
+}
+
 /// Absolute `--manifest-path` flag for one validated fetch root.
 ///
 /// The manifest anchors on `$GITHUB_WORKSPACE` (the runner-owned
@@ -340,5 +357,30 @@ mod tests {
         let crates = fetch_steps_for_crate(&catalog, &[]).expect("crate fetch steps");
         let plan = fetch_steps_for_plan(&catalog, &[]).expect("plan fetch steps");
         assert!(crates.is_empty() && plan.is_empty());
+    }
+
+    #[test]
+    fn crate_fetch_roots_scopes_to_matching_workspace_unless_all_needed() {
+        let roots = vec![String::new(), "crates/velnor-runner".to_owned()];
+        assert_eq!(
+            crate_fetch_roots("crates/velnor-actions-contract/Cargo.toml", &roots, false),
+            vec![String::new()]
+        );
+        assert_eq!(
+            crate_fetch_roots(
+                "crates/velnor-runner/crates/runner-core/Cargo.toml",
+                &roots,
+                false
+            ),
+            vec!["crates/velnor-runner".to_owned()]
+        );
+        assert_eq!(
+            crate_fetch_roots(
+                "crates/velnor-actions-orchestrator/Cargo.toml",
+                &roots,
+                true
+            ),
+            roots
+        );
     }
 }

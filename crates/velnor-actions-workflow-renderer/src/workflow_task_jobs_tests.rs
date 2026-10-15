@@ -136,6 +136,7 @@ fn required_job() -> Job {
         permissions: None,
         environment: None,
         steps: Vec::new(),
+        cache_mode: None,
     }
 }
 

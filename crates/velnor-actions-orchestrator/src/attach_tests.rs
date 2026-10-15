@@ -29,6 +29,7 @@ fn legacy_task_job() -> Job {
         permissions: None,
         environment: None,
         steps: vec![crate::workflow::wire_w1::checkout_step().expect("checkout")],
+        cache_mode: None,
     }
 }
 
@@ -49,6 +50,7 @@ pub(super) fn bare_ir(jobs: BTreeMap<String, velnor_actions_contract::Job>) -> W
             cancel_in_progress: "c".to_owned(),
         },
         jobs,
+        cache_mode: None,
     }
 }
 

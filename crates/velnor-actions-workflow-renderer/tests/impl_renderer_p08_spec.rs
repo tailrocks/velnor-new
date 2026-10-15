@@ -42,6 +42,7 @@ fn http_backend_spec_gets_mise_setup_in_generated_workflow() {
             )
             .expect("machete command"),
         ],
+        cache_mode: None,
     };
     assert_eq!(infer_job_tools(&job), vec![spec.clone()]);
 

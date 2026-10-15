@@ -188,6 +188,7 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
         needs: vec![],
         condition: None,
         permissions: None,
+        cache_mode: None,
         environment: None,
         steps: vec![Step {
             name: "Checkout".to_owned(),
@@ -210,6 +211,7 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
             schedule: None,
         },
         permissions: Permissions::default(),
+        cache_mode: None,
         concurrency: Concurrency {
             group: "velnor-ci".to_owned(),
             cancel_in_progress: "true".to_owned(),

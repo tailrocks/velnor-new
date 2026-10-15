@@ -139,10 +139,17 @@ normalize_generate_stderr() {
 # `find -type f` alone skips links, leaving targets unpinned.
 hash_tree() {
   (cd "$1" && {
-    find . -type f | LC_ALL=C sort | while IFS= read -r file; do
-      local_digest="$(file_sha256 "$file")" || exit 1
-      printf '%s  %s\n' "$local_digest" "$file"
-    done
+    files="$(find . -type f | LC_ALL=C sort)" || exit 1
+    if [ -n "$files" ]; then
+      if command -v sha256sum >/dev/null 2>&1; then
+        printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 sha256sum || exit 1
+      elif command -v shasum >/dev/null 2>&1; then
+        printf '%s\n' "$files" | tr '\n' '\0' | xargs -0 shasum -a 256 || exit 1
+      else
+        echo "FATAL: no SHA-256 utility is available" >&2
+        exit 1
+      fi
+    fi
     find . -type l | sort | while IFS= read -r link; do
       printf 'link %s -> %s\n' "$link" "$(readlink "$link")"
     done
@@ -331,14 +338,34 @@ if [ "$MODE" = "check-release" ]; then
   [ "$fail" = "0" ] && note "ALL RELEASE FIXTURE GOLDENS AND DOGFOOD PARITY MATCH"
   exit "$fail"
 fi
+pids=()
+cases=()
 for case in $FIXTURES; do
-  repo="$WORK/$case"
-  if ! head="$(setup_case "$case")"; then
-    echo "FATAL: could not set up fixture $case"
-    exit 2
+  cases+=("$case")
+  (
+    repo="$WORK/$case"
+    if ! head="$(setup_case "$case")"; then
+      echo "FATAL: could not set up fixture $case"
+      exit 2
+    fi
+    capture_case "$case" "$repo" "$head" "$stage/$case"
+    note "captured $case (plan exit $(cat "$stage/$case/plan.exit"))"
+  ) >"$WORK/$case.capture.log" 2>&1 &
+  pids+=("$!")
+done
+statuses=()
+for pid in "${pids[@]}"; do
+  status=0
+  wait "$pid" || status=$?
+  statuses+=("$status")
+done
+for index in "${!cases[@]}"; do
+  case="${cases[$index]}"
+  cat "$WORK/$case.capture.log"
+  rm -f "$WORK/$case.capture.log"
+  if [ "${statuses[$index]}" -ne 0 ]; then
+    exit "${statuses[$index]}"
   fi
-  capture_case "$case" "$repo" "$head" "$stage/$case"
-  note "captured $case (plan exit $(cat "$stage/$case/plan.exit"))"
 done
 capture_dogfood "$stage/dogfood"
 note "captured dogfood (plan exit $(cat "$stage/dogfood/plan.exit"), tree $(cat "$stage/dogfood/dogfood.verdict" 2>/dev/null))"

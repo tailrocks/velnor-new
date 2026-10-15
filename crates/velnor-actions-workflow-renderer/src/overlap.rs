@@ -12,6 +12,14 @@ use velnor_actions_contract::Job;
 
 use crate::RenderError;
 
+#[path = "overlap_steps.rs"]
+mod overlap_steps;
+pub use self::overlap_steps::{
+    BackgroundStep, MAX_CONCURRENT_BACKGROUND_STEPS, NativeStepItem, ParallelStepGroup, WaitStep,
+    WaitTarget, render_background_step_yaml, render_parallel_group_yaml, render_wait_step_yaml,
+    validate_native_step_sequence,
+};
+
 /// Typed overlap: two independent prep branches plus their join job.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrepOverlap {

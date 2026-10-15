@@ -246,6 +246,7 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
                 )?,
                 plan_step(),
             ],
+            cache_mode: None,
         },
     );
     let ir = WorkflowIr {
@@ -254,6 +255,7 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
         permissions: Permissions::default(),
         concurrency: emit_concurrency(),
         jobs,
+        cache_mode: None,
     };
     let ctx = emit_ctx();
     let first = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;

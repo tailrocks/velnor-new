@@ -53,6 +53,7 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
                 write_request_step("plan-v1")?,
                 plan_step(),
             ],
+            cache_mode: None,
         },
     );
     let ir = WorkflowIr {
@@ -73,6 +74,7 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs,
+        cache_mode: None,
     };
     let ctx = RenderContext {
         generator_version: "0.1.0".to_owned(),

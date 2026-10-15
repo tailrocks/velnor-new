@@ -120,3 +120,220 @@ fn prep_overlap_rejects_dependent_or_missing() -> Result<(), RenderError> {
     );
     Ok(())
 }
+
+const QUALIFIED_CAPS: bool = true;
+const UNQUALIFIED_CAPS: bool = false;
+
+#[test]
+fn native_step_parallelism_fails_closed_for_unqualified_actionlint_or_composite()
+-> Result<(), RenderError> {
+    use velnor_actions_workflow_renderer::overlap::{
+        BackgroundStep, NativeStepItem, ParallelStepGroup, WaitStep, WaitTarget,
+        render_parallel_group_yaml, validate_native_step_sequence,
+    };
+
+    let group = ParallelStepGroup {
+        name: "Independent probes".to_owned(),
+        condition: None,
+        steps: vec![shell("Probe A")?, shell("Probe B")?],
+    };
+    let seq = [
+        NativeStepItem::Parallel(group.clone()),
+        NativeStepItem::Background(BackgroundStep {
+            handle_id: "bg_fetch".to_owned(),
+            step: shell("Background fetch")?,
+        }),
+        NativeStepItem::Wait(WaitStep {
+            name: "Wait for background fetch".to_owned(),
+            condition: None,
+            target: WaitTarget::Steps(vec!["bg_fetch".to_owned()]),
+        }),
+    ];
+
+    assert!(
+        validate_native_step_sequence(&seq, false, UNQUALIFIED_CAPS).is_err_and(|err| {
+            format!("{err:?}").contains("native_step_parallelism_unqualified_actionlint")
+        }),
+        "pinned actionlint 1.7.12 must fail closed"
+    );
+    assert!(
+        validate_native_step_sequence(&seq, true, QUALIFIED_CAPS).is_err_and(|err| {
+            format!("{err:?}").contains("native_step_parallelism_composite_forbidden")
+        }),
+        "composite action scope must reject native step parallelism"
+    );
+    assert!(
+        render_parallel_group_yaml("plan", &group, &fixture_ctx(), false, UNQUALIFIED_CAPS)
+            .is_err_and(|err| {
+                format!("{err:?}").contains("native_step_parallelism_unqualified_actionlint")
+            })
+    );
+    assert!(
+        render_parallel_group_yaml("plan", &group, &fixture_ctx(), true, QUALIFIED_CAPS)
+            .is_err_and(|err| {
+                format!("{err:?}").contains("native_step_parallelism_composite_forbidden")
+            })
+    );
+    validate_native_step_sequence(&seq, false, QUALIFIED_CAPS)?;
+    Ok(())
+}
+
+#[test]
+fn native_step_parallelism_renders_parallel_background_and_wait_yaml() -> Result<(), RenderError> {
+    use velnor_actions_workflow_renderer::overlap::{
+        BackgroundStep, ParallelStepGroup, WaitStep, WaitTarget, render_background_step_yaml,
+        render_parallel_group_yaml, render_wait_step_yaml,
+    };
+    use velnor_actions_workflow_renderer::render_yaml;
+
+    let ctx = fixture_ctx();
+    let group = ParallelStepGroup {
+        name: "Parallel prep".to_owned(),
+        condition: Some("success()".to_owned()),
+        steps: vec![shell("Branch A")?, shell("Branch B")?],
+    };
+    let group_yaml = render_yaml(&render_parallel_group_yaml(
+        "plan",
+        &group,
+        &ctx,
+        false,
+        QUALIFIED_CAPS,
+    )?);
+    assert!(group_yaml.contains("name: Parallel prep\n"));
+    assert!(group_yaml.contains("parallel:\n"));
+    assert!(group_yaml.contains("- name: Branch A\n"));
+    assert!(group_yaml.contains("- name: Branch B\n"));
+
+    let bg = BackgroundStep {
+        handle_id: "warm_image".to_owned(),
+        step: shell("Warm image")?,
+    };
+    let bg_yaml = render_yaml(&render_background_step_yaml(
+        "plan",
+        &bg,
+        &ctx,
+        false,
+        QUALIFIED_CAPS,
+    )?);
+    assert!(bg_yaml.contains("id: warm_image\n"));
+    assert!(bg_yaml.contains("background: true\n"));
+
+    let wait_one = WaitStep {
+        name: "Join warm image".to_owned(),
+        condition: None,
+        target: WaitTarget::Steps(vec!["warm_image".to_owned()]),
+    };
+    let wait_one_yaml = render_yaml(&render_wait_step_yaml(&wait_one, false, QUALIFIED_CAPS)?);
+    assert!(wait_one_yaml.contains("wait: warm_image\n"));
+
+    let wait_all = WaitStep {
+        name: "Join all background steps".to_owned(),
+        condition: None,
+        target: WaitTarget::All,
+    };
+    let wait_all_yaml = render_yaml(&render_wait_step_yaml(&wait_all, false, QUALIFIED_CAPS)?);
+    assert!(wait_all_yaml.contains("wait-all: true\n"));
+    Ok(())
+}
+
+#[test]
+fn native_step_parallelism_enforces_concurrency_and_output_barriers() -> Result<(), RenderError> {
+    use velnor_actions_workflow_renderer::overlap::{
+        BackgroundStep, MAX_CONCURRENT_BACKGROUND_STEPS, NativeStepItem, WaitStep, WaitTarget,
+        validate_native_step_sequence,
+    };
+
+    let mut over_limit = Vec::new();
+    for idx in 0..=MAX_CONCURRENT_BACKGROUND_STEPS {
+        over_limit.push(NativeStepItem::Background(BackgroundStep {
+            handle_id: format!("bg_{idx}"),
+            step: shell("Background task")?,
+        }));
+    }
+    over_limit.push(NativeStepItem::Wait(WaitStep {
+        name: "Join all".to_owned(),
+        condition: None,
+        target: WaitTarget::All,
+    }));
+    assert!(
+        validate_native_step_sequence(&over_limit, false, QUALIFIED_CAPS).is_err_and(|err| {
+            format!("{err:?}").contains("native_step_parallelism_concurrency_limit_exceeded")
+        }),
+        "more than 10 concurrent background steps must fail closed"
+    );
+
+    let mut pre_wait_consumer = shell("Read output early")?;
+    pre_wait_consumer.condition = Some("steps.bg_1.outputs.ready == 'true'".to_owned());
+    let early_output_seq = [
+        NativeStepItem::Background(BackgroundStep {
+            handle_id: "bg_1".to_owned(),
+            step: shell("Producer")?,
+        }),
+        NativeStepItem::Sequential(pre_wait_consumer.clone()),
+        NativeStepItem::Wait(WaitStep {
+            name: "Join producer".to_owned(),
+            condition: None,
+            target: WaitTarget::Steps(vec!["bg_1".to_owned()]),
+        }),
+    ];
+    assert!(
+        validate_native_step_sequence(&early_output_seq, false, QUALIFIED_CAPS).is_err_and(|err| {
+            format!("{err:?}").contains("native_step_parallelism_output_before_wait:bg_1")
+        }),
+        "referencing background step outputs before wait must fail closed"
+    );
+
+    let post_wait_seq = [
+        NativeStepItem::Background(BackgroundStep {
+            handle_id: "bg_1".to_owned(),
+            step: shell("Producer")?,
+        }),
+        NativeStepItem::Wait(WaitStep {
+            name: "Join producer".to_owned(),
+            condition: None,
+            target: WaitTarget::Steps(vec!["bg_1".to_owned()]),
+        }),
+        NativeStepItem::Sequential(pre_wait_consumer),
+    ];
+    validate_native_step_sequence(&post_wait_seq, false, QUALIFIED_CAPS)?;
+    Ok(())
+}
+
+#[test]
+fn native_step_parallelism_enforces_cache_save_after_wait() -> Result<(), RenderError> {
+    use velnor_actions_contract::{Step, StepKind, StepRole};
+    use velnor_actions_workflow_renderer::overlap::{
+        BackgroundStep, NativeStepItem, WaitStep, WaitTarget, validate_native_step_sequence,
+    };
+
+    let cache_save = Step {
+        name: "Save Cargo sources".to_owned(),
+        id: None,
+        role: Some(StepRole::CargoSourcesSave),
+        condition: None,
+        kind: StepKind::Action {
+            uses: "actions/cache/save@0000000000000000000000000000000000000000".to_owned(),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+        },
+    };
+    let save_before_wait_seq = [
+        NativeStepItem::Background(BackgroundStep {
+            handle_id: "bg_fetch".to_owned(),
+            step: shell("Fetch")?,
+        }),
+        NativeStepItem::Sequential(cache_save),
+        NativeStepItem::Wait(WaitStep {
+            name: "Join fetch".to_owned(),
+            condition: None,
+            target: WaitTarget::Steps(vec!["bg_fetch".to_owned()]),
+        }),
+    ];
+    assert!(
+        validate_native_step_sequence(&save_before_wait_seq, false, QUALIFIED_CAPS).is_err_and(
+            |err| format!("{err:?}").contains("native_step_parallelism_cache_save_before_wait")
+        ),
+        "cache save before background wait must fail closed"
+    );
+    Ok(())
+}

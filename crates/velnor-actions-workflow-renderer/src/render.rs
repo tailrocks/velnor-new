@@ -157,7 +157,7 @@ pub fn finalize_jobs(
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
     // Both cache families are validated globally before either gets a save.
-    cache_p08::elect_cache_writers(&mut jobs)?;
+    cache_p08::elect_cache_writers_with_policy(&mut jobs, ctx.pull_request_cache_policy)?;
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;

@@ -207,6 +207,7 @@ fn simple_job(steps: Vec<Step>) -> Job {
         permissions: None,
         environment: None,
         steps,
+        cache_mode: None,
     }
 }
 

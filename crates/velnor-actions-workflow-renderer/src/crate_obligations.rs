@@ -187,6 +187,7 @@ mod tests {
             needs: Vec::new(),
             condition: None,
             permissions: None,
+            cache_mode: None,
             environment: None,
             check_runner: None,
             steps: vec![

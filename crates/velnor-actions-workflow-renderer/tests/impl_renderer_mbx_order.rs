@@ -43,6 +43,7 @@ fn typed_mbx_owner_precedes_cargo_source_fetch_independent_of_labels() {
         permissions: None,
         environment: None,
         steps: vec![mbx.clone(), fetch.clone()],
+        cache_mode: None,
     };
     assert!(check_mbx_before_fetch("demo", &job).is_ok());
     let reversed = Job {

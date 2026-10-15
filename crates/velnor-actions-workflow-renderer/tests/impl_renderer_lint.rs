@@ -67,6 +67,7 @@ fn lint_job() -> Result<Job, RenderError> {
                 BTreeMap::new(),
             )?,
         ],
+        cache_mode: None,
     })
 }
 
@@ -84,6 +85,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
             permissions: None,
             environment: None,
             steps: vec![checkout_step(&checkout_pin())?],
+            cache_mode: None,
         },
     );
     jobs.insert(
@@ -103,6 +105,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
             }),
             environment: None,
             steps: vec![merge_step()],
+            cache_mode: None,
         },
     );
     jobs.insert(LINT_ID.to_owned(), lint_job()?);
@@ -124,6 +127,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs,
+        cache_mode: None,
     })
 }
 

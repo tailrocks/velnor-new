@@ -318,9 +318,14 @@ fn render_job(
         )?);
     }
     if use_rust {
+        let scoped_roots = crate::source_prep::crate_fetch_roots(
+            &model.manifest,
+            fetch_roots,
+            policy == WorkflowPolicy::VelnorRepositoryV1 && needs_validators,
+        );
         steps.extend(crate::source_prep::fetch_steps_for_crate(
             catalog,
-            fetch_roots,
+            &scoped_roots,
         )?);
     }
     steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(
@@ -355,6 +360,7 @@ fn render_job(
         permissions: None,
         environment: None,
         steps,
+        cache_mode: None,
     })
 }
 

@@ -58,6 +58,7 @@ pub(crate) fn baseline_publish_job(
         permissions: None,
         environment: None,
         steps,
+        cache_mode: None,
     })
 }
 

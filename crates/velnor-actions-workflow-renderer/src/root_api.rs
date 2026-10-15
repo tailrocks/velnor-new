@@ -20,6 +20,11 @@ pub use crate::marker::{
     MARKER_PREFIX, MARKER_SUFFIX, check_first_line, marker_for_version, validate_version,
     with_marker,
 };
+pub use crate::overlap::{
+    BackgroundStep, MAX_CONCURRENT_BACKGROUND_STEPS, NativeStepItem, ParallelStepGroup,
+    PrepOverlap, WaitStep, WaitTarget, render_background_step_yaml, render_parallel_group_yaml,
+    render_wait_step_yaml, validate_native_step_sequence, wire_prep_join,
+};
 pub use crate::preseed::{
     PRESEED_ARTIFACT_NAME, PRESEED_BUILD_NAME, PRESEED_BUILD_OUTPUT, PRESEED_DOWNLOAD_NAME,
     PRESEED_DOWNLOADED_BINARY, PRESEED_MANIFEST_BINARY_ENV, PRESEED_MANIFEST_FILE,

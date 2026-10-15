@@ -67,6 +67,7 @@ fn check_job(
         permissions: Some(Permissions::default()),
         environment: None,
         steps,
+        cache_mode: None,
     })
 }
 

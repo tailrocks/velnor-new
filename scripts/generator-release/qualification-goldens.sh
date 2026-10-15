@@ -302,7 +302,9 @@ normalize_candidate_digests() {
 capture_release_dogfood() {
   local out="$1" repo="$WORK/dogfood-repo" preview="$1/preview" diff_status
   mkdir -p "$repo" "$out" "$preview"
-  if ! git -C "$ROOT" archive --format=tar HEAD | tar -xf - -C "$repo"; then
+  if ! git -C "$ROOT" archive --format=tar HEAD | tar -xf - -C "$repo" \
+    || ! rm -rf "$repo/.github" \
+    || ! copy_tree "$ROOT/.github/." "$repo/.github/"; then
     echo "FATAL: could not stage committed dogfood source"
     exit 2
   fi

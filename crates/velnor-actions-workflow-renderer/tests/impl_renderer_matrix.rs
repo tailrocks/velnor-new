@@ -50,6 +50,7 @@ fn fixture_ir(task: Job) -> Result<WorkflowIr, RenderError> {
             permissions: None,
             environment: None,
             steps: vec![checkout_step(&checkout_pin())?, plan_step()],
+            cache_mode: None,
         },
     );
     jobs.insert("velnor-task".to_owned(), task);
@@ -71,6 +72,7 @@ fn fixture_ir(task: Job) -> Result<WorkflowIr, RenderError> {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs,
+        cache_mode: None,
     })
 }
 
@@ -89,6 +91,7 @@ fn task_job(env: &BTreeMap<String, String>, needs: Vec<String>) -> Result<Job, R
             checkout_step(&checkout_pin())?,
             shell_step("Run task", argv, env.clone())?,
         ],
+        cache_mode: None,
     })
 }
 
@@ -199,6 +202,7 @@ fn capped_job(env: &BTreeMap<String, String>, needs: Vec<String>) -> Result<Job,
             checkout_step(&checkout_pin())?,
             shell_step("Validate", argv, env.clone())?,
         ],
+        cache_mode: None,
     })
 }
 

@@ -70,6 +70,7 @@ fn plan_job() -> Result<Job, RenderError> {
         permissions: None,
         environment: None,
         steps: vec![checkout_step(&checkout_pin())?, plan_step()],
+        cache_mode: None,
     })
 }
 
@@ -82,6 +83,7 @@ pub(crate) fn fixture_ir() -> Result<WorkflowIr, RenderError> {
         permissions: Permissions::default(),
         concurrency: exact_concurrency(),
         jobs,
+        cache_mode: None,
     })
 }
 

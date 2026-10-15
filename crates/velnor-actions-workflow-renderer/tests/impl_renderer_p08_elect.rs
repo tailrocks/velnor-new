@@ -2,10 +2,12 @@
 
 use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-use velnor_actions_contract::{Job, JobTimeout, Step, StepId, StepKind, StepRole};
+use velnor_actions_contract::{
+    Job, JobTimeout, PullRequestCachePolicy, Step, StepId, StepKind, StepRole,
+};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::cache_p08::{
-    ToolsCacheInputs, ToolsCachePayload, elect_cache_writers,
+    ToolsCacheInputs, ToolsCachePayload, elect_cache_writers, elect_cache_writers_with_policy,
 };
 use velnor_actions_workflow_renderer::steps::{TOOLS_CACHE_PATHS, TOOLS_SAVE_USES};
 use velnor_actions_workflow_renderer::tofu_cache::{
@@ -43,6 +45,7 @@ pub(crate) fn keyed_job(tool: &str) -> Result<Job, RenderError> {
         permissions: None,
         environment: None,
         steps: vec![payload.runtime_prelude_step()?, payload.restore_step()?],
+        cache_mode: None,
     })
 }
 
@@ -132,13 +135,20 @@ fn tools_cache_writer_saves_exact_payload_and_is_push_gated() -> Result<(), Rend
         with.get("path").map(String::as_str),
         Some(TOOLS_CACHE_PATHS.join("\n").as_str())
     );
+    let mut pr_jobs = BTreeMap::from([("plan".to_owned(), keyed_job("actionlint@1.7.12")?)]);
+    elect_cache_writers_with_policy(&mut pr_jobs, PullRequestCachePolicy::SameRepositoryScoped)?;
+    assert_eq!(
+        tools_saves(&pr_jobs["plan"])[0].condition.as_deref(),
+        Some(
+            "success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true'"
+        )
+    );
     Ok(())
 }
 
-#[test]
-fn tools_cache_writer_skips_keyless_and_reruns() -> Result<(), RenderError> {
-    let bare = Job {
-        display_name: "Bare".to_owned(),
+fn bare_job(display_name: &str) -> Job {
+    Job {
+        display_name: display_name.to_owned(),
         runs_on: LABEL.to_owned(),
         check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
@@ -147,9 +157,14 @@ fn tools_cache_writer_skips_keyless_and_reruns() -> Result<(), RenderError> {
         permissions: None,
         environment: None,
         steps: Vec::new(),
-    };
+        cache_mode: None,
+    }
+}
+
+#[test]
+fn tools_cache_writer_skips_keyless_and_reruns() -> Result<(), RenderError> {
     let mut jobs = BTreeMap::from([
-        ("bare".to_owned(), bare),
+        ("bare".to_owned(), bare_job("Bare")),
         ("rust-a".to_owned(), keyed_job("actionlint@1.7.12")?),
     ]);
     elect_cache_writers(&mut jobs)?;
@@ -197,6 +212,7 @@ fn provider_job(key: &str, path: &str) -> Job {
         permissions: None,
         environment: None,
         steps: vec![restore],
+        cache_mode: None,
     }
 }
 
@@ -225,19 +241,8 @@ const PROVIDER_PATH_B: &str = "${{ runner.temp }}/velnor/tofu-cache/stacks-vpc-a
 
 #[test]
 fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError> {
-    let bare = Job {
-        display_name: "Plan".to_owned(),
-        runs_on: LABEL.to_owned(),
-        check_runner: None,
-        timeout_minutes: JobTimeout::CRATE,
-        needs: Vec::new(),
-        condition: None,
-        permissions: None,
-        environment: None,
-        steps: Vec::new(),
-    };
     let mut jobs = BTreeMap::from([
-        ("plan".to_owned(), bare),
+        ("plan".to_owned(), bare_job("Plan")),
         (
             "tofu-b".to_owned(),
             provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A),
@@ -302,19 +307,8 @@ fn provider_writer_election_saves_push_gated_exact_entry() -> Result<(), RenderE
 
 #[test]
 fn provider_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError> {
-    let bare = Job {
-        display_name: "Bare".to_owned(),
-        runs_on: LABEL.to_owned(),
-        check_runner: None,
-        timeout_minutes: JobTimeout::CRATE,
-        needs: Vec::new(),
-        condition: None,
-        permissions: None,
-        environment: None,
-        steps: Vec::new(),
-    };
     let mut jobs = BTreeMap::from([
-        ("bare".to_owned(), bare),
+        ("bare".to_owned(), bare_job("Bare")),
         (
             "tofu-a".to_owned(),
             provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A),

@@ -82,6 +82,7 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
                 checkout_step(&format!("actions/checkout@{:040x}", 0))?,
                 plan_step(),
             ],
+            cache_mode: None,
         },
     );
     jobs.insert(
@@ -96,6 +97,7 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
             permissions: None,
             environment: None,
             steps,
+            cache_mode: None,
         },
     );
     Ok(WorkflowIr {
@@ -116,6 +118,7 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs,
+        cache_mode: None,
     })
 }
 

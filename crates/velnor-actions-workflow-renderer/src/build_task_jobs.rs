@@ -118,6 +118,7 @@ pub fn build_build_task_job(
         needs: Vec::new(),
         condition: None,
         permissions: Some(build_task_permissions()),
+        cache_mode: None,
         environment: None,
         steps: build_task_steps(policy, checkout_uses)?,
         check_runner: None,

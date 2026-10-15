@@ -95,6 +95,12 @@ impl Yaml {
         }
     }
 
+    /// Build a `cache-mode` mapping entry for workflow-level or job-level cache access control.
+    #[must_use]
+    pub fn cache_mode_field(mode: &velnor_actions_contract::CacheMode) -> (String, Self) {
+        ("cache-mode".to_owned(), Self::str(mode.as_str().to_owned()))
+    }
+
     /// True when the value fits on one line after `key: ` or `- `.
     fn is_inline(&self) -> bool {
         match self {

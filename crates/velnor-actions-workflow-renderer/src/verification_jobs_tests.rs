@@ -204,6 +204,7 @@ fn all_declared_tasks_join_required_fan_in() {
                 permissions: None,
                 environment: None,
                 steps: Vec::new(),
+                cache_mode: None,
             },
         ),
     ]);
@@ -256,6 +257,7 @@ fn paired_task_lanes_are_complete_and_join_required_together() {
                 permissions: None,
                 environment: None,
                 steps: Vec::new(),
+                cache_mode: None,
             },
         ),
     ]);

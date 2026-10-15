@@ -60,18 +60,24 @@ fn dispatch_suppression_preserves_canonical_push_only_save_gate() {
 
 #[test]
 fn dispatch_suppression_preserves_qualified_tools_save_gate() {
-    let mut save = cache_step("actions/cache/save@sha", "Save Mise tools");
-    save.role = Some(velnor_actions_contract::StepRole::ToolsCacheSave);
-    save.condition = Some(crate::cache_p08::tools_cache_save_condition());
-    let mut jobs = BTreeMap::from([("plan".to_owned(), job(&[], save))]);
+    for policy in [
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        velnor_actions_contract::PullRequestCachePolicy::SameRepositoryScoped,
+    ] {
+        let expected = crate::cache_p08::tools_cache_save_condition(policy);
+        let mut save = cache_step("actions/cache/save@sha", "Save Mise tools");
+        save.role = Some(velnor_actions_contract::StepRole::ToolsCacheSave);
+        save.condition = Some(expected.clone());
+        let mut jobs = BTreeMap::from([("plan".to_owned(), job(&[], save))]);
 
-    suppress_unvalidated_cache_access(&mut jobs);
+        suppress_unvalidated_cache_access(&mut jobs);
 
-    assert_eq!(
-        jobs["plan"].steps[0].condition.as_deref(),
-        Some(crate::cache_p08::tools_cache_save_condition().as_str()),
-        "the validated tool-cache save policy already restricts writers to protected default-branch pushes"
-    );
+        assert_eq!(
+            jobs["plan"].steps[0].condition.as_deref(),
+            Some(expected.as_str()),
+            "the validated tool-cache save policy already excludes workflow_dispatch"
+        );
+    }
 }
 
 #[test]

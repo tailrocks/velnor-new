@@ -49,6 +49,7 @@ pub(super) fn obligation_workflow_ir(checkout_uses: &str, task_step: Step) -> Wo
                 obligation_task_job(checkout_uses, task_step),
             ),
         ]),
+        cache_mode: None,
     }
 }
 
@@ -68,6 +69,7 @@ pub(super) fn obligation_plan_job(checkout_uses: &str) -> Job {
                 .expect("plan request step"),
             velnor_actions_workflow_renderer::plan_step(),
         ],
+        cache_mode: None,
     }
 }
 
@@ -82,6 +84,7 @@ pub(super) fn obligation_task_job(checkout_uses: &str, task_step: Step) -> Job {
         permissions: None,
         environment: None,
         steps: vec![checked_out(checkout_uses), staged_helper_step(), task_step],
+        cache_mode: None,
     }
 }
 

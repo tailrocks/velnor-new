@@ -49,6 +49,7 @@ fn gate_jobs() -> BTreeMap<String, Job> {
             permissions: None,
             environment: None,
             steps: Vec::new(),
+            cache_mode: None,
         },
     );
     jobs
@@ -139,6 +140,7 @@ fn consumer_ir_still_rejects_velnor_ids() {
             permissions: None,
             environment: None,
             steps: Vec::new(),
+            cache_mode: None,
         },
     );
     let err = merge_consumer_verify(&mut jobs, None, &ctx).expect_err("IR alint rejected");

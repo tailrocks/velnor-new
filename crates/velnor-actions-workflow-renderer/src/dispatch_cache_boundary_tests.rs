@@ -35,6 +35,7 @@ pub(crate) fn job(needs: &[&str], step: Step) -> Job {
         permissions: None,
         environment: None,
         steps: vec![step],
+        cache_mode: None,
     }
 }
 
@@ -149,6 +150,7 @@ fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
             },
             crate::steps::plan_step(),
         ],
+        cache_mode: None,
     })
 }
 
@@ -185,6 +187,7 @@ fn dispatch_ir(job: Job) -> WorkflowIr {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs: BTreeMap::from([(PLAN_JOB_ID.to_owned(), job)]),
+        cache_mode: None,
     }
 }
 

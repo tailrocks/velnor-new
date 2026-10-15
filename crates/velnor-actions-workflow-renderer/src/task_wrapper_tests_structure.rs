@@ -90,6 +90,7 @@ fn validated_crate_jobs() -> BTreeMap<String, Job> {
                 permissions: None,
                 environment: None,
                 steps: vec![checkout_step(), acquire_step(), task_step(index)],
+                cache_mode: None,
             };
             (id, job)
         })

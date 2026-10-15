@@ -48,6 +48,7 @@ fn plan_job() -> Result<Job, RenderError> {
         permissions: None,
         environment: None,
         steps: vec![checkout_step(&checkout_pin())?, plan_step()],
+        cache_mode: None,
     })
 }
 
@@ -89,6 +90,7 @@ pub(crate) fn fixture_ir() -> Result<WorkflowIr, RenderError> {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs,
+        cache_mode: None,
     })
 }
 
@@ -107,6 +109,7 @@ fn simple_job(display: &str, needs: Vec<String>, steps: Vec<Step>) -> Job {
         permissions: None,
         environment: None,
         steps,
+        cache_mode: None,
     }
 }
 

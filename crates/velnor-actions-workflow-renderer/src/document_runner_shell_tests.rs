@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    Concurrency, Job, JobTimeout, Permissions, SCALE_SET_NAME, ScaleSetSelector, Step, StepKind,
-    Trigger, VELNOR_LABEL, WorkflowIr,
+    CacheMode, Concurrency, Job, JobTimeout, Permissions, SCALE_SET_NAME, ScaleSetSelector, Step,
+    StepKind, Trigger, VELNOR_LABEL, WorkflowIr,
 };
 
 use super::workflow_to_yaml;
@@ -37,6 +37,7 @@ fn job(runs_on: &str) -> Job {
                 env: BTreeMap::new(),
             },
         }],
+        cache_mode: None,
     }
 }
 
@@ -74,6 +75,7 @@ fn workflow(jobs: BTreeMap<String, Job>) -> WorkflowIr {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs,
+        cache_mode: None,
     }
 }
 
@@ -203,4 +205,51 @@ fn rustdocflags_remain_scoped_to_the_documentation_step() {
             "sibling tasks must not inherit documentation flags"
         );
     }
+}
+
+#[test]
+fn cache_mode_renders_at_workflow_and_job_level_when_configured_and_omits_when_none() {
+    let mut read_job = job("ubuntu-26.04");
+    read_job.cache_mode = Some(CacheMode::Read);
+    let default_job = job("ubuntu-26.04");
+    let jobs = BTreeMap::from([
+        ("read-only".to_owned(), read_job),
+        ("default".to_owned(), default_job),
+    ]);
+    let ctx = context();
+    let shared = crate::lane_share::share_lanes(&jobs, &ctx).expect("lane sharing validates");
+
+    let omit_wf = workflow(jobs.clone());
+    let omit_rendered =
+        workflow_to_yaml(&omit_wf, &shared, &ctx, &BTreeSet::new()).expect("workflow renders");
+    assert_eq!(
+        field(&omit_rendered, "cache-mode"),
+        None,
+        "workflow cache-mode must be omitted when None"
+    );
+
+    let mut expr_wf = workflow(jobs);
+    expr_wf.cache_mode = Some(CacheMode::Expression(
+        "github.event_name == 'pull_request' && 'read' || 'write'".to_owned(),
+    ));
+    let expr_rendered =
+        workflow_to_yaml(&expr_wf, &shared, &ctx, &BTreeSet::new()).expect("workflow renders");
+    assert_eq!(
+        field(&expr_rendered, "cache-mode"),
+        Some(&crate::yaml::Yaml::str(
+            "github.event_name == 'pull_request' && 'read' || 'write'"
+        ))
+    );
+    let rendered_jobs = field(&expr_rendered, "jobs").expect("jobs map");
+    let read_only = field(rendered_jobs, "read-only").expect("read-only job");
+    let default_rendered = field(rendered_jobs, "default").expect("default job");
+    assert_eq!(
+        field(read_only, "cache-mode"),
+        Some(&crate::yaml::Yaml::str("read"))
+    );
+    assert_eq!(
+        field(default_rendered, "cache-mode"),
+        None,
+        "job cache-mode must be omitted when None"
+    );
 }

@@ -121,6 +121,7 @@ pub(crate) fn plan_job(
         permissions: None,
         environment: None,
         steps,
+        cache_mode: None,
     })
 }
 
@@ -158,6 +159,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
         permissions: None,
         environment: None,
         steps: vec![checkout_action()?, prepare, lint],
+        cache_mode: None,
     })
 }
 
@@ -205,6 +207,7 @@ pub(crate) fn final_job(
         permissions: Some(read_actions_permissions()),
         environment: None,
         steps,
+        cache_mode: None,
     })
 }
 

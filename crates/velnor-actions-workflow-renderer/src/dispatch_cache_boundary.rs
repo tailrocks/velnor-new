@@ -106,13 +106,19 @@ fn suppress_dispatch(step: &mut Step) {
 /// adding no further protection.
 fn is_push_only_cache_save(step: &Step) -> bool {
     let condition = step.condition.as_deref();
-    let tools_save_condition = crate::cache_p08::tools_cache_save_condition();
+    let tools_save_readonly = crate::cache_p08::tools_cache_save_condition(
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+    );
+    let tools_save_pr_scoped = crate::cache_p08::tools_cache_save_condition(
+        velnor_actions_contract::PullRequestCachePolicy::SameRepositoryScoped,
+    );
     let condition_is_push_only = condition
         == Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
         || condition
             == Some(velnor_actions_contract::workflow::ir::CARGO_SOURCES_PR_SCOPED_SAVE_CONDITION)
         || (step.role == Some(velnor_actions_contract::StepRole::ToolsCacheSave)
-            && condition == Some(tools_save_condition.as_str()));
+            && (condition == Some(tools_save_readonly.as_str())
+                || condition == Some(tools_save_pr_scoped.as_str())));
     condition_is_push_only
         && matches!(&step.kind, StepKind::Action { uses, .. }
             if uses.starts_with("actions/cache/save@"))

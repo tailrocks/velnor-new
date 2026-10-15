@@ -143,6 +143,7 @@ pub(crate) fn job(id: &str, display: &str, needs: Vec<String>, steps: Vec<Step>)
             ),
             environment: None,
             steps,
+            cache_mode: None,
         },
     )
 }
@@ -166,6 +167,7 @@ pub(crate) fn fixture_ir(jobs: Vec<(String, Job)>) -> WorkflowIr {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs: jobs.into_iter().collect(),
+        cache_mode: None,
     }
 }
 

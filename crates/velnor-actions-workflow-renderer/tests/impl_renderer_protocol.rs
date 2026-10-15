@@ -52,6 +52,7 @@ fn fixture_ir(steps: Vec<velnor_actions_contract::Step>) -> WorkflowIr {
             permissions: None,
             environment: None,
             steps,
+            cache_mode: None,
         },
     );
     WorkflowIr {
@@ -72,6 +73,7 @@ fn fixture_ir(steps: Vec<velnor_actions_contract::Step>) -> WorkflowIr {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs,
+        cache_mode: None,
     }
 }
 
