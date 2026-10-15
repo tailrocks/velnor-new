@@ -6,6 +6,7 @@ pub(crate) mod wire_w2;
 // P03 identity modules live here so no `lib.rs` edit can collide.
 #[path = "closure.rs"]
 pub(crate) mod closure;
+#[cfg(test)]
 #[path = "closure_slots.rs"]
 pub(crate) mod closure_slots;
 #[cfg(test)]

@@ -155,7 +155,7 @@ impl ExtensionBundle {
 
 pub(crate) fn extension_bundle_with_snapshot(
     snapshot: &ExecutionSnapshot,
-    discovery: &Discovery,
+    _discovery: &Discovery,
     task: &ProposedTask,
     root: Option<&std::path::Path>,
     nextest_config: Option<&str>,
@@ -163,34 +163,23 @@ pub(crate) fn extension_bundle_with_snapshot(
     let manifest = task.identity.unit_path.clone();
     let workspace_id = snapshot.workspace_id_for(&task.identity.unit_id, &manifest);
     let graph_digest = snapshot.graph_digest_for(&task.identity.unit_id, &manifest);
+    let (targets, has_build_script) = snapshot
+        .package_meta_for(&task.identity.unit_id, &manifest)
+        .cloned()
+        .unwrap_or_default();
     let mut bundle = ExtensionBundle {
         package_id: task.identity.unit_id.clone(),
         workspace_id,
         profile: task.configuration.clone(),
         manifest,
         graph_digest,
-        targets: Vec::new(),
-        config_digest: tool_config_digest(&discovery.tool_checks),
-        has_build_script: false,
+        targets,
+        config_digest: snapshot.config_digest().to_owned(),
+        has_build_script,
         lock_digest: velnor_actions_rust::tasks::DigestSlot::Unknown("no_checkout".to_owned()),
         nextest_digest: velnor_actions_rust::tasks::DigestSlot::Unknown("no_checkout".to_owned()),
         rerun_inputs: None,
     };
-    for workspace in &discovery.workspaces {
-        for package in &workspace.record.packages {
-            let owned = package.id == task.identity.unit_id
-                || (task.identity.unit_id.is_empty() && package.manifest == bundle.manifest);
-            if !owned {
-                continue;
-            }
-            bundle.targets = package
-                .targets
-                .iter()
-                .map(|target| format!("{}:{}", target.kind, target.name))
-                .collect();
-            bundle.has_build_script = package.has_build_script;
-        }
-    }
     if !bundle.has_build_script {
         bundle.rerun_inputs = Some(Vec::new());
     }
@@ -202,8 +191,8 @@ pub(crate) fn extension_bundle_with_snapshot(
         bundle.nextest_digest =
             velnor_actions_rust::tasks::DigestSlot::Unknown("tofu_adapter_owned".to_owned());
     } else if let Some(root) = root {
-        bundle.lock_digest = super::closure_slots::lock_digest_at_root(root, &bundle.manifest);
-        bundle.nextest_digest = super::closure_slots::nextest_digest_at_root(root, nextest_config);
+        bundle.lock_digest = snapshot.rust_lock_digest(root, &bundle.manifest);
+        bundle.nextest_digest = snapshot.rust_nextest_digest(root, nextest_config);
     }
     bundle
 }

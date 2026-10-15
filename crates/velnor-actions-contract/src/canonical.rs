@@ -88,9 +88,8 @@ pub fn digest_b3(bytes: &[u8]) -> String {
 pub fn canonical_json_bytes<T: Serialize + ?Sized>(value: &T) -> Result<Vec<u8>, ContractError> {
     let json =
         serde_json::to_value(value).map_err(|err| ContractError::CanonicalJson(err.to_string()))?;
-    let normalized = normalize_value(&json)?;
-    let mut out = Vec::new();
-    write_canonical(&normalized, &mut out);
+    let mut out = Vec::with_capacity(256);
+    write_canonical(&json, &mut out)?;
     Ok(out)
 }
 
@@ -313,41 +312,19 @@ pub fn compatibility_id(inputs: &CompatibilityInputs) -> Result<String, Contract
     Ok(digest_b3(&canonical_json_bytes(inputs)?))
 }
 
-/// Reject non-finite numbers and sort object keys recursively.
-fn normalize_value(value: &serde_json::Value) -> Result<serde_json::Value, ContractError> {
-    match value {
-        serde_json::Value::Object(map) => {
-            let mut sorted = BTreeMap::new();
-            for (key, val) in map {
-                sorted.insert(key.clone(), normalize_value(val)?);
-            }
-            Ok(serde_json::Value::Object(sorted.into_iter().collect()))
-        }
-        serde_json::Value::Array(items) => {
-            let mut out = Vec::with_capacity(items.len());
-            for item in items {
-                out.push(normalize_value(item)?);
-            }
-            Ok(serde_json::Value::Array(out))
-        }
-        serde_json::Value::Number(num) => {
-            if num.as_f64().is_some_and(f64::is_finite) || num.is_i64() || num.is_u64() {
-                Ok(value.clone())
-            } else {
-                Err(ContractError::CanonicalJson("non_finite_number".to_owned()))
-            }
-        }
-        other => Ok(other.clone()),
-    }
-}
-
-/// Write canonical JSON: sorted keys (via [`normalize_value`]), no whitespace.
-fn write_canonical(value: &serde_json::Value, out: &mut Vec<u8>) {
+/// Write canonical JSON: sorted keys, finite numbers, and no whitespace.
+fn write_canonical(value: &serde_json::Value, out: &mut Vec<u8>) -> Result<(), ContractError> {
     match value {
         serde_json::Value::Null => out.extend_from_slice(b"null"),
         serde_json::Value::Bool(true) => out.extend_from_slice(b"true"),
         serde_json::Value::Bool(false) => out.extend_from_slice(b"false"),
-        serde_json::Value::Number(num) => out.extend_from_slice(num.to_string().as_bytes()),
+        serde_json::Value::Number(num) => {
+            if num.as_f64().is_some_and(f64::is_finite) || num.is_i64() || num.is_u64() {
+                out.extend_from_slice(num.to_string().as_bytes());
+            } else {
+                return Err(ContractError::CanonicalJson("non_finite_number".to_owned()));
+            }
+        }
         serde_json::Value::String(text) => write_quoted(text, out),
         serde_json::Value::Array(items) => {
             out.push(b'[');
@@ -355,30 +332,36 @@ fn write_canonical(value: &serde_json::Value, out: &mut Vec<u8>) {
                 if index > 0 {
                     out.push(b',');
                 }
-                write_canonical(item, out);
+                write_canonical(item, out)?;
             }
             out.push(b']');
         }
         serde_json::Value::Object(map) => {
-            // Keys arrive pre-sorted from normalize_value's BTreeMap round-trip.
-            let sorted: BTreeMap<&String, &serde_json::Value> = map.iter().collect();
+            let mut entries: Vec<(&String, &serde_json::Value)> = map.iter().collect();
+            entries.sort_unstable_by_key(|(left, _)| *left);
             out.push(b'{');
-            for (index, (key, val)) in sorted.into_iter().enumerate() {
+            for (index, (key, val)) in entries.into_iter().enumerate() {
                 if index > 0 {
                     out.push(b',');
                 }
                 write_quoted(key, out);
                 out.push(b':');
-                write_canonical(val, out);
+                write_canonical(val, out)?;
             }
             out.push(b'}');
         }
     }
+    Ok(())
 }
 
 /// Write a JSON string with minimal escaping (ASCII-safe output).
 fn write_quoted(text: &str, out: &mut Vec<u8>) {
     out.push(b'"');
+    if !text.bytes().any(|b| b == b'"' || b == b'\\' || b < 0x20) {
+        out.extend_from_slice(text.as_bytes());
+        out.push(b'"');
+        return;
+    }
     for ch in text.chars() {
         match ch {
             '"' => out.extend_from_slice(b"\\\""),

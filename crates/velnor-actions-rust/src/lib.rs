@@ -33,7 +33,10 @@ pub mod tasks;
 pub mod toolfiles;
 
 pub use cargo_env::{DENY_WARNINGS, RUSTDOCFLAGS_ENV, cargo_payload_env};
-pub use closure::{lock_digest_at_root, nextest_digest_at_root, resolve_closure_at_root};
+pub use closure::{
+    RustClosureCache, lock_digest_at_root, lock_digest_cached, nextest_digest_at_root,
+    nextest_digest_cached, resolve_closure_at_root, resolve_closure_at_root_cached,
+};
 pub use detect::{
     CargoCandidate, detected_projects_for_units, discover_candidates, discover_stack_candidates,
     manifest_for_key, manifest_for_unit_root, project_root_for_manifest,
