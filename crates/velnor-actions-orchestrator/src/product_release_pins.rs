@@ -6,8 +6,8 @@ use velnor_actions_contract::{ReleaseTarget, VelnorConfig};
 use velnor_actions_mise::{
     MiseInstall, PinnedTool, PinnedToolExec, PrepareRustTarget, ToolCatalog,
 };
-use velnor_actions_workflow_renderer::{MiseSetup, ProductReleasePins};
 use velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv;
+use velnor_actions_workflow_renderer::{MiseSetup, ProductReleasePins};
 
 use crate::OrchestratorError;
 use crate::mbx_preflight::steps_for_catalog;
