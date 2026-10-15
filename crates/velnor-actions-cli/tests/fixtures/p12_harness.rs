@@ -129,7 +129,6 @@ fn relative_root_is_resolved_before_the_script_changes_directory() -> Result<(),
             "CARGO_TARGET_DIR",
             crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?,
         )
-        .env_remove("RUSTC_WRAPPER")
         .env("CDPATH", caller_dir)
         .current_dir(caller_dir)
         .output()?;
@@ -158,7 +157,6 @@ fn script_builds_cli_in_shared_nested_target() -> Result<(), Box<dyn Error>> {
         .arg("--root")
         .arg(&fixture.dir)
         .env("CARGO_TARGET_DIR", &nested_target)
-        .env_remove("RUSTC_WRAPPER")
         .env_remove("VELNOR_ACTIONS_BIN")
         .output()?;
     let run = Run {

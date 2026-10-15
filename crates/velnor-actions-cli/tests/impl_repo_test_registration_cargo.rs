@@ -70,9 +70,7 @@ fn cargo_output_with_target(
         .args(options)
         .current_dir(manifest_dir);
     if let Some(target_dir) = target_dir {
-        process
-            .env("CARGO_TARGET_DIR", absolute_path(&current_dir, target_dir))
-            .env_remove("RUSTC_WRAPPER");
+        process.env("CARGO_TARGET_DIR", absolute_path(&current_dir, target_dir));
     }
     let output = process.output()?;
     if !output.status.success() {
