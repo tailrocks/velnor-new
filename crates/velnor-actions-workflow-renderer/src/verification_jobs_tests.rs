@@ -31,7 +31,7 @@ fn policy(id: &str, runner: VerificationRunner) -> VerificationTaskPolicy {
             sha256: "a".repeat(64),
         },
         selected_tools: Vec::new(),
-        mise_config_sha256: None,
+        mise_config_sha256: Some("b".repeat(64)),
         mise_lock_sha256: None,
         rust_toolchain_sha256: None,
     }

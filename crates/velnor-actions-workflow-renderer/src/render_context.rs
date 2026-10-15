@@ -43,7 +43,6 @@ pub const CANDIDATE_JOB_ID: &str = "candidate";
 pub const PUBLISH_JOB_ID: &str = "publish-baseline";
 /// Full-SHA Alint pin for the repository-policy `alint` job.
 pub const ALINT_USES: &str = "asamarts/alint@f558d76d076710312c54723d18e44d8cd95b3977";
-pub use super::ALINT_BINARY_VERSION;
 
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]
