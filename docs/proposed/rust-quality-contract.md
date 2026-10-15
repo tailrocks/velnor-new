@@ -10,8 +10,9 @@ repository-structure linter in V1; it is limited to configured generic
 file/path, required-file, and line-count rules. V1 has no custom Rust
 source-structure, Cargo-architecture, or test-layout linter. Automatic stack
 detection, composition, `[stacks].ignore`, and the stack-neutral
-`workflow.policy` belong to the workflow contract. The deferred macOS/Debian
-self-hosted runner is outside this contract.
+`workflow.policy` belong to the workflow contract. Runner implementations in
+nested `crates/velnor-runner` are governed by `docs/proposed/macos-scaleset-runner.md`,
+which defines its own workspace lints, rust version, and quality invariants.
 
 The words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
 
@@ -338,7 +339,7 @@ full-SHA pin (repository-structure alint, distinct
 from workflow-syntax actionlint):
 
 ```yaml
-- uses: asamarts/alint@f558d76d076710312c54723d18e44d8cd95b3977 # v0.18.1
+- uses: asamarts/alint@b02109b84dd59f3f96f33ad98b829b4d2fcd4b0a # v0.18.3
 ```
 
 It runs only the generic rules configured in `.alint.yml`: file/path rules,

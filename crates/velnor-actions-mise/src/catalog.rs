@@ -40,17 +40,17 @@ mod versions;
 pub use versions::{check_freshness_requirements, validate_exact_version};
 use versions::{invalid_version, tool_source};
 
-/// Adopted Mise runner release (tag `v2026.10.8`); hosted version/digest qualification
+/// Adopted Mise runner release (tag `v2026.10.11`); hosted version/digest qualification
 /// passed on Linux x64 and macOS x64 in run 38321521320 for source SHA
-/// `438bd90d2ef64515373f413b501b7ae01189a8e7`.
-/// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-10-12.
-pub const MISE_VERSION: &str = "2026.10.8";
+/// `a24763b05e203e4d8e72702d7bc68214b99fbd06`.
+/// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-10-15.
+pub const MISE_VERSION: &str = "2026.10.11";
 /// Qualified Rust stable toolchain; 1.99.0 is held pending policy review.
 /// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-10-08.
 pub const RUST_VERSION: &str = "1.98.1";
-/// Qualified `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.21.1`).
-/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-03.
-pub const MR_BOXINGTON_VERSION: &str = "1.21.1";
+/// Qualified `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.24.0`).
+/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-15.
+pub const MR_BOXINGTON_VERSION: &str = "1.24.0";
 /// Qualified GitHub CLI (tag `v2.102.0`).
 /// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-09-30.
 pub const GH_VERSION: &str = "2.102.0";
@@ -60,9 +60,9 @@ pub const ACTIONLINT_VERSION: &str = "1.7.12";
 /// Qualified shellcheck release (tag `v0.11.0`).
 /// Source: `https://api.github.com/repos/koalaman/shellcheck/releases/latest`; checked 2026-09-28.
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
-/// Qualified zizmor tool release (`zizmorcore/zizmor` tag `v1.30.1`, stable, published 2026-09-09).
-/// Source: `https://api.github.com/repos/zizmorcore/zizmor/releases/latest`; checked 2026-09-28.
-pub const ZIZMOR_VERSION: &str = "1.30.1";
+/// Qualified zizmor tool release (`zizmorcore/zizmor` tag `v1.31.0`, stable, published 2026-10-14).
+/// Source: `https://api.github.com/repos/zizmorcore/zizmor/releases/latest`; checked 2026-10-15.
+pub const ZIZMOR_VERSION: &str = "1.31.0";
 /// Qualified cargo-nextest release (`nextest-rs/nextest` tag
 /// `cargo-nextest-0.9.148`, published 2026-10-07).
 /// Source: `https://crates.io/api/v1/crates/cargo-nextest`; checked 2026-10-08.

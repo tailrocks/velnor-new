@@ -49,7 +49,7 @@ pub(crate) fn extract_baseline(
     let file = archive
         .by_index(0)
         .map_err(|_| "baseline_unavailable".to_owned())?;
-    if file.name() != "baseline.json"
+    if file.name_raw() != b"baseline.json"
         || file.is_dir()
         || file.size() == 0
         || file.size() != u64::from(shape.uncompressed_size)

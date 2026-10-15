@@ -1,32 +1,14 @@
 # Deferred: Velnor self-hosted execution
 
-**Status:** Partially superseded. The active runner specification is
-[macOS Scale Set runner](../proposed/macos-scaleset-runner.md). Clauses marked
-**Superseded** below are not normative. Workspace separation, no second task
-graph, no generator-adapter dependency, one task and cache authority, exact
-lock identities, durable recovery, truthful conclusions, and the ban on mounting
-the host home or the outer Docker socket into a job remain in force.
+**Status:** Historical / Superseded. The active runner specification is [macOS Scale Set runner](../proposed/macos-scaleset-runner.md). Active implementation lives in `crates/velnor-runner`. Clauses marked **Superseded** below are not normative. Workspace separation, no second task graph, no generator-adapter dependency, one task and cache authority, exact lock identities, durable recovery, truthful conclusions, and the ban on mounting the host home or the outer Docker socket into a job remain in force.
 
 ## 1. Entry condition
 
-Velnor Actions V1 is a proposed stack-generic workflow generator with a Rust adapter as its first stack. Separate crates own Rust analysis, Mise integration, generic workflow rendering, and orchestration. The runner is a later Velnor product. It may reuse generated workflows, task contracts, and cache conventions, but MUST NOT depend on the Rust or Mise adapter crates; those are generation integrations, not runner APIs. `rust-toolchain.toml`, `mise.toml`, and `mise.lock` remain optional repository-owned inputs that Velnor Actions only inspects and recommends changes for.
+Velnor Actions V1 provides a stack-generic workflow generator (`crates/velnor-actions-*`). The Runner Scale Set implementation is delivered in nested `crates/velnor-runner` under `docs/proposed/macos-scaleset-runner.md`. The self-hosted runner roadmap documented below is historical. All V1 entry gates have passed and dogfooding is active.
 
-The self-hosted runner MUST consume those generated artifacts. It MUST NOT scan a repository to create a second workflow, invent a second task graph, or maintain a second cache policy. The V1 generator and task contract are the only source of workflow intent. Runner crates remain outside the `velnor-actions-*` adapter workspace; the future `velnor` product name stays reserved.
 
-Runner implementation MUST NOT start until all applicable V1 gates are recorded as passing:
-
-1. Deterministic human planning and workflow generation, with parity between
-   `velnor-actions plan` and `generate --output-dir <fresh-temp-dir>`.
-2. Correct Rust workspace discovery and affected-package selection.
-3. Focused generated jobs with meaningful required results.
-4. Mise, Rust, MBX, and cache identities locked and qualified.
-5. Task-result reuse and invalidation tests passing.
-6. Velnor's own generated CI running from the pinned bootstrap binary.
-
-V2/V3 versions MUST follow the [Velnor version policy](../proposed/version-policy.md).
-Create and protect `.velnor/runner.lock` before runner implementation; the
-runner lock and exact Turso crate pin MUST pass upstream freshness and platform
-qualification checks before release.
+V2/V3 versions follow the [Velnor version policy](../proposed/version-policy.md).
+`.velnor/runner.lock` has been created, pinned, and committed in the repository root.
 
 An unverified or skipped V1 gate is a failed entry condition. No current V1 gate is implied by this roadmap.
 

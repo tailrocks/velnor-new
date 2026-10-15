@@ -1,9 +1,8 @@
 # Velnor Actions release contract (consumer-release scope amendment)
 
-**Status:** Proposed. No release behavior is implemented. This document amends
-the V1 generator boundary with a reviewed consumer-release scope; it does not
-authorize the deferred runner, Docker, Kubernetes, database, or general
-deployment platform.
+**Status:** Implemented specification. This document amends the V1 generator
+boundary with a reviewed consumer-release scope; it does not authorize Kubernetes,
+or general deployment platforms beyond the Runner Scale Set controller (`crates/velnor-runner`).
 
 Velnor Actions generates repository-local release-plz preparation, validation,
 protected publishing, and reconciliation workflows. It does not implement a

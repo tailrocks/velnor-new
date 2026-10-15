@@ -26,23 +26,23 @@
       "checked_at": "2026-10-15T02:50:00Z",
       "key": "actions/download-artifact",
       "latest": "v8.0.2",
-      "pinned_sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
-      "pinned_version": "v8.0.1",
-      "qualified_sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
-      "qualified_version": "v8.0.1",
+      "pinned_sha": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+      "pinned_version": "v8.0.2",
+      "qualified_sha": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
+      "qualified_version": "v8.0.2",
       "source": "https://api.github.com/repos/actions/download-artifact/releases/latest",
-      "status": "held"
+      "status": "current"
     },
     {
       "checked_at": "2026-10-15T02:50:00Z",
       "key": "actions/upload-artifact",
       "latest": "v7.0.2",
-      "pinned_sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-      "pinned_version": "v7.0.1",
-      "qualified_sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
-      "qualified_version": "v7.0.1",
+      "pinned_sha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+      "pinned_version": "v7.0.2",
+      "qualified_sha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+      "qualified_version": "v7.0.2",
       "source": "https://api.github.com/repos/actions/upload-artifact/releases/latest",
-      "status": "held"
+      "status": "current"
     },
     {
       "checked_at": "2026-10-15T02:50:00Z",
@@ -70,22 +70,22 @@
       "checked_at": "2026-10-15T02:50:00Z",
       "key": "jdx/mr-boxington-action",
       "latest": "v1.7.2",
-      "pinned_sha": "1687e54eb349cadf61fa38b5813a77875489e8e6",
-      "pinned_version": "v1.6.0",
-      "qualified_sha": "1687e54eb349cadf61fa38b5813a77875489e8e6",
-      "qualified_version": "v1.6.0",
+      "pinned_sha": "47ce49b32025d93a7a2f4570815afaa2b7092240",
+      "pinned_version": "v1.7.2",
+      "qualified_sha": "47ce49b32025d93a7a2f4570815afaa2b7092240",
+      "qualified_version": "v1.7.2",
       "source": "https://api.github.com/repos/jdx/mr-boxington-action/releases",
-      "status": "held",
+      "status": "current",
       "latest_sha": "47ce49b32025d93a7a2f4570815afaa2b7092240"
     },
     {
       "checked_at": "2026-10-15T02:50:00Z",
       "key": "asamarts/alint",
-      "latest": "v0.18.1",
-      "pinned_sha": "f558d76d076710312c54723d18e44d8cd95b3977",
-      "pinned_version": "v0.18.1",
-      "qualified_sha": "f558d76d076710312c54723d18e44d8cd95b3977",
-      "qualified_version": "v0.18.1",
+      "latest": "v0.18.3",
+      "pinned_sha": "b02109b84dd59f3f96f33ad98b829b4d2fcd4b0a",
+      "pinned_version": "v0.18.3",
+      "qualified_sha": "b02109b84dd59f3f96f33ad98b829b4d2fcd4b0a",
+      "qualified_version": "v0.18.3",
       "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
       "status": "current"
     },
@@ -119,44 +119,8 @@
   "schema": 1,
   "temporary_holds": [
     {
-      "expires": "2026-10-18",
-      "granted": "2026-10-04",
-      "held_version": "v1.6.0",
-      "issue": "#29",
-      "key": "jdx/mr-boxington-action",
-      "owner": "@donbeave",
-      "reason": "latest v1.7.2 resolves to commit 47ce49b32025d93a7a2f4570815afaa2b7092240. PR #29 closed unmerged and is historical context; it did not qualify this exact current action source for protected-main cache lifecycle behavior. Keep the qualified v1.6.0 pin until the current source passes qualification."
-    },
-    {
-      "expires": "2026-10-18",
-      "granted": "2026-10-04",
-      "held_version": "1.21.1",
-      "issue": "#29",
-      "key": "mr-boxington",
-      "owner": "@donbeave",
-      "reason": "latest v1.23.0 resolves to commit fb614644ff98c8ee3a3f28a6d31b3ba0af37b17f. PR #29 closed unmerged and is historical context; it did not qualify this exact current source for protected-main cache lifecycle, disk, and input behavior. Keep the qualified 1.21.1 pin until that source passes current-source qualification."
-    },
-    {
-      "expires": "2026-10-21",
-      "granted": "2026-10-07",
-      "held_version": "v8.0.1",
-      "issue": "#6",
-      "key": "actions/download-artifact",
-      "owner": "@donbeave",
-      "reason": "upstream released a routine patch during v0.1.1 qualification (429-retry handling, no security content); pin held for the release, update tracked with the #6 update set"
-    },
-    {
-      "expires": "2026-10-21",
-      "granted": "2026-10-07",
-      "held_version": "v7.0.1",
-      "issue": "#6",
-      "key": "actions/upload-artifact",
-      "owner": "@donbeave",
-      "reason": "upstream released a routine patch during v0.1.1 qualification (429-retry handling, no security content); pin held for the release, update tracked with the #6 update set"
-    },
-    {
-      "expires": "2026-10-15",
-      "granted": "2026-10-08",
+      "expires": "2026-10-29",
+      "granted": "2026-10-15",
       "held_version": "1.98.1",
       "issue": "#6",
       "key": "rust",
@@ -167,10 +131,10 @@
   "tools": [
     {
       "checked_at": "2026-10-15T02:50:00Z",
-      "latest": "2026.10.8",
+      "latest": "2026.10.11",
       "name": "mise",
-      "pinned": "2026.10.8",
-      "qualified": "2026.10.8",
+      "pinned": "2026.10.11",
+      "qualified": "2026.10.11",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
       "status": "current"
     },
@@ -185,13 +149,13 @@
     },
     {
       "checked_at": "2026-10-15T02:50:00Z",
-      "latest": "v1.23.0",
+      "latest": "v1.24.0",
       "name": "mr-boxington",
-      "pinned": "1.21.1",
-      "qualified": "1.21.1",
+      "pinned": "1.24.0",
+      "qualified": "1.24.0",
       "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
-      "status": "held",
-      "latest_sha": "fb614644ff98c8ee3a3f28a6d31b3ba0af37b17f"
+      "status": "current",
+      "latest_sha": "1b62dc2c795c93630d4ce28c4d9d2540d6e776ea"
     },
     {
       "checked_at": "2026-10-15T02:50:00Z",
@@ -222,10 +186,10 @@
     },
     {
       "checked_at": "2026-10-15T02:50:00Z",
-      "latest": "v1.30.1",
+      "latest": "v1.31.0",
       "name": "zizmor",
-      "pinned": "1.30.1",
-      "qualified": "1.30.1",
+      "pinned": "1.31.0",
+      "qualified": "1.31.0",
       "source": "https://api.github.com/repos/zizmorcore/zizmor/releases/latest",
       "status": "current"
     },

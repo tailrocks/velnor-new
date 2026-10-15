@@ -29,8 +29,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428
-          version: 2026.10.8
+          sha256: f9612efcddda0ae55b62d3b6f82a6c860d5b54ebee0807d4f1a1d578055e1607
+          version: 2026.10.11
       - name: Install Rust toolchain
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""

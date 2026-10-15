@@ -16,7 +16,7 @@ resolver = "3"
 
 [workspace.dependencies]
 serde = { version = "=1.0.229", features = ["derive"] }
-serde_json = { version = "=1.0.151" }
+serde_json = { version = "=1.0.154" }
 thiserror = { version = "=2.0.21" }
 
 [workspace.package]
@@ -58,5 +58,5 @@ allow_attributes = "warn"
 broken_intra_doc_links = "deny"
 private_intra_doc_links = "deny"
 
-[profile.test.package."sha2:0.11.0"]
+[profile.test.package."sha2:0.11.1"]
 opt-level = 3

@@ -1,13 +1,15 @@
 # Velnor V1 Workflow Contract
 
-Status: proposed specification; implementation requires Velnor dogfooding.
+Status: implemented and dogfooded specification.
 
 This document fixes V1 defaults; unsupported configuration MUST be rejected.
 
 ## 1. Product boundary
 
 Velnor Actions is a stack-generic workflow generator, not a task interpreter. V1 registers Rust/Cargo and
-typed verification declarations in one workflow IR; GitHub Actions runs jobs on hosted or configured Scale Set runners, while V1 never runs scripts locally or manages runner lifecycle.
+OpenTofu adapters and typed verification declarations in one workflow IR; GitHub Actions runs jobs on hosted
+or configured Scale Set runners. Workflow generation never runs CI scripts locally, while runner host
+lifecycle is managed separately by the Runner Scale Set controller in `crates/velnor-runner`.
 
 Each registered stack adapter owns its discovery and task proposals. The Mise adapter owns tool selection,
 command construction and execution, and cache integration. The actionlint crate owns actionlint configuration
@@ -15,14 +17,17 @@ and capabilities. The orchestrator composes stack/tool proposals, selection, cac
 The workflow renderer emits generic GitHub Actions YAML. V1 Rust work selects Cargo versus MBX and Cargo test
 versus Nextest independently from explicit repository evidence; it does not impose MBX or Nextest on consumers.
 
-The V1 workspace MUST contain these seven purpose-specific crates under `crates/`: `velnor-actions-contract`,
-`velnor-actions-rust`, `velnor-actions-mise`, `velnor-actions-actionlint`, `velnor-actions-workflow-renderer`,
-`velnor-actions-orchestrator`, and `velnor-actions-cli`. Generic package names such as `velnor-model`,
-`velnor-core`, `velnor-rust`, `velnor-util`, and `velnor-common` are forbidden.
+The V1 workspace contains eight purpose-specific crates under `crates/`: `velnor-actions-contract`,
+`velnor-actions-rust`, `velnor-actions-tofu`, `velnor-actions-mise`, `velnor-actions-actionlint`,
+`velnor-actions-workflow-renderer`, `velnor-actions-orchestrator`, and `velnor-actions-cli`, plus repository
+maintenance crates `velnor-actions-freshness` and `velnor-archive-guard`. Runner support lives in the nested
+`crates/velnor-runner` workspace. Generic package names such as `velnor-model`, `velnor-core`, `velnor-rust`,
+`velnor-util`, and `velnor-common` are forbidden.
 
 ```text
 velnor-actions-contract            Stack-neutral workflow and task contracts
 velnor-actions-rust                All Rust/Cargo scanning and task proposals
+velnor-actions-tofu                OpenTofu stack adapter and task proposals
 velnor-actions-mise                Mise tool, command, and cache adapter
 velnor-actions-actionlint          actionlint config, pin metadata, and workflow validation
 velnor-actions-workflow-renderer   Generic GitHub Actions YAML renderer
@@ -189,18 +194,11 @@ names, generated command labels, or CLI subcommands. The sole Velnor executable 
    does not invoke the candidate or require the bootstrap to reproduce its output.
 2. `rust-<slug>`: one job per selected crate, grouping its obligations in contract order. It runs the focused
 steps in the [task execution contract](task-execution-contract.md) and uploads one stack-neutral report after failure too.
-3. `actionlint`: checkout without persisted credentials; setup Mise with pinned action, version,
-   and SHA-256; install exact
-   Actionlint and ShellCheck versions with project config, env, and hooks disabled; run
-   `mise --no-config exec actionlint@<exact> shellcheck@<exact> -- actionlint -color` from the root. This
-   required job reads `.github/actionlint.yaml` and checks every generated workflow, even with no Rust stack.
+3. `actionlint`: checkout without persisted credentials; setup Mise with pinned action, version, and SHA-256; install exact Actionlint and ShellCheck versions with project config, env, and hooks disabled; run `mise --no-config exec actionlint@<exact> shellcheck@<exact> -- actionlint -color` from the root. This required job reads `.github/actionlint.yaml` and checks every generated workflow, even with no Rust stack.
 4. `required`: `if: always()`, depends on base and enabled policy jobs, validates reports/conclusions, and is the required status check.
 
 Only for `workflow.policy = "velnor-repository-v1"`, emit one independent job per repository validator. Its five-phase hosted cache campaign ([contract](hosted-cache-qualification-contract.md)) uses `workflow_dispatch` inputs in generated `ci.yml`: required `campaign` and `phase` (`cold`, `control`, `third`, `useful_delta`, or `warm`), plus the paired optional `predecessor_run_id` and `predecessor_run_attempt`. The plan job resolves and validates predecessor evidence when the phase requires it. This Velnor-only campaign is not a separate workflow file. Independently, schema-2 `[execution].workflows` may select the optional generic `.github/workflows/qualification.yml` under either workflow policy.
-The repository-policy jobs and any emitted workflows are rendered from typed workflow IR, each with an explicit `permissions:` block (least privilege for its role). `alint`
-checks out source with `persist-credentials: false` and runs the full-SHA-pinned `asamarts/alint` action with `path: .`,
-`config: .alint.yml`, `format: github`, and `fail-on-warning: true`. `cargo-deny`, `cargo-machete`, and `zizmor`
-each run their single dependency/security check in their own job; no umbrella grouping exists.
+The repository-policy jobs and any emitted workflows are rendered from typed workflow IR, each with an explicit `permissions:` block (least privilege for its role). `alint` checks out source with `persist-credentials: false` and runs the full-SHA-pinned `asamarts/alint` action with `path: .`, `config: .alint.yml`, `format: github`, and `fail-on-warning: true`. `cargo-deny`, `cargo-machete`, and `zizmor` each run their single dependency/security check in their own job; no umbrella grouping exists.
 Each job conclusion is required evidence; Velnor does not assume validator-specific report artifacts.
 All repository-policy job conclusions are required even with no crate selected. `consumer-v1` MUST
 NOT assume `.alint.yml`, `deny.toml`, or Velnor's layout and MUST NOT emit repository validators. GitHub Action

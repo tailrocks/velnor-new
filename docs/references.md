@@ -61,7 +61,7 @@ when tool pins or protocol integrations are updated.
 - [actionlint native parallel-step syntax pull request](https://github.com/rhysd/actionlint/pull/694)
 - [zizmor](https://woodruffw.github.io/zizmor/)
 
-## GitHub Actions and deferred runner
+## GitHub Actions and Scale Set runner
 
 - [Mise `exec` command and explicit tool arguments](https://mise.jdx.dev/cli/exec)
 - [Mise global `--no-config`, `--no-env`, and `--no-hooks` flags](https://mise.jdx.dev/cli/)

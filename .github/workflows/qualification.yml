@@ -114,7 +114,7 @@ jobs:
       - name: Write proof
         run: echo g4-artifact > g4-proof.txt
       - name: Upload proof
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: g4-proof-hosted
           path: g4-proof.txt
@@ -134,7 +134,7 @@ jobs:
       - name: Write proof
         run: echo g4-artifact > g4-proof.txt
       - name: Upload proof
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: g4-proof-scale-set
           path: g4-proof.txt
@@ -827,8 +827,8 @@ jobs:
       - name: Set up Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          version: 2026.10.8
-          sha256: c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428
+          version: 2026.10.11
+          sha256: f9612efcddda0ae55b62d3b6f82a6c860d5b54ebee0807d4f1a1d578055e1607
           install: "false"
           env: "false"
           cache: "false"
@@ -840,10 +840,10 @@ jobs:
         id: mbx_cache
         with:
           github-cache-mode: objects
-          version: 1.21.1
+          version: 1.24.0
           toolchain: 1.98.1
           isolate-objects-cache: "true"
-          cache-generation: velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-47ce49b32025d93a7a2f4570815afaa2b7092240-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          cache-generation: velnor-qualification-mbx-1.24.0-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-47ce49b32025d93a7a2f4570815afaa2b7092240-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "true"
       - name: Verify MBX action identity and write policy
         id: mbx-ready
@@ -852,7 +852,7 @@ jobs:
           CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
           CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
           CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
-        run: "test \"$MBX_VERSION\" = '1.21.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'true' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch'"
+        run: "test \"$MBX_VERSION\" = '1.24.0' && test \"$CACHE_SAVE_ELIGIBLE\" = 'true' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch'"
       - name: Compile MBX cache probe
         run: "set -eu\nroot=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
       - name: Clean MBX workspace outputs
@@ -893,8 +893,8 @@ jobs:
       - name: Set up Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          version: 2026.10.8
-          sha256: c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428
+          version: 2026.10.11
+          sha256: f9612efcddda0ae55b62d3b6f82a6c860d5b54ebee0807d4f1a1d578055e1607
           install: "false"
           env: "false"
           cache: "false"
@@ -906,10 +906,10 @@ jobs:
         id: mbx_cache
         with:
           github-cache-mode: objects
-          version: 1.21.1
+          version: 1.24.0
           toolchain: 1.98.1
           isolate-objects-cache: "true"
-          cache-generation: velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-47ce49b32025d93a7a2f4570815afaa2b7092240-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          cache-generation: velnor-qualification-mbx-1.24.0-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-47ce49b32025d93a7a2f4570815afaa2b7092240-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "false"
       - name: Verify MBX action identity and write policy
         id: mbx-ready
@@ -918,7 +918,7 @@ jobs:
           CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
           CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
           CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
-        run: "test \"$MBX_VERSION\" = '1.21.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'false' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch; save-on-workflow-dispatch is off' && test \"$CACHE_HIT\" = 'false'"
+        run: "test \"$MBX_VERSION\" = '1.24.0' && test \"$CACHE_SAVE_ELIGIBLE\" = 'false' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch; save-on-workflow-dispatch is off' && test \"$CACHE_HIT\" = 'false'"
       - name: Require imported MBX objects
         run: "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx cache stats --json | tee \"$RUNNER_TEMP/mbx-object-stats.json\"; jq -e '.objects > 0' \"$RUNNER_TEMP/mbx-object-stats.json\""
       - name: Compile MBX cache probe

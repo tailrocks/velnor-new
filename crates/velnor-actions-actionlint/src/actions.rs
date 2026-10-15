@@ -32,10 +32,10 @@ pub const AWS_CREDENTIALS_ACTION_VERSION: &str = "v6.3.0";
 pub const AWS_CREDENTIALS_ACTION_SHA: &str = "e1253824e5c10ff9df46874f81ed3ec929e19cfd";
 
 /// Selected `asamarts/alint` candidate; the updated action is checked by CI.
-/// Source: `https://api.github.com/repos/asamarts/alint/releases/latest`; checked 2026-10-12.
-pub const ALINT_ACTION_VERSION: &str = "v0.18.1";
-/// Full commit SHA for [`ALINT_ACTION_VERSION`] (verified upstream tag `v0.18.1`, 2026-10-12).
-pub const ALINT_ACTION_SHA: &str = "f558d76d076710312c54723d18e44d8cd95b3977";
+/// Source: `https://api.github.com/repos/asamarts/alint/releases/latest`; checked 2026-10-15.
+pub const ALINT_ACTION_VERSION: &str = "v0.18.3";
+/// Full commit SHA for [`ALINT_ACTION_VERSION`] (verified upstream tag `v0.18.3`, 2026-10-15).
+pub const ALINT_ACTION_SHA: &str = "b02109b84dd59f3f96f33ad98b829b4d2fcd4b0a";
 
 /// Selected `jdx/mise-action` candidate; the updated action is checked by CI.
 ///
@@ -56,25 +56,25 @@ pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";
 /// Full commit SHA for [`CHECKOUT_ACTION_VERSION`] (`v7` moves with it).
 pub const CHECKOUT_ACTION_SHA: &str = "3d3c42e5aac5ba805825da76410c181273ba90b1";
 /// Qualified `actions/download-artifact` release.
-/// Source: `https://api.github.com/repos/actions/download-artifact/releases/latest`; checked 2026-09-28.
-pub const DOWNLOAD_ARTIFACT_ACTION_VERSION: &str = "v8.0.1";
+/// Source: `https://api.github.com/repos/actions/download-artifact/releases/latest`; checked 2026-10-15.
+pub const DOWNLOAD_ARTIFACT_ACTION_VERSION: &str = "v8.0.2";
 /// Full commit SHA for [`DOWNLOAD_ARTIFACT_ACTION_VERSION`] (`v8` moves with it).
-pub const DOWNLOAD_ARTIFACT_ACTION_SHA: &str = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c";
+pub const DOWNLOAD_ARTIFACT_ACTION_SHA: &str = "9000827ccba6bdab643e8b6fd33ac0654aef8333";
 /// Qualified `actions/upload-artifact` release.
-/// Source: `https://api.github.com/repos/actions/upload-artifact/releases/latest`; checked 2026-09-28.
-pub const UPLOAD_ARTIFACT_ACTION_VERSION: &str = "v7.0.1";
+/// Source: `https://api.github.com/repos/actions/upload-artifact/releases/latest`; checked 2026-10-15.
+pub const UPLOAD_ARTIFACT_ACTION_VERSION: &str = "v7.0.2";
 /// Full commit SHA for [`UPLOAD_ARTIFACT_ACTION_VERSION`] (`v7` moves with it).
-pub const UPLOAD_ARTIFACT_ACTION_SHA: &str = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+pub const UPLOAD_ARTIFACT_ACTION_SHA: &str = "cf430e030ddbb5b0abf93d22962f4752f3646cd9";
 /// Qualified `actions/cache` release (shared by `restore` and `save`).
 /// Source: `https://api.github.com/repos/actions/cache/releases/latest`; checked 2026-09-28.
 pub const CACHE_ACTION_VERSION: &str = "v6.1.0";
 /// Full commit SHA for [`CACHE_ACTION_VERSION`] (`v6` moves with it; v6 is current, no replacement).
 pub const CACHE_ACTION_SHA: &str = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 /// Qualified `jdx/mr-boxington-action` release.
-/// Source: `https://api.github.com/repos/jdx/mr-boxington-action/releases`; checked 2026-10-03.
-pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.6.0";
+/// Source: `https://api.github.com/repos/jdx/mr-boxington-action/releases`; checked 2026-10-15.
+pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.7.2";
 /// Full commit SHA for [`MR_BOXINGTON_ACTION_VERSION`] (immutable release tag).
-pub const MR_BOXINGTON_ACTION_SHA: &str = "1687e54eb349cadf61fa38b5813a77875489e8e6";
+pub const MR_BOXINGTON_ACTION_SHA: &str = "47ce49b32025d93a7a2f4570815afaa2b7092240";
 /// Latest immutable MBX action release used only by the qualification experiment.
 ///
 /// This pair is not the production pin. The freshness inventory records the

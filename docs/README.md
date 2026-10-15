@@ -4,10 +4,10 @@ This documentation separates work by delivery state:
 
 | State | Meaning | Document |
 |---|---|---|
-| Proposed implementation | Normative Velnor V1 generator specification and build sequence. Nothing here is claimed to exist yet. | [Proposed V1 specification](proposed/README.md) |
-| Deferred implementation | Roadmap clauses that remain after the macOS Scale Set spec. Conflicting clauses are superseded. | [Deferred work](deferred/README.md) |
+| Proposed specifications | Normative Velnor specifications and contracts for the workflow generator and runner. | [Proposed specifications](proposed/README.md) |
+| Historical / deferred work | Historical roadmap clauses superseded by the macOS Scale Set runner spec. | [Deferred work](deferred/README.md) |
 | Active runner specification | Native macOS Scale Set controller and generator routing. | [macOS Scale Set runner](proposed/macos-scaleset-runner.md) |
-| Already implemented | Verified implementation records only, plus V1 Gate 0–8 records pending merge on `docs/velnor-actions-spec`. | [Implemented index](implemented/README.md) |
+| Already implemented | Verified implementation records and acceptance criteria. | [Implemented index](implemented/README.md) |
 | Research references | Primary documentation and tool references used by the specifications. | [References](references.md) |
 
 Words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** in proposed and deferred specifications define requirements. A recommendation marked **SHOULD** may be changed only by recording the reason and impact in the relevant decision record.

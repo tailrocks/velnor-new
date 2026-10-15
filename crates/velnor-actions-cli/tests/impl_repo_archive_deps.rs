@@ -10,9 +10,9 @@ pub(crate) fn reviewed_archive_dependency(dir: &str, key: &str, line: &str) -> b
     }
     let (version, features) = match key {
         "flate2" => ("=1.1.10", Some("[\"rust_backend\"]")),
-        "lzma-rust2" => ("=0.21.0", Some("[\"std\",\"xz\"]")),
+        "lzma-rust2" => ("=0.22.0", Some("[\"std\",\"xz\"]")),
         "tar" => ("=0.4.46", None),
-        "zip" => ("=8.6.0", Some("[\"deflate-flate2\"]")),
+        "zip" => ("=9.0.3", Some("[\"deflate-flate2\"]")),
         _ => return false,
     };
     let Some((_, value)) = line.split_once('=') else {
@@ -48,14 +48,14 @@ pub(crate) fn reviewed_archive_dependency(dir: &str, key: &str, line: &str) -> b
 #[test]
 fn archive_dependency_policy_rejects_wrong_owner_pin_defaults_and_extra_features() {
     let line =
-        "zip = { version = \"=8.6.0\", default-features = false, features = [\"deflate-flate2\"] }";
+        "zip = { version = \"=9.0.3\", default-features = false, features = [\"deflate-flate2\"] }";
     let owner = "crates/velnor-actions-orchestrator";
     assert!(reviewed_archive_dependency(owner, "zip", line));
     for dir in ["crates/velnor-actions-cli", "crates/velnor-actions-mise"] {
         assert!(!reviewed_archive_dependency(dir, "zip", line));
     }
     for altered in [
-        line.replace("=8.6.0", "=8.6.1"),
+        line.replace("=9.0.3", "=9.0.4"),
         line.replace("false", "true"),
         line.replace(
             "[\"deflate-flate2\"]",

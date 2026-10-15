@@ -1,8 +1,8 @@
 # Velnor
 
-Velnor Actions is proposed as a stack-generic GitHub Actions workflow generator. It scans repositories for every registered stack and plans all detected, supported stacks unless `.velnor/config.toml` excludes them. V1 registers only the Rust/Cargo adapter; TypeScript, Bun, and other stacks can be added later through dedicated adapters. Rust analysis, Mise integration, generic workflow rendering, orchestration, and CLI are separate crates. Gates 0–8 are implemented on branch `docs/velnor-actions-spec` (unmerged; records in `docs/implemented/`, generated tree is 15 jobs in `.github/workflows/ci.yml` plus the scheduled `.github/workflows/freshness.yml` probe).
+Velnor provides a stack-generic GitHub Actions workflow generator (`crates/velnor-actions-*`) and runner support via the Runner Scale Set controller (`crates/velnor-runner`). It scans repositories for registered stacks (Rust and OpenTofu in V1) and plans all detected, supported stacks unless `.velnor/config.toml` excludes them. TypeScript, Bun, and other stacks can be added later through dedicated adapters. Rust analysis, OpenTofu analysis, Mise integration, generic workflow rendering, orchestration, and CLI are separate crates, while macOS Runner Scale Set host supervision lives in `crates/velnor-runner`. Gates 0–8 are implemented and dogfooded.
 
-See the [documentation index](docs/README.md) for the proposed V1 specification, deferred runner roadmap, and implemented status.
+See the [documentation index](docs/README.md) for specifications, Runner Scale Set architecture, and implemented status.
 
 The CLI is implemented (`crates/velnor-actions-cli`):
 
@@ -105,4 +105,4 @@ not a present claim.
 - Explain selected, executed, reused, skipped, and invalidated work.
 - Dogfood Velnor by generating and checking its own committed CI workflow.
 
-Deferred roadmap: V2 adds macOS-hosted Docker execution; V3 extends that same model to Debian. A genuine native GitHub Actions runner remains a later milestone.
+Runner support: macOS-hosted Docker execution and official GitHub Actions Runner Scale Set supervision live in `crates/velnor-runner` and are governed by `docs/proposed/macos-scaleset-runner.md`.

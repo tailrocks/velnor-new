@@ -2,8 +2,8 @@
 
 Status: implementation contract for the current integration. This document does
 not establish release publication, live runner qualification, or full gate
-completion. V1 remains a workflow generator; runner provisioning and the
-`actions/runner` protocol remain deferred.
+completion. Workflow generation (`velnor-actions`) produces CI workflows; runner host
+supervision and Scale Set execution are owned by `crates/velnor-runner`.
 
 ## Configuration
 

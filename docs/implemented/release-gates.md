@@ -108,10 +108,11 @@ qualification is established by the release-source checks below.
   files get recommendations only. Residual NEEDS-HUMAN: same as VER-3.3 —
   human execution per update set.
 
-## Deferred (not a V1 gate failure)
+## Runner integration (separate workspace)
 
 - VER-4.6 (`turso` exact + journal/txn/lock/durability/crash qual, Cloud
-  sync disabled): sanctioned V2 deferral. No `turso` in manifests by
-  design. Unblock = runner implementation starts (post-V1 gates) and
-  `.velnor/runner.lock` binds the full runner identity. See
-  [deferred work](../deferred/README.md).
+  sync disabled): implemented in `crates/velnor-runner/crates/velnor-runner-host`.
+  `.velnor/runner.lock` binds the full runner identity including Turso 0.8.1.
+  Root workspace manifests do not include `turso` by design; runner dependencies
+  live in `crates/velnor-runner/Cargo.toml`. See
+  [macOS Scale Set runner](../proposed/macos-scaleset-runner.md).

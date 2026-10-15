@@ -1,6 +1,7 @@
 # Subagent model policy
 
-This document is the detailed, mandatory model and delegation policy referenced by [AGENTS.md](../../AGENTS.md).
+> [!NOTE]
+> This document records historical model configurations used in specific environments. Velnor is model-agnostic and works across diverse models and AI coding agents without enforcing specific model families or providers. Model selection should adapt to the running agent and environment.
 
 ## Subagent Model Configuration — Role-Based Exact Match, No Fallback
 
