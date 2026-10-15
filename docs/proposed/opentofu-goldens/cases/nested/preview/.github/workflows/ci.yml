@@ -349,45 +349,20 @@ jobs:
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
       - name: Clippy
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/a/clippy/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/a/clippy/default
-          VELNOR_MATRIX_KEY: m-0942c890ab413b23
-          VELNOR_TASK_DIGEST: b3-66726080679df3d9cba6b24a76e02f4d4908d7a41a896ef69d9de664fd36ca54
-          VELNOR_TASK_ID: stack/rust/crates/a/clippy/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo clippy --locked --offline --manifest-path crates/a/Cargo.toml --package a --all-targets -- -D warnings; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.8\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-7f944124c660f83e86058f55886db469ed18efa7c000a46af9de9547402d7663"}
       - name: Unit and integration tests
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/a/test/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/a/test/default
-          VELNOR_MATRIX_KEY: m-ec8bf231299f4045
-          VELNOR_TASK_DIGEST: b3-6b355c4ed4eea5bd85869c0393d50debbeb2bc61ae75a5ddbe5911f16e8ed84e
-          VELNOR_TASK_ID: stack/rust/crates/a/test/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo test --locked --offline --manifest-path crates/a/Cargo.toml --package a --lib; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.8\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-3ddad8934d375bac9d574ca61de95f764d8589aba5847a77ae1bdb2c7d92b1c1"}
       - name: Doctests
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/a/doctest/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/a/doctest/default
-          VELNOR_MATRIX_KEY: m-46826b991a6ada8b
-          VELNOR_TASK_DIGEST: b3-9421e2f4f7aea223a4b9aa80864aa56d3302b824fd39042e91f7eb643a86394b
-          VELNOR_TASK_ID: stack/rust/crates/a/doctest/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo test --locked --offline --manifest-path crates/a/Cargo.toml --package a --doc; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.8\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-6c1c74a98af050290f1b630c43a1f6af600bb59bcb13c356930d7c480b7a8e03"}
       - name: Documentation
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/a/doc/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          RUSTDOCFLAGS: "-D warnings"
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/a/doc/default
-          VELNOR_MATRIX_KEY: m-96c2000d56d4332a
-          VELNOR_TASK_DIGEST: b3-81fc601cf978f2f584a250d0c6a5e9385cf067ca2a8f0b18d9ae8de481e21e24
-          VELNOR_TASK_ID: stack/rust/crates/a/doc/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo doc --locked --offline --manifest-path crates/a/Cargo.toml --package a --no-deps; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.8\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-1581f48a269a7de08fff3a2f10cddb8daac1b75baa42088e5365f2de38a42db6"}
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -471,45 +446,20 @@ jobs:
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
       - name: Clippy
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/nested/lib/clippy/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/nested/lib/clippy/default
-          VELNOR_MATRIX_KEY: m-c229a5bca5cb4036
-          VELNOR_TASK_DIGEST: b3-b7e7490a597424d4517537745bd9f30edf41605b2736b6180b0fb282adbe41bf
-          VELNOR_TASK_ID: stack/rust/nested/lib/clippy/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo clippy --locked --offline --manifest-path nested/lib/Cargo.toml --package lib --all-targets -- -D warnings; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.8\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-ae05f1180b6f88d31c09e40fa305a4c106fea8e563cc25f8e4a2041b393f67df"}
       - name: Unit and integration tests
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/nested/lib/test/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/nested/lib/test/default
-          VELNOR_MATRIX_KEY: m-0fcc0072a12c618b
-          VELNOR_TASK_DIGEST: b3-d4facb9331e00510c2eaeb5350ff4a494442351cedc31f401cf07b2f3b033fb8
-          VELNOR_TASK_ID: stack/rust/nested/lib/test/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo test --locked --offline --manifest-path nested/lib/Cargo.toml --package lib --lib; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.8\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-6489e09f322fc7554cc843289f95095754097cd37bdfe1dc0a865045e7bdef13"}
       - name: Doctests
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/nested/lib/doctest/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/nested/lib/doctest/default
-          VELNOR_MATRIX_KEY: m-c76919f7a2c20d79
-          VELNOR_TASK_DIGEST: b3-405ce7fe0239398e17dfc2684f3f3a0a657b796d1d63c0488eba5b7cb0e68d8b
-          VELNOR_TASK_ID: stack/rust/nested/lib/doctest/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo test --locked --offline --manifest-path nested/lib/Cargo.toml --package lib --doc; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.8\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-25b432d535acb63bc7c798cdd4cbdd71aaecfbf5dab870cfb3435a4b0121dd67"}
       - name: Documentation
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/nested/lib/doc/default,')"
-        env:
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          RUSTDOCFLAGS: "-D warnings"
-          VELNOR_MATRIX_ID: stack:rust|task:stack/rust/nested/lib/doc/default
-          VELNOR_MATRIX_KEY: m-64e41d61cfd10ad0
-          VELNOR_TASK_DIGEST: b3-0c69897ced160a0c08342d56b79102ab9b7b2dcaea2a44907ca00791d1a65af1
-          VELNOR_TASK_ID: stack/rust/nested/lib/doc/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo doc --locked --offline --manifest-path nested/lib/Cargo.toml --package lib --no-deps; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.8\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-86fffb6ecc668eb10a0431117660e9be9029deeb4baa73b23841fff3ac44f7e1"}
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
