@@ -204,7 +204,8 @@ elif [ "$SUB_VER" = "$NEXTEST_PIN" ]; then
   NEXTEST_RUN=("${MISE_EXEC[@]}" cargo nextest)
   echo "effective: nextest $SUB_VER via cargo nextest"
 else
-  echo "effective: no pinned nextest (bare $BARE_VER, subcommand $SUB_VER, pin $NEXTEST_PIN); integration falls back to cargo test"
+  echo "effective: no pinned nextest (bare $BARE_VER, subcommand $SUB_VER, pin $NEXTEST_PIN); nextest is required"
+  fail "toolchain (pinned nextest missing)"
 fi
 pass "toolchain"
 
@@ -218,11 +219,7 @@ RUNNER_MANIFEST="crates/velnor-runner/Cargo.toml"
 if [ -f "$RUNNER_MANIFEST" ]; then
   stage runner-fmt "${MISE_EXEC[@]}" cargo fmt --manifest-path "$RUNNER_MANIFEST" --all -- --check
   stage runner-clippy "${MISE_EXEC[@]}" cargo clippy --manifest-path "$RUNNER_MANIFEST" --locked --workspace --all-targets -- -D warnings
-  if [ "${#NEXTEST_RUN[@]}" -gt 0 ]; then
-    stage runner-nextest "${NEXTEST_RUN[@]}" run --manifest-path "$RUNNER_MANIFEST" --locked --workspace
-  else
-    stage runner-test "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace
-  fi
+  stage runner-nextest "${NEXTEST_RUN[@]}" run --manifest-path "$RUNNER_MANIFEST" --locked --workspace
   stage runner-doctest "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace --doc
   # Invoke the pinned binary. A cargo shim can reject the deny subcommand.
   stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo-deny --locked --manifest-path "$RUNNER_MANIFEST" --config "crates/velnor-runner/deny.toml" check
@@ -284,7 +281,7 @@ else
   done
   for member in $MEMBERS; do
     safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
-    stage "test-$safe" "${MISE_EXEC[@]}" cargo test --locked -p "$member"
+    stage "test-$safe" "${NEXTEST_RUN[@]}" run --locked -p "$member"
   done
   LIB_MEMBERS=""
   LIB_MEMBERS="$(repo_policy library-members 2>"$DOCTEST_LIST_LOG")"
@@ -314,8 +311,8 @@ fi
 # `tests/fixtures` tree fails here even when the broad integration pass
 # below stays green (e.g. after a filter/rename silently drops them).
 echo "--- verify-local: fixtures"
-if "${MISE_EXEC[@]}" cargo test --locked -p velnor-actions-orchestrator --test velnor_orchestrator \
-  evasion_fixtures_are_all_flagged \
+if "${NEXTEST_RUN[@]}" run --locked -p velnor-actions-orchestrator --test velnor_orchestrator \
+  -E 'test(evasion_fixtures_are_all_flagged)' \
   >"$FIXTURES_LOG" 2>&1; then
   pass "fixtures"
 else
@@ -324,15 +321,9 @@ fi
 
 # --- whole-workspace integration pass ----------------------------------------
 echo "--- verify-local: integration"
-if [ "${#NEXTEST_RUN[@]}" -gt 0 ]; then
-  if "${NEXTEST_RUN[@]}" run --workspace --locked --profile ci --no-tests fail \
-    >"$INTEGRATION_LOG" 2>&1; then
-    pass "integration (nextest ci)"
-  else
-    fail "integration (log: $INTEGRATION_LOG)"
-  fi
-elif "${MISE_EXEC[@]}" cargo test --locked --workspace >"$INTEGRATION_LOG" 2>&1; then
-  pass "integration (cargo test)"
+if "${NEXTEST_RUN[@]}" run --workspace --locked --profile ci --no-tests fail \
+  >"$INTEGRATION_LOG" 2>&1; then
+  pass "integration (nextest ci)"
 else
   fail "integration (log: $INTEGRATION_LOG)"
 fi

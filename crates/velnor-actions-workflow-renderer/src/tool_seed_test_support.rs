@@ -46,8 +46,7 @@ case "$mode" in
         exit 0
         ;;
     tree-too-many)
-        i=0
-        while [ "$i" -lt 100001 ]; do printf '%s\0' "$1"; i=$((i+1)); done
+        python3 -c 'import sys; sys.stdout.buffer.write((sys.argv[1].encode() + b"\0") * 100001)' "$1"
         exit 0
         ;;
 esac

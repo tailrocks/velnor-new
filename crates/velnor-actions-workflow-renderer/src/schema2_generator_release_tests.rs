@@ -61,40 +61,44 @@ enum Failure {
     MutablePublished,
 }
 
-#[test]
-fn complete_publish_script_uses_parent_tag_and_checks_all_assets() -> Result<(), Box<dyn Error>> {
-    for case in [
-        Failure::None,
-        Failure::DuplicateRequired,
-        Failure::WrongSidecarName,
-        Failure::MissingBinary,
-        Failure::StaleManifest,
-        Failure::UnauthorizedTag,
-        Failure::ForbiddenTag,
-        Failure::TransientTag,
-        Failure::TagMovedBeforePublish,
-        Failure::WrongDraftReleaseId,
-        Failure::WrongDraftRepository,
-        Failure::WrongDraftApiPath,
-        Failure::WrongDraftTag,
-        Failure::WrongDraftSource,
-        Failure::WrongDraftDigest,
-        Failure::WrongDraftSize,
-        Failure::WrongDraftInventory,
-        Failure::UnknownDraftAsset,
-        Failure::WrongDraftAssetName,
-        Failure::WrongDraftAssetState,
-        Failure::UntaggedDraftUrls,
-        Failure::ChangedReleaseId,
-        Failure::WrongPublishedDigest,
-        Failure::WrongPublishedAssetUrl,
-        Failure::WrongPublishedUrl,
-        Failure::MutablePublished,
-    ] {
-        run_publish_case(case)?;
-    }
-    Ok(())
+macro_rules! generator_publish_test {
+    ($name:ident, $case:ident) => {
+        #[test]
+        fn $name() -> Result<(), Box<dyn Error>> {
+            run_publish_case(Failure::$case)
+        }
+    };
 }
+
+generator_publish_test!(publish_case_none, None);
+generator_publish_test!(publish_case_duplicate_required, DuplicateRequired);
+generator_publish_test!(publish_case_wrong_sidecar_name, WrongSidecarName);
+generator_publish_test!(publish_case_missing_binary, MissingBinary);
+generator_publish_test!(publish_case_stale_manifest, StaleManifest);
+generator_publish_test!(publish_case_unauthorized_tag, UnauthorizedTag);
+generator_publish_test!(publish_case_forbidden_tag, ForbiddenTag);
+generator_publish_test!(publish_case_transient_tag, TransientTag);
+generator_publish_test!(publish_case_tag_moved_before_publish, TagMovedBeforePublish);
+generator_publish_test!(publish_case_wrong_draft_release_id, WrongDraftReleaseId);
+generator_publish_test!(publish_case_wrong_draft_repository, WrongDraftRepository);
+generator_publish_test!(publish_case_wrong_draft_api_path, WrongDraftApiPath);
+generator_publish_test!(publish_case_wrong_draft_tag, WrongDraftTag);
+generator_publish_test!(publish_case_wrong_draft_source, WrongDraftSource);
+generator_publish_test!(publish_case_wrong_draft_digest, WrongDraftDigest);
+generator_publish_test!(publish_case_wrong_draft_size, WrongDraftSize);
+generator_publish_test!(publish_case_wrong_draft_inventory, WrongDraftInventory);
+generator_publish_test!(publish_case_unknown_draft_asset, UnknownDraftAsset);
+generator_publish_test!(publish_case_wrong_draft_asset_name, WrongDraftAssetName);
+generator_publish_test!(publish_case_wrong_draft_asset_state, WrongDraftAssetState);
+generator_publish_test!(publish_case_untagged_draft_urls, UntaggedDraftUrls);
+generator_publish_test!(publish_case_changed_release_id, ChangedReleaseId);
+generator_publish_test!(publish_case_wrong_published_digest, WrongPublishedDigest);
+generator_publish_test!(
+    publish_case_wrong_published_asset_url,
+    WrongPublishedAssetUrl
+);
+generator_publish_test!(publish_case_wrong_published_url, WrongPublishedUrl);
+generator_publish_test!(publish_case_mutable_published, MutablePublished);
 
 fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     let scratch = Scratch::new()?;

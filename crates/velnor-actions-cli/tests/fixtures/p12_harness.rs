@@ -97,13 +97,14 @@ pub(crate) fn mutate(dir: &Path, rel: &str, old: &str, new: &str) -> Result<(), 
 
 /// Run `check-freshness.sh --root dir` plus `extra` args.
 pub(crate) fn run_script(dir: &Path, extra: &[&str]) -> Result<Run, Box<dyn Error>> {
-    let _target_lock = crate::impl_cli_tmp::nested_target::lock_nested_cargo_target()?;
     let script = crate::impl_repo_policy::repo_root().join("scripts/check-freshness.sh");
     let mut command = Command::new("bash");
-    command.arg(script).arg("--root").arg(dir).args(extra).env(
-        "CARGO_TARGET_DIR",
-        crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?,
-    );
+    command
+        .arg(script)
+        .arg("--root")
+        .arg(dir)
+        .args(extra)
+        .env("VELNOR_ACTIONS_BIN", env!("CARGO_BIN_EXE_velnor-actions"));
     let output = command.output()?;
     Ok(Run {
         code: output.status.code().unwrap_or(-1),

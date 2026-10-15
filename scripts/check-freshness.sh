@@ -79,6 +79,16 @@ if [[ ! -f "$INV" ]]; then
   echo "check-freshness: missing inventory: $INV" >&2
   exit 1
 fi
+if [[ -n "${VELNOR_ACTIONS_BIN:-}" && -x "$VELNOR_ACTIONS_BIN" ]]; then
+  exec env \
+    VELNOR_INTERNAL_OP=repo-policy-v1 \
+    VELNOR_REPO_POLICY_ACTION=freshness \
+    VELNOR_REPO_POLICY_ROOT="$ROOT" \
+    VELNOR_REPO_POLICY_CHECK_UPSTREAM="$CHECK_UPSTREAM" \
+    VELNOR_REPO_POLICY_WITH_ADVISORIES="$WITH_ADVISORIES" \
+    "$VELNOR_ACTIONS_BIN"
+fi
+
 if ! command -v mise >/dev/null 2>&1; then
   echo "check-freshness: mise is required (install the pinned repository toolchain first)" >&2
   exit 1

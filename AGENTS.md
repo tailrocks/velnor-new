@@ -18,7 +18,7 @@
 
 - `cargo fmt --all -- --check`
 - `cargo clippy --locked --workspace --all-targets -- -D warnings`
-- `cargo nextest run --locked --workspace` (fallback: `cargo test --locked --workspace`)
+- `cargo nextest run --locked --workspace`
 - `alint validate-config && alint check --fail-on-warning`
 - `cargo deny check`
 - `bash scripts/check-freshness.sh`
