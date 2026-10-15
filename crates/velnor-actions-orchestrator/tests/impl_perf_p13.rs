@@ -241,7 +241,9 @@ fn generate_150_crates_schedules_every_member() -> TestResult {
     let actions = report
         .files_written
         .iter()
-        .filter(|path| path.starts_with(".github/actions/rust-") && path.ends_with("/action.yml"))
+        .filter(|path| {
+            path.starts_with(".github/actions/crate-obligation-") && path.ends_with("/action.yml")
+        })
         .count();
     assert!(
         actions >= members,

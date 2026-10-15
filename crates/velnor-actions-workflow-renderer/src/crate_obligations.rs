@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, Step};
 
+use crate::action_ref::CRATE_OBLIGATION_ACTION_PREFIX;
 use crate::lane_share::LaneShare;
 use crate::render::{COVERED_TASKS_OUTPUT, PLAN_JOB_ID, RenderContext};
 use crate::tree::RenderedFile;
@@ -100,7 +101,7 @@ fn extract_job(
     let file = obligation_action(job_id, &obligations, ctx)?;
     let call = steps::action_step(
         "Run crate obligations",
-        &format!("./.github/actions/{job_id}"),
+        &format!("{CRATE_OBLIGATION_ACTION_PREFIX}{job_id}"),
         BTreeMap::from([(COVERED_TASKS_OUTPUT.to_owned(), format!("${{{{{needs}}}}}"))]),
     )?;
     let mut steps = Vec::with_capacity(job.steps.len() - obligations.len() + 1);
@@ -166,7 +167,83 @@ fn obligation_action(
     let bytes = marker::with_marker(&ctx.generator_version, &yaml::render_yaml(&body))?;
     steps::scan_for_private_subcommands(&bytes)?;
     Ok(RenderedFile {
-        path: format!(".github/actions/{job_id}/action.yml"),
+        path: format!(".github/actions/crate-obligation-{job_id}/action.yml"),
         bytes,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use velnor_actions_contract::{Job, JobTimeout, Step, StepKind};
+
+    #[test]
+    fn extracts_job_starting_with_provider_prelude() {
+        let job_id = "tofu-provider-prelude-alpha";
+        let mut job = Job {
+            display_name: "tofu provider prelude alpha".to_owned(),
+            runs_on: "ubuntu-26.04".to_owned(),
+            timeout_minutes: JobTimeout::CRATE,
+            needs: Vec::new(),
+            condition: None,
+            permissions: None,
+            environment: None,
+            check_runner: None,
+            steps: vec![
+                Step {
+                    name: "Checkout".to_owned(),
+                    id: None,
+                    role: None,
+                    condition: None,
+                    kind: StepKind::Action {
+                        uses: "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683"
+                            .to_owned(),
+                        with: BTreeMap::new(),
+                        env: BTreeMap::new(),
+                    },
+                },
+                Step {
+                    name: "Check task".to_owned(),
+                    id: None,
+                    role: None,
+                    condition: Some(format!(
+                        "contains(needs.{PLAN_JOB_ID}.outputs.{COVERED_TASKS_OUTPUT}, 'tofu-task')"
+                    )),
+                    kind: StepKind::Shell {
+                        run: vec!["echo".to_owned(), "task".to_owned()],
+                        env: BTreeMap::new(),
+                    },
+                },
+            ],
+        };
+        let ctx = RenderContext {
+            generator_version: "0.1.0".to_owned(),
+            runs_on: "ubuntu-26.04".to_owned(),
+            staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
+            request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
+            checkout_uses: "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683".to_owned(),
+            validator_commands: Vec::new(),
+            candidate: None,
+            preseed: false,
+            workflow_tasks: Vec::new(),
+            pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            plan_consumer_env: BTreeMap::new(),
+        };
+        let file = extract_job(job_id, &mut job, &ctx)
+            .expect("extraction must succeed")
+            .expect("obligation file written");
+        assert_eq!(
+            file.path,
+            ".github/actions/crate-obligation-tofu-provider-prelude-alpha/action.yml"
+        );
+        let call_step = &job.steps[1];
+        let StepKind::Action { uses, .. } = &call_step.kind else {
+            panic!("expected Action step");
+        };
+        assert_eq!(
+            uses,
+            "./.github/actions/crate-obligation-tofu-provider-prelude-alpha"
+        );
+        crate::action_ref::validate_uses(uses).expect("action step uses must validate");
+    }
 }
