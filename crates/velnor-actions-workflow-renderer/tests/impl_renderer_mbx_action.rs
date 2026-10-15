@@ -23,6 +23,7 @@ fn steps(
         rust,
         mbx_tool_env(rust),
         velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        None,
     )?
     .ok_or_else(|| {
         velnor_actions_workflow_renderer::RenderError::InvalidWorkflow(
@@ -137,6 +138,7 @@ fn action_construction_rejects_floating_refs_and_tool_versions() {
                 TEST_RUST_TOOLCHAIN,
                 env.clone(),
                 velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+                None,
             )
             .is_err(),
             "invalid action ref {uses}"
@@ -158,6 +160,7 @@ fn action_construction_rejects_floating_refs_and_tool_versions() {
                 rust,
                 env,
                 velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+                None,
             )
             .is_err(),
             "invalid Rust toolchain {rust:?}"
@@ -175,6 +178,7 @@ fn cargo_driver_emits_neither_preflight_nor_mbx_action() {
             TEST_RUST_TOOLCHAIN,
             mbx_tool_env(TEST_RUST_TOOLCHAIN),
             velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            None,
         )
         .expect("Cargo driver")
         .is_none()
@@ -241,6 +245,7 @@ fn same_repo_scoped_pr_cache_policy_enables_pr_cache_writes() {
         TEST_RUST_TOOLCHAIN,
         mbx_tool_env(TEST_RUST_TOOLCHAIN),
         velnor_actions_contract::PullRequestCachePolicy::SameRepositoryScoped,
+        None,
     )
     .expect("driver steps")
     .expect("MBX steps");
@@ -258,5 +263,50 @@ fn same_repo_scoped_pr_cache_policy_enables_pr_cache_writes() {
         Some(
             "${{ ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && 'write' || 'read' }}"
         )
+    );
+}
+
+#[test]
+fn mbx_objects_step_sets_working_directory_for_nested_workspaces() {
+    let [_, action, _] = mbx_steps_for_driver(
+        MBX_ACTION,
+        CompileDriver::Mbx,
+        TEST_MBX_VERSION,
+        TEST_RUST_TOOLCHAIN,
+        mbx_tool_env(TEST_RUST_TOOLCHAIN),
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        Some("crates/velnor-runner"),
+    )
+    .expect("driver steps")
+    .expect("MBX steps");
+    let StepKind::Action { with, .. } = action.kind else {
+        panic!("restore must be an action");
+    };
+    assert_eq!(
+        with.get("working-directory").map(String::as_str),
+        Some("crates/velnor-runner"),
+        "nested workspace must configure working-directory for target cache"
+    );
+
+    let [_, root_action, _] = mbx_steps_for_driver(
+        MBX_ACTION,
+        CompileDriver::Mbx,
+        TEST_MBX_VERSION,
+        TEST_RUST_TOOLCHAIN,
+        mbx_tool_env(TEST_RUST_TOOLCHAIN),
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        None,
+    )
+    .expect("driver steps")
+    .expect("MBX steps");
+    let StepKind::Action {
+        with: root_with, ..
+    } = root_action.kind
+    else {
+        panic!("restore must be an action");
+    };
+    assert!(
+        !root_with.contains_key("working-directory"),
+        "root workspace must omit working-directory"
     );
 }

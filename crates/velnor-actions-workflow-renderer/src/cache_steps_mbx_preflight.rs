@@ -24,6 +24,7 @@ pub fn mbx_steps_for_driver(
     rust_toolchain: &str,
     env: BTreeMap<String, String>,
     policy: velnor_actions_contract::PullRequestCachePolicy,
+    working_directory: Option<&str>,
 ) -> Result<Option<[Step; 3]>, RenderError> {
     match driver {
         CompileDriver::Cargo => Ok(None),
@@ -43,6 +44,7 @@ pub fn mbx_steps_for_driver(
                 rust_toolchain,
                 action_env.clone(),
                 policy,
+                working_directory,
             )?;
             let version_check = mbx_version_check_step(mbx_version, rust_toolchain, action_env)?;
             Ok(Some([preflight, action, version_check]))
@@ -295,6 +297,7 @@ fn mbx_objects_action_step(
     rust_toolchain: &str,
     env: BTreeMap<String, String>,
     policy: velnor_actions_contract::PullRequestCachePolicy,
+    working_directory: Option<&str>,
 ) -> Result<Step, RenderError> {
     validate_uses(uses)?;
     let action_sha = uses
@@ -315,7 +318,7 @@ fn mbx_objects_action_step(
         )));
     }
     validate_rust_toolchain(rust_toolchain)?;
-    let with = BTreeMap::from([
+    let mut with = BTreeMap::from([
         ("github-cache-mode".to_owned(), "target".to_owned()),
         ("version".to_owned(), mbx_version.to_owned()),
         ("toolchain".to_owned(), rust_toolchain.to_owned()),
@@ -330,6 +333,12 @@ fn mbx_objects_action_step(
         ),
         ("save-on-protected-branch".to_owned(), "false".to_owned()),
     ]);
+    if let Some(dir) = working_directory
+        && !dir.is_empty()
+        && dir != "."
+    {
+        with.insert("working-directory".to_owned(), dir.to_owned());
+    }
     let mut step = action_step_with_env(MBX_RESTORE_NAME, uses, with, env)?;
     step.role = Some(StepRole::MbxCache);
     Ok(step)

@@ -15,6 +15,7 @@ use crate::OrchestratorError;
 pub(crate) fn steps_for_catalog(
     catalog: &ToolCatalog,
     policy: velnor_actions_contract::PullRequestCachePolicy,
+    working_directory: Option<&str>,
 ) -> Result<[Step; 3], OrchestratorError> {
     let uses = PinnedActionRef::new(
         "jdx/mr-boxington-action",
@@ -31,6 +32,7 @@ pub(crate) fn steps_for_catalog(
         catalog.version(PinnedTool::Rust),
         env,
         policy,
+        working_directory,
     )?;
     steps.ok_or_else(|| OrchestratorError::Contract {
         problem: "mbx_driver_did_not_emit_preflight".to_owned(),

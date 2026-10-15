@@ -309,9 +309,12 @@ fn render_job(
         )?);
     }
     if use_mbx {
+        let root = crate::source_prep::workspace_root_for_manifest(&model.manifest, fetch_roots);
+        let working_dir = (!root.is_empty()).then_some(root);
         steps.extend(crate::mbx_preflight::steps_for_catalog(
             catalog,
             cache_policy,
+            working_dir,
         )?);
     }
     if use_rust {

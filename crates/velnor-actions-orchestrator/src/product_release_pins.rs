@@ -49,6 +49,7 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
         qualify_mbx_action_steps: steps_for_catalog(
             &catalog,
             velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            None,
         )?,
         install_runner_build_tools_argv: install_argv(&[PinnedTool::Rust], &catalog)?,
         install_gh_argv: install_argv(&[PinnedTool::Gh], &catalog)?,

@@ -67,6 +67,7 @@ fn release_qualification_uses_catalog_action_and_exact_version_probe() {
     let steps = steps_for_catalog(
         &catalog,
         velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        None,
     )
     .expect("catalog qualification MBX steps");
     let StepKind::Action { uses, with, .. } = &steps[1].kind else {

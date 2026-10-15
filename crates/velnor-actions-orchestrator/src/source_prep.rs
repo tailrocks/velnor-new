@@ -37,6 +37,23 @@ pub(crate) fn cargo_isolation_prefix() -> String {
     format!("mkdir -p \"{CARGO_CLEAN_DIR}\" && cd \"{CARGO_CLEAN_DIR}\" && ")
 }
 
+/// Find the matching workspace root from `fetch_roots` for a manifest path.
+pub(crate) fn workspace_root_for_manifest<'a>(
+    manifest: &str,
+    fetch_roots: &'a [String],
+) -> &'a str {
+    let mut matching = "";
+    for root in fetch_roots {
+        if !root.is_empty()
+            && (manifest == root || manifest.starts_with(&format!("{root}/")))
+            && root.len() > matching.len()
+        {
+            matching = root;
+        }
+    }
+    matching
+}
+
 /// Absolute `--manifest-path` flag for one validated fetch root.
 ///
 /// The manifest anchors on `$GITHUB_WORKSPACE` (the runner-owned

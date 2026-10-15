@@ -55,6 +55,7 @@ pub(crate) fn mbx_tool_steps(
         rust_toolchain,
         mbx_tool_env(rust_toolchain),
         velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        None,
     )?
     .ok_or_else(|| RenderError::InvalidWorkflow("mbx_steps_missing".to_owned()))
 }

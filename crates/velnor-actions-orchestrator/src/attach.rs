@@ -203,7 +203,7 @@ fn insert_plan_mbx_restore(
         .iter()
         .position(|step| step.role == Some(StepRole::CargoSourcesRestore))
         .map_or_else(|| after_rust_setup(steps), |index| index + 1);
-    for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog, policy)?
+    for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog, policy, None)?
         .into_iter()
         .enumerate()
     {
