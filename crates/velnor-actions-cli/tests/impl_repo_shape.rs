@@ -284,7 +284,7 @@ fn rq53_limits_discipline_no_baseline() -> Result<(), Box<dyn Error>> {
 fn policy_zizmor_config_matches_derived_ignores() -> Result<(), Box<dyn Error>> {
     let yaml = read(".github/workflows/ci.yml")?;
     assert!(
-        yaml.contains("uses: asamarts/alint@b02109b84dd59f3f96f33ad98b829b4d2fcd4b0a"),
+        yaml.contains("uses: asamarts/alint@f558d76d076710312c54723d18e44d8cd95b3977"),
         "full-SHA alint pin must exist"
     );
     assert!(

@@ -64,21 +64,21 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          version: 2026.10.11
-          sha256: f9612efcddda0ae55b62d3b6f82a6c860d5b54ebee0807d4f1a1d578055e1607
+          version: 2026.10.8
+          sha256: c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428
           install: "false"
           env: "false"
           cache: "false"
           cache_save: "false"
       - name: Install pinned release gate tools
         shell: bash
-        run: mise --no-config --no-env --no-hooks install gh@2.102.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.0
+        run: mise --no-config --no-env --no-hooks install gh@2.102.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1
       - name: Run actionlint
         shell: bash
         run: mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
       - name: Run zizmor
         shell: bash
-        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec zizmor@1.31.0 -- zizmor --no-online-audits --config .zizmor.yml .github/workflows
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec zizmor@1.30.1 -- zizmor --no-online-audits --config .zizmor.yml .github/workflows
       - name: Require successful CI at exact main SHA
         env:
           GH_TOKEN: ${{ github.token }}
@@ -118,7 +118,7 @@ jobs:
         uses: ./.github/actions/generator-release-build-linux # zizmor: ignore[self-repository]
       - name: Upload Linux assets
         id: upload
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           if-no-files-found: error
           name: generator-linux-assets
@@ -196,7 +196,7 @@ jobs:
         uses: ./.github/actions/generator-release-build-macos # zizmor: ignore[self-repository]
       - name: Upload macOS assets
         id: upload
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           if-no-files-found: error
           name: generator-macos-assets
@@ -274,7 +274,7 @@ jobs:
         uses: ./.github/actions/generator-release-build-macos-intel # zizmor: ignore[self-repository]
       - name: Upload macOS x86_64 assets
         id: upload
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           if-no-files-found: error
           name: generator-macos-intel-assets
@@ -352,14 +352,14 @@ jobs:
       - name: Setup Mise
         uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
         with:
-          version: 2026.10.11
-          sha256: f9612efcddda0ae55b62d3b6f82a6c860d5b54ebee0807d4f1a1d578055e1607
+          version: 2026.10.8
+          sha256: c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428
           install: "false"
           env: "false"
           cache: "false"
           cache_save: "false"
       - name: Download exact build artifact
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           artifact-ids: ${{ needs.build-linux.outputs.artifact_id }}
           path: linux-assets
@@ -371,9 +371,9 @@ jobs:
         run: "set -eu\ntest -f linux-assets/velnor-actions-0.1.8-x86_64-unknown-linux-gnu\ntest ! -L linux-assets/velnor-actions-0.1.8-x86_64-unknown-linux-gnu\ntest -x linux-assets/velnor-actions-0.1.8-x86_64-unknown-linux-gnu\ntest -f linux-assets/velnor-actions-0.1.8-x86_64-unknown-linux-gnu.sha256\ntest ! -L linux-assets/velnor-actions-0.1.8-x86_64-unknown-linux-gnu.sha256\ntest ! -x linux-assets/velnor-actions-0.1.8-x86_64-unknown-linux-gnu.sha256\ntest -f linux-assets/velnor-actions-0.1.8-x86_64-unknown-linux-gnu.provenance.json\ntest ! -L linux-assets/velnor-actions-0.1.8-x86_64-unknown-linux-gnu.provenance.json\ntest ! -x linux-assets/velnor-actions-0.1.8-x86_64-unknown-linux-gnu.provenance.json"
       - name: Verify source-bound build record
         shell: bash
-        run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.8-x86_64-unknown-linux-gnu' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'linux-assets/velnor-actions-0.1.8-x86_64-unknown-linux-gnu.sha256')\"\njq -e --arg version \"0.1.8\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"x86_64-unknown-linux-gnu\" --arg asset \"velnor-actions-0.1.8-x86_64-unknown-linux-gnu\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.24.0' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' linux-assets/velnor-actions-0.1.8-x86_64-unknown-linux-gnu.provenance.json > /dev/null"
+        run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.8-x86_64-unknown-linux-gnu' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'linux-assets/velnor-actions-0.1.8-x86_64-unknown-linux-gnu.sha256')\"\njq -e --arg version \"0.1.8\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"x86_64-unknown-linux-gnu\" --arg asset \"velnor-actions-0.1.8-x86_64-unknown-linux-gnu\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.21.1' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' linux-assets/velnor-actions-0.1.8-x86_64-unknown-linux-gnu.provenance.json > /dev/null"
       - name: Download exact build artifact
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           artifact-ids: ${{ needs.build-macos.outputs.artifact_id }}
           path: macos-assets
@@ -385,9 +385,9 @@ jobs:
         run: "set -eu\ntest -f macos-assets/velnor-actions-0.1.8-aarch64-apple-darwin\ntest ! -L macos-assets/velnor-actions-0.1.8-aarch64-apple-darwin\ntest -x macos-assets/velnor-actions-0.1.8-aarch64-apple-darwin\ntest -f macos-assets/velnor-actions-0.1.8-aarch64-apple-darwin.sha256\ntest ! -L macos-assets/velnor-actions-0.1.8-aarch64-apple-darwin.sha256\ntest ! -x macos-assets/velnor-actions-0.1.8-aarch64-apple-darwin.sha256\ntest -f macos-assets/velnor-actions-0.1.8-aarch64-apple-darwin.provenance.json\ntest ! -L macos-assets/velnor-actions-0.1.8-aarch64-apple-darwin.provenance.json\ntest ! -x macos-assets/velnor-actions-0.1.8-aarch64-apple-darwin.provenance.json"
       - name: Verify source-bound build record
         shell: bash
-        run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.8-aarch64-apple-darwin' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'macos-assets/velnor-actions-0.1.8-aarch64-apple-darwin.sha256')\"\njq -e --arg version \"0.1.8\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"aarch64-apple-darwin\" --arg asset \"velnor-actions-0.1.8-aarch64-apple-darwin\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.24.0' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' macos-assets/velnor-actions-0.1.8-aarch64-apple-darwin.provenance.json > /dev/null"
+        run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.8-aarch64-apple-darwin' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'macos-assets/velnor-actions-0.1.8-aarch64-apple-darwin.sha256')\"\njq -e --arg version \"0.1.8\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"aarch64-apple-darwin\" --arg asset \"velnor-actions-0.1.8-aarch64-apple-darwin\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.21.1' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' macos-assets/velnor-actions-0.1.8-aarch64-apple-darwin.provenance.json > /dev/null"
       - name: Download exact build artifact
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           artifact-ids: ${{ needs.build-macos-intel.outputs.artifact_id }}
           path: macos-intel-assets
@@ -399,10 +399,10 @@ jobs:
         run: "set -eu\ntest -f macos-intel-assets/velnor-actions-0.1.8-x86_64-apple-darwin\ntest ! -L macos-intel-assets/velnor-actions-0.1.8-x86_64-apple-darwin\ntest -x macos-intel-assets/velnor-actions-0.1.8-x86_64-apple-darwin\ntest -f macos-intel-assets/velnor-actions-0.1.8-x86_64-apple-darwin.sha256\ntest ! -L macos-intel-assets/velnor-actions-0.1.8-x86_64-apple-darwin.sha256\ntest ! -x macos-intel-assets/velnor-actions-0.1.8-x86_64-apple-darwin.sha256\ntest -f macos-intel-assets/velnor-actions-0.1.8-x86_64-apple-darwin.provenance.json\ntest ! -L macos-intel-assets/velnor-actions-0.1.8-x86_64-apple-darwin.provenance.json\ntest ! -x macos-intel-assets/velnor-actions-0.1.8-x86_64-apple-darwin.provenance.json"
       - name: Verify source-bound build record
         shell: bash
-        run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.8-x86_64-apple-darwin' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'macos-intel-assets/velnor-actions-0.1.8-x86_64-apple-darwin.sha256')\"\njq -e --arg version \"0.1.8\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"x86_64-apple-darwin\" --arg asset \"velnor-actions-0.1.8-x86_64-apple-darwin\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.24.0' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' macos-intel-assets/velnor-actions-0.1.8-x86_64-apple-darwin.provenance.json > /dev/null"
+        run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.8-x86_64-apple-darwin' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'macos-intel-assets/velnor-actions-0.1.8-x86_64-apple-darwin.sha256')\"\njq -e --arg version \"0.1.8\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"x86_64-apple-darwin\" --arg asset \"velnor-actions-0.1.8-x86_64-apple-darwin\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.21.1' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' macos-intel-assets/velnor-actions-0.1.8-x86_64-apple-darwin.provenance.json > /dev/null"
       - name: Create canonical candidate manifest from verified build bytes
         shell: bash
-        run: "test \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nbash scripts/generator-release/create-release-manifest.sh '0.1.8' 'tailrocks/velnor-new' '1.98.1' '1.24.0'"
+        run: "test \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nbash scripts/generator-release/create-release-manifest.sh '0.1.8' 'tailrocks/velnor-new' '1.98.1' '1.21.1'"
       - name: Stage canonical candidate manifest
         shell: bash
         run: "set -eu\nmkdir -p manifest-assets\nmv release-manifest.json manifest-assets/release-manifest.json"
@@ -412,7 +412,7 @@ jobs:
         run: "set -eu\ndigest=\"$(sha256sum 'manifest-assets/release-manifest.json' | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')\"\ntest \"${#digest}\" -eq 64\nprintf 'manifest_sha256=%s\\n' \"$digest\" >> \"$GITHUB_OUTPUT\""
       - name: Upload same-run release manifest
         id: upload
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           if-no-files-found: error
           name: generator-release-manifest
@@ -487,7 +487,7 @@ jobs:
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
       - name: Upload verified immutable release acceptance
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           if-no-files-found: error
           name: generator-release-accepted-${{ github.sha }}
