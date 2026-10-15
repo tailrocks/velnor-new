@@ -76,7 +76,7 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     assert_eq!(uses, MBX_ACTION);
     assert_eq!(
         with.get("github-cache-mode").map(String::as_str),
-        Some("objects")
+        Some("target")
     );
     assert_eq!(
         with.get("toolchain").map(String::as_str),
@@ -227,7 +227,7 @@ fn rendered_action_has_rust_homes_and_native_owner_policy() -> Result<(), Render
     assert!(text.contains("name: Clean MBX workspace outputs"));
     assert!(text.contains("if: always() && steps.mbx-ready.outcome == 'success'"));
     assert!(text.contains(
-        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \\\"$mbx_bin\\\" clean"
+        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \\\"$mbx_bin\\\" cache dir >/dev/null 2>&1"
     ));
     Ok(())
 }

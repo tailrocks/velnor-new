@@ -134,8 +134,8 @@ fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
         "one objects step:\n{task}"
     );
     assert!(
-        task.contains("github-cache-mode: objects")
-            || task.contains("github-cache-mode: \"objects\""),
+        task.contains("github-cache-mode: target")
+            || task.contains("github-cache-mode: \"target\""),
         "{task}"
     );
     Ok(())

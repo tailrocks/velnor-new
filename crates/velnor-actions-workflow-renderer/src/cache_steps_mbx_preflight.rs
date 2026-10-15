@@ -256,7 +256,11 @@ pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step,
         mbx_disk_sample_function(),
         "mbx_disk_sample before-final-clean".to_owned(),
         RESOLVE_ACTION_MBX_BIN.to_owned(),
-        format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" clean; then clean_status=0; else clean_status=$?; fi"),
+        if with.get("github-cache-mode").map(String::as_str) == Some("objects") {
+            format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" clean; then clean_status=0; else clean_status=$?; fi")
+        } else {
+            format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" cache dir >/dev/null 2>&1; then clean_status=0; else clean_status=$?; fi")
+        },
         "mbx_disk_sample after-final-clean".to_owned(),
         "exit \"$clean_status\"".to_owned(),
     ]
@@ -312,7 +316,7 @@ fn mbx_objects_action_step(
     }
     validate_rust_toolchain(rust_toolchain)?;
     let with = BTreeMap::from([
-        ("github-cache-mode".to_owned(), "objects".to_owned()),
+        ("github-cache-mode".to_owned(), "target".to_owned()),
         ("version".to_owned(), mbx_version.to_owned()),
         ("toolchain".to_owned(), rust_toolchain.to_owned()),
         (

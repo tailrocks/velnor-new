@@ -90,7 +90,7 @@ esac
         );
         assert_eq!(
             with.get("github-cache-mode").map(String::as_str),
-            Some("objects")
+            Some("target")
         );
         assert_eq!(
             with.get("save-on-workflow-dispatch").map(String::as_str),

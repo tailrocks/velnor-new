@@ -341,7 +341,7 @@ fn valid_mise_setup(kind: &StepKind) -> bool {
 fn valid_mbx_cache(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { uses, with, .. }
         if action_has_prefix(uses, "jdx/mr-boxington-action@")
-            && with.get("github-cache-mode").is_some_and(|mode| mode == "objects")
+            && with.get("github-cache-mode").is_some_and(|mode| mode == "target" || mode == "objects")
             && with.get("version").is_some_and(|version| !version.is_empty())
             && with.get("toolchain").is_some_and(|toolchain| !toolchain.is_empty())
             && with.get("cache-generation").is_some_and(|generation| !generation.is_empty()))
