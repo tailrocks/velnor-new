@@ -109,6 +109,7 @@ fn qualification_mbx_action_steps(catalog: &ToolCatalog) -> [Step; 3] {
         catalog.version(PinnedTool::MrBoxington),
         catalog.version(PinnedTool::Rust),
         env,
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     )
     .expect("test MBX qualification steps are valid")
     .expect("MBX qualification emits the native action steps")

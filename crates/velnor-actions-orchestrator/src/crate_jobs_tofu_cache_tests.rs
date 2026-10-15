@@ -59,6 +59,7 @@ fn provider_restore_precedes_init_obligation() {
         acquire: None,
         max_parallel_jobs: 2,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1, "one job per tofu root");
@@ -101,6 +102,7 @@ fn provider_restore_keys_are_per_root() {
         acquire: None,
         max_parallel_jobs: 5,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2);
@@ -141,6 +143,7 @@ fn rust_jobs_carry_no_provider_restore() {
         acquire: None,
         max_parallel_jobs: 2,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1);
@@ -167,6 +170,7 @@ fn mixed_job_restores_both_sources_and_providers() {
         acquire: None,
         max_parallel_jobs: 2,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1, "shared group renders once");

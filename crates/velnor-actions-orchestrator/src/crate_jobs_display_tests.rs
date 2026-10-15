@@ -45,6 +45,7 @@ fn id_and_display_prefixes_agree_per_partition() {
         acquire: None,
         max_parallel_jobs: 2,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 3, "rust plus tofu plus mixed");

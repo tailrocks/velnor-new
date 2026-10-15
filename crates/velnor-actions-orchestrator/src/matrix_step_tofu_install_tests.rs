@@ -147,6 +147,7 @@ fn mise_crate_job_prepare_installs_opentofu() {
         acquire: None,
         max_parallel_jobs: 2,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2);

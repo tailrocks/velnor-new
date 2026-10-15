@@ -31,12 +31,11 @@ pub(crate) struct Fixture {
 
 /// Days since the Unix epoch, plus `offset`, as `YYYY-MM-DD`.
 pub(crate) fn days_iso(offset: i64) -> Result<String, Box<dyn Error>> {
-    let whole_days = SystemTime::now()
+    let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|err| err.to_string())?
-        .as_secs()
-        / 86_400;
-    let days = i64::try_from(whole_days).map_err(|err| err.to_string())? + offset;
+        .as_secs();
+    let days = i64::try_from(secs / 86_400).map_err(|err| err.to_string())? + offset;
     Ok(date_iso(days))
 }
 
@@ -54,10 +53,12 @@ pub(crate) fn timestamp_iso(offset_seconds: i64) -> Result<String, Box<dyn Error
         .ok_or_else(|| "timestamp offset overflow".to_owned())?;
     let day_seconds = seconds.rem_euclid(86_400);
     let date = date_iso(seconds.div_euclid(86_400));
-    let hour = day_seconds / 3_600;
-    let minute = (day_seconds % 3_600) / 60;
-    let second = day_seconds % 60;
-    Ok(format!("{date}T{hour:02}:{minute:02}:{second:02}Z"))
+    let (h, m, s) = (
+        day_seconds / 3_600,
+        (day_seconds % 3_600) / 60,
+        day_seconds % 60,
+    );
+    Ok(format!("{date}T{h:02}:{m:02}:{s:02}Z"))
 }
 
 fn date_iso(days: i64) -> String {
@@ -143,12 +144,29 @@ fn relative_root_is_resolved_before_the_script_changes_directory() -> Result<(),
 
 #[test]
 fn script_builds_cli_in_shared_nested_target() -> Result<(), Box<dyn Error>> {
+    let _target_lock = crate::impl_cli_tmp::nested_target::lock_nested_cargo_target()?;
     let fixture = passing("p12-nested-target")?;
     let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?;
-    let run = run_script(&fixture.dir, &[])?;
+    let binary = nested_target.join("debug/velnor-actions");
+    if binary.exists() {
+        std::fs::remove_file(&binary)?;
+    }
+    let script = crate::impl_repo_policy::repo_root().join("scripts/check-freshness.sh");
+    let output = Command::new("bash")
+        .arg(script)
+        .arg("--root")
+        .arg(&fixture.dir)
+        .env("CARGO_TARGET_DIR", &nested_target)
+        .env_remove("VELNOR_ACTIONS_BIN")
+        .output()?;
+    let run = Run {
+        code: output.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+        stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+    };
     assert_clean(&run);
     assert!(
-        nested_target.join("debug/velnor-actions").is_file(),
+        binary.is_file(),
         "check-freshness Cargo output was not written under {}",
         nested_target.display()
     );
@@ -280,105 +298,38 @@ pub(crate) fn cleanup(fixture: &Fixture) {
     crate::impl_cli_tmp::cleanup(&fixture.dir);
 }
 
-const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
-    (
-        "https://api.github.com/repos/jdx/mise/releases/latest",
-        "mise.json",
-        "{\"tag_name\": \"v2026.10.4\"}",
-    ),
-    (
-        "https://static.rust-lang.org/dist/channel-rust-stable.toml",
-        "rust.toml",
-        "[pkg.rust]\nversion = \"1.98.1 (48a229cea 2026-09-01)\"\n",
-    ),
-    (
-        "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
-        "mbx.json",
-        "[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.19.0\"}]",
-    ),
-    (
-        "https://api.github.com/repos/cli/cli/releases/latest",
-        "gh.json",
-        "{\"tag_name\": \"v2.101.0\"}",
-    ),
-    (
-        "https://api.github.com/repos/rhysd/actionlint/releases/latest",
-        "actionlint.json",
-        "{\"tag_name\": \"v1.7.12\"}",
-    ),
-    (
-        "https://api.github.com/repos/koalaman/shellcheck/releases/latest",
-        "shellcheck.json",
-        "{\"tag_name\": \"v0.11.0\"}",
-    ),
-    (
-        "https://api.github.com/repos/zizmorcore/zizmor/releases/latest",
-        "zizmor.json",
-        "{\"tag_name\": \"v1.30.1\"}",
-    ),
-    (
-        "https://crates.io/api/v1/crates/cargo-nextest",
-        "nextest.json",
-        "{\"crate\": {\"max_version\": \"0.9.148\"}}",
-    ),
-    (
-        "https://crates.io/api/v1/crates/release-plz",
-        "release-plz.json",
-        "{\"crate\": {\"max_version\": \"0.3.172\"}}",
-    ),
-    (
-        "https://api.github.com/repos/opentofu/opentofu/releases/latest",
-        "opentofu.json",
-        "{\"tag_name\": \"v1.13.1\"}",
-    ),
-];
-
-const ACTION_PROBE_ROWS: &[(&str, &str, &str)] = &[
-    (
-        "https://api.github.com/repos/jdx/mise-action/releases/latest",
-        "mise-action.json",
-        "{\"tag_name\": \"v5.1.2\"}",
-    ),
-    (
-        "https://api.github.com/repos/actions/checkout/releases/latest",
-        "checkout.json",
-        "{\"tag_name\": \"v7.0.1\"}",
-    ),
-    (
-        "https://api.github.com/repos/actions/download-artifact/releases/latest",
-        "download.json",
-        "{\"tag_name\": \"v8.0.1\"}",
-    ),
-    (
-        "https://api.github.com/repos/actions/upload-artifact/releases/latest",
-        "upload.json",
-        "{\"tag_name\": \"v7.0.1\"}",
-    ),
-    (
-        "https://api.github.com/repos/actions/cache/releases/latest",
-        "cache.json",
-        "{\"tag_name\": \"v6.1.0\"}",
-    ),
-    (
-        "https://api.github.com/repos/jdx/mr-boxington-action/releases",
-        "mbx-action.json",
-        "[{\"tag_name\": \"v1.5.0\"}]",
-    ),
-    (
-        "https://api.github.com/repos/asamarts/alint/releases/latest",
-        "alint.json",
-        "{\"tag_name\": \"v0.18.1\"}",
-    ),
-    (
-        "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest",
-        "aws-credentials.json",
-        "{\"tag_name\": \"v6.3.0\"}",
-    ),
+const PROBE_DATA: &[&str] = &[
+    "https://api.github.com/repos/jdx/mise/releases/latest\tmise.json\t{\"tag_name\": \"v2026.10.4\"}",
+    "https://static.rust-lang.org/dist/channel-rust-stable.toml\trust.toml\t[pkg.rust]\nversion = \"1.98.1 (48a229cea 2026-09-01)\"\n",
+    "https://api.github.com/repos/jdx/mr-boxington/releases/latest\tmbx.json\t[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.19.0\"}]",
+    "https://api.github.com/repos/cli/cli/releases/latest\tgh.json\t{\"tag_name\": \"v2.101.0\"}",
+    "https://api.github.com/repos/rhysd/actionlint/releases/latest\tactionlint.json\t{\"tag_name\": \"v1.7.12\"}",
+    "https://api.github.com/repos/koalaman/shellcheck/releases/latest\tshellcheck.json\t{\"tag_name\": \"v0.11.0\"}",
+    "https://api.github.com/repos/zizmorcore/zizmor/releases/latest\tzizmor.json\t{\"tag_name\": \"v1.30.1\"}",
+    "https://crates.io/api/v1/crates/cargo-nextest\tnextest.json\t{\"crate\": {\"max_version\": \"0.9.148\"}}",
+    "https://crates.io/api/v1/crates/release-plz\trelease-plz.json\t{\"crate\": {\"max_version\": \"0.3.172\"}}",
+    "https://api.github.com/repos/opentofu/opentofu/releases/latest\topentofu.json\t{\"tag_name\": \"v1.13.1\"}",
+    "https://api.github.com/repos/jdx/mise-action/releases/latest\tmise-action.json\t{\"tag_name\": \"v5.1.2\"}",
+    "https://api.github.com/repos/actions/checkout/releases/latest\tcheckout.json\t{\"tag_name\": \"v7.0.1\"}",
+    "https://api.github.com/repos/actions/download-artifact/releases/latest\tdownload.json\t{\"tag_name\": \"v8.0.1\"}",
+    "https://api.github.com/repos/actions/upload-artifact/releases/latest\tupload.json\t{\"tag_name\": \"v7.0.1\"}",
+    "https://api.github.com/repos/actions/cache/releases/latest\tcache.json\t{\"tag_name\": \"v6.1.0\"}",
+    "https://api.github.com/repos/jdx/mr-boxington-action/releases\tmbx-action.json\t[{\"tag_name\": \"v1.5.0\"}]",
+    "https://api.github.com/repos/asamarts/alint/releases/latest\talint.json\t{\"tag_name\": \"v0.18.1\"}",
+    "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest\taws-credentials.json\t{\"tag_name\": \"v6.3.0\"}",
 ];
 
 /// (inventory source URL, canned file, canned body) for every probe row.
 pub(crate) fn probe_rows() -> Vec<(&'static str, &'static str, &'static str)> {
-    let mut rows = TOOL_PROBE_ROWS.to_vec();
-    rows.extend_from_slice(ACTION_PROBE_ROWS);
-    rows
+    PROBE_DATA
+        .iter()
+        .map(|row| {
+            let mut parts = row.split('\t');
+            (
+                parts.next().unwrap_or_default(),
+                parts.next().unwrap_or_default(),
+                parts.next().unwrap_or_default(),
+            )
+        })
+        .collect()
 }

@@ -68,5 +68,5 @@ The runner controller and supervisor live in the nested virtual workspace `crate
 ```bash
 cargo clippy --manifest-path crates/velnor-runner/Cargo.toml --locked --all-targets -- -D warnings
 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked
-cargo deny check --manifest-path crates/velnor-runner/Cargo.toml
+cargo deny --manifest-path crates/velnor-runner/Cargo.toml check
 ```

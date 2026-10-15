@@ -22,6 +22,7 @@ fn steps(
         version,
         rust,
         mbx_tool_env(rust),
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     )?
     .ok_or_else(|| {
         velnor_actions_workflow_renderer::RenderError::InvalidWorkflow(
@@ -135,6 +136,7 @@ fn action_construction_rejects_floating_refs_and_tool_versions() {
                 TEST_MBX_VERSION,
                 TEST_RUST_TOOLCHAIN,
                 env.clone(),
+                velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
             )
             .is_err(),
             "invalid action ref {uses}"
@@ -149,8 +151,15 @@ fn action_construction_rejects_floating_refs_and_tool_versions() {
     for rust in ["stable", "1.98", "1.98.1-nightly", "1.98.1;exit 1"] {
         env = mbx_tool_env(rust);
         assert!(
-            mbx_steps_for_driver(MBX_ACTION, CompileDriver::Mbx, TEST_MBX_VERSION, rust, env,)
-                .is_err(),
+            mbx_steps_for_driver(
+                MBX_ACTION,
+                CompileDriver::Mbx,
+                TEST_MBX_VERSION,
+                rust,
+                env,
+                velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            )
+            .is_err(),
             "invalid Rust toolchain {rust:?}"
         );
     }
@@ -165,6 +174,7 @@ fn cargo_driver_emits_neither_preflight_nor_mbx_action() {
             TEST_MBX_VERSION,
             TEST_RUST_TOOLCHAIN,
             mbx_tool_env(TEST_RUST_TOOLCHAIN),
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         )
         .expect("Cargo driver")
         .is_none()
@@ -220,4 +230,33 @@ fn rendered_action_has_rust_homes_and_native_owner_policy() -> Result<(), Render
         "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \\\"$mbx_bin\\\" clean"
     ));
     Ok(())
+}
+
+#[test]
+fn same_repo_scoped_pr_cache_policy_enables_pr_cache_writes() {
+    let [_, action, _] = mbx_steps_for_driver(
+        MBX_ACTION,
+        CompileDriver::Mbx,
+        TEST_MBX_VERSION,
+        TEST_RUST_TOOLCHAIN,
+        mbx_tool_env(TEST_RUST_TOOLCHAIN),
+        velnor_actions_contract::PullRequestCachePolicy::SameRepositoryScoped,
+    )
+    .expect("driver steps")
+    .expect("MBX steps");
+    let StepKind::Action { with, env, .. } = action.kind else {
+        panic!("restore must be an action");
+    };
+    assert_eq!(
+        with.get("save-on-pull-request").map(String::as_str),
+        Some(
+            "${{ github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork }}"
+        )
+    );
+    assert_eq!(
+        env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
+        Some(
+            "${{ ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && 'write' || 'read' }}"
+        )
+    );
 }

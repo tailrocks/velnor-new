@@ -18,7 +18,9 @@ use velnor_actions_contract::{
     WorkflowPolicy, crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
     tofu_display_name,
 };
-use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
+#[cfg(test)]
+use velnor_actions_mise::PinnedTool;
+use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
@@ -64,6 +66,7 @@ pub(crate) fn build_for_workflow(
         acquire,
         max_parallel_jobs: config.workflow.max_parallel_jobs,
         helper_version,
+        cache_policy: config.workflow.pull_request_cache_policy,
     })
 }
 
@@ -78,6 +81,7 @@ pub(crate) struct CrateJobInputs<'a> {
     pub(crate) acquire: Option<&'a Step>,
     pub(crate) max_parallel_jobs: u32,
     pub(crate) helper_version: &'a str,
+    pub(crate) cache_policy: velnor_actions_contract::PullRequestCachePolicy,
 }
 
 /// Build one ordered IR job per runnable crate from discovery proposals.
@@ -103,6 +107,7 @@ pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, 
         acquire,
         max_parallel_jobs,
         helper_version,
+        cache_policy,
     } = input;
     let grouped = group_runnable(&discovery.proposals);
     let assigned = assign_group_ids(&grouped);
@@ -154,6 +159,7 @@ pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, 
             acquire,
             max_parallel_jobs,
             helper_version,
+            cache_policy,
         )?;
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
@@ -272,6 +278,7 @@ fn render_job(
     acquire: Option<&Step>,
     max_parallel_jobs: u32,
     helper_version: &str,
+    cache_policy: velnor_actions_contract::PullRequestCachePolicy,
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire.cloned());
@@ -289,7 +296,7 @@ fn render_job(
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
-    steps.extend(restore_step_for_crate(
+    steps.extend(crate::source_cache::restore_step_for_crate(
         label,
         catalog,
         fetch_roots,
@@ -302,7 +309,10 @@ fn render_job(
         )?);
     }
     if use_mbx {
-        steps.extend(crate::mbx_preflight::steps_for_catalog(catalog)?);
+        steps.extend(crate::mbx_preflight::steps_for_catalog(
+            catalog,
+            cache_policy,
+        )?);
     }
     if use_rust {
         steps.extend(crate::source_prep::fetch_steps_for_crate(
@@ -343,32 +353,6 @@ fn render_job(
         environment: None,
         steps,
     })
-}
-
-/// Restore the exact shared Cargo source subset for one crate.
-///
-/// Lockless emits nothing, and tofu roles restore providers through
-/// the separate provider-cache step (never here). The separate V2 tools
-/// layer owns Cargo binaries and tool receipts. Compiler driver does not
-/// change which shared-source payload readers restore.
-fn restore_step_for_crate(
-    label: &str,
-    catalog: &ToolCatalog,
-    fetch_roots: &[String],
-    use_rust: bool,
-) -> Result<Option<Step>, OrchestratorError> {
-    if !use_rust || fetch_roots.is_empty() {
-        return Ok(None);
-    }
-    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
-        .map(velnor_actions_contract::ReleaseTarget::triple)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("bad_label:{label}"),
-        })?;
-    let rust = catalog.version(PinnedTool::Rust);
-    let key = crate::source_cache::sources_cache_key(target, rust, fetch_roots)?;
-    let prefix = crate::source_cache::sources_restore_prefix(&key);
-    crate::source_cache::sources_restore_step(&key, &[prefix]).map(Some)
 }
 
 #[cfg(test)]

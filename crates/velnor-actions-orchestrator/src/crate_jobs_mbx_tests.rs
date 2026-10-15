@@ -14,6 +14,7 @@ fn drivers_follow_per_crate_selection() {
         acquire: None,
         max_parallel_jobs: 2,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);

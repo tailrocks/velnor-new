@@ -6,6 +6,7 @@
 
 use velnor_actions_actionlint::actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION};
 use velnor_actions_contract::{Step, StepRole};
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use crate::OrchestratorError;
 
@@ -68,7 +69,12 @@ pub(crate) fn sources_restore_step(
     key: &str,
     restore_keys: &[String],
 ) -> Result<Step, OrchestratorError> {
-    sources_step(true, key, restore_keys)
+    sources_step(
+        true,
+        key,
+        restore_keys,
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+    )
 }
 
 /// Shared save step over the owned-home subset (writer only).
@@ -76,8 +82,11 @@ pub(crate) fn sources_restore_step(
 ///
 /// Returns contract, actionlint, or render errors for rejected pins,
 /// paths, or step shapes.
-pub(crate) fn sources_save_step(key: &str) -> Result<Step, OrchestratorError> {
-    sources_step(false, key, &[])
+pub(crate) fn sources_save_step(
+    key: &str,
+    policy: velnor_actions_contract::PullRequestCachePolicy,
+) -> Result<Step, OrchestratorError> {
+    sources_step(false, key, &[], policy)
 }
 
 /// One sources restore/save step with the P08 display name.
@@ -85,6 +94,7 @@ fn sources_step(
     restore: bool,
     key: &str,
     restore_keys: &[String],
+    policy: velnor_actions_contract::PullRequestCachePolicy,
 ) -> Result<Step, OrchestratorError> {
     use velnor_actions_actionlint::PinnedActionRef;
     use velnor_actions_mise::cache_sources::{sources_cache_paths, validate_sources_subset};
@@ -117,7 +127,7 @@ fn sources_step(
         "Save Cargo sources".to_owned()
     };
     if !restore {
-        let gate = velnor_actions_mise::cache_trust::authorize_trusted_save().map_err(wrap)?;
+        let gate = velnor_actions_contract::workflow::ir::cargo_sources_save_condition(policy);
         step.condition = Some(gate.to_owned());
     }
     step.role = Some(if restore {
@@ -126,6 +136,30 @@ fn sources_step(
         StepRole::CargoSourcesSave
     });
     Ok(step)
+}
+
+/// Lockless emits nothing, and tofu roles restore providers through
+/// the separate provider-cache step (never here). The separate V2 tools
+/// layer owns Cargo binaries and tool receipts. Compiler driver does not
+/// change which shared-source payload readers restore.
+pub(crate) fn restore_step_for_crate(
+    label: &str,
+    catalog: &ToolCatalog,
+    fetch_roots: &[String],
+    use_rust: bool,
+) -> Result<Option<Step>, OrchestratorError> {
+    if !use_rust || fetch_roots.is_empty() {
+        return Ok(None);
+    }
+    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
+        .map(velnor_actions_contract::ReleaseTarget::triple)
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: format!("bad_label:{label}"),
+        })?;
+    let rust = catalog.version(PinnedTool::Rust);
+    let key = sources_cache_key(target, rust, fetch_roots)?;
+    let prefix = sources_restore_prefix(&key);
+    sources_restore_step(&key, &[prefix]).map(Some)
 }
 
 /// Shared-cache key rejection.

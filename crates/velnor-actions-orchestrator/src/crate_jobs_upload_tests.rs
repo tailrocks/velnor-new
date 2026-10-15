@@ -26,6 +26,7 @@ fn two_obligation_job(driver: CompileDriver) -> (String, Job, ProposedTask, Prop
         acquire: None,
         max_parallel_jobs: 2,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     let (job_id, job) = found.jobs.into_iter().next().expect("demo job");

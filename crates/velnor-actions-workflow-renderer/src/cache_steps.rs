@@ -11,6 +11,8 @@ use velnor_actions_contract::{Step, StepKind};
 mod mbx_command;
 #[path = "cache_steps_mbx_gate.rs"]
 mod mbx_gate;
+#[path = "cache_steps_mbx_mode.rs"]
+mod mbx_mode;
 #[path = "cache_steps_mbx_preflight.rs"]
 mod mbx_preflight;
 pub(crate) use mbx_gate::append_workspace_cleanups;

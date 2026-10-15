@@ -78,7 +78,15 @@ fn lock_acquire_inserts_digest_verified_stage() {
     let mut ir = bare_ir(BTreeMap::from([
         (
             "plan".to_owned(),
-            plan_job("ubuntu-26.04", None, &catalog, rust_plan_needs(), &[]).expect("plan job"),
+            plan_job(
+                "ubuntu-26.04",
+                None,
+                &catalog,
+                rust_plan_needs(),
+                &[],
+                velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            )
+            .expect("plan job"),
         ),
         (
             "required".to_owned(),
@@ -150,7 +158,15 @@ fn lock_acquire_records_source_commit() {
     let catalog = ToolCatalog::pinned();
     let mut ir = bare_ir(BTreeMap::from([(
         "plan".to_owned(),
-        plan_job("ubuntu-26.04", None, &catalog, rust_plan_needs(), &[]).expect("plan job"),
+        plan_job(
+            "ubuntu-26.04",
+            None,
+            &catalog,
+            rust_plan_needs(),
+            &[],
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        )
+        .expect("plan job"),
     )]));
     ir.jobs.insert(
         "required".to_owned(),
@@ -186,7 +202,15 @@ fn preseed_attach_builds_once_and_sets_mode() {
         ir: bare_ir(BTreeMap::from([
             (
                 "plan".to_owned(),
-                plan_job("ubuntu-26.04", None, &catalog, rust_plan_needs(), &[]).expect("plan job"),
+                plan_job(
+                    "ubuntu-26.04",
+                    None,
+                    &catalog,
+                    rust_plan_needs(),
+                    &[],
+                    velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+                )
+                .expect("plan job"),
             ),
             ("rust-demo".to_owned(), legacy_task_job()),
             (
@@ -295,6 +319,7 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
                     &catalog,
                     rust_plan_needs(),
                     fetch_roots,
+                    velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
                 )
                 .expect("plan job"),
             ),

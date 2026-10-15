@@ -109,6 +109,8 @@ fn is_push_only_cache_save(step: &Step) -> bool {
     let tools_save_condition = crate::cache_p08::tools_cache_save_condition();
     let condition_is_push_only = condition
         == Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
+        || condition
+            == Some(velnor_actions_contract::workflow::ir::CARGO_SOURCES_PR_SCOPED_SAVE_CONDITION)
         || (step.role == Some(velnor_actions_contract::StepRole::ToolsCacheSave)
             && condition == Some(tools_save_condition.as_str()));
     condition_is_push_only

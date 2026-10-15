@@ -23,6 +23,7 @@ pub fn mbx_steps_for_driver(
     mbx_version: &str,
     rust_toolchain: &str,
     env: BTreeMap<String, String>,
+    policy: velnor_actions_contract::PullRequestCachePolicy,
 ) -> Result<Option<[Step; 3]>, RenderError> {
     match driver {
         CompileDriver::Cargo => Ok(None),
@@ -31,10 +32,18 @@ pub fn mbx_steps_for_driver(
             let mut rust_env = with_rustup_process_homes(env)?;
             rust_env.insert(MBX_CACHE_DIR_ENV.to_owned(), MBX_CACHE_DIR_VALUE.to_owned());
             let mut action_env = rust_env;
-            action_env.insert(MBX_CACHE_MODE_ENV.to_owned(), CACHE_MODE_VALUE.to_owned());
+            action_env.insert(
+                MBX_CACHE_MODE_ENV.to_owned(),
+                super::mbx_mode::mbx_cache_mode_value(policy).to_owned(),
+            );
             let preflight = canonical_mbx_preflight_step(mbx_version, rust_toolchain, &action_env)?;
-            let action =
-                mbx_objects_action_step(uses, mbx_version, rust_toolchain, action_env.clone())?;
+            let action = mbx_objects_action_step(
+                uses,
+                mbx_version,
+                rust_toolchain,
+                action_env.clone(),
+                policy,
+            )?;
             let version_check = mbx_version_check_step(mbx_version, rust_toolchain, action_env)?;
             Ok(Some([preflight, action, version_check]))
         }
@@ -68,9 +77,6 @@ const MBX_DISK_SAMPLE_BODY: &[&str] = &[
     r#"target_path="$RUNNER_TEMP/velnor/target""#,
     r#"if [ -L "$target_path" ]; then printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\n' "$boundary" >&2; elif [ -d "$target_path" ]; then printf 'MBX_DISK_ALLOCATED_KIB boundary=%s root=target\n' "$boundary"; if du -sk "$target_path"; then :; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\n' "$boundary" >&2; fi; else printf 'MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\n' "$boundary"; fi"#,
 ];
-/// Write permission is granted only to protected default-branch pushes.
-const CACHE_MODE_VALUE: &str = "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}";
-
 /// Reconstruct the only preflight authorized for the selected MBX action.
 ///
 /// The action environment is the source of truth for the toolchain setup;
@@ -87,7 +93,8 @@ pub(super) fn canonical_mbx_preflight_step(
         )));
     }
     validate_rust_toolchain(rust_toolchain)?;
-    if action_env.get(MBX_CACHE_MODE_ENV).map(String::as_str) != Some(CACHE_MODE_VALUE) {
+    let mode = action_env.get(MBX_CACHE_MODE_ENV).map(String::as_str);
+    if !mode.is_some_and(super::mbx_mode::is_valid_mbx_cache_mode) {
         return Err(RenderError::InvalidWorkflow(
             "mbx_cache_mode_mismatch".to_owned(),
         ));
@@ -283,6 +290,7 @@ fn mbx_objects_action_step(
     mbx_version: &str,
     rust_toolchain: &str,
     env: BTreeMap<String, String>,
+    policy: velnor_actions_contract::PullRequestCachePolicy,
 ) -> Result<Step, RenderError> {
     validate_uses(uses)?;
     let action_sha = uses
@@ -312,7 +320,10 @@ fn mbx_objects_action_step(
             cache_generation(mbx_version, action_sha),
         ),
         ("save-on-workflow-dispatch".to_owned(), "false".to_owned()),
-        ("save-on-pull-request".to_owned(), "false".to_owned()),
+        (
+            "save-on-pull-request".to_owned(),
+            super::mbx_mode::mbx_save_on_pull_request_value(policy).to_owned(),
+        ),
         ("save-on-protected-branch".to_owned(), "false".to_owned()),
     ]);
     let mut step = action_step_with_env(MBX_RESTORE_NAME, uses, with, env)?;

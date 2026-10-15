@@ -84,8 +84,9 @@ fn build_plan_job(
     needs: PlanJobToolNeeds,
     fetch_roots: &[String],
     discovery: &Discovery,
+    policy: velnor_actions_contract::PullRequestCachePolicy,
 ) -> Result<Job, OrchestratorError> {
-    let mut plan = plan_job(label, acquire, catalog, needs, fetch_roots)?;
+    let mut plan = plan_job(label, acquire, catalog, needs, fetch_roots, policy)?;
     insert_format_report_steps(
         &mut plan,
         wire_w1::workspace_format_report_steps(discovery)?,

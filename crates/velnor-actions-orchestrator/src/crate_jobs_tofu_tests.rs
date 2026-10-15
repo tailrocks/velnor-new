@@ -89,6 +89,7 @@ fn pure_tofu_group_renders_without_rust_setup() {
         acquire: None,
         max_parallel_jobs: 2,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1, "one job per tofu root");
@@ -163,6 +164,7 @@ fn mixed_group_keeps_the_rust_union() {
         acquire: None,
         max_parallel_jobs: 2,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1, "shared group renders once");
@@ -236,6 +238,7 @@ fn tofu_root_jobs_stage_lanes_by_max_parallel() {
         acquire: None,
         max_parallel_jobs: 2,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 3, "one job per root");
@@ -261,6 +264,7 @@ fn wide_cap_stages_nothing() {
         acquire: None,
         max_parallel_jobs: 5,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2);
@@ -282,6 +286,7 @@ fn rust_jobs_never_stage() {
         acquire: None,
         max_parallel_jobs: 1,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2);
@@ -320,6 +325,7 @@ fn first_tofu_obligation_declares_the_cap() {
         acquire: None,
         max_parallel_jobs: 3,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1);
@@ -368,6 +374,7 @@ fn all_tofu_groups_take_tofu_ids_mixed_keep_rust() {
         acquire: None,
         max_parallel_jobs: 2,
         helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 2);

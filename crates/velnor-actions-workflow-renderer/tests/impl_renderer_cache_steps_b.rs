@@ -30,6 +30,7 @@ fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
         "1.19.0",
         "1.98.1",
         mbx_tool_env("1.98.1"),
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     )
     .expect("driver MBX")
     .expect("MBX driver emits");
@@ -52,6 +53,7 @@ fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
             "1.19.0",
             "1.98.1",
             mbx_tool_env("1.98.1"),
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         )
         .expect("cargo driver")
         .is_none(),

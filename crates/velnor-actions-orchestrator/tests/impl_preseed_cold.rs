@@ -155,6 +155,7 @@ esac
             catalog.version(PinnedTool::MrBoxington),
             catalog.version(PinnedTool::Rust),
             env,
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         )?
         .ok_or_else(|| std::io::Error::other("MBX driver steps missing"))?;
         steps
@@ -173,6 +174,7 @@ esac
             catalog.version(PinnedTool::MrBoxington),
             catalog.version(PinnedTool::Rust),
             env,
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         )?
         .ok_or_else(|| std::io::Error::other("MBX driver steps missing"))?;
         Ok(steps)

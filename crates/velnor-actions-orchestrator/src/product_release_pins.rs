@@ -6,7 +6,7 @@ use velnor_actions_contract::{ReleaseTarget, VelnorConfig};
 use velnor_actions_mise::{
     MiseInstall, PinnedTool, PinnedToolExec, PrepareRustTarget, ToolCatalog,
 };
-use velnor_actions_workflow_renderer::ProductReleasePins;
+use velnor_actions_workflow_renderer::{MiseSetup, ProductReleasePins};
 use velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv;
 
 use crate::OrchestratorError;
@@ -15,21 +15,23 @@ use crate::pins::resolve_mise_setup_for_release_target;
 use crate::utf8::strings_of;
 
 /// Build every release command through the Mise adapter's typed requests.
+fn resolve_setups(
+    config: &VelnorConfig,
+) -> Result<(MiseSetup, MiseSetup, MiseSetup), OrchestratorError> {
+    Ok((
+        resolve_mise_setup_for_release_target(config, ReleaseTarget::LinuxX86_64)?,
+        resolve_mise_setup_for_release_target(config, ReleaseTarget::MacosArm64)?,
+        resolve_mise_setup_for_release_target(config, ReleaseTarget::MacosX86_64)?,
+    ))
+}
+
 pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, OrchestratorError> {
     let catalog = ToolCatalog::pinned();
+    let (linux_x86_64_setup, macos_arm64_setup, macos_x86_64_setup) = resolve_setups(config)?;
     Ok(ProductReleasePins {
-        linux_x86_64_setup: resolve_mise_setup_for_release_target(
-            config,
-            ReleaseTarget::LinuxX86_64,
-        )?,
-        macos_arm64_setup: resolve_mise_setup_for_release_target(
-            config,
-            ReleaseTarget::MacosArm64,
-        )?,
-        macos_x86_64_setup: resolve_mise_setup_for_release_target(
-            config,
-            ReleaseTarget::MacosX86_64,
-        )?,
+        linux_x86_64_setup,
+        macos_arm64_setup,
+        macos_x86_64_setup,
         install_gate_tools_argv: install_argv(
             &[
                 PinnedTool::Gh,
@@ -44,7 +46,10 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
             &catalog,
         )?,
         install_qualify_tools_argv: qualify_install_argv(&catalog)?,
-        qualify_mbx_action_steps: steps_for_catalog(&catalog)?,
+        qualify_mbx_action_steps: steps_for_catalog(
+            &catalog,
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        )?,
         install_runner_build_tools_argv: install_argv(&[PinnedTool::Rust], &catalog)?,
         install_gh_argv: install_argv(&[PinnedTool::Gh], &catalog)?,
         build_argv: mbx_build_argv(&[], &catalog)?,

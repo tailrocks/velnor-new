@@ -54,11 +54,12 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// default branch; Scale Set routes do not invoke action restore.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 11] = [
+const ENV_EXPRESSIONS: [&str; 12] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
     "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read'",
+    "((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && 'write' || 'read'",
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
     "github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha",
@@ -74,11 +75,12 @@ const ENV_EXPRESSIONS: [&str; 11] = [
 /// push-gated cache-save flag, and the publish step's derived
 /// artifact name. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 12] = [
+const WITH_EXPRESSIONS: [&str; 13] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
     "github.event_name == 'push'",
+    "github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork",
     "steps.publish-baseline.outputs.artifact_name",
     "steps.v2.outputs.identity",
     "steps.v2.outputs.seed_admitted",

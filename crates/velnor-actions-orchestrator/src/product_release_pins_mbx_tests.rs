@@ -64,7 +64,11 @@ fn linux_resource_probe_build_uses_cargo_and_pinned_rust() {
 #[test]
 fn release_qualification_uses_catalog_action_and_exact_version_probe() {
     let catalog = ToolCatalog::pinned();
-    let steps = steps_for_catalog(&catalog).expect("catalog qualification MBX steps");
+    let steps = steps_for_catalog(
+        &catalog,
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+    )
+    .expect("catalog qualification MBX steps");
     let StepKind::Action { uses, with, .. } = &steps[1].kind else {
         panic!("qualification middle step must install the native MBX action");
     };
