@@ -31,20 +31,21 @@ fn id_and_display_prefixes_agree_per_partition() {
         .unit_id
         .clone_from(&mixed_tofu.identity.unit_id);
     rust.configuration.clone_from(&mixed_tofu.configuration);
-    let found = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &discovery(vec![
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &discovery(vec![
             group("demo", TaskKind::Clippy, &[]),
             tofu_group("stacks/a", TofuTaskKind::Validate),
             rust,
             mixed_tofu,
         ]),
-        &ToolCatalog::pinned(),
-        &[],
-        None,
-        2,
-    )
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+    })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 3, "rust plus tofu plus mixed");
     for (id, job) in &found.jobs {

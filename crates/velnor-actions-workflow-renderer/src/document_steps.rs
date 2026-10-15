@@ -152,6 +152,7 @@ fn action_step_to_yaml(
         || uses == crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
         || crate::action_ref::is_generated_provider_prelude(uses)
         || crate::action_ref::is_crate_obligation_action(uses)
+        || crate::action_ref::is_generated_declared_task(uses)
     {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
     } else {
@@ -159,7 +160,16 @@ fn action_step_to_yaml(
     };
     entries.push(("uses".to_owned(), uses_value));
     if !with.is_empty() {
-        entries.push(("with".to_owned(), string_map_yaml(with)));
+        let with_yaml = if crate::action_ref::is_generated_declared_task(uses) {
+            Yaml::FlowMap(
+                with.iter()
+                    .map(|(key, value)| (key.clone(), value.clone()))
+                    .collect(),
+            )
+        } else {
+            string_map_yaml(with)
+        };
+        entries.push(("with".to_owned(), with_yaml));
     }
     let filtered_env: BTreeMap<String, String> = env
         .iter()
@@ -203,7 +213,7 @@ pub(crate) fn step_to_yaml(
             step_context.runs_on,
         ),
         StepKind::Shell { run, env } => {
-            commands::validate_command_argv(run)?;
+            crate::action_mbx_shell::validate_step_argv(run, step.role)?;
             if composite {
                 commands::validate_composite_env(env)?;
             } else {
@@ -228,13 +238,16 @@ pub(crate) fn step_to_yaml(
             push_composite_shell(&mut entries, composite);
             entries.push((
                 "run".to_owned(),
-                Yaml::str(commands::join_argv_for_run(run)?),
+                Yaml::str(commands::join_validated_argv_for_run(run)?),
             ));
             Ok(Yaml::Map(entries))
         }
         StepKind::Internal { .. } => {
             internal_step_to_yaml(job_id, step, ctx, needs_envs, composite, step_context)
         }
+        StepKind::TaskExecution { .. } => Err(RenderError::InvalidWorkflow(
+            "unfactored_task_execution".to_owned(),
+        )),
     }
 }
 

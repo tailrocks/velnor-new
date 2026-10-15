@@ -108,13 +108,24 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # strict_json_files = [".github/marketplace.json"] # Optional explicit scope; omit to check every JSON file.
 # lychee_args = ["--offline", "--include-fragments"] # Optional Lychee args; preserved as separate argv values.
 
-# Optional isolated verification tasks. Authors and reviewers keep task bodies
-# free of Rust compilation; V1 does not inspect them. Each declaration gets a
-# read-only contents token and joins Required on every CI trigger.
+# Optional isolated verification and build tasks. V1 does not inspect task
+# bodies for Rust compilation; task authors own that behavior. Each declaration
+# gets a read-only contents token and joins Required on every CI trigger.
+# [[workflow.tasks]]
+# id = "native-desktop"
+# kind = "build"                       # Hosted macOS 26 ARM64; joins Required.
+# mise_task = "desktop-ci"
+# source = { mise_config = "native/mise.toml", working_directory = "native" }
+# tools = ["mr-boxington", "rust"]    # Selected closure comes from root mise.toml/mise.lock.
+# runner = "macos-26-arm64"
+# timeout_minutes = 120                 # Bounded 1..=180.
+# cargo_build_jobs = 2                  # Bounded 1..=2; MBX/Rust are selected, while task code owns compiler selection.
+# nextest_test_threads = 2              # Bounded 1..=2.
 # [[workflow.tasks]]
 # id = "native-format"
 # kind = "verification"
 # mise_task = "desktop-format-check"
+# source = { mise_config = "native/mise.toml", working_directory = "native" }
 # runner = "macos-arm64"               # Or "linux-x64".
 # timeout_minutes = 10                  # Bounded 1..=360.
 
@@ -135,7 +146,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # Optional Rust task configuration. The Rust detector is automatic in V1.
 # [stacks.rust]
 # configurations = [{ name = "default", features = ["default"], target = "host" }]
-# compile_driver = "cargo"         # Sticky override: "cargo" (default) or "mbx". Without it, a repo-local Mise Cargo wrapper selects MBX. Each key overrides its own axis only; conflicts with durable evidence fail closed.
+# compile_driver = "mbx"           # Sticky override: "cargo" (default) or "mbx". This sample's selected Rust toolchain enables MBX; V1 does not inspect task bodies to confirm their compiler route. Conflicts with durable evidence fail closed.
 # test_runner = "cargo_test"       # Sticky override: "cargo_test" (default) or "cargo_nextest". Without it, .config/nextest.toml selects Nextest ([profile.ci] when declared, else the documented default profile).
 # Do not put free-form Mise commands in credential-bearing Rust jobs.
 

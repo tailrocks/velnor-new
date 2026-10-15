@@ -267,7 +267,9 @@ fn job_to_yaml(
         .get(id)
         .map_or(job.steps.as_slice(), Vec::as_slice);
     let step_has_env = source_steps.iter().any(|step| match &step.kind {
-        StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
+        StepKind::Shell { env, .. }
+        | StepKind::Action { env, .. }
+        | StepKind::TaskExecution { env, .. } => !env.is_empty(),
         StepKind::Internal { .. } => false,
     });
     let mut job_env = if step_has_env && ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id))
@@ -283,7 +285,9 @@ fn job_to_yaml(
     if step_has_env {
         for step in source_steps {
             let step_env = match &step.kind {
-                StepKind::Shell { env, .. } | StepKind::Action { env, .. } => Some(env),
+                StepKind::Shell { env, .. }
+                | StepKind::Action { env, .. }
+                | StepKind::TaskExecution { env, .. } => Some(env),
                 StepKind::Internal { .. } => None,
             };
             if let Some(env) = step_env {

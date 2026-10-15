@@ -94,27 +94,40 @@ fn mise_lock_projects_exact_selected_tool_and_macos_arm64_artifact() {
     // Parser-shape fixture only. It makes no install-acceptance or provenance claim.
     let value = toml::from_str(
         r#"
+lockfile_version = 3
+
 [tools]
 "github:boltffi/boltffi" = [
-  { version = "0.30.1", backend = "github:boltffi/boltffi", "platforms.macos-arm64" = { url = "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-darwin-aarch64.tar.gz", checksum = "sha256:ce3a47b5c398cbb9c327098a612b431f30db15d353d62cee4e4637540fa8321a" } }
+  { version = "0.30.1", backend = "github:boltffi/boltffi", specifiers = ["0.30.1"], "platforms.macos-arm64" = { url = "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-darwin-aarch64.tar.gz", checksum = "sha256:ce3a47b5c398cbb9c327098a612b431f30db15d353d62cee4e4637540fa8321a" } }
 ]
 rust = [
-  { version = "1.98.0", backend = "core:rust" }
+  { version = "1.98.0", backend = "core:rust", specifiers = ["1.98.0"] }
 ]
 "#,
     )
     .expect("valid lock TOML");
     let lock = parse_native_mise_lock(&value).expect("Mise lock projection");
-    let selected = lock
+    let selected_rows = lock
         .tools
         .get("github:boltffi/boltffi")
-        .expect("selected tool entry");
-    let macos = selected.macos_arm64.as_ref().expect("macOS ARM64 entry");
+        .expect("selected tool rows");
+    assert_eq!(selected_rows.len(), 1, "fixture has one exact selected row");
+    let selected = selected_rows.first().expect("selected tool entry");
+    let macos = selected
+        .platforms
+        .get("macos-arm64")
+        .expect("macOS ARM64 entry");
 
     assert!(lock.valid_shape);
+    assert!(lock.has_supported_root_shape());
+    assert_eq!(lock.lockfile_version, Some(3));
     assert!(selected.valid_shape);
     assert_eq!(selected.backend.as_deref(), Some("github:boltffi/boltffi"));
     assert_eq!(selected.version.as_deref(), Some("0.30.1"));
+    assert_eq!(
+        selected.specifiers.as_deref(),
+        Some(&["0.30.1".to_owned()][..])
+    );
     assert!(macos.valid_shape);
     assert_eq!(
         macos.url.as_deref(),
@@ -126,30 +139,41 @@ rust = [
         macos.checksum.as_deref(),
         Some("sha256:ce3a47b5c398cbb9c327098a612b431f30db15d353d62cee4e4637540fa8321a")
     );
-    assert!(selected.linux_x64.is_none());
+    assert!(!selected.platforms.contains_key("linux-x64"));
 
-    let rust = lock.tools.get("rust").expect("Rust lock entry");
+    let rust = lock
+        .tools
+        .get("rust")
+        .and_then(|entries| entries.first())
+        .expect("Rust lock entry");
     assert!(rust.valid_shape);
     assert_eq!(rust.backend.as_deref(), Some("core:rust"));
     assert_eq!(rust.version.as_deref(), Some("1.98.0"));
-    assert!(rust.macos_arm64.is_none());
+    assert_eq!(rust.specifiers.as_deref(), Some(&["1.98.0".to_owned()][..]));
+    assert!(rust.platforms.is_empty());
 }
 
 #[test]
 fn mise_lock_projects_exact_linux_x64_artifact() {
     let value = toml::from_str(
         r#"
+lockfile_version = 3
+
 [tools]
 "github:example/linter" = [
-  { version = "1.2.3", backend = "github:example/linter", "platforms.linux-x64" = { url = "https://github.com/example/linter/releases/download/v1.2.3/linter-linux-x64.tar.gz", checksum = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }
+  { version = "1.2.3", backend = "github:example/linter", specifiers = ["1.2.3"], "platforms.linux-x64" = { url = "https://github.com/example/linter/releases/download/v1.2.3/linter-linux-x64.tar.gz", checksum = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }
 ]
 "#,
     )
     .expect("valid Linux lock TOML");
     let lock = parse_native_mise_lock(&value).expect("Mise lock projection");
-    let tool = lock.tools.get("github:example/linter").expect("tool row");
-    let linux = tool.linux_x64.as_ref().expect("Linux x64 artifact");
-    assert!(tool.macos_arm64.is_none());
+    let tool = lock
+        .tools
+        .get("github:example/linter")
+        .and_then(|entries| entries.first())
+        .expect("tool row");
+    let linux = tool.platforms.get("linux-x64").expect("Linux x64 artifact");
+    assert!(!tool.platforms.contains_key("macos-arm64"));
     assert_eq!(tool.version.as_deref(), Some("1.2.3"));
     assert_eq!(
         linux.url.as_deref(),
@@ -161,18 +185,19 @@ fn mise_lock_projects_exact_linux_x64_artifact() {
 fn mise_lock_exposes_unknown_fields_and_rejects_malformed_shapes() {
     let value = toml::from_str(
         r#"
+lockfile_version = 3
 future_root = true
 
 [tools]
 rust = [
-  { version = "1.98.0", backend = "core:rust", future_option = "reject" }
+  { version = "1.98.0", backend = "core:rust", specifiers = ["1.98.0"], future_option = "reject" }
 ]
 "github:boltffi/boltffi" = [
-  { version = "0.30.1", backend = "github:boltffi/boltffi", "platforms.macos-arm64" = { url = "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-darwin-aarch64.tar.gz", checksum = "sha256:ce3a47b5c398cbb9c327098a612b431f30db15d353d62cee4e4637540fa8321a", future_artifact_field = "reject" } }
+  { version = "0.30.1", backend = "github:boltffi/boltffi", specifiers = ["0.30.1"], "platforms.macos-arm64" = { url = "https://github.com/boltffi/boltffi/releases/download/v0.30.1/boltffi-darwin-aarch64.tar.gz", checksum = "sha256:ce3a47b5c398cbb9c327098a612b431f30db15d353d62cee4e4637540fa8321a", future_artifact_field = "reject" } }
 ]
 malformed = [
-  { version = "1.0.0", backend = "core:rust" },
-  { version = "2.0.0", backend = "core:rust" }
+  { version = "1.0.0", backend = "core:rust", specifiers = ["1.0.0"] },
+  { version = "2.0.0", backend = "core:rust", specifiers = ["2.0.0"] }
 ]
 "#,
     )
@@ -180,18 +205,156 @@ malformed = [
     let lock = parse_native_mise_lock(&value).expect("Mise lock projection");
 
     assert!(lock.root_keys.contains(&"future_root".to_owned()));
-    let rust = lock.tools.get("rust").expect("Rust entry");
+    assert!(!lock.has_supported_root_shape());
+    let rust = lock
+        .tools
+        .get("rust")
+        .and_then(|entries| entries.first())
+        .expect("Rust entry");
     assert!(rust.valid_shape);
     assert_eq!(rust.unsupported_fields, ["future_option"]);
 
-    let selected = lock
+    let selected_rows = lock
         .tools
         .get("github:boltffi/boltffi")
-        .expect("selected tool entry");
-    let macos = selected.macos_arm64.as_ref().expect("macOS ARM64 entry");
+        .expect("selected tool rows");
+    assert_eq!(selected_rows.len(), 1, "fixture has one exact selected row");
+    let selected = selected_rows.first().expect("selected tool entry");
+    let macos = selected
+        .platforms
+        .get("macos-arm64")
+        .expect("macOS ARM64 entry");
     assert_eq!(macos.unsupported_fields, ["future_artifact_field"]);
 
-    let malformed = lock.tools.get("malformed").expect("malformed entry");
-    assert!(!malformed.valid_shape);
+    let variants = lock.tools.get("malformed").expect("version variants");
+    assert_eq!(variants.len(), 2);
+    assert!(variants.iter().all(|entry| entry.valid_shape));
+    assert!(
+        lock.selected_tool(
+            "malformed",
+            "1.0.0",
+            "1.0.0",
+            &std::collections::BTreeMap::new(),
+        )
+        .is_some()
+    );
+    assert!(
+        lock.selected_tool(
+            "malformed",
+            "2.0.0",
+            "2.0.0",
+            &std::collections::BTreeMap::new(),
+        )
+        .is_some()
+    );
     assert!(parse_native_mise_lock(&toml::Value::String("not a lock".to_owned())).is_none());
 }
+
+#[test]
+fn mise_lock_specifiers_must_be_nonempty_unique_string_lists() {
+    for row in [
+        r#"{ version = "1.2.3", backend = "core:rust" }"#,
+        r#"{ version = "1.2.3", backend = "core:rust", specifiers = "1.2.3" }"#,
+        r#"{ version = "1.2.3", backend = "core:rust", specifiers = [] }"#,
+        r#"{ version = "1.2.3", backend = "core:rust", specifiers = [1] }"#,
+        r#"{ version = "1.2.3", backend = "core:rust", specifiers = [""] }"#,
+        r#"{ version = "1.2.3", backend = "core:rust", specifiers = ["1.2.3", "1.2.3"] }"#,
+    ] {
+        let value = toml::from_str(&format!("lockfile_version = 3\n[tools]\nrust = [{row}]\n"))
+            .expect("syntactically valid lock row");
+        let lock = parse_native_mise_lock(&value).expect("lock projection");
+        let rust = lock
+            .tools
+            .get("rust")
+            .and_then(|entries| entries.first())
+            .expect("Rust row");
+        assert!(
+            rust.unsupported_fields
+                .iter()
+                .any(|field| field.starts_with("specifiers.")),
+            "invalid specifier field must be rejected: {row}"
+        );
+    }
+}
+
+#[test]
+fn mise_lock_selects_exact_option_variants_and_rejects_ambiguous_rows() {
+    let value = toml::from_str(
+        r#"
+lockfile_version = 3
+
+[tools]
+rust = [
+  { version = "1.99.0", backend = "core:rust", specifiers = ["1.99.0"], options = { profile = "plain" } },
+  { version = "1.99.0", backend = "core:rust", specifiers = ["=1.99.0"], options = { profile = "plain" } },
+  { version = "1.99.0", backend = "core:rust", specifiers = ["1.99.0"], options = { profile = "workspace" } }
+]
+"#,
+    )
+    .expect("valid duplicate-version option variants");
+    let lock = parse_native_mise_lock(&value).expect("lock projection");
+    assert_eq!(lock.tools["rust"].len(), 3);
+    assert!(
+        lock.selected_tool(
+            "rust",
+            "1.99.0",
+            "1.99.0",
+            &std::collections::BTreeMap::from([("profile".to_owned(), "plain".to_owned())]),
+        )
+        .is_some()
+    );
+    assert!(
+        lock.selected_tool(
+            "rust",
+            "1.99.0",
+            "1.99",
+            &std::collections::BTreeMap::from([("profile".to_owned(), "plain".to_owned())]),
+        )
+        .is_none(),
+        "a lock row must bind the exact requested specifier"
+    );
+    assert!(
+        lock.selected_tool(
+            "rust",
+            "1.99.0",
+            "=1.99.0",
+            &std::collections::BTreeMap::from([("profile".to_owned(), "plain".to_owned())]),
+        )
+        .is_some()
+    );
+    assert!(
+        lock.selected_tool(
+            "rust",
+            "1.99.0",
+            "1.99.0",
+            &std::collections::BTreeMap::from([("profile".to_owned(), "workspace".to_owned())]),
+        )
+        .is_some()
+    );
+
+    let ambiguous = toml::from_str(
+        r#"
+lockfile_version = 3
+
+[tools]
+rust = [
+  { version = "1.99.0", backend = "core:rust", specifiers = ["1.99.0"] },
+  { version = "1.99.0", backend = "aqua:unexpected/tool", specifiers = ["1.99.0"] }
+]
+"#,
+    )
+    .expect("valid duplicated rows");
+    let lock = parse_native_mise_lock(&ambiguous).expect("lock projection");
+    assert!(
+        lock.selected_tool(
+            "rust",
+            "1.99.0",
+            "1.99.0",
+            &std::collections::BTreeMap::new(),
+        )
+        .is_none()
+    );
+}
+
+#[path = "impl_mise_build_tools_lock_tests.rs"]
+mod lock_v3_tests;

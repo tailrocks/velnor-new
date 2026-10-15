@@ -9,6 +9,8 @@ use velnor_actions_contract::workflow::step_identity::{
 /// Prefix for renderer-generated shared `ToFu` setup composites.
 pub(crate) const TOFU_PROVIDER_PRELUDE_ACTION_PREFIX: &str =
     "./.github/actions/tofu-provider-prelude-";
+/// Prefix for renderer-generated declared-task argv composites.
+pub(crate) const DECLARED_TASK_ACTION_PREFIX: &str = "./.github/actions/declared-task-";
 
 /// Validate an `owner/repo@<40 hex>` action ref. Branch names are rejected.
 ///
@@ -27,6 +29,7 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
     ) || TOOLS_CACHE_PRELUDE_USES.contains(&uses)
         || is_generated_provider_prelude(uses)
         || is_crate_obligation_action(uses)
+        || is_generated_declared_task(uses)
     {
         return Ok(());
     }
@@ -80,6 +83,17 @@ pub(crate) fn is_generated_provider_prelude(uses: &str) -> bool {
         })
 }
 
+pub(crate) fn is_generated_declared_task(uses: &str) -> bool {
+    uses.strip_prefix(DECLARED_TASK_ACTION_PREFIX)
+        .is_some_and(|suffix| {
+            !suffix.is_empty()
+                && suffix.bytes().all(|byte| byte.is_ascii_digit())
+                && suffix
+                    .parse::<usize>()
+                    .is_ok_and(|index| index.to_string() == suffix)
+        })
+}
+
 /// True for `owner/repo` over alphanumerics plus `.-_`.
 fn is_action_name(name: &str) -> bool {
     !name.is_empty()
@@ -105,6 +119,8 @@ mod tests {
         assert!(
             validate_uses("./.github/actions/crate-obligation-tofu-provider-prelude-a").is_ok()
         );
+        assert!(validate_uses("./.github/actions/declared-task-0").is_ok());
+        assert!(validate_uses("./.github/actions/declared-task-12").is_ok());
         for uses in [
             "./.github/actions/rust-demo",
             "./.github/actions/velnor-tools-prelude-u20",
@@ -114,6 +130,9 @@ mod tests {
             "./.github/actions/tofu-provider-prelude-01",
             "./.github/actions/tofu-provider-prelude-1-extra",
             "./.github/actions/crate-obligation-",
+            "./.github/actions/declared-task-",
+            "./.github/actions/declared-task-01",
+            "./.github/actions/declared-task-1/extra",
         ] {
             assert!(validate_uses(uses).is_err(), "{uses}");
         }

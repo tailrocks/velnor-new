@@ -25,6 +25,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         task: VerificationTask {
             id: "native-format".to_owned(),
             mise_task: "desktop-format-check".to_owned(),
+            source: velnor_actions_contract::MiseTaskSource::default(),
             runner: VerificationRunner::MacosArm64,
             timeout_minutes: 10,
         },
@@ -48,7 +49,9 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
     .expect("typed task job");
     let context = RenderContext {
         generator_version: "0.1.0".to_owned(),
+        report_helper_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        scale_set_selector: None,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: "actions/checkout@0123456789abcdef0123456789abcdef01234567".to_owned(),

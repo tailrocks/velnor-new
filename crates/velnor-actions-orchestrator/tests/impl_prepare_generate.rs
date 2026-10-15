@@ -14,6 +14,9 @@ use crate::impl_common::{
     ReadonlyGuard, TestResult, config_with_branch, err_of, make_repo, plan_for, snapshot,
 };
 
+#[path = "impl_prepare_generate_expected.rs"]
+mod generated_files;
+
 #[test]
 fn prepare_plan_text_is_deterministic_and_write_free() -> TestResult {
     let repo = make_repo(config_with_branch())?;
@@ -54,17 +57,7 @@ fn generate_preview_matches_in_place_and_preserves_repo() -> TestResult {
     assert_eq!(before, snapshot(root)?, "preview must not touch the repo");
     let inplace_report = generate(&prep, &GenerateOptions { output_dir: None })?;
     assert_eq!(preview_report.files_written, inplace_report.files_written);
-    let expected_files = [
-        ".github/AGENTS.md",
-        ".github/CLAUDE.md",
-        ".github/actionlint.yaml",
-        ".github/actions/u26/action.yml",
-        ".github/actions/velnor-tool-seed/action.yml",
-        ".github/actions/velnor-tools-cache-restore/action.yml",
-        ".github/actions/velnor-tools-prelude-u26/action.yml",
-        ".github/scripts/velnor-tools-cache-identity.sh",
-        ".github/workflows/ci.yml",
-    ];
+    let expected_files = generated_files::EXPECTED;
     assert_eq!(preview_report.files_written, expected_files);
     for rel in &inplace_report.files_written {
         let preview_bytes = fs::read(preview_root.join(rel))?;

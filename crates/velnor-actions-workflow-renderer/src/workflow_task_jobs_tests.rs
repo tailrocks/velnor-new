@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    BuildTask, BuildTaskRunner, Job, JobTimeout, NativeImageCachePolicy, NativeImagePlatform,
-    NativeImageTask, VerificationRunner, VerificationTask,
+    BuildTask, BuildTaskRunner, Job, JobTimeout, MiseTaskSource, NativeImageCachePolicy,
+    NativeImagePlatform, NativeImageTask, VerificationRunner, VerificationTask,
 };
 
 use super::{WorkflowTaskPolicy, extend_required_needs, validate_workflow_task_jobs};
@@ -29,6 +29,10 @@ fn verification_policy() -> VerificationTaskPolicy {
         task: VerificationTask {
             id: "native-format".to_owned(),
             mise_task: "desktop-format-check".to_owned(),
+            source: MiseTaskSource {
+                mise_config: "mise.toml".to_owned(),
+                working_directory: ".".to_owned(),
+            },
             runner: VerificationRunner::LinuxX64,
             timeout_minutes: 10,
         },
@@ -36,7 +40,7 @@ fn verification_policy() -> VerificationTaskPolicy {
         scale_set_token: None,
         mise_setup: mise_setup(),
         selected_tools: Vec::new(),
-        mise_config_sha256: None,
+        mise_config_sha256: Some("b".repeat(64)),
         mise_lock_sha256: None,
         rust_toolchain_sha256: None,
     }
@@ -47,6 +51,10 @@ fn build_policy() -> BuildTaskPolicy {
         task: BuildTask {
             id: "native-desktop".to_owned(),
             mise_task: "desktop-ci".to_owned(),
+            source: MiseTaskSource {
+                mise_config: "native/mise.toml".to_owned(),
+                working_directory: "native".to_owned(),
+            },
             tools: vec!["mr-boxington".to_owned(), "rust".to_owned()],
             runner: BuildTaskRunner::Macos26Arm64,
             timeout_minutes: 120,
@@ -58,33 +66,49 @@ fn build_policy() -> BuildTaskPolicy {
         mise_config_sha256: "b".repeat(64),
         mise_lock_sha256: "c".repeat(64),
         rust_toolchain_sha256: "d".repeat(64),
+        source_mise_config_sha256: "e".repeat(64),
+        source_mise_lock_sha256: None,
+        source_rust_toolchain_sha256: None,
         selected_tools: vec![
             BuildTaskTool {
                 key: "mr-boxington".to_owned(),
-                version: "1.22.0".to_owned(),
+                version: "1.23.0".to_owned(),
                 backend: "packslip:github.com/jdx/mr-boxington".to_owned(),
                 os: Vec::new(),
                 config_options: BTreeMap::new(),
                 lock_options: BTreeMap::new(),
                 artifact: Some(BuildTaskArtifact {
-                    checksum: format!("sha256:{}", "e".repeat(64)),
-                    url: "https://github.com/jdx/mr-boxington/releases/download/v1.22.0/mbx-aarch64-apple-darwin.tar.gz".to_owned(),
+                    checksum: "sha256:e548b5758498cf822a180b6328597e6aded8fe9bb3046cd918399172ae30dde2".to_owned(),
+                    url: "https://github.com/jdx/mr-boxington/releases/download/v1.23.0/mbx-aarch64-apple-darwin.tar.gz".to_owned(),
                     url_api: None,
-                    signer: None,
+                    signer: Some(
+                        "sigstore-oidc:https://github.com/jdx/mr-boxington/.github/workflows/release.yml"
+                            .to_owned(),
+                    ),
                     provenance: None,
                 }),
             },
             BuildTaskTool {
                 key: "rust".to_owned(),
-                version: "1.97.1".to_owned(),
+                version: "1.99.0".to_owned(),
                 backend: "core:rust".to_owned(),
                 os: Vec::new(),
-                config_options: BTreeMap::new(),
-                lock_options: BTreeMap::new(),
+                config_options: rust_options(),
+                lock_options: rust_options(),
                 artifact: None,
             },
         ],
     }
+}
+
+fn rust_options() -> BTreeMap<String, String> {
+    BTreeMap::from([
+        ("components".to_owned(), "clippy,rustfmt".to_owned()),
+        (
+            "targets".to_owned(),
+            "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu".to_owned(),
+        ),
+    ])
 }
 
 fn image_policy() -> NativeImageTaskPolicy {

@@ -137,11 +137,18 @@ fn collect_anchor_names(node: &Yaml, names: &mut BTreeSet<AnchorName>) {
                 collect_anchor_names(value, names);
             }
         }
+        Yaml::AnchoredMap { name, entries } => {
+            names.insert(name.clone());
+            for (_, value) in entries {
+                collect_anchor_names(value, names);
+            }
+        }
         Yaml::Null
         | Yaml::Str(_)
         | Yaml::Bool(_)
         | Yaml::Int(_)
         | Yaml::Flow(_)
+        | Yaml::FlowMap(_)
         | Yaml::Quoted(_)
         | Yaml::Annotated { .. } => {}
     }

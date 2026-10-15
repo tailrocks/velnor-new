@@ -3,9 +3,13 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, Plan};
+use velnor_actions_contract::workflow::{TASK_EXECUTION_MANIFEST_PATH, TaskExecutionManifestV1};
+use velnor_actions_contract::{
+    FinalStatus, Plan, StepKind, matrix_id_for_task_group, matrix_key_for_id,
+};
 use velnor_actions_orchestrator::{
     GenerateOptions, generate, merge_internal, merge_passed, plan_internal, prepare,
+    render_staged_tree,
 };
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
@@ -222,20 +226,71 @@ fn ignored_rust_merges_to_no_work_never_passes() -> TestResult {
 
 #[test]
 fn obligations_carry_fixed_identity() -> TestResult {
-    let (_repo, _parent, text) = preview_yml(config_with_branch())?;
-    for want in [
-        "- name: Clippy",
-        "VELNOR_TASK_ID: stack/rust/root/clippy/default",
-        "VELNOR_TASK_DIGEST: b3-",
-        "VELNOR_MATRIX_ID: ",
-        "VELNOR_MATRIX_KEY: m-",
-        "cargo clippy --locked --offline",
-    ] {
-        assert!(text.contains(want), "missing {want}:\n{text}");
-    }
+    const TASK_ID: &str = "stack/rust/root/clippy/default";
+    let repo = make_repo(config_with_branch())?;
+    let prep = prepare(repo.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+    let marked = tree
+        .get(TASK_EXECUTION_MANIFEST_PATH)
+        .ok_or("missing task execution manifest")?;
+    let (_, json) = marked
+        .split_once('\n')
+        .ok_or("missing task execution manifest marker")?;
+    let manifest: TaskExecutionManifestV1 = serde_json::from_str(json)?;
+    manifest.validate()?;
+    let job = prep
+        .workflow
+        .ir
+        .jobs
+        .get("rust-demo")
+        .ok_or("missing Rust job")?;
+    let clippy = job
+        .steps
+        .iter()
+        .find(|step| step.name == "Clippy")
+        .ok_or("missing Clippy task")?;
+    let StepKind::TaskExecution {
+        argv,
+        env,
+        task_id,
+        task_digest,
+        toolchain_inputs,
+        matrix_id,
+        matrix_key,
+        report_helper_version,
+        matrix_max_parallel,
+    } = &clippy.kind
+    else {
+        return Err("Clippy must be a declared task".into());
+    };
+    let record = manifest.tasks.get(task_id).ok_or("missing Clippy record")?;
+    assert_eq!(*task_id, TASK_ID);
+    assert!(task_digest.starts_with("b3-"));
+    assert_eq!(record.task_id, *task_id);
+    assert_eq!(record.task_digest, *task_digest);
+    assert_eq!(record.argv, *argv);
+    assert_eq!(record.env, *env);
+    assert_eq!(record.toolchain_inputs, *toolchain_inputs);
+    assert_eq!(record.matrix_id, *matrix_id);
+    assert_eq!(record.matrix_key, *matrix_key);
+    assert_eq!(record.report_helper_version, *report_helper_version);
+    assert_eq!(record.matrix_max_parallel, *matrix_max_parallel);
+    assert_eq!(*matrix_id, matrix_id_for_task_group("rust", TASK_ID)?);
+    assert_eq!(*matrix_key, matrix_key_for_id(matrix_id)?);
+    assert!(argv.iter().any(|arg| arg == "--locked"));
+    assert!(argv.iter().any(|arg| arg == "--offline"));
     assert!(
-        !text.contains("${{ matrix."),
-        "fixed identities, no matrix context:\n{text}"
+        argv.windows(2)
+            .any(|pair| pair[0] == "cargo" && pair[1] == "clippy")
+    );
+    assert!(
+        yaml.contains(&record.execution_digest),
+        "workflow binds manifest record"
+    );
+    assert!(
+        !yaml.contains("${{ matrix."),
+        "fixed identities, no matrix context:\n{yaml}"
     );
     Ok(())
 }

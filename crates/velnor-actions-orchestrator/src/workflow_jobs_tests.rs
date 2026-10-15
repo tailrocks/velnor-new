@@ -5,7 +5,7 @@
 use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
 use crate::discover::Discovery;
-use crate::workflow::plan_uses_rust;
+use crate::workflow::workflow_policy::plan_uses_rust;
 use velnor_actions_contract::StepKind;
 use velnor_actions_contract::WorkflowPolicy;
 
@@ -80,7 +80,7 @@ pub(crate) fn needs(rust: PlanRustNeed) -> PlanJobToolNeeds {
 fn operation_of(step: &Step) -> Option<&str> {
     match &step.kind {
         StepKind::Internal { operation, .. } => Some(operation),
-        StepKind::Action { .. } | StepKind::Shell { .. } => None,
+        StepKind::Action { .. } | StepKind::Shell { .. } | StepKind::TaskExecution { .. } => None,
     }
 }
 

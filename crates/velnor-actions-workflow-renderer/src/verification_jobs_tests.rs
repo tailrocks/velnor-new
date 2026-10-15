@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::verification_jobs::build_task_jobs::{BuildTaskArtifact, BuildTaskTool};
 use velnor_actions_contract::{
-    Job, JobTimeout, PermissionLevel, VerificationRunner, VerificationTask,
+    Job, JobTimeout, MiseTaskSource, PermissionLevel, VerificationRunner, VerificationTask,
 };
 
 use super::{
@@ -19,6 +19,7 @@ fn policy(id: &str, runner: VerificationRunner) -> VerificationTaskPolicy {
         task: VerificationTask {
             id: id.to_owned(),
             mise_task: format!("lint-{id}"),
+            source: MiseTaskSource::default(),
             runner,
             timeout_minutes: 10,
         },
