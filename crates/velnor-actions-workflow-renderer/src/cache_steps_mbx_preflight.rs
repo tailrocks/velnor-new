@@ -130,7 +130,7 @@ fn rust_path_preflight_step(
         "if [ ! -e \"$RUNNER_TEMP/velnor\" ]; then (umask 077 && mkdir -m 700 \"$RUNNER_TEMP/velnor\"); fi".to_owned(),
         "[ -d \"$RUNNER_TEMP/velnor\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" || { printf '%s\\n' 'Velnor temp root must be a real directory' >&2; exit 1; }".to_owned(),
         "[ ! -e \"$mbx_cache_dir\" ] && [ ! -L \"$mbx_cache_dir\" ] || { printf '%s\\n' 'MBX store root already exists in this private runner namespace' >&2; exit 1; }".to_owned(),
-        "(umask 077 && mkdir -m 700 \"$mbx_cache_dir\") || { printf '%s\\n' 'could not reserve the MBX store root' >&2; exit 1; }".to_owned(),
+        "(umask 077 && mkdir -m 700 \"$mbx_cache_dir\" && mkdir -m 700 \"$mbx_cache_dir/actions\") || { printf '%s\\n' 'could not reserve the MBX store root' >&2; exit 1; }".to_owned(),
         "[ -n \"${GITHUB_ENV:-}\" ] && [ -f \"$GITHUB_ENV\" ] && [ ! -L \"$GITHUB_ENV\" ] || { printf '%s\\n' 'GITHUB_ENV must be a regular runner file' >&2; exit 1; }".to_owned(),
         "check_no_symlink \"$GITHUB_ENV\" || { printf '%s\\n' 'GITHUB_ENV path contains a symlink' >&2; exit 1; }".to_owned(),
         "printf 'MBX_CACHE_DIR=%s\\n' \"$mbx_cache_dir\" >> \"$GITHUB_ENV\"".to_owned(),
