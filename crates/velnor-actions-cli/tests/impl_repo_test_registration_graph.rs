@@ -172,10 +172,17 @@ impl<'ast> Visit<'ast> for SourceVisitor<'_> {
 pub(super) fn source_findings(path: &Path) -> Outcome<SourceFindings> {
     let source = fs::read_to_string(path)?;
     let syntax = syn::parse_file(&source)?;
-    if cfg::attrs_possibility_in_test(&syntax.attrs)? == Possibility::Never {
+    source_findings_for_syntax(path, &syntax)
+}
+
+pub(super) fn source_findings_for_syntax(
+    path: &Path,
+    syntax: &syn::File,
+) -> Outcome<SourceFindings> {
+    let condition = cfg::attrs_possibility_in_test(&syntax.attrs)?;
+    if condition == Possibility::Never {
         return Ok(SourceFindings::default());
     }
-    let condition = cfg::attrs_possibility_in_test(&syntax.attrs)?;
     let mut visitor = SourceVisitor {
         source: path,
         findings: SourceFindings::default(),
@@ -184,7 +191,7 @@ pub(super) fn source_findings(path: &Path) -> Outcome<SourceFindings> {
         source_order: 0,
         error: None,
     };
-    visitor.visit_file(&syntax);
+    visitor.visit_file(syntax);
     if let Some(error) = visitor.error {
         return Err(error.into());
     }

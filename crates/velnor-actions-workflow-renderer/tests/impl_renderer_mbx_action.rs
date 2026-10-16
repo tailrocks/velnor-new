@@ -89,18 +89,7 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     );
     assert!(!with.contains_key("cache-key-suffix"));
     assert!(!with.contains_key("isolate-objects-cache"));
-    assert!(!with.contains_key("cache-key"));
-    assert!(!with.contains_key("restore-keys"));
-    let expected_generation = format!(
-        "{}-gc-auto-off-final-clean-v1-action-{}-lane-${{{{ runner.environment }}}}-job-${{{{ github.job }}}}",
-        mbx_cache_generation(TEST_MBX_VERSION),
-        "a".repeat(40)
-    );
-    assert_eq!(
-        with.get("cache-generation").map(String::as_str),
-        Some(expected_generation.as_str()),
-        "the provider's default Rust compiler hash stays intact while cache-generation separates jobs"
-    );
+    assert_root_target_cache_keys(&with);
     assert_eq!(
         env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
         Some(
@@ -120,6 +109,35 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     assert_eq!(
         with.get("save-on-protected-branch").map(String::as_str),
         Some("true")
+    );
+}
+
+fn assert_root_target_cache_keys(with: &std::collections::BTreeMap<String, String>) {
+    let expected_generation = format!(
+        "{}-gc-auto-off-final-clean-v1-action-{}-lane-${{{{ runner.environment }}}}-job-${{{{ github.job }}}}",
+        mbx_cache_generation(TEST_MBX_VERSION),
+        "a".repeat(40)
+    );
+    let expected_lock_hash = "${{ hashFiles('Cargo.lock','Cargo.toml','crates/*/Cargo.toml','rust-toolchain.toml','rust-toolchain','.config/nextest.toml') }}";
+    let expected_source_hash = "${{ hashFiles('Cargo.lock','Cargo.toml','crates/*/Cargo.toml','src/**/*.rs','crates/*/src/**/*.rs','crates/*/tests/**/*.rs','crates/*/benches/**/*.rs','crates/*/examples/**/*.rs','crates/*/build.rs','tests/**/*.rs','benches/**/*.rs','examples/**/*.rs','build.rs') }}";
+    let expected_cache_key = format!(
+        "{expected_generation}-target-rust-{TEST_RUST_TOOLCHAIN}-{expected_lock_hash}-{expected_source_hash}"
+    );
+    let expected_restore_keys = format!(
+        "{expected_generation}-target-rust-{TEST_RUST_TOOLCHAIN}-{expected_lock_hash}-\n{expected_generation}-target-rust-{TEST_RUST_TOOLCHAIN}-"
+    );
+    assert_eq!(
+        with.get("cache-generation").map(String::as_str),
+        Some(expected_generation.as_str()),
+        "cache-generation separates jobs and lanes"
+    );
+    assert_eq!(
+        with.get("cache-key").map(String::as_str),
+        Some(expected_cache_key.as_str())
+    );
+    assert_eq!(
+        with.get("restore-keys").map(String::as_str),
+        Some(expected_restore_keys.as_str())
     );
 }
 
@@ -226,6 +244,8 @@ fn rendered_action_has_rust_homes_and_native_owner_policy() -> Result<(), Render
         "the retired caller-owned fixed scratch leaf is absent"
     );
     assert!(text.contains("MBX_SHARE_OUT_DIR: \"0\""));
+    assert!(text.contains("MBX_CC: \"0\""));
+    assert!(text.contains("MBX_BUILD_SCRIPT_EXECUTION: \"0\""));
     assert!(text.contains("MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx"));
     assert!(text.contains("MBX_GC_AUTO: \"0\""));
     assert!(text.contains("name: Clean MBX workspace outputs"));
@@ -233,6 +253,8 @@ fn rendered_action_has_rust_homes_and_native_owner_policy() -> Result<(), Render
     assert!(text.contains(
         "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \\\"$mbx_bin\\\" cache dir >/dev/null 2>&1"
     ));
+    assert!(text.contains(".velnor-doc"));
+    assert!(text.contains(".velnor-source-oids"));
     Ok(())
 }
 
@@ -286,6 +308,12 @@ fn mbx_objects_step_sets_working_directory_for_nested_workspaces() {
         with.get("working-directory").map(String::as_str),
         Some("crates/velnor-runner"),
         "nested workspace must configure working-directory for target cache"
+    );
+    assert!(
+        with.get("cache-key").is_some_and(|key| key
+            .contains("hashFiles('crates/velnor-runner/Cargo.lock'")
+            && key.contains("hashFiles('crates/velnor-runner/**/*.rs'")),
+        "nested workspace cache-key must scope hashFiles to working-directory"
     );
 
     let [_, root_action, _] = mbx_steps_for_driver(

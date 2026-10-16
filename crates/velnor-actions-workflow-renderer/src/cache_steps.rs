@@ -19,7 +19,8 @@ pub(crate) use mbx_gate::append_workspace_cleanups;
 pub use mbx_gate::check_mbx_gating;
 pub(crate) use mbx_gate::is_mbx_action;
 pub(crate) use mbx_preflight::{
-    ACTION_MBX_BIN, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV,
+    ACTION_MBX_BIN, MBX_BUILD_SCRIPT_EXECUTION_ENV, MBX_BUILD_SCRIPT_EXECUTION_VALUE, MBX_CC_ENV,
+    MBX_CC_VALUE, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV,
     MBX_SHARE_OUT_DIR_VALUE, RESOLVE_ACTION_MBX_BIN, mbx_version_check_step,
     mbx_workspace_clean_step_for_action,
 };

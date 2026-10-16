@@ -85,21 +85,7 @@ impl<'ast> Visit<'ast> for ModuleCollector {
     }
 }
 
-pub(super) fn source_closure(
-    root: &Path,
-    compiler_dependencies: &HashSet<PathBuf>,
-) -> Outcome<HashSet<PathBuf>> {
-    source_closure_with_evidence(root, Some(compiler_dependencies))
-}
-
 pub(super) fn declared_target_source_closure(root: &Path) -> Outcome<HashSet<PathBuf>> {
-    source_closure_with_evidence(root, None)
-}
-
-fn source_closure_with_evidence(
-    root: &Path,
-    compiler_dependencies: Option<&HashSet<PathBuf>>,
-) -> Outcome<HashSet<PathBuf>> {
     let root = root.canonicalize()?;
     let source_base = root
         .parent()
@@ -141,12 +127,11 @@ fn source_closure_with_evidence(
                 }
                 pending.extend(collector.modules);
             }
-            let findings = graph::source_findings(&source)?;
+            let findings = graph::source_findings_for_syntax(&source, &syntax)?;
             for include in &findings.includes {
                 enqueue_compiled_include(
                     &include.path,
                     combine(file.condition, include.condition),
-                    compiler_dependencies,
                     &file,
                     &mut pending,
                 )?;
@@ -158,13 +143,7 @@ fn source_closure_with_evidence(
             break;
         }
         for (path, condition, parent) in macro_includes {
-            enqueue_compiled_include(
-                &path,
-                condition,
-                compiler_dependencies,
-                &parent,
-                &mut pending,
-            )?;
+            enqueue_compiled_include(&path, condition, &parent, &mut pending)?;
         }
     }
     Ok(sources)
@@ -173,7 +152,6 @@ fn source_closure_with_evidence(
 fn enqueue_compiled_include(
     include: &Path,
     condition: Possibility,
-    compiler_dependencies: Option<&HashSet<PathBuf>>,
     parent: &ModuleFile,
     pending: &mut VecDeque<ModuleFile>,
 ) -> Outcome<()> {
@@ -186,15 +164,6 @@ fn enqueue_compiled_include(
         }
         return Ok(());
     };
-    if compiler_dependencies.is_some_and(|dependencies| !dependencies.contains(&source))
-        && condition == Possibility::Always
-    {
-        return Err(format!(
-            "active include! source is missing from rustc dep-info: {}",
-            source.display()
-        )
-        .into());
-    }
     pending.push_back(ModuleFile {
         source,
         module_dir: parent.module_dir.clone(),

@@ -67,18 +67,22 @@ pub(crate) const MBX_GC_AUTO_VALUE: &str = "0";
 /// Disable shared `OUT_DIR` stabilization in each independently mounted store.
 pub(crate) const MBX_SHARE_OUT_DIR_ENV: &str = "MBX_SHARE_OUT_DIR";
 pub(crate) const MBX_SHARE_OUT_DIR_VALUE: &str = "0";
+/// Disable MBX C/C++ compiler wrapper in target-cache mode.
+pub(crate) const MBX_CC_ENV: &str = "MBX_CC";
+pub(crate) const MBX_CC_VALUE: &str = "0";
+/// Disable MBX build-script execution wrapper in target-cache mode.
+pub(crate) const MBX_BUILD_SCRIPT_EXECUTION_ENV: &str = "MBX_BUILD_SCRIPT_EXECUTION";
+pub(crate) const MBX_BUILD_SCRIPT_EXECUTION_VALUE: &str = "0";
 /// Stable logical store path; runner namespaces provide physical job isolation.
 pub(crate) const MBX_CACHE_DIR_ENV: &str = "MBX_CACHE_DIR";
 pub(crate) const MBX_CACHE_DIR_VALUE: &str = "${{ runner.temp }}/velnor/mbx";
-const MBX_DISK_SAMPLE_BODY: &[&str] = &[
-    "boundary=$1",
-    r#"case "${RUNNER_TEMP:-}" in /*) ;; *) printf '%s\n' 'MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute' >&2; return 0 ;; esac"#,
-    r#"if [ -d "$RUNNER_TEMP" ] && [ ! -L "$RUNNER_TEMP" ]; then printf 'MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\n' "$boundary"; if df -Pk "$RUNNER_TEMP"; then :; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\n' "$boundary" >&2; fi; printf 'MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\n' "$boundary"; if df -Pi "$RUNNER_TEMP"; then :; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\n' "$boundary" >&2; fi; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\n' "$boundary" >&2; return 0; fi"#,
-    r#"store_path="$RUNNER_TEMP/velnor/mbx""#,
-    r#"if [ "${MBX_CACHE_DIR:-}" = "$store_path" ] && [ -d "$store_path" ] && [ ! -L "$store_path" ]; then printf 'MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\n' "$boundary"; if du -sk "$store_path"; then :; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\n' "$boundary" >&2; fi; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\n' "$boundary" >&2; fi"#,
-    r#"target_path="${target_dir:-target}"; if [ ! -d "$target_path" ]; then for candidate in */target crates/*/target "$RUNNER_TEMP/velnor/target"; do if [ -d "$candidate" ]; then target_path="$candidate"; break; fi; done; fi"#,
-    r#"if [ -L "$target_path" ]; then printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\n' "$boundary" >&2; elif [ -d "$target_path" ]; then printf 'MBX_DISK_ALLOCATED_KIB boundary=%s root=target\n' "$boundary"; if du -sk "$target_path"; then :; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\n' "$boundary" >&2; fi; else printf 'MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\n' "$boundary"; fi"#,
-];
+
+#[path = "cache_steps_mbx_scripts.rs"]
+mod scripts;
+use self::scripts::{
+    MBX_RESTORE_SOURCE_MTIMES_CMD, mbx_disk_sample_commands, mbx_disk_sample_function,
+    mbx_target_clean_command, target_cache_keys,
+};
 /// Reconstruct the only preflight authorized for the selected MBX action.
 ///
 /// The action environment is the source of truth for the toolchain setup;
@@ -209,6 +213,7 @@ pub(crate) fn mbx_version_check_step(
         "extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '%s\\n' 'MBX cache dir output has extra data' >&2; exit 1; fi".to_owned(),
         "exec 3<&-".to_owned(),
         "[ \"$cache_dir\" = \"$MBX_CACHE_DIR/actions\" ] || { printf '%s\\n' 'MBX reported an unexpected object store path' >&2; exit 1; }".to_owned(),
+        MBX_RESTORE_SOURCE_MTIMES_CMD.to_owned(),
     ];
     script.extend(mbx_disk_sample_commands("after-cache-restore"));
     let script = script.join("; ");
@@ -263,7 +268,7 @@ pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step,
         if with.get("github-cache-mode").map(String::as_str) == Some("objects") {
             format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" clean; then clean_status=0; else clean_status=$?; fi")
         } else {
-            format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" cache dir >/dev/null 2>&1; then clean_status=0; else clean_status=$?; fi; for td in \"$target_dir\" \"$target_dir/velnor-cli-nested-cargo\"; do if [ -d \"$td\" ] && [ ! -L \"$td\" ]; then rm -rf \"$td/doc\" \"$td/tmp\" \"$td/debug/examples\" \"$td/debug/incremental\"; if [ -d \"$td/debug/deps\" ] && [ ! -L \"$td/debug/deps\" ]; then find \"$td/debug/deps\" -maxdepth 1 -type f -executable ! -name \"*.so\" ! -name \"*.dylib\" -delete; fi; fi; done")
+            mbx_target_clean_command(rust_toolchain)
         },
         "mbx_disk_sample after-final-clean".to_owned(),
         "exit \"$clean_status\"".to_owned(),
@@ -277,20 +282,6 @@ pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step,
     step.condition = Some(MBX_WORKSPACE_CLEAN_CONDITION.to_owned());
     step.role = Some(StepRole::MbxWorkspaceCleanup);
     Ok(step)
-}
-
-fn mbx_disk_sample_commands(boundary: &'static str) -> [String; 2] {
-    [
-        mbx_disk_sample_function(),
-        format!("mbx_disk_sample {boundary}"),
-    ]
-}
-
-fn mbx_disk_sample_function() -> String {
-    format!(
-        "mbx_disk_sample() {{ {}; }}",
-        MBX_DISK_SAMPLE_BODY.join("; ")
-    )
 }
 
 fn mbx_objects_action_step(
@@ -320,14 +311,16 @@ fn mbx_objects_action_step(
         )));
     }
     validate_rust_toolchain(rust_toolchain)?;
+    let generation = cache_generation(mbx_version, action_sha);
+    let (cache_key, restore_keys) =
+        target_cache_keys(&generation, rust_toolchain, working_directory);
     let mut with = BTreeMap::from([
         ("github-cache-mode".to_owned(), "target".to_owned()),
         ("version".to_owned(), mbx_version.to_owned()),
         ("toolchain".to_owned(), rust_toolchain.to_owned()),
-        (
-            "cache-generation".to_owned(),
-            cache_generation(mbx_version, action_sha),
-        ),
+        ("cache-generation".to_owned(), generation),
+        ("cache-key".to_owned(), cache_key),
+        ("restore-keys".to_owned(), restore_keys),
         ("save-on-workflow-dispatch".to_owned(), "false".to_owned()),
         (
             "save-on-pull-request".to_owned(),

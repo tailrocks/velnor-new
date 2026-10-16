@@ -2,8 +2,6 @@
 
 #[path = "impl_repo_test_registration_cargo.rs"]
 mod cargo_config;
-#[path = "impl_repo_test_registration_dep_info.rs"]
-mod dep_info;
 #[path = "impl_repo_test_registration_fixtures.rs"]
 mod fixtures;
 #[path = "impl_repo_test_registration_graph.rs"]
@@ -16,26 +14,21 @@ use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde_json::Value;
-
 use crate::impl_repo_policy::repo_root;
 
 type Outcome<T> = Result<T, Box<dyn Error>>;
 
 struct PackagePlan {
-    id: String,
     root: PathBuf,
     test_targets: Vec<TestTarget>,
 }
 
 struct TestTarget {
     source: PathBuf,
-    required_features: Vec<String>,
 }
 
 pub(super) struct WorkspacePlan {
     manifest: PathBuf,
-    root: PathBuf,
     target_directory: PathBuf,
     vcs_metadata: Option<PathBuf>,
     packages: Vec<PackagePlan>,
@@ -50,146 +43,24 @@ fn registered_sources(workspaces: &[WorkspacePlan]) -> Outcome<HashSet<PathBuf>>
 }
 
 fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>> {
-    let _target_lock = crate::impl_cli_tmp::nested_target::lock_nested_cargo_target()?;
-    let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?;
-    let output = cargo_config::cargo_output_at_target(
-        &workspace.manifest,
-        &[
-            "check",
-            "--all-targets",
-            "--locked",
-            "--workspace",
-            "--message-format=json",
-        ],
-        &nested_target,
-    )?;
-    let package_ids: HashSet<&str> = workspace
-        .packages
-        .iter()
-        .map(|package| package.id.as_str())
-        .collect();
-    let mut sources = HashSet::new();
-    for line in output.stdout.split(|byte| *byte == b'\n') {
-        if line.is_empty() {
-            continue;
-        }
-        let message: Value = serde_json::from_slice(line)?;
-        if let Some(artifact) = test_artifact(&message, &package_ids, workspace)? {
-            sources.extend(modules::source_closure(
-                &artifact.source,
-                &artifact.dependencies,
-            )?);
-        }
-    }
+    let mut compiled = HashSet::new();
+    let mut seen_targets = HashSet::new();
     for package in &workspace.packages {
         for target in &package.test_targets {
-            if sources.contains(&target.source) {
+            if !seen_targets.insert(target.source.clone()) {
                 continue;
             }
-            if target.required_features.is_empty() {
-                return Err(format!(
-                    "Cargo metadata test target source is absent from rustc dependency files: {}",
-                    target.source.display()
-                )
-                .into());
-            }
-            sources.extend(modules::declared_target_source_closure(&target.source)?);
+            compiled.extend(modules::declared_target_source_closure(&target.source)?);
         }
     }
-    Ok(sources)
-}
-
-struct TestArtifact {
-    source: PathBuf,
-    dependencies: HashSet<PathBuf>,
-}
-
-fn test_artifact(
-    message: &Value,
-    package_ids: &HashSet<&str>,
-    workspace: &WorkspacePlan,
-) -> Outcome<Option<TestArtifact>> {
-    if message["reason"] != "compiler-artifact"
-        || message["target"]["test"].as_bool() != Some(true)
-        || message["profile"]["test"].as_bool() != Some(true)
-    {
-        return Ok(None);
-    }
-    let package_id = message["package_id"]
-        .as_str()
-        .ok_or("artifact package id")?;
-    if !package_ids.contains(package_id) {
-        return Ok(None);
-    }
-    let Some(dep_info) = artifact_dep_info(message)? else {
-        return Ok(None);
-    };
-    let dependencies: HashSet<PathBuf> = dep_info::sources(&dep_info, &workspace.root)?
-        .into_iter()
-        .collect();
-    let source = PathBuf::from(
-        message["target"]["src_path"]
-            .as_str()
-            .ok_or("test artifact source path")?,
-    )
-    .canonicalize()?;
-    if !dependencies.contains(&source) {
+    if compiled.is_empty() {
         return Err(format!(
-            "test-profile dep-info omits Cargo test source {}",
-            source.display()
+            "Cargo metadata reported zero test target sources for {}",
+            workspace.manifest.display()
         )
         .into());
     }
-    Ok(Some(TestArtifact {
-        source,
-        dependencies,
-    }))
-}
-
-fn artifact_dep_info(message: &Value) -> Outcome<Option<PathBuf>> {
-    let mut candidates = Vec::new();
-    if let Some(executable) = message["executable"].as_str() {
-        candidates.push(executable);
-    }
-    if let Some(filenames) = message["filenames"].as_array() {
-        candidates.extend(filenames.iter().filter_map(Value::as_str));
-    }
-    for candidate in &candidates {
-        for dep_info in candidate_dep_info_paths(Path::new(candidate)) {
-            if dep_info.is_file() {
-                return Ok(Some(dep_info));
-            }
-        }
-    }
-    for candidate in candidates {
-        let candidate_path = Path::new(candidate);
-        if candidate_path
-            .parent()
-            .and_then(Path::file_name)
-            .is_some_and(|directory| directory == "deps")
-        {
-            let dep_info = candidate_path.with_extension("d");
-            return Err(format!(
-                "Cargo test executable is missing dep-info: {}",
-                dep_info.display()
-            )
-            .into());
-        }
-    }
-    Ok(None)
-}
-
-fn candidate_dep_info_paths(candidate: &Path) -> Vec<PathBuf> {
-    let mut paths = vec![candidate.with_extension("d")];
-    if let (Some(parent), Some(stem)) = (
-        candidate.parent(),
-        candidate.file_stem().and_then(|stem| stem.to_str()),
-    ) && let Some(stripped) = stem.strip_prefix("lib")
-        && !stripped.is_empty()
-    {
-        paths.push(parent.join(format!("{stripped}.d")));
-    }
-    paths
+    Ok(compiled)
 }
 
 fn rust_files(
@@ -314,12 +185,6 @@ fn cargo_targets_register_every_test_bearing_source() -> Outcome<()> {
     let misplaced_target = runner_root.join("target/velnor-cli-nested-cargo");
     let misplaced_target_existed = path_exists(&misplaced_target)?;
     let (registered, orphans) = registration_audit(&workspaces)?;
-    let nested_target = crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?;
-    assert!(
-        nested_target.join("debug/deps").is_dir(),
-        "nested Cargo outputs are missing from {}",
-        nested_target.display()
-    );
     assert!(
         registered.contains(
             &runner_root
