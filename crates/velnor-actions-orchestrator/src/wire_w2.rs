@@ -162,6 +162,7 @@ pub(crate) fn check_archive_identity_with_source(
     platform_id: &str,
     config_digest: &str,
     source_digest: Option<&str>,
+    catalog: &ToolCatalog,
 ) -> Result<ArchiveGate, OrchestratorError> {
     if !is_nextest_kind(&task.task_kind) {
         return Ok(ArchiveGate::Clear);
@@ -194,7 +195,6 @@ pub(crate) fn check_archive_identity_with_source(
         &task.runner_profile,
     )
     .map_err(|err| internal(&format!("archive_inputs_rejected:{err}")))?;
-    let catalog = ToolCatalog::pinned();
     let inputs = ArchiveIdentityInputs {
         source_digest: source,
         profile: &task.configuration,

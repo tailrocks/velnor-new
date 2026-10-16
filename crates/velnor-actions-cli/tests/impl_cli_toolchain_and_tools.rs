@@ -51,6 +51,40 @@ triggers = ["pull_request", "push", "workflow_dispatch"]
     )
 }
 
+/// Whether mise reports `version` installed for rust on this host.
+///
+/// Inventory executes the repo-resolved pin and fails closed when it is
+/// absent, so these tests branch on presence instead of assuming the
+/// compile-time pin.
+fn mise_has_rust(version: &str) -> bool {
+    let Ok(output) = std::process::Command::new("mise")
+        .args([
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "ls",
+            "--json",
+            "rust",
+        ])
+        .output()
+    else {
+        return false;
+    };
+    let Ok(text) = String::from_utf8(output.stdout) else {
+        return false;
+    };
+    let Ok(entries) = serde_json::from_str::<serde_json::Value>(&text).map(|value| match value {
+        serde_json::Value::Array(entries) => entries,
+        _ => Vec::new(),
+    }) else {
+        return false;
+    };
+    entries.iter().any(|entry| {
+        entry.get("version").and_then(|seen| seen.as_str()) == Some(version)
+            && entry.get("installed").and_then(serde_json::Value::as_bool) == Some(true)
+    })
+}
+
 #[test]
 fn rust_toolchain_toml_and_legacy_file_override_rust_and_omit_rustup_toolchain()
 -> Result<(), Box<dyn Error>> {
@@ -76,12 +110,27 @@ fn rust_toolchain_toml_and_legacy_file_override_rust_and_omit_rustup_toolchain()
         commit_all(&tmp)?;
 
         let out = spawn(&["generate"], &[], &tmp)?;
-        assert_eq!(
-            code(&out),
-            0,
-            "{label} generate stderr: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        if !mise_has_rust("1.94.1") {
+            assert_eq!(
+                code(&out),
+                1,
+                "{label} generate must fail closed without the repo pin: {stderr}"
+            );
+            assert!(
+                stderr.contains("missing_tool_pin: rust@1.94.1 not installed"),
+                "{label} generate must name the unsatisfied pin: {stderr}"
+            );
+            eprintln!(
+                "SKIPPED (pin absent): {label} generated-workflow assertions need \
+                 rust@1.94.1 installed; install it with `mise install rust@1.94.1` \
+                 to run the full coverage branch"
+            );
+            cleanup(&tmp);
+            continue;
+        }
+
+        assert_eq!(code(&out), 0, "{label} generate stderr: {stderr}");
 
         let ci_yaml = fs::read_to_string(tmp.join(".github/workflows/ci.yml"))?;
         let suites_yaml = fs::read_to_string(tmp.join(".github/workflows/suites.yml"))?;
@@ -130,12 +179,27 @@ fn config_only_rust_toolchain_exports_rustup_toolchain() -> Result<(), Box<dyn E
         commit_all(&tmp)?;
 
         let out = spawn(&["generate"], &[], &tmp)?;
-        assert_eq!(
-            code(&out),
-            0,
-            "{label} generate stderr: {}",
-            String::from_utf8_lossy(&out.stderr)
-        );
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        if !mise_has_rust("1.94.1") {
+            assert_eq!(
+                code(&out),
+                1,
+                "{label} generate must fail closed without the repo pin: {stderr}"
+            );
+            assert!(
+                stderr.contains("missing_tool_pin: rust@1.94.1 not installed"),
+                "{label} generate must name the unsatisfied pin: {stderr}"
+            );
+            eprintln!(
+                "SKIPPED (pin absent): {label} generated-workflow assertions need \
+                 rust@1.94.1 installed; install it with `mise install rust@1.94.1` \
+                 to run the full coverage branch"
+            );
+            cleanup(&tmp);
+            continue;
+        }
+
+        assert_eq!(code(&out), 0, "{label} generate stderr: {stderr}");
 
         let ci_yaml = fs::read_to_string(tmp.join(".github/workflows/ci.yml"))?;
         let suites_yaml = fs::read_to_string(tmp.join(".github/workflows/suites.yml"))?;

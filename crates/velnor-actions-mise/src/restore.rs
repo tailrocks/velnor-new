@@ -252,9 +252,9 @@ pub fn fallback_for_error(error: &MiseError) -> Result<MissReason, MiseError> {
         | MiseError::InvalidBaselineInput { .. }
         | MiseError::Contract { .. } => MissReason::CACHE_UNAVAILABLE,
         MiseError::UnknownCacheMode { .. } => MissReason::FORCED_UNCACHED,
-        MiseError::UnknownTool { .. } | MiseError::InvalidToolVersion { .. } => {
-            MissReason::TOOL_MISSING
-        }
+        MiseError::UnknownTool { .. }
+        | MiseError::InvalidToolVersion { .. }
+        | MiseError::MissingToolPin { .. } => MissReason::TOOL_MISSING,
         MiseError::EmptyCommand { .. }
         | MiseError::EmptyToolchain
         | MiseError::ForbiddenPayload { .. }

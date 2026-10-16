@@ -30,6 +30,9 @@ pub(crate) struct WorkflowBuildInput<'a> {
     pub(crate) discovery: &'a Discovery,
     pub(crate) fetch_roots: &'a [String],
     pub(crate) consumer_release_version: &'a str,
+    /// Repo-resolved catalog shared with the rest of the preparation;
+    /// workflow building never re-resolves or falls back to compile pins.
+    pub(crate) catalog: &'a ToolCatalog,
 }
 
 struct PreparedWorkflow {
@@ -97,7 +100,7 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         input.config,
         input.discovery,
     )?;
-    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(input.root, input.config)?;
+    let catalog = input.catalog;
     let report_helper_version = input.consumer_release_version.to_owned();
     let generator_version = env!("CARGO_PKG_VERSION");
     let policy = input.config.workflow.policy;
@@ -114,7 +117,7 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         )?),
         WorkflowPolicy::VelnorRepositoryV1 => None,
     };
-    let format = wire_w1::workspace_format_step(input.discovery, &catalog)?;
+    let format = wire_w1::workspace_format_step(input.discovery, catalog)?;
     let rust = match (plan_uses_rust(input.discovery, policy), format.is_some()) {
         (false, false) => PlanRustNeed::None,
         (_, true) => PlanRustNeed::CompilerAndComponents,
@@ -127,7 +130,7 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         gh: policy == WorkflowPolicy::VelnorRepositoryV1,
     };
     Ok(PreparedWorkflow {
-        catalog,
+        catalog: catalog.clone(),
         report_helper_version,
         generator_version,
         policy,

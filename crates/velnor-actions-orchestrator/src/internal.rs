@@ -109,7 +109,7 @@ fn plan_internal_inner(
     };
     validate_qualification_request(&request, &prep.default_branch)?;
     let named_check_lanes = named_lanes::resolve(&prep, request.named_check_lanes.take())?;
-    let catalog = ToolCatalog::pinned();
+    let catalog = &prep.catalog;
     let mut warnings = Vec::new();
     warnings.extend(crate::evidence::workspace_drift_warnings(
         &prep.root,
@@ -133,7 +133,7 @@ fn plan_internal_inner(
         changed.as_ref(),
         &prep.runner_label,
         prep.runner_selection,
-        &catalog,
+        catalog,
         &named_check_lanes,
         warnings,
         timings.as_deref_mut(),
@@ -156,7 +156,7 @@ fn plan_internal_inner(
                 branch: &prep.default_branch,
                 root: &prep.root,
                 workflow: velnor_actions_workflow_renderer::render::WORKFLOW_PATH,
-                catalog: &catalog,
+                catalog,
                 repository: request.repository.as_deref(),
             },
             manifest,

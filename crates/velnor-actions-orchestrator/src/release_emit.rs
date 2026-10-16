@@ -87,7 +87,7 @@ pub(crate) fn release_files(
         version,
     );
     let gate = publish_gate_condition(&repository, &bootstrap);
-    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&prep.root, &prep.config)?;
+    let catalog = &prep.catalog;
     // Omit `--registry` for the cargo-implicit default: release-plz 0.3.172
     // resolves the flag value from Cargo config, where that name is absent.
     let registry_arg = (registry != DEFAULT_REGISTRY).then_some(registry.as_str());
@@ -98,7 +98,7 @@ pub(crate) fn release_files(
         registry: registry_arg,
         label: &prep.runner_label,
         mise,
-        catalog: &catalog,
+        catalog,
     })?;
     let concurrency = stable_lock_group(
         &registry,
@@ -163,7 +163,7 @@ fn select_packages(
     release: &RustReleaseConfig,
 ) -> Result<ReleaseSelection, OrchestratorError> {
     let manifest = release.manifest_path.as_str();
-    let json = release_metadata_json(&prep.root, manifest)?;
+    let json = release_metadata_json(&prep.root, manifest, &prep.catalog)?;
     let scope = if release.publishable_workspace {
         ReleaseScope::PublishableWorkspace
     } else {
@@ -185,25 +185,27 @@ fn select_packages(
     })
 }
 
-/// Run pinned metadata discovery for the release manifest.
+/// Run repo-pinned metadata discovery for the release manifest.
 ///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::PreparationIncomplete`] when the tool
-/// cannot run or the manifest read fails.
+/// Returns [`OrchestratorError::PreparationIncomplete`] when the pinned
+/// toolchain is absent (fail closed, before any spawn), the tool cannot
+/// run, or the manifest read fails.
 fn release_metadata_json(
     root: &std::path::Path,
     manifest: &str,
+    catalog: &ToolCatalog,
 ) -> Result<String, OrchestratorError> {
     let incomplete = |problem: String| OrchestratorError::PreparationIncomplete {
         manifest: manifest.to_owned(),
         problem,
     };
-    let catalog = ToolCatalog::pinned();
+    crate::inventory::require_rust_pin(catalog).map_err(|err| incomplete(err.to_string()))?;
     let request =
         MetadataDiscovery::new(root.join(manifest)).map_err(|err| incomplete(err.to_string()))?;
     let command = request
-        .command(&catalog)
+        .command(catalog)
         .map_err(|err| incomplete(err.to_string()))?;
     let output = command.run().map_err(|err| incomplete(err.to_string()))?;
     if !output.success {

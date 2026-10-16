@@ -192,22 +192,17 @@ fn lock_acquire_records_source_commit() {
     }
 }
 
-#[test]
-fn preseed_attach_builds_once_and_sets_mode() {
+/// Plan-shaped workflow with plan, crate, final, and publish jobs.
+fn preseed_attach_plan(catalog: &ToolCatalog) -> WorkflowPlan {
     use velnor_actions_actionlint::ActionlintConfigInput;
-    use velnor_actions_workflow_renderer::{
-        MBX_PREFLIGHT_NAME, MBX_VERSION_CHECK_NAME, PRESEED_BUILD_NAME, PRESEED_STAGE_NAME,
-        steps::MBX_RESTORE_NAME,
-    };
-    let catalog = ToolCatalog::pinned();
-    let mut plan = WorkflowPlan {
+    WorkflowPlan {
         ir: bare_ir(BTreeMap::from([
             (
                 "plan".to_owned(),
                 plan_job(
                     "ubuntu-26.04",
                     None,
-                    &catalog,
+                    catalog,
                     rust_plan_needs(),
                     &[],
                     velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
@@ -217,7 +212,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
             ("rust-demo".to_owned(), legacy_task_job()),
             (
                 "required".to_owned(),
-                final_job("ubuntu-26.04", &["rust-demo".to_owned()], None, &catalog)
+                final_job("ubuntu-26.04", &["rust-demo".to_owned()], None, catalog)
                     .expect("final job"),
             ),
             (
@@ -242,8 +237,17 @@ fn preseed_attach_builds_once_and_sets_mode() {
             plan_consumer_env: std::collections::BTreeMap::new(),
         },
         actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
+    }
+}
+
+#[test]
+fn preseed_attach_builds_once_and_sets_mode() {
+    use velnor_actions_workflow_renderer::{
+        MBX_PREFLIGHT_NAME, MBX_VERSION_CHECK_NAME, PRESEED_BUILD_NAME, PRESEED_STAGE_NAME,
+        steps::MBX_RESTORE_NAME,
     };
-    assert!(attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").is_ok());
+    let mut plan = preseed_attach_plan(&ToolCatalog::pinned());
+    assert!(attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &ToolCatalog::pinned()).is_ok());
     assert!(plan.context.preseed);
     let names: Vec<&str> = plan.ir.jobs["plan"]
         .steps
@@ -269,7 +273,15 @@ fn preseed_attach_builds_once_and_sets_mode() {
         ]
     );
     assert_preseed_consumers(&plan);
-    assert!(attach_preseed(&mut plan, "ubuntu-26.04-arm", "0.1.0").is_err());
+    assert!(
+        attach_preseed(
+            &mut plan,
+            "ubuntu-26.04-arm",
+            "0.1.0",
+            &ToolCatalog::pinned()
+        )
+        .is_err()
+    );
 }
 
 /// Download, verify, then stage exactly once; never rebuild.

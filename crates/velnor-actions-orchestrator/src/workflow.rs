@@ -116,6 +116,7 @@ pub(super) fn build_workflow(
         discovery,
         fetch_roots,
         consumer_release_version: env!("CARGO_PKG_VERSION"),
+        catalog: &ToolCatalog::pinned(),
     })
 }
 

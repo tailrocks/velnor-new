@@ -28,6 +28,7 @@ pub mod nextest_plan;
 pub mod nextest_shapes;
 pub mod preflight;
 pub mod requests;
+pub mod requests_presence;
 pub mod restore;
 pub mod restore_evidence;
 pub mod reuse;
@@ -82,6 +83,7 @@ pub use nextest_plan::{
 pub use nextest_shapes::{NextestArchive, NextestList, NextestRun};
 pub use preflight::{RouteDriver, RouteSelection, select_route};
 pub use requests::{MetadataDiscovery, MetadataQualification, MiseInstall, PinnedToolExec};
+pub use requests_presence::ToolPresence;
 pub use restore::{
     MissReason, RestoreCheck, RestoreEvidence, ReuseFallback, SaveInputs, ToolAvailability,
     fallback_for_error, save_decision, save_useful, verify_restored_task_result, writers_overlap,

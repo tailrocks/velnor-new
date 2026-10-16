@@ -4,7 +4,7 @@ use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{RunnerImageEvidence, RunnerSelection, VelnorConfig, WorkflowPolicy};
-use velnor_actions_mise::GitRequest;
+use velnor_actions_mise::{GitRequest, ToolCatalog};
 
 use crate::OrchestratorError;
 use crate::config::load_config;
@@ -41,6 +41,10 @@ pub struct GenerationPreparation {
     /// corrupt checksums. `generate` fails closed on any entry while
     /// `plan` reports them; also mirrored into recommendations.
     pub lock_audit_blocking: Vec<String>,
+    /// Repo-resolved tool catalog: every internal execution and every
+    /// derivation on this preparation uses this one catalog, never the
+    /// compile-time pins.
+    pub catalog: ToolCatalog,
 }
 
 /// Build the shared preparation object for `root`.
@@ -72,11 +76,12 @@ fn prepare_inner(
         });
     }
     let config = load_config(&canonical)?;
+    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
     check_velnor_identity(&canonical, &config)?;
     let mut discovery = match phases {
-        Some(phases) => discover_with_phase_timings(&canonical, &config, phases)?,
-        None => discover(&canonical, &config)?,
+        Some(phases) => discover_with_phase_timings(&canonical, &config, &catalog, phases)?,
+        None => discover(&canonical, &config, &catalog)?,
     };
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
@@ -89,10 +94,10 @@ fn prepare_inner(
             discovery: &discovery,
             fetch_roots: &fetch_roots,
             consumer_release_version: env!("CARGO_PKG_VERSION"),
+            catalog: &catalog,
         },
     )?;
     let runner_image = runner_image_evidence();
-    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
     let audit = crate::lock_audit::audit_prepare_installs_with_catalog(
         &canonical,
         &workflow.ir,
@@ -116,6 +121,7 @@ fn prepare_inner(
         workflow,
         runner_image,
         lock_audit_blocking: audit.blocking,
+        catalog,
     })
 }
 

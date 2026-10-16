@@ -101,8 +101,8 @@ pub(crate) fn attach_preseed(
     workflow: &mut WorkflowPlan,
     label: &str,
     version: &str,
+    catalog: &ToolCatalog,
 ) -> Result<(), OrchestratorError> {
-    let catalog = ToolCatalog::pinned();
     let target = ReleaseTarget::for_runner_label(label)
         .map(ReleaseTarget::triple)
         .ok_or_else(|| OrchestratorError::Contract {
@@ -117,10 +117,10 @@ pub(crate) fn attach_preseed(
             });
         }
     }
-    let build = candidate_build_argv(&catalog)?;
-    let probe = mbx_probe_argv(&catalog)?;
+    let build = candidate_build_argv(catalog)?;
+    let probe = mbx_probe_argv(catalog)?;
     let staged = format!("{STAGED_BINARY_PREFIX}{version}");
-    let homes = crate::matrix_step::task_step_env(&catalog, &BTreeMap::new(), true)?;
+    let homes = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
     let plan_steps = vec![
         preseed_build_step(&build, &homes)?,
         preseed_verify_step(&probe, catalog.version(PinnedTool::MrBoxington), &homes)?,
@@ -134,7 +134,7 @@ pub(crate) fn attach_preseed(
         });
     };
     insert_plan_mbx_restore(
-        &catalog,
+        catalog,
         &mut plan.steps,
         workflow.context.pull_request_cache_policy,
     )?;

@@ -136,6 +136,13 @@ pub enum MiseError {
         /// Rejected value as supplied.
         value: String,
     },
+    /// A pinned tool spec is not installed, so no payload may spawn.
+    MissingToolPin {
+        /// Unsatisfied mise selector (`tool@exact`).
+        spec: String,
+        /// Installed versions the query found, sorted; empty when none.
+        installed: Vec<String>,
+    },
 }
 
 impl Display for MiseError {
@@ -187,6 +194,20 @@ impl Display for MiseError {
             }
             Self::InvalidBaselineInput { field, value } => {
                 write!(f, "invalid_baseline_input: {field}: {value}")
+            }
+            Self::MissingToolPin { spec, installed } => {
+                if installed.is_empty() {
+                    write!(
+                        f,
+                        "missing_tool_pin: {spec} not installed (installed: none)"
+                    )
+                } else {
+                    write!(
+                        f,
+                        "missing_tool_pin: {spec} not installed (installed: {})",
+                        installed.join(", ")
+                    )
+                }
             }
         }
     }

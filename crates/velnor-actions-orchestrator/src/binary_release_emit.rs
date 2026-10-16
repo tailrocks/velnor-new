@@ -30,7 +30,7 @@ pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, O
     let package = selected_package(prep, config)?;
     require_tracked_lockfile(prep, config)?;
     let repository = origin_repository(&prep.root)?;
-    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&prep.root, &prep.config)?;
+    let catalog = &prep.catalog;
     let spec = ConsumerBinaryReleaseSpec {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         repository,
@@ -46,12 +46,12 @@ pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, O
             &prep.config,
             ReleaseTarget::MacosArm64,
         )?,
-        install_tools_argv: install_argv(&[PinnedTool::Rust, PinnedTool::Gh], &catalog)?,
-        install_rust_argv: install_argv(&[PinnedTool::Rust], &catalog)?,
-        metadata_argv: metadata_argv(&config.manifest_path, &catalog)?,
-        add_target_argv: target_argv(&catalog)?,
-        build_argv: build_argv(config, &catalog)?,
-        gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog)?,
+        install_tools_argv: install_argv(&[PinnedTool::Rust, PinnedTool::Gh], catalog)?,
+        install_rust_argv: install_argv(&[PinnedTool::Rust], catalog)?,
+        metadata_argv: metadata_argv(&config.manifest_path, catalog)?,
+        add_target_argv: target_argv(catalog)?,
+        build_argv: build_argv(config, catalog)?,
+        gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], catalog)?,
     };
     Ok(vec![render_consumer_binary_release(&spec)?])
 }

@@ -255,6 +255,7 @@ pub(crate) fn plan_group(
         &platform_id,
         identity.bundle.config_digest(),
         Some(&closure_digest),
+        inputs.catalog,
     )?;
     // The archive identity binds the content closure, never a manifest
     // pathname: a same-path source edit flips the closure and the

@@ -106,6 +106,25 @@ impl IsolatedCommand {
         Self::mise_with_subcommand("install", tool_specs, None, false)
     }
 
+    /// Build `mise <globals> ls --json <tool>`: installed-version query.
+    ///
+    /// Read-only discovery under the same isolation overlay and
+    /// install-disable pair as `exec`, so it observes exactly the tool
+    /// state a later `exec` would select from; it never installs.
+    pub(crate) fn mise_ls_json(tool: &str) -> Self {
+        let mut args: Vec<OsString> = MISE_GLOBAL_FLAGS.iter().map(OsString::from).collect();
+        args.push(OsString::from("ls"));
+        args.push(OsString::from("--json"));
+        args.push(OsString::from(tool));
+        Self {
+            program: OsString::from("mise"),
+            args,
+            cwd: None,
+            extra_env: pairs_of(&NO_AUTO_INSTALL_ENV),
+            policy: EnvPolicy::Verify,
+        }
+    }
+
     /// Build a repo-task child: cleared env plus declared inputs.
     /// # Errors
     /// Returns [`MiseError::InvalidStepInput`] on a reserved declared key.

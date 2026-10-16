@@ -142,9 +142,8 @@ pub(crate) fn suite_workflow_files(
     prep: &GenerationPreparation,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     validate_suites_against_repo(&prep.root, &prep.config, &prep.discovery)?;
-    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&prep.root, &prep.config)?;
-    let Some(spec) =
-        build_render_spec(&prep.config, &prep.runner_label, &prep.discovery, &catalog)?
+    let catalog = &prep.catalog;
+    let Some(spec) = build_render_spec(&prep.config, &prep.runner_label, &prep.discovery, catalog)?
     else {
         return Ok(Vec::new());
     };
