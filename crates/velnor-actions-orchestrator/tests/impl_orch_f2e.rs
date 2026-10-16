@@ -11,7 +11,7 @@ use velnor_actions_orchestrator::{
 };
 
 use crate::impl_common::{
-    TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
+    TestResult, config_with_branch, err_of, fixture_manifest_json, git, git_line, make_repo,
     plan_for_source_change, snapshot, without_ambient_identity,
 };
 
@@ -155,13 +155,20 @@ fn malformed_toolchain_recommends_without_writes() -> TestResult {
     let root = repo.path();
     fs::write(root.join("mise.toml"), "[tools]\n")?;
     fs::write(root.join("rust-toolchain.toml"), "[[[\n")?;
+    let err = err_of(prepare(root).map(|_| ()), "malformed toolchain")?;
+    assert!(err.to_string().contains("invalid_rust_toolchain:"), "{err}");
+    fs::write(
+        root.join("rust-toolchain.toml"),
+        "[toolchain]\nchannel = \"1.85.0\"\n",
+    )?;
+    fs::write(root.join("mise.lock"), "[[[\n")?;
     let before = snapshot(root)?;
     let prep = prepare(root)?;
     let parent = TempDir::new()?;
     let report = preview_into(&prep, parent.path().join("preview"))?;
     let text = report.recommendations.join("\n");
     assert!(text.contains("tooling_input_invalid"), "{text}");
-    assert!(text.contains("rust-toolchain.toml"), "{text}");
+    assert!(text.contains("mise.lock"), "{text}");
     assert!(text.contains("continues with its pinned tools"), "{text}");
     assert_eq!(report.files_written.len(), 11);
     for rel in ["mise.toml", "rust-toolchain.toml", ".velnor/config.toml"] {

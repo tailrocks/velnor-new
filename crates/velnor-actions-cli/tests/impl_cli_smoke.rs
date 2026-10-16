@@ -211,12 +211,11 @@ fn velnor_generate_omits_consumer_manifest_warning() -> Result<(), Box<dyn Error
 fn generate_writes_manual_change_suggestions_for_malformed_tools() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("smoke-malformed-tools")?;
     init_repo(&tmp)?;
-    // TOOL-2.2: malformed tool files stay read-only inputs; both commands
-    // report `tooling_input_invalid` plus a concrete manual-change suggestion.
+    // TOOL-2.2: malformed mise.toml stays a read-only input; both commands
+    // report `tooling_input_invalid` plus a concrete manual-change suggestion,
+    // while malformed rust-toolchain.toml fails closed without modifying the file.
     std::fs::write(tmp.join("mise.toml"), "[tools\nrust = \n")?;
-    std::fs::write(tmp.join("rust-toolchain.toml"), "[[[\n")?;
     let mise_before = std::fs::read(tmp.join("mise.toml"))?;
-    let toolchain_before = std::fs::read(tmp.join("rust-toolchain.toml"))?;
     let plan = spawn(&["plan"], &[], &tmp)?;
     assert_eq!(code(&plan), 0, "stderr: {:?}", plan.stderr);
     assert!(plan.stderr.is_empty());
@@ -225,16 +224,11 @@ fn generate_writes_manual_change_suggestions_for_malformed_tools() -> Result<(),
         .into_iter()
         .filter(|rec| rec.contains("tooling_input_invalid"))
         .collect();
-    assert_eq!(invalid.len(), 2, "both files flagged:\n{stdout}");
+    assert_eq!(invalid.len(), 1, "mise.toml flagged:\n{stdout}");
     for rec in &invalid {
         assert!(rec.contains("fix it manually"), "no suggestion: {rec}");
     }
     assert!(invalid.iter().any(|rec| rec.contains("mise.toml")));
-    assert!(
-        invalid
-            .iter()
-            .any(|rec| rec.contains("rust-toolchain.toml"))
-    );
     let outer = fresh_tempdir("smoke-malformed-preview")?;
     let preview = outer.join("preview");
     let generated = spawn(
@@ -252,11 +246,17 @@ fn generate_writes_manual_change_suggestions_for_malformed_tools() -> Result<(),
         );
     }
     assert_eq!(std::fs::read(tmp.join("mise.toml"))?, mise_before);
+    assert!(preview.join(".github/workflows/ci.yml").is_file());
+
+    std::fs::write(tmp.join("rust-toolchain.toml"), "[[[\n")?;
+    let toolchain_before = std::fs::read(tmp.join("rust-toolchain.toml"))?;
+    let bad_plan = spawn(&["plan"], &[], &tmp)?;
+    assert_eq!(code(&bad_plan), 1);
+    assert!(String::from_utf8_lossy(&bad_plan.stderr).contains("invalid_rust_toolchain:"));
     assert_eq!(
         std::fs::read(tmp.join("rust-toolchain.toml"))?,
         toolchain_before
     );
-    assert!(preview.join(".github/workflows/ci.yml").is_file());
     cleanup(&tmp);
     cleanup(&outer);
     Ok(())

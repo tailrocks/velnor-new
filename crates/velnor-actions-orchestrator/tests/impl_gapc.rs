@@ -282,7 +282,7 @@ fn tool_files_untouched() -> TestResult {
         ("mise.toml", "[tools]\n"),
         (".mise.toml", "[tools]\n"),
         ("mise.lock", "{}\n"),
-        ("rust-toolchain.toml", "[toolchain]\nchannel = \"1.90\"\n"),
+        ("rust-toolchain.toml", "[toolchain]\nchannel = \"1.90.0\"\n"),
     ];
     for (rel, body) in witnesses {
         fs::write(root.join(rel), body)?;

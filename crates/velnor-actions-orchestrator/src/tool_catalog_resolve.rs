@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::{VelnorConfig, is_exact_semver};
+use velnor_actions_contract::VelnorConfig;
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::catalog::{
     ACTIONLINT_VERSION, GH_VERSION, MR_BOXINGTON_VERSION, NEXTEST_VERSION, OPENTOFU_VERSION,
@@ -65,14 +65,12 @@ pub(crate) fn resolve_tool_catalog(
             ),
         ));
     }
-    let exact_file_tc = file_tc
+    let rust_version = file_tc
         .as_ref()
-        .filter(|(_, channel)| is_exact_semver(channel));
-    let rust_version = exact_file_tc
         .map(|(_, channel)| channel.as_str())
         .or_else(|| config_tc.map(|(_, channel)| channel))
         .unwrap_or(RUST_VERSION);
-    let export_rustup_toolchain = exact_file_tc.is_none();
+    let export_rustup_toolchain = file_tc.is_none();
     let mr_boxington = config
         .tools
         .get("mr-boxington")
@@ -106,9 +104,13 @@ fn read_toolchain_file(
     let RepoRead::Text(text) = read_repo_file(root, rel, MAX_REPO_FILE_BYTES)? else {
         return Ok(None);
     };
-    let Ok(channel) = extract_rust_toolchain_channel(rel, &text) else {
-        return Ok(None);
-    };
+    let channel = extract_rust_toolchain_channel(rel, &text).map_err(|problem| {
+        OrchestratorError::config(
+            rel,
+            "toolchain.channel",
+            format!("invalid_rust_toolchain:{problem}"),
+        )
+    })?;
     Ok(Some((rel, channel)))
 }
 
@@ -173,5 +175,34 @@ mod tests {
         assert_eq!(catalog.version(PinnedTool::Actionlint), "1.7.13");
         assert!(catalog.exports_rustup_toolchain());
         assert_eq!(catalog.rustup_toolchain_env(), Some("1.94.1"));
+    }
+
+    #[test]
+    fn resolves_target_qualified_exact_toolchain_and_rejects_non_exact_channels() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let cfg = config_with(BTreeMap::new());
+        std::fs::write(
+            dir.path().join("rust-toolchain.toml"),
+            "[toolchain]\nchannel = \"1.99.1-x86_64-unknown-linux-gnu\"\n",
+        )
+        .expect("write target-qualified toolchain");
+        let catalog = resolve_tool_catalog(dir.path(), &cfg).expect("resolve target-qualified");
+        assert_eq!(catalog.version(PinnedTool::Rust), "1.99.1");
+        assert!(!catalog.exports_rustup_toolchain());
+
+        for bad in [
+            "[toolchain]\nchannel = \"stable\"\n",
+            "[toolchain]\nchannel = \"1.99\"\n",
+            "[toolchain]\nchannel = \"nightly-2026-10-01\"\n",
+            "[toolchain]\n",
+            "[[[\n",
+        ] {
+            std::fs::write(dir.path().join("rust-toolchain.toml"), bad).expect("write bad");
+            let err = resolve_tool_catalog(dir.path(), &cfg).expect_err("non-exact must fail");
+            assert!(
+                err.to_string().contains("invalid_rust_toolchain:"),
+                "expected invalid_rust_toolchain for {bad:?}, got {err}"
+            );
+        }
     }
 }

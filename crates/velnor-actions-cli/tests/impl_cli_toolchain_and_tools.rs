@@ -61,6 +61,12 @@ fn rust_toolchain_toml_and_legacy_file_override_rust_and_omit_rustup_toolchain()
             "[toolchain]\nchannel = \"1.94.1\"\ncomponents = [\"rustfmt\", \"clippy\"]\n",
             "toolchain = \"1.94.1\"\n",
         ),
+        (
+            "toml-target-qualified",
+            "rust-toolchain.toml",
+            "[toolchain]\nchannel = \"1.94.1-x86_64-unknown-linux-gnu\"\n",
+            "",
+        ),
         ("legacy-plain-file", "rust-toolchain", "1.94.1\n", ""),
     ] {
         let tmp = fresh_tempdir(&format!("tc-{label}"))?;
@@ -158,7 +164,7 @@ fn config_only_rust_toolchain_exports_rustup_toolchain() -> Result<(), Box<dyn E
 }
 
 #[test]
-fn conflicting_toolchain_file_and_config_fails_closed() -> Result<(), Box<dyn Error>> {
+fn conflicting_or_non_exact_toolchain_file_fails_closed() -> Result<(), Box<dyn Error>> {
     for (label, extra_rust, extra_root) in [
         ("stacks-conflict", "toolchain = \"1.98.1\"\n", ""),
         ("tools-conflict", "", "\n[tools]\nrust = \"1.98.1\"\n"),
@@ -179,6 +185,32 @@ fn conflicting_toolchain_file_and_config_fails_closed() -> Result<(), Box<dyn Er
             assert!(
                 stderr.contains("conflicting_rust_toolchain"),
                 "{label} {subcmd} stderr must contain conflicting_rust_toolchain: {stderr}"
+            );
+        }
+        cleanup(&tmp);
+    }
+
+    for (label, channel) in [
+        ("stable", "stable"),
+        ("two-part", "1.99"),
+        ("nightly-date", "nightly-2026-10-01"),
+    ] {
+        let tmp = fresh_tempdir(&format!("tc-nonexact-{label}"))?;
+        let cfg = config_with_suites("", "");
+        setup_repo(&tmp, &cfg)?;
+        fs::write(
+            tmp.join("rust-toolchain.toml"),
+            format!("[toolchain]\nchannel = \"{channel}\"\n"),
+        )?;
+        commit_all(&tmp)?;
+
+        for subcmd in ["plan", "generate"] {
+            let out = spawn(&[subcmd], &[], &tmp)?;
+            assert_eq!(code(&out), 1, "{label} {subcmd} must exit 1");
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            assert!(
+                stderr.contains(&format!("invalid_rust_toolchain:{channel}")),
+                "{label} {subcmd} stderr must contain invalid_rust_toolchain:{channel}: {stderr}"
             );
         }
         cleanup(&tmp);

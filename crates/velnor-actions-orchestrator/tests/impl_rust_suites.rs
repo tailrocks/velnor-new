@@ -166,7 +166,7 @@ fn rust_suites_render_ci_jobs_and_standalone_suites_workflow() -> TestResult {
     assert!(ci_yaml.contains("suite-build-e2e:"));
     assert!(ci_yaml.contains("suite-e2e:"));
     assert!(ci_yaml.contains("aqua:nextest-rs/nextest/cargo-nextest@"));
-    assert!(ci_yaml.contains("--workspace-remap . --extract-to . --no-tests warn --partition \\\"hash:$VELNOR_SUITE_SHARD/2\\\""));
+    assert!(ci_yaml.contains("--workspace-remap . --extract-to . --extract-overwrite --no-tests warn --partition \\\"hash:$VELNOR_SUITE_SHARD/2\\\""));
     assert!(ci_yaml.contains("VELNOR_SUITE_SHARD: ${{ matrix.shard }}"));
     assert!(ci_yaml.contains("  suite-pr-probe:\n"));
     assert!(

@@ -247,7 +247,7 @@ fn verify_suites_yaml(suites_yaml: &str) {
         "  suite-capture:\n",
         "    if: (github.event_name == 'workflow_dispatch' && (inputs.tier == 'full' || inputs.tier == 'all')) || (github.event_name == 'schedule' && github.event.schedule == '0 2 * * *')\n",
         "    if: github.event_name == 'workflow_dispatch' && inputs.tier == 'capture'\n    continue-on-error: true\n",
-        "--archive-file \\\"$RUNNER_TEMP/velnor/suite-archive-full/archive.tar.zst\\\" --workspace-remap . --extract-to . --no-tests warn --partition \\\"hash:$VELNOR_SUITE_SHARD/12\\\" --profile full --run-ignored only",
+        "--archive-file \\\"$RUNNER_TEMP/velnor/suite-archive-full/archive.tar.zst\\\" --workspace-remap . --extract-to . --extract-overwrite --no-tests warn --partition \\\"hash:$VELNOR_SUITE_SHARD/12\\\" --profile full --run-ignored only",
         "VELNOR_SUITE_FILTERSET: ${{ inputs.filter }}",
         "VELNOR_SUITE_SHARD: ${{ matrix.shard }}",
         "name: velnor-suite-r${{ github.run_id }}-a${{ github.run_attempt }}-full-diff-${{ matrix.shard }}",

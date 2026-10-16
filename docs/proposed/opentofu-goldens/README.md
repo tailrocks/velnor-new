@@ -35,6 +35,18 @@ The markers never enter the real release manifest, generator lock, producer
 `fixtures/consumer-release-manifest.json` stays unchanged at 0.1.4 as a
 historical schema fixture for direct schema tests.
 
+## Product version prep v0.1.9 (2026-10-16; source-only)
+
+From `origin/main` at `e34cfb836761d5b9e209802c056b83736afd816c`, including
+follow-up fixes for repository `rust-toolchain.toml` channel validation,
+`[tools]` alias validation, and archived suite extraction (`--extract-overwrite`),
+the workspace and release renderer versions were advanced to 0.1.9. Supported
+CLI generation refreshed `.github` and verified zero drift against a separate
+`--output-dir` preview. The CLI parity goldens and five OpenTofu cases were
+recaptured; dogfood reported `tree identical`. These records are
+source-preparation evidence, not release qualification or publication evidence.
+No release was created.
+
 ## Product version prep v0.1.8 (2026-10-13; source-only)
 
 From current `origin/main` at `4c9a54ac71d3425440864cebb2496e6ed0bc4640`,
