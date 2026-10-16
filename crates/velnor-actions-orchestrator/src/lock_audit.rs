@@ -68,21 +68,25 @@ enum MiseVectors {
     Unclassifiable(String),
 }
 
-/// Audit emitted install sets against `root/mise.lock`.
-///
-/// Install sets come from the built workflow (what CI will install,
-/// not intent): Prepare specs from the IR resolve through the
-/// catalog, validator install specs from the typed render context
-/// resolve through the validator pin, and anything else blocks as a
-/// generator bug, never silently. A `mise` vector that is neither an
-/// `install` nor an isolated `exec` blocks as unclassifiable.
+/// Audit emitted install sets against `root/mise.lock` using pinned defaults.
+#[cfg(test)]
 pub(crate) fn audit_prepare_installs(
     root: &Path,
     ir: &WorkflowIr,
     label: &str,
     validator_commands: &[ValidatorCommand],
 ) -> LockAuditOutcome {
-    let catalog = ToolCatalog::pinned();
+    audit_prepare_installs_with_catalog(root, ir, label, validator_commands, &ToolCatalog::pinned())
+}
+
+/// Audit emitted install sets against `root/mise.lock` with a resolved [`ToolCatalog`].
+pub(crate) fn audit_prepare_installs_with_catalog(
+    root: &Path,
+    ir: &WorkflowIr,
+    label: &str,
+    validator_commands: &[ValidatorCommand],
+    catalog: &ToolCatalog,
+) -> LockAuditOutcome {
     let mut blocking = Vec::new();
     let mut subjects: Vec<InstallSubject> = Vec::new();
     for (id, job) in &ir.jobs {
@@ -98,7 +102,7 @@ pub(crate) fn audit_prepare_installs(
                 continue;
             }
             for spec in specs {
-                match subject_for_install_spec(&spec, &catalog) {
+                match subject_for_install_spec(&spec, catalog) {
                     Some(subject) => subjects.push(subject),
                     None => blocking.push(format!("unauditable_install_spec:{spec}")),
                 }

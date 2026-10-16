@@ -381,7 +381,7 @@ fn test_manifest_json() -> String {
 
 #[cfg(test)]
 #[path = "pins_tests.rs"]
-mod tests;
+pub(crate) mod tests;
 #[cfg(test)]
 #[path = "pins_tests_b.rs"]
 mod tests_b;

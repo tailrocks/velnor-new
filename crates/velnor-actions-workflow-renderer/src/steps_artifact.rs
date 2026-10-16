@@ -166,3 +166,82 @@ fn matrix_report_upload_raw(key: &str, name: &str) -> Result<Step, RenderError> 
         ]),
     )
 }
+
+/// Suite artifact upload step over the pinned upload action.
+///
+/// # Errors
+///
+/// Returns [`RenderError`] when the artifact name, path, or condition is invalid.
+pub fn upload_suite_artifact_step(
+    step_name: &str,
+    artifact_name: &str,
+    path: &str,
+    retention_days: u32,
+    when: velnor_actions_contract::RustSuiteArtifactWhen,
+) -> Result<Step, RenderError> {
+    if artifact_name.trim().is_empty()
+        || path.trim().is_empty()
+        || !(1..=90).contains(&retention_days)
+    {
+        return Err(RenderError::BadActionRef("empty_artifact_io".to_owned()));
+    }
+    for entry in path.lines() {
+        artifact_paths::check_artifact_path(entry)?;
+    }
+    let mut step = action_step(
+        step_name,
+        UPLOAD_ARTIFACT_USES,
+        BTreeMap::from([
+            ("name".to_owned(), artifact_name.to_owned()),
+            ("path".to_owned(), path.to_owned()),
+            ("if-no-files-found".to_owned(), "warn".to_owned()),
+            ("retention-days".to_owned(), retention_days.to_string()),
+        ]),
+    )?;
+    step.condition = Some(when.github_condition().to_owned());
+    Ok(step)
+}
+
+/// Upload a prebuilt nextest archive (`retention-days: 1`, `if-no-files-found: error`).
+///
+/// # Errors
+///
+/// Returns [`RenderError`] when the artifact name or path is invalid.
+pub fn upload_suite_archive_step(artifact_name: &str, path: &str) -> Result<Step, RenderError> {
+    if artifact_name.trim().is_empty() || path.trim().is_empty() {
+        return Err(RenderError::BadActionRef("empty_artifact_io".to_owned()));
+    }
+    artifact_paths::check_artifact_path(path)?;
+    let mut step = action_step(
+        "Upload suite archive",
+        UPLOAD_ARTIFACT_USES,
+        BTreeMap::from([
+            ("name".to_owned(), artifact_name.to_owned()),
+            ("path".to_owned(), path.to_owned()),
+            ("if-no-files-found".to_owned(), "error".to_owned()),
+            ("retention-days".to_owned(), "1".to_owned()),
+        ]),
+    )?;
+    step.condition = Some("success()".to_owned());
+    Ok(step)
+}
+
+/// Download a prebuilt nextest archive in a sharded suite runner job.
+///
+/// # Errors
+///
+/// Returns [`RenderError`] when the artifact name or path is invalid.
+pub fn download_suite_archive_step(artifact_name: &str, path: &str) -> Result<Step, RenderError> {
+    if artifact_name.trim().is_empty() || path.trim().is_empty() {
+        return Err(RenderError::BadActionRef("empty_artifact_io".to_owned()));
+    }
+    artifact_paths::check_artifact_path(path)?;
+    action_step(
+        "Download suite archive",
+        DOWNLOAD_ARTIFACT_USES,
+        BTreeMap::from([
+            ("name".to_owned(), artifact_name.to_owned()),
+            ("path".to_owned(), path.to_owned()),
+        ]),
+    )
+}

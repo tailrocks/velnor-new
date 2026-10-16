@@ -116,6 +116,7 @@ fn discover_inner(
         previous = stack_id;
         candidates.extend(detect(&index));
     }
+    let _catalog = crate::tool_catalog_resolve::resolve_tool_catalog(root, config)?;
     let task_tool_paths = task_tool_paths(config);
     let tool_checks = check_tool_inputs_with_paths(root, &task_tool_paths);
     let mut reads = velnor_actions_tofu::FileCache::new();
@@ -239,7 +240,13 @@ fn plan_workspaces(
         if !keep_roots.contains(&record.workspace_root) {
             continue;
         }
-        let outcome = profile_for_workspace(root, index, &record, config.stacks.rust.as_ref())?;
+        let outcome = profile_for_workspace(
+            root,
+            index,
+            &record,
+            config.stacks.rust.as_ref(),
+            &config.workflow.preserve_workflows,
+        )?;
         planned.push(PlannedWorkspace {
             record,
             profile: outcome.profile,

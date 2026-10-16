@@ -7,17 +7,17 @@
 //! Provenance the contract does not allow fails closed with the
 //! documented seed remediation instead of emitting a dead helper call.
 
-use std::collections::BTreeMap;
-
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::{
-    RenderError,
-    closure_paths::{validate_helper_path, validate_output_dir},
-    preseed,
+    RenderError, preseed,
     render::{PLAN_JOB_ID, RenderContext},
     steps,
 };
+
+#[path = "closure_freshness.rs"]
+mod freshness_impl;
+pub use freshness_impl::{freshness_step, freshness_step_with_claude_mode};
 
 /// Contract-fixed display name of the freshness step.
 pub const CHECK_GENERATED_NAME: &str = "Check generated files";
@@ -173,28 +173,6 @@ fn check_acquire_shape(job_id: &str, step: &Step) -> Result<(), RenderError> {
             "acquire_malformed:{job_id}"
         )))
     }
-}
-
-/// Fixed freshness step: regenerate into scratch, byte-compare `.github`.
-///
-/// Runs the helper's `generate --output-dir`, diffs preview against
-/// committed `.github`; `env` is the caller-validated consumer env,
-/// scrubbed here since local generation needs no ambient auth.
-/// # Errors
-pub fn freshness_step(
-    binary: &str,
-    output_dir: &str,
-    env: &BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    validate_helper_path(binary)?;
-    validate_output_dir(output_dir)?;
-    let script = format!(
-        "{binary} generate --output-dir \"{output_dir}\" && diff -r --brief .github \"{output_dir}/.github\""
-    );
-    let argv = vec!["sh".to_owned(), "-c".to_owned(), script];
-    let mut step = steps::shell_step(CHECK_GENERATED_NAME, argv, env.clone())?;
-    step.role = Some(StepRole::CheckGenerated);
-    Ok(step)
 }
 
 /// Fixed plan-report upload step (`velnor-plan-<run-key>`, fails loud).

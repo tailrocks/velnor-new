@@ -246,11 +246,13 @@ fn release_wired_into_stack_validation_with_key_paths() {
             features: vec!["default".to_owned()],
             target: "host".to_owned(),
         }],
+        toolchain: None,
         compile_driver: None,
         test_runner: None,
         run_ignored: None,
         release: valid_release(),
         binary_release: RustBinaryReleaseConfig::default(),
+        suites: Vec::new(),
     };
     assert_eq!(stack.validate(FILE), Ok(()));
     let mut bad = stack.clone();

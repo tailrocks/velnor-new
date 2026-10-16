@@ -271,10 +271,16 @@ not task identity, because Cargo permits duplicate names in separate
 workspaces.
 Only detected Nextest profiles have shard IDs in `execute_task_ids`; Cargo-test
 profiles have one test obligation. A Nextest partition job invokes its exact
-Mise/MBX command and writes one report. Shard count defaults to 1; explicit
-per-manifest overrides MUST NOT exceed the test-process budget. Unconfigured
+Mise/MBX command and writes one report. `[test_sharding]` (`default_shards` and
+`by_manifest`) defaults to `1` and passes `--partition hash:<i>/<n>` (`1..=n`) to
+each generated `cargo nextest run` shard step; explicit per-manifest overrides
+MUST NOT exceed `resources.test_process_budget`. Unconfigured
 suites are not auto-sharded. Change the shard count only after timing evidence
-shows added job fan-out helps.
+shows added job fan-out helps. Named Nextest suites declared under
+`[[stacks.rust.suites]]` configure `partitions` (`1..=64`) separately, rendered
+as a GitHub Actions matrix (`strategy.matrix.shard`) running
+`--partition hash:<k>/<N>` independently of `resources.test_process_budget` (see
+[task execution contract](task-execution-contract.md)).
 
 `strategy.max-parallel` MUST equal `workflow.max_parallel_jobs`. All compiler
 tasks share `resources.compiler_process_budget`; MBX coordinates compiler

@@ -40,6 +40,7 @@ fn replace(root: &Path) -> TestResult {
         &target,
         staging.path(),
         &generated_tree(&[".github/workflows/ci.yml"]),
+        &[],
     )?;
     crate::generate::swap_directories(root, &target, &staged)?;
     Ok(())
@@ -92,6 +93,7 @@ fn shared_action_markers_preserve_custom_actions_and_retire_stale_ones() -> Test
             ".github/workflows/ci.yml",
             ".github/actions/rust-demo/action.yml",
         ]),
+        &[],
     )?;
     crate::generate::swap_directories(root.path(), &github, &staged)?;
     assert!(
@@ -124,6 +126,7 @@ fn marked_helper_scripts_stay_generator_owned() -> TestResult {
         &github,
         staging.path(),
         &generated_tree(&[".github/workflows/ci.yml", ".github/scripts/generated.sh"]),
+        &[],
     )?;
     crate::generate::swap_directories(root.path(), &github, &staged)?;
     assert!(
@@ -144,8 +147,13 @@ fn unmanaged_generated_path_collision_refuses_before_commit() -> TestResult {
     fs::create_dir_all(github.join("custom"))?;
     fs::write(github.join("custom/support.py"), b"repository bytes")?;
     let staging = TempDir::new_in(root.path())?;
-    let error = super::stage_in_place(&github, staging.path(), &tree(".github/custom/support.py"))
-        .expect_err("unknown generated collision refuses");
+    let error = super::stage_in_place(
+        &github,
+        staging.path(),
+        &tree(".github/custom/support.py"),
+        &[],
+    )
+    .expect_err("unknown generated collision refuses");
     assert!(matches!(error, OrchestratorError::OverwriteRefused { .. }));
     assert_eq!(
         fs::read(github.join("custom/support.py"))?,
@@ -170,6 +178,7 @@ fn preserved_symlink_ancestor_refuses_generated_write() -> TestResult {
         &github,
         staging.path(),
         &tree(".github/custom/link/escaped/output.py"),
+        &[],
     )
     .expect_err("symlink ancestor refuses");
     assert!(matches!(error, OrchestratorError::UnsafePath { .. }));
@@ -248,10 +257,55 @@ fn unsupported_entry_refuses_before_replacement() -> TestResult {
     fs::write(github.join("CODEOWNERS"), b"kept")?;
     let _socket = UnixListener::bind(github.join("socket"))?;
     let staging = TempDir::new_in(root.path())?;
-    let error = super::stage_in_place(&github, staging.path(), &tree(".github/workflows/ci.yml"))
-        .expect_err("socket cannot be preserved safely");
+    let error = super::stage_in_place(
+        &github,
+        staging.path(),
+        &tree(".github/workflows/ci.yml"),
+        &[],
+    )
+    .expect_err("socket cannot be preserved safely");
     assert!(error.to_string().contains("unsupported_repository_entry"));
     assert_eq!(fs::read(github.join("CODEOWNERS"))?, b"kept");
     assert!(!github.join("workflows").exists());
+    Ok(())
+}
+
+#[test]
+fn preserve_workflows_keeps_allowlisted_files_in_stage_and_preview() -> TestResult {
+    let root = TempDir::new()?;
+    let github = root.path().join(".github");
+    fs::create_dir_all(github.join("workflows"))?;
+    fs::write(github.join("workflows/handwritten.yml"), b"name: custom\n")?;
+    fs::write(github.join("workflows/stale.yml"), b"name: stale\n")?;
+    let preserve = vec![".github/workflows/handwritten.yml".to_owned()];
+
+    let preview = TempDir::new()?;
+    super::write_preview(
+        &github,
+        preview.path(),
+        &generated_tree(&[".github/workflows/ci.yml"]),
+        &preserve,
+    )?;
+    assert_eq!(
+        fs::read(preview.path().join("workflows/handwritten.yml"))?,
+        b"name: custom\n"
+    );
+    assert!(!preview.path().join("workflows/stale.yml").exists());
+    assert!(preview.path().join("workflows/ci.yml").exists());
+
+    let staging = TempDir::new_in(root.path())?;
+    let staged = super::stage_in_place(
+        &github,
+        staging.path(),
+        &generated_tree(&[".github/workflows/ci.yml"]),
+        &preserve,
+    )?;
+    crate::generate::swap_directories(root.path(), &github, &staged)?;
+    assert_eq!(
+        fs::read(github.join("workflows/handwritten.yml"))?,
+        b"name: custom\n"
+    );
+    assert!(!github.join("workflows/stale.yml").exists());
+    assert!(github.join("workflows/ci.yml").exists());
     Ok(())
 }

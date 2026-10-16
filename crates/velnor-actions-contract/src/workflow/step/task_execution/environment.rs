@@ -18,7 +18,9 @@ pub(super) fn validate_environment(
 ) -> Result<(), ContractError> {
     validate_required_environment(input)?;
     let rust_version = rust_toolchain_version(input)?;
-    if input.env.get("RUSTUP_TOOLCHAIN").map(String::as_str) != Some(rust_version) {
+    if let Some(toolchain) = input.env.get("RUSTUP_TOOLCHAIN").map(String::as_str)
+        && toolchain != rust_version
+    {
         return Err(ContractError::identity(
             "step.task.env",
             format!("rustup_toolchain_pin_mismatch:{}", input.job),

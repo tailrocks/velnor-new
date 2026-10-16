@@ -21,6 +21,7 @@ pub(super) fn stage_in_place(
     source: &Path,
     staging_root: &Path,
     tree: &RenderedTree,
+    preserve_workflows: &[String],
 ) -> Result<PathBuf, OrchestratorError> {
     let permissions = root_permissions(source)?;
     // A read-only root must exchange with a sibling on macOS.
@@ -29,7 +30,7 @@ pub(super) fn stage_in_place(
     } else {
         staging_root.join(".github")
     };
-    let directories = copy_repository_content(source, &staged)?;
+    let directories = copy_repository_content(source, &staged, preserve_workflows)?;
     check_generated_collisions(&staged, tree)?;
     super::write_tree(&staged, tree)?;
     restore_directory_permissions(directories)?;
@@ -42,9 +43,10 @@ pub(super) fn write_preview(
     source: &Path,
     destination: &Path,
     tree: &RenderedTree,
+    preserve_workflows: &[String],
 ) -> Result<(), OrchestratorError> {
     let permissions = root_permissions(source)?;
-    let directories = copy_repository_content(source, destination)?;
+    let directories = copy_repository_content(source, destination, preserve_workflows)?;
     check_generated_collisions(destination, tree)?;
     super::write_tree(destination, tree)?;
     restore_directory_permissions(directories)?;
@@ -139,6 +141,7 @@ fn check_generated_collisions(
 fn copy_repository_content(
     source: &Path,
     destination: &Path,
+    preserve_workflows: &[String],
 ) -> Result<Vec<(PathBuf, std::fs::Permissions)>, OrchestratorError> {
     if std::fs::symlink_metadata(source).is_ok_and(|metadata| metadata.is_symlink()) {
         return Err(OrchestratorError::UnsafePath {
@@ -160,25 +163,35 @@ fn copy_repository_content(
             &entry.path(),
             &destination.join(&name),
             Path::new(&name),
+            preserve_workflows,
             &mut directories,
         )?;
     }
     Ok(directories)
 }
 
-/// Keep workflow, declared-format, and release outputs generator-owned.
-fn generator_owned(relative: &Path) -> bool {
-    relative.starts_with("workflows")
-        || DECLARED_GITHUB_FORMATS
-            .iter()
-            .map(|format| format.path)
-            .chain(RELEASE_TREE_PATHS.iter().copied())
-            .chain(std::iter::once(TASK_EXECUTION_MANIFEST_PATH))
-            .any(|path| {
-                Path::new(path)
-                    .strip_prefix(".github")
-                    .is_ok_and(|rel| rel == relative)
-            })
+/// Keep workflow, declared-format, and release outputs generator-owned unless preserved.
+fn generator_owned(relative: &Path, preserve_workflows: &[String]) -> bool {
+    if relative == Path::new("workflows") {
+        return preserve_workflows.is_empty();
+    }
+    if relative.starts_with("workflows") {
+        return !preserve_workflows.iter().any(|preserved| {
+            Path::new(preserved)
+                .strip_prefix(".github")
+                .is_ok_and(|rel| rel == relative)
+        });
+    }
+    DECLARED_GITHUB_FORMATS
+        .iter()
+        .map(|format| format.path)
+        .chain(RELEASE_TREE_PATHS.iter().copied())
+        .chain(std::iter::once(TASK_EXECUTION_MANIFEST_PATH))
+        .any(|path| {
+            Path::new(path)
+                .strip_prefix(".github")
+                .is_ok_and(|rel| rel == relative)
+        })
 }
 
 /// Recognize generated shared actions by exact path shape and marker.
@@ -234,10 +247,11 @@ fn copy_entry(
     source: &Path,
     destination: &Path,
     relative: &Path,
+    preserve_workflows: &[String],
     directories: &mut Vec<(PathBuf, std::fs::Permissions)>,
 ) -> Result<bool, OrchestratorError> {
     let metadata = std::fs::symlink_metadata(source).map_err(|error| io(source, &error))?;
-    if generator_owned(relative)
+    if generator_owned(relative, preserve_workflows)
         || generated_shared_action(relative, source, &metadata)?
         || generated_marked_script(relative, source, &metadata)?
     {
@@ -261,6 +275,7 @@ fn copy_entry(
                 &entry.path(),
                 &destination.join(&name),
                 &relative.join(&name),
+                preserve_workflows,
                 directories,
             )?;
         }

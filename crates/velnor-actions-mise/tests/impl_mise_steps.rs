@@ -379,3 +379,16 @@ fn tool_homes_rejects_empty() {
     let err = ToolHomes::new("", "").expect_err("empty homes must fail");
     assert_eq!(err.to_string(), "invalid_step_input: rustup_home: ");
 }
+
+#[test]
+fn catalog_without_export_rustup_toolchain_omits_rustup_toolchain_env() -> Result<(), String> {
+    let catalog = pinned().with_export_rustup_toolchain(false);
+    assert!(!catalog.exports_rustup_toolchain());
+    assert_eq!(catalog.rustup_toolchain_env(), None);
+    let env = homes()?.env(&catalog);
+    assert!(env_has(&env, "MISE_RUSTUP_HOME", "/velnor/rustup"));
+    assert!(env_has(&env, "MISE_CARGO_HOME", "/velnor/cargo"));
+    assert!(!env.iter().any(|(key, _)| key == "RUSTUP_TOOLCHAIN"));
+    assert_eq!(env.len(), 2);
+    Ok(())
+}

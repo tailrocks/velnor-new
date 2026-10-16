@@ -135,8 +135,8 @@ pub(crate) fn task_step_env(
         return Ok(base);
     }
     let homes = ToolHomes::runner_temp();
-    let toolchain = catalog.rustup_toolchain();
-    toolchain_env::checked_task_env(&base, homes.rustup_home(), homes.cargo_home(), &toolchain)
+    let toolchain = catalog.rustup_toolchain_env().unwrap_or("");
+    toolchain_env::checked_task_env(&base, homes.rustup_home(), homes.cargo_home(), toolchain)
         .map_err(OrchestratorError::from)
 }
 

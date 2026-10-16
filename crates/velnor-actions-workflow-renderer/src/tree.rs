@@ -11,7 +11,9 @@
 //! any. Its single `@AGENTS.md` import line resolves the same instructions
 //! without symlink resolution.
 
-use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_POINTER_BODY};
+use velnor_actions_contract::{
+    AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_POINTER_BODY, ClaudeMdMode,
+};
 
 use crate::agents_md;
 use crate::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
@@ -121,6 +123,27 @@ pub fn render_tree_with_extra(
     extra: &[RenderedFile],
     version: &str,
 ) -> Result<RenderedTree, RenderError> {
+    render_tree_with_claude_mode(
+        workflow_bytes,
+        actionlint_bytes,
+        extra,
+        version,
+        ClaudeMdMode::Import,
+    )
+}
+
+/// Assemble the generated tree with an explicit `CLAUDE.md` emission mode.
+///
+/// # Errors
+///
+/// Returns [`RenderError`] for marker, token, path, or collision failures.
+pub fn render_tree_with_claude_mode(
+    workflow_bytes: &str,
+    actionlint_bytes: &str,
+    extra: &[RenderedFile],
+    version: &str,
+    claude_md: ClaudeMdMode,
+) -> Result<RenderedTree, RenderError> {
     marker::check_first_line(workflow_bytes, version)?;
     marker::check_first_line(actionlint_bytes, version)?;
     steps::scan_for_private_subcommands(workflow_bytes)?;
@@ -129,12 +152,6 @@ pub fn render_tree_with_extra(
     guard::validate_tree_path(WORKFLOW_PATH)?;
     guard::validate_tree_path(AGENTS_MD_PATH)?;
     guard::validate_tree_path(CLAUDE_MD_PATH)?;
-
-    let agents_file = agents_md::render_agents_md(version)?;
-    let claude_file = RenderedFile {
-        path: CLAUDE_MD_PATH.to_owned(),
-        bytes: CLAUDE_MD_POINTER_BODY.to_owned(),
-    };
 
     let mut files = vec![
         RenderedFile {
@@ -145,9 +162,21 @@ pub fn render_tree_with_extra(
             path: WORKFLOW_PATH.to_owned(),
             bytes: workflow_bytes.to_owned(),
         },
-        agents_file,
-        claude_file,
+        agents_md::render_agents_md(version)?,
     ];
+    let symlinks = match claude_md {
+        ClaudeMdMode::Import => {
+            files.push(RenderedFile {
+                path: CLAUDE_MD_PATH.to_owned(),
+                bytes: CLAUDE_MD_POINTER_BODY.to_owned(),
+            });
+            Vec::new()
+        }
+        ClaudeMdMode::Symlink => vec![RenderedSymlink {
+            path: CLAUDE_MD_PATH.to_owned(),
+            target: "AGENTS.md".to_owned(),
+        }],
+    };
     for file in extra {
         marker::check_first_line(&file.bytes, version)?;
         steps::scan_for_private_subcommands(&file.bytes)?;
@@ -174,8 +203,5 @@ pub fn render_tree_with_extra(
         }
     }
 
-    Ok(RenderedTree {
-        files,
-        symlinks: Vec::new(),
-    })
+    Ok(RenderedTree { files, symlinks })
 }

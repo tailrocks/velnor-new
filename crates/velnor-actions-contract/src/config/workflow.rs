@@ -1,4 +1,6 @@
 //! Workflow section of `.velnor/config.toml`: naming, policy, runner labels.
+use super::rust_suites::WorkflowDispatchConfig;
+use super::rust_suites_validate::validate_preserve_workflows;
 use crate::config::{TofuApplyConfig, WorkflowTask};
 use crate::errors::ContractError;
 use crate::workflow::ValidatorKind;
@@ -51,6 +53,12 @@ pub struct WorkflowConfig {
     /// Consumer-selected verification jobs; empty disables them all.
     #[serde(default, skip_serializing_if = "VerifyConfig::is_empty")]
     pub verify: VerifyConfig,
+    /// Optional `workflow_dispatch` inputs for suite workflows.
+    #[serde(default, skip_serializing_if = "WorkflowDispatchConfig::is_empty")]
+    pub dispatch: WorkflowDispatchConfig,
+    /// Repository-owned workflow files under `.github/workflows/` preserved across generation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub preserve_workflows: Vec<String>,
 }
 
 /// `[workflow.verify]`: config-selected verification jobs.
@@ -187,6 +195,8 @@ impl WorkflowConfig {
             }
         }
         self.verify.validate(file)?;
+        self.dispatch.validate(file)?;
+        validate_preserve_workflows(&self.preserve_workflows, file)?;
         Ok(())
     }
 

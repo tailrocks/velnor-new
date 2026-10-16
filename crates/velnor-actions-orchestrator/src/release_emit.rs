@@ -87,7 +87,7 @@ pub(crate) fn release_files(
         version,
     );
     let gate = publish_gate_condition(&repository, &bootstrap);
-    let catalog = ToolCatalog::pinned();
+    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&prep.root, &prep.config)?;
     // Omit `--registry` for the cargo-implicit default: release-plz 0.3.172
     // resolves the flag value from Cargo config, where that name is absent.
     let registry_arg = (registry != DEFAULT_REGISTRY).then_some(registry.as_str());

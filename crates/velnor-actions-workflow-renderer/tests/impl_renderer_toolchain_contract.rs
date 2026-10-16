@@ -137,17 +137,23 @@ fn checked_task_env_merges_triple_over_validated_base() {
 #[test]
 fn checked_task_env_rejects_blank_triple_inputs() {
     let base = BTreeMap::new();
-    for (rustup, cargo, toolchain) in [
-        ("", "/r/cargo", "1.98.1"),
-        ("/r/rustup", "", "1.98.1"),
-        ("/r/rustup", "/r/cargo", ""),
-    ] {
+    for (rustup, cargo, toolchain) in [("", "/r/cargo", "1.98.1"), ("/r/rustup", "", "1.98.1")] {
         let err = checked_task_env(&base, rustup, cargo, toolchain).expect_err("blank must fail");
         assert!(
             err.to_string().contains("missing_toolchain_home"),
             "got {err}"
         );
     }
+    let omitted = checked_task_env(&base, "/r/rustup", "/r/cargo", "").expect("empty omits key");
+    assert!(!omitted.contains_key("RUSTUP_TOOLCHAIN"));
+    let blank_base = BTreeMap::from([("RUSTUP_TOOLCHAIN".to_owned(), String::new())]);
+    let err = checked_task_env(&blank_base, "/r/rustup", "/r/cargo", "")
+        .expect_err("blank base toolchain must fail");
+    assert!(
+        err.to_string()
+            .contains("missing_toolchain_home:RUSTUP_TOOLCHAIN"),
+        "got {err}"
+    );
 }
 
 #[test]

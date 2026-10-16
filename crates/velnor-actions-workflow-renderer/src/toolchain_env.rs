@@ -76,12 +76,7 @@ pub const STEP_TF_DENYLIST_PREFIXES: [&str; 2] = ["TF_", "CHECKPOINT_"];
 /// automation pair, which the generator itself threads everywhere.
 pub const STEP_TF_ALLOWLIST: [&str; 2] = ["TF_IN_AUTOMATION", "TF_INPUT"];
 
-/// True for a TF-family env key no project task may declare: the
-/// `TF_`/`CHECKPOINT_` prefixes minus the automation-pair allowlist.
-///
-/// (One future reserved family stays Mise-only: no tool reads it
-/// and it has no wire presence, so the renderer leaves it alone; the
-/// orchestrator parity test pins the deliberate divergence.)
+/// True for a TF-family env key no project task may declare.
 #[must_use]
 pub fn is_denied_tf_key(key: &str) -> bool {
     if STEP_TF_ALLOWLIST.contains(&key) {
@@ -92,7 +87,7 @@ pub fn is_denied_tf_key(key: &str) -> bool {
         .any(|prefix| key.starts_with(prefix))
 }
 
-/// Merge the toolchain-home triple into a step env map.
+/// Merge toolchain homes (and non-empty `RUSTUP_TOOLCHAIN`) into a step env map.
 #[must_use]
 pub fn with_toolchain_homes(
     env: &BTreeMap<String, String>,
@@ -101,25 +96,32 @@ pub fn with_toolchain_homes(
     toolchain: &str,
 ) -> BTreeMap<String, String> {
     let mut merged = env.clone();
-    for (key, value) in [
-        (TOOLCHAIN_HOME_KEYS[0], rustup_home),
-        (TOOLCHAIN_HOME_KEYS[1], cargo_home),
-        (TOOLCHAIN_HOME_KEYS[2], toolchain),
-    ] {
-        merged.insert(key.to_owned(), value.to_owned());
+    merged.insert(TOOLCHAIN_HOME_KEYS[0].to_owned(), rustup_home.to_owned());
+    merged.insert(TOOLCHAIN_HOME_KEYS[1].to_owned(), cargo_home.to_owned());
+    if !toolchain.is_empty() {
+        merged.insert(TOOLCHAIN_HOME_KEYS[2].to_owned(), toolchain.to_owned());
     }
     merged
 }
 
-/// Require the toolchain-home triple in a Cargo step env.
+/// Require toolchain homes and, when present, a non-empty `RUSTUP_TOOLCHAIN`.
 /// # Errors
 pub fn check_toolchain_homes(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
-    for key in TOOLCHAIN_HOME_KEYS {
+    for key in [TOOLCHAIN_HOME_KEYS[0], TOOLCHAIN_HOME_KEYS[1]] {
         if env.get(key).is_none_or(String::is_empty) {
             return Err(RenderError::BadCommand(format!(
                 "missing_toolchain_home:{key}"
             )));
         }
+    }
+    if env
+        .get(TOOLCHAIN_HOME_KEYS[2])
+        .is_some_and(String::is_empty)
+    {
+        return Err(RenderError::BadCommand(format!(
+            "missing_toolchain_home:{}",
+            TOOLCHAIN_HOME_KEYS[2]
+        )));
     }
     Ok(())
 }
@@ -374,7 +376,6 @@ pub fn checked_task_env(
     for (key, value) in [
         (TOOLCHAIN_HOME_KEYS[0], rustup_home),
         (TOOLCHAIN_HOME_KEYS[1], cargo_home),
-        (TOOLCHAIN_HOME_KEYS[2], toolchain),
     ] {
         if value.is_empty() {
             return Err(RenderError::BadCommand(format!(

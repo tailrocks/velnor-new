@@ -146,7 +146,8 @@ pub fn finalize_jobs(
             .ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
-        let setup = if job.check_runner.is_some() {
+        let default_target = crate::runs_on::target_for_runner(&ctx.runs_on);
+        let setup = if job.check_runner.is_some() || default_target != Some(target) {
             mise.for_target(target)?
         } else {
             mise.clone()
@@ -232,7 +233,15 @@ fn render_merged(
 ) -> Result<RenderedWorkflow, RenderError> {
     let matrix = matrix::task_matrix_of(jobs)?;
     let caps = matrix::crate_job_caps(jobs)?;
-    let jobs = if matrix.is_some() || !caps.is_empty() {
+    let suite_matrices = (
+        matrix::suites::suite_matrices_of(jobs)?,
+        matrix::suites::suite_allow_failure_jobs_of(jobs),
+    );
+    let jobs = if matrix.is_some()
+        || !caps.is_empty()
+        || !suite_matrices.0.is_empty()
+        || !suite_matrices.1.is_empty()
+    {
         matrix::scrub_matrix_marker(jobs)
     } else {
         jobs.clone()
@@ -247,7 +256,15 @@ fn render_merged(
     )?;
     let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     shared.files.extend(task_files);
-    match emit::emit_shared(ir, &shared, &jobs, ctx, matrix.as_ref(), &caps) {
+    match emit::emit_shared(
+        ir,
+        &shared,
+        &jobs,
+        ctx,
+        matrix.as_ref(),
+        &caps,
+        &suite_matrices,
+    ) {
         Ok(workflow) => Ok(workflow),
         Err(error) if emit::workflow_file_too_large(&error) => {
             let extracted =
@@ -255,7 +272,15 @@ fn render_merged(
             if extracted == 0 {
                 return Err(error);
             }
-            emit::emit_shared(ir, &shared, &jobs, ctx, matrix.as_ref(), &caps)
+            emit::emit_shared(
+                ir,
+                &shared,
+                &jobs,
+                ctx,
+                matrix.as_ref(),
+                &caps,
+                &suite_matrices,
+            )
         }
         Err(error) => Err(error),
     }

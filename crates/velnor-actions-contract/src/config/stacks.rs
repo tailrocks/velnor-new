@@ -1,6 +1,8 @@
 //! Stack selection and per-stack options.
 use super::binary_release::RustBinaryReleaseConfig;
 use super::release::RustReleaseConfig;
+use super::rust_suites::RustSuiteConfig;
+use super::rust_suites_validate::validate_rust_suites;
 use super::tofu::TofuStackConfig;
 use crate::discover::Stack;
 use crate::errors::ContractError;
@@ -50,6 +52,9 @@ pub struct RustStackConfig {
     /// Rust task configuration variants.
     #[serde(default = "default_configurations")]
     pub configurations: Vec<RustConfiguration>,
+    /// Optional exact `major.minor.patch` Rust toolchain override (`[stacks.rust] toolchain`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toolchain: Option<String>,
     /// Sticky declared compile driver; conflicts with durable evidence fail closed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compile_driver: Option<DeclaredCompileDriver>,
@@ -65,6 +70,9 @@ pub struct RustStackConfig {
     /// Single-package binary release policy; disabled by default.
     #[serde(default)]
     pub binary_release: RustBinaryReleaseConfig,
+    /// Named Nextest suites (`[[stacks.rust.suites]]`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suites: Vec<RustSuiteConfig>,
 }
 
 /// Documented default: one `default` configuration variant list.
@@ -127,11 +135,13 @@ impl RustStackConfig {
     pub fn default_config() -> Self {
         Self {
             configurations: default_configurations(),
+            toolchain: None,
             compile_driver: None,
             test_runner: None,
             run_ignored: None,
             release: RustReleaseConfig::default(),
             binary_release: RustBinaryReleaseConfig::default(),
+            suites: Vec::new(),
         }
     }
 }
@@ -180,9 +190,18 @@ impl StacksConfig {
 }
 
 impl RustStackConfig {
-    /// Validate Rust configurations (unique nonempty names).
+    /// Validate Rust configurations (unique nonempty names) and declared suites.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        if let Some(ref tc) = self.toolchain
+            && (tc.trim() != tc || tc.is_empty() || !super::tools::is_exact_semver(tc))
+        {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.toolchain",
+                format!("invalid_rust_toolchain:{tc}"),
+            ));
+        }
         if self.configurations.is_empty() {
             return Err(ContractError::config(
                 file,
@@ -241,6 +260,7 @@ impl RustStackConfig {
         }
         self.release.validate(file)?;
         self.binary_release.validate(file)?;
+        validate_rust_suites(&self.suites, file)?;
         Ok(())
     }
 }
