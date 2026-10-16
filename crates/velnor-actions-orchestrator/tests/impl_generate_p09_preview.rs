@@ -16,6 +16,9 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, err_of, make_repo, snapshot};
 
+#[path = "impl_generate_p09_preview_contract.rs"]
+mod contract;
+
 /// Preview-generate helper: `Ok` report or the typed error.
 fn preview(
     prep: &GenerationPreparation,
@@ -25,13 +28,6 @@ fn preview(
         output_dir: Some(dir.to_path_buf()),
     };
     generate(prep, &opts)
-}
-
-/// Rendered workflow text window between two job markers.
-fn window<'a>(yaml: &'a str, from: &str, to: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
-    let start = yaml.find(from).ok_or("missing window start")?;
-    let end = yaml[start..].find(to).map_or(yaml.len(), |at| start + at);
-    Ok(&yaml[start..end])
 }
 
 #[test]
@@ -109,44 +105,11 @@ fn rendered_crate_steps_carry_validated_contract() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
     let tree = render_staged_tree(&prep)?;
+    let manifest = contract::task_manifest(&tree)?;
     let yaml = tree
         .get(WORKFLOW_PATH)
         .ok_or_else(|| std::io::Error::other("missing workflow"))?;
-    let workflow_env = window(yaml, "env:\n", "concurrency:")?;
-    let task = window(yaml, "  rust-demo:", "  required:")?;
-    let run_at = task.find("- name: Clippy").ok_or("first obligation")?;
-    let run_block = &task[run_at..];
-    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:"] {
-        assert!(run_block.contains(key), "Clippy misses {key}");
-    }
-    assert!(
-        task.contains("RUSTUP_TOOLCHAIN: 1.98.1"),
-        "task misses toolchain"
-    );
-    for key in [
-        "MISE_NO_CONFIG:",
-        "MISE_NO_ENV:",
-        "MISE_NO_HOOKS:",
-        "MISE_LOCKFILE:",
-        "MISE_AUTO_INSTALL:",
-        "MISE_EXEC_AUTO_INSTALL:",
-    ] {
-        assert!(workflow_env.contains(key), "workflow misses {key}");
-    }
-    for key in [
-        "MISE_GITHUB_TOKEN",
-        "GITHUB_TOKEN",
-        "GH_TOKEN",
-        "ACTIONS_RUNTIME_TOKEN",
-        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
-        "ACTIONS_ID_TOKEN_REQUEST_URL",
-        "CARGO_REGISTRY_TOKEN",
-    ] {
-        assert!(
-            workflow_env.contains(&format!("{key}: \"\"")),
-            "workflow must scrub {key} empty"
-        );
-    }
+    contract::assert_crate_contract(&prep, &manifest, yaml)?;
     Ok(())
 }
 
@@ -173,8 +136,8 @@ fn fetch_matches_obligation_contract_by_construction() -> TestResult {
     let StepKind::Shell { env: fetch_env, .. } = &task.steps[fetch_at].kind else {
         return Err("fetch must be a shell step".into());
     };
-    let StepKind::Shell { env: run_env, .. } = &task.steps[run_at].kind else {
-        return Err("Clippy must be a shell step".into());
+    let StepKind::TaskExecution { env: run_env, .. } = &task.steps[run_at].kind else {
+        return Err("Clippy must be a declared task".into());
     };
     let mut keys: Vec<&str> = fetch_env.keys().map(String::as_str).collect();
     keys.sort_unstable();
@@ -259,8 +222,8 @@ fn concurrent_generate_lock_refused() -> TestResult {
     let report = generate(&prep, &opts)?;
     assert_eq!(
         report.files_written.len(),
-        9,
-        "lock removal unblocks with V2 support assets: {:?}",
+        11,
+        "lock removal unblocks with generated task assets: {:?}",
         report.files_written
     );
     Ok(())

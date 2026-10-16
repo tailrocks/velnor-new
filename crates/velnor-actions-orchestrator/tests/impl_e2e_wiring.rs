@@ -162,7 +162,8 @@ fn check_verify_mbx(plan: &JobText, mbx: &str) -> Result<(), String> {
         .ok_or("missing Verify MBX compile step")?;
     for need in [
         "test -x target/release/velnor-actions".to_owned(),
-        "mbx --version".to_owned(),
+        "command -v mbx".to_owned(),
+        "\\\"$mbx_bin\\\" --version".to_owned(),
         format!("grep -qxF \\\"mbx {mbx}\\\" \\\"$RUNNER_TEMP/velnor/preseed-mbx-version\\\""),
     ] {
         if !verify.body.contains(&need) {

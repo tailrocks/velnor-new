@@ -24,9 +24,9 @@ path = "tests/velnor_cli.rs"
 
 [dev-dependencies]
 proc-macro2 = "=1.0.107"
-sha2 = "=0.11.0"
+sha2 = "=0.11.1"
 serde_json = { workspace = true }
-syn = { version = "=3.0.6", features = ["full", "visit"] }
+syn = { version = "=3.0.9", features = ["full", "visit"] }
 unicode-general-category = "=1.1.0"
 
 [[example]]

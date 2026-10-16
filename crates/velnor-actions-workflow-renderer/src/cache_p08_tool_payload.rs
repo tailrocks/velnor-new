@@ -171,7 +171,9 @@ impl ToolsCachePayload {
         steps::tools_cache_step(
             false,
             &self.key_expression(),
-            Some(super::save_policy::condition()),
+            Some(super::save_policy::condition(
+                velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            )),
         )
     }
 }

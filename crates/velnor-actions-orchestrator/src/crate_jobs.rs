@@ -18,7 +18,9 @@ use velnor_actions_contract::{
     WorkflowPolicy, crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
     tofu_display_name,
 };
-use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
+#[cfg(test)]
+use velnor_actions_mise::PinnedTool;
+use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
@@ -53,16 +55,33 @@ pub(crate) fn build_for_workflow(
     catalog: &ToolCatalog,
     fetch_roots: &[String],
     acquire: Option<&Step>,
+    helper_version: &str,
 ) -> Result<CrateBuild, OrchestratorError> {
-    build_crate_jobs(
+    build_crate_jobs(CrateJobInputs {
         label,
-        config.workflow.policy,
+        policy: config.workflow.policy,
         discovery,
         catalog,
         fetch_roots,
         acquire,
-        config.workflow.max_parallel_jobs,
-    )
+        max_parallel_jobs: config.workflow.max_parallel_jobs,
+        helper_version,
+        cache_policy: config.workflow.pull_request_cache_policy,
+    })
+}
+
+/// All authority and rendering inputs for one crate-job build.
+#[derive(Clone, Copy)]
+pub(crate) struct CrateJobInputs<'a> {
+    pub(crate) label: &'a str,
+    pub(crate) policy: WorkflowPolicy,
+    pub(crate) discovery: &'a Discovery,
+    pub(crate) catalog: &'a ToolCatalog,
+    pub(crate) fetch_roots: &'a [String],
+    pub(crate) acquire: Option<&'a Step>,
+    pub(crate) max_parallel_jobs: u32,
+    pub(crate) helper_version: &'a str,
+    pub(crate) cache_policy: velnor_actions_contract::PullRequestCachePolicy,
 }
 
 /// Build one ordered IR job per runnable crate from discovery proposals.
@@ -78,15 +97,18 @@ pub(crate) fn build_for_workflow(
 /// # Errors
 ///
 /// Returns contract, render-context, or tool-request errors.
-pub(crate) fn build_crate_jobs(
-    label: &str,
-    policy: WorkflowPolicy,
-    discovery: &Discovery,
-    catalog: &ToolCatalog,
-    fetch_roots: &[String],
-    acquire: Option<&Step>,
-    max_parallel_jobs: u32,
-) -> Result<CrateBuild, OrchestratorError> {
+pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, OrchestratorError> {
+    let CrateJobInputs {
+        label,
+        policy,
+        discovery,
+        catalog,
+        fetch_roots,
+        acquire,
+        max_parallel_jobs,
+        helper_version,
+        cache_policy,
+    } = input;
     let grouped = group_runnable(&discovery.proposals);
     let assigned = assign_group_ids(&grouped);
     let mut jobs = Vec::with_capacity(grouped.len());
@@ -136,6 +158,8 @@ pub(crate) fn build_crate_jobs(
             use_opentofu,
             acquire,
             max_parallel_jobs,
+            helper_version,
+            cache_policy,
         )?;
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
@@ -191,7 +215,8 @@ fn obligation_for(
     catalog: &ToolCatalog,
 ) -> Result<CrateObligation, OrchestratorError> {
     let argv = crate::vectors::task_argv(task, catalog)?;
-    let toolchain = crate::internal_plan::toolchain_id(task, catalog)?;
+    let toolchain_inputs = crate::internal_plan::identities::toolchain_inputs_for(task, catalog)?;
+    let toolchain = velnor_actions_contract::cachekey::toolchain_id(&toolchain_inputs)?;
     let digest = crate::internal::plan_obligation::task_digest(&task.task_id, &argv, &toolchain)?;
     let matrix_id = matrix_id_for_task_group(&task.stack_id, &task.task_id)?;
     let matrix_key = matrix_key_for_id(&matrix_id)?;
@@ -202,6 +227,7 @@ fn obligation_for(
         gated_by: gates_for(task, executed),
         matrix_key,
         task_digest: digest,
+        toolchain_inputs,
         run: argv,
     })
 }
@@ -251,6 +277,8 @@ fn render_job(
     use_opentofu: bool,
     acquire: Option<&Step>,
     max_parallel_jobs: u32,
+    helper_version: &str,
+    cache_policy: velnor_actions_contract::PullRequestCachePolicy,
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire.cloned());
@@ -268,7 +296,7 @@ fn render_job(
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
-    steps.extend(restore_step_for_crate(
+    steps.extend(crate::source_cache::restore_step_for_crate(
         label,
         catalog,
         fetch_roots,
@@ -281,12 +309,23 @@ fn render_job(
         )?);
     }
     if use_mbx {
-        steps.extend(crate::mbx_preflight::steps_for_catalog(catalog)?);
+        let root = crate::source_prep::workspace_root_for_manifest(&model.manifest, fetch_roots);
+        let working_dir = (!root.is_empty()).then_some(root);
+        steps.extend(crate::mbx_preflight::steps_for_catalog(
+            catalog,
+            cache_policy,
+            working_dir,
+        )?);
     }
     if use_rust {
+        let scoped_roots = crate::source_prep::crate_fetch_roots(
+            &model.manifest,
+            fetch_roots,
+            policy == WorkflowPolicy::VelnorRepositoryV1 && needs_validators,
+        );
         steps.extend(crate::source_prep::fetch_steps_for_crate(
             catalog,
-            fetch_roots,
+            &scoped_roots,
         )?);
     }
     steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(
@@ -307,6 +346,7 @@ fn render_job(
             catalog,
             &downstream,
             cap,
+            helper_version,
         )?);
     }
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
@@ -320,33 +360,8 @@ fn render_job(
         permissions: None,
         environment: None,
         steps,
+        cache_mode: None,
     })
-}
-
-/// Restore the exact shared Cargo source subset for one crate.
-///
-/// Lockless emits nothing, and tofu roles restore providers through
-/// the separate provider-cache step (never here). The separate V2 tools
-/// layer owns Cargo binaries and tool receipts. Compiler driver does not
-/// change which shared-source payload readers restore.
-fn restore_step_for_crate(
-    label: &str,
-    catalog: &ToolCatalog,
-    fetch_roots: &[String],
-    use_rust: bool,
-) -> Result<Option<Step>, OrchestratorError> {
-    if !use_rust || fetch_roots.is_empty() {
-        return Ok(None);
-    }
-    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
-        .map(velnor_actions_contract::ReleaseTarget::triple)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("bad_label:{label}"),
-        })?;
-    let rust = catalog.version(PinnedTool::Rust);
-    let key = crate::source_cache::sources_cache_key(target, rust, fetch_roots)?;
-    let prefix = crate::source_cache::sources_restore_prefix(&key);
-    crate::source_cache::sources_restore_step(&key, &[prefix]).map(Some)
 }
 
 #[cfg(test)]

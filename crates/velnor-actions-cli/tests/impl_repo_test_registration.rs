@@ -55,8 +55,8 @@ fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>>
     let output = cargo_config::cargo_output_at_target(
         &workspace.manifest,
         &[
-            "test",
-            "--no-run",
+            "check",
+            "--all-targets",
             "--locked",
             "--workspace",
             "--message-format=json",
@@ -121,24 +121,9 @@ fn test_artifact(
     if !package_ids.contains(package_id) {
         return Ok(None);
     }
-    let Some(executable) = message["executable"].as_str() else {
+    let Some(dep_info) = artifact_dep_info(message)? else {
         return Ok(None);
     };
-    let dep_info = PathBuf::from(executable).with_extension("d");
-    if !dep_info.is_file() {
-        if Path::new(executable)
-            .parent()
-            .and_then(Path::file_name)
-            .is_some_and(|directory| directory == "deps")
-        {
-            return Err(format!(
-                "Cargo test executable is missing dep-info: {}",
-                dep_info.display()
-            )
-            .into());
-        }
-        return Ok(None);
-    }
     let dependencies: HashSet<PathBuf> = dep_info::sources(&dep_info, &workspace.root)?
         .into_iter()
         .collect();
@@ -159,6 +144,52 @@ fn test_artifact(
         source,
         dependencies,
     }))
+}
+
+fn artifact_dep_info(message: &Value) -> Outcome<Option<PathBuf>> {
+    let mut candidates = Vec::new();
+    if let Some(executable) = message["executable"].as_str() {
+        candidates.push(executable);
+    }
+    if let Some(filenames) = message["filenames"].as_array() {
+        candidates.extend(filenames.iter().filter_map(Value::as_str));
+    }
+    for candidate in &candidates {
+        for dep_info in candidate_dep_info_paths(Path::new(candidate)) {
+            if dep_info.is_file() {
+                return Ok(Some(dep_info));
+            }
+        }
+    }
+    for candidate in candidates {
+        let candidate_path = Path::new(candidate);
+        if candidate_path
+            .parent()
+            .and_then(Path::file_name)
+            .is_some_and(|directory| directory == "deps")
+        {
+            let dep_info = candidate_path.with_extension("d");
+            return Err(format!(
+                "Cargo test executable is missing dep-info: {}",
+                dep_info.display()
+            )
+            .into());
+        }
+    }
+    Ok(None)
+}
+
+fn candidate_dep_info_paths(candidate: &Path) -> Vec<PathBuf> {
+    let mut paths = vec![candidate.with_extension("d")];
+    if let (Some(parent), Some(stem)) = (
+        candidate.parent(),
+        candidate.file_stem().and_then(|stem| stem.to_str()),
+    ) && let Some(stripped) = stem.strip_prefix("lib")
+        && !stripped.is_empty()
+    {
+        paths.push(parent.join(format!("{stripped}.d")));
+    }
+    paths
 }
 
 fn rust_files(

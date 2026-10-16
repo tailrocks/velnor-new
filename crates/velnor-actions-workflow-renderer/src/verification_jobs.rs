@@ -99,6 +99,7 @@ pub fn build_verification_task_job(
         needs: Vec::new(),
         condition: None,
         permissions: Some(verification_permissions()),
+        cache_mode: None,
         environment: None,
         steps,
     })

@@ -23,6 +23,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
             permissions: None,
             environment: None,
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],
+            cache_mode: None,
         },
     );
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
@@ -39,6 +40,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
             permissions: None,
             environment: None,
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],
+            cache_mode: None,
         },
     );
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
@@ -61,6 +63,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
             }),
             environment: None,
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],
+            cache_mode: None,
         },
     );
     let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;

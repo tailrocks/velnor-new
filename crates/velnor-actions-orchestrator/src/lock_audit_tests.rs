@@ -32,6 +32,7 @@ fn shell_job(run: Vec<String>) -> Job {
                 env: BTreeMap::new(),
             },
         }],
+        cache_mode: None,
     }
 }
 
@@ -61,6 +62,7 @@ fn ir_for(job: Job) -> WorkflowIr {
             cancel_in_progress: "c".to_owned(),
         },
         jobs: BTreeMap::from([("plan".to_owned(), job)]),
+        cache_mode: None,
     }
 }
 

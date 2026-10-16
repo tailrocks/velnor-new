@@ -95,86 +95,126 @@ fn publisher_creates_exact_tag_after_eligibility_then_publishes_verified_assets(
     Ok(())
 }
 
-#[test]
-fn complete_publisher_fails_closed_on_release_verification_errors() -> Result<(), Box<dyn Error>> {
-    for (failure, diagnostic) in [
-        ("release-verify", "release signature verification failed"),
-        ("download", "release asset download failed"),
-        ("checksum", "release asset checksum verification failed"),
-        ("asset-verify", "release asset verification failed"),
-        (
-            "attestation-verify",
-            "asset attestation verification failed",
-        ),
-    ] {
-        let fixture = Fixture::new(Family::Binary, "complete")?;
-        let result = fixture.run_with_failure(
-            family::publish_script(Family::Binary, &test_pins())?,
-            Some("complete"),
-            Some(failure),
-        )?;
-        assert!(!result.success, "{failure} unexpectedly passed");
-        assert!(
-            result.stderr.contains(diagnostic),
-            "{failure}: {}",
-            result.stderr
-        );
-        assert!(
-            !result.output.contains("action=complete"),
-            "{failure} emitted complete: {}",
-            result.output
-        );
-        assert!(
-            !contains_mutation(&result.calls),
-            "{failure} reached a mutating command: {}",
-            result.calls
-        );
-    }
+fn assert_verification_failure(failure: &str, diagnostic: &str) -> Result<(), Box<dyn Error>> {
+    let fixture = Fixture::new(Family::Binary, "complete")?;
+    let result = fixture.run_with_failure(
+        family::publish_script(Family::Binary, &test_pins())?,
+        Some("complete"),
+        Some(failure),
+    )?;
+    assert!(!result.success, "{failure} unexpectedly passed");
+    assert!(
+        result.stderr.contains(diagnostic),
+        "{failure}: {}",
+        result.stderr
+    );
+    assert!(
+        !result.output.contains("action=complete"),
+        "{failure} emitted complete: {}",
+        result.output
+    );
+    assert!(
+        !contains_mutation(&result.calls),
+        "{failure} reached a mutating command: {}",
+        result.calls
+    );
     Ok(())
 }
 
 #[test]
-fn complete_publisher_fails_closed_on_authoritative_read_errors() -> Result<(), Box<dyn Error>> {
-    for (mode, failure, diagnostic) in [
-        ("absent", "main-read", "main commit response is invalid"),
-        ("absent", "ci-read", "CI run response is invalid"),
-        ("absent", "required-read", "Required job lookup failed"),
-        (
-            "complete",
-            "release-list-read",
-            "release list request failed",
-        ),
-        (
-            "absent",
-            "matching-refs-read",
-            "matching release tag lookup failed",
-        ),
-        ("complete", "tag-read", "release tag lookup failed"),
-    ] {
-        let fixture = Fixture::new(Family::Binary, mode)?;
-        let result = fixture.run_with_failure(
-            family::publish_script(Family::Binary, &test_pins())?,
-            Some("complete"),
-            Some(failure),
-        )?;
-        assert!(!result.success, "{failure} unexpectedly passed");
-        assert!(
-            result.stderr.contains(diagnostic),
-            "{failure}: {}",
-            result.stderr
-        );
-        assert!(
-            !result.output.contains("action=complete"),
-            "{failure} emitted complete: {}",
-            result.output
-        );
-        assert!(
-            !contains_mutation(&result.calls),
-            "{failure} reached a mutating command: {}",
-            result.calls
-        );
-    }
+fn verification_failure_release_verify() -> Result<(), Box<dyn Error>> {
+    assert_verification_failure("release-verify", "release signature verification failed")
+}
+
+#[test]
+fn verification_failure_download() -> Result<(), Box<dyn Error>> {
+    assert_verification_failure("download", "release asset download failed")
+}
+
+#[test]
+fn verification_failure_checksum() -> Result<(), Box<dyn Error>> {
+    assert_verification_failure("checksum", "release asset checksum verification failed")
+}
+
+#[test]
+fn verification_failure_asset_verify() -> Result<(), Box<dyn Error>> {
+    assert_verification_failure("asset-verify", "release asset verification failed")
+}
+
+#[test]
+fn verification_failure_attestation_verify() -> Result<(), Box<dyn Error>> {
+    assert_verification_failure(
+        "attestation-verify",
+        "asset attestation verification failed",
+    )
+}
+
+fn assert_authoritative_read_failure(
+    mode: &'static str,
+    failure: &str,
+    diagnostic: &str,
+) -> Result<(), Box<dyn Error>> {
+    let fixture = Fixture::new(Family::Binary, mode)?;
+    let result = fixture.run_with_failure(
+        family::publish_script(Family::Binary, &test_pins())?,
+        Some("complete"),
+        Some(failure),
+    )?;
+    assert!(!result.success, "{failure} unexpectedly passed");
+    assert!(
+        result.stderr.contains(diagnostic),
+        "{failure}: {}",
+        result.stderr
+    );
+    assert!(
+        !result.output.contains("action=complete"),
+        "{failure} emitted complete: {}",
+        result.output
+    );
+    assert!(
+        !contains_mutation(&result.calls),
+        "{failure} reached a mutating command: {}",
+        result.calls
+    );
     Ok(())
+}
+
+#[test]
+fn authoritative_read_failure_main_read() -> Result<(), Box<dyn Error>> {
+    assert_authoritative_read_failure("absent", "main-read", "main commit response is invalid")
+}
+
+#[test]
+fn authoritative_read_failure_ci_read() -> Result<(), Box<dyn Error>> {
+    assert_authoritative_read_failure("absent", "ci-read", "CI run response is invalid")
+}
+
+#[test]
+fn authoritative_read_failure_required_read() -> Result<(), Box<dyn Error>> {
+    assert_authoritative_read_failure("absent", "required-read", "Required job lookup failed")
+}
+
+#[test]
+fn authoritative_read_failure_release_list_read() -> Result<(), Box<dyn Error>> {
+    assert_authoritative_read_failure(
+        "complete",
+        "release-list-read",
+        "release list request failed",
+    )
+}
+
+#[test]
+fn authoritative_read_failure_matching_refs_read() -> Result<(), Box<dyn Error>> {
+    assert_authoritative_read_failure(
+        "absent",
+        "matching-refs-read",
+        "matching release tag lookup failed",
+    )
+}
+
+#[test]
+fn authoritative_read_failure_tag_read() -> Result<(), Box<dyn Error>> {
+    assert_authoritative_read_failure("complete", "tag-read", "release tag lookup failed")
 }
 
 #[test]

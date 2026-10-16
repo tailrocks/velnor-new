@@ -144,6 +144,10 @@ fn observe_until_done(
     let mut iteration = 0_u64;
     let mut first_error = None;
     while done.load(Ordering::Relaxed) == 0 {
+        assert!(
+            started.elapsed() <= std::time::Duration::from_secs(30),
+            "observer timed out waiting for writer"
+        );
         iteration += 1;
         if let Err(error) = target.symlink_metadata() {
             counts.record(&error);
@@ -159,9 +163,17 @@ fn observe_until_done(
                 ));
             }
         }
+        std::thread::yield_now();
     }
     if let Some(first_error) = first_error {
         first_error.emit();
+    }
+}
+
+struct DoneGuard<'a>(&'a AtomicUsize);
+impl Drop for DoneGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(1, Ordering::Relaxed);
     }
 }
 
@@ -180,13 +192,13 @@ fn atomic_commit_never_exposes_missing_tree() -> TestResult {
     let started = Instant::now();
     std::thread::scope(|scope| {
         scope.spawn(|| {
+            let _guard = DoneGuard(&done);
             for rewrite in 1..=8 {
                 writer_phase.store(rewrite * 2 - 1, Ordering::Relaxed);
                 generate(&prep, &opts).expect("rewrite commits");
                 writer_phase.store(rewrite * 2, Ordering::Relaxed);
             }
             writer_phase.store(WRITER_COMPLETE, Ordering::Relaxed);
-            done.store(1, Ordering::Relaxed);
         });
         for observer in 0..4 {
             let parent = root.to_path_buf();

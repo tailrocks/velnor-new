@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::verification_jobs::build_task_jobs::{BuildTaskArtifact, BuildTaskTool};
 use velnor_actions_contract::{
-    Job, JobTimeout, PermissionLevel, VerificationRunner, VerificationTask,
+    Job, JobTimeout, MiseTaskSource, PermissionLevel, VerificationRunner, VerificationTask,
 };
 
 use super::{
@@ -19,6 +19,7 @@ fn policy(id: &str, runner: VerificationRunner) -> VerificationTaskPolicy {
         task: VerificationTask {
             id: id.to_owned(),
             mise_task: format!("lint-{id}"),
+            source: MiseTaskSource::default(),
             runner,
             timeout_minutes: 10,
         },
@@ -30,7 +31,7 @@ fn policy(id: &str, runner: VerificationRunner) -> VerificationTaskPolicy {
             sha256: "a".repeat(64),
         },
         selected_tools: Vec::new(),
-        mise_config_sha256: None,
+        mise_config_sha256: Some("b".repeat(64)),
         mise_lock_sha256: None,
         rust_toolchain_sha256: None,
     }
@@ -203,6 +204,7 @@ fn all_declared_tasks_join_required_fan_in() {
                 permissions: None,
                 environment: None,
                 steps: Vec::new(),
+                cache_mode: None,
             },
         ),
     ]);
@@ -255,6 +257,7 @@ fn paired_task_lanes_are_complete_and_join_required_together() {
                 permissions: None,
                 environment: None,
                 steps: Vec::new(),
+                cache_mode: None,
             },
         ),
     ]);

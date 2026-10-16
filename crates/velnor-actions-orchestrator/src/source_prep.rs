@@ -37,6 +37,40 @@ pub(crate) fn cargo_isolation_prefix() -> String {
     format!("mkdir -p \"{CARGO_CLEAN_DIR}\" && cd \"{CARGO_CLEAN_DIR}\" && ")
 }
 
+/// Find the matching workspace root from `fetch_roots` for a manifest path.
+pub(crate) fn workspace_root_for_manifest<'a>(
+    manifest: &str,
+    fetch_roots: &'a [String],
+) -> &'a str {
+    let mut matching = "";
+    for root in fetch_roots {
+        if !root.is_empty()
+            && (manifest == root || manifest.starts_with(&format!("{root}/")))
+            && root.len() > matching.len()
+        {
+            matching = root;
+        }
+    }
+    matching
+}
+
+/// Scope `fetch_roots` for a single crate job unless it requires all repository workspaces.
+pub(crate) fn crate_fetch_roots(
+    manifest: &str,
+    fetch_roots: &[String],
+    needs_all_workspaces: bool,
+) -> Vec<String> {
+    if needs_all_workspaces {
+        return fetch_roots.to_vec();
+    }
+    let root = workspace_root_for_manifest(manifest, fetch_roots);
+    fetch_roots
+        .iter()
+        .filter(|candidate| candidate.as_str() == root)
+        .cloned()
+        .collect()
+}
+
 /// Absolute `--manifest-path` flag for one validated fetch root.
 ///
 /// The manifest anchors on `$GITHUB_WORKSPACE` (the runner-owned
@@ -323,5 +357,30 @@ mod tests {
         let crates = fetch_steps_for_crate(&catalog, &[]).expect("crate fetch steps");
         let plan = fetch_steps_for_plan(&catalog, &[]).expect("plan fetch steps");
         assert!(crates.is_empty() && plan.is_empty());
+    }
+
+    #[test]
+    fn crate_fetch_roots_scopes_to_matching_workspace_unless_all_needed() {
+        let roots = vec![String::new(), "crates/velnor-runner".to_owned()];
+        assert_eq!(
+            crate_fetch_roots("crates/velnor-actions-contract/Cargo.toml", &roots, false),
+            vec![String::new()]
+        );
+        assert_eq!(
+            crate_fetch_roots(
+                "crates/velnor-runner/crates/runner-core/Cargo.toml",
+                &roots,
+                false
+            ),
+            vec!["crates/velnor-runner".to_owned()]
+        );
+        assert_eq!(
+            crate_fetch_roots(
+                "crates/velnor-actions-orchestrator/Cargo.toml",
+                &roots,
+                true
+            ),
+            roots
+        );
     }
 }

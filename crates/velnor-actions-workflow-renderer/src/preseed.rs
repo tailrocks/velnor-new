@@ -26,8 +26,12 @@ use velnor_actions_contract::{Step, StepRole};
 use crate::{
     RenderError,
     artifact_paths::{PRESEED_OUTPUT_DIR_EXPR, PRESEED_STAGE_DIR_EXPR},
+    cache_steps::RESOLVE_ACTION_MBX_BIN,
     steps,
 };
+
+#[path = "preseed_mbx.rs"]
+mod mbx;
 
 /// Exact pre-seed helper artifact name (run-scoped, no wildcards).
 pub const PRESEED_ARTIFACT_NAME: &str = "velnor-preseed-helper";
@@ -105,7 +109,14 @@ pub fn preseed_build_step(
     env: &BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_BUILD_NAME.ends_with(TRUST_MARK));
-    let mut step = steps::shell_step(PRESEED_BUILD_NAME, build.to_vec(), env.clone())?;
+    let build = mbx::build_argv_for_action(build)?;
+    let command = crate::commands::join_argv_for_run(&build)?;
+    let script = format!("set -eu; {RESOLVE_ACTION_MBX_BIN}; {command}");
+    let mut step = steps::action_owned_mbx_shell_step(
+        PRESEED_BUILD_NAME,
+        vec!["sh".to_owned(), "-c".to_owned(), script],
+        env.clone(),
+    )?;
     step.role = Some(StepRole::PreseedBuild);
     Ok(step)
 }
@@ -116,7 +127,8 @@ pub fn preseed_build_step(
 /// isolated `mbx --version` probe and requires its whole line to equal
 /// `mbx <version>` (exact pinned catalog version, never `latest`), so a
 /// wrong-toolchain compile fails here instead of uploading. The probe
-/// resolves through Mise on every run, cold or warm. The script writes
+/// resolves the action-owned executable before entering Rust-only Mise on
+/// every run, cold or warm. The script writes
 /// probe output to a temporary file before comparing it, so a matching
 /// partial response cannot mask a nonzero Mise exit.
 /// # Errors
@@ -131,12 +143,12 @@ pub fn preseed_verify_step(
             "preseed_bad_mbx_version:{mbx_version}"
         )));
     }
-    check_probe_shape(probe)?;
+    let probe = mbx::probe_argv_for_action(probe)?;
+    let command = crate::commands::join_argv_for_run(&probe)?;
     let script = format!(
-        "test -x {PRESEED_BUILD_OUTPUT} && mkdir -p \"$RUNNER_TEMP/velnor\" && {} > \"{PRESEED_MBX_VERSION_OUTPUT}\" && grep -qxF \"mbx {mbx_version}\" \"{PRESEED_MBX_VERSION_OUTPUT}\"",
-        probe.join(" ")
+        "set -eu; {RESOLVE_ACTION_MBX_BIN}; test -x {PRESEED_BUILD_OUTPUT} && mkdir -p \"$RUNNER_TEMP/velnor\" && {command} > \"{PRESEED_MBX_VERSION_OUTPUT}\" && grep -qxF \"mbx {mbx_version}\" \"{PRESEED_MBX_VERSION_OUTPUT}\""
     );
-    let mut step = steps::shell_step(
+    let mut step = steps::action_owned_mbx_shell_step(
         PRESEED_VERIFY_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
         env.clone(),
@@ -145,11 +157,11 @@ pub fn preseed_verify_step(
     Ok(step)
 }
 
-/// Probe shape: isolated `mise exec rust@<exact> -- mbx --version`.
+/// Portable probe shape: isolated `mise exec rust@<exact> -- mbx --version`.
 ///
-/// The native action owns MBX installation. This route selects only Rust
-/// through Mise and inherits the action's PATH; every arg is shell-plain
-/// so script embedding is injection-free.
+/// The native action owns MBX installation. Runtime binding replaces the
+/// portable `mbx` token with the absolute executable resolved from the
+/// action's PATH before Mise selects only Rust.
 fn check_probe_shape(probe: &[String]) -> Result<(), RenderError> {
     let malformed = || RenderError::BadCommand("preseed_bad_mbx_probe".to_owned());
     if probe.len() != 9

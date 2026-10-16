@@ -54,6 +54,8 @@ pub(crate) fn mbx_tool_steps(
         mbx_version,
         rust_toolchain,
         mbx_tool_env(rust_toolchain),
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        None,
     )?
     .ok_or_else(|| RenderError::InvalidWorkflow("mbx_steps_missing".to_owned()))
 }
@@ -73,7 +75,9 @@ pub(crate) fn mise() -> MiseSetup {
 pub(crate) fn fixture_ctx() -> RenderContext {
     RenderContext {
         generator_version: VERSION.to_owned(),
+        report_helper_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
+        scale_set_selector: None,
         staged_binary: STAGED.to_owned(),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
@@ -139,6 +143,7 @@ pub(crate) fn job(id: &str, display: &str, needs: Vec<String>, steps: Vec<Step>)
             ),
             environment: None,
             steps,
+            cache_mode: None,
         },
     )
 }
@@ -162,6 +167,7 @@ pub(crate) fn fixture_ir(jobs: Vec<(String, Job)>) -> WorkflowIr {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs: jobs.into_iter().collect(),
+        cache_mode: None,
     }
 }
 

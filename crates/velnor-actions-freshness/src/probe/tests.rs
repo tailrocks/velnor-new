@@ -102,7 +102,7 @@ fn start_server(responses: Vec<MockResponse>) -> Result<TestServer, Box<dyn Erro
 }
 
 fn accept_with_deadline(listener: &TcpListener) -> Option<TcpStream> {
-    let deadline = Instant::now() + Duration::from_millis(500);
+    let deadline = Instant::now() + Duration::from_secs(3);
     while Instant::now() < deadline {
         if let Ok((stream, _)) = listener.accept() {
             // Accepted sockets inherit the listener's nonblocking mode on

@@ -18,7 +18,9 @@ const LOGICAL_JOBS: usize = 21;
 pub(super) fn ctx() -> RenderContext {
     RenderContext {
         generator_version: "0.1.0".to_owned(),
+        report_helper_version: "0.1.0".to_owned(),
         runs_on: HOSTED_RUNS.to_owned(),
+        scale_set_selector: None,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),
@@ -50,6 +52,7 @@ pub(super) fn workflow_ir() -> WorkflowIr {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs: BTreeMap::new(),
+        cache_mode: None,
     }
 }
 
@@ -86,6 +89,7 @@ fn lane_job(display: &str, runs_on: &str, steps: Vec<Step>) -> Job {
         environment: None,
         check_runner: None,
         steps,
+        cache_mode: None,
     }
 }
 
@@ -273,7 +277,9 @@ fn elected_save_stays_on_the_winner_job() {
     let save = crate::cache_steps::tools_cache_step(
         false,
         crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
-        Some(crate::cache_p08::tools_cache_save_condition()),
+        Some(crate::cache_p08::tools_cache_save_condition(
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        )),
     )
     .expect("save");
     jobs.get_mut("rust-0__hosted")

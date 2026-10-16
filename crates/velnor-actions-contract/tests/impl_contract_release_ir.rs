@@ -47,6 +47,7 @@ fn ci_job() -> Job {
         needs: vec![],
         condition: None,
         permissions: None,
+        cache_mode: None,
         environment: None,
         steps: vec![Step {
             name: "run".to_owned(),
@@ -66,6 +67,7 @@ fn ci_workflow() -> WorkflowIr {
         name: "demo CI".to_owned(),
         triggers: ci_triggers(),
         permissions: Permissions::default(),
+        cache_mode: None,
         concurrency: Concurrency {
             group: "demo".to_owned(),
             cancel_in_progress: "false".to_owned(),

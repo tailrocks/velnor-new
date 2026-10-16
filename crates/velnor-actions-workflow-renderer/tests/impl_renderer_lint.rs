@@ -23,7 +23,9 @@ fn checkout_pin() -> String {
 fn fixture_ctx() -> RenderContext {
     RenderContext {
         generator_version: VERSION.to_owned(),
+        report_helper_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
+        scale_set_selector: None,
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
@@ -65,6 +67,7 @@ fn lint_job() -> Result<Job, RenderError> {
                 BTreeMap::new(),
             )?,
         ],
+        cache_mode: None,
     })
 }
 
@@ -82,6 +85,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
             permissions: None,
             environment: None,
             steps: vec![checkout_step(&checkout_pin())?],
+            cache_mode: None,
         },
     );
     jobs.insert(
@@ -101,6 +105,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
             }),
             environment: None,
             steps: vec![merge_step()],
+            cache_mode: None,
         },
     );
     jobs.insert(LINT_ID.to_owned(), lint_job()?);
@@ -122,6 +127,7 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs,
+        cache_mode: None,
     })
 }
 

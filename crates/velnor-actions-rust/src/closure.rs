@@ -4,6 +4,7 @@
 //! Cargo filenames, and Rust source extensions here are Rust-domain
 //! rules; the orchestrator dispatches per stack to this resolver.
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use velnor_actions_contract::{
@@ -16,6 +17,25 @@ use super::closure_probes::{
 };
 use crate::task_identity::DigestSlot;
 use crate::tasks::TaskKind;
+
+/// Per-analysis cache of Rust checkout probes to avoid repeated directory walks and file hashing.
+#[derive(Debug, Clone, Default)]
+pub struct RustClosureCache {
+    source_trees: BTreeMap<String, Provenance>,
+    files: BTreeMap<String, Provenance>,
+    lockfiles: BTreeMap<String, Provenance>,
+    nextest_configs: BTreeMap<Option<String>, Provenance>,
+    cargo_configs: BTreeMap<String, Provenance>,
+    classes: BTreeMap<(String, u8), Provenance>,
+}
+
+impl RustClosureCache {
+    /// Create an empty probe cache for one analysis pass.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
 
 /// Resolve one proposed task's closure against the checkout at `root`.
 ///
@@ -35,18 +55,69 @@ pub fn resolve_closure_at_root(
     toolchain_id: &str,
     platform_id: &str,
 ) -> Result<TaskInputClosure, ContractError> {
+    let mut cache = RustClosureCache::new();
+    resolve_closure_at_root_cached(
+        root,
+        task,
+        profile_nextest_config,
+        graph_digest,
+        toolchain_id,
+        platform_id,
+        &mut cache,
+    )
+}
+
+/// Resolve one proposed task's closure using a shared [`RustClosureCache`].
+///
+/// # Errors
+///
+/// Returns [`ContractError`] for task-kind spellings outside the seven
+/// known kinds.
+pub fn resolve_closure_at_root_cached(
+    root: &Path,
+    task: &ProposedTask,
+    profile_nextest_config: Option<&str>,
+    graph_digest: &str,
+    toolchain_id: &str,
+    platform_id: &str,
+    cache: &mut RustClosureCache,
+) -> Result<TaskInputClosure, ContractError> {
     let kind = TaskKind::parse(&task.task_kind)?;
     let manifest = task.identity.unit_path.as_str();
-    let nextest = probe_nextest_config(root, profile_nextest_config);
-    let docs = class_provenance(root, kind, manifest, Class::Docs);
-    let fixtures = class_provenance(root, kind, manifest, Class::Fixtures);
-    let schemas = class_provenance(root, kind, manifest, Class::Schemas);
+    let nextest = cache
+        .nextest_configs
+        .entry(profile_nextest_config.map(str::to_owned))
+        .or_insert_with(|| probe_nextest_config(root, profile_nextest_config))
+        .clone();
+    let docs = class_provenance_cached(root, kind, manifest, Class::Docs, cache);
+    let fixtures = class_provenance_cached(root, kind, manifest, Class::Fixtures, cache);
+    let schemas = class_provenance_cached(root, kind, manifest, Class::Schemas, cache);
+    let source_tree = cache
+        .source_trees
+        .entry(manifest.to_owned())
+        .or_insert_with(|| source_tree_provenance(root, manifest))
+        .clone();
+    let manifest_prov = cache
+        .files
+        .entry(manifest.to_owned())
+        .or_insert_with(|| probe_file(root, manifest))
+        .clone();
+    let lockfile = cache
+        .lockfiles
+        .entry(manifest.to_owned())
+        .or_insert_with(|| probe_lockfile(root, manifest))
+        .clone();
+    let cargo_config = cache
+        .cargo_configs
+        .entry(manifest.to_owned())
+        .or_insert_with(|| probe_cargo_config(root, manifest))
+        .clone();
     let mut closure = ClosureBuilder::new()
-        .input("source_tree", source_tree_provenance(root, manifest))
-        .input("manifest", probe_file(root, manifest))
-        .input("lockfile", probe_lockfile(root, manifest))
+        .input("source_tree", source_tree)
+        .input("manifest", manifest_prov)
+        .input("lockfile", lockfile)
         .input("nextest_config", nextest)
-        .input("cargo_config", probe_cargo_config(root, manifest))
+        .input("cargo_config", cargo_config)
         .input("docs", docs)
         .input("fixtures", fixtures)
         .input("schemas", schemas)
@@ -88,10 +159,36 @@ pub fn lock_digest_at_root(root: &Path, manifest: &str) -> DigestSlot {
     digest_slot(probe_lockfile(root, manifest))
 }
 
+/// Cached lockfile slot at `root`.
+#[must_use]
+pub fn lock_digest_cached(root: &Path, manifest: &str, cache: &mut RustClosureCache) -> DigestSlot {
+    let prov = cache
+        .lockfiles
+        .entry(manifest.to_owned())
+        .or_insert_with(|| probe_lockfile(root, manifest))
+        .clone();
+    digest_slot(prov)
+}
+
 /// Nextest-config slot at `root`: content, proven absence, or unknown.
 #[must_use]
 pub fn nextest_digest_at_root(root: &Path, profile_config: Option<&str>) -> DigestSlot {
     digest_slot(probe_nextest_config(root, profile_config))
+}
+
+/// Cached Nextest-config slot at `root`.
+#[must_use]
+pub fn nextest_digest_cached(
+    root: &Path,
+    profile_config: Option<&str>,
+    cache: &mut RustClosureCache,
+) -> DigestSlot {
+    let prov = cache
+        .nextest_configs
+        .entry(profile_config.map(str::to_owned))
+        .or_insert_with(|| probe_nextest_config(root, profile_config))
+        .clone();
+    digest_slot(prov)
 }
 
 /// VCS provenance: unknown with undeclared reads, proven absent without.
@@ -202,21 +299,33 @@ impl Class {
     }
 }
 
-/// Class provenance: exclusion for non-consuming kinds, else digest or absence.
-fn class_provenance(root: &Path, kind: TaskKind, manifest: &str, class: Class) -> Provenance {
+/// Class provenance: exclusion for non-consuming kinds, else cached digest or absence.
+fn class_provenance_cached(
+    root: &Path,
+    kind: TaskKind,
+    manifest: &str,
+    class: Class,
+    cache: &mut RustClosureCache,
+) -> Provenance {
     if let Some(evidence) = class.excluded(kind) {
         return Provenance::AbsentProven {
             evidence: evidence.to_owned(),
         };
     }
-    let keep = |_: &Path, path: &str| class.keep(path);
-    match super::closure_probes::walk_package_files(root, manifest, &keep) {
-        Err(reason) => Provenance::Unknown { reason },
-        Ok(files) if files.is_empty() => Provenance::AbsentProven {
-            evidence: "probed_no_class_files".to_owned(),
-        },
-        Ok(files) => Provenance::Known {
-            digest: files_digest(&files),
-        },
-    }
+    cache
+        .classes
+        .entry((manifest.to_owned(), class as u8))
+        .or_insert_with(|| {
+            let keep = |_: &Path, path: &str| class.keep(path);
+            match super::closure_probes::walk_package_files(root, manifest, &keep) {
+                Err(reason) => Provenance::Unknown { reason },
+                Ok(files) if files.is_empty() => Provenance::AbsentProven {
+                    evidence: "probed_no_class_files".to_owned(),
+                },
+                Ok(files) => Provenance::Known {
+                    digest: files_digest(&files),
+                },
+            }
+        })
+        .clone()
 }

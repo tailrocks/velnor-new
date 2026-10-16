@@ -148,11 +148,12 @@ pinned actionlint release's built-in GitHub-hosted label table lags the
 versioned GitHub runner catalog. Velnor's own runner registry validates that
 it is an exact GitHub-hosted label; it is not emitted in `runs-on` as a
 self-hosted runner. The actionlint crate MUST remove this bridge once its
-pinned version recognizes the hosted label natively. When a generated workflow
 references repository configuration variables, the renderer adds their exact
-declared names to `config-variables`. V1 generates no self-hosted runners. Path-specific
-ignore entries are forbidden unless a narrowly matched diagnostic is approved
-in Velnor's own protected policy; consumer config cannot add ignores.
+declared names to `config-variables`. Under schema 1, V1 generates no self-hosted runners
+and emits only hosted `ubuntu-26.04`. Under schema 2, Scale Set runner labels
+`[velnor, ubuntu-26.04-scale-set]` are emitted when `scale-set` or `both` execution mode
+is configured. Path-specific ignore entries are forbidden unless a narrowly matched
+diagnostic is approved in Velnor's own protected policy; consumer config cannot add ignores.
 Actionlint config is part of the generated tree and is linted with the same
 pinned actionlint binary as every generated workflow.
 

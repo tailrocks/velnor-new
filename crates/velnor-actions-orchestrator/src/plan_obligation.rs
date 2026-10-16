@@ -102,6 +102,8 @@ pub(crate) fn member_changed(
 struct PlannedIdentity {
     /// Snapshot-indexed bundle with checkout-bound lock/Nextest digests.
     bundle: ExtensionBundle,
+    /// Whether the stack extension permits reuse.
+    reuse_eligible: bool,
     /// Canonical digest over the complete input closure.
     closure_digest: String,
     /// Input digest with the closure digest bound into the envelope.
@@ -155,17 +157,31 @@ fn planned_identity(
         Some(inputs.root),
         nextest_config.as_deref(),
     );
-    let extension = extension_for_task(task, inputs.root, &bundle, reads)?.0;
-    let closure = resolve_closure_at_root(
-        inputs.root,
-        task,
-        nextest_config.as_deref(),
-        bundle.graph_digest(),
-        toolchain,
-        platform_id,
-        &mut *reads,
-    )
-    .map_err(internal_contract)?;
+    let (extension, reuse_eligible) = extension_for_task(task, inputs.root, &bundle, reads)?;
+    let closure = if Stack::from_id(&task.stack_id) == Some(Stack::Rust) {
+        inputs
+            .snapshot
+            .resolve_rust_closure(
+                inputs.root,
+                task,
+                nextest_config.as_deref(),
+                bundle.graph_digest(),
+                toolchain,
+                platform_id,
+            )
+            .map_err(internal_contract)?
+    } else {
+        resolve_closure_at_root(
+            inputs.root,
+            task,
+            nextest_config.as_deref(),
+            bundle.graph_digest(),
+            toolchain,
+            platform_id,
+            &mut *reads,
+        )
+        .map_err(internal_contract)?
+    };
     let closure_digest = canonical_digest(&closure).map_err(internal_contract)?;
     let input_digest = task_identity_digest(&IdentityInputs {
         task,
@@ -180,6 +196,7 @@ fn planned_identity(
     .map_err(internal_contract)?;
     Ok(PlannedIdentity {
         bundle,
+        reuse_eligible,
         closure_digest,
         input_digest,
     })
@@ -217,7 +234,7 @@ pub(crate) fn plan_group(
     let argv = task_argv(task, inputs.catalog)?;
     let platform_id = platform_id_for_group(inputs.label, task).map_err(internal_contract)?;
     let identity = planned_identity(inputs, &argv, &toolchain, &platform_id, &mut *reads)?;
-    let reuse_eligible = extension_for_task(task, inputs.root, &identity.bundle, reads)?.1;
+    let reuse_eligible = identity.reuse_eligible;
     let input_digest = identity.input_digest;
     let closure_digest = identity.closure_digest;
     let reuse = if inputs.changed {

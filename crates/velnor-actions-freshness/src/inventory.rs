@@ -186,6 +186,15 @@ pub(crate) fn load_policy(ctx: &mut FreshnessContext) {
     }
 }
 
+/// Default package release cooldown window (in days), matching GitHub's July 2026
+/// Dependabot 3-day default cooldown for newly published versions.
+pub(crate) const DEFAULT_COOLDOWN_DAYS: i64 = 3;
+/// Minimum allowed `default_cooldown_days` in `.velnor/version-policy.toml`.
+pub(crate) const MIN_COOLDOWN_DAYS: i64 = 1;
+/// Maximum allowed `default_cooldown_days` in `.velnor/version-policy.toml`,
+/// matching Dependabot's `1..=90` day cooldown contract.
+pub(crate) const MAX_COOLDOWN_DAYS: i64 = 90;
+
 /// Validate fixed policy header and prevent weakening the cadence limits.
 pub(crate) fn check_policy_header(ctx: &mut FreshnessContext) {
     let Some(policy) = ctx.policy.clone() else {
@@ -197,6 +206,7 @@ pub(crate) fn check_policy_header(ctx: &mut FreshnessContext) {
         "registry",
         "check_interval_hours",
         "max_exception_days",
+        "default_cooldown_days",
         "tools",
         "github_runner_images",
         "actions",
@@ -232,6 +242,7 @@ pub(crate) fn check_policy_header(ctx: &mut FreshnessContext) {
         &TomlValue::Integer(ctx.max_days),
     );
     check_registry(ctx, &policy);
+    check_cooldown_days(ctx, &policy);
     if toml_int(&policy, "check_interval_hours").is_some_and(|value| value > 24) {
         ctx.fail_row(
             "policy-header",
@@ -245,6 +256,41 @@ pub(crate) fn check_policy_header(ctx: &mut FreshnessContext) {
             "max_exception_days",
             "weakens policy: must be <= 14",
         );
+    }
+}
+
+fn check_cooldown_days(ctx: &mut FreshnessContext, policy: &TomlValue) {
+    match policy.get("default_cooldown_days") {
+        None => {
+            ctx.cooldown_days = DEFAULT_COOLDOWN_DAYS;
+            ctx.pass_row(
+                "policy-header",
+                "default_cooldown_days",
+                &format!("{DEFAULT_COOLDOWN_DAYS} (default)"),
+            );
+        }
+        Some(TomlValue::Integer(days))
+            if (MIN_COOLDOWN_DAYS..=MAX_COOLDOWN_DAYS).contains(days) =>
+        {
+            ctx.cooldown_days = *days;
+            ctx.pass_row("policy-header", "default_cooldown_days", &days.to_string());
+        }
+        Some(TomlValue::Integer(days)) => {
+            ctx.fail_row(
+                "policy-header",
+                "default_cooldown_days",
+                &format!("must be in {MIN_COOLDOWN_DAYS}..={MAX_COOLDOWN_DAYS}, got {days}"),
+            );
+        }
+        Some(other) => {
+            ctx.fail_row(
+                "policy-header",
+                "default_cooldown_days",
+                &format!(
+                    "must be an integer in {MIN_COOLDOWN_DAYS}..={MAX_COOLDOWN_DAYS}, got {other}"
+                ),
+            );
+        }
     }
 }
 

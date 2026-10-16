@@ -82,6 +82,7 @@ fn job(id: &str, check_runner: Option<CheckRunner>, needs: &[&str]) -> Job {
         needs: needs.iter().map(ToString::to_string).collect(),
         condition: None,
         permissions: Some(Permissions::default()),
+        cache_mode: None,
         environment: None,
         steps,
     }
@@ -138,6 +139,7 @@ fn ir(checks: &[(&str, CheckRunner)]) -> WorkflowIr {
             schedule: None,
         },
         permissions: Permissions::default(),
+        cache_mode: None,
         concurrency: Concurrency {
             group: "ci".to_owned(),
             cancel_in_progress: "true".to_owned(),

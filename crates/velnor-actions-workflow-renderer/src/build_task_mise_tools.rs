@@ -12,7 +12,7 @@ pub(super) fn selected_mise_files(
     policy: &BuildTaskPolicy,
 ) -> Result<(String, String), RenderError> {
     validate_selected_tools(policy)?;
-    selected_mise_files_for(&policy.selected_tools, "macos", "macos-arm64", true)
+    selected_mise_files_for(&policy.selected_tools, "macos", "macos-arm64", false)
 }
 
 pub(super) fn selected_mise_files_for(
@@ -216,9 +216,18 @@ fn validate_source_digests(policy: &BuildTaskPolicy) -> Result<(), RenderError> 
 fn validate_tool_backend(
     tool: &crate::verification_jobs::build_task_jobs::BuildTaskTool,
 ) -> Result<(), RenderError> {
+    if let Some(artifact) = &tool.artifact
+        && !artifact.url.contains(&tool.version)
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "build_task_tool_version_artifact_mismatch:{}",
+            tool.key
+        )));
+    }
     match (tool.key.as_str(), tool.backend.as_str(), &tool.artifact) {
         ("rust", "core:rust", None)
             if tool.config_options == tool.lock_options
+                && exact_rust_version(&tool.version)
                 && tool
                     .lock_options
                     .keys()
@@ -307,10 +316,17 @@ pub(super) fn safe_version(value: &str) -> bool {
 
 pub(super) fn exact_rust_version(value: &str) -> bool {
     let components = value.split('.').collect::<Vec<_>>();
-    components.len() == 3
-        && components
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+    if components.len() != 3 {
+        return false;
+    }
+    let (Ok(major), Ok(minor), Ok(_patch)) = (
+        components[0].parse::<u32>(),
+        components[1].parse::<u32>(),
+        components[2].parse::<u32>(),
+    ) else {
+        return false;
+    };
+    major == 1 && minor >= 98
 }
 
 pub(super) fn safe_backend(value: &str) -> bool {

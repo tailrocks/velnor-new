@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
-use crate::steps::{action_step_with_env, shell_step, validate_uses};
+use crate::steps::{action_owned_mbx_shell_step, action_step_with_env, shell_step, validate_uses};
 use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
@@ -23,6 +23,8 @@ pub fn mbx_steps_for_driver(
     mbx_version: &str,
     rust_toolchain: &str,
     env: BTreeMap<String, String>,
+    policy: velnor_actions_contract::PullRequestCachePolicy,
+    working_directory: Option<&str>,
 ) -> Result<Option<[Step; 3]>, RenderError> {
     match driver {
         CompileDriver::Cargo => Ok(None),
@@ -31,10 +33,19 @@ pub fn mbx_steps_for_driver(
             let mut rust_env = with_rustup_process_homes(env)?;
             rust_env.insert(MBX_CACHE_DIR_ENV.to_owned(), MBX_CACHE_DIR_VALUE.to_owned());
             let mut action_env = rust_env;
-            action_env.insert(MBX_CACHE_MODE_ENV.to_owned(), CACHE_MODE_VALUE.to_owned());
+            action_env.insert(
+                MBX_CACHE_MODE_ENV.to_owned(),
+                super::mbx_mode::mbx_cache_mode_value(policy).to_owned(),
+            );
             let preflight = canonical_mbx_preflight_step(mbx_version, rust_toolchain, &action_env)?;
-            let action =
-                mbx_objects_action_step(uses, mbx_version, rust_toolchain, action_env.clone())?;
+            let action = mbx_objects_action_step(
+                uses,
+                mbx_version,
+                rust_toolchain,
+                action_env.clone(),
+                policy,
+                working_directory,
+            )?;
             let version_check = mbx_version_check_step(mbx_version, rust_toolchain, action_env)?;
             Ok(Some([preflight, action, version_check]))
         }
@@ -47,6 +58,8 @@ pub const MBX_CACHE_MODE_ENV: &str = "ACTIONS_CACHE_MODE";
 pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
 /// Display name for the exact MBX binary placed on PATH by its native action.
 pub const MBX_VERSION_CHECK_NAME: &str = "Verify native MBX version";
+/// Shell-local absolute path to the executable installed by the pinned action.
+pub(crate) use crate::action_mbx_shell::{ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN};
 /// Keep automatic collection from evicting uncommitted active-run results.
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
 /// Defer collection until the native action has committed and exported the job group.
@@ -66,9 +79,6 @@ const MBX_DISK_SAMPLE_BODY: &[&str] = &[
     r#"target_path="$RUNNER_TEMP/velnor/target""#,
     r#"if [ -L "$target_path" ]; then printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\n' "$boundary" >&2; elif [ -d "$target_path" ]; then printf 'MBX_DISK_ALLOCATED_KIB boundary=%s root=target\n' "$boundary"; if du -sk "$target_path"; then :; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\n' "$boundary" >&2; fi; else printf 'MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\n' "$boundary"; fi"#,
 ];
-/// Write permission is granted only to protected default-branch pushes.
-const CACHE_MODE_VALUE: &str = "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}";
-
 /// Reconstruct the only preflight authorized for the selected MBX action.
 ///
 /// The action environment is the source of truth for the toolchain setup;
@@ -85,7 +95,8 @@ pub(super) fn canonical_mbx_preflight_step(
         )));
     }
     validate_rust_toolchain(rust_toolchain)?;
-    if action_env.get(MBX_CACHE_MODE_ENV).map(String::as_str) != Some(CACHE_MODE_VALUE) {
+    let mode = action_env.get(MBX_CACHE_MODE_ENV).map(String::as_str);
+    if !mode.is_some_and(super::mbx_mode::is_valid_mbx_cache_mode) {
         return Err(RenderError::InvalidWorkflow(
             "mbx_cache_mode_mismatch".to_owned(),
         ));
@@ -121,7 +132,7 @@ fn rust_path_preflight_step(
         "if [ ! -e \"$RUNNER_TEMP/velnor\" ]; then (umask 077 && mkdir -m 700 \"$RUNNER_TEMP/velnor\"); fi".to_owned(),
         "[ -d \"$RUNNER_TEMP/velnor\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" || { printf '%s\\n' 'Velnor temp root must be a real directory' >&2; exit 1; }".to_owned(),
         "[ ! -e \"$mbx_cache_dir\" ] && [ ! -L \"$mbx_cache_dir\" ] || { printf '%s\\n' 'MBX store root already exists in this private runner namespace' >&2; exit 1; }".to_owned(),
-        "(umask 077 && mkdir -m 700 \"$mbx_cache_dir\") || { printf '%s\\n' 'could not reserve the MBX store root' >&2; exit 1; }".to_owned(),
+        "(umask 077 && mkdir -m 700 \"$mbx_cache_dir\" && mkdir -m 700 \"$mbx_cache_dir/actions\") || { printf '%s\\n' 'could not reserve the MBX store root' >&2; exit 1; }".to_owned(),
         "[ -n \"${GITHUB_ENV:-}\" ] && [ -f \"$GITHUB_ENV\" ] && [ ! -L \"$GITHUB_ENV\" ] || { printf '%s\\n' 'GITHUB_ENV must be a regular runner file' >&2; exit 1; }".to_owned(),
         "check_no_symlink \"$GITHUB_ENV\" || { printf '%s\\n' 'GITHUB_ENV path contains a symlink' >&2; exit 1; }".to_owned(),
         "printf 'MBX_CACHE_DIR=%s\\n' \"$mbx_cache_dir\" >> \"$GITHUB_ENV\"".to_owned(),
@@ -158,7 +169,7 @@ fn rust_path_preflight_step(
     Ok(step)
 }
 
-pub(super) fn mbx_version_check_step(
+pub(crate) fn mbx_version_check_step(
     mbx_version: &str,
     rust_toolchain: &str,
     env: BTreeMap<String, String>,
@@ -185,13 +196,14 @@ pub(super) fn mbx_version_check_step(
         "cleanup() { rm -f \"$probe_dir/version\" \"$probe_dir/cache-dir\"; rmdir \"$probe_dir\"; }".to_owned(),
         "trap cleanup EXIT".to_owned(),
         "trap 'exit 1' HUP INT TERM".to_owned(),
-        format!("mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- mbx --version > \"$probe_dir/version\""),
+        RESOLVE_ACTION_MBX_BIN.to_owned(),
+        format!("mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" --version > \"$probe_dir/version\""),
         "exec 3< \"$probe_dir/version\"".to_owned(),
         "IFS= read -r version_line <&3 || { printf '%s\\n' 'MBX version output is empty or unterminated' >&2; exit 1; }".to_owned(),
         "extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '%s\\n' 'MBX version output has extra data' >&2; exit 1; fi".to_owned(),
         "exec 3<&-".to_owned(),
         format!("[ \"$version_line\" = 'mbx {mbx_version}' ] || {{ printf '%s\\n' 'MBX on PATH does not match the pinned action version' >&2; exit 1; }}"),
-        format!("mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- mbx cache dir > \"$probe_dir/cache-dir\""),
+        format!("mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" cache dir > \"$probe_dir/cache-dir\""),
         "exec 3< \"$probe_dir/cache-dir\"".to_owned(),
         "IFS= read -r cache_dir <&3 || { printf '%s\\n' 'MBX cache dir output is empty or unterminated' >&2; exit 1; }".to_owned(),
         "extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '%s\\n' 'MBX cache dir output has extra data' >&2; exit 1; fi".to_owned(),
@@ -200,7 +212,7 @@ pub(super) fn mbx_version_check_step(
     ];
     script.extend(mbx_disk_sample_commands("after-cache-restore"));
     let script = script.join("; ");
-    let mut step = shell_step(
+    let mut step = action_owned_mbx_shell_step(
         MBX_VERSION_CHECK_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
         env,
@@ -245,12 +257,17 @@ pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step,
         "[ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '%s\\n' 'MBX store path changed before cleanup' >&2; exit 1; }".to_owned(),
         mbx_disk_sample_function(),
         "mbx_disk_sample before-final-clean".to_owned(),
-        format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- mbx clean; then clean_status=0; else clean_status=$?; fi"),
+        RESOLVE_ACTION_MBX_BIN.to_owned(),
+        if with.get("github-cache-mode").map(String::as_str) == Some("objects") {
+            format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" clean; then clean_status=0; else clean_status=$?; fi")
+        } else {
+            format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" cache dir >/dev/null 2>&1; then clean_status=0; else clean_status=$?; fi")
+        },
         "mbx_disk_sample after-final-clean".to_owned(),
         "exit \"$clean_status\"".to_owned(),
     ]
     .join("; ");
-    let mut step = shell_step(
+    let mut step = action_owned_mbx_shell_step(
         "Clean MBX workspace outputs",
         vec!["sh".to_owned(), "-c".to_owned(), script],
         clean_env,
@@ -279,6 +296,8 @@ fn mbx_objects_action_step(
     mbx_version: &str,
     rust_toolchain: &str,
     env: BTreeMap<String, String>,
+    policy: velnor_actions_contract::PullRequestCachePolicy,
+    working_directory: Option<&str>,
 ) -> Result<Step, RenderError> {
     validate_uses(uses)?;
     let action_sha = uses
@@ -299,8 +318,8 @@ fn mbx_objects_action_step(
         )));
     }
     validate_rust_toolchain(rust_toolchain)?;
-    let with = BTreeMap::from([
-        ("github-cache-mode".to_owned(), "objects".to_owned()),
+    let mut with = BTreeMap::from([
+        ("github-cache-mode".to_owned(), "target".to_owned()),
         ("version".to_owned(), mbx_version.to_owned()),
         ("toolchain".to_owned(), rust_toolchain.to_owned()),
         (
@@ -308,9 +327,18 @@ fn mbx_objects_action_step(
             cache_generation(mbx_version, action_sha),
         ),
         ("save-on-workflow-dispatch".to_owned(), "false".to_owned()),
-        ("save-on-pull-request".to_owned(), "false".to_owned()),
+        (
+            "save-on-pull-request".to_owned(),
+            super::mbx_mode::mbx_save_on_pull_request_value(policy).to_owned(),
+        ),
         ("save-on-protected-branch".to_owned(), "false".to_owned()),
     ]);
+    if let Some(dir) = working_directory
+        && !dir.is_empty()
+        && dir != "."
+    {
+        with.insert("working-directory".to_owned(), dir.to_owned());
+    }
     let mut step = action_step_with_env(MBX_RESTORE_NAME, uses, with, env)?;
     step.role = Some(StepRole::MbxCache);
     Ok(step)

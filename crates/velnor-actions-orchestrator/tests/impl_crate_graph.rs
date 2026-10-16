@@ -6,9 +6,13 @@
 use std::fs;
 
 use tempfile::TempDir;
+use velnor_actions_contract::StepKind;
+use velnor_actions_contract::workflow::{
+    TASK_EXECUTION_MANIFEST_PATH, TaskExecutionManifestEntryV1, TaskExecutionManifestV1,
+};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
-use velnor_actions_orchestrator::{prepare, render_staged_tree};
-use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
+use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::{render::WORKFLOW_PATH, tree::RenderedTree};
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
 
@@ -43,16 +47,6 @@ fn window<'a>(text: &'a str, start: &str, end: &str) -> Result<&'a str, &'static
         Some(at) => Ok(&tail[..at]),
         None => Ok(tail),
     }
-}
-
-/// Trimmed `env:` line starting with `key` inside one rendered step block.
-fn env_line<'a>(block: &'a str, key: &str) -> Result<&'a str, &'static str> {
-    for line in block.lines() {
-        if line.trim().starts_with(key) {
-            return Ok(line.trim());
-        }
-    }
-    Err("env line")
 }
 
 #[test]
@@ -140,8 +134,8 @@ fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
         "one objects step:\n{task}"
     );
     assert!(
-        task.contains("github-cache-mode: objects")
-            || task.contains("github-cache-mode: \"objects\""),
+        task.contains("github-cache-mode: target")
+            || task.contains("github-cache-mode: \"target\""),
         "{task}"
     );
     Ok(())
@@ -149,8 +143,17 @@ fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
 
 #[test]
 fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
-    let (_repo, yaml) = preview_yaml(config_with_branch())?;
-    let task = window(&yaml, "  rust-demo:", "  required:")?;
+    let repo = make_repo(config_with_branch())?;
+    let prep = prepare(repo.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+    let task = window(yaml, "  rust-demo:", "  required:")?;
+    assert_crate_job_prepares_required_tools(task)?;
+    assert_clippy_task_uses_toolchain_union(&prep, &tree, task)?;
+    Ok(())
+}
+
+fn assert_crate_job_prepares_required_tools(task: &str) -> TestResult {
     let prepare_at = task.find("- name: Prepare pinned tools").ok_or("prepare")?;
     let run_at = task.find("- name: Clippy").ok_or("first obligation")?;
     let catalog = ToolCatalog::pinned();
@@ -169,19 +172,105 @@ fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
             "crate jobs install {spec} for test-spawned generate:\n{task}"
         );
     }
-    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:"] {
-        let line = env_line(&task[run_at..], key)?;
-        assert_eq!(
-            env_line(&task[prepare_at..run_at], key)?,
-            line,
-            "{key}:\n{task}"
-        );
-    }
+    Ok(())
+}
+
+fn assert_clippy_task_uses_toolchain_union(
+    prep: &GenerationPreparation,
+    tree: &RenderedTree,
+    task: &str,
+) -> TestResult {
+    let manifest_text = tree
+        .get(TASK_EXECUTION_MANIFEST_PATH)
+        .ok_or("missing task execution manifest")?;
+    let (_, manifest_json) = manifest_text
+        .split_once('\n')
+        .ok_or("missing task execution manifest marker")?;
+    let manifest: TaskExecutionManifestV1 = serde_json::from_str(manifest_json)?;
+    manifest.validate()?;
+    let crate_job = prep
+        .workflow
+        .ir
+        .jobs
+        .get("rust-demo")
+        .ok_or("missing rust-demo IR job")?;
+    let clippy = crate_job
+        .steps
+        .iter()
+        .find(|step| step.name == "Clippy")
+        .ok_or("missing Clippy task")?;
+    let StepKind::TaskExecution { task_id, .. } = &clippy.kind else {
+        return Err("Clippy must be a declared task".into());
+    };
+    let record = manifest
+        .tasks
+        .get(task_id)
+        .ok_or("missing Clippy task manifest record")?;
+    assert_task_record_matches_step(&clippy.kind, record)?;
+    assert_clippy_uses_pinned_rust(record);
     assert!(
-        task.contains("RUSTUP_TOOLCHAIN: 1.98.1"),
-        "job carries toolchain:\n{task}"
+        task.contains(&record.execution_digest),
+        "Clippy binds its manifest record"
     );
     Ok(())
+}
+
+fn assert_task_record_matches_step(
+    step: &StepKind,
+    record: &TaskExecutionManifestEntryV1,
+) -> TestResult {
+    let StepKind::TaskExecution {
+        task_id,
+        task_digest,
+        argv,
+        env,
+        toolchain_inputs,
+        matrix_id,
+        matrix_key,
+        report_helper_version,
+        matrix_max_parallel,
+    } = step
+    else {
+        return Err("Clippy must be a declared task".into());
+    };
+    assert_eq!(record.task_id, *task_id);
+    assert_eq!(record.task_digest, *task_digest);
+    assert_eq!(record.argv, *argv);
+    assert_eq!(record.env, *env);
+    assert_eq!(record.toolchain_inputs, *toolchain_inputs);
+    assert_eq!(record.matrix_id, *matrix_id);
+    assert_eq!(record.matrix_key, *matrix_key);
+    assert_eq!(record.report_helper_version, *report_helper_version);
+    assert_eq!(record.matrix_max_parallel, *matrix_max_parallel);
+    Ok(())
+}
+
+fn assert_clippy_uses_pinned_rust(record: &TaskExecutionManifestEntryV1) {
+    let catalog = ToolCatalog::pinned();
+    let rust_spec = catalog.tool_spec(PinnedTool::Rust);
+    let rust_version = catalog.rustup_toolchain();
+    assert!(
+        record.toolchain_inputs.tools.contains(&rust_spec),
+        "Clippy task identity includes pinned Rust {rust_spec}: {:?}",
+        record.toolchain_inputs.tools
+    );
+    assert_eq!(record.toolchain_inputs.compile_driver, "cargo");
+    assert_eq!(record.toolchain_inputs.test_runner, "cargo_test");
+    assert_eq!(
+        record.toolchain_inputs.components,
+        velnor_actions_mise::PrepareRustComponents::components()
+    );
+    for (key, expected) in [
+        ("MISE_RUSTUP_HOME", "${{ runner.temp }}/velnor/rustup"),
+        ("MISE_CARGO_HOME", "${{ runner.temp }}/velnor/cargo"),
+        ("RUSTUP_TOOLCHAIN", rust_version.as_str()),
+    ] {
+        assert_eq!(
+            record.env.get(key).map(String::as_str),
+            Some(expected),
+            "{key}"
+        );
+    }
 }
 
 #[test]

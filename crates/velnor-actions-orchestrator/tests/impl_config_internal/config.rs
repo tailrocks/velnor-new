@@ -148,14 +148,19 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
         "sample must document overrides"
     );
     fs::write(root.join(".velnor/config.toml"), &live)?;
-    // The uncommented sample declares a verification task; resolution binds
-    // it to a checked-in Mise task body.
-    fs::write(
-        root.join("mise.toml"),
-        "[tasks.desktop-format-check]\nrun = \"echo desktop-format-check\"\n",
-    )?;
+    // The sample points at a nested checked-in task source and uses root
+    // toolchain files, so provide both real source locations before resolve.
+    crate::impl_schema2_build_tasks::write_native_source_fixture(root)?;
+    let mut native_mise = fs::read_to_string(root.join("native/mise.toml"))?;
+    native_mise.push_str("\n[tasks.desktop-format-check]\nrun = \"echo desktop-format-check\"\n");
+    fs::write(root.join("native/mise.toml"), native_mise)?;
+    add_sample_binary_release_package(root)?;
     let prep = prepare(root)?;
-    assert!(prep.config.checks.is_empty());
+    assert_sample_mbx_compile_route(&prep)?;
+    assert_eq!(
+        prep.config.checks,
+        [] as [velnor_actions_contract::MiseCheck; 0]
+    );
     // Retired `Swatinem/rust-cache` is not an overridable sample pin.
     let overrides = &prep.config.actions.overrides;
     let keys: Vec<&str> = overrides.keys().map(String::as_str).collect();
@@ -179,6 +184,85 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
     assert_eq!(overrides["actions/checkout"].version, "v7.0.1");
     assert_eq!(prep.runner_label, "ubuntu-24.04");
     assert_eq!(prep.runner_selection, RunnerSelection::ConfigOverride);
+    Ok(())
+}
+
+fn add_sample_binary_release_package(root: &std::path::Path) -> TestResult {
+    let manifest_path = root.join("Cargo.toml");
+    let mut manifest = fs::read_to_string(&manifest_path)?;
+    manifest.push_str("\n[workspace]\nmembers = [\"crates/repo-scan\"]\nresolver = \"2\"\n");
+    fs::write(manifest_path, manifest)?;
+
+    let package = root.join("crates/repo-scan");
+    fs::create_dir_all(package.join("src"))?;
+    fs::write(
+        package.join("Cargo.toml"),
+        "[package]\nname = \"repo-scan\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )?;
+    fs::write(package.join("src/main.rs"), "fn main() {}\n")?;
+    fs::write(
+        root.join("Cargo.lock"),
+        "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"repo-scan\"\nversion = \"0.1.0\"\n",
+    )?;
+    git(&["add", "Cargo.lock"], root)?;
+    anchor_repo(root)?;
+    Ok(())
+}
+
+fn assert_sample_mbx_compile_route(
+    prep: &velnor_actions_orchestrator::GenerationPreparation,
+) -> TestResult {
+    let rust = prep
+        .config
+        .stacks
+        .rust
+        .as_ref()
+        .ok_or("sample Rust stack")?;
+    assert_eq!(
+        rust.compile_driver,
+        Some(velnor_actions_contract::DeclaredCompileDriver::Mbx)
+    );
+    let job = prep
+        .workflow
+        .ir
+        .jobs
+        .get("rust-demo")
+        .ok_or("sample Rust job")?;
+    let clippy = job
+        .steps
+        .iter()
+        .find(|step| step.name == "Clippy")
+        .ok_or("sample Clippy task")?;
+    let velnor_actions_contract::workflow::StepKind::TaskExecution {
+        task_id,
+        argv,
+        toolchain_inputs,
+        ..
+    } = &clippy.kind
+    else {
+        return Err("sample Clippy step must be a declared task".into());
+    };
+    assert_eq!(toolchain_inputs.compile_driver, "mbx");
+    let separator = argv
+        .iter()
+        .position(|arg| arg == "--")
+        .ok_or("sample Clippy command separator")?;
+    assert_eq!(argv.get(separator + 1).map(String::as_str), Some("mbx"));
+    assert_eq!(argv.get(separator + 2).map(String::as_str), Some("clippy"));
+
+    let tree = velnor_actions_orchestrator::render_staged_tree(prep)?;
+    let manifest = tree
+        .get(velnor_actions_contract::workflow::TASK_EXECUTION_MANIFEST_PATH)
+        .ok_or("sample task manifest")?;
+    let (_, json) = manifest
+        .split_once('\n')
+        .ok_or("sample task manifest marker")?;
+    let manifest: velnor_actions_contract::workflow::TaskExecutionManifestV1 =
+        serde_json::from_str(json)?;
+    manifest.validate()?;
+    let record = manifest.tasks.get(task_id).ok_or("sample Clippy record")?;
+    assert_eq!(record.argv, *argv);
+    assert_eq!(record.toolchain_inputs, *toolchain_inputs);
     Ok(())
 }
 

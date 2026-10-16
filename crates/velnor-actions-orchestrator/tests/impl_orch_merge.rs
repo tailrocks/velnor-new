@@ -13,7 +13,7 @@ use crate::impl_common::{
 use crate::impl_merge::task_reports_for;
 use crate::impl_orch_core::{
     committed_repo, merge, merge_request, plan_for_partial_change, push_request, set_task,
-    success_jobs, wide_repo,
+    success_jobs, wide_repo, wide_repo_configured,
 };
 use crate::impl_orch_core_cover::covered_plan;
 
@@ -148,7 +148,11 @@ fn orch_core_plan_is_deterministic() -> TestResult {
 
 #[test]
 fn orch_core_matrix_budget_guides_broaden_or_reduce() -> TestResult {
-    let repo = wide_repo(60)?;
+    // MATRIX_BUDGET_BYTES is 4 MiB: 15 members across 40 configurations
+    // generates > 4.5 MB of matrix, exceeding the 4 MiB budget with minimal fixture I/O.
+    let configs: Vec<String> = (0..40).map(|i| format!("cfg{i:02}")).collect();
+    let config_refs: Vec<&str> = configs.iter().map(String::as_str).collect();
+    let repo = wide_repo_configured(15, &config_refs)?;
     let root = repo.path();
     git(&["add", "."], root)?;
     git(&["commit", "-m", "wide"], root)?;

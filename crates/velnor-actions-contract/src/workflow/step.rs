@@ -6,6 +6,29 @@ use super::step_identity::{
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
+mod task_execution;
+pub(super) use task_execution::{TaskExecutionValidation, validate_task_execution};
+
+/// Maximum arguments carried by one generated task record.
+pub const MAX_TASK_EXECUTION_ARGV: usize = 512;
+/// Maximum environment pairs carried by one generated task record.
+pub const MAX_TASK_EXECUTION_ENV: usize = 64;
+
+/// Plan output consumed by generated obligation skip conditions.
+pub const TASK_COVERED_OUTPUT: &str = "covered_tasks";
+
+/// Exact generated condition that skips one task only after plan coverage.
+///
+/// # Errors
+///
+/// Returns a contract error for a malformed task ID.
+pub fn task_execution_condition(task_id: &str) -> Result<String, ContractError> {
+    crate::ids::validate_task_id(task_id)?;
+    Ok(format!(
+        "!contains(needs.plan.outputs.{TASK_COVERED_OUTPUT}, ',{task_id},')"
+    ))
+}
+
 /// One workflow step.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Step {
@@ -48,6 +71,34 @@ pub enum StepKind {
         #[serde(default)]
         env: std::collections::BTreeMap<String, String>,
     },
+    /// One fixed pinned-tool task with a structured report envelope.
+    ///
+    /// This variant is reserved for generated obligation steps. The task
+    /// argv, identity, report version, and optional matrix cap remain
+    /// separate data through rendering; no shell script is parsed to
+    /// rediscover those fields.
+    TaskExecution {
+        /// Full fixed `mise --no-config --no-env --no-hooks exec ... -- ...` argv.
+        argv: Vec<String>,
+        /// Task environment, excluding report identity and matrix metadata.
+        #[serde(default)]
+        env: std::collections::BTreeMap<String, String>,
+        /// Stable task report lookup ID.
+        task_id: String,
+        /// Digest binding task argv and toolchain.
+        task_digest: String,
+        /// Canonical pinned toolchain inputs bound by `task_digest`.
+        toolchain_inputs: crate::cachekey::ToolchainInputs,
+        /// Stable matrix identity for this task.
+        matrix_id: String,
+        /// Short matrix lookup key.
+        matrix_key: String,
+        /// Version of the staged report helper to invoke.
+        report_helper_version: String,
+        /// Optional maximum parallelism for the containing crate-job matrix.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        matrix_max_parallel: Option<u32>,
+    },
     /// Fixed internal planner/aggregation step.
     Internal {
         /// Internal operation name.
@@ -73,6 +124,22 @@ impl Step {
             return Err(ContractError::identity(
                 "step.condition",
                 format!("bad_condition:{job}"),
+            ));
+        }
+        if matches!(&self.kind, StepKind::TaskExecution { .. })
+            && (self.id.is_some() || self.role.is_some() || self.condition.is_none())
+        {
+            return Err(ContractError::identity(
+                "step.task",
+                format!("task_execution_authority_mismatch:{job}"),
+            ));
+        }
+        if let StepKind::TaskExecution { task_id, .. } = &self.kind
+            && self.condition.as_deref() != Some(task_execution_condition(task_id)?.as_str())
+        {
+            return Err(ContractError::identity(
+                "step.task.condition",
+                format!("task_coverage_condition_mismatch:{job}"),
             ));
         }
         if let Some(role) = self.role {
@@ -157,6 +224,28 @@ fn validate_kind(kind: &StepKind, job: &str) -> Result<(), ContractError> {
                 ));
             }
         }
+        StepKind::TaskExecution {
+            argv,
+            env,
+            task_id,
+            task_digest,
+            toolchain_inputs,
+            matrix_id,
+            matrix_key,
+            report_helper_version,
+            matrix_max_parallel,
+        } => validate_task_execution(&TaskExecutionValidation {
+            argv,
+            env,
+            task_id,
+            task_digest,
+            toolchain_inputs,
+            matrix_id,
+            matrix_key,
+            report_helper_version,
+            matrix_max_parallel: *matrix_max_parallel,
+            job,
+        })?,
         StepKind::Internal { operation, env } => {
             if operation.trim().is_empty() {
                 return Err(ContractError::identity(

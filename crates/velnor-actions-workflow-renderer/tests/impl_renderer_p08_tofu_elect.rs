@@ -46,6 +46,7 @@ fn provider_job(key: &str, path: &str) -> Job {
         permissions: None,
         environment: None,
         steps: vec![restore],
+        cache_mode: None,
     }
 }
 
@@ -85,6 +86,7 @@ fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError
         permissions: None,
         environment: None,
         steps: Vec::new(),
+        cache_mode: None,
     };
     let mut jobs = BTreeMap::from([
         ("plan".to_owned(), bare),
@@ -162,6 +164,7 @@ fn provider_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError
         permissions: None,
         environment: None,
         steps: Vec::new(),
+        cache_mode: None,
     };
     let mut jobs = BTreeMap::from([
         ("bare".to_owned(), bare),

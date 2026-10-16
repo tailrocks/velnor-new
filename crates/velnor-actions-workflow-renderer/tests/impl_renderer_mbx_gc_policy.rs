@@ -92,10 +92,12 @@ fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderEr
         "task failures still clean after a successful native setup guard: {text}"
     );
     assert_eq!(
-        text.matches("mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx clean")
-            .count(),
+        text.matches(
+            "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \\\"$mbx_bin\\\" cache dir >/dev/null 2>&1"
+        )
+        .count(),
         2,
-        "cleanup uses the exact task toolchain in both lanes: {text}"
+        "cleanup uses the exact Rust-only Mise toolchain in both lanes: {text}"
     );
     assert!(
         !text.contains("isolate-objects-cache"),
@@ -130,7 +132,7 @@ fn native_mbx_disk_samples_cover_the_active_lifecycle_boundaries() -> Result<(),
     let post_restore = positions(&text, "mbx_disk_sample after-cache-restore");
     let consumers = positions(&text, "uses: ./.github/actions/rust-demo");
     let before_clean = positions(&text, "mbx_disk_sample before-final-clean");
-    let clean_calls = positions(&text, "mbx clean");
+    let clean_calls = positions(&text, "\\\"$mbx_bin\\\" cache dir >/dev/null 2>&1");
     let after_clean = positions(&text, "mbx_disk_sample after-final-clean");
     for positions in [
         &pre_restore,

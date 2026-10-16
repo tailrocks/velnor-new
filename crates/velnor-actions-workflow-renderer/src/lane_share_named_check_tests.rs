@@ -19,6 +19,7 @@ fn job(display: &str, runs_on: &str, steps: Vec<Step>) -> Job {
         environment: None,
         check_runner: None,
         steps,
+        cache_mode: None,
     }
 }
 

@@ -43,6 +43,7 @@ both workspaces.
 | `velnor-runner-github` | Scale Set wire client, auth refresh, registration, session, acquire, JIT, run census | Containers, task planning |
 | `velnor-runner-host` | Journal, Docker ownership, workers, Keychain, launchd, IPC, recovery | Step interpretation, a second task graph |
 | `velnor-runner-cli` | `velnor-host` parsing and presentation | Scheduling |
+| `velnor-resource-probe` | Guest probe binary, fixed-path numeric procfs/cgroup/statvfs parsers, bounded schema | Host supervisor, network |
 
 Direction: CLI to host to GitHub and core; GitHub to core. No runner crate
 depends on the Rust, Tofu, Mise, renderer, or orchestrator crates. No generator

@@ -17,7 +17,9 @@ fn elected_save_stays_on_the_winner_job() {
     let save = crate::cache_steps::tools_cache_step(
         false,
         crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
-        Some(crate::cache_p08::tools_cache_save_condition()),
+        Some(crate::cache_p08::tools_cache_save_condition(
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        )),
     )
     .expect("save");
     jobs.get_mut("rust-0__hosted")

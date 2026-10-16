@@ -50,8 +50,6 @@ case "$operation" in
     *) exit 2 ;;
 esac
 "#;
-    const RUSTC_STUB: &str = "#!/bin/sh\nprintf '%s\\n' 'rustc 1.98.1' 'host: x86_64-unknown-linux-gnu' 'release: 1.98.1'\n";
-
     #[test]
     fn cold_preseed_preflight_needs_prepared_rust_and_not_a_warm_mise_cache() -> TestResult {
         let temp = tempfile::tempdir()?;
@@ -64,10 +62,14 @@ esac
         fs::create_dir_all(&stub_bin)?;
         let log = temp_root.join("mise.log");
         let rust_template = temp_root.join("rust-template");
-        write_executable(&stub_bin.join("mise"), MISE_STUB)?;
-        write_executable(&rust_template, RUSTC_STUB)?;
-
         let catalog = ToolCatalog::pinned();
+        let rust_version = catalog.version(PinnedTool::Rust);
+        let rustc_stub = format!(
+            "#!/bin/sh\nprintf '%s\\n' 'rustc {rust_version}' 'host: x86_64-unknown-linux-gnu' 'release: {rust_version}'\n"
+        );
+        write_executable(&stub_bin.join("mise"), MISE_STUB)?;
+        write_executable(&rust_template, &rustc_stub)?;
+
         let rust_install = install_step("Prepare pinned tools", vec![PinnedTool::Rust], &catalog)?;
         let preflight = preflight_step(&catalog)?;
         let [_, mbx_action, version_check] = mbx_steps(&catalog)?;
@@ -88,16 +90,20 @@ esac
         );
         assert_eq!(
             with.get("github-cache-mode").map(String::as_str),
-            Some("objects")
+            Some("target")
         );
         assert_eq!(
             with.get("save-on-workflow-dispatch").map(String::as_str),
             Some("false")
         );
+        let version_command = shell_run(&version_check)?.join(" ");
         assert!(
-            shell_run(&version_check)?
-                .join(" ")
-                .contains("mbx --version")
+            version_command.contains("command -v mbx"),
+            "{version_command}"
+        );
+        assert!(
+            version_command.contains("\"$mbx_bin\" --version"),
+            "{version_command}"
         );
         let cold_env = runner_env(
             &temp_root.join("cold-runner"),
@@ -149,6 +155,8 @@ esac
             catalog.version(PinnedTool::MrBoxington),
             catalog.version(PinnedTool::Rust),
             env,
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            None,
         )?
         .ok_or_else(|| std::io::Error::other("MBX driver steps missing"))?;
         steps
@@ -167,6 +175,8 @@ esac
             catalog.version(PinnedTool::MrBoxington),
             catalog.version(PinnedTool::Rust),
             env,
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            None,
         )?
         .ok_or_else(|| std::io::Error::other("MBX driver steps missing"))?;
         Ok(steps)

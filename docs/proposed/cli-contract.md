@@ -1,6 +1,6 @@
 # Velnor Actions CLI Contract
 
-**Status:** Proposed. The `velnor-actions` binary is not implemented yet.
+**Status:** Implemented.
 
 This document defines the complete public command line for Velnor Actions V1.
 It has three commands. `plan` exposes a concise human summary from the same
@@ -10,8 +10,8 @@ aggregation, and workflow rendering remain internal.
 ## 1. Executable and parser
 
 The Cargo package MUST be named `velnor-actions-cli` and declare the executable
-name `velnor-actions`. The bare name `velnor` is reserved for a future product.
-V1 MUST NOT publish a `velnor` executable, package, or command alias.
+name `velnor-actions`. The workflow generator binary is `velnor-actions`, while runner
+supervisor operations are provided by `velnor-host` in `crates/velnor-runner/crates/velnor-runner-cli`.
 
 The CLI MUST use Clap's derive API. Clap's built-in `--help` and `--version`
 options are the only global options. The exact user-facing command tree is:

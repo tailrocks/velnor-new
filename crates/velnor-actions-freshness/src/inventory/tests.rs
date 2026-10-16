@@ -1,6 +1,10 @@
-use super::{policy_mise_version, toolchain_specs};
+use super::{
+    DEFAULT_COOLDOWN_DAYS, MAX_COOLDOWN_DAYS, MIN_COOLDOWN_DAYS, check_policy_header,
+    policy_mise_version, toolchain_specs,
+};
+use crate::context::FreshnessContext;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[test]
 fn verify_local_toolchain_specs_come_from_policy_when_local_mise_pins_differ() {
@@ -52,4 +56,42 @@ fn verify_local_toolchain_specs_come_from_policy_when_local_mise_pins_differ() {
     );
     let cleanup = fs::remove_dir_all(fixture_root);
     assert!(cleanup.is_ok(), "fixture cleanup: {cleanup:?}");
+}
+
+fn eval_policy_header(extra_header: &str) -> FreshnessContext {
+    let toml_text = format!(
+        "schema = 1\nchannel = \"stable\"\nregistry = \"https://github.com/rust-lang/crates.io-index\"\ncheck_interval_hours = 24\nmax_exception_days = 14\n{extra_header}"
+    );
+    let mut ctx = FreshnessContext::new(PathBuf::from("."), false, false);
+    ctx.policy = toml::from_str(&toml_text).ok();
+    check_policy_header(&mut ctx);
+    ctx
+}
+
+#[test]
+fn policy_header_default_cooldown_days_defaults_to_three_and_bounds_one_to_ninety() {
+    assert_eq!(DEFAULT_COOLDOWN_DAYS, 3);
+    assert_eq!(MIN_COOLDOWN_DAYS, 1);
+    assert_eq!(MAX_COOLDOWN_DAYS, 90);
+
+    let omitted = eval_policy_header("");
+    assert!(omitted.failures.is_empty(), "{:?}", omitted.failures);
+    assert_eq!(omitted.cooldown_days, 3);
+
+    for valid in [1, 3, 7, 30, 90] {
+        let ctx = eval_policy_header(&format!("default_cooldown_days = {valid}\n"));
+        assert!(ctx.failures.is_empty(), "valid={valid}: {:?}", ctx.failures);
+        assert_eq!(ctx.cooldown_days, valid);
+    }
+
+    for invalid in ["0", "-1", "91", "\"3\""] {
+        let ctx = eval_policy_header(&format!("default_cooldown_days = {invalid}\n"));
+        assert!(
+            ctx.failures
+                .iter()
+                .any(|failure| failure.contains("policy-header default_cooldown_days:")),
+            "invalid={invalid} should fail: {:?}",
+            ctx.failures
+        );
+    }
 }

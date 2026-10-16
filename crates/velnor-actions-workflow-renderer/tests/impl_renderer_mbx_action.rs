@@ -22,12 +22,26 @@ fn steps(
         version,
         rust,
         mbx_tool_env(rust),
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        None,
     )?
     .ok_or_else(|| {
         velnor_actions_workflow_renderer::RenderError::InvalidWorkflow(
             "mbx_steps_missing".to_owned(),
         )
     })
+}
+
+fn assert_action_mbx_version_binding(run: &str) {
+    assert!(run.contains(&format!("mbx {TEST_MBX_VERSION}")));
+    assert!(run.contains("unterminated"));
+    assert!(run.contains("mbx_bin=$(command -v mbx)"));
+    assert!(run.contains("-- \"$mbx_bin\" --version"));
+    assert!(run.contains("-- \"$mbx_bin\" cache dir"));
+    assert!(!run.contains("-- mbx --version"));
+    assert!(run.contains(&format!(
+        "mise --no-config --no-env --no-hooks exec rust@{TEST_RUST_TOOLCHAIN} -- \"$mbx_bin\" --version"
+    )));
 }
 
 #[test]
@@ -50,12 +64,7 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     else {
         panic!("version check must be a shell step");
     };
-    assert!(run[2].contains("mbx --version"));
-    assert!(run[2].contains("mbx 1.21.1"));
-    assert!(run[2].contains("unterminated"));
-    assert!(run[2].contains(&format!(
-        "mise --no-config --no-env --no-hooks exec rust@{TEST_RUST_TOOLCHAIN} -- mbx --version"
-    )));
+    assert_action_mbx_version_binding(&run[2]);
     let StepKind::Action { uses, with, env } = action.kind else {
         panic!("restore must be an action");
     };
@@ -68,7 +77,7 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     assert_eq!(uses, MBX_ACTION);
     assert_eq!(
         with.get("github-cache-mode").map(String::as_str),
-        Some("objects")
+        Some("target")
     );
     assert_eq!(
         with.get("toolchain").map(String::as_str),
@@ -128,6 +137,8 @@ fn action_construction_rejects_floating_refs_and_tool_versions() {
                 TEST_MBX_VERSION,
                 TEST_RUST_TOOLCHAIN,
                 env.clone(),
+                velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+                None,
             )
             .is_err(),
             "invalid action ref {uses}"
@@ -142,8 +153,16 @@ fn action_construction_rejects_floating_refs_and_tool_versions() {
     for rust in ["stable", "1.98", "1.98.1-nightly", "1.98.1;exit 1"] {
         env = mbx_tool_env(rust);
         assert!(
-            mbx_steps_for_driver(MBX_ACTION, CompileDriver::Mbx, TEST_MBX_VERSION, rust, env,)
-                .is_err(),
+            mbx_steps_for_driver(
+                MBX_ACTION,
+                CompileDriver::Mbx,
+                TEST_MBX_VERSION,
+                rust,
+                env,
+                velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+                None,
+            )
+            .is_err(),
             "invalid Rust toolchain {rust:?}"
         );
     }
@@ -158,6 +177,8 @@ fn cargo_driver_emits_neither_preflight_nor_mbx_action() {
             TEST_MBX_VERSION,
             TEST_RUST_TOOLCHAIN,
             mbx_tool_env(TEST_RUST_TOOLCHAIN),
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            None,
         )
         .expect("Cargo driver")
         .is_none()
@@ -209,6 +230,83 @@ fn rendered_action_has_rust_homes_and_native_owner_policy() -> Result<(), Render
     assert!(text.contains("MBX_GC_AUTO: \"0\""));
     assert!(text.contains("name: Clean MBX workspace outputs"));
     assert!(text.contains("if: always() && steps.mbx-ready.outcome == 'success'"));
-    assert!(text.contains("mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx clean"));
+    assert!(text.contains(
+        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \\\"$mbx_bin\\\" cache dir >/dev/null 2>&1"
+    ));
     Ok(())
+}
+
+#[test]
+fn same_repo_scoped_pr_cache_policy_enables_pr_cache_writes() {
+    let [_, action, _] = mbx_steps_for_driver(
+        MBX_ACTION,
+        CompileDriver::Mbx,
+        TEST_MBX_VERSION,
+        TEST_RUST_TOOLCHAIN,
+        mbx_tool_env(TEST_RUST_TOOLCHAIN),
+        velnor_actions_contract::PullRequestCachePolicy::SameRepositoryScoped,
+        None,
+    )
+    .expect("driver steps")
+    .expect("MBX steps");
+    let StepKind::Action { with, env, .. } = action.kind else {
+        panic!("restore must be an action");
+    };
+    assert_eq!(
+        with.get("save-on-pull-request").map(String::as_str),
+        Some(
+            "${{ github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork }}"
+        )
+    );
+    assert_eq!(
+        env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
+        Some(
+            "${{ ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && 'write' || 'read' }}"
+        )
+    );
+}
+
+#[test]
+fn mbx_objects_step_sets_working_directory_for_nested_workspaces() {
+    let [_, action, _] = mbx_steps_for_driver(
+        MBX_ACTION,
+        CompileDriver::Mbx,
+        TEST_MBX_VERSION,
+        TEST_RUST_TOOLCHAIN,
+        mbx_tool_env(TEST_RUST_TOOLCHAIN),
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        Some("crates/velnor-runner"),
+    )
+    .expect("driver steps")
+    .expect("MBX steps");
+    let StepKind::Action { with, .. } = action.kind else {
+        panic!("restore must be an action");
+    };
+    assert_eq!(
+        with.get("working-directory").map(String::as_str),
+        Some("crates/velnor-runner"),
+        "nested workspace must configure working-directory for target cache"
+    );
+
+    let [_, root_action, _] = mbx_steps_for_driver(
+        MBX_ACTION,
+        CompileDriver::Mbx,
+        TEST_MBX_VERSION,
+        TEST_RUST_TOOLCHAIN,
+        mbx_tool_env(TEST_RUST_TOOLCHAIN),
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        None,
+    )
+    .expect("driver steps")
+    .expect("MBX steps");
+    let StepKind::Action {
+        with: root_with, ..
+    } = root_action.kind
+    else {
+        panic!("restore must be an action");
+    };
+    assert!(
+        !root_with.contains_key("working-directory"),
+        "root workspace must omit working-directory"
+    );
 }

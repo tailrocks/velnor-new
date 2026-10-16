@@ -204,6 +204,7 @@ fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLa
     if hosted.timeout_minutes != local.timeout_minutes
         || !crate::lane_share_sections::same_or_admitted_check_condition(hosted, local)
         || hosted.permissions != local.permissions
+        || hosted.cache_mode != local.cache_mode
         || hosted.environment != local.environment
     {
         return None;

@@ -27,6 +27,7 @@ pub(crate) fn cache_steps_for_plan(
     label: &str,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
+    policy: velnor_actions_contract::PullRequestCachePolicy,
 ) -> Result<PlanCache, OrchestratorError> {
     if fetch_roots.is_empty() {
         return Ok(PlanCache {
@@ -43,7 +44,7 @@ pub(crate) fn cache_steps_for_plan(
     let key = crate::source_cache::sources_cache_key(target, rust, fetch_roots)?;
     let prefix = crate::source_cache::sources_restore_prefix(&key);
     let restore = crate::source_cache::sources_restore_step(&key, &[prefix])?;
-    let save = crate::source_cache::sources_save_step(&key)?;
+    let save = crate::source_cache::sources_save_step(&key, policy)?;
     Ok(PlanCache {
         restore: vec![restore],
         save: vec![save],

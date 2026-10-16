@@ -13,9 +13,14 @@ schema = 1
 channel = "stable"
 check_interval_hours = 24
 max_exception_days = 14
+# Optional: default_cooldown_days = 3  # integer in 1..=90 (defaults to 3 when omitted)
 ```
 
 The checker MUST reject unknown keys and any value that weakens this policy.
+When `default_cooldown_days` is present, it MUST be an integer in `1..=90`
+(defaulting to `3` days when omitted, matching GitHub Dependabot's 3-day default
+package release cooldown contract). Security advisories and `cargo-deny` checks
+remain immediate and are never delayed by `default_cooldown_days`.
 
 ## 1. Normative rule
 
@@ -70,7 +75,7 @@ consumer workflow output.
 | GitHub Actions | Compiled-in Velnor action registry; optional exact overrides in `.velnor/config.toml` | Default record is the latest reviewed stable release; workflow uses immutable full commit SHA |
 | Alint GitHub Action | Compiled-in Velnor action registry; emitted as a full-SHA pin like every other action | `v0.18.1` (`f558d76d076710312c54723d18e44d8cd95b3977`) is the current reviewed default. No tag exception exists; changing the pin requires a reviewed Velnor version-policy update |
 | GitHub-hosted OS image | Generated `runs-on` label and recorded runner metadata | Latest stable supported Ubuntu image family after host qualification; exact versioned label is the pin. GitHub may update its image contents in place, so record `ImageOS` and `ImageVersion` as runtime evidence and cache identity, not as immutable pins |
-| Deferred V2/V3 runtime inputs | `.velnor/runner.lock` (created before runner implementation) | Latest qualified Docker Desktop/Engine, official runner, base-image digest, GitHub API version, protocol revision, and runner dependencies including Turso |
+| Runner runtime inputs | `.velnor/runner.lock` | Latest qualified Docker Desktop/Engine, official runner, base-image digest, GitHub API version, protocol revision, and runner dependencies including Turso |
 
 Consumer workflows MUST be self-contained: all tool pins, action pins, runner
 labels, and the bootstrap binary identity are embedded in generated output.
@@ -104,20 +109,20 @@ Verified defaults on 2026-10-03 (Mr. Boxington action; other pins were last chec
 ```yaml
 uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8 # v5.1.2
 uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6 # v1.6.0
+uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+uses: jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240 # v1.7.2
 uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
 uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-uses: asamarts/alint@f558d76d076710312c54723d18e44d8cd95b3977 # v0.18.1
+uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+uses: asamarts/alint@b02109b84dd59f3f96f33ad98b829b4d2fcd4b0a # v0.18.3
 ```
 
 Release records: [mise-action v4.3.0](https://github.com/jdx/mise-action/releases/tag/v4.3.0),
 [checkout v7.0.1](https://github.com/actions/checkout/releases/tag/v7.0.1),
-[download-artifact v8.0.1](https://github.com/actions/download-artifact/releases/tag/v8.0.1),
-[mr-boxington-action v1.6.0](https://github.com/jdx/mr-boxington-action/releases/tag/v1.6.0),
+[download-artifact v8.0.2](https://github.com/actions/download-artifact/releases/tag/v8.0.2),
+[mr-boxington-action v1.7.2](https://github.com/jdx/mr-boxington-action/releases/tag/v1.7.2),
 [cache v6.1.0](https://github.com/actions/cache/releases/tag/v6.1.0),
-[upload-artifact v7.0.1](https://github.com/actions/upload-artifact/releases/tag/v7.0.1).
+[upload-artifact v7.0.2](https://github.com/actions/upload-artifact/releases/tag/v7.0.2).
 
 Checkout, Mise setup, cache restore/save, and artifact transfer are emitted
 where required by the workflow graph. The Mr. Boxington action is emitted only
@@ -138,7 +143,7 @@ and its matching stable version. Keys must be exact allowlisted action
 repositories, and the pair must appear in that action's bundled approved-pin
 catalog (latest release plus maintained compatibility pins). The Alint action
 is not a per-project override: Velnor emits exactly
-`asamarts/alint@f558d76d076710312c54723d18e44d8cd95b3977` (`# v0.18.1`).
+`asamarts/alint@b02109b84dd59f3f96f33ad98b829b4d2fcd4b0a` (`# v0.18.3`).
 Changing that pin is a Velnor version-policy change,
 not a consumer configuration change. Velnor validates every ordinary pair and
 the action's input/output schema before replacing generated output. Unknown
@@ -173,7 +178,7 @@ Alint runs as a separate job only in Velnor's `velnor-repository-v1` profile,
 using this exact generated step:
 
 ```yaml
-- uses: asamarts/alint@f558d76d076710312c54723d18e44d8cd95b3977 # v0.18.1
+- uses: asamarts/alint@b02109b84dd59f3f96f33ad98b829b4d2fcd4b0a # v0.18.3
 ```
 
 It reads `.alint.yml` and enforces only the rules supported and explicitly
@@ -248,12 +253,12 @@ MUST install version-sensitive validation tools through Mise and MUST record
 the image metadata for host-provided system dependencies.
 
 Refresh only Velnor-owned locks and pins: `Cargo.lock`,
-`.velnor/version-policy.toml`, `.velnor/generator.lock`, and deferred
+`.velnor/version-policy.toml`, `.velnor/generator.lock`, and
 `.velnor/runner.lock`. Do not edit or refresh repository-owned
 `mise.toml`, `mise.lock`, or `rust-toolchain.toml`; report recommendations for
 those files for a maintainer to apply.
 
-For the deferred self-hosted runner, `.velnor/runner.lock` MUST be reviewed and
+For the Scale Set runner (`crates/velnor-runner`), `.velnor/runner.lock` MUST be reviewed and
 must bind image repository and digest, base distribution, official runner
 version and archive SHA-256, architecture, Docker Desktop/Engine versions, API
 version, GitHub REST API version, and native protocol source revision. Runner

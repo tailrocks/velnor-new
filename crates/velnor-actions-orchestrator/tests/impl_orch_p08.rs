@@ -136,11 +136,11 @@ fn c4_mbx_and_restore_precede_fetch_with_offline_skip() -> TestResult {
         "sources hit, skipping fetch",
         "sources miss (source_missing)",
         "cargo fetch --locked",
-        "github-cache-mode: objects",
+        "github-cache-mode: target",
     ] {
         assert!(yaml.contains(need), "fetch/mbx misses {need}");
     }
-    assert!(!yaml.contains("github-cache-mode: target"), "objects only");
+    assert!(!yaml.contains("github-cache-mode: objects"), "target only");
     Ok(())
 }
 

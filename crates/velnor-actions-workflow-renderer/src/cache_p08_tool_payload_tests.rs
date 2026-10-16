@@ -61,7 +61,9 @@ fn action_inputs(
 fn rendered_condition(step: &Step) -> String {
     let context = RenderContext {
         generator_version: "0.1.0".to_owned(),
+        report_helper_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        scale_set_selector: None,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),
@@ -176,7 +178,9 @@ fn restore_wrapper_admission_rejects_mutated_calls() {
 fn restore_composite_binds_marker_pin_key_and_paths() {
     let payload = sample_payload();
     let save = payload.save_step().expect("save");
-    let save_condition = crate::cache_p08::save_policy::condition();
+    let save_condition = crate::cache_p08::save_policy::condition(
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+    );
     assert_eq!(save.condition.as_deref(), Some(save_condition.as_str()));
     let restore_action = crate::cache_steps::tools_restore_action_file("0.1.0")
         .expect("generated tools restore action");

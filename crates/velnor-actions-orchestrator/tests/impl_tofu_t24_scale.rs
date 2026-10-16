@@ -15,8 +15,8 @@ use crate::impl_tofu_t24_gates::tofu_perf_fixtures_t24::{
 
 /// Plan wall plus obligation counts on 1/10/40-root fixtures.
 ///
-/// 40 stays under the 512 KiB matrix-artifact budget (the P13 40-crate
-/// precedent); wider plans fail closed on the budget instead.
+/// 40 and wider plans stay inside the matrix-artifact budget. An oversize
+/// matrix still fails closed and is never truncated.
 #[test]
 fn tofu_plan_scales_with_root_count() -> TestResult {
     for roots in [1_usize, 10, 40] {
@@ -54,10 +54,12 @@ fn tofu_prepare_scales_to_100_roots() -> TestResult {
     Ok(())
 }
 
-/// Generate measured 40/60-root positives and fail closed above the byte cap.
+/// Generate measured root counts inside the 500 KB workflow file.
 ///
-/// The shared runtime identity helper is emitted once; each typed job retains
-/// its own lane identity, tool payload, and provider restore operations.
+/// Wide root sets keep one job per root by moving obligation commands into
+/// local composite actions. The shared runtime identity helper is emitted
+/// once; each typed job retains its own lane identity, tool payload, and
+/// provider restore operations.
 #[test]
 fn tofu_generate_scales_with_root_count() -> TestResult {
     for roots in [1_usize, 10, 31, 32, 40, 60, 100] {
@@ -71,47 +73,25 @@ fn tofu_generate_scales_with_root_count() -> TestResult {
             output_dir: Some(target.clone()),
         };
         let (result, gen_ms) = timed(|| generate(&prep, &opts));
-        if roots >= 100 {
-            let Err(error) = result else {
-                return Err(std::io::Error::other(format!(
-                    "{roots}-root workflow unexpectedly fit the contract"
-                ))
-                .into());
-            };
-            let diagnostic = error.to_string();
-            let actual_bytes = diagnostic
-                .strip_prefix(
-                    "render: invalid workflow: workflow_too_large:.github/workflows/ci.yml:",
-                )
-                .and_then(|detail| detail.strip_suffix(&format!(":{MAX_WORKFLOW_BYTES}")))
-                .ok_or_else(|| format!("unexpected workflow-size diagnostic: {diagnostic}"))?
-                .parse::<usize>()?;
-            assert!(
-                actual_bytes > MAX_WORKFLOW_BYTES,
-                "diagnostic reported {actual_bytes} bytes"
-            );
-            assert!(
-                !target.exists(),
-                "failed preview generation left a partial output tree"
-            );
-            eprintln!(
-                "perf: op=generate roots={roots} prepare_ms={prep_ms} generate_ms={gen_ms} failed_closed_bytes={actual_bytes} limit_bytes={MAX_WORKFLOW_BYTES}"
-            );
-        } else {
-            let report = result?;
-            assert!(!report.files_written.is_empty(), "files staged");
-            let workflow = std::fs::read(target.join(".github/workflows/ci.yml"))?;
-            assert!(
-                workflow.len() <= MAX_WORKFLOW_BYTES,
-                "{roots} roots generated {} bytes, limit is {MAX_WORKFLOW_BYTES}",
-                workflow.len()
-            );
-            eprintln!(
-                "perf: op=generate roots={roots} prepare_ms={prep_ms} generate_ms={gen_ms} files={} ci_bytes={}",
-                report.files_written.len(),
-                workflow.len()
-            );
-        }
+        let report = result?;
+        assert!(!report.files_written.is_empty(), "files staged");
+        let workflow = std::fs::read(target.join(".github/workflows/ci.yml"))?;
+        assert!(
+            workflow.len() <= MAX_WORKFLOW_BYTES,
+            "{roots} roots generated {} bytes, limit is {MAX_WORKFLOW_BYTES}",
+            workflow.len()
+        );
+        let text = String::from_utf8(workflow)?;
+        let jobs = text
+            .lines()
+            .filter(|line| line.starts_with("  tofu-"))
+            .count();
+        assert!(jobs >= roots, "{roots} roots scheduled {jobs} tofu jobs");
+        eprintln!(
+            "perf: op=generate roots={roots} prepare_ms={prep_ms} generate_ms={gen_ms} files={} ci_bytes={}",
+            report.files_written.len(),
+            text.len()
+        );
     }
     Ok(())
 }

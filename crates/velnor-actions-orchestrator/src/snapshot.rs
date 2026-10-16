@@ -158,6 +158,12 @@ pub(crate) struct ExecutionSnapshot {
     member_index: std::collections::BTreeMap<String, String>,
     /// Manifest path to owning package ID.
     manifest_index: std::collections::BTreeMap<String, String>,
+    /// Precomputed tool-input config digest.
+    config_digest: String,
+    /// Package ID to `(targets, has_build_script)`.
+    package_meta: std::collections::BTreeMap<String, (Vec<String>, bool)>,
+    /// Per-snapshot Rust closure probe cache.
+    rust_cache: std::cell::RefCell<velnor_actions_rust::RustClosureCache>,
 }
 
 impl ExecutionSnapshot {
@@ -167,6 +173,7 @@ impl ExecutionSnapshot {
         let mut workspace_ids = std::collections::BTreeMap::new();
         let mut member_index = std::collections::BTreeMap::new();
         let mut manifest_index = std::collections::BTreeMap::new();
+        let mut package_meta = std::collections::BTreeMap::new();
         for workspace in &discovery.workspaces {
             let graph = super::identities::snapshot_graph_for(&workspace.record);
             let digest = canonical_digest(&graph).unwrap_or_else(|_| digest_b3(b"graph_error"));
@@ -175,6 +182,12 @@ impl ExecutionSnapshot {
             for package in &workspace.record.packages {
                 member_index.insert(package.id.clone(), workspace.record.workspace_root.clone());
                 manifest_index.insert(package.manifest.clone(), package.id.clone());
+                let targets = package
+                    .targets
+                    .iter()
+                    .map(|target| format!("{}:{}", target.kind, target.name))
+                    .collect();
+                package_meta.insert(package.id.clone(), (targets, package.has_build_script));
             }
         }
         Self {
@@ -182,7 +195,76 @@ impl ExecutionSnapshot {
             workspace_ids,
             member_index,
             manifest_index,
+            config_digest: super::identities::tool_config_digest(&discovery.tool_checks),
+            package_meta,
+            rust_cache: std::cell::RefCell::new(velnor_actions_rust::RustClosureCache::new()),
         }
+    }
+
+    /// Precomputed tool-input config digest.
+    pub(crate) fn config_digest(&self) -> &str {
+        &self.config_digest
+    }
+
+    /// Targets and build-script flag for `package_id` or `manifest`.
+    pub(crate) fn package_meta_for(
+        &self,
+        package_id: &str,
+        manifest: &str,
+    ) -> Option<&(Vec<String>, bool)> {
+        if let Some(meta) = self.package_meta.get(package_id) {
+            return Some(meta);
+        }
+        if package_id.is_empty() {
+            return self
+                .manifest_index
+                .get(manifest)
+                .and_then(|id| self.package_meta.get(id));
+        }
+        None
+    }
+
+    /// Cached Rust lockfile digest slot at `root`.
+    pub(crate) fn rust_lock_digest(
+        &self,
+        root: &std::path::Path,
+        manifest: &str,
+    ) -> velnor_actions_rust::tasks::DigestSlot {
+        velnor_actions_rust::lock_digest_cached(root, manifest, &mut self.rust_cache.borrow_mut())
+    }
+
+    /// Cached Rust Nextest-config digest slot at `root`.
+    pub(crate) fn rust_nextest_digest(
+        &self,
+        root: &std::path::Path,
+        profile_config: Option<&str>,
+    ) -> velnor_actions_rust::tasks::DigestSlot {
+        velnor_actions_rust::nextest_digest_cached(
+            root,
+            profile_config,
+            &mut self.rust_cache.borrow_mut(),
+        )
+    }
+
+    /// Resolve a Rust task input closure using the snapshot's probe cache.
+    pub(crate) fn resolve_rust_closure(
+        &self,
+        root: &std::path::Path,
+        task: &ProposedTask,
+        profile_nextest_config: Option<&str>,
+        graph_digest: &str,
+        toolchain_id: &str,
+        platform_id: &str,
+    ) -> Result<velnor_actions_contract::TaskInputClosure, ContractError> {
+        velnor_actions_rust::resolve_closure_at_root_cached(
+            root,
+            task,
+            profile_nextest_config,
+            graph_digest,
+            toolchain_id,
+            platform_id,
+            &mut self.rust_cache.borrow_mut(),
+        )
     }
 
     /// Graph digest for the workspace owning `package_id` or `manifest`.

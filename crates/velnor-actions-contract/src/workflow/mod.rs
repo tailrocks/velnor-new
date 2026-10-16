@@ -24,8 +24,10 @@ pub mod step;
 pub mod step_identity;
 mod step_mbx_lifecycle;
 mod step_protocol;
+pub mod task_execution_manifest;
 pub mod timeout;
 pub mod trust;
+pub mod workflow_policy;
 pub use artifacts::{
     CANDIDATE_ATTESTATION_FILENAME, CANDIDATE_EVIDENCE_SUBDIR, FINAL_JSON_FILENAME,
     MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, check_matrix_agreement, matrix_json_bytes,
@@ -36,7 +38,9 @@ pub use cache_ids::EntryCacheIds;
 pub use crate_job::{CrateJob, CrateObligation};
 pub use dispatch::{DispatchInput, DispatchInputType, WorkflowDispatch};
 pub use execute::{ExecuteTaskIds, ExecuteTaskRef};
-pub use ir::{Concurrency, Job, ScheduleTrigger, Trigger, WorkflowIr};
+pub use ir::{
+    CACHE_MODE_PUSH_WRITE_EXPR, CacheMode, Concurrency, Job, ScheduleTrigger, Trigger, WorkflowIr,
+};
 pub use jobs::{
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
     PLAN_DISPLAY_NAME, PLAN_JOB_ID, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID,
@@ -96,7 +100,20 @@ pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
     NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
 };
-pub use step::{Step, StepKind};
+pub use step::{
+    MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, Step, StepKind, TASK_COVERED_OUTPUT,
+    task_execution_condition,
+};
 pub use step_identity::{MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole};
+pub use task_execution_manifest::{
+    MAX_TASK_EXECUTION_FRAME_BYTES, MAX_TASK_EXECUTION_RECORDS, TASK_EXECUTION_FRAME_MAGIC,
+    TASK_EXECUTION_MANIFEST_PATH, TASK_EXECUTION_MANIFEST_SCHEMA, TaskExecutionManifestEntryV1,
+    TaskExecutionManifestV1, task_execution_manifest_marker_line,
+};
 pub use timeout::JobTimeout;
 pub use trust::{Trust, trust_for_event};
+pub use workflow_policy::{
+    ALLOWED_WORKFLOW_EVENTS, DEFAULT_BLOCKED_PUBLIC_REPO_EVENTS, RESTRICTED_ACTION_EVENTS,
+    is_allowed_workflow_event, is_restricted_action_event, validate_workflow_trigger_event,
+    validate_workflow_trigger_events,
+};

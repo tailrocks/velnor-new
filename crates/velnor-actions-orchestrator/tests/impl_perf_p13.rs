@@ -26,8 +26,8 @@ use crate::impl_common::{TestResult, git, git_line};
 
 /// Plan wall time plus obligation counts on 1/10/40-crate workspaces.
 ///
-/// 40 stays under the 512 KiB matrix-artifact budget; 60 exceeds it by
-/// design (`matrix_budget_enforced_never_truncated` pins that ceiling).
+/// 40 and wider plans stay inside the matrix-artifact budget. An oversize
+/// matrix still fails closed and is never truncated.
 #[test]
 fn plan_scales_with_crate_count() -> TestResult {
     for members in [1_usize, 10, 40] {
@@ -105,9 +105,9 @@ fn prepare_scales_to_100_crates() -> TestResult {
     Ok(())
 }
 
-/// A 100-crate full plan fails closed on the matrix budget, never truncates.
+/// A 100-crate plan keeps every member inside the artifact budget.
 #[test]
-fn plan_100_crates_reports_matrix_budget() -> TestResult {
+fn plan_100_crates_fits_matrix_budget() -> TestResult {
     let repo = workspace_repo(100)?;
     let root = repo.path();
     let (base, head) = commit_two(root, "src/lib.rs")?;
@@ -119,10 +119,15 @@ fn plan_100_crates_reports_matrix_budget() -> TestResult {
         "event": "pull_request",
         "root": root.display().to_string(),
     });
-    let err = err_of(plan_internal(&request.to_string()), "100-crate plan")?;
+    let response = plan_internal(&request.to_string()).map_err(|err| err.to_string())?;
+    let value: serde_json::Value = serde_json::from_str(&response)?;
+    let include = value["matrix"]["include"]
+        .as_array()
+        .ok_or("matrix missing")?;
     assert!(
-        err.to_string().contains("matrix_budget_exceeded"),
-        "got {err}"
+        include.len() >= 100,
+        "100 members produced {} matrix rows",
+        include.len()
     );
     Ok(())
 }
@@ -202,6 +207,48 @@ fn generate_scales_to_workflow_file_limit_then_fails_closed() -> TestResult {
             );
         }
     }
+    Ok(())
+}
+
+/// One hundred fifty workspace members each get a crate job inside 500 KB.
+#[test]
+fn generate_150_crates_schedules_every_member() -> TestResult {
+    let members = 150_usize;
+    let repo = workspace_repo(members)?;
+    let root = repo.path();
+    let prep = prepare(root)?;
+    let out = tempfile::TempDir::new()?;
+    let target = out.path().join("gen-150");
+    let report = generate(
+        &prep,
+        &GenerateOptions {
+            output_dir: Some(target.clone()),
+        },
+    )?;
+    assert!(!report.files_written.is_empty(), "files staged");
+    let workflow = std::fs::read(target.join(".github/workflows/ci.yml"))?;
+    assert!(
+        workflow.len() <= MAX_WORKFLOW_BYTES,
+        "150 members generated {} bytes, limit is {MAX_WORKFLOW_BYTES}",
+        workflow.len()
+    );
+    let text = String::from_utf8(workflow)?;
+    for index in 0..members {
+        let job = format!("  rust-c{index:03}:");
+        assert!(text.contains(&job), "missing {job}");
+    }
+    assert!(text.contains("  rust-demo:"), "missing root package job");
+    let actions = report
+        .files_written
+        .iter()
+        .filter(|path| {
+            path.starts_with(".github/actions/crate-obligation-") && path.ends_with("/action.yml")
+        })
+        .count();
+    assert!(
+        actions >= members,
+        "expected one composite per member, wrote {actions}"
+    );
     Ok(())
 }
 

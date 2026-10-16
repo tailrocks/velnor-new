@@ -299,6 +299,7 @@ impl TaskGraph {
 /// edges must be sorted and unique by (`from`, `to`, kind).
 /// # Errors
 pub fn validate_plan_edges(edges: &[TaskEdge], task_ids: &[String]) -> Result<(), ContractError> {
+    let known: BTreeSet<&str> = task_ids.iter().map(String::as_str).collect();
     let mut seen = BTreeSet::new();
     let mut last: Option<(&str, &str, u8)> = None;
     for edge in edges {
@@ -307,8 +308,8 @@ pub fn validate_plan_edges(edges: &[TaskEdge], task_ids: &[String]) -> Result<()
         if edge.from == edge.to {
             return Err(ContractError::identity("edges", "self_loop"));
         }
-        for end in [&edge.from, &edge.to] {
-            if !task_ids.iter().any(|id| id == end) {
+        for end in [edge.from.as_str(), edge.to.as_str()] {
+            if !known.contains(end) {
                 return Err(ContractError::identity("edges", "unknown_task"));
             }
         }

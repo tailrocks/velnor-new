@@ -40,6 +40,7 @@ fn job_tools_inferred_from_install_and_exec() {
             )
             .expect("lint"),
         ],
+        cache_mode: None,
     };
     let tools = infer_job_tools(&job);
     assert!(tools.contains(&"rust@1.98.1".to_owned()), "{tools:?}");
@@ -72,6 +73,7 @@ fn job_tools_inferred_from_inline_shell_script() {
             )
             .expect("deny"),
         ],
+        cache_mode: None,
     };
     assert_eq!(infer_job_tools(&job), vec!["cargo-deny@0.20.2".to_owned()]);
 }
@@ -101,6 +103,7 @@ fn job_tools_inferred_from_quoted_spec() {
             )
             .expect("task"),
         ],
+        cache_mode: None,
     };
     assert_eq!(infer_job_tools(&job), vec!["quoted-tool@1.0".to_owned()]);
 }
@@ -187,6 +190,7 @@ fn retired_rust_cache_is_rejected_for_every_lane() {
         permissions: None,
         environment: None,
         steps: vec![rust_cache.clone()],
+        cache_mode: None,
     };
     let both = Job {
         steps: vec![preflight, mbx, version_check, rust_cache],
@@ -231,6 +235,7 @@ fn mbx_restore_precedes_fetch() {
         permissions: None,
         environment: None,
         steps: vec![mbx.clone(), fetch.clone()],
+        cache_mode: None,
     };
     assert!(check_mbx_before_fetch("demo", &good).is_ok());
     let bad = Job {

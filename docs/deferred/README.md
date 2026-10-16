@@ -1,11 +1,11 @@
 # Deferred implementation
 
-**Status:** Deferred. No runner implementation is claimed by this document.
+**Status:** Historical / Superseded. Active runner implementation lives in `crates/velnor-runner` governed by [macOS Scale Set runner](../proposed/macos-scaleset-runner.md).
 
-Velnor's proposed V1 product is the workflow generator. Self-hosted runner work MUST NOT start until every V1 entry gate in the [implementation plan](../proposed/implementation-plan.md) passes and Velnor dogfoods its generated workflow on GitHub-hosted runners.
+V1 workflow generator entry gates and dogfooding have been satisfied. Runner support is actively implemented in `crates/velnor-runner` as a macOS Runner Scale Set controller using official runner containers and the Runner Scale Set protocol.
 
 ## Deferred specifications
 
-- [Self-hosted execution roadmap and architecture](self-hosted-runner.md) — conflicting Scale Set, slot, architecture, and label clauses are superseded by the [macOS Scale Set runner](../proposed/macos-scaleset-runner.md)
+- [Self-hosted execution roadmap and architecture](self-hosted-runner.md) — historical roadmap document; superseded by [macOS Scale Set runner](../proposed/macos-scaleset-runner.md).
 
-The sequence is macOS host with official GitHub runner containers first, reuse on Debian second, and the genuine Velnor-native GitHub Actions protocol runtime as a later milestone. The later runner consumes V1 workflow/task contracts; it MUST NOT create a second workflow generator.
+The active normative standard uses official `actions/runner` containers supervised by `velnor-host` via the `actions/scaleset` protocol. The runner consumes V1 workflow/task contracts; it MUST NOT create a second workflow generator.

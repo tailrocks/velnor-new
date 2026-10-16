@@ -235,7 +235,7 @@ fn actions_overrides_validate_allowlist_and_pin_shape() {
     let alint = ActionsConfig {
         overrides: BTreeMap::from([(
             "asamarts/alint".to_owned(),
-            pin("f558d76d076710312c54723d18e44d8cd95b3977", "v0.18.1"),
+            pin("b02109b84dd59f3f96f33ad98b829b4d2fcd4b0a", "v0.18.3"),
         )]),
     };
     // Alint pin is policy-owned, not overridable (version-policy.md §2, GitHub Action defaults).

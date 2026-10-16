@@ -24,7 +24,9 @@ fn checkout_pin() -> String {
 pub(crate) fn fixture_ctx() -> RenderContext {
     RenderContext {
         generator_version: VERSION.to_owned(),
+        report_helper_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
+        scale_set_selector: None,
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),
@@ -68,6 +70,7 @@ fn plan_job() -> Result<Job, RenderError> {
         permissions: None,
         environment: None,
         steps: vec![checkout_step(&checkout_pin())?, plan_step()],
+        cache_mode: None,
     })
 }
 
@@ -80,6 +83,7 @@ pub(crate) fn fixture_ir() -> Result<WorkflowIr, RenderError> {
         permissions: Permissions::default(),
         concurrency: exact_concurrency(),
         jobs,
+        cache_mode: None,
     })
 }
 

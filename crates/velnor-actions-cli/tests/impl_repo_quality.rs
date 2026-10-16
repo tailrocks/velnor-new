@@ -31,7 +31,7 @@ const ORIGINAL_ANCHORS: [&str; 13] = [
     "unsafe_code = \"forbid\"",
     "unwrap_used = \"deny\"",
     "too-many-lines-threshold = 80",
-    "asamarts/alint@f558d76d076710312c54723d18e44d8cd95b3977",
+    "asamarts/alint@b02109b84dd59f3f96f33ad98b829b4d2fcd4b0a",
     "MISE_RUSTUP_HOME",
     "RUSTUP_TOOLCHAIN",
     "400 physical lines",

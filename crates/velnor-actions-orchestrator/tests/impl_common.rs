@@ -167,9 +167,6 @@ pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Err
     let dir = TempDir::new()?;
     let root = dir.path();
     git(&["init", "-b", "testmain"], root)?;
-    git(&["config", "user.email", "test@example.com"], root)?;
-    git(&["config", "user.name", "Test"], root)?;
-    git(&["config", "commit.gpgsign", "false"], root)?;
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(root.join(".velnor/config.toml"), config)?;
     install_fixture_release_manifest(root)?;
@@ -203,20 +200,24 @@ pub(crate) fn write_nextest_task(root: &Path) -> TestResult {
 
 /// Run git with inherited failure context.
 pub(crate) fn git(args: &[&str], cwd: &Path) -> TestResult {
-    let status = git_fixture::command(cwd)?
+    let output = git_fixture::command(cwd)?
         .args(args)
         .current_dir(cwd)
-        .status()?;
-    assert!(status.success(), "git {args:?} failed in {}", cwd.display());
+        .output()?;
+    assert!(
+        output.status.success(),
+        "git {args:?} failed in {}: {}",
+        cwd.display(),
+        String::from_utf8_lossy(&output.stderr)
+    );
     Ok(())
 }
 
+const ORIGIN: &[&str] = &["remote", "add", "origin", "https://github.com/o/r.git"];
+
 /// Anchor a fixture repo so fail-closed provenance can validate it.
 pub(crate) fn anchor_repo(root: &Path) -> TestResult {
-    git(
-        &["remote", "add", "origin", "https://github.com/o/r.git"],
-        root,
-    )
+    git(ORIGIN, root)
 }
 
 /// Manifest `repository_id` matching [`anchor_repo`].

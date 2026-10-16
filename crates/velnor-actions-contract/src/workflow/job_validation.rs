@@ -92,6 +92,9 @@ impl Job {
                 format!("write_all:{id}"),
             ));
         }
+        if let Some(cache_mode) = &self.cache_mode {
+            cache_mode.validate("job.cache_mode")?;
+        }
         if let Some(environment) = &self.environment
             && !is_valid_environment(environment)
         {
@@ -144,6 +147,7 @@ mod admission_tests {
             needs: Vec::new(),
             condition: condition.map(str::to_owned),
             permissions: None,
+            cache_mode: None,
             environment: None,
             steps: Vec::new(),
         }

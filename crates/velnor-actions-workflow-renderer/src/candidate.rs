@@ -115,6 +115,7 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
         needs: vec![PLAN_JOB_ID.to_owned()],
         condition: None,
         permissions: None,
+        cache_mode: None,
         environment: None,
         steps: vec![
             steps::checkout_step(&ctx.checkout_uses)?,
@@ -184,6 +185,7 @@ pub(crate) fn release_job(ctx: &RenderContext) -> Result<Job, RenderError> {
         needs: vec![CANDIDATE_JOB_ID.to_owned()],
         condition: Some(super::support::RELEASE_REF_CONDITION.to_owned()),
         permissions: None,
+        cache_mode: None,
         environment: None,
         steps: vec![
             steps::checkout_step(&ctx.checkout_uses)?,

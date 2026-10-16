@@ -64,7 +64,7 @@ Local equality is never presented as an upstream freshness proof.
 2. The change records freshness timestamp + version delta, and refreshes
    ONLY Velnor-owned pins and locks: `Cargo.lock`,
    `.velnor/version-policy.toml`, `.velnor/generator.lock` (once seeded),
-   `.velnor/runner.lock` (deferred V2). It MUST NOT edit `mise.toml`,
+   `.velnor/runner.lock`. It MUST NOT edit `mise.toml`,
    `mise.lock`, or `rust-toolchain.toml` (VER-3.4, VER-4.4); those get
    maintainer recommendations only.
 3. Run the full qualification: `cargo fmt --all -- --check`, policy checks,
@@ -247,5 +247,5 @@ files MUST be split, and grandfathering new or existing debt is forbidden.
 - `.velnor/generator.lock`: Velnor bootstrap identity; created at seed
   ([release-gates.md](release-gates.md)). Refresh rule: protected release
   job only, separate reviewed change.
-- `.velnor/runner.lock`: deferred V2 self-hosted runner identity. Refresh
+- `.velnor/runner.lock`: Scale Set runner identity (`crates/velnor-runner`). Refresh
   rule: reviewed, binds image digest + runner version + arch + API versions.

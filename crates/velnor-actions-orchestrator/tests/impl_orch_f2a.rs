@@ -23,7 +23,7 @@ pub(crate) fn product_src_files() -> Result<Vec<PathBuf>, Box<dyn std::error::Er
         let test_companion = path
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| name.ends_with("_tests.rs") || name.ends_with("_fixtures.rs"));
+            .is_some_and(|name| name.contains("_test") || name.contains("_fixture"));
         if path.extension().is_some_and(|ext| ext == "rs") && !test_companion {
             out.push(path);
         }
@@ -149,12 +149,12 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     assert_eq!(
         sh_files,
         std::collections::BTreeSet::from([
-            "matrix_step.rs".to_owned(),
+            "matrix_step_reports.rs".to_owned(),
             "pins.rs".to_owned(),
             "qualify.rs".to_owned(),
             "source_prep.rs".to_owned(),
         ]),
-        "fixed sh wrappers live in matrix_step/pins/qualify/source_prep only"
+        "fixed sh wrappers live in matrix_step_reports/pins/qualify/source_prep only"
     );
     Ok(())
 }

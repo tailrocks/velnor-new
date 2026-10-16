@@ -1,6 +1,6 @@
 //! Closed declarations for isolated, credential-free verification jobs.
 
-use super::mise::is_valid_mise_task_name;
+use super::{MiseTaskSource, mise::is_valid_mise_task_name};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
@@ -12,6 +12,8 @@ pub struct VerificationTask {
     pub id: String,
     /// Exact task name from the repository's locked Mise configuration.
     pub mise_task: String,
+    /// Exact Mise source file and task working directory.
+    pub source: MiseTaskSource,
     /// OS and architecture used for this task.
     pub runner: VerificationRunner,
     /// Required per-job timeout in minutes.
@@ -26,6 +28,9 @@ pub enum VerificationRunner {
     LinuxX64,
     /// GitHub-hosted macOS Apple ARM64 runner.
     MacosArm64,
+    /// GitHub-hosted macOS 26 Apple ARM64 runner.
+    #[serde(rename = "macos-26-arm64")]
+    Macos26Arm64,
 }
 
 /// Runner label for one typed verification platform.
@@ -36,6 +41,7 @@ impl VerificationRunner {
         match self {
             Self::LinuxX64 => "ubuntu-26.04",
             Self::MacosArm64 => "macos-15",
+            Self::Macos26Arm64 => "macos-26",
         }
     }
 
@@ -44,13 +50,13 @@ impl VerificationRunner {
     pub const fn mise_target(self) -> &'static str {
         match self {
             Self::LinuxX64 => "x86_64-unknown-linux-gnu",
-            Self::MacosArm64 => "aarch64-apple-darwin",
+            Self::MacosArm64 | Self::Macos26Arm64 => "aarch64-apple-darwin",
         }
     }
 }
 
 impl VerificationTask {
-    /// Validate task identifiers, task names, and bounded execution time.
+    /// Validate identifiers, source paths, task names, and bounded execution time.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         if !super::is_valid_workflow_task_id(&self.id) {
@@ -67,6 +73,13 @@ impl VerificationTask {
                 format!("bad_mise_task:{}", self.mise_task),
             ));
         }
+        if !self.source.validate() {
+            return Err(ContractError::config(
+                file,
+                "workflow.tasks.source",
+                "bad_verification_source_or_working_directory",
+            ));
+        }
         if !(1..=360).contains(&self.timeout_minutes) {
             return Err(ContractError::config(
                 file,
@@ -81,12 +94,17 @@ impl VerificationTask {
 #[cfg(test)]
 mod tests {
     use super::{VerificationRunner, VerificationTask};
+    use crate::config::MiseTaskSource;
     use crate::config::mise::is_valid_mise_task_name;
 
     fn task(id: &str, mise_task: &str, timeout_minutes: u16) -> VerificationTask {
         VerificationTask {
             id: id.to_owned(),
             mise_task: mise_task.to_owned(),
+            source: MiseTaskSource {
+                mise_config: "mise.toml".to_owned(),
+                working_directory: ".".to_owned(),
+            },
             runner: VerificationRunner::LinuxX64,
             timeout_minutes,
         }
@@ -132,5 +150,53 @@ mod tests {
             VerificationRunner::MacosArm64.mise_target(),
             "aarch64-apple-darwin"
         );
+        assert_eq!(VerificationRunner::Macos26Arm64.runs_on(), "macos-26");
+        assert_eq!(
+            VerificationRunner::Macos26Arm64.mise_target(),
+            "aarch64-apple-darwin"
+        );
+        assert_eq!(
+            serde_json::to_string(&VerificationRunner::Macos26Arm64)
+                .expect("serialize macOS 26 runner"),
+            "\"macos-26-arm64\""
+        );
+    }
+
+    #[test]
+    fn source_paths_are_canonical_and_working_directory_stays_under_config_root() {
+        let valid = MiseTaskSource {
+            mise_config: "native/mise.toml".to_owned(),
+            working_directory: "native/apple".to_owned(),
+        };
+        assert_eq!(valid.mise_lock_path(), "native/mise.lock");
+        assert_eq!(valid.rust_toolchain_path(), "native/rust-toolchain.toml");
+        assert_eq!(valid.config_ceiling_directory(), ".");
+        let mut valid_task = task("native-format", "format", 10);
+        valid_task.source = valid;
+        assert!(valid_task.validate("config.toml").is_ok());
+
+        for (mise_config, working_directory) in [
+            ("../mise.toml", ".."),
+            ("/native/mise.toml", "native"),
+            ("C:/native/mise.toml", "C:/native"),
+            ("native\\mise.toml", "native"),
+            ("native/../mise.toml", "native"),
+            ("native/mise.toml", "other"),
+            ("native/mise.toml", "native/../outside"),
+            ("native/custom.toml", "native"),
+            ("native//mise.toml", "native"),
+            ("native/mise.toml", "native/"),
+            ("native/mise.toml", "native/$HOME"),
+        ] {
+            let mut invalid = task("native-format", "format", 10);
+            invalid.source = MiseTaskSource {
+                mise_config: mise_config.to_owned(),
+                working_directory: working_directory.to_owned(),
+            };
+            assert!(
+                invalid.validate("config.toml").is_err(),
+                "accepted {mise_config:?} from {working_directory:?}"
+            );
+        }
     }
 }

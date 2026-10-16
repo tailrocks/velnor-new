@@ -44,6 +44,8 @@ fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
             "1.19.0",
             "1.98.1",
             mbx_tool_env("1.98.1"),
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            None,
         )?
         .is_none()
     );
@@ -54,6 +56,8 @@ fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
             "1.19.0",
             "1.98.1",
             mbx_tool_env("1.98.1"),
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            None,
         )
         .is_err_and(|err| format!("{err:?}").contains("not_mbx_action")),
         "non-MBX action must fail"
@@ -65,6 +69,8 @@ fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
             "latest",
             "1.98.1",
             mbx_tool_env("1.98.1"),
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            None,
         )
         .is_err_and(|err| format!("{err:?}").contains("bad_mbx_version")),
         "floating action version must fail"

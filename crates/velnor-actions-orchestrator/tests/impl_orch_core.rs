@@ -188,13 +188,21 @@ pub(crate) fn push_request(root: &std::path::Path, head: &str) -> serde_json::Va
 
 /// Wide workspace repo with `members` crates for budget tests.
 pub(crate) fn wide_repo(members: u32) -> Result<TempDir, Box<dyn std::error::Error>> {
+    wide_repo_configured(members, &["c1", "c2", "c3", "c4"])
+}
+
+/// Wide workspace repo with `members` crates and custom configurations for budget tests.
+pub(crate) fn wide_repo_configured(
+    members: u32,
+    configs: &[&str],
+) -> Result<TempDir, Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let root = dir.path();
     git(&["init", "-b", "testmain"], root)?;
     git(&["config", "user.email", "test@example.com"], root)?;
     git(&["config", "user.name", "Test"], root)?;
     git(&["config", "commit.gpgsign", "false"], root)?;
-    let configs = ["c1", "c2", "c3", "c4"]
+    let rendered_configs = configs
         .iter()
         .map(|name| format!("{{ name = \"{name}\", target = \"host\" }}"))
         .collect::<Vec<_>>()
@@ -203,7 +211,7 @@ pub(crate) fn wide_repo(members: u32) -> Result<TempDir, Box<dyn std::error::Err
     fs::write(
         root.join(".velnor/config.toml"),
         format!(
-            "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks.rust]\nconfigurations = [{configs}]\n"
+            "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks.rust]\nconfigurations = [{rendered_configs}]\n"
         ),
     )?;
     fs::write(

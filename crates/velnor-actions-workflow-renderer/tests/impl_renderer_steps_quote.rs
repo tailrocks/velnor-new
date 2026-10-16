@@ -188,7 +188,9 @@ const EMIT_LABEL: &str = "ubuntu-26.04";
 fn emit_ctx() -> RenderContext {
     RenderContext {
         generator_version: EMIT_VERSION.to_owned(),
+        report_helper_version: EMIT_VERSION.to_owned(),
         runs_on: EMIT_LABEL.to_owned(),
+        scale_set_selector: None,
         staged_binary: format!("{STAGED_BINARY_PREFIX}{EMIT_VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: pin("actions/checkout"),
@@ -244,6 +246,7 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
                 )?,
                 plan_step(),
             ],
+            cache_mode: None,
         },
     );
     let ir = WorkflowIr {
@@ -252,6 +255,7 @@ fn rendered_run_steps_quote_runner_temp_paths() -> Result<(), RenderError> {
         permissions: Permissions::default(),
         concurrency: emit_concurrency(),
         jobs,
+        cache_mode: None,
     };
     let ctx = emit_ctx();
     let first = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;

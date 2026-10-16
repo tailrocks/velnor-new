@@ -1,6 +1,6 @@
 # Velnor V1 architecture
 
-**Status:** Proposed implementation specification. No implementation is claimed.
+**Status:** Implemented specification.
 
 This document defines Velnor's V1 crates, repository inputs, data contracts,
 and generated-file ownership. The exact executable interface is in the [CLI
@@ -14,8 +14,10 @@ Normative terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** have their usual
 ## 1. Product boundary and dependency direction
 
 Velnor Actions is a stack-generic GitHub Actions workflow generator. V1 registers
-the `rust` detector; the architecture keeps stack analysis, Mise integration,
-generic workflow rendering, and orchestration in separate packages.
+the `rust` and `tofu` detectors; the architecture keeps stack analysis, Mise integration,
+generic workflow rendering, and orchestration in separate packages. Runner execution
+and supervision live in the nested `crates/velnor-runner` workspace under
+`docs/proposed/macos-scaleset-runner.md`.
 
 Cargo dependency direction (`A -> B` means “A depends on B”):
 
@@ -80,8 +82,8 @@ the actionlint crate to validate rendered output before any write. `plan` and
 `plan` prints its concise text summary, while `generate` serializes the same
 workflow IR to YAML and writes `.github`. Rust, Mise, and workflow-renderer crates MUST
 depend only on `velnor-actions-contract`; they MUST NOT depend on each other.
-Only the orchestrator composes them. The executable/package name `velnor`
-remains reserved for a separate future product.
+Only the orchestrator composes them. The generator CLI binary is named `velnor-actions`,
+while runner supervisor operations are provided by `velnor-host` in `crates/velnor-runner`.
 
 Adapters exchange typed requests and stack-neutral results through the contract
 crate. The Rust adapter requests Cargo metadata; the orchestrator asks Mise to
@@ -116,15 +118,19 @@ deny.toml
 .config/nextest.toml
 .velnor/config.toml
 .velnor/generator.lock
+.velnor/runner.lock
 .velnor/version-policy.toml
 crates/velnor-actions-contract/
 crates/velnor-actions-rust/
+crates/velnor-actions-tofu/
 crates/velnor-actions-mise/
 crates/velnor-actions-actionlint/
 crates/velnor-actions-workflow-renderer/
 crates/velnor-actions-orchestrator/
 crates/velnor-actions-cli/
 crates/velnor-actions-freshness/  # repository-only support, outside V1 product graph
+crates/velnor-archive-guard/      # repository-only build protection
+crates/velnor-runner/             # nested runner workspace (crates/velnor-runner/Cargo.toml)
 fixtures/rust-workspaces/
 .github/actionlint.yaml
 .github/workflows/ci.yml

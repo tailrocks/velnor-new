@@ -2,8 +2,8 @@ use super::{
     GeneratorValidation, PullRequestCachePolicy, VerifyConfig, WorkflowConfig, WorkflowPolicy,
 };
 use crate::config::{
-    BuildTask, BuildTaskRunner, NativeImageCachePolicy, NativeImagePlatform, NativeImageTask,
-    VerificationRunner, VerificationTask, WorkflowTask,
+    BuildTask, BuildTaskRunner, MiseTaskSource, NativeImageCachePolicy, NativeImagePlatform,
+    NativeImageTask, VerificationRunner, VerificationTask, WorkflowTask,
 };
 
 /// Workflow config carrying `name`, all else default.
@@ -142,6 +142,7 @@ fn workflow_tasks_require_sorted_unique_safe_ids() {
         WorkflowTask::Verification(VerificationTask {
             id: id.to_owned(),
             mise_task: format!("check-{id}"),
+            source: MiseTaskSource::default(),
             runner: VerificationRunner::LinuxX64,
             timeout_minutes: 10,
         })
@@ -171,6 +172,7 @@ fn workflow_task_variants_share_sorted_unique_ids_and_build_bound() {
         WorkflowTask::Build(BuildTask {
             id: id.to_owned(),
             mise_task: "desktop-ci".to_owned(),
+            source: MiseTaskSource::default(),
             tools: vec!["mr-boxington".to_owned(), "rust".to_owned()],
             runner: BuildTaskRunner::Macos26Arm64,
             timeout_minutes: 120,
@@ -203,6 +205,7 @@ fn workflow_task_variants_share_sorted_unique_ids_and_build_bound() {
         WorkflowTask::Verification(VerificationTask {
             id: "native-desktop".to_owned(),
             mise_task: "desktop-format-check".to_owned(),
+            source: MiseTaskSource::default(),
             runner: VerificationRunner::MacosArm64,
             timeout_minutes: 10,
         }),

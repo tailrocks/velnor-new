@@ -18,6 +18,9 @@ pub struct WorkflowIr {
     pub triggers: Trigger,
     /// Workflow permissions.
     pub permissions: Permissions,
+    /// Optional workflow-wide GitHub Actions `cache-mode` policy (2026-09-10).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_mode: Option<CacheMode>,
     /// Concurrency group.
     pub concurrency: Concurrency,
     /// Jobs keyed by job ID (sorted).
@@ -47,6 +50,75 @@ pub struct Concurrency {
     /// Cancel-in-progress expression.
     pub cancel_in_progress: String,
 }
+/// GitHub Actions `cache-mode` access control level (2026-09-10).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CacheMode {
+    /// Restore cache entries only (`read`).
+    Read,
+    /// Restore and save cache entries (`write`).
+    Write,
+    /// Save cache entries without restoring (`write-only`).
+    WriteOnly,
+    /// Disable all cache operations (`none`).
+    None,
+    /// Dynamic GitHub Actions expression (`${{ ... }}`), such as [`CACHE_MODE_PUSH_WRITE_EXPR`].
+    #[serde(untagged)]
+    Expression(String),
+}
+impl CacheMode {
+    /// Canonical YAML string representation of this cache mode.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Read => "read",
+            Self::Write => "write",
+            Self::WriteOnly => "write-only",
+            Self::None => "none",
+            Self::Expression(expr) => expr.as_str(),
+        }
+    }
+    /// Push-only writer policy expression (`${{ github.event_name == 'push' && 'write' || 'read' }}`).
+    #[must_use]
+    pub fn push_write_expression() -> Self {
+        Self::Expression(CACHE_MODE_PUSH_WRITE_EXPR.to_owned())
+    }
+    /// Parse a literal cache mode (`read`, `write`, `write-only`, `none`) or `${{ ... }}` expression.
+    /// # Errors
+    pub fn parse(value: &str) -> Result<Self, ContractError> {
+        let mode = match value {
+            "read" => Self::Read,
+            "write" => Self::Write,
+            "write-only" => Self::WriteOnly,
+            "none" => Self::None,
+            expr if expr.starts_with("${{") && expr.ends_with("}}") => {
+                Self::Expression(expr.to_owned())
+            }
+            _ => {
+                return Err(ContractError::identity(
+                    "cache_mode",
+                    format!("invalid_cache_mode:{value}"),
+                ));
+            }
+        };
+        mode.validate("cache_mode")?;
+        Ok(mode)
+    }
+    /// Validate that an expression cache mode is a single-line `${{ ... }}` expression.
+    /// # Errors
+    pub fn validate(&self, field: &'static str) -> Result<(), ContractError> {
+        if let Self::Expression(expr) = self {
+            let inner = expr
+                .strip_prefix("${{")
+                .and_then(|rest| rest.strip_suffix("}}"))
+                .map(str::trim);
+            if inner.is_none_or(str::is_empty) || expr.chars().any(char::is_control) {
+                return Err(ContractError::identity(field, "bad_cache_mode_expression"));
+            }
+        }
+        Ok(())
+    }
+}
 /// One workflow job.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Job {
@@ -68,6 +140,9 @@ pub struct Job {
     /// Optional per-job permission override (else workflow permissions).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub permissions: Option<Permissions>,
+    /// Optional per-job GitHub Actions `cache-mode` override (2026-09-10).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_mode: Option<CacheMode>,
     /// Optional protected environment bound to this job.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub environment: Option<String>,
@@ -86,6 +161,19 @@ pub struct Job {
 /// fork. The Mise adapter's trust predicates implement this same policy
 /// over runtime values; this string is its generation-time spelling.
 pub const CACHE_SAVE_CONDITION: &str = "success() && github.event_name == 'push'";
+/// Save condition for pull-request-scoped Cargo sources caching on the same repository.
+pub const CARGO_SOURCES_PR_SCOPED_SAVE_CONDITION: &str = "success() && (github.event_name == 'push' || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork))";
+
+/// Returns the cache save condition for Cargo sources based on the pull request cache policy.
+#[must_use]
+pub fn cargo_sources_save_condition(policy: crate::config::PullRequestCachePolicy) -> &'static str {
+    match policy {
+        crate::config::PullRequestCachePolicy::ReadOnly => CACHE_SAVE_CONDITION,
+        crate::config::PullRequestCachePolicy::SameRepositoryScoped => {
+            CARGO_SOURCES_PR_SCOPED_SAVE_CONDITION
+        }
+    }
+}
 /// `env:` spelling of the push-only writer policy for cache-mode inputs.
 ///
 /// Evaluates to `write` on push runs and `read` everywhere else, so a
@@ -110,6 +198,9 @@ impl WorkflowIr {
         if self.permissions.is_write_all() {
             return Err(ContractError::identity("workflow.permissions", "write_all"));
         }
+        if let Some(cache_mode) = &self.cache_mode {
+            cache_mode.validate("workflow.cache_mode")?;
+        }
         self.triggers.validate()?;
         if self.concurrency.group.trim().is_empty() {
             return Err(ContractError::identity(
@@ -129,8 +220,16 @@ impl WorkflowIr {
     }
 }
 impl Trigger {
-    /// Validate push branch names, dispatch inputs, and schedule.
+    /// Validate pull-request types, push branch names, dispatch inputs, and schedule.
     fn validate(&self) -> Result<(), ContractError> {
+        for pr_type in &self.pull_request_types {
+            if super::workflow_policy::is_restricted_action_event(pr_type) {
+                return Err(ContractError::identity(
+                    "trigger.pull_request_types",
+                    format!("restricted_untrusted_actor_event:{pr_type}"),
+                ));
+            }
+        }
         for branch in &self.push_branches {
             if !crate::is_valid_branch_name(branch) {
                 return Err(ContractError::identity(

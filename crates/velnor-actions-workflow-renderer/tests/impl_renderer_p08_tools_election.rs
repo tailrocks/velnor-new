@@ -31,6 +31,7 @@ fn keyed_job() -> Result<Job, RenderError> {
         permissions: None,
         environment: None,
         steps: vec![payload.runtime_prelude_step()?, payload.restore_step()?],
+        cache_mode: None,
     })
 }
 
@@ -173,6 +174,7 @@ fn tools_cache_election_rejects_orphan_and_duplicate_winner_saves() -> Result<()
         permissions: None,
         environment: None,
         steps: vec![canonical.clone()],
+        cache_mode: None,
     };
     assert!(elect_cache_writers(&mut BTreeMap::from([("orphan".to_owned(), orphan)])).is_err());
 

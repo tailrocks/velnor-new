@@ -33,7 +33,12 @@ pub(crate) fn sterile_command() -> Command {
         .env("GIT_CONFIG_SYSTEM", null)
         .env("GIT_CONFIG_GLOBAL", null)
         .env("GIT_TEMPLATE_DIR", "")
+        .env("GIT_AUTHOR_NAME", "Test")
+        .env("GIT_AUTHOR_EMAIL", "test@example.com")
+        .env("GIT_COMMITTER_NAME", "Test")
+        .env("GIT_COMMITTER_EMAIL", "test@example.com")
         .args(["-c", &format!("core.hooksPath={null}")])
+        .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
         .args(["-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false"])
         .args(["-c", "core.fsmonitor=false", "-c", "init.templateDir="]);
     command

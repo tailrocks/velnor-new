@@ -23,7 +23,9 @@ fn checkout_pin() -> String {
 fn fixture_ctx() -> RenderContext {
     RenderContext {
         generator_version: VERSION.to_owned(),
+        report_helper_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
+        scale_set_selector: None,
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{VERSION}"),
         request_dir: REQUEST_DIR.to_owned(),
         checkout_uses: checkout_pin(),
@@ -50,6 +52,7 @@ fn fixture_ir(steps: Vec<velnor_actions_contract::Step>) -> WorkflowIr {
             permissions: None,
             environment: None,
             steps,
+            cache_mode: None,
         },
     );
     WorkflowIr {
@@ -70,6 +73,7 @@ fn fixture_ir(steps: Vec<velnor_actions_contract::Step>) -> WorkflowIr {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs,
+        cache_mode: None,
     }
 }
 

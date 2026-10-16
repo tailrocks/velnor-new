@@ -35,6 +35,7 @@ pub(crate) fn job(needs: &[&str], step: Step) -> Job {
         permissions: None,
         environment: None,
         steps: vec![step],
+        cache_mode: None,
     }
 }
 
@@ -149,6 +150,7 @@ fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
             },
             crate::steps::plan_step(),
         ],
+        cache_mode: None,
     })
 }
 
@@ -185,13 +187,16 @@ fn dispatch_ir(job: Job) -> WorkflowIr {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs: BTreeMap::from([(PLAN_JOB_ID.to_owned(), job)]),
+        cache_mode: None,
     }
 }
 
 fn dispatch_render_context(staged: String) -> RenderContext {
     RenderContext {
         generator_version: "0.1.0".to_owned(),
+        report_helper_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        scale_set_selector: None,
         staged_binary: staged,
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: format!("actions/checkout@{}", "c".repeat(40)),

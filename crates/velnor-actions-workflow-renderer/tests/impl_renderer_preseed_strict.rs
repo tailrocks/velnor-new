@@ -93,7 +93,13 @@ fn strict_preseed_closure_rejects_gaps() {
         &mise(),
     );
     assert!(
-        err.is_err_and(|err| err.to_string().contains("internal_without_acquire")),
+        err.is_err_and(|err| {
+            matches!(
+                err,
+                RenderError::InvalidWorkflow(problem)
+                    if problem.contains("_without_acquire:required")
+            )
+        }),
         "final without stage accepted"
     );
     let (id, mut misordered) = preseed_final().expect("final");

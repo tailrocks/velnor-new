@@ -3,26 +3,46 @@
 //! Declared via `#[path]` from `crate_job.rs` under `cfg(test)`.
 
 use super::*;
-use crate::{digest_b3, matrix_id_for_task_group, matrix_key_for_id, task_id_for_stack};
+use crate::cachekey::{ToolchainInputs, toolchain_id};
+use crate::workflow::crate_job::task_digest_for_execution;
+use crate::{matrix_id_for_task_group, matrix_key_for_id, task_id_for_stack};
 
 /// Minimal valid obligation through the real identity constructors.
 fn obligation() -> CrateObligation {
     let task_id =
         task_id_for_stack("tofu", "stacks/a", "validate", "default", None).expect("task id");
     let matrix_id = matrix_id_for_task_group("tofu", &task_id).expect("matrix id");
+    let run = vec![
+        "mise".to_owned(),
+        "--no-config".to_owned(),
+        "--no-env".to_owned(),
+        "--no-hooks".to_owned(),
+        "exec".to_owned(),
+        "opentofu@1.10.0".to_owned(),
+        "--".to_owned(),
+        "tofu".to_owned(),
+        "-chdir".to_owned(),
+        "stacks/a".to_owned(),
+        "validate".to_owned(),
+    ];
+    let toolchain_inputs = ToolchainInputs {
+        tools: vec!["opentofu@1.10.0".to_owned()],
+        components: vec![format!("tofu-provider-inputs:{}", "a".repeat(64))],
+        compile_driver: "tofu".to_owned(),
+        test_runner: "none".to_owned(),
+    };
+    let toolchain_id = toolchain_id(&toolchain_inputs).expect("toolchain identity");
+    let task_digest =
+        task_digest_for_execution(&task_id, &run, &toolchain_id).expect("task identity");
     CrateObligation {
         task_id,
         kind: "validate".to_owned(),
         step_name: "Validate".to_owned(),
         gated_by: Vec::new(),
         matrix_key: matrix_key_for_id(&matrix_id).expect("matrix key"),
-        task_digest: digest_b3(b"argv"),
-        run: vec![
-            "tofu".to_owned(),
-            "-chdir".to_owned(),
-            "stacks/a".to_owned(),
-            "validate".to_owned(),
-        ],
+        task_digest,
+        toolchain_inputs,
+        run,
     }
 }
 
@@ -93,6 +113,9 @@ fn crate_job_accepts_only_strictly_prior_gates() {
     let mut later = obligation();
     later.task_id =
         task_id_for_stack("tofu", "stacks/a", "plan", "default", None).expect("task id");
+    let toolchain = toolchain_id(&later.toolchain_inputs).expect("toolchain identity");
+    later.task_digest =
+        task_digest_for_execution(&later.task_id, &later.run, &toolchain).expect("task identity");
     later.gated_by.push(job.obligations[0].task_id.clone());
     job.obligations.push(later);
     assert!(job.validate().is_ok(), "prior gate accepted");

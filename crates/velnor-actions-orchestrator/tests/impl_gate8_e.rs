@@ -50,7 +50,9 @@ fn manifest_text(sha: &str) -> String {
 fn ctx() -> RenderContext {
     RenderContext {
         generator_version: GENERATOR_VERSION.to_owned(),
+        report_helper_version: GENERATOR_VERSION.to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        scale_set_selector: None,
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{GENERATOR_VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),
@@ -80,6 +82,7 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
                 checkout_step(&format!("actions/checkout@{:040x}", 0))?,
                 plan_step(),
             ],
+            cache_mode: None,
         },
     );
     jobs.insert(
@@ -94,6 +97,7 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
             permissions: None,
             environment: None,
             steps,
+            cache_mode: None,
         },
     );
     Ok(WorkflowIr {
@@ -114,6 +118,7 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
             cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
         },
         jobs,
+        cache_mode: None,
     })
 }
 

@@ -29,6 +29,7 @@ fn legacy_task_job() -> Job {
         permissions: None,
         environment: None,
         steps: vec![crate::workflow::wire_w1::checkout_step().expect("checkout")],
+        cache_mode: None,
     }
 }
 
@@ -49,6 +50,7 @@ pub(super) fn bare_ir(jobs: BTreeMap<String, velnor_actions_contract::Job>) -> W
             cancel_in_progress: "c".to_owned(),
         },
         jobs,
+        cache_mode: None,
     }
 }
 
@@ -78,7 +80,15 @@ fn lock_acquire_inserts_digest_verified_stage() {
     let mut ir = bare_ir(BTreeMap::from([
         (
             "plan".to_owned(),
-            plan_job("ubuntu-26.04", None, &catalog, rust_plan_needs(), &[]).expect("plan job"),
+            plan_job(
+                "ubuntu-26.04",
+                None,
+                &catalog,
+                rust_plan_needs(),
+                &[],
+                velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            )
+            .expect("plan job"),
         ),
         (
             "required".to_owned(),
@@ -150,7 +160,15 @@ fn lock_acquire_records_source_commit() {
     let catalog = ToolCatalog::pinned();
     let mut ir = bare_ir(BTreeMap::from([(
         "plan".to_owned(),
-        plan_job("ubuntu-26.04", None, &catalog, rust_plan_needs(), &[]).expect("plan job"),
+        plan_job(
+            "ubuntu-26.04",
+            None,
+            &catalog,
+            rust_plan_needs(),
+            &[],
+            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        )
+        .expect("plan job"),
     )]));
     ir.jobs.insert(
         "required".to_owned(),
@@ -186,7 +204,15 @@ fn preseed_attach_builds_once_and_sets_mode() {
         ir: bare_ir(BTreeMap::from([
             (
                 "plan".to_owned(),
-                plan_job("ubuntu-26.04", None, &catalog, rust_plan_needs(), &[]).expect("plan job"),
+                plan_job(
+                    "ubuntu-26.04",
+                    None,
+                    &catalog,
+                    rust_plan_needs(),
+                    &[],
+                    velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+                )
+                .expect("plan job"),
             ),
             ("rust-demo".to_owned(), legacy_task_job()),
             (
@@ -202,7 +228,9 @@ fn preseed_attach_builds_once_and_sets_mode() {
         support: None,
         context: RenderContext {
             generator_version: "0.1.0".to_owned(),
+            report_helper_version: "0.1.0".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
+            scale_set_selector: None,
             staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),
             request_dir: REQUEST_DIR.to_owned(),
             checkout_uses: CHECKOUT_USES.to_owned(),
@@ -293,6 +321,7 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
                     &catalog,
                     rust_plan_needs(),
                     fetch_roots,
+                    velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
                 )
                 .expect("plan job"),
             ),
@@ -304,7 +333,9 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
         support: None,
         context: RenderContext {
             generator_version: "0.1.0".to_owned(),
+            report_helper_version: "0.1.0".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
+            scale_set_selector: None,
             staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),
             request_dir: REQUEST_DIR.to_owned(),
             checkout_uses: CHECKOUT_USES.to_owned(),

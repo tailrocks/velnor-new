@@ -133,7 +133,11 @@ pub(crate) fn attach_preseed(
             problem: "plan_job_missing".to_owned(),
         });
     };
-    insert_plan_mbx_restore(&catalog, &mut plan.steps)?;
+    insert_plan_mbx_restore(
+        &catalog,
+        &mut plan.steps,
+        workflow.context.pull_request_cache_policy,
+    )?;
     let at = preseed_anchor(&plan.steps);
     plan.steps.splice(at..at, plan_steps);
     let Some(final_gate) = workflow.ir.jobs.get_mut(FINAL_JOB_ID) else {
@@ -188,6 +192,7 @@ fn after_prepare(steps: &[Step]) -> usize {
 fn insert_plan_mbx_restore(
     catalog: &ToolCatalog,
     steps: &mut Vec<Step>,
+    policy: velnor_actions_contract::PullRequestCachePolicy,
 ) -> Result<(), OrchestratorError> {
     if steps.iter().any(is_mbx_action) {
         return Err(OrchestratorError::Contract {
@@ -198,7 +203,7 @@ fn insert_plan_mbx_restore(
         .iter()
         .position(|step| step.role == Some(StepRole::CargoSourcesRestore))
         .map_or_else(|| after_rust_setup(steps), |index| index + 1);
-    for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog)?
+    for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog, policy, None)?
         .into_iter()
         .enumerate()
     {

@@ -70,13 +70,19 @@ pub(crate) fn workflow_to_yaml(
             )?,
         ));
     }
-    Ok(Yaml::Map(vec![
+    let mut top = vec![
         ("name".to_owned(), Yaml::str(ir.name.clone())),
         ("on".to_owned(), triggers_to_yaml(&ir.triggers)),
         (
             "permissions".to_owned(),
             permissions_to_yaml(&ir.permissions),
         ),
+    ];
+    if let Some(cache_mode) = &ir.cache_mode {
+        steps::scan_for_private_subcommands(cache_mode.as_str())?;
+        top.push(Yaml::cache_mode_field(cache_mode));
+    }
+    top.extend([
         ("env".to_owned(), string_map_yaml(&workflow_env)),
         (
             "concurrency".to_owned(),
@@ -89,12 +95,11 @@ pub(crate) fn workflow_to_yaml(
             ]),
         ),
         ("jobs".to_owned(), Yaml::Map(rendered_jobs)),
-    ]))
+    ]);
+    Ok(Yaml::Map(top))
 }
 
-/// Report download is intentionally limited to the least-privilege `read` grant.
-/// A broader `write` grant can access artifacts on GitHub, but does not satisfy
-/// this renderer policy; callers must model the dedicated reader scope.
+/// Report download is limited to the least-privilege `read` grant.
 fn grants_exact_actions_read(level: PermissionLevel) -> bool {
     level == PermissionLevel::Read
 }
@@ -267,7 +272,9 @@ fn job_to_yaml(
         .get(id)
         .map_or(job.steps.as_slice(), Vec::as_slice);
     let step_has_env = source_steps.iter().any(|step| match &step.kind {
-        StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
+        StepKind::Shell { env, .. }
+        | StepKind::Action { env, .. }
+        | StepKind::TaskExecution { env, .. } => !env.is_empty(),
         StepKind::Internal { .. } => false,
     });
     let mut job_env = if step_has_env && ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id))
@@ -283,7 +290,9 @@ fn job_to_yaml(
     if step_has_env {
         for step in source_steps {
             let step_env = match &step.kind {
-                StepKind::Shell { env, .. } | StepKind::Action { env, .. } => Some(env),
+                StepKind::Shell { env, .. }
+                | StepKind::Action { env, .. }
+                | StepKind::TaskExecution { env, .. } => Some(env),
                 StepKind::Internal { .. } => None,
             };
             if let Some(env) = step_env {
@@ -367,6 +376,10 @@ fn append_job_options(
     }
     if let Some(permissions) = &job.permissions {
         entries.push(("permissions".to_owned(), permissions_to_yaml(permissions)));
+    }
+    if let Some(cache_mode) = &job.cache_mode {
+        steps::scan_for_private_subcommands(cache_mode.as_str())?;
+        entries.push(Yaml::cache_mode_field(cache_mode));
     }
     if !job.needs.is_empty() {
         let needs: Vec<Yaml> = job

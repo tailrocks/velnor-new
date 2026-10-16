@@ -1,15 +1,14 @@
 # Proposed implementation: Velnor V1
 
-**Status:** Proposed. No implementation is claimed by this specification.
+**Status:** Implemented specifications and contracts.
 
 Velnor Actions is a stack-generic GitHub Actions workflow generator. The CLI
-auto-detects every registered project stack. V1
-registers only Rust/Cargo detectors, so unregistered stacks receive no
-validation claim. Future TypeScript and Bun detectors add coverage under the
-same command tree. Configuration is in `.velnor/config.toml`:
-`[stacks].ignore` disables exact registered stack IDs, `[stacks.<name>]` holds
-stack-specific settings, and `[discovery].exclude` holds repository path
-globs. These are not CLI flags.
+auto-detects every registered project stack. V1 registers Rust/Cargo and
+OpenTofu detectors, so unregistered stacks receive no validation claim. Future
+TypeScript and Bun detectors add coverage under the same command tree.
+Configuration is in `.velnor/config.toml`: `[stacks].ignore` disables exact
+registered stack IDs, `[stacks.<name>]` holds stack-specific settings, and
+`[discovery].exclude` holds repository path globs. These are not CLI flags.
 
 ## Responsibility boundaries
 
@@ -42,13 +41,14 @@ velnor-actions generate [--output-dir PATH]
 `plan` prints a concise, human-readable summary from the same analysis and
 workflow rendering path as `generate`. It prints no YAML and writes no files.
 
-V1 contains seven purpose-scoped Cargo packages: `velnor-actions-contract`,
-`velnor-actions-rust`, `velnor-actions-mise`, `velnor-actions-actionlint`,
-`velnor-actions-workflow-renderer`, `velnor-actions-orchestrator`, and
-`velnor-actions-cli`. Rust and Mise are separate crates; only the orchestrator
-composes them. The CLI package declares the `velnor-actions` binary. Generic
-package names such as `velnor-model`, `velnor-core`, and `velnor-rust` are
-forbidden.
+V1 contains eight purpose-scoped generator packages: `velnor-actions-contract`,
+`velnor-actions-rust`, `velnor-actions-tofu`, `velnor-actions-mise`,
+`velnor-actions-actionlint`, `velnor-actions-workflow-renderer`,
+`velnor-actions-orchestrator`, and `velnor-actions-cli`, plus repository maintenance
+packages `velnor-actions-freshness` and `velnor-archive-guard`. Rust, OpenTofu, and Mise
+are separate crates; only the orchestrator composes them. The CLI package declares the
+`velnor-actions` binary. Generic package names such as `velnor-model`, `velnor-core`,
+and `velnor-rust` are forbidden.
 
 The generator crates MUST NOT implement a runner, a Scale Set client, or an Actions interpreter. That work lives in the nested `crates/velnor-runner` workspace under the [macOS Scale Set runner](macos-scaleset-runner.md) specification. Kubernetes, a web server, a TUI, a remote cache service, and a deployment system remain out of scope. Generated workflows MAY use a small allowlist of full-SHA-pinned setup actions; Velnor does not execute arbitrary `uses:` actions itself.
 
@@ -75,7 +75,10 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 19. [Rust dependency policy](rust-dependency-policy.md) defines dependency narrowness, the initial crate set, and deny/machete supply-chain gates (companion to the quality contract §7).
 20. [Rust test policy](rust-test-policy.md) defines test layout, integration entry points, doctest separation, fixture independence, and snapshot review (companion to the quality contract §4).
 21. [Rust verification contract](rust-verification-contract.md) defines the required focused task templates, workflow verification, and risk-triggered checks (binding extension of the quality contract §9).
-20. [macOS Scale Set runner](macos-scaleset-runner.md) is the active runner specification. It supersedes conflicting deferred roadmap clauses.
-22. [Resource probe image artifact](resource-probe-artifact.md) defines the trusted probe image, archive, manifest, and publication contract.
+22. [macOS Scale Set runner](macos-scaleset-runner.md) is the active runner specification. It supersedes conflicting deferred roadmap clauses.
+23. [Resource probe image artifact](resource-probe-artifact.md) defines the trusted probe image, archive, manifest, and publication contract.
+24. [Resource probe controller](resource-probe-controller.md) defines controller-side guest probe execution and parsing.
+25. [Runner resource admission](runner-resource-admission.md) defines candidate job admission and resource enforcement.
+26. [GitHub Actions reference](github-actions-reference.md) defines source repository requirements and fidelity contracts.
 
 The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.

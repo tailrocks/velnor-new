@@ -71,6 +71,7 @@ pub fn build_native_image_job(
         needs: Vec::new(),
         condition: None,
         permissions: Some(native_image_permissions()),
+        cache_mode: None,
         environment: None,
         steps: native_image_steps(policy, checkout_uses)?,
         check_runner: None,

@@ -150,6 +150,7 @@ fn generated_files_exist_only_for_real_v2_consumers() -> Result<(), RenderError>
         permissions: None,
         environment: None,
         steps: vec![prelude],
+        cache_mode: None,
     };
     let jobs = BTreeMap::from([("fixture".to_owned(), job)]);
     let files = crate::render_cache_files::with_runtime_identity_files(Vec::new(), &jobs, "0.1.0")?;
