@@ -34,6 +34,8 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
         "MBX jobs defer GC while action results may be in flight:\n{text}"
     );
     assert!(text.contains("MBX_SHARE_OUT_DIR: \"0\""), "{text}");
+    assert!(text.contains("MBX_CC: \"0\""), "{text}");
+    assert!(text.contains("MBX_BUILD_SCRIPT_EXECUTION: \"0\""), "{text}");
     assert!(text.contains(&format!("{MBX_CACHE_MODE_ENV}:")), "{text}");
 
     let plain = checkout_step(&checkout_pin())?;
@@ -54,7 +56,9 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     );
     assert!(
         !cargo_text.contains("jdx/mr-boxington-action")
-            && !cargo_text.contains("MBX_SHARE_OUT_DIR"),
+            && !cargo_text.contains("MBX_SHARE_OUT_DIR")
+            && !cargo_text.contains("MBX_CC")
+            && !cargo_text.contains("MBX_BUILD_SCRIPT_EXECUTION"),
         "Cargo-only jobs do not carry native MBX cache policy:\n{cargo_text}"
     );
     Ok(())
@@ -71,6 +75,12 @@ fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderEr
     );
     assert_eq!(
         text.matches("MBX_SHARE_OUT_DIR: \"0\"").count(),
+        2,
+        "{text}"
+    );
+    assert_eq!(text.matches("MBX_CC: \"0\"").count(), 2, "{text}");
+    assert_eq!(
+        text.matches("MBX_BUILD_SCRIPT_EXECUTION: \"0\"").count(),
         2,
         "{text}"
     );

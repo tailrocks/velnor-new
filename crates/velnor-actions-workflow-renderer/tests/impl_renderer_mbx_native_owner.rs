@@ -53,6 +53,8 @@ fn native_action_is_the_only_mbx_cache_owner_on_both_lanes() -> Result<(), Rende
             "native MBX consumers set the shared collection policy: {yaml}"
         );
         assert!(yaml.contains("MBX_SHARE_OUT_DIR: \"0\""), "{yaml}");
+        assert!(yaml.contains("MBX_CC: \"0\""), "{yaml}");
+        assert!(yaml.contains("MBX_BUILD_SCRIPT_EXECUTION: \"0\""), "{yaml}");
         assert_eq!(
             yaml.matches("MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx")
                 .count(),
@@ -73,12 +75,12 @@ fn native_action_is_the_only_mbx_cache_owner_on_both_lanes() -> Result<(), Rende
         assert!(yaml.contains("cache-generation: "), "{yaml}");
         assert!(yaml.contains("name: Clean MBX workspace outputs"), "{yaml}");
         assert!(
-            !yaml.contains("cache-key:"),
-            "the v1.6 action derives its Rust identity key"
+            yaml.contains("cache-key: "),
+            "content-addressed target cache key is set: {yaml}"
         );
         assert!(
-            !yaml.contains("restore-keys:"),
-            "the v1.6 action derives its Rust identity prefix"
+            yaml.contains("restore-keys: "),
+            "layered target restore-keys prefix is set: {yaml}"
         );
         assert!(
             !yaml.contains("cache-key-suffix:"),

@@ -92,7 +92,7 @@ fn allowed_feature(dir: &str, key: &str, feature: &str) -> bool {
         || (dir == "crates/velnor-actions-freshness"
             && ((key == "flate2" && feature == "rust_backend")
                 || (key == "rustls" && feature == "ring")
-                || (key == "syn" && ["full", "parsing"].contains(&feature))
+                || (key == "syn" && matches!(feature, "full" | "visit"))
                 || (key == "ureq" && feature == "rustls-no-provider")))
         || (dir == "crates/velnor-actions-cli"
             && key == "syn"

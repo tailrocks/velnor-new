@@ -6,6 +6,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     RenderError,
+    cache_steps::{
+        MBX_BUILD_SCRIPT_EXECUTION_ENV, MBX_BUILD_SCRIPT_EXECUTION_VALUE, MBX_CC_ENV, MBX_CC_VALUE,
+        MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE,
+    },
     document_steps::string_map_yaml,
     lane_share::LaneShare,
     render::{FINAL_JOB_ID, RenderContext},
@@ -289,13 +293,10 @@ fn job_to_yaml(
     };
     if step_has_env {
         for step in source_steps {
-            let step_env = match &step.kind {
-                StepKind::Shell { env, .. }
-                | StepKind::Action { env, .. }
-                | StepKind::TaskExecution { env, .. } => Some(env),
-                StepKind::Internal { .. } => None,
-            };
-            if let Some(env) = step_env {
+            if let StepKind::Shell { env, .. }
+            | StepKind::Action { env, .. }
+            | StepKind::TaskExecution { env, .. } = &step.kind
+            {
                 if let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN") {
                     job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
                 }
@@ -306,7 +307,7 @@ fn job_to_yaml(
                         crate::steps::RELEASE_COMMIT_ENV,
                     ] {
                         if let Some(val) = env.get(key) {
-                            job_env.insert(key.to_owned(), val.clone());
+                            job_env.insert(key.to_owned(), val.to_owned());
                         }
                     }
                 }
@@ -314,14 +315,17 @@ fn job_to_yaml(
         }
     }
     if policy.native_mbx {
-        job_env.insert(
-            crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
-            crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
-        );
-        job_env.insert(
-            crate::cache_steps::MBX_SHARE_OUT_DIR_ENV.to_owned(),
-            crate::cache_steps::MBX_SHARE_OUT_DIR_VALUE.to_owned(),
-        );
+        for (key, val) in [
+            (MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE),
+            (MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE),
+            (MBX_CC_ENV, MBX_CC_VALUE),
+            (
+                MBX_BUILD_SCRIPT_EXECUTION_ENV,
+                MBX_BUILD_SCRIPT_EXECUTION_VALUE,
+            ),
+        ] {
+            job_env.insert(key.to_owned(), val.to_owned());
+        }
     }
     let mut entries = job_header_fields(job, runs_on);
     append_job_options(&mut entries, job, scale_set, &job_env, policy.workflow_env)?;
@@ -345,13 +349,11 @@ fn job_to_yaml(
 }
 
 fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {
+    let timeout = Yaml::Int(i64::from(job.timeout_minutes.minutes()));
     vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
         ("runs-on".to_owned(), runs_on),
-        (
-            "timeout-minutes".to_owned(),
-            Yaml::Int(i64::from(job.timeout_minutes.minutes())),
-        ),
+        ("timeout-minutes".to_owned(), timeout),
     ]
 }
 

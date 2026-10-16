@@ -355,14 +355,22 @@ fn extract_suite_job_env(job: &Job, native_mbx: bool) -> BTreeMap<String, String
         }
     }
     if native_mbx {
-        job_env.insert(
-            crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
-            crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
-        );
-        job_env.insert(
-            crate::cache_steps::MBX_SHARE_OUT_DIR_ENV.to_owned(),
-            crate::cache_steps::MBX_SHARE_OUT_DIR_VALUE.to_owned(),
-        );
+        use crate::cache_steps::{
+            MBX_BUILD_SCRIPT_EXECUTION_ENV, MBX_BUILD_SCRIPT_EXECUTION_VALUE, MBX_CC_ENV,
+            MBX_CC_VALUE, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV,
+            MBX_SHARE_OUT_DIR_VALUE,
+        };
+        for (key, val) in [
+            (MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE),
+            (MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE),
+            (MBX_CC_ENV, MBX_CC_VALUE),
+            (
+                MBX_BUILD_SCRIPT_EXECUTION_ENV,
+                MBX_BUILD_SCRIPT_EXECUTION_VALUE,
+            ),
+        ] {
+            job_env.insert(key.to_owned(), val.to_owned());
+        }
     }
     job_env
 }

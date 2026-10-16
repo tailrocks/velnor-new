@@ -104,7 +104,7 @@ fn is_matrix_field(inner: &str) -> bool {
 /// True for a `hashFiles('...')` call over quoted fixed paths.
 ///
 /// Action cache keys only: the file list carries quotes, commas, dots,
-/// slashes, dashes, and alphanumerics, nothing else.
+/// slashes, dashes, underscores, globs, and alphanumerics, nothing else.
 fn is_hash_files(inner: &str) -> bool {
     inner
         .strip_prefix("hashFiles(")
@@ -113,7 +113,7 @@ fn is_hash_files(inner: &str) -> bool {
             !files.is_empty()
                 && files.bytes().all(|b| {
                     b.is_ascii_alphanumeric()
-                        || matches!(b, b'\'' | b',' | b'.' | b'/' | b'-' | b'_')
+                        || matches!(b, b'\'' | b',' | b'.' | b'/' | b'-' | b'_' | b'*')
                 })
         })
 }
@@ -215,4 +215,20 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::check_with_value;
+
+    #[test]
+    fn check_with_value_accepts_glob_hash_files() {
+        assert!(
+            check_with_value(
+                "cache-key",
+                "prefix-${{ hashFiles('**/Cargo.lock','**/Cargo.toml') }}"
+            )
+            .is_ok()
+        );
+    }
 }
