@@ -19,6 +19,8 @@ fn named(name: &str) -> WorkflowConfig {
         tasks: Vec::new(),
         tofu_apply: None,
         verify: VerifyConfig::default(),
+        dispatch: crate::config::WorkflowDispatchConfig::default(),
+        preserve_workflows: Vec::new(),
     }
 }
 

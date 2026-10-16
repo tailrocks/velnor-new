@@ -9,7 +9,8 @@ pub use crate::candidate::{
 pub use crate::closure::{
     CHECK_GENERATED_NAME, DOWNLOAD_PLAN_NAME, FRESHNESS_OUTDIR, HelperProvenance,
     PLAN_ARTIFACT_NAME, PLAN_ARTIFACT_PATH, PUBLISH_PLAN_NAME, SEED_REMEDIATION,
-    download_plan_step, freshness_step, provision_acquire_step, publish_plan_step,
+    download_plan_step, freshness_step, freshness_step_with_claude_mode, provision_acquire_step,
+    publish_plan_step,
 };
 pub use crate::commands::{
     check_no_bare_cargo, join_argv_for_run, quote_run_arg, validate_command_argv, validate_env,
@@ -43,6 +44,9 @@ pub use crate::render::{
     RenderedTree, TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH, action_pins, finalize_jobs,
     render_workflow_ir, render_workflow_ir_strict,
 };
+pub use crate::rust_suites::{
+    RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflow, render_suites_workflows,
+};
 pub use crate::schema2::{
     MbxQualificationPins, MisePinQualificationPins, ProductReleasePins, Schema2WorkflowRequest,
     render_schema2_workflows,
@@ -56,16 +60,17 @@ pub use crate::steps::{
     REQUEST_DIR_PREFIX, REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX,
     WRITE_PRESEED_MANIFEST_OPERATION, WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step,
     action_step_with_env, ambient_shell_step, baseline_publish_upload_step, check_cache_step_order,
-    check_mbx_gating, checkout_step, crate_job_report_upload_step, internal_step,
-    lane_cargo_target_env, matrix_report_upload_step, mbx_steps_for_driver, merge_step, plan_step,
-    publish_step, scan_for_private_subcommands, shell_step, validate_uses, write_request_step,
+    check_mbx_gating, checkout_step, crate_job_report_upload_step, download_suite_archive_step,
+    internal_step, lane_cargo_target_env, matrix_report_upload_step, mbx_steps_for_driver,
+    merge_step, plan_step, publish_step, scan_for_private_subcommands, shell_step,
+    upload_suite_archive_step, upload_suite_artifact_step, validate_uses, write_request_step,
 };
 pub use crate::tofu_apply::{
     AWS_CREDENTIALS_STEP_ID, AWS_CREDENTIALS_USES, AWS_CREDENTIALS_VERSION,
     TOFU_APPLY_CONCURRENCY_GROUP, TOFU_APPLY_JOB_ID, TOFU_APPLY_TIMEOUT_MINUTES,
     TOFU_APPLY_WORKFLOW_NAME, TofuApplySpec, render_tofu_apply_workflow,
 };
-pub use crate::tree::{render_tree, render_tree_with_extra};
+pub use crate::tree::{render_tree, render_tree_with_claude_mode, render_tree_with_extra};
 pub use crate::verification_jobs::{
     INSTALL_VERIFICATION_TOOLS_NAME, RUN_VERIFICATION_TASK_NAME, VerificationTaskPolicy,
     build_verification_task_job,

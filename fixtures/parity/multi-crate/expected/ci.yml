@@ -401,11 +401,11 @@ jobs:
       - name: Unit and integration tests (shard 1 of 2)
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/nextest/default/shard-1-of-2,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d3555d226c459ee0246f42da0eaf51e6210a389601f1dd652e86d18771615e0e"}
+        with: {"digest": "b3-11763e646e802b3b7795735d4e3259f1b72203caab2056d51291f8f3022f377d"}
       - name: Unit and integration tests (shard 2 of 2)
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/nextest/default/shard-2-of-2,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-4f79fccd43fd6439be9fafd04aa0fd883040c71343cb82346b939ffe3dee6d99"}
+        with: {"digest": "b3-2d639cd4b08a7f241b8815a7e1a423d1df349dc81fd183d88a7804c25ede8fd0"}
       - name: Doctests
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -557,11 +557,11 @@ jobs:
       - name: Unit and integration tests (shard 1 of 2)
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/nextest/default/shard-1-of-2,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e5d8ad90058fa15b8ccf56ec8c1c303e7485bb943fa9146f2805551f1b0e5938"}
+        with: {"digest": "b3-8298050f2248f74780e150f059344b995702693f2501058c044a4b26e3c12a75"}
       - name: Unit and integration tests (shard 2 of 2)
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/nextest/default/shard-2-of-2,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-756c49d74ecc9fd34ab25dac53431a6e8f35beadd49d5e1934a07998286596f9"}
+        with: {"digest": "b3-a002662870efa6a5ce56f69d472c6aca5c45419c7e6cc92c710263b9b03a872d"}
       - name: Documentation
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]

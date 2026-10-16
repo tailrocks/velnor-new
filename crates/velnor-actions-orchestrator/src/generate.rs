@@ -9,7 +9,7 @@ use velnor_actions_contract::{ExecutionMode, expand_workflow};
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
 use velnor_actions_workflow_renderer::render::RenderedTree;
 use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
-use velnor_actions_workflow_renderer::tree::render_tree_with_extra;
+use velnor_actions_workflow_renderer::tree::render_tree_with_claude_mode;
 
 use crate::OrchestratorError;
 use crate::finalized::owned_preparation;
@@ -197,19 +197,26 @@ fn render_all(
     extra.extend(crate::owned_tool_publication::files(prep)?);
     extra.extend(crate::tofu_apply_emit::tofu_apply_files(prep)?);
     extra.extend(crate::routing::extra_files(&prep.config, version)?);
+    extra.extend(crate::rust_suites_emit::suite_workflow_files(prep)?);
     extra.extend(rendered.shared);
-    let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
+    let tree = render_tree_with_claude_mode(
+        &workflow,
+        &actionlint,
+        &extra,
+        version,
+        prep.config.agents.claude_md,
+    )?;
     Ok(tree)
 }
 
 /// Validate every rendered path lexically plus symlink-prefix probing.
 fn check_tree_paths(tree: &RenderedTree) -> Result<Vec<SafeTreePath>, OrchestratorError> {
-    let mut safe = Vec::with_capacity(tree.files.len());
+    let mut safe = Vec::with_capacity(tree.files.len() + tree.symlinks.len());
     for file in &tree.files {
         safe.push(guard::validate_tree_path(&file.path)?);
     }
     for link in &tree.symlinks {
-        guard::validate_tree_path(&link.path)?;
+        safe.push(guard::validate_tree_path(&link.path)?);
     }
     Ok(safe)
 }
@@ -251,7 +258,12 @@ fn replace_in_place(
         check_no_symlink_or_emitted_leaf(root, &rel)?;
     }
     staging.clear_spare_before_staging()?;
-    let staged = match preserve::stage_in_place(&target, staging.spare(), tree) {
+    let staged = match preserve::stage_in_place(
+        &target,
+        staging.spare(),
+        tree,
+        &prep.config.workflow.preserve_workflows,
+    ) {
         Ok(path) => path,
         Err(error) => return Err(staging.abort_before_commit(error)),
     };

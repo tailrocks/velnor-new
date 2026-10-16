@@ -23,6 +23,9 @@ use crate::{
 mod qualification;
 use qualification::QUALIFICATION_OUTPUTS;
 
+#[path = "matrix_suites.rs"]
+pub(crate) mod suites;
+
 /// Matrix marker: producer job backing `needs.<job>.outputs.<output>`.
 pub const MATRIX_NEEDS_JOB_ENV: &str = "VELNOR_MATRIX_NEEDS_JOB";
 /// Matrix marker: producer output name consumed via `fromJSON`.
@@ -160,6 +163,9 @@ pub(crate) fn scrub_matrix_marker(jobs: &BTreeMap<String, Job>) -> BTreeMap<Stri
                     MATRIX_NEEDS_JOB_ENV,
                     MATRIX_OUTPUT_ENV,
                     MATRIX_MAX_PARALLEL_ENV,
+                    suites::SUITE_SHARDS_ENV,
+                    suites::SUITE_MAX_PARALLEL_ENV,
+                    suites::SUITE_FAIL_FAST_ENV,
                 ] {
                     env.remove(key);
                 }
@@ -293,7 +299,7 @@ pub(crate) fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError
 }
 
 /// Insert a job key directly before its `steps` entry.
-fn insert_job_key(
+pub(super) fn insert_job_key(
     jobs: &mut [(String, Yaml)],
     id: &str,
     key: &str,

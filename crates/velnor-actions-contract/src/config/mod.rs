@@ -3,6 +3,7 @@
 //! Unknown fields are rejected; validation reports file, key path, problem.
 
 mod actions;
+mod agents;
 mod binary_release;
 mod build_task;
 mod check_receipt_budget;
@@ -15,6 +16,8 @@ mod qualified_tools;
 mod release;
 mod resources;
 mod runs_on;
+mod rust_suites;
+mod rust_suites_validate;
 mod stacks;
 mod task_source;
 mod tofu;
@@ -24,6 +27,7 @@ mod workflow;
 mod workflow_task;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
+pub use agents::{AgentsConfig, ClaudeMdMode};
 pub use binary_release::{CONSUMER_BINARY_TARGET, RustBinaryReleaseConfig};
 pub use build_task::{BuildTask, BuildTaskRunner, is_valid_build_tool_key};
 pub use check_receipt_budget::{
@@ -61,6 +65,17 @@ pub use resources::{
 pub use runs_on::{
     LINUX_AMD64, RunsOn, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL, is_hosted_catalog,
     is_legacy_hosted_label,
+};
+pub use rust_suites::{
+    DEFAULT_SUITE_PARTITIONS, DEFAULT_SUITE_RETENTION_DAYS, DEFAULT_SUITE_TIMEOUT_MINUTES,
+    DEFAULT_SUITE_WORKFLOW_SLUG, GENERATOR_OWNED_WORKFLOW_FILES, MAX_SUITE_PARTITIONS,
+    MAX_SUITE_RETENTION_DAYS, MAX_SUITE_TEST_THREADS, MAX_SUITE_TIMEOUT_MINUTES, NextestRunIgnored,
+    RESERVED_SUITE_IDS, RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteArtifact, RustSuiteArtifactWhen,
+    RustSuiteBuildMode, RustSuiteConfig, RustSuiteTrigger, WorkflowDispatchConfig,
+    WorkflowDispatchInputConfig, WorkflowDispatchInputType,
+};
+pub use rust_suites_validate::{
+    validate_preserve_workflows, validate_rust_suites, validate_suites_with_dispatch,
 };
 pub use stacks::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
@@ -103,6 +118,9 @@ pub struct VelnorConfig {
     /// Action-pin overrides; absent means bundled latest pins.
     #[serde(default)]
     pub actions: ActionsConfig,
+    /// Agent instruction file policy (`[agents]`).
+    #[serde(default, skip_serializing_if = "AgentsConfig::is_default")]
+    pub agents: AgentsConfig,
     /// Schema 2 routing. Absent on schema 1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution: Option<ExecutionConfig>,
@@ -129,6 +147,23 @@ impl VelnorConfig {
         self.resources.validate(file)?;
         self.test_sharding.validate(file)?;
         self.stacks.validate(file)?;
+        if let Some(rust) = &self.stacks.rust {
+            validate_suites_with_dispatch(&rust.suites, &self.workflow.dispatch, file)?;
+            for suite in &rust.suites {
+                let slug = suite
+                    .workflow
+                    .as_deref()
+                    .unwrap_or(DEFAULT_SUITE_WORKFLOW_SLUG);
+                let path = format!(".github/workflows/{slug}.yml");
+                if self.workflow.preserve_workflows.contains(&path) {
+                    return Err(ContractError::config(
+                        file,
+                        "workflow.preserve_workflows",
+                        format!("preserve_workflow_generator_owned:{path}"),
+                    ));
+                }
+            }
+        }
         if self.workflow.policy != WorkflowPolicy::ConsumerV1
             && self
                 .stacks

@@ -99,6 +99,7 @@ mod impl_protocol_render_gate;
 mod impl_required_evidence;
 mod impl_required_reports;
 mod impl_required_validators;
+mod impl_rust_suites;
 mod impl_schema2_build_tasks;
 mod impl_schema2_mbx_qualification;
 mod impl_schema2_routing;

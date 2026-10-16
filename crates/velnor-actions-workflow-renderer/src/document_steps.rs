@@ -191,6 +191,60 @@ pub(crate) fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
     )
 }
 
+fn shell_step_to_yaml(
+    step: &Step,
+    run: &[String],
+    env: &BTreeMap<String, String>,
+    job_env: &BTreeMap<String, String>,
+    composite: bool,
+) -> Result<Yaml, RenderError> {
+    crate::action_mbx_shell::validate_step_argv(run, step.role)?;
+    if composite {
+        commands::validate_composite_env(env)?;
+    } else {
+        commands::validate_env(env)?;
+    }
+    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+    crate::step_ids::push_step_id(&mut entries, step);
+    if let Some(condition) = &step.condition {
+        steps::scan_for_private_subcommands(condition)?;
+        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+    }
+    let filtered_env: BTreeMap<String, String> = env
+        .iter()
+        .filter(|(k, v)| job_env.get(*k).map(String::as_str) != Some(v.as_str()))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    if !filtered_env.is_empty() {
+        entries.push(("env".to_owned(), string_map_yaml(&filtered_env)));
+    }
+    push_composite_shell(&mut entries, composite);
+    entries.push((
+        "run".to_owned(),
+        Yaml::str(commands::join_validated_argv_for_run(run)?),
+    ));
+    Ok(Yaml::Map(entries))
+}
+
+/// Render one action or shell step outside the CI internal-step pipeline.
+pub(crate) fn non_internal_step_to_yaml(
+    job_id: &str,
+    step: &Step,
+    job_env: &BTreeMap<String, String>,
+    runs_on: &str,
+) -> Result<Yaml, RenderError> {
+    steps::scan_for_private_subcommands(&step.name)?;
+    match &step.kind {
+        StepKind::Action { uses, with, env } => {
+            action_step_to_yaml(job_id, step, uses, with, env, job_env, Some(runs_on))
+        }
+        StepKind::Shell { run, env } => shell_step_to_yaml(step, run, env, job_env, false),
+        StepKind::Internal { .. } | StepKind::TaskExecution { .. } => Err(
+            RenderError::InvalidWorkflow("internal_op_rejected".to_owned()),
+        ),
+    }
+}
+
 /// Render one step; internal ops become env plus request file, never argv.
 /// Every action ref (including the Alint pin) must be a full-SHA pin.
 pub(crate) fn step_to_yaml(
@@ -213,34 +267,7 @@ pub(crate) fn step_to_yaml(
             step_context.runs_on,
         ),
         StepKind::Shell { run, env } => {
-            crate::action_mbx_shell::validate_step_argv(run, step.role)?;
-            if composite {
-                commands::validate_composite_env(env)?;
-            } else {
-                commands::validate_env(env)?;
-            }
-            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            crate::step_ids::push_step_id(&mut entries, step);
-            if let Some(condition) = &step.condition {
-                steps::scan_for_private_subcommands(condition)?;
-                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-            }
-            let filtered_env: BTreeMap<String, String> = env
-                .iter()
-                .filter(|(k, v)| {
-                    step_context.job_env.get(*k).map(String::as_str) != Some(v.as_str())
-                })
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
-            if !filtered_env.is_empty() {
-                entries.push(("env".to_owned(), string_map_yaml(&filtered_env)));
-            }
-            push_composite_shell(&mut entries, composite);
-            entries.push((
-                "run".to_owned(),
-                Yaml::str(commands::join_validated_argv_for_run(run)?),
-            ));
-            Ok(Yaml::Map(entries))
+            shell_step_to_yaml(step, run, env, step_context.job_env, composite)
         }
         StepKind::Internal { .. } => {
             internal_step_to_yaml(job_id, step, ctx, needs_envs, composite, step_context)

@@ -210,6 +210,9 @@ fn push_kind_args(
                 args.extend([flag("--run-ignored"), flag(mode)]);
             }
             args.extend([flag("--no-tests"), flag("fail")]);
+            if let Some((_, index, count)) = split_shard_suffix(&group.task_id) {
+                args.extend([flag("--partition"), flag(&format!("hash:{index}/{count}"))]);
+            }
         }
         TaskKind::Doctest => {
             args.extend([flag("test"), flag("--locked"), flag("--offline")]);

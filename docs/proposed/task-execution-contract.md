@@ -225,7 +225,10 @@ separate step. If no such target exists, record `valid_no_test_targets` and
 emit no test command. Cargo-test mode compiles and runs through one step.
 Nextest mode has separate build/archive,
 inventory, and execution steps only when measured suite size requires
-partitioning; small suites use a single `nextest run` step. Empty selected
+partitioning; small suites use a single `nextest run` step. When `[test_sharding]`
+(`default_shards` or `by_manifest`) configures `n` shards (`n > 1`), each generated
+`cargo nextest run` (or `mbx nextest run`) shard step passes `--partition hash:<i>/<n>`
+for shard `i` in `1..=n`. Empty selected
 suites fail unless Cargo metadata proves that the package has no applicable
 test target. A mixed test runner is never selected by guesswork.
 
@@ -251,3 +254,78 @@ step failed. It MUST create `not_selected` reports for obligations skipped
 because of that failure. Report validation and aggregation are internal
 orchestrator behavior rendered into workflow steps; no public CLI command is
 used.
+
+## Named Nextest suites and workflow dispatch
+
+Repository configuration may declare named Nextest suites under `[[stacks.rust.suites]]` and manual dispatch inputs under `[workflow.dispatch.inputs.<name>]`:
+
+```toml
+[workflow.dispatch.inputs.test_filter]
+type = "string"
+description = "Optional Nextest filterset expression"
+required = false
+
+[workflow.dispatch.inputs.tier]
+type = "choice"
+description = "Execution tier"
+required = false
+default = "smoke"
+options = ["smoke", "full"]
+
+[[stacks.rust.suites]]
+id = "integration-smoke"
+profile = "ci"
+run_ignored = "default"
+partitions = 2
+build = "inline"
+timeout_minutes = 30
+test_threads = 4
+triggers = ["pull_request", "push", "workflow_dispatch"]
+required = true
+filter = "kind(test)"
+filter_input = "test_filter"
+dispatch_inputs = { tier = ["smoke", "full"] }
+package = "core"
+manifest_path = "crates/core/Cargo.toml"
+env = { RUST_BACKTRACE = "1" }
+artifacts = [{ name = "snapshots-{shard}", paths = ["target/test-artifacts/**"], when = "failure", retention_days = 14 }]
+
+[[stacks.rust.suites]]
+id = "stress-full"
+profile = "ci"
+run_ignored = "only"
+partitions = 4
+build = "archive"
+timeout_minutes = 60
+runner_label = "ubuntu-26.04"
+workflow = "suites"
+triggers = ["schedule", "workflow_dispatch"]
+schedule = ["0 3 * * *"]
+cancel_in_progress = false
+allow_failure = false
+```
+
+Each `[[stacks.rust.suites]]` entry validates fail-closed before rendering:
+
+- `id`: unique lowercase identifier (`[a-z0-9-]+`, no leading/trailing `-`); reserved IDs (`plan`, `required`, `actionlint`, `publish-baseline`, `rust`) are rejected.
+- `profile`: Nextest profile name (`[a-zA-Z0-9_-]+`); any profile other than `"default"` MUST exist as `[profile.<name>]` in the workspace's `.config/nextest.toml`.
+- `run_ignored`: optional `"default" | "only" | "all"` (alias `"ignored-only"` for `"only"`), passing `--run-ignored only` or `--run-ignored all` when non-default; `[stacks.rust] run_ignored` sets the workspace-level default for standard crate tasks.
+- `partitions`: `1..=64` (default `1`), rendered as a GitHub Actions `strategy.matrix.shard` (`[1..=N]`, `fail-fast: false`) passing `--partition "hash:${{ matrix.shard }}/<N>"` to `nextest run`, independent of `resources.test_process_budget`.
+- `build`: `"inline" | "archive"` (default `"inline"`). When `partitions > 1` and `build = "archive"`, Velnor emits `suite-build-<id>` (`nextest archive` + archive artifact upload) and `suite-<id>` (`needs: [suite-build-<id>]`, downloading the archive and running `cargo nextest run --archive-file ... --workspace-remap .`).
+- `timeout_minutes`: `1..=360` (default `30`).
+- `test_threads`: optional `1..=64`, exported as `NEXTEST_TEST_THREADS`.
+- `runner_label`: optional catalog runner label override; defaults to `workflow.runner_label` or the latest pinned default.
+- `workflow`: optional standalone workflow slug (`[a-z0-9][a-z0-9_-]*` without `.yml`, default `"suites"` emitting `.github/workflows/suites.yml`); reserved generator slugs (`ci`, `freshness`, `release`, `binary-release`, `tofu-apply`, `qualification`, `product-release`, `monitoring`) are rejected.
+- `triggers`: non-empty deduplicated list of `"pull_request" | "push" | "schedule" | "workflow_dispatch"` (default `["pull_request", "push"]`). Suites with `pull_request` or `push` emit into `ci.yml`; suites with `schedule` or `workflow_dispatch` emit into `.github/workflows/<workflow>.yml`.
+- `schedule`: non-empty list of 5-field cron expressions with validated numeric bounds (`minute 0..=59`, `hour 0..=23`, `day-of-month 1..=31`, `month 1..=12`, `day-of-week 0..=7`); required when `triggers` includes `"schedule"` and rejected otherwise.
+- `required`: boolean (default `false`); requires `pull_request` or `push` trigger and adds the suite's `ci.yml` jobs to `Required`'s `needs`.
+- `cancel_in_progress`: optional boolean overriding concurrency `cancel-in-progress` on standalone suite workflows (default `false`).
+- `allow_failure`: boolean (default `false`), setting job `continue-on-error: true` when enabled.
+- `filter` and `filter_input`: optional static Nextest filterset passed via `-E`, and optional `[workflow.dispatch.inputs.<name>]` key bound at runtime via `VELNOR_SUITE_FILTERSET` (requires `workflow_dispatch` trigger; overrides `filter` when non-empty).
+- `dispatch_inputs`: optional map of declared `[workflow.dispatch.inputs.<name>]` keys to non-empty allowed value lists gating the suite's `if:` condition on `workflow_dispatch` runs (requires `workflow_dispatch` trigger; `choice` values must exist in the input's `options`).
+- `package` and `manifest_path`: optional workspace member package (`--package <name>`, otherwise `--workspace`) and normalized repo-relative Cargo manifest path (`--manifest-path <path>`), both validated against discovered Cargo metadata.
+- `env`: additional static POSIX environment variables (`[A-Za-z_][A-Za-z0-9_]*`, single-line values without `${{`).
+- `artifacts`: optional upload declarations with `name` (supporting `{shard}` and `{partition}` placeholders), non-empty repo-relative `paths`, `when = "failure" | "always" | "success"` (default `"failure"`, mapping to `failure()`, `always()`, `success()`), and `retention_days` (`1..=90`, default `14`).
+
+Each `[workflow.dispatch.inputs.<name>]` entry defines a manual dispatch input (`[A-Za-z_][A-Za-z0-9_-]*`) with `type = "choice" | "string"`, optional single-line `description`, `required` (default `false`), optional `default`, and `options` (required and non-empty for `"choice"`, rejected for `"string"`, with `default` required to be a member of `options` when both are set). Standalone suite workflows with `workflow_dispatch` automatically prepend a `suite` choice input (`"all"` plus each dispatchable suite `id`).
+

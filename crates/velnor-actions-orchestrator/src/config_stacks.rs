@@ -43,6 +43,9 @@ pub(crate) struct PartialRustStack {
     release: Option<RustReleaseConfig>,
     /// Single-package binary release policy; disabled by default.
     binary_release: Option<RustBinaryReleaseConfig>,
+    /// Named Nextest suites (`[[stacks.rust.suites]]`).
+    #[serde(default)]
+    suites: Vec<velnor_actions_contract::RustSuiteConfig>,
 }
 
 /// Tofu stack section: `roots` required when the table is present.
@@ -65,6 +68,7 @@ impl PartialStacks {
                 run_ignored: stack.run_ignored,
                 release: stack.release.unwrap_or_default(),
                 binary_release: stack.binary_release.unwrap_or_default(),
+                suites: stack.suites,
             }
         });
         let tofu = self

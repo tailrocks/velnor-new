@@ -111,6 +111,9 @@ struct PartialConfig {
     /// Actions section.
     #[serde(default)]
     actions: PartialActions,
+    /// Agent instruction file policy.
+    #[serde(default)]
+    agents: velnor_actions_contract::AgentsConfig,
     /// Schema 2 routing section.
     #[serde(default)]
     execution: Option<velnor_actions_contract::ExecutionConfig>,
@@ -149,6 +152,12 @@ struct PartialWorkflow {
     /// Consumer-selected verification jobs.
     #[serde(default)]
     verify: VerifyConfig,
+    /// Optional `workflow_dispatch` inputs for suite workflows.
+    #[serde(default)]
+    dispatch: velnor_actions_contract::WorkflowDispatchConfig,
+    /// Repository-owned workflow files preserved across generation.
+    #[serde(default)]
+    preserve_workflows: Vec<String>,
 }
 
 /// Resources section with every value optional.
@@ -204,6 +213,7 @@ impl PartialConfig {
             stacks: self.stacks.materialize()?,
             discovery: self.discovery.materialize(),
             actions: self.actions.materialize(),
+            agents: self.agents,
             execution: self.execution,
             checks: self.checks,
             qualified_tools: self.qualified_tools,
@@ -227,6 +237,8 @@ impl PartialWorkflow {
             tasks: self.tasks,
             tofu_apply: self.tofu_apply,
             verify: self.verify,
+            dispatch: self.dispatch,
+            preserve_workflows: self.preserve_workflows,
         }
     }
 }

@@ -51,7 +51,7 @@ pub(crate) fn build_workflow_for_consumer_release(
     let mut prepared = prepare_workflow(input)?;
     let plan = build_workflow_plan(input, &mut prepared)?;
     let jobs = build_workflow_jobs(input, &mut prepared, plan)?;
-    let ir = workflow_ir(input.config, input.branch, jobs, prepared.policy);
+    let mut ir = workflow_ir(input.config, input.branch, jobs, prepared.policy);
     let context = workflow_context::render_context(workflow_context::RenderContextInputs {
         config: input.config,
         label: input.label,
@@ -63,6 +63,24 @@ pub(crate) fn build_workflow_for_consumer_release(
         workflow_tasks: prepared.workflow_tasks,
         verify: &prepared.verify,
     })?;
+    if input.config.agents.claude_md == velnor_actions_contract::ClaudeMdMode::Symlink
+        && let Some(plan_job) = ir.jobs.get_mut(PLAN_JOB_ID)
+        && let Some(at) = plan_job.steps.iter().position(|step| {
+            matches!(
+                &step.kind,
+                velnor_actions_contract::StepKind::Internal { operation, .. }
+                    if operation == velnor_actions_workflow_renderer::steps::PLAN_OPERATION
+            )
+        })
+    {
+        let check = velnor_actions_workflow_renderer::closure::freshness_step_with_claude_mode(
+            &context.staged_binary,
+            velnor_actions_workflow_renderer::closure::FRESHNESS_OUTDIR,
+            &context.plan_consumer_env,
+            input.config.agents.claude_md,
+        )?;
+        plan_job.steps.insert(at, check);
+    }
     let actionlint = actionlint_input(input.config, prepared.generator_version, input.label);
     Ok(WorkflowPlan {
         ir,
@@ -74,6 +92,11 @@ pub(crate) fn build_workflow_for_consumer_release(
 
 fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, OrchestratorError> {
     wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
+    crate::rust_suites_emit::validate_suites_against_repo(
+        input.root,
+        input.config,
+        input.discovery,
+    )?;
     let catalog = ToolCatalog::pinned();
     let report_helper_version = input.consumer_release_version.to_owned();
     let generator_version = env!("CARGO_PKG_VERSION");
@@ -165,6 +188,17 @@ fn build_workflow_jobs(
         required_ids.push(id.clone());
         jobs.insert(id, job);
     }
+    let (suite_jobs, suite_required_ids) = crate::rust_suites_emit::build_ci_jobs(
+        input.root,
+        input.config,
+        input.label,
+        input.discovery,
+        &prepared.catalog,
+    )?;
+    for (id, job) in suite_jobs {
+        jobs.insert(id, job);
+    }
+    required_ids.extend(suite_required_ids);
     crate::workflow_task_jobs::insert_jobs(&mut jobs, &prepared.workflow_tasks)?;
     insert_gate_jobs(
         &mut jobs,

@@ -22,6 +22,7 @@ pub(crate) fn emit_shared(
     ctx: &RenderContext,
     matrix: Option<&(MatrixSource, u32)>,
     caps: &BTreeMap<String, u32>,
+    suite_matrices: &BTreeMap<String, matrix::suites::SuiteMatrix>,
 ) -> Result<RenderedWorkflow, RenderError> {
     let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(jobs);
     let mut document = document::workflow_to_yaml(ir, shared, ctx, &mbx_jobs)?;
@@ -31,6 +32,7 @@ pub(crate) fn emit_shared(
         matrix::attach_plan_outputs(&mut document)?;
     }
     matrix::attach_crate_job_caps(&mut document, caps)?;
+    matrix::suites::attach_suite_matrices(&mut document, suite_matrices)?;
     let text = fallback::render_checked_workflow(WORKFLOW_PATH, &document, &ctx.generator_version)?;
     steps::scan_for_private_subcommands(&text)?;
     let shared_files = crate::render_cache_files::with_runtime_identity_files(

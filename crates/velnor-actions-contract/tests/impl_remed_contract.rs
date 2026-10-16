@@ -28,6 +28,8 @@ pub(crate) fn valid_config() -> VelnorConfig {
             tasks: Vec::new(),
             tofu_apply: None,
             verify: velnor_actions_contract::VerifyConfig::default(),
+            dispatch: velnor_actions_contract::WorkflowDispatchConfig::default(),
+            preserve_workflows: Vec::new(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -44,6 +46,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
+        agents: velnor_actions_contract::AgentsConfig::default(),
         execution: None,
     }
 }

@@ -80,6 +80,7 @@ mod retrieve_retry;
 mod root;
 mod routing;
 pub mod run_select;
+pub(crate) mod rust_suites_emit;
 mod safe_read;
 pub mod schedule;
 mod select;

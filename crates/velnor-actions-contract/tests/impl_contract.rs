@@ -29,6 +29,8 @@ fn config_validation_reports_key_paths() {
             tasks: Vec::new(),
             tofu_apply: None,
             verify: velnor_actions_contract::VerifyConfig::default(),
+            dispatch: velnor_actions_contract::WorkflowDispatchConfig::default(),
+            preserve_workflows: Vec::new(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -51,6 +53,7 @@ fn config_validation_reports_key_paths() {
                 run_ignored: None,
                 release: RustReleaseConfig::default(),
                 binary_release: RustBinaryReleaseConfig::default(),
+                suites: Vec::new(),
             }),
             tofu: None,
         },
@@ -58,6 +61,7 @@ fn config_validation_reports_key_paths() {
             exclude: vec!["vendor/**".to_owned()],
         },
         actions: ActionsConfig::default(),
+        agents: velnor_actions_contract::AgentsConfig::default(),
         execution: None,
     };
     assert_eq!(valid.validate(".velnor/config.toml"), Ok(()));
@@ -107,6 +111,8 @@ fn runner_label_uses_exact_catalog_match() {
             tasks: Vec::new(),
             tofu_apply: None,
             verify: velnor_actions_contract::VerifyConfig::default(),
+            dispatch: velnor_actions_contract::WorkflowDispatchConfig::default(),
+            preserve_workflows: Vec::new(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -123,6 +129,7 @@ fn runner_label_uses_exact_catalog_match() {
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
+        agents: velnor_actions_contract::AgentsConfig::default(),
         execution: None,
     };
     assert!(RUNNER_LABEL_CATALOG.contains(&LATEST_RUNNER_LABEL));
@@ -154,57 +161,16 @@ fn runner_label_uses_exact_catalog_match() {
 
 #[test]
 fn uppercase_rust_config_name_rejected_with_key_path() {
-    use velnor_actions_contract::config::ActionsConfig;
-    use velnor_actions_contract::config::{RustBinaryReleaseConfig, RustReleaseConfig};
-    use velnor_actions_contract::{
-        ContractError, DiscoveryConfig, GeneratorValidation, PullRequestCachePolicy,
-        ResourcesConfig, RustConfiguration, RustStackConfig, StacksConfig, TestShardingConfig,
-        VelnorConfig, WorkflowConfig, WorkflowPolicy,
-    };
-    let mut config = VelnorConfig {
-        checks: Vec::new(),
-        qualified_tools: Vec::new(),
-        schema: 1,
-        workflow: WorkflowConfig {
-            name: "CI".to_owned(),
-            policy: WorkflowPolicy::ConsumerV1,
-            default_branch: None,
-            generator_validation: GeneratorValidation::Bootstrap,
-            max_parallel_jobs: 2,
-            pull_request_cache_policy: PullRequestCachePolicy::default(),
-            runner_label: None,
-            tasks: Vec::new(),
-            tofu_apply: None,
-            verify: velnor_actions_contract::VerifyConfig::default(),
-        },
-        resources: ResourcesConfig {
-            compiler_process_budget: 2,
-            test_process_budget: 2,
-        },
-        test_sharding: TestShardingConfig {
-            default_shards: 1,
-            by_manifest: BTreeMap::new(),
-        },
-        stacks: StacksConfig {
-            ignore: vec![],
-            rust: Some(RustStackConfig {
-                configurations: vec![RustConfiguration {
-                    name: "Default".to_owned(),
-                    features: vec![],
-                    target: "host".to_owned(),
-                }],
-                compile_driver: None,
-                test_runner: None,
-                run_ignored: None,
-                release: RustReleaseConfig::default(),
-                binary_release: RustBinaryReleaseConfig::default(),
-            }),
-            tofu: None,
-        },
-        discovery: DiscoveryConfig { exclude: vec![] },
-        actions: ActionsConfig::default(),
-        execution: None,
-    };
+    use velnor_actions_contract::{ContractError, RustConfiguration, RustStackConfig};
+    let mut config = crate::impl_remed_contract::valid_config();
+    config.stacks.rust = Some(RustStackConfig {
+        configurations: vec![RustConfiguration {
+            name: "Default".to_owned(),
+            features: vec![],
+            target: "host".to_owned(),
+        }],
+        ..RustStackConfig::default_config()
+    });
     let Err(ContractError::Config {
         key_path, problem, ..
     }) = config.validate("cfg")

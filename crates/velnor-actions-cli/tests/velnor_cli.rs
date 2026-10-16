@@ -33,6 +33,8 @@ mod impl_cli_report;
 mod impl_cli_schema2;
 #[path = "impl_cli_smoke.rs"]
 mod impl_cli_smoke;
+#[path = "impl_cli_suites_and_symlink.rs"]
+mod impl_cli_suites_and_symlink;
 #[path = "impl_cli_tmp.rs"]
 mod impl_cli_tmp;
 #[path = "impl_cli_tofu_capacity.rs"]

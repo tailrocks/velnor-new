@@ -139,9 +139,11 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
                 name == crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT
                     || is_task_execution_input(name)
             });
+        let workflow_input = !composite && is_workflow_input(inner);
         if !ENV_EXPRESSIONS.contains(&inner)
             && !is_matrix_field(inner)
             && !composite_input
+            && !workflow_input
             && !is_github_token_secret(inner)
         {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
@@ -152,6 +154,19 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
 
 fn is_task_execution_input(name: &str) -> bool {
     name == "digest"
+}
+
+/// True for a validated `inputs.<name>` workflow-dispatch input reference.
+fn is_workflow_input(inner: &str) -> bool {
+    inner.strip_prefix("inputs.").is_some_and(|name| {
+        let mut bytes = name.bytes();
+        let Some(first) = bytes.next() else {
+            return false;
+        };
+        name.len() <= 64
+            && (first.is_ascii_alphabetic() || first == b'_')
+            && bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+    })
 }
 
 /// Declared provider token inputs use an uppercase Actions secret handle.

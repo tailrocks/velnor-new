@@ -78,3 +78,41 @@ fn test_build_prepares_nextest_binaries_without_running_tests() -> Result<(), Co
     assert_eq!(text(&group(TaskKind::Build))?[..2], ["test", "--no-run"]);
     Ok(())
 }
+
+#[test]
+fn nextest_shard_suffix_emits_hash_partition_flag() -> Result<(), ContractError> {
+    let mut sharded = group(TaskKind::Nextest);
+    sharded.task_id = "stack/rust/root/nextest/default/shard-2-of-4".to_owned();
+    sharded.test_runner = TestRunner::CargoNextest;
+    sharded.nextest_profile = NextestProfile::Ci;
+    assert_eq!(
+        profiled(&sharded)?,
+        [
+            "nextest",
+            "run",
+            "--profile",
+            "ci",
+            "--locked",
+            "--offline",
+            "--manifest-path",
+            "Cargo.toml",
+            "--package",
+            "demo",
+            "--no-tests",
+            "fail",
+            "--partition",
+            "hash:2/4",
+        ]
+    );
+
+    let mut unsharded = group(TaskKind::Nextest);
+    unsharded.task_id = "stack/rust/root/nextest/default".to_owned();
+    unsharded.test_runner = TestRunner::CargoNextest;
+    unsharded.nextest_profile = NextestProfile::Ci;
+    let argv = profiled(&unsharded)?;
+    assert!(
+        !argv.iter().any(|arg| arg == "--partition"),
+        "unsharded nextest task must not emit --partition: {argv:?}"
+    );
+    Ok(())
+}

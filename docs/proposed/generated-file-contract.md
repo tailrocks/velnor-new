@@ -10,7 +10,7 @@ preserves other repository-owned entries as specified in §3:
 ```text
 .github/
 ├── AGENTS.md
-├── CLAUDE.md                # regular file; single `@AGENTS.md` import line
+├── CLAUDE.md                # regular file; single `@AGENTS.md` import line (or symlink when `[agents] claude_md = "symlink"`)
 ├── actionlint.yaml
 ├── release-plz-bootstrap.toml   # consumer-v1 only, release enabled
 ├── release-plz.toml             # consumer-v1 only, release enabled
@@ -18,7 +18,8 @@ preserves other repository-owned entries as specified in §3:
     ├── binary-release.yml         # consumer-v1 only, Rust binary release enabled
     ├── ci.yml                      # both policies; Velnor policy adds campaign inputs
     ├── qualification.yml           # optional schema 2 workflow selected by configuration
-    └── release.yml               # velnor-repository-v1, or consumer-v1 with release enabled
+    ├── release.yml               # velnor-repository-v1, or consumer-v1 with release enabled
+    └── suites.yml                  # optional standalone Nextest suite workflow (or `<slug>.yml`)
 ```
 
 Schema 2 emits `qualification.yml` when `[execution].workflows` selects
@@ -32,7 +33,10 @@ under `velnor-repository-v1`, not a separate workflow file.
 its existing Velnor-internal meaning) and for `consumer-v1` when
 `[stacks.rust.release].enabled = true`, together with the two effective
 release-plz configs; with release disabled, `consumer-v1` emits none of
-the three. All workflow files are rendered from typed workflow IR by
+the three. Standalone Nextest suite workflows (`.github/workflows/suites.yml` by
+default, or `.github/workflows/<slug>.yml` when a suite sets `workflow = "<slug>"`)
+are emitted when `[[stacks.rust.suites]]` entries declare `schedule` or
+`workflow_dispatch` triggers. All workflow files are rendered from typed workflow IR by
 `velnor-actions-workflow-renderer`, each with an explicit `permissions:`
 block (least privilege for its role); see [workflow
 §3](workflow-contract.md).
@@ -56,8 +60,8 @@ successful generation.
 |---|---|---|---|
 | .github/actionlint.yaml | velnor-actions-actionlint | velnor-actions-orchestrator | Exact generated path; replaced on generation |
 | .github/AGENTS.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated path; version marker; replaced on generation |
-| .github/CLAUDE.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated pointer file with the single `@AGENTS.md` import line; replaced on generation |
-| .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Reserved generator-owned namespace; every path is replaced or retired on successful generation |
+| .github/CLAUDE.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated pointer file with the single `@AGENTS.md` import line (or relative symlink `.github/CLAUDE.md -> AGENTS.md` when `[agents] claude_md = "symlink"`); replaced on generation |
+| .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Reserved generator-owned namespace; every path is replaced or retired on successful generation unless allowlisted in `[workflow] preserve_workflows` |
 | .github/release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated release-plz config paths; retired when no longer emitted |
 | .github/actions/<logical>/action.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated shared action path is owned when its first line has a Velnor generated marker; replaced or retired with dispatch output |
 | mise.toml, mise.lock, rust-toolchain.toml | None | None | Repository-owned read-only inputs; never create or modify |
@@ -109,7 +113,13 @@ file. It MUST NOT contain a generation date. The YAML renderer MUST emit the
 marker as a comment before the workflow document and MUST use stable key,
 job, step, matrix, and array ordering. `.github/CLAUDE.md` is exempt from
 the marker: it carries only the single `@AGENTS.md` import line so Claude
-resolves the sibling instructions without symlink resolution.
+resolves the sibling instructions without symlink resolution. Repository
+configuration may set `[agents] claude_md = "import" | "symlink"` (default
+`"import"`): `"import"` emits a regular file containing `@AGENTS.md\n`, while
+`"symlink"` emits a relative symbolic link `.github/CLAUDE.md -> AGENTS.md` and
+causes the `Check generated files` step in `plan` to verify both symlink type
+(`test -L`) and link target (`readlink .github/CLAUDE.md | grep -qxF AGENTS.md`)
+on the committed and preview `.github/CLAUDE.md` entries before comparing trees.
 
 Generated workflow shell steps MUST contain fixed argument vectors produced by
 typed adapters. Repository configuration MUST NOT supply shell text, arbitrary
@@ -181,7 +191,16 @@ the reserved `.github/workflows/**` namespace, and shared action definitions
 whose exact `.github/actions/<logical>/action.yml` path begins with a Velnor
 generated marker. Those paths are replaced when emitted and retired when a
 successful generation no longer emits them. The workflows namespace is fully
-generator-owned; manually maintained workflows placed there are retired.
+generator-owned; manually maintained workflows placed there are retired unless
+explicitly allowlisted in `[workflow] preserve_workflows = [".github/workflows/<slug>.yml"]`.
+Each `preserve_workflows` entry MUST be an exact `.github/workflows/<slug>.yml`
+path with a lowercase ASCII slug (`[a-z0-9][a-z0-9_-]*`), no duplicates, and
+MUST NOT name a generator-owned workflow (`ci.yml`, `freshness.yml`,
+`release.yml`, `binary-release.yml`, `tofu-apply.yml`, `qualification.yml`,
+`product-release.yml`, `monitoring.yml`, `suites.yml`, or any custom suite
+`<workflow>.yml` slug). Allowlisted hand-owned workflows are preserved across
+in-place generation and copied into `--output-dir` preview trees so
+`Check generated files` drift checks pass.
 
 All other entries under `.github` are unmanaged repository content. Successful
 generation MUST preserve their file bytes, hidden names, symbolic links and

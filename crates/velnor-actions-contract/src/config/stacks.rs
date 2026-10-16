@@ -1,6 +1,8 @@
 //! Stack selection and per-stack options.
 use super::binary_release::RustBinaryReleaseConfig;
 use super::release::RustReleaseConfig;
+use super::rust_suites::RustSuiteConfig;
+use super::rust_suites_validate::validate_rust_suites;
 use super::tofu::TofuStackConfig;
 use crate::discover::Stack;
 use crate::errors::ContractError;
@@ -65,6 +67,9 @@ pub struct RustStackConfig {
     /// Single-package binary release policy; disabled by default.
     #[serde(default)]
     pub binary_release: RustBinaryReleaseConfig,
+    /// Named Nextest suites (`[[stacks.rust.suites]]`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suites: Vec<RustSuiteConfig>,
 }
 
 /// Documented default: one `default` configuration variant list.
@@ -132,6 +137,7 @@ impl RustStackConfig {
             run_ignored: None,
             release: RustReleaseConfig::default(),
             binary_release: RustBinaryReleaseConfig::default(),
+            suites: Vec::new(),
         }
     }
 }
@@ -180,7 +186,7 @@ impl StacksConfig {
 }
 
 impl RustStackConfig {
-    /// Validate Rust configurations (unique nonempty names).
+    /// Validate Rust configurations (unique nonempty names) and declared suites.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
         if self.configurations.is_empty() {
@@ -241,6 +247,7 @@ impl RustStackConfig {
         }
         self.release.validate(file)?;
         self.binary_release.validate(file)?;
+        validate_rust_suites(&self.suites, file)?;
         Ok(())
     }
 }

@@ -70,6 +70,15 @@ fn plan_tools_saves(
         let winner = owners
             .iter()
             .find(|id| id.as_str() == crate::render::PLAN_JOB_ID)
+            .or_else(|| {
+                owners
+                    .iter()
+                    .filter(|id| {
+                        jobs.get(*id)
+                            .is_some_and(|job| !crate::matrix::suites::has_suite_matrix(job))
+                    })
+                    .min()
+            })
             .or_else(|| owners.iter().min())
             .map(String::as_str)
             .unwrap_or_default();

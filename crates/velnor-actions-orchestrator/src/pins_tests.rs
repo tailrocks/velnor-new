@@ -23,6 +23,8 @@ pub(super) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
             tasks: Vec::new(),
             tofu_apply: None,
             verify: VerifyConfig::default(),
+            dispatch: velnor_actions_contract::WorkflowDispatchConfig::default(),
+            preserve_workflows: Vec::new(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -41,6 +43,7 @@ pub(super) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
             exclude: Vec::new(),
         },
         actions: ActionsConfig { overrides },
+        agents: velnor_actions_contract::AgentsConfig::default(),
         execution: None,
     }
 }
