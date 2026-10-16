@@ -309,4 +309,31 @@ fn mbx_objects_step_sets_working_directory_for_nested_workspaces() {
         !root_with.contains_key("working-directory"),
         "root workspace must omit working-directory"
     );
+    let [preflight, action, version_check] = mbx_steps_for_driver(
+        MBX_ACTION,
+        CompileDriver::Mbx,
+        TEST_MBX_VERSION,
+        TEST_RUST_TOOLCHAIN,
+        mbx_tool_env(TEST_RUST_TOOLCHAIN),
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        Some("native"),
+    )
+    .expect("driver steps")
+    .expect("MBX steps");
+    let text = render_workflow_ir(
+        &fixture_ir(vec![job(
+            "demo",
+            "Demo",
+            Vec::new(),
+            vec![preflight, action, version_check],
+        )]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )
+    .expect("rendered nested workflow");
+    assert!(
+        text.contains("target_dir=\\\"native/target\\\""),
+        "cleanup must derive target_dir from working-directory: {text}"
+    );
 }

@@ -53,6 +53,16 @@ pub(crate) fn validate_argv_for_role(
             )?)?
         }
         Some(StepRole::MbxWorkspaceCleanup) => {
+            let mut with = BTreeMap::from([
+                ("version".to_owned(), "1.0.0".to_owned()),
+                ("toolchain".to_owned(), rust.to_owned()),
+            ]);
+            if let Some((_, after)) = script.split_once("; target_dir=\"")
+                && let Some((td, _)) = after.split_once('"')
+                && let Some(dir) = td.strip_suffix("/target")
+            {
+                with.insert("working-directory".to_owned(), dir.to_owned());
+            }
             let action = Step {
                 name: crate::cache_steps::MBX_RESTORE_NAME.to_owned(),
                 id: None,
@@ -60,10 +70,7 @@ pub(crate) fn validate_argv_for_role(
                 condition: None,
                 kind: StepKind::Action {
                     uses: format!("{}@{}", crate::cache_steps::MBX_ACTION_NAME, "a".repeat(40)),
-                    with: BTreeMap::from([
-                        ("version".to_owned(), "1.0.0".to_owned()),
-                        ("toolchain".to_owned(), rust.to_owned()),
-                    ]),
+                    with,
                     env: BTreeMap::new(),
                 },
             };
@@ -207,6 +214,32 @@ fn shell_run(step: Step) -> Result<Vec<String>, RenderError> {
     match step.kind {
         StepKind::Shell { run, .. } => Ok(run),
         _ => Err(bad_shape("canonical_step_not_shell")),
+    }
+}
+
+pub(crate) fn target_dir_for_action(
+    with: &BTreeMap<String, String>,
+) -> Result<String, RenderError> {
+    let Some(dir) = with
+        .get("working-directory")
+        .map(String::as_str)
+        .filter(|d| !d.is_empty() && *d != ".")
+    else {
+        return Ok("target".to_owned());
+    };
+    if !dir.starts_with('/')
+        && !dir.ends_with('/')
+        && dir.split('/').all(|s| {
+            !s.is_empty()
+                && s != "."
+                && s != ".."
+                && s.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+        })
+    {
+        Ok(format!("{dir}/target"))
+    } else {
+        Err(RenderError::BadCommand(format!("bad_working_dir:{dir}")))
     }
 }
 

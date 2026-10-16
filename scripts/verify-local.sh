@@ -199,15 +199,15 @@ NEXTEST_BIN="$(mise which cargo-nextest --tool "aqua:nextest-rs/nextest/cargo-ne
 NEXTEST_BIN_VER="$("${MISE_EXEC[@]}" "${NEXTEST_BIN:-cargo-nextest}" --version 2>/dev/null | awk 'NR==1{print $2}')"
 BARE_VER="$("${MISE_EXEC[@]}" cargo-nextest --version 2>/dev/null | awk 'NR==1{print $2}')"
 SUB_VER="$("${MISE_EXEC[@]}" cargo nextest --version 2>/dev/null | awk 'NR==1{print $2}')"
-if [ "$BARE_VER" = "$NEXTEST_PIN" ]; then
+if [ -n "$NEXTEST_BIN" ] && [ "$NEXTEST_BIN_VER" = "$NEXTEST_PIN" ]; then
+  NEXTEST_RUN=("${MISE_EXEC[@]}" "$NEXTEST_BIN" nextest)
+  echo "effective: nextest $NEXTEST_BIN_VER via mise which cargo-nextest"
+elif [ "$BARE_VER" = "$NEXTEST_PIN" ]; then
   NEXTEST_RUN=("${MISE_EXEC[@]}" cargo-nextest nextest)
   echo "effective: nextest $BARE_VER via bare cargo-nextest"
 elif [ "$SUB_VER" = "$NEXTEST_PIN" ]; then
   NEXTEST_RUN=("${MISE_EXEC[@]}" cargo nextest)
   echo "effective: nextest $SUB_VER via cargo nextest"
-elif [ -n "$NEXTEST_BIN" ] && [ "$NEXTEST_BIN_VER" = "$NEXTEST_PIN" ]; then
-  NEXTEST_RUN=("${MISE_EXEC[@]}" "$NEXTEST_BIN" nextest)
-  echo "effective: nextest $NEXTEST_BIN_VER via mise which cargo-nextest"
 else
   echo "effective: no pinned nextest (bare $BARE_VER, subcommand $SUB_VER, pin $NEXTEST_PIN); nextest is required"
   fail "toolchain (pinned nextest missing)"

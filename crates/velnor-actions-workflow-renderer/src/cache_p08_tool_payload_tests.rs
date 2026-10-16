@@ -199,7 +199,7 @@ fn restore_composite_binds_marker_pin_key_and_paths() {
     for path in payload.paths() {
         assert!(bytes.contains(path), "missing {path}");
     }
-    assert!(bytes.contains("restore-keys: mise-tools-v2-"));
+    assert!(bytes.contains("restore-keys: \"\""));
     assert!(bytes.contains("outputs.cache-hit"));
     assert!(bytes.contains("outputs.cache-matched-key"));
     assert!(bytes.contains("rm -rf"));

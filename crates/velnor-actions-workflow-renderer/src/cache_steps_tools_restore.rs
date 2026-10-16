@@ -32,7 +32,7 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
     Ok(key)
 }
 
-/// Keep an exact cache hit, a valid V2 prefix fallback hit, or a validated seed on an empty-cache miss.
+/// Keep only an exact cache hit or a validated seed on an empty-cache miss.
 /// Semicolons keep this valid after `quote_run_line_env_paths` joins words with spaces.
 const TOOLS_CACHE_ADMISSION_SCRIPT: &str = r#"set -eu;
 [ -n "$HOME" ] && [ -n "$RUNNER_TEMP" ] || exit 1;
@@ -45,8 +45,6 @@ matched_key="${TOOLS_MATCHED_KEY-}";
 seed_admitted="${TOOLS_SEED_ADMITTED-}";
 keep=false;
 if [ "$cache_hit" = true ] && [[ "$expected_key" =~ ^mise-tools-v2-[0-9a-f]{64}$ ]] && [ "$matched_key" = "$expected_key" ]; then
-keep=true;
-elif [ "$cache_hit" = false ] && [[ "$expected_key" =~ ^mise-tools-v2-[0-9a-f]{64}$ ]] && [[ "$matched_key" =~ ^mise-tools-v2-[0-9a-f]{64}$ ]] && [ "$matched_key" != "$expected_key" ]; then
 keep=true;
 elif [ -z "$cache_hit" ] && [[ "$expected_key" =~ ^mise-tools-v2-[0-9a-f]{64}$ ]] && [ -z "$matched_key" ] && [ "$seed_admitted" = true ]; then
 keep=true;
@@ -83,7 +81,7 @@ fn restore_step() -> Result<Yaml, RenderError> {
             Yaml::Map(vec![
                 ("key".to_owned(), Yaml::str("${{ inputs.key }}")),
                 ("path".to_owned(), Yaml::str(path)),
-                ("restore-keys".to_owned(), Yaml::str("mise-tools-v2-")),
+                ("restore-keys".to_owned(), Yaml::str(String::new())),
             ]),
         ),
     ]))
