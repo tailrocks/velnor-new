@@ -214,10 +214,13 @@ fn assert_task_is_offline_and_manifest_bound(
     else {
         return Err("obligation must be a declared task".into());
     };
-    assert!(
-        argv.iter().any(|arg| arg == "--offline"),
-        "{job_id} is offline: {argv:?}"
-    );
+    let expected_subcommand = expected_task_subcommand(task_id, &toolchain_inputs.test_runner)?;
+    if expected_subcommand != "fmt" {
+        assert!(
+            argv.iter().any(|arg| arg == "--offline"),
+            "{job_id} is offline: {argv:?}"
+        );
+    }
     let separator = argv
         .iter()
         .position(|arg| arg == "--")
@@ -240,7 +243,6 @@ fn assert_task_is_offline_and_manifest_bound(
             .into());
         }
     };
-    let expected_subcommand = expected_task_subcommand(task_id, &toolchain_inputs.test_runner)?;
     assert_eq!(
         command.first().map(String::as_str),
         Some(expected_subcommand),

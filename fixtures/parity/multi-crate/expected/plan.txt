@@ -21,10 +21,10 @@ Workflow to generate
     - plan (14 steps)
     - publish-baseline (5 steps)
     - required (8 steps)
-    - rust-parity-app (22 steps)
-    - rust-parity-tool (20 steps)
+    - rust-parity-app (23 steps)
+    - rust-parity-tool (21 steps)
     - 2 Rust crate jobs
-      Each: Clippy -> build -> run tests -> doctests -> doc build
+      Each: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-parity-app
         - rust-parity-tool
@@ -33,11 +33,13 @@ Workflow to generate
         - stack/rust/crates/app/clippy/default
         - stack/rust/crates/app/doc/default
         - stack/rust/crates/app/doctest/default
+        - stack/rust/crates/app/fmt/default
         - stack/rust/crates/app/nextest/default/shard-1-of-2
         - stack/rust/crates/app/nextest/default/shard-2-of-2
         - stack/rust/crates/tool/build/default
         - stack/rust/crates/tool/clippy/default
         - stack/rust/crates/tool/doc/default
+        - stack/rust/crates/tool/fmt/default
         - stack/rust/crates/tool/nextest/default/shard-1-of-2
         - stack/rust/crates/tool/nextest/default/shard-2-of-2
   Parallel: 2 independent crate jobs; no matrix fan-out

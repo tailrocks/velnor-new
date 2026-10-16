@@ -227,22 +227,26 @@ fn parse_native_locked_artifact(value: &toml::Value) -> NativeLockedArtifact {
     let Some(table) = value.as_table() else {
         return NativeLockedArtifact::default();
     };
+    let str_field = |key: &str| {
+        table
+            .get(key)
+            .and_then(toml::Value::as_str)
+            .map(ToOwned::to_owned)
+    };
     let mut unsupported_fields = Vec::new();
     let repository_ids = table.get("repository_ids").and_then(|value| {
         let Some(ids) = value.as_table() else {
             unsupported_fields.push("repository_ids.shape".to_owned());
             return None;
         };
-        let repository = ids
-            .get("repository")
-            .and_then(toml::Value::as_str)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned);
-        let owner = ids
-            .get("owner")
-            .and_then(toml::Value::as_str)
-            .filter(|value| !value.is_empty())
-            .map(ToOwned::to_owned);
+        let non_empty = |k: &str| {
+            ids.get(k)
+                .and_then(toml::Value::as_str)
+                .filter(|v| !v.is_empty())
+                .map(ToOwned::to_owned)
+        };
+        let repository = non_empty("repository");
+        let owner = non_empty("owner");
         if repository.is_none() {
             unsupported_fields.push("repository_ids.repository".to_owned());
         }
@@ -257,47 +261,37 @@ fn parse_native_locked_artifact(value: &toml::Value) -> NativeLockedArtifact {
         }
         Some(NativeRepositoryIds { repository, owner })
     });
+    if table
+        .get("provenance_verified")
+        .is_some_and(|v| v.as_bool().is_none())
+    {
+        unsupported_fields.push("provenance_verified".to_owned());
+    }
+    unsupported_fields.extend(
+        table
+            .keys()
+            .filter(|key| {
+                !matches!(
+                    key.as_str(),
+                    "checksum"
+                        | "url"
+                        | "url_api"
+                        | "signer"
+                        | "provenance"
+                        | "provenance_verified"
+                        | "repository_ids"
+                )
+            })
+            .cloned(),
+    );
     NativeLockedArtifact {
-        checksum: table
-            .get("checksum")
-            .and_then(toml::Value::as_str)
-            .map(ToOwned::to_owned),
-        url: table
-            .get("url")
-            .and_then(toml::Value::as_str)
-            .map(ToOwned::to_owned),
-        url_api: table
-            .get("url_api")
-            .and_then(toml::Value::as_str)
-            .map(ToOwned::to_owned),
-        signer: table
-            .get("signer")
-            .and_then(toml::Value::as_str)
-            .map(ToOwned::to_owned),
-        provenance: table
-            .get("provenance")
-            .and_then(toml::Value::as_str)
-            .map(ToOwned::to_owned),
+        checksum: str_field("checksum"),
+        url: str_field("url"),
+        url_api: str_field("url_api"),
+        signer: str_field("signer"),
+        provenance: str_field("provenance"),
         repository_ids,
-        unsupported_fields: {
-            unsupported_fields.extend(
-                table
-                    .keys()
-                    .filter(|key| {
-                        !matches!(
-                            key.as_str(),
-                            "checksum"
-                                | "url"
-                                | "url_api"
-                                | "signer"
-                                | "provenance"
-                                | "repository_ids"
-                        )
-                    })
-                    .cloned(),
-            );
-            unsupported_fields
-        },
+        unsupported_fields,
         valid_shape: true,
     }
 }

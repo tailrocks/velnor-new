@@ -1,27 +1,10 @@
 //! Read-only `mise.lock` hygiene audit (G2).
 //!
-//! The audit verifies the committed lock is complete and well-formed
-//! for local `mise install`: every emitted install spec must resolve
-//! to a lock entry, and a verifiable entry with a CI-platform hole
-//! (or a corrupt checksum) blocks generation instead of shipping a
-//! lock that cannot install the pinned set.
-//!
-//! Hygiene only, not runtime verification: CI installs run
-//! `--no-config` isolated and trust upstream TLS plus exact pinned
-//! versions. Lock checksums are TOFU (trust on first use).
-//!
-//! Provenance boundary: the committed lock is trusted input like
-//! `mise.toml` itself. The audit checks coverage and shape only — it
-//! cannot recompute upstream bytes. A self-consistent malicious lock
-//! (attacker URL plus matching checksum) is a malicious commit, out
-//! of scope.
-//!
-//! Backend boundary: core backends (notably `rust`) emit no platform
-//! checksums at all (`mise lock`: "0 platform entries, 7 skipped"),
-//! so checksum-less entries are advisory, never blocking. Blocking
-//! fires only when the entry proves checksums exist (other platforms
-//! present) but omits the CI platform, or when a CI checksum is
-//! corrupt (mise would fail that local install unconditionally).
+//! Verifies the committed lock is complete and well-formed for local `mise install`:
+//! every emitted install spec must resolve to a lock entry, and a verifiable entry
+//! with a CI-platform hole or corrupt checksum blocks generation.
+//! CI installs run `--no-config` isolated; lock checksums are TOFU hygiene only.
+//! Core backends (`rust`) emit no platform checksums (`NoChecksums` is advisory).
 
 use std::collections::BTreeMap;
 
@@ -41,6 +24,8 @@ pub struct LockEntry {
 pub struct MiseLockfile {
     /// Locked entries keyed by config tool key.
     pub tools: BTreeMap<String, LockEntry>,
+    /// All `[[tools.<key>]]` blocks per tool key in declaration order.
+    pub entries: BTreeMap<String, Vec<LockEntry>>,
 }
 
 /// Verification coverage of one installed tool.
@@ -112,16 +97,15 @@ pub fn parse_mise_lockfile(text: &str) -> Result<MiseLockfile, String> {
         if let Some(header) = parse_header(code, index)? {
             match header {
                 Header::Tool(key) => {
-                    if lock.tools.contains_key(&key) {
-                        return Err(line_problem(index, "duplicate_tool"));
-                    }
-                    lock.tools.insert(
-                        key.clone(),
-                        LockEntry {
-                            version: String::new(),
-                            checksums: BTreeMap::new(),
-                        },
-                    );
+                    let blank = LockEntry {
+                        version: String::new(),
+                        checksums: BTreeMap::new(),
+                    };
+                    lock.entries
+                        .entry(key.clone())
+                        .or_default()
+                        .push(blank.clone());
+                    lock.tools.entry(key.clone()).or_insert(blank);
                     tool = Some(key);
                     platform = None;
                 }
@@ -142,25 +126,33 @@ pub fn parse_mise_lockfile(text: &str) -> Result<MiseLockfile, String> {
         match (tool.as_ref(), platform.as_ref(), key) {
             (Some(name), None, "version") => {
                 let value = expect_quoted_string(value, index)?;
-                let entry = lock
-                    .tools
+                let current = lock
+                    .entries
                     .get_mut(name)
+                    .and_then(|list| list.last_mut())
                     .ok_or_else(|| line_problem(index, "version_without_tool"))?;
-                if !entry.version.is_empty() {
+                if !current.version.is_empty() {
                     return Err(line_problem(index, "duplicate_key"));
                 }
-                entry.version = value;
+                current.version.clone_from(&value);
+                if let Some(summary) = lock.tools.get_mut(name) {
+                    summary.version = value;
+                }
             }
             (Some(name), Some(platform), "checksum") => {
                 let value = expect_quoted_string(value, index)?;
-                let entry = lock
-                    .tools
+                let current = lock
+                    .entries
                     .get_mut(name)
+                    .and_then(|list| list.last_mut())
                     .ok_or_else(|| line_problem(index, "checksum_without_tool"))?;
-                if entry.checksums.contains_key(platform) {
+                if current.checksums.contains_key(platform) {
                     return Err(line_problem(index, "duplicate_key"));
                 }
-                entry.checksums.insert(platform.clone(), value);
+                current.checksums.insert(platform.clone(), value.clone());
+                if let Some(summary) = lock.tools.get_mut(name) {
+                    summary.checksums.insert(platform.clone(), value);
+                }
             }
             _ => {}
         }
@@ -245,13 +237,19 @@ fn split_setting(code: &str, index: usize) -> Result<(&str, SettingValue), Strin
     let value = if let Some(value) = trimmed
         .strip_prefix('"')
         .and_then(|rest| rest.strip_suffix('"'))
-    {
+        .or_else(|| {
+            trimmed
+                .strip_prefix('\'')
+                .and_then(|rest| rest.strip_suffix('\''))
+                .filter(|inner| !inner.contains('\''))
+        }) {
         Some(SettingValue::Quoted(value.to_owned()))
     } else {
         let integer = !trimmed.is_empty() && trimmed.bytes().all(|b| b.is_ascii_digit());
         let array = trimmed.starts_with('[') && trimmed.ends_with(']');
+        let inline_table = trimmed.starts_with('{') && trimmed.ends_with('}');
         let boolean = matches!(trimmed, "true" | "false");
-        (integer || array || boolean).then_some(SettingValue::Other)
+        (integer || array || inline_table || boolean).then_some(SettingValue::Other)
     };
     match (key.is_empty(), value) {
         (false, Some(value)) => Ok((key, value)),
@@ -287,11 +285,6 @@ fn lock_keys_for(tool: PinnedTool, catalog: &ToolCatalog) -> Vec<String> {
 
 /// One emitted install to audit: display name, expected pin version,
 /// and the exact lock key the emitted spec addresses.
-///
-/// The lock key is the spec's key verbatim, never a first match over
-/// aliases: mise honors the entry under the key the install names, so
-/// an entry under any other key is invisible to that install (a decoy
-/// entry must never mask a hole or a corrupt checksum).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstallSubject {
     /// `tool@pin` display name for findings.
@@ -303,12 +296,6 @@ pub struct InstallSubject {
 }
 
 /// Resolve an emitted install spec (`key@version`) to its audit subject.
-///
-/// The key must name a catalog tool (registry name or backend-qualified
-/// spec prefix); the recorded lock key is the spec's key verbatim. The
-/// spec version must equal the catalog pin exactly: a drifted spec is
-/// unauditable (the caller blocks it), never silently re-pinned to the
-/// pin it should have carried. Lock-side drift stays a later advisory.
 #[must_use]
 pub fn subject_for_install_spec(spec: &str, catalog: &ToolCatalog) -> Option<InstallSubject> {
     let (key, version) = spec.split_once('@')?;
@@ -343,10 +330,6 @@ fn is_hex(text: &str) -> bool {
 }
 
 /// Audit emitted installs against the parsed lock for one platform.
-///
-/// Subjects iterate in caller order; verdicts are per subject.
-/// Shape-only: a well-formed but wrong checksum still fails closed at
-/// local install time through mise's native enforcement.
 #[must_use]
 pub fn audit_install_coverage(
     lock: &MiseLockfile,
@@ -360,15 +343,21 @@ pub fn audit_install_coverage(
 }
 
 /// Coverage of one install: entry match, version match, CI checksum shape.
-///
-/// Looks up the subject's lock key only: any other key's entry is
-/// invisible to this install and must not affect its verdict.
 fn coverage_for_subject(
     lock: &MiseLockfile,
     subject: &InstallSubject,
     platform: &str,
 ) -> InstallCoverage {
-    let Some(entry) = lock.tools.get(&subject.lock_key) else {
+    let entry = lock
+        .entries
+        .get(&subject.lock_key)
+        .and_then(|list| {
+            list.iter()
+                .find(|item| item.version == subject.expected_version)
+                .or_else(|| list.last())
+        })
+        .or_else(|| lock.tools.get(&subject.lock_key));
+    let Some(entry) = entry else {
         return InstallCoverage::MissingEntry;
     };
     if entry.version != subject.expected_version {

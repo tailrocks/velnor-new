@@ -195,6 +195,7 @@ fn consumer_acquire_for_target(
             ),
         });
     }
+    crate::local_release_manifest::verify_current_exe_matches_consumer_manifest(&manifest)?;
     let record =
         manifest
             .record_for_target(target.triple())

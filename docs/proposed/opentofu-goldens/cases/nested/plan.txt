@@ -19,10 +19,10 @@ Workflow to generate
     - plan (14 steps)
     - publish-baseline (5 steps)
     - required (8 steps)
-    - rust-a (16 steps)
-    - rust-lib (15 steps)
+    - rust-a (17 steps)
+    - rust-lib (16 steps)
     - 2 Rust crate jobs
-      Each: Clippy -> run tests -> doctests -> doc build
+      Each: Clippy -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-a
         - rust-lib
@@ -30,10 +30,12 @@ Workflow to generate
         - stack/rust/crates/a/clippy/default
         - stack/rust/crates/a/doc/default
         - stack/rust/crates/a/doctest/default
+        - stack/rust/crates/a/fmt/default
         - stack/rust/crates/a/test/default
         - stack/rust/nested/lib/clippy/default
         - stack/rust/nested/lib/doc/default
         - stack/rust/nested/lib/doctest/default
+        - stack/rust/nested/lib/fmt/default
         - stack/rust/nested/lib/test/default
   Parallel: 2 independent crate jobs; no matrix fan-out
   Critical path: stack/rust/crates/a/clippy/default -> stack/rust/crates/a/doctest/default -> stack/rust/crates/a/doc/default (3 tasks)

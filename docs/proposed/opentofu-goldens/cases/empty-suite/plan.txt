@@ -19,15 +19,16 @@ Workflow to generate
     - plan (11 steps)
     - publish-baseline (5 steps)
     - required (8 steps)
-    - rust-empty-suite (13 steps)
+    - rust-empty-suite (14 steps)
     - 1 Rust crate job
-      Each: Clippy -> build -> doc build
+      Each: Clippy -> build -> doc build -> format check
       Entries:
         - rust-empty-suite
       Obligations:
         - stack/rust/root/build/default
         - stack/rust/root/clippy/default
         - stack/rust/root/doc/default
+        - stack/rust/root/fmt/default
   Parallel: 1 independent crate job; no matrix fan-out
   Critical path: stack/rust/root/clippy/default -> stack/rust/root/build/default (2 tasks)
   Clippy memory groups: 1; barriers: 0

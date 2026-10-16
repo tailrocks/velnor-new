@@ -386,6 +386,10 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
+      - name: Format
+        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-34a8850fe0a2bc4dc5da6d42eac16e1ccddecb846923b9535db22a2aa6271249"}
       - name: Clippy
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
@@ -538,6 +542,10 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
+      - name: Format
+        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-982a8c7f25fd761ecdaa1be89e585e1776f255358e6737b5c552fcf3549ed144"}
       - name: Clippy
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
