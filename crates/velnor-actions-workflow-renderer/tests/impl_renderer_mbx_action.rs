@@ -114,13 +114,13 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     );
     assert_eq!(env.get("RUSTUP_HOME"), env.get("MISE_RUSTUP_HOME"));
     assert_eq!(env.get("CARGO_HOME"), env.get("MISE_CARGO_HOME"));
-    for key in [
-        "save-on-pull-request",
-        "save-on-workflow-dispatch",
-        "save-on-protected-branch",
-    ] {
+    for key in ["save-on-pull-request", "save-on-workflow-dispatch"] {
         assert_eq!(with.get(key).map(String::as_str), Some("false"));
     }
+    assert_eq!(
+        with.get("save-on-protected-branch").map(String::as_str),
+        Some("true")
+    );
 }
 
 #[test]
@@ -308,5 +308,32 @@ fn mbx_objects_step_sets_working_directory_for_nested_workspaces() {
     assert!(
         !root_with.contains_key("working-directory"),
         "root workspace must omit working-directory"
+    );
+    let [preflight, action, version_check] = mbx_steps_for_driver(
+        MBX_ACTION,
+        CompileDriver::Mbx,
+        TEST_MBX_VERSION,
+        TEST_RUST_TOOLCHAIN,
+        mbx_tool_env(TEST_RUST_TOOLCHAIN),
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        Some("native"),
+    )
+    .expect("driver steps")
+    .expect("MBX steps");
+    let text = render_workflow_ir(
+        &fixture_ir(vec![job(
+            "demo",
+            "Demo",
+            Vec::new(),
+            vec![preflight, action, version_check],
+        )]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )
+    .expect("rendered nested workflow");
+    assert!(
+        text.contains("target_dir=\\\"native/target\\\""),
+        "cleanup must derive target_dir from working-directory: {text}"
     );
 }

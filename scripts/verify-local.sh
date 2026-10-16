@@ -195,9 +195,14 @@ fi
 # `~/.cargo/bin` instead of the mise aqua path. Prefer whichever
 # reports the exact pin; the choice is echoed, never assumed.
 NEXTEST_RUN=()
+NEXTEST_BIN="$(mise which cargo-nextest --tool "aqua:nextest-rs/nextest/cargo-nextest@$NEXTEST_PIN" 2>/dev/null || true)"
+NEXTEST_BIN_VER="$("${MISE_EXEC[@]}" "${NEXTEST_BIN:-cargo-nextest}" --version 2>/dev/null | awk 'NR==1{print $2}')"
 BARE_VER="$("${MISE_EXEC[@]}" cargo-nextest --version 2>/dev/null | awk 'NR==1{print $2}')"
 SUB_VER="$("${MISE_EXEC[@]}" cargo nextest --version 2>/dev/null | awk 'NR==1{print $2}')"
-if [ "$BARE_VER" = "$NEXTEST_PIN" ]; then
+if [ -n "$NEXTEST_BIN" ] && [ "$NEXTEST_BIN_VER" = "$NEXTEST_PIN" ]; then
+  NEXTEST_RUN=("${MISE_EXEC[@]}" "$NEXTEST_BIN" nextest)
+  echo "effective: nextest $NEXTEST_BIN_VER via mise which cargo-nextest"
+elif [ "$BARE_VER" = "$NEXTEST_PIN" ]; then
   NEXTEST_RUN=("${MISE_EXEC[@]}" cargo-nextest nextest)
   echo "effective: nextest $BARE_VER via bare cargo-nextest"
 elif [ "$SUB_VER" = "$NEXTEST_PIN" ]; then

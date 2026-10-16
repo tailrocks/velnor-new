@@ -21,9 +21,9 @@ Workflow to generate
     - plan (11 steps)
     - publish-baseline (5 steps)
     - required (8 steps)
-    - rust-app (19 steps)
+    - rust-app (20 steps)
     - 1 Rust crate job
-      Each: Clippy -> build -> run tests -> doctests -> doc build
+      Each: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-app
       Obligations:
@@ -31,6 +31,7 @@ Workflow to generate
         - stack/rust/crates/app/clippy/default
         - stack/rust/crates/app/doc/default
         - stack/rust/crates/app/doctest/default
+        - stack/rust/crates/app/fmt/default
         - stack/rust/crates/app/nextest/default
   Parallel: 1 independent crate job; no matrix fan-out
   Critical path: stack/rust/crates/app/clippy/default -> stack/rust/crates/app/build/default -> stack/rust/crates/app/nextest/default (3 tasks)

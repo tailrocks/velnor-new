@@ -76,7 +76,7 @@ const MBX_DISK_SAMPLE_BODY: &[&str] = &[
     r#"if [ -d "$RUNNER_TEMP" ] && [ ! -L "$RUNNER_TEMP" ]; then printf 'MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\n' "$boundary"; if df -Pk "$RUNNER_TEMP"; then :; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\n' "$boundary" >&2; fi; printf 'MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\n' "$boundary"; if df -Pi "$RUNNER_TEMP"; then :; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\n' "$boundary" >&2; fi; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\n' "$boundary" >&2; return 0; fi"#,
     r#"store_path="$RUNNER_TEMP/velnor/mbx""#,
     r#"if [ "${MBX_CACHE_DIR:-}" = "$store_path" ] && [ -d "$store_path" ] && [ ! -L "$store_path" ]; then printf 'MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\n' "$boundary"; if du -sk "$store_path"; then :; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\n' "$boundary" >&2; fi; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\n' "$boundary" >&2; fi"#,
-    r#"target_path="$RUNNER_TEMP/velnor/target""#,
+    r#"target_path="${target_dir:-target}"; if [ ! -d "$target_path" ]; then for candidate in */target crates/*/target "$RUNNER_TEMP/velnor/target"; do if [ -d "$candidate" ]; then target_path="$candidate"; break; fi; done; fi"#,
     r#"if [ -L "$target_path" ]; then printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\n' "$boundary" >&2; elif [ -d "$target_path" ]; then printf 'MBX_DISK_ALLOCATED_KIB boundary=%s root=target\n' "$boundary"; if du -sk "$target_path"; then :; else printf 'MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\n' "$boundary" >&2; fi; else printf 'MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\n' "$boundary"; fi"#,
 ];
 /// Reconstruct the only preflight authorized for the selected MBX action.
@@ -246,6 +246,7 @@ pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step,
         )));
     }
     validate_rust_toolchain(rust_toolchain)?;
+    let target_dir = crate::action_mbx_shell::target_dir_for_action(with)?;
 
     let mut clean_env = env.clone();
     clean_env.remove(MBX_CACHE_MODE_ENV);
@@ -256,12 +257,13 @@ pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step,
         "[ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '%s\\n' 'RUNNER_TEMP must be a real directory' >&2; exit 1; }".to_owned(),
         "[ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '%s\\n' 'MBX store path changed before cleanup' >&2; exit 1; }".to_owned(),
         mbx_disk_sample_function(),
+        format!("target_dir=\"{target_dir}\""),
         "mbx_disk_sample before-final-clean".to_owned(),
         RESOLVE_ACTION_MBX_BIN.to_owned(),
         if with.get("github-cache-mode").map(String::as_str) == Some("objects") {
             format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" clean; then clean_status=0; else clean_status=$?; fi")
         } else {
-            format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" cache dir >/dev/null 2>&1; then clean_status=0; else clean_status=$?; fi")
+            format!("clean_status=0; if mise --no-config --no-env --no-hooks exec rust@{rust_toolchain} -- \"{ACTION_MBX_BIN}\" cache dir >/dev/null 2>&1; then clean_status=0; else clean_status=$?; fi; for td in \"$target_dir\" \"$target_dir/velnor-cli-nested-cargo\"; do if [ -d \"$td\" ] && [ ! -L \"$td\" ]; then rm -rf \"$td/doc\" \"$td/tmp\" \"$td/debug/examples\" \"$td/debug/incremental\"; if [ -d \"$td/debug/deps\" ] && [ ! -L \"$td/debug/deps\" ]; then find \"$td/debug/deps\" -maxdepth 1 -type f -executable ! -name \"*.so\" ! -name \"*.dylib\" -delete; fi; fi; done")
         },
         "mbx_disk_sample after-final-clean".to_owned(),
         "exit \"$clean_status\"".to_owned(),
@@ -331,7 +333,7 @@ fn mbx_objects_action_step(
             "save-on-pull-request".to_owned(),
             super::mbx_mode::mbx_save_on_pull_request_value(policy).to_owned(),
         ),
-        ("save-on-protected-branch".to_owned(), "false".to_owned()),
+        ("save-on-protected-branch".to_owned(), "true".to_owned()),
     ]);
     if let Some(dir) = working_directory
         && !dir.is_empty()
@@ -381,16 +383,7 @@ fn is_exact_mbx_version(version: &str) -> bool {
 }
 
 fn validate_rust_toolchain(toolchain: &str) -> Result<(), RenderError> {
-    let parts: Vec<&str> = toolchain.split('.').collect();
-    if parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
-    {
-        Ok(())
-    } else {
-        Err(RenderError::BadCommand(format!(
-            "bad_rust_toolchain:{toolchain}"
-        )))
-    }
+    is_exact_mbx_version(toolchain)
+        .then_some(())
+        .ok_or_else(|| RenderError::BadCommand(format!("bad_rust_toolchain:{toolchain}")))
 }

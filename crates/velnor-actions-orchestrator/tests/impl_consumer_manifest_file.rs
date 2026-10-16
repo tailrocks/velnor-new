@@ -219,3 +219,20 @@ fn velnor_repository_generation_needs_no_consumer_manifest() -> TestResult {
         },
     )
 }
+
+#[test]
+fn binary_digest_mismatch_fails_consumer_manifest_verification() -> TestResult {
+    use velnor_actions_orchestrator::local_release_manifest::verify_binary_matches_consumer_manifest;
+    let manifest = velnor_actions_contract::ReleaseManifest::parse_json(
+        &release_manifest_json(),
+        ".velnor/release-manifest.json",
+    )?;
+    verify_binary_matches_consumer_manifest(&manifest, &"c".repeat(64))?;
+    let err = verify_binary_matches_consumer_manifest(&manifest, &"f".repeat(64))
+        .expect_err("unreleased binary digest mismatch must fail closed");
+    assert!(
+        err.to_string().contains("release_manifest_binary_mismatch"),
+        "expected release_manifest_binary_mismatch, got: {err}"
+    );
+    Ok(())
+}

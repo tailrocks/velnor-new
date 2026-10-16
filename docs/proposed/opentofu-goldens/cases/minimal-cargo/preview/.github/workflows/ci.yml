@@ -29,6 +29,7 @@ env:
   MISE_NO_CONFIG: "1"
   MISE_NO_ENV: "1"
   MISE_NO_HOOKS: "1"
+  MISE_QUIET: "1"
   NODE_AUTH_TOKEN: ""
   NPM_TOKEN: ""
 concurrency:
@@ -316,6 +317,10 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+      - name: Format
+        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/root/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-c0dae15432fb6cf140433ba083ae6cd5c7937793dd842c9c8deb9b03b0218767"}
       - name: Clippy
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/root/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]

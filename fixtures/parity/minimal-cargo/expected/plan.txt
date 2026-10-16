@@ -18,15 +18,16 @@ Workflow to generate
     - plan (11 steps)
     - publish-baseline (5 steps)
     - required (8 steps)
-    - rust-minimal-cargo (14 steps)
+    - rust-minimal-cargo (15 steps)
     - 1 Rust crate job
-      Each: Clippy -> run tests -> doctests -> doc build
+      Each: Clippy -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-minimal-cargo
       Obligations:
         - stack/rust/root/clippy/default
         - stack/rust/root/doc/default
         - stack/rust/root/doctest/default
+        - stack/rust/root/fmt/default
         - stack/rust/root/test/default
   Parallel: 1 independent crate job; no matrix fan-out
   Critical path: stack/rust/root/clippy/default -> stack/rust/root/doctest/default -> stack/rust/root/doc/default (3 tasks)

@@ -219,7 +219,7 @@ fn obligation_universe_matches_independent_oracle() -> TestResult {
             .and_then(|dir| dir.to_str())
             .filter(|dir| !dir.is_empty())
             .unwrap_or("root");
-        for kind in ["clippy", "test", "doctest", "doc"] {
+        for kind in ["fmt", "clippy", "test", "doctest", "doc"] {
             expected.insert(format!("stack/rust/{key}/{kind}/default"));
         }
     }

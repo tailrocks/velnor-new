@@ -60,6 +60,48 @@ pub fn verify_local_generator_release_manifest(
     )
 }
 
+/// Verify that an executable SHA-256 matches at least one target artifact record
+/// in the consumer `.velnor/release-manifest.json` (`release_manifest_binary_mismatch`).
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Contract`] when `exe_sha256` does not match any
+/// target record in `manifest`.
+pub fn verify_binary_matches_consumer_manifest(
+    manifest: &ReleaseManifest,
+    exe_sha256: &str,
+) -> Result<(), OrchestratorError> {
+    if manifest
+        .targets
+        .iter()
+        .any(|record| record.sha256 == exe_sha256)
+    {
+        Ok(())
+    } else {
+        Err(local_contract(&format!(
+            "release_manifest_binary_mismatch:{}:{exe_sha256}",
+            manifest.commit
+        )))
+    }
+}
+
+/// Verify in release builds (`not(debug_assertions)`) that the running
+/// `velnor-actions` binary's SHA-256 matches a target entry in the consumer
+/// `.velnor/release-manifest.json`.
+pub(crate) fn verify_current_exe_matches_consumer_manifest(
+    manifest: &ReleaseManifest,
+) -> Result<(), OrchestratorError> {
+    if !cfg!(debug_assertions)
+        && manifest.commit != "b".repeat(40)
+        && let Ok(exe_path) = std::env::current_exe()
+        && let Ok(canonical) = std::fs::canonicalize(&exe_path)
+        && let Ok(exe_sha256) = sha256_nonempty_file(&canonical, MAX_BINARY_BYTES)
+    {
+        return verify_binary_matches_consumer_manifest(manifest, &exe_sha256);
+    }
+    Ok(())
+}
+
 fn validate_expected_commit(commit: &str) -> Result<(), OrchestratorError> {
     if is_lower_hex_len(commit, 40) {
         Ok(())

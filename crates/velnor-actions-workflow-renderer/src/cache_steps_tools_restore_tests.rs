@@ -135,6 +135,7 @@ fn preserves_exact_hits_and_validated_seed_on_pure_cache_miss() {
 #[test]
 fn removes_untrusted_partial_and_malformed_restore_state() {
     let expected_key = format!("mise-tools-v2-{}", "a".repeat(64));
+    let other_v2_key = format!("mise-tools-v2-{}", "b".repeat(64));
     assert_case(
         "miss-without-admitted-seed",
         None,
@@ -149,6 +150,14 @@ fn removes_untrusted_partial_and_malformed_restore_state() {
         Some(&expected_key),
         Some("mise-tools-v2-other"),
         Some("true"),
+        false,
+    );
+    assert_case(
+        "non-exact-v2-restore",
+        Some("false"),
+        Some(&expected_key),
+        Some(&other_v2_key),
+        Some("false"),
         false,
     );
     assert_case(

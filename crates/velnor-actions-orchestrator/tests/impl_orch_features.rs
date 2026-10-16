@@ -138,7 +138,15 @@ fn assert_fuzz_task_records(
         let record = manifest.tasks.get(&proposal.task_id).ok_or_else(|| {
             std::io::Error::other(format!("missing fuzz task {}", proposal.task_id))
         })?;
-        assert!(has_argv_pair(record, "--package", "fuzz"));
+        if proposal.task_kind == "fmt" {
+            assert!(has_argv_pair(
+                record,
+                "--manifest-path",
+                "crates/fuzz/Cargo.toml"
+            ));
+        } else {
+            assert!(has_argv_pair(record, "--package", "fuzz"));
+        }
         assert!(
             !has_argv_pair(record, "nextest", "run")
                 && !record.argv.iter().any(|arg| arg == "--doc"),

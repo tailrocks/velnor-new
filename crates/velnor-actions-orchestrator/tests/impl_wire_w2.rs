@@ -375,7 +375,7 @@ fn fmt_needs_explicit_config() -> TestResult {
     let dir = make_repo(config_with_branch())?;
     let prep = prepare(dir.path())?;
     let groups = &prep.discovery.proposals;
-    assert!(!groups.iter().any(|g| g.task_id.contains("/fmt/")));
+    assert!(groups.iter().any(|g| g.task_id.contains("/fmt/")));
     fs::write(dir.path().join("rustfmt.toml"), "")?;
     let prep = prepare(dir.path())?;
     let groups = &prep.discovery.proposals;
