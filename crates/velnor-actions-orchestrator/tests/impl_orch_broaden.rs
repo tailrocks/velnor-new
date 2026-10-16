@@ -54,7 +54,7 @@ fn toolfile_edits_leave_universe_unproven() -> TestResult {
         &[],
         &[
             ("mise.toml", "[tools]\n"),
-            ("rust-toolchain.toml", "[toolchain]\n"),
+            ("rust-toolchain.toml", "[toolchain]\nchannel = \"1.85.0\"\n"),
         ],
     )?;
     assert!(

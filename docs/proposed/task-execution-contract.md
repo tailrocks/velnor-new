@@ -246,12 +246,16 @@ The generated workflow sets `MISE_RUSTUP_HOME` and `MISE_CARGO_HOME`, and export
 `RUSTUP_TOOLCHAIN` only when no repository `rust-toolchain.toml` or `rust-toolchain`
 pin is active (since `RUSTUP_TOOLCHAIN` has higher rustup precedence than repository
 toolchain files). The effective Rust version resolves from `rust-toolchain.toml`
-(`[toolchain] channel = "X.Y.Z"`), legacy `rust-toolchain`, `[stacks.rust] toolchain = "X.Y.Z"`,
-or `[tools] rust = "X.Y.Z"`, falling back to the compiled catalog default; any mismatch
-between `rust-toolchain.toml`, `rust-toolchain`, and `.velnor/config.toml` fails closed
-(`conflicting_rust_toolchain` / `conflicting_rust_toolchain_files`). `[tools]` may also
-override exact `X.Y.Z` versions for `rust`, `mr-boxington`, `gh`, `actionlint`, `shellcheck`,
-`zizmor`, `cargo-nextest`, and `opentofu`. Exec steps MUST NOT
+(`[toolchain] channel = "X.Y.Z"` or `"X.Y.Z-<target-triple>"`), legacy `rust-toolchain`,
+`[stacks.rust] toolchain = "X.Y.Z"`, or `[tools] rust = "X.Y.Z"`, falling back to the
+compiled catalog default; malformed toolchain files, non-exact channels (such as `"stable"`,
+`"1.99"`, or `"nightly-..."`), or any mismatch between `rust-toolchain.toml`,
+`rust-toolchain`, and `.velnor/config.toml` fail closed (`invalid_rust_toolchain`,
+`conflicting_rust_toolchain`, or `conflicting_rust_toolchain_files`). `[tools]` validates
+tool names against the overridable catalog allowlist (`rust`, `mr-boxington`, `gh`,
+`actionlint`, `shellcheck`, `zizmor`, `cargo-nextest` / `nextest`, and `opentofu`),
+requires exact `X.Y.Z` semver format (`invalid_tool_version`), and rejects specifying
+both `nextest` and `cargo-nextest` simultaneously (`duplicate_nextest_tool_override`). Exec steps MUST NOT
 load or modify consumer `mise.toml`, `mise.lock`, or environment files;
 the install step loads no config either, so no generated step reads
 any repository config path. The lock audit is hygiene for local-dev
@@ -327,7 +331,7 @@ Each `[[stacks.rust.suites]]` entry validates fail-closed before rendering:
 - `profile`: Nextest profile name (`[a-zA-Z0-9_-]+`); any profile other than `"default"` MUST exist as `[profile.<name>]` in the workspace's `.config/nextest.toml`.
 - `run_ignored`: optional `"default" | "only" | "all"` (alias `"ignored-only"` for `"only"`), passing `--run-ignored only` or `--run-ignored all` when non-default; `[stacks.rust] run_ignored` sets the workspace-level default for standard crate tasks.
 - `partitions`: `1..=64` (default `1`), rendered as a GitHub Actions `strategy.matrix.shard` (`[1..=N]`, `fail-fast: false`) with `VELNOR_SUITE_SHARD: ${{ matrix.shard }}` in step `env` and `--partition "hash:$VELNOR_SUITE_SHARD/<N>"` passed to `nextest run`, independent of `resources.test_process_budget`.
-- `build`: `"inline" | "archive"` (default `"inline"`). When `partitions > 1` and `build = "archive"`, Velnor emits `suite-build-<id>` (`nextest archive` + archive artifact upload) and `suite-<id>` (`needs: [suite-build-<id>]`, downloading the archive and running `cargo nextest run --archive-file ... --workspace-remap . --extract-to .`).
+- `build`: `"inline" | "archive"` (default `"inline"`). When `partitions > 1` and `build = "archive"`, Velnor emits `suite-build-<id>` (`nextest archive` + archive artifact upload) and `suite-<id>` (`needs: [suite-build-<id>]`, downloading the archive and running `cargo nextest run --archive-file ... --workspace-remap . --extract-to . --extract-overwrite`).
 - `timeout_minutes`: `1..=360` (default `30`).
 - `test_threads`: optional `1..=64`, exported as `NEXTEST_TEST_THREADS`.
 - `runner_label`: optional catalog runner label override; defaults to `workflow.runner_label` or the latest pinned default.

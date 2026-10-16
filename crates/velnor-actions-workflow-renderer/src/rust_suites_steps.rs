@@ -113,6 +113,7 @@ pub(super) fn nextest_run_step(
             format!("--archive-file \"$RUNNER_TEMP/velnor/suite-archive-{name}/archive.tar.zst\""),
             "--workspace-remap .".to_owned(),
             "--extract-to .".to_owned(),
+            "--extract-overwrite".to_owned(),
         ]
     } else {
         package_and_manifest_flags(suite)?

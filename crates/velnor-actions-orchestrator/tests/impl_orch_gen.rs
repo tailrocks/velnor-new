@@ -23,7 +23,7 @@ const TOOL_CONTENTS: [(&str, &str); 4] = [
     ("mise.toml", "[tools]\n"),
     (".mise.toml", "[tools]\n"),
     ("mise.lock", "{}\n"),
-    ("rust-toolchain.toml", "[toolchain]\nchannel = \"1.90\"\n"),
+    ("rust-toolchain.toml", "[toolchain]\nchannel = \"1.90.0\"\n"),
 ];
 
 /// Preview-generate `prep` into `dir`.

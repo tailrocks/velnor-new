@@ -217,22 +217,48 @@ fn file_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
-/// Extract the non-empty toolchain channel from `rust-toolchain.toml` or `rust-toolchain`.
+/// Extract the exact `X.Y.Z` toolchain version from `rust-toolchain.toml` or `rust-toolchain`.
 ///
 /// # Errors
 ///
 /// Returns an error string when `path` is not an owned toolchain file, the content
-/// is malformed, or no non-empty channel is declared.
+/// is malformed, or the declared channel is missing or not an exact `X.Y.Z` version.
 pub fn extract_rust_toolchain_channel(path: &str, bytes: &str) -> Result<String, String> {
     if !is_owned_tool_file(path) {
         return Err(format!("tool_file_not_owned:{path}"));
     }
-    let spec = parse_toolchain_for_path(path, bytes)?;
-    let channel = spec.channel.unwrap_or_default();
+    let channel = parse_toolchain_for_path(path, bytes)?
+        .channel
+        .unwrap_or_default();
     if channel.is_empty() {
         return Err("missing_toolchain_channel".to_owned());
     }
-    Ok(channel)
+    if is_exact_semver(&channel) {
+        return Ok(channel);
+    }
+    if let Some((ver, target)) = channel.split_once('-')
+        && is_exact_semver(ver)
+        && is_target_triple(target)
+    {
+        return Ok(ver.to_owned());
+    }
+    Err(channel)
+}
+
+fn is_exact_semver(version: &str) -> bool {
+    let parts: Vec<&str> = version.split('.').collect();
+    parts.len() == 3
+        && parts.iter().all(|part| {
+            !(part.is_empty() || part.len() > 1 && part.starts_with('0'))
+                && part.bytes().all(|byte| byte.is_ascii_digit())
+        })
+}
+
+fn is_target_triple(target: &str) -> bool {
+    target.split('-').count() >= 3
+        && target
+            .split('-')
+            .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_'))
 }
 
 /// Inspect supplied `rust-toolchain.toml` or `rust-toolchain` bytes (`None` when missing).

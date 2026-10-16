@@ -53,7 +53,10 @@ fn intake_tool_inputs_untouched_and_reported() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     fs::write(root.join("mise.toml"), "[tools]\n")?;
-    fs::write(root.join("rust-toolchain.toml"), "[toolchain]\n")?;
+    fs::write(
+        root.join("rust-toolchain.toml"),
+        "[toolchain]\nchannel = \"1.85.0\"\n",
+    )?;
     fs::write(root.join("mise.lock"), "{}\n")?;
     let before = snapshot(root)?;
     let prep = prepare(root)?;
@@ -138,7 +141,10 @@ fn intake_tool_changes_refresh_findings_not_tasks() -> TestResult {
     let tasks_before = task_ids_for(root)?;
     let recs_before = prepare(root)?.discovery.recommendations;
     fs::write(root.join("mise.toml"), "[tools]\nrust = \"1.0.0\"\n")?;
-    fs::write(root.join("rust-toolchain.toml"), "[toolchain]\n")?;
+    fs::write(
+        root.join("rust-toolchain.toml"),
+        "[toolchain]\nchannel = \"1.0.0\"\n",
+    )?;
     fs::write(root.join("mise.lock"), "{\"version\":1}\n")?;
     assert_eq!(task_ids_for(root)?, tasks_before);
     let recs_after = prepare(root)?.discovery.recommendations;
@@ -148,13 +154,18 @@ fn intake_tool_changes_refresh_findings_not_tasks() -> TestResult {
     fs::write(root.join("mise.toml"), "!!! not toml {{{ \n")?;
     fs::write(root.join("rust-toolchain.toml"), "[[[ nope\n")?;
     fs::write(root.join("mise.lock"), "not json {{{\n")?;
+    let err = err_of(prepare(root).map(|_| ()), "garbage toolchain")?;
+    assert!(
+        err.to_string().contains("invalid_rust_toolchain:"),
+        "diagnostic: {err}"
+    );
+    fs::remove_file(root.join("rust-toolchain.toml"))?;
     let err = err_of(prepare(root).map(|_| ()), "garbage wrapper")?;
     assert!(
         err.to_string().contains("wrapper_invalid"),
         "diagnostic: {err}"
     );
     fs::remove_file(root.join("mise.toml"))?;
-    fs::remove_file(root.join("rust-toolchain.toml"))?;
     fs::remove_file(root.join("mise.lock"))?;
     assert_eq!(prepare(root)?.discovery.recommendations, recs_before);
     Ok(())

@@ -47,11 +47,7 @@ impl ToolsConfig {
     /// Validate override keys (allowlist), alias consistency, and exact semver shapes.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
-        if let (Some(nextest), Some(cargo_nextest)) = (
-            self.overrides.get("nextest"),
-            self.overrides.get("cargo-nextest"),
-        ) && nextest != cargo_nextest
-        {
+        if self.overrides.contains_key("nextest") && self.overrides.contains_key("cargo-nextest") {
             return Err(ContractError::config(
                 file,
                 "tools.cargo-nextest",
@@ -130,6 +126,11 @@ mod tests {
         assert_eq!(cfg.get("cargo-nextest"), Some("0.9.140"));
         assert_eq!(cfg.validate("config.toml"), Ok(()));
 
+        cfg.overrides
+            .insert("nextest".to_owned(), "0.9.140".to_owned());
+        assert!(
+            matches!(cfg.validate("config.toml"), Err(ref err) if err.to_string().contains("duplicate_nextest_tool_override"))
+        );
         cfg.overrides
             .insert("nextest".to_owned(), "0.9.141".to_owned());
         assert!(

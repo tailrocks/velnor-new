@@ -207,6 +207,33 @@ fn legacy_rust_toolchain_and_channel_extraction() {
         ),
         Ok("1.96.0".to_owned())
     );
+    assert_eq!(
+        extract_rust_toolchain_channel(
+            "rust-toolchain.toml",
+            "[toolchain]\nchannel = \"1.99.1-x86_64-unknown-linux-gnu\"\n"
+        ),
+        Ok("1.99.1".to_owned())
+    );
+    assert_eq!(
+        extract_rust_toolchain_channel("rust-toolchain", "1.99.1-aarch64-apple-darwin\n"),
+        Ok("1.99.1".to_owned())
+    );
+    for invalid in [
+        "stable",
+        "1.99",
+        "nightly-2026-10-01",
+        "1.99.1-beta.1",
+        "1.99.1-beta-1",
+    ] {
+        assert!(
+            extract_rust_toolchain_channel(
+                "rust-toolchain.toml",
+                &format!("[toolchain]\nchannel = \"{invalid}\"\n")
+            )
+            .is_err(),
+            "expected error for {invalid:?}"
+        );
+    }
     assert!(extract_rust_toolchain_channel("rust-toolchain", "").is_err());
     assert!(extract_rust_toolchain_channel("rust-toolchain", "1.98.1 extra").is_err());
     assert!(extract_rust_toolchain_channel("rust-toolchain", "1.98.1\n1.97.0\n").is_err());

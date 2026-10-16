@@ -297,7 +297,7 @@ fn single_shard_and_sharded_archive_and_inline_suites_render() -> TestResult {
         "    strategy:\n      fail-fast: false\n      matrix:\n        shard:\n          - 1\n          - 2\n          - 3\n          - 4\n"
     ));
     assert!(yaml.contains("aqua:nextest-rs/nextest/cargo-nextest@0.9.133"));
-    assert!(yaml.contains("--workspace-remap . --extract-to . --no-tests warn --partition \\\"hash:$VELNOR_SUITE_SHARD/4\\\""));
+    assert!(yaml.contains("--workspace-remap . --extract-to . --extract-overwrite --no-tests warn --partition \\\"hash:$VELNOR_SUITE_SHARD/4\\\""));
     assert!(yaml.contains("VELNOR_SUITE_SHARD: ${{ matrix.shard }}"));
     assert!(
         yaml.contains("-E '\\\\''test(stress_)'\\\\'' -E \\\"$VELNOR_SUITE_FILTERSET\\\"; else")

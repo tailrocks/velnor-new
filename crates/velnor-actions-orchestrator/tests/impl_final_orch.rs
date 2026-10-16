@@ -117,10 +117,7 @@ fn conflicting_tool_values_yield_findings() -> TestResult {
 fn unsupported_tool_values_yield_findings() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
-    fs::write(
-        root.join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"frobnicator\"\n",
-    )?;
+    fs::write(root.join("mise.toml"), "[tools]\nrust = \"frobnicator\"\n")?;
     let prep = prepare(root)?;
     let findings = tool_conflicts(&prep.discovery.tool_checks);
     assert_eq!(findings.len(), 1);
@@ -134,6 +131,17 @@ fn unsupported_tool_values_yield_findings() -> TestResult {
         "{:?}",
         prep.discovery.recommendations
     );
+    fs::write(
+        root.join("rust-toolchain.toml"),
+        "[toolchain]\nchannel = \"frobnicator\"\n",
+    )?;
+    let err = err_of(prepare(root).map(|_| ()), "non-exact toolchain channel")?;
+    assert!(
+        err.to_string()
+            .contains("invalid_rust_toolchain:frobnicator"),
+        "{err}"
+    );
+    assert_eq!(tool_conflicts(&check_tool_inputs(root)).len(), 2);
     Ok(())
 }
 
