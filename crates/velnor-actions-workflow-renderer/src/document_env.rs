@@ -15,6 +15,7 @@ pub(super) fn workflow_env(verification_tasks_present: bool) -> BTreeMap<String,
                 .into_iter()
                 .map(|(key, value)| (key.to_owned(), value.to_owned())),
         );
+        env.insert("MISE_QUIET".to_owned(), "1".to_owned());
     }
     env
 }
@@ -44,7 +45,9 @@ mod tests {
             isolated.get("MISE_NO_CONFIG").map(String::as_str),
             Some("1")
         );
+        assert_eq!(isolated.get("MISE_QUIET").map(String::as_str), Some("1"));
         assert!(!verification.contains_key("MISE_NO_CONFIG"));
+        assert!(!verification.contains_key("MISE_QUIET"));
         assert_eq!(isolated.get("GH_TOKEN").map(String::as_str), Some(""));
         assert_eq!(verification.get("GH_TOKEN").map(String::as_str), Some(""));
     }

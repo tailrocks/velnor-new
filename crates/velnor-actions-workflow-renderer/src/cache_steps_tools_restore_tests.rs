@@ -114,11 +114,20 @@ fn assert_case(
 #[test]
 fn preserves_exact_hits_and_validated_seed_on_pure_cache_miss() {
     let expected_key = format!("mise-tools-v2-{}", "a".repeat(64));
+    let fallback_key = format!("mise-tools-v2-{}", "b".repeat(64));
     assert_case(
         "exact-hit",
         Some("true"),
         Some(&expected_key),
         Some(&expected_key),
+        Some("false"),
+        true,
+    );
+    assert_case(
+        "fallback-hit",
+        Some("false"),
+        Some(&expected_key),
+        Some(&fallback_key),
         Some("false"),
         true,
     );

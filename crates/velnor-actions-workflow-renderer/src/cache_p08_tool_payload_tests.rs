@@ -184,25 +184,26 @@ fn restore_composite_binds_marker_pin_key_and_paths() {
     assert_eq!(save.condition.as_deref(), Some(save_condition.as_str()));
     let restore_action = crate::cache_steps::tools_restore_action_file("0.1.0")
         .expect("generated tools restore action");
+    let bytes = &restore_action.bytes;
     let marker = crate::marker::marker_for_version("0.1.0").expect("generator marker");
-    assert!(restore_action.bytes.starts_with(&format!("{marker}\n")));
+    assert!(bytes.starts_with(&format!("{marker}\n")));
     assert_eq!(
         restore_action.path,
         ".github/actions/velnor-tools-cache-restore/action.yml"
     );
-    assert!(restore_action.bytes.contains(&format!(
+    assert!(bytes.contains(&format!(
         "uses: {}",
         crate::cache_steps::TOOLS_RESTORE_ACTION_USES
     )));
-    assert!(restore_action.bytes.contains("key: ${{ inputs.key }}"));
+    assert!(bytes.contains("key: ${{ inputs.key }}"));
     for path in payload.paths() {
-        assert!(restore_action.bytes.contains(path), "missing {path}");
+        assert!(bytes.contains(path), "missing {path}");
     }
-    assert!(restore_action.bytes.contains("restore-keys: \"\""));
-    assert!(restore_action.bytes.contains("outputs.cache-hit"));
-    assert!(restore_action.bytes.contains("outputs.cache-matched-key"));
-    assert!(restore_action.bytes.contains("rm -rf"));
-    crate::cache_steps::assert_rendered_admission_parses(&restore_action.bytes);
+    assert!(bytes.contains("restore-keys: mise-tools-v2-"));
+    assert!(bytes.contains("outputs.cache-hit"));
+    assert!(bytes.contains("outputs.cache-matched-key"));
+    assert!(bytes.contains("rm -rf"));
+    crate::cache_steps::assert_rendered_admission_parses(bytes);
 }
 
 #[test]

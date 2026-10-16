@@ -29,6 +29,7 @@ env:
   MISE_NO_CONFIG: "1"
   MISE_NO_ENV: "1"
   MISE_NO_HOOKS: "1"
+  MISE_QUIET: "1"
   NODE_AUTH_TOKEN: ""
   NPM_TOKEN: ""
 concurrency:

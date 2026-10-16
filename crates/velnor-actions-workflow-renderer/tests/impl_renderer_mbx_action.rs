@@ -114,13 +114,13 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     );
     assert_eq!(env.get("RUSTUP_HOME"), env.get("MISE_RUSTUP_HOME"));
     assert_eq!(env.get("CARGO_HOME"), env.get("MISE_CARGO_HOME"));
-    for key in [
-        "save-on-pull-request",
-        "save-on-workflow-dispatch",
-        "save-on-protected-branch",
-    ] {
+    for key in ["save-on-pull-request", "save-on-workflow-dispatch"] {
         assert_eq!(with.get(key).map(String::as_str), Some("false"));
     }
+    assert_eq!(
+        with.get("save-on-protected-branch").map(String::as_str),
+        Some("true")
+    );
 }
 
 #[test]
