@@ -92,11 +92,13 @@ fn prepare_inner(
         },
     )?;
     let runner_image = runner_image_evidence();
-    let audit = crate::lock_audit::audit_prepare_installs(
+    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
+    let audit = crate::lock_audit::audit_prepare_installs_with_catalog(
         &canonical,
         &workflow.ir,
         &runner_label,
         &workflow.context.validator_commands,
+        &catalog,
     );
     discovery.recommendations.extend(audit.recommendation);
     discovery

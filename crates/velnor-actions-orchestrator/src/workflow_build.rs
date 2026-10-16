@@ -97,7 +97,7 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         input.config,
         input.discovery,
     )?;
-    let catalog = ToolCatalog::pinned();
+    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(input.root, input.config)?;
     let report_helper_version = input.consumer_release_version.to_owned();
     let generator_version = env!("CARGO_PKG_VERSION");
     let policy = input.config.workflow.policy;

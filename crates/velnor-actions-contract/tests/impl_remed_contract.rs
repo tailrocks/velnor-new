@@ -46,6 +46,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
+        tools: velnor_actions_contract::ToolsConfig::default(),
         agents: velnor_actions_contract::AgentsConfig::default(),
         execution: None,
     }

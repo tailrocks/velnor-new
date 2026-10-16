@@ -45,6 +45,23 @@ pub(crate) fn validate_suites_against_repo(
     Ok(())
 }
 
+fn find_suite_workspace<'a>(
+    manifest_path: Option<&str>,
+    workspaces: &'a [PlannedWorkspace],
+) -> Option<&'a PlannedWorkspace> {
+    match manifest_path {
+        Some(manifest) => workspaces.iter().find(|ws| {
+            workspace_manifest(&ws.record.workspace_root) == manifest
+                || ws
+                    .record
+                    .packages
+                    .iter()
+                    .any(|pkg| pkg.in_workspace && !pkg.external && pkg.manifest == manifest)
+        }),
+        None => workspaces.first(),
+    }
+}
+
 fn validate_single_suite(
     root: &Path,
     idx: usize,
@@ -52,24 +69,16 @@ fn validate_single_suite(
     workspaces: &[PlannedWorkspace],
 ) -> Result<(), OrchestratorError> {
     let workspace =
-        match &suite.manifest_path {
-            Some(manifest) => workspaces
-                .iter()
-                .find(|ws| {
-                    workspace_manifest(&ws.record.workspace_root) == *manifest
-                        || ws.record.packages.iter().any(|pkg| {
-                            pkg.in_workspace && !pkg.external && pkg.manifest == *manifest
-                        })
-                })
-                .ok_or_else(|| {
-                    OrchestratorError::config(
-                        CONFIG_REL,
-                        format!("stacks.rust.suites[{idx}].manifest_path"),
-                        format!("unknown_manifest_path:{manifest}"),
-                    )
-                })?,
-            None => &workspaces[0],
-        };
+        find_suite_workspace(suite.manifest_path.as_deref(), workspaces).ok_or_else(|| {
+            OrchestratorError::config(
+                CONFIG_REL,
+                format!("stacks.rust.suites[{idx}].manifest_path"),
+                format!(
+                    "unknown_manifest_path:{}",
+                    suite.manifest_path.as_deref().unwrap_or_default()
+                ),
+            )
+        })?;
     if let Some(pkg) = &suite.package
         && !workspace
             .record
@@ -133,7 +142,7 @@ pub(crate) fn suite_workflow_files(
     prep: &GenerationPreparation,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     validate_suites_against_repo(&prep.root, &prep.config, &prep.discovery)?;
-    let catalog = ToolCatalog::pinned();
+    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&prep.root, &prep.config)?;
     let Some(spec) =
         build_render_spec(&prep.config, &prep.runner_label, &prep.discovery, &catalog)?
     else {
@@ -154,13 +163,16 @@ fn build_render_spec(
     if rust.suites.is_empty() {
         return Ok(None);
     }
-    let primary = discovery.workspaces.first().ok_or_else(|| {
-        OrchestratorError::config(
-            CONFIG_REL,
-            "stacks.rust.suites",
-            "rust_suites_without_workspace",
-        )
-    })?;
+    let first_manifest = rust.suites.first().and_then(|s| s.manifest_path.as_deref());
+    let primary = find_suite_workspace(first_manifest, &discovery.workspaces)
+        .or_else(|| discovery.workspaces.first())
+        .ok_or_else(|| {
+            OrchestratorError::config(
+                CONFIG_REL,
+                "stacks.rust.suites",
+                "rust_suites_without_workspace",
+            )
+        })?;
     let (compile_driver, mbx_action) = match primary.profile.compile_driver {
         RustCompileDriver::Cargo => (CompileDriver::Cargo, None),
         RustCompileDriver::Mbx => {
@@ -191,5 +203,6 @@ fn build_render_spec(
         compile_driver,
         mbx_action,
         pull_request_cache_policy: config.workflow.pull_request_cache_policy,
+        export_rustup_toolchain: catalog.exports_rustup_toolchain(),
     }))
 }

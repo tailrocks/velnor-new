@@ -105,6 +105,13 @@ pub(super) fn validate_suite_targets_and_env(
                 format!("bad_env_key:{key}"),
             ));
         }
+        if is_reserved_suite_env_key(key) {
+            return Err(cfg_err(
+                file,
+                format!("{prefix}.env.{key}"),
+                format!("reserved_suite_env_key:{key}"),
+            ));
+        }
         if value.contains('\0')
             || value.contains('\n')
             || value.contains('\r')
@@ -118,6 +125,17 @@ pub(super) fn validate_suite_targets_and_env(
         }
     }
     Ok(())
+}
+
+const RESERVED_SUITE_ENV_PREFIXES: &[&str] = &[
+    "VELNOR_", "NEXTEST_", "MISE_", "RUSTUP_", "CARGO_", "GITHUB_", "ACTIONS_", "RUNNER_",
+];
+
+fn is_reserved_suite_env_key(key: &str) -> bool {
+    key == "PATH"
+        || RESERVED_SUITE_ENV_PREFIXES
+            .iter()
+            .any(|prefix| key.starts_with(prefix))
 }
 
 pub(super) fn validate_suite_artifact(
@@ -275,12 +293,15 @@ pub(super) fn is_valid_artifact_path(path: &str) -> bool {
     !path.is_empty()
         && !path.starts_with('/')
         && !path.starts_with('-')
+        && !path.starts_with('~')
+        && !path.starts_with('!')
+        && !path.starts_with('*')
         && !path.contains('\\')
         && !path.contains("${{")
         && !path.chars().any(char::is_control)
         && path
             .split('/')
-            .all(|seg| !seg.is_empty() && seg != "." && seg != "..")
+            .all(|seg| !seg.is_empty() && seg != "." && seg != ".." && seg != "~")
 }
 
 pub(super) fn is_valid_workflow_slug(slug: &str) -> bool {

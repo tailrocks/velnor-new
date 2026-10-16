@@ -22,6 +22,7 @@ mod stacks;
 mod task_source;
 mod tofu;
 mod tofu_apply;
+mod tools;
 mod verification;
 mod workflow;
 mod workflow_task;
@@ -84,6 +85,7 @@ pub use stacks::{
 pub use task_source::MiseTaskSource;
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
 pub use tofu_apply::{GitHubTokenSecret, S3BackendConfig, TofuApplyConfig};
+pub use tools::{OVERRIDABLE_TOOLS, ToolsConfig, is_exact_semver};
 pub use verification::{VerificationRunner, VerificationTask};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, PullRequestCachePolicy, RUNNER_LABEL_CATALOG,
@@ -118,6 +120,9 @@ pub struct VelnorConfig {
     /// Action-pin overrides; absent means bundled latest pins.
     #[serde(default)]
     pub actions: ActionsConfig,
+    /// Tool-version overrides (`[tools]`); absent means bundled catalog pins.
+    #[serde(default, skip_serializing_if = "ToolsConfig::is_empty")]
+    pub tools: ToolsConfig,
     /// Agent instruction file policy (`[agents]`).
     #[serde(default, skip_serializing_if = "AgentsConfig::is_default")]
     pub agents: AgentsConfig,
@@ -147,21 +152,22 @@ impl VelnorConfig {
         self.resources.validate(file)?;
         self.test_sharding.validate(file)?;
         self.stacks.validate(file)?;
-        if let Some(rust) = &self.stacks.rust {
-            validate_suites_with_dispatch(&rust.suites, &self.workflow.dispatch, file)?;
-            for suite in &rust.suites {
-                let slug = suite
-                    .workflow
-                    .as_deref()
-                    .unwrap_or(DEFAULT_SUITE_WORKFLOW_SLUG);
-                let path = format!(".github/workflows/{slug}.yml");
-                if self.workflow.preserve_workflows.contains(&path) {
-                    return Err(ContractError::config(
-                        file,
-                        "workflow.preserve_workflows",
-                        format!("preserve_workflow_generator_owned:{path}"),
-                    ));
-                }
+        self.tools.validate(file)?;
+        self.check_toolchain_consistency(file)?;
+        let suites = self.stacks.rust.as_ref().map_or(&[][..], |r| &r.suites);
+        validate_suites_with_dispatch(suites, &self.workflow.dispatch, file)?;
+        for suite in suites {
+            let slug = suite
+                .workflow
+                .as_deref()
+                .unwrap_or(DEFAULT_SUITE_WORKFLOW_SLUG);
+            let path = format!(".github/workflows/{slug}.yml");
+            if self.workflow.preserve_workflows.contains(&path) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.preserve_workflows",
+                    format!("preserve_workflow_generator_owned:{path}"),
+                ));
             }
         }
         if self.workflow.policy != WorkflowPolicy::ConsumerV1
@@ -196,6 +202,32 @@ impl VelnorConfig {
         self.discovery.validate(file)?;
         self.actions.validate(file)?;
         validate_qualified_tools(&self.qualified_tools, file)?;
+        self.check_checks(file)?;
+        self.check_shard_budgets(file)?;
+        Ok(())
+    }
+
+    fn check_toolchain_consistency(&self, file: &str) -> Result<(), ContractError> {
+        if let (Some(stack_tc), Some(tools_tc)) = (
+            self.stacks
+                .rust
+                .as_ref()
+                .and_then(|r| r.toolchain.as_deref()),
+            self.tools.get("rust"),
+        ) && stack_tc != tools_tc
+        {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.toolchain",
+                format!(
+                    "conflicting_rust_toolchain:stacks.rust.toolchain={stack_tc},tools.rust={tools_tc}"
+                ),
+            ));
+        }
+        Ok(())
+    }
+
+    fn check_checks(&self, file: &str) -> Result<(), ContractError> {
         let mut check_ids = std::collections::BTreeSet::new();
         for (index, check) in self.checks.iter().enumerate() {
             check.validate(file, &format!("checks[{index}]"))?;
@@ -218,7 +250,6 @@ impl VelnorConfig {
                 return Err(ContractError::config(file, "checks", "duplicate_check_id"));
             }
         }
-        self.check_shard_budgets(file)?;
         Ok(())
     }
 

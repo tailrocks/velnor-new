@@ -233,8 +233,15 @@ fn render_merged(
 ) -> Result<RenderedWorkflow, RenderError> {
     let matrix = matrix::task_matrix_of(jobs)?;
     let caps = matrix::crate_job_caps(jobs)?;
-    let suite_matrices = matrix::suites::suite_matrices_of(jobs)?;
-    let jobs = if matrix.is_some() || !caps.is_empty() || !suite_matrices.is_empty() {
+    let suite_matrices = (
+        matrix::suites::suite_matrices_of(jobs)?,
+        matrix::suites::suite_allow_failure_jobs_of(jobs),
+    );
+    let jobs = if matrix.is_some()
+        || !caps.is_empty()
+        || !suite_matrices.0.is_empty()
+        || !suite_matrices.1.is_empty()
+    {
         matrix::scrub_matrix_marker(jobs)
     } else {
         jobs.clone()

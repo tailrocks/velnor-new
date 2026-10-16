@@ -6,7 +6,12 @@ use velnor_actions_rust::{
 
 #[test]
 fn symbols_route_to_owning_stacks() {
-    for owned in ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml"] {
+    for owned in [
+        "Cargo.toml",
+        "Cargo.lock",
+        "rust-toolchain.toml",
+        "rust-toolchain",
+    ] {
         assert_eq!(stack_for_symbol(owned), Some("rust"));
     }
     for foreign in ["mise.toml", "mise.lock"] {
@@ -16,13 +21,16 @@ fn symbols_route_to_owning_stacks() {
         assert_eq!(stack_for_symbol(unknown), None);
     }
     assert_eq!(stack_for_symbol("nested/rust-toolchain.toml"), Some("rust"));
+    assert_eq!(stack_for_symbol("nested/rust-toolchain"), Some("rust"));
     assert_eq!(stack_for_symbol("nested/mise.toml"), Some("mise"));
 }
 
 #[test]
 fn rust_inspects_only_its_tool_file() {
     assert!(is_owned_tool_file("rust-toolchain.toml"));
+    assert!(is_owned_tool_file("rust-toolchain"));
     assert!(is_owned_tool_file("nested/rust-toolchain.toml"));
+    assert!(is_owned_tool_file("nested/rust-toolchain"));
     assert!(!is_owned_tool_file("mise.toml"));
     assert!(!is_owned_tool_file("mise.lock"));
     assert!(!is_owned_tool_file("Cargo.toml"));
@@ -140,4 +148,68 @@ fn every_finding_names_supplying_file() {
             assert!(!finding.recommendation.is_empty());
         }
     }
+}
+
+#[test]
+fn broadening_and_known_toolfiles_cover_own_and_foreign() {
+    use velnor_actions_rust::{SelectionBroadening, is_known_toolfile, selection_broadening};
+    assert_eq!(
+        selection_broadening("Cargo.lock"),
+        Some(SelectionBroadening::Lockfile)
+    );
+    for path in ["Cargo.toml", ".cargo/config.toml", ".cargo/config"] {
+        assert_eq!(
+            selection_broadening(path),
+            Some(SelectionBroadening::RootConfig),
+            "{path:?}"
+        );
+    }
+    for path in [
+        "crates/a/Cargo.lock",
+        "crates/a/Cargo.toml",
+        "src/lib.rs",
+        ".mise.toml",
+        "mise.toml",
+        "rust-toolchain.toml",
+        "rust-toolchain",
+    ] {
+        assert_eq!(selection_broadening(path), None, "{path:?}");
+    }
+    for path in [
+        "rust-toolchain.toml",
+        "rust-toolchain",
+        "mise.toml",
+        "mise.lock",
+    ] {
+        assert!(is_known_toolfile(path), "{path:?}");
+    }
+    for path in [".mise.toml", "Cargo.toml", "Cargo.lock", "src/lib.rs"] {
+        assert!(!is_known_toolfile(path), "{path:?}");
+    }
+}
+
+#[test]
+fn legacy_rust_toolchain_and_channel_extraction() {
+    use velnor_actions_rust::{RUST_TOOLCHAIN_LEGACY_FILE, extract_rust_toolchain_channel};
+    assert_eq!(RUST_TOOLCHAIN_LEGACY_FILE, "rust-toolchain");
+    assert_eq!(
+        extract_rust_toolchain_channel("rust-toolchain", "1.98.1\n"),
+        Ok("1.98.1".to_owned())
+    );
+    assert_eq!(
+        extract_rust_toolchain_channel("rust-toolchain", "[toolchain]\nchannel = \"1.97.0\"\n"),
+        Ok("1.97.0".to_owned())
+    );
+    assert_eq!(
+        extract_rust_toolchain_channel(
+            "rust-toolchain.toml",
+            "[toolchain]\nchannel = \"1.96.0\"\n"
+        ),
+        Ok("1.96.0".to_owned())
+    );
+    assert!(extract_rust_toolchain_channel("rust-toolchain", "").is_err());
+    assert!(extract_rust_toolchain_channel("rust-toolchain", "1.98.1 extra").is_err());
+    assert!(extract_rust_toolchain_channel("rust-toolchain", "1.98.1\n1.97.0\n").is_err());
+    assert!(extract_rust_toolchain_channel("rust-toolchain.toml", "[toolchain]\n").is_err());
+    assert!(extract_rust_toolchain_channel("mise.toml", "1.98.1").is_err());
 }

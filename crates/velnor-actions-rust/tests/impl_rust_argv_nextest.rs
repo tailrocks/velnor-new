@@ -99,9 +99,31 @@ fn nextest_shard_suffix_emits_hash_partition_flag() -> Result<(), ContractError>
             "--package",
             "demo",
             "--no-tests",
-            "fail",
+            "warn",
             "--partition",
             "hash:2/4",
+        ]
+    );
+
+    let mut single_shard = group(TaskKind::Nextest);
+    single_shard.task_id = "stack/rust/root/nextest/default/shard-1-of-1".to_owned();
+    single_shard.test_runner = TestRunner::CargoNextest;
+    single_shard.nextest_profile = NextestProfile::Ci;
+    assert_eq!(
+        profiled(&single_shard)?,
+        [
+            "nextest",
+            "run",
+            "--profile",
+            "ci",
+            "--locked",
+            "--offline",
+            "--manifest-path",
+            "Cargo.toml",
+            "--package",
+            "demo",
+            "--no-tests",
+            "fail",
         ]
     );
 

@@ -18,12 +18,7 @@ use crate::generate::render_staged_tree;
 use crate::plan_stacks::stacks_section;
 use crate::prepare::GenerationPreparation;
 
-/// Render the concise deterministic `plan` report from a preparation,
-/// after rendering the full tree in memory and discarding the bytes.
-///
-/// The job table, step counts, and action pins derive from the same
-/// finalized jobs `generate` writes (validators included), so plan
-/// and YAML agree by construction. Writes nothing.
+/// Render the concise deterministic `plan` report from a preparation.
 ///
 /// # Errors
 ///
@@ -36,11 +31,6 @@ pub fn plan_text_checked(prep: &GenerationPreparation) -> Result<String, Orchest
 }
 
 /// Render the concise deterministic `plan` report from finalized jobs.
-///
-/// `jobs` must be [`finalized_jobs`] for `prep`: the attached IR plus
-/// merged support, setup insertion, closures, and the final fan-in.
-/// Passing pre-merge IR jobs would reintroduce the plan/YAML gaps
-/// (missing validators, stale step counts, partial pins).
 #[must_use]
 pub fn plan_text(prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) -> String {
     let mut out = String::new();
@@ -109,7 +99,12 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTree
     critical_path_lines(out, prep);
     clippy_lines(out, prep);
     push(out, &format!("  Cache layers: {}", cache_layers(prep)));
-    push(out, &format!("  Actionlint: {ACTIONLINT_VERSION} pinned"));
+    let actionlint = prep
+        .config
+        .tools
+        .get("actionlint")
+        .unwrap_or(ACTIONLINT_VERSION);
+    push(out, &format!("  Actionlint: {actionlint} pinned"));
     pin_lines(out, jobs);
     ineligible_lines(out, prep);
     feature_lines(out, prep);
@@ -120,9 +115,6 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTree
 }
 
 /// Every distinct action pin the finalized jobs embed, sorted.
-///
-/// The count and refs match the `uses:` lines `generate` writes, so a
-/// new action in the YAML appears here without a plan-side allowlist.
 fn pin_lines(out: &mut String, jobs: &BTreeMap<String, Job>) {
     let pins = action_pins(jobs);
     push(out, &format!("  Action pins: {}", pins.len()));

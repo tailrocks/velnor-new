@@ -209,9 +209,17 @@ fn push_kind_args(
             {
                 args.extend([flag("--run-ignored"), flag(mode)]);
             }
-            args.extend([flag("--no-tests"), flag("fail")]);
-            if let Some((_, index, count)) = split_shard_suffix(&group.task_id) {
-                args.extend([flag("--partition"), flag(&format!("hash:{index}/{count}"))]);
+            if let Some((_, index, count)) = split_shard_suffix(&group.task_id)
+                && count > 1
+            {
+                args.extend([
+                    flag("--no-tests"),
+                    flag("warn"),
+                    flag("--partition"),
+                    flag(&format!("hash:{index}/{count}")),
+                ]);
+            } else {
+                args.extend([flag("--no-tests"), flag("fail")]);
             }
         }
         TaskKind::Doctest => {

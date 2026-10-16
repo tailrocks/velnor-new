@@ -123,6 +123,9 @@ struct PartialConfig {
     /// Explicit qualified repository tool closure for named checks.
     #[serde(default)]
     qualified_tools: Vec<QualifiedTool>,
+    /// Optional exact `X.Y.Z` version overrides for generator-managed tools.
+    #[serde(default)]
+    tools: velnor_actions_contract::ToolsConfig,
 }
 
 /// Workflow section with every value optional.
@@ -217,6 +220,7 @@ impl PartialConfig {
             execution: self.execution,
             checks: self.checks,
             qualified_tools: self.qualified_tools,
+            tools: self.tools,
         })
     }
 }

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::error::Error;
 
 use velnor_actions_contract::{
     ClaudeMdMode, NextestRunIgnored, PullRequestCachePolicy, RustSuiteArtifact,
@@ -15,6 +16,8 @@ use crate::{
     tree::render_tree_with_claude_mode, upload_suite_archive_step, upload_suite_artifact_step,
     validate_env,
 };
+
+type TestResult = Result<(), Box<dyn Error>>;
 
 fn sample_mise() -> MiseSetup {
     MiseSetup {
@@ -37,6 +40,7 @@ fn sample_spec(suites: Vec<RustSuiteConfig>) -> RustSuitesRenderSpec {
         compile_driver: CompileDriver::Cargo,
         mbx_action: None,
         pull_request_cache_policy: PullRequestCachePolicy::ReadOnly,
+        export_rustup_toolchain: true,
     }
 }
 
@@ -47,21 +51,19 @@ fn minimal_suite(id: &str, triggers: Vec<RustSuiteTrigger>) -> RustSuiteConfig {
 }
 
 #[test]
-fn claude_md_mode_import_and_symlink_render_and_freshness_step() {
+fn claude_md_mode_import_and_symlink_render_and_freshness_step() -> TestResult {
     let binary = "$RUNNER_TEMP/velnor/bin/velnor-actions-test";
     let output_dir = "$RUNNER_TEMP/velnor/rendered";
     let env = BTreeMap::new();
     let import_step =
-        freshness_step_with_claude_mode(binary, output_dir, &env, ClaudeMdMode::Import)
-            .expect("import step");
+        freshness_step_with_claude_mode(binary, output_dir, &env, ClaudeMdMode::Import)?;
     let symlink_step =
-        freshness_step_with_claude_mode(binary, output_dir, &env, ClaudeMdMode::Symlink)
-            .expect("symlink step");
+        freshness_step_with_claude_mode(binary, output_dir, &env, ClaudeMdMode::Symlink)?;
     assert_eq!(import_step.name, CHECK_GENERATED_NAME);
     let (StepKind::Shell { run: imp, .. }, StepKind::Shell { run: sym, .. }) =
         (&import_step.kind, &symlink_step.kind)
     else {
-        panic!("expected shell steps");
+        return Err("expected shell steps".into());
     };
     assert!(!imp[2].contains("readlink .github/CLAUDE.md"));
     assert!(imp[2].contains("diff -r --brief .github \"$RUNNER_TEMP/velnor/rendered/.github\""));
@@ -73,8 +75,7 @@ fn claude_md_mode_import_and_symlink_render_and_freshness_step() {
     let ci_yaml = format!("{hdr}\nname: CI\n");
     let act_yaml = format!("{hdr}\nself-hosted-runner:\n");
     let import_tree =
-        render_tree_with_claude_mode(&ci_yaml, &act_yaml, &[], "0.1.0", ClaudeMdMode::Import)
-            .expect("import tree");
+        render_tree_with_claude_mode(&ci_yaml, &act_yaml, &[], "0.1.0", ClaudeMdMode::Import)?;
     assert!(import_tree.symlinks.is_empty());
     assert!(
         import_tree
@@ -84,8 +85,7 @@ fn claude_md_mode_import_and_symlink_render_and_freshness_step() {
     );
 
     let symlink_tree =
-        render_tree_with_claude_mode(&ci_yaml, &act_yaml, &[], "0.1.0", ClaudeMdMode::Symlink)
-            .expect("symlink tree");
+        render_tree_with_claude_mode(&ci_yaml, &act_yaml, &[], "0.1.0", ClaudeMdMode::Symlink)?;
     assert!(
         !symlink_tree
             .files
@@ -95,15 +95,15 @@ fn claude_md_mode_import_and_symlink_render_and_freshness_step() {
     assert_eq!(symlink_tree.symlinks.len(), 1);
     assert_eq!(symlink_tree.symlinks[0].path, ".github/CLAUDE.md");
     assert_eq!(symlink_tree.symlinks[0].target, "AGENTS.md");
+    Ok(())
 }
 
 #[test]
-fn workflow_dispatch_input_expressions_allowed_in_step_env() {
+fn workflow_dispatch_input_expressions_allowed_in_step_env() -> TestResult {
     validate_env(&BTreeMap::from([
         ("FILTER".to_owned(), "${{ inputs.test_filter }}".to_owned()),
         ("CUSTOM".to_owned(), "${{ inputs.my-input_1 }}".to_owned()),
-    ]))
-    .expect("valid workflow_dispatch input references accepted");
+    ]))?;
 
     assert!(
         validate_env(&BTreeMap::from([(
@@ -119,21 +119,21 @@ fn workflow_dispatch_input_expressions_allowed_in_step_env() {
         )]))
         .is_err()
     );
+    Ok(())
 }
 
 #[test]
-fn suite_artifact_and_archive_steps_emit_expected_payloads() {
+fn suite_artifact_and_archive_steps_emit_expected_payloads() -> TestResult {
     let always = upload_suite_artifact_step(
         "Upload suite artifact (logs)",
         "velnor-suite-r1-a1-smoke-logs",
         "target/nextest/logs",
         14,
         RustSuiteArtifactWhen::Always,
-    )
-    .expect("always artifact");
+    )?;
     assert_eq!(always.condition.as_deref(), Some("always()"));
     let StepKind::Action { with, .. } = &always.kind else {
-        panic!("expected action step");
+        return Err("expected action step".into());
     };
     assert_eq!(
         with.get("if-no-files-found").map(String::as_str),
@@ -147,8 +147,7 @@ fn suite_artifact_and_archive_steps_emit_expected_payloads() {
         "target/nextest/dumps",
         7,
         RustSuiteArtifactWhen::Failure,
-    )
-    .expect("failure artifact");
+    )?;
     assert_eq!(on_failure.condition.as_deref(), Some("failure()"));
 
     let on_success = upload_suite_artifact_step(
@@ -157,18 +156,16 @@ fn suite_artifact_and_archive_steps_emit_expected_payloads() {
         "target/nextest/report",
         30,
         RustSuiteArtifactWhen::Success,
-    )
-    .expect("success artifact");
+    )?;
     assert_eq!(on_success.condition.as_deref(), Some("success()"));
 
     let archive_up = upload_suite_archive_step(
         "velnor-suite-archive-r1-a1-stress",
         "${{ runner.temp }}/velnor/suite-archive-stress/archive.tar.zst",
-    )
-    .expect("archive upload");
+    )?;
     assert_eq!(archive_up.name, "Upload suite archive");
     let StepKind::Action { with: up_with, .. } = &archive_up.kind else {
-        panic!("expected action step");
+        return Err("expected action step".into());
     };
     assert_eq!(
         up_with.get("if-no-files-found").map(String::as_str),
@@ -179,13 +176,12 @@ fn suite_artifact_and_archive_steps_emit_expected_payloads() {
     let archive_down = download_suite_archive_step(
         "velnor-suite-archive-r1-a1-stress",
         "${{ runner.temp }}/velnor/suite-archive-stress",
-    )
-    .expect("archive download");
+    )?;
     assert_eq!(archive_down.name, "Download suite archive");
+    Ok(())
 }
 
-#[test]
-fn single_shard_and_sharded_archive_and_inline_suites_render() {
+fn sample_mixed_suites_spec() -> RustSuitesRenderSpec {
     let mut smoke = minimal_suite(
         "smoke",
         vec![
@@ -196,6 +192,12 @@ fn single_shard_and_sharded_archive_and_inline_suites_render() {
     smoke.package = Some("pkg-a".to_owned());
     smoke.filter_input = Some("test_filter".to_owned());
     smoke.allow_failure = true;
+    smoke.artifacts = vec![RustSuiteArtifact {
+        name: "smoke-logs".to_owned(),
+        paths: vec!["target/nextest/smoke".to_owned()],
+        retention_days: 7,
+        when: RustSuiteArtifactWhen::Failure,
+    }];
 
     let mut stress = minimal_suite(
         "stress",
@@ -235,70 +237,128 @@ fn single_shard_and_sharded_archive_and_inline_suites_render() {
             },
         )]),
     });
+    spec
+}
 
-    let ci_jobs = build_ci_suite_jobs(&spec).expect("ci suite jobs");
+#[test]
+fn single_shard_and_sharded_archive_and_inline_suites_render() -> TestResult {
+    let spec = sample_mixed_suites_spec();
+    let ci_jobs = build_ci_suite_jobs(&spec)?;
     assert_eq!(ci_jobs.keys().collect::<Vec<_>>(), vec!["suite-smoke"]);
+    assert_eq!(
+        ci_jobs["suite-smoke"].condition.as_deref(),
+        Some("github.event_name == 'pull_request'")
+    );
     let ci_run_step = ci_jobs["suite-smoke"]
         .steps
         .iter()
         .find(|s| s.name == "Run suite (smoke)")
-        .expect("Run suite (smoke) in ci.yml");
+        .ok_or("missing Run suite (smoke) in ci.yml")?;
     let StepKind::Shell { run, env } = &ci_run_step.kind else {
-        panic!("expected shell step");
+        return Err("expected shell step".into());
     };
     assert!(
         !env.contains_key("VELNOR_SUITE_FILTERSET") && !run[2].contains("VELNOR_SUITE_FILTERSET")
     );
-    assert!(run[2].ends_with(" || true"));
+    assert_eq!(
+        env.get("VELNOR_SUITE_ALLOW_FAILURE").map(String::as_str),
+        Some("true")
+    );
+    assert!(!run[2].ends_with(" || true"));
+    assert!(run[2].contains("aqua:nextest-rs/nextest/cargo-nextest@0.9.133"));
+    assert!(run[2].contains("--no-tests fail"));
+    let ci_art_step = ci_jobs["suite-smoke"]
+        .steps
+        .iter()
+        .find(|s| s.name == "Upload suite artifact (smoke-logs)")
+        .ok_or("missing Upload suite artifact (smoke-logs)")?;
+    let StepKind::Action { with: art_with, .. } = &ci_art_step.kind else {
+        return Err("expected action step".into());
+    };
+    assert_eq!(
+        art_with.get("name").map(String::as_str),
+        Some("velnor-suite-r${{ github.run_id }}-a${{ github.run_attempt }}-smoke-logs")
+    );
 
-    let yaml = render_suites_workflow(&spec)
-        .expect("render suites workflow")
-        .expect("suites.yml present");
+    let yaml = render_suites_workflow(&spec)?.ok_or("suites.yml absent")?;
     assert!(yaml.contains("name: Suites\n"));
     assert!(yaml.contains("workflow_dispatch:\n"));
-    assert!(yaml.contains("test_filter:\n"));
+    assert!(yaml.contains("      suite:\n"));
+    assert!(yaml.contains("      test_filter:\n"));
     assert!(yaml.contains("schedule:\n"));
     assert!(yaml.contains("- cron: 0 3 * * *\n"));
     assert!(yaml.contains("  suite-build-stress:\n"));
     assert!(yaml.contains("  suite-stress:\n"));
+    assert!(yaml.contains(
+        "if: (github.event_name == 'workflow_dispatch' && (inputs.suite == 'all' || inputs.suite == 'stress')) || (github.event_name == 'schedule' && github.event.schedule == '0 3 * * *')\n"
+    ));
     assert!(yaml.contains("    needs:\n      - suite-build-stress\n"));
     assert!(yaml.contains(
         "    strategy:\n      fail-fast: false\n      matrix:\n        shard:\n          - 1\n          - 2\n          - 3\n          - 4\n"
     ));
-    assert!(yaml.contains("hash:${{ matrix.shard }}/4"));
+    assert!(yaml.contains("aqua:nextest-rs/nextest/cargo-nextest@0.9.133"));
+    assert!(yaml.contains("--workspace-remap . --extract-to . --no-tests warn --partition \\\"hash:$VELNOR_SUITE_SHARD/4\\\""));
+    assert!(yaml.contains("VELNOR_SUITE_SHARD: ${{ matrix.shard }}"));
+    assert!(
+        yaml.contains("-E '\\\\''test(stress_)'\\\\'' -E \\\"$VELNOR_SUITE_FILTERSET\\\"; else")
+    );
     assert!(yaml.contains("VELNOR_SUITE_FILTERSET: ${{ inputs.test_filter }}"));
     assert!(yaml.contains("NEXTEST_TEST_THREADS: \"8\""));
     assert!(!yaml.contains("suite-build-direct:"));
     assert!(yaml.contains("  suite-direct:\n"));
     assert!(yaml.contains("        shard:\n          - 1\n          - 2\n          - 3\n"));
+    Ok(())
 }
 
 #[test]
-fn multi_workflow_grouping_and_non_matrix_tools_cache_writer_election() {
+fn multi_workflow_grouping_and_non_matrix_tools_cache_writer_election() -> TestResult {
     let mut stress = minimal_suite("stress", vec![RustSuiteTrigger::WorkflowDispatch]);
     stress.partitions = 2;
     stress.build = RustSuiteBuildMode::Archive;
+    stress.cancel_in_progress = Some(true);
+    stress.dispatch_inputs = BTreeMap::from([("tier".to_owned(), vec!["stress".to_owned()])]);
+
+    let mut sched = minimal_suite("sched", vec![RustSuiteTrigger::Schedule]);
+    sched.schedule = vec!["0 2 * * *".to_owned(), "0 14 * * *".to_owned()];
 
     let mut nightly = minimal_suite("nightly", vec![RustSuiteTrigger::Schedule]);
     nightly.workflow = Some("nightly".to_owned());
     nightly.schedule = vec!["0 4 * * *".to_owned()];
 
-    let spec = sample_spec(vec![nightly, stress]);
-    let files = render_suites_workflows(&spec).expect("render suite workflows");
+    let mut spec = sample_spec(vec![nightly, sched, stress]);
+    spec.workflow_dispatch = Some(WorkflowDispatchConfig {
+        inputs: BTreeMap::from([(
+            "tier".to_owned(),
+            WorkflowDispatchInputConfig {
+                kind: WorkflowDispatchInputType::Choice,
+                description: None,
+                required: false,
+                default: Some("stress".to_owned()),
+                options: vec!["stress".to_owned()],
+            },
+        )]),
+    });
+    let files = render_suites_workflows(&spec)?;
     assert_eq!(files.len(), 2);
     assert_eq!(files[0].path, ".github/workflows/nightly.yml");
     assert_eq!(files[1].path, ".github/workflows/suites.yml");
 
     let suites_yaml = &files[1].bytes;
+    assert!(!suites_yaml.contains("      suite:\n"));
+    assert!(suites_yaml.contains("  cancel-in-progress: ${{ github.event_name != 'schedule' }}\n"));
+    assert!(suites_yaml.contains(
+        "if: github.event_name == 'schedule' && (github.event.schedule == '0 2 * * *' || github.event.schedule == '0 14 * * *')\n"
+    ));
     let build_section = suites_yaml
         .split("  suite-build-stress:\n")
         .nth(1)
         .and_then(|rest| rest.split("  suite-stress:\n").next())
-        .expect("suite-build-stress section");
+        .ok_or("missing suite-build-stress section")?;
     let run_section = suites_yaml
         .split("  suite-stress:\n")
         .nth(1)
-        .expect("suite-stress section");
+        .ok_or("missing suite-stress section")?;
     assert!(build_section.contains("name: Save Mise tools\n"));
     assert!(!run_section.contains("name: Save Mise tools\n"));
+    Ok(())
 }

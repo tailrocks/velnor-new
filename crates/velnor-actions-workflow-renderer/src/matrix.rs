@@ -166,6 +166,7 @@ pub(crate) fn scrub_matrix_marker(jobs: &BTreeMap<String, Job>) -> BTreeMap<Stri
                     suites::SUITE_SHARDS_ENV,
                     suites::SUITE_MAX_PARALLEL_ENV,
                     suites::SUITE_FAIL_FAST_ENV,
+                    suites::SUITE_ALLOW_FAILURE_ENV,
                 ] {
                     env.remove(key);
                 }

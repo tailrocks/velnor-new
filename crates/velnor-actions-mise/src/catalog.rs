@@ -198,15 +198,12 @@ pub struct ToolCatalog {
     nextest: String,
     /// Pinned `OpenTofu` engine version.
     opentofu: String,
+    /// Whether `RUSTUP_TOOLCHAIN` is exported in step environments.
+    export_rustup_toolchain: bool,
 }
 
 impl ToolCatalog {
     /// Catalog holding the qualified pins.
-    ///
-    /// Versions are compile-time literals, so no fallible check runs
-    /// here; trusted identity validation is the separate
-    /// [`Self::validate_identities`] gate, which fails until freshness
-    /// binds real artifact digests (P03-8b).
     #[must_use]
     pub fn pinned() -> Self {
         Self {
@@ -218,14 +215,11 @@ impl ToolCatalog {
             zizmor: ZIZMOR_VERSION.to_owned(),
             nextest: NEXTEST_VERSION.to_owned(),
             opentofu: OPENTOFU_VERSION.to_owned(),
+            export_rustup_toolchain: true,
         }
     }
 
     /// Catalog with explicit versions; every version must be an exact pin.
-    ///
-    /// Only version exactness is enforced here: the catalog owns pins,
-    /// not artifact trust. Trusted identity validation is the separate
-    /// [`Self::validate_identities`] gate (P03-8b).
     ///
     /// # Errors
     ///
@@ -262,16 +256,11 @@ impl ToolCatalog {
             zizmor: zizmor.to_owned(),
             nextest: nextest.to_owned(),
             opentofu: opentofu.to_owned(),
+            export_rustup_toolchain: true,
         })
     }
 
     /// Pinned identity record for one tool (ver §2).
-    ///
-    /// The digest is the qualified artifact SHA-256 once freshness
-    /// binds it (`OpenTofu` is bound since T15); every other slot
-    /// keeps the explicitly unqualified placeholder, so its record
-    /// never validates as trusted and no trust decision may consume
-    /// it (P03-8b).
     #[must_use]
     pub fn tool_identity(&self, tool: PinnedTool) -> ToolIdentity {
         ToolIdentity {
@@ -284,11 +273,6 @@ impl ToolCatalog {
     }
 
     /// Qualified artifact digest for one tool, or the placeholder.
-    ///
-    /// Only the qualified `OpenTofu` pin carries its digest (contract
-    /// §4.3: the `linux_amd64` `.tar.gz` SHA-256, matching the x64-Linux
-    /// runner fleet); any other version keeps the placeholder so an
-    /// unqualified pin never validates as trusted.
     fn tool_digest(&self, tool: PinnedTool) -> &str {
         if tool == PinnedTool::Opentofu && self.version(tool) == OPENTOFU_VERSION {
             OPENTOFU_SHA256_LINUX_AMD64
@@ -298,12 +282,6 @@ impl ToolCatalog {
     }
 
     /// Trusted gate over every catalog identity record.
-    ///
-    /// Fails closed with `placeholder_digest` for every tool whose
-    /// artifact SHA-256 freshness has not bound yet (`OpenTofu` is
-    /// bound; the rest stay placeholder); it flips to `Ok` only once
-    /// every slot binds, so callers can treat success as qualified
-    /// trust (P03-8b).
     ///
     /// # Errors
     ///
@@ -337,10 +315,6 @@ impl ToolCatalog {
 
     /// Mise selector for one tool: `<tool>@<exact>`, except Nextest,
     /// which needs its backend-qualified aqua-registry path.
-    ///
-    /// Rust carries no inline options: bracketed tool options are silently
-    /// ignored on config-less CLI specs, so components install through the
-    /// fixed `PrepareRustComponents` step instead.
     #[must_use]
     pub fn tool_spec(&self, tool: PinnedTool) -> String {
         match tool {
@@ -374,12 +348,32 @@ impl ToolCatalog {
     }
 
     /// Exact `RUSTUP_TOOLCHAIN` value: the pinned Rust version.
-    ///
-    /// Rendered Cargo steps set this override so an inspected project
-    /// toolchain file cannot select another compiler.
     #[must_use]
     pub fn rustup_toolchain(&self) -> String {
         self.version(PinnedTool::Rust).to_owned()
+    }
+
+    /// Configure whether step environments export `RUSTUP_TOOLCHAIN`.
+    #[must_use]
+    pub const fn with_export_rustup_toolchain(mut self, export: bool) -> Self {
+        self.export_rustup_toolchain = export;
+        self
+    }
+
+    /// Whether step environments export `RUSTUP_TOOLCHAIN`.
+    #[must_use]
+    pub const fn exports_rustup_toolchain(&self) -> bool {
+        self.export_rustup_toolchain
+    }
+
+    /// `RUSTUP_TOOLCHAIN` value when exported, or `None` when repository toolchain file governs.
+    #[must_use]
+    pub fn rustup_toolchain_env(&self) -> Option<&str> {
+        if self.export_rustup_toolchain {
+            Some(&self.rust)
+        } else {
+            None
+        }
     }
 
     /// Fail unless the action-installed MBX equals the catalog pin (action SHA alone never proves it).

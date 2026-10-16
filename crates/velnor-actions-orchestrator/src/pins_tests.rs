@@ -7,7 +7,7 @@ use velnor_actions_contract::{
 };
 
 /// Config carrying exactly the given action-pin overrides.
-pub(super) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
+pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
     VelnorConfig {
         checks: Vec::new(),
         qualified_tools: Vec::new(),
@@ -45,6 +45,7 @@ pub(super) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
         actions: ActionsConfig { overrides },
         agents: velnor_actions_contract::AgentsConfig::default(),
         execution: None,
+        tools: velnor_actions_contract::ToolsConfig::default(),
     }
 }
 

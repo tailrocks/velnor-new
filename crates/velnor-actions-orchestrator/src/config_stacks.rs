@@ -46,6 +46,9 @@ pub(crate) struct PartialRustStack {
     /// Named Nextest suites (`[[stacks.rust.suites]]`).
     #[serde(default)]
     suites: Vec<velnor_actions_contract::RustSuiteConfig>,
+    /// Optional exact `X.Y.Z` Rust toolchain channel override.
+    #[serde(default)]
+    toolchain: Option<String>,
 }
 
 /// Tofu stack section: `roots` required when the table is present.
@@ -69,6 +72,7 @@ impl PartialStacks {
                 release: stack.release.unwrap_or_default(),
                 binary_release: stack.binary_release.unwrap_or_default(),
                 suites: stack.suites,
+                toolchain: stack.toolchain,
             }
         });
         let tofu = self

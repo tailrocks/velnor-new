@@ -30,7 +30,7 @@ pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, O
     let package = selected_package(prep, config)?;
     require_tracked_lockfile(prep, config)?;
     let repository = origin_repository(&prep.root)?;
-    let catalog = ToolCatalog::pinned();
+    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&prep.root, &prep.config)?;
     let spec = ConsumerBinaryReleaseSpec {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         repository,

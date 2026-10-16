@@ -116,6 +116,7 @@ fn discover_inner(
         previous = stack_id;
         candidates.extend(detect(&index));
     }
+    let _catalog = crate::tool_catalog_resolve::resolve_tool_catalog(root, config)?;
     let task_tool_paths = task_tool_paths(config);
     let tool_checks = check_tool_inputs_with_paths(root, &task_tool_paths);
     let mut reads = velnor_actions_tofu::FileCache::new();

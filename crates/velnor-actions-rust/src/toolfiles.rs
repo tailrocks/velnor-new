@@ -10,8 +10,16 @@ use std::fmt;
 /// Tool-file name owned by the Rust adapter.
 pub const RUST_TOOLCHAIN_FILE: &str = "rust-toolchain.toml";
 
+/// Legacy plain/TOML toolchain file name owned by the Rust adapter.
+pub const RUST_TOOLCHAIN_LEGACY_FILE: &str = "rust-toolchain";
+
 /// File symbols routed to the Rust stack (quality §1).
-pub const OWNED_SYMBOLS: &[&str] = &["Cargo.toml", "Cargo.lock", RUST_TOOLCHAIN_FILE];
+pub const OWNED_SYMBOLS: &[&str] = &[
+    "Cargo.toml",
+    "Cargo.lock",
+    RUST_TOOLCHAIN_FILE,
+    RUST_TOOLCHAIN_LEGACY_FILE,
+];
 
 /// Tool files owned by sibling adapters; recognized but never inspected here.
 pub const FOREIGN_TOOL_FILES: &[&str] = &["mise.toml", "mise.lock"];
@@ -46,7 +54,9 @@ pub fn selection_broadening(path: &str) -> Option<SelectionBroadening> {
 /// covered here.
 #[must_use]
 pub fn is_known_toolfile(path: &str) -> bool {
-    path == RUST_TOOLCHAIN_FILE || FOREIGN_TOOL_FILES.contains(&path)
+    path == RUST_TOOLCHAIN_FILE
+        || path == RUST_TOOLCHAIN_LEGACY_FILE
+        || FOREIGN_TOOL_FILES.contains(&path)
 }
 
 /// Stable code for a missing recommended tool input (tooling-input §1).
@@ -196,7 +206,10 @@ pub fn stack_for_symbol(path: &str) -> Option<&'static str> {
 /// Whether `path` names a file this adapter may inspect.
 #[must_use]
 pub fn is_owned_tool_file(path: &str) -> bool {
-    file_name(path) == RUST_TOOLCHAIN_FILE
+    matches!(
+        file_name(path),
+        RUST_TOOLCHAIN_FILE | RUST_TOOLCHAIN_LEGACY_FILE
+    )
 }
 
 /// Final path segment of a repository-relative path.
@@ -204,14 +217,32 @@ fn file_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
 }
 
-/// Inspect supplied `rust-toolchain.toml` bytes (`None` when missing).
+/// Extract the non-empty toolchain channel from `rust-toolchain.toml` or `rust-toolchain`.
+///
+/// # Errors
+///
+/// Returns an error string when `path` is not an owned toolchain file, the content
+/// is malformed, or no non-empty channel is declared.
+pub fn extract_rust_toolchain_channel(path: &str, bytes: &str) -> Result<String, String> {
+    if !is_owned_tool_file(path) {
+        return Err(format!("tool_file_not_owned:{path}"));
+    }
+    let spec = parse_toolchain_for_path(path, bytes)?;
+    let channel = spec.channel.unwrap_or_default();
+    if channel.is_empty() {
+        return Err("missing_toolchain_channel".to_owned());
+    }
+    Ok(channel)
+}
+
+/// Inspect supplied `rust-toolchain.toml` or `rust-toolchain` bytes (`None` when missing).
 ///
 /// Read-only: content issues become findings with manual recommendations,
 /// never errors and never writes.
 ///
 /// # Errors
 ///
-/// Returns [`ToolInspectError::NotOwned`] unless `path` names the owned
+/// Returns [`ToolInspectError::NotOwned`] unless `path` names an owned
 /// tool file.
 pub fn inspect_toolchain_file(
     path: &str,
@@ -225,9 +256,33 @@ pub fn inspect_toolchain_file(
     let Some(text) = content else {
         return Ok(ToolchainInspection::missing(path));
     };
-    match parse_toolchain(text) {
+    match parse_toolchain_for_path(path, text) {
         Ok(spec) => Ok(ToolchainInspection::present(path, spec)),
         Err(problem) => Ok(ToolchainInspection::invalid(path, &problem)),
+    }
+}
+
+/// Parse toolchain specification according to whether `path` is TOML or legacy `rust-toolchain`.
+fn parse_toolchain_for_path(path: &str, content: &str) -> Result<ToolchainSpec, String> {
+    if file_name(path) == RUST_TOOLCHAIN_LEGACY_FILE {
+        let trimmed = content.trim();
+        if trimmed.starts_with('[') {
+            parse_toolchain(content)
+        } else if !trimmed.is_empty()
+            && !trimmed.contains('\n')
+            && !trimmed.contains('\r')
+            && !trimmed.chars().any(char::is_whitespace)
+        {
+            Ok(ToolchainSpec {
+                channel: Some(trimmed.to_owned()),
+                components: Vec::new(),
+                targets: Vec::new(),
+            })
+        } else {
+            Err("line 1: malformed_legacy_toolchain".to_owned())
+        }
+    } else {
+        parse_toolchain(content)
     }
 }
 
@@ -312,44 +367,4 @@ fn parse_string_list(value: &str, index: usize) -> Result<Vec<String>, String> {
 /// `line N: problem` detail with one-based line numbers.
 fn line_problem(index: usize, problem: &str) -> String {
     format!("line {}: {problem}", index.saturating_add(1))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn broadening_pins_root_lock_and_config_only() {
-        assert_eq!(
-            selection_broadening("Cargo.lock"),
-            Some(SelectionBroadening::Lockfile)
-        );
-        for path in ["Cargo.toml", ".cargo/config.toml", ".cargo/config"] {
-            assert_eq!(
-                selection_broadening(path),
-                Some(SelectionBroadening::RootConfig),
-                "{path:?}"
-            );
-        }
-        for path in [
-            "crates/a/Cargo.lock",
-            "crates/a/Cargo.toml",
-            "src/lib.rs",
-            ".mise.toml",
-            "mise.toml",
-            "rust-toolchain.toml",
-        ] {
-            assert_eq!(selection_broadening(path), None, "{path:?}");
-        }
-    }
-
-    #[test]
-    fn known_toolfiles_cover_own_and_foreign() {
-        for path in ["rust-toolchain.toml", "mise.toml", "mise.lock"] {
-            assert!(is_known_toolfile(path), "{path:?}");
-        }
-        for path in [".mise.toml", "Cargo.toml", "Cargo.lock", "src/lib.rs"] {
-            assert!(!is_known_toolfile(path), "{path:?}");
-        }
-    }
 }

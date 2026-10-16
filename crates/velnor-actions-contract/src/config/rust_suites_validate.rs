@@ -108,6 +108,20 @@ pub fn validate_suites_with_dispatch(
             }
         }
     }
+    for name in dispatch.inputs.keys() {
+        let used = suites.iter().any(|suite| {
+            suite.has_workflow_dispatch_trigger()
+                && (suite.filter_input.as_deref() == Some(name.as_str())
+                    || suite.dispatch_inputs.contains_key(name.as_str()))
+        });
+        if !used {
+            return Err(cfg_err(
+                file,
+                format!("workflow.dispatch.inputs.{name}"),
+                format!("unused_dispatch_input:{name}"),
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -124,6 +138,13 @@ impl WorkflowDispatchConfig {
                     file,
                     "workflow.dispatch.inputs",
                     format!("bad_dispatch_input_name:{name}"),
+                ));
+            }
+            if name == "suite" {
+                return Err(cfg_err(
+                    file,
+                    "workflow.dispatch.inputs.suite",
+                    "reserved_dispatch_input_name:suite",
                 ));
             }
             validate_dispatch_input(name, input, file)?;
@@ -326,11 +347,21 @@ fn validate_suite_triggers_and_schedule(
             "schedule_requires_schedule_trigger",
         ));
     }
-    if suite.required && !suite.has_pr_or_push_trigger() {
+    if suite.cancel_in_progress == Some(true) && suite.has_schedule_trigger() {
+        return Err(cfg_err(
+            file,
+            format!("{prefix}.cancel_in_progress"),
+            "schedule_suite_cannot_cancel_in_progress",
+        ));
+    }
+    if suite.required
+        && (!trigger_set.contains(&RustSuiteTrigger::PullRequest)
+            || !trigger_set.contains(&RustSuiteTrigger::Push))
+    {
         return Err(cfg_err(
             file,
             format!("{prefix}.required"),
-            "required_suite_needs_pr_or_push_trigger",
+            "required_suite_requires_pr_and_push_triggers",
         ));
     }
     if suite.allow_failure && suite.required {

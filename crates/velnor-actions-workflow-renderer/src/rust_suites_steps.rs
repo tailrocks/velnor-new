@@ -7,12 +7,16 @@ use velnor_actions_contract::{NextestRunIgnored, RustSuiteConfig, Step};
 use super::RustSuitesRenderSpec;
 use crate::{
     CompileDriver, RenderError, commands,
-    matrix::suites::{SUITE_FAIL_FAST_ENV, SUITE_SHARDS_ENV},
+    matrix::suites::{SUITE_ALLOW_FAILURE_ENV, SUITE_FAIL_FAST_ENV, SUITE_SHARDS_ENV},
     steps,
 };
 
-pub(super) fn base_suite_env(rust_version: &str) -> BTreeMap<String, String> {
-    BTreeMap::from([
+fn nextest_tool_spec(version: &str) -> String {
+    format!("aqua:nextest-rs/nextest/cargo-nextest@{version}")
+}
+
+pub(super) fn base_suite_env(spec: &RustSuitesRenderSpec) -> BTreeMap<String, String> {
+    let mut env = BTreeMap::from([
         (
             "MISE_RUSTUP_HOME".to_owned(),
             "${{ runner.temp }}/velnor/rustup".to_owned(),
@@ -21,8 +25,11 @@ pub(super) fn base_suite_env(rust_version: &str) -> BTreeMap<String, String> {
             "MISE_CARGO_HOME".to_owned(),
             "${{ runner.temp }}/velnor/cargo".to_owned(),
         ),
-        ("RUSTUP_TOOLCHAIN".to_owned(), rust_version.to_owned()),
-    ])
+    ]);
+    if spec.export_rustup_toolchain {
+        env.insert("RUSTUP_TOOLCHAIN".to_owned(), spec.rust_version.clone());
+    }
+    env
 }
 
 pub(super) fn compile_driver_steps(spec: &RustSuitesRenderSpec) -> Result<Vec<Step>, RenderError> {
@@ -34,7 +41,7 @@ pub(super) fn compile_driver_steps(spec: &RustSuitesRenderSpec) -> Result<Vec<St
         spec.compile_driver,
         mbx_version,
         &spec.rust_version,
-        base_suite_env(&spec.rust_version),
+        base_suite_env(spec),
         spec.pull_request_cache_policy,
         None,
     )?;
@@ -51,9 +58,9 @@ pub(super) fn install_suite_tools_step(spec: &RustSuitesRenderSpec) -> Result<St
             "--no-hooks".to_owned(),
             "install".to_owned(),
             format!("rust@{}", spec.rust_version),
-            format!("cargo-nextest@{}", spec.cargo_nextest_version),
+            nextest_tool_spec(&spec.cargo_nextest_version),
         ],
-        base_suite_env(&spec.rust_version),
+        base_suite_env(spec),
     )
 }
 
@@ -71,12 +78,12 @@ pub(super) fn nextest_archive_step(
     let archive_file = format!("{archive_dir}/archive.tar.zst");
     flags.push(format!("--archive-file \"{archive_file}\""));
     let script = format!(
-        "mkdir -p \"{archive_dir}\" && mise --no-config --no-env --no-hooks exec rust@{} cargo-nextest@{} -- {driver} nextest archive {}",
+        "mkdir -p \"{archive_dir}\" && mise --no-config --no-env --no-hooks exec rust@{} {} -- {driver} nextest archive {}",
         spec.rust_version,
-        spec.cargo_nextest_version,
+        nextest_tool_spec(&spec.cargo_nextest_version),
         flags.join(" ")
     );
-    let mut env = base_suite_env(&spec.rust_version);
+    let mut env = base_suite_env(spec);
     env.extend(suite.env.clone());
     steps::shell_step(
         &format!("Build suite ({name})"),
@@ -105,13 +112,21 @@ pub(super) fn nextest_run_step(
         vec![
             format!("--archive-file \"$RUNNER_TEMP/velnor/suite-archive-{name}/archive.tar.zst\""),
             "--workspace-remap .".to_owned(),
+            "--extract-to .".to_owned(),
         ]
     } else {
         package_and_manifest_flags(suite)?
     };
+    let use_filter_input = standalone_workflow && suite.filter_input.is_some();
+    let no_tests = if sharded || suite.filter.is_some() || use_filter_input {
+        "warn"
+    } else {
+        "fail"
+    };
+    args.push(format!("--no-tests {no_tests}"));
     if sharded {
         args.push(format!(
-            "--partition \"hash:${{{{ matrix.shard }}}}/{}\"",
+            "--partition \"hash:$VELNOR_SUITE_SHARD/{}\"",
             suite.partitions
         ));
     }
@@ -125,17 +140,13 @@ pub(super) fn nextest_run_step(
         NextestRunIgnored::All => args.push("--run-ignored all".to_owned()),
     }
     let base_cmd = format!(
-        "mise --no-config --no-env --no-hooks exec rust@{} cargo-nextest@{} -- {driver} nextest run {}",
+        "mise --no-config --no-env --no-hooks exec rust@{} {} -- {driver} nextest run {}",
         spec.rust_version,
-        spec.cargo_nextest_version,
+        nextest_tool_spec(&spec.cargo_nextest_version),
         args.join(" ")
     );
-    let use_filter_input = standalone_workflow && suite.filter_input.is_some();
-    let mut script = build_run_script(&base_cmd, suite.filter.as_deref(), use_filter_input)?;
-    if !standalone_workflow && suite.allow_failure {
-        script.push_str(" || true");
-    }
-    let mut env = base_suite_env(&spec.rust_version);
+    let script = build_run_script(&base_cmd, suite.filter.as_deref(), use_filter_input)?;
+    let mut env = base_suite_env(spec);
     env.extend(suite.env.clone());
     if let Some(threads) = suite.test_threads {
         env.insert("NEXTEST_TEST_THREADS".to_owned(), threads.to_string());
@@ -146,7 +157,14 @@ pub(super) fn nextest_run_step(
             format!("${{{{ inputs.{input_name} }}}}"),
         );
     }
+    if !standalone_workflow && suite.allow_failure {
+        env.insert(SUITE_ALLOW_FAILURE_ENV.to_owned(), "true".to_owned());
+    }
     if sharded {
+        env.insert(
+            "VELNOR_SUITE_SHARD".to_owned(),
+            "${{ matrix.shard }}".to_owned(),
+        );
         env.insert(SUITE_SHARDS_ENV.to_owned(), suite.partitions.to_string());
         env.insert(SUITE_FAIL_FAST_ENV.to_owned(), "false".to_owned());
     }
@@ -178,20 +196,15 @@ fn build_run_script(
     static_filterset: Option<&str>,
     has_filterset_input: bool,
 ) -> Result<String, RenderError> {
-    match (has_filterset_input, static_filterset) {
-        (false, None) => Ok(base_cmd.to_owned()),
-        (false, Some(expr)) => {
-            let quoted = commands::quote_run_arg(expr)?;
-            Ok(format!("{base_cmd} -E {quoted}"))
-        }
-        (true, None) => Ok(format!(
-            "if [ -n \"${{VELNOR_SUITE_FILTERSET:-}}\" ]; then {base_cmd} -E \"$VELNOR_SUITE_FILTERSET\"; else {base_cmd}; fi"
-        )),
-        (true, Some(expr)) => {
-            let quoted = commands::quote_run_arg(expr)?;
-            Ok(format!(
-                "if [ -n \"${{VELNOR_SUITE_FILTERSET:-}}\" ]; then {base_cmd} -E \"$VELNOR_SUITE_FILTERSET\"; else {base_cmd} -E {quoted}; fi"
-            ))
-        }
+    let base = match static_filterset {
+        Some(expr) => format!("{base_cmd} -E {}", commands::quote_run_arg(expr)?),
+        None => base_cmd.to_owned(),
+    };
+    if has_filterset_input {
+        Ok(format!(
+            "if [ -n \"${{VELNOR_SUITE_FILTERSET:-}}\" ]; then {base} -E \"$VELNOR_SUITE_FILTERSET\"; else {base}; fi"
+        ))
+    } else {
+        Ok(base)
     }
 }

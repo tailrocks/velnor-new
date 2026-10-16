@@ -1,15 +1,13 @@
 //! Generic Rust test suite job and workflow builders.
 //!
-//! Renders declared `[[stacks.rust.suites]]` entries into `ci.yml` jobs
-//! or standalone `.github/workflows/<slug>.yml` documents (`suites.yml` by
-//! default) with `workflow_dispatch` and `schedule` triggers, sharded
-//! execution (`Archive` or `Inline`), and suite artifact uploads.
+//! Renders `[[stacks.rust.suites]]` into `ci.yml` jobs or standalone
+//! `.github/workflows/<slug>.yml` documents (`suites.yml` by default).
 
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
     DEFAULT_SUITE_WORKFLOW_SLUG, Job, JobTimeout, PermissionLevel, Permissions,
-    PullRequestCachePolicy, RunsOn, RustSuiteBuildMode, RustSuiteConfig, Step,
+    PullRequestCachePolicy, RunsOn, RustSuiteBuildMode, RustSuiteConfig, RustSuiteTrigger, Step,
     WorkflowDispatchConfig, validate_rust_suites, validate_suites_with_dispatch,
 };
 
@@ -51,13 +49,13 @@ pub struct RustSuitesRenderSpec {
     pub mbx_action: Option<(String, String)>,
     /// Pull-request cache save policy.
     pub pull_request_cache_policy: PullRequestCachePolicy,
+    /// Whether step environments export `RUSTUP_TOOLCHAIN`.
+    pub export_rustup_toolchain: bool,
 }
 
 /// Build suite jobs triggered on `pull_request` or `push` for merging into `ci.yml`.
 ///
-/// Returned jobs carry checkout, optional MBX setup, tool installation,
-/// nextest archive/run, and artifact upload steps; `finalize_jobs` attaches
-/// V2 tools-cache setup, writer election, and workspace cleanup.
+/// `finalize_jobs` attaches V2 tools-cache setup, writer election, and cleanup.
 ///
 /// # Errors
 ///
@@ -187,18 +185,39 @@ pub(super) fn build_suite_jobs_for_entry(
         .unwrap_or(&spec.default_runs_on);
     RunsOn::parse(runs_on).map_err(RenderError::Contract)?;
     let timeout = JobTimeout::new(suite.timeout_minutes).map_err(RenderError::Contract)?;
-    if suite.partitions == 1 {
+    let ci_condition = (!standalone_workflow)
+        .then(|| ci_trigger_condition(suite))
+        .flatten();
+    let mut jobs = if suite.partitions == 1 {
         let job = build_single_suite_job(suite, runs_on, timeout, spec, standalone_workflow)?;
-        return Ok(vec![(format!("suite-{name}"), job)]);
+        vec![(format!("suite-{name}"), job)]
+    } else {
+        match suite.build {
+            RustSuiteBuildMode::Archive => {
+                build_sharded_archive_jobs(suite, runs_on, timeout, spec, standalone_workflow)?
+            }
+            RustSuiteBuildMode::Inline => {
+                let job =
+                    build_sharded_inline_job(suite, runs_on, timeout, spec, standalone_workflow)?;
+                vec![(format!("suite-{name}"), job)]
+            }
+        }
+    };
+    if ci_condition.is_some() {
+        for (_, job) in &mut jobs {
+            job.condition.clone_from(&ci_condition);
+        }
     }
-    match suite.build {
-        RustSuiteBuildMode::Archive => {
-            build_sharded_archive_jobs(suite, runs_on, timeout, spec, standalone_workflow)
-        }
-        RustSuiteBuildMode::Inline => {
-            let job = build_sharded_inline_job(suite, runs_on, timeout, spec, standalone_workflow)?;
-            Ok(vec![(format!("suite-{name}"), job)])
-        }
+    Ok(jobs)
+}
+
+fn ci_trigger_condition(suite: &RustSuiteConfig) -> Option<String> {
+    let pr = suite.triggers.contains(&RustSuiteTrigger::PullRequest);
+    let push = suite.triggers.contains(&RustSuiteTrigger::Push);
+    match (pr, push) {
+        (true, false) => Some("github.event_name == 'pull_request'".to_owned()),
+        (false, true) => Some("github.event_name == 'push'".to_owned()),
+        _ => None,
     }
 }
 
@@ -311,6 +330,7 @@ fn append_suite_artifact_uploads(
     sharded: bool,
 ) -> Result<(), RenderError> {
     let name = &suite.id;
+    let id_prefix = format!("{name}-");
     for artifact in &suite.artifacts {
         let resolved_label = artifact
             .name
@@ -319,16 +339,22 @@ fn append_suite_artifact_uploads(
                 "{partition}",
                 if sharded { "${{ matrix.shard }}" } else { "1" },
             );
-        let artifact_name = if sharded && !resolved_label.contains("${{ matrix.shard }}") {
-            format!(
+        let has_id_prefix = resolved_label == *name || resolved_label.starts_with(&id_prefix);
+        let needs_shard_suffix = sharded && !resolved_label.contains("${{ matrix.shard }}");
+        let artifact_name = match (has_id_prefix, needs_shard_suffix) {
+            (true, true) => format!(
+                "velnor-suite-{}-{resolved_label}-s${{{{ matrix.shard }}}}",
+                steps::RUN_KEY_EXPR
+            ),
+            (true, false) => format!("velnor-suite-{}-{resolved_label}", steps::RUN_KEY_EXPR),
+            (false, true) => format!(
                 "velnor-suite-{}-{name}-s${{{{ matrix.shard }}}}-{resolved_label}",
                 steps::RUN_KEY_EXPR
-            )
-        } else {
-            format!(
+            ),
+            (false, false) => format!(
                 "velnor-suite-{}-{name}-{resolved_label}",
                 steps::RUN_KEY_EXPR
-            )
+            ),
         };
         let path = artifact.paths.join("\n");
         job_steps.push(steps::upload_suite_artifact_step(

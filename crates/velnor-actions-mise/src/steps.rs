@@ -10,7 +10,10 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use crate::catalog::{PinnedTool, ToolCatalog};
-use crate::command::{IsolatedCommand, NO_AUTO_INSTALL_ENV, mise_argv_tail, toolchain_env};
+use crate::command::{
+    IsolatedCommand, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV, NO_AUTO_INSTALL_ENV,
+    mise_argv_tail, toolchain_env,
+};
 use crate::error::MiseError;
 use crate::requests::{MetadataQualification, MiseInstall};
 
@@ -19,10 +22,6 @@ use crate::requests::{MetadataQualification, MiseInstall};
 pub const PREPARE_PINNED_TOOLS_STEP: &str = "Prepare pinned tools";
 
 /// Velnor-owned persistent tool homes carried by every generated step.
-///
-/// Values are caller-supplied absolute paths or runner-temp expressions;
-/// only presence is enforced here, never a shape, so expression forms
-/// (`${{ runner.temp }}/...`) pass through untouched.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolHomes {
     /// Velnor-owned `MISE_RUSTUP_HOME` value.
@@ -33,9 +32,6 @@ pub struct ToolHomes {
 
 impl ToolHomes {
     /// Velnor-owned tool homes under runner temp (expression form).
-    ///
-    /// Shell `$VAR` never expands in the `env:` position that carries
-    /// these paths; the `${{ runner.temp }}` expression form does.
     #[must_use]
     pub fn runner_temp() -> Self {
         Self {
@@ -74,22 +70,30 @@ impl ToolHomes {
         &self.cargo_home
     }
 
-    /// Exact home env triple: both owned homes plus the exact
-    /// `RUSTUP_TOOLCHAIN` pin from the catalog.
+    /// Owned home environment: both owned homes plus `RUSTUP_TOOLCHAIN` when exported.
     #[must_use]
     pub fn env(&self, catalog: &ToolCatalog) -> Vec<(OsString, OsString)> {
-        toolchain_env(
-            &self.rustup_home,
-            &self.cargo_home,
-            &catalog.rustup_toolchain(),
-        )
+        if catalog.exports_rustup_toolchain() {
+            toolchain_env(
+                &self.rustup_home,
+                &self.cargo_home,
+                &catalog.rustup_toolchain(),
+            )
+        } else {
+            vec![
+                (
+                    OsString::from(MISE_RUSTUP_HOME_ENV),
+                    OsString::from(&self.rustup_home),
+                ),
+                (
+                    OsString::from(MISE_CARGO_HOME_ENV),
+                    OsString::from(&self.cargo_home),
+                ),
+            ]
+        }
     }
 
     /// Full env for a pinned `exec` verification step.
-    ///
-    /// Isolation quartet, install-disable pair, plus the owned-homes
-    /// triple: the step runs the prepared toolchain, and a missing tool
-    /// fails as a preparation error instead of installing.
     #[must_use]
     pub fn exec_env(&self, catalog: &ToolCatalog) -> Vec<(OsString, OsString)> {
         let mut env = IsolatedCommand::env_overlay();
@@ -153,9 +157,6 @@ impl PreparePinnedTools {
     }
 
     /// Full step env: isolation overlay plus the owned-homes triple.
-    ///
-    /// Matches [`Self::command`]'s spawner env exactly; the
-    /// correspondence is pinned by test, not by construction comment.
     #[must_use]
     pub fn env(&self, catalog: &ToolCatalog) -> Vec<(OsString, OsString)> {
         let mut env = IsolatedCommand::env_overlay();
@@ -164,12 +165,6 @@ impl PreparePinnedTools {
     }
 
     /// Step env without the owned-homes triple: isolation overlay only.
-    ///
-    /// Pure-tofu roles install no Rust toolchain, so their prepare
-    /// step carries no rustup/cargo homes; config, env files, hooks,
-    /// and lockfile writes stay disabled as in [`Self::env`]. Render
-    /// only: local installs always run under owned homes, so this
-    /// matches no spawner env.
     #[must_use]
     pub fn env_without_homes(&self) -> Vec<(OsString, OsString)> {
         IsolatedCommand::env_overlay()

@@ -52,6 +52,9 @@ pub struct RustStackConfig {
     /// Rust task configuration variants.
     #[serde(default = "default_configurations")]
     pub configurations: Vec<RustConfiguration>,
+    /// Optional exact `major.minor.patch` Rust toolchain override (`[stacks.rust] toolchain`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toolchain: Option<String>,
     /// Sticky declared compile driver; conflicts with durable evidence fail closed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub compile_driver: Option<DeclaredCompileDriver>,
@@ -132,6 +135,7 @@ impl RustStackConfig {
     pub fn default_config() -> Self {
         Self {
             configurations: default_configurations(),
+            toolchain: None,
             compile_driver: None,
             test_runner: None,
             run_ignored: None,
@@ -189,6 +193,15 @@ impl RustStackConfig {
     /// Validate Rust configurations (unique nonempty names) and declared suites.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        if let Some(ref tc) = self.toolchain
+            && (tc.trim() != tc || tc.is_empty() || !super::tools::is_exact_semver(tc))
+        {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.toolchain",
+                format!("invalid_rust_toolchain:{tc}"),
+            ));
+        }
         if self.configurations.is_empty() {
             return Err(ContractError::config(
                 file,

@@ -36,9 +36,7 @@ pub(crate) const VERIFY_NODE_VERSION: &str = "24.21.0";
 /// Supported validator installation pins. The version must equal the pinned
 /// const or the emitted shape drifted and the audit fails closed.
 #[must_use]
-pub(crate) fn validator_install_pin(
-    spec: &str,
-) -> Option<(&'static str, &'static str, &'static str)> {
+pub(crate) fn validator_install_pin(spec: &str) -> Option<(&'static str, &str, &'static str)> {
     let (key, version) = spec.split_once('@')?;
     match key {
         "cargo-deny" if version == CARGO_DENY_VERSION => {
@@ -49,11 +47,9 @@ pub(crate) fn validator_install_pin(
             CARGO_MACHETE_VERSION,
             CARGO_MACHETE_TOOL_SPEC,
         )),
-        "zizmor" if version == velnor_actions_mise::catalog::ZIZMOR_VERSION => Some((
-            "zizmor",
-            velnor_actions_mise::catalog::ZIZMOR_VERSION,
-            "zizmor",
-        )),
+        "zizmor" if velnor_actions_contract::is_exact_semver(version) => {
+            Some(("zizmor", version, "zizmor"))
+        }
         "npm:markdownlint-cli2" if version == MARKDOWNLINT_VERSION => Some((
             "markdownlint-cli2",
             MARKDOWNLINT_VERSION,

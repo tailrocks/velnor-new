@@ -76,12 +76,35 @@ manifest_path = "missing/Cargo.toml"
             .contains("unknown_manifest_path:missing/Cargo.toml"),
         "unexpected error: {err}"
     );
+    assert_unused_dispatch_input_rejected()?;
     Ok(())
 }
 
-#[test]
-fn rust_suites_render_ci_jobs_and_standalone_suites_workflow() -> TestResult {
-    let config = r#"
+fn assert_unused_dispatch_input_rejected() -> TestResult {
+    let config_unused_dispatch = r#"
+schema = 1
+[workflow]
+name = "CI"
+default_branch = "testmain"
+[workflow.dispatch.inputs.unused_flag]
+type = "string"
+[stacks.rust]
+test_runner = "cargo_nextest"
+[[stacks.rust.suites]]
+id = "quarantine"
+profile = "default"
+"#;
+    let repo_unused = make_repo(config_unused_dispatch)?;
+    let err = err_of(prepare(repo_unused.path()), "unused dispatch input")?;
+    assert!(
+        err.to_string()
+            .contains("unused_dispatch_input:unused_flag"),
+        "unexpected error: {err}"
+    );
+    Ok(())
+}
+
+const SUITES_RENDER_CONFIG: &str = r#"
 schema = 1
 [workflow]
 name = "CI"
@@ -104,6 +127,12 @@ required = true
 triggers = ["pull_request", "push"]
 
 [[stacks.rust.suites]]
+id = "pr-probe"
+profile = "ci"
+allow_failure = true
+triggers = ["pull_request"]
+
+[[stacks.rust.suites]]
 id = "nightly"
 profile = "quarantine"
 run_ignored = "only"
@@ -111,7 +140,10 @@ triggers = ["schedule", "workflow_dispatch"]
 schedule = ["0 3 * * *"]
 filter_input = "test_filter"
 "#;
-    let repo = make_repo(config)?;
+
+#[test]
+fn rust_suites_render_ci_jobs_and_standalone_suites_workflow() -> TestResult {
+    let repo = make_repo(SUITES_RENDER_CONFIG)?;
     fs::create_dir_all(repo.path().join(".config"))?;
     fs::write(
         repo.path().join(".config/nextest.toml"),
@@ -121,9 +153,11 @@ filter_input = "test_filter"
     let jobs = finalized_jobs(&prep)?;
     assert!(jobs.contains_key("suite-build-e2e"));
     assert!(jobs.contains_key("suite-e2e"));
+    assert!(jobs.contains_key("suite-pr-probe"));
     let required = jobs.get("required").ok_or("missing required job")?;
     assert!(required.needs.contains(&"suite-build-e2e".to_owned()));
     assert!(required.needs.contains(&"suite-e2e".to_owned()));
+    assert!(!required.needs.contains(&"suite-pr-probe".to_owned()));
 
     let tree = render_staged_tree(&prep)?;
     let ci_yaml = tree
@@ -131,12 +165,22 @@ filter_input = "test_filter"
         .ok_or("missing ci.yml")?;
     assert!(ci_yaml.contains("suite-build-e2e:"));
     assert!(ci_yaml.contains("suite-e2e:"));
+    assert!(ci_yaml.contains("aqua:nextest-rs/nextest/cargo-nextest@"));
+    assert!(ci_yaml.contains("--workspace-remap . --extract-to . --no-tests warn --partition \\\"hash:$VELNOR_SUITE_SHARD/2\\\""));
+    assert!(ci_yaml.contains("VELNOR_SUITE_SHARD: ${{ matrix.shard }}"));
+    assert!(ci_yaml.contains("  suite-pr-probe:\n"));
+    assert!(
+        ci_yaml
+            .contains("    if: github.event_name == 'pull_request'\n    continue-on-error: true\n")
+    );
+    assert!(!ci_yaml.contains("VELNOR_SUITE_ALLOW_FAILURE"));
+
     let suites_yaml = tree
         .get(".github/workflows/suites.yml")
         .ok_or("missing suites.yml")?;
     assert!(suites_yaml.contains("workflow_dispatch:"));
     assert!(suites_yaml.contains("schedule:"));
-    assert!(suites_yaml.contains("0 3 * * *"));
+    assert!(suites_yaml.contains("github.event.schedule == '0 3 * * *'"));
     assert!(suites_yaml.contains("suite-nightly:"));
     assert!(suites_yaml.contains("VELNOR_SUITE_FILTERSET"));
 

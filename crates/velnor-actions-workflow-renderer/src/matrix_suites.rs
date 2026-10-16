@@ -1,6 +1,6 @@
 //! Suite matrix strategy emission for sharded Rust suite jobs.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{Job, StepKind};
 
@@ -13,6 +13,8 @@ pub(crate) const SUITE_SHARDS_ENV: &str = "VELNOR_SUITE_SHARDS";
 pub(crate) const SUITE_MAX_PARALLEL_ENV: &str = "VELNOR_SUITE_MAX_PARALLEL";
 /// Suite matrix marker: `strategy.fail-fast` boolean (`"true"` or `"false"`).
 pub(crate) const SUITE_FAIL_FAST_ENV: &str = "VELNOR_SUITE_FAIL_FAST";
+/// Suite job marker: `continue-on-error: true` when `"true"`.
+pub(crate) const SUITE_ALLOW_FAILURE_ENV: &str = "VELNOR_SUITE_ALLOW_FAILURE";
 
 /// Static shard matrix configuration for a sharded suite runner job.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,6 +38,22 @@ pub(crate) fn has_suite_matrix(job: &Job) -> bool {
                     || env.contains_key(SUITE_FAIL_FAST_ENV)
         )
     })
+}
+
+/// Extract suite job IDs carrying the `VELNOR_SUITE_ALLOW_FAILURE` marker.
+pub(crate) fn suite_allow_failure_jobs_of(jobs: &BTreeMap<String, Job>) -> BTreeSet<String> {
+    jobs.iter()
+        .filter(|(_, job)| {
+            job.steps.iter().any(|step| {
+                matches!(
+                    &step.kind,
+                    StepKind::Shell { env, .. }
+                        if env.get(SUITE_ALLOW_FAILURE_ENV).map(String::as_str) == Some("true")
+                )
+            })
+        })
+        .map(|(id, _)| id.clone())
+        .collect()
 }
 
 /// Extract validated [`SuiteMatrix`] definitions from marked suite jobs.
@@ -131,6 +149,30 @@ pub(crate) fn attach_suite_matrices(
             Yaml::Map(vec![("shard".to_owned(), Yaml::Seq(shards))]),
         ));
         insert_job_key(jobs, id, "strategy", Yaml::Map(strategy_entries))?;
+    }
+    Ok(())
+}
+
+/// Attach `continue-on-error: true` at the job level for `allow_failure` suite jobs.
+pub(crate) fn attach_suite_allow_failure(
+    document: &mut Yaml,
+    allow_failure_jobs: &BTreeSet<String>,
+) -> Result<(), RenderError> {
+    if allow_failure_jobs.is_empty() {
+        return Ok(());
+    }
+    let Yaml::Map(entries) = document else {
+        return Err(matrix_invalid("matrix_without_document"));
+    };
+    let Some(Yaml::Map(jobs)) = entries
+        .iter_mut()
+        .find(|entry| entry.0 == "jobs")
+        .map(|entry| &mut entry.1)
+    else {
+        return Err(matrix_invalid("matrix_without_jobs"));
+    };
+    for id in allow_failure_jobs {
+        insert_job_key(jobs, id, "continue-on-error", Yaml::Bool(true))?;
     }
     Ok(())
 }

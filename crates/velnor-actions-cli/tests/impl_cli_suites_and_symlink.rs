@@ -30,6 +30,9 @@ default = ""
 [agents]
 claude_md = "symlink"
 
+[test_sharding]
+default_shards = 2
+
 [stacks.rust]
 test_runner = "cargo_nextest"
 
@@ -114,7 +117,17 @@ fn default_schema1_config_emits_byte_identical_github_tree() -> Result<(), Box<d
     assert!(meta.is_file());
     assert_eq!(fs::read(&claude)?, b"@AGENTS.md\n");
     assert!(!tmp.join(".github/workflows/suites.yml").exists());
-    assert!(tmp.join(".github/workflows/ci.yml").is_file());
+    let default_ci = fs::read_to_string(tmp.join(".github/workflows/ci.yml"))?;
+    assert!(
+        !default_ci.contains("--partition"),
+        "default_shards = 1 must not emit --partition in ci.yml"
+    );
+    let default_manifest =
+        fs::read_to_string(tmp.join(".github/velnor/task-execution-manifest-v1.json"))?;
+    assert!(
+        !default_manifest.contains("--partition"),
+        "default_shards = 1 must not emit --partition in task-execution-manifest-v1.json"
+    );
 
     let outer = fresh_tempdir("suites-default-preview")?;
     let preview = outer.join("preview");
@@ -159,33 +172,28 @@ fn setup_full_suites_repo(repo: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn verify_ci_yaml(ci_yaml: &str) -> Result<(), Box<dyn Error>> {
+fn verify_ci_yaml(ci_yaml: &str, manifest_json: &str) -> Result<(), Box<dyn Error>> {
     assert!(
-        ci_yaml.contains("  suite-smoke:\n"),
-        "missing suite-smoke in ci.yml:\n{ci_yaml}"
+        manifest_json.contains("\"--no-tests\",\"warn\",\"--partition\",\"hash:1/2\"")
+            && manifest_json.contains("\"--no-tests\",\"warn\",\"--partition\",\"hash:2/2\""),
+        "default_shards = 2 must emit --no-tests warn --partition hash:1/2 and hash:2/2:\n{manifest_json}"
     );
-    assert!(
-        ci_yaml.contains(
-            "    strategy:\n      fail-fast: false\n      matrix:\n        shard:\n          - 1\n          - 2\n"
-        ),
-        "missing 2-shard matrix in ci.yml:\n{ci_yaml}"
-    );
-    assert!(
-        ci_yaml.contains("--partition \\\"hash:${{ matrix.shard }}/2\\\""),
-        "missing nextest partition arg in ci.yml:\n{ci_yaml}"
-    );
-    assert!(
-        ci_yaml.contains("--profile smoke --run-ignored only"),
-        "missing profile/run-ignored in ci.yml:\n{ci_yaml}"
-    );
-    assert!(
-        ci_yaml.contains("NEXTEST_TEST_THREADS: \"4\""),
-        "missing NEXTEST_TEST_THREADS in ci.yml:\n{ci_yaml}"
-    );
-    assert!(
-        ci_yaml.contains("smoke-diff-${{ matrix.shard }}"),
-        "missing smoke-diff shard artifact in ci.yml:\n{ci_yaml}"
-    );
+    for needle in [
+        "  suite-smoke:\n",
+        "    strategy:\n      fail-fast: false\n      matrix:\n        shard:\n          - 1\n          - 2\n",
+        "aqua:nextest-rs/nextest/cargo-nextest@",
+        "--no-tests warn --partition \\\"hash:$VELNOR_SUITE_SHARD/2\\\" --profile smoke --run-ignored only",
+        "VELNOR_SUITE_SHARD: ${{ matrix.shard }}",
+        "NEXTEST_TEST_THREADS: \"4\"",
+        "name: velnor-suite-r${{ github.run_id }}-a${{ github.run_attempt }}-smoke-diff-${{ matrix.shard }}",
+        "test -L .github/CLAUDE.md",
+        "readlink .github/CLAUDE.md | grep -qxF AGENTS.md",
+    ] {
+        assert!(
+            ci_yaml.contains(needle),
+            "missing {needle:?} in ci.yml:\n{ci_yaml}"
+        );
+    }
     let required_block = ci_yaml
         .split("  required:\n")
         .nth(1)
@@ -194,69 +202,62 @@ fn verify_ci_yaml(ci_yaml: &str) -> Result<(), Box<dyn Error>> {
         required_block.contains("      - suite-smoke\n"),
         "Required job must need suite-smoke:\n{required_block}"
     );
-    assert!(
-        ci_yaml.contains("test -L .github/CLAUDE.md"),
-        "Check generated files must verify symlink in ci.yml:\n{ci_yaml}"
-    );
-    assert!(
-        ci_yaml.contains("readlink .github/CLAUDE.md | grep -qxF AGENTS.md"),
-        "Check generated files must verify symlink target in ci.yml:\n{ci_yaml}"
-    );
     Ok(())
 }
 
+const EXPECTED_SUITES_HEADER: &str = "\
+name: Suites
+\"on\":
+  workflow_dispatch:
+    inputs:
+      filter:
+        required: false
+        type: string
+        default: \"\"
+      tier:
+        required: false
+        type: choice
+        default: smoke
+        options:
+          - smoke
+          - full
+          - narrow
+          - capture
+          - all
+  schedule:
+    - cron: 0 2 * * *
+permissions:
+  contents: read
+";
+
 fn verify_suites_yaml(suites_yaml: &str) {
     assert!(
-        suites_yaml.contains("name: Suites\n"),
-        "missing Suites workflow name:\n{suites_yaml}"
+        suites_yaml.contains(EXPECTED_SUITES_HEADER),
+        "suites.yml header/triggers mismatch:\n{suites_yaml}"
     );
     assert!(
-        suites_yaml.contains("  schedule:\n    - cron: 0 2 * * *\n"),
-        "missing schedule 0 2 * * * in suites.yml:\n{suites_yaml}"
+        !suites_yaml.contains("      suite:\n"),
+        "auto suite input must be omitted when all suites declare dispatch_inputs:\n{suites_yaml}"
     );
-    assert!(
-        suites_yaml.contains("  workflow_dispatch:\n    inputs:\n      suite:\n"),
-        "missing workflow_dispatch suite input in suites.yml:\n{suites_yaml}"
-    );
-    assert!(
-        suites_yaml.contains("      tier:\n"),
-        "missing tier dispatch input in suites.yml:\n{suites_yaml}"
-    );
-    assert!(
-        suites_yaml.contains("      filter:\n"),
-        "missing filter dispatch input in suites.yml:\n{suites_yaml}"
-    );
-    assert!(
-        suites_yaml.contains("  cancel-in-progress: false\n"),
-        "missing cancel-in-progress: false in suites.yml:\n{suites_yaml}"
-    );
-    for job_key in [
+    for needle in [
+        "  cancel-in-progress: false\n",
         "  suite-build-full:\n",
         "  suite-full:\n",
         "  suite-build-capture:\n",
         "  suite-capture:\n",
+        "    if: (github.event_name == 'workflow_dispatch' && (inputs.tier == 'full' || inputs.tier == 'all')) || (github.event_name == 'schedule' && github.event.schedule == '0 2 * * *')\n",
+        "    if: github.event_name == 'workflow_dispatch' && inputs.tier == 'capture'\n    continue-on-error: true\n",
+        "--archive-file \\\"$RUNNER_TEMP/velnor/suite-archive-full/archive.tar.zst\\\" --workspace-remap . --extract-to . --no-tests warn --partition \\\"hash:$VELNOR_SUITE_SHARD/12\\\" --profile full --run-ignored only",
+        "VELNOR_SUITE_FILTERSET: ${{ inputs.filter }}",
+        "VELNOR_SUITE_SHARD: ${{ matrix.shard }}",
+        "name: velnor-suite-r${{ github.run_id }}-a${{ github.run_attempt }}-full-diff-${{ matrix.shard }}",
+        "name: velnor-suite-r${{ github.run_id }}-a${{ github.run_attempt }}-capture-${{ matrix.shard }}",
     ] {
         assert!(
-            suites_yaml.contains(job_key),
-            "missing {job_key:?} in suites.yml:\n{suites_yaml}"
+            suites_yaml.contains(needle),
+            "missing {needle:?} in suites.yml:\n{suites_yaml}"
         );
     }
-    assert!(
-        suites_yaml.contains("(inputs.tier == 'full' || inputs.tier == 'all')"),
-        "missing tier condition for full suite:\n{suites_yaml}"
-    );
-    assert!(
-        suites_yaml.contains("inputs.tier == 'capture'"),
-        "missing tier condition for capture suite:\n{suites_yaml}"
-    );
-    assert!(
-        suites_yaml.contains("continue-on-error: true"),
-        "missing continue-on-error: true on capture suite:\n{suites_yaml}"
-    );
-    assert!(
-        suites_yaml.contains("VELNOR_SUITE_FILTERSET: ${{ inputs.filter }}"),
-        "missing VELNOR_SUITE_FILTERSET binding:\n{suites_yaml}"
-    );
 }
 
 #[cfg(unix)]
@@ -286,7 +287,9 @@ fn full_suites_dispatch_symlink_and_preserve_workflows_end_to_end() -> Result<()
     assert!(!tmp.join(".github/workflows/obsolete.yml").exists());
 
     let ci_yaml = fs::read_to_string(tmp.join(".github/workflows/ci.yml"))?;
-    verify_ci_yaml(&ci_yaml)?;
+    let manifest_json =
+        fs::read_to_string(tmp.join(".github/velnor/task-execution-manifest-v1.json"))?;
+    verify_ci_yaml(&ci_yaml, &manifest_json)?;
 
     let suites_yaml = fs::read_to_string(tmp.join(".github/workflows/suites.yml"))?;
     verify_suites_yaml(&suites_yaml);

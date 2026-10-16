@@ -61,32 +61,13 @@ fn agents_config_defaults_to_import_and_roundtrips_symlink() {
 
 #[test]
 fn schedule_trigger_validates_numeric_bounds_and_ranges() {
-    for valid in [
-        "0 2 * * *",
-        "0 6 * * 1",
-        "*/15 0-23/2 1,15 1-12 0-7",
-        "59 23 31 12 7",
-        "0 0 1 1 0",
-    ] {
-        assert_eq!(ScheduleTrigger::single(valid).validate(), Ok(()));
+    let valid = "0 2 * * *|0 6 * * 1|*/15 0-23/2 1,15 1-12 0-7|59 23 31 12 7|0 0 1 1 0";
+    for cron in valid.split('|') {
+        assert_eq!(ScheduleTrigger::single(cron).validate(), Ok(()));
     }
-    for invalid in [
-        "",
-        "0 2 * *",
-        "0 2 * * * *",
-        "60 0 * * *",
-        "0 24 * * *",
-        "0 2 0 * *",
-        "0 2 32 13 8",
-        "0 2 * 0 *",
-        "0 2 * 13 *",
-        "0 2 * * 8",
-        "*/0 * * * *",
-        "10-5 * * * *",
-        "1,,2 * * * *",
-        "a b c d e",
-    ] {
-        assert!(ScheduleTrigger::single(invalid).validate().is_err());
+    let invalid = "|0 2 * *|0 2 * * * *|60 0 * * *|0 24 * * *|0 2 0 * *|0 2 32 13 8|0 2 * 0 *|0 2 * 13 *|0 2 * * 8|*/0 * * * *|10-5 * * * *|1,,2 * * * *|a b c d e";
+    for cron in invalid.split('|') {
+        assert!(ScheduleTrigger::single(cron).validate().is_err());
     }
 }
 
@@ -170,63 +151,53 @@ fn valid_rust_suites_and_dispatch_pass_validation() {
 
 #[test]
 fn rust_suite_id_profile_and_scalar_bounds_fail_closed() {
-    type Case = (fn(&mut RustSuiteConfig), &'static str, &'static str);
-    let cases: &[Case] = &[
-        (|s| s.id = String::new(), "id", "bad_suite_id"),
-        (|s| s.id = "-bad".to_owned(), "id", "bad_suite_id"),
-        (|s| s.id = "bad-".to_owned(), "id", "bad_suite_id"),
-        (|s| s.id = "Bad_Id".to_owned(), "id", "bad_suite_id"),
-        (|s| s.id = "required".to_owned(), "id", "reserved_suite_id"),
-        (|s| s.id = "plan".to_owned(), "id", "reserved_suite_id"),
-        (
-            |s| s.profile = "-flag".to_owned(),
-            "profile",
-            "bad_suite_profile",
-        ),
-        (|s| s.partitions = 0, "partitions", "bad_suite_partitions"),
-        (|s| s.partitions = 65, "partitions", "bad_suite_partitions"),
-        (
-            |s| s.timeout_minutes = 0,
-            "timeout_minutes",
-            "bad_suite_timeout",
-        ),
-        (
-            |s| s.timeout_minutes = 361,
-            "timeout_minutes",
-            "bad_suite_timeout",
-        ),
-        (
-            |s| s.test_threads = Some(0),
-            "test_threads",
-            "bad_suite_test_threads",
-        ),
-        (
-            |s| s.test_threads = Some(65),
-            "test_threads",
-            "bad_suite_test_threads",
-        ),
-        (
-            |s| s.runner_label = Some("ubuntu-latest".to_owned()),
-            "runner_label",
-            "unsupported_label",
-        ),
-        (
-            |s| s.workflow = Some("ci".to_owned()),
-            "workflow",
-            "reserved_suite_workflow",
-        ),
-        (
-            |s| s.workflow = Some("bad.yml".to_owned()),
-            "workflow",
-            "bad_suite_workflow",
-        ),
-    ];
-    for &(mutate, field, problem) in cases {
-        check_suite_err(mutate, field, problem);
-    }
+    chk(|s| s.id = String::new(), "id", "bad_suite_id");
+    chk(|s| s.id = "-bad".into(), "id", "bad_suite_id");
+    chk(|s| s.id = "bad-".into(), "id", "bad_suite_id");
+    chk(|s| s.id = "Bad_Id".into(), "id", "bad_suite_id");
+    chk(|s| s.id = "required".into(), "id", "reserved_suite_id");
+    chk(|s| s.id = "plan".into(), "id", "reserved_suite_id");
+    chk(|s| s.profile = "-f".into(), "profile", "bad_suite_profile");
+    chk(|s| s.partitions = 0, "partitions", "bad_suite_partitions");
+    chk(|s| s.partitions = 65, "partitions", "bad_suite_partitions");
+    chk(
+        |s| s.timeout_minutes = 0,
+        "timeout_minutes",
+        "bad_suite_timeout",
+    );
+    chk(
+        |s| s.timeout_minutes = 361,
+        "timeout_minutes",
+        "bad_suite_timeout",
+    );
+    chk(
+        |s| s.test_threads = Some(0),
+        "test_threads",
+        "bad_suite_test_threads",
+    );
+    chk(
+        |s| s.test_threads = Some(65),
+        "test_threads",
+        "bad_suite_test_threads",
+    );
+    chk(
+        |s| s.runner_label = Some("bad".into()),
+        "runner_label",
+        "unsupported_label",
+    );
+    chk(
+        |s| s.workflow = Some("ci".into()),
+        "workflow",
+        "reserved_suite_workflow",
+    );
+    chk(
+        |s| s.workflow = Some("bad.yml".into()),
+        "workflow",
+        "bad_suite_workflow",
+    );
 }
 
-fn check_suite_err(mutate: fn(&mut RustSuiteConfig), field: &str, problem: &str) {
+fn chk(mutate: fn(&mut RustSuiteConfig), field: &str, problem: &str) {
     let mut stack = RustStackConfig::default_config();
     let mut suite = RustSuiteConfig::new("valid-suite", "default");
     mutate(&mut suite);
@@ -239,39 +210,53 @@ fn check_suite_err(mutate: fn(&mut RustSuiteConfig), field: &str, problem: &str)
 
 #[test]
 fn rust_suite_triggers_and_schedule_fail_closed() {
-    check_suite_err(|s| s.triggers.clear(), "triggers", "empty_suite_triggers");
-    check_suite_err(
-        |s| s.triggers = vec![RustSuiteTrigger::Push, RustSuiteTrigger::Push],
+    use RustSuiteTrigger::{PullRequest, Push, Schedule, WorkflowDispatch};
+    chk(|s| s.triggers.clear(), "triggers", "empty_suite_triggers");
+    chk(
+        |s| s.triggers = vec![Push, Push],
         "triggers",
         "duplicate_suite_trigger",
     );
-    check_suite_err(
-        |s| s.triggers = vec![RustSuiteTrigger::Schedule],
+    chk(
+        |s| s.triggers = vec![Schedule],
         "schedule",
         "empty_suite_schedule",
     );
-    check_suite_err(
+    chk(
         |s| {
-            s.triggers = vec![RustSuiteTrigger::Schedule];
-            s.schedule = vec!["99 25 * * *".to_owned()];
+            s.triggers = vec![Schedule];
+            s.schedule = vec!["99 25 * * *".into()];
         },
         "schedule",
         "bad_cron",
     );
-    check_suite_err(
-        |s| s.schedule = vec!["0 2 * * *".to_owned()],
+    chk(
+        |s| s.schedule = vec!["0 2 * * *".into()],
         "schedule",
         "schedule_requires_schedule_trigger",
     );
-    check_suite_err(
+    chk(
         |s| {
-            s.triggers = vec![RustSuiteTrigger::WorkflowDispatch];
-            s.required = true;
+            s.triggers = vec![Schedule];
+            s.schedule = vec!["0 2 * * *".into()];
+            s.cancel_in_progress = Some(true);
         },
-        "required",
-        "required_suite_needs_pr_or_push_trigger",
+        "cancel_in_progress",
+        "schedule_suite_cannot_cancel_in_progress",
     );
-    check_suite_err(
+    for triggers in [vec![WorkflowDispatch], vec![PullRequest], vec![Push]] {
+        let mut stack = RustStackConfig::default_config();
+        let mut suite = RustSuiteConfig::new("valid-suite", "default");
+        suite.triggers = triggers;
+        suite.required = true;
+        stack.suites = vec![suite];
+        expect_config_err(
+            stack.validate(FILE),
+            "stacks.rust.suites[0].required",
+            "required_suite_requires_pr_and_push_triggers",
+        );
+    }
+    chk(
         |s| {
             s.allow_failure = true;
             s.required = true;
@@ -279,12 +264,11 @@ fn rust_suite_triggers_and_schedule_fail_closed() {
         "allow_failure",
         "allow_failure_cannot_be_required",
     );
-    check_suite_err(
-        |s| s.manifest_path = Some("../Cargo.toml".to_owned()),
+    chk(
+        |s| s.manifest_path = Some("../Cargo.toml".into()),
         "manifest_path",
         "bad_suite_manifest_path",
     );
-
     let mut stack = RustStackConfig::default_config();
     let mut s1 = RustSuiteConfig::new("suite-a", "default");
     s1.cancel_in_progress = Some(true);
@@ -299,10 +283,14 @@ fn rust_suite_triggers_and_schedule_fail_closed() {
 }
 
 #[test]
-fn rust_suite_artifacts_fail_closed() {
+fn rust_suite_artifacts_and_reserved_env_fail_closed() {
     let cases = [
         ("bad-{u}", "target/out", 14, "name", "bad_artifact_name"),
         ("good", "../escape", 14, "paths", "bad_artifact_path"),
+        ("good", "~/home", 14, "paths", "bad_artifact_path"),
+        ("good", "!exclude", 14, "paths", "bad_artifact_path"),
+        ("good", "*/glob", 14, "paths", "bad_artifact_path"),
+        ("good", "target/~/out", 14, "paths", "bad_artifact_path"),
         (
             "good",
             "target/out",
@@ -324,6 +312,18 @@ fn rust_suite_artifacts_fail_closed() {
         let key = format!("stacks.rust.suites[0].artifacts[0].{field}");
         expect_config_err(stack.validate(FILE), &key, problem);
     }
+    let reserved = "PATH VELNOR_X NEXTEST_X MISE_X RUSTUP_X CARGO_X GITHUB_X ACTIONS_X RUNNER_X";
+    for key in reserved.split_whitespace() {
+        let mut stack = RustStackConfig::default_config();
+        let mut suite = RustSuiteConfig::new("valid-suite", "default");
+        suite.env = BTreeMap::from([(key.to_owned(), "1".to_owned())]);
+        stack.suites = vec![suite];
+        expect_config_err(
+            stack.validate(FILE),
+            &format!("stacks.rust.suites[0].env.{key}"),
+            &format!("reserved_suite_env_key:{key}"),
+        );
+    }
 }
 
 #[test]
@@ -337,7 +337,6 @@ fn dispatch_cross_validation_and_preserve_workflows_fail_closed() {
             "cannot_preserve_generator_workflow",
         );
     }
-
     cfg.workflow.preserve_workflows = vec![".github/workflows/nightly.yml".to_owned()];
     let mut custom_wf_suite = RustSuiteConfig::new("nightly-suite", "default");
     custom_wf_suite.workflow = Some("nightly".to_owned());
@@ -349,28 +348,42 @@ fn dispatch_cross_validation_and_preserve_workflows_fail_closed() {
         "workflow.preserve_workflows",
         "preserve_workflow_generator_owned:.github/workflows/nightly.yml",
     );
-
     cfg.workflow.preserve_workflows.clear();
-    cfg.workflow.dispatch = WorkflowDispatchConfig {
-        inputs: BTreeMap::from([(
-            "group".to_owned(),
-            WorkflowDispatchInputConfig {
-                kind: WorkflowDispatchInputType::Choice,
-                description: None,
-                required: false,
-                default: Some("fast".to_owned()),
-                options: vec!["fast".to_owned()],
-            },
-        )]),
+    let str_input = WorkflowDispatchInputConfig {
+        kind: WorkflowDispatchInputType::String,
+        description: None,
+        required: false,
+        default: None,
+        options: Vec::new(),
     };
-
+    cfg.workflow.dispatch.inputs = BTreeMap::from([("suite".to_owned(), str_input.clone())]);
+    expect_config_err(
+        cfg.validate(FILE),
+        "workflow.dispatch.inputs.suite",
+        "reserved_dispatch_input_name:suite",
+    );
+    cfg.workflow.dispatch.inputs = BTreeMap::from([("orphan".to_owned(), str_input)]);
+    expect_config_err(
+        cfg.validate(FILE),
+        "workflow.dispatch.inputs.orphan",
+        "unused_dispatch_input:orphan",
+    );
+    cfg.workflow.dispatch.inputs = BTreeMap::from([(
+        "group".to_owned(),
+        WorkflowDispatchInputConfig {
+            kind: WorkflowDispatchInputType::Choice,
+            description: None,
+            required: false,
+            default: Some("fast".to_owned()),
+            options: vec!["fast".to_owned()],
+        },
+    )]);
     let mut suite = RustSuiteConfig::new("manual-suite", "default");
     suite.triggers = vec![RustSuiteTrigger::WorkflowDispatch];
     suite.dispatch_inputs = BTreeMap::from([("group".to_owned(), vec!["missing".to_owned()])]);
     let mut rust = RustStackConfig::default_config();
     rust.suites = vec![suite];
     cfg.stacks.rust = Some(rust);
-
     expect_config_err(
         cfg.validate(FILE),
         "stacks.rust.suites[0].dispatch_inputs.group",

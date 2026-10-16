@@ -60,6 +60,12 @@ pub(super) fn render_workflow_for_slug(
         .iter()
         .find_map(|suite| suite.cancel_in_progress)
         .unwrap_or(false);
+    let cancel_yaml =
+        if cancel_in_progress && entries.iter().any(|suite| suite.has_schedule_trigger()) {
+            Yaml::str("${{ github.event_name != 'schedule' }}")
+        } else {
+            Yaml::Bool(cancel_in_progress)
+        };
     let top = vec![
         ("name".to_owned(), Yaml::str(workflow_display_name(slug))),
         (
@@ -80,10 +86,7 @@ pub(super) fn render_workflow_for_slug(
                         "{slug}-${{{{ github.workflow }}}}-${{{{ github.ref }}}}-${{{{ github.event_name }}}}"
                     )),
                 ),
-                (
-                    "cancel-in-progress".to_owned(),
-                    Yaml::Bool(cancel_in_progress),
-                ),
+                ("cancel-in-progress".to_owned(), cancel_yaml),
             ]),
         ),
         ("jobs".to_owned(), Yaml::Map(rendered_jobs)),
@@ -135,33 +138,52 @@ fn workflow_display_name(slug: &str) -> String {
 
 fn suite_job_condition(suite: &RustSuiteConfig) -> Option<String> {
     let name = &suite.id;
-    let dispatch = suite.has_workflow_dispatch_trigger();
-    let schedule = suite.has_schedule_trigger();
-    let dispatch_expr = if dispatch {
-        let mut clauses = vec![
-            "github.event_name == 'workflow_dispatch'".to_owned(),
-            format!("(inputs.suite == 'all' || inputs.suite == '{name}')"),
-        ];
-        for (input_name, values) in &suite.dispatch_inputs {
-            let value_ors: Vec<String> = values
-                .iter()
-                .map(|val| format!("inputs.{input_name} == '{val}'"))
-                .collect();
-            clauses.push(if value_ors.len() == 1 {
-                value_ors[0].clone()
-            } else {
-                format!("({})", value_ors.join(" || "))
-            });
+    let dispatch_expr = if suite.has_workflow_dispatch_trigger() {
+        let mut clauses = vec!["github.event_name == 'workflow_dispatch'".to_owned()];
+        if suite.dispatch_inputs.is_empty() {
+            clauses.push(format!(
+                "(inputs.suite == 'all' || inputs.suite == '{name}')"
+            ));
+        } else {
+            for (input_name, values) in &suite.dispatch_inputs {
+                let value_ors: Vec<String> = values
+                    .iter()
+                    .map(|val| format!("inputs.{input_name} == '{val}'"))
+                    .collect();
+                clauses.push(if value_ors.len() == 1 {
+                    value_ors[0].clone()
+                } else {
+                    format!("({})", value_ors.join(" || "))
+                });
+            }
         }
         Some(clauses.join(" && "))
     } else {
         None
     };
-    match (dispatch_expr, schedule) {
-        (Some(d), true) => Some(format!("({d}) || github.event_name == 'schedule'")),
-        (Some(d), false) => Some(d),
-        (None, true) => Some("github.event_name == 'schedule'".to_owned()),
-        (None, false) => None,
+    let schedule_expr = if suite.has_schedule_trigger() {
+        let cron_ors: Vec<String> = suite
+            .schedule
+            .iter()
+            .map(|cron| format!("github.event.schedule == '{cron}'"))
+            .collect();
+        let cron_clause = match cron_ors.as_slice() {
+            [] => None,
+            [single] => Some(single.clone()),
+            many => Some(format!("({})", many.join(" || "))),
+        };
+        Some(match cron_clause {
+            Some(clause) => format!("github.event_name == 'schedule' && {clause}"),
+            None => "github.event_name == 'schedule'".to_owned(),
+        })
+    } else {
+        None
+    };
+    match (dispatch_expr, schedule_expr) {
+        (Some(d), Some(s)) => Some(format!("({d}) || ({s})")),
+        (Some(d), None) => Some(d),
+        (None, Some(s)) => Some(s),
+        (None, None) => None,
     }
 }
 
@@ -174,6 +196,9 @@ fn triggers_yaml(
         .filter(|suite| suite.has_workflow_dispatch_trigger())
         .map(|suite| suite.id.as_str())
         .collect();
+    let needs_auto_suite_input = entries
+        .iter()
+        .any(|suite| suite.has_workflow_dispatch_trigger() && suite.dispatch_inputs.is_empty());
     let mut crons = BTreeSet::new();
     for suite in entries {
         if suite.has_schedule_trigger() {
@@ -188,7 +213,7 @@ fn triggers_yaml(
             "workflow_dispatch".to_owned(),
             Yaml::Map(vec![(
                 "inputs".to_owned(),
-                dispatch_inputs_yaml(&dispatch_suites, workflow_dispatch),
+                dispatch_inputs_yaml(&dispatch_suites, needs_auto_suite_input, workflow_dispatch),
             )]),
         ));
     }
@@ -204,24 +229,28 @@ fn triggers_yaml(
 
 fn dispatch_inputs_yaml(
     dispatch_suites: &[&str],
+    needs_auto_suite_input: bool,
     workflow_dispatch: Option<&WorkflowDispatchConfig>,
 ) -> Yaml {
-    let mut options = Vec::with_capacity(dispatch_suites.len() + 1);
-    options.push(Yaml::str("all"));
-    for name in dispatch_suites {
-        options.push(Yaml::str((*name).to_owned()));
+    let mut inputs = Vec::new();
+    if needs_auto_suite_input {
+        let mut options = Vec::with_capacity(dispatch_suites.len() + 1);
+        options.push(Yaml::str("all"));
+        for name in dispatch_suites {
+            options.push(Yaml::str((*name).to_owned()));
+        }
+        let suite_input = Yaml::Map(vec![
+            (
+                "description".to_owned(),
+                Yaml::str("Test suite to run ('all' runs every dispatchable suite)"),
+            ),
+            ("required".to_owned(), Yaml::Bool(false)),
+            ("type".to_owned(), Yaml::str("choice")),
+            ("default".to_owned(), Yaml::str("all")),
+            ("options".to_owned(), Yaml::Seq(options)),
+        ]);
+        inputs.push(("suite".to_owned(), suite_input));
     }
-    let suite_input = Yaml::Map(vec![
-        (
-            "description".to_owned(),
-            Yaml::str("Test suite to run ('all' runs every dispatchable suite)"),
-        ),
-        ("required".to_owned(), Yaml::Bool(false)),
-        ("type".to_owned(), Yaml::str("choice")),
-        ("default".to_owned(), Yaml::str("all")),
-        ("options".to_owned(), Yaml::Seq(options)),
-    ]);
-    let mut inputs = vec![("suite".to_owned(), suite_input)];
     if let Some(dispatch) = workflow_dispatch {
         for (name, cfg) in &dispatch.inputs {
             let mut fields = Vec::new();

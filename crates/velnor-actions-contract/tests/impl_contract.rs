@@ -48,6 +48,7 @@ fn config_validation_reports_key_paths() {
                     features: vec!["default".to_owned()],
                     target: "host".to_owned(),
                 }],
+                toolchain: None,
                 compile_driver: None,
                 test_runner: None,
                 run_ignored: None,
@@ -61,6 +62,7 @@ fn config_validation_reports_key_paths() {
             exclude: vec!["vendor/**".to_owned()],
         },
         actions: ActionsConfig::default(),
+        tools: velnor_actions_contract::ToolsConfig::default(),
         agents: velnor_actions_contract::AgentsConfig::default(),
         execution: None,
     };
@@ -129,6 +131,7 @@ fn runner_label_uses_exact_catalog_match() {
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
+        tools: velnor_actions_contract::ToolsConfig::default(),
         agents: velnor_actions_contract::AgentsConfig::default(),
         execution: None,
     };
