@@ -210,7 +210,9 @@ fn archive_gate_binds_sources_and_refuses_unbound() {
     let digest = digest_b3(b"d");
     let source = digest_b3(b"package-sources");
     let plain = group(TaskKind::Nextest, "stack/rust/root/nextest/default");
-    let gate = check_archive_identity_with_source(&plain, &digest, &digest, &digest, None);
+    let catalog = ToolCatalog::pinned();
+    let gate =
+        check_archive_identity_with_source(&plain, &digest, &digest, &digest, None, &catalog);
     assert!(matches!(gate, Ok(ArchiveGate::Clear)));
     let mut sharded = group(
         TaskKind::Nextest,
@@ -220,7 +222,7 @@ fn archive_gate_binds_sources_and_refuses_unbound() {
         .as_str()
         .to_owned();
     let check = |task: &ProposedTask, source: Option<&str>| {
-        check_archive_identity_with_source(task, &digest, &digest, &digest, source)
+        check_archive_identity_with_source(task, &digest, &digest, &digest, source, &catalog)
     };
     let unbound = check(&sharded, None);
     assert!(matches!(unbound, Ok(ArchiveGate::SourceUnbound)));

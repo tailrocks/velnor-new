@@ -76,7 +76,7 @@ pub(crate) fn execute_check_to(
     )
     .map_err(|e| internal(&e.to_string()))?;
     crate::select::verify_checkout_until(root, plan.event, &plan.head, deadline)?;
-    let catalog = ToolCatalog::pinned();
+    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(root, &config)?;
     let mut discovered = discover_checks_until(
         root,
         std::slice::from_ref(definition),

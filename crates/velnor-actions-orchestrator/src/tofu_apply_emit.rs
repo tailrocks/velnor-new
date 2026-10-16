@@ -25,7 +25,7 @@ pub(crate) fn tofu_apply_files(
     let Some(config) = prep.config.workflow.tofu_apply.as_ref() else {
         return Ok(Vec::new());
     };
-    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&prep.root, &prep.config)?;
+    let catalog = &prep.catalog;
     let spec = TofuApplySpec {
         config: config.clone(),
         default_branch: prep.default_branch.clone(),

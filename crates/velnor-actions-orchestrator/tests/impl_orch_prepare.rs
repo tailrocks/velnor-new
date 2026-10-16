@@ -52,9 +52,10 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "check_runtime.rs",
             "owned_tool_preview.rs",
             "prepare.rs",
+            "qualification_resolver.rs",
             "routing.rs",
         ],
-        "preparation, execution, routing, and owned preview load configuration at their boundaries"
+        "preparation, execution, routing, owned preview, and qualification admission load configuration at their boundaries"
     );
     let internal = std::fs::read_to_string(orch_src().join("internal.rs"))?;
     assert!(internal.contains("prepare(&root)"), "plan runs preparation");

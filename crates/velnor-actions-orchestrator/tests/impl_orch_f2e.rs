@@ -159,7 +159,7 @@ fn malformed_toolchain_recommends_without_writes() -> TestResult {
     assert!(err.to_string().contains("invalid_rust_toolchain:"), "{err}");
     fs::write(
         root.join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"1.85.0\"\n",
+        "[toolchain]\nchannel = \"1.98.1\"\n",
     )?;
     fs::write(root.join("mise.lock"), "[[[\n")?;
     let before = snapshot(root)?;
@@ -201,7 +201,7 @@ fn conflicting_tool_pins_recommend() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     fs::write(
         repo.path().join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"1.84.0\"\n",
+        "[toolchain]\nchannel = \"1.98.1\"\n",
     )?;
     fs::write(
         repo.path().join("mise.toml"),
@@ -212,7 +212,7 @@ fn conflicting_tool_pins_recommend() -> TestResult {
     let report = preview_into(&prep, parent.path().join("preview"))?;
     let text = report.recommendations.join("\n");
     assert!(text.contains("conflicting_tool_values"), "{text}");
-    assert!(text.contains("1.84.0"), "{text}");
+    assert!(text.contains("1.85.0"), "{text}");
     Ok(())
 }
 

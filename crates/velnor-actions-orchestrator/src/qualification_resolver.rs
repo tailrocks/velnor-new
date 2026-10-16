@@ -17,7 +17,6 @@ use std::path::{Path, PathBuf};
 use velnor_actions_contract::{
     QualificationCacheAdmission, QualificationPhase, canonical_json_bytes,
 };
-use velnor_actions_mise::ToolCatalog;
 
 use crate::OrchestratorError;
 use crate::internal::internal;
@@ -34,7 +33,8 @@ pub fn resolve_qualification_admission(request_path: &Path) -> Result<(), Orches
     let request = request::read_request(request_path)?;
     let root = checkout_root()?;
     request.validate(&root)?;
-    let catalog = ToolCatalog::pinned();
+    let config = crate::config::load_config(&root)?;
+    let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&root, &config)?;
     let client = api::GitHub::for_repository(&catalog, &request.repository)?;
     client.validate_current_branch(&request.context.default_branch)?;
     let Some(predecessor) = request.context.predecessor else {

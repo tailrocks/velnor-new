@@ -67,6 +67,8 @@ fn expected_modules() -> Vec<&'static str> {
         "qualified_acquisition.rs",
         "release_plz.rs",
         "requests.rs",
+        "requests_presence.rs",
+        "requests_presence_tests.rs",
         "restore.rs",
         "restore_evidence.rs",
         "reuse.rs",

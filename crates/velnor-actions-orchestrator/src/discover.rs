@@ -13,7 +13,7 @@ mod registry;
 pub(crate) use registry::detector_entries;
 use registry::{DETECTORS, detected_projects};
 
-use velnor_actions_mise::ArchivePlan;
+use velnor_actions_mise::{ArchivePlan, ToolCatalog};
 use velnor_actions_rust::{
     Recommendation, RustExecutionProfile, WorkspaceRecord, dedupe_workspaces, propose_task,
 };
@@ -90,21 +90,27 @@ pub struct Discovery {
 ///
 /// Returns discovery, detection, inventory, profile, preparation, or
 /// contract errors when any stage fails.
-pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, OrchestratorError> {
-    discover_inner(root, config, None)
+pub(crate) fn discover(
+    root: &Path,
+    config: &VelnorConfig,
+    catalog: &ToolCatalog,
+) -> Result<Discovery, OrchestratorError> {
+    discover_inner(root, config, catalog, None)
 }
 
 pub(crate) fn discover_with_phase_timings(
     root: &Path,
     config: &VelnorConfig,
+    catalog: &ToolCatalog,
     phases: &mut PlanPhaseTimings,
 ) -> Result<Discovery, OrchestratorError> {
-    discover_inner(root, config, Some(phases))
+    discover_inner(root, config, catalog, Some(phases))
 }
 
 fn discover_inner(
     root: &Path,
     config: &VelnorConfig,
+    catalog: &ToolCatalog,
     mut phases: Option<&mut PlanPhaseTimings>,
 ) -> Result<Discovery, OrchestratorError> {
     let (index, skipped_non_utf8) = build_file_index(root, &config.discovery.exclude)?;
@@ -116,7 +122,6 @@ fn discover_inner(
         previous = stack_id;
         candidates.extend(detect(&index));
     }
-    let _catalog = crate::tool_catalog_resolve::resolve_tool_catalog(root, config)?;
     let task_tool_paths = task_tool_paths(config);
     let tool_checks = check_tool_inputs_with_paths(root, &task_tool_paths);
     let mut reads = velnor_actions_tofu::FileCache::new();
@@ -132,10 +137,15 @@ fn discover_inner(
         reason = "the original Option must remain available after this branch"
     )]
     let inventory_result = match phases.as_deref_mut() {
-        Some(phases) => {
-            run_inventories_with_phase_timings(root, &candidates, index.files(), &mut reads, phases)
-        }
-        None => run_inventories(root, &candidates, index.files(), &mut reads),
+        Some(phases) => run_inventories_with_phase_timings(
+            root,
+            &candidates,
+            index.files(),
+            &mut reads,
+            phases,
+            catalog,
+        ),
+        None => run_inventories(root, &candidates, index.files(), &mut reads, catalog),
     };
     let ((outcomes, inventories), tofu_units) = inventory_result?;
     let statuses = check_candidate_outcomes(initial, &outcomes).map_err(|err| {
@@ -144,7 +154,7 @@ fn discover_inner(
         }
     })?;
     let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
-    qualify_workspaces(root, &workspaces)?;
+    qualify_workspaces(root, &workspaces, catalog)?;
     let (mut proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
     let mise_checks =
         velnor_actions_mise::discover_checks(root, &config.checks, &config.qualified_tools)

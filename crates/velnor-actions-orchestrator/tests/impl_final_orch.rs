@@ -23,9 +23,9 @@ fn tool_inputs_report_presence_parse_values_digests() -> TestResult {
     let root = repo.path();
     fs::write(
         root.join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"1.85.0\"\n",
+        "[toolchain]\nchannel = \"1.98.1\"\n",
     )?;
-    fs::write(root.join("mise.toml"), "[tools]\nrust = \"1.85.0\"\n")?;
+    fs::write(root.join("mise.toml"), "[tools]\nrust = \"1.98.1\"\n")?;
     fs::write(root.join("mise.lock"), "{}\n")?;
     let prep = prepare(root)?;
     assert_eq!(prep.discovery.tool_checks.len(), 3);
@@ -53,9 +53,9 @@ fn tool_inputs_report_presence_parse_values_digests() -> TestResult {
         .collect();
     assert_eq!(
         values.get(&("rust-toolchain.toml", "channel")),
-        Some(&"1.85.0")
+        Some(&"1.98.1")
     );
-    assert_eq!(values.get(&("mise.toml", "tools.rust")), Some(&"1.85.0"));
+    assert_eq!(values.get(&("mise.toml", "tools.rust")), Some(&"1.98.1"));
     assert!(tool_conflicts(&prep.discovery.tool_checks).is_empty());
     let text = plan_for(&prep)?;
     assert!(text.contains("mise.toml is read-only input"), "{text}");
@@ -88,7 +88,7 @@ fn conflicting_tool_values_yield_findings() -> TestResult {
     let root = repo.path();
     fs::write(
         root.join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"1.84.0\"\n",
+        "[toolchain]\nchannel = \"1.98.1\"\n",
     )?;
     fs::write(root.join("mise.toml"), "[tools]\nrust = \"1.85.0\"\n")?;
     let before = (

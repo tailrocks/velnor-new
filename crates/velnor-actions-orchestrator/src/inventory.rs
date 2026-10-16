@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use velnor_actions_contract::{CandidateOutcome, Stack, StackCandidate};
-use velnor_actions_mise::{MetadataDiscovery, MetadataQualification, ToolCatalog};
+use velnor_actions_mise::{
+    MetadataDiscovery, MetadataQualification, PinnedTool, ToolCatalog, ToolPresence,
+};
 use velnor_actions_rust::{WorkspaceRecord, parse_metadata_json};
 
 use crate::OrchestratorError;
@@ -42,8 +44,9 @@ pub(crate) fn run_inventories(
     candidates: &[StackCandidate],
     files: &[String],
     reads: &mut velnor_actions_tofu::FileCache,
+    catalog: &ToolCatalog,
 ) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
-    run_inventories_inner(root, candidates, files, reads, None)
+    run_inventories_inner(root, candidates, files, reads, None, catalog)
 }
 
 pub(crate) fn run_inventories_with_phase_timings(
@@ -52,8 +55,9 @@ pub(crate) fn run_inventories_with_phase_timings(
     files: &[String],
     reads: &mut velnor_actions_tofu::FileCache,
     phases: &mut PlanPhaseTimings,
+    catalog: &ToolCatalog,
 ) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
-    run_inventories_inner(root, candidates, files, reads, Some(phases))
+    run_inventories_inner(root, candidates, files, reads, Some(phases), catalog)
 }
 
 fn run_inventories_inner(
@@ -62,8 +66,8 @@ fn run_inventories_inner(
     files: &[String],
     reads: &mut velnor_actions_tofu::FileCache,
     mut phases: Option<&mut PlanPhaseTimings>,
+    catalog: &ToolCatalog,
 ) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
-    let catalog = ToolCatalog::pinned();
     let mut manifests = Vec::with_capacity(candidates.len());
     for candidate in candidates {
         manifests.push(manifest_for_candidate(candidate)?);
@@ -82,9 +86,14 @@ fn run_inventories_inner(
             }
         }
     }
+    // Presence is gated on rust work existing: a tofu-only or candidate-free
+    // request never spawns a rust payload, so it must not require the pin.
+    if !rust_manifests.is_empty() {
+        require_rust_pin(catalog)?;
+    }
     let known: BTreeSet<String> = manifests.iter().cloned().collect();
     let mut load =
-        |manifest: &str| fetch_inventory(root, manifest, &catalog, &known, phases.as_deref_mut());
+        |manifest: &str| fetch_inventory(root, manifest, catalog, &known, phases.as_deref_mut());
     let (rust_outcomes, inventories) = run_with(root, &rust_manifests, true, &mut load)?;
     let mut tofu_outcomes = BTreeMap::new();
     let mut tofu_selection = Vec::new();
@@ -285,6 +294,32 @@ fn is_tool_missing(stderr: &str) -> bool {
         || text.contains("no such tool")
 }
 
+/// Fail closed before any spawn: the pinned Rust toolchain must already
+/// be installed. Mise prints `WARN missing:` on stderr and still runs the
+/// payload when a selected tool is absent, so the nonzero-exit classifier
+/// in [`fetch_inventory`] can never see the gap; presence is verified up
+/// front instead, naming the tool and the versions actually installed.
+///
+/// Fidelity: plain `rust` is a mise core plugin with no backend aliasing,
+/// and the query runs under the same isolation overlay and `--no-config`
+/// flags as `exec`, so `mise ls` reads the same installs directory `exec`
+/// selects from. Backend-qualified `aqua:` selectors are never gated here
+/// (their aliasing made `mise ls` miss versions `exec` resolves). Should
+/// a future mise still resolve a core-plugin version the query misses,
+/// the gate fails closed — generate aborts naming the exact `mise
+/// install` command — never running the wrong toolchain.
+pub(crate) fn require_rust_pin(catalog: &ToolCatalog) -> Result<(), OrchestratorError> {
+    let presence =
+        ToolPresence::new(vec![PinnedTool::Rust]).map_err(|err| OrchestratorError::Inventory {
+            problem: err.to_string(),
+        })?;
+    presence
+        .run(catalog)
+        .map_err(|err| OrchestratorError::Inventory {
+            problem: err.to_string(),
+        })
+}
+
 /// Qualify locked/offline resolution where a lockfile pins deps.
 /// A tool snapshot brackets the runs, failing closed on tool drift.
 /// # Errors
@@ -292,9 +327,14 @@ fn is_tool_missing(stderr: &str) -> bool {
 pub(crate) fn qualify_workspaces(
     root: &Path,
     workspaces: &[PlannedWorkspace],
+    catalog: &ToolCatalog,
 ) -> Result<(), OrchestratorError> {
     let tools = ToolSnapshot::capture(root);
-    let catalog = ToolCatalog::pinned();
+    // Only rust workspaces qualify lockful metadata; an empty list never
+    // spawns, so it must not require the pin.
+    if !workspaces.is_empty() {
+        require_rust_pin(catalog)?;
+    }
     for workspace in workspaces {
         let prefix = workspace.record.workspace_root.clone();
         let lock = workspace_lock(&prefix);
@@ -308,7 +348,7 @@ pub(crate) fn qualify_workspaces(
                 problem: format!("bad_manifest_path:{err}"),
             }
         })?;
-        if let Err(err) = request.run(&catalog) {
+        if let Err(err) = request.run(catalog) {
             let text = err.to_string();
             let first = text.lines().next().unwrap_or("metadata_offline");
             let short: String = first.chars().take(160).collect();

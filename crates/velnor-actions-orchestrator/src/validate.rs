@@ -32,7 +32,10 @@ const DIAG_CAP: usize = 4000;
 ///
 /// Runs before any replace or preview write, so any validator failure,
 /// tool failure, or empty workflow set leaves all output untouched.
-/// Returns the sorted pinned-validator specs that accepted the tree.
+/// Validators run on the compile-time pins: the generating host owns
+/// them, and staged-tree linting is generator QA, not repo toolchain
+/// selection. Returns the sorted pinned-validator specs that accepted
+/// the tree.
 pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, OrchestratorError> {
     let staging = tempfile::tempdir().map_err(|err| {
         OrchestratorError::io(std::env::temp_dir().display().to_string(), err.to_string())

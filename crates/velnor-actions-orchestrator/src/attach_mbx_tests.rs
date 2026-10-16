@@ -6,7 +6,7 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
     use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
     let roots = [String::new()];
     let mut plan = preseed_fixture(&roots);
-    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
+    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &ToolCatalog::pinned()).expect("attach");
     let steps = &plan.ir.jobs["plan"].steps;
     let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
     let roles: Vec<Option<StepRole>> = steps.iter().map(|step| step.role).collect();
@@ -70,7 +70,7 @@ fn lockless_preseed_installs_mbx_before_the_build_without_a_restore() {
     use velnor_actions_contract::StepRole;
     use velnor_actions_workflow_renderer::PRESEED_BUILD_NAME;
     let mut plan = preseed_fixture(&[]);
-    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
+    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &ToolCatalog::pinned()).expect("attach");
     let steps = &plan.ir.jobs["plan"].steps;
     let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
     let roles: Vec<Option<StepRole>> = steps.iter().map(|step| step.role).collect();

@@ -6,7 +6,7 @@ fn cargo_only_preseed_uses_exact_sources_and_native_helper_owners() {
     use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
     let roots = [String::new()];
     let mut plan = preseed_fixture(&roots);
-    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
+    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &ToolCatalog::pinned()).expect("attach");
     let steps = &plan.ir.jobs["plan"].steps;
     let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
     assert!(

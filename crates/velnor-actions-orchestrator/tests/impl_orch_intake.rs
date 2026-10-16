@@ -55,7 +55,7 @@ fn intake_tool_inputs_untouched_and_reported() -> TestResult {
     fs::write(root.join("mise.toml"), "[tools]\n")?;
     fs::write(
         root.join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"1.85.0\"\n",
+        "[toolchain]\nchannel = \"1.98.1\"\n",
     )?;
     fs::write(root.join("mise.lock"), "{}\n")?;
     let before = snapshot(root)?;
@@ -140,10 +140,10 @@ fn intake_tool_changes_refresh_findings_not_tasks() -> TestResult {
     let root = repo.path();
     let tasks_before = task_ids_for(root)?;
     let recs_before = prepare(root)?.discovery.recommendations;
-    fs::write(root.join("mise.toml"), "[tools]\nrust = \"1.0.0\"\n")?;
+    fs::write(root.join("mise.toml"), "[tools]\nrust = \"1.98.1\"\n")?;
     fs::write(
         root.join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"1.0.0\"\n",
+        "[toolchain]\nchannel = \"1.98.1\"\n",
     )?;
     fs::write(root.join("mise.lock"), "{\"version\":1}\n")?;
     assert_eq!(task_ids_for(root)?, tasks_before);

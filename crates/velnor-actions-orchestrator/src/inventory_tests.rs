@@ -170,3 +170,114 @@ fn metadata_subprocess_counts() -> Result<(), String> {
     }
     Ok(())
 }
+
+/// Repo toolchain pin (never 1.98.1) reaches the inventory spawn path:
+/// the passed resolved catalog governs command construction, not the
+/// compile-time pins.
+#[test]
+fn resolved_catalog_reaches_spawn_construction() -> Result<(), String> {
+    let dir = fixture_dir(&[("Cargo.toml", MEMBER)])?;
+    std::fs::write(
+        dir.path().join("rust-toolchain.toml"),
+        "[toolchain]\nchannel = \"9.9.9\"\n",
+    )
+    .map_err(|err| err.to_string())?;
+    let cfg = crate::pins::tests::config_with(std::collections::BTreeMap::new());
+    let resolved = crate::tool_catalog_resolve::resolve_tool_catalog(dir.path(), &cfg)
+        .map_err(|err| err.to_string())?;
+    assert_eq!(
+        resolved.version(velnor_actions_mise::PinnedTool::Rust),
+        "9.9.9"
+    );
+    let request =
+        MetadataDiscovery::new(dir.path().join("Cargo.toml")).map_err(|err| err.to_string())?;
+    let argv = request.argv(&resolved);
+    let text: String = argv
+        .iter()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        text.contains("exec rust@9.9.9 -- cargo metadata"),
+        "resolved pin must build the spawn argv: {text}"
+    );
+    let pinned = request.argv(&ToolCatalog::pinned());
+    let pinned_text: String = pinned
+        .iter()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(
+        pinned_text.contains("exec rust@1.98.1 -- cargo metadata"),
+        "compile-time pin stays distinct: {pinned_text}"
+    );
+    Ok(())
+}
+
+/// Missing repo pin fails closed before any payload spawn: the structured
+/// error names the tool spec and the versions actually installed. Before
+/// this catalog was threaded, the pinned 1.98.1 spec was spawned instead
+/// and mise's `WARN missing:` path silently ran the payload anyway.
+#[test]
+fn missing_repo_pin_fails_closed_before_spawn() -> Result<(), String> {
+    let dir = fixture_dir(&[("Cargo.toml", MEMBER)])?;
+    std::fs::write(
+        dir.path().join("rust-toolchain.toml"),
+        "[toolchain]\nchannel = \"9.9.9\"\n",
+    )
+    .map_err(|err| err.to_string())?;
+    let cfg = crate::pins::tests::config_with(std::collections::BTreeMap::new());
+    let resolved = crate::tool_catalog_resolve::resolve_tool_catalog(dir.path(), &cfg)
+        .map_err(|err| err.to_string())?;
+    let candidates = vec![StackCandidate {
+        stack_id: velnor_actions_rust::STACK_ID.to_owned(),
+        unit_root: String::new(),
+    }];
+    let mut reads = velnor_actions_tofu::FileCache::new();
+    let err = run_inventories(dir.path(), &candidates, &[], &mut reads, &resolved)
+        .expect_err("unsatisfiable pin must fail before spawning");
+    let OrchestratorError::Inventory { problem } = &err else {
+        return Err(format!("expected inventory error, got {err}"));
+    };
+    assert!(
+        problem.contains("missing_tool_pin: rust@9.9.9 not installed"),
+        "error must name tool and versions: {problem}"
+    );
+    Ok(())
+}
+
+/// Tofu-only candidates never spawn a rust payload, so an unsatisfiable
+/// rust pin must not fail the request: the presence gate is scoped to
+/// rust manifests, and qualification sees no workspaces either.
+#[test]
+fn tofu_only_candidates_skip_the_rust_pin_gate() -> Result<(), String> {
+    let dir = fixture_dir(&[
+        ("main.tf", "variable \"plain\" {\n  default = 1\n}\n"),
+        (
+            "config.tf.json",
+            "{\"variable\":{\"jf\":{\"default\":\"tf-json\"}}}",
+        ),
+    ])?;
+    std::fs::write(
+        dir.path().join("rust-toolchain.toml"),
+        "[toolchain]\nchannel = \"9.9.9\"\n",
+    )
+    .map_err(|err| err.to_string())?;
+    let cfg = crate::pins::tests::config_with(std::collections::BTreeMap::new());
+    let resolved = crate::tool_catalog_resolve::resolve_tool_catalog(dir.path(), &cfg)
+        .map_err(|err| err.to_string())?;
+    let candidates = vec![StackCandidate {
+        stack_id: velnor_actions_tofu::STACK_ID.to_owned(),
+        unit_root: String::new(),
+    }];
+    let mut reads = velnor_actions_tofu::FileCache::new();
+    let ((outcomes, inventories), _) =
+        run_inventories(dir.path(), &candidates, &[], &mut reads, &resolved)
+            .map_err(|err| format!("tofu-only must not require the rust pin: {err}"))?;
+    assert_eq!(outcomes.len(), 1);
+    assert!(outcomes[0].metadata_ok, "tofu outcome must succeed");
+    assert!(inventories.is_empty(), "tofu yields no rust inventories");
+    qualify_workspaces(dir.path(), &[], &resolved)
+        .map_err(|err| format!("empty qualification must not require the rust pin: {err}"))?;
+    Ok(())
+}
