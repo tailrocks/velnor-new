@@ -78,6 +78,10 @@ pub struct RenderContext {
     pub workflow_tasks: Vec<crate::verification_jobs::WorkflowTaskPolicy>,
     /// Pull-request cache writes; scoped writes require explicit same-repository opt-in.
     pub pull_request_cache_policy: PullRequestCachePolicy,
+    /// Workflow-level Mise silencing from `workflow.mise_quiet` (default
+    /// true): `false` omits `MISE_QUIET` from the generated workflow
+    /// environment so the wrapper-dispatch trace stays visible.
+    pub mise_quiet: bool,
     /// Caller-validated env for plan-job helper consumers: the freshness
     /// step and the `plan-v1` internal step run the helper, whose
     /// locked/offline qualification reads the Cargo home the Fetch step

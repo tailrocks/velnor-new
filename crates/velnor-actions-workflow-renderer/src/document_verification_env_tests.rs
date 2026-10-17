@@ -60,6 +60,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         preseed: false,
         workflow_tasks: vec![WorkflowTaskPolicy::Verification(policy)],
         pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        mise_quiet: true,
         plan_consumer_env: BTreeMap::new(),
     };
     let checkouts = BTreeMap::new();

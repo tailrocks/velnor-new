@@ -20,6 +20,7 @@ fn fixture_ctx(commands: Vec<ValidatorCommand>) -> RenderContext {
         preseed: false,
         workflow_tasks: Vec::new(),
         pull_request_cache_policy: PullRequestCachePolicy::ReadOnly,
+        mise_quiet: true,
         plan_consumer_env: BTreeMap::new(),
     };
     ctx.validate().expect("fixture context is valid");

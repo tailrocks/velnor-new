@@ -22,6 +22,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             policy: WorkflowPolicy::ConsumerV1,
             default_branch: None,
             generator_validation: velnor_actions_contract::GeneratorValidation::Bootstrap,
+            mise_quiet: true,
             max_parallel_jobs: 2,
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,

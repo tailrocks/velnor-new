@@ -38,6 +38,14 @@ pub struct WorkflowConfig {
     pub generator_validation: GeneratorValidation,
     /// Maximum parallel matrix jobs.
     pub max_parallel_jobs: u32,
+    /// Keep `MISE_QUIET=1` in the generated workflow environment (default true).
+    ///
+    /// Silence is the default for log hygiene. `false` omits `MISE_QUIET` so
+    /// Mise stderr (including the wrapper-dispatch trace) stays visible for
+    /// consumers that assert on it. Verification-task documents never carry
+    /// `MISE_QUIET` regardless of this flag.
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
+    pub mise_quiet: bool,
     /// Cache writes from pull requests; same-repository scope requires explicit opt-in.
     #[serde(default)]
     pub pull_request_cache_policy: PullRequestCachePolicy,
@@ -332,6 +340,23 @@ fn valid_lychee_arg(value: &str) -> bool {
         && !value.contains(['$', '`'])
         && !value.chars().any(char::is_control)
         && !value.split_whitespace().any(|word| word == "mise")
+}
+
+/// Default `mise_quiet` value: silence stays on.
+fn default_true() -> bool {
+    true
+}
+
+/// Serialization predicate keeping the `mise_quiet` default out of emitted config.
+///
+/// Serde's `skip_serializing_if` requires `fn(&bool) -> bool`, so the
+/// small-`Copy` by-value clippy lint does not apply here.
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if requires fn(&bool) -> bool"
+)]
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 #[cfg(test)]

@@ -142,6 +142,8 @@ struct PartialWorkflow {
     generator_validation: Option<GeneratorValidation>,
     /// Maximum parallel matrix jobs.
     max_parallel_jobs: Option<u32>,
+    /// Workflow-level Mise silencing override.
+    mise_quiet: Option<bool>,
     /// Pull-request cache-write policy.
     #[serde(default)]
     pull_request_cache_policy: PullRequestCachePolicy,
@@ -236,6 +238,7 @@ impl PartialWorkflow {
                 .generator_validation
                 .unwrap_or(GeneratorValidation::Bootstrap),
             max_parallel_jobs: self.max_parallel_jobs.unwrap_or(2),
+            mise_quiet: self.mise_quiet.unwrap_or(true),
             pull_request_cache_policy: self.pull_request_cache_policy,
             runner_label: self.runner_label,
             tasks: self.tasks,

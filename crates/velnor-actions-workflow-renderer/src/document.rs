@@ -51,7 +51,8 @@ pub(crate) fn workflow_to_yaml(
     }
     let needs_env = needs_channel_envs(jobs)?;
     let lane_steps = lane_steps(shared);
-    let workflow_env = crate::document_env::workflow_env(!ctx.workflow_tasks.is_empty());
+    let workflow_env =
+        crate::document_env::workflow_env(!ctx.workflow_tasks.is_empty(), ctx.mise_quiet);
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
         let call = shared.calls.get(id).map(String::as_str);
