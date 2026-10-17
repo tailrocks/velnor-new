@@ -42,6 +42,49 @@ fn parse_config(source: &str) -> Result<VelnorConfig, Box<dyn Error>> {
     Ok(config)
 }
 
+#[test]
+fn mise_quiet_defaults_on_and_follows_explicit_values() -> Result<(), Box<dyn Error>> {
+    let default = parse_config(&mise_quiet_source(None))?;
+    assert!(
+        default.workflow.mise_quiet,
+        "absent mise_quiet stays loud-silent"
+    );
+
+    for (wire, expected) in [("false", false), ("true", true)] {
+        let config = parse_config(&mise_quiet_source(Some(wire)))?;
+        assert_eq!(config.workflow.mise_quiet, expected, "mise_quiet = {wire}");
+    }
+    Ok(())
+}
+
+#[test]
+fn mise_quiet_rejects_non_boolean_with_structured_config_error() {
+    for wire in ["\"yes\"", "1"] {
+        let err = toml::from_str::<PartialConfig>(&mise_quiet_source(Some(wire)))
+            .map_err(|err| {
+                velnor_actions_contract::ContractError::map_decode_error(
+                    CONFIG_REL,
+                    &err.to_string(),
+                )
+            })
+            .expect_err("non-boolean mise_quiet must fail");
+        let velnor_actions_contract::ContractError::Config {
+            key_path, problem, ..
+        } = err
+        else {
+            panic!("expected a structured config error, got {err:?}");
+        };
+        assert_eq!(key_path, "document");
+        assert!(problem.contains("invalid type"), "{problem}");
+        assert!(problem.contains("mise_quiet"), "{problem}");
+    }
+}
+
+fn mise_quiet_source(mise_quiet: Option<&str>) -> String {
+    let value = mise_quiet.map_or_else(String::new, |value| format!("mise_quiet = {value}\n"));
+    format!("schema = 1\n[workflow]\nname = \"CI\"\n{value}")
+}
+
 fn source(schema: u32, pull_request_cache_policy: Option<&str>) -> String {
     let policy = pull_request_cache_policy.map_or_else(String::new, |policy| {
         format!("pull_request_cache_policy = \"{policy}\"\n")

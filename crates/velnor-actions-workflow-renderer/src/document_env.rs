@@ -7,7 +7,12 @@ use std::collections::BTreeMap;
 /// Credential scrubbing always applies globally. Mise isolation becomes
 /// workflow-wide only when no repository-declared verification task needs
 /// to load its project config; those tasks keep the job-scoped exception.
-pub(super) fn workflow_env(verification_tasks_present: bool) -> BTreeMap<String, String> {
+/// `mise_quiet = false` (consumer `workflow.mise_quiet`) omits `MISE_QUIET`
+/// so the Mise wrapper-dispatch trace stays visible; the default silences it.
+pub(super) fn workflow_env(
+    verification_tasks_present: bool,
+    mise_quiet: bool,
+) -> BTreeMap<String, String> {
     let mut env = crate::toolchain_env::credential_scrub();
     if !verification_tasks_present {
         env.extend(
@@ -15,7 +20,9 @@ pub(super) fn workflow_env(verification_tasks_present: bool) -> BTreeMap<String,
                 .into_iter()
                 .map(|(key, value)| (key.to_owned(), value.to_owned())),
         );
-        env.insert("MISE_QUIET".to_owned(), "1".to_owned());
+        if mise_quiet {
+            env.insert("MISE_QUIET".to_owned(), "1".to_owned());
+        }
     }
     env
 }
@@ -38,8 +45,8 @@ mod tests {
 
     #[test]
     fn workflow_policy_keeps_verification_mise_config_available() {
-        let isolated = workflow_env(false);
-        let verification = workflow_env(true);
+        let isolated = workflow_env(false, true);
+        let verification = workflow_env(true, true);
 
         assert_eq!(
             isolated.get("MISE_NO_CONFIG").map(String::as_str),
@@ -50,6 +57,20 @@ mod tests {
         assert!(!verification.contains_key("MISE_QUIET"));
         assert_eq!(isolated.get("GH_TOKEN").map(String::as_str), Some(""));
         assert_eq!(verification.get("GH_TOKEN").map(String::as_str), Some(""));
+    }
+
+    #[test]
+    fn mise_quiet_opt_out_omits_only_the_quiet_key() {
+        let silenced = workflow_env(false, true);
+        let loud = workflow_env(false, false);
+        let verification = workflow_env(true, false);
+
+        assert!(!loud.contains_key("MISE_QUIET"));
+        let mut expected = silenced;
+        expected.remove("MISE_QUIET");
+        assert_eq!(loud, expected, "silencing changes only MISE_QUIET");
+        assert!(!verification.contains_key("MISE_QUIET"));
+        assert_eq!(loud.get("MISE_NO_CONFIG").map(String::as_str), Some("1"));
     }
 
     #[test]

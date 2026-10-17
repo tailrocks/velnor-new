@@ -17,6 +17,7 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
             policy: WorkflowPolicy::ConsumerV1,
             default_branch: None,
             generator_validation: GeneratorValidation::Bootstrap,
+            mise_quiet: true,
             max_parallel_jobs: 2,
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,

@@ -13,6 +13,7 @@ fn named(name: &str) -> WorkflowConfig {
         policy: WorkflowPolicy::ConsumerV1,
         default_branch: None,
         generator_validation: GeneratorValidation::Bootstrap,
+        mise_quiet: true,
         max_parallel_jobs: 2,
         pull_request_cache_policy: PullRequestCachePolicy::default(),
         runner_label: None,
@@ -45,6 +46,55 @@ fn pull_request_cache_policy_is_strict_and_uses_kebab_case() {
         PullRequestCachePolicy::ReadOnly
     );
     assert!(serde_json::from_str::<PullRequestCachePolicy>("\"same-repo\"").is_err());
+}
+
+#[test]
+fn mise_quiet_defaults_on_and_serializes_only_when_opted_out() {
+    let value = serde_json::json!({
+        "name": "CI",
+        "policy": "consumer-v1",
+        "generator_validation": "bootstrap",
+        "max_parallel_jobs": 2
+    });
+    let config: WorkflowConfig = serde_json::from_value(value.clone()).expect("default workflow");
+    assert!(config.mise_quiet, "absent mise_quiet must default to true");
+    assert_eq!(
+        serde_json::to_value(&config)
+            .expect("serialize workflow")
+            .get("mise_quiet"),
+        None,
+        "the mise_quiet default must stay out of emitted config"
+    );
+
+    for (wire, expected) in [("false", false), ("true", true)] {
+        let mut opted = value.clone();
+        opted["mise_quiet"] = serde_json::Value::Bool(expected);
+        let config: WorkflowConfig = serde_json::from_value(opted).expect("explicit mise_quiet");
+        assert_eq!(config.mise_quiet, expected, "mise_quiet = {wire}");
+        let serialized = serde_json::to_value(&config).expect("serialize workflow");
+        assert_eq!(
+            serialized.get("mise_quiet").is_some(),
+            !expected,
+            "mise_quiet = {wire} serialization"
+        );
+    }
+}
+
+#[test]
+fn mise_quiet_rejects_non_boolean_values() {
+    for wire in ["\"yes\"", "1", "[]", "{}"] {
+        let value = serde_json::json!({
+            "name": "CI",
+            "policy": "consumer-v1",
+            "generator_validation": "bootstrap",
+            "max_parallel_jobs": 2,
+            "mise_quiet": serde_json::from_str::<serde_json::Value>(wire).expect("json wire"),
+        });
+        assert!(
+            serde_json::from_value::<WorkflowConfig>(value).is_err(),
+            "mise_quiet = {wire} must fail as a non-boolean"
+        );
+    }
 }
 
 #[test]

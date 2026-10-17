@@ -89,6 +89,7 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
         preseed: false,
         workflow_tasks: Vec::new(),
         pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        mise_quiet: true,
         plan_consumer_env: std::collections::BTreeMap::new(),
     };
     let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;

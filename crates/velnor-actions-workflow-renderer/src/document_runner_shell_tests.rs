@@ -55,6 +55,7 @@ fn context() -> RenderContext {
         preseed: false,
         workflow_tasks: Vec::new(),
         pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        mise_quiet: true,
         plan_consumer_env: BTreeMap::new(),
     }
 }
@@ -131,6 +132,44 @@ fn credential_scrub_is_factored_to_workflow_env() {
     assert!(!probe.contains("GH_TOKEN: \"\""));
     assert!(!probe.contains("MISE_NO_CONFIG: \"1\""));
     assert!(probe.contains("PROBE_VALUE: visible"));
+}
+
+#[test]
+fn mise_quiet_opt_out_removes_exactly_the_quiet_line() {
+    let jobs = BTreeMap::from([("probe".to_owned(), job("ubuntu-26.04"))]);
+    let quiet_ctx = context();
+    let loud_ctx = RenderContext {
+        mise_quiet: false,
+        ..context()
+    };
+    let quiet_shared =
+        crate::lane_share::share_lanes(&jobs, &quiet_ctx).expect("lane sharing validates");
+    let quiet = crate::yaml::render_yaml(
+        &workflow_to_yaml(
+            &workflow(jobs.clone()),
+            &quiet_shared,
+            &quiet_ctx,
+            &BTreeSet::new(),
+        )
+        .expect("quiet workflow renders"),
+    );
+    let loud_shared =
+        crate::lane_share::share_lanes(&jobs, &loud_ctx).expect("lane sharing validates");
+    let loud = crate::yaml::render_yaml(
+        &workflow_to_yaml(&workflow(jobs), &loud_shared, &loud_ctx, &BTreeSet::new())
+            .expect("loud workflow renders"),
+    );
+
+    let quiet_line = "  MISE_QUIET: \"1\"\n";
+    assert_eq!(quiet.matches(quiet_line).count(), 1, "{quiet}");
+    assert_eq!(loud.matches(quiet_line).count(), 0, "{loud}");
+    let mut without_quiet = quiet.clone();
+    let start = without_quiet.find(quiet_line).expect("quiet line");
+    without_quiet.replace_range(start..start + quiet_line.len(), "");
+    assert_eq!(
+        loud, without_quiet,
+        "opting out must change no byte except the MISE_QUIET line"
+    );
 }
 
 fn field<'a>(value: &'a crate::yaml::Yaml, key: &str) -> Option<&'a crate::yaml::Yaml> {
