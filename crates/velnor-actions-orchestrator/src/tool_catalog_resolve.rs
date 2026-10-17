@@ -4,14 +4,22 @@
 //! `rust-toolchain`, `[stacks.rust] toolchain`, and `[tools]`, omitting
 //! `RUSTUP_TOOLCHAIN` from step environments when a repository toolchain
 //! file is present so rustup honors the repository file directly.
+//!
+//! The repository `mise.toml` rust record's `mr_boxington` option is read
+//! too: when it selects mise's exec-time cargo→MBX wrapper, the resolved
+//! catalog carries the repository's `mr-boxington` pin so the pinned-tool
+//! preflight installs it (missing installs fall back to the action-owned
+//! PATH `mbx`, which may be a different version).
 
 use std::path::Path;
 
 use velnor_actions_contract::VelnorConfig;
-use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::catalog::{
     ACTIONLINT_VERSION, GH_VERSION, MR_BOXINGTON_VERSION, NEXTEST_VERSION, OPENTOFU_VERSION,
     RUST_VERSION, SHELLCHECK_VERSION, ZIZMOR_VERSION,
+};
+use velnor_actions_mise::{
+    DOT_MISE_TOML_FILE, MISE_TOML_FILE, PinnedTool, ToolCatalog, validate_exact_version,
 };
 use velnor_actions_rust::{
     RUST_TOOLCHAIN_FILE, RUST_TOOLCHAIN_LEGACY_FILE, extract_rust_toolchain_channel,
@@ -20,6 +28,7 @@ use velnor_actions_rust::{
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
+use crate::native_tool_input::{NativeToolSelector, parse_native_tool_selector};
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 
 /// Resolve the effective [`ToolCatalog`] for a repository root and parsed [`VelnorConfig`].
@@ -29,7 +38,11 @@ use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 /// Returns [`OrchestratorError::Config`] when a repository toolchain file has
 /// an invalid or non-`X.Y.Z` channel, when `rust-toolchain.toml` and
 /// `rust-toolchain` disagree, or when a repository toolchain file conflicts
-/// with `[stacks.rust] toolchain` or `[tools] rust`.
+/// with `[stacks.rust] toolchain` or `[tools] rust`. A repository `mise.toml`
+/// rust record with `mr_boxington = true` additionally requires an exact
+/// `[tools] mr-boxington` record; a missing or inexact record, or a record
+/// pin disagreeing with a `.velnor/config.toml [tools] mr-boxington`
+/// override, fails closed.
 pub(crate) fn resolve_tool_catalog(
     root: &Path,
     config: &VelnorConfig,
@@ -73,10 +86,22 @@ pub(crate) fn resolve_tool_catalog(
         .or_else(|| config_tc.map(|(_, channel)| channel))
         .unwrap_or(RUST_VERSION);
     let export_rustup_toolchain = file_tc.is_none();
-    let mr_boxington = config
-        .tools
-        .get("mr-boxington")
-        .unwrap_or(MR_BOXINGTON_VERSION);
+    let repo_mise = read_repo_mise_tools(root)?;
+    let rust_mr_boxington = repo_mise.as_ref().is_some_and(|tools| {
+        tools.lenient_mbx_option
+            || tools
+                .rust
+                .as_ref()
+                .is_some_and(|rust| rust.mr_boxington == Some(true))
+    });
+    let config_mbx_override = config.tools.get("mr-boxington");
+    let mr_boxington = if rust_mr_boxington {
+        resolve_wrapped_mr_boxington_pin(repo_mise.as_ref(), config_mbx_override)?
+    } else {
+        config_mbx_override
+            .unwrap_or(MR_BOXINGTON_VERSION)
+            .to_owned()
+    };
     let gh = config.tools.get("gh").unwrap_or(GH_VERSION);
     let actionlint = config.tools.get("actionlint").unwrap_or(ACTIONLINT_VERSION);
     let shellcheck = config.tools.get("shellcheck").unwrap_or(SHELLCHECK_VERSION);
@@ -85,7 +110,7 @@ pub(crate) fn resolve_tool_catalog(
     let opentofu = config.tools.get("opentofu").unwrap_or(OPENTOFU_VERSION);
     let catalog = ToolCatalog::new(
         rust_version,
-        mr_boxington,
+        &mr_boxington,
         gh,
         actionlint,
         shellcheck,
@@ -96,7 +121,141 @@ pub(crate) fn resolve_tool_catalog(
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
-    Ok(catalog.with_export_rustup_toolchain(export_rustup_toolchain))
+    Ok(catalog
+        .with_export_rustup_toolchain(export_rustup_toolchain)
+        .with_rust_mr_boxington(rust_mr_boxington))
+}
+
+/// Repository-root `mise.toml` tool records the catalog must agree with.
+struct RepoMiseTools {
+    /// Repository-relative file the records were read from.
+    file: &'static str,
+    /// `[tools] rust` record, when present.
+    rust: Option<NativeToolSelector>,
+    /// `[tools] mr-boxington` record, when present.
+    mr_boxington: Option<NativeToolSelector>,
+    /// Line-local wrapper detection over bytes too malformed to parse as
+    /// TOML — the exact predicate that feeds P06 driver evidence, so the
+    /// two readers of the same file cannot disagree.
+    lenient_mbx_option: bool,
+}
+
+/// Read the repository-root Mise tool records (`mise.toml`, then `.mise.toml`).
+///
+/// Recorded decision — first parseable file wins: mise merges every
+/// config file it loads, but this reader deliberately takes only the
+/// first parseable spelling (the same precedence the profile-evidence
+/// reader in `evidence.rs::tool_config_input` applies) and never merges
+/// records across the two. Repositories that rely on per-file merging
+/// must keep the `rust` and `mr-boxington` records in the first file.
+///
+/// Malformed bytes contribute no records and never fail resolution on
+/// their own (tooling-input contract: a malformed `mise.toml` stays a
+/// read-only input reported as a `tooling_input_invalid` finding with a
+/// manual suggestion); the reader keeps walking to the next spelling.
+/// The wrapper option is still detected line-locally in malformed bytes
+/// through [`velnor_actions_rust::tool_config_selects_mbx`] — the same
+/// predicate the P06 driver detector reads — so a malformed file that
+/// selects the wrapper cannot degrade to a silent flag-off while
+/// detection picks the MBX driver; the missing exact pin then fails
+/// closed in [`resolve_wrapped_mr_boxington_pin`]. No readable file
+/// returns `None`.
+fn read_repo_mise_tools(root: &Path) -> Result<Option<RepoMiseTools>, OrchestratorError> {
+    let mut lenient_mbx_option = false;
+    for file in [MISE_TOML_FILE, DOT_MISE_TOML_FILE] {
+        let RepoRead::Text(text) = read_repo_file(root, file, MAX_REPO_FILE_BYTES)? else {
+            continue;
+        };
+        let Ok(value) = toml::from_str::<toml::Value>(&text) else {
+            lenient_mbx_option |= velnor_actions_rust::tool_config_selects_mbx(&text);
+            continue;
+        };
+        let tools = value.get("tools").and_then(toml::Value::as_table);
+        let select = |name: &str| {
+            tools
+                .and_then(|table| table.get(name))
+                .map(parse_native_tool_selector)
+        };
+        return Ok(Some(RepoMiseTools {
+            file,
+            rust: select("rust"),
+            mr_boxington: select("mr-boxington"),
+            lenient_mbx_option,
+        }));
+    }
+    Ok((lenient_mbx_option).then_some(RepoMiseTools {
+        file: MISE_TOML_FILE,
+        rust: None,
+        mr_boxington: None,
+        lenient_mbx_option: true,
+    }))
+}
+
+/// Resolve the mise-managed `mr-boxington` pin the preflight must install.
+///
+/// With the repository rust record's `mr_boxington = true`, mise's
+/// exec-time wrapper dispatches cargo through the mise-managed
+/// `mr-boxington` tool at the repository's own pin, so that pin is
+/// mandatory: an exact, os-unfiltered `X.Y.Z` `[tools] mr-boxington`
+/// record must exist in the same file (mise itself rejects the config
+/// otherwise). An os-restricted record would install on the repository's
+/// listed systems only, so the fleet's preflight could not rely on it.
+/// A `.velnor/config.toml [tools] mr-boxington` override names the same
+/// tool; the repository record governs the exec-time dispatch, so the
+/// override must match it exactly — agreement means the shared pin wins,
+/// disagreement is ambiguous (the preflight would install one pin while
+/// the wrapper dispatches the other) and fails closed naming both.
+fn resolve_wrapped_mr_boxington_pin(
+    repo_mise: Option<&RepoMiseTools>,
+    config_override: Option<&str>,
+) -> Result<String, OrchestratorError> {
+    let Some(tools) = repo_mise else {
+        return Err(missing_mr_boxington_record(MISE_TOML_FILE));
+    };
+    let selector = tools.mr_boxington.as_ref();
+    let Some(pin) = selector.and_then(|selector| selector.version.as_deref()) else {
+        return Err(missing_mr_boxington_record(tools.file));
+    };
+    if let Some(os) = selector.and_then(|selector| selector.os.as_ref()) {
+        return Err(OrchestratorError::config(
+            tools.file,
+            "tools.mr-boxington",
+            format!(
+                "rust_mr_boxington_requires_unfiltered_pin:os={}",
+                os.join(",")
+            ),
+        ));
+    }
+    if validate_exact_version(PinnedTool::MrBoxington.tool_name(), pin).is_err() {
+        return Err(OrchestratorError::config(
+            tools.file,
+            "tools.mr-boxington",
+            format!("rust_mr_boxington_requires_exact_pin:{pin}"),
+        ));
+    }
+    if let Some(override_pin) = config_override
+        && override_pin != pin
+    {
+        return Err(OrchestratorError::config(
+            CONFIG_REL,
+            "tools.mr-boxington",
+            format!(
+                "ambiguous_mr_boxington_pin:{}={pin},{CONFIG_REL}={override_pin}",
+                tools.file
+            ),
+        ));
+    }
+    Ok(pin.to_owned())
+}
+
+/// Fail-closed error for a rust record opting into the wrapper without a
+/// repository `mr-boxington` record to dispatch through.
+fn missing_mr_boxington_record(file: &str) -> OrchestratorError {
+    OrchestratorError::config(
+        file,
+        "tools.mr-boxington",
+        "rust_mr_boxington_requires_mr_boxington_record",
+    )
 }
 
 fn read_toolchain_file(
@@ -122,109 +281,5 @@ fn read_toolchain_file(
 }
 
 #[cfg(test)]
-mod tests {
-    use std::collections::BTreeMap;
-
-    use velnor_actions_contract::{RustStackConfig, VelnorConfig};
-    use velnor_actions_mise::PinnedTool;
-
-    use super::resolve_tool_catalog;
-    use crate::pins::tests::config_with;
-
-    #[test]
-    fn resolves_repo_toolchain_file_and_omits_rustup_toolchain_export() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(
-            dir.path().join("rust-toolchain.toml"),
-            "[toolchain]\nchannel = \"1.94.1\"\n",
-        )
-        .expect("write toolchain");
-        let cfg = config_with(BTreeMap::new());
-        let catalog = resolve_tool_catalog(dir.path(), &cfg).expect("resolve");
-        assert_eq!(catalog.version(PinnedTool::Rust), "1.94.1");
-        assert!(!catalog.exports_rustup_toolchain());
-        assert_eq!(catalog.rustup_toolchain_env(), None);
-    }
-
-    #[test]
-    fn rejects_conflict_between_repo_toolchain_file_and_config() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        std::fs::write(
-            dir.path().join("rust-toolchain.toml"),
-            "[toolchain]\nchannel = \"1.94.1\"\n",
-        )
-        .expect("write toolchain");
-        let mut cfg = config_with(BTreeMap::new());
-        let mut rust = RustStackConfig::default_config();
-        rust.toolchain = Some("1.98.1".to_owned());
-        cfg.stacks.rust = Some(rust);
-        let err = resolve_tool_catalog(dir.path(), &cfg).expect_err("conflict must fail");
-        assert!(
-            err.to_string().contains(
-                "conflicting_rust_toolchain:rust-toolchain.toml=1.94.1,stacks.rust.toolchain=1.98.1"
-            ),
-            "got {err}"
-        );
-    }
-
-    #[test]
-    fn resolves_config_only_rust_and_tool_overrides_with_rustup_export() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let mut cfg: VelnorConfig = config_with(BTreeMap::new());
-        cfg.tools.overrides = BTreeMap::from([
-            ("rust".to_owned(), "1.94.1".to_owned()),
-            ("cargo-nextest".to_owned(), "0.9.150".to_owned()),
-            ("actionlint".to_owned(), "1.7.13".to_owned()),
-        ]);
-        let catalog = resolve_tool_catalog(dir.path(), &cfg).expect("resolve");
-        assert_eq!(catalog.version(PinnedTool::Rust), "1.94.1");
-        assert_eq!(catalog.version(PinnedTool::Nextest), "0.9.150");
-        assert_eq!(catalog.version(PinnedTool::Actionlint), "1.7.13");
-        assert!(catalog.exports_rustup_toolchain());
-        assert_eq!(catalog.rustup_toolchain_env(), Some("1.94.1"));
-    }
-
-    #[test]
-    fn resolves_target_qualified_exact_toolchain_and_rejects_non_exact_channels() {
-        let dir = tempfile::tempdir().expect("tempdir");
-        let cfg = config_with(BTreeMap::new());
-        std::fs::write(
-            dir.path().join("rust-toolchain.toml"),
-            "[toolchain]\nchannel = \"1.99.1-x86_64-unknown-linux-gnu\"\n",
-        )
-        .expect("write target-qualified toolchain");
-        let catalog = resolve_tool_catalog(dir.path(), &cfg).expect("resolve target-qualified");
-        assert_eq!(catalog.version(PinnedTool::Rust), "1.99.1");
-        assert!(!catalog.exports_rustup_toolchain());
-
-        std::fs::write(
-            dir.path().join("rust-toolchain"),
-            "1.99.1-aarch64-apple-darwin\n",
-        )
-        .expect("write legacy toolchain with different target");
-        let conflict_err =
-            resolve_tool_catalog(dir.path(), &cfg).expect_err("target mismatch must fail");
-        assert!(
-            conflict_err.to_string().contains(
-                "conflicting_rust_toolchain_files:rust-toolchain.toml=1.99.1-x86_64-unknown-linux-gnu,rust-toolchain=1.99.1-aarch64-apple-darwin"
-            ),
-            "got {conflict_err}"
-        );
-        std::fs::remove_file(dir.path().join("rust-toolchain")).expect("remove legacy toolchain");
-
-        for bad in [
-            "[toolchain]\nchannel = \"stable\"\n",
-            "[toolchain]\nchannel = \"1.99\"\n",
-            "[toolchain]\nchannel = \"nightly-2026-10-01\"\n",
-            "[toolchain]\n",
-            "[[[\n",
-        ] {
-            std::fs::write(dir.path().join("rust-toolchain.toml"), bad).expect("write bad");
-            let err = resolve_tool_catalog(dir.path(), &cfg).expect_err("non-exact must fail");
-            assert!(
-                err.to_string().contains("invalid_rust_toolchain:"),
-                "expected invalid_rust_toolchain for {bad:?}, got {err}"
-            );
-        }
-    }
-}
+#[path = "tool_catalog_resolve_tests.rs"]
+mod tests;

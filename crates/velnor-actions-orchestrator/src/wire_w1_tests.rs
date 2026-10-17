@@ -231,3 +231,93 @@ fn crate_tools_install_exact_pinned_set() {
         }
     }
 }
+
+#[test]
+fn crate_tools_install_the_repo_mr_boxington_pin_only_for_the_wrapper_option() {
+    use velnor_actions_mise::PinnedTool;
+
+    use crate::matrix_step::prepare_crate_tools_step;
+    let flag_catalog = ToolCatalog::pinned().with_rust_mr_boxington(true);
+    let pinned_catalog = ToolCatalog::pinned();
+    for needs_validators in [false, true] {
+        for use_nextest in [false, true] {
+            let step =
+                prepare_crate_tools_step(&flag_catalog, true, use_nextest, false, needs_validators)
+                    .expect("step");
+            let StepKind::Shell { run, env } = &step.kind else {
+                panic!("prepare must be a shell step");
+            };
+            let at = run
+                .iter()
+                .position(|arg| arg == "install")
+                .expect("install argv");
+            let specs = &run[at + 1..];
+            let mut expected = vec![
+                flag_catalog.tool_spec(PinnedTool::Rust),
+                flag_catalog.tool_spec(PinnedTool::MrBoxington),
+            ];
+            if needs_validators {
+                expected.extend([
+                    flag_catalog.tool_spec(PinnedTool::Actionlint),
+                    flag_catalog.tool_spec(PinnedTool::Shellcheck),
+                    flag_catalog.tool_spec(PinnedTool::Zizmor),
+                ]);
+            }
+            if use_nextest {
+                expected.push(flag_catalog.tool_spec(PinnedTool::Nextest));
+            }
+            assert_eq!(
+                specs,
+                expected.as_slice(),
+                "the repo mr-boxington pin joins the drivers (validators={needs_validators}, nextest={use_nextest})"
+            );
+            for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
+                assert!(env.contains_key(key), "rust role keeps the triple: {env:?}");
+            }
+            let plain = prepare_crate_tools_step(
+                &pinned_catalog,
+                true,
+                use_nextest,
+                false,
+                needs_validators,
+            )
+            .expect("step");
+            let StepKind::Shell { run: plain_run, .. } = &plain.kind else {
+                panic!("prepare must be a shell step");
+            };
+            assert!(
+                !plain_run.contains(&flag_catalog.tool_spec(PinnedTool::MrBoxington)),
+                "without the wrapper option mr-boxington stays action-owned"
+            );
+        }
+    }
+}
+
+#[test]
+fn pure_tofu_crate_jobs_never_install_the_repo_mr_boxington_pin() {
+    use velnor_actions_mise::PinnedTool;
+
+    use crate::matrix_step::prepare_crate_tools_step;
+    let flag_catalog = ToolCatalog::pinned().with_rust_mr_boxington(true);
+    let mbx_spec = flag_catalog.tool_spec(PinnedTool::MrBoxington);
+    for needs_validators in [false, true] {
+        for use_nextest in [false, true] {
+            let step =
+                prepare_crate_tools_step(&flag_catalog, false, use_nextest, true, needs_validators)
+                    .expect("step");
+            let StepKind::Shell { run, env } = &step.kind else {
+                panic!("prepare must be a shell step");
+            };
+            assert!(
+                !run.contains(&mbx_spec),
+                "a job that runs no cargo must not install the repo pin (validators={needs_validators}, nextest={use_nextest}): {run:?}"
+            );
+            for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
+                assert!(
+                    !env.contains_key(key),
+                    "pure-tofu roles keep no owned-homes triple: {env:?}"
+                );
+            }
+        }
+    }
+}

@@ -112,7 +112,13 @@ fn wrapper_only_detects_mbx() -> TestResult {
 fn dot_mise_toml_labeled_correctly() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
-    write_file(root, ".mise.toml", "[tools.rust]\nmr_boxington = true\n")?;
+    // The wrapper option requires the mr-boxington pin in the same file
+    // (tool-catalog resolution fails closed without it).
+    write_file(
+        root,
+        ".mise.toml",
+        "[tools.rust]\nmr_boxington = true\n[tools.mr-boxington]\nversion = \"1.21.1\"\n",
+    )?;
     let prep = prepare(root)?;
     let workspace = &prep.discovery.workspaces[0];
     assert_eq!(workspace.profile.compile_driver.as_str(), "mbx");

@@ -46,6 +46,7 @@ pub use evidence::{
     NextestConfigInput, PERSIST_EVIDENCE, SHADOWED_NEXTEST_CONFIG, evidence_scan_excluded,
     is_generated_output,
 };
+pub use evidence_text::tool_config_selects_mbx;
 pub use graph::dedupe_workspaces;
 pub use identity::{
     GroupExtensionInputs, adapter_entry_metadata, entry_metadata_for_task, expand_shards_for_group,

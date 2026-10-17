@@ -133,7 +133,12 @@ fn parse_native_mise_config(value: &toml::Value) -> Option<NativeMiseConfig> {
     Some(config)
 }
 
-fn parse_native_tool_selector(value: &toml::Value) -> NativeToolSelector {
+/// Parse one `[tools]` record into the typed selector projection.
+///
+/// Shared with the tool-catalog resolver, which reads the same option
+/// surface (`mr_boxington`, `version`) from the repository `mise.toml`
+/// rust record; keep one parser so the shapes cannot drift.
+pub(crate) fn parse_native_tool_selector(value: &toml::Value) -> NativeToolSelector {
     if let Some(version) = value.as_str() {
         return NativeToolSelector {
             version: Some(version.to_owned()),
