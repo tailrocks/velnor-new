@@ -29,6 +29,23 @@ pub(crate) fn scan_tool_config(file: &EvidenceFile<'_>) -> Vec<Evidence> {
     out
 }
 
+/// Whether tool-config bytes select the MBX cargo wrapper line-locally.
+///
+/// One question, one owner: this is the exact predicate
+/// `scan_tool_config` turns into driver evidence, so a reader that
+/// cannot parse the file as TOML (and the P06 detector reading the same
+/// bytes) can never disagree about whether the wrapper is selected.
+#[must_use]
+pub fn tool_config_selects_mbx(content: &str) -> bool {
+    if is_generated_output(content) {
+        return false;
+    }
+    content
+        .lines()
+        .map(strip_comment)
+        .any(|code| has_setting(code, "mr_boxington", "true"))
+}
+
 /// Scan Cargo config content for `rustc-wrapper` naming MBX.
 pub(crate) fn scan_cargo_config(file: &EvidenceFile<'_>) -> Vec<Evidence> {
     if is_generated_output(file.content) {

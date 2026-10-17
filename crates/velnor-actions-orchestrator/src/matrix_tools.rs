@@ -204,6 +204,19 @@ pub(crate) fn prepare_install_opentofu(
 /// nothing else. Pure-tofu roles carry no owned-homes triple in the
 /// step env; every other role keeps it.
 ///
+/// When the repository `mise.toml` rust record sets `mr_boxington = true`
+/// (catalog [`ToolCatalog::rust_mr_boxington`]) and the job carries rust
+/// obligations, mise's exec-time wrapper dispatches cargo through the
+/// mise-managed `mr-boxington` tool at the repository's own pin, so that
+/// pin joins the install argv of the rust-carrying jobs; without it
+/// the preflight never installs `mr-boxington` and, with
+/// `MISE_AUTO_INSTALL=false`, the wrapper falls back to the action-owned
+/// PATH `mbx`, which may be a different version and emits no
+/// `WRAPPER command: mbx` trace (`jackin-project/jackin` issue 1142,
+/// test `case_02`). Pure-tofu jobs run no cargo, so they never install
+/// the pin — and never trip the renderer's mbx-selector gate, which
+/// admits the pin only next to the job's own native MBX action.
+///
 /// # Errors
 ///
 /// Returns a contract error when the Mise adapter rejects the request.
@@ -219,6 +232,7 @@ pub(crate) fn prepare_crate_tools_step(
     needs_validators: bool,
 ) -> Result<Step, OrchestratorError> {
     let mut tools = task_driver_tools(use_rust, use_opentofu);
+    tools.extend((use_rust && catalog.rust_mr_boxington()).then_some(PinnedTool::MrBoxington));
     if needs_validators {
         tools.extend([
             PinnedTool::Actionlint,

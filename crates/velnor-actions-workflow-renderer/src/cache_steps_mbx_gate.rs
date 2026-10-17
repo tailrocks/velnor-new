@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use super::mbx_command::{has_external_mbx_selector, uses_mbx_command};
+use super::mbx_command::{has_external_mbx_selector, mbx_selector_surfaces, uses_mbx_command};
 use super::mbx_preflight::{canonical_mbx_preflight_step, mbx_version_check_step};
 use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
@@ -12,13 +12,23 @@ use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 ///
 /// Jobs without a declared driver are skipped (plan/final/lint carry none);
 /// Cargo jobs are MBX-free while MBX jobs carry exactly one action and command.
+/// The one allowed mise surface is the pinned-tools preflight installing the
+/// job's own action MBX version (the repository `mr_boxington = true` rust
+/// record makes mise's exec-time wrapper dispatch cargo through the
+/// mise-managed tool, so the exact action pin must also be installed there).
 /// # Errors
 pub fn check_mbx_gating(
     jobs: &BTreeMap<String, Job>,
     drivers: &BTreeMap<String, CompileDriver>,
 ) -> Result<(), RenderError> {
     for (id, job) in jobs {
-        if job.steps.iter().any(has_external_mbx_selector) {
+        for step in &job.steps {
+            if !has_external_mbx_selector(step) {
+                continue;
+            }
+            if installs_only_the_action_mbx_version(step, job) {
+                continue;
+            }
             return Err(RenderError::InvalidWorkflow(format!(
                 "mbx_mise_selector_forbidden:{id}"
             )));
@@ -45,6 +55,44 @@ pub fn check_mbx_gating(
         }
     }
     Ok(())
+}
+
+/// Whether the step's only MBX selectors are the pinned-tools install of
+/// the job's own native action version.
+///
+/// The repository rust record's `mr_boxington = true` makes mise's
+/// exec-time wrapper dispatch cargo through the mise-managed
+/// `mr-boxington` tool, so `Prepare pinned tools` installs the exact pin
+/// the job's native MBX action also carries: one version, two transports.
+/// Any other surface — another version, another role, an `exec` selector —
+/// stays forbidden.
+fn installs_only_the_action_mbx_version(step: &Step, job: &Job) -> bool {
+    if step.role != Some(StepRole::PreparePinnedTools) {
+        return false;
+    }
+    let (install, exec) = mbx_selector_surfaces(step);
+    if install.is_empty() || !exec.is_empty() {
+        return false;
+    }
+    let mut versions = job.steps.iter().filter_map(mbx_action_version);
+    let Some(version) = versions.next() else {
+        return false;
+    };
+    versions.next().is_none()
+        && install
+            .iter()
+            .all(|selector| selector == &format!("mr-boxington@{version}"))
+}
+
+/// The `version` input of the job's native MBX action, if it is one.
+fn mbx_action_version(step: &Step) -> Option<&str> {
+    if !is_mbx_action(step) {
+        return None;
+    }
+    match &step.kind {
+        StepKind::Action { with, .. } => with.get("version").map(String::as_str),
+        _ => None,
+    }
 }
 
 fn check_job_mbx(id: &str, job: &Job, driver: CompileDriver) -> Result<(), RenderError> {

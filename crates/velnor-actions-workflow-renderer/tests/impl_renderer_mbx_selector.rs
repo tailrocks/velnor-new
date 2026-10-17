@@ -1,12 +1,15 @@
 //! External Mise selection cannot install or execute MBX outside its action.
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract::{Step, StepKind, StepRole};
 use velnor_actions_workflow_renderer::{
     CompileDriver, RenderError, check_mbx_gating, mise_setup_step, shell_step,
 };
 
 use super::impl_renderer_fixtures::*;
+
+/// Pinned native MBX action ref used to build gating-fixture action steps.
+const MBX_ACTION_USES: &str = "jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6";
 
 fn selector_error(run: Vec<String>, driver: Option<CompileDriver>) -> Result<(), RenderError> {
     let step = shell_step("External tool selection", run, BTreeMap::new())?;
@@ -172,4 +175,114 @@ fn rust_nextest_exec_remains_outside_the_mbx_selector_gate() -> Result<(), Rende
     )?;
     let jobs = BTreeMap::from([job("tests", "Tests", Vec::new(), vec![step])]);
     check_mbx_gating(&jobs, &BTreeMap::new())
+}
+
+/// A `Prepare pinned tools` step installing the given specs.
+fn pinned_install(specs: &[&str]) -> Result<Step, RenderError> {
+    let mut step = shell_step(
+        "Prepare pinned tools",
+        [
+            &["mise", "--no-config", "--no-env", "--no-hooks", "install"][..],
+            specs,
+        ]
+        .concat()
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
+        BTreeMap::new(),
+    )?;
+    step.role = Some(StepRole::PreparePinnedTools);
+    Ok(step)
+}
+
+/// A native MBX action step pinned to the given version input.
+fn mbx_action(version: &str) -> Result<Step, RenderError> {
+    let mut step = shell_step(
+        "Unused shell placeholder",
+        vec!["true".to_owned()],
+        BTreeMap::new(),
+    )?;
+    step.kind = StepKind::Action {
+        uses: MBX_ACTION_USES.to_owned(),
+        with: BTreeMap::from([
+            ("version".to_owned(), version.to_owned()),
+            ("toolchain".to_owned(), "1.98.1".to_owned()),
+        ]),
+        env: BTreeMap::new(),
+    };
+    Ok(step)
+}
+
+#[test]
+fn pinned_preflight_may_install_only_the_action_mbx_version() -> Result<(), RenderError> {
+    let steps = vec![
+        pinned_install(&["rust@1.98.1", "mr-boxington@1.21.1"])?,
+        mbx_action("1.21.1")?,
+    ];
+    let jobs = BTreeMap::from([job("wrapped", "Wrapped", Vec::new(), steps)]);
+    check_mbx_gating(&jobs, &BTreeMap::new())
+}
+
+#[test]
+fn pinned_preflight_version_drift_from_the_action_stays_forbidden() -> Result<(), RenderError> {
+    for (install, action) in [("1.21.1", "1.24.0"), ("1.24.0", "1.21.1")] {
+        let steps = vec![
+            pinned_install(&["rust@1.98.1", &format!("mr-boxington@{install}")])?,
+            mbx_action(action)?,
+        ];
+        let jobs = BTreeMap::from([job("drift", "Drift", Vec::new(), steps)]);
+        assert!(
+            check_mbx_gating(&jobs, &BTreeMap::new())
+                .is_err_and(|error| format!("{error:?}").contains("mbx_mise_selector_forbidden")),
+            "install {install} vs action {action} must stay forbidden"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn pinned_preflight_without_the_action_stays_forbidden() -> Result<(), RenderError> {
+    let steps = vec![pinned_install(&["rust@1.98.1", "mr-boxington@1.21.1"])?];
+    let jobs = BTreeMap::from([job("no-action", "No action", Vec::new(), steps)]);
+    assert!(
+        check_mbx_gating(&jobs, &BTreeMap::new())
+            .is_err_and(|error| format!("{error:?}").contains("mbx_mise_selector_forbidden")),
+        "an mbx install without the native action has no version to agree with"
+    );
+    Ok(())
+}
+
+#[test]
+fn pinned_preflight_exec_selectors_and_other_roles_stay_forbidden() -> Result<(), RenderError> {
+    let mut exec_step = shell_step(
+        "Prepare pinned tools",
+        mise_exec(&["rust@1.98.1", "mr-boxington@1.21.1"], &["cargo", "build"]),
+        BTreeMap::new(),
+    )?;
+    exec_step.role = Some(StepRole::PreparePinnedTools);
+    let jobs = BTreeMap::from([job(
+        "exec",
+        "Exec",
+        Vec::new(),
+        vec![exec_step, mbx_action("1.21.1")?],
+    )]);
+    assert!(
+        check_mbx_gating(&jobs, &BTreeMap::new())
+            .is_err_and(|error| format!("{error:?}").contains("mbx_mise_selector_forbidden")),
+        "an exec selector stays forbidden even inside the prepare step"
+    );
+    let mut loose = pinned_install(&["rust@1.98.1", "mr-boxington@1.21.1"])?;
+    loose.role = None;
+    let jobs = BTreeMap::from([job(
+        "loose",
+        "Loose",
+        Vec::new(),
+        vec![loose, mbx_action("1.21.1")?],
+    )]);
+    assert!(
+        check_mbx_gating(&jobs, &BTreeMap::new())
+            .is_err_and(|error| format!("{error:?}").contains("mbx_mise_selector_forbidden")),
+        "the exemption names the pinned-tools role, not any shell step"
+    );
+    Ok(())
 }

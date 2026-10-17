@@ -3,8 +3,6 @@
 //! Exact Velnor-owned pins; project `mise.toml` selectors never alter them.
 //! Each source and check date is recorded beside its release constant.
 
-use velnor_actions_contract::ToolIdentity;
-
 use crate::error::MiseError;
 
 /// Bootstrap lock and version-policy IO plus verification.
@@ -29,6 +27,10 @@ pub use mbx::MbxProvisioning;
 /// Measured official bootstrap assets for source building only.
 #[path = "catalog_source_build_bootstrap.rs"]
 pub mod source_build_bootstrap;
+
+/// Pinned identity records (ver §2) plus the trusted gate over them.
+#[path = "catalog_identity.rs"]
+mod identity;
 
 /// Reviewed owned source staging identities, separate from distribution qualification.
 #[path = "catalog_owned_source.rs"]
@@ -200,6 +202,12 @@ pub struct ToolCatalog {
     opentofu: String,
     /// Whether `RUSTUP_TOOLCHAIN` is exported in step environments.
     export_rustup_toolchain: bool,
+    /// Whether the repository `mise.toml` rust record sets `mr_boxington = true`,
+    /// so the pinned-tool preflight must also install [`PinnedTool::MrBoxington`]
+    /// at the catalog pin (mise's exec-time wrapper dispatches cargo through it;
+    /// with `MISE_AUTO_INSTALL=false` a missing install falls back to the
+    /// action-owned `mbx` on PATH, which may be a different version).
+    rust_mr_boxington: bool,
 }
 
 impl ToolCatalog {
@@ -216,6 +224,7 @@ impl ToolCatalog {
             nextest: NEXTEST_VERSION.to_owned(),
             opentofu: OPENTOFU_VERSION.to_owned(),
             export_rustup_toolchain: true,
+            rust_mr_boxington: false,
         }
     }
 
@@ -257,44 +266,8 @@ impl ToolCatalog {
             nextest: nextest.to_owned(),
             opentofu: opentofu.to_owned(),
             export_rustup_toolchain: true,
+            rust_mr_boxington: false,
         })
-    }
-
-    /// Pinned identity record for one tool (ver §2).
-    #[must_use]
-    pub fn tool_identity(&self, tool: PinnedTool) -> ToolIdentity {
-        ToolIdentity {
-            name: tool.tool_name().to_owned(),
-            version: self.version(tool).to_owned(),
-            source: tool_source(tool, self.version(tool)),
-            platforms: TOOL_PLATFORMS.iter().map(ToString::to_string).collect(),
-            digest: self.tool_digest(tool).to_owned(),
-        }
-    }
-
-    /// Qualified artifact digest for one tool, or the placeholder.
-    fn tool_digest(&self, tool: PinnedTool) -> &str {
-        if tool == PinnedTool::Opentofu && self.version(tool) == OPENTOFU_VERSION {
-            OPENTOFU_SHA256_LINUX_AMD64
-        } else {
-            PLACEHOLDER_DIGEST
-        }
-    }
-
-    /// Trusted gate over every catalog identity record.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::Contract`] for the first invalid identity.
-    pub fn validate_identities(&self) -> Result<(), MiseError> {
-        for tool in PinnedTool::ALL {
-            self.tool_identity(tool)
-                .validate("catalog")
-                .map_err(|err| MiseError::Contract {
-                    problem: err.to_string(),
-                })?;
-        }
-        Ok(())
     }
 
     /// Exact pinned version for one tool.
@@ -357,6 +330,21 @@ impl ToolCatalog {
     #[must_use]
     pub const fn with_export_rustup_toolchain(mut self, export: bool) -> Self {
         self.export_rustup_toolchain = export;
+        self
+    }
+
+    /// Whether the repository rust record sets `mr_boxington = true`, so the
+    /// pinned-tool preflight must install [`PinnedTool::MrBoxington`] too.
+    #[must_use]
+    pub const fn rust_mr_boxington(&self) -> bool {
+        self.rust_mr_boxington
+    }
+
+    /// Configure whether the pinned-tool preflight must install the
+    /// repository's `mr-boxington` pin alongside the drivers.
+    #[must_use]
+    pub const fn with_rust_mr_boxington(mut self, flag: bool) -> Self {
+        self.rust_mr_boxington = flag;
         self
     }
 

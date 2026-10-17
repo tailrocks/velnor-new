@@ -156,6 +156,14 @@ fn has_mbx_selector(words: &[ShellToken]) -> bool {
 }
 
 fn has_mbx_selector_in_command(words: &[ShellToken], start: usize) -> bool {
+    let (install, exec) = mbx_selectors_in_command(words, start);
+    !install.is_empty() || !exec.is_empty()
+}
+
+/// MBX selectors of one `mise` command, split by their surface: pinned
+/// bootstrap `install` specs first, `exec` tool selectors second.
+fn mbx_selectors_in_command(words: &[ShellToken], start: usize) -> (Vec<String>, Vec<String>) {
+    let none = (Vec::new(), Vec::new());
     let prefix_matches = words
         .get(start..start + MISE_INSTALL_PREFIX.len())
         .is_some_and(|prefix| {
@@ -165,25 +173,58 @@ fn has_mbx_selector_in_command(words: &[ShellToken], start: usize) -> bool {
                 .eq(MISE_INSTALL_PREFIX.iter().copied().map(Some))
         });
     if !prefix_matches {
-        return false;
+        return none;
     }
     let Some(subcommand) = words.get(start + MISE_INSTALL_PREFIX.len()) else {
-        return false;
+        return none;
     };
     let first_selector = start + MISE_INSTALL_PREFIX.len() + 1;
+    let selected = |take: &dyn Fn(&ShellToken) -> bool| -> Vec<String> {
+        words[first_selector..]
+            .iter()
+            .take_while(|word| take(word))
+            .filter_map(ShellToken::word)
+            .filter(|word| is_mbx_selector(word))
+            .map(ToOwned::to_owned)
+            .collect()
+    };
     match subcommand.word() {
-        Some("install") => words[first_selector..]
-            .iter()
-            .take_while(|word| !word.is_separator())
-            .filter_map(ShellToken::word)
-            .any(is_mbx_selector),
-        Some("exec") => words[first_selector..]
-            .iter()
-            .take_while(|word| word.word() != Some("--") && !word.is_separator())
-            .filter_map(ShellToken::word)
-            .any(is_mbx_selector),
-        _ => false,
+        Some("install") => {
+            let specs = selected(&|word| !word.is_separator());
+            (specs, Vec::new())
+        }
+        Some("exec") => {
+            let specs = selected(&|word| word.word() != Some("--") && !word.is_separator());
+            (Vec::new(), specs)
+        }
+        _ => none,
     }
+}
+
+/// MBX selectors of one rendered step, split by their mise surface.
+///
+/// Install selectors name pinned bootstrap installs; exec selectors name
+/// tool selection. Both stay empty for non-shell steps and for shell the
+/// token split cannot prove safe, which [`has_external_mbx_selector`]
+/// already reports as forbidden.
+pub(super) fn mbx_selector_surfaces(step: &Step) -> (Vec<String>, Vec<String>) {
+    let StepKind::Shell { run, .. } = &step.kind else {
+        return (Vec::new(), Vec::new());
+    };
+    let payload = &run[crate::toolchain_env::unset_prefix_len(run)..];
+    let Some(words) = selector_words(payload) else {
+        return (Vec::new(), Vec::new());
+    };
+    let mut surfaces = (Vec::new(), Vec::new());
+    for start in 0..words.len() {
+        if words[start].word() != Some("mise") || !is_command_start(&words, start) {
+            continue;
+        }
+        let (mut install, mut exec) = mbx_selectors_in_command(&words, start);
+        surfaces.0.append(&mut install);
+        surfaces.1.append(&mut exec);
+    }
+    surfaces
 }
 
 fn is_command_start(words: &[ShellToken], index: usize) -> bool {
