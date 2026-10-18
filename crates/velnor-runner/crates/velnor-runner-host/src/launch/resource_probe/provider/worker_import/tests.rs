@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use bollard::models::ContainerConfig;
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crate::journal::{ImageImportState, Journal};
 use crate::launch::inspect_tests::{DockerStub, http};
@@ -174,6 +174,45 @@ async fn wrong_rootfs_layers_stop_before_durable_completion() -> Result<(), Stri
         .await
         .map_err(|error| error.to_string())?;
     assert_eq!(record.state, ImageImportState::Prepared);
+    Ok(())
+}
+
+#[tokio::test]
+async fn classic_image_with_repo_digest_stays_prepared() -> Result<(), String> {
+    let (_scratch, journal) = journal("classic-repo-digest").await?;
+    journal
+        .bind_engine("selected-engine")
+        .await
+        .map_err(|error| error.to_string())?;
+    let selected = selected_daemon();
+    let artifact = artifact();
+    let mut inspection: Value =
+        serde_json::from_str(&image_inspect(&artifact, None)).map_err(|error| error.to_string())?;
+    inspection["Id"] = json!(artifact.original.config_digest);
+    inspection["Descriptor"] = Value::Null;
+    inspection["RepoDigests"] = json!([format!(
+        "foreign.invalid/velnor-runner@{}",
+        artifact.original.config_digest
+    )]);
+    let docker = DockerStub::open(vec![http(
+        200,
+        &serde_json::to_string(&inspection).map_err(|error| error.to_string())?,
+    )])?;
+
+    let result =
+        import_worker_artifact(&docker.docker, &journal, &selected, SOURCE_SHA, &artifact).await;
+    let requests = docker.finish().await?;
+    assert!(matches!(result, Err(ProviderFailure::ImageIdentity)));
+    assert_eq!(requests.len(), 1);
+    let record = journal
+        .prepare_image_import(
+            super::import_request(&selected, SOURCE_SHA, &artifact)
+                .map_err(|error| format!("request failed: {error:?}"))?,
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    assert_eq!(record.state, ImageImportState::Prepared);
+    assert!(record.receipt.is_none());
     Ok(())
 }
 

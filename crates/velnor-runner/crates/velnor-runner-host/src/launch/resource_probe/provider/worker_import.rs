@@ -20,7 +20,7 @@ use super::identity::{
 use super::release::PreparedWorkerArtifact;
 use super::{ProviderFailure, worker_stream};
 
-const IMPORT_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+const IMPORT_TIMEOUT: Duration = Duration::from_mins(30);
 
 pub(super) async fn import_worker_artifact(
     docker: &Docker,
@@ -211,8 +211,8 @@ async fn verify_worker_inspection(
     image: &ImageInspect,
 ) -> Result<VerifiedImportInspection, ProviderFailure> {
     verify_worker_image_config(image, &artifact.original)?;
-    let observed = selected_daemon_info(docker, selected).await?;
     let observation = image_observation(image)?;
+    let observed = selected_daemon_info(docker, selected).await?;
     let receipt = ImageImportInspection::verified(
         request,
         &observed.engine_id,

@@ -132,6 +132,40 @@ async fn changed_image_id_or_tag_stops_before_the_second_image_inspection() -> R
 }
 
 #[tokio::test]
+async fn classic_store_rejects_nonempty_repo_digests() -> Result<(), String> {
+    let images = test_worker_images_for_root_with_mutation(
+        DOCKER_ROOT,
+        Some(TestWorkerImageMutation::RunnerClassicStore),
+    );
+    let expected = selected_context(&images)?;
+    let mut inspection: Value = serde_json::from_str(&image_inspect(
+        &images,
+        "velnor-runner",
+        images.runner(),
+        true,
+    ))
+    .map_err(|error| error.to_string())?;
+    inspection["RepoDigests"] = json!([format!(
+        "foreign.invalid/velnor-runner@{}",
+        images.runner().config_digest()
+    )]);
+    let docker = DockerStub::open(vec![
+        http(200, &engine_info("selected-engine", DOCKER_ROOT, "aarch64")),
+        http(
+            200,
+            &serde_json::to_string(&inspection).map_err(|error| error.to_string())?,
+        ),
+    ])?;
+
+    let result = verify_worker_images_for_engine(&docker.docker, &expected, &images).await;
+    let requests = docker.finish().await?;
+
+    assert!(result.is_err());
+    assert_eq!(requests.len(), 2);
+    Ok(())
+}
+
+#[tokio::test]
 async fn accepts_only_exact_bare_or_docker_hub_local_image_names() -> Result<(), String> {
     let images = test_worker_images_for_root(DOCKER_ROOT);
     let expected = selected_context(&images)?;

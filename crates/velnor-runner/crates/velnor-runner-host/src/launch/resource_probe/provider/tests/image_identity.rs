@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use bollard::models::{ImageConfig, ImageInspect, OciDescriptor, SystemInfo};
 
+use super::super::identity::image_observation;
 use super::super::{
     ProviderFailure, candidate, daemon_architecture, daemon_platform_matches, selected_daemon,
     verify_daemon_image,
@@ -112,7 +113,37 @@ fn classic_store_accepts_only_the_verified_config_identity_without_descriptor() 
         ..Default::default()
     };
     assert!(verify_daemon_image(&image, &release).is_ok());
+    assert!(image_observation(&image).is_ok());
     assert!(candidate("selected-engine", "x86_64", image, &release).is_ok());
+}
+
+#[test]
+fn classic_image_observation_rejects_any_repo_digest() {
+    let release = prepared_release(&"a".repeat(40));
+    let image = ImageInspect {
+        id: Some(release.config_digest.clone()),
+        repo_tags: Some(vec![release.image_reference.clone()]),
+        repo_digests: Some(vec![format!(
+            "foreign.invalid/velnor-resource-probe@{}",
+            release.config_digest
+        )]),
+        os: Some("linux".to_owned()),
+        architecture: Some("amd64".to_owned()),
+        config: Some(ImageConfig {
+            user: release.config.user.clone(),
+            env: release.config.env.clone(),
+            working_dir: release.config.working_dir.clone(),
+            entrypoint: release.config.entrypoint.clone(),
+            labels: release.config.labels.clone(),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    assert_eq!(
+        image_observation(&image),
+        Err(ProviderFailure::ImageIdentity)
+    );
 }
 
 #[test]

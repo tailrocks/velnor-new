@@ -28,8 +28,8 @@ pub(super) async fn verified_import_inspection(
     image: &ImageInspect,
 ) -> Result<ImageImportInspection, ProviderFailure> {
     verify_daemon_image(image, release)?;
-    let observed = selected_daemon_info(docker, selected).await?;
     let observation = image_observation(image)?;
+    let observed = selected_daemon_info(docker, selected).await?;
     ImageImportInspection::verified(
         request,
         &observed.engine_id,
@@ -96,10 +96,12 @@ pub(super) fn image_observation(
     let image_id = image.id.clone().ok_or(ProviderFailure::ImageIdentity)?;
     let repo_tags = image.repo_tags.clone().unwrap_or_default();
     match image.descriptor.as_ref() {
-        None if image.manifests.is_none() => Ok(ImageImportObservation::Classic {
-            image_id,
-            repo_tags,
-        }),
+        None if image.manifests.is_none() && classic_repo_digests_empty(image) => {
+            Ok(ImageImportObservation::Classic {
+                image_id,
+                repo_tags,
+            })
+        }
         None => Err(ProviderFailure::ImageIdentity),
         Some(descriptor) => {
             let digest = descriptor
@@ -137,6 +139,10 @@ pub(super) fn image_observation(
             })
         }
     }
+}
+
+pub(super) fn classic_repo_digests_empty(image: &ImageInspect) -> bool {
+    image.repo_digests.as_ref().is_none_or(Vec::is_empty)
 }
 
 pub(super) async fn verify_selected_daemon(

@@ -52,12 +52,12 @@ pub(super) async fn open_verified_archive(
         max_bytes,
         sent: 0,
         hasher: Sha256::new(),
+        buffer: vec![0; STREAM_CHUNK_BYTES].into_boxed_slice(),
     };
     let stream = stream::try_unfold(
         (state, stream_fully_read),
         |(mut state, fully_read)| async move {
-            let mut buffer = [0; STREAM_CHUNK_BYTES];
-            let count = state.file.read(&mut buffer).await?;
+            let count = state.file.read(state.buffer.as_mut()).await?;
             if count == 0 {
                 if state.sent != state.expected_size
                     || hex(&state.hasher.finalize()) != state.expected_sha256
@@ -84,9 +84,9 @@ pub(super) async fn open_verified_archive(
                     "worker archive exceeds its verified size",
                 ));
             }
-            state.hasher.update(&buffer[..count]);
+            state.hasher.update(&state.buffer[..count]);
             Ok(Some((
-                Bytes::copy_from_slice(&buffer[..count]),
+                Bytes::copy_from_slice(&state.buffer[..count]),
                 (state, fully_read),
             )))
         },
@@ -123,10 +123,10 @@ async fn hash_and_rewind(
 ) -> Result<(String, u64), ProviderFailure> {
     let mut hasher = Sha256::new();
     let mut total = 0_u64;
-    let mut buffer = [0; STREAM_CHUNK_BYTES];
+    let mut buffer = vec![0; STREAM_CHUNK_BYTES].into_boxed_slice();
     loop {
         let count = file
-            .read(&mut buffer)
+            .read(buffer.as_mut())
             .await
             .map_err(|_| ProviderFailure::Archive)?;
         if count == 0 {
@@ -153,6 +153,7 @@ struct UploadState {
     max_bytes: u64,
     sent: u64,
     hasher: Sha256,
+    buffer: Box<[u8]>,
 }
 
 #[cfg(test)]

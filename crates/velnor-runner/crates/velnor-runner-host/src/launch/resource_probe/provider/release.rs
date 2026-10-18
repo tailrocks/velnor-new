@@ -89,6 +89,7 @@ pub(super) async fn prepare(
         &workspace,
         pat,
         &tag,
+        &assets,
         &[PROBE_ARCHIVE, MANIFEST_FILE, CHECKSUMS_FILE],
     )
     .await?;
@@ -125,6 +126,7 @@ pub(super) async fn prepare_worker_releases(
         &workspace,
         pat,
         &tag,
+        &assets,
         &[RUNNER_ARCHIVE, DIND_ARCHIVE, CHECKSUMS_FILE],
     )
     .await?;
@@ -190,23 +192,50 @@ async fn download_selected_assets(
     workspace: &Workspace,
     pat: &str,
     tag: &str,
+    assets: &metadata::HashMapAssets,
     selected: &[&str],
 ) -> Result<(), ProviderFailure> {
-    let mut arguments = vec![
-        OsString::from("release"),
-        OsString::from("download"),
-        OsString::from(tag),
-        OsString::from("--repo"),
-        OsString::from(SOURCE_REPOSITORY),
-        OsString::from("--dir"),
-        workspace.assets().as_os_str().to_owned(),
-    ];
     for name in selected {
-        arguments.push(OsString::from("--pattern"));
-        arguments.push(OsString::from(name));
+        let metadata = assets.get(*name).ok_or(ProviderFailure::ReleaseAssets)?;
+        let digest = metadata
+            .digest
+            .strip_prefix("sha256:")
+            .ok_or(ProviderFailure::ReleaseAssets)?;
+        let arguments = [
+            "release",
+            "download",
+            tag,
+            "--repo",
+            SOURCE_REPOSITORY,
+            "--pattern",
+            name,
+            "--output",
+            "-",
+        ]
+        .into_iter()
+        .map(OsString::from);
+        gh::download_to_file(
+            workspace,
+            pat,
+            arguments,
+            &workspace.assets().join(name),
+            metadata.size,
+            max_asset_bytes(name)?,
+            digest,
+        )
+        .await?;
     }
-    gh::run_download(workspace, pat, arguments).await?;
     Ok(())
+}
+
+fn max_asset_bytes(name: &str) -> Result<u64, ProviderFailure> {
+    match name {
+        RUNNER_ARCHIVE | DIND_ARCHIVE => Ok(super::archive::worker::MAX_WORKER_ARCHIVE_BYTES),
+        PROBE_ARCHIVE => Ok(MAX_ARCHIVE_BYTES),
+        MANIFEST_FILE => Ok(MAX_MANIFEST_BYTES),
+        CHECKSUMS_FILE => Ok(MAX_CHECKSUMS_BYTES),
+        _ => Err(ProviderFailure::ReleaseAssets),
+    }
 }
 
 fn verify_downloads(

@@ -7,7 +7,9 @@ use bollard::models::ImageInspect;
 
 use crate::launch::{SelectedEngineContext, VerifiedImageIdentity, VerifiedWorkerImages};
 
-use super::identity::{SelectedDaemon, inspect_image, selected_daemon_info};
+use super::identity::{
+    SelectedDaemon, classic_repo_digests_empty, inspect_image, selected_daemon_info,
+};
 use super::{ProviderFailure, valid_hex, valid_sha};
 
 const IMAGE_INDEX_MEDIA_TYPE: &str = "application/vnd.oci.image.index.v1+json";
@@ -98,8 +100,7 @@ fn verify_inspection(
         return Err(ProviderFailure::ImageIdentity);
     }
     match image.descriptor.as_ref() {
-        None if id == identity.config_digest()
-            && image.repo_digests.as_ref().is_none_or(Vec::is_empty) => {}
+        None if id == identity.config_digest() && classic_repo_digests_empty(image) => {}
         Some(descriptor) => {
             let (digest, media_type, size) = match identity.image_index_digest() {
                 Some(index_digest) => (

@@ -11,10 +11,15 @@ use uuid::Uuid;
 
 use super::ProviderFailure;
 
+mod download;
+pub(super) use download::download_to_file;
+
 const GH_VERSION: &str = "2.102.0";
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(60);
-pub(super) const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const MAX_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
+
+#[cfg(all(test, unix))]
+mod tests;
 
 pub(super) struct Workspace {
     executable: PathBuf,
@@ -103,17 +108,6 @@ where
     I: IntoIterator<Item = OsString>,
 {
     run_with_timeout(workspace, pat, arguments, COMMAND_TIMEOUT).await
-}
-
-pub(super) async fn run_download<I>(
-    workspace: &Workspace,
-    pat: &str,
-    arguments: I,
-) -> Result<Vec<u8>, ProviderFailure>
-where
-    I: IntoIterator<Item = OsString>,
-{
-    run_with_timeout(workspace, pat, arguments, DOWNLOAD_TIMEOUT).await
 }
 
 async fn run_with_timeout<I>(
