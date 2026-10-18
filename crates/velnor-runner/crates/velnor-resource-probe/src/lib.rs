@@ -1,15 +1,19 @@
 //! Fixed, bounded Linux guest resource measurements for the controller-only probe image.
 
 mod capacity;
+mod cgroup;
 mod error;
+mod filesystem;
 mod load;
 mod memory;
+mod mountinfo;
 mod pressure;
 mod record;
 mod sample;
 mod units;
 
 pub use error::ProbeError;
+pub use filesystem::InodePolicy;
 pub use record::{MAX_OUTPUT_BYTES, ProbeRecord};
 pub use sample::sample;
 
