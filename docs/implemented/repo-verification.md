@@ -11,7 +11,8 @@ The steps exclude test fixtures and generated golden files.
 The commit stops if a tool changes a file.
 The changed content stays outside the Git index.
 Review these changes before you add them to the Git index.
-The hook does not save unstaged changes before it runs.
+The hook does not keep a separate copy of unstaged changes.
+Cargo fix commands can change unstaged Rust files in the selected package.
 Keep the full verification procedure below.
 
 ## Full verification
