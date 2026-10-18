@@ -97,6 +97,17 @@ where
             missing_credential = true;
         }
     }
+    match config.release_read_credential_ref() {
+        Some(reference) if !has_credential(reference) => {
+            eprintln!("readiness=waiting_for_credentials credential=release_read");
+            missing_credential = true;
+        }
+        Some(_) => {}
+        None => {
+            eprintln!("readiness=waiting_for_credentials reason=release_read_reference_missing");
+            missing_credential = true;
+        }
+    }
     if missing_credential {
         return Readiness::WaitingForCredentials;
     }

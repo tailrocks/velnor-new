@@ -1,7 +1,7 @@
 use crate::config_test_support::{basic_connection, connection, host_config};
 use crate::{
-    ConnectionId, HostConfig, HostError, PullRequestRule, ScaleSetSelector, SourcePolicy,
-    SourcePolicyMode, WorkflowEvent,
+    ConnectionId, HostConfig, HostError, KeychainReference, PullRequestRule, ScaleSetSelector,
+    SourcePolicy, SourcePolicyMode, WorkflowEvent,
 };
 
 fn parsed(connection: String) -> Result<HostConfig, HostError> {
@@ -40,6 +40,40 @@ fn schema_two_accepts_multiple_connections_with_one_host_budget() -> Result<(), 
         config.connections()[0].scale_set.labels(),
         ["velnor", "essential-scale-set"]
     );
+    Ok(())
+}
+
+#[test]
+fn release_reader_reference_is_optional_for_old_config_and_round_trips_when_set()
+-> Result<(), HostError> {
+    let mut config = parsed(basic_connection(
+        "essential",
+        101,
+        "donbeave/essential-mac",
+        "essential",
+        "essential-scale-set",
+    ))?;
+    assert_eq!(config.release_read_credential_ref(), None);
+    assert!(!config.to_toml()?.contains("[release_read]"));
+
+    let reference = KeychainReference::parse("keychain:com.tailrocks.velnor.host/release-read")?;
+    config.set_release_read_credential_ref(reference.clone())?;
+    assert_eq!(config.release_read_credential_ref(), Some(&reference));
+    let encoded = config.to_toml()?;
+    assert!(encoded.contains("[release_read]"));
+    assert!(
+        encoded.contains("credential_ref = \"keychain:com.tailrocks.velnor.host/release-read\"")
+    );
+    let reopened = HostConfig::parse(&encoded)?;
+    assert_eq!(reopened.release_read_credential_ref(), Some(&reference));
+
+    let repository_ref = config.connections()[0].credential_ref.clone();
+    assert!(
+        config
+            .set_release_read_credential_ref(repository_ref)
+            .is_err()
+    );
+    assert_eq!(config.release_read_credential_ref(), Some(&reference));
     Ok(())
 }
 

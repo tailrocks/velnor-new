@@ -9,6 +9,7 @@ use crate::daemon_lock::{EngineLineageGuard, canonical_journal_path};
 use crate::docker_client::{connect_unix, docker_deadline};
 use crate::error::HostError;
 use crate::journal::{CapacityLimits, EngineContext, Journal};
+use crate::keychain::load_secret;
 use crate::launch::SelectedEngineContext;
 use crate::launch_blocking::ListenFault;
 
@@ -22,12 +23,25 @@ const CONFIG_RELOAD_PAUSE: Duration = Duration::from_secs(2);
 ///
 /// Returns [`ListenFault`] if the selected engine, journal, or local controller fails to start.
 pub fn run_host_blocking(config: &HostConfig, state: &Path) -> Result<(), ListenFault> {
+    ensure_release_read_credential(config)?;
     let _capacity = crate::launch::install_job_capacity(config.max_jobs());
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|_| HostError::Journal)?;
     runtime.block_on(run_controller(config.clone(), state))
+}
+
+fn ensure_release_read_credential(config: &HostConfig) -> Result<(), HostError> {
+    let reference = config
+        .release_read_credential_ref()
+        .ok_or(HostError::Keychain)?;
+    let secret = load_secret(reference.service(), reference.account())?;
+    let token = std::str::from_utf8(secret.as_slice()).map_err(|_| HostError::Keychain)?;
+    if token.trim().is_empty() {
+        return Err(HostError::EmptySecret);
+    }
+    Ok(())
 }
 
 async fn run_controller(mut current: HostConfig, state: &Path) -> Result<(), ListenFault> {

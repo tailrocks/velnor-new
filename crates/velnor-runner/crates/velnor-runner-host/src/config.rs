@@ -9,9 +9,11 @@ use crate::error::HostError;
 use crate::worker::{ResourceBudget, ResourceBudgetConfig};
 
 mod connection;
+mod release_read;
 mod source_policy;
 
 pub use connection::{ConnectionId, RepositoryConnection, ScaleSetSelector};
+use release_read::{ReleaseReadConfig, validate_release_read};
 pub use source_policy::{PullRequestRule, SourcePolicy, SourcePolicyMode, WorkflowEvent};
 
 /// Top-level controller file. Schema 2 has one shared host budget.
@@ -22,6 +24,9 @@ pub struct HostConfig {
     pub schema: u32,
     /// Repository bindings that share this host.
     connections: Vec<RepositoryConnection>,
+    /// Optional host-level credential for verified release artifacts.
+    #[serde(default)]
+    release_read: Option<ReleaseReadConfig>,
     /// Capacity.
     pub host: HostLimits,
     /// Selected Docker context.
@@ -155,6 +160,12 @@ impl HostConfig {
             .pair()
             .docker_limits(self.host.max_jobs)?;
         validate_connections(&self.connections)?;
+        validate_release_read(
+            self.release_read.as_ref(),
+            self.connections
+                .iter()
+                .map(|connection| &connection.credential_ref),
+        )?;
         validate_docker(&self.docker)
     }
 
@@ -171,6 +182,32 @@ impl HostConfig {
     #[must_use]
     pub fn connections(&self) -> &[RepositoryConnection] {
         &self.connections
+    }
+
+    /// Host-level Keychain reference for release metadata and attestations.
+    #[must_use]
+    pub fn release_read_credential_ref(&self) -> Option<&KeychainReference> {
+        self.release_read
+            .as_ref()
+            .map(ReleaseReadConfig::credential_ref)
+    }
+
+    /// Set the separate host-level release-reader Keychain reference.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Config`] if it reuses a repository credential.
+    pub fn set_release_read_credential_ref(
+        &mut self,
+        credential_ref: KeychainReference,
+    ) -> Result<(), HostError> {
+        let previous = self.release_read.clone();
+        self.release_read = Some(ReleaseReadConfig::new(credential_ref));
+        if let Err(error) = self.validate() {
+            self.release_read = previous;
+            return Err(error);
+        }
+        Ok(())
     }
 
     /// Shared host job limit.
@@ -245,6 +282,7 @@ impl HostConfig {
         let document = HostToml {
             schema: self.schema,
             connections: &self.connections,
+            release_read: self.release_read.as_ref(),
             host: HostTomlLimits {
                 max_jobs: self.host.max_jobs,
                 resources: HostTomlResources {
@@ -268,6 +306,8 @@ impl HostConfig {
 struct HostToml<'a> {
     schema: u32,
     connections: &'a [RepositoryConnection],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    release_read: Option<&'a ReleaseReadConfig>,
     host: HostTomlLimits,
     docker: &'a DockerConfig,
 }
