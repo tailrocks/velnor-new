@@ -1,8 +1,9 @@
 //! Workflow step payloads and local validation.
 
 use super::step_identity::{
-    MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole, TOFU_PROVIDER_ADMISSION_USES,
-    TOOLS_CACHE_RESTORE_USES,
+    MBX_WORKSPACE_CLEAN_CONDITION, NORMAL_TOOLS_CACHE_EXPORT_OPERATION,
+    NORMAL_TOOLS_CACHE_IMPORT_OPERATION, NORMAL_TOOLS_CACHE_STAGE_OPERATION, StepId, StepRole,
+    TOFU_PROVIDER_ADMISSION_USES, TOOLS_CACHE_RESTORE_USES,
 };
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -194,6 +195,18 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         StepId::ToolsCacheRestore => {
             matches!(kind, StepKind::Action { uses, .. } if uses == TOOLS_CACHE_RESTORE_USES)
         }
+        StepId::NormalToolsCacheStage => matches!(
+            kind,
+            StepKind::Internal { operation, .. } if operation == NORMAL_TOOLS_CACHE_STAGE_OPERATION
+        ),
+        StepId::NormalToolsCacheImport => matches!(
+            kind,
+            StepKind::Internal { operation, .. } if operation == NORMAL_TOOLS_CACHE_IMPORT_OPERATION
+        ),
+        StepId::NormalToolsCacheExport => matches!(
+            kind,
+            StepKind::Internal { operation, .. } if operation == NORMAL_TOOLS_CACHE_EXPORT_OPERATION
+        ),
         StepId::TofuProviders => {
             matches!(kind, StepKind::Action { uses, .. } if uses == TOFU_PROVIDER_ADMISSION_USES)
         }
