@@ -24,6 +24,15 @@ pub struct GitCommitTree {
     pub sha: String,
 }
 
+/// Author or committer identity from a Git commit object.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub struct GitCommitPerson {
+    /// Name recorded in the commit object.
+    pub name: String,
+    /// Email recorded in the commit object.
+    pub email: String,
+}
+
 /// Exact commit values needed to check pull request ancestry.
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub struct GitCommit {
@@ -31,6 +40,12 @@ pub struct GitCommit {
     pub sha: String,
     /// Commit message.
     pub message: String,
+    /// Author identity when returned by GitHub.
+    #[serde(default)]
+    pub author: Option<GitCommitPerson>,
+    /// Committer identity when returned by GitHub.
+    #[serde(default)]
+    pub committer: Option<GitCommitPerson>,
     /// Commit tree object.
     pub tree: GitCommitTree,
     /// Parent commits in Git order.

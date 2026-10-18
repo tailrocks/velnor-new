@@ -1,7 +1,7 @@
 //! Causal proof for one branch-restricted pull request run.
 
 use super::{
-    GitCommit, PullRequestBaseHistory, PullRequestMismatch, RepositoryTarget,
+    GitCommit, GitCommitIdentity, PullRequestBaseHistory, PullRequestMismatch, RepositoryTarget,
     VerifiedPullRequestRunAssociation, VerifiedWorkflowSource, WorkflowRefKind, WorkflowRun,
     WorkflowRunError, get_git_commit, is_commit_ancestor, retarget_event_after_acknowledgement,
     verify_pull_request_run_association, verify_workflow_source,
@@ -39,6 +39,8 @@ pub struct PullRequestNoncePublication {
     pub nonce: String,
     /// Exact commit object published to the pull request head ref.
     pub commit_sha: String,
+    /// Configured identity that signed off the nonce commit.
+    pub identity: GitCommitIdentity,
 }
 
 /// Exact policy and durable transition inputs for one run check.
@@ -300,10 +302,23 @@ fn verify_nonce_commit(
         || nonce_commit.parents.len() != 1
         || nonce_commit.parents[0].sha != acknowledgement.head_sha
         || !nonce_commit.message.lines().any(|line| line == marker)
+        || !nonce_commit
+            .message
+            .lines()
+            .any(|line| line == publication.identity.sign_off_line())
+        || !commit_person_matches(nonce_commit.author.as_ref(), &publication.identity)
+        || !commit_person_matches(nonce_commit.committer.as_ref(), &publication.identity)
     {
         return Err(PullRequestExecutionMismatch::NonceCommit);
     }
     Ok(())
+}
+
+fn commit_person_matches(
+    person: Option<&super::GitCommitPerson>,
+    identity: &GitCommitIdentity,
+) -> bool {
+    person.is_some_and(|person| identity.matches_fields(&person.name, &person.email))
 }
 
 fn verify_run_commit(

@@ -3,8 +3,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-    PullRequestNonceCommitReceipt, RepositoryTarget, WorkflowRunError, api_headers, get_git_commit,
-    get_repository_identity, repository_path,
+    GitCommitIdentity, PullRequestNonceCommitReceipt, RepositoryTarget, WorkflowRunError,
+    api_headers, get_git_commit, get_repository_identity, repository_path,
 };
 use crate::TransportFail;
 use crate::session::{Exchange, Method, SessionRequest, Transport};
@@ -73,6 +73,9 @@ where
             .message
             .lines()
             .any(|line| line == format!("velnor-pr-validation-nonce:v1:{}", receipt.nonce))
+        || !sign_off_matches(&commit.message, &receipt.identity)
+        || !person_matches(commit.author.as_ref(), &receipt.identity)
+        || !person_matches(commit.committer.as_ref(), &receipt.identity)
     {
         return Err(WorkflowRunError::Malformed);
     }
@@ -129,6 +132,14 @@ where
         return Err(WorkflowRunError::Uncertain);
     }
     Ok(updated)
+}
+
+fn sign_off_matches(message: &str, identity: &GitCommitIdentity) -> bool {
+    message.lines().any(|line| line == identity.sign_off_line())
+}
+
+fn person_matches(person: Option<&super::GitCommitPerson>, identity: &GitCommitIdentity) -> bool {
+    person.is_some_and(|person| identity.matches_fields(&person.name, &person.email))
 }
 
 fn get_reference<T>(

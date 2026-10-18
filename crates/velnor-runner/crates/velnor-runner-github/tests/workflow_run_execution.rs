@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 
 use velnor_runner_github::workflow_run::{
-    BaseRefChangedEvent, PullRequestBaseHistory, PullRequestExecutionContext,
+    BaseRefChangedEvent, GitCommitIdentity, PullRequestBaseHistory, PullRequestExecutionContext,
     PullRequestExecutionError, PullRequestExecutionMismatch, PullRequestNoncePublication,
     PullRequestRetargetAcknowledgement, RepositoryTarget, WorkflowRun, WorkflowRunError,
     get_git_commit, verify_pull_request_execution, verify_workflow_source,
@@ -25,6 +25,13 @@ const CURRENT_BASE: &str = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 const RUN_MERGE: &str = "ffffffffffffffffffffffffffffffffffffffff";
 const TREE: &str = "9999999999999999999999999999999999999999";
 const NONCE: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const AUTHOR_NAME: &str = "Configured Person";
+const AUTHOR_EMAIL: &str = "person@example.com";
+const SIGNED_OFF_NONCE_MESSAGE: &str = "Add validation nonce\n\nvelnor-pr-validation-nonce:v1:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n\nSigned-off-by: Configured Person <person@example.com>";
+
+fn identity() -> Result<GitCommitIdentity, String> {
+    GitCommitIdentity::try_new(AUTHOR_NAME, AUTHOR_EMAIL).map_err(|error| error.to_string())
+}
 
 #[derive(Default)]
 struct CommitApi {
@@ -61,6 +68,8 @@ fn commit_json(sha: &str, message: &str, parents: &[&str]) -> String {
     serde_json::json!({
         "sha": sha,
         "message": message,
+        "author": {"name": AUTHOR_NAME, "email": AUTHOR_EMAIL},
+        "committer": {"name": AUTHOR_NAME, "email": AUTHOR_EMAIL},
         "tree": {"sha": TREE},
         "parents": parents
     })
@@ -93,11 +102,7 @@ fn context() -> Result<(WorkflowRun, PullRequestBaseHistory, CommitApi), String>
     let mut api = CommitApi::default();
     api.commits.insert(
         NONCE_HEAD.to_owned(),
-        commit_json(
-            NONCE_HEAD,
-            &format!("Add validation nonce\n\nvelnor-pr-validation-nonce:v1:{NONCE}"),
-            &[PRIOR_HEAD],
-        ),
+        commit_json(NONCE_HEAD, SIGNED_OFF_NONCE_MESSAGE, &[PRIOR_HEAD]),
     );
     api.commits.insert(
         RUN_MERGE.to_owned(),
@@ -149,11 +154,12 @@ fn acknowledgement() -> PullRequestRetargetAcknowledgement {
     }
 }
 
-fn publication() -> PullRequestNoncePublication {
-    PullRequestNoncePublication {
+fn publication() -> Result<PullRequestNoncePublication, String> {
+    Ok(PullRequestNoncePublication {
         nonce: NONCE.to_owned(),
         commit_sha: NONCE_HEAD.to_owned(),
-    }
+        identity: identity()?,
+    })
 }
 
 fn verify(
@@ -192,8 +198,14 @@ fn verify(
 fn proves_nonce_commit_and_exact_run_merge_ancestry_despite_mutable_pr_snapshot()
 -> Result<(), String> {
     let (run, history, mut api) = context()?;
-    let proof = verify(&run, &history, &mut api, &acknowledgement(), &publication())
-        .map_err(|error| error.to_string())?;
+    let proof = verify(
+        &run,
+        &history,
+        &mut api,
+        &acknowledgement(),
+        &publication()?,
+    )
+    .map_err(|error| error.to_string())?;
     assert_eq!(proof.association().number, PR_NUMBER);
     assert_eq!(proof.run_base_sha(), Some(RUN_BASE));
     assert_eq!(proof.retarget_event_id(), "base-event-42");
@@ -214,7 +226,13 @@ fn rejects_later_base_retarget_and_wrong_acknowledgement() -> Result<(), String>
     });
     history.base_ref = "main".to_owned();
     assert!(matches!(
-        verify(&run, &history, &mut api, &acknowledgement(), &publication()),
+        verify(
+            &run,
+            &history,
+            &mut api,
+            &acknowledgement(),
+            &publication()?
+        ),
         Err(PullRequestExecutionError::Proof(
             PullRequestExecutionMismatch::BaseHistory
         ))
@@ -224,7 +242,7 @@ fn rejects_later_base_retarget_and_wrong_acknowledgement() -> Result<(), String>
     let mut ack = acknowledgement();
     ack.event_id = "wrong-event".to_owned();
     assert!(matches!(
-        verify(&run, &history, &mut api, &ack, &publication()),
+        verify(&run, &history, &mut api, &ack, &publication()?),
         Err(PullRequestExecutionError::Proof(
             PullRequestExecutionMismatch::BaseHistory
         ))
@@ -244,7 +262,13 @@ fn rejects_nonce_without_post_ack_parent_and_run_not_using_nonce() -> Result<(),
         ),
     );
     assert!(matches!(
-        verify(&run, &history, &mut api, &acknowledgement(), &publication()),
+        verify(
+            &run,
+            &history,
+            &mut api,
+            &acknowledgement(),
+            &publication()?
+        ),
         Err(PullRequestExecutionError::Proof(
             PullRequestExecutionMismatch::NonceCommit
         ))
@@ -257,7 +281,13 @@ fn rejects_nonce_without_post_ack_parent_and_run_not_using_nonce() -> Result<(),
     );
     run.head_sha = RUN_MERGE.to_owned();
     assert!(matches!(
-        verify(&run, &history, &mut api, &acknowledgement(), &publication()),
+        verify(
+            &run,
+            &history,
+            &mut api,
+            &acknowledgement(),
+            &publication()?
+        ),
         Err(PullRequestExecutionError::Proof(
             PullRequestExecutionMismatch::RunCommit
         ))
@@ -270,7 +300,13 @@ fn rejects_run_source_and_base_graph_from_a_different_context() -> Result<(), St
     let (mut run, history, mut api) = context()?;
     run.pull_requests[0].number += 1;
     assert!(matches!(
-        verify(&run, &history, &mut api, &acknowledgement(), &publication()),
+        verify(
+            &run,
+            &history,
+            &mut api,
+            &acknowledgement(),
+            &publication()?
+        ),
         Err(PullRequestExecutionError::Proof(
             PullRequestExecutionMismatch::WorkflowSource
         ))
@@ -282,7 +318,13 @@ fn rejects_run_source_and_base_graph_from_a_different_context() -> Result<(), St
         commit_json(CURRENT_BASE, "rewritten base", &[]),
     );
     assert!(matches!(
-        verify(&run, &history, &mut api, &acknowledgement(), &publication()),
+        verify(
+            &run,
+            &history,
+            &mut api,
+            &acknowledgement(),
+            &publication()?
+        ),
         Err(PullRequestExecutionError::Proof(
             PullRequestExecutionMismatch::BaseAncestry
         ))
@@ -300,7 +342,7 @@ fn rejects_run_source_and_base_graph_from_a_different_context() -> Result<(), St
             &history,
             &mut api,
             &acknowledgement(),
-            &publication()
+            &publication()?
         ),
         Err(PullRequestExecutionError::Proof(
             PullRequestExecutionMismatch::RunCommit
@@ -315,7 +357,7 @@ fn rejects_run_source_and_base_graph_from_a_different_context() -> Result<(), St
             &history,
             &mut api,
             &acknowledgement(),
-            &publication()
+            &publication()?
         ),
         Err(PullRequestExecutionError::Proof(
             PullRequestExecutionMismatch::WorkflowSource
@@ -332,7 +374,7 @@ fn rejects_run_source_and_base_graph_from_a_different_context() -> Result<(), St
             &history,
             &mut api,
             &acknowledgement(),
-            &publication()
+            &publication()?
         ),
         Err(PullRequestExecutionError::Proof(
             PullRequestExecutionMismatch::WorkflowSource
@@ -370,7 +412,7 @@ fn direct_head_run_requires_the_same_nonce_publication() -> Result<(), String> {
             expected_base_ref: "sea/integration",
             history: &history,
             acknowledgement: &acknowledgement(),
-            publication: &publication(),
+            publication: &publication()?,
         },
         "token",
     )

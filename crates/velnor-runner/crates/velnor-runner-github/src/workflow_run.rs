@@ -1,6 +1,7 @@
 //! GitHub workflow and pull request source records.
 
 mod base_update;
+mod commit_identity;
 mod execution;
 mod git_commit;
 mod nonce_commit;
@@ -20,13 +21,14 @@ use crate::session::{Exchange, Method, SessionRequest, Transport};
 pub use base_update::{
     PullRequestBaseUpdateReceipt, PullRequestBaseUpdateRequest, update_pull_request_base,
 };
+pub use commit_identity::{GitCommitIdentity, GitCommitIdentityError};
 pub use execution::{
     PullRequestExecutionContext, PullRequestExecutionError, PullRequestExecutionMismatch,
     PullRequestNoncePublication, PullRequestRetargetAcknowledgement, VerifiedPullRequestExecution,
     verify_pull_request_execution,
 };
 pub use git_commit::{
-    GitCommit, GitCommitParent, GitCommitTree, get_git_commit, is_commit_ancestor,
+    GitCommit, GitCommitParent, GitCommitPerson, GitCommitTree, get_git_commit, is_commit_ancestor,
 };
 pub use nonce_commit::{PullRequestNonceCommitReceipt, create_pull_request_nonce_commit};
 pub use reference::{GitReference, GitReferenceObject, publish_pull_request_nonce_commit};

@@ -1,7 +1,7 @@
 //! Create one content-empty commit carrying the durable nonce marker.
 
 use super::{
-    GitCommit, RepositoryTarget, WorkflowRunError, api_headers, get_git_commit,
+    GitCommit, GitCommitIdentity, RepositoryTarget, WorkflowRunError, api_headers, get_git_commit,
     get_repository_identity, repository_path,
 };
 use crate::TransportFail;
@@ -20,6 +20,8 @@ pub struct PullRequestNonceCommitReceipt {
     pub parent_sha: String,
     /// Random nonce embedded in the commit message.
     pub nonce: String,
+    /// Explicit configured author and committer identity.
+    pub identity: GitCommitIdentity,
     /// Created commit object.
     pub commit: GitCommit,
 }
@@ -40,6 +42,7 @@ pub fn create_pull_request_nonce_commit<T>(
     head_ref: &str,
     parent_sha: &str,
     nonce: &str,
+    commit_identity: &GitCommitIdentity,
     token: &str,
 ) -> Result<PullRequestNonceCommitReceipt, WorkflowRunError>
 where
@@ -48,23 +51,32 @@ where
     if !valid_branch(head_ref) || !valid_sha(parent_sha) || !valid_nonce(nonce) {
         return Err(WorkflowRunError::InvalidRequest);
     }
-    let identity = get_repository_identity(transport, head_repository, token)?;
+    let repository_identity = get_repository_identity(transport, head_repository, token)?;
     let parent = get_git_commit(
         transport,
-        identity.owner(),
-        identity.name(),
+        repository_identity.owner(),
+        repository_identity.name(),
         parent_sha,
         token,
     )?;
-    let message = format!("Velnor pull request validation\n\n{NONCE_PREFIX}{nonce}");
+    let message = format!(
+        "Velnor pull request validation\n\n{NONCE_PREFIX}{nonce}\n\n{}",
+        commit_identity.sign_off_line()
+    );
     let body = serde_json::json!({
         "message": message,
         "tree": parent.tree.sha.clone(),
-        "parents": [parent_sha]
+        "parents": [parent_sha],
+        "author": { "name": commit_identity.name(), "email": commit_identity.email() },
+        "committer": { "name": commit_identity.name(), "email": commit_identity.email() }
     })
     .to_string()
     .into_bytes();
-    let path = repository_path(identity.owner(), identity.name(), "git/commits")?;
+    let path = repository_path(
+        repository_identity.owner(),
+        repository_identity.name(),
+        "git/commits",
+    )?;
     let mut headers = api_headers(token)?;
     headers.push(("Content-Type".to_owned(), "application/json".to_owned()));
     let exchange = send_once(
@@ -77,20 +89,27 @@ where
             body,
         },
     )?;
-    let commit = decode_commit(&exchange, parent_sha, &message, &parent.tree.sha)?;
+    let commit = decode_commit(
+        &exchange,
+        parent_sha,
+        &message,
+        &parent.tree.sha,
+        commit_identity,
+    )?;
     let after = get_repository_identity(transport, head_repository, token)
         .map_err(|_| WorkflowRunError::Uncertain)?;
-    if after.id() != identity.id()
-        || after.owner() != identity.owner()
-        || after.name() != identity.name()
+    if after.id() != repository_identity.id()
+        || after.owner() != repository_identity.owner()
+        || after.name() != repository_identity.name()
     {
         return Err(WorkflowRunError::Uncertain);
     }
     Ok(PullRequestNonceCommitReceipt {
-        head_repository_id: identity.id(),
+        head_repository_id: repository_identity.id(),
         head_ref: head_ref.to_owned(),
         parent_sha: parent_sha.to_owned(),
         nonce: nonce.to_owned(),
+        identity: commit_identity.clone(),
         commit,
     })
 }
@@ -100,6 +119,7 @@ fn decode_commit(
     parent_sha: &str,
     message: &str,
     tree_sha: &str,
+    identity: &GitCommitIdentity,
 ) -> Result<GitCommit, WorkflowRunError> {
     if exchange.status != 201 {
         return Err(super::api_status(exchange.status));
@@ -114,10 +134,16 @@ fn decode_commit(
         || commit.tree.sha != tree_sha
         || commit.parents.len() != 1
         || commit.parents[0].sha != parent_sha
+        || !person_matches(commit.author.as_ref(), identity)
+        || !person_matches(commit.committer.as_ref(), identity)
     {
         return Err(WorkflowRunError::Uncertain);
     }
     Ok(commit)
+}
+
+fn person_matches(person: Option<&super::GitCommitPerson>, identity: &GitCommitIdentity) -> bool {
+    person.is_some_and(|person| identity.matches_fields(&person.name, &person.email))
 }
 
 fn send_once<T>(transport: &mut T, request: &SessionRequest) -> Result<Exchange, WorkflowRunError>
