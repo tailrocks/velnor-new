@@ -139,10 +139,43 @@ pub fn accept_scale_set(view: &ScaleSetView, expected_name: &str) -> Result<(), 
         .iter()
         .map(|label| label.name.as_str())
         .collect();
-    if names.contains(&"ubuntu-26.04") {
+    if names.contains(&"ubuntu-26.04")
+        || !names.contains(&"velnor")
+        || !names.contains(&"ubuntu-26.04-scale-set")
+    {
         return Err(WireError::RegistrationRejected);
     }
-    if !names.contains(&"velnor") || !names.contains(&"ubuntu-26.04-scale-set") {
+    Ok(())
+}
+
+fn accept_scale_set_labels(
+    view: &ScaleSetView,
+    expected_name: &str,
+    expected_labels: &[String],
+) -> Result<(), WireError> {
+    if view.id <= 0 || view.name != expected_name || !view.runner_setting.disable_update {
+        return Err(WireError::RegistrationRejected);
+    }
+    let names: Vec<&str> = view
+        .labels
+        .iter()
+        .map(|label| label.name.as_str())
+        .collect();
+    let mut actual = names.clone();
+    let mut expected = expected_labels
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>();
+    actual.sort_unstable();
+    expected.sort_unstable();
+    if expected.is_empty()
+        || expected.windows(2).any(|pair| pair[0] == pair[1])
+        || expected.contains(&"ubuntu-26.04")
+        || actual != expected
+    {
+        return Err(WireError::RegistrationRejected);
+    }
+    if !expected.contains(&"velnor") || !expected.contains(&expected_name) {
         return Err(WireError::RegistrationRejected);
     }
     Ok(())

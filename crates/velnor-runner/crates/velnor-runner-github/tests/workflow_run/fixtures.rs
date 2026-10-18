@@ -22,6 +22,12 @@ pub(super) fn target() -> RepositoryTarget<'static> {
     }
 }
 
+pub(super) fn repository_json(id: i64, owner: &str, name: &str, private: bool) -> String {
+    format!(
+        r#"{{"id":{id},"name":"{name}","full_name":"{owner}/{name}","private":{private},"owner":{{"login":"{owner}"}}}}"#
+    )
+}
+
 pub(super) fn source_metadata() -> SourceMetadata {
     SourceMetadata {
         owner_name: Some(OWNER.to_owned()),

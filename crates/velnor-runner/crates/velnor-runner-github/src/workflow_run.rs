@@ -3,6 +3,8 @@
 mod source;
 mod workflow_ref;
 
+use source::verify_repository_scope;
+
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 
@@ -11,7 +13,7 @@ use crate::session::{Exchange, Method, SessionRequest, Transport};
 
 pub use source::{
     PullRequestMismatch, RepositoryTarget, SourceMismatch, VerifiedPullRequest,
-    VerifiedWorkflowSource, verify_pull_request, verify_workflow_source,
+    VerifiedRepositoryScope, VerifiedWorkflowSource, verify_pull_request, verify_workflow_source,
 };
 pub use workflow_ref::{VerifiedJobWorkflowRef, WorkflowRefKind};
 
@@ -37,6 +39,9 @@ pub enum WorkflowRunError {
     /// The response exceeded the local byte limit.
     #[error("GitHub API response is too large")]
     ResponseTooLarge,
+    /// The repository endpoint did not match the configured private repository.
+    #[error("GitHub repository identity did not match")]
+    RepositoryMismatch,
 }
 
 /// GitHub account in a repository record.
@@ -57,6 +62,9 @@ pub struct GitHubRepository {
     pub full_name: String,
     /// Repository owner.
     pub owner: GitHubAccount,
+    /// Whether the repository is private. Missing values fail closed as public.
+    #[serde(default)]
+    pub private: bool,
 }
 
 /// Workflow used by a completed or active GitHub Actions run.
@@ -192,6 +200,27 @@ where
     get_json(transport, path, token)
 }
 
+/// Authenticate the configured repository name and return its immutable private scope.
+///
+/// # Errors
+///
+/// Returns [`WorkflowRunError`] when the endpoint, token, or repository identity is invalid.
+pub fn get_repository_scope<T>(
+    transport: &mut T,
+    expected: RepositoryTarget<'_>,
+    token: &str,
+) -> Result<VerifiedRepositoryScope, WorkflowRunError>
+where
+    T: Transport + ?Sized,
+{
+    if expected.id <= 0 {
+        return Err(WorkflowRunError::InvalidRequest);
+    }
+    let path = repository_path(expected.owner, expected.name, "")?;
+    let repository: GitHubRepository = get_json(transport, path, token)?;
+    verify_repository_scope(&repository, expected).map_err(|_| WorkflowRunError::RepositoryMismatch)
+}
+
 /// Get one pull request from the GitHub REST API.
 ///
 /// # Errors
@@ -280,7 +309,11 @@ fn repository_path(owner: &str, repository: &str, tail: &str) -> Result<String, 
     if !path_segment(owner) || !path_segment(repository) {
         return Err(WorkflowRunError::InvalidRequest);
     }
-    Ok(format!("/repos/{owner}/{repository}/{tail}"))
+    if tail.is_empty() {
+        Ok(format!("/repos/{owner}/{repository}"))
+    } else {
+        Ok(format!("/repos/{owner}/{repository}/{tail}"))
+    }
 }
 
 fn path_segment(value: &str) -> bool {

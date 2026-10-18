@@ -5,14 +5,14 @@ mod fixtures;
 
 use fixtures::{
     BASE_SHA, HEAD_REPOSITORY_ID, HEAD_SHA, MERGE_SHA, OWNER, REPOSITORY, REPOSITORY_ID, RUN_ID,
-    empty_source, pull_request_json, pull_request_run_json, source_metadata, target,
-    workflow_run_json,
+    empty_source, pull_request_json, pull_request_run_json, repository_json, source_metadata,
+    target, workflow_run_json,
 };
 
 use velnor_runner_github::workflow_run::{
     GITHUB_API_VERSION, PullRequest, PullRequestMismatch, ReferencedWorkflow, RepositoryTarget,
     SourceMismatch, WorkflowRefKind, WorkflowRun, WorkflowRunError, get_pull_request,
-    get_workflow_run, verify_pull_request, verify_workflow_source,
+    get_repository_scope, get_workflow_run, verify_pull_request, verify_workflow_source,
 };
 use velnor_runner_github::{
     CompleteSourceMetadata, Exchange, Method, SessionRequest, SourceMetadata, Transport,
@@ -91,6 +91,53 @@ fn workflow_run_request_uses_pinned_api_and_returns_source_fields() -> Result<()
             .sha,
         HEAD_SHA
     );
+    Ok(())
+}
+
+#[test]
+fn repository_scope_requires_authenticated_id_name_and_private_visibility()
+-> Result<(), &'static str> {
+    let body = repository_json(REPOSITORY_ID, OWNER, REPOSITORY, true);
+    let mut script = Script::response(&body);
+    let scope = get_repository_scope(&mut script, target(), "token-canary")
+        .map_err(|_| "verified repository")?;
+    assert_eq!(scope.id(), REPOSITORY_ID);
+    assert_eq!(scope.owner(), OWNER);
+    assert_eq!(scope.name(), REPOSITORY);
+    let request = script.seen.first().ok_or("repository request")?;
+    assert_eq!(request.method, Method::Get);
+    assert_eq!(request.path, "/repos/ChainArgos/java-monorepo");
+
+    for body in [
+        repository_json(REPOSITORY_ID + 1, OWNER, REPOSITORY, true),
+        repository_json(REPOSITORY_ID, "other-owner", REPOSITORY, true),
+        repository_json(REPOSITORY_ID, OWNER, "other-repository", true),
+        repository_json(REPOSITORY_ID, OWNER, REPOSITORY, true)
+            .replace("ChainArgos/java-monorepo", "ChainArgos/other-repository"),
+        repository_json(REPOSITORY_ID, OWNER, REPOSITORY, false),
+        repository_json(REPOSITORY_ID, OWNER, REPOSITORY, true).replace(",\"private\":true", ""),
+    ] {
+        let mut script = Script::response(&body);
+        assert_eq!(
+            get_repository_scope(&mut script, target(), "token-canary"),
+            Err(WorkflowRunError::RepositoryMismatch)
+        );
+    }
+
+    let mut script = Script::response(&body);
+    assert_eq!(
+        get_repository_scope(
+            &mut script,
+            RepositoryTarget {
+                id: 0,
+                owner: OWNER,
+                name: REPOSITORY,
+            },
+            "token-canary"
+        ),
+        Err(WorkflowRunError::InvalidRequest)
+    );
+    assert_eq!(script.seen, Vec::<SessionRequest>::new());
     Ok(())
 }
 
@@ -328,7 +375,7 @@ fn pull_request_request_rejects_invalid_number_before_transport() {
         get_pull_request(&mut script, OWNER, REPOSITORY, 0, "token-canary"),
         Err(WorkflowRunError::InvalidRequest)
     );
-    assert!(script.seen.is_empty());
+    assert_eq!(script.seen, Vec::<SessionRequest>::new());
 }
 
 #[test]
@@ -380,5 +427,5 @@ fn invalid_api_path_and_token_do_not_reach_transport() {
         get_workflow_run(&mut script, OWNER, REPOSITORY, RUN_ID, "bad\ntoken"),
         Err(WorkflowRunError::InvalidRequest)
     );
-    assert!(script.seen.is_empty());
+    assert_eq!(script.seen, Vec::<SessionRequest>::new());
 }
