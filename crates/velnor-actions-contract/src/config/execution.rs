@@ -4,12 +4,12 @@
 //! configured mode. With neither, overrides win over `default_profile`.
 //! Migration leaves mode unset and `default_profile` hosted.
 
-use super::runs_on::{
-    LINUX_AMD64, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL, is_hosted_catalog,
-};
+use super::runs_on::{LINUX_AMD64, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 use super::workflow::RUNNER_LABEL_CATALOG;
 use crate::errors::ContractError;
+mod image_reference;
 mod validation;
+pub use image_reference::ValidatedImageReference;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use validation::{is_source_sha, missing};
@@ -96,6 +96,9 @@ pub struct ExecutionProfile {
     /// Expected source revision for the immutable Scale Set guest images.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_source_sha: Option<String>,
+    /// Optional image reference for jobs on this profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job_container_image: Option<ValidatedImageReference>,
 }
 
 /// Per-logical-job placement override.
@@ -349,46 +352,6 @@ impl ExecutionConfig {
         self.profiles.get(id).ok_or_else(|| {
             ContractError::config(file, "execution.profiles", format!("unknown_profile:{id}"))
         })
-    }
-}
-
-impl ExecutionProfile {
-    /// Hosted catalog profile.
-    ///
-    /// # Errors
-    ///
-    /// The label must be in the hosted catalog.
-    pub fn hosted(label: &str) -> Result<Self, ContractError> {
-        if !RUNNER_LABEL_CATALOG.contains(&label) || !is_hosted_catalog(label) {
-            return Err(ContractError::config(
-                "config.toml",
-                "execution.profiles.hosted.label",
-                format!("unsupported_label:{label}"),
-            ));
-        }
-        Ok(Self {
-            kind: ProfileKind::GithubHosted,
-            label: Some(label.to_owned()),
-            name: None,
-            labels: Vec::new(),
-            platform: LINUX_AMD64.to_owned(),
-            capability_profile: None,
-            image_source_sha: None,
-        })
-    }
-
-    /// Scale-set profile from an already validated selector.
-    #[must_use]
-    pub fn scale_set(selector: &ScaleSetSelector) -> Self {
-        Self {
-            kind: ProfileKind::GithubScaleSet,
-            label: None,
-            name: Some(selector.name().to_owned()),
-            labels: selector.labels().to_vec(),
-            platform: LINUX_AMD64.to_owned(),
-            capability_profile: None,
-            image_source_sha: None,
-        }
     }
 }
 
