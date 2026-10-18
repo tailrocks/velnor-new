@@ -6,7 +6,8 @@ use std::time::{Duration, Instant};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
-use super::{ProviderFailure, Workspace, download_to_file};
+use super::{ProviderFailure, Workspace, download_to_file, download_to_file_with_timeout};
+use super::download::DownloadVerification;
 
 #[tokio::test]
 async fn bounded_download_writes_only_exact_size_and_digest() -> Result<(), String> {
@@ -67,8 +68,107 @@ async fn oversized_download_kills_and_waits_for_child_and_removes_partial_file()
         .status()
         .map_err(|error| error.to_string())?;
     assert!(!alive.success(), "over-limit child must be reaped");
-    let _ = fs::remove_file(pid_path);
+    fs::remove_file(pid_path).map_err(|error| error.to_string())?;
     Ok(())
+}
+
+#[tokio::test]
+async fn cancelling_download_removes_partial_file_and_stops_child() -> Result<(), String> {
+    let pid_path = std::env::temp_dir().join(format!("velnor-gh-cancel-{}.pid", Uuid::new_v4()));
+    let script = format!(
+        "printf '%s\\n' \"$$\" > '{}'; printf 'abc'; exec /bin/sleep 30",
+        shell_path(&pid_path)
+    );
+    let workspace = workspace(&script)?;
+    let destination = workspace.assets().join("cancelled.tar");
+    let digest = sha256(b"abcd");
+    let mut transfer = Box::pin(download_to_file(
+        &workspace,
+        "test-secret",
+        std::iter::empty(),
+        &destination,
+        4,
+        4,
+        &digest,
+    ));
+    tokio::select! {
+        result = &mut transfer => return Err(format!("download ended before cancellation: {result:?}")),
+        result = wait_for_partial_file(&destination, 3) => result?,
+    }
+    drop(transfer);
+
+    let pid = fs::read_to_string(&pid_path).map_err(|error| error.to_string())?;
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            let alive = std::process::Command::new("/bin/kill")
+                .args(["-0", pid.trim()])
+                .stderr(std::process::Stdio::null())
+                .status()
+                .is_ok_and(|status| status.success());
+            if !destination.exists() && !alive {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .map_err(|_| "cancellation did not clean the file and stop the child".to_owned())?;
+    fs::remove_file(pid_path).map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn download_timeout_kills_child_and_removes_partial_file() -> Result<(), String> {
+    let pid_path = std::env::temp_dir().join(format!("velnor-gh-timeout-{}.pid", Uuid::new_v4()));
+    let script = format!(
+        "printf '%s\\n' \"$$\" > '{}'; printf 'abc'; exec /bin/sleep 30",
+        shell_path(&pid_path)
+    );
+    let workspace = workspace(&script)?;
+    let destination = workspace.assets().join("timed-out.tar");
+    let digest = sha256(b"abcd");
+    let result = tokio::time::timeout(
+        Duration::from_secs(5),
+        download_to_file_with_timeout(
+            &workspace,
+            "test-secret",
+            std::iter::empty(),
+            &destination,
+            DownloadVerification {
+                expected_size: 4,
+                max_size: 4,
+                expected_sha256: digest,
+                timeout: Duration::from_secs(1),
+            },
+        ),
+    )
+    .await
+    .map_err(|_| "download timeout did not stop the child".to_owned())?;
+
+    assert_eq!(result, Err(ProviderFailure::GhTimeout));
+    assert!(!destination.exists());
+    let pid = fs::read_to_string(&pid_path).map_err(|error| error.to_string())?;
+    let alive = std::process::Command::new("/bin/kill")
+        .args(["-0", pid.trim()])
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map_err(|error| error.to_string())?;
+    assert!(!alive.success(), "timed-out child must be reaped");
+    fs::remove_file(pid_path).map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+async fn wait_for_partial_file(path: &Path, expected_size: u64) -> Result<(), String> {
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            if fs::metadata(path).is_ok_and(|metadata| metadata.len() == expected_size) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .map_err(|_| "download did not write the partial file".to_owned())
 }
 
 #[tokio::test]
@@ -115,10 +215,7 @@ fn workspace(script: &str) -> Result<Workspace, String> {
 }
 
 fn sha256(bytes: &[u8]) -> String {
-    Sha256::digest(bytes)
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    super::super::hex(&Sha256::digest(bytes))
 }
 
 fn shell_path(path: &Path) -> String {

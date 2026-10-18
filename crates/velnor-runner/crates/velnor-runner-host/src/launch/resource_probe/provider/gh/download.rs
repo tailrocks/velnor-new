@@ -1,12 +1,16 @@
 //! Size- and digest-bounded release asset download from the GitHub CLI.
 
 use std::ffi::OsString;
-use std::path::Path;
+use std::fs::OpenOptions;
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
-use tokio::process::{Child, Command};
+use tokio::process::{Child, ChildStdout, Command};
+use tokio::sync::oneshot;
 
 use super::super::ProviderFailure;
 use super::Workspace;
@@ -14,10 +18,29 @@ use super::Workspace;
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(15);
 const DOWNLOAD_CHUNK_BYTES: usize = 64 * 1024;
 
+pub(in crate::launch::resource_probe::provider) struct DownloadVerification {
+    pub(in crate::launch::resource_probe::provider) expected_size: u64,
+    pub(in crate::launch::resource_probe::provider) max_size: u64,
+    pub(in crate::launch::resource_probe::provider) expected_sha256: String,
+    pub(in crate::launch::resource_probe::provider) timeout: Duration,
+}
+
 enum FirstCompletion {
     Copy(Result<Result<(), ProviderFailure>, tokio::task::JoinError>),
     Child(std::io::Result<std::process::ExitStatus>),
     Timeout,
+    Cancelled,
+}
+
+struct DownloadTask {
+    child: Child,
+    stdout: Option<ChildStdout>,
+    file: tokio::fs::File,
+    destination: PathBuf,
+    verification: DownloadVerification,
+    cancel: oneshot::Receiver<()>,
+    ready: oneshot::Sender<Result<(), ProviderFailure>>,
+    commit: oneshot::Receiver<()>,
 }
 
 pub(in crate::launch::resource_probe::provider) async fn download_to_file<I>(
@@ -32,47 +55,46 @@ pub(in crate::launch::resource_probe::provider) async fn download_to_file<I>(
 where
     I: IntoIterator<Item = OsString>,
 {
-    if expected_size == 0 || expected_size > max_size || !valid_sha256(expected_sha256) {
+    download_to_file_with_timeout(
+        workspace,
+        pat,
+        arguments,
+        destination,
+        DownloadVerification {
+            expected_size,
+            max_size,
+            expected_sha256: expected_sha256.to_owned(),
+            timeout: DOWNLOAD_TIMEOUT,
+        },
+    )
+    .await
+}
+
+pub(in crate::launch::resource_probe::provider) async fn download_to_file_with_timeout<I>(
+    workspace: &Workspace,
+    pat: &str,
+    arguments: I,
+    destination: &Path,
+    verification: DownloadVerification,
+) -> Result<(), ProviderFailure>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    if verification.expected_size == 0
+        || verification.expected_size > verification.max_size
+        || !valid_sha256(&verification.expected_sha256)
+    {
         return Err(ProviderFailure::ReleaseAssets);
     }
 
-    let mut options = tokio::fs::OpenOptions::new();
+    let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
     options.mode(0o600);
     let file = options
         .open(destination)
-        .await
         .map_err(|_| ProviderFailure::GhOutput)?;
 
-    let result = download_child_to_file(
-        workspace,
-        pat,
-        arguments,
-        file,
-        expected_size,
-        max_size,
-        expected_sha256,
-    )
-    .await;
-    if result.is_err() && tokio::fs::remove_file(destination).await.is_err() {
-        return Err(ProviderFailure::GhOutput);
-    }
-    result
-}
-
-async fn download_child_to_file<I>(
-    workspace: &Workspace,
-    pat: &str,
-    arguments: I,
-    file: tokio::fs::File,
-    expected_size: u64,
-    max_size: u64,
-    expected_sha256: &str,
-) -> Result<(), ProviderFailure>
-where
-    I: IntoIterator<Item = OsString>,
-{
     let mut command = Command::new(workspace.executable());
     command
         .args(arguments)
@@ -92,80 +114,185 @@ where
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .kill_on_drop(true);
-    let mut child = command
-        .spawn()
-        .map_err(|_| ProviderFailure::GhUnavailable)?;
-    let Some(stdout) = child.stdout.take() else {
-        let _kill_result = child.start_kill();
-        let _wait_result = child.wait().await;
+    let Ok(mut child) = command.spawn() else {
+        let _remove_result = std::fs::remove_file(destination);
         return Err(ProviderFailure::GhUnavailable);
+    };
+    let stdout = child.stdout.take();
+    let destination = destination.to_owned();
+    let (cancel_tx, cancel_rx) = oneshot::channel();
+    let (ready_tx, ready_rx) = oneshot::channel();
+    let (commit_tx, commit_rx) = oneshot::channel();
+
+    // This task owns the writer and child until it commits or cleans up.
+    let supervisor = tokio::spawn(supervise_download(DownloadTask {
+        child,
+        stdout,
+        file: tokio::fs::File::from_std(file),
+        destination,
+        verification,
+        cancel: cancel_rx,
+        ready: ready_tx,
+        commit: commit_rx,
+    }));
+    let _cancel = cancel_tx;
+
+    match ready_rx.await {
+        Ok(Ok(())) => {
+            if commit_tx.send(()).is_err() {
+                return Err(ProviderFailure::GhOutput);
+            }
+        }
+        Ok(Err(error)) => {
+            let _supervisor_result = supervisor.await;
+            return Err(error);
+        }
+        Err(_) => return Err(ProviderFailure::GhOutput),
+    }
+    supervisor.await.map_err(|_| ProviderFailure::GhOutput)?
+}
+
+async fn supervise_download(task: DownloadTask) -> Result<(), ProviderFailure> {
+    let DownloadTask {
+        mut child,
+        stdout,
+        file,
+        destination,
+        verification,
+        cancel,
+        ready,
+        commit,
+    } = task;
+    let Some(stdout) = stdout else {
+        kill_child_and_wait(&mut child).await;
+        let error = ProviderFailure::GhUnavailable;
+        let _ready_result = ready.send(Err(error));
+        if remove_partial_file(&destination).await.is_err() {
+            return Err(ProviderFailure::GhOutput);
+        }
+        return Err(error);
     };
     let copy = tokio::spawn(copy_verified_asset(
         stdout,
         file,
-        expected_size,
-        max_size,
-        expected_sha256.to_owned(),
+        verification.expected_size,
+        verification.max_size,
+        verification.expected_sha256,
     ));
-    finish_download(child, copy).await
+    let result =
+        finish_download(child, copy, verification.timeout, cancel, ready, commit).await;
+    if result.is_err() && remove_partial_file(&destination).await.is_err() {
+        return Err(ProviderFailure::GhOutput);
+    }
+    result
+}
+
+async fn remove_partial_file(destination: &Path) -> std::io::Result<()> {
+    tokio::fs::remove_file(destination).await
 }
 
 async fn finish_download(
     mut child: Child,
     mut copy: tokio::task::JoinHandle<Result<(), ProviderFailure>>,
+    timeout: Duration,
+    mut cancel: oneshot::Receiver<()>,
+    ready: oneshot::Sender<Result<(), ProviderFailure>>,
+    commit: oneshot::Receiver<()>,
 ) -> Result<(), ProviderFailure> {
-    let deadline_at = tokio::time::Instant::now() + DOWNLOAD_TIMEOUT;
+    let deadline_at = tokio::time::Instant::now() + timeout;
     let first = {
         let wait = child.wait();
         tokio::pin!(wait);
         let deadline = tokio::time::sleep_until(deadline_at);
         tokio::pin!(deadline);
         tokio::select! {
+            biased;
+            _ = &mut cancel => FirstCompletion::Cancelled,
             result = &mut copy => FirstCompletion::Copy(result),
             status = &mut wait => FirstCompletion::Child(status),
             () = &mut deadline => FirstCompletion::Timeout,
         }
     };
 
+    let result = complete_transfer(first, &mut child, &mut copy, &mut cancel, deadline_at).await;
+    if let Err(error) = result {
+        let _ready_result = ready.send(Err(error));
+        return Err(error);
+    }
+    if ready.send(Ok(())).is_err() {
+        return Err(ProviderFailure::GhOutput);
+    }
+    tokio::select! {
+        biased;
+        _ = &mut cancel => Err(ProviderFailure::GhOutput),
+        result = commit => result.map_err(|_| ProviderFailure::GhOutput),
+    }
+}
+
+async fn complete_transfer(
+    first: FirstCompletion,
+    child: &mut Child,
+    copy: &mut tokio::task::JoinHandle<Result<(), ProviderFailure>>,
+    cancel: &mut oneshot::Receiver<()>,
+    deadline_at: tokio::time::Instant,
+) -> Result<(), ProviderFailure> {
     match first {
         FirstCompletion::Copy(Ok(Ok(()))) => {
-            match tokio::time::timeout_at(deadline_at, child.wait()).await {
+            tokio::select! {
+                biased;
+                _ = &mut *cancel => {
+                    stop_child(child, copy).await;
+                    Err(ProviderFailure::GhOutput)
+                }
+                result = tokio::time::timeout_at(deadline_at, child.wait()) => match result {
                 Ok(Ok(status)) if status.success() => Ok(()),
                 Ok(Ok(_)) => Err(ProviderFailure::GhCommand),
                 Ok(Err(_)) => Err(ProviderFailure::GhUnavailable),
                 Err(_) => {
-                    kill_child_and_wait(&mut child).await;
+                    kill_child_and_wait(child).await;
                     Err(ProviderFailure::GhTimeout)
+                }
                 }
             }
         }
         FirstCompletion::Child(Ok(status)) => {
-            match tokio::time::timeout_at(deadline_at, &mut copy).await {
+            tokio::select! {
+                biased;
+                _ = &mut *cancel => {
+                    stop_child(child, copy).await;
+                    Err(ProviderFailure::GhOutput)
+                }
+                result = tokio::time::timeout_at(deadline_at, &mut *copy) => match result {
                 Ok(Ok(Ok(()))) if status.success() => Ok(()),
                 Ok(Ok(Ok(()))) => Err(ProviderFailure::GhCommand),
                 Ok(Ok(Err(error))) => Err(error),
                 Ok(Err(_)) => Err(ProviderFailure::GhOutput),
                 Err(_) => {
-                    stop_child(&mut child, &mut copy).await;
+                    stop_child(child, copy).await;
                     Err(ProviderFailure::GhTimeout)
+                }
                 }
             }
         }
         FirstCompletion::Copy(Ok(Err(error))) => {
-            kill_child_and_wait(&mut child).await;
+            kill_child_and_wait(child).await;
             Err(error)
         }
         FirstCompletion::Copy(Err(_)) => {
-            kill_child_and_wait(&mut child).await;
+            kill_child_and_wait(child).await;
             Err(ProviderFailure::GhUnavailable)
         }
         FirstCompletion::Child(Err(_)) => {
-            stop_child(&mut child, &mut copy).await;
+            stop_child(child, copy).await;
             Err(ProviderFailure::GhUnavailable)
         }
         FirstCompletion::Timeout => {
-            stop_child(&mut child, &mut copy).await;
+            stop_child(child, copy).await;
             Err(ProviderFailure::GhTimeout)
+        }
+        FirstCompletion::Cancelled => {
+            stop_child(child, copy).await;
+            Err(ProviderFailure::GhOutput)
         }
     }
 }

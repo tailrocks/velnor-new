@@ -13,6 +13,8 @@ use super::ProviderFailure;
 
 mod download;
 pub(super) use download::download_to_file;
+#[cfg(test)]
+pub(super) use download::download_to_file_with_timeout;
 
 const GH_VERSION: &str = "2.102.0";
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(60);
