@@ -10,6 +10,9 @@ use std::error::Error;
 pub(crate) mod archive_deps;
 #[path = "impl_repo_deps_process_methods.rs"]
 mod process_methods;
+#[path = "impl_repo_deps_process_policy.rs"]
+mod process_policy;
+use self::process_policy::direct_tool_policy_violation;
 #[path = "impl_repo_size_limits.rs"]
 mod size_limits;
 #[path = "impl_repo_workflow_yaml_deps.rs"]
@@ -214,82 +217,6 @@ fn direct_tool_policy_allows_cache_metadata_but_rejects_process_launches() {
         direct_tool_policy_violation(aliased),
         Some("Process::new".to_owned())
     );
-}
-
-fn direct_tool_policy_violation(source: &str) -> Option<String> {
-    let Ok(aliases) = process_command_aliases(source) else {
-        return Some("Rust syntax parse failed".to_owned());
-    };
-    for alias in aliases {
-        let construction = format!("{alias}::new");
-        if source.contains(&construction) {
-            return Some(construction);
-        }
-    }
-    for token in [
-        "process::Command",
-        "Command::new",
-        "\"gh\"",
-        "shell",
-        "Shell",
-        "sh -c",
-    ] {
-        if source.contains(token) {
-            return Some(token.to_owned());
-        }
-    }
-    for (index, _) in source.match_indices("std::process::") {
-        let rest = &source[index + "std::process::".len()..];
-        if !rest.starts_with("ExitCode") && !rest.starts_with("id()") {
-            return Some(rest.to_owned());
-        }
-    }
-    None
-}
-
-fn process_command_aliases(source: &str) -> Result<Vec<String>, syn::Error> {
-    fn collect(tree: &syn::UseTree, prefix: &mut Vec<String>, aliases: &mut Vec<String>) {
-        match tree {
-            syn::UseTree::Path(path) => {
-                prefix.push(path.ident.to_string());
-                collect(&path.tree, prefix, aliases);
-                prefix.pop();
-            }
-            syn::UseTree::Name(name) => {
-                prefix.push(name.ident.to_string());
-                if is_std_process_command(prefix) {
-                    aliases.push(name.ident.to_string());
-                }
-                prefix.pop();
-            }
-            syn::UseTree::Rename(rename) => {
-                prefix.push(rename.ident.to_string());
-                if is_std_process_command(prefix) {
-                    aliases.push(rename.rename.to_string());
-                }
-                prefix.pop();
-            }
-            syn::UseTree::Group(group) => {
-                for item in &group.items {
-                    collect(item, prefix, aliases);
-                }
-            }
-            syn::UseTree::Glob(_) => {}
-        }
-    }
-
-    fn is_std_process_command(prefix: &[String]) -> bool {
-        prefix.len() == 3 && prefix[0] == "std" && prefix[1] == "process" && prefix[2] == "Command"
-    }
-
-    let syntax = syn::parse_file(source)?;
-    let mut aliases = Vec::new();
-    for item in syntax.items {
-        if let syn::Item::Use(item) = item {
-            collect(&item.tree, &mut Vec::new(), &mut aliases);
-        }
-    }
-    Ok(aliases)
 }
 
 #[test]
