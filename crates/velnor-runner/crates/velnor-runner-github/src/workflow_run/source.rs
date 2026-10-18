@@ -45,7 +45,7 @@ pub struct VerifiedWorkflowSource {
     pub run_attempt: i64,
 }
 
-/// Pull request source values checked against a workflow run and API record.
+/// Pull request source values compared with a workflow run and API record.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifiedPullRequest {
     /// Pull request number.
@@ -70,63 +70,63 @@ pub struct VerifiedPullRequest {
     pub merge_commit_sha: Option<String>,
 }
 
-/// Workflow source values that did not match the GitHub API.
+/// Workflow source values that are different from the GitHub API.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum SourceMismatch {
     /// A required source value is absent or empty.
     #[error("workflow source metadata is incomplete")]
     MissingValue,
-    /// The workflow run identifier differs.
-    #[error("workflow run identifier differs")]
+    /// The workflow run identifier is different.
+    #[error("workflow run identifier is different")]
     WorkflowRunId,
-    /// The repository identifier differs.
-    #[error("repository identifier differs")]
+    /// The repository identifier is different.
+    #[error("repository identifier is different")]
     RepositoryId,
-    /// The repository owner or name differs.
-    #[error("repository name differs")]
+    /// The repository owner or name is different.
+    #[error("repository name is different")]
     RepositoryName,
-    /// The event differs.
-    #[error("workflow event differs")]
+    /// The event is different.
+    #[error("workflow event is different")]
     Event,
-    /// The workflow path, ref, or source commit differs.
-    #[error("workflow ref differs")]
+    /// The workflow path, ref, or source commit is different.
+    #[error("workflow ref is different")]
     WorkflowRef,
     /// The workflow run record has an invalid source commit.
     #[error("workflow run commit SHA is invalid")]
     WorkflowSha,
 }
 
-/// Pull request values that did not match the workflow run or API record.
+/// Pull request values that are different from the workflow run or API record.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum PullRequestMismatch {
     /// The event, number, or expected repository is invalid.
-    #[error("pull request event or number differs")]
+    #[error("pull request event or number is different")]
     Event,
-    /// The pull request number does not match the run.
-    #[error("pull request number differs")]
+    /// The pull request number is different from the number in the run record.
+    #[error("pull request number is different")]
     Number,
-    /// The head repository is missing or differs.
-    #[error("pull request head repository differs")]
+    /// The head repository is missing or is different.
+    #[error("pull request head repository is different")]
     HeadRepository,
-    /// The base repository is missing or differs.
-    #[error("pull request base repository differs")]
+    /// The base repository is missing or is different.
+    #[error("pull request base repository is different")]
     BaseRepository,
-    /// The head ref or SHA differs.
-    #[error("pull request head differs")]
+    /// The head ref or SHA is different.
+    #[error("pull request head is different")]
     Head,
-    /// The base ref or SHA differs.
-    #[error("pull request base differs")]
+    /// The base ref or SHA is different.
+    #[error("pull request base is different")]
     Base,
     /// A pull request commit SHA is malformed.
     #[error("pull request commit SHA is invalid")]
     CommitSha,
 }
 
-/// Match message values to a workflow run and repository identity.
+/// Compare message values with a workflow run and repository identity.
 ///
 /// # Errors
 ///
-/// Returns [`SourceMismatch`] when one value is absent or differs from the API.
+/// Gives [`SourceMismatch`] when a value is absent or different from the API value.
 pub fn verify_workflow_source(
     source: CompleteSourceMetadata<'_>,
     run: &WorkflowRun,
@@ -191,11 +191,11 @@ pub fn verify_workflow_source(
     })
 }
 
-/// Match pull request values to the workflow run and expected base repository.
+/// Compare pull request values with the workflow run and expected base repository.
 ///
 /// # Errors
 ///
-/// Returns [`PullRequestMismatch`] when the head, base, or test merge differs.
+/// Gives [`PullRequestMismatch`] when a head or base value is invalid or different.
 pub fn verify_pull_request(
     run: &WorkflowRun,
     pull: &PullRequest,
