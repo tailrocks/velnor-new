@@ -11,6 +11,8 @@ fn src_dir() -> PathBuf {
 
 const EXPECTED_MODULES: &[&str] = &[
     "build.rs",
+    "bounded_file_filter.rs",
+    "bounded_file_filter_process.rs",
     "cache.rs",
     "cache_sources.rs",
     "cache_transport.rs",
@@ -45,6 +47,7 @@ const EXPECTED_MODULES: &[&str] = &[
     "check_tool_projection.rs",
     "checks.rs",
     "command.rs",
+    "command_bounded_file_filter.rs",
     "command_cancellable.rs",
     "command_env.rs",
     "command_git.rs",
@@ -204,7 +207,43 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
         .file_name()
         .map(|name| name.to_string_lossy())
         .ok_or_else(|| format!("nameless file: {}", path.display()))?;
-    for (line, code) in code_of(path)? {
+    let source = std::fs::read_to_string(path).map_err(|err| err.to_string())?;
+    let compact = source
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace(" .", ".");
+    let is_filter_process = name == "bounded_file_filter_process.rs";
+    let is_filter = name == "bounded_file_filter.rs";
+    let write_expression = "output.write_all(&buffer[..count])";
+    let metadata_expression = "std::fs::symlink_metadata(program)";
+    if is_filter_process && compact.matches(write_expression).count() != 1 {
+        violations.push(format!(
+            "{name}: expected exactly one bounded output write `{write_expression}`"
+        ));
+    }
+    if is_filter && compact.matches(metadata_expression).count() != 1 {
+        violations.push(format!(
+            "{name}: expected exactly one read-only program metadata check `{metadata_expression}`"
+        ));
+    }
+    if !is_filter_process && compact.contains(write_expression) {
+        violations.push(format!(
+            "{name}: bounded output write is outside its approved module"
+        ));
+    }
+    if !is_filter && compact.contains(metadata_expression) {
+        violations.push(format!(
+            "{name}: program metadata check is outside its approved module"
+        ));
+    }
+    for (line, mut code) in code_of(path)? {
+        if is_filter_process && code.trim() == ".write_all(&buffer[..count])" {
+            code = code.replace("write_all", "");
+        }
+        if is_filter && code.contains(metadata_expression) {
+            code = code.replace(metadata_expression, "");
+        }
         let at = format!("{name}:{line}");
         for token in ALWAYS_BANNED {
             if code.contains(token) {
@@ -226,4 +265,112 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[test]
+fn bounded_file_filter_exceptions_are_exact_and_local() {
+    let allowed_write = "fn copy_from_child() { output\n.write_all(&buffer[..count])?; }";
+    let altered_write = "fn copy_from_child() { other\n.write_all(&buffer[..count])?; }";
+    let extra_write =
+        "fn copy_from_child() { output.write_all(&buffer[..count])?; output.write_all(b\"x\")?; }";
+    let allowed_metadata = "fn check() { let m = std::fs::symlink_metadata(program)?; }";
+    let extra_metadata =
+        "fn check() { std::fs::symlink_metadata(program)?; std::fs::symlink_metadata(other)?; }";
+    let create_link = "fn bad() { std::os::unix::fs::symlink(source, target)?; }";
+
+    let mut violations = Vec::new();
+    check_source_fixture(
+        "bounded_file_filter_process.rs",
+        allowed_write,
+        &mut violations,
+    );
+    assert!(violations.is_empty(), "{violations:?}");
+
+    violations.clear();
+    check_source_fixture(
+        "bounded_file_filter_process.rs",
+        altered_write,
+        &mut violations,
+    );
+    assert_ne!(violations, Vec::<String>::new());
+
+    violations.clear();
+    check_source_fixture(
+        "bounded_file_filter_process.rs",
+        extra_write,
+        &mut violations,
+    );
+    assert_ne!(violations, Vec::<String>::new());
+
+    violations.clear();
+    check_source_fixture("bounded_file_filter.rs", allowed_metadata, &mut violations);
+    assert!(violations.is_empty(), "{violations:?}");
+
+    violations.clear();
+    check_source_fixture("bounded_file_filter.rs", extra_metadata, &mut violations);
+    assert_ne!(violations, Vec::<String>::new());
+
+    violations.clear();
+    check_source_fixture("bounded_file_filter.rs", create_link, &mut violations);
+    assert_ne!(violations, Vec::<String>::new());
+
+    violations.clear();
+    check_source_fixture(
+        "bounded_file_filter_tests.rs",
+        allowed_write,
+        &mut violations,
+    );
+    assert_ne!(violations, Vec::<String>::new());
+
+    for mutation in [
+        "std::fs::write(path, bytes)",
+        "File::create(path)",
+        "std::fs::create_dir(path)",
+        "std::fs::rename(old, new)",
+        "std::fs::remove_file(path)",
+        "std::fs::set_permissions(path, permissions)",
+        "std::os::unix::fs::hard_link(source, target)",
+    ] {
+        violations.clear();
+        check_source_fixture("bounded_file_filter.rs", mutation, &mut violations);
+        assert!(!violations.is_empty(), "mutation passed: {mutation}");
+    }
+}
+
+fn check_source_fixture(name: &str, source: &str, violations: &mut Vec<String>) {
+    let compact = source
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace(" .", ".");
+    let is_filter_process = name == "bounded_file_filter_process.rs";
+    let is_filter = name == "bounded_file_filter.rs";
+    let write_expression = "output.write_all(&buffer[..count])";
+    let metadata_expression = "std::fs::symlink_metadata(program)";
+    if is_filter_process && compact.matches(write_expression).count() != 1 {
+        violations.push(format!("{name}: missing exact bounded output expression"));
+    }
+    if is_filter && compact.matches(metadata_expression).count() != 1 {
+        violations.push(format!("{name}: missing exact metadata expression"));
+    }
+    if !is_filter_process && compact.contains(write_expression) {
+        violations.push(format!(
+            "{name}: bounded output expression is outside its module"
+        ));
+    }
+    if !is_filter && compact.contains(metadata_expression) {
+        violations.push(format!("{name}: metadata expression is outside its module"));
+    }
+    let mut remaining = compact;
+    if is_filter_process {
+        remaining = remaining.replacen(write_expression, "", 1);
+    }
+    if is_filter {
+        remaining = remaining.replacen(metadata_expression, "", 1);
+    }
+    for token in ALWAYS_BANNED {
+        if remaining.contains(token) {
+            violations.push(format!("{name}: forbidden `{token}`"));
+        }
+    }
 }

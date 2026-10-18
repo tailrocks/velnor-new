@@ -72,7 +72,7 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 | --- | --- | --- |
 | `velnor-actions-contract` | Stack-neutral workflow/task contracts, task graph, identities, reports, recommendations | Rust/Cargo, Mise, process, filesystem, YAML implementation, CLI, generic application models |
 | `velnor-actions-rust` | All Rust/Cargo discovery, metadata conversion, targets, graph, affected selection, Rust task proposals, `rust-toolchain.toml` inspection | Mise config/commands, workflow YAML, process execution, or non-Rust stack behavior |
-| `velnor-actions-mise` | Mise tool selection, pinned command construction, fixed subprocess/environment wrapper, `mise.toml`/`mise.lock` inspection, Mise cache integration | Cargo metadata, Rust graph/selection rules, `rust-toolchain.toml`, GitHub YAML, stack discovery |
+| `velnor-actions-mise` | Mise tool selection, pinned command construction, fixed subprocess/environment wrapper, bounded file filter, `mise.toml`/`mise.lock` inspection, Mise cache integration | Cargo metadata, Rust graph/selection rules, `rust-toolchain.toml`, GitHub YAML, stack discovery |
 | `velnor-actions-actionlint` | actionlint pin/capability metadata, generated config, action-schema validation | Mise process execution, stack scanning, generic workflow rendering |
 | `velnor-actions-workflow-renderer` | Generic GitHub Actions workflow YAML from typed workflow IR | Rust/Cargo, Mise syntax, repository scanning, subprocesses, stack policy |
 | `velnor-actions-orchestrator` | Composition, obligation selection, cache evidence, scheduling, generation coordination, typed process-request coordination | Parsing Cargo/Mise files, direct YAML templates, CLI parsing, OS process details and process creation/control, except the read-only `rustix::process::geteuid()` caller-owner lookup in the private generation-stage validator |
@@ -86,6 +86,17 @@ CLI private gate consumes freshness at runtime. Repository scripts provision
 the archive guard binary; the orchestrator links its library only for bounded
 cache-payload raw-tar framing. The guard does not inspect cache paths or
 manifests, validate links, or extract files.
+
+The private file filter runs fixed zstd operations for archive compression.
+Callers MUST pass open regular files. The filter MUST use the shared command
+factory, fixed arguments, input and output byte limits, and a child deadline.
+File operations can continue after the child deadline.
+
+The source policy MUST allow one bounded output write in
+`bounded_file_filter_process.rs` and one read-only symbolic-link metadata lookup
+in `bounded_file_filter.rs`. It MUST reject extra or relocated expressions.
+All other file writes, path changes, links, and installer operations remain
+forbidden in Mise source.
 The canonical repository's `maintenance-helpers` named Mise check runs their
 package test suites independently of Rust task derivation and the product
 matrix; this repository's VelnorRepositoryV1 configuration makes it required.

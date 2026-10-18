@@ -79,5 +79,5 @@ pub fn run_zstd_file_filter(
 mod process;
 
 #[cfg(test)]
-#[path = "bounded_file_filter_tests.rs"]
+#[path = "../tests/bounded_file_filter_unit.rs"]
 mod tests;

@@ -100,6 +100,13 @@ orchestrator supplies product requests and schedules calls; it never builds
 shell commands. The renderer receives validated command references and generic
 workflow IR; it never emits Mise syntax.
 
+Mise also owns a private bounded file filter for archive compression. The
+filter accepts open regular files, fixed zstd arguments, byte limits, and a
+child deadline. It uses the shared isolated command factory. It writes only
+through the caller's existing output file descriptor. It creates no paths and
+does not change path metadata. Before it starts the child, it reads the
+program's symbolic-link metadata. It rejects a symbolic link.
+
 All Velnor product Rust package roots MUST live under `crates/`. The root
 manifest MUST be a virtual workspace with explicit members.
 `fixtures/rust-workspaces/**` contains independent Cargo projects used as test
