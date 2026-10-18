@@ -69,7 +69,7 @@ fn rejects_events_repository_refs_authority_and_stale_ci_sources() -> Result<(),
         }
         let result = execute(scenario)?;
         assert!(!result.success);
-        assert!(result.calls.is_empty());
+        assert_eq!(result.calls, "");
     }
 
     let mut stale = Scenario::valid();

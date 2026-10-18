@@ -34,13 +34,13 @@ fn preview_rejects_fork_events_and_alternate_workflow_authority() -> Result<(), 
         scenario.event = event.to_owned();
         let result = execute_preview(&scenario)?;
         assert_rejected(&result);
-        assert!(result.calls.is_empty());
+        assert_eq!(result.calls, "");
     }
     let mut scenario = preview();
     scenario.workflow_ref = Scenario::valid().workflow_ref;
     let result = execute_preview(&scenario)?;
     assert_rejected(&result);
-    assert!(result.calls.is_empty());
+    assert_eq!(result.calls, "");
     Ok(())
 }
 

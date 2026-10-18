@@ -70,7 +70,7 @@ fn rejects_wrong_source_event_and_branch_before_api_access() -> Result<(), Box<d
     wrong_authority.authority_sha = Some(OTHER_SHA.to_owned());
     let result = execute(&wrong_authority)?;
     assert_rejected(&result);
-    assert!(result.calls.is_empty());
+    assert_eq!(result.calls, "");
     Ok(())
 }
 

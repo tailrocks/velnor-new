@@ -77,7 +77,7 @@ fn claude_md_mode_import_and_symlink_render_and_freshness_step() -> TestResult {
     let act_yaml = format!("{hdr}\nself-hosted-runner:\n");
     let import_tree =
         render_tree_with_claude_mode(&ci_yaml, &act_yaml, &[], "0.1.0", ClaudeMdMode::Import)?;
-    assert!(import_tree.symlinks.is_empty());
+    assert_eq!(import_tree.symlinks, [] as [crate::RenderedSymlink; 0]);
     assert!(
         import_tree
             .files
