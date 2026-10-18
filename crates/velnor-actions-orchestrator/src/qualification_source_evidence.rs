@@ -233,7 +233,7 @@ fn write_sidecar(
         .join(&plan.run_key)
         .join(&entry.matrix_key)
         .join(SOURCE_EVIDENCE_FILENAME);
-    crate::exclusive_write::write_exclusive(&path, &bytes, "qualification_source_evidence")
+    crate::exclusive_write::write_private_exclusive(&path, &bytes, "qualification_source_evidence")
 }
 
 fn validate_runner_directories(

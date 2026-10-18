@@ -20,6 +20,9 @@ use super::{SOURCE_EVIDENCE_FILENAME, validate_runner_directories};
 use crate::qualification_cache_runtime::closure::ObservedLaneClosure;
 use crate::task_report::{single_task_aggregate, terminal_task_report, write_entry_reports};
 
+#[path = "qualification_source_evidence_mode_tests.rs"]
+mod mode_tests;
+
 const RUN_ID: u64 = 720;
 const RUN_KEY: &str = "r720-a1";
 const TASK_ID: &str = "stack/rust/demo/clippy/default";
