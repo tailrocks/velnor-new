@@ -11,6 +11,7 @@ use tokio::io::AsyncWriteExt;
 use crate::docker_client::docker_deadline;
 use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_mounts, runner_plan};
 use crate::error::HostError;
+#[cfg(test)]
 use crate::stage::PairStop;
 
 pub(crate) mod resources;
@@ -21,6 +22,7 @@ pub(crate) use volumes::{
     VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
     create_named_volumes, remove_worker_volumes, verify_worker_volume,
 };
+pub(crate) mod guest_image;
 mod mounts;
 mod projection;
 mod projection_types;
@@ -31,11 +33,13 @@ mod volumes_tests;
 pub(crate) use projection::{dind_create_for_identity, runner_create_for_identity};
 #[cfg(test)]
 pub(crate) use projection::{identity_labels_match, launch_identity_labels_match};
-pub(crate) use resource_budget::DockerResourceLimits;
 pub use resource_budget::ResourceBudget;
 pub(crate) use resource_budget::ResourceBudgetConfig;
 #[cfg(test)]
 pub(crate) use resource_budget::test_resource_budget;
+pub(crate) use resource_budget::{
+    AdmissionReserve, DockerResourceLimits, PROBE_CPU_MILLICORES, PROBE_MEMORY_LIMIT_BYTES,
+};
 #[cfg(test)]
 mod projection_tests;
 
@@ -103,6 +107,22 @@ pub fn runner_create(
     })
 }
 
+/// Project a runner only from verified immutable images and its guest metadata file.
+pub(crate) fn runner_create_verified(
+    plan: &ContainerPlan,
+    resource_budget: ResourceBudget,
+    connection: &crate::config::RepositoryConnection,
+    images: &crate::launch::VerifiedWorkerImages,
+    guest_image: &guest_image::GuestImageFile,
+) -> Result<CreateProjection, HostError> {
+    let metadata_mount = guest_image.runner_bind(connection, images)?;
+    let mut projection = runner_create(plan, resource_budget)?;
+    projection.image = images.runner().runtime_id().to_owned();
+    projection.platform = images.platform().to_owned();
+    projection.bind_mounts.push(metadata_mount);
+    Ok(projection)
+}
+
 /// Join `spec` to the private `DinD` network namespace.
 ///
 /// Published service ports and Testcontainers then bind on the runner's localhost.
@@ -165,6 +185,19 @@ pub fn dind_create(
         network_mode: None,
         resource_budget,
     })
+}
+
+/// Project privileged `DinD` only from the verified immutable bundle.
+pub(crate) fn dind_create_verified(
+    private_volume: &str,
+    resource_budget: ResourceBudget,
+    images: &crate::launch::VerifiedWorkerImages,
+) -> Result<CreateProjection, HostError> {
+    guest_image::validate_worker_images(images)?;
+    let mut projection = dind_create(private_volume, resource_budget)?;
+    projection.image = images.dind().runtime_id().to_owned();
+    projection.platform = images.platform().to_owned();
+    Ok(projection)
 }
 
 pub(crate) fn dind_mounts(private_volume: &str) -> Result<Vec<Mount>, HostError> {
@@ -230,7 +263,8 @@ pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostErro
 /// Returns [`HostError::ForbiddenMount`] for a rejected volume name.
 /// Returns [`HostError::Docker`] when Docker rejects a call. The error text
 /// does not include `jit`.
-pub async fn start_pair(
+#[cfg(test)]
+pub(crate) async fn start_pair(
     docker: &Docker,
     private_volume: &str,
     resource_budget: ResourceBudget,

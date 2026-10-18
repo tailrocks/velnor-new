@@ -172,7 +172,8 @@ impl PairEngine for Docker {
 /// Returns [`HostError::EmptyJit`] before any create when `jit` is empty.
 /// Returns [`HostError::Docker`] when a Docker call fails. A failed later step
 /// removes only an id that still inspects as the one this call created.
-pub async fn start_pair_until(
+#[cfg(test)]
+pub(crate) async fn start_pair_until(
     docker: &Docker,
     private_volume: &str,
     resource_budget: ResourceBudget,

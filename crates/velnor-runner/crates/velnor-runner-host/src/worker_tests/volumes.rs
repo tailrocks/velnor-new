@@ -9,11 +9,11 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::oneshot;
 
+use crate::HostError;
 use crate::worker::{
     VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
-    remove_verified_worker_volume, verify_worker_volume,
+    remove_verified_worker_volume, start_pair, verify_worker_volume,
 };
-use crate::{HostError, start_pair};
 
 const WORKER: &str = "wtransport";
 const WORK_VOLUME: &str = "wtransport-work";
