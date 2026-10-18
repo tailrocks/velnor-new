@@ -100,7 +100,7 @@ pub(super) fn connect(request: &ConnectRequest<'_>) -> ExitCode {
             ExitCode::from(1)
         }
         Err(ConnectError::WriteUncertain) => {
-            eprintln!("Config update is uncertain. Check host.toml.");
+            eprintln!("Configuration update is uncertain. Examine host.toml.");
             ExitCode::from(1)
         }
     }

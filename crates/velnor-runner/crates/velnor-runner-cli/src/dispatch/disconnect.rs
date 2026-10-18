@@ -254,7 +254,7 @@ fn remove_connection_config(
         return Err("Connection is no longer configured.");
     }
     let text = config.to_toml().map_err(|_| "Config update failed.")?;
-    persist_host(state, &text).map_err(|_| "Config update is uncertain. Check host.toml.")
+    persist_host(state, &text).map_err(|_| "Configuration update is uncertain. Examine host.toml.")
 }
 
 fn verify_disconnect_marker(

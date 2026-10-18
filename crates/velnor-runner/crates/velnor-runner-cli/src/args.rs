@@ -101,7 +101,7 @@ pub enum Command {
     },
     /// Print the log path.
     Logs {
-        /// Follow log output.
+        /// Show new service log output.
         #[arg(long)]
         follow: bool,
     },

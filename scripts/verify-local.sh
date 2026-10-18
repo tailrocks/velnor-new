@@ -313,7 +313,7 @@ else
   echo "effective: no pinned Nextest binary at $NEXTEST_BIN (pin $NEXTEST_PIN)"
 fi
 if ! nextest_route_is_pinned "$NEXTEST_BIN" "$NEXTEST_BIN_VER" "${NEXTEST_RUN_VER:-}" "$NEXTEST_PIN"; then
-  fail "toolchain (pinned Nextest executable or MBX route unavailable; expected $NEXTEST_PIN)"
+  fail "toolchain (pinned Nextest executable or MBX Nextest version mismatch; expected $NEXTEST_PIN)"
   echo "verify-local: FAIL:$FAILURES"
   exit 1
 fi

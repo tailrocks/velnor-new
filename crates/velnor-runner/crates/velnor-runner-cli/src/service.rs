@@ -30,7 +30,7 @@ fn start(state: &Path) -> ExitCode {
     if std::fs::create_dir_all(log_dir()).is_err()
         || !plist_matches(&plist_path(), &bin, state, &log_dir())
     {
-        eprintln!("Service config does not match.");
+        eprintln!("Service configuration is different.");
         return ExitCode::from(1);
     }
     spawn(&bootstrap_argv(uid, &plist_path()))

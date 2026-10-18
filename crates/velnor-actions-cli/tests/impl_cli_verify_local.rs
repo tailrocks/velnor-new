@@ -196,7 +196,10 @@ fn verify_local_nextest_route_rejects_missing_or_wrong_pins() -> Result<(), Box<
         .nth(1)
         .and_then(|body| body.split("\nfi").next())
         .ok_or("Nextest version guard call is missing")?;
-    assert!(route_check.contains("exit 1"), "route failures exit early");
+    assert!(
+        route_check.contains("exit 1"),
+        "version failures exit early"
+    );
 
     let executable = std::env::current_exe()?;
     let guard = r#"
