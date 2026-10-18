@@ -42,7 +42,7 @@ MISE_TRACE="$WORK/mise-release-fetches"
 ORIGINAL_PATH="$PATH"
 REAL_MISE_BIN="$(command -v mise)"
 if [[ "$REAL_MISE_BIN" != /* || ! -f "$REAL_MISE_BIN" || ! -x "$REAL_MISE_BIN" ]]; then
-  echo "FAIL: could not resolve the real executable Mise binary for the test stub" >&2
+  echo "FAIL: the test stub needs an absolute path to the mise executable." >&2
   exit 2
 fi
 export VELNOR_TEST_REAL_MISE_BIN="$REAL_MISE_BIN"
