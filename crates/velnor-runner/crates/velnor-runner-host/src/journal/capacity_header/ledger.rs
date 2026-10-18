@@ -220,6 +220,18 @@ impl HeaderLedger {
         self.max_jobs
     }
 
+    /// Change the host ceiling only when every existing header still fits.
+    pub(crate) fn set_max_jobs(&mut self, max_jobs: u32) -> Result<(), HeaderLedgerError> {
+        if max_jobs == 0 {
+            return Err(HeaderLedgerError::ZeroHostCapacity);
+        }
+        if self.checked_charged_capacity()? > max_jobs {
+            return Err(HeaderLedgerError::OverBudget);
+        }
+        self.max_jobs = max_jobs;
+        Ok(())
+    }
+
     /// Copy a deterministic snapshot for durable journal storage.
     #[must_use]
     pub(crate) fn snapshot(&self) -> HeaderLedgerSnapshot {
@@ -231,7 +243,23 @@ impl HeaderLedger {
     }
 
     /// Restore and validate persisted state; an interrupted poll stays charged.
-    pub(crate) fn restore(mut snapshot: HeaderLedgerSnapshot) -> Result<Self, HeaderLedgerError> {
+    pub(crate) fn restore(snapshot: HeaderLedgerSnapshot) -> Result<Self, HeaderLedgerError> {
+        Self::restore_with_poll_recovery(snapshot, true)
+    }
+
+    /// Restore a validated snapshot inside a running process transaction.
+    ///
+    /// Unlike [`Self::restore`], this keeps a persisted in-flight poll so its
+    /// owning request can durably settle it. Startup recovery must use
+    /// [`Self::restore`] to mark an interrupted request uncertain.
+    pub(crate) fn restore_live(snapshot: HeaderLedgerSnapshot) -> Result<Self, HeaderLedgerError> {
+        Self::restore_with_poll_recovery(snapshot, false)
+    }
+
+    fn restore_with_poll_recovery(
+        mut snapshot: HeaderLedgerSnapshot,
+        recover_interrupted_polls: bool,
+    ) -> Result<Self, HeaderLedgerError> {
         if snapshot.max_jobs == 0 || snapshot.next_generation == 0 {
             return Err(HeaderLedgerError::InvalidSnapshot);
         }
@@ -243,7 +271,7 @@ impl HeaderLedger {
                 return Err(HeaderLedgerError::InvalidSnapshot);
             }
             largest_generation = largest_generation.max(record.generation.0);
-            if record.in_flight_poll.take().is_some() {
+            if recover_interrupted_polls && record.in_flight_poll.take().is_some() {
                 record.state = GenerationState::Uncertain;
                 record.zero_header_settled = false;
             }

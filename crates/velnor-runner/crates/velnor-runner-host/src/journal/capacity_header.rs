@@ -8,6 +8,8 @@
 mod ledger;
 #[path = "capacity_header/model.rs"]
 mod model;
+#[path = "capacity_header/storage.rs"]
+mod storage;
 
 pub(crate) use ledger::HeaderLedger;
 #[cfg(test)]
@@ -15,6 +17,10 @@ use model::{GenerationState, SessionId};
 pub(crate) use model::{
     HeaderAllocation, HeaderGeneration, HeaderLedgerError, HeaderLedgerSnapshot, HeaderPollAttempt,
     HeaderSessionIdentity, PollOutcome, PollsSettledProof, SessionDeleteProof,
+};
+pub(super) use storage::{
+    bootstrap, bootstrap_connection, bootstrap_schema_connection, load, save, transition, validate,
+    validate_connection,
 };
 
 #[cfg(test)]

@@ -9,6 +9,7 @@ pub(super) const MAX_SESSION_ID_BYTES: usize = 256;
 
 /// Exact identity of one Scale Set message session.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct HeaderSessionIdentity {
     pub(super) connection_id: ConnectionId,
     pub(super) scale_set_id: i64,
@@ -91,7 +92,7 @@ impl HeaderAllocation {
 }
 
 /// Opaque token binding one poll result to its allocation and attempt.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) struct HeaderPollAttempt {
     pub(super) identity: HeaderSessionIdentity,
     pub(super) generation: HeaderGeneration,
@@ -105,6 +106,17 @@ impl HeaderPollAttempt {
     #[must_use]
     pub(crate) const fn header_value(&self) -> u32 {
         self.header_value
+    }
+
+    #[cfg(test)]
+    pub(super) fn duplicate_for_test(&self) -> Self {
+        Self {
+            identity: self.identity.clone(),
+            generation: self.generation,
+            attempt: self.attempt,
+            header_value: self.header_value,
+            purpose: self.purpose,
+        }
     }
 }
 
@@ -124,6 +136,7 @@ pub(super) enum PollPurpose {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct InFlightPoll {
     pub(super) sequence: u64,
     pub(super) header_value: u32,
@@ -139,6 +152,7 @@ pub(super) enum GenerationState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct HeaderRecord {
     pub(super) identity: HeaderSessionIdentity,
     pub(super) generation: HeaderGeneration,
@@ -168,6 +182,7 @@ impl HeaderRecord {
 /// Treat snapshots as journal data, not user configuration. Restore validates
 /// every identity, generation, attempt, and aggregate before accepting it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct HeaderLedgerSnapshot {
     pub(super) max_jobs: u32,
     pub(super) next_generation: u64,
