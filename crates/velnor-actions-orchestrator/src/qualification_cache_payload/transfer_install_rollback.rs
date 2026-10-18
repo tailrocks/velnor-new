@@ -1,7 +1,9 @@
 use super::super::cleanup::remove_owned_at;
-use super::super::dirs::{open_directory_at, same_object, stat_optional};
+use super::super::dirs::{same_object, stat_optional};
 use super::{CreatedPayload, PreparedRoot};
-use rustix::fs::{FileType, Mode, OFlags, RenameFlags, Stat, mkdirat, openat, renameat_with};
+use rustix::fs::{Mode, OFlags, RenameFlags, Stat, openat, renameat_with};
+#[cfg(test)]
+use std::io::Write;
 
 pub(super) fn rollback_prepared(prepared: &mut [PreparedRoot]) -> Result<(), &'static str> {
     for item in prepared.iter_mut().rev() {
@@ -86,7 +88,7 @@ fn restore_backup_to_empty_destination(
         return Err("qualification_cache_import_rollback_failed");
     }
 
-    let placeholder = create_rollback_placeholder(item, previous)?;
+    let placeholder = create_rollback_placeholder(item)?;
     if renameat_with(
         &item.parent,
         item.backup_name.as_c_str(),
@@ -135,29 +137,16 @@ fn restore_backup_to_empty_destination(
     Err("qualification_cache_import_rollback_failed")
 }
 
-fn create_rollback_placeholder(
-    item: &PreparedRoot,
-    previous: &Stat,
-) -> Result<CreatedPayload, &'static str> {
-    let descriptor = match FileType::from_raw_mode(previous.st_mode) {
-        FileType::Directory => {
-            mkdirat(
-                &item.parent,
-                item.destination_name.as_c_str(),
-                Mode::RUSR | Mode::WUSR | Mode::XUSR,
-            )
-            .map_err(|_| "qualification_cache_import_rollback_failed")?;
-            open_directory_at(&item.parent, item.destination_name.as_c_str())?
-        }
-        FileType::RegularFile => openat(
-            &item.parent,
-            item.destination_name.as_c_str(),
-            OFlags::CREATE | OFlags::EXCL | OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
-            Mode::RUSR | Mode::WUSR,
-        )
-        .map_err(|_| "qualification_cache_import_rollback_failed")?,
-        _ => return Err("qualification_cache_import_rollback_failed"),
-    };
+fn create_rollback_placeholder(item: &PreparedRoot) -> Result<CreatedPayload, &'static str> {
+    let descriptor = openat(
+        &item.parent,
+        item.destination_name.as_c_str(),
+        OFlags::CREATE | OFlags::EXCL | OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::RUSR | Mode::WUSR,
+    )
+    .map_err(|_| "qualification_cache_import_rollback_failed")?;
+    #[cfg(test)]
+    replace_placeholder_after_create(item);
     let stat =
         rustix::fs::fstat(&descriptor).map_err(|_| "qualification_cache_import_rollback_failed")?;
     let path_stat = stat_optional(&item.parent, item.destination_name.as_c_str())?
@@ -170,6 +159,46 @@ fn create_rollback_placeholder(
         descriptor,
         stat,
     })
+}
+
+#[cfg(test)]
+thread_local! {
+    static REPLACE_PLACEHOLDER_AFTER_CREATE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+pub(super) fn replace_next_placeholder_for_test() {
+    REPLACE_PLACEHOLDER_AFTER_CREATE.with(|replace| replace.set(true));
+}
+
+#[cfg(test)]
+fn replace_placeholder_after_create(item: &PreparedRoot) {
+    if !REPLACE_PLACEHOLDER_AFTER_CREATE.with(|replace| replace.replace(false)) {
+        return;
+    }
+    rustix::fs::renameat(
+        &item.parent,
+        item.destination_name.as_c_str(),
+        &item.parent,
+        c"retained-placeholder",
+    )
+    .expect("retain exclusively created placeholder");
+    rustix::fs::mkdirat(
+        &item.parent,
+        item.destination_name.as_c_str(),
+        Mode::from_bits_truncate(0o700),
+    )
+    .expect("create foreign replacement directory");
+    let marker = openat(
+        &item.parent,
+        c"live/foreign-marker",
+        OFlags::CREATE | OFlags::EXCL | OFlags::WRONLY | OFlags::CLOEXEC,
+        Mode::from_bits_truncate(0o600),
+    )
+    .expect("create replacement marker");
+    std::fs::File::from(marker)
+        .write_all(b"foreign")
+        .expect("write replacement marker");
 }
 
 fn remove_installed_replacement(item: &mut PreparedRoot) -> Result<(), &'static str> {

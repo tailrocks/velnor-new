@@ -159,6 +159,87 @@ fn rollback_rejects_replaced_backup_before_restoring_to_empty_root() {
 }
 
 #[test]
+fn rollback_exchanges_the_file_placeholder_for_an_original_directory() {
+    let scratch = tempfile::tempdir().expect("scratch");
+    let base = fs::canonicalize(scratch.path()).expect("canonical path");
+    let live_path = base.join("live");
+    let backup_path = base.join("backup");
+    fs::create_dir(&live_path).expect("original root");
+    fs::write(live_path.join("state"), b"original").expect("original state");
+
+    let parent = open_owned_directory(&base).expect("parent");
+    let destination_name = c_name(std::ffi::OsStr::new("live")).expect("live name");
+    let backup_name = c_name(std::ffi::OsStr::new("backup")).expect("backup name");
+    let previous = stat_optional(&parent, destination_name.as_c_str())
+        .expect("original stat")
+        .expect("original root exists");
+    fs::rename(&live_path, &backup_path).expect("move original to backup");
+
+    let mut prepared = [PreparedRoot {
+        parent,
+        destination_name,
+        temporary_name: c_name(std::ffi::OsStr::new("temporary")).expect("temporary name"),
+        backup_name,
+        previous: Some(previous),
+        temporary: None,
+        backup_moved: true,
+        replacement_installed: false,
+    }];
+    rollback_prepared(&mut prepared).expect("restore original directory");
+
+    let restored = stat_optional(&prepared[0].parent, prepared[0].destination_name.as_c_str())
+        .expect("restored stat")
+        .expect("restored root exists");
+    assert!(same_object(&previous, &restored));
+    assert_eq!(
+        fs::read(live_path.join("state")).expect("restored state"),
+        b"original"
+    );
+    assert!(!backup_path.exists());
+    assert!(!prepared[0].backup_moved);
+}
+
+#[test]
+fn rollback_does_not_adopt_replacement_after_exclusive_placeholder_creation() {
+    let scratch = tempfile::tempdir().expect("scratch");
+    let base = fs::canonicalize(scratch.path()).expect("canonical path");
+    let backup_path = base.join("backup");
+    fs::create_dir(&backup_path).expect("original root");
+    fs::write(backup_path.join("state"), b"original").expect("original state");
+
+    let parent = open_owned_directory(&base).expect("parent");
+    let backup_name = c_name(std::ffi::OsStr::new("backup")).expect("backup name");
+    let previous = stat_optional(&parent, backup_name.as_c_str())
+        .expect("original stat")
+        .expect("original root exists");
+    let mut prepared = [PreparedRoot {
+        parent,
+        destination_name: c_name(std::ffi::OsStr::new("live")).expect("live name"),
+        temporary_name: c_name(std::ffi::OsStr::new("temporary")).expect("temporary name"),
+        backup_name,
+        previous: Some(previous),
+        temporary: None,
+        backup_moved: true,
+        replacement_installed: false,
+    }];
+
+    super::rollback::replace_next_placeholder_for_test();
+    assert_eq!(
+        rollback_prepared(&mut prepared),
+        Err("qualification_cache_import_rollback_failed")
+    );
+    assert_eq!(
+        fs::read(base.join("live/foreign-marker")).expect("foreign marker preserved"),
+        b"foreign"
+    );
+    assert_eq!(
+        fs::read(backup_path.join("state")).expect("original backup preserved"),
+        b"original"
+    );
+    assert!(base.join("retained-placeholder").is_file());
+}
+
+#[test]
 fn rollback_restores_the_original_inode_and_removes_the_imported_root() {
     let scratch = tempfile::tempdir().expect("scratch");
     let base = fs::canonicalize(scratch.path()).expect("canonical path");
