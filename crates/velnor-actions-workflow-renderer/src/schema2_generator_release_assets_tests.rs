@@ -229,9 +229,9 @@ fn wrong_checksum_filename_stops_before_candidate_execution() -> Result<(), Box<
         .join("../..")
         .canonicalize()?;
     let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let directory_name = format!("target/release-sidecar-test-{}-{nonce}", std::process::id());
+    let directory_name = format!(".release-sidecar-test-{}-{nonce}", std::process::id());
     let directory = root.join(&directory_name);
-    fs::create_dir_all(&directory)?;
+    fs::create_dir(&directory)?;
     let scratch = Scratch(directory.clone());
     let executed = scratch.0.join("candidate-executed");
     let candidate = directory.join(LINUX.binary);
