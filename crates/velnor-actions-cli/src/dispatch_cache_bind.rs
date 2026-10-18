@@ -10,6 +10,9 @@ use velnor_actions_orchestrator::{
     QUALIFICATION_CACHE_BIND_OP, QualificationCacheBindingRequest, bind_qualification_cache_runtime,
 };
 
+#[path = "dispatch_cache_roots.rs"]
+mod roots;
+
 /// Operation tag for one validated cache binding.
 pub(crate) const OP: &str = QUALIFICATION_CACHE_BIND_OP;
 
@@ -76,6 +79,9 @@ pub(crate) fn run() -> ExitCode {
         Ok(outputs) => outputs,
         Err(error) => return fail(&error.to_string()),
     };
+    if let Err(problem) = validate_optional_root_observation(&inputs) {
+        return fail(problem);
+    }
     let Some(path) = env::var_os(GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty()) else {
         return fail("missing_github_output");
     };
@@ -87,6 +93,18 @@ pub(crate) fn run() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => fail(&format!("append_github_output:{error}")),
     }
+}
+
+fn validate_optional_root_observation(inputs: &BindInputs) -> Result<(), &'static str> {
+    let Ok(text) = env::var(roots::ROOTS_ENV) else {
+        return Ok(());
+    };
+    let layer = roots::parse_layer(&inputs.layer).ok_or("qualification_cache_roots_invalid")?;
+    let observed = roots::CacheRootSet::parse(&text, &inputs.matrix_key, layer)?;
+    let expected = roots::expected_paths_for_environment(layer, &inputs.runner_temp, |name| {
+        env::var(name).ok()
+    })?;
+    observed.validate_expected_paths(&expected)
 }
 
 pub(crate) fn append_owned_output(path: &std::ffi::OsStr, body: &[u8]) -> std::io::Result<()> {
@@ -343,7 +361,7 @@ fn stage_path(
         && key.bytes().all(|byte| {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"-_".contains(&byte)
         })
-        && key.starts_with(&format!("velnor-qcache-v1-{campaign}-{layer}-"));
+        && key.starts_with(&format!("velnor-qcache-v2-{campaign}-{layer}-"));
     if !valid_campaign || !valid_layer || !valid_key {
         return Err("cache_binding_stage_path_invalid");
     }
