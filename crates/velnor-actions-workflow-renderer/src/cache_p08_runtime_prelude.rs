@@ -69,7 +69,13 @@ pub(super) fn validate_action_call(
     let source_sha =
         with.get(super::runtime_identity::TOOLS_CACHE_SCALE_SET_IMAGE_SOURCE_SHA_INPUT);
     if step.role != Some(StepRole::ToolsCacheIdentity)
-        || step.condition.as_deref() != Some(cache_p08::TOOLS_CACHE_NORMAL_RUN_CONDITION)
+        || !matches!(
+            step.condition.as_deref(),
+            Some(
+                cache_p08::TOOLS_CACHE_NORMAL_RUN_CONDITION
+                    | cache_p08::TOOLS_CACHE_PLAN_RUN_CONDITION
+            )
+        )
         || Some(uses) != action_uses(runs_on)
         || !env.is_empty()
         || with.len() != if is_scale_set { 2 } else { 1 }

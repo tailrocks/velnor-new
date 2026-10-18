@@ -78,7 +78,13 @@ fn suppress_dispatch(step: &mut Step) {
         return;
     }
     if step.role == Some(velnor_actions_contract::StepRole::ToolsCacheRestore)
-        && step.condition.as_deref() == Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
+        && matches!(
+            step.condition.as_deref(),
+            Some(
+                crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION
+                    | crate::cache_p08::TOOLS_CACHE_PLAN_RESTORE_CONDITION
+            )
+        )
     {
         return;
     }

@@ -116,8 +116,10 @@ fn insert_tools_prelude(
     if !payload.runtime_identity_supported() {
         return Ok(());
     }
-    let prelude = payload.runtime_prelude_step()?;
-    let restore = payload.restore_step()?;
+    let mut prelude = payload.runtime_prelude_step()?;
+    prelude.condition = Some(cache_p08::tools_cache_identity_condition(job_id).to_owned());
+    let mut restore = payload.restore_step()?;
+    restore.condition = Some(cache_p08::tools_cache_restore_condition(job_id).to_owned());
     job.steps
         .splice(setup_index..setup_index, [prelude, restore]);
     Ok(())

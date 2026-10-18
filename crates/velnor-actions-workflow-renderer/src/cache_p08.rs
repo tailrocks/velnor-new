@@ -37,10 +37,31 @@ pub(crate) const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str =
 /// Cache restore is unavailable unless runtime roots/image were qualified.
 pub const TOOLS_CACHE_NORMAL_RUN_CONDITION: &str =
     "needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''";
+/// The plan job cannot read its own outputs, so it denies dispatch cache access directly.
+pub const TOOLS_CACHE_PLAN_RUN_CONDITION: &str = "github.event_name != 'workflow_dispatch'";
 /// A tool seed may run only after its runtime identity action succeeds.
 pub const TOOLS_CACHE_IDENTITY_CONDITION: &str = "steps.v2.outputs.enabled == 'true'";
 /// Restore only in a normal planned run with a qualified runtime identity.
 pub const TOOLS_CACHE_RESTORE_CONDITION: &str = "needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'";
+/// The plan job uses an event guard because it cannot depend on its own result.
+pub const TOOLS_CACHE_PLAN_RESTORE_CONDITION: &str =
+    "github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'";
+
+pub(crate) fn tools_cache_identity_condition(job_id: &str) -> &'static str {
+    if job_id == crate::render::PLAN_JOB_ID {
+        TOOLS_CACHE_PLAN_RUN_CONDITION
+    } else {
+        TOOLS_CACHE_NORMAL_RUN_CONDITION
+    }
+}
+
+pub(crate) fn tools_cache_restore_condition(job_id: &str) -> &'static str {
+    if job_id == crate::render::PLAN_JOB_ID {
+        TOOLS_CACHE_PLAN_RESTORE_CONDITION
+    } else {
+        TOOLS_CACHE_RESTORE_CONDITION
+    }
+}
 /// Cache writes require an eligible producer under `policy` and qualified identity.
 pub(crate) fn tools_cache_save_condition(
     policy: velnor_actions_contract::PullRequestCachePolicy,

@@ -50,7 +50,7 @@ fn valid_tools_cache_prelude(steps: &[Step], runs_on: &str) -> bool {
 
 fn valid_identity(step: &Step, runs_on: &str) -> bool {
     step.role == Some(StepRole::ToolsCacheIdentity)
-        && step.condition.is_none()
+        && step.condition.as_deref() == Some(crate::cache_p08::TOOLS_CACHE_NORMAL_RUN_CONDITION)
         && matches!(
             &step.kind,
             StepKind::Action { uses, with, env }

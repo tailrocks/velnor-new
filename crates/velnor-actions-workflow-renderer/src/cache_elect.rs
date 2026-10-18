@@ -361,7 +361,9 @@ fn tools_restore_identity(id: &str, job: &Job) -> Result<Option<(String, String)
         )));
     };
     if identity.id != Some(velnor_actions_contract::StepId::ToolsCacheIdentity)
-        || identity.condition.is_some()
+        || identity.condition.as_deref()
+            != Some(crate::cache_p08::tools_cache_identity_condition(id))
+        || step.condition.as_deref() != Some(crate::cache_p08::tools_cache_restore_condition(id))
     {
         return Err(RenderError::InvalidWorkflow(format!(
             "tools_cache_identity_shape:{id}"
