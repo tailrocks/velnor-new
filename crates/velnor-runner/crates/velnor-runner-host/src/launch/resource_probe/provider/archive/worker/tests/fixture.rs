@@ -37,7 +37,11 @@ struct AttestationParts {
 }
 
 pub(super) fn fixture(image: WorkerImage) -> Fixture {
-    let platform = platform_parts(image);
+    fixture_with_config(image, |_| {})
+}
+
+pub(super) fn fixture_with_config(image: WorkerImage, mutate: impl FnOnce(&mut Value)) -> Fixture {
+    let platform = platform_parts(image, mutate);
     let statement = build_statement(image, &platform.manifest_digest);
     let attestation = attestation_parts(statement, &platform.manifest_digest);
     let nested_index = nested_index(
@@ -61,15 +65,16 @@ pub(super) fn fixture(image: WorkerImage) -> Fixture {
     }
 }
 
-fn platform_parts(image: WorkerImage) -> PlatformParts {
+fn platform_parts(image: WorkerImage, mutate: impl FnOnce(&mut Value)) -> PlatformParts {
     let layer = b"fixture compressed layer".to_vec();
     let config = runtime_config(image);
-    let image_config = json!({
+    let mut image_config = json!({
         "architecture": "amd64",
         "os": "linux",
         "config": config,
         "rootfs": { "type": "layers", "diff_ids": [format!("sha256:{}", "1".repeat(64))] }
     });
+    mutate(&mut image_config);
     let image_config_bytes = serde_json::to_vec(&image_config).expect("image config JSON is valid");
     let config_descriptor = descriptor(
         "application/vnd.oci.image.config.v1+json",
@@ -352,3 +357,7 @@ pub(super) fn write_fixture(label: &str, bytes: &[u8]) -> PathBuf {
     fs::write(&path, bytes).expect("fixture bytes are written");
     path
 }
+
+mod archive_mutations;
+
+pub(super) use archive_mutations::{append_file_entry, append_pax_link, rewrite_json_entry};

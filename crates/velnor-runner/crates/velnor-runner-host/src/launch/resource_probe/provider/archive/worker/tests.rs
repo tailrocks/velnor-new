@@ -1,12 +1,15 @@
 use std::collections::BTreeMap;
-use std::fs::{self, File};
+use std::fs::{self, File, OpenOptions};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use super::layout::sha256;
 use super::{WorkerImage, derive_load_archive, verify};
-use fixture::{SOURCE_SHA, fixture, write_fixture};
+use fixture::{
+    SOURCE_SHA, append_file_entry, append_pax_link, fixture, fixture_with_config,
+    rewrite_json_entry, write_fixture,
+};
 
 mod fixture;
 
@@ -176,6 +179,107 @@ fn rejects_a_tag_with_an_unowned_image_name() {
         .is_err()
     );
     fs::remove_file(archive_path).expect("wrong-tag archive is removed");
+}
+
+#[test]
+fn rejects_traversal_duplicate_and_pax_link_entries() {
+    let fixture = fixture(WorkerImage::Runner);
+    let traversal = append_file_entry(&fixture.archive, "../outside", b"foreign");
+    assert_archive_rejected("traversal", &traversal, WorkerImage::Runner);
+
+    let duplicate = append_file_entry(&fixture.archive, "index.json", b"{}");
+    assert_archive_rejected("duplicate", &duplicate, WorkerImage::Runner);
+
+    let link = append_pax_link(&fixture.archive, "blobs/sha256/linked", "../../outside");
+    assert_archive_rejected("pax-link", &link, WorkerImage::Runner);
+}
+
+#[test]
+fn rejects_descriptor_digest_and_size_mismatches() {
+    let fixture = fixture(WorkerImage::Runner);
+    let wrong_digest = rewrite_json_entry(&fixture.archive, "index.json", |index| {
+        index["manifests"][0]["digest"] = format!("sha256:{}", "0".repeat(64)).into();
+    });
+    assert_archive_rejected("descriptor-digest", &wrong_digest, WorkerImage::Runner);
+
+    let wrong_size = rewrite_json_entry(&fixture.archive, "index.json", |index| {
+        let size = index["manifests"][0]["size"]
+            .as_u64()
+            .expect("descriptor size is numeric");
+        index["manifests"][0]["size"] = (size + 1).into();
+    });
+    assert_archive_rejected("descriptor-size", &wrong_size, WorkerImage::Runner);
+}
+
+#[test]
+fn rejects_wrong_platform_config_and_rootfs() {
+    for (label, mutate) in [
+        (
+            "architecture",
+            Box::new(|config: &mut Value| config["architecture"] = "arm64".into())
+                as Box<dyn FnOnce(&mut Value)>,
+        ),
+        (
+            "operating-system",
+            Box::new(|config: &mut Value| config["os"] = "windows".into()),
+        ),
+        (
+            "rootfs-type",
+            Box::new(|config: &mut Value| config["rootfs"]["type"] = "squashfs".into()),
+        ),
+        (
+            "rootfs-diff-ids",
+            Box::new(|config: &mut Value| config["rootfs"]["diff_ids"] = json!([])),
+        ),
+        (
+            "runtime-config",
+            Box::new(|config: &mut Value| {
+                config["config"]["Entrypoint"] = json!(["/untrusted"]);
+            }),
+        ),
+    ] {
+        let fixture = fixture_with_config(WorkerImage::Runner, mutate);
+        assert_archive_rejected(label, &fixture.archive, WorkerImage::Runner);
+    }
+}
+
+#[test]
+fn rejects_worker_archive_larger_than_the_bound_before_reading() {
+    let path = temp_path("oversized-sparse");
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .expect("sparse fixture file is created")
+        .set_len(super::model::MAX_WORKER_ARCHIVE_BYTES + 1)
+        .expect("sparse fixture exceeds the archive bound");
+    assert!(
+        verify(
+            &path,
+            WorkerImage::Runner,
+            SOURCE_SHA,
+            &"0".repeat(64),
+            &WorkerImage::Runner.release_tag(),
+        )
+        .is_err()
+    );
+    fs::remove_file(path).expect("oversized fixture is removed");
+}
+
+fn assert_archive_rejected(label: &str, bytes: &[u8], image: WorkerImage) {
+    let path = write_fixture(label, bytes);
+    assert!(
+        verify(
+            &path,
+            image,
+            SOURCE_SHA,
+            &sha256(bytes),
+            &image.release_tag(),
+        )
+        .is_err(),
+        "malformed {label} archive is rejected"
+    );
+    fs::remove_file(path).expect("malformed archive is removed");
 }
 
 fn temp_path(label: &str) -> std::path::PathBuf {
