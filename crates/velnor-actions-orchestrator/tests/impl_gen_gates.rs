@@ -76,12 +76,13 @@ fn cross_checkout_determinism() -> TestResult {
     let right_bytes = preview_bytes(right.path())?;
     assert_eq!(
         left_bytes.keys().len(),
-        11,
+        12,
         "generated files: {:?}",
         left_bytes.keys().collect::<Vec<_>>()
     );
     for generated in [
         ".github/actions/declared-task-0/action.yml",
+        ".github/actions/velnor-cache-tar-launchers/action.yml",
         ".github/velnor/task-execution-manifest-v1.json",
     ] {
         assert!(left_bytes.contains_key(generated), "generated {generated}");

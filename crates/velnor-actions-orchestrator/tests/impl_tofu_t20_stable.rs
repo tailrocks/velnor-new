@@ -83,6 +83,7 @@ fn tofu_cross_checkout_determinism() -> TestResult {
                 ".github/actionlint.yaml",
                 ".github/actions/tofu-provider-admission/action.yml",
                 ".github/actions/u26/action.yml",
+                ".github/actions/velnor-cache-tar-launchers/action.yml",
                 ".github/actions/velnor-tool-seed/action.yml",
                 ".github/actions/velnor-tools-cache-restore/action.yml",
                 ".github/actions/velnor-tools-prelude-u26/action.yml",

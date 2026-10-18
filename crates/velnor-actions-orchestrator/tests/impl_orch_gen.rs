@@ -105,6 +105,7 @@ fn orch_gen_plan_matches_generated_tree() -> TestResult {
             ".github/actionlint.yaml",
             ".github/actions/declared-task-0/action.yml",
             ".github/actions/u26/action.yml",
+            ".github/actions/velnor-cache-tar-launchers/action.yml",
             ".github/actions/velnor-tool-seed/action.yml",
             ".github/actions/velnor-tools-cache-restore/action.yml",
             ".github/actions/velnor-tools-prelude-u26/action.yml",
@@ -144,7 +145,13 @@ fn orch_gen_zero_candidate_repo_plans_no_work() -> TestResult {
     assert!(plan.contains("no-work workflow"), "no-work:\n{plan}");
     let parent = TempDir::new()?;
     let report = preview_into(&prep, parent.path().join("preview"))?;
-    assert_eq!(report.files_written.len(), 9, "V2 cache assets are emitted");
+    assert_eq!(report.files_written.len(), 10, "generated files");
+    assert!(
+        report
+            .files_written
+            .iter()
+            .any(|path| { path == ".github/actions/velnor-cache-tar-launchers/action.yml" })
+    );
     Ok(())
 }
 

@@ -223,6 +223,7 @@ fn assert_hosted_outputs(files: &[String], declared_action: &str, manifest: &str
                 declared_action,
                 ".github/actions/velnor-tool-seed/action.yml",
                 ".github/actions/u26/action.yml",
+                ".github/actions/velnor-cache-tar-launchers/action.yml",
                 ".github/actions/velnor-tools-cache-restore/action.yml",
                 ".github/actions/velnor-tools-prelude-u26/action.yml",
             ]

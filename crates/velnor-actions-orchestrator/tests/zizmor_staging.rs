@@ -139,7 +139,13 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written.len(), 12, "generated files");
+    assert_eq!(report.files_written.len(), 13, "generated files");
+    assert!(
+        report
+            .files_written
+            .iter()
+            .any(|path| { path == ".github/actions/velnor-cache-tar-launchers/action.yml" })
+    );
     assert!(
         report
             .files_written
@@ -185,6 +191,7 @@ fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Erro
         ".github/CLAUDE.md",
         ".github/actions/declared-task-0/action.yml",
         ".github/actions/u26/action.yml",
+        ".github/actions/velnor-cache-tar-launchers/action.yml",
         ".github/actions/velnor-tool-seed/action.yml",
         ".github/actions/velnor-tools-cache-restore/action.yml",
         ".github/actions/velnor-tools-prelude-u26/action.yml",
@@ -293,8 +300,8 @@ fn staging_suppressions_stable_no_new() -> TestResult {
         "SHA-pinned refs produce no findings: {text}"
     );
     assert_eq!(
-        ignores, 34,
-        "Only the 34 local action calls have an ignore entry."
+        ignores, 45,
+        "Only the 45 local action calls have an ignore entry."
     );
     assert!(
         text.contains(&format!("{ignores} ignored")),
@@ -313,6 +320,7 @@ fn self_repository_ignores(root: &Path) -> Result<usize, Box<dyn std::error::Err
         FRESHNESS_WORKFLOW_PATH,
         ".github/actions/declared-task-0/action.yml",
         ".github/actions/u26/action.yml",
+        ".github/actions/velnor-cache-tar-launchers/action.yml",
         ".github/actions/velnor-tool-seed/action.yml",
         ".github/actions/velnor-tools-cache-restore/action.yml",
         ".github/actions/velnor-tools-prelude-u26/action.yml",
