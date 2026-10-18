@@ -219,115 +219,12 @@ impl StorageProfile {
     ) -> Result<Self, HostError> {
         pools.sort_by(|left, right| left.pool_id.cmp(&right.pool_id));
         roles.sort_by_key(|role| role.role);
-        if !valid_generation(&generation_id)
-            || pools.is_empty()
-            || pools.len() > MAX_STORAGE_POOLS
-            || roles.len() != StorageRole::ALL.len()
-        {
-            return Err(HostError::Journal);
-        }
-        let mut ids = pools
-            .iter()
-            .map(|pool| pool.pool_id.as_str())
-            .collect::<Vec<_>>();
-        ids.sort_unstable();
-        if ids.windows(2).any(|pair| pair[0] == pair[1]) {
-            return Err(HostError::Journal);
-        }
-        let mut role_ids = roles.iter().map(|row| row.role).collect::<Vec<_>>();
-        role_ids.sort_unstable();
-        let mut expected_role_ids = StorageRole::ALL.to_vec();
-        expected_role_ids.sort_unstable();
-        if role_ids != expected_role_ids {
-            return Err(HostError::Journal);
-        }
-        for role in &roles {
-            let pool = pools
-                .iter()
-                .find(|pool| pool.pool_id == role.pool_id)
-                .ok_or(HostError::Journal)?;
-            if pool.medium != role.medium {
-                return Err(HostError::Journal);
-            }
-            match role.alias_of {
-                Some(alias_of) => {
-                    let target = roles
-                        .iter()
-                        .find(|candidate| candidate.role == alias_of)
-                        .ok_or(HostError::Journal)?;
-                    if !matches!(role.role, StorageRole::CacheLive | StorageRole::CacheStage)
-                        || alias_of != StorageRole::RunnerWork
-                        || target.alias_of.is_some()
-                        || target.role == role.role
-                        || target.pool_id != role.pool_id
-                        || target.medium != role.medium
-                        || role.max_bytes > target.max_bytes
-                        || role.max_inodes > target.max_inodes
-                        || role.retained_memory_bytes != 0
-                    {
-                        return Err(HostError::Journal);
-                    }
-                }
-                None => {
-                    if matches!(role.role, StorageRole::CacheLive | StorageRole::CacheStage)
-                        || role.max_bytes == 0
-                        || role.max_inodes == 0
-                        || role.max_bytes > pool.max_bytes
-                        || (pool.inode_policy == StorageInodePolicy::Finite
-                            && role.max_inodes > pool.max_inodes)
-                        || (role.medium == StorageMedium::Disk && role.retained_memory_bytes != 0)
-                        || (role.medium == StorageMedium::Tmpfs
-                            && role.retained_memory_bytes != role.max_bytes)
-                        || (pool.inode_policy != StorageInodePolicy::Finite
-                            && role.medium == StorageMedium::Tmpfs)
-                    {
-                        return Err(HostError::Journal);
-                    }
-                }
-            }
-        }
-        for target in roles.iter().filter(|role| role.alias_of.is_none()) {
-            let mut aliases = roles
-                .iter()
-                .filter(|role| role.alias_of == Some(target.role));
-            let (alias_bytes, alias_inodes) = aliases.try_fold((0_u64, 0_u64), |sum, alias| {
-                Ok::<_, HostError>((
-                    sum.0
-                        .checked_add(alias.max_bytes)
-                        .ok_or(HostError::Journal)?,
-                    sum.1
-                        .checked_add(alias.max_inodes)
-                        .ok_or(HostError::Journal)?,
-                ))
-            })?;
-            if alias_bytes > target.max_bytes || alias_inodes > target.max_inodes {
-                return Err(HostError::Journal);
-            }
-        }
-        for pool in &pools {
-            let role_bytes = roles
-                .iter()
-                .filter(|role| role.pool_id == pool.pool_id && role.alias_of.is_none())
-                .try_fold(0_u64, |sum, role| {
-                    sum.checked_add(role.max_bytes).ok_or(HostError::Journal)
-                })?;
-            let role_inodes = roles
-                .iter()
-                .filter(|role| role.pool_id == pool.pool_id && role.alias_of.is_none())
-                .try_fold(0_u64, |sum, role| {
-                    sum.checked_add(role.max_inodes).ok_or(HostError::Journal)
-                })?;
-            let disk_does_not_fit = role_bytes
-                .checked_add(pool.reserve_bytes)
-                .is_none_or(|charge| charge > pool.max_bytes);
-            let finite_inodes_do_not_fit = pool.inode_policy == StorageInodePolicy::Finite
-                && role_inodes
-                    .checked_add(pool.reserve_inodes)
-                    .is_none_or(|charge| charge > pool.max_inodes);
-            if disk_does_not_fit || finite_inodes_do_not_fit {
-                return Err(HostError::Journal);
-            }
-        }
+        validate_profile_shape(&generation_id, &pools, &roles)?;
+        validate_pool_ids(&pools)?;
+        validate_role_ids(&roles)?;
+        validate_roles(&pools, &roles)?;
+        validate_alias_totals(&roles)?;
+        validate_pool_capacity(&pools, &roles)?;
         let profile_digest = profile_digest(&pools, &roles)?;
         Ok(Self {
             generation_id,
@@ -424,6 +321,185 @@ impl StorageProfile {
         }
         Ok(())
     }
+}
+
+fn validate_profile_shape(
+    generation_id: &str,
+    pools: &[StoragePoolLimit],
+    roles: &[StorageRoleLimit],
+) -> Result<(), HostError> {
+    if !valid_generation(generation_id)
+        || pools.is_empty()
+        || pools.len() > MAX_STORAGE_POOLS
+        || roles.len() != StorageRole::ALL.len()
+    {
+        Err(HostError::Journal)
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_pool_ids(pools: &[StoragePoolLimit]) -> Result<(), HostError> {
+    let mut ids = pools
+        .iter()
+        .map(|pool| pool.pool_id.as_str())
+        .collect::<Vec<_>>();
+    ids.sort_unstable();
+    if ids.windows(2).any(|pair| pair[0] == pair[1]) {
+        Err(HostError::Journal)
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_role_ids(roles: &[StorageRoleLimit]) -> Result<(), HostError> {
+    let mut role_ids = roles.iter().map(|row| row.role).collect::<Vec<_>>();
+    role_ids.sort_unstable();
+    let mut expected_role_ids = StorageRole::ALL.to_vec();
+    expected_role_ids.sort_unstable();
+    if role_ids == expected_role_ids {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
+}
+
+fn validate_roles(pools: &[StoragePoolLimit], roles: &[StorageRoleLimit]) -> Result<(), HostError> {
+    for role in roles {
+        let pool = pools
+            .iter()
+            .find(|pool| pool.pool_id == role.pool_id)
+            .ok_or(HostError::Journal)?;
+        validate_role_pool_match(pool, role)?;
+        validate_role_limits(pool, roles, role)?;
+    }
+    Ok(())
+}
+
+fn validate_role_pool_match(
+    pool: &StoragePoolLimit,
+    role: &StorageRoleLimit,
+) -> Result<(), HostError> {
+    if pool.medium == role.medium {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
+}
+
+fn validate_role_limits(
+    pool: &StoragePoolLimit,
+    roles: &[StorageRoleLimit],
+    role: &StorageRoleLimit,
+) -> Result<(), HostError> {
+    match role.alias_of {
+        Some(alias_of) => validate_alias_role(roles, role, alias_of),
+        None => validate_physical_role(pool, role),
+    }
+}
+
+fn validate_alias_role(
+    roles: &[StorageRoleLimit],
+    role: &StorageRoleLimit,
+    alias_of: StorageRole,
+) -> Result<(), HostError> {
+    let target = roles
+        .iter()
+        .find(|candidate| candidate.role == alias_of)
+        .ok_or(HostError::Journal)?;
+    if matches!(role.role, StorageRole::CacheLive | StorageRole::CacheStage)
+        && alias_of == StorageRole::RunnerWork
+        && target.alias_of.is_none()
+        && target.role != role.role
+        && target.pool_id == role.pool_id
+        && target.medium == role.medium
+        && role.max_bytes <= target.max_bytes
+        && role.max_inodes <= target.max_inodes
+        && role.retained_memory_bytes == 0
+    {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
+}
+
+fn validate_physical_role(
+    pool: &StoragePoolLimit,
+    role: &StorageRoleLimit,
+) -> Result<(), HostError> {
+    let cache_alias = matches!(role.role, StorageRole::CacheLive | StorageRole::CacheStage);
+    let inode_limit_exceeded =
+        pool.inode_policy == StorageInodePolicy::Finite && role.max_inodes > pool.max_inodes;
+    let retained_memory_invalid = match role.medium {
+        StorageMedium::Disk => role.retained_memory_bytes != 0,
+        StorageMedium::Tmpfs => role.retained_memory_bytes != role.max_bytes,
+    };
+    let invalid = cache_alias
+        || role.max_bytes == 0
+        || role.max_inodes == 0
+        || role.max_bytes > pool.max_bytes
+        || inode_limit_exceeded
+        || retained_memory_invalid
+        || (pool.inode_policy != StorageInodePolicy::Finite && role.medium == StorageMedium::Tmpfs);
+    if invalid {
+        Err(HostError::Journal)
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_alias_totals(roles: &[StorageRoleLimit]) -> Result<(), HostError> {
+    for target in roles.iter().filter(|role| role.alias_of.is_none()) {
+        let (alias_bytes, alias_inodes) = roles
+            .iter()
+            .filter(|role| role.alias_of == Some(target.role))
+            .try_fold((0_u64, 0_u64), |sum, alias| {
+                Ok::<_, HostError>((
+                    sum.0
+                        .checked_add(alias.max_bytes)
+                        .ok_or(HostError::Journal)?,
+                    sum.1
+                        .checked_add(alias.max_inodes)
+                        .ok_or(HostError::Journal)?,
+                ))
+            })?;
+        if alias_bytes > target.max_bytes || alias_inodes > target.max_inodes {
+            return Err(HostError::Journal);
+        }
+    }
+    Ok(())
+}
+
+fn validate_pool_capacity(
+    pools: &[StoragePoolLimit],
+    roles: &[StorageRoleLimit],
+) -> Result<(), HostError> {
+    for pool in pools {
+        let (role_bytes, role_inodes) = roles
+            .iter()
+            .filter(|role| role.pool_id == pool.pool_id && role.alias_of.is_none())
+            .try_fold((0_u64, 0_u64), |sum, role| {
+                Ok::<_, HostError>((
+                    sum.0
+                        .checked_add(role.max_bytes)
+                        .ok_or(HostError::Journal)?,
+                    sum.1
+                        .checked_add(role.max_inodes)
+                        .ok_or(HostError::Journal)?,
+                ))
+            })?;
+        let disk_does_not_fit = role_bytes
+            .checked_add(pool.reserve_bytes)
+            .is_none_or(|charge| charge > pool.max_bytes);
+        let finite_inodes_do_not_fit = pool.inode_policy == StorageInodePolicy::Finite
+            && role_inodes
+                .checked_add(pool.reserve_inodes)
+                .is_none_or(|charge| charge > pool.max_inodes);
+        if disk_does_not_fit || finite_inodes_do_not_fit {
+            return Err(HostError::Journal);
+        }
+    }
+    Ok(())
 }
 
 fn profile_digest(

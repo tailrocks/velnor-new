@@ -319,17 +319,7 @@ async fn completion_for_request_b_does_not_release_runner_a_and_cancel_is_reques
     let scope = created_scope(&journal, &binding, 501).await?;
     record_acquired(&scope, 61).await?;
     record_acquired(&scope, 62).await?;
-    let cancel = scope
-        .assignment_identity(AssignmentKey::AssignedRequest { request_id: 63 })
-        .await?;
-    let cancel_receipt = receipt(&scope, 63, 163, 101).await?;
-    scope
-        .record_source_authorization(&cancel, &cancel_receipt)
-        .await?;
-    assert!(scope.claim_request_acquire(&cancel).await?);
-    scope
-        .record_request_acquire(&cancel, AssignedAcquireResult::Returned(vec![63]))
-        .await?;
+    let cancel = acquire_request_for_cancellation(&scope, 63).await?;
     let (physical, intent_id) = physical_intent(&scope, 'd').await?;
     let claim = scope
         .claim_runner_jit(intent_id, &runner_name('d'))
@@ -396,4 +386,22 @@ async fn completion_for_request_b_does_not_release_runner_a_and_cancel_is_reques
         Some(crate::journal::ReservationState::Reserved)
     );
     Ok(())
+}
+
+async fn acquire_request_for_cancellation(
+    scope: &ConnectionJournal,
+    request_id: i64,
+) -> Result<AssignmentIdentity, HostError> {
+    let identity = scope
+        .assignment_identity(AssignmentKey::AssignedRequest { request_id })
+        .await?;
+    let source_receipt = receipt(scope, request_id, request_id + 100, 101).await?;
+    scope
+        .record_source_authorization(&identity, &source_receipt)
+        .await?;
+    assert!(scope.claim_request_acquire(&identity).await?);
+    scope
+        .record_request_acquire(&identity, AssignedAcquireResult::Returned(vec![request_id]))
+        .await?;
+    Ok(identity)
 }

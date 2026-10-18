@@ -592,13 +592,29 @@ fn aggregate_fits(
     admission: &StorageAdmission,
     held: &HeldCharges,
 ) -> Result<bool, HostError> {
+    if !held_charges_match_profile(profile, admission, held) {
+        return Ok(false);
+    }
+    for limit in profile.pools() {
+        if !pool_aggregate_fits(admission, held, limit)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn held_charges_match_profile(
+    profile: &StorageProfile,
+    admission: &StorageAdmission,
+    held: &HeldCharges,
+) -> bool {
     for (pool_id, charge) in &held.by_pool {
         let Some(limit) = profile
             .pools()
             .iter()
             .find(|pool| pool.pool_id() == pool_id)
         else {
-            return Ok(false);
+            return false;
         };
         let Some(observation) = admission
             .sample
@@ -606,24 +622,67 @@ fn aggregate_fits(
             .iter()
             .find(|pool| pool.pool_id() == pool_id)
         else {
-            return Ok(false);
+            return false;
         };
         if observation.filesystem_instance_digest() != charge.filesystem_instance_digest
             || observation.medium() != charge.medium
             || observation.filesystem_kind() != charge.filesystem_kind
             || limit.inode_policy() != charge.inode_policy
         {
+            return false;
+        }
+    }
+    true
+}
+
+fn pool_aggregate_fits(
+    admission: &StorageAdmission,
+    held: &HeldCharges,
+    limit: &super::profile::StoragePoolLimit,
+) -> Result<bool, HostError> {
+    let planned = planned_charge(admission, limit.pool_id())?;
+    let held = held.by_pool.get(limit.pool_id());
+    let bytes = held
+        .map_or(0, |charge| charge.bytes)
+        .checked_add(planned.0)
+        .ok_or(HostError::Journal)?;
+    let inodes = held
+        .map_or(0, |charge| charge.inodes)
+        .checked_add(planned.1)
+        .ok_or(HostError::Journal)?;
+    if !fits_profile_pool(limit, bytes, inodes) {
+        return Ok(false);
+    }
+    let observation = admission
+        .sample
+        .pools()
+        .iter()
+        .find(|pool| pool.pool_id() == limit.pool_id())
+        .ok_or(HostError::Journal)?;
+    if bytes
+        .checked_add(limit.reserve_bytes())
+        .is_none_or(|sum| sum > observation.available_bytes())
+    {
+        return Ok(false);
+    }
+    if limit.inode_policy() == StorageInodePolicy::Finite {
+        if inodes
+            .checked_add(limit.reserve_inodes())
+            .is_none_or(|sum| sum > observation.available_inodes())
+        {
             return Ok(false);
         }
     }
-    for limit in profile.pools() {
-        let held_charge = held.by_pool.get(limit.pool_id());
-        let mut planned = admission
-            .plan
-            .roles()
-            .iter()
-            .filter(|role| role.pool_id() == limit.pool_id());
-        let (planned_bytes, planned_inodes) = planned.try_fold((0_u64, 0_u64), |sum, role| {
+    Ok(true)
+}
+
+fn planned_charge(admission: &StorageAdmission, pool_id: &str) -> Result<(u64, u64), HostError> {
+    admission
+        .plan
+        .roles()
+        .iter()
+        .filter(|role| role.pool_id() == pool_id)
+        .try_fold((0_u64, 0_u64), |sum, role| {
             Ok::<_, HostError>((
                 sum.0
                     .checked_add(role.charge_bytes())
@@ -632,49 +691,17 @@ fn aggregate_fits(
                     .checked_add(role.charge_inodes())
                     .ok_or(HostError::Journal)?,
             ))
-        })?;
-        let bytes = held_charge
-            .map_or(0, |charge| charge.bytes)
-            .checked_add(planned_bytes)
-            .ok_or(HostError::Journal)?;
-        let inodes = held_charge
-            .map_or(0, |charge| charge.inodes)
-            .checked_add(planned_inodes)
-            .ok_or(HostError::Journal)?;
-        if bytes
-            .checked_add(limit.reserve_bytes())
-            .is_none_or(|sum| sum > limit.max_bytes())
-        {
-            return Ok(false);
-        }
-        if limit.inode_policy() == StorageInodePolicy::Finite
-            && inodes
+        })
+}
+
+fn fits_profile_pool(limit: &super::profile::StoragePoolLimit, bytes: u64, inodes: u64) -> bool {
+    bytes
+        .checked_add(limit.reserve_bytes())
+        .is_some_and(|sum| sum <= limit.max_bytes())
+        && (limit.inode_policy() != StorageInodePolicy::Finite
+            || inodes
                 .checked_add(limit.reserve_inodes())
-                .is_none_or(|sum| sum > limit.max_inodes())
-        {
-            return Ok(false);
-        }
-        let observation = admission
-            .sample
-            .pools()
-            .iter()
-            .find(|pool| pool.pool_id() == limit.pool_id())
-            .ok_or(HostError::Journal)?;
-        if bytes
-            .checked_add(limit.reserve_bytes())
-            .is_none_or(|sum| sum > observation.available_bytes())
-        {
-            return Ok(false);
-        }
-        if limit.inode_policy() == StorageInodePolicy::Finite
-            && inodes
-                .checked_add(limit.reserve_inodes())
-                .is_none_or(|sum| sum > observation.available_inodes())
-        {
-            return Ok(false);
-        }
-    }
-    Ok(true)
+                .is_some_and(|sum| sum <= limit.max_inodes()))
 }
 
 /// Persist the immutable role charge and first successful admission sample.

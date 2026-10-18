@@ -2,7 +2,7 @@
 
 use crate::error::HostError;
 use crate::journal::IntentState;
-use crate::journal::connection::reservation::read::{ReservationSnapshot, ReservationState};
+use crate::journal::connection::reservation::read::ReservationSnapshot;
 use crate::journal::connection::storage::read_transaction;
 use crate::journal::connection::{AssignmentIdentity, ConnectionJournal};
 use crate::reconcile::LaunchPhase;

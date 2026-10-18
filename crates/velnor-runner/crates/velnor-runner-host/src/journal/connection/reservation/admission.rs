@@ -5,7 +5,9 @@ use crate::launch::StartPermit;
 
 use super::super::storage::{has_ambiguous_legacy_work, in_transaction};
 use super::super::{AssignmentIdentity, AssignmentKey, ConnectionJournal};
-use super::storage::{has_unreserved_scoped_launch, reservation_for_assignment, validate_request};
+use super::storage::{
+    ExistingReservation, has_unreserved_scoped_launch, reservation_for_assignment, validate_request,
+};
 use super::storage_budget::StorageAdmission;
 
 /// Resources charged by one assignment.
@@ -52,6 +54,15 @@ pub(crate) enum ReservationResult {
     AtCapacity,
 }
 
+struct ReservationAttempt<'a> {
+    request: ReservationRequest<'a>,
+    permit: Option<StartPermit>,
+    storage: Option<StorageAdmission>,
+    cpu: i64,
+    memory: i64,
+    assignment_key: String,
+}
+
 impl ConnectionJournal {
     /// Reserve host capacity before remote or Docker work starts.
     ///
@@ -85,177 +96,245 @@ impl ConnectionJournal {
         storage: Option<StorageAdmission>,
     ) -> Result<ReservationResult, HostError> {
         validate_request(request)?;
-        let cpu = i64::try_from(request.cpu_millicores).map_err(|_| HostError::Journal)?;
-        let memory = i64::try_from(request.memory_bytes).map_err(|_| HostError::Journal)?;
-        let assignment_key = request.assignment.storage_key();
+        let attempt = ReservationAttempt {
+            request,
+            permit: Some(permit),
+            storage,
+            cpu: i64::try_from(request.cpu_millicores).map_err(|_| HostError::Journal)?,
+            memory: i64::try_from(request.memory_bytes).map_err(|_| HostError::Journal)?,
+            assignment_key: request.assignment.storage_key(),
+        };
         in_transaction(&self.journal, async move |connection| {
-            self.validate_scope(connection).await?;
-            validate_bound_identity(connection, self, request.assignment).await?;
-            if has_ambiguous_legacy_work(connection).await?
-                || has_unreserved_scoped_launch(connection).await?
-            {
-                return Err(HostError::Journal);
-            }
-            if let Some(existing) = reservation_for_assignment(
-                connection,
-                self.connection_id.as_str(),
-                request.assignment,
-            )
-            .await?
-            {
-                if existing.binding_digest != self.binding_digest
-                    || existing.engine_id != request.engine_id
-                    || existing.docker_root_digest != request.docker_root_digest
-                    || existing.cpu_millicores != cpu
-                    || existing.memory_bytes != memory
-                {
-                    return Err(HostError::Journal);
-                }
-                if existing.released {
-                    return Ok(ReservationResult::Released {
-                        reservation_id: existing.id,
-                    });
-                }
-                if existing.state != "reserved"
-                    || !launch_is_pristine(connection, self.connection_id.as_str(), existing.intent_id).await?
-                {
-                    return Ok(ReservationResult::ReconcileRequired {
-                        reservation_id: existing.id,
-                    });
-                }
-                let Some(storage) = storage.as_ref() else {
-                    return Ok(ReservationResult::ReconcileRequired {
-                        reservation_id: existing.id,
-                    });
-                };
-                if !super::storage_budget::admission_matches_existing(
-                    connection,
-                    existing.id,
-                    storage,
-                )
-                .await?
-                {
-                    return Ok(ReservationResult::ReconcileRequired {
-                        reservation_id: existing.id,
-                    });
-                }
-                if !super::storage_budget::admission_fits(
-                    connection,
-                    storage,
-                    request.sample_generation_id,
-                    request.engine_id,
-                    request.docker_root_digest,
-                    request.memory_bytes,
-                    Some(existing.id),
-                )
-                .await?
-                {
-                    return Ok(ReservationResult::AtCapacity);
-                }
-                validate_permit(request, &permit)?;
-                ensure_sample_is_new(connection, request.sample_generation_id).await?;
-                if !permit.consume_for_admission(request.engine_id, request.docker_root_digest) {
-                    return Err(HostError::Journal);
-                }
-                record_sample_use(connection, existing.id, request.sample_generation_id, "resume").await?;
-                let profile = super::storage_budget::current_profile(connection)
-                    .await?
-                    .ok_or(HostError::Journal)?;
-                super::storage_budget::append_storage_sample(
-                    connection,
-                    existing.id,
-                    &profile,
-                    storage.sample(),
-                )
-                .await?;
-                return Ok(ReservationResult::Resumed {
-                    reservation_id: existing.id,
-                });
-            }
-            let Some(storage) = storage.as_ref() else {
-                return Ok(ReservationResult::AtCapacity);
-            };
-            let Some(profile) = super::storage_budget::current_profile(connection).await? else {
-                return Ok(ReservationResult::AtCapacity);
-            };
-            if !super::storage_budget::admission_fits(
-                connection,
-                storage,
-                request.sample_generation_id,
-                request.engine_id,
-                request.docker_root_digest,
-                request.memory_bytes,
-                None,
-            )
-            .await?
-            {
-                return Ok(ReservationResult::AtCapacity);
-            }
-            if !capacity_available(
-                connection,
-                request,
-                storage.plan().retained_memory_bytes()?,
-            )
-            .await?
-            {
-                return Ok(ReservationResult::AtCapacity);
-            }
-            validate_permit(request, &permit)?;
-            let scale_set_id = request.assignment.scale_set_id();
-            let key = assignment_key;
-            let (request_id, runner_name) = match request.assignment.key() {
-                AssignmentKey::AssignedRequest { request_id } => {
-                    (Some(*request_id), Some(format!("v{request_id}")))
-                }
-                AssignmentKey::PopulationMessage { message_id } => {
-                    (None, Some(format!("m{message_id}")))
-                }
-                AssignmentKey::Session { name } => (None, Some(name.clone())),
-                AssignmentKey::Remote { .. } => (None, None),
-            };
-            if !permit.consume_for_admission(request.engine_id, request.docker_root_digest) {
-                return Err(HostError::Journal);
-            }
-            connection
-                .execute(
-                    "INSERT INTO connection_intents (connection_id, kind, subject, state, scale_set_id, runner_request_id, runner_name, assignment_key) VALUES (?1, 'launch', ?2, 'pending', ?3, ?4, ?5, ?2)",
-                    (self.connection_id.as_str(), key.as_str(), scale_set_id, request_id, runner_name),
-                )
-                .await
-                .map_err(|_| HostError::Journal)?;
-            let intent_id = connection.last_insert_rowid();
-            connection
-                .execute(
-                    "INSERT INTO capacity_reservations (intent_id, connection_id, assignment_key, engine_id, docker_root_digest, binding_digest, sample_generation_id, cpu_millicores, memory_bytes, state) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'reserved')",
-                    (
-                        intent_id,
-                        self.connection_id.as_str(),
-                        key,
-                        request.engine_id,
-                        request.docker_root_digest,
-                        self.binding_digest.as_str(),
-                        request.sample_generation_id,
-                        cpu,
-                        memory,
-                    ),
-                )
-                .await
-                .map_err(|_| HostError::Journal)?;
-            let reservation_id = connection.last_insert_rowid();
-            record_sample_use(connection, reservation_id, request.sample_generation_id, "initial").await?;
-            super::storage_budget::insert_reservation_storage(
-                connection,
-                reservation_id,
-                &profile,
-                storage,
-            )
-            .await?;
-            Ok(ReservationResult::Reserved {
-                reservation_id,
-            })
+            reserve_in_transaction(connection, self, attempt).await
         })
         .await
     }
+}
+
+async fn reserve_in_transaction(
+    connection: &turso::Connection,
+    journal: &ConnectionJournal,
+    mut attempt: ReservationAttempt<'_>,
+) -> Result<ReservationResult, HostError> {
+    journal.validate_scope(connection).await?;
+    validate_bound_identity(connection, journal, attempt.request.assignment).await?;
+    if has_ambiguous_legacy_work(connection).await?
+        || has_unreserved_scoped_launch(connection).await?
+    {
+        return Err(HostError::Journal);
+    }
+    let existing = reservation_for_assignment(
+        connection,
+        journal.connection_id.as_str(),
+        attempt.request.assignment,
+    )
+    .await?;
+    match existing {
+        Some(existing) => resume_reservation(connection, journal, &mut attempt, existing).await,
+        None => create_reservation(connection, journal, &mut attempt).await,
+    }
+}
+
+async fn resume_reservation(
+    connection: &turso::Connection,
+    journal: &ConnectionJournal,
+    attempt: &mut ReservationAttempt<'_>,
+    existing: ExistingReservation,
+) -> Result<ReservationResult, HostError> {
+    let request = attempt.request;
+    if existing.binding_digest != journal.binding_digest
+        || existing.engine_id != request.engine_id
+        || existing.docker_root_digest != request.docker_root_digest
+        || existing.cpu_millicores != attempt.cpu
+        || existing.memory_bytes != attempt.memory
+    {
+        return Err(HostError::Journal);
+    }
+    if existing.released {
+        return Ok(ReservationResult::Released {
+            reservation_id: existing.id,
+        });
+    }
+    if existing.state != "reserved"
+        || !launch_is_pristine(
+            connection,
+            journal.connection_id.as_str(),
+            existing.intent_id,
+        )
+        .await?
+    {
+        return Ok(ReservationResult::ReconcileRequired {
+            reservation_id: existing.id,
+        });
+    }
+    let Some(storage) = attempt.storage.as_ref() else {
+        return Ok(ReservationResult::ReconcileRequired {
+            reservation_id: existing.id,
+        });
+    };
+    if !super::storage_budget::admission_matches_existing(connection, existing.id, storage).await? {
+        return Ok(ReservationResult::ReconcileRequired {
+            reservation_id: existing.id,
+        });
+    }
+    if !admission_fits(connection, storage, request, Some(existing.id)).await? {
+        return Ok(ReservationResult::AtCapacity);
+    }
+    validate_permit(request, attempt.permit.as_ref().ok_or(HostError::Journal)?)?;
+    ensure_sample_is_new(connection, request.sample_generation_id).await?;
+    consume_permit(&mut attempt.permit, request)?;
+    record_sample_use(
+        connection,
+        existing.id,
+        request.sample_generation_id,
+        "resume",
+    )
+    .await?;
+    let profile = super::storage_budget::current_profile(connection)
+        .await?
+        .ok_or(HostError::Journal)?;
+    super::storage_budget::append_storage_sample(
+        connection,
+        existing.id,
+        &profile,
+        storage.sample(),
+    )
+    .await?;
+    Ok(ReservationResult::Resumed {
+        reservation_id: existing.id,
+    })
+}
+
+async fn create_reservation(
+    connection: &turso::Connection,
+    journal: &ConnectionJournal,
+    attempt: &mut ReservationAttempt<'_>,
+) -> Result<ReservationResult, HostError> {
+    let Some(storage) = attempt.storage.as_ref() else {
+        return Ok(ReservationResult::AtCapacity);
+    };
+    let Some(profile) = super::storage_budget::current_profile(connection).await? else {
+        return Ok(ReservationResult::AtCapacity);
+    };
+    if !admission_fits(connection, storage, attempt.request, None).await?
+        || !capacity_available(
+            connection,
+            attempt.request,
+            storage.plan().retained_memory_bytes()?,
+        )
+        .await?
+    {
+        return Ok(ReservationResult::AtCapacity);
+    }
+    validate_permit(
+        attempt.request,
+        attempt.permit.as_ref().ok_or(HostError::Journal)?,
+    )?;
+    let (request_id, runner_name) = runner_assignment_fields(attempt.request.assignment.key());
+    consume_permit(&mut attempt.permit, attempt.request)?;
+    let intent_id =
+        insert_launch_intent(connection, journal, attempt, request_id, runner_name).await?;
+    let reservation_id =
+        insert_capacity_reservation(connection, journal, attempt, intent_id).await?;
+    record_sample_use(
+        connection,
+        reservation_id,
+        attempt.request.sample_generation_id,
+        "initial",
+    )
+    .await?;
+    super::storage_budget::insert_reservation_storage(
+        connection,
+        reservation_id,
+        &profile,
+        storage,
+    )
+    .await?;
+    Ok(ReservationResult::Reserved { reservation_id })
+}
+
+async fn admission_fits(
+    connection: &turso::Connection,
+    storage: &StorageAdmission,
+    request: ReservationRequest<'_>,
+    existing_id: Option<i64>,
+) -> Result<bool, HostError> {
+    super::storage_budget::admission_fits(
+        connection,
+        storage,
+        request.sample_generation_id,
+        request.engine_id,
+        request.docker_root_digest,
+        request.memory_bytes,
+        existing_id,
+    )
+    .await
+}
+
+fn consume_permit(
+    permit: &mut Option<StartPermit>,
+    request: ReservationRequest<'_>,
+) -> Result<(), HostError> {
+    let permit = permit.take().ok_or(HostError::Journal)?;
+    if permit.consume_for_admission(request.engine_id, request.docker_root_digest) {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
+}
+
+fn runner_assignment_fields(key: &AssignmentKey) -> (Option<i64>, Option<String>) {
+    match key {
+        AssignmentKey::AssignedRequest { request_id } => {
+            (Some(*request_id), Some(format!("v{request_id}")))
+        }
+        AssignmentKey::PopulationMessage { message_id } => (None, Some(format!("m{message_id}"))),
+        AssignmentKey::Session { name } => (None, Some(name.clone())),
+        AssignmentKey::Remote { .. } => (None, None),
+    }
+}
+
+async fn insert_launch_intent(
+    connection: &turso::Connection,
+    journal: &ConnectionJournal,
+    attempt: &ReservationAttempt<'_>,
+    request_id: Option<i64>,
+    runner_name: Option<String>,
+) -> Result<i64, HostError> {
+    connection.execute(
+        "INSERT INTO connection_intents (connection_id, kind, subject, state, scale_set_id, runner_request_id, runner_name, assignment_key) VALUES (?1, 'launch', ?2, 'pending', ?3, ?4, ?5, ?2)",
+        (
+            journal.connection_id.as_str(),
+            attempt.assignment_key.as_str(),
+            attempt.request.assignment.scale_set_id(),
+            request_id,
+            runner_name,
+        ),
+    ).await.map_err(|_| HostError::Journal)?;
+    Ok(connection.last_insert_rowid())
+}
+
+async fn insert_capacity_reservation(
+    connection: &turso::Connection,
+    journal: &ConnectionJournal,
+    attempt: &ReservationAttempt<'_>,
+    intent_id: i64,
+) -> Result<i64, HostError> {
+    connection.execute(
+        "INSERT INTO capacity_reservations (intent_id, connection_id, assignment_key, engine_id, docker_root_digest, binding_digest, sample_generation_id, cpu_millicores, memory_bytes, state) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 'reserved')",
+        (
+            intent_id,
+            journal.connection_id.as_str(),
+            attempt.assignment_key.as_str(),
+            attempt.request.engine_id,
+            attempt.request.docker_root_digest,
+            journal.binding_digest.as_str(),
+            attempt.request.sample_generation_id,
+            attempt.cpu,
+            attempt.memory,
+        ),
+    ).await.map_err(|_| HostError::Journal)?;
+    Ok(connection.last_insert_rowid())
 }
 
 fn validate_permit(request: ReservationRequest<'_>, permit: &StartPermit) -> Result<(), HostError> {

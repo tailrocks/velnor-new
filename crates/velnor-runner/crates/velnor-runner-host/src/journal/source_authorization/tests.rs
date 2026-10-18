@@ -216,37 +216,12 @@ async fn exact_receipts_are_scoped_replayed_and_durable() -> Result<(), HostErro
     )
     .await?;
 
-    assert_eq!(
-        first
-            .record_source_authorization(&first_assignment, &first_receipt)
-            .await?,
-        SourceAuthorizationResult::Recorded
-    );
+    record_receipt_and_check_conflict(&first, &first_assignment, &first_receipt).await?;
     assert_eq!(
         second
             .record_source_authorization(&second_assignment, &second_receipt)
             .await?,
         SourceAuthorizationResult::Recorded
-    );
-    assert_eq!(
-        first
-            .record_source_authorization(&first_assignment, &first_receipt)
-            .await?,
-        SourceAuthorizationResult::Replayed
-    );
-    let changed_receipt = scoped_receipt(
-        &first,
-        33,
-        78,
-        source(101, 900),
-        SourcePolicyMode::Repository,
-    )
-    .await?;
-    assert_eq!(
-        first
-            .record_source_authorization(&first_assignment, &changed_receipt)
-            .await,
-        Err(HostError::Identity)
     );
     drop(first);
     drop(second);
@@ -261,15 +236,53 @@ async fn exact_receipts_are_scoped_replayed_and_durable() -> Result<(), HostErro
     let second_assignment = second
         .assignment_identity(AssignmentKey::AssignedRequest { request_id: 33 })
         .await?;
-    assert_eq!(
-        first
-            .record_source_authorization(&first_assignment, &first_receipt)
-            .await?,
-        SourceAuthorizationResult::Replayed
-    );
+    assert_receipt_replays(&first, &first_assignment, &first_receipt).await?;
     assert_eq!(
         second
             .record_source_authorization(&second_assignment, &second_receipt)
+            .await?,
+        SourceAuthorizationResult::Replayed
+    );
+    Ok(())
+}
+
+async fn record_receipt_and_check_conflict(
+    scope: &ConnectionJournal,
+    assignment: &crate::journal::AssignmentIdentity,
+    receipt: &AuthorizedSourceReceipt,
+) -> Result<(), HostError> {
+    assert_eq!(
+        scope
+            .record_source_authorization(assignment, receipt)
+            .await?,
+        SourceAuthorizationResult::Recorded
+    );
+    assert_receipt_replays(scope, assignment, receipt).await?;
+    let changed_receipt = scoped_receipt(
+        scope,
+        33,
+        78,
+        source(101, 900),
+        SourcePolicyMode::Repository,
+    )
+    .await?;
+    assert_eq!(
+        scope
+            .record_source_authorization(assignment, &changed_receipt)
+            .await,
+        Err(HostError::Identity)
+    );
+    Ok(())
+}
+
+async fn assert_receipt_replays(
+    scope: &ConnectionJournal,
+    assignment: &crate::journal::AssignmentIdentity,
+    receipt: &AuthorizedSourceReceipt,
+) -> Result<(), HostError> {
+    assert_eq!(
+        scope
+            .record_source_authorization(assignment, receipt)
             .await?,
         SourceAuthorizationResult::Replayed
     );
