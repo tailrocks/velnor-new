@@ -10,6 +10,9 @@ use super::release_eligibility as eligibility;
 
 const PREPARE_TEMPLATE: &str = include_str!("schema2_release_prepare.sh");
 const PUBLISH_TEMPLATE: &str = include_str!("schema2_release_publish.sh");
+// Leave three minutes of the five-minute job for setup and final asset checks.
+// Their variable costs remain bounded by the job timeout, not this phase cap.
+const RELEASE_CONFIRMATION_BUDGET_SECONDS: u16 = 120;
 
 /// Stable ID for the legacy family publisher before typed composition.
 pub(super) const PUBLISH_STEP_ID: &str = "publish-family-release";
@@ -182,7 +185,7 @@ pub(super) fn publish_script(
         )
         .replace(
             "@RELEASE_BUDGET_SECONDS@",
-            &(u32::from(velnor_actions_contract::JobTimeout::PUBLISH.minutes()) * 60).to_string(),
+            &RELEASE_CONFIRMATION_BUDGET_SECONDS.to_string(),
         )
         .replace("@GH_FUNCTION@", &gh_function)
         .replace(

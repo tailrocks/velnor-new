@@ -149,6 +149,27 @@ fn exhausted_confirmation_fails_without_republishing_or_accepting_assets()
     Ok(())
 }
 
+#[test]
+fn confirmation_expires_before_the_full_job_allowance() -> Result<(), Box<dyn Error>> {
+    for family_kind in [Family::Binary, Family::Images] {
+        let fixture = Fixture::new(family_kind, "absent")?;
+        fixture.create_build_assets()?;
+        let script = family::publish_script(family_kind, &test_pins())?;
+        let confirmation = "while (( SECONDS < release_confirmation_deadline )); do";
+        assert_eq!(script.matches(confirmation).count(), 1);
+        // Prior publisher work has consumed two minutes. Verification would
+        // otherwise succeed immediately, but must not consume the job reserve.
+        let script = script.replacen(confirmation, &format!("SECONDS=121\n{confirmation}"), 1);
+        let result = fixture.run(script, Some("build"))?;
+        assert!(!result.success);
+        assert!(result.stderr.contains("confirmation deadline exceeded"));
+        assert_single_publication(&result.calls);
+        assert!(!result.calls.contains("gh release verify "));
+        assert!(!result.calls.contains("gh release verify-asset "));
+    }
+    Ok(())
+}
+
 fn assert_verification_failure(failure: &str, diagnostic: &str) -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new(Family::Binary, "complete")?;
     let result = fixture.run_with_failure(
