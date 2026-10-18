@@ -7,19 +7,22 @@ mod staging;
 #[cfg(test)]
 mod tests;
 
-use std::path::Path;
+use std::fs::File;
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 use crate::args::ServiceAction;
 use filesystem::write_plist;
 use plist::{plist_path, render_plist};
-use quarantine::{existing_matches, uninstall_after_stop};
+use quarantine::{open_expected_file, uninstall_after_stop};
 
 #[cfg(test)]
 use filesystem::{atomic_write, publish_staged};
 pub(crate) use plist::log_dir;
 #[cfg(test)]
 use plist::{plist_matches, with_logs, with_state};
+#[cfg(test)]
+use quarantine::existing_matches;
 #[cfg(test)]
 use quarantine::same_file;
 #[cfg(test)]
@@ -29,6 +32,13 @@ use staging::PrivateDirectory;
 
 const LABEL: &str = "com.tailrocks.velnor.host";
 const LAUNCHCTL: &str = "/bin/launchctl";
+
+struct InstalledPlist {
+    uid: u32,
+    path: PathBuf,
+    expected: String,
+    identity: File,
+}
 
 pub(crate) fn service(action: ServiceAction, state: &Path) -> ExitCode {
     match action {
@@ -44,40 +54,51 @@ fn start(state: &Path) -> ExitCode {
         eprintln!("Service configuration is different.");
         return ExitCode::from(1);
     }
-    let Some((uid, path, _expected)) = installed_plist(state) else {
+    let Some(installed) = installed_plist(state) else {
         eprintln!("Service configuration is different.");
         return ExitCode::from(1);
     };
-    spawn(&bootstrap_argv(uid, &path))
+    let result = spawn(&bootstrap_argv(installed.uid, &installed.path));
+    drop(installed);
+    result
 }
 
 fn stop(state: &Path) -> ExitCode {
-    let Some(uid) = read_uid() else {
-        return ExitCode::from(1);
-    };
-    let Some((_uid, _path, _expected)) = installed_plist(state) else {
+    let Some(installed) = installed_plist(state) else {
         eprintln!("Service configuration is different.");
         return ExitCode::from(1);
     };
-    spawn(&bootout_argv(uid))
+    let result = spawn(&bootout_argv(installed.uid));
+    drop(installed);
+    result
 }
 
 fn uninstall(state: &Path) -> ExitCode {
-    let Some((uid, path, expected)) = installed_plist(state) else {
+    let Some(installed) = installed_plist(state) else {
         eprintln!("Service configuration is different.");
         return ExitCode::from(1);
     };
-    uninstall_after_stop(spawn(&bootout_argv(uid)), &path, expected.as_bytes())
+    let stopped = spawn(&bootout_argv(installed.uid));
+    uninstall_after_stop(
+        stopped,
+        &installed.path,
+        &installed.identity,
+        installed.expected.as_bytes(),
+    )
 }
 
-fn installed_plist(state: &Path) -> Option<(u32, std::path::PathBuf, String)> {
+fn installed_plist(state: &Path) -> Option<InstalledPlist> {
     let uid = read_uid()?;
     let binary = std::env::current_exe().ok()?;
     let path = plist_path();
     let expected = render_plist(&binary, state, &log_dir())?;
-    existing_matches(&path, expected.as_bytes())
-        .ok()?
-        .then_some((uid, path, expected))
+    let identity = open_expected_file(&path, expected.as_bytes()).ok()??;
+    Some(InstalledPlist {
+        uid,
+        path,
+        expected,
+        identity,
+    })
 }
 
 fn install(state: &Path) -> ExitCode {

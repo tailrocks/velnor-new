@@ -59,7 +59,9 @@ fn plist_install_preserves_a_different_existing_file() -> Result<(), String> {
     let written = write_plist(Path::new("/opt/velnor-host"), &state, &path, &logs);
     let after = std::fs::read(&path).map_err(|error| error.to_string())?;
     if written || after != original {
-        return Err("install replaced a different LaunchAgent file".to_owned());
+        return Err(
+            "The install operation changed the file owned by another LaunchAgent.".to_owned(),
+        );
     }
     Ok(())
 }
@@ -73,13 +75,16 @@ fn plist_install_is_idempotent_for_its_exact_private_file() -> Result<(), String
     let path = root.join("agent.plist");
     let binary = Path::new("/opt/velnor-host");
     if !write_plist(binary, &state, &path, &logs) {
-        return Err("first install failed".to_owned());
+        return Err("The first install did not give success.".to_owned());
     }
     let before = std::fs::metadata(&path).map_err(|error| error.to_string())?;
     let installed = write_plist(binary, &state, &path, &logs);
     let after = std::fs::metadata(&path).map_err(|error| error.to_string())?;
     if !installed || !same_file(&before, &after) || after.mode() & 0o777 != 0o600 {
-        return Err("exact owned plist was not preserved idempotently".to_owned());
+        return Err(
+            "The second install did not keep the owned plist, its file identity, and mode 0600."
+                .to_owned(),
+        );
     }
     Ok(())
 }
@@ -95,7 +100,7 @@ fn plist_install_rejects_matching_content_with_unsafe_permissions() -> Result<()
     let path = root.join("agent.plist");
     let binary = Path::new("/opt/velnor-host");
     if !write_plist(binary, &state, &path, &logs) {
-        return Err("first install failed".to_owned());
+        return Err("The first install did not give success.".to_owned());
     }
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644))
         .map_err(|error| error.to_string())?;
@@ -103,7 +108,9 @@ fn plist_install_rejects_matching_content_with_unsafe_permissions() -> Result<()
     let installed = write_plist(binary, &state, &path, &logs);
     let after = std::fs::read(&path).map_err(|error| error.to_string())?;
     if installed || after != unchanged {
-        return Err("install accepted or changed a plist with unsafe permissions".to_owned());
+        return Err(
+            "The install operation accepted the unsafe plist or changed its contents.".to_owned(),
+        );
     }
     Ok(())
 }

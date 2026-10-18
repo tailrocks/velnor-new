@@ -5,16 +5,16 @@ use std::process::ExitCode;
 
 use super::staging::PrivateDirectory;
 
-pub(super) fn uninstall_after_stop(stopped: ExitCode, path: &Path, expected: &[u8]) -> ExitCode {
+pub(super) fn uninstall_after_stop(
+    stopped: ExitCode,
+    path: &Path,
+    preflight_file: &std::fs::File,
+    expected: &[u8],
+) -> ExitCode {
     if stopped != ExitCode::SUCCESS {
         return ExitCode::from(1);
     }
-    let owned = match open_expected_file(path, expected) {
-        Ok(Some(file)) => file,
-        Ok(None) if path_is_absent(path) => return ExitCode::SUCCESS,
-        Ok(None) | Err(_) => return ExitCode::from(1),
-    };
-    match quarantine_remove(path, &owned, expected) {
+    match quarantine_remove(path, preflight_file, expected) {
         Ok(QuarantineOutcome::Removed | QuarantineOutcome::Missing) if path_is_absent(path) => {
             ExitCode::SUCCESS
         }

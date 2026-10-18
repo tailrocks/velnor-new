@@ -19,7 +19,7 @@ fn racing_foreign_file_wins_without_being_unlinked() -> Result<(), String> {
     drop(staged);
     stage.cleanup().map_err(|error| error.to_string())?;
     if result.is_ok() || after != foreign {
-        return Err("a racing file was replaced or removed".to_owned());
+        return Err("The install operation replaced or removed a file created at the same destination during the race.".to_owned());
     }
     Ok(())
 }
