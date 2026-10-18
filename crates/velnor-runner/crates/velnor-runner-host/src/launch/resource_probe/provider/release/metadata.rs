@@ -16,8 +16,8 @@ use super::{
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct AssetMetadata {
-    size: u64,
-    digest: String,
+    pub(super) size: u64,
+    pub(super) digest: String,
 }
 
 pub(super) fn release_metadata(
@@ -228,7 +228,10 @@ pub(super) fn verify_asset_digests(
     Ok(())
 }
 
-pub(super) fn ensure_exact_downloads(assets: &Path) -> Result<(), ProviderFailure> {
+pub(super) fn ensure_exact_downloads(
+    assets: &Path,
+    expected: &[&str],
+) -> Result<(), ProviderFailure> {
     let mut names = fs::read_dir(assets)
         .map_err(|_| ProviderFailure::ReleaseAssets)?
         .map(|entry| {
@@ -240,7 +243,7 @@ pub(super) fn ensure_exact_downloads(assets: &Path) -> Result<(), ProviderFailur
         })
         .collect::<Result<Vec<_>, _>>()?;
     names.sort();
-    let mut expected = [PROBE_ARCHIVE, MANIFEST_FILE, CHECKSUMS_FILE];
+    let mut expected = expected.to_vec();
     expected.sort_unstable();
     if names.iter().map(String::as_str).ne(expected) {
         return Err(ProviderFailure::ReleaseAssets);

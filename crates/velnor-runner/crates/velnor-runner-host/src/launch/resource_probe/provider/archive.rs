@@ -11,6 +11,7 @@ use sha2::{Digest, Sha256};
 mod load_archive;
 mod types;
 mod unpack;
+pub(super) mod worker;
 
 use super::release::ResourceManifest;
 use super::{IMAGE_TAG, ProviderFailure, hex, valid_hex, valid_sha};

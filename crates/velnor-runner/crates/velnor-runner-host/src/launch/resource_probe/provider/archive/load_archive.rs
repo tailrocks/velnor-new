@@ -40,9 +40,31 @@ pub(super) fn derive(
     let index_bytes = original_files
         .get(INDEX_FILE)
         .ok_or(ProviderFailure::Archive)?;
-    let _: OciIndex = serde_json::from_slice(index_bytes).map_err(|_| ProviderFailure::Archive)?;
-    let mut index: Value =
-        serde_json::from_slice(index_bytes).map_err(|_| ProviderFailure::Archive)?;
+    let manifest_bytes = original_files
+        .get(LEGACY_MANIFEST_FILE)
+        .ok_or(ProviderFailure::Archive)?;
+    let rewritten_index = rewrite_index(index_bytes, &image_reference)?;
+    let rewritten_manifest = rewrite_manifest(manifest_bytes, &image_reference)?;
+
+    let mut expected_files = original_files.clone();
+    expected_files.insert(INDEX_FILE.to_owned(), rewritten_index.clone());
+    expected_files.insert(LEGACY_MANIFEST_FILE.to_owned(), rewritten_manifest.clone());
+    let bytes = pack_with_rewritten_metadata(archive, &rewritten_index, &rewritten_manifest)?;
+    if bytes.len() > MAX_ARCHIVE_BYTES || unpack(&bytes)? != expected_files {
+        return Err(ProviderFailure::Archive);
+    }
+
+    Ok(DerivedLoadArchive {
+        archive_sha256: sha256(&bytes),
+        index_digest: sha256(&rewritten_index),
+        bytes,
+        image_reference,
+    })
+}
+
+fn rewrite_index(bytes: &[u8], image_reference: &str) -> Result<Vec<u8>, ProviderFailure> {
+    let _: OciIndex = serde_json::from_slice(bytes).map_err(|_| ProviderFailure::Archive)?;
+    let mut index: Value = serde_json::from_slice(bytes).map_err(|_| ProviderFailure::Archive)?;
     let descriptor = index
         .get_mut("manifests")
         .and_then(Value::as_array_mut)
@@ -78,41 +100,24 @@ pub(super) fn derive(
         OCI_REFERENCE_ANNOTATION.to_owned(),
         Value::String(tag.to_owned()),
     );
-    let rewritten_index = serde_json::to_vec(&index).map_err(|_| ProviderFailure::Archive)?;
+    serde_json::to_vec(&index).map_err(|_| ProviderFailure::Archive)
+}
 
-    let manifest_bytes = original_files
-        .get(LEGACY_MANIFEST_FILE)
-        .ok_or(ProviderFailure::Archive)?;
+fn rewrite_manifest(bytes: &[u8], image_reference: &str) -> Result<Vec<u8>, ProviderFailure> {
     let entries: Vec<LegacyManifest> =
-        serde_json::from_slice(manifest_bytes).map_err(|_| ProviderFailure::Archive)?;
+        serde_json::from_slice(bytes).map_err(|_| ProviderFailure::Archive)?;
     if entries.len() != 1 || entries[0].repo_tags != [IMAGE_TAG] {
         return Err(ProviderFailure::Archive);
     }
     let mut legacy_manifest: Value =
-        serde_json::from_slice(manifest_bytes).map_err(|_| ProviderFailure::Archive)?;
+        serde_json::from_slice(bytes).map_err(|_| ProviderFailure::Archive)?;
     let entry = legacy_manifest
         .as_array_mut()
         .filter(|entries| entries.len() == 1)
         .and_then(|entries| entries.first_mut())
         .ok_or(ProviderFailure::Archive)?;
-    entry["RepoTags"] = Value::Array(vec![Value::String(image_reference.clone())]);
-    let rewritten_manifest =
-        serde_json::to_vec(&legacy_manifest).map_err(|_| ProviderFailure::Archive)?;
-
-    let mut expected_files = original_files.clone();
-    expected_files.insert(INDEX_FILE.to_owned(), rewritten_index.clone());
-    expected_files.insert(LEGACY_MANIFEST_FILE.to_owned(), rewritten_manifest.clone());
-    let bytes = pack_with_rewritten_metadata(archive, &rewritten_index, &rewritten_manifest)?;
-    if bytes.len() > MAX_ARCHIVE_BYTES || unpack(&bytes)? != expected_files {
-        return Err(ProviderFailure::Archive);
-    }
-
-    Ok(DerivedLoadArchive {
-        archive_sha256: sha256(&bytes),
-        index_digest: sha256(&rewritten_index),
-        bytes,
-        image_reference,
-    })
+    entry["RepoTags"] = Value::Array(vec![Value::String(image_reference.to_owned())]);
+    serde_json::to_vec(&legacy_manifest).map_err(|_| ProviderFailure::Archive)
 }
 
 fn pack_with_rewritten_metadata(

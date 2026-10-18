@@ -13,6 +13,7 @@ use super::ProviderFailure;
 
 const GH_VERSION: &str = "2.102.0";
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(60);
+pub(super) const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const MAX_OUTPUT_BYTES: usize = 8 * 1024 * 1024;
 
 pub(super) struct Workspace {
@@ -101,6 +102,29 @@ pub(super) async fn run<I>(
 where
     I: IntoIterator<Item = OsString>,
 {
+    run_with_timeout(workspace, pat, arguments, COMMAND_TIMEOUT).await
+}
+
+pub(super) async fn run_download<I>(
+    workspace: &Workspace,
+    pat: &str,
+    arguments: I,
+) -> Result<Vec<u8>, ProviderFailure>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    run_with_timeout(workspace, pat, arguments, DOWNLOAD_TIMEOUT).await
+}
+
+async fn run_with_timeout<I>(
+    workspace: &Workspace,
+    pat: &str,
+    arguments: I,
+    timeout: Duration,
+) -> Result<Vec<u8>, ProviderFailure>
+where
+    I: IntoIterator<Item = OsString>,
+{
     let mut command = Command::new(workspace.executable());
     command
         .args(arguments)
@@ -124,7 +148,7 @@ where
         .spawn()
         .map_err(|_| ProviderFailure::GhUnavailable)?;
     let stdout = child.stdout.take().ok_or(ProviderFailure::GhUnavailable)?;
-    let output = tokio::time::timeout(COMMAND_TIMEOUT, async {
+    let output = tokio::time::timeout(timeout, async {
         let (stdout, status) = tokio::join!(read_bounded(stdout), child.wait());
         let stdout = stdout?;
         let status = status.map_err(|_| ProviderFailure::GhUnavailable)?;
