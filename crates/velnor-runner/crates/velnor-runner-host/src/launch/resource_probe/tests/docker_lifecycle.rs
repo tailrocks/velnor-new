@@ -517,13 +517,13 @@ fn inspect(projection: &ProbeProjection, status: &str, exit_code: i64) -> Result
 }
 
 fn record_bytes() -> Vec<u8> {
-    format!(
-        "{{\"schema_version\":1,\"docker_root_free_bytes\":{},\"docker_root_total_bytes\":{},\"memory_available_bytes\":{},\"load_milli\":125,\"memory_psi_some_avg10_bps\":null}}\n",
-        32_u64 * 1024 * 1024 * 1024,
-        40_u64 * 1024 * 1024 * 1024,
-        10_u64 * 1024 * 1024 * 1024,
-    )
-    .into_bytes()
+    let mut record = super::super::record::fixture_record();
+    record.docker_root_free_bytes = 32 * 1024 * 1024 * 1024;
+    record.docker_root_available_bytes = 30 * 1024 * 1024 * 1024;
+    record.memory_available_bytes = 10 * 1024 * 1024 * 1024;
+    let mut bytes = serde_json::to_vec(&record).unwrap_or_default();
+    bytes.push(b'\n');
+    bytes
 }
 
 fn log_frame(record: &[u8]) -> Result<Vec<u8>, String> {

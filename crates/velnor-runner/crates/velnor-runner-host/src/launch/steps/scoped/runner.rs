@@ -5,7 +5,9 @@ use std::future::Future;
 use velnor_runner_github::{RunnerReference, Transport, jit, jit_request};
 
 use crate::error::HostError;
-use crate::journal::{AssignmentKey, ConnectionJournal, ReservationRequest, ReservationResult};
+use crate::journal::{
+    AssignmentKey, ConnectionJournal, ReservationRequest, ReservationResult, StorageAdmission,
+};
 use crate::launch::resource_probe::StartObservationWitness;
 use crate::launch::{Lane, SelectedEngineContext, VerifiedWorkerImages};
 use crate::scale_set::EnsureError;
@@ -23,6 +25,7 @@ pub(super) struct PhysicalIntent {
 pub(super) async fn reserve(
     scoped: &ConnectionJournal,
     permit: crate::launch::StartPermit,
+    storage: StorageAdmission,
 ) -> Result<PhysicalIntent, EnsureError> {
     let nonce = fresh_nonce()?;
     let observation = permit.observation_witness();
@@ -39,7 +42,7 @@ pub(super) async fn reserve(
     let engine_id = permit.engine_id().to_owned();
     let docker_root_digest = permit.docker_root_digest().to_owned();
     let reservation = scoped
-        .try_reserve(
+        .try_reserve_with_storage(
             ReservationRequest {
                 assignment: &identity,
                 engine_id: &engine_id,
@@ -49,6 +52,7 @@ pub(super) async fn reserve(
                 sample_generation_id: &sample_generation_id,
             },
             permit,
+            storage,
         )
         .await
         .map_err(super::super::map_journal)?;

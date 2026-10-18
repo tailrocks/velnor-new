@@ -12,6 +12,7 @@ use bollard::query_parameters::{
 use crate::error::HostError;
 
 use super::lifecycle::Deadline;
+use super::record::MAX_OUTPUT_BYTES;
 
 pub(super) async fn create(
     docker: &Docker,
@@ -74,13 +75,13 @@ pub(super) async fn stdout(
         .build();
     let read = async {
         let mut stream = docker.logs(id, Some(options));
-        let mut output = Vec::with_capacity(512);
+        let mut output = Vec::with_capacity(MAX_OUTPUT_BYTES);
         while let Some(item) = stream.next().await {
             let item = item.map_err(|_| HostError::Docker)?;
             let LogOutput::StdOut { message } = item else {
                 return Err(HostError::Docker);
             };
-            if output.len().saturating_add(message.len()) > 512 {
+            if output.len().saturating_add(message.len()) > MAX_OUTPUT_BYTES {
                 return Err(HostError::Frame);
             }
             output.extend_from_slice(&message);

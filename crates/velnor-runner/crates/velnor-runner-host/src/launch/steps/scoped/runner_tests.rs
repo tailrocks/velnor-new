@@ -15,7 +15,7 @@ use super::super::runner;
 use super::super::validate_scope_binding;
 use support::{
     FakeLane, Fixture, REQUEST_ID, SET_ID, assert_runner_name, docker_identity_stub, exchange,
-    selected_engine, test_images,
+    fixture_storage, selected_engine, test_images,
 };
 
 #[path = "runner_tests/docker_pair.rs"]
@@ -115,8 +115,9 @@ async fn exact_acquire_jit_and_bounded_docker_preflight_use_one_physical_nonce()
 -> Result<(), String> {
     let fixture = Fixture::open("scoped-exact").await?;
     let permit = StartPermit::test_fixture();
+    let storage = fixture_storage(&permit)?;
     let root_digest = permit.docker_root_digest().to_owned();
-    let physical = runner::reserve(&fixture.scope, permit)
+    let physical = runner::reserve(&fixture.scope, permit, storage)
         .await
         .map_err(|error| error.to_string())?;
     assert_runner_name(&physical.runner_name)?;
@@ -213,9 +214,10 @@ async fn expiry_after_acquire_keeps_charge_and_sends_no_jit_or_docker_request() 
 {
     let fixture = Fixture::open("scoped-expiry").await?;
     let permit = StartPermit::test_fixture();
+    let storage = fixture_storage(&permit)?;
     let root_digest = permit.docker_root_digest().to_owned();
     let stale = permit.stale_observation_witness();
-    let mut physical = runner::reserve(&fixture.scope, permit)
+    let mut physical = runner::reserve(&fixture.scope, permit, storage)
         .await
         .map_err(|error| error.to_string())?;
     physical.observation = stale;
@@ -278,7 +280,9 @@ async fn expiry_after_acquire_keeps_charge_and_sends_no_jit_or_docker_request() 
 #[tokio::test]
 async fn exact_no_effect_releases_only_the_unstarted_physical_charge() -> Result<(), String> {
     let fixture = Fixture::open("scoped-no-effect").await?;
-    let physical = runner::reserve(&fixture.scope, StartPermit::test_fixture())
+    let permit = StartPermit::test_fixture();
+    let storage = fixture_storage(&permit)?;
+    let physical = runner::reserve(&fixture.scope, permit, storage)
         .await
         .map_err(|error| error.to_string())?;
     let mut lane = FakeLane::new([Ok(exchange(200, r#"{"count":0,"value":[]}"#))]);
@@ -307,7 +311,9 @@ async fn exact_no_effect_releases_only_the_unstarted_physical_charge() -> Result
 #[tokio::test]
 async fn uncertain_acquire_keeps_charge_and_blocks_jit_replay() -> Result<(), String> {
     let fixture = Fixture::open("scoped-uncertain").await?;
-    let physical = runner::reserve(&fixture.scope, StartPermit::test_fixture())
+    let permit = StartPermit::test_fixture();
+    let storage = fixture_storage(&permit)?;
+    let physical = runner::reserve(&fixture.scope, permit, storage)
         .await
         .map_err(|error| error.to_string())?;
     let mut lane = FakeLane::new([Err(velnor_runner_github::TransportFail::Timeout)]);
@@ -340,7 +346,9 @@ async fn uncertain_acquire_keeps_charge_and_blocks_jit_replay() -> Result<(), St
 #[tokio::test]
 async fn already_acquired_request_never_authorizes_a_new_runner() -> Result<(), String> {
     let fixture = Fixture::open("scoped-already-acquired").await?;
-    let physical = runner::reserve(&fixture.scope, StartPermit::test_fixture())
+    let permit = StartPermit::test_fixture();
+    let storage = fixture_storage(&permit)?;
+    let physical = runner::reserve(&fixture.scope, permit, storage)
         .await
         .map_err(|error| error.to_string())?;
     assert!(

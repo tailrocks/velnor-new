@@ -6,7 +6,7 @@ use serde_json::Value;
 use velnor_runner_github::Method;
 
 use super::support::{
-    FakeLane, Fixture, REQUEST_ID, SET_ID, exchange, selected_engine, test_images,
+    FakeLane, Fixture, REQUEST_ID, SET_ID, exchange, fixture_storage, selected_engine, test_images,
 };
 use crate::launch::resource_probe::StartPermit;
 use crate::launch::steps::scoped::{acquire, runner};
@@ -64,6 +64,7 @@ impl PairSetup {
     async fn open() -> Result<Self, String> {
         let fixture = Fixture::open("scoped-bollard-pair").await?;
         let permit = StartPermit::test_fixture();
+        let storage = fixture_storage(&permit)?;
         let images = test_images(permit.docker_root_digest());
         let selected = selected_engine(&images)?;
         let docker_api = PairDockerApi::open(images.clone())?;
@@ -71,7 +72,7 @@ impl PairSetup {
         let guest_image =
             worker::guest_image::write_guest_image(&state.path, &fixture.binding, &images)
                 .map_err(|error| error.to_string())?;
-        let physical = runner::reserve(&fixture.scope, permit)
+        let physical = runner::reserve(&fixture.scope, permit, storage)
             .await
             .map_err(|error| error.to_string())?;
         let mut lane = fake_lane(&physical.runner_name);

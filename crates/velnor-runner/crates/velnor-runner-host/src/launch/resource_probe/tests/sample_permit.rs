@@ -6,14 +6,11 @@ use super::super::sample::Observation;
 use crate::worker::{ResourceBudget, test_resource_budget};
 
 fn sample_record(disk_free_bytes: u64) -> ProbeRecord {
-    ProbeRecord {
-        schema_version: 1,
-        docker_root_free_bytes: disk_free_bytes,
-        docker_root_total_bytes: 40 * 1024 * 1024 * 1024,
-        memory_available_bytes: 10 * 1024 * 1024 * 1024,
-        load_milli: 125,
-        memory_psi_some_avg10_bps: None,
-    }
+    let mut record = super::super::record::fixture_record();
+    record.docker_root_free_bytes = disk_free_bytes;
+    record.docker_root_available_bytes = disk_free_bytes;
+    record.memory_available_bytes = 10 * 1024 * 1024 * 1024;
+    record
 }
 
 #[test]

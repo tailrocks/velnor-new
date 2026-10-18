@@ -204,6 +204,7 @@ where
         &ctx,
         ready.polled,
         permit,
+        None,
         docker,
         selected_engine,
         images,

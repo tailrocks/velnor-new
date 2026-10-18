@@ -1,4 +1,4 @@
-use super::support::{FakeLane, Fixture, exchange};
+use super::support::{FakeLane, Fixture, exchange, fixture_storage};
 use crate::journal::RequestAcquireState;
 use crate::launch::resource_probe::StartPermit;
 use crate::launch::steps::scoped::{acquire, runner};
@@ -8,7 +8,9 @@ use velnor_runner_github::Method;
 #[tokio::test]
 async fn acquire_401_is_not_replayed_and_keeps_the_physical_charge() -> Result<(), String> {
     let fixture = Fixture::open("scoped-acquire-401-no-replay").await?;
-    let physical = runner::reserve(&fixture.scope, StartPermit::test_fixture())
+    let permit = StartPermit::test_fixture();
+    let storage = fixture_storage(&permit)?;
+    let physical = runner::reserve(&fixture.scope, permit, storage)
         .await
         .map_err(|error| error.to_string())?;
     let mut lane = FakeLane::new([
