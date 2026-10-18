@@ -275,7 +275,7 @@ async fn poll_active_connections(
         let outcome = poll_scoped_connection_once(
             &mut credentials.link,
             prepared.set_id,
-            &credentials.session,
+            &mut credentials.session,
             &prepared.scope,
             prepared.session_intent,
             &allocation,

@@ -1,9 +1,11 @@
 //! One session probe. Deletes the session before returning. No JIT and no job acquire.
 
+use std::cell::Cell;
+
 use velnor_runner_github::{
     AdminConnection, AdminConnectionCall, Poll, QueueSession, RefreshGate, RegistrationScope,
-    RegistrationTokenCall, SessionError, WireError, admin_connection, poll, registration_token,
-    workflow_run::VerifiedRepositoryScope,
+    RegistrationTokenCall, SessionError, Transport, WireError, admin_connection, poll,
+    registration_token, workflow_run::VerifiedRepositoryScope,
 };
 use zeroize::Zeroize;
 
@@ -203,19 +205,53 @@ pub(crate) fn poll_path(
     path: &str,
     total_capacity: u32,
     cursor: i64,
-) -> Result<Poll, EnsureError> {
-    let gate = RefreshGate::new();
-    let refresh = || Ok::<(), WireError>(());
-    poll(
+) -> Result<PollPathResult, EnsureError> {
+    poll_path_with(
         &mut link.transport,
+        session.token(),
+        path,
+        total_capacity,
+        cursor,
+    )
+}
+
+/// One queue response, or a request for the durable caller to refresh and rebuild it.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum PollPathResult {
+    /// The queue returned a usable response.
+    Response(Poll),
+    /// The queue returned 401. No request was replayed with the old token.
+    RefreshRequired,
+}
+
+pub(crate) fn poll_path_with<T: Transport + ?Sized>(
+    transport: &mut T,
+    queue_token: &str,
+    path: &str,
+    total_capacity: u32,
+    cursor: i64,
+) -> Result<PollPathResult, EnsureError> {
+    let gate = RefreshGate::new();
+    let refresh_requested = Cell::new(false);
+    let refresh = || {
+        refresh_requested.set(true);
+        Err(WireError::RefreshExhausted)
+    };
+    match poll(
+        transport,
         path,
         cursor,
         total_capacity,
-        session.token(),
+        queue_token,
         &gate,
         refresh,
-    )
-    .map_err(|err| annotate(err, "poll"))
+    ) {
+        Ok(response) => Ok(PollPathResult::Response(response)),
+        Err(SessionError::Wire(WireError::RefreshExhausted)) if refresh_requested.get() => {
+            Ok(PollPathResult::RefreshRequired)
+        }
+        Err(error) => Err(annotate(error, "poll")),
+    }
 }
 
 /// Restore the admin origin saved by [`point_at_queue`].
@@ -284,3 +320,7 @@ pub(crate) fn map_listen(error: SessionError) -> EnsureError {
         },
     }
 }
+
+#[cfg(test)]
+#[path = "listen/poll_tests.rs"]
+mod poll_tests;

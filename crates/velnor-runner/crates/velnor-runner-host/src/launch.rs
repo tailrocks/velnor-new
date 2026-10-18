@@ -78,7 +78,7 @@ pub(crate) use verified_images::{VerifiedImageIdentity, VerifiedWorkerImages};
 pub(crate) async fn poll_scoped_connection_once(
     link: &mut Link,
     set_id: i64,
-    session: &QueueSession,
+    session: &mut QueueSession,
     scoped: &ConnectionJournal,
     session_intent_id: i64,
     allocation: &HeaderAllocation,
