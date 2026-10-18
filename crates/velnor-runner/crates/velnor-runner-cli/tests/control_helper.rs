@@ -116,7 +116,7 @@ fn wait_bounded(
         if Instant::now() >= deadline {
             child.kill()?;
             let _ = child.wait()?;
-            return Err("helper exceeded its deadline".into());
+            return Err("The host did not finish before the time limit.".into());
         }
         thread::sleep(Duration::from_millis(2));
     }
@@ -156,7 +156,7 @@ fn product_binary_kills_and_reaps_a_stalled_control_child_by_deadline() -> Resul
 
     assert!(output.status.success());
     assert_eq!(output.stdout, b"false\n");
-    assert!(released, "the helper did not contact the stalled peer");
+    assert!(released, "The host did not send the request to the peer.");
     assert_eq!(fs::read(state.path().join("drain"))?, TOKEN.as_bytes());
     Ok(())
 }
@@ -262,11 +262,14 @@ fn child_and_boolean_output_share_the_input_deadline() -> Result<(), Box<dyn Err
         .map_err(|error| error.to_string())?;
     assert!(status.success());
     assert_eq!(output.stdout, b"false\n");
-    assert!(released, "the helper did not finish its child operation");
+    assert!(
+        released,
+        "The child process did not finish before the time limit."
+    );
     let elapsed = started.elapsed();
     assert!(
         elapsed < Duration::from_millis(3_400),
-        "input and child phases took {elapsed:?}, exceeding one 2,000 ms budget"
+        "Input and child operations took {elapsed:?}. The time limit was 2,000 ms."
     );
     Ok(())
 }
