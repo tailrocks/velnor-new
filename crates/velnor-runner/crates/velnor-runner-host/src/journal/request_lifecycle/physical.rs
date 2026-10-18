@@ -5,11 +5,17 @@ use crate::error::HostError;
 use crate::journal::connection::ConnectionJournal;
 use crate::journal::connection::storage::in_transaction;
 use crate::journal::source_authorization::created_set_matches;
-use crate::journal::sql::token_rejected;
 use velnor_runner_github::RunnerReference;
 
 use super::helpers::bound_set_id;
 use super::set_scope::set_is_exclusive;
+mod support;
+pub(in crate::journal) use support::mark_runner_cleaned_after_cleanup;
+use support::{
+    acquired_witness, has_legacy_receipts, has_uncertain_acquire, physical_intent_is_fresh,
+    valid_resource_id, valid_runner_name, valid_worker_volume, validate_jit_claim,
+    validate_start_claim,
+};
 
 impl ConnectionJournal {
     /// Claim one runner JIT and choose an acquired request as its audit witness.
@@ -253,7 +259,7 @@ impl ConnectionJournal {
             self.validate_scope(connection).await?;
             let changed = connection
                 .execute(
-                    "UPDATE connection_intents SET docker_id = ?1, dind_id = ?2, launch_phase = 'worker_ready' WHERE id = ?3 AND connection_id = ?4 AND scale_set_id = ?5 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND worker_volume = ?6 AND launch_phase = 'docker_requested' AND docker_id IS NULL AND dind_id IS NULL",
+                    "UPDATE connection_intents SET docker_id = ?1, dind_id = ?2, launch_phase = 'worker_ready' WHERE id = ?3 AND connection_id = ?4 AND scale_set_id = ?5 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND worker_volume = ?6 AND launch_phase = 'docker_requested' AND (docker_id IS NULL OR docker_id = ?1) AND (dind_id IS NULL OR dind_id = ?2)",
                     (runner_container_id, dind_container_id, claim.intent_id, self.connection_id().as_str(), claim.scale_set_id, claim.worker_volume.as_str()),
                 )
                 .await
@@ -276,140 +282,4 @@ impl ConnectionJournal {
         })
         .await
     }
-}
-
-pub(in crate::journal) async fn mark_runner_cleaned_after_cleanup(
-    connection: &turso::Connection,
-    connection_id: &str,
-    intent_id: i64,
-) -> Result<(), HostError> {
-    if intent_id <= 0 {
-        return Err(HostError::Journal);
-    }
-    connection
-        .execute(
-            "UPDATE connection_runner_jits SET state = 'cleaned' WHERE intent_id = ?1 AND connection_id = ?2 AND state IN ('bound', 'start_requested', 'start_uncertain', 'ready', 'started', 'completed') AND runner_id IS NOT NULL AND runner_name IS NOT NULL AND EXISTS (SELECT 1 FROM connection_intents WHERE id = ?1 AND connection_id = ?2 AND cleanup_proven = 1) AND (completed_request_id IS NOT NULL OR EXISTS (SELECT 1 FROM capacity_reservations AS r WHERE r.intent_id = ?1 AND r.connection_id = ?2 AND r.state = 'released' AND r.remote_cleanup_proven = 1 AND r.local_cleanup_proven = 1))",
-            (intent_id, connection_id),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    Ok(())
-}
-
-fn validate_jit_claim(scope: &ConnectionJournal, claim: &RunnerJitClaim) -> Result<(), HostError> {
-    if &claim.connection_id != scope.connection_id()
-        || claim.scale_set_id <= 0
-        || claim.intent_id <= 0
-        || claim.witness_request_id <= 0
-    {
-        return Err(HostError::Identity);
-    }
-    Ok(())
-}
-
-fn validate_start_claim(
-    scope: &ConnectionJournal,
-    claim: &PhysicalRunnerStartClaim,
-) -> Result<(), HostError> {
-    if &claim.connection_id != scope.connection_id()
-        || claim.scale_set_id <= 0
-        || claim.intent_id <= 0
-        || !valid_worker_volume(&claim.worker_volume)
-    {
-        return Err(HostError::Identity);
-    }
-    Ok(())
-}
-
-async fn physical_intent_is_fresh(
-    connection: &turso::Connection,
-    connection_id: &str,
-    set_id: i64,
-    intent_id: i64,
-    requested_name: &str,
-) -> Result<bool, HostError> {
-    let mut rows = connection
-        .query(
-            "SELECT i.assignment_key FROM connection_intents AS i JOIN capacity_reservations AS r ON r.intent_id = i.id AND r.connection_id = i.connection_id WHERE i.id = ?1 AND i.connection_id = ?2 AND i.scale_set_id = ?3 AND i.kind = 'launch' AND i.state = 'pending' AND i.cleanup_proven = 0 AND i.jit_requested = 0 AND i.acquire_attempted = 0 AND i.github_runner_id IS NULL AND i.runner_name IS NULL AND i.worker_volume IS NULL AND i.docker_id IS NULL AND i.dind_id IS NULL AND i.launch_phase IS NULL AND r.state = 'reserved' AND NOT EXISTS (SELECT 1 FROM connection_runner_jits WHERE intent_id = ?1) AND NOT EXISTS (SELECT 1 FROM connection_intents WHERE runner_name = ?4 AND cleanup_proven = 0) AND NOT EXISTS (SELECT 1 FROM connection_runner_jits WHERE requested_name = ?4 AND state != 'cleaned')",
-            (intent_id, connection_id, set_id, requested_name),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
-        return Ok(false);
-    };
-    let key: String = row.get(0).map_err(|_| HostError::Journal)?;
-    let prefix = format!("v1|{connection_id}|{set_id}|remote|6:runner|32:");
-    Ok(key
-        .strip_prefix(&prefix)
-        .is_some_and(|nonce| valid_nonce(nonce) && requested_name == format!("v{nonce}")))
-}
-
-async fn acquired_witness(
-    connection: &turso::Connection,
-    connection_id: &str,
-    set_id: i64,
-    binding_digest: &str,
-) -> Result<Option<i64>, HostError> {
-    let mut rows = connection
-        .query(
-            "SELECT request_id FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND binding_digest = ?3 AND authority_model = 'created_empty_exclusive_admin_session_v1' AND acquire_state = 'acquired' AND started_event_digest IS NULL AND completed_event_digest IS NULL AND NOT EXISTS (SELECT 1 FROM connection_runner_jits WHERE connection_runner_jits.connection_id = ?1 AND connection_runner_jits.scale_set_id = ?2 AND connection_runner_jits.witness_request_id = connection_request_authorizations.request_id AND connection_runner_jits.state != 'cleaned') ORDER BY request_id LIMIT 1",
-            (connection_id, set_id, binding_digest),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    rows.next()
-        .await
-        .map_err(|_| HostError::Journal)?
-        .map(|row| row.get(0).map_err(|_| HostError::Journal))
-        .transpose()
-}
-
-async fn has_legacy_receipts(
-    connection: &turso::Connection,
-    connection_id: &str,
-    set_id: i64,
-) -> Result<bool, HostError> {
-    let mut rows = connection
-        .query(
-            "SELECT 1 FROM connection_source_authorizations AS a JOIN connection_intents AS i ON i.id = a.intent_id AND i.connection_id = a.connection_id WHERE a.connection_id = ?1 AND a.scale_set_id = ?2 AND i.cleanup_proven = 0 LIMIT 1",
-            (connection_id, set_id),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    Ok(rows.next().await.map_err(|_| HostError::Journal)?.is_some())
-}
-
-async fn has_uncertain_acquire(
-    connection: &turso::Connection,
-    connection_id: &str,
-    set_id: i64,
-) -> Result<bool, HostError> {
-    let mut rows = connection
-        .query(
-            "SELECT 1 FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND acquire_state IN ('requested', 'already_acquired', 'uncertain') LIMIT 1",
-            (connection_id, set_id),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    Ok(rows.next().await.map_err(|_| HostError::Journal)?.is_some())
-}
-
-fn valid_runner_name(value: &str) -> bool {
-    !token_rejected(value) && value.len() <= 128 && !value.chars().any(char::is_control)
-}
-
-fn valid_nonce(value: &str) -> bool {
-    value.len() == 32
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
-fn valid_worker_volume(value: &str) -> bool {
-    value.strip_prefix('w').is_some_and(valid_nonce)
-}
-
-fn valid_resource_id(value: &str) -> bool {
-    !token_rejected(value) && value.len() <= 256 && !value.chars().any(char::is_control)
 }

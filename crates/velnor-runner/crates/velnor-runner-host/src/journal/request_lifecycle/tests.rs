@@ -8,3 +8,4 @@ mod review_counterexamples;
 mod review_migration;
 mod scope_exclusivity;
 mod uncertain_effects;
+mod worker_ready;
