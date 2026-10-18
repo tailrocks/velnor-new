@@ -2,10 +2,7 @@
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use serde::{Deserialize, Serialize};
-use velnor_actions_contract::config::{
-    CheckPlatform, QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend,
-    QualifiedToolOptions, QualifiedToolProbe,
-};
+use velnor_actions_contract::config::{CheckPlatform, QualifiedTool, QualifiedToolArtifact};
 use velnor_actions_contract::{canonical_json_bytes, digest_b3};
 use velnor_actions_mise::check_tool_probes::QualifiedExecutableProof;
 
@@ -21,58 +18,6 @@ pub(crate) struct QualifiedToolReceipt {
     pub dependency_artifacts: Vec<QualifiedToolArtifact>,
     pub install_tree_sha256: String,
     pub executables: Vec<QualifiedExecutableProof>,
-}
-
-/// Untrusted observations collected for a candidate pin; never accepted as a receipt.
-///
-/// Probe output is external evidence. A caller must review and explicitly promote
-/// these values into repository configuration before ordinary acquisition can use
-/// them as expected pins.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct UntrustedToolMeasurement {
-    /// Versioned candidate record format.
-    pub schema: String,
-    /// Candidate tool identity.
-    pub tool_id: String,
-    /// Declared upstream backend.
-    pub backend: QualifiedToolBackend,
-    /// Exact declared tool release.
-    pub version: String,
-    /// Declared backend-specific install options.
-    pub options: QualifiedToolOptions,
-    /// Declared direct prerequisite identities; their bytes are not measured here.
-    pub depends_on: Vec<String>,
-    /// Native platform on which the candidate was measured.
-    pub platform: CheckPlatform,
-    /// Declared source URLs and expected archive hashes whose bytes were verified.
-    pub source_artifacts: Vec<QualifiedToolArtifact>,
-    /// Source archives for dependencies used by this candidate; empty for supported inputs.
-    pub dependency_source_artifacts: Vec<QualifiedToolArtifact>,
-    /// SHA-256 observed for the complete normalized installation tree.
-    pub measured_install_tree_sha256: String,
-    /// Observed executable hashes and fixed-probe results.
-    pub executable_observations: Vec<MeasuredToolExecutable>,
-}
-
-/// One candidate executable identity and its bounded version-probe observation.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct MeasuredToolExecutable {
-    /// Stable executable identity.
-    pub name: String,
-    /// Relative executable path below the normalized prefix.
-    pub path: String,
-    /// SHA-256 measured from the normalized executable bytes.
-    pub measured_sha256: String,
-    /// Fixed version probe declaration.
-    pub probe: QualifiedToolProbe,
-    /// Bounded stdout observed from executing the candidate probe.
-    pub stdout: String,
-    /// BLAKE3 digest of the exact observed stdout bytes.
-    pub stdout_digest: String,
-    /// BLAKE3 digest of the exact observed stderr bytes.
-    pub stderr_digest: String,
 }
 
 pub(crate) fn receipt(

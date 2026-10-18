@@ -285,8 +285,8 @@ fn dated_exception_missing_field_fails() -> Result<(), Box<dyn Error>> {
 #[test]
 fn non_object_entries_fail() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-shapes")?;
-    let row = "{\"name\":\"mise\",\"pinned\":\"2026.10.4\",\
-        \"qualified\":\"2026.10.4\",\
+    let row = "{\"name\":\"mise\",\"pinned\":\"2026.10.13\",\
+        \"qualified\":\"2026.10.13\",\
         \"source\":\"https://api.github.com/repos/jdx/mise/releases/latest\",\
         \"status\":\"current\"}";
     harness::mutate(

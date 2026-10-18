@@ -72,7 +72,7 @@ print(namespace["_source_fingerprint"](repository))
 archive_guard_target_identity() {
   local rustc_verbose rustc_details rustc_release rustc_commit rustc_host llvm_version
   local cargo_identity platform_name platform_machine
-  rustc_verbose="$(run_mise exec rust@1.98.1 -- rustc -vV)" \
+  rustc_verbose="$(run_mise exec rust@1.99.1 -- rustc -vV)" \
     || fail 'cannot inspect the pinned Rust compiler'
   rustc_details="$(awk -F ': ' '
     $1 == "release" { release = $2; release_count++ }
@@ -94,7 +94,7 @@ archive_guard_target_identity() {
   cargo_identity="${cargo_identity//)/}"
   platform_name="$(uname -s)"
   platform_machine="$(uname -m)"
-  [[ "$rustc_release" == 1.98.1 && "$rustc_commit" =~ ^[A-Za-z0-9._-]+$ \
+  [[ "$rustc_release" == 1.99.1 && "$rustc_commit" =~ ^[A-Za-z0-9._-]+$ \
     && "$rustc_host" =~ ^[A-Za-z0-9._-]+$ && "$llvm_version" =~ ^[A-Za-z0-9._-]+$ \
     && "$cargo_identity" =~ ^[A-Za-z0-9._-]+$ \
     && "$platform_name" =~ ^[A-Za-z0-9._-]+$ \

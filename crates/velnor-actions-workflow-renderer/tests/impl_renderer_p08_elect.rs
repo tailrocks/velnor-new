@@ -63,7 +63,7 @@ fn tools_cache_writer_election_prefers_plan_then_lowest_id() -> Result<(), Rende
         restore_key(&jobs["plan"]),
         "plan wins shared"
     );
-    assert!(tools_saves(&jobs["rust-b"]).is_empty(), "sharer saves none");
+    assert_eq!(tools_saves(&jobs["rust-b"]).len(), 0, "sharer saves none");
     assert_eq!(
         saved_key(&jobs["rust-c"]),
         restore_key(&jobs["rust-c"]),
@@ -173,7 +173,7 @@ fn tools_cache_writer_skips_keyless_and_reruns() -> Result<(), RenderError> {
     ]);
     elect_cache_writers(&mut jobs)?;
     elect_cache_writers(&mut jobs)?;
-    assert!(jobs["bare"].steps.is_empty(), "keyless job untouched");
+    assert_eq!(jobs["bare"].steps.len(), 0, "keyless job untouched");
     assert_eq!(
         tools_saves(&jobs["rust-a"]).len(),
         1,
@@ -323,7 +323,7 @@ fn provider_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError
     ]);
     elect_cache_writers(&mut jobs)?;
     elect_cache_writers(&mut jobs)?;
-    assert!(jobs["bare"].steps.is_empty(), "keyless job untouched");
+    assert_eq!(jobs["bare"].steps.len(), 0, "keyless job untouched");
     assert_eq!(
         provider_saves(&jobs["tofu-a"]).len(),
         1,

@@ -191,15 +191,15 @@ fn catalog_pins_ignore_project_selectors() -> Result<(), String> {
 }
 
 #[test]
-fn mise_lock_neither_present_nor_tracked() -> Result<(), String> {
+fn mise_lock_is_present_and_tracked() -> Result<(), String> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)
         .map(std::path::Path::to_path_buf)
         .ok_or_else(|| "crate is not two levels below the workspace root".to_owned())?;
     assert!(
-        !root.join("mise.lock").exists(),
-        "Velnor must not create mise.lock"
+        root.join("mise.lock").is_file(),
+        "qualified Mise lock is missing"
     );
     let tracked = git_fixture::command(&root)
         .map_err(|err| err.to_string())?
@@ -207,7 +207,7 @@ fn mise_lock_neither_present_nor_tracked() -> Result<(), String> {
         .current_dir(&root)
         .output();
     if let Ok(output) = tracked {
-        assert!(output.stdout.is_empty(), "mise.lock stays untracked");
+        assert_eq!(output.stdout, b"mise.lock\n", "mise.lock must be tracked");
     }
     Ok(())
 }

@@ -14,9 +14,9 @@ import tempfile
 
 
 UPSTREAM = {
-    "mise": ("jdx/mise", "96cca90d3e55519a47cffa0cb99baa4c3"),
-    "mbx": ("jdx/mr-boxington", "a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313"),
-    "mbx-action": ("jdx/mr-boxington-action", "1687e54eb349cadf61fa38b5813a77875489e8e6"),
+    "mise": ("jdx/mise", "580a418ed8ce379669a1a98e9aa405aa6a860996"),
+    "mbx": ("jdx/mr-boxington", "ebb2b61b193d9ea487b67152d459e8332e8cf87e"),
+    "mbx-action": ("jdx/mr-boxington-action", "47ce49b32025d93a7a2f4570815afaa2b7092240"),
 }
 HOSTS = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu",
          "aarch64-apple-darwin"]

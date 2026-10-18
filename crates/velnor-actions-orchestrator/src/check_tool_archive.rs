@@ -26,7 +26,7 @@ mod tar_preflight;
 mod zip_checks;
 use archive_deadline::{DeadlineIo, archive_error, check_deadline, gzip_reader, xz_reader};
 
-pub(super) const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_ENTRIES: usize = 100_000;
 const MAX_PATH_BYTES: usize = 4096;
 const MAX_PATH_COMPONENTS: usize = 256;
@@ -147,21 +147,7 @@ fn open_archive(path: &Path) -> Result<File, OrchestratorError> {
     }
     #[cfg(unix)]
     {
-        let descriptor = rustix::fs::open(
-            path,
-            rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::CLOEXEC,
-            rustix::fs::Mode::empty(),
-        )
-        .map_err(|error| io_error(path, error))?;
-        let stat = rustix::fs::fstat(&descriptor)
-            .map_err(|error| io_error(path, std::io::Error::from(error)))?;
-        if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::RegularFile {
-            return Err(unsafe_path(path, "archive_not_regular"));
-        }
-        if u64::try_from(stat.st_size).unwrap_or(u64::MAX) > MAX_ARCHIVE_BYTES {
-            return Err(internal("tool_archive_input_limit"));
-        }
-        Ok(File::from(descriptor))
+        open_pinned_archive(path)
     }
     #[cfg(not(unix))]
     {
@@ -171,6 +157,28 @@ fn open_archive(path: &Path) -> Result<File, OrchestratorError> {
             .map_err(|error| io_error(path, error))
     }
 }
+#[cfg(unix)]
+fn open_pinned_archive(path: &Path) -> Result<File, OrchestratorError> {
+    let descriptor = rustix::fs::open(
+        path,
+        rustix::fs::OFlags::RDONLY
+            | rustix::fs::OFlags::NOFOLLOW
+            | rustix::fs::OFlags::NONBLOCK
+            | rustix::fs::OFlags::CLOEXEC,
+        rustix::fs::Mode::empty(),
+    )
+    .map_err(|error| io_error(path, error))?;
+    let stat = rustix::fs::fstat(&descriptor)
+        .map_err(|error| io_error(path, std::io::Error::from(error)))?;
+    if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::RegularFile {
+        return Err(unsafe_path(path, "archive_not_regular"));
+    }
+    if u64::try_from(stat.st_size).unwrap_or(u64::MAX) > MAX_ARCHIVE_BYTES {
+        return Err(internal("tool_archive_input_limit"));
+    }
+    Ok(File::from(descriptor))
+}
+
 fn extract_tar<R: Read>(
     reader: R,
     destination: &Path,

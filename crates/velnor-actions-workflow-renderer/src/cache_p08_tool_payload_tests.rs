@@ -137,7 +137,7 @@ fn payload_paths_and_restore_save_inputs_are_identical() {
         panic!("tools restore wrapper is an action");
     };
     assert_eq!(uses, crate::cache_steps::TOOLS_RESTORE_USES);
-    assert!(env.is_empty());
+    assert_eq!(env.len(), 0);
     assert_eq!(
         restore.id,
         Some(velnor_actions_contract::StepId::ToolsCacheRestore)

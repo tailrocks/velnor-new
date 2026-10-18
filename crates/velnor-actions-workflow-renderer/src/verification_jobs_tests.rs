@@ -57,13 +57,13 @@ fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
             with.get("persist-credentials").map(String::as_str),
             Some("false")
         );
-        assert!(env.is_empty());
+        assert_eq!(env.len(), 0);
     } else {
         panic!("checkout must be a pinned action");
     }
     let mise = &job.steps[1];
     if let velnor_actions_contract::StepKind::Action { with, env, .. } = &mise.kind {
-        assert!(env.is_empty());
+        assert_eq!(env.len(), 0);
         assert_eq!(with.get("install").map(String::as_str), Some("false"));
         assert_eq!(with.get("env").map(String::as_str), Some("false"));
         assert_eq!(with.get("cache").map(String::as_str), Some("false"));

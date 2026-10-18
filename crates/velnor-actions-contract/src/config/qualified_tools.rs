@@ -3,8 +3,21 @@ use super::CheckPlatform;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
+#[path = "qualified_tool_probes.rs"]
+pub(super) mod probes;
+#[path = "qualified_tool_recipe.rs"]
+mod recipe;
+#[path = "qualified_tool_recipe_validation.rs"]
+mod recipe_validation;
+#[path = "qualified_tool_sources.rs"]
+pub(super) mod sources;
 #[path = "qualified_tool_validation.rs"]
 mod validation;
+
+pub use recipe::{
+    QualifiedToolArtifactRecipe, QualifiedToolExecutableRecipe, QualifiedToolRecipe,
+    QualifiedToolRecipePlatform,
+};
 
 /// One explicit tool identity; scoped to checks selecting its ID.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,7 +41,7 @@ pub struct QualifiedTool {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum QualifiedToolBackend {
-    /// Supported built-in backend (`rust`, `node`, or `bun`).
+    /// Supported built-in backend (`rust`, `node`, `bun`, `zig`, or `python`).
     Core {
         /// Built-in backend name.
         tool: String,
@@ -114,6 +127,48 @@ pub struct QualifiedToolPlatform {
     pub executables: Vec<QualifiedToolExecutable>,
 }
 
+impl From<&QualifiedTool> for QualifiedToolRecipe {
+    fn from(tool: &QualifiedTool) -> Self {
+        Self {
+            id: tool.id.clone(),
+            backend: tool.backend.clone(),
+            version: tool.version.clone(),
+            options: tool.options.clone(),
+            depends_on: tool.depends_on.clone(),
+            platforms: tool
+                .platforms
+                .iter()
+                .map(|platform| QualifiedToolRecipePlatform {
+                    platform: platform.platform,
+                    artifacts: platform
+                        .artifacts
+                        .iter()
+                        .map(|artifact| QualifiedToolArtifactRecipe {
+                            url: artifact.url.clone(),
+                        })
+                        .collect(),
+                    dependency_artifacts: platform
+                        .dependency_artifacts
+                        .iter()
+                        .map(|artifact| QualifiedToolArtifactRecipe {
+                            url: artifact.url.clone(),
+                        })
+                        .collect(),
+                    executables: platform
+                        .executables
+                        .iter()
+                        .map(|executable| QualifiedToolExecutableRecipe {
+                            name: executable.name.clone(),
+                            path: executable.path.clone(),
+                            probe: executable.probe.clone(),
+                        })
+                        .collect(),
+                })
+                .collect(),
+        }
+    }
+}
+
 /// One executable within the tool's owned installation prefix.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -191,6 +246,30 @@ pub fn validate_qualified_tools(tools: &[QualifiedTool], file: &str) -> Result<(
     validation::validate_registry(tools, file)
 }
 
+/// Validate one hash-free qualified-tool recipe before artifact measurements exist.
+/// # Errors
+/// Rejects unsupported identities, source URLs, executable layouts, or probes.
+pub fn validate_qualified_tool_recipe(
+    recipe: &QualifiedToolRecipe,
+    file: &str,
+    key: &str,
+) -> Result<(), ContractError> {
+    recipe_validation::validate_recipe(recipe, file, key)
+}
+
+/// Validate a sorted recipe registry and its complete prerequisite graph.
+/// # Errors
+/// Rejects duplicate tools, missing dependencies, cycles, and invalid recipes.
+pub fn validate_qualified_tool_recipes(
+    recipes: &[QualifiedToolRecipe],
+    file: &str,
+) -> Result<(), ContractError> {
+    recipe_validation::validate_registry(recipes, file)
+}
+
+#[cfg(test)]
+#[path = "qualified_tool_recipes_tests.rs"]
+mod recipe_tests;
 #[cfg(test)]
 #[path = "qualified_tools_tests.rs"]
 mod tests;

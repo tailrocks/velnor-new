@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value as Json;
 use tempfile::TempDir;
+use velnor_actions_mise::catalog::RUST_VERSION;
 use velnor_actions_orchestrator::{
     GenerateOptions, GenerateReport, GenerationPreparation, OrchestratorError, PlanOutputMode,
     generate, plan_internal, plan_outputs, prepare, publish_plan_files,
@@ -157,10 +158,8 @@ fn malformed_toolchain_recommends_without_writes() -> TestResult {
     fs::write(root.join("rust-toolchain.toml"), "[[[\n")?;
     let err = err_of(prepare(root).map(|_| ()), "malformed toolchain")?;
     assert!(err.to_string().contains("invalid_rust_toolchain:"), "{err}");
-    fs::write(
-        root.join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"1.98.1\"\n",
-    )?;
+    let rust_toolchain = format!("[toolchain]\nchannel = \"{RUST_VERSION}\"\n");
+    fs::write(root.join("rust-toolchain.toml"), rust_toolchain)?;
     fs::write(root.join("mise.lock"), "[[[\n")?;
     let before = snapshot(root)?;
     let prep = prepare(root)?;
@@ -199,10 +198,8 @@ fn missing_lock_recommends_without_refresh() -> TestResult {
 #[test]
 fn conflicting_tool_pins_recommend() -> TestResult {
     let repo = make_repo(config_with_branch())?;
-    fs::write(
-        repo.path().join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"1.98.1\"\n",
-    )?;
+    let rust_toolchain = format!("[toolchain]\nchannel = \"{RUST_VERSION}\"\n");
+    fs::write(repo.path().join("rust-toolchain.toml"), rust_toolchain)?;
     fs::write(
         repo.path().join("mise.toml"),
         "[tools]\nrust = \"1.85.0\"\n",

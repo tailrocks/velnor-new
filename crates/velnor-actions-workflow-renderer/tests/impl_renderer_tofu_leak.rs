@@ -37,7 +37,7 @@ const FORBIDDEN: [&str; 14] = [
 #[test]
 fn renderer_tofu_sources_decide_no_domain_semantics() {
     for (file, body) in SOURCES {
-        assert!(!body.is_empty(), "{file} embedded");
+        assert_ne!(body.len(), 0, "{file} embedded");
         for token in FORBIDDEN {
             assert!(
                 !body.contains(token),

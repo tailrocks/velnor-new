@@ -34,11 +34,7 @@ fn unique_temp_dir_in_with_counter(
 ) -> io::Result<PathBuf> {
     let process_id = std::process::id();
     for _ in 0..MAX_TEMP_DIRECTORY_ATTEMPTS {
-        let id = counter
-            .try_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
-                current.checked_add(1)
-            })
-            .map_err(|_| io::Error::other("temporary directory ID space exhausted"))?;
+        let id = reserve_temp_directory_id(counter)?;
         let candidate = parent.join(format!("{prefix}-{process_id}-{id}"));
         match std::fs::create_dir(&candidate) {
             Ok(()) => return Ok(candidate),
@@ -50,6 +46,19 @@ fn unique_temp_dir_in_with_counter(
         io::ErrorKind::AlreadyExists,
         "temporary directory namespace exhausted after 1024 occupied names",
     ))
+}
+
+fn reserve_temp_directory_id(counter: &AtomicU64) -> io::Result<u64> {
+    let mut current = counter.load(Ordering::Relaxed);
+    loop {
+        let next = current
+            .checked_add(1)
+            .ok_or_else(|| io::Error::other("temporary directory ID space exhausted"))?;
+        match counter.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => return Ok(current),
+            Err(observed) => current = observed,
+        }
+    }
 }
 
 #[test]

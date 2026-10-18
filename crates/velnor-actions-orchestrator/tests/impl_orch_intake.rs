@@ -6,6 +6,7 @@ use std::path::Path;
 use tempfile::TempDir;
 use velnor_actions_contract::DetectionStatus;
 use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_mise::catalog::RUST_VERSION;
 use velnor_actions_mise::{GitRequest, is_allowed_git_verb};
 use velnor_actions_orchestrator::{
     GenerateOptions, OrchestratorError, generate, init_config, prepare, resolve_root,
@@ -52,11 +53,9 @@ fn add_sub_crate(root: &Path) -> Result<(), Box<dyn std::error::Error>> {
 fn intake_tool_inputs_untouched_and_reported() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
+    let rust_toolchain = format!("[toolchain]\nchannel = \"{RUST_VERSION}\"\n");
     fs::write(root.join("mise.toml"), "[tools]\n")?;
-    fs::write(
-        root.join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"1.98.1\"\n",
-    )?;
+    fs::write(root.join("rust-toolchain.toml"), rust_toolchain)?;
     fs::write(root.join("mise.lock"), "{}\n")?;
     let before = snapshot(root)?;
     let prep = prepare(root)?;
@@ -140,11 +139,10 @@ fn intake_tool_changes_refresh_findings_not_tasks() -> TestResult {
     let root = repo.path();
     let tasks_before = task_ids_for(root)?;
     let recs_before = prepare(root)?.discovery.recommendations;
-    fs::write(root.join("mise.toml"), "[tools]\nrust = \"1.98.1\"\n")?;
-    fs::write(
-        root.join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"1.98.1\"\n",
-    )?;
+    let rust_version_pin = format!("[tools]\nrust = \"{RUST_VERSION}\"\n");
+    let rust_toolchain = format!("[toolchain]\nchannel = \"{RUST_VERSION}\"\n");
+    fs::write(root.join("mise.toml"), rust_version_pin)?;
+    fs::write(root.join("rust-toolchain.toml"), rust_toolchain)?;
     fs::write(root.join("mise.lock"), "{\"version\":1}\n")?;
     assert_eq!(task_ids_for(root)?, tasks_before);
     let recs_after = prepare(root)?.discovery.recommendations;

@@ -99,7 +99,7 @@ fn validate_closure_binds_effective_set_and_lock() -> Outcome {
         "p",
         &mut FileCache::new(),
     )?;
-    assert!(closure.unknown_inputs().is_empty());
+    assert_eq!(closure.unknown_inputs(), [] as [&str; 0]);
     assert!(matches!(
         closure.inputs.get("source_tree"),
         Some(Provenance::Known { .. })
@@ -222,7 +222,7 @@ fn missing_lockfile_is_proven_absent_for_validate() -> Outcome {
         closure.inputs.get("lockfile"),
         Some(Provenance::AbsentProven { .. })
     ));
-    assert!(closure.unknown_inputs().is_empty());
+    assert_eq!(closure.unknown_inputs(), [] as [&str; 0]);
     Ok(())
 }
 
@@ -258,7 +258,7 @@ fn subdir_unit_scopes_to_itself() -> Outcome {
         "p",
         &mut FileCache::new(),
     )?;
-    assert!(closure.unknown_inputs().is_empty());
+    assert_eq!(closure.unknown_inputs(), [] as [&str; 0]);
     root.write("main.tf", "variable \"changed\" {}\n")?;
     let again = resolve_closure_at_root(
         root.path(),

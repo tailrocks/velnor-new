@@ -242,7 +242,7 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
 
 #[test]
 fn drifted_lock_advises_without_blocking() -> TestResult {
-    let drifted = full_lock().replace("version = \"1.98.1\"", "version = \"1.97.0\"");
+    let drifted = full_lock().replace("version = \"1.99.1\"", "version = \"1.97.0\"");
     let repo = repo_with_lock(Some(&drifted))?;
     let prep = prepare(repo.path())?;
     assert_eq!(prep.lock_audit_blocking, [] as [String; 0]);

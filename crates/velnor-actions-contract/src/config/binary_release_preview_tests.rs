@@ -151,7 +151,11 @@ fn producer_system_tool_pins_reuse_native_platform_validation() {
     let mut preview = enabled_preview();
     preview.producer.runner = VerificationRunner::MacosArm64;
     preview.producer.system_tools = vec![
-        system_tool(CheckSystemToolKind::Swift, "6.4", "swiftlang-6.4.0.34.1"),
+        system_tool(
+            CheckSystemToolKind::Swift,
+            "6.4",
+            "swiftlang-6.4.0.34.1 clang-2100.3.34.1",
+        ),
         system_tool(CheckSystemToolKind::Xcode, "26.0", "16A242d"),
     ];
     assert!(preview.validate("config.toml").is_ok());
@@ -162,8 +166,16 @@ fn producer_system_tool_pins_reuse_native_platform_validation() {
 
     let mut duplicate = preview.clone();
     duplicate.producer.system_tools = vec![
-        system_tool(CheckSystemToolKind::Swift, "6.4", "swiftlang-6.4.0.34.1"),
-        system_tool(CheckSystemToolKind::Swift, "6.4", "swiftlang-6.4.0.34.1"),
+        system_tool(
+            CheckSystemToolKind::Swift,
+            "6.4",
+            "swiftlang-6.4.0.34.1 clang-2100.3.34.1",
+        ),
+        system_tool(
+            CheckSystemToolKind::Swift,
+            "6.4",
+            "swiftlang-6.4.0.34.1 clang-2100.3.34.1",
+        ),
     ];
     assert!(duplicate.validate("config.toml").is_err());
 
@@ -177,6 +189,10 @@ fn system_tool(kind: CheckSystemToolKind, version: &str, build: &str) -> CheckSy
         kind,
         version: version.to_owned(),
         build: build.to_owned(),
+        sdk_version: (kind == CheckSystemToolKind::Xcode).then(|| "27.0".to_owned()),
+        developer_dir: (kind == CheckSystemToolKind::Xcode).then(|| {
+            "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer".to_owned()
+        }),
     }
 }
 

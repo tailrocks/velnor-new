@@ -94,7 +94,7 @@ fn fixed_composite_forwards_identity_and_runs_seed_before_outer_restore() -> Res
         };
         assert_eq!(uses, wrapper);
         assert_eq!(with.get("d"), Some(&payload.static_digest().to_owned()));
-        assert!(env.is_empty());
+        assert_eq!(env.len(), 0);
         validate_step_sequence(std::slice::from_ref(&step), "tools-prelude-test")
             .map_err(RenderError::Contract)?;
         assert!(

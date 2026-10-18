@@ -34,6 +34,17 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
   - Pre-installed utility versions, PATH layouts, and environment configurations.
   - OS-specific tool locations for Ubuntu Linux and macOS runner images.
 
+The official [`xcode-27` runner image inventory](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md)
+identifies an ARM64 macOS 27.0.1 host and lists Xcode 27.1 build `27A9275`
+at `/Applications/Xcode_27.1_Release_Candidate.app`. Velnor represents this
+host as the typed `xcode-27-arm64` runner (`runs-on: xcode-27`) and binds
+consumer qualification to the exact Xcode version/build through `system_tools`.
+The image's default Xcode is 27.0, so a task needing Xcode 27.1 pins
+`version = "27.1"`, `build = "27A9275"`, `sdk_version = "27.0"`, and
+`developer_dir = "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer"`.
+Velnor probes and runs the named task with that `DEVELOPER_DIR` and never changes
+the host's `xcode-select` setting.
+
 ---
 
 ## Compatibility Rules and Verification Procedures

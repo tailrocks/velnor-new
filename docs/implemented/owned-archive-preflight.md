@@ -21,7 +21,7 @@ parser starts:
 bash scripts/with-owned-archive-guard.sh -- python3 path/to/consumer.py ...
 ```
 
-The wrapper builds with the repository's pinned Mise and Rust 1.98.1, uses an
+The wrapper builds with the repository's pinned Mise and Rust 1.99.1, uses an
 isolated Cargo home and target directory, and copies the executable into the
 checkout-owned `.velnor/archive-guard/bin/` directory. The Python bridge never
 builds or downloads executable code. Direct bridge calls fail closed unless

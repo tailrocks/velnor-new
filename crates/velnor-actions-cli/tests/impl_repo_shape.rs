@@ -143,6 +143,7 @@ fn rq11_repo_shape_files_present() {
         "AGENTS.md",
         ".velnor/config.toml",
         ".velnor/version-policy.toml",
+        "mise.lock",
     ];
     for file in files {
         assert!(repo_root().join(file).is_file(), "{file} missing");
@@ -150,10 +151,6 @@ fn rq11_repo_shape_files_present() {
     for (dir, _) in MEMBERS {
         assert!(repo_root().join(dir).is_dir(), "{dir} missing");
     }
-    assert!(
-        !repo_root().join("mise.lock").exists(),
-        "mise.lock must stay absent (RQ-2.12)"
-    );
 }
 
 #[test]

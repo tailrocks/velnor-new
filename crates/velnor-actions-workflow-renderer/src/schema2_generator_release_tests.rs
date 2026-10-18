@@ -131,7 +131,7 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
             format!("{SOURCE_SHA}\n")
         );
         let calls = fs::read_to_string(scratch.0.join("gh-calls"))?;
-        assert!(calls.contains("release view v0.1.13"), "{calls}");
+        assert!(calls.contains("release view v0.1.14"), "{calls}");
         assert!(
             calls.contains("api repos/tailrocks/velnor-new/releases/123"),
             "{calls}"
@@ -152,7 +152,7 @@ fn create_candidate_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn E
     let manifest_status = Command::new("bash")
         .args([
             "scripts/generator-release/create-release-manifest.sh",
-            "0.1.13",
+            "0.1.14",
             REPOSITORY,
             &pins.rust_version,
             &pins.mr_boxington_version,
@@ -268,7 +268,7 @@ fn assert_publish_result(
             | Failure::TagMovedBeforePublish
     );
     if create_is_expected {
-        assert_eq!(fs::read_to_string(root.join("created-tag"))?, "v0.1.13\n");
+        assert_eq!(fs::read_to_string(root.join("created-tag"))?, "v0.1.14\n");
         assert_eq!(
             fs::read_to_string(root.join("asset-args"))?,
             expected_asset_args()

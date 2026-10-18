@@ -34,7 +34,9 @@ RUN apt-get update \
         /usr/local/bin/docker-init \
         /usr/local/bin/docker-proxy \
         /usr/local/bin/dockerd \
-        /usr/local/bin/runc
+        /usr/local/bin/runc \
+    && docker --version | grep -F "Docker version ${DOCKER_VERSION}," \
+    && dockerd --version | grep -F "Docker version ${DOCKER_VERSION},"
 
 # containerd's overlay snapshotter returns EINVAL when this amd64 dockerd
 # runs under emulation. vfs does not mount overlay. linux/amd64 stays the baseline.

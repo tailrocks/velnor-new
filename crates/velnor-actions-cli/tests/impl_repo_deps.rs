@@ -36,6 +36,9 @@ fn expected_internal(dir: &str) -> Vec<&str> {
                 "velnor-actions-orchestrator",
             ]
         }
+        "crates/velnor-actions-workflow-renderer" => {
+            vec!["velnor-actions-actionlint", "velnor-actions-contract"]
+        }
         _ => vec!["velnor-actions-contract"],
     }
 }

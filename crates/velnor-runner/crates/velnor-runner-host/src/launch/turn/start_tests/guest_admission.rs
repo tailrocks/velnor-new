@@ -40,15 +40,16 @@ async fn unavailable_guest_sample_blocks_acquire_and_worker_start() -> Result<()
     let requests = docker.finish().await?;
 
     assert_eq!(result, Ok(false));
-    assert!(requests.is_empty());
-    assert!(script.calls.is_empty());
-    assert!(workers.is_empty());
-    assert!(
+    assert_eq!(requests.as_slice().first(), None);
+    assert_eq!(script.calls.first(), None);
+    assert_eq!(workers.first(), None);
+    assert_eq!(
         journal
             .rows()
             .await
             .map_err(|error| error.to_string())?
-            .is_empty()
+            .first(),
+        None
     );
     absent(&scratch.file())
 }
@@ -135,9 +136,9 @@ async fn safe_idless_redelivery_cannot_start_when_guest_cannot_fit_a_pair() -> R
     let requests = docker.finish().await?;
 
     assert_eq!(result, Ok(false));
-    assert!(requests.is_empty());
-    assert!(script.calls.is_empty());
-    assert!(workers.is_empty());
+    assert_eq!(requests.first(), None);
+    assert_eq!(script.calls.first(), None);
+    assert_eq!(workers.first(), None);
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Uncertain);
@@ -181,15 +182,16 @@ async fn no_fit_case(name: &str, guest: GuestTotals, budget: ResourceBudget) -> 
     let requests = docker.finish().await?;
 
     assert_eq!(result, Ok(false));
-    assert!(requests.is_empty());
-    assert!(script.calls.is_empty());
-    assert!(workers.is_empty());
-    assert!(
+    assert_eq!(requests.first(), None);
+    assert_eq!(script.calls.first(), None);
+    assert_eq!(workers.first(), None);
+    assert_eq!(
         journal
             .rows()
             .await
             .map_err(|error| error.to_string())?
-            .is_empty()
+            .first(),
+        None
     );
     absent(&scratch.file())
 }

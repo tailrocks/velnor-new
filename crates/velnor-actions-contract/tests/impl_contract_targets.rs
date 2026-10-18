@@ -44,7 +44,13 @@ fn target_ids_round_trip_without_ordinal_mapping() {
 
 #[test]
 fn versioned_macos_labels_bind_explicit_architecture() {
-    for label in ["macos-14", "macos-15", "macos-15-arm64", "macos-26"] {
+    for label in [
+        "macos-14",
+        "macos-15",
+        "macos-15-arm64",
+        "macos-26",
+        "xcode-27",
+    ] {
         assert_eq!(
             ReleaseTarget::for_runner_label(label),
             Some(ReleaseTarget::MacosArm64)

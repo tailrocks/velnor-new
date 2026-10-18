@@ -85,7 +85,7 @@ fn tool_names_roundtrip_and_reject_aliases() {
 
 #[test]
 fn exact_version_validation_accepts_only_pins() {
-    for version in ["1.98.1", "2026.10.13", "0.11.0", "10.20.30"] {
+    for version in ["1.99.1", "2026.10.13", "0.11.0", "10.20.30"] {
         assert!(
             validate_exact_version("rust", version).is_ok(),
             "version must be accepted: {version}"
@@ -122,7 +122,7 @@ fn tool_file_values_never_become_pins() {
         );
     }
     for loose in [
-        "latest", "stable", "system", "1.98", "v1.98.1", ">=1.98", "",
+        "latest", "stable", "system", "1.98", "v1.99.1", ">=1.98", "",
     ] {
         assert!(
             matches!(
@@ -137,30 +137,30 @@ fn tool_file_values_never_become_pins() {
 #[test]
 fn catalog_new_validates_every_slot() {
     let catalog = ToolCatalog::new(
-        "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.31.1", "0.9.148", "1.13.1",
+        "1.99.1", "1.24.1", "2.102.0", "1.7.12", "0.11.0", "1.31.1", "0.9.148", "1.13.1",
     );
     assert!(catalog.is_ok());
     assert!(matches!(
         ToolCatalog::new(
-            "latest", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.31.1", "0.9.148", "1.13.1"
+            "latest", "1.24.1", "2.102.0", "1.7.12", "0.11.0", "1.31.1", "0.9.148", "1.13.1"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
     assert!(matches!(
         ToolCatalog::new(
-            "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "v1.31.1", "0.9.148", "1.13.1"
+            "1.99.1", "1.24.1", "2.102.0", "1.7.12", "0.11.0", "v1.31.1", "0.9.148", "1.13.1"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
     assert!(matches!(
         ToolCatalog::new(
-            "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.31.1", "latest", "1.13.1"
+            "1.99.1", "1.24.1", "2.102.0", "1.7.12", "0.11.0", "1.31.1", "latest", "1.13.1"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
     assert!(matches!(
         ToolCatalog::new(
-            "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.31.1", "0.9.148", "latest"
+            "1.99.1", "1.24.1", "2.102.0", "1.7.12", "0.11.0", "1.31.1", "0.9.148", "latest"
         ),
         Err(MiseError::InvalidToolVersion { .. })
     ));
@@ -187,7 +187,7 @@ fn action_mbx_reconcile_matches_pin_only() {
         Err(MiseError::InvalidToolVersion { tool, version })
             if tool == "mr-boxington" && version == "1.22.0"
     ));
-    for loose in ["latest", "v1.21.1", "1.19", ""] {
+    for loose in ["latest", "v1.24.1", "1.19", ""] {
         assert!(
             matches!(
                 catalog.reconcile_action_mbx(loose),
@@ -197,7 +197,7 @@ fn action_mbx_reconcile_matches_pin_only() {
         );
     }
     let moved = ToolCatalog::new(
-        "1.98.1", "1.22.0", "2.102.0", "1.7.12", "0.11.0", "1.31.1", "0.9.148", "1.13.1",
+        "1.99.1", "1.22.0", "2.102.0", "1.7.12", "0.11.0", "1.31.1", "0.9.148", "1.13.1",
     )
     .expect("exact catalog");
     assert!(moved.reconcile_action_mbx("1.22.0").is_ok());
@@ -271,7 +271,7 @@ fn opentofu_digest_follows_qualified_version_only() {
             .is_ok()
     );
     let moved = ToolCatalog::new(
-        "1.98.1", "1.21.1", "2.102.0", "1.7.12", "0.11.0", "1.31.1", "0.9.148", "1.13.0",
+        "1.99.1", "1.24.1", "2.102.0", "1.7.12", "0.11.0", "1.31.1", "0.9.148", "1.13.0",
     )
     .expect("exact catalog");
     let err = moved

@@ -158,7 +158,8 @@ RQ-4.1 test layout → `tests/impl_*.rs` + single `[[test]]` entry (accepted).
 RQ-4.3 entry naming → `tests/velnor_<crate>.rs` (accepted; orchestrator honestly
 carries 2nd hermetic target). RQ-4.7 proptest → hand-written boundary fixtures
 until first risk trigger (revisit at V1 code-complete). RQ-2.12 `mise.lock`
-absent = specified state, no deviation. VER-0.1 header-only file = residual gap,
+is repo-owned; its tracked state is maintained by an explicit migration while
+Velnor generation remains read-only. VER-0.1 header-only file = residual gap,
 not a deviation.
 
 ## MISSING summary (4 honest residues)

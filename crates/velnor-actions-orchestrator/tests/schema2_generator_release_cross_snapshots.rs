@@ -14,6 +14,23 @@ pub(super) fn assert_intel_cross_build(
     let intel = super::super::job_body(body, "build-macos-intel")?;
     assert!(intel.contains("runs-on: macos-15\n"), "{intel}");
     let intel_action = action(actions, "generator-release-build-macos-intel")?;
+    assert!(
+        intel_action.contains("mr-boxington@1.24.1")
+            && intel_action.contains("mbx build --release --locked")
+            && intel_action.contains("--target x86_64-apple-darwin"),
+        "the ARM-hosted cross-build must use the qualified MBX release for its Intel target: {intel_action}"
+    );
+    let mise_lock = include_str!("../../../mise.lock");
+    let mbx_lock = mise_lock
+        .split("[[tools.mr-boxington]]")
+        .nth(1)
+        .and_then(|entry| entry.split("[[tools.rust]]").next())
+        .ok_or("Mise lock must contain the MBX entry before the Rust entry")?;
+    assert!(mbx_lock.contains("[tools.mr-boxington.\"platforms.macos-arm64\"]"));
+    assert!(
+        !mbx_lock.contains("platforms.macos-x64"),
+        "MBX 1.24.1 has no macOS-x64 artifact; the Intel target must stay on the ARM build host"
+    );
     assert!(intel_action.contains("*Mach-O*x86_64*"), "{intel_action}");
     assert!(intel_action.contains("shasum -a 256"), "{intel_action}");
     assert!(
@@ -30,7 +47,7 @@ pub(super) fn assert_intel_cross_build(
     );
     assert!(
         intel_action.contains(
-            "rustup target add --toolchain 1.98.1-aarch64-apple-darwin x86_64-apple-darwin"
+            "rustup target add --toolchain 1.99.1-aarch64-apple-darwin x86_64-apple-darwin"
         ),
         "{intel_action}"
     );
@@ -44,6 +61,16 @@ pub(super) fn assert_intel_cross_build(
     );
     let qualify = super::super::job_body(body, "qualify-macos-intel")?;
     assert!(qualify.contains("runs-on: macos-15-intel\n"), "{qualify}");
+    let qualify_action = action(actions, "generator-release-qualify-macos-intel")?;
+    let install_step = qualify_action
+        .split("    - name: Install pinned qualification tools\n")
+        .nth(1)
+        .and_then(|step| step.split("\n    - name:").next())
+        .ok_or("Intel qualification action is missing its install step")?;
+    assert!(
+        !install_step.contains("mr-boxington") && !install_step.contains("mbx "),
+        "native Intel qualification must not install or invoke MBX: {install_step}"
+    );
     Ok(())
 }
 

@@ -3,7 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    BuildTask, Job, JobTimeout, PermissionLevel, Permissions, Step, WORKFLOW_TASK_JOB_PREFIX,
+    BuildTask, BuildTaskXcodeCapability, Job, JobTimeout, PermissionLevel, Permissions, Step,
+    WORKFLOW_TASK_JOB_PREFIX,
 };
 
 use crate::verification_jobs::build_task_mise::{
@@ -24,17 +25,8 @@ pub(crate) const RUN_BUILD_TASK_NAME: &str = "Run declared build task";
 /// Contract-fixed selected-tool bootstrap step.
 pub(crate) const INSTALL_BUILD_TASK_BOOTSTRAP_NAME: &str = "Install selected locked prebuilt tools";
 
-/// Pinned Xcode developer directory required by the native task contract.
-pub(crate) const BUILD_TASK_DEVELOPER_DIR: &str = "/Applications/Xcode_26.6.app/Contents/Developer";
 /// Cargo registry tools must use prebuilt binaries; no Cargo compile fallback.
 pub(crate) const CARGO_BINSTALL_ONLY_ENV: &str = "MISE_CARGO_BINSTALL_ONLY";
-
-const MACOS_BUILD_TOOLCHAIN_CHECK: &str = concat!(
-    "set -euo pipefail; ",
-    "/usr/bin/xcodebuild -version | /usr/bin/grep -Fqx 'Xcode 26.6'; ",
-    "/usr/bin/xcodebuild -version | /usr/bin/grep -Fqx 'Build version 17F113'; ",
-    "/usr/bin/xcrun --sdk macosx --show-sdk-version | /usr/bin/grep -Fqx '26.5'",
-);
 
 /// One exact selected Mise tool resolved by the orchestrator.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -166,10 +158,9 @@ fn build_task_steps(
     policy: &BuildTaskPolicy,
     checkout_uses: &str,
 ) -> Result<Vec<Step>, RenderError> {
-    let developer_dir = BTreeMap::from([(
-        "DEVELOPER_DIR".to_owned(),
-        BUILD_TASK_DEVELOPER_DIR.to_owned(),
-    )]);
+    let xcode = policy.task.runner.xcode_capability();
+    let developer_dir =
+        BTreeMap::from([("DEVELOPER_DIR".to_owned(), xcode.developer_dir.to_owned())]);
     let resource_limits = BTreeMap::from([
         (
             "CARGO_BUILD_JOBS".to_owned(),
@@ -179,16 +170,10 @@ fn build_task_steps(
             "NEXTEST_TEST_THREADS".to_owned(),
             policy.task.nextest_test_threads.to_string(),
         ),
-        (
-            "DEVELOPER_DIR".to_owned(),
-            BUILD_TASK_DEVELOPER_DIR.to_owned(),
-        ),
+        ("DEVELOPER_DIR".to_owned(), xcode.developer_dir.to_owned()),
     ]);
     let script_env = [
-        (
-            "DEVELOPER_DIR".to_owned(),
-            BUILD_TASK_DEVELOPER_DIR.to_owned(),
-        ),
+        ("DEVELOPER_DIR".to_owned(), xcode.developer_dir.to_owned()),
         (CARGO_BINSTALL_ONLY_ENV.to_owned(), "1".to_owned()),
     ];
 
@@ -196,7 +181,7 @@ fn build_task_steps(
         steps::checkout_step(checkout_uses)?,
         shell_step(
             VERIFY_BUILD_TASK_MACOS_NAME,
-            bash_script(MACOS_BUILD_TOOLCHAIN_CHECK),
+            bash_script(&macos_build_toolchain_check(xcode)),
             developer_dir.clone(),
         )?,
         mise_setup_step(&policy.mise_setup)?,
@@ -216,6 +201,18 @@ fn build_task_steps(
             resource_limits,
         )?,
     ])
+}
+
+fn macos_build_toolchain_check(capability: BuildTaskXcodeCapability) -> String {
+    format!(
+        concat!(
+            "set -euo pipefail; ",
+            "/usr/bin/xcodebuild -version | /usr/bin/grep -Fqx 'Xcode {}'; ",
+            "/usr/bin/xcodebuild -version | /usr/bin/grep -Fqx 'Build version {}'; ",
+            "/usr/bin/xcrun --sdk macosx --show-sdk-version | /usr/bin/grep -Fqx '{}'",
+        ),
+        capability.version, capability.build, capability.sdk_version
+    )
 }
 
 /// Inline-shell argv so the script is single-quoted whole at render time.

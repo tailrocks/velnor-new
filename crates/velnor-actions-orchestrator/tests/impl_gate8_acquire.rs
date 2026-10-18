@@ -144,7 +144,7 @@ fn version_policy_drift_fails_velnor_generate() -> TestResult {
         )?;
         fs::write(
             repo.path().join(".velnor/version-policy.toml"),
-            repo_policy()?.replace("1.98.1", "9.9.9"),
+            repo_policy()?.replace("rust = \"1.99.1\"", "rust = \"9.9.9\""),
         )?;
         let prep = prepare(repo.path())?;
         let parent = TempDir::new()?;

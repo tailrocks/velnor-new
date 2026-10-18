@@ -35,7 +35,7 @@ fn rustup_toolchain_is_exact_catalog_pin() -> Result<(), String> {
 #[test]
 fn toolchain_env_triple_is_exact() {
     assert_eq!(
-        toolchain_env("/velnor/rustup", "/velnor/cargo", "1.98.1"),
+        toolchain_env("/velnor/rustup", "/velnor/cargo", "1.99.1"),
         vec![
             (
                 OsString::from("MISE_RUSTUP_HOME"),
@@ -45,7 +45,7 @@ fn toolchain_env_triple_is_exact() {
                 OsString::from("MISE_CARGO_HOME"),
                 OsString::from("/velnor/cargo")
             ),
-            (OsString::from("RUSTUP_TOOLCHAIN"), OsString::from("1.98.1")),
+            (OsString::from("RUSTUP_TOOLCHAIN"), OsString::from("1.99.1")),
         ]
     );
 }
@@ -53,7 +53,7 @@ fn toolchain_env_triple_is_exact() {
 #[test]
 fn exec_disables_implicit_install() -> Result<(), String> {
     let command = IsolatedCommand::mise_exec(
-        &["rust@1.98.1".to_owned()],
+        &["rust@1.99.1".to_owned()],
         &[OsString::from("cargo"), OsString::from("--version")],
     )
     .map_err(|err| err.to_string())?;
@@ -75,16 +75,16 @@ fn exec_disables_implicit_install() -> Result<(), String> {
 #[test]
 fn auto_install_predicate_separates_exec_from_install() -> Result<(), String> {
     let exec = IsolatedCommand::mise_exec(
-        &["rust@1.98.1".to_owned()],
+        &["rust@1.99.1".to_owned()],
         &[OsString::from("cargo"), OsString::from("--version")],
     )
     .map_err(|err| err.to_string())?;
     assert!(exec.disables_auto_install());
-    let install = IsolatedCommand::mise_install(&["rust@1.98.1".to_owned()])
+    let install = IsolatedCommand::mise_install(&["rust@1.99.1".to_owned()])
         .map_err(|err| err.to_string())?;
     assert!(!install.disables_auto_install());
     let extended = exec
-        .with_env(&toolchain_env("/velnor/rustup", "/velnor/cargo", "1.98.1"))
+        .with_env(&toolchain_env("/velnor/rustup", "/velnor/cargo", "1.99.1"))
         .map_err(|err| err.to_string())?;
     assert!(extended.disables_auto_install());
     Ok(())
@@ -92,7 +92,7 @@ fn auto_install_predicate_separates_exec_from_install() -> Result<(), String> {
 
 #[test]
 fn install_and_direct_keep_install_enabled() -> Result<(), String> {
-    let install = IsolatedCommand::mise_install(&["rust@1.98.1".to_owned()])
+    let install = IsolatedCommand::mise_install(&["rust@1.99.1".to_owned()])
         .map_err(|err| err.to_string())?;
     assert!(
         !install
@@ -114,11 +114,11 @@ fn install_and_direct_keep_install_enabled() -> Result<(), String> {
 #[test]
 fn with_env_appends_toolchain_pairs() -> Result<(), String> {
     let command = IsolatedCommand::mise_exec(
-        &["rust@1.98.1".to_owned()],
+        &["rust@1.99.1".to_owned()],
         &[OsString::from("cargo"), OsString::from("--version")],
     )
     .map_err(|err| err.to_string())?;
-    let extra = toolchain_env("/velnor/rustup", "/velnor/cargo", "1.98.1");
+    let extra = toolchain_env("/velnor/rustup", "/velnor/cargo", "1.99.1");
     let extended = command.with_env(&extra).map_err(|err| err.to_string())?;
     let full = extended.full_env();
     assert_eq!(&full[full.len() - 3..], extra.as_slice());
@@ -172,7 +172,7 @@ fn oidc_token_pair_never_reaches_task_env() -> Result<(), String> {
         assert!(is_reserved_env_key(key), "{key} reserved");
         let pair = [(OsString::from(key), OsString::from("sentinel"))];
         let exec =
-            IsolatedCommand::mise_exec(&["rust@1.98.1".to_owned()], &[OsString::from("cargo")])
+            IsolatedCommand::mise_exec(&["rust@1.99.1".to_owned()], &[OsString::from("cargo")])
                 .map_err(|err| err.to_string())?;
         assert!(
             matches!(
@@ -208,7 +208,7 @@ fn endpoint_selectors_are_reserved_and_unsettable() -> Result<(), String> {
         assert!(is_reserved_env_key(key), "{key} reserved");
         let pair = [(OsString::from(key), OsString::from("sentinel"))];
         let exec =
-            IsolatedCommand::mise_exec(&["rust@1.98.1".to_owned()], &[OsString::from("cargo")])
+            IsolatedCommand::mise_exec(&["rust@1.99.1".to_owned()], &[OsString::from("cargo")])
                 .map_err(|err| err.to_string())?;
         assert!(
             matches!(
@@ -240,7 +240,7 @@ fn mise_prefix_is_reserved_except_owned_homes() -> Result<(), String> {
         assert!(is_reserved_env_key(key), "{key} reserved");
         let pair = [(OsString::from(key), OsString::from("sentinel"))];
         let exec =
-            IsolatedCommand::mise_exec(&["rust@1.98.1".to_owned()], &[OsString::from("cargo")])
+            IsolatedCommand::mise_exec(&["rust@1.99.1".to_owned()], &[OsString::from("cargo")])
                 .map_err(|err| err.to_string())?;
         assert!(
             matches!(
@@ -298,7 +298,7 @@ fn tofu_reserved_keys_fail_loud_via_with_env_and_repo_task() -> Result<(), Strin
     ] {
         let pair = [(OsString::from(key), OsString::from("sentinel"))];
         let exec =
-            IsolatedCommand::mise_exec(&["rust@1.98.1".to_owned()], &[OsString::from("cargo")])
+            IsolatedCommand::mise_exec(&["rust@1.99.1".to_owned()], &[OsString::from("cargo")])
                 .map_err(|err| err.to_string())?;
         assert!(
             matches!(
@@ -324,7 +324,7 @@ fn tofu_reserved_keys_fail_loud_via_with_env_and_repo_task() -> Result<(), Strin
 #[test]
 fn automation_pair_appends_as_allowed_extra() -> Result<(), String> {
     let command = IsolatedCommand::mise_exec(
-        &["rust@1.98.1".to_owned()],
+        &["rust@1.99.1".to_owned()],
         &[OsString::from("cargo"), OsString::from("--version")],
     )
     .map_err(|err| err.to_string())?;
@@ -370,9 +370,9 @@ fn subcommand_allowlist_is_exec_install_run() {
 
 #[test]
 fn every_built_mise_subcommand_is_allowlisted() -> Result<(), String> {
-    let exec = IsolatedCommand::mise_exec(&["rust@1.98.1".to_owned()], &[OsString::from("cargo")])
+    let exec = IsolatedCommand::mise_exec(&["rust@1.99.1".to_owned()], &[OsString::from("cargo")])
         .map_err(|err| err.to_string())?;
-    let install = IsolatedCommand::mise_install(&["rust@1.98.1".to_owned()])
+    let install = IsolatedCommand::mise_install(&["rust@1.99.1".to_owned()])
         .map_err(|err| err.to_string())?;
     for argv in [exec.argv(), install.argv()] {
         assert_eq!(argv[0], OsString::from("mise"));

@@ -178,7 +178,7 @@ fn provider_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError
     ]);
     elect_cache_writers(&mut jobs)?;
     elect_cache_writers(&mut jobs)?;
-    assert!(jobs["bare"].steps.is_empty(), "keyless job untouched");
+    assert_eq!(jobs["bare"].steps.len(), 0, "keyless job untouched");
     assert_eq!(
         provider_saves(&jobs["tofu-a"]).len(),
         1,

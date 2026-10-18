@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 #[path = "check_system_tools.rs"]
 mod check_system_tools;
-pub use check_system_tools::{CheckSystemTool, CheckSystemToolKind};
+pub use check_system_tools::{
+    CheckSystemTool, CheckSystemToolKind, is_valid_check_system_build,
+    is_valid_check_system_version,
+};
 
 /// One opaque check, always executed; no cached-result reuse.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -367,3 +367,17 @@ mod deadline_tests;
 
 #[path = "check_tool_archive_tar_admission_tests.rs"]
 mod tar_admission_tests;
+
+#[test]
+fn pinned_archive_open_rejects_fifo_without_waiting_for_writer() {
+    let temp = tempfile::tempdir().expect("temp");
+    let fifo = temp.path().join("fifo");
+    assert!(
+        std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .expect("fifo")
+            .success()
+    );
+    assert!(open_pinned_archive(&fifo).is_err());
+}

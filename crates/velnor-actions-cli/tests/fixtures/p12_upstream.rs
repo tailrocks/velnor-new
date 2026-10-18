@@ -29,17 +29,17 @@ fn probe_tool_rows() -> Vec<ProbeRow> {
         (
             "https://api.github.com/repos/jdx/mise/releases/latest",
             "mise.json",
-            "{\"tag_name\": \"v2026.10.4\"}",
+            "{\"tag_name\": \"v2026.10.13\"}",
         ),
         (
             "https://static.rust-lang.org/dist/channel-rust-stable.toml",
             "rust.toml",
-            "[pkg.rust]\nversion = \"1.98.1 (48a229cea 2026-09-01)\"\n",
+            "[pkg.rust]\nversion = \"1.99.1 (48a229cea 2026-09-01)\"\n",
         ),
         (
             "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
             "mbx.json",
-            "[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.19.0\"}]",
+            "[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.24.1\"}]",
         ),
         (
             "https://api.github.com/repos/sigstore/cosign/releases/latest",
@@ -49,7 +49,7 @@ fn probe_tool_rows() -> Vec<ProbeRow> {
         (
             "https://api.github.com/repos/cli/cli/releases/latest",
             "gh.json",
-            "{\"tag_name\": \"v2.101.0\"}",
+            "{\"tag_name\": \"v2.102.0\"}",
         ),
         (
             "https://api.github.com/repos/rhysd/actionlint/releases/latest",
@@ -137,6 +137,11 @@ fn probe_action_rows() -> Vec<ProbeRow> {
             "create-github-app-token.json",
             "{\"tag_name\": \"v3.3.0\"}",
         ),
+        (
+            "https://api.github.com/repos/actions/github-script/releases/latest",
+            "github-script.json",
+            "{\"tag_name\": \"v9.0.0\"}",
+        ),
     ]
 }
 
@@ -220,7 +225,7 @@ fn probe_rows_carry_source_and_check_time() -> Result<(), Box<dyn Error>> {
         .iter()
         .filter(|line| line.contains("\"check\":\"upstream-probe\""))
         .collect();
-    assert_eq!(probe.len(), 23, "22 rows + runner note:\n{}", run.stdout);
+    assert_eq!(probe.len(), 24, "23 rows + runner note:\n{}", run.stdout);
     for line in probe {
         if line.contains("\"subject\":\"runner\"") {
             assert!(

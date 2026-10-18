@@ -18,8 +18,10 @@ fn intake_adapter_dependency_direction() -> TestResult {
         let manifest: toml::Table = toml::from_str(&text)?;
         if let Some(deps) = manifest.get("dependencies").and_then(toml::Value::as_table) {
             for name in deps.keys() {
+                let permitted = name == "velnor-actions-contract"
+                    || (adapter == "workflow-renderer" && name == "velnor-actions-actionlint");
                 assert!(
-                    !name.starts_with("velnor-actions-") || name == "velnor-actions-contract",
+                    !name.starts_with("velnor-actions-") || permitted,
                     "{adapter} must not depend on {name}"
                 );
             }

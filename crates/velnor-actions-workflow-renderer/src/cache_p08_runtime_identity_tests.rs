@@ -125,7 +125,7 @@ fn emitted_identity_environment(payload: &ToolsCachePayload) -> BTreeMap<String,
         Some(uses.as_str()),
         crate::cache_p08::runtime_prelude_action_uses(&payload.runs_on)
     );
-    assert!(action_env.is_empty());
+    assert_eq!(action_env.len(), 0);
     let input = crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
     let input_value = with.get(input).expect("emitted digest input");
     assert_eq!(input_value, payload.static_digest());
@@ -356,7 +356,7 @@ fn identity_step_binds_fixed_tool_home_environment() {
         Some(uses.as_str()),
         crate::cache_p08::runtime_prelude_action_uses("ubuntu-26.04")
     );
-    assert!(env.is_empty());
+    assert_eq!(env.len(), 0);
     assert_eq!(
         with.get(crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
             .map(String::as_str),

@@ -4,6 +4,7 @@ use std::collections::BTreeMap;
 use std::fs;
 
 use crate::impl_common::{TestResult, config_with_branch, err_of, make_repo, plan_for};
+use velnor_actions_mise::catalog::RUST_VERSION;
 use velnor_actions_orchestrator::{
     CONFLICTING_TOOL_VALUES, DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, ExternalDataFreshness, ToolParse,
     UNSUPPORTED_TOOL_VALUE, check_tool_inputs, coverage_schema_known, critical_path_for_groups,
@@ -23,9 +24,12 @@ fn tool_inputs_report_presence_parse_values_digests() -> TestResult {
     let root = repo.path();
     fs::write(
         root.join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"1.98.1\"\n",
+        format!("[toolchain]\nchannel = \"{RUST_VERSION}\"\n"),
     )?;
-    fs::write(root.join("mise.toml"), "[tools]\nrust = \"1.98.1\"\n")?;
+    fs::write(
+        root.join("mise.toml"),
+        format!("[tools]\nrust = \"{RUST_VERSION}\"\n"),
+    )?;
     fs::write(root.join("mise.lock"), "{}\n")?;
     let prep = prepare(root)?;
     assert_eq!(prep.discovery.tool_checks.len(), 3);
@@ -53,9 +57,12 @@ fn tool_inputs_report_presence_parse_values_digests() -> TestResult {
         .collect();
     assert_eq!(
         values.get(&("rust-toolchain.toml", "channel")),
-        Some(&"1.98.1")
+        Some(&RUST_VERSION)
     );
-    assert_eq!(values.get(&("mise.toml", "tools.rust")), Some(&"1.98.1"));
+    assert_eq!(
+        values.get(&("mise.toml", "tools.rust")),
+        Some(&RUST_VERSION)
+    );
     assert!(tool_conflicts(&prep.discovery.tool_checks).is_empty());
     let text = plan_for(&prep)?;
     assert!(text.contains("mise.toml is read-only input"), "{text}");
@@ -88,7 +95,7 @@ fn conflicting_tool_values_yield_findings() -> TestResult {
     let root = repo.path();
     fs::write(
         root.join("rust-toolchain.toml"),
-        "[toolchain]\nchannel = \"1.98.1\"\n",
+        format!("[toolchain]\nchannel = \"{RUST_VERSION}\"\n"),
     )?;
     fs::write(root.join("mise.toml"), "[tools]\nrust = \"1.85.0\"\n")?;
     let before = (

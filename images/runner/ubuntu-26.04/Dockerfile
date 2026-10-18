@@ -71,7 +71,10 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz \
     && echo "${BUILDX_SHA256}  /usr/local/lib/docker/cli-plugins/docker-buildx" | sha256sum -c - \
     && chmod 0755 /usr/local/bin/docker \
         /usr/local/lib/docker/cli-plugins/docker-compose \
-        /usr/local/lib/docker/cli-plugins/docker-buildx
+        /usr/local/lib/docker/cli-plugins/docker-buildx \
+    && docker --version | grep -F "Docker version ${DOCKER_VERSION}," \
+    && docker compose version | grep -F "v${COMPOSE_VERSION}" \
+    && docker buildx version | grep -F "v${BUILDX_VERSION}"
 
 COPY entrypoint.sh /usr/local/bin/velnor-runner-entrypoint
 COPY wait-docker-sock.sh /usr/local/bin/wait-docker-sock
@@ -179,7 +182,8 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docke
     && test "$(cat /tmp/p-home/runner/.cache/mbx/marker)" = mbx-ok \
     && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-old /tmp/tar-probe.tgz /tmp/tar-manifest /tmp/cache.tgz /tmp/cache.tzst /tmp/tar-cache-out /tmp/tar-zstd-out /tmp/p-home /tmp/p-manifest /tmp/p-abs.tar /tmp/p.tzst /tmp/abs-marker /tmp/abs.tar /tmp/abs-out /tmp/cfz.tgz /tmp/cfz-out /tmp/m.proto /tmp/m.pb /tmp/argv-src /tmp/argv-manifest /tmp/argv-count /tmp/argv.tar /tmp/argv-out /tmp/argv-one /tmp/argv-one-out
 
-# Job steps call `node` on PATH. Action JavaScript uses the runner's own runtime.
+# Job steps call `node` on PATH. The runner's private action runtime is separate
+# and is Node 24 in actions/runner 2.338.0.
 # /usr/bin/tar is the job shim after the divert. Listing that trusted vendor
 # archive goes through GNU tar and does not finish under qemu-user. BusyBox
 # unpacks it. Job archives still enter the shim.
@@ -188,7 +192,7 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz 
     && echo "${NODE_SHA256}  /tmp/node.tar.gz" | sha256sum -c - \
     && busybox tar -xzf /tmp/node.tar.gz --strip-components=1 -C /usr/local \
     && rm -f /tmp/node.tar.gz \
-    && node --version \
+    && test "$(node --version)" = "v${NODE_VERSION}" \
     && test "$(node -e 'console.log("js-action-ok")')" = js-action-ok
 
 USER runner

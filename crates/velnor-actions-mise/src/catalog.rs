@@ -47,7 +47,7 @@ use versions::{invalid_version, tool_source};
 /// is required before release.
 /// Source: `https://api.github.com/repos/jdx/mise/releases/tags/v2026.10.13`; checked 2026-10-17.
 pub const MISE_VERSION: &str = "2026.10.13";
-/// Selected current Rust stable toolchain from the official channel manifest.
+/// Selected Rust stable toolchain from the 2026-10-15 official channel manifest.
 /// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-10-18.
 pub const RUST_VERSION: &str = "1.99.1";
 /// Selected current `mr-boxington` release (binary on PATH is `mbx`; tag `v1.24.1`).

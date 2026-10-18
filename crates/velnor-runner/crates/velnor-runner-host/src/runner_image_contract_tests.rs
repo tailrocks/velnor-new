@@ -197,6 +197,34 @@ fn pinned_runner_and_image_components_match_the_source_lock() -> Result<(), Stri
 
 #[test]
 fn checked_in_images_prepare_the_shared_path_for_runner_uid_1000() {
+    assert!(RUNNER_DOCKERFILE.contains("ARG RUNNER_VERSION=2.338.0"));
+    assert!(RUNNER_DOCKERFILE.contains(
+        "ARG RUNNER_SHA256=af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32"
+    ));
+    assert!(RUNNER_DOCKERFILE.contains("ARG DOCKER_VERSION=29.9.1"));
+    assert!(RUNNER_DOCKERFILE.contains(
+        "ARG DOCKER_SHA256=c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57"
+    ));
+    assert!(RUNNER_DOCKERFILE.contains("ARG COMPOSE_VERSION=5.6.0"));
+    assert!(RUNNER_DOCKERFILE.contains(
+        "ARG COMPOSE_SHA256=40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a"
+    ));
+    assert!(RUNNER_DOCKERFILE.contains("ARG BUILDX_VERSION=0.38.0"));
+    assert!(RUNNER_DOCKERFILE.contains(
+        "ARG BUILDX_SHA256=4fe4cc38adf48169132749b6ca22a990928db0118e3407584ee553723115d287"
+    ));
+    assert!(RUNNER_DOCKERFILE.contains("ARG NODE_VERSION=26.12.0"));
+    assert!(RUNNER_DOCKERFILE.contains(
+        "ARG NODE_SHA256=d9f88af72ad34f7ddf8e67289829f1698f54b6254f7d4f54b7453117ff1a3d2c"
+    ));
+    assert!(DIND_DOCKERFILE.contains("ARG DOCKER_VERSION=29.9.1"));
+    assert!(DIND_DOCKERFILE.contains(
+        "ARG DOCKER_SHA256=c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57"
+    ));
+    assert!(RUNNER_README.contains("velnor-runner:ubuntu-26.04-2.338.0"));
+    assert!(RUNNER_README.contains("actions/runner `2.338.0`"));
+    assert!(RUNNER_README.contains("Node.js `26.12.0`"));
+    assert!(DIND_README.contains("velnor-dind:29.9.1"));
     assert!(RUNNER_DOCKERFILE.contains("groupadd --gid 1000 runner"));
     assert!(RUNNER_DOCKERFILE.contains("useradd --uid 1000 --gid 1000"));
     assert!(RUNNER_DOCKERFILE.contains("mkdir -p /home/runner/_work"));
