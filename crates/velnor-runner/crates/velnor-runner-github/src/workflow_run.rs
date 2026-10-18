@@ -1,9 +1,11 @@
 //! GitHub workflow and pull request source records.
 
+mod attempt;
 mod base_update;
 mod commit_identity;
 mod execution;
 mod git_commit;
+mod hook_source;
 mod nonce_commit;
 mod reference;
 mod source;
@@ -18,6 +20,7 @@ use serde::de::DeserializeOwned;
 use crate::TransportFail;
 use crate::session::{Exchange, Method, SessionRequest, Transport};
 
+pub use attempt::get_workflow_run_attempt;
 pub use base_update::{
     PullRequestBaseUpdateReceipt, PullRequestBaseUpdateRequest, update_pull_request_base,
 };
@@ -29,6 +32,10 @@ pub use execution::{
 };
 pub use git_commit::{
     GitCommit, GitCommitParent, GitCommitPerson, GitCommitTree, get_git_commit, is_commit_ancestor,
+};
+pub use hook_source::{
+    ComparedHookPullRequestFacts, ComparedHookSourceFacts, HookSourceError,
+    UntrustedHookPullRequest, UntrustedHookSourceInput, compare_hook_source,
 };
 pub use nonce_commit::{PullRequestNonceCommitReceipt, create_pull_request_nonce_commit};
 pub use reference::{GitReference, GitReferenceObject, publish_pull_request_nonce_commit};
@@ -190,6 +197,8 @@ pub struct PullRequest {
     pub number: i64,
     /// Pull request state.
     pub state: String,
+    /// Whether GitHub has merged this pull request.
+    pub merged: bool,
     /// Pull request head branch.
     pub head: PullRequestBranch,
     /// Pull request base branch.

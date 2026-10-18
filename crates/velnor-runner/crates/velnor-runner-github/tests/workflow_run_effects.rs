@@ -99,6 +99,7 @@ fn pull_json(base_ref: &str, base_sha: &str, head_sha: &str) -> String {
     serde_json::json!({
         "number": PR_NUMBER,
         "state": "open",
+        "merged": false,
         "head": {
             "ref": "feature",
             "sha": head_sha,

@@ -62,6 +62,6 @@ pub(super) fn pull_request_run_json() -> String {
 
 pub(super) fn pull_request_json() -> String {
     format!(
-        r#"{{"number":2110,"state":"open","head":{{"ref":"feature","sha":"{HEAD_SHA}","repo":{{"id":{HEAD_REPOSITORY_ID},"name":"fork-repo","full_name":"fork-owner/fork-repo","owner":{{"login":"fork-owner"}}}}}},"base":{{"ref":"sea/integration","sha":"{BASE_SHA}","repo":{{"id":{REPOSITORY_ID},"name":"{REPOSITORY}","full_name":"{OWNER}/{REPOSITORY}","owner":{{"login":"{OWNER}"}}}}}},"merge_commit_sha":"{MERGE_SHA}"}}"#
+        r#"{{"number":2110,"state":"open","merged":false,"head":{{"ref":"feature","sha":"{HEAD_SHA}","repo":{{"id":{HEAD_REPOSITORY_ID},"name":"fork-repo","full_name":"fork-owner/fork-repo","owner":{{"login":"fork-owner"}}}}}},"base":{{"ref":"sea/integration","sha":"{BASE_SHA}","repo":{{"id":{REPOSITORY_ID},"name":"{REPOSITORY}","full_name":"{OWNER}/{REPOSITORY}","owner":{{"login":"{OWNER}"}}}}}},"merge_commit_sha":"{MERGE_SHA}"}}"#
     )
 }
