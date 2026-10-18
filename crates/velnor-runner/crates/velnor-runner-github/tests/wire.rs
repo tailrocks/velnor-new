@@ -138,6 +138,26 @@ fn completed_message_decodes_runner_identity_and_keeps_job_fields() -> Result<()
 }
 
 #[test]
+fn job_id_is_bounded_opaque_metadata_and_never_supplies_request_identity() {
+    let jobs = velnor_runner_github::parse_inner_messages(
+        r#"[{"messageType":"JobAvailable","runnerRequestId":41,"jobId":"job:opaque/41"},{"messageType":"JobStarted","jobId":"runner-job:alpha"}]"#,
+    )
+    .expect("valid job messages");
+    assert_eq!(jobs[0].request_id, Some(41));
+    assert_eq!(jobs[0].job_id.as_deref(), Some("job:opaque/41"));
+    assert_eq!(jobs[1].request_id, None);
+    assert_eq!(jobs[1].job_id.as_deref(), Some("runner-job:alpha"));
+
+    let oversized = "x".repeat(257);
+    let body = format!(
+        r#"[{{"messageType":"JobCompleted","jobId":"{oversized}"}},{{"messageType":"JobCompleted","jobId":"bad\nvalue"}}]"#
+    );
+    let jobs = velnor_runner_github::parse_inner_messages(&body).expect("valid message shape");
+    assert_eq!(jobs[0].job_id, None);
+    assert_eq!(jobs[1].job_id, None);
+}
+
+#[test]
 fn source_metadata_keeps_pinned_fields_and_missing_values() -> Result<(), &'static str> {
     let body = r#"[{"messageType":"JobAvailable","ownerName":"ChainArgos","repositoryName":"java-monorepo","jobWorkflowRef":"ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/heads/sea/integration","workflowRunId":2468,"eventName":"push"}]"#;
     let jobs = velnor_runner_github::parse_inner_messages(body).map_err(|_| "parse")?;

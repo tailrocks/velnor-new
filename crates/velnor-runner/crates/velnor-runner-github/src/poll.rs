@@ -10,6 +10,7 @@ pub const MAX_POLL_BODY_BYTES: usize = 256 * 1024;
 /// Maximum message count accepted from one Scale Set poll.
 pub const MAX_POLL_MESSAGES: usize = 50;
 const MAX_POLL_ENVELOPE_BYTES: usize = MAX_POLL_BODY_BYTES * 8;
+const MAX_JOB_ID_BYTES: usize = 256;
 
 /// One decoded poll.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,7 +74,7 @@ pub struct InnerJob {
     pub runner_name: Option<String>,
     /// `result` on `JobCompleted` only.
     pub result: Option<String>,
-    /// Numeric `jobId` only. Other shapes are dropped.
+    /// Bounded opaque native `jobId`. It is not a workflow-job API identifier.
     pub job_id: Option<String>,
     /// `requestLabels` names. Empty when the field is absent.
     pub labels: Vec<String>,
@@ -332,7 +333,7 @@ fn optional_string(value: &Value, field: &str) -> Result<Option<String>, WireErr
 
 fn job_id_of(value: &Value) -> Option<String> {
     match value.get("jobId")? {
-        Value::String(text) => numeric_job_id(Some(text)),
+        Value::String(text) => opaque_job_id(text),
         Value::Number(number) => positive_job_id(number.as_i64()),
         _ => None,
     }
@@ -343,15 +344,11 @@ fn positive_job_id(value: Option<i64>) -> Option<String> {
     Some(number.to_string())
 }
 
-fn numeric_job_id(value: Option<&str>) -> Option<String> {
-    let text = value?;
-    if text.is_empty() || text.len() > 24 || !text.bytes().all(|byte| byte.is_ascii_digit()) {
+fn opaque_job_id(value: &str) -> Option<String> {
+    if value.is_empty() || value.len() > MAX_JOB_ID_BYTES || value.chars().any(char::is_control) {
         return None;
     }
-    if text.bytes().all(|byte| byte == b'0') {
-        return None;
-    }
-    Some(text.to_owned())
+    Some(value.to_owned())
 }
 
 fn object_fields(value: &Value) -> Vec<String> {
