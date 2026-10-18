@@ -60,6 +60,7 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::ImportNormalToolsCachePayload => cache_bind::transfer::normal::run_import(),
         InternalOp::ExportNormalToolsCachePayload => cache_bind::transfer::normal::run_export(),
         InternalOp::InstallCacheTarLaunchers => cache_tar_launcher::run(),
+        InternalOp::PreflightNormalTofuCacheRestore => super::normal_tofu_cache_preflight::run(),
         InternalOp::WriteQualificationSourceEvidence => match write_qualification_source_evidence()
         {
             Ok(()) => ExitCode::SUCCESS,

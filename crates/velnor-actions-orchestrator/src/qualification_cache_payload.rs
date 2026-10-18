@@ -25,14 +25,20 @@ mod normal_tofu;
 pub(crate) use normal_tofu::validate_cache_key_shape as validate_normal_tofu_cache_key_shape;
 pub use normal_tofu::{
     NormalTofuProvidersCacheBackendEvidence, NormalTofuProvidersCacheExport,
-    NormalTofuProvidersCachePayloadRequest, export_normal_tofu_providers_cache_payload,
-    observe_normal_tofu_providers_cache_backend, validate_normal_tofu_providers_cache_request,
+    NormalTofuProvidersCachePayloadRequest, NormalTofuProvidersCacheRestorePreflight,
+    export_normal_tofu_providers_cache_payload, observe_normal_tofu_providers_cache_backend,
+    preflight_normal_tofu_providers_cache_restore, validate_normal_tofu_providers_cache_request,
 };
 #[path = "qualification_cache_payload/roots.rs"]
 mod roots;
 #[path = "qualification_cache_payload/stage_paths.rs"]
 mod stage_paths;
 pub use stage_paths::{normal_tools_cache_stage_path, qualification_cache_stage_path};
+#[path = "qualification_cache_payload/storage_admission.rs"]
+mod storage_admission;
+#[cfg(any(target_os = "linux", test))]
+#[path = "qualification_cache_payload/storage_admission_types.rs"]
+mod storage_admission_types;
 #[path = "qualification_cache_payload/transfer.rs"]
 mod transfer;
 

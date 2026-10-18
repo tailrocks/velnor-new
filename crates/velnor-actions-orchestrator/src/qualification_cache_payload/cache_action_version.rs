@@ -52,6 +52,27 @@ pub(super) fn version_agrees_with_action_compression(
     Ok(version_for_action_compression(action_path, compression)? == version)
 }
 
+/// Identify one pinned SDK method from its exact path-derived cache version.
+pub(super) fn compression_for_action_version(
+    action_path: &Path,
+    version: &str,
+) -> Result<CacheActionCompression, &'static str> {
+    let methods = [
+        CacheActionCompression::Gzip,
+        CacheActionCompression::ZstdWithoutLong,
+        CacheActionCompression::Zstd,
+    ];
+    let mut found = None;
+    for method in methods {
+        if version_agrees_with_action_compression(action_path, method, version)?
+            && found.replace(method).is_some()
+        {
+            return Err("cache_action_version_ambiguous");
+        }
+    }
+    found.ok_or("cache_action_version_mismatch")
+}
+
 fn lower_hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::with_capacity(bytes.len() * 2);
@@ -160,6 +181,18 @@ mod tests {
         assert!(
             !version_agrees_with_action_compression(path, CacheActionCompression::Gzip, &zstd)
                 .expect("reject mismatched compression")
+        );
+        assert_eq!(
+            super::compression_for_action_version(path, &gzip),
+            Ok(CacheActionCompression::Gzip)
+        );
+        assert_eq!(
+            super::compression_for_action_version(path, &zstd_without_long),
+            Ok(CacheActionCompression::ZstdWithoutLong)
+        );
+        assert_eq!(
+            super::compression_for_action_version(path, &zstd),
+            Ok(CacheActionCompression::Zstd)
         );
     }
 
