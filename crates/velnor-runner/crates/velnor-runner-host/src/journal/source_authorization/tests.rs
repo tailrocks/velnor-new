@@ -14,7 +14,7 @@ use crate::journal::connection::ConnectionJournal;
 use crate::journal::scale_set_create::{CreatedScaleSetResponse, ScaleSetCreateRequest};
 use crate::journal::{
     AssignmentKey, CapacityLimits, Journal, ReservationRequest, ReservationResult,
-    SourceAuthorizationResult,
+    SourceAuthorizationResult, fixture_admission, fixture_profile,
 };
 use crate::launch::StartPermit;
 use crate::launch::steps::source::{AuthorizedSourceReceipt, test_receipt};
@@ -97,6 +97,7 @@ async fn created_scope(
     binding: &RepositoryConnection,
     scale_set_id: i64,
 ) -> Result<ConnectionJournal, HostError> {
+    journal.configure_storage_profile(fixture_profile()).await?;
     journal.bind_engine("test-engine").await?;
     let scope = journal.connection_scope(binding).await?;
     let request = ScaleSetCreateRequest::new(binding, 7)?;
@@ -129,8 +130,9 @@ async fn reserve_assigned(
     let permit = StartPermit::test_fixture();
     let generation = permit.sample_generation_id().to_owned();
     let root_digest = permit.docker_root_digest().to_owned();
+    let storage = fixture_admission(&permit)?;
     let result = scope
-        .try_reserve(
+        .try_reserve_with_storage(
             ReservationRequest {
                 assignment: &assignment,
                 engine_id: "test-engine",
@@ -140,6 +142,7 @@ async fn reserve_assigned(
                 sample_generation_id: &generation,
             },
             permit,
+            storage,
         )
         .await?;
     if !matches!(result, ReservationResult::Reserved { .. }) {

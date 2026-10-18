@@ -49,9 +49,10 @@ async fn jit_witness_does_not_bind_the_started_request_and_events_replay_exactly
     let permit = StartPermit::test_fixture();
     let generation = permit.sample_generation_id().to_owned();
     let root_digest = permit.docker_root_digest().to_owned();
+    let storage = crate::journal::fixture_admission(&permit)?;
     assert!(matches!(
         scope
-            .try_reserve(
+            .try_reserve_with_storage(
                 ReservationRequest {
                     assignment: &assignment,
                     engine_id: "test-engine",
@@ -61,6 +62,7 @@ async fn jit_witness_does_not_bind_the_started_request_and_events_replay_exactly
                     sample_generation_id: &generation,
                 },
                 permit,
+                storage,
             )
             .await?,
         ReservationResult::Reserved { .. }
@@ -226,9 +228,10 @@ async fn active_legacy_acquire_blocks_new_jit_without_releasing_capacity() -> Re
     let permit = StartPermit::test_fixture();
     let generation = permit.sample_generation_id().to_owned();
     let root_digest = permit.docker_root_digest().to_owned();
+    let storage = crate::journal::fixture_admission(&permit)?;
     assert!(matches!(
         scope
-            .try_reserve(
+            .try_reserve_with_storage(
                 ReservationRequest {
                     assignment: &physical,
                     engine_id: "test-engine",
@@ -238,6 +241,7 @@ async fn active_legacy_acquire_blocks_new_jit_without_releasing_capacity() -> Re
                     sample_generation_id: &generation,
                 },
                 permit,
+                storage,
             )
             .await?,
         ReservationResult::Reserved { .. }
@@ -292,9 +296,10 @@ async fn every_acquired_request_must_match_the_bound_source_receipt() -> Result<
     let permit = StartPermit::test_fixture();
     let generation = permit.sample_generation_id().to_owned();
     let root_digest = permit.docker_root_digest().to_owned();
+    let storage = crate::journal::fixture_admission(&permit)?;
     assert!(matches!(
         scope
-            .try_reserve(
+            .try_reserve_with_storage(
                 ReservationRequest {
                     assignment: &physical,
                     engine_id: "test-engine",
@@ -304,6 +309,7 @@ async fn every_acquired_request_must_match_the_bound_source_receipt() -> Result<
                     sample_generation_id: &generation,
                 },
                 permit,
+                storage,
             )
             .await?,
         ReservationResult::Reserved { .. }
@@ -356,9 +362,10 @@ async fn claimed_jit_stays_one_shot_and_holds_capacity_after_restart() -> Result
     let permit = StartPermit::test_fixture();
     let generation = permit.sample_generation_id().to_owned();
     let root_digest = permit.docker_root_digest().to_owned();
+    let storage = crate::journal::fixture_admission(&permit)?;
     assert!(matches!(
         scope
-            .try_reserve(
+            .try_reserve_with_storage(
                 ReservationRequest {
                     assignment: &physical,
                     engine_id: "test-engine",
@@ -368,6 +375,7 @@ async fn claimed_jit_stays_one_shot_and_holds_capacity_after_restart() -> Result
                     sample_generation_id: &generation,
                 },
                 permit,
+                storage,
             )
             .await?,
         ReservationResult::Reserved { .. }

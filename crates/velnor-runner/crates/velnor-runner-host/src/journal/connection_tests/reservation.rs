@@ -14,26 +14,41 @@ async fn permit_generation_is_one_use_and_fresh_resume_reuses_the_charge() -> Re
     let assignment = message_assignment(&scope, 17).await?;
     let initial_generation = "b".repeat(32);
     let initial_permit = permit_with_generation(&initial_generation);
+    let initial_storage = crate::journal::fixture_admission(&initial_permit)?;
     let ReservationResult::Reserved { reservation_id } = scope
-        .try_reserve(request(&assignment, &initial_generation), initial_permit)
+        .try_reserve_with_storage(
+            request(&assignment, &initial_generation),
+            initial_permit,
+            initial_storage,
+        )
         .await?
     else {
         return Err(HostError::Journal);
     };
 
     let replayed_permit = permit_with_generation(&initial_generation);
+    let replayed_storage = crate::journal::fixture_admission(&replayed_permit)?;
     assert_eq!(
         scope
-            .try_reserve(request(&assignment, &initial_generation), replayed_permit,)
+            .try_reserve_with_storage(
+                request(&assignment, &initial_generation),
+                replayed_permit,
+                replayed_storage,
+            )
             .await,
         Err(HostError::Journal)
     );
 
     let resumed_generation = "c".repeat(32);
     let resumed_permit = permit_with_generation(&resumed_generation);
+    let resumed_storage = crate::journal::fixture_admission(&resumed_permit)?;
     assert_eq!(
         scope
-            .try_reserve(request(&assignment, &resumed_generation), resumed_permit,)
+            .try_reserve_with_storage(
+                request(&assignment, &resumed_generation),
+                resumed_permit,
+                resumed_storage,
+            )
             .await?,
         ReservationResult::Resumed { reservation_id }
     );
@@ -70,12 +85,11 @@ async fn uncreated_or_unreceipted_acquire_is_blocked_before_remote_effect() -> R
     assert!(!scope.claim_assigned_acquire(intent_id).await?);
 
     let generation = "d".repeat(32);
+    let permit = permit_with_generation(&generation);
+    let storage = crate::journal::fixture_admission(&permit)?;
     assert_eq!(
         scope
-            .try_reserve(
-                request(&identity, &generation),
-                permit_with_generation(&generation),
-            )
+            .try_reserve_with_storage(request(&identity, &generation), permit, storage,)
             .await?,
         ReservationResult::Resumed {
             reservation_id: scope

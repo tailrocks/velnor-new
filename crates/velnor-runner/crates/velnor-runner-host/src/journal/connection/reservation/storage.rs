@@ -125,6 +125,26 @@ pub(super) async fn capacity_usage(
             .checked_add(memory)
             .ok_or(HostError::Journal)?;
     }
+    let mut rows = connection
+        .query(
+            "SELECT COALESCE(SUM(s.retained_memory_bytes), 0) FROM capacity_reservation_storage AS s JOIN capacity_reservations AS r ON r.id = s.reservation_id WHERE r.state != 'released'",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let retained_memory = u64::try_from(
+        rows.next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?
+            .get::<i64>(0)
+            .map_err(|_| HostError::Journal)?,
+    )
+    .map_err(|_| HostError::Journal)?;
+    usage.memory_bytes = usage
+        .memory_bytes
+        .checked_add(retained_memory)
+        .ok_or(HostError::Journal)?;
     Ok(usage)
 }
 

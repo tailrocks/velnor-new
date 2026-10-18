@@ -6,6 +6,7 @@ use crate::launch::StartPermit;
 use super::super::storage::{has_ambiguous_legacy_work, in_transaction};
 use super::super::{AssignmentIdentity, AssignmentKey, ConnectionJournal};
 use super::storage::{has_unreserved_scoped_launch, reservation_for_assignment, validate_request};
+use super::storage_budget::StorageAdmission;
 
 /// Resources charged by one assignment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,6 +65,25 @@ impl ConnectionJournal {
         request: ReservationRequest<'_>,
         permit: StartPermit,
     ) -> Result<ReservationResult, HostError> {
+        self.try_reserve_inner(request, permit, None).await
+    }
+
+    /// Admit a reservation with a fresh storage plan and filesystem sample.
+    pub(crate) async fn try_reserve_with_storage(
+        &self,
+        request: ReservationRequest<'_>,
+        permit: StartPermit,
+        storage: StorageAdmission,
+    ) -> Result<ReservationResult, HostError> {
+        self.try_reserve_inner(request, permit, Some(storage)).await
+    }
+
+    async fn try_reserve_inner(
+        &self,
+        request: ReservationRequest<'_>,
+        permit: StartPermit,
+        storage: Option<StorageAdmission>,
+    ) -> Result<ReservationResult, HostError> {
         validate_request(request)?;
         let cpu = i64::try_from(request.cpu_millicores).map_err(|_| HostError::Journal)?;
         let memory = i64::try_from(request.memory_bytes).map_err(|_| HostError::Journal)?;
@@ -103,17 +123,81 @@ impl ConnectionJournal {
                         reservation_id: existing.id,
                     });
                 }
+                let Some(storage) = storage.as_ref() else {
+                    return Ok(ReservationResult::ReconcileRequired {
+                        reservation_id: existing.id,
+                    });
+                };
+                if !super::storage_budget::admission_matches_existing(
+                    connection,
+                    existing.id,
+                    storage,
+                )
+                .await?
+                {
+                    return Ok(ReservationResult::ReconcileRequired {
+                        reservation_id: existing.id,
+                    });
+                }
+                if !super::storage_budget::admission_fits(
+                    connection,
+                    storage,
+                    request.sample_generation_id,
+                    request.engine_id,
+                    request.docker_root_digest,
+                    request.memory_bytes,
+                    Some(existing.id),
+                )
+                .await?
+                {
+                    return Ok(ReservationResult::AtCapacity);
+                }
                 validate_permit(request, &permit)?;
                 ensure_sample_is_new(connection, request.sample_generation_id).await?;
                 if !permit.consume_for_admission(request.engine_id, request.docker_root_digest) {
                     return Err(HostError::Journal);
                 }
                 record_sample_use(connection, existing.id, request.sample_generation_id, "resume").await?;
+                let profile = super::storage_budget::current_profile(connection)
+                    .await?
+                    .ok_or(HostError::Journal)?;
+                super::storage_budget::append_storage_sample(
+                    connection,
+                    existing.id,
+                    &profile,
+                    storage.sample(),
+                )
+                .await?;
                 return Ok(ReservationResult::Resumed {
                     reservation_id: existing.id,
                 });
             }
-            if !capacity_available(connection, request).await? {
+            let Some(storage) = storage.as_ref() else {
+                return Ok(ReservationResult::AtCapacity);
+            };
+            let Some(profile) = super::storage_budget::current_profile(connection).await? else {
+                return Ok(ReservationResult::AtCapacity);
+            };
+            if !super::storage_budget::admission_fits(
+                connection,
+                storage,
+                request.sample_generation_id,
+                request.engine_id,
+                request.docker_root_digest,
+                request.memory_bytes,
+                None,
+            )
+            .await?
+            {
+                return Ok(ReservationResult::AtCapacity);
+            }
+            if !capacity_available(
+                connection,
+                request,
+                storage.plan().retained_memory_bytes()?,
+            )
+            .await?
+            {
                 return Ok(ReservationResult::AtCapacity);
             }
             validate_permit(request, &permit)?;
@@ -159,6 +243,13 @@ impl ConnectionJournal {
                 .map_err(|_| HostError::Journal)?;
             let reservation_id = connection.last_insert_rowid();
             record_sample_use(connection, reservation_id, request.sample_generation_id, "initial").await?;
+            super::storage_budget::insert_reservation_storage(
+                connection,
+                reservation_id,
+                &profile,
+                storage,
+            )
+            .await?;
             Ok(ReservationResult::Reserved {
                 reservation_id,
             })
@@ -212,7 +303,7 @@ async fn record_sample_use(
     Ok(())
 }
 
-async fn launch_is_pristine(
+pub(super) async fn launch_is_pristine(
     connection: &turso::Connection,
     connection_id: &str,
     intent_id: i64,
@@ -277,9 +368,14 @@ async fn validate_bound_identity(
 async fn capacity_available(
     connection: &turso::Connection,
     request: ReservationRequest<'_>,
+    storage_memory_bytes: u64,
 ) -> Result<bool, HostError> {
     let limits = super::storage::capacity_limits(connection).await?;
     let usage = super::storage::capacity_usage(connection).await?;
+    let requested_memory = request
+        .memory_bytes
+        .checked_add(storage_memory_bytes)
+        .ok_or(HostError::Journal)?;
     Ok(usage.jobs < limits.jobs
         && usage
             .cpu_millicores
@@ -287,6 +383,6 @@ async fn capacity_available(
             .is_some_and(|sum| sum <= limits.cpu_millicores)
         && usage
             .memory_bytes
-            .checked_add(request.memory_bytes)
+            .checked_add(requested_memory)
             .is_some_and(|sum| sum <= limits.memory_bytes))
 }

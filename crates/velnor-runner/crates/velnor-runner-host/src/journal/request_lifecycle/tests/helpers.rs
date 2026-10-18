@@ -8,7 +8,7 @@ use crate::config::{
 use crate::error::HostError;
 use crate::journal::connection::ConnectionJournal;
 use crate::journal::scale_set_create::{CreatedScaleSetResponse, ScaleSetCreateRequest};
-use crate::journal::{Journal, SourceAuthorizationResult};
+use crate::journal::{Journal, SourceAuthorizationResult, fixture_profile};
 use crate::launch::steps::source::{AuthorizedSourceReceipt, test_receipt};
 use velnor_runner_github::SourceMetadata;
 use velnor_runner_github::workflow_run::{
@@ -63,6 +63,7 @@ pub(super) async fn created_scope(
     binding: &RepositoryConnection,
     set_id: i64,
 ) -> Result<ConnectionJournal, HostError> {
+    journal.configure_storage_profile(fixture_profile()).await?;
     journal.bind_engine("test-engine").await?;
     let scope = journal.connection_scope(binding).await?;
     let request = ScaleSetCreateRequest::new(binding, 7)?;

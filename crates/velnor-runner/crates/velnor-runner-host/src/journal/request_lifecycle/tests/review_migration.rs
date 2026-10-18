@@ -146,9 +146,10 @@ async fn version_ten_partial_cleanup_keeps_capacity_held() -> Result<(), HostErr
     let permit = StartPermit::test_fixture();
     let generation = permit.sample_generation_id().to_owned();
     let root_digest = permit.docker_root_digest().to_owned();
+    let storage = crate::journal::fixture_admission(&permit)?;
     assert_eq!(
         scope
-            .try_reserve(
+            .try_reserve_with_storage(
                 ReservationRequest {
                     assignment: &assignment,
                     engine_id: "test-engine",
@@ -158,6 +159,7 @@ async fn version_ten_partial_cleanup_keeps_capacity_held() -> Result<(), HostErr
                     sample_generation_id: &generation,
                 },
                 permit,
+                storage,
             )
             .await?,
         ReservationResult::AtCapacity
