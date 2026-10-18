@@ -107,8 +107,8 @@ pub fn runner_create(
     })
 }
 
-/// Make a runner Docker create request only from images that pass
-/// the release and selected-engine checks.
+/// Make a runner Docker create request only after
+/// the release and selected-engine checks give success.
 /// Use the image IDs in the selected engine.
 /// Use the guest metadata file for the same connection and image bundle.
 pub(crate) fn runner_create_verified(
