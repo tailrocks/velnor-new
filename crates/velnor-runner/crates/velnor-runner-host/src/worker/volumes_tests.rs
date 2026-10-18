@@ -14,6 +14,8 @@ use crate::{HostError, IntentState, Outcome};
 
 #[path = "volumes_effect_tests.rs"]
 mod effect_tests;
+#[path = "volumes_fresh_tests.rs"]
+mod fresh;
 #[path = "volumes_post_delete_tests.rs"]
 mod post_delete;
 
@@ -82,7 +84,12 @@ async fn created_volumes_have_exact_worker_and_role_labels() -> Result<(), Strin
     let expected = volume_names();
     let responses = expected
         .iter()
-        .map(|(name, role)| http(201, &volume_json(name, WORKER, role)))
+        .map(|_| http(404, r#"{"message":"missing"}"#))
+        .chain(
+            expected
+                .iter()
+                .map(|(name, role)| http(201, &volume_json(name, WORKER, role))),
+        )
         .collect();
     let stub = DockerStub::open(responses)?;
     let mounts = crate::worker::dind_mounts(WORKER).map_err(|error| error.to_string())?;
@@ -90,8 +97,14 @@ async fn created_volumes_have_exact_worker_and_role_labels() -> Result<(), Strin
     let requests = stub.finish().await?;
 
     assert_eq!(created, Ok(()));
-    assert_eq!(requests.len(), expected.len());
-    for (request, (name, role)) in requests.iter().zip(expected) {
+    assert_eq!(requests.len(), expected.len() * 2);
+    assert!(
+        requests[..expected.len()]
+            .iter()
+            .all(|request| request.starts_with("GET "))
+    );
+    for (request, (name, role)) in requests[expected.len()..].iter().zip(expected) {
+        assert!(request.starts_with("POST "));
         let body = request_body(request)?;
         let value: serde_json::Value =
             serde_json::from_str(body).map_err(|error| error.to_string())?;

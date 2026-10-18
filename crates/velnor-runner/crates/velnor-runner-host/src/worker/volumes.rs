@@ -110,6 +110,11 @@ pub(crate) async fn create_named_volumes(
     {
         return Err(HostError::ForbiddenMount);
     }
+    for volume in &volumes {
+        if inspect_volume(docker, &volume.name).await?.is_some() {
+            return Err(HostError::Ownership);
+        }
+    }
     for volume in volumes {
         let created = docker_deadline(docker.create_volume(VolumeCreateRequest {
             name: Some(volume.name.clone()),
