@@ -21,6 +21,7 @@ The script uses pinned Mise tools without project configuration.
 Nextest runs ordinary unit and integration tests.
 MBX `test --doc` runs doctests as a separate stage.
 Nextest does not run doctests.
-Run `alint validate-config` and `alint check --fail-on-warning` separately.
+Run `alint validate-config`.
+Run `alint check --fail-on-warning`.
 Pinned cargo-deny 0.20.2 audits root and nested runner workspaces.
 Root workspace success without the nested manifest is a fail.

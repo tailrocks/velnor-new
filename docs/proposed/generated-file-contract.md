@@ -135,8 +135,8 @@ This is the MBX form when repository evidence selected MBX:
 Rust command selection is per detected Rust workspace. The Rust adapter records
 whether the repository uses MBX and whether it uses Nextest; the generator uses
 the matching fixed command family. Without MBX, invoke Cargo through Mise.
-Without Nextest, use `cargo test` for ordinary tests; do not add Nextest only
-because Velnor supports it. Nextest runs ordinary tests only. It does not run
+Without Nextest, use `cargo test` for ordinary tests.
+Do not add Nextest only because Velnor supports it. Nextest runs ordinary tests only. It does not run
 doctests. Run doctests through the selected compile driver. The MBX profile uses
 `mbx test --doc` for doctests.
 

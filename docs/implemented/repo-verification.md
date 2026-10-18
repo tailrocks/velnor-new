@@ -3,16 +3,16 @@
 Run `bash scripts/verify-local.sh` from the repository root.
 The script reads exact tool versions from `.velnor/version-policy.toml`.
 It loads no project Mise configuration.
-It checks the root and nested runner workspaces.
+The script does a check of the root and nested runner workspaces.
 
 The script resolves Rust components with the selected `rustup` toolchain.
 It puts that toolchain's `bin` directory first in its command path.
-It checks paths and versions for `rustc`, Cargo, Clippy, and rustfmt.
+It compares paths and versions for `rustc`, Cargo, Clippy, and rustfmt.
 It resolves Nextest with `mise --no-config which`.
 MBX runs Nextest through the pinned executable.
 The local Mise executable's version is reported; a policy mismatch warns and
-continues. Rust component paths and versions are checked, along with the MBX
-version, resolved Nextest executable and route, and resolved cargo-deny version.
+continues. The script compares Rust component paths and versions.
+It also compares the MBX version, Nextest executable and command path, and cargo-deny version.
 
 Nextest runs ordinary unit and integration tests.
 Nextest does not run doctests.

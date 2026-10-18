@@ -5,8 +5,8 @@
 //! into this very test), and `toolchain` needs `mise` plus network
 //! installs. Instead these tests pin the entrypoint's exact step list
 //! and fail-closed shape, syntax-check the script by executing
-//! `bash -n`, and exercise the CLI-backed freshness wrapper against an
-//! isolated fixture. A stage add, remove, or rename fails
+//! `bash -n`, and do a check of the CLI freshness wrapper with a
+//! separate fixture. A stage add, remove, or rename fails
 //! the inventory test until the expectation moves with it.
 
 use std::error::Error;

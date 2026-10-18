@@ -185,8 +185,8 @@ if [ -z "$RUSTC_TOOL_PATH" ] || [ -z "$CARGO_TOOL_PATH" ] ||
   exit 1
 fi
 RUST_TOOLCHAIN_BIN="$(dirname "$RUSTC_TOOL_PATH")"
-# These expansions intentionally happen in the child shell after the checked
-# toolchain path is added, not while the parent builds the command array.
+# The child shell expands these values after it adds the toolchain path from
+# the comparison. The parent does not expand them when it makes the command array.
 # shellcheck disable=SC2016
 RUST_EXEC=("${MISE_EXEC[@]}" env "RUST_TOOLCHAIN_BIN=$RUST_TOOLCHAIN_BIN" sh -c \
   'PATH="$RUST_TOOLCHAIN_BIN:$PATH" exec "$@"' verify-local-rust)
@@ -239,7 +239,7 @@ if [ "$POLICY_SPECS" != "$SPECS" ]; then
   exit 1
 fi
 POLICY_MISE="$(repo_policy mise-version 2>"$MISE_POLICY_LOG")"
-# Check effective tool paths and versions before verification stages run.
+# Compare actual tool paths and versions before verification starts.
 MBX_VER="$("${RUST_EXEC[@]}" mbx --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
 echo "effective: rustc $RUSTC_VER [$RUSTC_EFFECTIVE_PATH], cargo $CARGO_VER [$CARGO_EFFECTIVE_PATH]"
 echo "effective: clippy $CLIPPY_VER [$CLIPPY_EFFECTIVE_PATH], cargo-fmt $RUSTFMT_VER [$CARGO_FMT_EFFECTIVE_PATH]"
