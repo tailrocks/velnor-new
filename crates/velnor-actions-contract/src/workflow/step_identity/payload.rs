@@ -1,5 +1,8 @@
 use super::super::step::StepKind;
-use super::{TOOL_SEED_USES, TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PRELUDE_USES};
+use super::{
+    CACHE_TAR_LAUNCHER_SHA256_INPUT, CACHE_TAR_LAUNCHER_USES, PRESEED_HELPER_SHA256_OUTPUT_EXPR,
+    TOOL_SEED_USES, TOOLS_CACHE_IDENTITY_DIGEST_INPUT, TOOLS_CACHE_PRELUDE_USES,
+};
 
 /// Require the standard credential-free checkout action payload.
 pub(super) fn valid_checkout_payload(kind: &StepKind) -> bool {
@@ -74,4 +77,15 @@ pub(super) fn valid_mbx_cache(kind: &StepKind) -> bool {
             && with.get("version").is_some_and(|version| !version.is_empty())
             && with.get("toolchain").is_some_and(|toolchain| !toolchain.is_empty())
             && with.get("cache-generation").is_some_and(|generation| !generation.is_empty()))
+}
+
+pub(in crate::workflow) fn valid_cache_tar_launcher(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Action { uses, with, env }
+    if uses == CACHE_TAR_LAUNCHER_USES
+        && env.is_empty()
+        && with.len() == 1
+        && with.get(CACHE_TAR_LAUNCHER_SHA256_INPUT).is_some_and(|digest| {
+            crate::ids::is_lower_hex_len(digest, 64)
+                || digest == PRESEED_HELPER_SHA256_OUTPUT_EXPR
+        }))
 }
