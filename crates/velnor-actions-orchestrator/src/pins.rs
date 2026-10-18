@@ -173,7 +173,7 @@ pub(crate) fn consumer_acquire_for_runner(
     consumer_acquire_for_target(runner.platform.release_target(), version, json)
 }
 
-fn consumer_acquire_for_target(
+pub(crate) fn consumer_acquire_for_target(
     target: ReleaseTarget,
     version: &str,
     json: Option<&str>,
@@ -242,7 +242,7 @@ pub(crate) fn lock_acquire_for_runner(
     lock_acquire_for_target(lock, runner.platform.release_target(), staged)
 }
 
-fn lock_acquire_for_target(
+pub(crate) fn lock_acquire_for_target(
     lock: &GeneratorLock,
     target: ReleaseTarget,
     staged: &str,

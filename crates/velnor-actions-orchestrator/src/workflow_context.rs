@@ -3,8 +3,8 @@
 use std::collections::{BTreeMap, btree_map::Entry};
 
 use velnor_actions_contract::{
-    ExecutionMode, GeneratorValidation, ScaleSetSelector, ValidatorKind, VelnorConfig,
-    WorkflowPolicy,
+    ExecutionMode, GeneratorValidation, ReleaseTarget, ScaleSetSelector, ValidatorKind,
+    VelnorConfig, WorkflowPolicy,
 };
 use velnor_actions_mise::{IsolatedCommand, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{CandidateSpec, RenderContext, ValidatorCommand};
@@ -46,19 +46,22 @@ pub(super) fn render_context(
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let validator_commands = validator_commands(&input)?;
     let candidate = candidate_spec_for(&input)?;
-    let scale_set_selector = scale_set_selector(input.config, None)?;
+    let active_scale_set_selector = scale_set_selector(input.config, None)?;
+    let cache_helper_scale_set_selector =
+        scale_set_selector(input.config, Some(ExecutionMode::ScaleSet))?;
     let scale_set_image_source_sha = input
         .config
         .execution
         .as_ref()
         .and_then(|execution| execution.scale_set_image_source_sha())
         .map(str::to_owned);
-    let (verified_cache_helpers, require_verified_cache_helper) = verified_cache_helpers(&input)?;
+    let (verified_cache_helpers, require_verified_cache_helper) =
+        verified_cache_helpers(&input, cache_helper_scale_set_selector.as_ref())?;
     Ok(RenderContext {
         generator_version: input.generator_version.to_owned(),
         report_helper_version: input.report_helper_version.to_owned(),
         runs_on: input.label.to_owned(),
-        scale_set_selector,
+        scale_set_selector: active_scale_set_selector,
         scale_set_image_source_sha,
         staged_binary: format!("{STAGED_BINARY_PREFIX}{}", input.report_helper_version),
         verified_cache_helpers,
@@ -81,6 +84,7 @@ pub(super) fn render_context(
 
 fn verified_cache_helpers(
     input: &RenderContextInputs<'_>,
+    scale_set_selector: Option<&ScaleSetSelector>,
 ) -> Result<(BTreeMap<String, Vec<velnor_actions_contract::Step>>, bool), OrchestratorError> {
     if input.config.workflow.policy != WorkflowPolicy::ConsumerV1 {
         return Ok((BTreeMap::new(), false));
@@ -118,6 +122,16 @@ fn verified_cache_helpers(
                 );
             }
         }
+    }
+    if let Some(selector) = scale_set_selector {
+        helpers.insert(
+            selector.token(),
+            vec![crate::pins::consumer_acquire_for_target(
+                ReleaseTarget::LinuxX86_64,
+                input.report_helper_version,
+                input.discovery.consumer_manifest_json.as_deref(),
+            )?],
+        );
     }
     Ok((helpers, true))
 }

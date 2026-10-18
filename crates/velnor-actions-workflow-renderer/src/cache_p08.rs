@@ -18,6 +18,7 @@ pub(crate) use tool_payload::{
 mod save_policy;
 #[path = "cache_p08_setup.rs"]
 mod setup_pipeline;
+pub(crate) use setup_pipeline::move_acquire_after_checkout;
 
 pub use crate::cache_elect::{elect_cache_writers, elect_cache_writers_with_policy};
 
@@ -130,6 +131,16 @@ pub(crate) fn ensure_tools_cache_v2_with_helper_policy(
     options: ToolsCacheRenderOptions<'_>,
 ) -> Result<(), RenderError> {
     setup_pipeline::ensure_tools_cache_v2(job_id, job, setup, always, options)
+}
+
+pub(crate) fn ensure_mise_setup_only(
+    job_id: &str,
+    job: &mut Job,
+    setup: &MiseSetup,
+    always: bool,
+    checkout_uses: &str,
+) -> Result<(), RenderError> {
+    setup_pipeline::ensure_mise_setup_only(job_id, job, setup, always, checkout_uses)
 }
 
 /// Reject the retired broad `rust-cache` archive in generated jobs.

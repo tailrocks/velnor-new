@@ -85,6 +85,24 @@ fn inserts_the_helper_from_the_exact_runner_map() {
 }
 
 #[test]
+fn moves_a_mapped_acquire_before_the_first_mise_command() {
+    let expected = helper(&"a".repeat(64));
+    let context = context(Some(expected.clone()), true);
+    let mut prepare = crate::steps::shell_step(
+        "Prepare pinned tools",
+        vec!["mise".to_owned(), "install".to_owned()],
+        BTreeMap::new(),
+    )
+    .expect("pinned tool step");
+    prepare.role = Some(StepRole::PreparePinnedTools);
+    let mut job = job(vec![checkout(), prepare.clone(), expected.clone()]);
+
+    insert_verified_cache_helper("plan", &mut job, &context).expect("mapped helper");
+
+    assert_eq!(job.steps, [checkout(), expected, prepare]);
+}
+
+#[test]
 fn rejects_a_different_acquire_step_even_when_its_role_is_present() {
     let expected = helper(&"a".repeat(64));
     let mut wrong = helper(&"c".repeat(64));

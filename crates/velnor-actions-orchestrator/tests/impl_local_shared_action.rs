@@ -76,3 +76,32 @@ fn both_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
     assert!(!hosted_ci.contains("uses: $"), "{hosted_ci}");
     Ok(())
 }
+
+#[test]
+fn scale_set_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
+    let repo = committed_repo()?;
+    let prep = prepare(repo.path())?;
+    let preview = tempfile::TempDir::new()?;
+    let report = generate_dispatched(
+        &prep,
+        &GenerateOptions {
+            output_dir: Some(preview.path().to_path_buf()),
+        },
+        Some(ExecutionMode::ScaleSet),
+    )?;
+    assert_eq!(
+        report.validated_by,
+        vec![
+            "actionlint@1.7.12".to_owned(),
+            "shellcheck@0.11.0".to_owned(),
+            "zizmor@1.31.1".to_owned(),
+        ]
+    );
+    let ci = fs::read_to_string(preview.path().join(".github/workflows/ci.yml"))?;
+    assert!(
+        ci.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
+        "{ci}"
+    );
+    assert!(!ci.contains("runs-on: ubuntu-26.04\n"), "{ci}");
+    Ok(())
+}

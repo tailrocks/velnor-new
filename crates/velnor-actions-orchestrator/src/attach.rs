@@ -8,7 +8,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    GeneratorLock, ReleaseTarget, Step, StepRole, WorkflowIr, is_crate_job_id,
+    GeneratorLock, ReleaseTarget, ScaleSetSelector, Step, StepRole, WorkflowIr, is_crate_job_id,
 };
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
@@ -107,6 +107,17 @@ pub(crate) fn attach_preseed(
     version: &str,
     catalog: &ToolCatalog,
 ) -> Result<(), OrchestratorError> {
+    let selector = workflow.context.scale_set_selector.clone();
+    attach_preseed_with_selector(workflow, label, version, catalog, selector.as_ref())
+}
+
+pub(crate) fn attach_preseed_with_selector(
+    workflow: &mut WorkflowPlan,
+    label: &str,
+    version: &str,
+    catalog: &ToolCatalog,
+    scale_set_selector: Option<&ScaleSetSelector>,
+) -> Result<(), OrchestratorError> {
     let target = ReleaseTarget::for_runner_label(label)
         .map(ReleaseTarget::triple)
         .ok_or_else(|| OrchestratorError::Contract {
@@ -169,6 +180,14 @@ pub(crate) fn attach_preseed(
                 .entry(job.runs_on.clone())
                 .or_insert_with(|| helper_steps.clone());
         }
+    }
+    if target == ReleaseTarget::LinuxX86_64.triple()
+        && let Some(selector) = scale_set_selector
+    {
+        workflow
+            .context
+            .verified_cache_helpers
+            .insert(selector.token(), helper_steps.clone());
     }
     workflow.context.require_verified_cache_helper = true;
     workflow.context.preseed = true;

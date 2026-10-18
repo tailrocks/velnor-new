@@ -145,7 +145,9 @@ pub fn finalize_jobs(
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }
-        insert_verified_cache_helper(id, job, ctx)?;
+        if !bootstrap_plan {
+            insert_verified_cache_helper(id, job, ctx)?;
+        }
         closure::check_internal_staged(id, job, ctx.preseed)?;
         let always = id == PLAN_JOB_ID || id == TASK_JOB_ID || job.check_runner.is_some();
         let target = job
@@ -162,7 +164,9 @@ pub fn finalize_jobs(
         } else {
             mise.clone()
         };
-        if !bootstrap_plan {
+        if bootstrap_plan {
+            cache_p08::ensure_mise_setup_only(id, job, &setup, always, &ctx.checkout_uses)?;
+        } else {
             cache_p08::ensure_tools_cache_v2_with_helper_policy(
                 id,
                 job,
@@ -229,6 +233,11 @@ fn insert_verified_cache_helper(
             return Err(RenderError::InvalidWorkflow(format!(
                 "cache_helper_map_mismatch:{job_id}"
             )));
+        }
+        if actual.len() == 1
+            && actual[0].role == Some(velnor_actions_contract::StepRole::AcquireVelnor)
+        {
+            cache_p08::move_acquire_after_checkout(job, &ctx.checkout_uses);
         }
         return Ok(());
     }

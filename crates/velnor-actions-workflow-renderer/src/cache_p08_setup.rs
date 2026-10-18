@@ -67,6 +67,54 @@ pub(crate) fn ensure_tools_cache_v2(
     )
 }
 
+pub(crate) fn ensure_mise_setup_only(
+    job_id: &str,
+    job: &mut Job,
+    setup: &MiseSetup,
+    always: bool,
+    checkout_uses: &str,
+) -> Result<(), RenderError> {
+    setup.validate()?;
+    let setup_indices = job
+        .steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| is_setup_step(step))
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+    if setup_indices.len() > 1 {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "duplicate_setup_mise:{job_id}"
+        )));
+    }
+    let needed = always || job.steps.iter().any(step_uses_mise);
+    if !needed && setup_indices.is_empty() {
+        reject_v2_steps(job_id, job)?;
+        return Ok(());
+    }
+    let expected_setup = cache_p08::setup_step(setup)?;
+    let setup_index = if let Some(index) = setup_indices.first().copied() {
+        if !cache_p08::same_step_semantics(&job.steps[index], &expected_setup) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "setup_mise_malformed:{job_id}"
+            )));
+        }
+        index
+    } else {
+        let at = insert_at(job, checkout_uses).min(job.steps.len());
+        job.steps.insert(at, expected_setup);
+        at
+    };
+    if let Some(first_mise) = first_mise_index(job)
+        && setup_index > first_mise
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "setup_mise_misordered:{job_id}"
+        )));
+    }
+    reject_v2_steps(job_id, job)
+}
+
 fn insert_tools_prelude(
     job_id: &str,
     job: &mut Job,
@@ -254,6 +302,33 @@ fn move_setup_after_helper(job: &mut Job, setup_index: usize, checkout_uses: &st
     let setup = job.steps.remove(setup_index);
     job.steps.insert(helper_index, setup);
     helper_index
+}
+
+pub(crate) fn move_acquire_after_checkout(job: &mut Job, checkout_uses: &str) {
+    let Some(acquire_at) = job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::AcquireVelnor))
+    else {
+        return;
+    };
+    let Some(checkout_at) = job
+        .steps
+        .iter()
+        .position(|step| is_typed_checkout(step, checkout_uses))
+    else {
+        return;
+    };
+    if acquire_at == checkout_at + 1 {
+        return;
+    }
+    let acquire = job.steps.remove(acquire_at);
+    let checkout_at = if acquire_at < checkout_at {
+        checkout_at - 1
+    } else {
+        checkout_at
+    };
+    job.steps.insert(checkout_at + 1, acquire);
 }
 
 /// Parse the exact pinned components step that populated this tool payload.

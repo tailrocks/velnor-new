@@ -103,7 +103,7 @@ fn uses_staged_helper(step: &StepText) -> bool {
         && step.body.contains("$RUNNER_TEMP/velnor/bin")
 }
 
-/// Setup Mise follows checkout, composite seed/identity, and tools restore.
+/// Setup Mise precedes tool use and follows restore when the cache path is present.
 fn check_setup_first(job: &JobText) -> Result<(), String> {
     let setup = job.steps.iter().position(|s| s.name == "Setup Mise");
     let first_mise = job.steps.iter().position(uses_mise);
@@ -118,21 +118,19 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
     }
 }
 
-/// Setup position is legal after the V2 wrapper and restore, or on the cold path.
+/// Setup is early on cold paths and follows the checked identity/restore path otherwise.
 fn setup_is_early(job: &JobText, at: usize) -> bool {
-    at <= 1
-        || (at == 3
-            && job
-                .steps
-                .first()
-                .is_some_and(|step| step.name == "Checkout")
-            && job
-                .steps
-                .get(1)
-                .is_some_and(|step| step.name == "V2 identity")
-            && job.steps.get(2).is_some_and(|step| {
-                step.name == velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_NAME
-            }))
+    if at <= 1 {
+        return true;
+    }
+    let checkout = job.steps.iter().position(|step| step.name == "Checkout");
+    let identity = job.steps.iter().position(|step| step.name == "V2 identity");
+    let restore = job
+        .steps
+        .iter()
+        .position(|step| step.name == velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_NAME);
+    matches!((checkout, identity, restore), (Some(checkout), Some(identity), Some(restore))
+        if checkout < identity && identity < restore && restore < at)
 }
 
 /// Setup Mise must leave restore and save ownership to the explicit V2 layer.
