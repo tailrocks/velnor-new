@@ -173,7 +173,13 @@ impl ConnectionJournal {
                     "UPDATE connection_intents SET state = 'failed', acquire_resolved = 1, acquired = 0, launch_phase = 'acquire_rejected' WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND state = 'pending' AND acquire_attempted = 1 AND acquire_resolved = 0 AND acquired = 0 AND jit_requested = 0 AND cleanup_proven = 0",
                     "rejected",
                 ),
-                AssignedAcquireResult::Uncertain | AssignedAcquireResult::Returned(_) => (
+                AssignedAcquireResult::NoEffect => (
+                    "UPDATE connection_intents SET state = 'failed', acquire_resolved = 1, acquired = 0, launch_phase = 'acquire_no_effect' WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND state = 'pending' AND acquire_attempted = 1 AND acquire_resolved = 0 AND acquired = 0 AND jit_requested = 0 AND cleanup_proven = 0",
+                    "rejected",
+                ),
+                AssignedAcquireResult::AlreadyAcquired
+                | AssignedAcquireResult::Uncertain
+                | AssignedAcquireResult::Returned(_) => (
                     "UPDATE connection_intents SET state = 'uncertain', launch_phase = 'acquire_uncertain' WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND state = 'pending' AND acquire_attempted = 1 AND acquire_resolved = 0 AND acquired = 0 AND jit_requested = 0 AND cleanup_proven = 0",
                     "uncertain",
                 ),

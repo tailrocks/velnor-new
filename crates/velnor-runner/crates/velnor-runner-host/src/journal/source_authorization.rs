@@ -31,6 +31,10 @@ pub(crate) enum SourceAuthorizationResult {
 pub(crate) enum AssignedAcquireResult {
     /// IDs from the authoritative successful response.
     Returned(Vec<i64>),
+    /// The service proved that the request was not acquired by this call.
+    NoEffect,
+    /// The service reported that the request had already been acquired.
+    AlreadyAcquired,
     /// The service definitively rejected the request without acquiring work.
     Rejected,
     /// The effect may have completed; no replay is authorized.
@@ -44,7 +48,23 @@ impl ConnectionJournal {
         identity: &AssignmentIdentity,
         receipt: &AuthorizedSourceReceipt,
     ) -> Result<SourceAuthorizationResult, HostError> {
-        storage::record(self, identity, receipt).await
+        self.record_request_source(identity, receipt).await
+    }
+}
+
+pub(in crate::journal) fn encode_source_receipt(
+    receipt: &AuthorizedSourceReceipt,
+    repository_id: i64,
+) -> Result<String, HostError> {
+    StoredSource::from_receipt(receipt, repository_id)?.json()
+}
+
+pub(in crate::journal) fn source_policy_mode_name(
+    mode: crate::config::SourcePolicyMode,
+) -> &'static str {
+    match mode {
+        crate::config::SourcePolicyMode::Repository => "repository",
+        crate::config::SourcePolicyMode::BranchRestricted => "branch_restricted",
     }
 }
 

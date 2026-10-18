@@ -14,6 +14,7 @@ mod file_identity;
 mod image_import;
 mod launch;
 mod read;
+pub(in crate::journal) mod request_lifecycle;
 mod resource_probe;
 mod scale_set_create;
 mod schema;
@@ -52,6 +53,7 @@ pub(crate) use scale_set_create::{
 pub(crate) use source_authorization::{AssignedAcquireResult, SourceAuthorizationResult};
 use sql::{intent_row, one_row, same_ids, token_rejected};
 
+pub(crate) use request_lifecycle::{PhysicalRunnerStartClaim, RequestAcquireState, RunnerJitClaim};
 pub(crate) use resource_probe::{ProbePhase, ProbeRow, ProbeSeed};
 
 /// Durable intent row.

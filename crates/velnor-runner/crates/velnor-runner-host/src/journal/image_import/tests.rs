@@ -10,6 +10,8 @@ use super::{
     ImageImportState, Journal,
 };
 
+#[path = "identity_migration_tests.rs"]
+mod identity_migration_tests;
 #[path = "identity_tests.rs"]
 mod identity_tests;
 
@@ -345,6 +347,17 @@ async fn version_four_migration_creates_and_validates_import_ledger() -> Result<
         .await
         .map_err(|_| HostError::Journal)?;
     let connection = database.connect().map_err(|_| HostError::Journal)?;
+    for table in [
+        "connection_runner_jits",
+        "connection_request_authorizations",
+        "connection_source_authorizations",
+        "connection_scale_set_intents",
+    ] {
+        connection
+            .execute(&format!("DROP TABLE {table}"), ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
     connection
         .execute("DROP TABLE image_imports", ())
         .await

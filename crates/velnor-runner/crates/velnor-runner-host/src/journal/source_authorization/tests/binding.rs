@@ -126,9 +126,9 @@ async fn version_eight_receipts_remain_unbound_after_migration() -> Result<(), H
         SourcePolicyMode::Repository,
     )
     .await?;
-    scope
-        .record_source_authorization(&assignment, &receipt)
-        .await?;
+    let source_json = crate::journal::source_authorization::encode_source_receipt(&receipt, 101)?;
+    let source_digest = digest(source_json.as_bytes());
+    let binding_digest = scope.binding_digest().to_owned();
     drop(scope);
     drop(journal);
 
@@ -145,6 +145,30 @@ async fn version_eight_receipts_remain_unbound_after_migration() -> Result<(), H
         .await
         .map_err(|_| HostError::Journal)?;
     connection
+        .execute("DROP TABLE connection_runner_jits", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute("DROP TABLE connection_request_authorizations", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "INSERT INTO connection_source_authorizations (connection_id, scale_set_id, request_id, intent_id, message_id, policy_mode, authority_model, binding_digest, source_digest, source_json) VALUES (?1, ?2, ?3, ?4, ?5, 'repository', 'created_empty_exclusive_admin_session_v1', ?6, ?7, ?8)",
+            (
+                binding.connection_id.as_str(),
+                501,
+                89,
+                intent_id,
+                122,
+                binding_digest.as_str(),
+                source_digest.as_str(),
+                source_json.as_str(),
+            ),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
         .execute("PRAGMA user_version = 8", ())
         .await
         .map_err(|_| HostError::Journal)?;
@@ -156,14 +180,47 @@ async fn version_eight_receipts_remain_unbound_after_migration() -> Result<(), H
     let (replayed_intent_id, fresh) = scope.begin_assigned_launch(&assignment, "v89").await?;
     assert_eq!(replayed_intent_id, intent_id);
     assert!(fresh);
+    let connection = journal.connection().await?;
+    let mut rows = connection
+        .query(
+            "SELECT receipt_binding_digest FROM connection_source_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3",
+            (binding.connection_id.as_str(), 501, 89),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
     assert_eq!(
-        scope
-            .record_source_authorization(&assignment, &receipt)
-            .await,
-        Err(HostError::Identity)
+        rows.next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .ok_or(HostError::Journal)?
+            .get::<Option<String>>(0)
+            .map_err(|_| HostError::Journal)?,
+        None
     );
+    drop(rows);
+    drop(connection);
+    assert!(!scope.claim_request_acquire(&assignment).await?);
     assert!(!scope.claim_assigned_acquire(intent_id).await?);
+    let connection = journal.connection().await?;
+    connection
+        .execute(
+            "UPDATE connection_intents SET acquire_attempted = 1, acquire_resolved = 1, acquired = 1, launch_phase = 'acquired' WHERE id = ?1 AND connection_id = ?2",
+            (intent_id, binding.connection_id.as_str()),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
     assert!(!scope.claim_launch_jit(intent_id).await?);
     assert!(!journal.is_drained().await?);
     Ok(())
+}
+
+fn digest(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    use std::fmt::Write as _;
+
+    let mut value = String::with_capacity(64);
+    for byte in Sha256::digest(bytes) {
+        let _written = write!(value, "{byte:02x}");
+    }
+    value
 }

@@ -2,7 +2,9 @@
 
 use crate::error::HostError;
 
-use super::{connection, image_import, remote, scale_set_create, source_authorization};
+use super::{
+    connection, image_import, remote, request_ledger, scale_set_create, source_authorization,
+};
 
 pub(super) async fn from_version_zero(conn: &turso::Connection) -> Result<(), HostError> {
     crate::journal_schema::bootstrap(conn).await?;
@@ -104,6 +106,14 @@ pub(super) async fn from_version_seven(conn: &turso::Connection) -> Result<(), H
 pub(super) async fn from_version_eight(conn: &turso::Connection) -> Result<(), HostError> {
     source_authorization::upgrade_v8(conn).await?;
     conn.execute("PRAGMA user_version = 9", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    from_version_nine(conn).await
+}
+
+pub(super) async fn from_version_nine(conn: &turso::Connection) -> Result<(), HostError> {
+    request_ledger::bootstrap(conn).await?;
+    conn.execute("PRAGMA user_version = 10", ())
         .await
         .map_err(|_| HostError::Journal)?;
     Ok(())

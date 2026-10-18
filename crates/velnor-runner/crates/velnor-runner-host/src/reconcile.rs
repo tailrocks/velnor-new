@@ -12,16 +12,34 @@ pub enum LaunchPhase {
     Prepared,
     /// Acquire was committed before the request was sent.
     AcquireRequested,
+    /// Acquire was rejected without acquiring work.
+    AcquireRejected,
+    /// Acquire was proven to have no effect.
+    AcquireNoEffect,
+    /// Acquire may have completed; no replay is authorized.
+    AcquireUncertain,
     /// The acquire response confirmed the requested job.
     Acquired,
     /// JIT was committed before the request was sent.
     JitRequested,
+    /// JIT returned a runner identity that was recorded before Docker work.
+    JitBound,
+    /// JIT may have completed but its runner identity is unknown.
+    JitUncertain,
     /// JIT returned an encoded configuration, which is never journaled.
     JitReceived,
     /// Docker volume or container provisioning may have begun.
     DockerProvisioning,
+    /// Docker provisioning was durably claimed before the request.
+    DockerRequested,
+    /// Docker provisioning may have completed without a complete response.
+    DockerUncertain,
     /// The runner pair was created and bound in the journal.
     WorkerReady,
+    /// A matching `JobStarted` event was recorded for the runner.
+    RunnerStarted,
+    /// A matching `JobCompleted` event was recorded for the runner.
+    RunnerCompleted,
     /// Queue acknowledgement was committed before the request was sent.
     AcknowledgementRequested,
     /// All effects for this launch completed.
@@ -33,15 +51,85 @@ impl LaunchPhase {
         match text {
             "prepared" => Ok(Self::Prepared),
             "acquire_requested" => Ok(Self::AcquireRequested),
+            "acquire_rejected" => Ok(Self::AcquireRejected),
+            "acquire_no_effect" => Ok(Self::AcquireNoEffect),
+            "acquire_uncertain" => Ok(Self::AcquireUncertain),
             "acquired" => Ok(Self::Acquired),
             "jit_requested" => Ok(Self::JitRequested),
+            "jit_bound" => Ok(Self::JitBound),
+            "jit_uncertain" => Ok(Self::JitUncertain),
             "jit_received" => Ok(Self::JitReceived),
             "docker_provisioning" => Ok(Self::DockerProvisioning),
+            "docker_requested" => Ok(Self::DockerRequested),
+            "docker_uncertain" => Ok(Self::DockerUncertain),
             "worker_ready" => Ok(Self::WorkerReady),
+            "runner_started" => Ok(Self::RunnerStarted),
+            "runner_completed" => Ok(Self::RunnerCompleted),
             "acknowledgement_requested" => Ok(Self::AcknowledgementRequested),
             "complete" => Ok(Self::Complete),
             _ => Err(crate::HostError::Journal),
         }
+    }
+
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Prepared => "prepared",
+            Self::AcquireRequested => "acquire_requested",
+            Self::AcquireRejected => "acquire_rejected",
+            Self::AcquireNoEffect => "acquire_no_effect",
+            Self::AcquireUncertain => "acquire_uncertain",
+            Self::Acquired => "acquired",
+            Self::JitRequested => "jit_requested",
+            Self::JitBound => "jit_bound",
+            Self::JitUncertain => "jit_uncertain",
+            Self::JitReceived => "jit_received",
+            Self::DockerProvisioning => "docker_provisioning",
+            Self::DockerRequested => "docker_requested",
+            Self::DockerUncertain => "docker_uncertain",
+            Self::WorkerReady => "worker_ready",
+            Self::RunnerStarted => "runner_started",
+            Self::RunnerCompleted => "runner_completed",
+            Self::AcknowledgementRequested => "acknowledgement_requested",
+            Self::Complete => "complete",
+        }
+    }
+}
+
+#[cfg(test)]
+mod launch_phase_tests {
+    use super::LaunchPhase;
+
+    #[test]
+    fn every_persisted_launch_phase_roundtrips_and_unknown_values_fail_closed() {
+        let phases = [
+            ("prepared", LaunchPhase::Prepared),
+            ("acquire_requested", LaunchPhase::AcquireRequested),
+            ("acquire_rejected", LaunchPhase::AcquireRejected),
+            ("acquire_no_effect", LaunchPhase::AcquireNoEffect),
+            ("acquire_uncertain", LaunchPhase::AcquireUncertain),
+            ("acquired", LaunchPhase::Acquired),
+            ("jit_requested", LaunchPhase::JitRequested),
+            ("jit_bound", LaunchPhase::JitBound),
+            ("jit_uncertain", LaunchPhase::JitUncertain),
+            ("jit_received", LaunchPhase::JitReceived),
+            ("docker_provisioning", LaunchPhase::DockerProvisioning),
+            ("docker_requested", LaunchPhase::DockerRequested),
+            ("docker_uncertain", LaunchPhase::DockerUncertain),
+            ("worker_ready", LaunchPhase::WorkerReady),
+            ("runner_started", LaunchPhase::RunnerStarted),
+            ("runner_completed", LaunchPhase::RunnerCompleted),
+            (
+                "acknowledgement_requested",
+                LaunchPhase::AcknowledgementRequested,
+            ),
+            ("complete", LaunchPhase::Complete),
+        ];
+
+        for (encoded, phase) in phases {
+            assert_eq!(LaunchPhase::parse(encoded), Ok(phase));
+            assert_eq!(phase.as_str(), encoded);
+        }
+        assert!(LaunchPhase::parse("unknown_v10_phase").is_err());
     }
 }
 

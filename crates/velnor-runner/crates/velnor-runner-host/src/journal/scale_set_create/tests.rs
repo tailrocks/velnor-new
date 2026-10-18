@@ -242,6 +242,7 @@ async fn version_five_migration_adds_scale_set_intent_table() -> Result<(), Host
         .execute("DROP TABLE connection_scale_set_intents", ())
         .await
         .map_err(|_| HostError::Journal)?;
+    drop_post_v5_tables(&connection).await?;
     reset_image_imports_to_version_five(&connection).await?;
     connection
         .execute("PRAGMA user_version = 5", ())
@@ -251,7 +252,7 @@ async fn version_five_migration_adds_scale_set_intent_table() -> Result<(), Host
     drop(database);
 
     let _journal = Journal::open(&path).await?;
-    assert_eq!(journal_version(&path).await?, 7);
+    assert_eq!(journal_version(&path).await?, 10);
     let (_, connection) = raw_database(&path).await?;
     let mut rows = connection
         .query("PRAGMA table_info(connection_scale_set_intents)", ())
@@ -271,6 +272,7 @@ async fn malformed_version_five_scale_set_table_fails_without_mutation() -> Resu
         .execute("DROP TABLE connection_scale_set_intents", ())
         .await
         .map_err(|_| HostError::Journal)?;
+    drop_post_v5_tables(&connection).await?;
     reset_image_imports_to_version_five(&connection).await?;
     connection
         .execute("CREATE TABLE connection_scale_set_intents (wrong TEXT)", ())
@@ -349,5 +351,19 @@ async fn reset_image_imports_to_version_five(
         )
         .await
         .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+async fn drop_post_v5_tables(connection: &turso::Connection) -> Result<(), HostError> {
+    for table in [
+        "connection_runner_jits",
+        "connection_request_authorizations",
+        "connection_source_authorizations",
+    ] {
+        connection
+            .execute(&format!("DROP TABLE {table}"), ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
     Ok(())
 }

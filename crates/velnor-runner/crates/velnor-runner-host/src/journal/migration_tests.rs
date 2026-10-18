@@ -43,6 +43,17 @@ async fn version_four_migration_validates_connection_and_remote_tables() {
             .await
             .expect("open SQLite");
         let connection = database.connect().expect("connect SQLite");
+        for table in [
+            "connection_runner_jits",
+            "connection_request_authorizations",
+            "connection_source_authorizations",
+            "connection_scale_set_intents",
+        ] {
+            connection
+                .execute(&format!("DROP TABLE {table}"), ())
+                .await
+                .expect("restore version-four shape");
+        }
         connection
             .execute("DROP TABLE image_imports", ())
             .await
@@ -87,7 +98,7 @@ async fn version_seven_migration_installs_current_source_authorization_schema() 
         .await
         .expect("reopen SQLite");
     let connection = database.connect().expect("connect SQLite");
-    assert_eq!(read_version(&connection).await, 9);
+    assert_eq!(read_version(&connection).await, 10);
     assert_eq!(
         table_count(&connection, "connection_source_authorizations").await,
         1

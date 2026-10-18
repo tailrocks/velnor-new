@@ -1,6 +1,5 @@
 //! Source receipt and closed-world acquire regressions.
 
-mod admission;
 mod binding;
 
 use std::path::PathBuf;
@@ -14,8 +13,8 @@ use crate::error::HostError;
 use crate::journal::connection::ConnectionJournal;
 use crate::journal::scale_set_create::{CreatedScaleSetResponse, ScaleSetCreateRequest};
 use crate::journal::{
-    AssignedAcquireResult, AssignmentKey, CapacityLimits, Journal, ReservationRequest,
-    ReservationResult, SourceAuthorizationResult,
+    AssignmentKey, CapacityLimits, Journal, ReservationRequest, ReservationResult,
+    SourceAuthorizationResult,
 };
 use crate::launch::StartPermit;
 use crate::launch::steps::source::{AuthorizedSourceReceipt, test_receipt};
