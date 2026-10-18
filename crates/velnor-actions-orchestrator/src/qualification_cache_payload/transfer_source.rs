@@ -48,7 +48,8 @@ impl SourceDirectory {
         };
         for (index, name) in names.iter().enumerate() {
             let parent = result.current_fd();
-            let Some(before) = optional_directory_entry(parent, name)? else {
+            let Some(before) = optional_entry(parent, name)? else {
+                result.confirm_absent(name.as_c_str(), false)?;
                 return Ok(None);
             };
             let final_component = index + 1 == names.len();
@@ -88,6 +89,10 @@ impl SourceDirectory {
     }
 
     pub(in crate::qualification_cache_payload) fn revalidate(&self) -> Result<(), &'static str> {
+        self.revalidate_path(true)
+    }
+
+    fn revalidate_path(&self, final_edge_is_root: bool) -> Result<(), &'static str> {
         let root_stat =
             rustix::fs::fstat(&self.root).map_err(|_| "qualification_cache_payload_open_failed")?;
         validate_ancestor(&root_stat)?;
@@ -99,7 +104,7 @@ impl SourceDirectory {
             let parent_stat =
                 rustix::fs::fstat(parent).map_err(|_| "qualification_cache_payload_open_failed")?;
             validate_ancestor(&parent_stat)?;
-            let final_component = index + 1 == self.edges.len();
+            let final_component = final_edge_is_root && index + 1 == self.edges.len();
             let opened = rustix::fs::fstat(&edge.child)
                 .map_err(|_| "qualification_cache_payload_open_failed")?;
             let current = statat(parent, edge.name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)
@@ -113,6 +118,19 @@ impl SourceDirectory {
             }
         }
         Ok(())
+    }
+
+    fn confirm_absent(
+        &self,
+        name: &std::ffi::CStr,
+        parent_is_complete_path: bool,
+    ) -> Result<(), &'static str> {
+        self.revalidate_path(parent_is_complete_path)?;
+        match statat(self.fd(), name, AtFlags::SYMLINK_NOFOLLOW) {
+            Err(error) if error == rustix::io::Errno::NOENT => Ok(()),
+            Ok(_) => Err("qualification_cache_payload_file_changed"),
+            Err(_) => Err("qualification_cache_payload_open_failed"),
+        }
     }
 
     fn current_fd(&self) -> &rustix::fd::OwnedFd {
@@ -149,6 +167,12 @@ impl SourceFileGuard {
 }
 
 pub(super) fn open_file(path: &Path) -> Result<(fs::File, Stat, SourceFileGuard), &'static str> {
+    open_optional_file(path)?.ok_or("qualification_cache_payload_open_failed")
+}
+
+pub(super) fn open_optional_file(
+    path: &Path,
+) -> Result<Option<(fs::File, Stat, SourceFileGuard)>, &'static str> {
     let parent_path = path
         .parent()
         .ok_or("qualification_cache_payload_path_invalid")?;
@@ -156,9 +180,16 @@ pub(super) fn open_file(path: &Path) -> Result<(fs::File, Stat, SourceFileGuard)
         path.file_name()
             .ok_or("qualification_cache_payload_path_invalid")?,
     )?;
-    let parent = SourceDirectory::open(parent_path)?;
-    let before = statat(parent.fd(), name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)
-        .map_err(|_| "qualification_cache_payload_open_failed")?;
+    let Some(parent) = SourceDirectory::open_optional(parent_path)? else {
+        return Ok(None);
+    };
+    let Some(before) = optional_entry(parent.fd(), &name)? else {
+        parent.confirm_absent(name.as_c_str(), true)?;
+        return Ok(None);
+    };
+    if FileType::from_raw_mode(before.st_mode) != FileType::RegularFile {
+        return Err("qualification_cache_root_kind_mismatch");
+    }
     validate_file_stat(&before)?;
     let descriptor = openat(
         parent.fd(),
@@ -179,7 +210,7 @@ pub(super) fn open_file(path: &Path) -> Result<(fs::File, Stat, SourceFileGuard)
     };
     let file = fs::File::from(descriptor);
     guard.revalidate(&file)?;
-    Ok((file, opened, guard))
+    Ok(Some((file, opened, guard)))
 }
 
 fn components(path: &Path) -> Result<Vec<CString>, &'static str> {
@@ -207,7 +238,7 @@ fn components(path: &Path) -> Result<Vec<CString>, &'static str> {
     Ok(names)
 }
 
-fn optional_directory_entry(
+fn optional_entry(
     parent: &rustix::fd::OwnedFd,
     name: &std::ffi::CStr,
 ) -> Result<Option<Stat>, &'static str> {

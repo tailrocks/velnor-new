@@ -174,7 +174,9 @@ pub(super) fn digest_file(path: &Path) -> Result<Option<String>, &'static str> {
 }
 
 pub(super) fn digest_file_with_mode(path: &Path) -> Result<Option<(String, u32)>, &'static str> {
-    let (mut file, before, source_guard) = open_copy_source(path)?;
+    let Some((mut file, before, source_guard)) = super::source::open_optional_file(path)? else {
+        return Ok(None);
+    };
     super::payload::validate_payload_root_mode(&before)?;
     let size = u64::try_from(before.st_size).map_err(|_| "qualification_cache_payload_limit")?;
     if size > MAX_FILE_BYTES {

@@ -6,6 +6,7 @@ use crate::qualification_cache_payload::transfer::write_transport_payload;
 use std::fs;
 use std::io::Cursor;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::path::Path;
 use velnor_actions_contract::workflow::QualificationCacheLayer;
 
 #[test]
@@ -94,4 +95,24 @@ fn retained_source_descriptor_detects_ancestor_replacement() {
     fs::rename(&original, &replacement).expect("move replacement away");
     fs::rename(&displaced, &original).expect("restore ancestor");
     assert_eq!(source.revalidate(), Ok(()));
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[test]
+fn missing_root_under_root_owned_sticky_parent_remains_absent() {
+    #[cfg(target_os = "linux")]
+    let sticky_parent = Path::new("/tmp");
+    #[cfg(target_os = "macos")]
+    let sticky_parent = Path::new("/private/tmp");
+
+    let missing = tempfile::Builder::new()
+        .tempdir_in(sticky_parent)
+        .expect("temporary directory under sticky parent");
+    let path = missing.path().to_owned();
+    missing.close().expect("remove temporary directory");
+
+    assert_eq!(
+        SourceDirectory::open_optional(&path).map(|root| root.is_none()),
+        Ok(true)
+    );
 }
