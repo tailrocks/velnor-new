@@ -191,7 +191,7 @@ fn derives_each_supported_layer_from_runner_environment() {
         ),
         (
             "MISE_DATA_DIR".to_owned(),
-            "/home/runner/.local/share/mise".to_owned(),
+            "/tmp/runner/velnor/mise".to_owned(),
         ),
         (
             "MBX_CACHE_DIR".to_owned(),
@@ -248,29 +248,70 @@ fn environment_root_paths_fail_closed_on_home_mismatch_and_escape() {
 }
 
 #[test]
-fn task_result_uses_mise_precedence_and_rejects_unrooted_parent() {
+fn mise_tools_requires_the_isolated_runner_temp_data_root() {
     let runner_temp = PathBuf::from("/tmp/runner");
-    let environment = BTreeMap::from([
-        (
-            "MISE_TASK_CACHE_DIR".to_owned(),
-            "/tmp/runner/velnor/tasks/task-1/cache".to_owned(),
-        ),
-        (
-            "MISE_CACHE_DIR".to_owned(),
-            "/tmp/runner/velnor/tasks/task-1/default".to_owned(),
-        ),
-    ]);
+    for mise_data_dir in ["/home/runner/.local/share/mise", "/tmp/runner/user-mise"] {
+        let environment = BTreeMap::from([
+            ("MISE_DATA_DIR".to_owned(), mise_data_dir.to_owned()),
+            (
+                "CARGO_HOME".to_owned(),
+                "/tmp/runner/velnor/cargo".to_owned(),
+            ),
+            (
+                "MISE_CARGO_HOME".to_owned(),
+                "/tmp/runner/velnor/cargo".to_owned(),
+            ),
+            (
+                "RUSTUP_HOME".to_owned(),
+                "/tmp/runner/velnor/rustup".to_owned(),
+            ),
+            (
+                "MISE_RUSTUP_HOME".to_owned(),
+                "/tmp/runner/velnor/rustup".to_owned(),
+            ),
+        ]);
+        assert_eq!(
+            expected_paths_for_environment(
+                QualificationCacheLayer::MiseTools,
+                &runner_temp,
+                |name| environment.get(name).cloned(),
+            )
+            .expect_err("nonisolated Mise data root"),
+            "qualification_cache_root_environment_invalid"
+        );
+    }
+}
+
+#[test]
+fn task_result_requires_an_explicit_isolated_task_cache_root() {
+    let runner_temp = PathBuf::from("/tmp/runner");
+    let environment = BTreeMap::from([(
+        "MISE_TASK_CACHE_DIR".to_owned(),
+        "/tmp/runner/velnor/tasks/task-1/cache".to_owned(),
+    )]);
     assert_eq!(
         expected_paths_for_environment(QualificationCacheLayer::TaskResult, &runner_temp, |name| {
             environment.get(name).cloned()
         },)
-        .expect("task env override")[0]
+        .expect("explicit task env root")[0]
             .1,
         PathBuf::from("/tmp/runner/velnor/tasks/task-1/cache/task-artifacts/v2")
     );
 
-    let outside = BTreeMap::from([(
+    let missing = BTreeMap::from([(
         "MISE_CACHE_DIR".to_owned(),
+        "/tmp/runner/velnor/tasks/task-1/default".to_owned(),
+    )]);
+    assert_eq!(
+        expected_paths_for_environment(QualificationCacheLayer::TaskResult, &runner_temp, |name| {
+            missing.get(name).cloned()
+        },)
+        .expect_err("do not infer task roots from Mise cache"),
+        "qualification_cache_root_environment_missing"
+    );
+
+    let outside = BTreeMap::from([(
+        "MISE_TASK_CACHE_DIR".to_owned(),
         "/tmp/runner/untrusted-cache".to_owned(),
     )]);
     assert_eq!(
