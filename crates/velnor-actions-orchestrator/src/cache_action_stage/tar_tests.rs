@@ -1,8 +1,11 @@
+use super::super::compression::{ArchiveCompression, encode_archive};
 use super::{
-    BLOCK, Operation, create_archive, open_archive, parse_args, put_field, put_octal, scan_archive,
-    write_single_member,
+    BLOCK, Operation, StageAccess, create_archive, open_archive, parse_args, put_field, put_octal,
+    scan_archive, write_single_member,
 };
-use crate::cache_action_stage::{StageContext, create_stage, open_stage};
+use crate::cache_action_stage::{
+    CacheActionCompression, StageContext, create_stage, open_stage, run_cache_tar,
+};
 use std::ffi::OsString;
 use std::io::{Seek, SeekFrom, Write};
 use std::os::unix::fs::PermissionsExt;
@@ -245,6 +248,55 @@ fn accepts_pinned_sdk_tar_arguments_and_rejects_unknown_forms() {
     let unsupported =
         ["-xf", "/tmp/archive.tar", "-P", "-C", "/workspace", "-v"].map(OsString::from);
     assert!(parse_args(&unsupported).is_err());
+}
+
+#[test]
+fn extraction_reports_the_sdk_compression_parsed_from_tar_arguments() {
+    let root = tempfile::tempdir().expect("temporary root");
+    let workspace = root.path().join("workspace");
+    let runner_temp = root.path().join("runner-temp");
+    std::fs::create_dir(&workspace).expect("create workspace");
+    std::fs::create_dir(&runner_temp).expect("create runner temp");
+    let workspace = std::fs::canonicalize(workspace).expect("canonical workspace");
+    let runner_temp = std::fs::canonicalize(runner_temp).expect("canonical runner temp");
+    let source_key = format!("mise-tools-v2-payload-v3-{}", "b".repeat(64));
+    let target_key = format!("mise-tools-v2-payload-v3-{}", "a".repeat(64));
+    let source_context =
+        StageContext::normal(&runner_temp, &workspace, &source_key).expect("source context");
+    let target_context =
+        StageContext::normal(&runner_temp, &workspace, &target_key).expect("target context");
+    let mut source = create_stage(&source_context).expect("create source stage");
+    source
+        .write_all(b"verified payload")
+        .expect("write source stage");
+    let source_claim = source.finish().expect("finish source stage");
+    let mut source = open_stage(&source_context, &source_claim).expect("open source stage");
+    let mut raw = tempfile::tempfile().expect("temporary tar");
+    write_single_member(&mut source, &mut raw, target_context.member_path())
+        .expect("write action member");
+    raw.seek(SeekFrom::Start(0)).expect("rewind raw tar");
+    let archive_path = archive_path(&runner_temp);
+    let (mut archive, _parent, _name) =
+        create_archive(&runner_temp, archive_path.as_os_str()).expect("create compressed archive");
+    encode_archive(raw, &mut archive, ArchiveCompression::Gzip, None).expect("encode gzip archive");
+    archive
+        .flush()
+        .and_then(|()| archive.sync_all())
+        .expect("finish compressed archive");
+
+    let args = [
+        OsString::from("-xf"),
+        archive_path.into_os_string(),
+        OsString::from("-P"),
+        OsString::from("-C"),
+        workspace.into_os_string(),
+        OsString::from("-z"),
+    ];
+    let outcome = run_cache_tar(&target_context, &args, StageAccess::New, None)
+        .expect("extract through the trusted tar adapter");
+
+    assert_eq!(outcome.compression, Some(CacheActionCompression::Gzip));
+    assert!(outcome.receipt.is_some());
 }
 
 #[test]

@@ -21,6 +21,9 @@ use self::writer::{put_field, put_octal};
 
 #[path = "tar_format.rs"]
 mod format;
+#[path = "tar_outcome.rs"]
+mod outcome;
+pub use outcome::TarOutcome;
 #[cfg(test)]
 #[path = "tar_tests.rs"]
 mod tests;
@@ -38,14 +41,6 @@ pub enum StageAccess<'a> {
     Rewrite(&'a StageReceiptClaim),
 }
 
-/// Gives the verified stage observation produced by an extract operation.
-#[derive(Debug)]
-pub struct TarOutcome {
-    /// For an extraction operation, this field contains a new compact claim.
-    /// For other operations, this field contains `None`.
-    pub receipt: Option<StageReceiptClaim>,
-}
-
 /// Runs one pinned SDK tar operation without extracting an archive path.
 ///
 /// # Errors
@@ -59,7 +54,7 @@ pub fn run_cache_tar(
 ) -> Result<TarOutcome, StageError> {
     if args.len() == 1 && args[0] == "--version" {
         println!("tar (GNU tar) velnor-cache-adapter-v1");
-        return Ok(TarOutcome { receipt: None });
+        return Ok(TarOutcome::without_observation());
     }
     let parsed = parse_args(args)?;
     match parsed.operation {
@@ -68,7 +63,7 @@ pub fn run_cache_tar(
             let mut decoded = decode_archive(archive, parsed.compression, zstd_path)?;
             scan_archive(&mut decoded, context.member_path())?;
             println!("{}", context.member_path());
-            Ok(TarOutcome { receipt: None })
+            TarOutcome::observed(None, parsed.compression)
         }
         Operation::Extract => {
             if !matches_workspace(parsed.change_directory.as_deref(), context.workspace()) {
@@ -84,9 +79,7 @@ pub fn run_cache_tar(
             };
             io_copy_bounded(&mut payload, &mut writer, MAX_STAGE_BYTES)?;
             let receipt = writer.finish()?;
-            Ok(TarOutcome {
-                receipt: Some(receipt),
-            })
+            TarOutcome::observed(Some(receipt), parsed.compression)
         }
         Operation::Create => {
             if !matches_workspace(parsed.change_directory.as_deref(), context.workspace()) {
@@ -112,7 +105,7 @@ pub fn run_cache_tar(
                 .flush()
                 .and_then(|()| output.sync_all())
                 .map_err(|_| "cache_tar_archive_write_failed")?;
-            Ok(TarOutcome { receipt: None })
+            TarOutcome::observed(None, parsed.compression)
         }
     }
 }

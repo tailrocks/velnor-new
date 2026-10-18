@@ -10,9 +10,10 @@ use crate::connect::SetOwnership;
 use crate::error::HostError;
 use crate::journal::{
     AssignmentKey, CapacityLimits, ConnectionJournal, Journal, ReservationRequest,
-    ReservationResult, StorageAdmission, StorageAdmissionSample, StorageMedium, StoragePoolLimit,
-    StoragePoolObservation, StorageProfile, StorageReservationPlan, StorageRole, StorageRoleCharge,
-    StorageRoleLimit, StorageSampleIdentity,
+    ReservationResult, StorageAdmission, StorageAdmissionSample, StorageCacheProjection,
+    StorageMedium, StoragePoolLimit, StoragePoolObservation, StorageProfile,
+    StorageReservationPlan, StorageRole, StorageRoleCharge, StorageRoleLimit,
+    StorageSampleIdentity,
 };
 use crate::launch::StartPermit;
 
@@ -231,18 +232,12 @@ async fn cache_projection_is_scoped_fresh_read_only_and_stops_after_effect_claim
         .await?
         .expect("fresh projection");
     assert_eq!(journal.revision().await?, before_read);
-    assert_eq!(projection.reservation_id(), reservation_id);
-    assert!(projection.launch_intent_id() > 0);
-    assert_eq!(projection.profile_generation_id(), "a".repeat(32));
-    assert_eq!(projection.sample_generation_id(), sample_generation);
-    assert_eq!(projection.engine_id(), "test-engine");
-    assert_eq!(projection.docker_root_digest(), root_digest);
-    assert_eq!(projection.pool_id(), "c".repeat(64));
-    assert_eq!(projection.filesystem_instance_digest(), "d".repeat(64));
-    assert_eq!(projection.cache_live_bytes(), 128);
-    assert_eq!(projection.cache_live_inodes(), 2);
-    assert_eq!(projection.cache_stage_bytes(), 128);
-    assert_eq!(projection.cache_stage_inodes(), 2);
+    assert_projection_details(
+        &projection,
+        reservation_id,
+        &sample_generation,
+        &root_digest,
+    );
 
     let other_assignment = second
         .assignment_identity(AssignmentKey::AssignedRequest { request_id: 77 })
@@ -271,4 +266,24 @@ async fn cache_projection_is_scoped_fresh_read_only_and_stops_after_effect_claim
             .is_none()
     );
     Ok(())
+}
+
+fn assert_projection_details(
+    projection: &StorageCacheProjection,
+    reservation_id: i64,
+    sample_generation: &str,
+    root_digest: &str,
+) {
+    assert_eq!(projection.reservation_id(), reservation_id);
+    assert!(projection.launch_intent_id() > 0);
+    assert_eq!(projection.profile_generation_id(), "a".repeat(32));
+    assert_eq!(projection.sample_generation_id(), sample_generation);
+    assert_eq!(projection.engine_id(), "test-engine");
+    assert_eq!(projection.docker_root_digest(), root_digest);
+    assert_eq!(projection.pool_id(), "c".repeat(64));
+    assert_eq!(projection.filesystem_instance_digest(), "d".repeat(64));
+    assert_eq!(projection.cache_live_bytes(), 128);
+    assert_eq!(projection.cache_live_inodes(), 2);
+    assert_eq!(projection.cache_stage_bytes(), 128);
+    assert_eq!(projection.cache_stage_inodes(), 2);
 }

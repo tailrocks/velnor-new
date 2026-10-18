@@ -11,8 +11,9 @@ use crate::config::{
 };
 use crate::journal::{
     AssignmentKey, CapacityLimits, ConnectionJournal, CreatedScaleSetResponse, Journal,
-    OperationalCapacityLimits, ScaleSetCreateRequest,
+    OperationalCapacityLimits, ScaleSetCreateRequest, StorageAdmission,
 };
+use crate::launch::resource_probe::StartPermit;
 use crate::launch::steps::source::test_receipt;
 use crate::launch::{
     SelectedEngineContext, VerifiedImageIdentity, VerifiedWorkerImages,
@@ -36,6 +37,10 @@ impl Fixture {
     pub(super) async fn open(label: &str) -> Result<Self, String> {
         let scratch = Scratch::new(label)?;
         let journal = Journal::open(&scratch.file())
+            .await
+            .map_err(|error| error.to_string())?;
+        journal
+            .configure_storage_profile(crate::journal::fixture_profile())
             .await
             .map_err(|error| error.to_string())?;
         journal
@@ -116,6 +121,10 @@ impl Fixture {
             binding,
         })
     }
+}
+
+pub(super) fn fixture_storage(permit: &StartPermit) -> Result<StorageAdmission, String> {
+    crate::journal::fixture_admission(permit).map_err(|error| error.to_string())
 }
 
 struct Scratch(PathBuf);

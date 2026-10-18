@@ -6,7 +6,7 @@ use sha2::{Digest, Sha256};
 use velnor_runner_github::{Poll, Transport};
 
 use crate::error::HostError;
-use crate::journal::{AssignmentKey, ConnectionJournal};
+use crate::journal::{AssignmentKey, ConnectionJournal, StorageAdmission};
 use crate::launch::{Drive, Lane};
 use crate::scale_set::EnsureError;
 use crate::worker::Started;
@@ -21,6 +21,7 @@ pub(in crate::launch) async fn launch_scoped<T, S, F>(
     ctx: &Drive,
     polled: &Poll,
     permit: crate::launch::StartPermit,
+    storage: Option<StorageAdmission>,
     docker: &bollard::Docker,
     expected_engine: &crate::launch::SelectedEngineContext,
     images: &crate::launch::VerifiedWorkerImages,
@@ -31,6 +32,9 @@ where
     S: FnOnce(&str, &[u8], crate::launch::bind::Bind, crate::stage::StageAdmission) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
+    let Some(storage) = storage else {
+        return Ok(None);
+    };
     let (connection, scoped, state) = scoped_context(ctx)?;
     if !ctx.source_authorized {
         return Err(source_blocked(
@@ -49,7 +53,7 @@ where
     acquire::require_authorized(scoped, &request).await?;
     lane.on_admin()?;
 
-    let physical = runner::reserve(scoped, permit).await?;
+    let physical = runner::reserve(scoped, permit, storage).await?;
     match acquire::run(lane, &ctx.queue_token, scoped, &request).await? {
         acquire::AcquireDisposition::Acquired => {}
         acquire::AcquireDisposition::NoEffect => {

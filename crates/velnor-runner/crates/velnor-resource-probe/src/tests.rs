@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use crate::capacity::docker_root_bytes;
+use crate::capacity::docker_root_capacity;
 use crate::load::one_minute_milli;
 use crate::memory::available_bytes;
 use crate::pressure::memory_some_avg10;
@@ -10,12 +10,15 @@ use crate::units::{decimal_milli_ceil, percent_basis_points};
 #[test]
 fn docker_root_capacity_uses_checked_fragment_bytes_and_bounds_free_space()
 -> Result<(), Box<dyn Error>> {
-    assert_eq!(docker_root_bytes(10, 4, 4096)?, (16_384, 40_960));
-    assert_eq!(docker_root_bytes(0, 0, 4096)?, (0, 0));
-    assert!(docker_root_bytes(u64::MAX, 0, 2).is_err());
-    assert!(docker_root_bytes(10, u64::MAX, 2).is_err());
-    assert!(docker_root_bytes(4, 5, 1).is_err());
-    assert!(docker_root_bytes(10, 4, 0).is_err());
+    assert_eq!(
+        docker_root_capacity(10, 6, 4, 4096)?,
+        (24_576, 40_960, 16_384)
+    );
+    assert_eq!(docker_root_capacity(0, 0, 0, 4096)?, (0, 0, 0));
+    assert!(docker_root_capacity(u64::MAX, 0, 0, 2).is_err());
+    assert!(docker_root_capacity(10, u64::MAX, 0, 2).is_err());
+    assert!(docker_root_capacity(10, 4, 5, 1).is_err());
+    assert!(docker_root_capacity(10, 4, 0, 0).is_err());
     Ok(())
 }
 
@@ -87,18 +90,53 @@ fn psi_is_optional_but_valid_some_line_is_strict() {
 #[test]
 fn record_json_has_stable_required_keys_and_nullable_psi() -> Result<(), Box<dyn Error>> {
     let record = ProbeRecord {
-        schema_version: 1,
+        schema_version: 2,
+        docker_root_mount_target: "/velnor/docker-root".into(),
+        docker_root_mount_id: 1,
+        docker_root_device_major: 0,
+        docker_root_device_minor: 38,
+        docker_root_statx_device_major: 0,
+        docker_root_statx_device_minor: 41,
+        docker_root_fs_type_magic: 0x9123_683e,
+        docker_root_fs_type_name: "btrfs".into(),
+        docker_root_filesystem_id: 2,
+        guest_boot_id: "12345678-1234-1234-1234-123456789abc".into(),
         docker_root_free_bytes: 0,
         docker_root_total_bytes: 4,
+        docker_root_available_bytes: 0,
+        docker_root_inode_total: 0,
+        docker_root_inode_free: 0,
+        docker_root_inode_available: 0,
+        docker_root_inode_policy: crate::InodePolicy::DynamicBtrfs,
         memory_available_bytes: 2,
         load_milli: 3,
         memory_psi_some_avg10_bps: None,
+        probe_cgroup_path: "/probe".into(),
+        probe_cgroup_memory_max_bytes: None,
+        probe_cgroup_memory_current_bytes: 0,
+        probe_cgroup_swap_max_bytes: None,
+        probe_cgroup_swap_current_bytes: 0,
+        probe_cgroup_cpu_quota_micros: None,
+        probe_cgroup_cpu_period_micros: 100_000,
+        probe_cgroup_pids_max: None,
     };
     let bytes = serde_json::to_vec(&record)?;
+    let value: serde_json::Value = serde_json::from_slice(&bytes)?;
+    let object = value
+        .as_object()
+        .ok_or("the probe record is not an object")?;
+    assert_eq!(object.len(), 29);
+    assert_eq!(value["schema_version"], 2);
+    assert_eq!(value["docker_root_device_major"], 0);
+    assert_eq!(value["docker_root_device_minor"], 38);
+    assert_eq!(value["docker_root_statx_device_major"], 0);
+    assert_eq!(value["docker_root_statx_device_minor"], 41);
+    assert_eq!(value["docker_root_inode_policy"], "dynamic_btrfs");
     assert_eq!(
-        std::str::from_utf8(&bytes)?,
-        r#"{"schema_version":1,"docker_root_free_bytes":0,"docker_root_total_bytes":4,"memory_available_bytes":2,"load_milli":3,"memory_psi_some_avg10_bps":null}"#
+        value["probe_cgroup_memory_max_bytes"],
+        serde_json::Value::Null
     );
+    assert!(value.get("probe_cgroup_path").is_some());
     assert!(bytes.len() < MAX_OUTPUT_BYTES);
     Ok(())
 }

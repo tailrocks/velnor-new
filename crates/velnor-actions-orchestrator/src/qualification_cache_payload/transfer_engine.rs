@@ -9,7 +9,6 @@ use super::{CacheExportProof, CacheRestoreProof, CacheRestoreStatus};
 use super::{STATE_DOMAIN, digest_bytes, is_file_root, root_name, update_bytes};
 use crate::qualification_cache_backend::validate_qualification_cache_backend_observation;
 use crate::qualification_cache_runtime::QualificationCacheBindingOutputs;
-use std::fs;
 use std::path::Path;
 use velnor_actions_contract::workflow::{
     BoundQualificationCacheKeys, QualificationCacheBackendObservation,
@@ -249,28 +248,16 @@ pub(crate) fn snapshot_roots(roots: &CacheRootSet) -> Result<Vec<PayloadRoot>, &
 }
 
 pub(crate) fn snapshot_root(root: &CacheRootObservation) -> Result<PayloadRoot, &'static str> {
-    let metadata = match fs::symlink_metadata(&root.path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(PayloadRoot {
-                id: root.id,
-                present: false,
-                mode: None,
-                digest: None,
-            });
-        }
-        Err(_) => return Err("qualification_cache_root_inventory_failed"),
-    };
     let observed = if is_file_root(root.id) {
-        if !metadata.file_type().is_file() {
-            return Err("qualification_cache_root_kind_mismatch");
-        }
         digest_file_with_mode(&root.path)?
     } else {
-        if !metadata.file_type().is_dir() {
-            return Err("qualification_cache_root_kind_mismatch");
-        }
-        digest_directory(&root.path)?
+        digest_directory(&root.path).map_err(|error| {
+            if error == "qualification_cache_payload_root_invalid" {
+                "qualification_cache_root_kind_mismatch"
+            } else {
+                error
+            }
+        })?
     };
     let (digest, mode) = observed.map_or((None, None), |(digest, mode)| (Some(digest), Some(mode)));
     Ok(PayloadRoot {
@@ -335,3 +322,7 @@ pub(crate) fn useful_state_digest(roots: &[PayloadRoot]) -> Result<String, &'sta
     }
     Ok(format!("b3-{}", digest.finalize().to_hex()))
 }
+
+#[cfg(test)]
+#[path = "tests/dispatch_cache_source_absence_tests.rs"]
+mod source_absence_tests;

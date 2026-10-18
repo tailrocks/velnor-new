@@ -42,7 +42,10 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
 }
 
 async fn validate_triggers(conn: &turso::Connection) -> Result<(), HostError> {
-    let expected = trigger_contracts();
+    let expected = profile_trigger_contracts()
+        .into_iter()
+        .chain(reservation_trigger_contracts())
+        .collect::<Vec<_>>();
     let mut rows = conn
         .query(
             "SELECT name, tbl_name, sql FROM sqlite_schema WHERE type = 'trigger'",
@@ -82,7 +85,7 @@ async fn validate_triggers(conn: &turso::Connection) -> Result<(), HostError> {
     }
 }
 
-fn trigger_contracts() -> [(&'static str, &'static str, &'static str, &'static str); 16] {
+fn profile_trigger_contracts() -> [(&'static str, &'static str, &'static str, &'static str); 7] {
     [
         (
             "host_storage_profiles_no_update",
@@ -126,6 +129,12 @@ fn trigger_contracts() -> [(&'static str, &'static str, &'static str, &'static s
             "before insert on host_storage_profile_roles",
             "raise(abort,'invalid storage role alias')",
         ),
+    ]
+}
+
+fn reservation_trigger_contracts() -> [(&'static str, &'static str, &'static str, &'static str); 9]
+{
+    [
         (
             "capacity_reservation_storage_no_update",
             "capacity_reservation_storage",

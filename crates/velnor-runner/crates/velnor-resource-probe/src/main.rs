@@ -1,4 +1,4 @@
-//! Write one bounded version-1 guest measurement record to stdout.
+//! Write one bounded version-2 guest measurement record to stdout.
 
 use std::io::{self, Write};
 

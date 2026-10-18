@@ -1,9 +1,24 @@
 # Resource probe image
 
 This build context packages the `velnor-resource-probe` executable in a
-`scratch` image for `linux/amd64`. The executable samples only fixed numeric
-kernel data and `statvfs` metadata for `/velnor/docker-root`; it never reads or
-enumerates files from that mount.
+`scratch` image for `linux/amd64`. The executable reads bounded kernel data.
+It measures the read-only `/velnor/docker-root` mount through one open file
+descriptor. It reports the mount ID, mount device, statx device, filesystem
+type, filesystem ID, boot ID, byte counts, and raw inode counts. Btrfs
+subvolumes can report a different statx device. The probe keeps both values and
+checks the mount ID and filesystem type. It does not read files from the
+Docker-root mount.
+
+The executable reports guest `MemAvailable` and its own cgroup v2 values.
+These cgroup values describe the probe only. They do not describe runner or
+worker memory, CPU, process, or swap limits. The host must measure those limits.
+The probe does not select a Docker root or storage pool policy. The host binds
+the report to the selected engine and configured storage pools.
+
+The version 2 JSON record preserves finite inode counts. It reports
+`dynamic_btrfs` only when Btrfs reports zero for all raw inode counts. Unknown
+inode policy must close storage admission. Btrfs byte counts do not prove a
+hard storage quota.
 
 The image has numeric user and group `65532:65532`, a fixed entrypoint, no
 command, the exact environment emitted by the pinned image builder, and an OCI

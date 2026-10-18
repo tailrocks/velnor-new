@@ -71,24 +71,41 @@ async fn absent_event_source_fields_match_authorization_but_presence_is_replay_i
         .await?;
     let fixture = started_fixture(&journal).await?;
     let absent = SourceMetadata::default();
+    assert_absent_start_replay_and_presence(&fixture, &absent).await?;
+    assert_absent_completion_replay_and_presence(&fixture, &absent).await?;
 
-    assert_eq!(
-        fixture
-            .scope
-            .record_job_started(&fixture.request, 910, &absent, &fixture.runner, None)
-            .await?,
-        fixture.intent_id
-    );
-    assert_eq!(
-        fixture
-            .scope
-            .record_job_started(&fixture.request, 910, &absent, &fixture.runner, None)
-            .await?,
-        fixture.intent_id
-    );
+    let binding = fixture.binding.clone();
+    let physical = fixture.physical.clone();
+    let intent_id = fixture.intent_id;
+    let request = fixture.request.clone();
+    let runner = fixture.runner.clone();
+    drop(fixture);
+    drop(journal);
 
-    let mut present = SourceMetadata::default();
-    present.owner_name = fixture.source.owner_name.clone();
+    assert_replay_survives_restart(
+        &path, &binding, &physical, intent_id, &request, &runner, &absent,
+    )
+    .await?;
+    Ok(())
+}
+
+async fn assert_absent_start_replay_and_presence(
+    fixture: &StartedFixture,
+    absent: &SourceMetadata,
+) -> Result<(), HostError> {
+    for _ in 0..2 {
+        assert_eq!(
+            fixture
+                .scope
+                .record_job_started(&fixture.request, 910, absent, &fixture.runner, None)
+                .await?,
+            fixture.intent_id
+        );
+    }
+    let present = SourceMetadata {
+        owner_name: fixture.source.owner_name.clone(),
+        ..SourceMetadata::default()
+    };
     assert!(matches!(
         fixture
             .scope
@@ -96,35 +113,33 @@ async fn absent_event_source_fields_match_authorization_but_presence_is_replay_i
             .await,
         Err(HostError::Identity)
     ));
+    Ok(())
+}
 
-    assert_eq!(
-        fixture
-            .scope
-            .record_job_completed(
-                &fixture.request,
-                911,
-                &absent,
-                Some("cancelled"),
-                Some(&fixture.runner),
-                None,
-            )
-            .await?,
-        Some(fixture.intent_id)
-    );
-    assert_eq!(
-        fixture
-            .scope
-            .record_job_completed(
-                &fixture.request,
-                911,
-                &absent,
-                Some("cancelled"),
-                Some(&fixture.runner),
-                None,
-            )
-            .await?,
-        Some(fixture.intent_id)
-    );
+async fn assert_absent_completion_replay_and_presence(
+    fixture: &StartedFixture,
+    absent: &SourceMetadata,
+) -> Result<(), HostError> {
+    for _ in 0..2 {
+        assert_eq!(
+            fixture
+                .scope
+                .record_job_completed(
+                    &fixture.request,
+                    911,
+                    absent,
+                    Some("cancelled"),
+                    Some(&fixture.runner),
+                    None,
+                )
+                .await?,
+            Some(fixture.intent_id)
+        );
+    }
+    let present = SourceMetadata {
+        owner_name: fixture.source.owner_name.clone(),
+        ..SourceMetadata::default()
+    };
     assert!(matches!(
         fixture
             .scope
@@ -139,38 +154,34 @@ async fn absent_event_source_fields_match_authorization_but_presence_is_replay_i
             .await,
         Err(HostError::Identity)
     ));
+    Ok(())
+}
 
-    let binding = fixture.binding.clone();
-    let physical = fixture.physical.clone();
-    let intent_id = fixture.intent_id;
-    let request = fixture.request.clone();
-    let runner = fixture.runner.clone();
-    drop(fixture);
-    drop(journal);
-
-    let journal = Journal::open(&path).await?;
-    let scope = journal.connection_scope(&binding).await?;
+async fn assert_replay_survives_restart(
+    path: &std::path::Path,
+    binding: &crate::config::RepositoryConnection,
+    physical: &AssignmentIdentity,
+    intent_id: i64,
+    request: &AssignmentIdentity,
+    runner: &RunnerReference,
+    absent: &SourceMetadata,
+) -> Result<(), HostError> {
+    let journal = Journal::open(path).await?;
+    let scope = journal.connection_scope(binding).await?;
     assert_eq!(
         scope
-            .record_job_started(&request, 910, &absent, &runner, None)
+            .record_job_started(request, 910, absent, runner, None)
             .await?,
         intent_id
     );
     assert_eq!(
         scope
-            .record_job_completed(
-                &request,
-                911,
-                &absent,
-                Some("cancelled"),
-                Some(&runner),
-                None,
-            )
+            .record_job_completed(request, 911, absent, Some("cancelled"), Some(runner), None,)
             .await?,
         Some(intent_id)
     );
     assert_eq!(
-        scope.reservation(&physical).await?.map(|row| row.state),
+        scope.reservation(physical).await?.map(|row| row.state),
         Some(ReservationState::Reserved)
     );
     Ok(())

@@ -6,8 +6,8 @@ use crate::error::HostError;
 use super::observations::{
     StorageMemoryObservation, StoragePoolObservation, StorageSampleIdentity,
 };
-use super::plan::StorageReservationPlan;
-use super::profile::StorageProfile;
+use super::plan::{StorageReservationPlan, StorageRoleCharge};
+use super::profile::{StoragePoolLimit, StorageProfile};
 use super::role::{StorageFilesystemKind, StorageInodePolicy, StorageMedium};
 
 const MAX_STORAGE_POOLS: usize = 16;
@@ -83,107 +83,17 @@ impl StorageAdmissionSample {
         base_memory_charge: u64,
         now: Instant,
     ) -> Result<(), HostError> {
-        if self.identity.sample_generation_id != sample_generation_id
-            || self.identity.profile_generation_id != profile.generation_id()
-            || self.identity.profile_digest != profile.profile_digest()
-            || self.identity.engine_id != engine_id
-            || self.identity.docker_root_digest != docker_root_digest
-            || now
-                .checked_duration_since(self.observed_at)
-                .is_none_or(|age| age > MAX_SAMPLE_AGE)
-            || !wall_sample_is_recent(self.observed_at_unix_ms)
-        {
-            return Err(HostError::Journal);
-        }
+        validate_sample_identity(
+            self,
+            profile,
+            sample_generation_id,
+            engine_id,
+            docker_root_digest,
+            now,
+        )?;
         profile.validate_plan(plan)?;
-        if self.pools.len() != profile.pools().len() {
-            return Err(HostError::Journal);
-        }
-        let mut retained_memory = 0_u64;
-        for pool_limit in profile.pools() {
-            let observation = self
-                .pools
-                .iter()
-                .find(|pool| pool.pool_id == pool_limit.pool_id)
-                .ok_or(HostError::Journal)?;
-            if observation.medium != pool_limit.medium
-                || observation.total_bytes < pool_limit.max_bytes
-            {
-                return Err(HostError::Journal);
-            }
-            match pool_limit.inode_policy {
-                StorageInodePolicy::Finite
-                    if observation.total_inodes >= pool_limit.max_inodes
-                        && observation.total_inodes > 0 => {}
-                StorageInodePolicy::DynamicBtrfs
-                    if pool_limit.medium == StorageMedium::Disk
-                        && observation.filesystem_kind == StorageFilesystemKind::Btrfs
-                        && observation.total_inodes == 0
-                        && observation.available_inodes == 0 => {}
-                _ => return Err(HostError::Journal),
-            }
-            if pool_limit.medium == StorageMedium::Tmpfs
-                && observation.filesystem_kind != StorageFilesystemKind::Tmpfs
-            {
-                return Err(HostError::Journal);
-            }
-            let matching_roles = plan
-                .roles()
-                .iter()
-                .filter(|role| role.pool_id == pool_limit.pool_id)
-                .collect::<Vec<_>>();
-            if matching_roles.iter().any(|role| {
-                role.filesystem_instance_digest != observation.filesystem_instance_digest
-            }) {
-                return Err(HostError::Journal);
-            }
-            let charged_bytes = matching_roles.iter().try_fold(0_u64, |sum, role| {
-                sum.checked_add(role.charge_bytes).ok_or(HostError::Journal)
-            })?;
-            let charged_inodes = matching_roles.iter().try_fold(0_u64, |sum, role| {
-                sum.checked_add(role.charge_inodes)
-                    .ok_or(HostError::Journal)
-            })?;
-            let required_bytes = charged_bytes
-                .checked_add(pool_limit.reserve_bytes)
-                .ok_or(HostError::Journal)?;
-            let required_inodes = charged_inodes
-                .checked_add(pool_limit.reserve_inodes)
-                .ok_or(HostError::Journal)?;
-            let inode_capacity_fits = match pool_limit.inode_policy {
-                StorageInodePolicy::Finite => observation.available_inodes >= required_inodes,
-                StorageInodePolicy::DynamicBtrfs => true,
-                StorageInodePolicy::Unknown => false,
-            };
-            if observation.available_bytes < required_bytes || !inode_capacity_fits {
-                return Err(HostError::Journal);
-            }
-        }
-        for role in plan.roles() {
-            retained_memory = retained_memory
-                .checked_add(role.retained_memory_bytes)
-                .ok_or(HostError::Journal)?;
-        }
-        if profile
-            .pools()
-            .iter()
-            .any(|pool| pool.medium == StorageMedium::Tmpfs)
-        {
-            let memory = self.memory.as_ref().ok_or(HostError::Journal)?;
-            let total = retained_memory
-                .checked_add(base_memory_charge)
-                .ok_or(HostError::Journal)?;
-            let memory_after = memory
-                .ancestor_memory_current_bytes
-                .checked_add(total)
-                .ok_or(HostError::Journal)?;
-            if memory.guest_available_bytes < total
-                || memory_after > memory.ancestor_memory_max_bytes
-            {
-                return Err(HostError::Journal);
-            }
-        }
-        Ok(())
+        validate_pool_observations(self, profile, plan)?;
+        validate_retained_memory(self, profile, plan, base_memory_charge)
     }
 
     pub(crate) fn identity(&self) -> &StorageSampleIdentity {
@@ -200,6 +110,160 @@ impl StorageAdmissionSample {
 
     pub(crate) fn memory(&self) -> Option<&StorageMemoryObservation> {
         self.memory.as_ref()
+    }
+}
+
+fn validate_sample_identity(
+    sample: &StorageAdmissionSample,
+    profile: &StorageProfile,
+    sample_generation_id: &str,
+    engine_id: &str,
+    docker_root_digest: &str,
+    now: Instant,
+) -> Result<(), HostError> {
+    let identity_matches = sample.identity.sample_generation_id == sample_generation_id
+        && sample.identity.profile_generation_id == profile.generation_id()
+        && sample.identity.profile_digest == profile.profile_digest()
+        && sample.identity.engine_id == engine_id
+        && sample.identity.docker_root_digest == docker_root_digest;
+    let sample_is_fresh = now
+        .checked_duration_since(sample.observed_at)
+        .is_some_and(|age| age <= MAX_SAMPLE_AGE)
+        && wall_sample_is_recent(sample.observed_at_unix_ms);
+    if identity_matches && sample_is_fresh {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
+}
+
+fn validate_pool_observations(
+    sample: &StorageAdmissionSample,
+    profile: &StorageProfile,
+    plan: &StorageReservationPlan,
+) -> Result<(), HostError> {
+    if sample.pools.len() != profile.pools().len() {
+        return Err(HostError::Journal);
+    }
+    for limit in profile.pools() {
+        let observation = sample
+            .pools
+            .iter()
+            .find(|pool| pool.pool_id == limit.pool_id)
+            .ok_or(HostError::Journal)?;
+        validate_pool_observation(limit, observation, plan)?;
+    }
+    Ok(())
+}
+
+fn validate_pool_observation(
+    limit: &StoragePoolLimit,
+    observation: &StoragePoolObservation,
+    plan: &StorageReservationPlan,
+) -> Result<(), HostError> {
+    validate_pool_identity(limit, observation)?;
+    let matching_roles = plan
+        .roles()
+        .iter()
+        .filter(|role| role.pool_id == limit.pool_id)
+        .collect::<Vec<_>>();
+    if matching_roles
+        .iter()
+        .any(|role| role.filesystem_instance_digest != observation.filesystem_instance_digest)
+    {
+        return Err(HostError::Journal);
+    }
+    validate_pool_capacity(limit, observation, &matching_roles)
+}
+
+fn validate_pool_identity(
+    limit: &StoragePoolLimit,
+    observation: &StoragePoolObservation,
+) -> Result<(), HostError> {
+    let inode_policy_matches = match limit.inode_policy {
+        StorageInodePolicy::Finite => {
+            observation.total_inodes >= limit.max_inodes && observation.total_inodes > 0
+        }
+        StorageInodePolicy::DynamicBtrfs => {
+            limit.medium == StorageMedium::Disk
+                && observation.filesystem_kind == StorageFilesystemKind::Btrfs
+                && observation.total_inodes == 0
+                && observation.available_inodes == 0
+        }
+        StorageInodePolicy::Unknown => false,
+    };
+    let filesystem_matches = limit.medium != StorageMedium::Tmpfs
+        || observation.filesystem_kind == StorageFilesystemKind::Tmpfs;
+    if observation.medium == limit.medium
+        && observation.total_bytes >= limit.max_bytes
+        && inode_policy_matches
+        && filesystem_matches
+    {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
+}
+
+fn validate_pool_capacity(
+    limit: &StoragePoolLimit,
+    observation: &StoragePoolObservation,
+    roles: &[&StorageRoleCharge],
+) -> Result<(), HostError> {
+    let charged_bytes = roles.iter().try_fold(0_u64, |sum, role| {
+        sum.checked_add(role.charge_bytes).ok_or(HostError::Journal)
+    })?;
+    let charged_inodes = roles.iter().try_fold(0_u64, |sum, role| {
+        sum.checked_add(role.charge_inodes)
+            .ok_or(HostError::Journal)
+    })?;
+    let required_bytes = charged_bytes
+        .checked_add(limit.reserve_bytes)
+        .ok_or(HostError::Journal)?;
+    let required_inodes = charged_inodes
+        .checked_add(limit.reserve_inodes)
+        .ok_or(HostError::Journal)?;
+    let inode_capacity_fits = match limit.inode_policy {
+        StorageInodePolicy::Finite => observation.available_inodes >= required_inodes,
+        StorageInodePolicy::DynamicBtrfs => true,
+        StorageInodePolicy::Unknown => false,
+    };
+    if observation.available_bytes >= required_bytes && inode_capacity_fits {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
+}
+
+fn validate_retained_memory(
+    sample: &StorageAdmissionSample,
+    profile: &StorageProfile,
+    plan: &StorageReservationPlan,
+    base_memory_charge: u64,
+) -> Result<(), HostError> {
+    let has_tmpfs = profile
+        .pools()
+        .iter()
+        .any(|pool| pool.medium == StorageMedium::Tmpfs);
+    if !has_tmpfs {
+        return Ok(());
+    }
+    let retained_memory = plan.roles().iter().try_fold(0_u64, |sum, role| {
+        sum.checked_add(role.retained_memory_bytes)
+            .ok_or(HostError::Journal)
+    })?;
+    let memory = sample.memory.as_ref().ok_or(HostError::Journal)?;
+    let total = retained_memory
+        .checked_add(base_memory_charge)
+        .ok_or(HostError::Journal)?;
+    let memory_after = memory
+        .ancestor_memory_current_bytes
+        .checked_add(total)
+        .ok_or(HostError::Journal)?;
+    if memory.guest_available_bytes >= total && memory_after <= memory.ancestor_memory_max_bytes {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
     }
 }
 

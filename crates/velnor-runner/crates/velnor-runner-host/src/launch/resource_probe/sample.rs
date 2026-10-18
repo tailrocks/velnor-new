@@ -58,7 +58,7 @@ impl Observation {
 
     pub(super) fn pressure(self) -> Option<Sample> {
         self.is_recent_at(Instant::now()).then_some(Sample {
-            load_millis: self.record.load_milli,
+            load_millis: u32::try_from(self.record.load_milli).unwrap_or(u32::MAX),
             ncpu: self.cpus,
             mem_available: self.record.memory_available_bytes,
             disk_free: self.record.docker_root_free_bytes,
@@ -165,14 +165,7 @@ impl StartPermit {
             .unwrap_or_default();
         StartPermit {
             observation: Observation {
-                record: ProbeRecord {
-                    schema_version: 1,
-                    docker_root_free_bytes: 20 * 1024 * 1024 * 1024,
-                    docker_root_total_bytes: 40 * 1024 * 1024 * 1024,
-                    memory_available_bytes: 8 * 1024 * 1024 * 1024,
-                    load_milli: 125,
-                    memory_psi_some_avg10_bps: None,
-                },
+                record: super::record::fixture_record(),
                 cpus: 1,
                 engine_id: "test-engine".to_owned(),
                 docker_root_digest,
