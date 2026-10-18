@@ -4,7 +4,10 @@ use super::admission::physical_intent;
 use super::helpers::{event_source, record_acquired, runner_name};
 use super::review_counterexamples::ready;
 use crate::error::HostError;
-use crate::journal::{Journal, ReservationState};
+use crate::journal::{
+    AssignmentKey, Journal, ReservationRequest, ReservationResult, ReservationState,
+};
+use crate::launch::StartPermit;
 
 #[tokio::test]
 async fn version_ten_migration_preserves_ready_runner_and_capacity_charge() -> Result<(), HostError>
@@ -40,8 +43,77 @@ async fn version_ten_migration_preserves_ready_runner_and_capacity_charge() -> R
 }
 
 #[tokio::test]
-async fn version_ten_ready_runner_with_both_cleanup_proofs_allows_replacement_jit()
--> Result<(), HostError> {
+async fn version_ten_known_cleaned_runner_states_allow_replacement_jit() -> Result<(), HostError> {
+    for (index, legacy_state) in [
+        "bound",
+        "start_requested",
+        "start_uncertain",
+        "ready",
+        "started",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let fixture = ready().await?;
+        if legacy_state == "started" {
+            fixture
+                .scope
+                .record_job_started(
+                    &fixture.request,
+                    701,
+                    &event_source(101, 1070),
+                    &fixture.runner,
+                    None,
+                )
+                .await?;
+        }
+        let reservation = fixture
+            .scope
+            .reservation(&fixture.physical)
+            .await?
+            .ok_or(HostError::Journal)?;
+        fixture
+            .scope
+            .record_remote_cleanup(reservation.reservation_id)
+            .await?;
+        fixture
+            .scope
+            .record_local_cleanup(reservation.reservation_id)
+            .await?;
+        let path = fixture.scratch.file();
+        let intent = fixture.intent;
+        let physical = fixture.physical.clone();
+        let binding = fixture.binding.clone();
+        drop(fixture.scope);
+        drop(fixture.journal);
+
+        restore_legacy_runner_state(&path, intent, legacy_state).await?;
+        make_version_ten_jit_schema(&path).await?;
+
+        let journal = Journal::open(&path).await?;
+        let scope = journal.connection_scope(&binding).await?;
+        assert_eq!(
+            scope.reservation(&physical).await?.map(|row| row.state),
+            Some(ReservationState::Released)
+        );
+        if legacy_state == "started" {
+            record_acquired(&scope, 72).await?;
+        }
+        let nonce = char::from(b'a' + u8::try_from(index).map_err(|_| HostError::Journal)?);
+        let (_replacement, replacement_intent) = physical_intent(&scope, nonce).await?;
+        assert!(
+            scope
+                .claim_runner_jit(replacement_intent, &runner_name(nonce))
+                .await?
+                .is_some(),
+            "known runner in {legacy_state} with exact released cleanup proof blocked replacement"
+        );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn version_ten_partial_cleanup_keeps_capacity_held() -> Result<(), HostError> {
     let fixture = ready().await?;
     let reservation = fixture
         .scope
@@ -52,33 +124,43 @@ async fn version_ten_ready_runner_with_both_cleanup_proofs_allows_replacement_ji
         .scope
         .record_remote_cleanup(reservation.reservation_id)
         .await?;
-    fixture
-        .scope
-        .record_local_cleanup(reservation.reservation_id)
-        .await?;
     let path = fixture.scratch.file();
-    let intent = fixture.intent;
     let physical = fixture.physical.clone();
     let binding = fixture.binding.clone();
     drop(fixture.scope);
     drop(fixture.journal);
-
-    restore_legacy_ready_state(&path, intent).await?;
     make_version_ten_jit_schema(&path).await?;
 
     let journal = Journal::open(&path).await?;
     let scope = journal.connection_scope(&binding).await?;
     assert_eq!(
         scope.reservation(&physical).await?.map(|row| row.state),
-        Some(ReservationState::Released)
+        Some(ReservationState::Reserved)
     );
-    let (_replacement, replacement_intent) = physical_intent(&scope, 'f').await?;
-    assert!(
+    let assignment = scope
+        .assignment_identity(AssignmentKey::Remote {
+            kind: "runner".to_owned(),
+            subject: "f".repeat(32),
+        })
+        .await?;
+    let permit = StartPermit::test_fixture();
+    let generation = permit.sample_generation_id().to_owned();
+    let root_digest = permit.docker_root_digest().to_owned();
+    assert_eq!(
         scope
-            .claim_runner_jit(replacement_intent, &runner_name('f'))
-            .await?
-            .is_some(),
-        "a known runner with exact released cleanup proof kept its acquired request blocked"
+            .try_reserve(
+                ReservationRequest {
+                    assignment: &assignment,
+                    engine_id: "test-engine",
+                    docker_root_digest: &root_digest,
+                    cpu_millicores: super::admission::JOB_LIMIT.cpu_millicores,
+                    memory_bytes: super::admission::JOB_LIMIT.memory_bytes,
+                    sample_generation_id: &generation,
+                },
+                permit,
+            )
+            .await?,
+        ReservationResult::AtCapacity
     );
     Ok(())
 }
@@ -232,7 +314,17 @@ async fn make_version_ten_jit_schema(path: &Path) -> Result<(), HostError> {
     Ok(())
 }
 
-async fn restore_legacy_ready_state(path: &Path, intent_id: i64) -> Result<(), HostError> {
+async fn restore_legacy_runner_state(
+    path: &Path,
+    intent_id: i64,
+    legacy_state: &str,
+) -> Result<(), HostError> {
+    if !matches!(
+        legacy_state,
+        "bound" | "start_requested" | "start_uncertain" | "ready" | "started"
+    ) {
+        return Err(HostError::Journal);
+    }
     let path = path.to_str().ok_or(HostError::Journal)?;
     let database = turso::Builder::new_local(path)
         .build()
@@ -241,8 +333,8 @@ async fn restore_legacy_ready_state(path: &Path, intent_id: i64) -> Result<(), H
     let connection = database.connect().map_err(|_| HostError::Journal)?;
     let changed = connection
         .execute(
-            "UPDATE connection_runner_jits SET state = 'ready' WHERE intent_id = ?1 AND state = 'cleaned' AND runner_id IS NOT NULL AND runner_name IS NOT NULL AND completed_request_id IS NULL",
-            [intent_id],
+            "UPDATE connection_runner_jits SET state = ?1 WHERE intent_id = ?2 AND state = 'cleaned' AND runner_id IS NOT NULL AND runner_name IS NOT NULL",
+            (legacy_state, intent_id),
         )
         .await
         .map_err(|_| HostError::Journal)?;
