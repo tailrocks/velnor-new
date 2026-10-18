@@ -51,7 +51,8 @@ async fn permit_generation_is_one_use_and_fresh_resume_reuses_the_charge() -> Re
 }
 
 #[tokio::test]
-async fn claimed_remote_effect_requires_reconciliation_before_resume() -> Result<(), HostError> {
+async fn uncreated_or_unreceipted_acquire_is_blocked_before_remote_effect() -> Result<(), HostError>
+{
     let scratch = Scratch::new("effect-claim-resume")?;
     let journal = Journal::open(&scratch.file()).await?;
     journal
@@ -66,7 +67,7 @@ async fn claimed_remote_effect_requires_reconciliation_before_resume() -> Result
     };
     let (intent_id, fresh) = scope.begin_assigned_launch(&identity, "v33").await?;
     assert!(fresh);
-    assert!(scope.claim_assigned_acquire(intent_id).await?);
+    assert!(!scope.claim_assigned_acquire(intent_id).await?);
 
     let generation = "d".repeat(32);
     assert_eq!(
@@ -76,7 +77,7 @@ async fn claimed_remote_effect_requires_reconciliation_before_resume() -> Result
                 permit_with_generation(&generation),
             )
             .await?,
-        ReservationResult::ReconcileRequired {
+        ReservationResult::Resumed {
             reservation_id: scope
                 .reservation(&identity)
                 .await?

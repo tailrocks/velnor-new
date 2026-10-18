@@ -17,6 +17,7 @@ mod read;
 mod resource_probe;
 mod scale_set_create;
 mod schema;
+mod source_authorization;
 mod sql;
 mod transaction;
 mod worker_volume;
@@ -48,6 +49,7 @@ pub(crate) use scale_set_create::{
     ScaleSetCreateNoEffect, ScaleSetCreateReceipt, ScaleSetCreateRecord, ScaleSetCreateRequest,
     ScaleSetCreateState,
 };
+pub(crate) use source_authorization::{AssignedAcquireResult, SourceAuthorizationResult};
 use sql::{intent_row, one_row, same_ids, token_rejected};
 
 pub(crate) use resource_probe::{ProbePhase, ProbeRow, ProbeSeed};

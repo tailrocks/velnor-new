@@ -27,3 +27,9 @@ pub(crate) struct ConnectionJournal {
     identity: String,
     binding_digest: String,
 }
+
+pub(in crate::journal) async fn has_unresolved_legacy_work(
+    connection: &turso::Connection,
+) -> Result<bool, crate::error::HostError> {
+    storage::has_ambiguous_legacy_work(connection).await
+}

@@ -4,6 +4,10 @@ use super::super::storage::{in_transaction, read_transaction};
 use super::super::{AssignmentIdentity, ConnectionJournal};
 use super::helpers::same_runner_identity;
 use crate::error::HostError;
+use crate::journal::source_authorization::{
+    AssignedAcquireResult, closed_world_allows_jit, created_set_matches,
+    source_authorized_for_intent,
+};
 use crate::journal::sql::{one_row, token_rejected};
 
 impl ConnectionJournal {
@@ -155,20 +159,45 @@ impl ConnectionJournal {
     pub(crate) async fn record_assigned_acquire(
         &self,
         id: i64,
-        acquired: bool,
+        result: AssignedAcquireResult,
     ) -> Result<(), HostError> {
         in_transaction(&self.journal, async |connection| {
             self.validate_scope(connection).await?;
-            let statement = if acquired {
-                "UPDATE connection_intents SET acquire_resolved = 1, acquired = 1, launch_phase = 'acquired' WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND state = 'pending' AND acquire_attempted = 1 AND acquire_resolved = 0 AND acquired = 0 AND jit_requested = 0 AND cleanup_proven = 0"
-            } else {
-                "UPDATE connection_intents SET state = 'failed', acquire_attempted = 0, acquire_resolved = 0, acquired = 0 WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND state = 'pending' AND acquire_attempted = 1 AND acquire_resolved = 0 AND acquired = 0 AND jit_requested = 0 AND cleanup_proven = 0"
+            let request_id = assigned_request_id(connection, id, self.connection_id.as_str()).await?;
+            let (statement, replay_state) = match &result {
+                AssignedAcquireResult::Returned(ids) if ids.as_slice() == [request_id] => (
+                    "UPDATE connection_intents SET acquire_resolved = 1, acquired = 1, launch_phase = 'acquired' WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND state = 'pending' AND acquire_attempted = 1 AND acquire_resolved = 0 AND acquired = 0 AND jit_requested = 0 AND cleanup_proven = 0",
+                    "acquired",
+                ),
+                AssignedAcquireResult::Rejected => (
+                    "UPDATE connection_intents SET state = 'failed', acquire_resolved = 1, acquired = 0, launch_phase = 'acquire_rejected' WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND state = 'pending' AND acquire_attempted = 1 AND acquire_resolved = 0 AND acquired = 0 AND jit_requested = 0 AND cleanup_proven = 0",
+                    "rejected",
+                ),
+                AssignedAcquireResult::Uncertain | AssignedAcquireResult::Returned(_) => (
+                    "UPDATE connection_intents SET state = 'uncertain', launch_phase = 'acquire_uncertain' WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND state = 'pending' AND acquire_attempted = 1 AND acquire_resolved = 0 AND acquired = 0 AND jit_requested = 0 AND cleanup_proven = 0",
+                    "uncertain",
+                ),
             };
             let changed = connection
                 .execute(statement, (id, self.connection_id.as_str()))
                 .await
                 .map_err(|_| HostError::Journal)?;
-            one_row(changed)
+            if changed == 1 {
+                return Ok(());
+            }
+            if assigned_acquire_replay_matches(
+                connection,
+                id,
+                self.connection_id.as_str(),
+                request_id,
+                replay_state,
+            )
+            .await?
+            {
+                Ok(())
+            } else {
+                Err(HostError::Journal)
+            }
         })
         .await
     }
@@ -185,9 +214,45 @@ impl ConnectionJournal {
         }
         in_transaction(&self.journal, async |connection| {
             self.validate_scope(connection).await?;
+            let set_id = self.required_set_id(connection).await?;
+            let allowed = match flag {
+                "acquire" => {
+                    let request_id = assigned_request_id(connection, id, self.connection_id.as_str()).await?;
+                    created_set_matches(
+                        connection,
+                        self.connection_id.as_str(),
+                        set_id,
+                        self.binding_digest(),
+                    )
+                    .await?
+                        && source_authorized_for_intent(
+                            connection,
+                            self.connection_id.as_str(),
+                            set_id,
+                            request_id,
+                            id,
+                            self.binding_digest(),
+                        )
+                        .await?
+                }
+                "jit" => {
+                    closed_world_allows_jit(
+                        connection,
+                        self.connection_id.as_str(),
+                        set_id,
+                        id,
+                        self.binding_digest(),
+                    )
+                    .await?
+                }
+                _ => return Err(HostError::Journal),
+            };
+            if !allowed {
+                return Ok(false);
+            }
             let statement = match flag {
                 "acquire" => "UPDATE connection_intents SET acquire_attempted = 1, launch_phase = 'acquire_requested' WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND scale_set_id IS NOT NULL AND runner_request_id IS NOT NULL AND runner_name IS NOT NULL AND acquire_attempted = 0 AND acquire_resolved = 0 AND acquired = 0 AND jit_requested = 0",
-                "jit" => "UPDATE connection_intents SET jit_requested = 1, launch_phase = 'jit_requested' WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND runner_name IS NOT NULL AND jit_requested = 0 AND ((runner_request_id IS NULL AND acquire_attempted = 0 AND acquire_resolved = 0 AND acquired = 0) OR (runner_request_id IS NOT NULL AND acquire_attempted = 1 AND acquire_resolved = 1 AND acquired = 1))",
+                "jit" => "UPDATE connection_intents SET jit_requested = 1, launch_phase = 'jit_requested' WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND runner_request_id IS NOT NULL AND runner_name IS NOT NULL AND acquire_attempted = 1 AND acquire_resolved = 1 AND acquired = 1 AND jit_requested = 0",
                 _ => return Err(HostError::Journal),
             };
             let changed = connection
@@ -233,4 +298,58 @@ impl ConnectionJournal {
             .filter(|id| *id > 0)
             .ok_or(HostError::Journal)
     }
+}
+
+async fn assigned_request_id(
+    connection: &turso::Connection,
+    id: i64,
+    connection_id: &str,
+) -> Result<i64, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT runner_request_id FROM connection_intents WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND runner_request_id IS NOT NULL AND scale_set_id IS NOT NULL",
+            (id, connection_id),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    rows.next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?
+        .get::<Option<i64>>(0)
+        .map_err(|_| HostError::Journal)?
+        .filter(|request_id| *request_id > 0)
+        .ok_or(HostError::Journal)
+}
+
+async fn assigned_acquire_replay_matches(
+    connection: &turso::Connection,
+    id: i64,
+    connection_id: &str,
+    request_id: i64,
+    expected: &str,
+) -> Result<bool, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT state, acquire_attempted, acquire_resolved, acquired, runner_request_id FROM connection_intents WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch'",
+            (id, connection_id),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+        return Ok(false);
+    };
+    let state: String = row.get(0).map_err(|_| HostError::Journal)?;
+    let attempted: bool = row.get(1).map_err(|_| HostError::Journal)?;
+    let resolved: bool = row.get(2).map_err(|_| HostError::Journal)?;
+    let acquired: bool = row.get(3).map_err(|_| HostError::Journal)?;
+    let stored_request_id: Option<i64> = row.get(4).map_err(|_| HostError::Journal)?;
+    Ok(attempted
+        && stored_request_id == Some(request_id)
+        && match expected {
+            "acquired" => resolved && acquired && matches!(state.as_str(), "pending" | "done"),
+            "rejected" => resolved && !acquired && state == "failed",
+            "uncertain" => !resolved && !acquired && state == "uncertain",
+            _ => false,
+        })
 }

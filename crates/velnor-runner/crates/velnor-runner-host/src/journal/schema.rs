@@ -9,8 +9,9 @@ mod image_import;
 mod migration;
 mod remote;
 mod scale_set_create;
+mod source_authorization;
 
-const JOURNAL_VERSION: i64 = 7;
+const JOURNAL_VERSION: i64 = 8;
 const CURRENT_COLUMNS: [ColumnShape; 23] = [
     ColumnShape::new("id", "INTEGER", false, None),
     ColumnShape::new("kind", "TEXT", true, None),
@@ -98,6 +99,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
             4 => migration::from_version_four(conn).await?,
             5 => migration::from_version_five(conn).await?,
             6 => migration::from_version_six(conn).await?,
+            7 => migration::from_version_seven(conn).await?,
             _ => return Err(HostError::Journal),
         }
     }
@@ -109,7 +111,8 @@ async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostE
     connection::validate_connection_schema(conn).await?;
     remote::validate(conn).await?;
     image_import::validate(conn).await?;
-    scale_set_create::validate(conn).await
+    scale_set_create::validate(conn).await?;
+    source_authorization::validate(conn).await
 }
 
 async fn journal_version(conn: &turso::Connection) -> Result<i64, HostError> {

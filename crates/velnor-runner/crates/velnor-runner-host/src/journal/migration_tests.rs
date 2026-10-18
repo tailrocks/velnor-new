@@ -60,6 +60,115 @@ async fn version_four_migration_validates_connection_and_remote_tables() {
     }
 }
 
+#[tokio::test]
+async fn version_seven_migration_installs_source_authorization_schema() {
+    let scratch = Scratch::new();
+    let path = scratch.file();
+    drop(Journal::open(&path).await.expect("initial schema"));
+    let database = turso::Builder::new_local(path.to_str().expect("UTF-8 temp path"))
+        .build()
+        .await
+        .expect("open SQLite");
+    let connection = database.connect().expect("connect SQLite");
+    connection
+        .execute("DROP TABLE connection_source_authorizations", ())
+        .await
+        .expect("restore version-seven shape");
+    connection
+        .execute("PRAGMA user_version = 7", ())
+        .await
+        .expect("mark version seven");
+    drop(connection);
+    drop(database);
+
+    drop(Journal::open(&path).await.expect("migrate version seven"));
+    let database = turso::Builder::new_local(path.to_str().expect("UTF-8 temp path"))
+        .build()
+        .await
+        .expect("reopen SQLite");
+    let connection = database.connect().expect("connect SQLite");
+    assert_eq!(read_version(&connection).await, 8);
+    assert_eq!(
+        table_count(&connection, "connection_source_authorizations").await,
+        1
+    );
+}
+
+#[tokio::test]
+async fn version_seven_migration_rejects_malformed_source_table_atomically() {
+    let scratch = Scratch::new();
+    let path = scratch.file();
+    drop(Journal::open(&path).await.expect("initial schema"));
+    let database = turso::Builder::new_local(path.to_str().expect("UTF-8 temp path"))
+        .build()
+        .await
+        .expect("open SQLite");
+    let connection = database.connect().expect("connect SQLite");
+    connection
+        .execute("DROP INDEX connection_source_authorization_intent", ())
+        .await
+        .expect("drop source index");
+    connection
+        .execute("DROP TABLE connection_source_authorizations", ())
+        .await
+        .expect("drop source table");
+    connection
+        .execute(
+            "CREATE TABLE connection_source_authorizations (connection_id TEXT, request_id INTEGER)",
+            (),
+        )
+        .await
+        .expect("create malformed source table");
+    connection
+        .execute("PRAGMA user_version = 7", ())
+        .await
+        .expect("mark version seven");
+    drop(connection);
+    drop(database);
+
+    assert!(Journal::open(&path).await.is_err());
+    let database = turso::Builder::new_local(path.to_str().expect("UTF-8 temp path"))
+        .build()
+        .await
+        .expect("reopen SQLite");
+    let connection = database.connect().expect("connect SQLite");
+    assert_eq!(read_version(&connection).await, 7);
+    assert_eq!(
+        table_count(&connection, "connection_source_authorizations").await,
+        1
+    );
+    assert_eq!(
+        table_count(&connection, "connection_source_authorization_intent").await,
+        0
+    );
+}
+
+async fn read_version(connection: &turso::Connection) -> i64 {
+    let mut rows = connection
+        .query("PRAGMA user_version", ())
+        .await
+        .expect("read version");
+    rows.next()
+        .await
+        .expect("read version row")
+        .expect("version row")
+        .get(0)
+        .expect("version value")
+}
+
+async fn table_count(connection: &turso::Connection, name: &str) -> i64 {
+    let mut rows = connection
+        .query("SELECT COUNT(*) FROM sqlite_schema WHERE name = ?1", [name])
+        .await
+        .expect("count schema objects");
+    rows.next()
+        .await
+        .expect("read schema count")
+        .expect("schema count row")
+        .get(0)
+        .expect("schema count")
+}
+
 async fn assert_v4_failure_rolled_back(path: &std::path::Path, damage: &str) {
     let database = turso::Builder::new_local(path.to_str().expect("UTF-8 temp path"))
         .build()
