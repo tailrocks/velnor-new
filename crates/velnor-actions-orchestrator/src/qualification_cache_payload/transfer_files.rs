@@ -1,4 +1,5 @@
 use super::dirs::{open_parent, same_object, same_version, validate_file_stat};
+use super::source::SourceFileGuard;
 use super::{CreatedPayload, cleanup};
 use super::{FILE_DOMAIN, MAX_FILE_BYTES};
 use rustix::fs::{AtFlags, Mode, OFlags, fchmod, openat, statat};
@@ -14,7 +15,7 @@ pub(super) fn copy_file_to_new_owned(
     source: &Path,
     destination: &Path,
 ) -> Result<CreatedPayload, &'static str> {
-    let (mut source_file, source_stat) = open_copy_source(source)?;
+    let (mut source_file, source_stat, source_guard) = open_copy_source(source)?;
     let (destination_parent, destination_name) = open_parent(destination)?;
     let destination_fd = openat(
         &destination_parent,
@@ -46,6 +47,7 @@ pub(super) fn copy_file_to_new_owned(
         &destination_name,
         destination,
         &source_stat,
+        &source_guard,
     );
     match copied {
         Ok(digest) => {
@@ -66,42 +68,28 @@ fn copy_open_file(
     destination_name: &std::ffi::CString,
     destination: &Path,
     source_stat: &rustix::fs::Stat,
+    source_guard: &SourceFileGuard,
 ) -> Result<String, &'static str> {
     let destination_copy = rustix::io::dup(&mut *destination_fd)
         .map_err(|_| "qualification_cache_payload_open_failed")?;
     let mut destination_file = fs::File::from(destination_copy);
     let expected = copy_file_bytes(source, &mut destination_file, source_stat)?;
-    verify_copied_file(
+    let digest = verify_copied_file(
         destination_fd,
         destination_parent,
         destination_name,
         destination,
         source_stat,
         &expected,
-    )
+    )?;
+    source_guard.revalidate(source)?;
+    Ok(digest)
 }
 
-pub(crate) fn open_copy_source(
+pub(in crate::qualification_cache_payload) fn open_copy_source(
     source: &Path,
-) -> Result<(fs::File, rustix::fs::Stat), &'static str> {
-    let (parent, name) = open_parent(source)?;
-    let before = statat(&parent, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)
-        .map_err(|_| "qualification_cache_payload_open_failed")?;
-    validate_file_stat(&before)?;
-    let fd = openat(
-        &parent,
-        name.as_c_str(),
-        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
-        Mode::empty(),
-    )
-    .map_err(|_| "qualification_cache_payload_open_failed")?;
-    if !same_version(
-        &before,
-        &rustix::fs::fstat(&fd).map_err(|_| "qualification_cache_payload_open_failed")?,
-    ) {
-        return Err("qualification_cache_payload_file_changed");
-    }
-    Ok((fs::File::from(fd), before))
+) -> Result<(fs::File, rustix::fs::Stat, SourceFileGuard), &'static str> {
+    super::source::open_file(source)
 }
 
 fn copy_file_bytes(
@@ -186,29 +174,12 @@ pub(super) fn digest_file(path: &Path) -> Result<Option<String>, &'static str> {
 }
 
 pub(super) fn digest_file_with_mode(path: &Path) -> Result<Option<(String, u32)>, &'static str> {
-    let (parent, name) = open_parent(path)?;
-    let before = statat(&parent, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)
-        .map_err(|_| "qualification_cache_payload_open_failed")?;
-    validate_file_stat(&before)?;
+    let (mut file, before, source_guard) = open_copy_source(path)?;
     super::payload::validate_payload_root_mode(&before)?;
-    let fd = openat(
-        &parent,
-        name.as_c_str(),
-        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
-        Mode::empty(),
-    )
-    .map_err(|_| "qualification_cache_payload_open_failed")?;
-    if !same_version(
-        &before,
-        &rustix::fs::fstat(&fd).map_err(|_| "qualification_cache_payload_open_failed")?,
-    ) {
-        return Err("qualification_cache_payload_file_changed");
-    }
     let size = u64::try_from(before.st_size).map_err(|_| "qualification_cache_payload_limit")?;
     if size > MAX_FILE_BYTES {
         return Err("qualification_cache_payload_limit");
     }
-    let mut file = fs::File::from(fd);
     let mut digest = blake3::Hasher::new();
     digest.update(FILE_DOMAIN);
     digest.update(&(u32::from(before.st_mode) & 0o777).to_be_bytes());
@@ -230,10 +201,10 @@ pub(super) fn digest_file_with_mode(path: &Path) -> Result<Option<(String, u32)>
         }
         digest.update(&buffer[..read]);
     }
-    let after = rustix::fs::fstat(&file).map_err(|_| "qualification_cache_payload_read_failed")?;
-    if count != size || !same_version(&before, &after) {
+    if count != size {
         return Err("qualification_cache_payload_file_changed");
     }
+    source_guard.revalidate(&file)?;
     Ok(Some((
         format!("b3-{}", digest.finalize().to_hex()),
         u32::from(before.st_mode) & 0o777,

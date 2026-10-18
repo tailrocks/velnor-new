@@ -1,12 +1,11 @@
 use std::fs;
-use std::os::fd::AsFd;
 use std::path::Path;
 
-use rustix::fs::{AtFlags, Mode, OFlags, Stat, open, openat, statat};
+use rustix::fs::{AtFlags, Mode, OFlags, Stat, openat, statat};
 
 use super::{
-    DOMAIN, Tree, payload_format_version, same_identity, same_version, update_bytes,
-    validate_directory, validate_payload_root_mode,
+    DOMAIN, Tree, payload_format_version, same_version, update_bytes, validate_directory,
+    validate_payload_root_mode,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,35 +140,24 @@ pub(crate) fn digest_archive_entries(
 
 pub(crate) fn inventory_directory(
     root: &Path,
-) -> Result<Option<(ArchiveInventory, rustix::fd::OwnedFd)>, &'static str> {
-    let metadata = fs::symlink_metadata(root).map_err(|_| "qualification_cache_payload_missing")?;
-    if !metadata.file_type().is_dir() {
-        return Err("qualification_cache_payload_root_invalid");
-    }
-    let root_fd = open(
-        root,
-        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
-        Mode::empty(),
-    )
-    .map_err(|_| "qualification_cache_payload_root_invalid")?;
-    let root_stat = rustix::fs::fstat(root_fd.as_fd())
-        .map_err(|_| "qualification_cache_payload_open_failed")?;
+) -> Result<Option<(ArchiveInventory, super::super::source::SourceDirectory)>, &'static str> {
+    let source = super::super::source::SourceDirectory::open(root)?;
+    let root_stat =
+        rustix::fs::fstat(source.fd()).map_err(|_| "qualification_cache_payload_open_failed")?;
     validate_directory(&root_stat)?;
     validate_payload_root_mode(&root_stat)?;
-    if !same_identity(&metadata, &root_stat) {
-        return Err("qualification_cache_payload_root_invalid");
-    }
     let mut tree = Tree::default();
-    super::scan::collect(&root_fd, "", 0, &mut tree)?;
-    let end_stat = rustix::fs::fstat(root_fd.as_fd())
-        .map_err(|_| "qualification_cache_payload_open_failed")?;
+    super::scan::collect(source.fd(), "", 0, &mut tree)?;
+    let end_stat =
+        rustix::fs::fstat(source.fd()).map_err(|_| "qualification_cache_payload_open_failed")?;
     if !same_version(&root_stat, &end_stat) {
         return Err("qualification_cache_payload_file_changed");
     }
+    source.revalidate()?;
     if tree.entries.is_empty() {
         return Ok(None);
     }
-    inventory_from_tree(root_stat, tree).map(|inventory| Some((inventory, root_fd)))
+    inventory_from_tree(root_stat, tree).map(|inventory| Some((inventory, source)))
 }
 
 pub(crate) fn open_inventory_file(

@@ -1,9 +1,6 @@
 use super::super::manifest::{PayloadManifest, PayloadRoot};
 use super::super::roots::{CacheRootId, CacheRootObservation, CacheRootSet};
-use super::dirs::{
-    open_directory_path, path_exists_no_follow, path_points_to, same_version,
-    validate_owned_directory,
-};
+use super::dirs::{path_exists_no_follow, same_version};
 use super::files::digest_file_with_mode;
 use super::install::install_roots;
 use super::payload;
@@ -285,14 +282,18 @@ pub(crate) fn snapshot_root(root: &CacheRootObservation) -> Result<PayloadRoot, 
 }
 
 pub(super) fn digest_directory(path: &Path) -> Result<Option<(String, u32)>, &'static str> {
-    let opened = open_directory_path(path)?;
-    validate_owned_directory(&opened)?;
-    let before = rustix::fs::fstat(&opened).map_err(|_| "qualification_cache_root_read_failed")?;
-    let digest = payload::digest_stage(path)?;
-    let after = rustix::fs::fstat(&opened).map_err(|_| "qualification_cache_root_read_failed")?;
-    if !same_version(&before, &after) || !path_points_to(path, &opened) {
+    let Some(source) = super::source::SourceDirectory::open_optional(path)? else {
+        return Ok(None);
+    };
+    let before =
+        rustix::fs::fstat(source.fd()).map_err(|_| "qualification_cache_root_read_failed")?;
+    let digest = payload::digest_open_directory(source.fd())?;
+    let after =
+        rustix::fs::fstat(source.fd()).map_err(|_| "qualification_cache_root_read_failed")?;
+    if !same_version(&before, &after) {
         return Err("qualification_cache_root_changed");
     }
+    source.revalidate()?;
     Ok(digest.map(|digest| (digest, u32::from(before.st_mode) & 0o777)))
 }
 
