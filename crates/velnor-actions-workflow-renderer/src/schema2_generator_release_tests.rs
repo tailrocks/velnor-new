@@ -148,13 +148,14 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
 }
 
 fn create_candidate_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn Error>> {
+    let pins = test_pins();
     let manifest_status = Command::new("bash")
         .args([
             "scripts/generator-release/create-release-manifest.sh",
             "0.1.13",
             REPOSITORY,
-            "1.98.1",
-            "1.21.1",
+            &pins.rust_version,
+            &pins.mr_boxington_version,
         ])
         .current_dir(root)
         .env("PATH", with_required_tool_path(&[])?)
