@@ -9,6 +9,7 @@ fn config() -> ResourceBudgetConfig {
         runner_memory_bytes: 2_147_483_648,
         dind_cpu_millicores: 3_000,
         dind_memory_bytes: 6_442_450_944,
+        operational_memory_reserve_bytes: 1_073_741_824,
     }
 }
 
@@ -45,6 +46,14 @@ fn zero_or_overflowing_container_budgets_fail_closed() {
 
     let mut bad = config();
     bad.dind_memory_bytes = u64::MAX;
+    assert_eq!(bad.validate().err(), Some(HostError::Config));
+
+    let mut bad = config();
+    bad.operational_memory_reserve_bytes = 0;
+    assert_eq!(bad.validate().err(), Some(HostError::Config));
+
+    let mut bad = config();
+    bad.operational_memory_reserve_bytes = u64::MAX;
     assert_eq!(bad.validate().err(), Some(HostError::Config));
 }
 
@@ -125,6 +134,7 @@ fn changed_config_reaches_both_actual_container_create_projections() -> Result<(
         runner_memory_bytes: 3_221_225_472,
         dind_cpu_millicores: 2_500,
         dind_memory_bytes: 5_368_709_120,
+        operational_memory_reserve_bytes: 1_073_741_824,
     };
     let budget = config.validate()?;
     let runner = crate::worker::runner_create(&crate::runner_plan("worker_a")?, budget)?;
@@ -150,11 +160,29 @@ fn resource_configuration_rejects_missing_malformed_and_overflowing_values() {
     )
     .is_err());
     assert!(toml::from_str::<ResourceBudgetConfig>(
-        "runner_cpu_millicores = 'many'\nrunner_memory_bytes = 2147483648\ndind_cpu_millicores = 3000\ndind_memory_bytes = 6442450944"
+        "runner_cpu_millicores = 'many'\nrunner_memory_bytes = 2147483648\ndind_cpu_millicores = 3000\ndind_memory_bytes = 6442450944\noperational_memory_reserve_bytes = 1073741824"
     )
     .is_err());
     let oversized = toml::from_str::<ResourceBudgetConfig>(
-        "runner_cpu_millicores = 1000\nrunner_memory_bytes = 9223372036854775807\ndind_cpu_millicores = 3000\ndind_memory_bytes = 6442450944",
+        "runner_cpu_millicores = 1000\nrunner_memory_bytes = 9223372036854775807\ndind_cpu_millicores = 3000\ndind_memory_bytes = 6442450944\noperational_memory_reserve_bytes = 1073741824",
     );
     assert!(oversized.is_ok_and(|value| value.validate().is_err()));
+}
+
+#[test]
+fn operational_reserve_is_required_and_includes_probe_memory_with_checked_bounds() {
+    assert!(toml::from_str::<ResourceBudgetConfig>(
+        "runner_cpu_millicores = 1000\nrunner_memory_bytes = 2147483648\ndind_cpu_millicores = 3000\ndind_memory_bytes = 6442450944"
+    )
+    .is_err());
+    let zero = ResourceBudgetConfig {
+        operational_memory_reserve_bytes: 0,
+        ..config()
+    };
+    assert_eq!(zero.validate().err(), Some(HostError::Config));
+    let too_large = ResourceBudgetConfig {
+        operational_memory_reserve_bytes: i64::MAX as u64,
+        ..config()
+    };
+    assert_eq!(too_large.validate().err(), Some(HostError::Config));
 }

@@ -1,15 +1,18 @@
 //! Connect and disconnect decisions. Adopted sets are not deleted.
 
 use crate::config::HostConfig;
+use std::cmp::Ordering;
 
-/// Result of comparing a request with stored config.
+/// Result of comparing a candidate with stored config.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConnectPlan {
-    /// Nothing is stored yet.
+    /// No config is stored.
     Create,
-    /// Same repository, set, platform, and context.
+    /// All stored bindings and shared settings match.
     Idempotent,
-    /// A different repository or binding. Refused.
+    /// Candidate adds connections and preserves all stored bindings.
+    AddConnection,
+    /// Candidate changes a stored binding or shared setting.
     Rejected,
 }
 
@@ -31,21 +34,36 @@ pub enum DisconnectEffect {
     DeleteSet,
 }
 
-/// Idempotent when the binding matches. Any other stored binding is rejected.
+/// Add connections only when all stored bindings stay unchanged.
 #[must_use]
 pub fn connect_plan(existing: Option<&HostConfig>, request: &HostConfig) -> ConnectPlan {
+    if request.validate().is_err() || (existing.is_none() && request.connections().is_empty()) {
+        return ConnectPlan::Rejected;
+    }
     let Some(current) = existing else {
         return ConnectPlan::Create;
     };
-    let same = current.github.repository == request.github.repository
-        && current.github.scale_set_name == request.github.scale_set_name
-        && current.docker.platform == request.docker.platform
-        && current.docker.context == request.docker.context
-        && current.docker.endpoint == request.docker.endpoint;
-    if same {
-        ConnectPlan::Idempotent
-    } else {
-        ConnectPlan::Rejected
+    if current.validate().is_err()
+        || current.host != request.host
+        || current.docker != request.docker
+    {
+        return ConnectPlan::Rejected;
+    }
+    let preserved = current
+        .connections()
+        .iter()
+        .all(|stored| request.connection(&stored.connection_id) == Some(stored));
+    if !preserved {
+        return ConnectPlan::Rejected;
+    }
+    match current
+        .connections()
+        .len()
+        .cmp(&request.connections().len())
+    {
+        Ordering::Equal => ConnectPlan::Idempotent,
+        Ordering::Less => ConnectPlan::AddConnection,
+        Ordering::Greater => ConnectPlan::Rejected,
     }
 }
 
