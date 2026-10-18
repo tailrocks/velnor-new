@@ -238,6 +238,7 @@ cat >"$TEST_RUNNER_ROOT/bin/Runner.Listener" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >"$READINESS_LISTENER_MARKER"
+printf '%s\n' "${ACTIONS_RUNNER_INPUT_JITCONFIG:-}" >"${READINESS_LISTENER_MARKER}.jit"
 STUB
 
 chmod 0755 "$STUB_BIN/timeout" "$STUB_BIN/sleep" "$STUB_BIN/dd" \
@@ -273,7 +274,7 @@ awk '
 chmod 0755 "$STALLED_ENTRYPOINT"
 
 helper_line="$(awk 'index($0, "velnor-wait-docker-api") { print NR; exit }' "$ENTRYPOINT")"
-listener_line="$(awk 'index($0, "exec \"$listener\" run --jitconfig \"$payload\"") { print NR; exit }' "$ENTRYPOINT")"
+listener_line="$(awk 'index($0, "ACTIONS_RUNNER_INPUT_JITCONFIG=\"$payload\" exec \"$listener\" run") { print NR; exit }' "$ENTRYPOINT")"
 if [[ -z "$helper_line" || -z "$listener_line" ]] || ((helper_line >= listener_line)); then
   echo 'FAIL: readiness helper must run before the listener' >&2
   exit 1
@@ -284,7 +285,7 @@ grep -Fq '"unix:///var/run/docker.sock"' "$ENTRYPOINT"
 run_entrypoint() {
   local name="$1" expected_status="$2" status=0
   shift 2
-  rm -f "$LISTENER_MARKER"
+  rm -f "$LISTENER_MARKER" "${LISTENER_MARKER}.jit"
   : >"$DOCKER_LOG"
   : >"$API_LOG"
   : >"$TIMEOUT_LOG"
@@ -311,7 +312,7 @@ run_entrypoint() {
 
 run_stalled_entrypoint() {
   local status=0
-  rm -f "$LISTENER_MARKER"
+  rm -f "$LISTENER_MARKER" "${LISTENER_MARKER}.jit"
   : >"$DOCKER_LOG"
   : >"$API_LOG"
   : >"$TIMEOUT_LOG"
@@ -367,7 +368,8 @@ run_entrypoint api-becomes-ready 0 run delayed 3
   echo 'FAIL: listener did not start after the Docker API became ready' >&2
   exit 1
 }
-grep -Fq 'run --jitconfig jit-secret-fixture' "$LISTENER_MARKER"
+[[ "$(cat "$LISTENER_MARKER")" == run ]]
+grep -Fxq 'jit-secret-fixture' "${LISTENER_MARKER}.jit"
 [[ "$(cat "$DOCKER_COUNT")" == 3 ]]
 grep -Fq 'API unavailable while socket path exists' "$API_LOG"
 grep -Fq 'responsive API' "$API_LOG"
