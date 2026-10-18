@@ -53,7 +53,29 @@ pub(crate) fn ensure_tools_cache_v2(
     target: &str,
     checkout_uses: &str,
 ) -> Result<(), RenderError> {
-    setup_pipeline::ensure_tools_cache_v2(job_id, job, setup, always, target, checkout_uses)
+    ensure_tools_cache_v2_with_source(job_id, job, setup, always, target, None, checkout_uses)
+}
+
+/// Insert V2 tools-cache setup with the validated immutable Scale Set image source.
+/// # Errors
+pub(crate) fn ensure_tools_cache_v2_with_source(
+    job_id: &str,
+    job: &mut Job,
+    setup: &MiseSetup,
+    always: bool,
+    target: &str,
+    scale_set_image_source_sha: Option<&str>,
+    checkout_uses: &str,
+) -> Result<(), RenderError> {
+    setup_pipeline::ensure_tools_cache_v2(
+        job_id,
+        job,
+        setup,
+        always,
+        target,
+        scale_set_image_source_sha,
+        checkout_uses,
+    )
 }
 
 /// Reject the retired broad `rust-cache` archive in generated jobs.

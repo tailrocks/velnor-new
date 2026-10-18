@@ -9,6 +9,13 @@ use crate::yaml::Yaml;
 use super::*;
 
 fn payload(runs_on: &str) -> Result<super::super::ToolsCachePayload, RenderError> {
+    payload_with_source(runs_on, None)
+}
+
+fn payload_with_source(
+    runs_on: &str,
+    scale_set_image_source_sha: Option<&str>,
+) -> Result<super::super::ToolsCachePayload, RenderError> {
     let setup = crate::setup::MiseSetup {
         uses: "jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8".to_owned(),
         version: "2026.10.4".to_owned(),
@@ -21,7 +28,39 @@ fn payload(runs_on: &str) -> Result<super::super::ToolsCachePayload, RenderError
         tool_specs: &["rust@1.98.1".to_owned(), "actionlint@1.7.12".to_owned()],
         rustup_toolchain: Some("1.98.1"),
         rustup_components: &[],
+        scale_set_image_source_sha,
     })
+}
+
+#[test]
+fn scale_set_prelude_threads_the_validated_image_source_pin() -> Result<(), RenderError> {
+    let source_sha = "a".repeat(40);
+    let payload =
+        payload_with_source("scale-set:velnor+ubuntu-26.04-scale-set", Some(&source_sha))?;
+    assert!(payload.runtime_identity_supported());
+    let step = payload.runtime_prelude_step()?;
+    let StepKind::Action { uses, with, env } = &step.kind else {
+        return Err(RenderError::InvalidWorkflow(
+            "scale_set_prelude_not_action".to_owned(),
+        ));
+    };
+    assert_eq!(uses, "./.github/actions/velnor-tools-prelude-scale-set");
+    assert_eq!(with.get("d"), Some(&payload.static_digest().to_owned()));
+    assert_eq!(with.get("scale-set-image-source-sha"), Some(&source_sha));
+    assert!(env.is_empty());
+
+    let file = action_file("scale-set:velnor+ubuntu-26.04-scale-set", "0.1.0")?;
+    assert_eq!(
+        file.path,
+        ".github/actions/velnor-tools-prelude-scale-set/action.yml"
+    );
+    assert!(file.bytes.contains("scale-set-image-source-sha:"));
+    assert!(
+        file.bytes
+            .contains("${{ inputs.scale-set-image-source-sha }}")
+    );
+    assert!(file.bytes.contains("uses: ./.github/actions/scale-set"));
+    Ok(())
 }
 
 #[test]

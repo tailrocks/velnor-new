@@ -165,6 +165,7 @@ fn tools_cache_prelude(
         tool_specs: &specs,
         rustup_toolchain: None,
         rustup_components: &[],
+        scale_set_image_source_sha: None,
     })?;
     Ok(vec![
         payload.runtime_prelude_step()?,
