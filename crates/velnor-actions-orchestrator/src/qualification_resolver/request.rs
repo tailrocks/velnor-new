@@ -18,7 +18,7 @@ pub(super) struct QualificationRequest {
     event: WorkflowEvent,
     #[serde(rename = "base", default)]
     _base: Option<String>,
-    head: String,
+    pub(super) head: String,
     root: String,
     pub(super) repository: String,
     #[serde(rename = "qualification")]

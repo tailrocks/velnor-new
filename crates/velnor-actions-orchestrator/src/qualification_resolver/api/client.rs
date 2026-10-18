@@ -4,7 +4,7 @@ use std::ffi::{OsStr, OsString};
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
-use velnor_actions_contract::QualificationDispatch;
+use velnor_actions_contract::{QualificationDispatch, QualificationDispatchMode};
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 
 use crate::OrchestratorError;
@@ -22,12 +22,15 @@ pub(in crate::qualification_resolver) struct GitHub<'a> {
     branch: String,
     ref_protected: bool,
     workflow_path: String,
+    allow_unprotected_default: bool,
 }
 
 impl<'a> GitHub<'a> {
     pub(in crate::qualification_resolver) fn for_repository(
         catalog: &'a ToolCatalog,
         context: &QualificationDispatch,
+        verification_branch: Option<&str>,
+        expected_source_sha: &str,
     ) -> Result<Self, OrchestratorError> {
         let repository = validate_repository_slug(&context.repository)
             .ok_or_else(|| internal("qualification_repository_invalid"))?;
@@ -58,6 +61,13 @@ impl<'a> GitHub<'a> {
             })
             .ok_or_else(|| internal("qualification_workflow_invalid"))?
             .to_owned();
+        let allow_unprotected_default = allows_unprotected_default(
+            context,
+            &repository,
+            &default_branch,
+            verification_branch,
+            expected_source_sha,
+        )?;
         Ok(Self {
             catalog,
             repository,
@@ -65,6 +75,7 @@ impl<'a> GitHub<'a> {
             branch,
             ref_protected: context.ref_protected,
             workflow_path,
+            allow_unprotected_default,
         })
     }
 
@@ -98,9 +109,12 @@ impl<'a> GitHub<'a> {
         let branch = percent_encode_path_segment(&self.branch);
         let route = format!("repos/{}/branches/{branch}", self.repository);
         let response: BranchResponse = Self::json(self.catalog, &route)?;
-        if response.protected != Some(self.ref_protected)
-            || (self.branch == self.default_branch && !self.ref_protected)
-        {
+        if !branch_protection_matches(
+            response.protected,
+            self.ref_protected,
+            self.branch == self.default_branch,
+            self.allow_unprotected_default,
+        ) {
             return Err(internal("qualification_branch_protection_mismatch"));
         }
         Ok(())
@@ -133,6 +147,40 @@ impl<'a> GitHub<'a> {
         }
         Ok(output.stdout)
     }
+}
+
+fn allows_unprotected_default(
+    context: &QualificationDispatch,
+    repository: &str,
+    default_branch: &str,
+    verification_branch: Option<&str>,
+    expected_source_sha: &str,
+) -> Result<bool, OrchestratorError> {
+    context
+        .validate_for_config(
+            default_branch,
+            verification_branch,
+            repository,
+            expected_source_sha,
+        )
+        .map_err(crate::internal::internal_contract)?;
+    let workflow_path = context
+        .workflow_ref
+        .strip_prefix(&format!("{repository}/"))
+        .and_then(|value| value.split_once('@').map(|(path, _)| path));
+    Ok(context.mode == QualificationDispatchMode::VerificationOnly
+        && context.git_ref == format!("refs/heads/{default_branch}")
+        && workflow_path == Some(velnor_actions_contract::QUALIFICATION_WORKFLOW_PATH))
+}
+
+fn branch_protection_matches(
+    api_protected: Option<bool>,
+    runner_protected: bool,
+    is_default_branch: bool,
+    allow_unprotected_default: bool,
+) -> bool {
+    api_protected == Some(runner_protected)
+        && (!is_default_branch || runner_protected || allow_unprotected_default)
 }
 
 #[derive(serde::Deserialize)]
@@ -176,3 +224,7 @@ fn percent_encode_path_segment(value: &str) -> String {
     }
     encoded
 }
+
+#[cfg(test)]
+#[path = "client_tests.rs"]
+mod tests;
