@@ -30,7 +30,7 @@ pub struct CreateProjection {
     pub labels: Vec<String>,
     /// Mounts. Volume sources use `volume:<name>`.
     pub mounts: Vec<Mount>,
-    /// Private host binds. The action archive bind is read-only.
+    /// Allowlisted controller-owned host files. All binds are read-only.
     pub bind_mounts: Vec<BindMount>,
     /// Host privilege. False for the runner. True only for private `DinD`.
     pub privileged: bool,
@@ -42,7 +42,7 @@ pub struct CreateProjection {
     pub(crate) resource_budget: ResourceBudget,
 }
 
-/// One controller-owned host bind in a runner create projection.
+/// One allowlisted controller-owned host-file bind in a runner create projection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BindMount {
     /// Controller-owned source path.
@@ -51,6 +51,35 @@ pub struct BindMount {
     pub target: String,
     /// Whether the container may write to the source.
     pub read_only: bool,
+    /// The only permitted host bind kinds. Kept private so callers cannot
+    /// expand the host-path allowlist by constructing a new kind.
+    pub(super) kind: BindMountKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum BindMountKind {
+    ActionArchive,
+    GuestImage,
+}
+
+impl BindMount {
+    pub(super) fn action_archive(source: String) -> Self {
+        Self {
+            source,
+            target: "/opt/velnor/action-archives".to_owned(),
+            read_only: true,
+            kind: BindMountKind::ActionArchive,
+        }
+    }
+
+    pub(super) fn guest_image(source: String) -> Self {
+        Self {
+            source,
+            target: "/opt/velnor/guest-image.json".to_owned(),
+            read_only: true,
+            kind: BindMountKind::GuestImage,
+        }
+    }
 }
 
 /// Ids this call created. No JIT and no name.

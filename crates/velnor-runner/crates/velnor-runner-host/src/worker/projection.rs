@@ -13,7 +13,7 @@ use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
 
 #[cfg(test)]
-use super::{BindMount, CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, runner_create};
+use super::{BindMount, CreateProjection, DIND_ENTRYPOINT, runner_create};
 
 /// Private `DinD` create. Privilege is not a flag on the runner plan.
 ///
@@ -35,7 +35,7 @@ pub(crate) fn dind_create_for_identity(
     });
     Ok(CreateProjection {
         name: container_name(identity, "dind"),
-        image: DIND_IMAGE.to_owned(),
+        image: test_runtime_id('a'),
         platform: runner.platform,
         env: Vec::new(),
         cmd: Vec::new(),
@@ -69,6 +69,7 @@ pub(crate) fn runner_create_for_identity(
     let resource_budget = super::resource_budget::test_resource_budget()?;
     let plan = runner_plan(identity.private_volume())?;
     let mut spec = runner_create(&plan, resource_budget)?;
+    spec.image = test_runtime_id('b');
     spec.name = container_name(identity, "runner");
     spec.labels = container_labels(identity, "runner");
     if let Some(path) = archive_cache_path {
@@ -78,13 +79,15 @@ pub(crate) fn runner_create_for_identity(
         let source = path.to_str().ok_or(HostError::Path)?;
         spec.env
             .push("ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/velnor/action-archives".to_owned());
-        spec.bind_mounts.push(BindMount {
-            source: source.to_owned(),
-            target: "/opt/velnor/action-archives".to_owned(),
-            read_only: true,
-        });
+        spec.bind_mounts
+            .push(BindMount::action_archive(source.to_owned()));
     }
     Ok(spec)
+}
+
+#[cfg(test)]
+fn test_runtime_id(nibble: char) -> String {
+    format!("sha256:{}", nibble.to_string().repeat(64))
 }
 
 #[cfg(test)]

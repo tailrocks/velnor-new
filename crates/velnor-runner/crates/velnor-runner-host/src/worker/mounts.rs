@@ -12,6 +12,7 @@ use bollard::models::{
 };
 
 use super::CreateProjection;
+use super::projection_types::BindMountKind;
 use crate::docker_spec::Mount;
 use crate::error::HostError;
 
@@ -41,21 +42,43 @@ pub(super) fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostErr
 }
 
 fn bind_mounts(spec: &CreateProjection) -> Result<Vec<DockerMount>, HostError> {
-    let archive_env = "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/velnor/action-archives";
     let archive_envs = spec
         .env
         .iter()
         .filter(|entry| entry.starts_with("ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE="))
         .count();
-    if spec.bind_mounts.len() > 1 || archive_envs != usize::from(!spec.bind_mounts.is_empty()) {
+    let exact_archive_env = spec
+        .env
+        .iter()
+        .filter(|entry| {
+            entry.as_str() == "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/velnor/action-archives"
+        })
+        .count();
+    let archive_mounts = spec
+        .bind_mounts
+        .iter()
+        .filter(|mount| mount.kind == BindMountKind::ActionArchive)
+        .count();
+    let guest_image_mounts = spec
+        .bind_mounts
+        .iter()
+        .filter(|mount| mount.kind == BindMountKind::GuestImage)
+        .count();
+    if spec.bind_mounts.len() > 2
+        || archive_mounts > 1
+        || guest_image_mounts > 1
+        || archive_envs != archive_mounts
+        || exact_archive_env != archive_envs
+        || spec.env.len() != archive_envs
+    {
         return Err(HostError::ForbiddenMount);
     }
     for mount in &spec.bind_mounts {
-        if mount.target != "/opt/velnor/action-archives"
-            || !Path::new(&mount.source).is_absolute()
-            || !mount.read_only
-            || !spec.env.iter().any(|entry| entry == archive_env)
-        {
+        let valid_target = match mount.kind {
+            BindMountKind::ActionArchive => mount.target == "/opt/velnor/action-archives",
+            BindMountKind::GuestImage => mount.target == "/opt/velnor/guest-image.json",
+        };
+        if !valid_target || !Path::new(&mount.source).is_absolute() || !mount.read_only {
             return Err(HostError::ForbiddenMount);
         }
     }
@@ -128,4 +151,65 @@ fn volume_name(source: &str) -> Result<&str, HostError> {
         .strip_prefix("volume:")
         .filter(|name| !name.is_empty())
         .ok_or(HostError::ForbiddenMount)
+}
+
+#[cfg(test)]
+mod tests {
+    use bollard::models::MountType;
+
+    use crate::docker_spec::runner_plan;
+    use crate::worker::{BindMount, runner_create, test_resource_budget};
+
+    use super::*;
+
+    fn runner() -> Result<CreateProjection, HostError> {
+        runner_create(&runner_plan("worker_a")?, test_resource_budget()?)
+    }
+
+    #[test]
+    fn guest_image_bind_is_exact_read_only_and_has_no_environment_channel() -> Result<(), HostError>
+    {
+        let mut spec = runner()?;
+        spec.bind_mounts.push(BindMount::guest_image(
+            "/var/lib/velnor/guest-image/essential/abc.json".to_owned(),
+        ));
+
+        let host = host_config(&spec)?;
+        let mounts = host.mounts.as_ref().ok_or(HostError::Docker)?;
+        let guest_image = mounts
+            .iter()
+            .find(|mount| mount.target.as_deref() == Some("/opt/velnor/guest-image.json"))
+            .ok_or(HostError::Docker)?;
+        assert_eq!(
+            guest_image.source.as_deref(),
+            Some("/var/lib/velnor/guest-image/essential/abc.json")
+        );
+        assert_eq!(guest_image.typ, Some(MountType::BIND));
+        assert_eq!(guest_image.read_only, Some(true));
+        assert_eq!(
+            guest_image
+                .bind_options
+                .as_ref()
+                .and_then(|options| options.create_mountpoint),
+            Some(false)
+        );
+        assert!(spec.env.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn guest_image_bind_rejects_writable_mounts_and_other_targets() -> Result<(), HostError> {
+        let mut spec = runner()?;
+        let mut mount = BindMount::guest_image("/var/lib/velnor/image.json".to_owned());
+        mount.read_only = false;
+        spec.bind_mounts.push(mount);
+        assert_eq!(host_config(&spec), Err(HostError::ForbiddenMount));
+
+        let mut spec = runner()?;
+        let mut mount = BindMount::guest_image("/var/lib/velnor/image.json".to_owned());
+        mount.target = "/home/runner/.ssh".to_owned();
+        spec.bind_mounts.push(mount);
+        assert_eq!(host_config(&spec), Err(HostError::ForbiddenMount));
+        Ok(())
+    }
 }
