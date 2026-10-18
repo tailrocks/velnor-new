@@ -2,7 +2,7 @@ use super::super::{
     CacheRestoreStatus, export_payload, import_payload, payload, root_name, snapshot_root,
     useful_state_digest,
 };
-use super::{CACHE_VERSION, binding_with_keys};
+use super::binding_with_keys;
 use crate::qualification_cache_payload::roots::{CacheRootId, CacheRootObservation, CacheRootSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -60,7 +60,7 @@ fn roundtrip(layer: QualificationCacheLayer, name: &str, ids: &[CacheRootId]) {
     .expect("warm restore path");
     fs::create_dir_all(warm_stage.parent().expect("stage parent")).expect("stage parents");
     payload::copy_tree_to_new_dir(&stage, &warm_stage).expect("restore staged payload");
-    let entry = cache_entry(&key);
+    let entry = cache_entry(&warm_temp, name, &key);
     let warm_binding = binding_with_keys(
         name,
         &key,
@@ -133,12 +133,25 @@ fn runner_temp(temp: &tempfile::TempDir) -> PathBuf {
     fs::canonicalize(path).expect("canonical runner temp path")
 }
 
-fn cache_entry(key: &str) -> QualificationCacheBackendEntry {
+fn cache_entry(runner_temp: &Path, layer: &str, key: &str) -> QualificationCacheBackendEntry {
+    let stage_path = crate::qualification_cache_payload::qualification_cache_stage_path(
+        runner_temp,
+        "campaign-1",
+        layer,
+        key,
+    )
+    .expect("checked action stage path");
+    let version =
+        crate::qualification_cache_payload::cache_action_version::version_for_action_path(
+            &stage_path,
+            crate::qualification_cache_payload::cache_action_version::CompressionMethod::Gzip,
+        )
+        .expect("pinned action version");
     QualificationCacheBackendEntry {
         id: 71,
         key: key.to_owned(),
         git_ref: "refs/heads/main".to_owned(),
-        version: CACHE_VERSION.to_owned(),
+        version,
         size_bytes: 512,
     }
 }

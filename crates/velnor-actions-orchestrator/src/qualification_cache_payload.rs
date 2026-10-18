@@ -3,7 +3,6 @@
 use std::env;
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::QualificationCacheLayer;
 use velnor_actions_contract::workflow::QualificationCacheBackendObservation;
 
 use crate::qualification_cache_runtime::{
@@ -11,8 +10,23 @@ use crate::qualification_cache_runtime::{
     bind_qualification_cache_runtime,
 };
 
+#[path = "qualification_cache_payload/cache_action_version.rs"]
+mod cache_action_version;
 #[path = "qualification_cache_payload/manifest.rs"]
 mod manifest;
+#[path = "qualification_cache_payload/normal_tools.rs"]
+mod normal_tools;
+pub use normal_tools::{
+    NormalToolsCachePayloadRequest, export_normal_tools_cache_payload,
+    import_normal_tools_cache_payload,
+};
+#[path = "qualification_cache_payload/normal_tofu.rs"]
+mod normal_tofu;
+pub(crate) use normal_tofu::validate_cache_key_shape as validate_normal_tofu_cache_key_shape;
+pub use normal_tofu::{
+    NormalTofuProvidersCacheExport, NormalTofuProvidersCachePayloadRequest,
+    export_normal_tofu_providers_cache_payload, validate_normal_tofu_providers_cache_request,
+};
 #[path = "qualification_cache_payload/roots.rs"]
 mod roots;
 #[path = "qualification_cache_payload/stage_paths.rs"]
@@ -83,13 +97,39 @@ pub struct CacheActionObservation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CacheExportProof {
     /// Digest of the useful state copied into the stage.
-    pub state_digest: String,
+    state_digest: String,
     /// Exact key saved by this export, if the bound policy allows a save.
-    pub save_key: Option<String>,
+    save_key: Option<String>,
     /// Isolated stage path written by this export, if one was created.
-    pub save_stage_path: Option<PathBuf>,
+    save_stage_path: Option<PathBuf>,
     /// Digest of the checked manifest, if one was created.
-    pub manifest_digest: Option<String>,
+    manifest_digest: Option<String>,
+}
+
+impl CacheExportProof {
+    /// Digest of the staged useful state.
+    #[must_use]
+    pub fn state_digest(&self) -> &str {
+        &self.state_digest
+    }
+
+    /// Exact cache key, when this export may save.
+    #[must_use]
+    pub fn save_key(&self) -> Option<&str> {
+        self.save_key.as_deref()
+    }
+
+    /// Isolated stage path, when this export may save.
+    #[must_use]
+    pub fn save_stage_path(&self) -> Option<&Path> {
+        self.save_stage_path.as_deref()
+    }
+
+    /// Digest of the checked manifest, when this export may save.
+    #[must_use]
+    pub fn manifest_digest(&self) -> Option<&str> {
+        self.manifest_digest.as_deref()
+    }
 }
 
 /// State of one cache restore operation.
@@ -107,11 +147,31 @@ pub enum CacheRestoreStatus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CacheRestoreProof {
     /// Outcome after backend and payload checks.
-    pub status: CacheRestoreStatus,
+    status: CacheRestoreStatus,
     /// Digest of the installed useful state, when the restore was a hit.
-    pub state_digest: Option<String>,
+    state_digest: Option<String>,
     /// Isolated stage path used by the restore, when it was a hit.
-    pub stage_path: Option<PathBuf>,
+    stage_path: Option<PathBuf>,
+}
+
+impl CacheRestoreProof {
+    /// Restore result after backend and payload checks.
+    #[must_use]
+    pub const fn status(&self) -> CacheRestoreStatus {
+        self.status
+    }
+
+    /// Digest of the installed useful state, when the restore was a hit.
+    #[must_use]
+    pub fn state_digest(&self) -> Option<&str> {
+        self.state_digest.as_deref()
+    }
+
+    /// Isolated stage path used by the restore, when it was a hit.
+    #[must_use]
+    pub fn stage_path(&self) -> Option<&Path> {
+        self.stage_path.as_deref()
+    }
 }
 
 /// Validated qualification cache inputs. This value has no cache authority.
@@ -132,25 +192,6 @@ pub struct QualificationCachePayloadImport {
     pub backend: QualificationCacheBackendObservation,
     /// Evidence recorded by the import operation.
     pub proof: CacheRestoreProof,
-}
-
-/// Inputs for the normal mise-tools payload, read from the checked runtime action.
-#[derive(Debug, Clone, Copy)]
-pub struct NormalToolsCachePayloadRequest<'a> {
-    /// Runner temporary root from the current job.
-    pub runner_temp: &'a Path,
-    /// Current user home directory.
-    pub home: &'a Path,
-    /// Runtime identity emitted by the trusted post-setup action.
-    pub runtime_identity: &'a str,
-    /// Full key emitted by the normal tools cache identity step.
-    pub cache_key: &'a str,
-    /// Mise data directory emitted by the trusted runtime action.
-    pub mise_data_dir: &'a Path,
-    /// Cargo home configured for the job.
-    pub cargo_home: &'a Path,
-    /// Rustup home configured for the job.
-    pub rustup_home: &'a Path,
 }
 
 /// Check collector roots against the bound plan lane and runtime environment.
@@ -222,46 +263,6 @@ pub fn import_qualification_cache_payload(
     })
 }
 
-/// Record the normal tools payload under its full cache key.
-///
-/// # Errors
-///
-/// Gives a static error code when the runtime identity, cache key, roots, or
-/// payload staging fail validation.
-pub fn export_normal_tools_cache_payload(
-    request: &NormalToolsCachePayloadRequest<'_>,
-) -> Result<CacheExportProof, &'static str> {
-    let roots = normal_tools_roots(request)?;
-    transfer::engine::export_normal_payload(
-        request.runtime_identity,
-        request.cache_key,
-        &roots,
-        request.runner_temp,
-        request.home,
-        &normal_tools_cache_stage_path(request.runner_temp, request.cache_key)?,
-    )
-}
-
-/// Check action output and the v3 manifest before restoring normal tools.
-///
-/// # Errors
-///
-/// Gives a static error code when the action output, manifest, staged bytes, or
-/// live roots fail validation.
-pub fn import_normal_tools_cache_payload(
-    request: &NormalToolsCachePayloadRequest<'_>,
-    action: &CacheActionObservation,
-) -> Result<CacheRestoreProof, &'static str> {
-    validate_action_observation(action)?;
-    let roots = normal_tools_roots(request)?;
-    transfer::engine::import_normal_payload(
-        request,
-        &roots,
-        action.hit,
-        action.matched_key.as_deref(),
-    )
-}
-
 fn bind_context(
     context: &QualificationCachePayloadContext<'_, '_>,
 ) -> Result<(QualificationCacheBindingOutputs, roots::CacheRootSet), &'static str> {
@@ -291,49 +292,6 @@ fn read_roots(
     })?;
     observed.validate_expected_paths(&expected)?;
     Ok(observed)
-}
-
-fn normal_tools_roots(
-    request: &NormalToolsCachePayloadRequest<'_>,
-) -> Result<roots::CacheRootSet, &'static str> {
-    clean_path_text(request.runner_temp, "normal_cache_binding_invalid")?;
-    clean_path_text(request.home, "normal_cache_binding_invalid")?;
-    let expected_cargo_home = request.runner_temp.join("velnor/cargo");
-    let expected_rustup_home = request.runner_temp.join("velnor/rustup");
-    let expected_mise_data = request.home.join(".local/share/mise");
-    if request.cargo_home != expected_cargo_home
-        || request.rustup_home != expected_rustup_home
-        || request.mise_data_dir != expected_mise_data
-    {
-        return Err("normal_cache_roots_mismatch");
-    }
-    let roots = roots::CacheRootSet {
-        matrix_key: "normal-tools".to_owned(),
-        layer: QualificationCacheLayer::MiseTools,
-        roots: vec![
-            roots::CacheRootObservation {
-                id: roots::CacheRootId::CargoBin,
-                path: request.cargo_home.join("bin"),
-            },
-            roots::CacheRootObservation {
-                id: roots::CacheRootId::CargoCrates2Json,
-                path: request.cargo_home.join(".crates2.json"),
-            },
-            roots::CacheRootObservation {
-                id: roots::CacheRootId::CargoCratesToml,
-                path: request.cargo_home.join(".crates.toml"),
-            },
-            roots::CacheRootObservation {
-                id: roots::CacheRootId::MiseData,
-                path: request.mise_data_dir.to_owned(),
-            },
-            roots::CacheRootObservation {
-                id: roots::CacheRootId::RustupHome,
-                path: request.rustup_home.to_owned(),
-            },
-        ],
-    };
-    Ok(roots)
 }
 
 fn validate_action_observation(action: &CacheActionObservation) -> Result<(), &'static str> {

@@ -81,7 +81,9 @@ fn copy_open_file(
     )
 }
 
-fn open_copy_source(source: &Path) -> Result<(fs::File, rustix::fs::Stat), &'static str> {
+pub(crate) fn open_copy_source(
+    source: &Path,
+) -> Result<(fs::File, rustix::fs::Stat), &'static str> {
     let (parent, name) = open_parent(source)?;
     let before = statat(&parent, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)
         .map_err(|_| "qualification_cache_payload_open_failed")?;

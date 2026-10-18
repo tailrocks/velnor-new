@@ -79,11 +79,13 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules |
 | `velnor-actions-tofu` | All OpenToFu/HCL discovery, root/module interpretation, task payloads, affected selection, identity extensions | Rust/Cargo, Mise execution, workflow YAML, process details, non-tofu stacks |
 | `velnor-actions-freshness` (repository-only support) | Read-only repository freshness/pin/lock/advisory checks and bounded bootstrap metadata operations behind the existing CLI private gate | V1 planning, task graph or selection, runner behavior, product evidence claims, public commands, or workflow generation |
-| `velnor-archive-guard` (repository-only security utility) | Bounded validation of owned candidate and Cargo package archive bytes through its explicit modes | V1 stack behavior, task derivation, workflow generation, or product dependencies |
+| `velnor-archive-guard` (repository-only security utility) | Bounded framing validation of owned candidate, Cargo-package, and cache-payload tar bytes through explicit profiles | V1 stack behavior, task derivation, workflow generation, cache paths/manifests/links, extraction, or product behavior beyond the explicit orchestrator framing call |
 
 Both repository-only members are outside the eight-product V1 task graph. The
-CLI private gate consumes freshness at runtime, repository scripts provision
-archive guard, and the orchestrator does not link either helper as a library.
+CLI private gate consumes freshness at runtime. Repository scripts provision
+the archive guard binary; the orchestrator links its library only for bounded
+cache-payload raw-tar framing. The guard does not inspect cache paths or
+manifests, validate links, or extract files.
 The canonical repository's `maintenance-helpers` named Mise check runs their
 package test suites independently of Rust task derivation and the product
 matrix; this repository's VelnorRepositoryV1 configuration makes it required.

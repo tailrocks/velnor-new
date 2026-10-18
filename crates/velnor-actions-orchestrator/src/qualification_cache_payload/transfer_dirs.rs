@@ -130,7 +130,7 @@ pub(super) fn path_points_to(path: &Path, fd: &rustix::fd::OwnedFd) -> bool {
         .is_ok_and(|left| rustix::fs::fstat(&current).is_ok_and(|right| same_object(&left, &right)))
 }
 
-pub(super) fn same_version(left: &Stat, right: &Stat) -> bool {
+pub(crate) fn same_version(left: &Stat, right: &Stat) -> bool {
     left.st_dev == right.st_dev
         && left.st_ino == right.st_ino
         && left.st_mode == right.st_mode

@@ -103,6 +103,46 @@ fn normal_stage_path_hashes_the_full_v3_key_and_rejects_old_namespaces() {
 }
 
 #[test]
+fn stage_path_does_not_prepare_or_delete_an_action_target() {
+    let temp = tempfile::tempdir().expect("temporary directory");
+    let fixture = Fixture::new(temp.path(), "runner", "live-state");
+    let stage = normal_tools_cache_stage_path(&fixture.runner_temp, &fixture.cache_key)
+        .expect("derive action stage path");
+    assert_eq!(stage, fixture.stage_path());
+    assert!(!stage.exists());
+
+    let miss = import_normal_tools_cache_payload(
+        &fixture.request(),
+        &CacheActionObservation {
+            hit: false,
+            matched_key: None,
+        },
+    )
+    .expect("cold absence");
+    assert_eq!(miss.status, CacheRestoreStatus::Miss);
+    assert!(!stage.exists());
+    assert_eq!(fixture.tool_state(), "live-state");
+
+    fs::create_dir_all(&stage).expect("preexisting stage");
+    let marker = stage.join("foreign-marker");
+    fs::write(&marker, b"leave this file unchanged").expect("foreign marker");
+    assert_eq!(
+        import_normal_tools_cache_payload(
+            &fixture.request(),
+            &CacheActionObservation {
+                hit: false,
+                matched_key: None,
+            },
+        ),
+        Err("normal_cache_restore_unexpected_stage_on_miss")
+    );
+    assert_eq!(
+        fs::read(&marker).expect("foreign marker after rejected preparation"),
+        b"leave this file unchanged"
+    );
+}
+
+#[test]
 fn cold_miss_keeps_live_roots_and_warm_import_restores_the_exported_state() {
     let temp = tempfile::tempdir().expect("temporary directory");
     let cold = Fixture::new(temp.path(), "cold", "cold-state");

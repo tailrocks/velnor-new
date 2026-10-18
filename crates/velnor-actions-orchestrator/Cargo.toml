@@ -22,6 +22,7 @@ velnor-actions-mise = { version = "=0.1.13", path = "../velnor-actions-mise" }
 velnor-actions-rust = { version = "=0.1.13", path = "../velnor-actions-rust" }
 velnor-actions-tofu = { version = "=0.1.13", path = "../velnor-actions-tofu" }
 velnor-actions-workflow-renderer = { version = "=0.1.13", path = "../velnor-actions-workflow-renderer" }
+velnor-archive-guard = { version = "=0.1.13", path = "../velnor-archive-guard" }
 rustix = { version = "=1.1.5", features = ["fs", "process"] }
 serde = { workspace = true }
 serde_json = { workspace = true }

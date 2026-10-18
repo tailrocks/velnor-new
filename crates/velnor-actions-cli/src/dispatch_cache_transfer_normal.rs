@@ -78,23 +78,18 @@ fn payload_request(inputs: &Inputs) -> NormalToolsCachePayloadRequest<'_> {
 
 fn export_output(proof: &CacheExportProof) -> Result<String, &'static str> {
     let stage_path = proof
-        .save_stage_path
-        .as_ref()
+        .save_stage_path()
         .ok_or("normal_cache_export_stage_missing")?;
-    let save_key = proof
-        .save_key
-        .as_ref()
-        .ok_or("normal_cache_export_key_missing")?;
+    let save_key = proof.save_key().ok_or("normal_cache_export_key_missing")?;
     let manifest_digest = proof
-        .manifest_digest
-        .as_ref()
+        .manifest_digest()
         .ok_or("normal_cache_export_manifest_missing")?;
     output_body(&[
         ("export_result", "staged".to_owned()),
-        ("save_key", save_key.clone()),
+        ("save_key", save_key.to_owned()),
         ("stage_path", path_text(stage_path)?),
-        ("state_digest", proof.state_digest.clone()),
-        ("manifest_digest", manifest_digest.clone()),
+        ("state_digest", proof.state_digest().to_owned()),
+        ("manifest_digest", manifest_digest.to_owned()),
         ("snapshot_admitted", "true".to_owned()),
     ])
 }
@@ -104,7 +99,7 @@ fn import_output(
     cache_key: &str,
     stage_path: &Path,
 ) -> Result<String, &'static str> {
-    let result = match proof.status {
+    let result = match proof.status() {
         CacheRestoreStatus::Miss => "miss",
         CacheRestoreStatus::Hit => "hit",
         CacheRestoreStatus::Disabled => return Err("normal_cache_restore_disabled"),
@@ -115,10 +110,10 @@ fn import_output(
         ("stage_path", path_text(stage_path)?),
         (
             "state_digest",
-            proof.state_digest.clone().unwrap_or_default(),
+            proof.state_digest().unwrap_or_default().to_owned(),
         ),
     ];
-    if proof.status == CacheRestoreStatus::Hit {
+    if proof.status() == CacheRestoreStatus::Hit {
         fields.push(("payload_admitted", "true".to_owned()));
         fields.push(("restore_admitted", "true".to_owned()));
     }

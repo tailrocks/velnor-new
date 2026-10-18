@@ -21,12 +21,12 @@ fn safe_staged_root_mode_change_is_rejected_before_live_import() {
     .expect("changed safe root mode");
 
     let result = import_payload(
-        &binding(Some(cache_entry()), Some(exported.state_digest)),
+        &binding(Some(cache_entry(&runner_temp)), Some(exported.state_digest)),
         &roots,
         &runner_temp,
         true,
         Some(CACHE_KEY),
-        &QualificationCacheBackendObservation::Found(cache_entry()),
+        &QualificationCacheBackendObservation::Found(cache_entry(&runner_temp)),
     );
 
     assert!(result.is_err(), "changed root mode was admitted");

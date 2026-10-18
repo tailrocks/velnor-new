@@ -126,12 +126,26 @@ pub(super) fn binding_with_keys(
     }
 }
 
-pub(super) fn cache_entry() -> QualificationCacheBackendEntry {
+pub(super) fn cache_entry(runner_temp: &Path) -> QualificationCacheBackendEntry {
+    let key = super::CACHE_KEY;
+    let stage_path = crate::qualification_cache_payload::qualification_cache_stage_path(
+        runner_temp,
+        "campaign-1",
+        "mise_tools",
+        key,
+    )
+    .expect("checked action stage path");
+    let version =
+        crate::qualification_cache_payload::cache_action_version::version_for_action_path(
+            &stage_path,
+            crate::qualification_cache_payload::cache_action_version::CompressionMethod::Gzip,
+        )
+        .expect("pinned action version");
     QualificationCacheBackendEntry {
         id: 71,
-        key: super::CACHE_KEY.to_owned(),
+        key: key.to_owned(),
         git_ref: "refs/heads/main".to_owned(),
-        version: super::CACHE_VERSION.to_owned(),
+        version,
         size_bytes: 512,
     }
 }

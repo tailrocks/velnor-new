@@ -120,6 +120,8 @@ fn collect_directory(
         size: 0,
         content_digest: [0; 32],
         file_identity: None,
+        link_target: None,
+        stat: *stat,
     });
     collect(&child_fd, relative, depth + 1, tree)
 }
