@@ -95,5 +95,5 @@ pub(super) fn update_bytes(hasher: &mut blake3::Hasher, value: &[u8]) {
 }
 
 #[cfg(test)]
-#[path = "dispatch_cache_transfer_tests.rs"]
+#[path = "../tests/dispatch_cache_transfer_tests.rs"]
 mod tests;

@@ -406,5 +406,5 @@ fn string_field<'a>(
 }
 
 #[cfg(test)]
-#[path = "dispatch_cache_roots_tests.rs"]
+#[path = "../tests/dispatch_cache_roots_tests.rs"]
 mod tests;

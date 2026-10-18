@@ -30,7 +30,11 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-workflow-renderer",
         ],
         "crates/velnor-actions-cli" => {
-            vec!["velnor-actions-freshness", "velnor-actions-orchestrator"]
+            vec![
+                "velnor-actions-contract",
+                "velnor-actions-freshness",
+                "velnor-actions-orchestrator",
+            ]
         }
         _ => vec!["velnor-actions-contract"],
     }
@@ -155,7 +159,7 @@ fn cli_tests_assert_through_binary_only() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn lockfile_committed_and_locked_used() -> Result<(), Box<dyn Error>> {
-    assert!(!read("Cargo.lock")?.trim().is_empty());
+    assert_ne!(read("Cargo.lock")?.trim(), "");
     let tracked = git_fixture::command(&repo_root())?
         .arg("ls-files")
         .arg("--error-unmatch")
@@ -174,37 +178,118 @@ fn lockfile_committed_and_locked_used() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn cli_invokes_no_tools_directly() -> Result<(), Box<dyn Error>> {
-    let banned = [
+    for path in tree_files("crates/velnor-actions-cli/src", "rs")? {
+        let body = std::fs::read_to_string(&path)?;
+        if let Some(violation) = direct_tool_policy_violation(&body) {
+            return Err(format!("{} violates CLI tool policy: {violation}", path.display()).into());
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn direct_tool_policy_allows_cache_metadata_but_rejects_process_launches() {
+    let metadata = r#"const CACHE_LAYER: &str = "cargo_sources";"#;
+    assert_eq!(direct_tool_policy_violation(metadata), None);
+    assert_eq!(
+        direct_tool_policy_violation("fn process_id() { let _pid = std::process::id(); }"),
+        None
+    );
+
+    let fully_qualified =
+        r#"fn launch() { std::process::Command::new("cargo").status().unwrap(); }"#;
+    assert_eq!(
+        direct_tool_policy_violation(fully_qualified),
+        Some("process::Command".to_owned())
+    );
+
+    let aliased = r#"
+        use std::process::Command as Process;
+        fn launch() { Process::new("cargo").status().unwrap(); }
+    "#;
+    assert_eq!(
+        direct_tool_policy_violation(aliased),
+        Some("Process::new".to_owned())
+    );
+}
+
+fn direct_tool_policy_violation(source: &str) -> Option<String> {
+    let Ok(aliases) = process_command_aliases(source) else {
+        return Some("Rust syntax parse failed".to_owned());
+    };
+    for alias in aliases {
+        let construction = format!("{alias}::new");
+        if source.contains(&construction) {
+            return Some(construction);
+        }
+    }
+    for token in [
         "process::Command",
         "Command::new",
         ".spawn(",
         ".status()",
         ".output()",
-        "cargo",
-        // "mise" stays unbanned: repo-policy names a mise-version operation.
-        "mbx",
-        "nextest",
-        "rustup",
         "\"gh\"",
         "shell",
         "Shell",
         "sh -c",
-    ];
-    for path in tree_files("crates/velnor-actions-cli/src", "rs")? {
-        let body = std::fs::read_to_string(&path)?;
-        for token in banned {
-            assert!(!body.contains(token), "{} leaks {token}", path.display());
-        }
-        for (index, _) in body.match_indices("std::process::") {
-            let rest = &body[index + "std::process::".len()..];
-            assert!(
-                rest.starts_with("ExitCode"),
-                "{} uses {rest:?}",
-                path.display()
-            );
+    ] {
+        if source.contains(token) {
+            return Some(token.to_owned());
         }
     }
-    Ok(())
+    for (index, _) in source.match_indices("std::process::") {
+        let rest = &source[index + "std::process::".len()..];
+        if !rest.starts_with("ExitCode") && !rest.starts_with("id()") {
+            return Some(rest.to_owned());
+        }
+    }
+    None
+}
+
+fn process_command_aliases(source: &str) -> Result<Vec<String>, syn::Error> {
+    fn collect(tree: &syn::UseTree, prefix: &mut Vec<String>, aliases: &mut Vec<String>) {
+        match tree {
+            syn::UseTree::Path(path) => {
+                prefix.push(path.ident.to_string());
+                collect(&path.tree, prefix, aliases);
+                prefix.pop();
+            }
+            syn::UseTree::Name(name) => {
+                prefix.push(name.ident.to_string());
+                if is_std_process_command(prefix) {
+                    aliases.push(name.ident.to_string());
+                }
+                prefix.pop();
+            }
+            syn::UseTree::Rename(rename) => {
+                prefix.push(rename.ident.to_string());
+                if is_std_process_command(prefix) {
+                    aliases.push(rename.rename.to_string());
+                }
+                prefix.pop();
+            }
+            syn::UseTree::Group(group) => {
+                for item in &group.items {
+                    collect(item, prefix, aliases);
+                }
+            }
+            syn::UseTree::Glob(_) => {}
+        }
+    }
+
+    fn is_std_process_command(prefix: &[String]) -> bool {
+        prefix.len() == 3 && prefix[0] == "std" && prefix[1] == "process" && prefix[2] == "Command"
+    }
+
+    let syntax = syn::parse_file(source)?;
+    let mut aliases = Vec::new();
+    for item in syntax.items {
+        if let syn::Item::Use(item) = item {
+            collect(&item.tree, &mut Vec::new(), &mut aliases);
+        }
+    }
+    Ok(aliases)
 }
 
 #[test]

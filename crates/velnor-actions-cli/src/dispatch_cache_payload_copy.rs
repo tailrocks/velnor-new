@@ -206,9 +206,9 @@ fn same_object(left: &Stat, right: &Stat) -> bool {
 }
 
 #[cfg(test)]
-#[path = "dispatch_cache_payload_copy_tests.rs"]
+#[path = "../tests/dispatch_cache_payload_copy_tests.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "dispatch_cache_payload_tests.rs"]
+#[path = "../tests/dispatch_cache_payload_tests.rs"]
 mod digest_tests;

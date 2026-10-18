@@ -372,5 +372,5 @@ fn string_field<'a>(object: &'a Map<String, Value>, key: &str) -> Result<&'a str
 }
 
 #[cfg(test)]
-#[path = "dispatch_cache_manifest_tests.rs"]
+#[path = "../tests/dispatch_cache_manifest_tests.rs"]
 mod tests;

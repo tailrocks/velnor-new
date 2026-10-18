@@ -389,5 +389,5 @@ fn fail(problem: &str) -> ExitCode {
 }
 
 #[cfg(test)]
-#[path = "dispatch_cache_bind_tests.rs"]
+#[path = "../tests/dispatch_cache_bind_tests.rs"]
 mod tests;

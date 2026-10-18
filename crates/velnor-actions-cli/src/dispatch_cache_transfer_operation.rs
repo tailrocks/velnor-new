@@ -260,5 +260,5 @@ fn bool_text(value: bool) -> &'static str {
 }
 
 #[cfg(test)]
-#[path = "dispatch_cache_transfer_operation_tests.rs"]
+#[path = "../tests/dispatch_cache_transfer_operation_tests.rs"]
 mod tests;
