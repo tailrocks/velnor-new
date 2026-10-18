@@ -1,22 +1,21 @@
-//! `daemon run` holds one lock and calls `launch_once`.
+//! `daemon run` holds one lock and starts the host controller.
 
 use std::path::Path;
 use std::process::ExitCode;
 use std::thread;
 use std::time::Duration;
 
-use velnor_runner_host::{
-    DaemonLock, HostConfig, HostError, LaunchReport, launch_blocking, load_secret,
-};
+use velnor_runner_host::{DaemonLock, HostConfig, ListenFault, run_host_blocking};
 
 const RETRY: Duration = Duration::from_secs(5);
+const MAX_CONFIG_BYTES: u64 = 1_048_576;
 
 /// Missing file waits. Valid TOML listens. Rejected TOML is an error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DaemonIntent {
     /// `host.toml` is absent.
     Wait,
-    /// Parsed config can drive one launch.
+    /// Parsed config can drive the host controller.
     Listen,
     /// The file is not a valid host config.
     Err,
@@ -44,112 +43,65 @@ pub(crate) fn run_daemon(state: &Path) -> ExitCode {
 }
 
 fn serve(state: &Path, lock: &DaemonLock) -> ExitCode {
-    if !lock.is_held() {
-        return ExitCode::from(1);
-    }
     loop {
         if !lock.is_held() {
             return ExitCode::from(1);
         }
-        step(state);
-    }
-}
-
-fn step(state: &Path) {
-    let text = std::fs::read_to_string(state.join("host.toml")).ok();
-    match daemon_intent(text.as_deref()) {
-        DaemonIntent::Wait => pause(),
-        DaemonIntent::Err => {
-            eprintln!("invalid config");
-            pause();
-        }
-        DaemonIntent::Listen => listen_config(state, text.as_deref()),
-    }
-}
-
-fn listen_config(state: &Path, text: Option<&str>) {
-    let Some(text) = text else {
-        pause();
-        return;
-    };
-    let Ok(config) = HostConfig::parse(text) else {
-        eprintln!("invalid config");
-        pause();
-        return;
-    };
-    drive(state, &config);
-}
-
-fn drive(state: &Path, config: &HostConfig) {
-    let Some((owner, repo)) = split_repo(&config.github.repository) else {
-        eprintln!("invalid config");
-        pause();
-        return;
-    };
-    let secret = match load_configured_secret(config, load_secret) {
-        Ok(secret) => secret,
-        Err(error) => {
-            eprintln!("{error}");
-            pause();
-            return;
-        }
-    };
-    let Some(pat) = credential_text(secret.as_slice()) else {
-        eprintln!("keychain");
-        pause();
-        return;
-    };
-    match launch_blocking(
-        pat,
-        owner,
-        repo,
-        &config.docker.endpoint,
-        &state.join("launch.db"),
-        config.host.max_jobs,
-        match config.resource_budget() {
-            Ok(budget) => budget,
-            Err(error) => {
-                eprintln!("{error}");
+        let text = match read_config_file(&state.join("host.toml")) {
+            Ok(Some(text)) => text,
+            Ok(None) => {
                 pause();
-                return;
+                continue;
             }
-        },
-    ) {
-        Ok(report) => finish_launch(&report),
-        Err(error) => {
-            eprintln!("{error}");
-            pause();
+            Err(_) => {
+                eprintln!("invalid config");
+                pause();
+                continue;
+            }
+        };
+        let config = match HostConfig::parse(&text) {
+            Ok(config) => config,
+            Err(_) => {
+                eprintln!("invalid config");
+                pause();
+                continue;
+            }
+        };
+        return drive(state, &config);
+    }
+}
+
+fn read_config_file(path: &Path) -> std::io::Result<Option<String>> {
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata)
+            if metadata.is_file()
+                && !metadata.file_type().is_symlink()
+                && metadata.len() <= MAX_CONFIG_BYTES =>
+        {
+            metadata
         }
+        Ok(_) => return Err(std::io::ErrorKind::InvalidData.into()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let text = std::fs::read_to_string(path)?;
+    let length = u64::try_from(text.len()).map_err(|_| std::io::ErrorKind::InvalidData)?;
+    if length > MAX_CONFIG_BYTES || length > metadata.len() {
+        return Err(std::io::ErrorKind::InvalidData.into());
+    }
+    Ok(Some(text))
+}
+
+fn drive(state: &Path, config: &HostConfig) -> ExitCode {
+    match run_host_blocking(config, state) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => report_listen_error(&error),
     }
 }
 
-fn load_configured_secret<T, F>(config: &HostConfig, load: F) -> Result<T, HostError>
-where
-    F: FnOnce(&str, &str) -> Result<T, HostError>,
-{
-    let reference = &config.github.credential_ref;
-    load(reference.service(), reference.account())
-}
-
-fn finish_launch(report: &LaunchReport) {
-    println!("set_id={} workers={}", report.set_id, report.workers.len());
-    if report.workers.is_empty() {
-        pause();
-    }
-}
-
-fn credential_text(secret: &[u8]) -> Option<&str> {
-    let text = std::str::from_utf8(secret).ok()?;
-    let pat = text.trim();
-    if pat.is_empty() { None } else { Some(pat) }
-}
-
-fn split_repo(repository: &str) -> Option<(&str, &str)> {
-    let (owner, repo) = repository.split_once('/')?;
-    if owner.is_empty() || repo.is_empty() || repo.contains('/') {
-        return None;
-    }
-    Some((owner, repo))
+fn report_listen_error(error: &ListenFault) -> ExitCode {
+    eprintln!("{error}");
+    ExitCode::from(1)
 }
 
 fn pause() {
@@ -160,15 +112,25 @@ fn pause() {
 mod tests {
     use std::path::PathBuf;
 
-    use super::{DaemonIntent, daemon_intent};
-    use velnor_runner_host::{DaemonLock, HostConfig, HostError};
+    use super::{DaemonIntent, daemon_intent, read_config_file};
+    use velnor_runner_host::{ConnectionId, DaemonLock, HostConfig, HostError};
 
     const SAMPLE: &str = concat!(
-        "schema = 1\n",
-        "[github]\n",
+        "schema = 2\n",
+        "[[connections]]\n",
+        "connection_id = \"essential-mac\"\n",
+        "repository_id = 123\n",
         "repository = \"tailrocks/velnor-new\"\n",
-        "scale_set_name = \"ubuntu-26.04-scale-set\"\n",
-        "credential_ref = \"keychain:com.tailrocks.velnor.host/local\"\n",
+        "credential_ref = \"keychain:com.tailrocks.velnor.host/essential-mac\"\n",
+        "[connections.scale_set]\n",
+        "name = \"ubuntu-26.04-scale-set\"\n",
+        "labels = [\"velnor\", \"ubuntu-26.04-scale-set\"]\n",
+        "[connections.source_policy]\n",
+        "mode = \"branch_restricted\"\n",
+        "branches = [\"main\"]\n",
+        "tag_prefixes = []\n",
+        "events = [\"push\"]\n",
+        "pull_request_rules = []\n",
         "[host]\n",
         "max_jobs = 1\n",
         "[host.resources]\n",
@@ -176,6 +138,7 @@ mod tests {
         "runner_memory_bytes = 2147483648\n",
         "dind_cpu_millicores = 3000\n",
         "dind_memory_bytes = 6442450944\n",
+        "operational_memory_reserve_bytes = 1073741824\n",
         "[docker]\n",
         "context = \"orbstack\"\n",
         "platform = \"linux/amd64\"\n",
@@ -183,18 +146,38 @@ mod tests {
     );
 
     #[test]
-    fn credential_text_trims_and_rejects_empty() {
-        assert_eq!(
-            super::credential_text(b"canary-token\n"),
-            Some("canary-token")
-        );
-        assert_eq!(super::credential_text(b"\n"), None);
-        assert_eq!(super::credential_text(&[0xff, 0xfe]), None);
+    fn missing_config_waits() {
+        assert_eq!(daemon_intent(None), DaemonIntent::Wait);
     }
 
     #[test]
-    fn missing_config_waits() {
-        assert_eq!(daemon_intent(None), DaemonIntent::Wait);
+    fn daemon_reads_only_regular_bounded_config_files() -> Result<(), String> {
+        let dir = std::env::temp_dir().join(format!("velnor-config-file-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+        let path = dir.join("host.toml");
+        if read_config_file(&path)
+            .map_err(|error| error.to_string())?
+            .is_some()
+        {
+            return Err("missing config was not empty".to_owned());
+        }
+        std::fs::write(&path, SAMPLE).map_err(|error| error.to_string())?;
+        if read_config_file(&path).map_err(|error| error.to_string())? != Some(SAMPLE.to_owned()) {
+            return Err("regular config changed".to_owned());
+        }
+        std::fs::remove_file(&path).map_err(|error| error.to_string())?;
+        std::os::unix::fs::symlink("missing", &path).map_err(|error| error.to_string())?;
+        if read_config_file(&path).is_ok() {
+            return Err("symlink config was accepted".to_owned());
+        }
+        std::fs::remove_file(&path).map_err(|error| error.to_string())?;
+        std::fs::write(&path, vec![b'x'; 1_048_577]).map_err(|error| error.to_string())?;
+        if read_config_file(&path).is_ok() {
+            return Err("oversized config was accepted".to_owned());
+        }
+        std::fs::remove_dir_all(&dir).map_err(|error| error.to_string())?;
+        Ok(())
     }
 
     #[test]
@@ -203,33 +186,28 @@ mod tests {
     }
 
     #[test]
-    fn daemon_loads_the_pair_selected_by_host_toml() -> Result<(), String> {
+    fn daemon_passes_the_complete_config_to_the_host() -> Result<(), String> {
         let config = HostConfig::parse(SAMPLE).map_err(|error| error.to_string())?;
-        let mut selected = None;
-        let loaded = super::load_configured_secret(&config, |service, account| {
-            selected = Some((service.to_owned(), account.to_owned()));
-            Ok("loaded")
-        })
-        .map_err(|error| error.to_string())?;
-        if selected != Some(("com.tailrocks.velnor.host".to_owned(), "local".to_owned()))
-            || loaded != "loaded"
+        let connection = ConnectionId::parse("essential-mac").map_err(|error| error.to_string())?;
+        if config.connections().len() != 1
+            || config.connection(&connection).is_none()
+            || config.docker.endpoint != "unix:///var/run/docker.sock"
         {
-            return Err("daemon ignored host.toml credential_ref".to_owned());
+            return Err("daemon config lost a connection or shared setting".to_owned());
         }
         Ok(())
     }
 
     #[test]
-    fn bad_toml_is_err_and_hides_the_secret() {
-        let bad = SAMPLE.replace("schema = 1", "schema = 2\ntoken = \"secret\"");
+    fn bad_toml_is_err() {
+        let bad = SAMPLE.replace("schema = 2", "schema = 2\ntoken = \"secret\"");
         assert_eq!(daemon_intent(Some(&bad)), DaemonIntent::Err);
-        let error = match HostConfig::parse(&bad) {
-            Ok(_) => HostError::Config,
-            Err(error) => error,
-        };
-        let text = format!("{error}");
-        assert_eq!(text, "invalid config");
-        assert!(!text.contains("secret"));
+    }
+
+    #[test]
+    fn old_single_repository_config_is_rejected() {
+        let old = SAMPLE.replace("schema = 2", "schema = 1");
+        assert_eq!(daemon_intent(Some(&old)), DaemonIntent::Err);
     }
 
     #[test]
