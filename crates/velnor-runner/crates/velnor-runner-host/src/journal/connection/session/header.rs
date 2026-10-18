@@ -5,10 +5,31 @@ use crate::journal::ConnectionJournal;
 use crate::journal::capacity_header::{
     HeaderAllocation, HeaderDeleteAttempt, HeaderLedger, HeaderPollAttempt, PollOutcome, load, save,
 };
-use crate::journal::connection::storage::{in_transaction, read_transaction};
+use crate::journal::connection::storage::{
+    has_ambiguous_legacy_work, in_transaction, read_transaction,
+};
 use crate::launch::{CompletedHeaderPoll, DeletedSession204};
 
 impl ConnectionJournal {
+    /// Read whether this exact session has no other connection work to drain.
+    pub(crate) async fn session_work_drained(
+        &self,
+        session_intent_id: i64,
+    ) -> Result<bool, HostError> {
+        read_transaction(self.journal_ref(), async |connection| {
+            self.validate_scope(connection).await?;
+            let scale_set_id = self.required_set_id(connection).await?;
+            active_session_id(connection, self, scale_set_id, session_intent_id).await?;
+            Ok(!has_other_session_work(
+                connection,
+                self.connection_id().as_str(),
+                session_intent_id,
+            )
+            .await?)
+        })
+        .await
+    }
+
     /// Read the exact live allocation bound to one returned session.
     pub(crate) async fn session_header_allocation(
         &self,
@@ -302,6 +323,9 @@ async fn has_other_session_work(
     connection_id: &str,
     session_intent_id: i64,
 ) -> Result<bool, HostError> {
+    if has_ambiguous_legacy_work(connection).await? {
+        return Ok(true);
+    }
     let mut rows = connection
         .query(
             "SELECT EXISTS (SELECT 1 FROM connection_intents WHERE connection_id = ?1 AND id != ?2 AND cleanup_proven = 0) OR EXISTS (SELECT 1 FROM connection_completion_inbox WHERE connection_id = ?1) OR EXISTS (SELECT 1 FROM capacity_reservations WHERE connection_id = ?1 AND state != 'released') OR EXISTS (SELECT 1 FROM connection_session_creates WHERE connection_id = ?1 AND state IN ('prepared', 'requested', 'uncertain'))",

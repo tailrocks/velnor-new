@@ -209,6 +209,60 @@ fn release_requires_settled_polls_zero_header_and_exact_delete() -> TestResult {
 }
 
 #[test]
+fn zero_header_poll_can_repeat_while_the_same_session_drains() -> TestResult {
+    let mut ledger = HeaderLedger::new(2)?;
+    let allocation = reserve(&mut ledger, connection("essential")?, 10, "session-a", 2)?;
+    let advertised = ledger.begin_poll(&allocation)?;
+    ledger.finish_poll(&advertised, PollOutcome::Response)?;
+
+    let first_zero = ledger.begin_zero_poll(&allocation)?;
+    ledger.finish_poll(&first_zero, PollOutcome::Response)?;
+    assert_eq!(ledger.charged_capacity(), 2);
+    assert_eq!(
+        ledger.begin_poll(&allocation),
+        Err(HeaderLedgerError::ZeroHeaderSettled)
+    );
+
+    let second_zero = ledger.begin_zero_poll(&allocation)?;
+    assert_eq!(second_zero.header_value(), 0);
+    assert_eq!(ledger.charged_capacity(), 2);
+    ledger.finish_poll(&second_zero, PollOutcome::Response)?;
+
+    let deletion = ledger.begin_delete(&allocation)?;
+    ledger.finish_delete(&deletion)?;
+    assert_eq!(ledger.charged_capacity(), 0);
+    Ok(())
+}
+
+#[test]
+fn unknown_repeated_zero_poll_stays_uncertain_and_charged_after_restart() -> TestResult {
+    let mut ledger = HeaderLedger::new(2)?;
+    let allocation = reserve(&mut ledger, connection("essential")?, 10, "session-a", 2)?;
+    let advertised = ledger.begin_poll(&allocation)?;
+    ledger.finish_poll(&advertised, PollOutcome::Response)?;
+    let first_zero = ledger.begin_zero_poll(&allocation)?;
+    ledger.finish_poll(&first_zero, PollOutcome::Response)?;
+    let second_zero = ledger.begin_zero_poll(&allocation)?;
+    ledger.finish_poll(&second_zero, PollOutcome::Unknown)?;
+
+    let mut reopened = HeaderLedger::restore(ledger.snapshot())?;
+    assert_eq!(reopened.charged_capacity(), 2);
+    assert_eq!(
+        reopened.begin_zero_poll(&allocation),
+        Err(HeaderLedgerError::UnsettledPoll)
+    );
+    assert_eq!(
+        reopened.begin_delete(&allocation),
+        Err(HeaderLedgerError::UnsettledPoll)
+    );
+    assert_eq!(
+        reserve(&mut reopened, connection("essential")?, 10, "session-b", 1),
+        Err(HeaderLedgerError::SessionStillCharged)
+    );
+    Ok(())
+}
+
+#[test]
 fn restart_after_zero_poll_keeps_charge_until_exact_session_delete() -> TestResult {
     let mut ledger = HeaderLedger::new(2)?;
     let allocation = reserve(&mut ledger, connection("essential")?, 10, "session-a", 2)?;
