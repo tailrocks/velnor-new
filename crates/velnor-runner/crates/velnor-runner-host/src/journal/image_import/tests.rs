@@ -6,8 +6,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::error::HostError;
 
 use super::{
-    ImageImportIdentity, ImageImportInspection, ImageImportRequest, ImageImportState, Journal,
+    ImageImportIdentity, ImageImportInspection, ImageImportObservation, ImageImportRequest,
+    ImageImportState, Journal,
 };
+
+#[path = "identity_tests.rs"]
+mod identity_tests;
 
 struct Scratch {
     path: PathBuf,
@@ -47,10 +51,16 @@ fn identity(engine_id: &str) -> ImageImportIdentity {
         daemon_architecture: "x86_64".to_owned(),
         source_sha: "a".repeat(40),
         archive_sha256: "c".repeat(64),
-        index_digest: "d".repeat(64),
+        archive_index_digest: "d".repeat(64),
         platform: "linux/amd64".to_owned(),
         manifest_digest: format!("sha256:{}", "e".repeat(64)),
+        manifest_size: 128,
         config_digest: format!("sha256:{}", "f".repeat(64)),
+        image_index_digest: None,
+        image_index_size: None,
+        load_archive_sha256: None,
+        load_archive_index_digest: None,
+        image_reference: "velnor-resource-probe:linux-amd64".to_owned(),
     }
 }
 
@@ -90,14 +100,14 @@ async fn prepare_claim_and_verified_completion_are_idempotent() -> Result<(), Ho
             .is_none()
     );
 
-    let image_id = format!("sha256:{}", "f".repeat(64));
+    let observation = classic_observation(&artifact);
     assert!(
         ImageImportInspection::verified(
             &artifact,
             "other-engine",
             artifact.docker_root_digest(),
             artifact.daemon_architecture(),
-            &image_id,
+            observation.clone(),
         )
         .is_err()
     );
@@ -107,7 +117,7 @@ async fn prepare_claim_and_verified_completion_are_idempotent() -> Result<(), Ho
             artifact.engine_id(),
             &"0".repeat(64),
             artifact.daemon_architecture(),
-            &image_id,
+            observation.clone(),
         )
         .is_err()
     );
@@ -116,7 +126,7 @@ async fn prepare_claim_and_verified_completion_are_idempotent() -> Result<(), Ho
         artifact.engine_id(),
         artifact.docker_root_digest(),
         artifact.daemon_architecture(),
-        &image_id,
+        observation,
     )?;
     journal
         .complete_claimed_image_import(claim, &receipt)
@@ -124,7 +134,8 @@ async fn prepare_claim_and_verified_completion_are_idempotent() -> Result<(), Ho
     let completed = journal.prepare_image_import(artifact.clone()).await?;
     assert_eq!(completed.id, prepared.id);
     assert_eq!(completed.state, ImageImportState::Completed);
-    assert_eq!(completed.image_id, Some(receipt.image_id.clone()));
+    assert_eq!(completed.image_id, Some(receipt.image_id().to_owned()));
+    assert!(completed.receipt.is_some());
     assert!(journal.is_drained().await?);
 
     let mut different_identity = identity("engine-a");
@@ -311,8 +322,15 @@ fn verified_inspection(request: &ImageImportRequest) -> Result<ImageImportInspec
         request.engine_id(),
         request.docker_root_digest(),
         request.daemon_architecture(),
-        &format!("sha256:{}", "f".repeat(64)),
+        classic_observation(request),
     )
+}
+
+fn classic_observation(request: &ImageImportRequest) -> ImageImportObservation {
+    ImageImportObservation::Classic {
+        image_id: request.config_digest.clone(),
+        repo_tags: vec![request.image_reference.clone()],
+    }
 }
 
 #[tokio::test]

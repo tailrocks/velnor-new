@@ -1,5 +1,7 @@
 //! Transactional SQL operations for image import intents.
 
+mod rows;
+
 use crate::error::HostError;
 
 use super::{
@@ -8,6 +10,7 @@ use super::{
 };
 use crate::journal::connection::storage::in_transaction;
 use crate::journal::sql::one_row;
+use rows::{insert_prepared, latest_for_request, record_by_id};
 
 pub(super) async fn prepare(
     journal: &crate::journal::Journal,
@@ -109,6 +112,8 @@ pub(super) async fn complete_claimed(
     if request != inspection.request {
         return Err(HostError::Identity);
     }
+    let image_id = inspection.image_id().to_owned();
+    let receipt = inspection.receipt()?;
     in_transaction(journal, async |connection| {
         verify_engine(connection, &request).await?;
         let record = record_by_id(connection, id, &request).await?;
@@ -117,8 +122,8 @@ pub(super) async fn complete_claimed(
         }
         let changed = connection
             .execute(
-                "UPDATE image_imports SET state = 'completed', image_id = ?1 WHERE id = ?2 AND state = 'requested'",
-                (inspection.image_id.as_str(), id.0),
+                "UPDATE image_imports SET state = 'completed', image_id = ?1, receipt = ?2 WHERE id = ?3 AND state = 'requested'",
+                (image_id.as_str(), receipt.as_str(), id.0),
             )
             .await
             .map_err(|_| HostError::Journal)?;
@@ -138,6 +143,8 @@ pub(super) async fn complete_preloaded(
     if request != &inspection.request {
         return Err(HostError::Identity);
     }
+    let image_id = inspection.image_id().to_owned();
+    let receipt = inspection.receipt()?;
     in_transaction(journal, async |connection| {
         verify_engine(connection, request).await?;
         let record = record_by_id(connection, id, request).await?;
@@ -146,8 +153,8 @@ pub(super) async fn complete_preloaded(
         }
         let changed = connection
             .execute(
-                "UPDATE image_imports SET state = 'completed', image_id = ?1 WHERE id = ?2 AND state = 'prepared'",
-                (inspection.image_id.as_str(), id.0),
+                "UPDATE image_imports SET state = 'completed', image_id = ?1, receipt = ?2 WHERE id = ?3 AND state = 'prepared'",
+                (image_id.as_str(), receipt.as_str(), id.0),
             )
             .await
             .map_err(|_| HostError::Journal)?;
@@ -194,102 +201,6 @@ async fn verify_engine(
     }
 }
 
-async fn latest_for_request(
-    connection: &turso::Connection,
-    request: &ImageImportRequest,
-) -> Result<Option<ImageImportRecord>, HostError> {
-    let mut rows = connection
-        .query(
-            "SELECT id, attempt, state, image_id FROM image_imports WHERE engine_id = ?1 AND docker_root_digest = ?2 AND daemon_architecture = ?3 AND source_sha = ?4 AND archive_sha256 = ?5 AND index_digest = ?6 AND platform = ?7 AND manifest_digest = ?8 AND config_digest = ?9 ORDER BY attempt DESC LIMIT 1",
-            identity_values(request),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
-        return Ok(None);
-    };
-    Ok(Some(parse_record(&row, request.clone())?))
-}
-
-async fn record_by_id(
-    connection: &turso::Connection,
-    id: ImageImportId,
-    request: &ImageImportRequest,
-) -> Result<ImageImportRecord, HostError> {
-    let mut rows = connection
-        .query(
-            "SELECT id, attempt, state, image_id FROM image_imports WHERE id = ?1 AND engine_id = ?2 AND docker_root_digest = ?3 AND daemon_architecture = ?4 AND source_sha = ?5 AND archive_sha256 = ?6 AND index_digest = ?7 AND platform = ?8 AND manifest_digest = ?9 AND config_digest = ?10",
-            (
-                id.0,
-                request.engine_id.as_str(),
-                request.docker_root_digest.as_str(),
-                request.daemon_architecture.as_str(),
-                request.source_sha.as_str(),
-                request.archive_sha256.as_str(),
-                request.index_digest.as_str(),
-                request.platform.as_str(),
-                request.manifest_digest.as_str(),
-                request.config_digest.as_str(),
-            ),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let row = rows
-        .next()
-        .await
-        .map_err(|_| HostError::Journal)?
-        .ok_or(HostError::Journal)?;
-    parse_record(&row, request.clone())
-}
-
-fn parse_record(
-    row: &turso::Row,
-    request: ImageImportRequest,
-) -> Result<ImageImportRecord, HostError> {
-    Ok(ImageImportRecord {
-        id: ImageImportId(row.get(0).map_err(|_| HostError::Journal)?),
-        attempt: row.get(1).map_err(|_| HostError::Journal)?,
-        state: ImageImportState::parse(&row.get::<String>(2).map_err(|_| HostError::Journal)?)?,
-        request,
-        image_id: row.get(3).map_err(|_| HostError::Journal)?,
-    })
-}
-
-async fn insert_prepared(
-    connection: &turso::Connection,
-    request: &ImageImportRequest,
-    attempt: i64,
-) -> Result<ImageImportRecord, HostError> {
-    connection
-        .execute(
-            "INSERT INTO image_imports (engine_id, docker_root_digest, daemon_architecture, source_sha, archive_sha256, index_digest, platform, manifest_digest, config_digest, attempt, state, image_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'prepared', NULL)",
-            identity_values_with_attempt(request, attempt),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let id = last_insert_id(connection).await?;
-    Ok(ImageImportRecord {
-        id: ImageImportId(id),
-        attempt,
-        state: ImageImportState::Prepared,
-        request: request.clone(),
-        image_id: None,
-    })
-}
-
-async fn last_insert_id(connection: &turso::Connection) -> Result<i64, HostError> {
-    let mut rows = connection
-        .query("SELECT last_insert_rowid()", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    rows.next()
-        .await
-        .map_err(|_| HostError::Journal)?
-        .ok_or(HostError::Journal)?
-        .get(0)
-        .map_err(|_| HostError::Journal)
-}
-
 async fn has_unresolved(
     connection: &turso::Connection,
     engine_id: &str,
@@ -324,7 +235,7 @@ async fn has_other_unresolved(
                 request.daemon_architecture.as_str(),
                 request.source_sha.as_str(),
                 request.archive_sha256.as_str(),
-                request.index_digest.as_str(),
+                request.archive_index_digest.as_str(),
                 request.platform.as_str(),
                 request.manifest_digest.as_str(),
                 request.config_digest.as_str(),
@@ -340,40 +251,4 @@ async fn has_other_unresolved(
         .get(0)
         .map_err(|_| HostError::Journal)?;
     Ok(value != 0)
-}
-
-fn identity_values(
-    request: &ImageImportRequest,
-) -> (&str, &str, &str, &str, &str, &str, &str, &str, &str) {
-    (
-        request.engine_id.as_str(),
-        request.docker_root_digest.as_str(),
-        request.daemon_architecture.as_str(),
-        request.source_sha.as_str(),
-        request.archive_sha256.as_str(),
-        request.index_digest.as_str(),
-        request.platform.as_str(),
-        request.manifest_digest.as_str(),
-        request.config_digest.as_str(),
-    )
-}
-
-fn identity_values_with_attempt(
-    request: &ImageImportRequest,
-    attempt: i64,
-) -> (&str, &str, &str, &str, &str, &str, &str, &str, &str, i64) {
-    let (engine_id, root, architecture, source, archive, index, platform, manifest, config) =
-        identity_values(request);
-    (
-        engine_id,
-        root,
-        architecture,
-        source,
-        archive,
-        index,
-        platform,
-        manifest,
-        config,
-        attempt,
-    )
 }

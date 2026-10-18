@@ -242,6 +242,7 @@ async fn version_five_migration_adds_scale_set_intent_table() -> Result<(), Host
         .execute("DROP TABLE connection_scale_set_intents", ())
         .await
         .map_err(|_| HostError::Journal)?;
+    reset_image_imports_to_version_five(&connection).await?;
     connection
         .execute("PRAGMA user_version = 5", ())
         .await
@@ -250,7 +251,7 @@ async fn version_five_migration_adds_scale_set_intent_table() -> Result<(), Host
     drop(database);
 
     let _journal = Journal::open(&path).await?;
-    assert_eq!(journal_version(&path).await?, 6);
+    assert_eq!(journal_version(&path).await?, 7);
     let (_, connection) = raw_database(&path).await?;
     let mut rows = connection
         .query("PRAGMA table_info(connection_scale_set_intents)", ())
@@ -270,6 +271,7 @@ async fn malformed_version_five_scale_set_table_fails_without_mutation() -> Resu
         .execute("DROP TABLE connection_scale_set_intents", ())
         .await
         .map_err(|_| HostError::Journal)?;
+    reset_image_imports_to_version_five(&connection).await?;
     connection
         .execute("CREATE TABLE connection_scale_set_intents (wrong TEXT)", ())
         .await
@@ -324,4 +326,28 @@ async fn journal_version(path: &std::path::Path) -> Result<i64, HostError> {
         .ok_or(HostError::Journal)?
         .get(0)
         .map_err(|_| HostError::Journal)
+}
+
+async fn reset_image_imports_to_version_five(
+    connection: &turso::Connection,
+) -> Result<(), HostError> {
+    connection
+        .execute("DROP TABLE image_imports", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "CREATE TABLE image_imports (id INTEGER PRIMARY KEY AUTOINCREMENT, engine_id TEXT NOT NULL, docker_root_digest TEXT NOT NULL CHECK (length(docker_root_digest) = 64 AND docker_root_digest NOT GLOB '*[^0-9a-f]*'), daemon_architecture TEXT NOT NULL CHECK (daemon_architecture IN ('x86_64', 'aarch64')), source_sha TEXT NOT NULL CHECK (length(source_sha) = 40 AND source_sha NOT GLOB '*[^0-9a-f]*'), archive_sha256 TEXT NOT NULL CHECK (length(archive_sha256) = 64 AND archive_sha256 NOT GLOB '*[^0-9a-f]*'), index_digest TEXT NOT NULL CHECK (length(index_digest) = 64 AND index_digest NOT GLOB '*[^0-9a-f]*'), platform TEXT NOT NULL CHECK (platform = 'linux/amd64'), manifest_digest TEXT NOT NULL CHECK (length(manifest_digest) = 71 AND substr(manifest_digest, 1, 7) = 'sha256:' AND substr(manifest_digest, 8) NOT GLOB '*[^0-9a-f]*'), config_digest TEXT NOT NULL CHECK (length(config_digest) = 71 AND substr(config_digest, 1, 7) = 'sha256:' AND substr(config_digest, 8) NOT GLOB '*[^0-9a-f]*'), attempt INTEGER NOT NULL CHECK (attempt >= 0), state TEXT NOT NULL CHECK (state IN ('prepared', 'requested', 'uncertain', 'completed', 'aborted')), image_id TEXT, CHECK ((state = 'completed' AND image_id IS NOT NULL) OR (state != 'completed' AND image_id IS NULL)), UNIQUE (engine_id, docker_root_digest, daemon_architecture, source_sha, archive_sha256, index_digest, platform, manifest_digest, config_digest, attempt))",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "CREATE INDEX image_imports_engine_state ON image_imports(engine_id, state, id)",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
 }

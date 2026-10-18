@@ -39,8 +39,9 @@ pub(crate) use connection::{
     ReservationSnapshot, ReservationState,
 };
 pub(crate) use image_import::{
-    ImageImportClaim, ImageImportId, ImageImportIdentity, ImageImportInspection, ImageImportRecord,
-    ImageImportRequest, ImageImportState,
+    ImageImportClaim, ImageImportDescriptor, ImageImportId, ImageImportIdentity,
+    ImageImportInspection, ImageImportObservation, ImageImportRecord, ImageImportRequest,
+    ImageImportState,
 };
 pub(crate) use scale_set_create::{
     CreatedScaleSetResponse, ExistingScaleSetObservation, ScaleSetCreateClaim, ScaleSetCreateId,

@@ -1,123 +1,55 @@
 //! Durable identity and status for host image imports.
 
+mod identity;
+mod inspection;
 mod storage;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use identity::{ImageImportIdentity, ImageImportRequest};
+pub(crate) use inspection::{ImageImportDescriptor, ImageImportObservation};
+
 use crate::error::HostError;
 
 use super::Journal;
-
-/// Exact verified artifact and selected daemon identity.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ImageImportRequest {
-    engine_id: String,
-    docker_root_digest: String,
-    daemon_architecture: String,
-    source_sha: String,
-    archive_sha256: String,
-    index_digest: String,
-    platform: String,
-    manifest_digest: String,
-    config_digest: String,
-}
-
-/// Immutable daemon and artifact values supplied for one import operation.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ImageImportIdentity {
-    pub(crate) engine_id: String,
-    pub(crate) docker_root_digest: String,
-    pub(crate) daemon_architecture: String,
-    pub(crate) source_sha: String,
-    pub(crate) archive_sha256: String,
-    pub(crate) index_digest: String,
-    pub(crate) platform: String,
-    pub(crate) manifest_digest: String,
-    pub(crate) config_digest: String,
-}
-
-impl ImageImportRequest {
-    /// Build a request from verified release and daemon identities.
-    pub(crate) fn new(identity: ImageImportIdentity) -> Result<Self, HostError> {
-        let request = Self {
-            engine_id: identity.engine_id,
-            docker_root_digest: identity.docker_root_digest,
-            daemon_architecture: identity.daemon_architecture,
-            source_sha: identity.source_sha,
-            archive_sha256: identity.archive_sha256,
-            index_digest: identity.index_digest,
-            platform: identity.platform,
-            manifest_digest: identity.manifest_digest,
-            config_digest: identity.config_digest,
-        };
-        request.validate()?;
-        Ok(request)
-    }
-
-    pub(crate) fn engine_id(&self) -> &str {
-        &self.engine_id
-    }
-
-    pub(crate) fn docker_root_digest(&self) -> &str {
-        &self.docker_root_digest
-    }
-
-    pub(crate) fn daemon_architecture(&self) -> &str {
-        &self.daemon_architecture
-    }
-
-    fn validate(&self) -> Result<(), HostError> {
-        let valid_engine = !self.engine_id.is_empty()
-            && self.engine_id.len() <= 128
-            && self
-                .engine_id
-                .bytes()
-                .all(|byte| byte.is_ascii_graphic() && !matches!(byte, b'\'' | b'"'));
-        if !valid_engine
-            || !valid_hex(&self.docker_root_digest, 64)
-            || !matches!(self.daemon_architecture.as_str(), "x86_64" | "aarch64")
-            || !valid_hex(&self.source_sha, 40)
-            || !valid_hex(&self.archive_sha256, 64)
-            || !valid_hex(&self.index_digest, 64)
-            || self.platform != "linux/amd64"
-            || !valid_digest(&self.manifest_digest)
-            || !valid_digest(&self.config_digest)
-        {
-            return Err(HostError::Journal);
-        }
-        Ok(())
-    }
-}
+pub(crate) use inspection::ImageImportObservation as ImageImportReceipt;
 
 /// Verified selected-daemon image inspection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ImageImportInspection {
     request: ImageImportRequest,
-    image_id: String,
+    observation: ImageImportObservation,
 }
 
 impl ImageImportInspection {
-    /// Bind a completed inspection to the exact request.
+    /// Bind exact store evidence to the selected daemon and request.
     pub(crate) fn verified(
         request: &ImageImportRequest,
         observed_engine_id: &str,
         observed_docker_root_digest: &str,
         observed_daemon_architecture: &str,
-        image_id: &str,
+        observation: ImageImportObservation,
     ) -> Result<Self, HostError> {
         request.validate()?;
         if request.engine_id != observed_engine_id
             || request.docker_root_digest != observed_docker_root_digest
             || request.daemon_architecture != observed_daemon_architecture
-            || !valid_digest(image_id)
-            || (image_id != request.config_digest && image_id != request.manifest_digest)
         {
             return Err(HostError::Identity);
         }
+        observation.validate_for(request)?;
         Ok(Self {
             request: request.clone(),
-            image_id: image_id.to_owned(),
+            observation,
         })
+    }
+
+    pub(super) fn image_id(&self) -> &str {
+        self.observation.image_id()
+    }
+
+    pub(super) fn receipt(&self) -> Result<String, HostError> {
+        self.observation.receipt()
     }
 }
 
@@ -189,6 +121,7 @@ pub(crate) struct ImageImportRecord {
     pub(crate) state: ImageImportState,
     pub(crate) request: ImageImportRequest,
     pub(crate) image_id: Option<String>,
+    pub(crate) receipt: Option<ImageImportReceipt>,
 }
 
 impl Journal {
@@ -244,17 +177,4 @@ impl Journal {
     ) -> Result<(), HostError> {
         storage::abort_before_effect(self, id, request).await
     }
-}
-
-fn valid_digest(value: &str) -> bool {
-    value
-        .strip_prefix("sha256:")
-        .is_some_and(|digest| valid_hex(digest, 64))
-}
-
-fn valid_hex(value: &str, length: usize) -> bool {
-    value.len() == length
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }

@@ -82,6 +82,14 @@ pub(super) async fn from_version_five(conn: &turso::Connection) -> Result<(), Ho
     conn.execute("PRAGMA user_version = 6", ())
         .await
         .map_err(|_| HostError::Journal)?;
+    from_version_six(conn).await
+}
+
+pub(super) async fn from_version_six(conn: &turso::Connection) -> Result<(), HostError> {
+    image_import::upgrade_identity(conn).await?;
+    conn.execute("PRAGMA user_version = 7", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
     Ok(())
 }
 
