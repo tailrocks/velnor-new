@@ -271,7 +271,7 @@ fn scale_set_routes_linux_jobs_once_including_controls_and_writers() {
     for id in ["plan", "check-linux", "required", "publish-baseline"] {
         assert_eq!(expanded.jobs[id].runs_on, runner, "{id}");
     }
-    assert!(expanded.jobs["plan"].needs.is_empty());
+    assert_eq!(expanded.jobs["plan"].needs, Vec::<String>::new());
     assert_eq!(expanded.jobs["required"].needs, ["check-linux"]);
     assert_eq!(expanded.jobs["publish-baseline"].needs, ["required"]);
     assert_eq!(
