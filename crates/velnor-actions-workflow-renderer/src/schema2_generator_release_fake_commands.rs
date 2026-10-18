@@ -39,8 +39,8 @@ if [ "$1" = api ]; then
     repos/tailrocks/velnor-new/git/refs)
       test "$2 $3" = '--method POST'
       printf '%s\n' "$GITHUB_SHA" > "$GH_TAG_SOURCE"
-      printf '{"ref":"refs/tags/v0.1.15","object":{"type":"commit","sha":"%s"}}\n' "$GITHUB_SHA" ;;
-    repos/tailrocks/velnor-new/git/ref/tags/v0.1.15)
+      printf '{"ref":"refs/tags/v@COMPILED_RELEASE_VERSION@","object":{"type":"commit","sha":"%s"}}\n' "$GITHUB_SHA" ;;
+    repos/tailrocks/velnor-new/git/ref/tags/v@COMPILED_RELEASE_VERSION@)
       if [ "$GH_CASE" = TagMovedBeforePublish ]; then
         count=0
         if [ -f "$GH_TAG_READS" ]; then count="$(cat "$GH_TAG_READS")"; fi
@@ -65,7 +65,7 @@ if [ "$1" = api ]; then
   exit 0
 fi
 if [ "$1 $2" = 'release create' ]; then
-  test "$3" = v0.1.15
+  test "$3" = v@COMPILED_RELEASE_VERSION@
   printf '%s\n' "$3" > "$GH_CREATE_TAG"
   printf 'draft\n' > "$GH_STATE"
   target_seen=false
@@ -75,8 +75,8 @@ if [ "$1 $2" = 'release create' ]; then
       --repo) test "$2" = tailrocks/velnor-new; shift 2 ;;
       --target) test "$2" = "$GITHUB_SHA"; target_seen=true; shift 2 ;;
       --verify-tag|--latest=false|--draft) shift ;;
-      --title) test "$2" = 'velnor-actions v0.1.15'; shift 2 ;;
-      --notes) test "$2" = "velnor-actions 0.1.15 built from $GITHUB_SHA."; shift 2 ;;
+      --title) test "$2" = 'velnor-actions v@COMPILED_RELEASE_VERSION@'; shift 2 ;;
+      --notes) test "$2" = "velnor-actions @COMPILED_RELEASE_VERSION@ built from $GITHUB_SHA."; shift 2 ;;
       *) exit 45 ;;
     esac
   done
@@ -87,14 +87,14 @@ if [ "$1 $2" = 'release create' ]; then
   exit 0
 fi
 if [ "$1 $2" = 'release view' ]; then
-  test "$3" = v0.1.15
+  test "$3" = v@COMPILED_RELEASE_VERSION@
   test "$4 $5" = '--repo tailrocks/velnor-new'
   test "$6 $7" = '--json databaseId,tagName,isDraft'
-  printf '{"databaseId":123,"tagName":"v0.1.15","isDraft":true}\n'
+  printf '{"databaseId":123,"tagName":"v@COMPILED_RELEASE_VERSION@","isDraft":true}\n'
   exit 0
 fi
 if [ "$1 $2" = 'release upload' ]; then
-  test "$3" = v0.1.15
+  test "$3" = v@COMPILED_RELEASE_VERSION@
   test "$4 $5" = '--repo tailrocks/velnor-new'
   shift 5
   for path in "$@"; do test -s "$path"; done
@@ -116,7 +116,10 @@ pub(super) fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
     permissions.set_mode(0o755);
     fs::set_permissions(timeout, permissions)?;
     let mock = bin.join("gh");
-    fs::write(&mock, MOCK_GH)?;
+    fs::write(
+        &mock,
+        MOCK_GH.replace("@COMPILED_RELEASE_VERSION@", super::release_version()),
+    )?;
     let mut permissions = fs::metadata(&mock)?.permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(mock, permissions)?;

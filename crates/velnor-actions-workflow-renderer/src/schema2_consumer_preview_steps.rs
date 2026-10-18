@@ -5,6 +5,39 @@ use crate::steps::{
     ATTEST_BUILD_PROVENANCE_USES, CHECKOUT_USES, DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES,
 };
 
+// runner.temp expressions are supported at step env scope, never job env scope.
+pub(super) fn with_producer_homes(
+    step: &mut Yaml,
+    homes: &std::collections::BTreeMap<String, String>,
+) -> Result<(), RenderError> {
+    let Yaml::Map(fields) = step else {
+        return Err(RenderError::InvalidWorkflow(
+            "preview_step_not_map".to_owned(),
+        ));
+    };
+    if !fields.iter().any(|(key, _)| key == "env") {
+        fields.push(("env".to_owned(), Yaml::Map(Vec::new())));
+    }
+    let Some((_, Yaml::Map(env))) = fields.iter_mut().find(|(key, _)| key == "env") else {
+        return Err(RenderError::InvalidWorkflow(
+            "preview_step_env_not_map".to_owned(),
+        ));
+    };
+    for (key, value) in homes {
+        let expected = Yaml::str(value);
+        if let Some((_, existing)) = env.iter().find(|(name, _)| name == key) {
+            if existing != &expected {
+                return Err(RenderError::InvalidWorkflow(
+                    "preview_step_home_conflict".to_owned(),
+                ));
+            }
+        } else {
+            env.push((key.clone(), expected));
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn permissions(values: &[(&str, &str)]) -> Yaml {
     Yaml::Map(
         values

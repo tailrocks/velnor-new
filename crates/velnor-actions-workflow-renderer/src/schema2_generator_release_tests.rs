@@ -152,7 +152,10 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
             format!("{SOURCE_SHA}\n")
         );
         let calls = fs::read_to_string(scratch.0.join("gh-calls"))?;
-        assert!(calls.contains("release view v0.1.15"), "{calls}");
+        assert!(
+            calls.contains(&format!("release view v{}", release_version())),
+            "{calls}"
+        );
         assert!(
             calls.contains("api repos/tailrocks/velnor-new/releases/123"),
             "{calls}"
@@ -172,7 +175,7 @@ fn create_candidate_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn E
     let manifest_status = Command::new("bash")
         .args([
             "scripts/generator-release/create-release-manifest.sh",
-            "0.1.15",
+            release_version(),
             REPOSITORY,
             "1.99.1",
             "1.24.1",
@@ -288,7 +291,8 @@ fn assert_publish_result(
             | Failure::TagMovedBeforePublish
     );
     if create_is_expected {
-        assert_eq!(fs::read_to_string(root.join("created-tag"))?, "v0.1.15\n");
+        let expected_tag = format!("v{}\n", release_version());
+        assert_eq!(fs::read_to_string(root.join("created-tag"))?, expected_tag);
         assert_eq!(
             fs::read_to_string(root.join("asset-args"))?,
             expected_asset_args()
@@ -364,10 +368,6 @@ fn preflight_mode(case: Failure) -> &'static str {
     }
 }
 
-fn expected_asset_args() -> String {
-    format!("{}\n", manifest::release_asset_paths().replace(' ', "\n"))
-}
-
 fn assert_no_release_created(root: &Path) {
     assert!(!root.join("created-tag").exists());
 }
@@ -377,7 +377,8 @@ mod cli_tests;
 #[path = "schema2_generator_release_publish_fixtures.rs"]
 mod publish_fixtures;
 use publish_fixtures::{
-    copy_release_helpers, release_json, sha256, write_attestation_files, write_candidate_records,
+    copy_release_helpers, expected_asset_args, release_json, sha256, write_attestation_files,
+    write_candidate_records,
 };
 
 #[path = "schema2_generator_release_fake_commands.rs"]

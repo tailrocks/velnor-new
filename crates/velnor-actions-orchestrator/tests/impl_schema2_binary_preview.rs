@@ -85,6 +85,20 @@ fn preview_generates_independently_with_sorted_static_inventory() -> TestResult 
         assert!(preview.contains("sign-package-release-v1"));
         assert!(preview.contains("publish-package-release-v1"));
         assert!(preview.contains("preview-publish"));
+        let fetch = preview
+            .find("Fetch Cargo sources")
+            .ok_or("P08 source preparation missing")?;
+        let dispatch = preview
+            .find("execute-preview-producer-v1")
+            .ok_or("producer missing")?;
+        assert!(fetch < dispatch);
+        assert!(preview.contains("metadata --locked --offline"));
+        assert!(preview.contains("cargo fetch --locked"));
+        assert!(preview.contains("CARGO_HOME: ${{ runner.temp }}/velnor/cargo"));
+        assert!(preview.contains("RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup"));
+        assert!(preview.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
+        assert!(preview.contains("CARGO_REGISTRY_TOKEN"));
+        assert!(preview.contains("NODE_AUTH_TOKEN NPM_TOKEN;"));
         assert_eq!(
             tree.get(".github/workflows/binary-release.yml").is_some(),
             stable
