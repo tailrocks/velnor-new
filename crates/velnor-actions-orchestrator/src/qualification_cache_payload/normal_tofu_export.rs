@@ -128,3 +128,7 @@ pub fn export_normal_tofu_providers_cache_payload(
         stage_claim,
     })
 }
+
+#[cfg(test)]
+#[path = "tests/normal_tofu_source_authority_tests.rs"]
+mod source_authority_tests;

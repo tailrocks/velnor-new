@@ -69,7 +69,7 @@ fn append_root_directory<W: Write>(
     source: &Path,
     expected: &PayloadRoot,
 ) -> Result<(), &'static str> {
-    let Some((inventory, root_fd)) = inventory_directory(source)? else {
+    let Some((inventory, root)) = inventory_directory(source)? else {
         return Err("qualification_cache_payload_copy_mismatch");
     };
     if Some(&inventory.digest) != expected.digest.as_ref()
@@ -79,13 +79,14 @@ fn append_root_directory<W: Write>(
     }
     append_directory(archive, archive_root, inventory.root_mode)?;
     for entry in &inventory.entries {
-        append_inventory_entry(archive, &root_fd, archive_root, entry)?;
+        append_inventory_entry(archive, root.fd(), archive_root, entry)?;
     }
     let final_stat =
-        rustix::fs::fstat(&root_fd).map_err(|_| "qualification_cache_payload_read_failed")?;
+        rustix::fs::fstat(root.fd()).map_err(|_| "qualification_cache_payload_read_failed")?;
     if !super::dirs::same_version(&inventory.root_stat, &final_stat) {
         return Err("qualification_cache_payload_file_changed");
     }
+    root.revalidate()?;
     Ok(())
 }
 
@@ -140,7 +141,7 @@ fn append_root_file<W: Write>(
     source: &Path,
     expected: &PayloadRoot,
 ) -> Result<(), &'static str> {
-    let (mut file, stat) = open_copy_source(source)?;
+    let (mut file, stat, source_guard) = open_copy_source(source)?;
     super::payload::validate_payload_root_mode(&stat)?;
     let size = u64::try_from(stat.st_size).map_err(|_| "qualification_cache_payload_limit")?;
     if size > MAX_FILE_BYTES {
@@ -175,6 +176,7 @@ fn append_root_file<W: Write>(
     if !super::dirs::same_version(&stat, &final_stat) {
         return Err("qualification_cache_payload_file_changed");
     }
+    source_guard.revalidate(&file)?;
     Ok(())
 }
 

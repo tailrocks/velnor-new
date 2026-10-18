@@ -69,7 +69,9 @@ fn writer_preserves_long_paths_and_link_targets() {
 #[test]
 fn writer_rejects_a_stale_root_digest_before_finishing() {
     let scratch = tempfile::tempdir().expect("scratch directory");
-    let root = scratch.path().join("tofu");
+    let root = fs::canonicalize(scratch.path())
+        .expect("canonical scratch directory")
+        .join("tofu");
     fs::create_dir(&root).expect("cache root");
     fs::write(root.join("provider"), b"provider bytes").expect("provider file");
     let roots = CacheRootSet {
@@ -98,7 +100,9 @@ fn writer_rejects_a_stale_root_digest_before_finishing() {
 
 fn fixture() -> Fixture {
     let scratch = tempfile::tempdir().expect("scratch directory");
-    let root = scratch.path().join("tofu");
+    let root = fs::canonicalize(scratch.path())
+        .expect("canonical scratch directory")
+        .join("tofu");
     let nested = root.join("long-directory-name-".repeat(8));
     fs::create_dir_all(&nested).expect("nested cache directory");
     fs::set_permissions(&root, fs::Permissions::from_mode(0o700)).expect("root mode");

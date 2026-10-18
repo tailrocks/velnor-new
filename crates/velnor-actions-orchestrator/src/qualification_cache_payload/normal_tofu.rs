@@ -283,7 +283,7 @@ fn lockfile_path(workspace: &Path, root: &str) -> Result<PathBuf, &'static str> 
 }
 
 fn sha256_file(path: &Path, max_bytes: u64, executable: bool) -> Result<String, &'static str> {
-    let (mut file, before) = super::transfer::open_copy_source(path)?;
+    let (mut file, before, source_guard) = super::transfer::open_copy_source(path)?;
     if executable && before.st_mode & 0o111 == 0 {
         return Err("normal_tofu_binary_not_executable");
     }
@@ -311,6 +311,7 @@ fn sha256_file(path: &Path, max_bytes: u64, executable: bool) -> Result<String, 
     if bytes != declared || !super::transfer::same_version(&before, &after) {
         return Err("normal_tofu_file_changed");
     }
+    source_guard.revalidate(&file)?;
     Ok(lower_hex(&digest.finalize()))
 }
 

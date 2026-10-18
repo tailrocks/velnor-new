@@ -251,7 +251,7 @@ records the action result only. It does not show that the service stored the
 bytes sent for storage.
 
 The action's [lockfile](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/package-lock.json)
-selects `@actions/cache` 6.1.0. Its exact [package artifact](https://registry.npmjs.org/@actions/cache/-/cache-6.1.0.tgz)
+selects `@actions/cache` 6.1.0. Its [package artifact](https://registry.npmjs.org/@actions/cache/-/cache-6.1.0.tgz)
 has integrity `sha512-LVqybSbzhBp2uAETOQ3HnVjXA4AcjavgMH+LCr+cjgO+PZfciv/1QAgoW+esXBaAhvDid+vXeV70GGJpAh4V5Q==`
 and SHA-256 `88ed2cf43d91201de44a2f1b40741dc67d50fb0f1260b3ac8e6c3cfd1842bd47`.
 The package's `lib/cache.js`, `lib/internal/cacheUtils.js`, and
@@ -273,7 +273,7 @@ three records. Before you record a stored-payload result, do these checks:
 - A format-3 manifest check.
 - Agreement between the restored useful-state digest and the export digest kept
   outside the restore stage.
-- A backend record with the exact key, ref, version, and cache ID.
+- A backend record with the same key, ref, version, and cache ID as the restored entry.
 
 This records agreement for the stored bytes. It does not say that this run
 made the cache entry. The restore action output, a successful save step, or an
@@ -282,5 +282,5 @@ exact-key backend listing alone gives no stored-payload result.
 The runner's archive adapter still needs an action-level check of the selected
 tar executable and confinement environment for the pinned restore action. The
 check must include `gtar` on Darwin. Until the action-level check shows
-pre-extraction confinement for the exact staged path, do not report a
+pre-extraction confinement for the staged path used by the action, do not report a
 stored-payload result.

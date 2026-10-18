@@ -51,9 +51,10 @@ fn copy_tree_with_hook_owned<F>(
 where
     F: FnMut(&Path),
 {
-    let source_fd = open_directory(source)?;
-    let source_stat = fstat(&source_fd)?;
-    let expected = digest_directory_fd(&source_fd)?.ok_or("qualification_cache_payload_empty")?;
+    let source_root = super::super::source::SourceDirectory::open(source)?;
+    let source_fd = source_root.fd();
+    let source_stat = fstat(source_fd)?;
+    let expected = digest_directory_fd(source_fd)?.ok_or("qualification_cache_payload_empty")?;
     let destination_parent = destination
         .parent()
         .ok_or("qualification_cache_payload_destination_invalid")?;
@@ -86,14 +87,14 @@ where
         stat: created,
     };
     let copied = copy_created_tree(
-        &source_fd,
+        source_fd,
         &owned.descriptor,
         &source_stat,
         &expected,
         &mut after_source_open,
     );
     let result = if copied.is_ok()
-        && (!same_directory_at_path(source, &source_fd)
+        && (source_root.revalidate().is_err()
             || !same_directory_at_path(destination_parent, &parent_fd)
             || !same_entry_at_path(&parent_fd, name.as_c_str(), &owned.stat))
     {

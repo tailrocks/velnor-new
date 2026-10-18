@@ -1,10 +1,8 @@
 use std::fs;
 use std::io::Read;
-use std::os::fd::AsFd;
-use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
-use rustix::fs::{AtFlags, FileType, Mode, OFlags, Stat, open, openat, statat};
+use rustix::fs::{AtFlags, FileType, Mode, OFlags, Stat, openat, statat};
 
 const DOMAIN: &[u8] = b"velnor-qualification-cache-useful-state\0";
 const MAX_ENTRIES: usize = 250_000;
@@ -34,27 +32,17 @@ struct Tree {
     file_links: std::collections::BTreeMap<(u64, u64), (u64, u64)>,
 }
 
+#[cfg(test)]
 pub(crate) fn digest_stage(root: &Path) -> Result<Option<String>, &'static str> {
-    let metadata = fs::symlink_metadata(root).map_err(|_| "qualification_cache_payload_missing")?;
-    if !metadata.file_type().is_dir() {
-        return Err("qualification_cache_payload_root_invalid");
-    }
-    let root_fd = open(
-        root,
-        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
-        Mode::empty(),
-    )
-    .map_err(|_| "qualification_cache_payload_root_invalid")?;
-    let root_stat = rustix::fs::fstat(root_fd.as_fd())
-        .map_err(|_| "qualification_cache_payload_open_failed")?;
-    validate_directory(&root_stat)?;
-    if !same_identity(&metadata, &root_stat) {
-        return Err("qualification_cache_payload_root_invalid");
-    }
-    digest_open_directory(&root_fd)
+    let source = super::source::SourceDirectory::open(root)?;
+    let digest = digest_open_directory(source.fd())?;
+    source.revalidate()?;
+    Ok(digest)
 }
 
-fn digest_open_directory(root_fd: &rustix::fd::OwnedFd) -> Result<Option<String>, &'static str> {
+pub(super) fn digest_open_directory(
+    root_fd: &rustix::fd::OwnedFd,
+) -> Result<Option<String>, &'static str> {
     let root_stat =
         rustix::fs::fstat(root_fd).map_err(|_| "qualification_cache_payload_open_failed")?;
     validate_directory(&root_stat)?;
@@ -232,11 +220,6 @@ fn file_identity(stat: &Stat) -> Result<(u64, u64), &'static str> {
         u64::try_from(stat.st_dev).map_err(|_| "qualification_cache_payload_file_changed")?,
         stat.st_ino,
     ))
-}
-
-fn same_identity(metadata: &fs::Metadata, stat: &Stat) -> bool {
-    u64::try_from(stat.st_dev).is_ok_and(|device| metadata.dev() == device)
-        && metadata.ino() == stat.st_ino
 }
 
 pub(crate) fn same_version(left: &Stat, right: &Stat) -> bool {

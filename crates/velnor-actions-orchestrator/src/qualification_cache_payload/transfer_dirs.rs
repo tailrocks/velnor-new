@@ -122,14 +122,6 @@ pub(super) fn validate_file_stat(stat: &Stat) -> Result<(), &'static str> {
     Ok(())
 }
 
-pub(super) fn path_points_to(path: &Path, fd: &rustix::fd::OwnedFd) -> bool {
-    let Ok(current) = open_directory_path(path) else {
-        return false;
-    };
-    rustix::fs::fstat(fd)
-        .is_ok_and(|left| rustix::fs::fstat(&current).is_ok_and(|right| same_object(&left, &right)))
-}
-
 pub(crate) fn same_version(left: &Stat, right: &Stat) -> bool {
     left.st_dev == right.st_dev
         && left.st_ino == right.st_ino

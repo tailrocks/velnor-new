@@ -124,14 +124,13 @@ fn strip_line_comment(line: &str) -> &str {
     line
 }
 
-fn code_of(path: &Path) -> Result<Vec<(usize, String)>, String> {
-    let text = std::fs::read_to_string(path).map_err(|err| err.to_string())?;
-    Ok(text
+fn code_of(source: &str) -> Vec<(usize, String)> {
+    source
         .lines()
         .enumerate()
         .map(|(number, line)| (number + 1, strip_line_comment(line).to_owned()))
         .filter(|(_, line)| !line.trim().is_empty())
-        .collect())
+        .collect()
 }
 
 #[test]
@@ -168,6 +167,8 @@ fn mise_sources_stay_read_only_and_unmanaged() -> Result<(), String> {
 const ALWAYS_BANNED: &[&str] = &[
     "fs::write",
     "File::create",
+    "File::options",
+    "options()",
     "create_dir",
     "create_new",
     "OpenOptions",
@@ -194,6 +195,11 @@ const ALWAYS_BANNED: &[&str] = &[
     "apply_fix",
 ];
 
+/// Path-opening APIs are forbidden in the one module that writes filter output.
+/// That module receives its writer from the checked file-filter caller.
+const FILTER_PATH_OPEN_BANNED: &[&str] = &["std::fs", "libc::"];
+const FILTER_PATH_OPEN_IDENTIFIERS: &[&str] = &["open", "openat", "options", "OpenOptions"];
+
 /// Tool-file names allowed only in `toolfiles.rs` (read-only routing and
 /// inspection): owned Mise files plus foreign Rust files for routing.
 const TOOLFILES_ONLY: &[&str] = &[
@@ -210,6 +216,11 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
         .map(|name| name.to_string_lossy())
         .ok_or_else(|| format!("nameless file: {}", path.display()))?;
     let source = std::fs::read_to_string(path).map_err(|err| err.to_string())?;
+    check_source(&name, &source, violations);
+    Ok(())
+}
+
+fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
     let compact = source
         .split_whitespace()
         .collect::<Vec<_>>()
@@ -239,7 +250,27 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
             "{name}: program metadata check is outside its approved module"
         ));
     }
-    for (line, mut code) in code_of(path)? {
+    if is_filter_process {
+        for token in FILTER_PATH_OPEN_BANNED {
+            if compact.contains(token) {
+                violations.push(format!(
+                    "{name}: path-opening capability is forbidden in the output writer module: `{token}`"
+                ));
+            }
+        }
+        for (line, code) in code_of(source) {
+            let identifiers = code
+                .split(|character: char| !character.is_ascii_alphanumeric() && character != '_');
+            for token in FILTER_PATH_OPEN_IDENTIFIERS {
+                if identifiers.clone().any(|identifier| identifier == *token) {
+                    violations.push(format!(
+                        "{name}:{line}: path-opening identifier `{token}` is forbidden in the output writer module"
+                    ));
+                }
+            }
+        }
+    }
+    for (line, mut code) in code_of(source) {
         if is_filter_process && code.trim() == ".write_all(&buffer[..count])" {
             code = code.replace("write_all", "");
         }
@@ -266,113 +297,7 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
             violations.push(format!("{at}: unsanctioned `.mise/tasks` in `{code}`"));
         }
     }
-    Ok(())
 }
 
-#[test]
-fn bounded_file_filter_exceptions_are_exact_and_local() {
-    let allowed_write = "fn copy_from_child() { output\n.write_all(&buffer[..count])?; }";
-    let altered_write = "fn copy_from_child() { other\n.write_all(&buffer[..count])?; }";
-    let extra_write =
-        "fn copy_from_child() { output.write_all(&buffer[..count])?; output.write_all(b\"x\")?; }";
-    let allowed_metadata = "fn check() { let m = std::fs::symlink_metadata(program)?; }";
-    let extra_metadata =
-        "fn check() { std::fs::symlink_metadata(program)?; std::fs::symlink_metadata(other)?; }";
-    let create_link = "fn bad() { std::os::unix::fs::symlink(source, target)?; }";
-
-    let mut violations = Vec::new();
-    check_source_fixture(
-        "bounded_file_filter_process.rs",
-        allowed_write,
-        &mut violations,
-    );
-    assert!(violations.is_empty(), "{violations:?}");
-
-    violations.clear();
-    check_source_fixture(
-        "bounded_file_filter_process.rs",
-        altered_write,
-        &mut violations,
-    );
-    assert_ne!(violations, Vec::<String>::new());
-
-    violations.clear();
-    check_source_fixture(
-        "bounded_file_filter_process.rs",
-        extra_write,
-        &mut violations,
-    );
-    assert_ne!(violations, Vec::<String>::new());
-
-    violations.clear();
-    check_source_fixture("bounded_file_filter.rs", allowed_metadata, &mut violations);
-    assert!(violations.is_empty(), "{violations:?}");
-
-    violations.clear();
-    check_source_fixture("bounded_file_filter.rs", extra_metadata, &mut violations);
-    assert_ne!(violations, Vec::<String>::new());
-
-    violations.clear();
-    check_source_fixture("bounded_file_filter.rs", create_link, &mut violations);
-    assert_ne!(violations, Vec::<String>::new());
-
-    violations.clear();
-    check_source_fixture(
-        "bounded_file_filter_tests.rs",
-        allowed_write,
-        &mut violations,
-    );
-    assert_ne!(violations, Vec::<String>::new());
-
-    for mutation in [
-        "std::fs::write(path, bytes)",
-        "File::create(path)",
-        "std::fs::create_dir(path)",
-        "std::fs::rename(old, new)",
-        "std::fs::remove_file(path)",
-        "std::fs::set_permissions(path, permissions)",
-        "std::os::unix::fs::hard_link(source, target)",
-    ] {
-        violations.clear();
-        check_source_fixture("bounded_file_filter.rs", mutation, &mut violations);
-        assert!(!violations.is_empty(), "mutation passed: {mutation}");
-    }
-}
-
-fn check_source_fixture(name: &str, source: &str, violations: &mut Vec<String>) {
-    let compact = source
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .replace(" .", ".");
-    let is_filter_process = name == "bounded_file_filter_process.rs";
-    let is_filter = name == "bounded_file_filter.rs";
-    let write_expression = "output.write_all(&buffer[..count])";
-    let metadata_expression = "std::fs::symlink_metadata(program)";
-    if is_filter_process && compact.matches(write_expression).count() != 1 {
-        violations.push(format!("{name}: missing exact bounded output expression"));
-    }
-    if is_filter && compact.matches(metadata_expression).count() != 1 {
-        violations.push(format!("{name}: missing exact metadata expression"));
-    }
-    if !is_filter_process && compact.contains(write_expression) {
-        violations.push(format!(
-            "{name}: bounded output expression is outside its module"
-        ));
-    }
-    if !is_filter && compact.contains(metadata_expression) {
-        violations.push(format!("{name}: metadata expression is outside its module"));
-    }
-    let mut remaining = compact;
-    if is_filter_process {
-        remaining = remaining.replacen(write_expression, "", 1);
-    }
-    if is_filter {
-        remaining = remaining.replacen(metadata_expression, "", 1);
-    }
-    for token in ALWAYS_BANNED {
-        if remaining.contains(token) {
-            violations.push(format!("{name}: forbidden `{token}`"));
-        }
-    }
-}
+#[path = "impl_mise_forbidden_src_filter_tests.rs"]
+mod filter_tests;

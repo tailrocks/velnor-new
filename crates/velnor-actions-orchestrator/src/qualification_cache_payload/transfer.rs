@@ -18,6 +18,8 @@ pub(super) use files::open_copy_source;
 pub(super) mod install;
 #[path = "payload.rs"]
 pub(super) mod payload;
+#[path = "transfer_source.rs"]
+pub(super) mod source;
 #[path = "transfer_stage.rs"]
 pub(super) mod stage;
 pub(super) use dirs::same_version;
