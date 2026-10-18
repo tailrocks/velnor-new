@@ -1,11 +1,8 @@
 use std::path::Path;
 use std::process::ExitCode;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use velnor_runner_host::{
-    ConnectionId, HostError, RepositoryConnection, wait_for_connection_detached,
-    wait_for_connection_drain,
-};
+use velnor_runner_host::{ConnectionId, HostError, RepositoryConnection};
 
 use super::DRAIN_WAIT_BUDGET;
 use super::connection_state::{
@@ -16,24 +13,17 @@ use super::connection_state::{
 use super::marker::{MarkerToken, marker_token, report_marker_write_error, write_marker};
 
 pub(super) fn disconnect(state: &Path, raw_connection_id: &str, wait: bool) -> ExitCode {
-    disconnect_with(state, raw_connection_id, wait, wait_for_connection_drain)
-}
-
-pub(super) fn disconnect_with<F>(
-    state: &Path,
-    raw_connection_id: &str,
-    wait: bool,
-    wait_for_drain: F,
-) -> ExitCode
-where
-    F: FnOnce(&Path, &ConnectionId, Duration) -> Result<bool, HostError>,
-{
+    let deadline = Instant::now() + DRAIN_WAIT_BUDGET;
     disconnect_with_detach(
         state,
         raw_connection_id,
         wait,
-        wait_for_drain,
-        wait_for_connection_detached,
+        move |state, connection_id, _| {
+            crate::readiness_probe::wait_for_connection_drain_until(state, connection_id, deadline)
+        },
+        move |state, binding, _| {
+            crate::readiness_probe::wait_for_connection_detached_until(state, binding, deadline)
+        },
     )
 }
 

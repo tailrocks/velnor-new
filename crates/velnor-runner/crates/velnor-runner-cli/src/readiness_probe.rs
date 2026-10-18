@@ -1,41 +1,35 @@
 //! Run all synchronous readiness probes inside one killable child.
 
 use std::ffi::OsStr;
-use std::io::Write;
-use std::path::PathBuf;
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 use std::process::{ExitCode, ExitStatus, Stdio};
-use std::time::Duration;
+use std::time::{Duration, Instant as StdInstant};
 
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::{Child, Command};
 use tokio::time::{Instant, timeout_at};
-use velnor_runner_host::{Readiness, controller_readiness};
+use velnor_runner_host::{
+    ConnectionId, HostError, Readiness, RepositoryConnection, controller_readiness,
+    reactivate_connection_if_drained, wait_for_connection_detached, wait_for_connection_drain,
+    wait_for_drain,
+};
 
 const INTERNAL_FLAG: &str = "--internal-readiness-scan";
 const MAX_STATUS_BYTES: usize = 64;
 const MAX_STATUS_READ: u64 = 65;
 const REAP_RESERVE: Duration = Duration::from_millis(300);
 
+mod control;
+pub(crate) use control::{
+    reactivate_connection_until, run_internal, wait_for_connection_detached_until,
+    wait_for_connection_drain_until, wait_for_drain_until,
+};
+
 enum ChildWait {
     Exited(ExitStatus),
     TimedOut,
     Failed,
-}
-
-/// Run the private child operation when its exact argument shape is present.
-pub(crate) fn run_internal() -> Option<ExitCode> {
-    let mut args = std::env::args_os();
-    let _program = args.next()?;
-    if args.next()?.as_os_str() != OsStr::new(INTERNAL_FLAG) {
-        return None;
-    }
-    let Some(state) = args.next() else {
-        return Some(ExitCode::from(2));
-    };
-    if args.next().is_some() {
-        return Some(ExitCode::from(2));
-    }
-    Some(write_readiness(&PathBuf::from(state)))
 }
 
 /// Assess readiness in a child so blocking system calls can be killed.
