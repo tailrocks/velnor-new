@@ -66,14 +66,13 @@ fn curl_argv_has_no_header() {
 }
 
 #[test]
-fn curl_ignores_retrying_curlrc_before_a_post() {
-    let home = CurlHome::new();
+fn curl_ignores_retrying_curlrc_before_a_post() -> Result<(), Box<dyn std::error::Error>> {
+    let home = CurlHome::new()?;
     fs::write(
         home.path.join(".curlrc"),
         "retry = 1\nretry-all-errors\nretry-delay = 0\n",
-    )
-    .unwrap();
-    let server = RetryFixture::start();
+    )?;
+    let server = RetryFixture::start()?;
     let output = home.path.join("response");
     let config = format!(
         "request = \"POST\"\nurl = \"http://{}/create\"\noutput = \"{}\"\nwrite-out = \"%{{http_code}}\"\nmax-time = 5\n",
@@ -82,10 +81,11 @@ fn curl_ignores_retrying_curlrc_before_a_post() {
     );
 
     let result = run_curl_in_home(&config, &home.path);
-    let requests = server.finish();
+    let requests = server.finish()?;
 
     assert!(matches!(result, Ok(503)));
     assert_eq!(requests, 1);
+    Ok(())
 }
 
 #[test]
@@ -140,10 +140,10 @@ struct CurlHome {
 }
 
 impl CurlHome {
-    fn new() -> Self {
+    fn new() -> std::io::Result<Self> {
         let path = std::env::temp_dir().join(format!("velnor-curl-home-{}", uuid::Uuid::new_v4()));
-        fs::create_dir(&path).unwrap();
-        Self { path }
+        fs::create_dir(&path)?;
+        Ok(Self { path })
     }
 }
 
@@ -155,44 +155,46 @@ impl Drop for CurlHome {
 
 struct RetryFixture {
     address: std::net::SocketAddr,
-    requests: JoinHandle<usize>,
+    requests: JoinHandle<std::io::Result<usize>>,
 }
 
 impl RetryFixture {
-    fn start() -> Self {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let address = listener.local_addr().unwrap();
-        let requests = thread::spawn(move || serve_retry_fixture(listener));
-        Self { address, requests }
+    fn start() -> std::io::Result<Self> {
+        let listener = TcpListener::bind("127.0.0.1:0")?;
+        let address = listener.local_addr()?;
+        let requests = thread::spawn(move || serve_retry_fixture(&listener));
+        Ok(Self { address, requests })
     }
 
-    fn finish(self) -> usize {
-        self.requests.join().unwrap()
+    fn finish(self) -> std::io::Result<usize> {
+        self.requests
+            .join()
+            .map_err(|_| std::io::Error::other("retry fixture thread panicked"))?
     }
 }
 
-fn serve_retry_fixture(listener: TcpListener) -> usize {
-    let (mut first, _) = listener.accept().unwrap();
-    read_headers(&mut first).unwrap();
-    respond(&mut first, 503).unwrap();
-    listener.set_nonblocking(true).unwrap();
+fn serve_retry_fixture(listener: &TcpListener) -> std::io::Result<usize> {
+    let (mut first, _) = listener.accept()?;
+    read_headers(&mut first)?;
+    respond(&mut first, 503)?;
+    listener.set_nonblocking(true)?;
 
     let deadline = Instant::now() + Duration::from_millis(750);
     loop {
         match listener.accept() {
             Ok((mut retry, _)) => {
-                read_headers(&mut retry).unwrap();
-                respond(&mut retry, 409).unwrap();
-                return 2;
+                read_headers(&mut retry)?;
+                respond(&mut retry, 409)?;
+                return Ok(2);
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 if Instant::now() >= deadline {
-                    return 1;
+                    return Ok(1);
                 }
                 thread::sleep(Duration::from_millis(5));
             }
-            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
-            Err(error) => panic!("accept failed: {error}"),
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(error) => return Err(error),
         }
     }
 }
