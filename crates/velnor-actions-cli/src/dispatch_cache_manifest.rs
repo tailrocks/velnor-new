@@ -110,6 +110,34 @@ impl PayloadManifest {
         Ok(manifest)
     }
 
+    pub(crate) fn parse_for_save(
+        text: &str,
+        binding: &QualificationCacheBindingOutputs,
+        roots: &CacheRootSet,
+        cache_key: &str,
+    ) -> Result<Self, &'static str> {
+        let manifest = parse_canonical(text)?;
+        let runtime_identity_digest = binding
+            .runtime_identity_digest
+            .as_deref()
+            .ok_or("qualification_cache_manifest_identity_missing")?;
+        validate_digest(runtime_identity_digest)?;
+        if !binding.active
+            || binding.layer != roots.layer.as_str()
+            || binding.matrix_key != roots.matrix_key
+            || binding.save_key.as_deref() != Some(cache_key)
+            || manifest.campaign != binding.campaign
+            || manifest.matrix_key != binding.matrix_key
+            || manifest.layer != binding.layer
+            || manifest.cache_key != cache_key
+            || manifest.runtime_identity_digest != runtime_identity_digest
+        {
+            return Err("qualification_cache_manifest_binding_mismatch");
+        }
+        validate_payload_roots(roots, &manifest.roots)?;
+        Ok(manifest)
+    }
+
     pub(crate) fn canonical_json(&self) -> Result<String, &'static str> {
         validate_digest(&self.state_digest)?;
         validate_digest(&self.runtime_identity_digest)?;
@@ -157,6 +185,20 @@ impl PayloadManifest {
         }
         Ok(text)
     }
+}
+
+fn parse_canonical(text: &str) -> Result<PayloadManifest, &'static str> {
+    if text.len() > MAX_MANIFEST_BYTES || text.chars().any(|value| matches!(value, '\n' | '\r')) {
+        return Err("qualification_cache_manifest_invalid");
+    }
+    let value = parse_strict_json_with_limit(text, MAX_MANIFEST_BYTES)
+        .map_err(|_| "qualification_cache_manifest_invalid")?;
+    let canonical =
+        canonical_json_str(&value).map_err(|_| "qualification_cache_manifest_invalid")?;
+    if canonical != text {
+        return Err("qualification_cache_manifest_noncanonical");
+    }
+    parse_value(&value)
 }
 
 fn parse_value(value: &Value) -> Result<PayloadManifest, &'static str> {

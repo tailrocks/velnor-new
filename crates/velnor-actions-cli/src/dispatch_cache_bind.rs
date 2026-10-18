@@ -10,11 +10,12 @@ use velnor_actions_orchestrator::{
     QUALIFICATION_CACHE_BIND_OP, QualificationCacheBindingRequest, bind_qualification_cache_runtime,
 };
 
-#[cfg(test)]
 #[path = "dispatch_cache_manifest.rs"]
-mod manifest;
+pub(crate) mod manifest;
 #[path = "dispatch_cache_roots.rs"]
-mod roots;
+pub(crate) mod roots;
+#[path = "dispatch_cache_transfer.rs"]
+pub(crate) mod transfer;
 
 /// Operation tag for one validated cache binding.
 pub(crate) const OP: &str = QUALIFICATION_CACHE_BIND_OP;
@@ -322,7 +323,7 @@ fn output_body(
 /// Stable absolute staging path for an exact, typed campaign/layer/cache key.
 /// The path deliberately excludes the workflow run/attempt so a cold save and
 /// warm restore of the same key use the same action-cache archive version.
-fn stage_path(
+pub(crate) fn stage_path(
     runner_temp: &std::path::Path,
     campaign: &str,
     layer: &str,

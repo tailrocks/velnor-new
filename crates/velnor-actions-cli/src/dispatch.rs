@@ -91,6 +91,10 @@ enum InternalOp {
     BindQualificationCache,
     /// Validate one restored cache against the backend census.
     ObserveQualificationCacheBackend,
+    /// Import one admitted qualification cache payload.
+    ImportQualificationCachePayload,
+    /// Export one qualification cache payload to isolated staging.
+    ExportQualificationCachePayload,
     /// Data-only task execution record resolution for a generated wrapper.
     ResolveTaskExecution,
     /// Isolated, credentialed signing of a plan-bound package release.
@@ -143,6 +147,12 @@ fn internal_op() -> Option<InternalOp> {
         }
         Ok(tag) if tag == cache_bind::OP => InternalOp::BindQualificationCache,
         Ok(tag) if tag == cache_observe::OP => InternalOp::ObserveQualificationCacheBackend,
+        Ok(tag) if tag == cache_bind::transfer::IMPORT_OP => {
+            InternalOp::ImportQualificationCachePayload
+        }
+        Ok(tag) if tag == cache_bind::transfer::EXPORT_OP => {
+            InternalOp::ExportQualificationCachePayload
+        }
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
         Ok(tag) if tag == SIGN_PACKAGE_RELEASE_OP => InternalOp::PackageSigner,
         Ok(tag) if tag == PUBLISH_PACKAGE_RELEASE_OP => InternalOp::PackagePublisher,
@@ -163,7 +173,10 @@ fn gate_request() -> Option<InternalRequest> {
     let op = internal_op()?;
     if matches!(
         op,
-        InternalOp::BindQualificationCache | InternalOp::ObserveQualificationCacheBackend
+        InternalOp::BindQualificationCache
+            | InternalOp::ObserveQualificationCacheBackend
+            | InternalOp::ImportQualificationCachePayload
+            | InternalOp::ExportQualificationCachePayload
     ) {
         return cache_runner_request(op);
     }
@@ -186,6 +199,10 @@ fn gate_request() -> Option<InternalRequest> {
         let root = crate::dispatch_repo_policy::gate_root()?;
         return Some(InternalRequest { op, path: root });
     }
+    gate_request_file(op)
+}
+
+fn gate_request_file(op: InternalOp) -> Option<InternalRequest> {
     let path = env::var_os(REQUEST_FILE_ENV)
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)?;
@@ -234,6 +251,8 @@ fn gate_request() -> Option<InternalRequest> {
         | InternalOp::ExecuteCheck
         | InternalOp::BindQualificationCache
         | InternalOp::ObserveQualificationCacheBackend
+        | InternalOp::ImportQualificationCachePayload
+        | InternalOp::ExportQualificationCachePayload
         | InternalOp::ResolveTaskExecution => {}
     }
     Some(InternalRequest { op, path })
@@ -295,6 +314,8 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
         InternalOp::BindQualificationCache => cache_bind::run(),
         InternalOp::ObserveQualificationCacheBackend => cache_observe::run(),
+        InternalOp::ImportQualificationCachePayload => cache_bind::transfer::run_import(),
+        InternalOp::ExportQualificationCachePayload => cache_bind::transfer::run_export(),
         InternalOp::ResolveTaskExecution => match resolve_task_execution() {
             Ok(frame) => match std::io::stdout().lock().write_all(&frame) {
                 Ok(()) => ExitCode::SUCCESS,

@@ -11,6 +11,8 @@ mod impl_cli_gate;
 mod impl_cli_gate_cache_bind;
 #[path = "impl_cli_gate_cache_observe.rs"]
 mod impl_cli_gate_cache_observe;
+#[path = "impl_cli_gate_cache_transfer.rs"]
+mod impl_cli_gate_cache_transfer;
 #[path = "impl_cli_gate_preseed.rs"]
 mod impl_cli_gate_preseed;
 #[path = "impl_cli_gate_qualification.rs"]

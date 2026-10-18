@@ -30,7 +30,7 @@ pub(super) fn remove_created_tree(parent: &rustix::fd::OwnedFd, name: &CStr, exp
     if statat(parent, name, AtFlags::SYMLINK_NOFOLLOW)
         .is_ok_and(|current| same_object(expected, &current))
     {
-        let _ = unlinkat(parent, name, AtFlags::REMOVEDIR);
+        ignore_unlink_result(unlinkat(parent, name, AtFlags::REMOVEDIR));
     }
 }
 
@@ -63,7 +63,7 @@ fn remove_contents(directory_fd: &rustix::fd::OwnedFd, depth: usize) {
         } else if statat(directory_fd, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)
             .is_ok_and(|current| same_object(&before, &current))
         {
-            let _ = unlinkat(directory_fd, name.as_c_str(), AtFlags::empty());
+            ignore_unlink_result(unlinkat(directory_fd, name.as_c_str(), AtFlags::empty()));
         }
     }
 }
@@ -89,6 +89,12 @@ fn remove_child_directory(
     if statat(parent, name, AtFlags::SYMLINK_NOFOLLOW)
         .is_ok_and(|current| same_object(expected, &current))
     {
-        let _ = unlinkat(parent, name, AtFlags::REMOVEDIR);
+        ignore_unlink_result(unlinkat(parent, name, AtFlags::REMOVEDIR));
+    }
+}
+
+fn ignore_unlink_result(result: Result<(), rustix::io::Errno>) {
+    match result {
+        Ok(()) | Err(_) => {}
     }
 }
