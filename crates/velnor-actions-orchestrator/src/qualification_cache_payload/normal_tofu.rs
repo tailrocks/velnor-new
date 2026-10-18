@@ -263,7 +263,7 @@ struct RuntimeObservation {
 
 fn cache_path(runner_temp: &Path, root: &str) -> Result<PathBuf, &'static str> {
     let temp = path_text(runner_temp)?;
-    let base = format!("{temp}/velnor/tofu-cache");
+    let base = format!("{temp}/velnor/cache/tofu");
     let value = velnor_actions_tofu::tofu_cache_dir_under(&base, root)
         .map_err(|_| "normal_tofu_cache_path_invalid")?;
     let path = PathBuf::from(value);
@@ -386,3 +386,7 @@ fn string_field<'a>(object: &'a Map<String, Value>, key: &str) -> Result<&'a str
 #[cfg(test)]
 #[path = "tests/normal_tofu_runtime_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/normal_tofu_root_path_tests.rs"]
+mod root_path_tests;

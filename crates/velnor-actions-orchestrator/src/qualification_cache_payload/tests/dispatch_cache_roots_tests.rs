@@ -199,7 +199,7 @@ fn derives_each_supported_layer_from_runner_environment() {
         ),
         (
             "TF_PLUGIN_CACHE_DIR".to_owned(),
-            "/tmp/runner/velnor/tofu-cache/root-0123456789ab".to_owned(),
+            "/tmp/runner/velnor/cache/tofu/root-0123456789ab".to_owned(),
         ),
         (
             "MISE_TASK_CACHE_DIR".to_owned(),
@@ -234,7 +234,7 @@ fn environment_root_paths_fail_closed_on_home_mismatch_and_escape() {
 
     let escaping = BTreeMap::from([(
         "TF_PLUGIN_CACHE_DIR".to_owned(),
-        "/tmp/runner/velnor/tofu-cache/../../outside/root-0123456789ab".to_owned(),
+        "/tmp/runner/velnor/cache/tofu/../../outside/root-0123456789ab".to_owned(),
     )]);
     assert_eq!(
         expected_paths_for_environment(
