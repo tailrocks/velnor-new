@@ -125,7 +125,28 @@ enum FilterProgress {
     Output(Result<(), StageError>),
 }
 
-fn run_filter<R, W>(
+/// The deadline limits the child and pipes. Regular-file I/O can delay return.
+fn run_filter(
+    command: &mut Command,
+    input: File,
+    output: &mut File,
+    input_limit: u64,
+    output_limit: u64,
+    timeout: Duration,
+) -> Result<(), StageError> {
+    let input_metadata = input
+        .metadata()
+        .map_err(|_| "cache_tar_archive_read_failed")?;
+    let output_metadata = output
+        .metadata()
+        .map_err(|_| "cache_tar_archive_write_failed")?;
+    if !input_metadata.is_file() || !output_metadata.is_file() {
+        return Err("cache_tar_archive_invalid");
+    }
+    run_filter_io(command, input, output, input_limit, output_limit, timeout)
+}
+
+fn run_filter_io<R, W>(
     command: &mut Command,
     input: R,
     output: &mut W,
@@ -239,6 +260,7 @@ where
                     failure = Some(problem);
                     break;
                 }
+                Err(mpsc::TryRecvError::Disconnected) if input_done && output_done => {}
                 Err(mpsc::TryRecvError::Disconnected) => {
                     failure = Some("cache_tar_compression_failed");
                     break;
@@ -246,16 +268,16 @@ where
                 Err(mpsc::TryRecvError::Empty) => {}
             }
             if exit_status.is_none() {
-                match child.try_wait() {
-                    Ok(Some(status)) => {
-                        if !status.success() {
+                match observe_exit_without_reaping(child) {
+                    Ok(Some(success)) => {
+                        if !success {
                             failure = Some("cache_tar_compression_failed");
                             break;
                         }
-                        exit_status = Some(status);
+                        exit_status = Some(());
                     }
                     Ok(None) => {}
-                    Err(_) => {
+                    Err(()) => {
                         failure = Some("cache_tar_compression_failed");
                         break;
                     }
@@ -273,9 +295,25 @@ where
             terminate_and_reap(child, group);
             Err(problem)
         } else {
-            Ok(())
+            match child.wait() {
+                Ok(status) if status.success() => Ok(()),
+                _ => Err("cache_tar_compression_failed"),
+            }
         }
     })
+}
+
+fn observe_exit_without_reaping(child: &Child) -> Result<Option<bool>, ()> {
+    use rustix::process::{Pid, WaitId, WaitIdOptions, waitid};
+
+    let raw_pid = i32::try_from(child.id()).map_err(|_| ())?;
+    let pid = Pid::from_raw(raw_pid).ok_or(())?;
+    let status = waitid(
+        WaitId::Pid(pid),
+        WaitIdOptions::NOHANG | WaitIdOptions::EXITED | WaitIdOptions::NOWAIT,
+    )
+    .map_err(|_| ())?;
+    Ok(status.map(|status| status.exit_status() == Some(0)))
 }
 
 fn copy_into_child<R: Read, W: Write>(
@@ -365,9 +403,58 @@ fn set_nonblocking(fd: &impl std::os::fd::AsFd) -> Result<(), ()> {
     fcntl_setfl(fd, flags | OFlags::NONBLOCK).map_err(|_| ())
 }
 
+#[cfg(test)]
+mod group_signal_test_hook {
+    use std::cell::Cell;
+
+    thread_local! {
+        static ENABLED: Cell<bool> = const { Cell::new(false) };
+        static LEADER_ALREADY_REAPED: Cell<bool> = const { Cell::new(false) };
+    }
+
+    pub(super) fn enable() {
+        ENABLED.with(|enabled| enabled.set(true));
+        LEADER_ALREADY_REAPED.with(|observed| observed.set(false));
+    }
+
+    pub(super) fn disable() {
+        ENABLED.with(|enabled| enabled.set(false));
+    }
+
+    pub(super) fn leader_was_already_reaped() -> bool {
+        LEADER_ALREADY_REAPED.with(Cell::get)
+    }
+
+    pub(super) fn observe_and_suppress(group: u32) -> bool {
+        use rustix::process::{Pid, WaitOptions, waitpid};
+
+        if !ENABLED.with(Cell::get) {
+            return false;
+        }
+
+        let Ok(raw_pid) = i32::try_from(group) else {
+            return false;
+        };
+        let Some(pid) = Pid::from_raw(raw_pid) else {
+            return false;
+        };
+        let observed = waitpid(Some(pid), WaitOptions::NOHANG);
+        LEADER_ALREADY_REAPED.with(|already_reaped| {
+            already_reaped.set(matches!(observed, Err(rustix::io::Errno::CHILD)));
+        });
+        matches!(observed, Err(rustix::io::Errno::CHILD) | Ok(Some(_)))
+    }
+}
+
 fn terminate_and_reap(child: &mut Child, group: u32) {
     use rustix::io::Errno;
     use rustix::process::{Pid, Signal, kill_process_group};
+
+    #[cfg(test)]
+    if group_signal_test_hook::observe_and_suppress(group) {
+        drop(child.wait());
+        return;
+    }
 
     if let Ok(raw) = i32::try_from(group)
         && let Some(pid) = Pid::from_raw(raw)
@@ -424,7 +511,7 @@ fn copy_bounded<R: Read, W: Write>(mut reader: R, writer: &mut W) -> Result<(), 
 
 #[cfg(test)]
 mod tests {
-    use super::{ArchiveCompression, decode_archive, run_filter};
+    use super::{ArchiveCompression, decode_archive, group_signal_test_hook, run_filter_io};
     use flate2::Compression;
     use flate2::write::GzEncoder;
     use std::io::{Cursor, Error, Read, Seek, SeekFrom, Write};
@@ -474,7 +561,7 @@ mod tests {
         );
         let mut command = Command::new("/bin/sh");
         command.args(["-c", &script]);
-        let error = run_filter(
+        let error = run_filter_io(
             &mut command,
             DelayedFailureReader {
                 pid_path: pid_path.clone(),
@@ -499,7 +586,7 @@ mod tests {
         );
         let mut command = Command::new("/bin/sh");
         command.args(["-c", &script]);
-        let error = run_filter(
+        let error = run_filter_io(
             &mut command,
             Cursor::new(b"input"),
             &mut DelayedFailureWriter {
@@ -524,7 +611,7 @@ mod tests {
         );
         let mut command = Command::new("/bin/sh");
         command.args(["-c", &script]);
-        let error = run_filter(
+        let error = run_filter_io(
             &mut command,
             Cursor::new(b"input"),
             &mut Vec::new(),
@@ -545,7 +632,7 @@ mod tests {
         let mut command = Command::new("/bin/sh");
         command.args(["-c", &script]);
         let started = Instant::now();
-        let error = run_filter(
+        let error = run_filter_io(
             &mut command,
             Cursor::new(b""),
             &mut Vec::new(),
@@ -563,7 +650,7 @@ mod tests {
     fn zstd_filter_copies_both_streams_and_reaps_normal_exit() {
         let mut command = Command::new("/bin/cat");
         let mut output = Vec::new();
-        run_filter(
+        run_filter_io(
             &mut command,
             Cursor::new(b"bounded zstd stream"),
             &mut output,
@@ -573,6 +660,56 @@ mod tests {
         )
         .expect("successful filter");
         assert_eq!(output, b"bounded zstd stream");
+    }
+
+    #[test]
+    fn zstd_filter_waits_for_exit_after_both_streams_close() {
+        let mut command = Command::new("/bin/sh");
+        command.args(["-c", "cat; exec 1>&-; exec 0<&-; exec /bin/sleep 0.1"]);
+        let mut output = Vec::new();
+        let result = run_filter_io(
+            &mut command,
+            Cursor::new(b"complete stream"),
+            &mut output,
+            1_024,
+            1_024,
+            Duration::from_secs(2),
+        );
+        assert_eq!(output, b"complete stream");
+        assert!(
+            result.is_ok(),
+            "successful child failed after pipe EOF: {result:?}"
+        );
+    }
+
+    #[test]
+    fn zstd_filter_keeps_leader_unreaped_until_group_cleanup() {
+        struct DelayedFailure;
+
+        impl Read for DelayedFailure {
+            fn read(&mut self, _buffer: &mut [u8]) -> std::io::Result<usize> {
+                thread::sleep(Duration::from_millis(150));
+                Err(Error::other("synthetic input failure"))
+            }
+        }
+
+        group_signal_test_hook::enable();
+        let result = run_filter_io(
+            &mut Command::new("/usr/bin/true"),
+            DelayedFailure,
+            &mut Vec::new(),
+            1_024,
+            1_024,
+            Duration::from_secs(2),
+        );
+        let leader_was_already_reaped = group_signal_test_hook::leader_was_already_reaped();
+        group_signal_test_hook::disable();
+
+        assert!(result.is_err());
+        assert!(
+            !leader_was_already_reaped,
+            "cleanup reached group signaling after the leader had been reaped"
+        );
     }
 
     struct DelayedFailureReader {
