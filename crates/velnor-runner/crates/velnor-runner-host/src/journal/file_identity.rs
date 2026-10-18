@@ -11,6 +11,7 @@ pub(super) struct JournalFile {
     path: PathBuf,
     identity: FileIdentity,
     anchor: Arc<File>,
+    process_state: Arc<crate::journal_identity::JournalProcessState>,
 }
 
 impl PartialEq for JournalFile {
@@ -37,10 +38,12 @@ impl JournalFile {
         if canonical != path {
             return Err(HostError::Path);
         }
+        let process_state = crate::journal_identity::process_state(&canonical)?;
         let file = Self {
             path: canonical,
             identity,
             anchor,
+            process_state,
         };
         file.verify()?;
         Ok(file)
@@ -70,6 +73,12 @@ impl JournalFile {
             return Err(HostError::Path);
         }
         Ok(())
+    }
+}
+
+impl Drop for JournalFile {
+    fn drop(&mut self) {
+        crate::journal_identity::release_process_state(&self.path, &self.process_state);
     }
 }
 

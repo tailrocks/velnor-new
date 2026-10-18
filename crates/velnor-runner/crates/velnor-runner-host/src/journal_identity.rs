@@ -12,14 +12,14 @@ use crate::journal_sql::{one_row, token_rejected};
 use crate::launch_identity::LaunchIdentity;
 
 #[derive(Debug)]
-struct JournalProcessState {
+pub(crate) struct JournalProcessState {
     lineage_guard: Mutex<Option<EngineLineageGuard>>,
     write_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 static STATES: OnceLock<Mutex<HashMap<PathBuf, Arc<JournalProcessState>>>> = OnceLock::new();
 
-fn process_state(path: &Path) -> Result<Arc<JournalProcessState>, HostError> {
+pub(crate) fn process_state(path: &Path) -> Result<Arc<JournalProcessState>, HostError> {
     let states = STATES.get_or_init(|| Mutex::new(HashMap::new()));
     let mut states = states.lock().map_err(|_| HostError::Lock)?;
     if let Some(state) = states.get(path) {
@@ -33,17 +33,14 @@ fn process_state(path: &Path) -> Result<Arc<JournalProcessState>, HostError> {
     Ok(state)
 }
 
-fn release_process_state(path: &Path) {
+pub(crate) fn release_process_state(path: &Path, handle: &Arc<JournalProcessState>) {
     if let Some(states) = STATES.get()
         && let Ok(mut states) = states.lock()
+        && let Some(current) = states.get(path)
+        && Arc::ptr_eq(current, handle)
+        && Arc::strong_count(current) == 2
     {
         states.remove(path);
-    }
-}
-
-impl Drop for Journal {
-    fn drop(&mut self) {
-        release_process_state(self.path());
     }
 }
 

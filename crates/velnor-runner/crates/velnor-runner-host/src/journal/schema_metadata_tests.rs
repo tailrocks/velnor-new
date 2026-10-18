@@ -275,3 +275,98 @@ async fn reopened_current_schema_keeps_distinct_insert_ids() -> Result<(), Strin
     assert_eq!(journal.read(second).await, Ok(super::IntentState::Pending));
     Ok(())
 }
+
+#[tokio::test]
+async fn integer_primary_key_completion_tables_accept_fresh_and_v3_schemas() -> Result<(), String> {
+    let scratch = Scratch::new("remote-integer-primary-key")?;
+    let path = scratch.file();
+
+    drop(
+        Journal::open(&path)
+            .await
+            .map_err(|error| error.to_string())?,
+    );
+    assert_remote_primary_key_metadata(&path, 4).await?;
+
+    // Version 3 already used INTEGER PRIMARY KEY. SQLite reports its implicit
+    // rowid non-null guarantee as notnull=0, so migration must preserve it.
+    let (db, connection) = database(&path).await?;
+    connection
+        .execute("PRAGMA user_version = 3", ())
+        .await
+        .map_err(|error| error.to_string())?;
+    drop(connection);
+    drop(db);
+
+    drop(
+        Journal::open(&path)
+            .await
+            .map_err(|error| error.to_string())?,
+    );
+    assert_remote_primary_key_metadata(&path, 4).await
+}
+
+async fn assert_remote_primary_key_metadata(
+    path: &Path,
+    expected_version: i64,
+) -> Result<(), String> {
+    let (db, connection) = database(path).await?;
+    let version = {
+        let mut rows = connection
+            .query("PRAGMA user_version", ())
+            .await
+            .map_err(|error| error.to_string())?;
+        rows.next()
+            .await
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "user_version returned no row".to_owned())?
+            .get::<i64>(0)
+            .map_err(|error| error.to_string())?
+    };
+    assert_eq!(version, expected_version);
+
+    for table in [
+        "connection_completion_cleanup",
+        "connection_launch_recovery",
+    ] {
+        let mut columns = connection
+            .query(&format!("PRAGMA table_info({table})"), ())
+            .await
+            .map_err(|error| error.to_string())?;
+        let mut found = false;
+        while let Some(row) = columns.next().await.map_err(|error| error.to_string())? {
+            if row.get::<String>(1).map_err(|error| error.to_string())? == "intent_id" {
+                assert_eq!(
+                    row.get::<String>(2).map_err(|error| error.to_string())?,
+                    "INTEGER"
+                );
+                assert_eq!(row.get::<i64>(3).map_err(|error| error.to_string())?, 0);
+                assert_eq!(row.get::<i64>(5).map_err(|error| error.to_string())?, 1);
+                found = true;
+            }
+        }
+        assert!(found, "{table}.intent_id is missing");
+
+        let mut rows = connection
+            .query(
+                "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?1",
+                [table],
+            )
+            .await
+            .map_err(|error| error.to_string())?;
+        let sql = rows
+            .next()
+            .await
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| format!("{table} definition is missing"))?
+            .get::<String>(0)
+            .map_err(|error| error.to_string())?
+            .to_ascii_lowercase()
+            .replace(char::is_whitespace, "");
+        assert!(sql.contains("intent_idintegerprimarykey"), "{table}: {sql}");
+    }
+
+    drop(connection);
+    drop(db);
+    Ok(())
+}

@@ -1,0 +1,183 @@
+//! SQL lookups and validation for durable reservations.
+
+use crate::error::HostError;
+use crate::journal::sql::token_rejected;
+
+use super::super::identity::AssignmentIdentity;
+use super::super::storage::scalar_count;
+use super::admission::ReservationRequest;
+
+pub(super) fn validate_request(request: ReservationRequest<'_>) -> Result<(), HostError> {
+    let assignment_key = request.assignment.storage_key();
+    if token_rejected(&assignment_key)
+        || assignment_key.len() > 1024
+        || token_rejected(request.engine_id)
+        || request.engine_id.len() > 128
+        || !valid_digest(request.docker_root_digest)
+        || request.cpu_millicores == 0
+        || request.memory_bytes == 0
+        || !valid_generation(request.sample_generation_id)
+        || i64::try_from(request.cpu_millicores).is_err()
+        || i64::try_from(request.memory_bytes).is_err()
+    {
+        return Err(HostError::Journal);
+    }
+    Ok(())
+}
+
+fn valid_generation(value: &str) -> bool {
+    value.len() == 32
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn valid_digest(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+pub(super) struct ExistingReservation {
+    pub(super) id: i64,
+    pub(super) intent_id: i64,
+    pub(super) engine_id: String,
+    pub(super) docker_root_digest: String,
+    pub(super) sample_generation_id: Option<String>,
+    pub(super) binding_digest: String,
+    pub(super) cpu_millicores: i64,
+    pub(super) memory_bytes: i64,
+    pub(super) released: bool,
+    pub(super) state: String,
+}
+
+pub(super) async fn reservation_for_assignment(
+    connection: &turso::Connection,
+    connection_id: &str,
+    assignment: &AssignmentIdentity,
+) -> Result<Option<ExistingReservation>, HostError> {
+    let assignment_key = assignment.storage_key();
+    let mut rows = connection
+        .query(
+            "SELECT id, intent_id, engine_id, docker_root_digest, binding_digest, sample_generation_id, cpu_millicores, memory_bytes, state FROM capacity_reservations WHERE connection_id = ?1 AND assignment_key = ?2",
+            (connection_id, assignment_key.as_str()),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+        return Ok(None);
+    };
+    let state: String = row.get(8).map_err(|_| HostError::Journal)?;
+    Ok(Some(ExistingReservation {
+        id: row.get(0).map_err(|_| HostError::Journal)?,
+        intent_id: row.get(1).map_err(|_| HostError::Journal)?,
+        engine_id: row.get(2).map_err(|_| HostError::Journal)?,
+        docker_root_digest: row.get(3).map_err(|_| HostError::Journal)?,
+        binding_digest: row.get(4).map_err(|_| HostError::Journal)?,
+        sample_generation_id: row.get(5).map_err(|_| HostError::Journal)?,
+        cpu_millicores: row.get(6).map_err(|_| HostError::Journal)?,
+        memory_bytes: row.get(7).map_err(|_| HostError::Journal)?,
+        released: state == "released",
+        state,
+    }))
+}
+
+pub(super) struct CapacityUsage {
+    pub(super) jobs: u32,
+    pub(super) cpu_millicores: u64,
+    pub(super) memory_bytes: u64,
+}
+
+pub(super) struct StoredCapacityLimits {
+    pub(super) jobs: u32,
+    pub(super) cpu_millicores: u64,
+    pub(super) memory_bytes: u64,
+}
+
+pub(super) async fn capacity_usage(
+    connection: &turso::Connection,
+) -> Result<CapacityUsage, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT cpu_millicores, memory_bytes FROM capacity_reservations WHERE state != 'released'",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let mut usage = CapacityUsage {
+        jobs: 0,
+        cpu_millicores: 0,
+        memory_bytes: 0,
+    };
+    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
+        usage.jobs = usage.jobs.checked_add(1).ok_or(HostError::Journal)?;
+        let cpu = u64::try_from(row.get::<i64>(0).map_err(|_| HostError::Journal)?)
+            .map_err(|_| HostError::Journal)?;
+        let memory = u64::try_from(row.get::<i64>(1).map_err(|_| HostError::Journal)?)
+            .map_err(|_| HostError::Journal)?;
+        usage.cpu_millicores = usage
+            .cpu_millicores
+            .checked_add(cpu)
+            .ok_or(HostError::Journal)?;
+        usage.memory_bytes = usage
+            .memory_bytes
+            .checked_add(memory)
+            .ok_or(HostError::Journal)?;
+    }
+    Ok(usage)
+}
+
+pub(super) async fn capacity_limits(
+    connection: &turso::Connection,
+) -> Result<StoredCapacityLimits, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT max_jobs, max_cpu_millicores, max_memory_bytes FROM host_capacity_policy WHERE singleton = 1",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
+    Ok(StoredCapacityLimits {
+        jobs: u32::try_from(row.get::<i64>(0).map_err(|_| HostError::Journal)?)
+            .map_err(|_| HostError::Journal)?,
+        cpu_millicores: u64::try_from(row.get::<i64>(1).map_err(|_| HostError::Journal)?)
+            .map_err(|_| HostError::Journal)?,
+        memory_bytes: u64::try_from(row.get::<i64>(2).map_err(|_| HostError::Journal)?)
+            .map_err(|_| HostError::Journal)?,
+    })
+}
+
+pub(super) async fn reservation_state(
+    connection: &turso::Connection,
+    reservation_id: i64,
+    connection_id: &str,
+) -> Result<Option<String>, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT state FROM capacity_reservations WHERE id = ?1 AND connection_id = ?2",
+            (reservation_id, connection_id),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+        return Ok(None);
+    };
+    Ok(Some(row.get(0).map_err(|_| HostError::Journal)?))
+}
+
+pub(super) async fn has_unreserved_scoped_launch(
+    connection: &turso::Connection,
+) -> Result<bool, HostError> {
+    let count = scalar_count(
+        connection,
+        "SELECT COUNT(*) FROM connection_intents WHERE kind = 'launch' AND cleanup_proven = 0 AND NOT EXISTS (SELECT 1 FROM capacity_reservations WHERE capacity_reservations.intent_id = connection_intents.id)",
+    )
+    .await?;
+    Ok(count != 0)
+}
