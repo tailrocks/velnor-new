@@ -39,6 +39,8 @@ pub(crate) use public::run_public;
 mod cache_bind;
 #[path = "dispatch_cache_observe.rs"]
 mod cache_observe;
+#[path = "dispatch_cache_tar.rs"]
+mod cache_tar;
 #[path = "dispatch_owned_tool_publication.rs"]
 mod owned_publication;
 #[path = "dispatch_package_release.rs"]
@@ -137,6 +139,36 @@ struct InternalRequest {
 pub(crate) fn try_internal() -> Option<ExitCode> {
     let request = gate_request()?;
     Some(run_internal(&request))
+}
+
+/// Route `tar` and `gtar` invocations to the cache adapter.
+///
+/// One `--version` argument does not need runner context. Archive operations
+/// need the exact operation tag and runner context before the adapter reads
+/// stage inputs.
+pub(crate) fn try_cache_tar_entrypoint() -> Option<ExitCode> {
+    let mut args = env::args_os();
+    let program = args.next()?;
+    if !is_cache_tar_program(&program) {
+        return None;
+    }
+    let args: Vec<_> = args.collect();
+    if args.len() == 1 && args[0] == "--version" {
+        return Some(cache_tar::run(&args));
+    }
+    if !env::var(OP_ENV).is_ok_and(|operation| operation == cache_tar::OP)
+        || !cache_runner_context_is_valid()
+    {
+        return Some(fail_internal("cache_tar_runner_context_invalid"));
+    }
+    Some(cache_tar::run(&args))
+}
+
+fn is_cache_tar_program(program: &std::ffi::OsStr) -> bool {
+    matches!(
+        Path::new(program).file_name(),
+        Some(name) if name == "tar" || name == "gtar"
+    )
 }
 
 fn internal_op() -> Option<InternalOp> {
@@ -316,6 +348,13 @@ fn cache_runner_request(op: InternalOp) -> Option<InternalRequest> {
         return None;
     }
     runner_velnor_dir().map(|path| InternalRequest { op, path })
+}
+
+/// Check the workflow context required by the cache tar adapter.
+pub(crate) fn cache_runner_context_is_valid() -> bool {
+    env::var("GITHUB_ACTIONS").is_ok_and(|value| value == "true")
+        && valid_run_coordinates()
+        && env::var_os(RUNNER_TEMP_ENV).is_some_and(|value| !value.is_empty())
 }
 
 fn valid_run_coordinates() -> bool {
