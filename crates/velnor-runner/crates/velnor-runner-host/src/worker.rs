@@ -72,12 +72,13 @@ fn push_nibble(name: &mut String, nibble: u8) -> Result<(), HostError> {
     Ok(())
 }
 
-/// Project an audited runner plan. Stdin carries JIT. The plan does not.
+/// Make a Docker create request from an audited runner plan.
+/// Stdin carries JIT. The plan does not.
 ///
 /// # Errors
 ///
-/// Returns [`HostError::PrivilegedRunner`] or [`HostError::ForbiddenMount`]
-/// from [`audit_plan`], including JIT in env, cmd, or labels.
+/// Gives [`HostError::PrivilegedRunner`] or [`HostError::ForbiddenMount`] when
+/// [`audit_plan`] fails or when `env`, `cmd`, or labels contain JIT.
 pub fn runner_create(
     plan: &ContainerPlan,
     resource_budget: ResourceBudget,
@@ -105,7 +106,9 @@ pub fn runner_create(
     })
 }
 
-/// Project a runner only from verified immutable images and its guest metadata file.
+/// Make a runner Docker create request only from immutable images that pass
+/// the release and selected-engine checks.
+/// Use the guest metadata file for the same connection and image bundle.
 pub(crate) fn runner_create_verified(
     plan: &ContainerPlan,
     resource_budget: ResourceBudget,
@@ -123,12 +126,13 @@ pub(crate) fn runner_create_verified(
 
 /// Join `spec` to the private `DinD` network namespace.
 ///
-/// Published service ports and Testcontainers then bind on the runner's localhost.
-/// `dind_id` must be one Docker container id. `host` and other modes are rejected.
+/// Published service ports and Testcontainers use the runner's localhost.
+/// The value of `dind_id` must be one Docker container ID.
+/// The function rejects `host` and other modes.
 ///
 /// # Errors
 ///
-/// Returns [`HostError::ForbiddenMount`] when `dind_id` is not 64 hex digits.
+/// Gives [`HostError::ForbiddenMount`] when `dind_id` does not contain 64 hexadecimal digits.
 pub(crate) fn join_dind_net(
     mut spec: CreateProjection,
     dind_id: &str,
@@ -146,14 +150,16 @@ fn dind_container_id(id: &str) -> bool {
 
 /// Private `DinD` create. Privilege is not a flag on the runner plan.
 ///
-/// Mounts are the runner plan's socket volume at `/run`, the work volume at
-/// the Actions runner's `/home/runner/_work`, and a DinD-only volume at `/var/lib/docker`. The data
-/// volume is not on the runner. The action archive volume is not mounted
-/// here. vfs on the container layer slows later Testcontainers starts.
+/// The runner plan's socket volume is at `/run`.
+/// The shared work volume is at `/home/runner/_work`.
+/// A DinD-only Docker volume is at `/var/lib/docker`.
+/// The runner container does not mount the Docker data volume.
+/// The DinD container does not mount the action archive volume.
+/// The VFS storage driver on the container layer makes later Testcontainers starts slower.
 ///
 /// # Errors
 ///
-/// Returns [`HostError::ForbiddenMount`] when `private_volume` is not one private name.
+/// Gives [`HostError::ForbiddenMount`] when `private_volume` is not one private name.
 pub fn dind_create(
     private_volume: &str,
     resource_budget: ResourceBudget,
@@ -185,7 +191,8 @@ pub fn dind_create(
     })
 }
 
-/// Project privileged `DinD` only from the verified immutable bundle.
+/// Make a privileged DinD create request only from the immutable image bundle
+/// that passes release and selected-engine checks.
 pub(crate) fn dind_create_verified(
     private_volume: &str,
     resource_budget: ResourceBudget,
@@ -213,8 +220,8 @@ fn dind_mounts_for(private_volume: &str, mut mounts: Vec<Mount>) -> Vec<Mount> {
 
 /// Stable `DinD` container name used by cleanup and recovery.
 ///
-/// This identity helper deliberately does not carry a resource budget; cleanup
-/// must remain independent of the current configuration.
+/// This function does not use a resource budget.
+/// Cleanup does not use the current resource budget.
 pub(crate) fn dind_container_name(private_volume: &str) -> Result<String, HostError> {
     runner_plan(private_volume)?;
     Ok(format!("{private_volume}-dind"))
@@ -224,7 +231,7 @@ pub(crate) fn dind_container_name(private_volume: &str) -> Result<String, HostEr
 ///
 /// # Errors
 ///
-/// Returns [`HostError::ForbiddenMount`] when the platform is not `linux/amd64`
+/// Gives [`HostError::ForbiddenMount`] when the platform is not `linux/amd64`
 /// or a mount or label cannot be sent.
 pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostError> {
     if spec.platform != PLATFORM {
