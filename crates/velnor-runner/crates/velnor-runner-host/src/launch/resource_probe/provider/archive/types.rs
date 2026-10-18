@@ -13,7 +13,7 @@ pub(super) struct OciIndex {
     pub(super) manifests: Vec<Descriptor>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Descriptor {
     #[serde(rename = "mediaType")]
@@ -28,7 +28,7 @@ pub(super) struct Descriptor {
     pub(super) artifact_type: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Platform {
     pub(super) architecture: String,
