@@ -78,7 +78,7 @@ async fn completed_probe_cleans_the_exact_container_before_returning_metrics() -
     let observed_at = output.observed_at;
     assert!(observed_at.elapsed() >= cleanup_delay);
 
-    assert_eq!(requests.len(), 22);
+    assert_eq!(requests.len(), 25);
     assert!(
         journal
             .active_probe()
@@ -283,6 +283,9 @@ fn cleanup_request_order() -> Vec<RequestKind> {
         RequestKind::Inspect,
         RequestKind::Inspect,
         RequestKind::Info,
+        RequestKind::Inspect,
+        RequestKind::Inspect,
+        RequestKind::Info,
     ]
 }
 
@@ -297,6 +300,9 @@ fn recovery_request_order() -> Vec<RequestKind> {
         RequestKind::Info,
         RequestKind::Inspect,
         RequestKind::Inspect,
+        RequestKind::Inspect,
+        RequestKind::Inspect,
+        RequestKind::Info,
         RequestKind::Inspect,
         RequestKind::Inspect,
         RequestKind::Info,
@@ -445,6 +451,9 @@ fn append_cleanup(
         http(200, info),
         http(404, absent),
         http(404, absent),
+        http(404, absent),
+        http(404, absent),
+        http(200, info),
         http(404, absent),
         http(404, absent),
         http(200, info),

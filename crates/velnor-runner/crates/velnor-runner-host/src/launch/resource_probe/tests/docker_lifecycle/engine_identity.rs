@@ -67,7 +67,7 @@ async fn engine_change_before_create_blocks_mutation_and_keeps_row_recoverable()
 }
 
 #[tokio::test]
-async fn root_change_before_create_blocks_mutation_then_recovers_original_binding()
+async fn root_change_before_create_keeps_uncertain_create_charged_after_absence()
 -> Result<(), String> {
     let scratch = Scratch::new("probe-root-before-create").map_err(|error| error.to_string())?;
     let journal = Journal::open(&scratch.file())
@@ -120,19 +120,25 @@ async fn root_change_before_create_blocks_mutation_then_recovers_original_bindin
     ))
     .await;
     let recovery_requests = recovery.finish_observed().await?;
-    assert!(result.map_err(|error| error.to_string())?.is_none());
+    assert!(matches!(result, Err(HostError::Ownership)));
     assert_request_order(
         &recovery_requests,
         &[RequestKind::Info, RequestKind::Info, RequestKind::Inspect],
     )?;
     assert_eq!(recovery_requests.len(), 3);
-    assert!(
-        journal
-            .active_probe()
-            .await
-            .map_err(|error| error.to_string())?
-            .is_none()
+    let retained = journal
+        .active_probe()
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| {
+            "uncertain create row was discarded after one absent-name read".to_owned()
+        })?;
+    assert_eq!(retained.phase, crate::journal::ProbePhase::Quarantined);
+    assert_eq!(
+        retained.lease_state,
+        crate::journal::ProbeLeaseState::Uncertain
     );
+    assert!(retained.container_id.is_none());
     Ok(())
 }
 
@@ -182,6 +188,9 @@ async fn engine_change_after_create_blocks_start_then_cleans_on_bound_engine() -
         http(200, info_a),
         http(404, "{}"),
         http(404, "{}"),
+        http(404, "{}"),
+        http(404, "{}"),
+        http(200, info_a),
         http(404, "{}"),
         http(404, "{}"),
         http(200, info_a),
@@ -257,6 +266,9 @@ async fn root_change_after_create_blocks_start_then_cleans_on_original_root() ->
         http(200, original),
         http(404, "{}"),
         http(404, "{}"),
+        http(404, "{}"),
+        http(404, "{}"),
+        http(200, original),
         http(404, "{}"),
         http(404, "{}"),
         http(200, original),
