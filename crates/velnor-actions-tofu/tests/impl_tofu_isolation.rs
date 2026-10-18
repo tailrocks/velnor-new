@@ -67,7 +67,7 @@ fn root_locators_are_fixed_length_deterministic_and_exact() {
 
 #[test]
 fn cache_dir_mirrors_data_dir_under_its_base() {
-    let base = "${{ runner.temp }}/velnor/tofu-cache";
+    let base = "${{ runner.temp }}/velnor/cache/tofu";
     let root = tofu_cache_dir_under(base, "").expect("repo root maps");
     let data = tofu_data_dir_under("${{ runner.temp }}/velnor/tofu-data", "").expect("data maps");
     let cache_locator = root

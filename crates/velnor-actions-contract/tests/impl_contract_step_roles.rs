@@ -7,10 +7,10 @@ use velnor_actions_contract::workflow::step_identity::validate_step_sequence;
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 const TOFU_KEY: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-${{hashFiles('.terraform.lock.hcl')}}";
-const TOFU_PATH: &str = "${{ runner.temp }}/velnor/tofu-cache/root-0123456789ab";
+const TOFU_PATH: &str = "${{ runner.temp }}/velnor/cache/tofu/root-0123456789ab";
 const TOFU_DATA_PATH: &str = "${{ runner.temp }}/velnor/tofu-data/root-0123456789ab";
 const OTHER_TOFU_KEY: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.2-stacks-vpc-abcdef012345-${{hashFiles('stacks/vpc/.terraform.lock.hcl')}}";
-const OTHER_TOFU_PATH: &str = "${{ runner.temp }}/velnor/tofu-cache/stacks-vpc-abcdef012345";
+const OTHER_TOFU_PATH: &str = "${{ runner.temp }}/velnor/cache/tofu/stacks-vpc-abcdef012345";
 
 fn plan_step(name: &str) -> Step {
     Step {

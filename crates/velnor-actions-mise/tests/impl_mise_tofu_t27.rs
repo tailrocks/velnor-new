@@ -22,7 +22,7 @@ use velnor_actions_mise::{MiseError, ProcessOutput};
 fn provider_cache_observation() -> RestoreObservation {
     let bytes = b"provider package bytes".to_vec();
     RestoreObservation {
-        entry_path: "tofu-cache/b3-0000000000000000000000000000000000000000000000000000000000000000/registry.opentofu.org/hashicorp/null".to_owned(),
+        entry_path: "cache/tofu/b3-0000000000000000000000000000000000000000000000000000000000000000/registry.opentofu.org/hashicorp/null".to_owned(),
         entry_bytes: bytes.clone(),
         expected_digest: digest_b3(&bytes),
         expected_compat: digest_b3(b"tofu-1.13.1"),
@@ -41,7 +41,7 @@ fn tofu_command() -> Result<IsolatedCommand, String> {
         &[OsString::from("tofu"), OsString::from("version")],
         "/velnor/tofu-data",
         "/velnor/tofu-cli.hcl",
-        "/velnor/tofu-cache",
+        "/velnor/cache/tofu",
     )
     .map_err(|err| err.to_string())
 }
@@ -218,7 +218,7 @@ fn tofu_child_env_strips_registry_and_credential_keys() -> Result<(), String> {
     for (key, value) in [
         ("TF_DATA_DIR", "/velnor/tofu-data"),
         ("TF_CLI_CONFIG_FILE", "/velnor/tofu-cli.hcl"),
-        ("TF_PLUGIN_CACHE_DIR", "/velnor/tofu-cache"),
+        ("TF_PLUGIN_CACHE_DIR", "/velnor/cache/tofu"),
         ("TF_IN_AUTOMATION", "1"),
         ("TF_INPUT", "0"),
     ] {

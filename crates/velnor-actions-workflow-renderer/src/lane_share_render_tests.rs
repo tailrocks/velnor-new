@@ -80,7 +80,7 @@ fn shared_lanes_keep_ci_under_github_file_cap() {
 
 #[test]
 fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
-    let cache_path = "${{ runner.temp }}/velnor/tofu-cache/root-0123456789ab";
+    let cache_path = "${{ runner.temp }}/velnor/cache/tofu/root-0123456789ab";
     let cache_key = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-${{hashFiles('.terraform.lock.hcl')}}";
     let restore = Step {
         name: "Restore Tofu providers".to_owned(),

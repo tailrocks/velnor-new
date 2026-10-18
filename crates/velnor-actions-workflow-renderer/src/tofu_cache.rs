@@ -28,8 +28,9 @@ pub const TOFU_PROVIDER_ADMISSION_SCRIPT: &str = r#"set -eu
 cd -P "$RUNNER_TEMP"
 rt=$PWD
 v="$rt/velnor"
-p="$v/tofu-cache"
-[ ! -L "$v" ] && [ ! -L "$p" ] || exit 1
+c="$v/cache"
+p="$c/tofu"
+[ ! -L "$v" ] && [ ! -L "$c" ] && [ ! -L "$p" ] || exit 1
 mkdir -p "$p"
 cd -P "$p"
 [ "$PWD" = "$p" ] || exit 1

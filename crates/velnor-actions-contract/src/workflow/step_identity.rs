@@ -47,7 +47,7 @@ pub const TOOLS_CACHE_PRELUDE_USES: [&str; 4] = [
 /// Static tool digest input for the runtime-qualified tools identity action.
 pub const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str = "d";
 /// Expression path for the job-private `OpenTofu` plugin cache.
-pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-cache";
+pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velnor/cache/tofu";
 /// Exact-key layer identity shared by the restore and save protocol.
 pub const TOFU_PROVIDERS_KEY_PREFIX: &str = "velnor-v1-tofu-providers";
 /// Composite output expression for the exact configured provider key.

@@ -247,9 +247,9 @@ fn provider_saved_key(job: &Job) -> Option<&str> {
 }
 
 const PROVIDER_KEY_A: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-${{hashFiles('.terraform.lock.hcl')}}";
-const PROVIDER_PATH_A: &str = "${{ runner.temp }}/velnor/tofu-cache/root-0123456789ab";
+const PROVIDER_PATH_A: &str = "${{ runner.temp }}/velnor/cache/tofu/root-0123456789ab";
 const PROVIDER_KEY_B: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-stacks-vpc-abcdef012345-${{hashFiles('stacks/vpc/.terraform.lock.hcl')}}";
-const PROVIDER_PATH_B: &str = "${{ runner.temp }}/velnor/tofu-cache/stacks-vpc-abcdef012345";
+const PROVIDER_PATH_B: &str = "${{ runner.temp }}/velnor/cache/tofu/stacks-vpc-abcdef012345";
 
 #[test]
 fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError> {

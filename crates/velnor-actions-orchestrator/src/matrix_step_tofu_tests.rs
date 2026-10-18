@@ -151,7 +151,7 @@ fn tofu_obligation_step_carries_isolated_cache_dir() {
         "{data}"
     );
     assert!(
-        cache.starts_with("${{ runner.temp }}/velnor/tofu-cache/b3-"),
+        cache.starts_with("${{ runner.temp }}/velnor/cache/tofu/b3-"),
         "{cache}"
     );
     let data_locator = data.rsplit('/').next().expect("locator");
