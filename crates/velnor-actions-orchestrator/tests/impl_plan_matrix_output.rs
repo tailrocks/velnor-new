@@ -71,8 +71,11 @@ fn staged_admission_reader_validates_response_before_reading_staged_data() -> Te
     let forged = value.to_string();
 
     let runner_temp = TempDir::new()?;
-    let staged_dir = runner_temp.path().join("velnor");
-    fs::create_dir(&staged_dir)?;
+    let run_key = value["plan"]["run_key"]
+        .as_str()
+        .expect("response has a run key");
+    let staged_dir = runner_temp.path().join("velnor").join(run_key);
+    fs::create_dir_all(&staged_dir)?;
     fs::write(
         staged_dir.join("qualification-cache-admission.json"),
         b"unexpected staged admission",

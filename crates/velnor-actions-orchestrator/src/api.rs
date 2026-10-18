@@ -32,8 +32,8 @@ pub use super::internal::validate_plan_response;
 pub use super::internal::{
     MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,
     plan_internal, plan_outputs, plan_outputs_from_staged_admission, plan_outputs_with_admission,
-    publish_final_report, publish_plan_files, response_path_for, write_request,
-    write_request_parts,
+    publish_final_report, publish_plan_files, publish_plan_files_with_outputs, response_path_for,
+    write_request, write_request_parts,
 };
 pub use super::merge::merge_internal;
 pub use super::merge_request::assemble_merge_request;
@@ -44,6 +44,10 @@ pub use super::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMo
 pub use super::prepare::{GenerationPreparation, prepare};
 pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use super::provenance::{EvidenceProvenance, ProfileProvenance};
+pub use super::qualification_cache_runtime::{
+    QUALIFICATION_CACHE_BIND_OP, QualificationCacheBindingOutputs,
+    QualificationCacheBindingRequest, bind_qualification_cache_runtime,
+};
 pub use super::qualification_resolver::{
     QUALIFICATION_ADMISSION_FILENAME, QUALIFICATION_RESOLVER_OP, read_qualification_admission,
     resolve_qualification_admission,

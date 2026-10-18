@@ -15,7 +15,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{
-    QualificationCacheAdmission, QualificationPhase, canonical_json_bytes,
+    QualificationCacheAdmission, QualificationPhase, canonical_json_bytes, run_key_for_ci,
 };
 
 use crate::OrchestratorError;
@@ -54,7 +54,15 @@ pub fn resolve_qualification_admission(request_path: &Path) -> Result<(), Orches
     .map_err(crate::internal::internal_contract)?;
     QualificationCacheAdmission::parse_bounded(&bytes)
         .map_err(crate::internal::internal_contract)?;
-    stage_admission(&bytes)
+    let run_key = run_key_for_ci(
+        request.context.run_id,
+        u64::from(request.context.run_attempt),
+    );
+    let runner_temp = env::var_os("RUNNER_TEMP")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .ok_or_else(|| internal("missing_runner_temp"))?;
+    stage_admission(&runner_temp, &run_key, &bytes)
 }
 
 /// Load the staged admission only for phases that require a predecessor.
@@ -69,7 +77,7 @@ pub fn read_qualification_admission(
         .qualification
         .as_ref()
         .is_some_and(|context| context.phase.predecessor().is_some());
-    let path = admission_path(runner_temp);
+    let path = admission_path(runner_temp, &response.plan.run_key);
     if !expected {
         return match std::fs::symlink_metadata(&path) {
             Ok(_) => Err(internal("unexpected_qualification_admission")),
@@ -93,21 +101,26 @@ fn checkout_root() -> Result<PathBuf, OrchestratorError> {
     resolve_root(&cwd)
 }
 
-fn stage_admission(bytes: &[u8]) -> Result<(), OrchestratorError> {
-    let runner_temp = env::var_os("RUNNER_TEMP")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .ok_or_else(|| internal("missing_runner_temp"))?;
-    let path = admission_path(&runner_temp);
+fn stage_admission(
+    runner_temp: &Path,
+    run_key: &str,
+    bytes: &[u8],
+) -> Result<(), OrchestratorError> {
+    let path = admission_path(runner_temp, run_key);
     let parent = path
         .parent()
         .ok_or_else(|| internal("bad_qualification_admission_path"))?;
-    crate::exclusive_write::create_dir_no_symlink(&runner_temp, parent)?;
+    crate::exclusive_write::create_dir_no_symlink(runner_temp, parent)?;
     crate::exclusive_write::write_exclusive(&path, bytes, "qualification_admission")
 }
 
-fn admission_path(runner_temp: &Path) -> PathBuf {
+fn admission_path(runner_temp: &Path, run_key: &str) -> PathBuf {
     runner_temp
         .join("velnor")
+        .join(run_key)
         .join(QUALIFICATION_ADMISSION_FILENAME)
 }
+
+#[cfg(test)]
+#[path = "qualification_resolver_tests.rs"]
+mod tests;

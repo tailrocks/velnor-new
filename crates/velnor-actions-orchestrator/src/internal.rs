@@ -37,8 +37,8 @@ use crate::select::{classify_changed, select_universe};
 use crate::select_edges::plan_task_graph;
 
 pub use crate::internal_request::{
-    merge_passed, publish_final_report, publish_plan_files, response_path_for, write_request,
-    write_request_parts,
+    merge_passed, publish_final_report, publish_plan_files, publish_plan_files_with_outputs,
+    response_path_for, write_request, write_request_parts,
 };
 pub use crate::plan_output_limits::{
     PlanOutputs, plan_outputs, plan_outputs_from_staged_admission, plan_outputs_with_admission,

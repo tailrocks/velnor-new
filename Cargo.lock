@@ -923,9 +923,11 @@ version = "0.1.12"
 dependencies = [
  "clap",
  "proc-macro2",
+ "rustix",
  "serde_json",
  "sha2",
  "syn",
+ "tempfile",
  "unicode-general-category",
  "velnor-actions-freshness",
  "velnor-actions-orchestrator",

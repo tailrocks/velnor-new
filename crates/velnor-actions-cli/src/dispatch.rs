@@ -22,15 +22,17 @@ use velnor_actions_orchestrator::{
     DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, OrchestratorError,
     PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
     REPORT_OP, REQUEST_FILE_ENV, TASK_EXECUTION_RESOLVER_OP, WRITE_REQUEST_OP, execute_check,
-    merge_internal, merge_passed, plan_internal, plan_outputs, publish_final_report,
-    publish_plan_files, resolve_task_execution, response_path_for, retrieve_reports,
-    write_preseed_manifest, write_request, write_task_report,
+    merge_internal, merge_passed, plan_internal, plan_outputs_from_staged_admission,
+    publish_final_report, publish_plan_files_with_outputs, resolve_task_execution,
+    response_path_for, retrieve_reports, write_preseed_manifest, write_request, write_task_report,
 };
 
 use crate::dispatch_publish::run_publish_internal;
 
 mod public;
 pub(crate) use public::run_public;
+#[path = "dispatch_cache_bind.rs"]
+mod cache_bind;
 #[path = "dispatch_owned_tool_publication.rs"]
 mod owned_publication;
 
@@ -68,6 +70,8 @@ enum InternalOp {
     RepoPolicy,
     /// Read-only predecessor resolution for hosted qualification.
     ResolveQualification,
+    /// Select one cache layer for the validated qualification plan.
+    BindQualificationCache,
     /// Data-only task execution record resolution for a generated wrapper.
     ResolveTaskExecution,
 }
@@ -110,9 +114,19 @@ fn gate_request() -> Option<InternalRequest> {
         Ok(tag) if crate::dispatch_qualification::is_resolver_op(tag) => {
             InternalOp::ResolveQualification
         }
+        Ok(tag) if tag == cache_bind::OP => InternalOp::BindQualificationCache,
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
         _ => return None,
     };
+    if op == InternalOp::BindQualificationCache {
+        if !["GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"]
+            .iter()
+            .all(|name| env::var(name).is_ok_and(|value| !value.is_empty()))
+        {
+            return None;
+        }
+        return runner_velnor_dir().map(|path| InternalRequest { op, path });
+    }
     if op == InternalOp::ResolveTaskExecution {
         if !env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
             return None;
@@ -162,6 +176,7 @@ fn gate_request() -> Option<InternalRequest> {
         | InternalOp::PreseedManifest
         | InternalOp::RepoPolicy
         | InternalOp::ExecuteCheck
+        | InternalOp::BindQualificationCache
         | InternalOp::ResolveTaskExecution => {}
     }
     Some(InternalRequest { op, path })
@@ -206,6 +221,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::Publish => run_publish_internal(&request.path),
         InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
         InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
+        InternalOp::BindQualificationCache => cache_bind::run(),
         InternalOp::ResolveTaskExecution => match resolve_task_execution() {
             Ok(frame) => match std::io::stdout().lock().write_all(&frame) {
                 Ok(()) => ExitCode::SUCCESS,
@@ -238,17 +254,22 @@ fn run_plan_internal(path: &Path) -> ExitCode {
     if let Err(error) = fs::write(&sibling, &response) {
         return fail_internal(&format!("write response: {error}"));
     }
-    let outputs = match plan_outputs(&response, mode) {
-        Ok(outputs) => outputs,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
     let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
         return fail_internal("missing runner temp");
+    };
+    let outputs = match plan_outputs_from_staged_admission(&response, mode, Path::new(&runner_temp))
+    {
+        Ok(outputs) => outputs,
+        Err(error) => return fail_internal(&error.to_string()),
     };
     let Some(output_path) = env::var_os(GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty()) else {
         return fail_internal("missing github output");
     };
-    if let Err(error) = publish_plan_files(&response, &Path::new(&runner_temp).join("velnor")) {
+    if let Err(error) = publish_plan_files_with_outputs(
+        &response,
+        &Path::new(&runner_temp).join("velnor"),
+        &outputs,
+    ) {
         return fail_internal(&error.to_string());
     }
     let mut body = String::new();
