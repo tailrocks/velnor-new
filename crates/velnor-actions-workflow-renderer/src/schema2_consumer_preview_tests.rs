@@ -108,6 +108,12 @@ fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
     let rendered = render_consumer_preview(&fixture()).expect("preview");
     assert_eq!(rendered.path, ".github/workflows/binary-preview.yml");
     let yaml = &rendered.bytes;
+    let triggers = &yaml[..yaml.find("jobs:").expect("jobs")];
+    assert!(triggers.contains("workflow_run:"));
+    assert!(triggers.contains("workflows:"));
+    assert!(triggers.contains("- CI"));
+    assert!(triggers.contains("- completed"));
+    assert!(!triggers.contains("  push:"));
     let eligibility = job(yaml, "preview-eligibility", Some("preview-producer"));
     assert!(eligibility.contains("ref: ${{ github.sha }}"));
     assert_eq!(eligibility.matches("actions/checkout").count(), 1);
@@ -166,7 +172,7 @@ fn manual_recovery_has_no_build_or_signing_authority() {
         ("preview-signer", "preview-publisher"),
         ("preview-publisher", "preview-recovery"),
     ] {
-        assert!(job(yaml, name, Some(next)).contains("github.event_name == 'push'"));
+        assert!(job(yaml, name, Some(next)).contains("github.event_name == 'workflow_run'"));
     }
     let recovery = job(yaml, "preview-recovery", None);
     assert!(recovery.contains("github.event_name == 'workflow_dispatch'"));
@@ -309,3 +315,6 @@ fn preview_rejects_unbounded_producer_limits_before_rendering() {
         assert!(render_consumer_preview(&spec).is_err(), "{minutes}");
     }
 }
+
+#[path = "schema2_consumer_preview_trigger_tests.rs"]
+mod triggers;

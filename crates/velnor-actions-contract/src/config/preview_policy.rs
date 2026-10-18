@@ -1,9 +1,35 @@
 //! Cross-policy authorization and producer qualification.
 
-use super::VelnorConfig;
+use super::{VelnorConfig, WorkflowPolicy};
+use crate::WORKFLOW_DISPLAY_NAME;
 use crate::errors::ContractError;
 
 impl VelnorConfig {
+    pub(super) fn check_binary_release_authority(&self, file: &str) -> Result<(), ContractError> {
+        let enabled =
+            self.stacks.rust.as_ref().is_some_and(|rust| {
+                rust.binary_release.enabled || rust.binary_release.preview.enabled
+            });
+        if !enabled {
+            return Ok(());
+        }
+        if self.workflow.policy != WorkflowPolicy::ConsumerV1 {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.binary_release.enabled",
+                "binary_release_requires_consumer_policy",
+            ));
+        }
+        if self.workflow.name != WORKFLOW_DISPLAY_NAME {
+            return Err(ContractError::config(
+                file,
+                "workflow.name",
+                format!("native_binary_release_requires_canonical_ci_name:{WORKFLOW_DISPLAY_NAME}"),
+            ));
+        }
+        Ok(())
+    }
+
     pub(super) fn check_preview_tools(&self, file: &str) -> Result<(), ContractError> {
         let Some(preview) = self
             .stacks

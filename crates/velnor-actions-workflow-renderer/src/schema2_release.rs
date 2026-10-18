@@ -136,7 +136,7 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
         .product_release
         .as_ref()
         .ok_or_else(|| RenderError::InvalidWorkflow("product_release_pins_missing".to_owned()))?;
-    let install = join_argv_for_run(&pins.install_runner_build_tools_argv)?;
+    let install = join_argv_for_run(&pins.install_build_tools_argv)?;
     let build = format!(
         "set -eu\n{}\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ntest -s velnor-host",
         join_argv_for_run(&pins.runner_build_argv)?
@@ -153,8 +153,8 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
                 JobTimeout::DEFAULT,
                 vec![
                     generator_release::mise_setup_step(pins, ReleaseTarget::MacosArm64)?,
-                    run_step("Install pinned Rust", &install),
-                    run_step("Build velnor-host", &build),
+                    run_step("Install pinned Rust and MBX", &install),
+                    run_step("Build velnor-host with MBX", &build),
                     run_step("Verify Mach-O architecture", BINARY_VERIFY),
                     run_step("Checksum built bytes", BINARY_SUM),
                 ],

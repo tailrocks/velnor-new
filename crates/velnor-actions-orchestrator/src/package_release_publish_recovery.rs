@@ -7,7 +7,7 @@ use std::{
 
 use velnor_actions_contract::{
     PackageReleasePlan,
-    package_release::{PackageReleaseChannel, PackageReleaseEvent, PackageReleaseReceipt},
+    package_release::{PackageReleaseChannel, PackageReleaseReceipt},
     parse_package_release_plan,
 };
 
@@ -21,10 +21,13 @@ use crate::{
 };
 
 use super::{
-    GitHubPackagePublisher, OriginalVerification, ci_run_is_success, current_ci_from_env,
-    github::{GitHubApi, WorkflowArtifact, WorkflowJobList, WorkflowRunResponse, sha256},
+    GitHubPackagePublisher, OriginalVerification, current_ci_from_env,
+    github::{
+        GitHubApi, WorkflowArtifact, WorkflowJobList, WorkflowMetadata, WorkflowRunResponse, sha256,
+    },
     identity::{is_git_sha, read_regular},
     publish_package_release,
+    run_identity::{RunSource, run_matches},
 };
 
 const PLAN_FILE: &str = "package-release-plan.json";
@@ -185,6 +188,8 @@ fn original_signing_identity(
     repository_id: u64,
 ) -> Result<PackageReleaseSigningIdentity, OrchestratorError> {
     let source = &receipt.source;
+    let workflow =
+        api.admitted_workflow(plan.channel.workflow_path(), plan.channel.workflow_name())?;
     let workflow_run = api.workflow_run(run_id, attempt)?;
     if !source_run_matches(
         &workflow_run,
@@ -193,28 +198,28 @@ fn original_signing_identity(
         run_id,
         attempt,
         repository_id,
+        &workflow,
     ) || workflow_run.status.as_deref() != Some("completed")
     {
         return Err(internal("package_recovery_original_run_mismatch"));
     }
-    let jobs = api.workflow_jobs(run_id, attempt)?;
+    let jobs = api.complete_workflow_jobs(run_id, attempt)?;
     require_successful_job(
         &jobs,
         run_id,
         &source.commit_sha,
         plan.channel.signer_job_id(),
     )?;
-    let source_ci = api.workflow_run(source.ci_run_id, source.ci_run_attempt)?;
-    if !ci_run_is_success(
-        &source_ci,
+    api.verify_ci_identity(
         source.ci_run_id,
         source.ci_run_attempt,
-        repository_id,
-        &source.commit_sha,
-        &plan.default_branch,
-    ) {
-        return Err(internal("package_recovery_source_ci_invalid"));
-    }
+        RunSource {
+            repository_id,
+            sha: &source.commit_sha,
+            branch: &plan.default_branch,
+        },
+        false,
+    )?;
     let source_ref = format!("refs/heads/{}", plan.default_branch);
     let identity = PackageReleaseSigningIdentity {
         repository: plan.repository.clone(),
@@ -222,7 +227,7 @@ fn original_signing_identity(
         source_sha: source.commit_sha.clone(),
         source_ref: source_ref.clone(),
         default_branch: plan.default_branch.clone(),
-        event: PackageReleaseEvent::Push,
+        event: plan.channel.event(),
         workflow_path: plan.channel.workflow_path().to_owned(),
         workflow_ref: format!(
             "{}/{}@{}",
@@ -250,17 +255,20 @@ fn source_run_matches(
     run_id: u64,
     attempt: u32,
     repository_id: u64,
+    workflow: &WorkflowMetadata,
 ) -> bool {
-    run.id == Some(run_id)
-        && run.run_attempt == Some(attempt)
-        && run.path.as_deref() == Some(plan.channel.workflow_path())
-        && run.head_sha.as_deref() == Some(source_sha)
-        && run.head_branch.as_deref() == Some(plan.default_branch.as_str())
-        && run.event.as_deref() == Some("push")
-        && run
-            .repository
-            .as_ref()
-            .is_some_and(|repository| repository.id == repository_id)
+    run_matches(
+        run,
+        workflow,
+        run_id,
+        attempt,
+        RunSource {
+            repository_id,
+            sha: source_sha,
+            branch: &plan.default_branch,
+        },
+        plan.channel.event().as_str(),
+    )
 }
 
 fn require_successful_job(

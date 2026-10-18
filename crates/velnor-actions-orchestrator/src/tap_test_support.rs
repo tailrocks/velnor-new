@@ -132,7 +132,7 @@ pub(crate) fn release() -> VerifiedPreviewRelease {
             commit_sha: source_sha.to_owned(),
             source_ref: "refs/heads/main".to_owned(),
             default_branch: "main".to_owned(),
-            event: PackageReleaseEvent::Push,
+            event: PackageReleaseEvent::WorkflowRun,
             ci_run_id: 7,
             ci_run_attempt: 1,
         },

@@ -1,6 +1,8 @@
 use super::*;
 use super::{
-    github::{GITHUB_ACTIONS_BOT_ID, ReleaseAuthor},
+    github::{
+        GITHUB_ACTIONS_BOT_ID, ReleaseAuthor, RunRepository, WorkflowMetadata, WorkflowRunResponse,
+    },
     identity::{MAX_RECOVERY_BODY_BYTES, make_recovery_body},
 };
 
@@ -68,7 +70,11 @@ fn publisher_ci_gate_binds_exact_run_and_attempt() {
     let run = WorkflowRunResponse {
         id: Some(22),
         run_attempt: Some(3),
-        path: None,
+        path: Some(velnor_actions_contract::CI_WORKFLOW_PATH.to_owned()),
+        name: Some(velnor_actions_contract::WORKFLOW_DISPLAY_NAME.to_owned()),
+        workflow_id: Some(7),
+        run_number: Some(12),
+        head_repository: Some(RunRepository { id: 9 }),
         head_sha: Some("a".repeat(40)),
         head_branch: Some("main".to_owned()),
         event: Some("push".to_owned()),
@@ -76,9 +82,27 @@ fn publisher_ci_gate_binds_exact_run_and_attempt() {
         conclusion: Some("success".to_owned()),
         repository: Some(RunRepository { id: 9 }),
     };
-    assert!(ci_run_is_success(&run, 22, 3, 9, &"a".repeat(40), "main"));
-    assert!(!ci_run_is_success(&run, 22, 2, 9, &"a".repeat(40), "main"));
-    assert!(!ci_run_is_success(&run, 21, 3, 9, &"a".repeat(40), "main"));
+    let workflow = WorkflowMetadata {
+        state: "active".to_owned(),
+        id: 7,
+        path: velnor_actions_contract::CI_WORKFLOW_PATH.to_owned(),
+        name: velnor_actions_contract::WORKFLOW_DISPLAY_NAME.to_owned(),
+    };
+    let sha = "a".repeat(40);
+    let source = RunSource {
+        repository_id: 9,
+        sha: &sha,
+        branch: "main",
+    };
+    assert!(run_identity::ci_run_is_success(
+        &run, 22, 3, source, &workflow
+    ));
+    assert!(!run_identity::ci_run_is_success(
+        &run, 22, 2, source, &workflow
+    ));
+    assert!(!run_identity::ci_run_is_success(
+        &run, 21, 3, source, &workflow
+    ));
 }
 
 #[test]

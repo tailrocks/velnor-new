@@ -284,9 +284,13 @@ fn checkpoint(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
     read_checkpoint(deadline).map_err(internal)
 }
 
+fn is_preview_event(event: &str) -> bool {
+    event == velnor_actions_contract::package_release::NativePreviewEvent::WorkflowRun.as_str()
+}
+
 fn workflow_context() -> Result<(PathBuf, PathBuf), OrchestratorError> {
-    if required_env("GITHUB_EVENT_NAME")? != "push" {
-        return Err(internal("preview_event_not_push"));
+    if !is_preview_event(&required_env("GITHUB_EVENT_NAME")?) {
+        return Err(internal("preview_event_not_workflow_run"));
     }
     let workspace = PathBuf::from(required_env("GITHUB_WORKSPACE")?);
     let temp = PathBuf::from(required_env("RUNNER_TEMP")?);

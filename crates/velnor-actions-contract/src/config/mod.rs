@@ -190,17 +190,7 @@ impl VelnorConfig {
                 ));
             }
         }
-        if self.workflow.policy != WorkflowPolicy::ConsumerV1
-            && self.stacks.rust.as_ref().is_some_and(|rust| {
-                rust.binary_release.enabled || rust.binary_release.preview.enabled
-            })
-        {
-            return Err(ContractError::config(
-                file,
-                "stacks.rust.binary_release.enabled",
-                "binary_release_requires_consumer_policy",
-            ));
-        }
+        self.check_binary_release_authority(file)?;
         if let Some(apply) = &self.workflow.tofu_apply {
             let roots = self.stacks.tofu.as_ref().ok_or_else(|| {
                 ContractError::config(

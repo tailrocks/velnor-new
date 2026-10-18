@@ -96,7 +96,7 @@ the host's `xcode-select` setting.
   - Public repositories default to blocking workflows triggered by `pull_request_target`, `issue_comment`, `issues`, `discussion`, and `discussion_comment` from non-collaborators unless explicitly approved or relaxed by repository/organization policy.
 - **Velnor Implementation**:
   - `velnor-actions-contract` defines `ALLOWED_WORKFLOW_EVENTS` (`pull_request`, `push`, `merge_group`, `workflow_dispatch`, `schedule`), `RESTRICTED_ACTION_EVENTS` (the 11 restricted triggers above), and `DEFAULT_BLOCKED_PUBLIC_REPO_EVENTS`, along with `is_allowed_workflow_event`, `is_restricted_action_event`, `validate_workflow_trigger_event`, and `validate_workflow_trigger_events`.
-  - Velnor's `Trigger` IR is structurally disjoint from `RESTRICTED_ACTION_EVENTS`: generated workflows never emit `pull_request_target`, `workflow_run`, or comment/issue triggers, ensuring public-repository forks execute under `pull_request` with read-only permissions and no secrets without requiring manual maintainer approval for restricted triggers.
+  - Velnor's `Trigger` IR is structurally disjoint from `RESTRICTED_ACTION_EVENTS`: generic generated workflows never emit `pull_request_target`, `workflow_run`, or comment/issue triggers, ensuring public-repository forks execute under `pull_request` with read-only permissions and no secrets without requiring manual maintainer approval for restricted triggers.
 
 ### 3. Cache Access Control (`cache-mode`) — `2026-09-10`
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-09-10-actions-control-cache-access-in-workflows-with-cache-mode/)):
@@ -280,3 +280,58 @@ with process-group termination and bounded reaping reserved within that budget.
 Starting a fresh timeout for each phase would permit cumulative overruns.
 Expiration must prevent a success proof or publication handoff; GitHub's outer
 job limit additionally bounds checkout, tool installation, and source fetch.
+
+
+## Native preview after completed CI (2026-10-18)
+
+The dedicated native preview renderer admits only the canonical CI completion
+trigger, outside the generic trigger IR. GitHub documents that `workflow_run`
+uses the default-branch commit/ref, can receive write tokens, and also fires for
+unsuccessful upstream completions. Its name and branch filters do not establish
+trusted source identity. See the [official event contract](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run).
+
+Original runner commit
+[`9abfe11d2abd9de09d3a8d933d7ed701ea0518a3`](https://github.com/actions/runner/commit/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3)
+exports the actual [event, ref, SHA, and workflow SHA](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Worker/GitHubContext.cs#L14-L67)
+and [writes the webhook payload](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Worker/ExecutionContext.cs#L1320-L1337).
+The service's event selection and privilege semantics are documented contracts,
+not behavior proven by this runner implementation.
+
+Before producer execution, the eligibility job independently authenticates the
+canonical CI workflow and completed successful same-repository push run/attempt,
+Required job, and latest source head. The upstream head must equal the actual
+source SHA, workflow authority SHA, and live main tip. A completion for older,
+foreign, PR, failed, or superseded evidence cannot authorize preview. No CI
+artifact is consumed to select source. Signer and publisher retain isolated
+permissions and independent revalidation. Receipt, certificate and SLSA claims
+bind the true producing `workflow_run`; authenticated source CI remains `push`.
+
+
+The payload shape was checked against original `octokit/webhooks` commit
+`aa80c24a3f55354465b8b1438d33dd5602956d0d`: the
+[completed-event schema](https://github.com/octokit/webhooks/blob/aa80c24a3f55354465b8b1438d33dd5602956d0d/payload-schemas/api.github.com/workflow_run/completed.schema.json)
+requires the event action, repository, workflow, and workflow-run envelope; the
+[run schema](https://github.com/octokit/webhooks/blob/aa80c24a3f55354465b8b1438d33dd5602956d0d/payload-schemas/api.github.com/common/workflow-run.schema.json)
+provides the workflow ID/path/name, repository and head repository, attempt,
+source, and terminal status used by admission. The envelope's workflow identity
+must agree with independently fetched canonical CI metadata.
+
+
+## Native completion trigger scanner disposition (2026-10-18)
+
+Pinned zizmor 1.31.1, original commit
+`effdb35fa7868863f11655db256d9008922fa427`, emits `dangerous-triggers`
+[unconditionally for `workflow_run`](https://github.com/zizmorcore/zizmor/blob/effdb35fa7868863f11655db256d9008922fa427/crates/zizmor/src/audit/dangerous_triggers.rs#L51-L98).
+The rule includes a hidden location covering the entire `on` block. Its inline
+annotation can therefore suppress a dangerous sibling trigger as well; placement
+on the canonical CI scalar does not narrow that upstream suppression scope.
+Independent pinned-binary controls confirmed that sibling behavior and verified
+that unrelated template-injection findings remain active.
+
+Velnor accepts this finding only for its dedicated authenticated native completion
+protocol. Production structural admission requires exactly the native completion
+and manual recovery events, with canonical CI, completed activity and main branch
+filters. Mutation tests add dangerous sibling events while preserving the
+annotation and require rejection before output. The generic restricted-event
+policy, full staged scanner invocation, and other audits remain unchanged. An
+inline annotation alone is never sufficient release authority.

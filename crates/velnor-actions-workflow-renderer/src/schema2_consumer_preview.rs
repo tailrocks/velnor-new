@@ -93,16 +93,15 @@ pub fn render_consumer_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFil
         jobs.extend(tap::jobs(spec, tap)?);
     }
     let document = Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Rust binary preview")),
+        (
+            "name".to_owned(),
+            Yaml::str(spec.plan.channel.workflow_name()),
+        ),
         (
             "on".to_owned(),
             Yaml::Map(vec![
-                (
-                    "push".to_owned(),
-                    Yaml::Map(vec![(
-                        "branches".to_owned(),
-                        Yaml::Seq(vec![Yaml::str(&spec.plan.default_branch)]),
-                    )]),
+                super::consumer_release_eligibility::preview_trigger::trigger(
+                    &spec.plan.default_branch,
                 ),
                 ("workflow_dispatch".to_owned(), steps::recovery_inputs()),
             ]),
@@ -122,12 +121,23 @@ pub fn render_consumer_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFil
     ]);
     Ok(RenderedFile {
         path: PackageReleaseChannel::Preview.workflow_path().to_owned(),
-        bytes: crate::render::fallback::render_checked_workflow(
-            PackageReleaseChannel::Preview.workflow_path(),
-            &document,
-            &spec.generator_version,
-        )?,
+        bytes: render_preview_document(spec, &document)?,
     })
+}
+
+fn render_preview_document(
+    spec: &ConsumerPreviewSpec,
+    document: &Yaml,
+) -> Result<String, RenderError> {
+    super::consumer_release_eligibility::preview_trigger::validate(
+        document,
+        steps::recovery_inputs(),
+    )?;
+    crate::render::fallback::render_checked_workflow(
+        PackageReleaseChannel::Preview.workflow_path(),
+        document,
+        &spec.generator_version,
+    )
 }
 
 fn acquire(step: &Step, job: &str, runner: &str) -> Result<Yaml, RenderError> {
@@ -140,6 +150,10 @@ fn eligibility(spec: &ConsumerPreviewSpec, gate: &str) -> Result<(String, Yaml),
         Yaml::str("ubuntu-26.04"),
         JobTimeout::DEFAULT,
     );
+    fields.push((
+        "if".to_owned(),
+        Yaml::str("${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}"),
+    ));
     fields.push((
         "permissions".to_owned(),
         permissions(&[("actions", "read"), ("contents", "read")]),
@@ -188,7 +202,7 @@ fn producer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
     );
     fields.push((
         "if".to_owned(),
-        Yaml::str("${{ github.event_name == 'push' }}"),
+        Yaml::str("${{ github.event_name == 'workflow_run' }}"),
     ));
     fields.push(("needs".to_owned(), needs(&["preview-eligibility"])));
     fields.push((
@@ -247,7 +261,7 @@ fn signer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
     );
     fields.push((
         "if".to_owned(),
-        Yaml::str("${{ github.event_name == 'push' }}"),
+        Yaml::str("${{ github.event_name == 'workflow_run' }}"),
     ));
     fields.push((
         "needs".to_owned(),
@@ -289,7 +303,7 @@ fn publisher(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> 
     );
     fields.push((
         "if".to_owned(),
-        Yaml::str("${{ github.event_name == 'push' }}"),
+        Yaml::str("${{ github.event_name == 'workflow_run' }}"),
     ));
     fields.push((
         "needs".to_owned(),

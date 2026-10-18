@@ -125,7 +125,6 @@ fn render_script(
         .replace("@CI_WORKFLOW_API_ID@", CI_WORKFLOW_API_ID)
         .replace("@LATEST_RUN_JQ@", LATEST_RUN_JQ)
         .replace("@REQUIRED_JOB_JQ@", REQUIRED_JOB_JQ)
-        .replace("@SUCCESS_ACTION@", "successful=true; break")
         .replace(
             "@CALL@",
             if continue_on_success {
@@ -171,11 +170,6 @@ checkout_sha="$(git rev-parse HEAD)" || fail 'cannot read checked-out source SHA
 [[ "$checkout_sha" == "$source_sha" ]] || fail 'checked-out source SHA differs'
 [[ -n "${GH_TOKEN-}" ]] || fail 'read-only GitHub token is missing'
 [[ -n "${GITHUB_OUTPUT-}" ]] || fail 'workflow output path is missing'
-
-local poll_limit="${VELNOR_RELEASE_CI_POLL_LIMIT:-240}"
-local poll_seconds="${VELNOR_RELEASE_CI_POLL_SECONDS:-15}"
-[[ "$poll_limit" =~ ^[1-9][0-9]*$ ]] || fail 'poll limit is invalid'
-[[ "$poll_seconds" =~ ^[0-9]+$ ]] || fail 'poll interval is invalid'
 
 gh_api() {
   gh api "$@"
@@ -230,51 +224,37 @@ assert_required_job() {
   [[ "$actual_branch" == 'main' ]] || fail 'Required job is not on main'
 }
 
-local successful=false
-local attempt=0
-while [[ "$attempt" -lt "$poll_limit" ]]; do
-  assert_current_tip
-  run="$(latest_ci_run)" || fail 'latest CI run lookup failed'
-  if [[ "$run" != 'null' ]]; then
-    status="$(jq -er '.status' <<<"$run")" || fail 'latest CI run status is invalid'
-    case "$status" in
-      completed)
-        run_conclusion="$(jq -er '.conclusion' <<<"$run")" \
-          || fail 'latest CI run conclusion is invalid'
-        [[ "$run_conclusion" == 'success' ]] || fail 'latest exact-source CI run did not succeed'
-        run_id="$(jq -er '.id' <<<"$run")" || fail 'latest CI run ID is invalid'
-        run_attempt="$(jq -er '.run_attempt' <<<"$run")" \
-          || fail 'latest CI run attempt is invalid'
-        assert_required_job "$run_id" "$run_attempt"
-        latest_again="$(latest_ci_run)" || fail 'latest CI recheck failed'
-        latest_id="$(jq -er '.id' <<<"$latest_again")" || fail 'latest CI recheck ID is invalid'
-        latest_attempt="$(jq -er '.run_attempt' <<<"$latest_again")" \
-          || fail 'latest CI recheck attempt is invalid'
-        latest_status="$(jq -er '.status' <<<"$latest_again")" \
-          || fail 'latest CI recheck status is invalid'
-        latest_conclusion="$(jq -er '.conclusion' <<<"$latest_again")" \
-          || fail 'latest CI recheck conclusion is invalid'
-        [[ "$latest_id" == "$run_id" ]] || fail 'latest CI run changed during eligibility check'
-        [[ "$latest_attempt" == "$run_attempt" ]] || fail 'latest CI attempt changed during eligibility check'
-        [[ "$latest_status" == 'completed' ]] || fail 'latest CI run restarted during eligibility check'
-        [[ "$latest_conclusion" == 'success' ]] || fail 'latest CI run changed during eligibility check'
-        assert_current_tip
-        printf 'source_sha=%s\n' "$source_sha" >> "$GITHUB_OUTPUT"
-        printf 'workflow_authority_sha=%s\n' "$authority_sha" >> "$GITHUB_OUTPUT"
-        printf 'ci_run_id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
-        printf 'ci_attempt=%s\n' "$run_attempt" >> "$GITHUB_OUTPUT"
-        @SUCCESS_ACTION@
-        ;;
-      queued|in_progress|pending|waiting|requested) ;;
-      *) fail 'latest exact-source CI run has an unknown status' ;;
-    esac
-  fi
-  attempt=$((attempt + 1))
-  if [[ "$attempt" -lt "$poll_limit" ]]; then
-    sleep "$poll_seconds"
-  fi
-done
-[[ "$successful" == true ]] || fail 'latest exact-source CI run did not become successful before timeout'
+assert_current_tip
+run="$(latest_ci_run)" || fail 'latest CI run lookup failed'
+[[ "$run" != 'null' ]] || fail 'latest exact-source CI run is missing'
+status="$(jq -er '.status' <<<"$run")" || fail 'latest CI run status is invalid'
+[[ "$status" == 'completed' ]] || fail 'latest exact-source CI run is not complete'
+run_conclusion="$(jq -er '.conclusion' <<<"$run")" \
+  || fail 'latest CI run conclusion is invalid'
+[[ "$run_conclusion" == 'success' ]] || fail 'latest exact-source CI run did not succeed'
+run_id="$(jq -er '.id' <<<"$run")" || fail 'latest CI run ID is invalid'
+run_attempt="$(jq -er '.run_attempt' <<<"$run")" \
+  || fail 'latest CI run attempt is invalid'
+assert_required_job "$run_id" "$run_attempt"
+latest_again="$(latest_ci_run)" || fail 'latest CI recheck failed'
+latest_id="$(jq -er '.id' <<<"$latest_again")" || fail 'latest CI recheck ID is invalid'
+latest_attempt="$(jq -er '.run_attempt' <<<"$latest_again")" \
+  || fail 'latest CI recheck attempt is invalid'
+latest_status="$(jq -er '.status' <<<"$latest_again")" \
+  || fail 'latest CI recheck status is invalid'
+latest_conclusion="$(jq -er '.conclusion' <<<"$latest_again")" \
+  || fail 'latest CI recheck conclusion is invalid'
+[[ "$latest_id" == "$run_id" ]] || fail 'latest CI run changed during eligibility check'
+[[ "$latest_attempt" == "$run_attempt" ]] || fail 'latest CI attempt changed during eligibility check'
+[[ "$latest_status" == 'completed' ]] || fail 'latest CI run restarted during eligibility check'
+[[ "$latest_conclusion" == 'success' ]] || fail 'latest CI run changed during eligibility check'
+assert_current_tip
+{
+  printf 'source_sha=%s\n' "$source_sha"
+  printf 'workflow_authority_sha=%s\n' "$authority_sha"
+  printf 'ci_run_id=%s\n' "$run_id"
+  printf 'ci_attempt=%s\n' "$run_attempt"
+} >> "$GITHUB_OUTPUT"
 }
 
 @CALL@

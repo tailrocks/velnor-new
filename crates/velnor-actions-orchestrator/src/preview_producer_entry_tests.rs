@@ -23,6 +23,20 @@ fn plan() -> PackageReleasePlan {
 }
 
 #[test]
+fn preview_producer_accepts_only_actual_workflow_run_event() {
+    assert!(is_preview_event("workflow_run"));
+    for event in [
+        "push",
+        "workflow_dispatch",
+        "pull_request",
+        "workflow_run ",
+        "",
+    ] {
+        assert!(!is_preview_event(event), "accepted {event}");
+    }
+}
+
+#[test]
 fn preview_entry_rejects_mismatched_workflow_authority() {
     let plan = plan();
     let sha = "0123456789abcdef0123456789abcdef01234567";

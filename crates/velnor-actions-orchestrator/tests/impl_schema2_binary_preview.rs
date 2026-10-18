@@ -271,3 +271,35 @@ fn privileged_preview_gh_pin_cannot_come_from_consumer_catalog() -> TestResult {
     assert!(!workflow.contains("gh@2.0.0"));
     Ok(())
 }
+
+#[test]
+fn native_binary_generation_rejects_noncanonical_ci_names_before_discovery() -> TestResult {
+    for config in [
+        ENABLED.to_owned(),
+        preview_config(false)?,
+        preview_config(true)?,
+    ] {
+        let custom = config.replace("[workflow]", "[workflow]\nname = \"Custom CI\"");
+        let repo = binary_repo(&custom)?;
+        let error = prepare(repo.path()).expect_err("native custom CI name must fail validation");
+        assert!(
+            matches!(error, velnor_actions_orchestrator::OrchestratorError::Config {
+            ref key_path, ref problem, ..
+        } if key_path == "workflow.name" && problem == "native_binary_release_requires_canonical_ci_name:CI"),
+            "{error}"
+        );
+        assert!(
+            !repo
+                .path()
+                .join(".github/workflows/binary-preview.yml")
+                .exists()
+        );
+        assert!(
+            !repo
+                .path()
+                .join(".github/workflows/binary-release.yml")
+                .exists()
+        );
+    }
+    Ok(())
+}

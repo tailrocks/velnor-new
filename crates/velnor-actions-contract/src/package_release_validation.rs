@@ -14,7 +14,7 @@ mod identity;
 use super::{
     MAX_PACKAGE_RELEASE_ARCHIVES, MAX_PACKAGE_RELEASE_PRODUCTS, PACKAGE_RELEASE_EVIDENCE_PROFILE,
     PACKAGE_RELEASE_RECEIPT_BUNDLE_NAME, PACKAGE_RELEASE_RECEIPT_NAME, PACKAGE_RELEASE_SCHEMA_V2,
-    PackageReleaseChannel, PackageReleaseEvent, PackageReleasePayloadFormat, PackageReleaseReceipt,
+    PackageReleaseChannel, PackageReleasePayloadFormat, PackageReleaseReceipt,
     PackageReleaseSbomFormat,
 };
 

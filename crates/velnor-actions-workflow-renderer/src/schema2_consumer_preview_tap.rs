@@ -54,7 +54,7 @@ fn prepare(
     );
     fields.extend([
         ("needs".to_owned(), steps::needs(&["preview-eligibility", "preview-publisher", "preview-recovery"])),
-        ("if".to_owned(), Yaml::str("${{ always() && !cancelled() && needs.preview-eligibility.result == 'success' && ((github.event_name == 'push' && needs.preview-publisher.result == 'success') || (github.event_name == 'workflow_dispatch' && needs.preview-recovery.result == 'success')) }}")),
+        ("if".to_owned(), Yaml::str("${{ always() && !cancelled() && needs.preview-eligibility.result == 'success' && ((github.event_name == 'workflow_run' && needs.preview-publisher.result == 'success') || (github.event_name == 'workflow_dispatch' && needs.preview-recovery.result == 'success')) }}")),
         ("permissions".to_owned(), source_permissions()),
     ]);
     let download = push_download();
@@ -141,7 +141,7 @@ fn push_download() -> Yaml {
     if let Yaml::Map(fields) = &mut step {
         fields.push((
             "if".to_owned(),
-            Yaml::str("${{ github.event_name == 'push' }}"),
+            Yaml::str("${{ github.event_name == 'workflow_run' }}"),
         ));
     }
     step

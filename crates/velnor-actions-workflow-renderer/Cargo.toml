@@ -14,6 +14,7 @@ velnor-actions-actionlint = { version = "=0.1.17", path = "../velnor-actions-act
 velnor-actions-contract = { version = "=0.1.17", path = "../velnor-actions-contract" }
 
 [dev-dependencies]
+serde_json = { workspace = true }
 velnor-actions-mise = { version = "=0.1.17", path = "../velnor-actions-mise" }
 
 [lints]

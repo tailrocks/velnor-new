@@ -44,3 +44,18 @@ until measured build changes make the required artifacts available in time.
 Regression coverage exercises configuration boundaries, all workflow families,
 reusable callee admission, cumulative preparation and retry budgets, scoped
 restoration, descendant termination, and proof cleanup after outer expiry.
+
+
+Automatic preview begins after the canonical exact-commit CI workflow completes.
+Its authenticated completion gate does not wait or poll for unfinished CI.
+Manual product/stable release keeps its existing explicit authorization and
+fails eligibility when CI is not already complete. This separates CI scheduling
+from each job's execution budget without adding dispatch credentials or
+misrepresenting the producing event.
+
+
+Enabled native binary publication requires the exact generated CI name `CI`.
+Configuration rejects custom names at the shared release-authority boundary,
+before writing workflows. Generic workflows without native publication retain
+custom names. This prevents a validated configuration from generating a preview
+that can never receive its completion trigger.

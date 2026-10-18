@@ -1017,6 +1017,7 @@ dependencies = [
 name = "velnor-actions-workflow-renderer"
 version = "0.1.17"
 dependencies = [
+ "serde_json",
  "velnor-actions-actionlint",
  "velnor-actions-contract",
  "velnor-actions-mise",

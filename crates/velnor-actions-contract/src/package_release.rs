@@ -4,8 +4,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ContractError, canonical::canonical_json_bytes};
 
+#[path = "package_release_event.rs"]
+mod event;
 #[path = "package_release_parse.rs"]
 mod parse;
+pub use event::{NativePreviewEvent, PackageReleaseEvent};
 #[cfg(test)]
 #[path = "package_release_tests.rs"]
 pub(crate) mod tests;
@@ -120,22 +123,12 @@ pub struct PackageReleaseSource {
     pub source_ref: String,
     /// Exact configured default branch.
     pub default_branch: String,
-    /// Source workflow event; currently only default-branch push.
+    /// Actual original producing/signing release workflow event, not its CI event.
     pub event: PackageReleaseEvent,
     /// Successful CI workflow run ID for this source commit.
     pub ci_run_id: u64,
     /// Exact successful CI run attempt.
     pub ci_run_attempt: u32,
-}
-
-/// Preview push or stable human-approved dispatch event.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum PackageReleaseEvent {
-    /// Push to the configured default branch.
-    Push,
-    /// Stable release explicitly dispatched from the configured default branch.
-    WorkflowDispatch,
 }
 
 /// Workflow authority and run identity for build, signing, and publication.

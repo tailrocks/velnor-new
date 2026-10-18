@@ -227,8 +227,6 @@ fn execute(scenario: Scenario) -> Result<Execution, Box<dyn Error>> {
         .env("PATH", format!("{}:{path}", fixture.bin.display()))
         .env("VELNOR_TEST_FIXTURES", &fixture.directory)
         .env("VELNOR_TEST_CALLS", &fixture.calls)
-        .env("VELNOR_RELEASE_CI_POLL_LIMIT", "1")
-        .env("VELNOR_RELEASE_CI_POLL_SECONDS", "0")
         .env("GITHUB_REPOSITORY", scenario.repository)
         .env("GITHUB_REF", scenario.ref_name)
         .env("GITHUB_EVENT_NAME", scenario.event)
@@ -299,14 +297,16 @@ fn rejects_newer_failed_run_instead_of_reusing_old_success() -> Result<(), Box<d
 }
 
 #[test]
-fn script_uses_the_expected_paginated_selectors_and_bounded_wait() -> Result<(), Box<dyn Error>> {
+fn script_uses_paginated_selectors_and_fails_fast_without_waiting() -> Result<(), Box<dyn Error>> {
     let rendered = script(&test_pins())?;
     assert!(!rendered.contains("@LATEST_RUN_JQ@"));
     assert!(!rendered.contains("@REQUIRED_JOB_JQ@"));
     assert!(rendered.contains("/actions/runs/$run_id/attempts/$run_attempt/jobs?per_page=100"));
     assert!(rendered.contains("--paginate --slurp"));
     assert!(rendered.contains("latest CI attempt changed during eligibility check"));
-    assert!(rendered.contains("poll_limit=\"${VELNOR_RELEASE_CI_POLL_LIMIT:-240}\""));
+    assert!(!rendered.contains("VELNOR_RELEASE_CI_POLL"));
+    assert!(!rendered.contains(r#"sleep "$poll_seconds""#));
+    assert!(rendered.contains("latest exact-source CI run is not complete"));
     assert!(REQUIRED_JOB_JQ.contains(".name == \"Required\""));
     assert!(REQUIRED_JOB_JQ.contains(".run_attempt == $run_attempt"));
     assert!(rendered.contains("head_repository.full_name == $repository"));
