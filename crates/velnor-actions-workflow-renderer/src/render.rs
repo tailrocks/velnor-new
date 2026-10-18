@@ -310,15 +310,13 @@ fn render_merged(
     )?;
     let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     shared.files.extend(task_files);
-    match emit::emit_shared(
-        ir,
-        &shared,
-        &jobs,
-        ctx,
-        matrix.as_ref(),
-        &caps,
-        &suite_matrices,
-    ) {
+    let first_emit = emit::EmitSettings {
+        matrix: matrix.as_ref(),
+        caps: &caps,
+        suite_matrices: &suite_matrices,
+        allow_step_aliases: false,
+    };
+    match emit::emit_shared(ir, &shared, &jobs, ctx, &first_emit) {
         Ok(workflow) => Ok(workflow),
         Err(error) if emit::workflow_file_too_large(&error) => {
             let extracted =
@@ -326,15 +324,11 @@ fn render_merged(
             if extracted == 0 {
                 return Err(error);
             }
-            emit::emit_shared(
-                ir,
-                &shared,
-                &jobs,
-                ctx,
-                matrix.as_ref(),
-                &caps,
-                &suite_matrices,
-            )
+            let retry_emit = emit::EmitSettings {
+                allow_step_aliases: true,
+                ..first_emit
+            };
+            emit::emit_shared(ir, &shared, &jobs, ctx, &retry_emit)
         }
         Err(error) => Err(error),
     }

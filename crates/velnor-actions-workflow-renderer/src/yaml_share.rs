@@ -35,7 +35,7 @@ fn visit_step_runs(node: &Yaml, visit: &mut impl FnMut(&Yaml)) {
                 }
                 let Yaml::Seq(steps) = steps else { continue };
                 for step in steps {
-                    if let Yaml::Map(step) = step {
+                    if let Yaml::Map(step) | Yaml::AnchoredMap { entries: step, .. } = step {
                         for (key, value) in step {
                             if key == "run" {
                                 visit(value);
@@ -69,7 +69,9 @@ fn replace_step_runs(
                 }
                 let Yaml::Seq(steps) = steps else { continue };
                 for step in steps {
-                    let Yaml::Map(step) = step else { continue };
+                    let (Yaml::Map(step) | Yaml::AnchoredMap { entries: step, .. }) = step else {
+                        continue;
+                    };
                     for (key, value) in step {
                         if key != "run" {
                             continue;

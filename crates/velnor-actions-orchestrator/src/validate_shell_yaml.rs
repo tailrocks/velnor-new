@@ -40,6 +40,7 @@ struct WorkflowScan {
     saw_jobs: bool,
     workflow_shell: Option<ShellDialect>,
     run_anchors: BTreeMap<String, String>,
+    step_anchors: BTreeMap<String, StepScan>,
     current_job: Option<JobScan>,
     jobs: Vec<JobScan>,
 }
@@ -72,11 +73,13 @@ enum JobSection {
     Steps,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct StepScan {
     body: Option<String>,
     shell: Option<ShellDialect>,
     nested_mapping: Option<String>,
+    anchor: Option<String>,
+    first_mapping_field_seen: bool,
 }
 
 /// Extract only `jobs.*.steps[*].run` from the renderer's emitted YAML grammar.
@@ -104,15 +107,18 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
         if content.is_empty() || content.starts_with('#') {
             continue;
         }
-        let entry = mapping_entry(content);
-        if indent == 6
+        let step_sequence_item = indent == 6
             && content.starts_with("- ")
             && scan.section == WorkflowSection::Jobs
             && scan
                 .current_job
                 .as_ref()
-                .is_some_and(|job| job.section == JobSection::Steps)
-        {
+                .is_some_and(|job| job.section == JobSection::Steps);
+        if step_sequence_item && scan_step_mapping_item(&mut scan, content)? {
+            continue;
+        }
+        let entry = mapping_entry(content);
+        if step_sequence_item {
             let Some((key, value)) = entry else {
                 return Err(shellcheck_fail("step_mapping_unsupported"));
             };
@@ -131,29 +137,7 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
         } else {
             source_value.to_owned()
         };
-        if indent == 0 {
-            if let Some(job) = scan.current_job.take() {
-                scan.jobs.push(job.finish());
-            }
-            scan.section = match (key, value.as_str()) {
-                ("jobs", "") => {
-                    scan.saw_jobs = true;
-                    WorkflowSection::Jobs
-                }
-                ("defaults", "") => WorkflowSection::Defaults,
-                _ => WorkflowSection::Root,
-            };
-            continue;
-        }
-        if scan.section != WorkflowSection::Jobs {
-            scan_workflow_default(&mut scan, indent, key, &value)?;
-            continue;
-        }
-        if indent == 2 && value.is_empty() && !key.starts_with('-') {
-            if let Some(job) = scan.current_job.take() {
-                scan.jobs.push(job.finish());
-            }
-            scan.current_job = Some(JobScan::default());
+        if advance_workflow_scope(&mut scan, indent, key, &value)? {
             continue;
         }
         if key == "run"
@@ -173,12 +157,60 @@ fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
         let Some(job) = scan.current_job.as_mut() else {
             continue;
         };
+        if indent == 8
+            && job.section == JobSection::Steps
+            && let Some(step) = job.current_step.as_mut()
+            && step.anchor.is_some()
+            && !step.first_mapping_field_seen
+        {
+            if key != "name" || value.is_empty() {
+                return Err(shellcheck_fail("step_mapping_name_must_be_first"));
+            }
+            step.first_mapping_field_seen = true;
+        }
         scan_job_line(job, indent, key, &value)?;
     }
     finish_workflow_scan(scan)
 }
 
+fn advance_workflow_scope(
+    scan: &mut WorkflowScan,
+    indent: usize,
+    key: &str,
+    value: &str,
+) -> Result<bool, OrchestratorError> {
+    if indent == 0 {
+        scan.finish_current_step()?;
+        if let Some(job) = scan.current_job.take() {
+            scan.jobs.push(job.finish());
+        }
+        scan.section = match (key, value) {
+            ("jobs", "") => {
+                scan.saw_jobs = true;
+                WorkflowSection::Jobs
+            }
+            ("defaults", "") => WorkflowSection::Defaults,
+            _ => WorkflowSection::Root,
+        };
+        return Ok(true);
+    }
+    if scan.section != WorkflowSection::Jobs {
+        scan_workflow_default(scan, indent, key, value)?;
+        return Ok(true);
+    }
+    if indent == 2 && value.is_empty() && !key.starts_with('-') {
+        scan.finish_current_step()?;
+        if let Some(job) = scan.current_job.take() {
+            scan.jobs.push(job.finish());
+        }
+        scan.current_job = Some(JobScan::default());
+        return Ok(true);
+    }
+    Ok(false)
+}
+
 fn finish_workflow_scan(mut scan: WorkflowScan) -> Result<Vec<StagedRun>, OrchestratorError> {
+    scan.finish_current_step()?;
     if let Some(job) = scan.current_job.take() {
         scan.jobs.push(job.finish());
     }
@@ -186,6 +218,67 @@ fn finish_workflow_scan(mut scan: WorkflowScan) -> Result<Vec<StagedRun>, Orches
         return Err(shellcheck_fail("workflow_jobs_missing"));
     }
     collect_runs(scan.jobs, scan.workflow_shell)
+}
+
+fn scan_step_mapping_item(
+    scan: &mut WorkflowScan,
+    content: &str,
+) -> Result<bool, OrchestratorError> {
+    // Finish the prior mapping so its anchor is available before the next item.
+    scan.finish_current_step()?;
+    if let Some(name) = step_mapping_anchor(content)? {
+        let Some(job) = scan.current_job.as_mut() else {
+            return Err(shellcheck_fail("step_mapping_anchor_without_job"));
+        };
+        job.current_step = Some(StepScan {
+            anchor: Some(name.to_owned()),
+            ..StepScan::default()
+        });
+        return Ok(true);
+    }
+    if let Some(name) = step_mapping_alias(content)? {
+        let Some(step) = scan.step_anchors.get(name).cloned() else {
+            return Err(OrchestratorError::Validation {
+                tool: "shellcheck".to_owned(),
+                problem: format!("step_mapping_alias_unresolved:{name}"),
+            });
+        };
+        let Some(job) = scan.current_job.as_mut() else {
+            return Err(shellcheck_fail("step_mapping_alias_without_job"));
+        };
+        job.runs.push(step);
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+impl WorkflowScan {
+    fn finish_current_step(&mut self) -> Result<(), OrchestratorError> {
+        let Some(step) = self
+            .current_job
+            .as_mut()
+            .and_then(|job| job.current_step.take())
+        else {
+            return Ok(());
+        };
+        if let Some(name) = &step.anchor {
+            if !step.first_mapping_field_seen {
+                return Err(shellcheck_fail("step_mapping_name_missing"));
+            }
+            if self
+                .step_anchors
+                .insert(name.clone(), step.clone())
+                .is_some()
+            {
+                return Err(shellcheck_fail("step_mapping_anchor_duplicate"));
+            }
+        }
+        let Some(job) = self.current_job.as_mut() else {
+            return Err(shellcheck_fail("step_mapping_without_job"));
+        };
+        job.runs.push(step);
+        Ok(())
+    }
 }
 
 fn is_step_run_site(scan: &WorkflowScan, indent: usize, key: &str) -> bool {
@@ -387,6 +480,33 @@ fn mapping_entry(content: &str) -> Option<(&str, &str)> {
     Some((key, value.trim()))
 }
 
+fn step_mapping_anchor(content: &str) -> Result<Option<&str>, OrchestratorError> {
+    let Some(name) = content.strip_prefix("- &") else {
+        return Ok(None);
+    };
+    if !valid_anchor_name(name) {
+        return Err(shellcheck_fail("step_mapping_anchor_malformed"));
+    }
+    Ok(Some(name))
+}
+
+fn step_mapping_alias(content: &str) -> Result<Option<&str>, OrchestratorError> {
+    let Some(name) = content.strip_prefix("- *") else {
+        return Ok(None);
+    };
+    if !valid_anchor_name(name) {
+        return Err(shellcheck_fail("step_mapping_alias_malformed"));
+    }
+    Ok(Some(name))
+}
+
+fn valid_anchor_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+}
+
 fn content_is_step_item(key: &str, value: &str) -> bool {
     key == "name" && !value.is_empty()
 }
@@ -398,3 +518,7 @@ mod tests;
 #[cfg(test)]
 #[path = "validate_shell_yaml_runner_tests.rs"]
 mod runner_tests;
+
+#[cfg(test)]
+#[path = "validate_shell_yaml_step_anchor_tests.rs"]
+mod step_anchor_tests;

@@ -2,7 +2,7 @@
 
 use crate::{
     RenderError, marker, workflow_size,
-    yaml::{Yaml, render_yaml, share_step_run_scalars},
+    yaml::{Yaml, render_yaml, share_step_mappings, share_step_run_scalars},
 };
 
 /// Render the complete marked document before the caller applies the size guard.
@@ -21,7 +21,7 @@ pub(super) fn render_marked_workflow(
         }
         return Ok(canonical);
     }
-    let shared = share_step_run_scalars(document.clone());
+    let shared = share_step_run_scalars(share_step_mappings(document.clone()));
     let transformed = marker::with_marker(generator_version, &render_yaml(&shared))?;
     #[cfg(feature = "test-render-capture")]
     let canonical_capture = canonical.clone();
@@ -50,6 +50,24 @@ pub(crate) fn render_checked_workflow(
     {
         return Ok(text);
     }
+    workflow_size::check_workflow_size(path, &text)?;
+    Ok(text)
+}
+
+/// Render without representation sharing so the caller can run structural
+/// extraction before applying the over-cap YAML fallback.
+pub(crate) fn render_checked_workflow_before_extraction(
+    path: &str,
+    document: &Yaml,
+    generator_version: &str,
+) -> Result<String, RenderError> {
+    #[cfg(feature = "test-render-capture")]
+    if workflow_size::is_workflow_path(path)
+        && crate::render::test_render_capture::full_tree_capture_enabled()
+    {
+        return render_checked_workflow(path, document, generator_version);
+    }
+    let text = marker::with_marker(generator_version, &render_yaml(document))?;
     workflow_size::check_workflow_size(path, &text)?;
     Ok(text)
 }
