@@ -3,7 +3,7 @@
 
 use crate::RenderError;
 use velnor_actions_contract::workflow::step_identity::{
-    TOOL_SEED_USES, TOOLS_CACHE_PRELUDE_USES, TOOLS_CACHE_RESTORE_USES,
+    CACHE_TAR_LAUNCHER_USES, TOOL_SEED_USES, TOOLS_CACHE_PRELUDE_USES, TOOLS_CACHE_RESTORE_USES,
 };
 
 /// Prefix for renderer-generated shared `ToFu` setup composites.
@@ -14,9 +14,8 @@ pub(crate) const DECLARED_TASK_ACTION_PREFIX: &str = "./.github/actions/declared
 
 /// Validate an `owner/repo@<40 hex>` action ref. Branch names are rejected.
 ///
-/// Only registered tool-seed, tools-cache prelude/restore, and provider-
-/// admission composites are accepted as local paths. Every other local path
-/// is rejected.
+/// Only the fixed tool-seed, tools-cache, provider-admission, and cache-tar
+/// composites use local paths. Every other local path is rejected.
 ///
 /// # Errors
 ///
@@ -25,7 +24,10 @@ pub(crate) const DECLARED_TASK_ACTION_PREFIX: &str = "./.github/actions/declared
 pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
     if matches!(
         uses,
-        TOOL_SEED_USES | TOOLS_CACHE_RESTORE_USES | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
+        CACHE_TAR_LAUNCHER_USES
+            | TOOL_SEED_USES
+            | TOOLS_CACHE_RESTORE_USES
+            | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
     ) || TOOLS_CACHE_PRELUDE_USES.contains(&uses)
         || is_generated_provider_prelude(uses)
         || is_crate_obligation_action(uses)
@@ -105,13 +107,16 @@ fn is_action_name(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::validate_uses;
-    use velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_PRELUDE_USES;
+    use velnor_actions_contract::workflow::step_identity::{
+        CACHE_TAR_LAUNCHER_USES, TOOLS_CACHE_PRELUDE_USES,
+    };
 
     #[test]
     fn only_registered_cache_composites_are_local_actions() {
         for uses in TOOLS_CACHE_PRELUDE_USES {
             assert!(validate_uses(uses).is_ok(), "{uses}");
         }
+        assert!(validate_uses(CACHE_TAR_LAUNCHER_USES).is_ok());
         assert!(validate_uses("./.github/actions/tofu-provider-prelude-0").is_ok());
         assert!(validate_uses("./.github/actions/tofu-provider-prelude-12").is_ok());
         assert!(validate_uses("./.github/actions/crate-obligation-rust-demo").is_ok());

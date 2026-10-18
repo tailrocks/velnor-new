@@ -55,16 +55,20 @@ pub use crate::schema2::{
 pub use crate::setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use crate::steps::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, BASELINE_PUBLISH_UPLOAD_NAME,
-    CRATE_REPORT_UPLOAD_NAME, CompileDriver, DENY_STEP_NAME, FORBIDDEN_TOKENS, INTERNAL_OP_ENV,
-    MACHETE_STEP_NAME, MATRIX_REPORT_UPLOAD_NAME, MBX_PREFLIGHT_NAME, MBX_VERSION_CHECK_NAME,
-    MERGE_OPERATION, PLAN_OPERATION, PUBLISH_OPERATION, PUBLISH_STEP_ID, RELEASE_COMMIT_ENV,
+    CACHE_TAR_LAUNCHER_INSTALL_OPERATION, CACHE_TAR_LAUNCHER_PATH_OUTPUT_EXPR,
+    CACHE_TAR_LAUNCHER_SHA256_INPUT, CACHE_TAR_LAUNCHER_USES, CACHE_TAR_SHA256_ENV,
+    CACHE_TAR_VERSION_ENV, CRATE_REPORT_UPLOAD_NAME, CompileDriver, DENY_STEP_NAME,
+    FORBIDDEN_TOKENS, INTERNAL_OP_ENV, MACHETE_STEP_NAME, MATRIX_REPORT_UPLOAD_NAME,
+    MBX_PREFLIGHT_NAME, MBX_VERSION_CHECK_NAME, MERGE_OPERATION, PLAN_OPERATION,
+    PRESEED_HELPER_SHA256_OUTPUT_EXPR, PUBLISH_OPERATION, PUBLISH_STEP_ID, RELEASE_COMMIT_ENV,
     REQUEST_DIR_PREFIX, REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX,
     WRITE_PRESEED_MANIFEST_OPERATION, WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step,
-    action_step_with_env, ambient_shell_step, baseline_publish_upload_step, check_cache_step_order,
-    check_mbx_gating, checkout_step, crate_job_report_upload_step, download_suite_archive_step,
-    internal_step, lane_cargo_target_env, matrix_report_upload_step, mbx_steps_for_driver,
-    merge_step, plan_step, publish_step, scan_for_private_subcommands, shell_step,
-    upload_suite_archive_step, upload_suite_artifact_step, validate_uses, write_request_step,
+    action_step_with_env, ambient_shell_step, baseline_publish_upload_step,
+    cache_tar_launcher_step, check_cache_step_order, check_mbx_gating, checkout_step,
+    crate_job_report_upload_step, download_suite_archive_step, internal_step,
+    lane_cargo_target_env, matrix_report_upload_step, mbx_steps_for_driver, merge_step, plan_step,
+    publish_step, scan_for_private_subcommands, shell_step, upload_suite_archive_step,
+    upload_suite_artifact_step, validate_uses, write_request_step,
 };
 pub use crate::tofu_apply::{
     AWS_CREDENTIALS_STEP_ID, AWS_CREDENTIALS_USES, AWS_CREDENTIALS_VERSION,

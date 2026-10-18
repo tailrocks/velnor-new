@@ -207,6 +207,8 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
             kind,
             StepKind::Internal { operation, .. } if operation == NORMAL_TOOLS_CACHE_EXPORT_OPERATION
         ),
+        StepId::CacheTarLaunchers => super::step_identity::valid_cache_tar_launcher(kind),
+        StepId::PreseedStage => matches!(kind, StepKind::Shell { .. }),
         StepId::TofuProviders => {
             matches!(kind, StepKind::Action { uses, .. } if uses == TOFU_PROVIDER_ADMISSION_USES)
         }

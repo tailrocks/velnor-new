@@ -54,7 +54,7 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// default branch; Scale Set routes do not invoke action restore.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 12] = [
+const ENV_EXPRESSIONS: [&str; 14] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
@@ -67,6 +67,8 @@ const ENV_EXPRESSIONS: [&str; 12] = [
     "steps.aws-credentials.outputs.aws-access-key-id",
     "steps.aws-credentials.outputs.aws-secret-access-key",
     "steps.aws-credentials.outputs.aws-session-token",
+    "steps.cache-tar-launchers.outputs.path",
+    "steps.preseed-stage.outputs.helper-sha256",
 ];
 
 /// Exact `${{ }}` inners permitted in action `with:` values.
@@ -75,7 +77,7 @@ const ENV_EXPRESSIONS: [&str; 12] = [
 /// push-gated cache-save flag, and the publish step's derived
 /// artifact name. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 13] = [
+const WITH_EXPRESSIONS: [&str; 14] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
@@ -89,6 +91,7 @@ const WITH_EXPRESSIONS: [&str; 13] = [
     "steps.tofu-providers.outputs.cache-key",
     "steps.tofu-providers.outputs.cache-path",
     "needs.plan.outputs.covered_tasks",
+    "steps.preseed-stage.outputs.helper-sha256",
 ];
 
 /// True for a `matrix.*` field reference (both layers allow the family).
@@ -138,6 +141,7 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
             && inner.strip_prefix("inputs.").is_some_and(|name| {
                 name == crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT
                     || name == "scale-set-image-source-sha"
+                    || name == "helper-sha256"
                     || is_task_execution_input(name)
             });
         let workflow_input = !composite && is_workflow_input(inner);
@@ -220,7 +224,7 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
 
 #[cfg(test)]
 mod tests {
-    use super::check_with_value;
+    use super::{check_composite_env_value, check_with_value};
 
     #[test]
     fn check_with_value_accepts_glob_hash_files() {
@@ -230,6 +234,24 @@ mod tests {
                 "prefix-${{ hashFiles('**/Cargo.lock','**/Cargo.toml') }}"
             )
             .is_ok()
+        );
+    }
+
+    #[test]
+    fn cache_tar_launcher_accepts_only_its_fixed_digest_inputs() {
+        assert!(
+            check_with_value(
+                "helper-sha256",
+                "${{ steps.preseed-stage.outputs.helper-sha256 }}"
+            )
+            .is_ok()
+        );
+        assert!(
+            check_composite_env_value("VELNOR_CACHE_TAR_SHA256", "${{ inputs.helper-sha256 }}")
+                .is_ok()
+        );
+        assert!(
+            check_composite_env_value("VELNOR_CACHE_TAR_SHA256", "${{ inputs.other }}").is_err()
         );
     }
 }

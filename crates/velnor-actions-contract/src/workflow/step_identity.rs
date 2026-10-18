@@ -25,6 +25,18 @@ pub const NORMAL_TOOLS_CACHE_STAGE_OPERATION: &str = "normal-tools-cache-stage-p
 pub const NORMAL_TOOLS_CACHE_IMPORT_OPERATION: &str = "import-normal-tools-cache-payload-v1";
 /// Operation that checks and stages the normal tools-cache payload for saving.
 pub const NORMAL_TOOLS_CACHE_EXPORT_OPERATION: &str = "export-normal-tools-cache-payload-v1";
+/// Operation that installs verified `tar` aliases for one cache action.
+pub const CACHE_TAR_LAUNCHER_INSTALL_OPERATION: &str = "install-cache-tar-aliases-v1";
+/// Fixed local composite that installs the verified cache-action aliases.
+pub const CACHE_TAR_LAUNCHER_USES: &str = "./.github/actions/velnor-cache-tar-launchers";
+/// Composite input carrying the helper's expected SHA-256.
+pub const CACHE_TAR_LAUNCHER_SHA256_INPUT: &str = "helper-sha256";
+/// Output expression for the verified aliases plus the inherited PATH.
+pub const CACHE_TAR_LAUNCHER_PATH_OUTPUT_EXPR: &str =
+    "${{ steps.cache-tar-launchers.outputs.path }}";
+/// Output expression for the verified pre-seed helper digest.
+pub const PRESEED_HELPER_SHA256_OUTPUT_EXPR: &str =
+    "${{ steps.preseed-stage.outputs.helper-sha256 }}";
 /// Fixed generated V2 identity-and-seed composites for the supported runner lanes.
 pub const TOOLS_CACHE_PRELUDE_USES: [&str; 4] = [
     "./.github/actions/velnor-tools-prelude-u22",
@@ -45,6 +57,17 @@ pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outp
 /// Run MBX workspace cleanup only after the exact-version/store guard passed.
 pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
 
+pub(super) fn valid_cache_tar_launcher(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Action { uses, with, env }
+    if uses == CACHE_TAR_LAUNCHER_USES
+        && env.is_empty()
+        && with.len() == 1
+        && with.get(CACHE_TAR_LAUNCHER_SHA256_INPUT).is_some_and(|digest| {
+            crate::ids::is_lower_hex_len(digest, 64)
+                || digest == PRESEED_HELPER_SHA256_OUTPUT_EXPR
+        }))
+}
+
 /// Stable GitHub Actions id for a step whose outputs or outcome have consumers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -63,6 +86,10 @@ pub enum StepId {
     NormalToolsCacheImport,
     /// Staged payload identity outputs for the normal tools-cache save.
     NormalToolsCacheExport,
+    /// Action-local PATH containing verified cache tar aliases.
+    CacheTarLaunchers,
+    /// Verified staged helper digest used by the tar adapter installer.
+    PreseedStage,
     /// `OpenTofu` provider-cache composite outputs consumed by the save step.
     TofuProviders,
     /// Successful MBX version/store guard that enables final workspace cleanup.
@@ -81,6 +108,8 @@ impl StepId {
             Self::NormalToolsCacheStage => "normal-tools-cache-stage",
             Self::NormalToolsCacheImport => "normal-tools-cache-import",
             Self::NormalToolsCacheExport => "normal-tools-cache-export",
+            Self::CacheTarLaunchers => "cache-tar-launchers",
+            Self::PreseedStage => "preseed-stage",
             Self::TofuProviders => "tofu-providers",
             Self::MbxReady => "mbx-ready",
         }
@@ -147,6 +176,8 @@ pub enum StepRole {
     MsrvQualification,
     /// One elected tools-cache writer.
     ToolsCacheSave,
+    /// Installer producing PATH output for cache-action steps only.
+    CacheTarLaunchers,
     /// Runtime identity action that gates the V2 tools-cache layer.
     ToolsCacheIdentity,
     /// Read-only restore wrapper for the V2 tools-cache payload.
@@ -238,6 +269,7 @@ impl StepRole {
             Self::NormalToolsCacheExport => {
                 internal_operation(kind, NORMAL_TOOLS_CACHE_EXPORT_OPERATION)
             }
+            Self::CacheTarLaunchers => valid_cache_tar_launcher(kind),
             Self::CargoSourcesRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
@@ -280,6 +312,8 @@ impl StepRole {
             Self::NormalToolsCacheStage => Some(StepId::NormalToolsCacheStage),
             Self::NormalToolsCacheImport => Some(StepId::NormalToolsCacheImport),
             Self::NormalToolsCacheExport => Some(StepId::NormalToolsCacheExport),
+            Self::CacheTarLaunchers => Some(StepId::CacheTarLaunchers),
+            Self::PreseedStage => Some(StepId::PreseedStage),
             Self::TofuProvidersRestore => Some(StepId::TofuProviders),
             Self::MbxVersionCheck => Some(StepId::MbxReady),
             _ => None,
@@ -296,6 +330,8 @@ impl StepRole {
             StepId::NormalToolsCacheStage => Self::NormalToolsCacheStage,
             StepId::NormalToolsCacheImport => Self::NormalToolsCacheImport,
             StepId::NormalToolsCacheExport => Self::NormalToolsCacheExport,
+            StepId::CacheTarLaunchers => Self::CacheTarLaunchers,
+            StepId::PreseedStage => Self::PreseedStage,
             StepId::TofuProviders => Self::TofuProvidersRestore,
             StepId::MbxReady => Self::MbxVersionCheck,
         }

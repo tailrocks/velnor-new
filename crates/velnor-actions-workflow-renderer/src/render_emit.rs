@@ -39,10 +39,12 @@ pub(crate) fn emit_shared(
     matrix::suites::attach_suite_matrices(&mut document, &suite_matrices.0)?;
     let text = fallback::render_checked_workflow(WORKFLOW_PATH, &document, &ctx.generator_version)?;
     steps::scan_for_private_subcommands(&text)?;
-    let shared_files = crate::render_cache_files::with_runtime_identity_files(
+    let shared_files = crate::render_cache_files::with_runtime_identity_and_cache_tar_files(
         shared.files.clone(),
         jobs,
         &ctx.generator_version,
+        &ctx.staged_binary,
+        &ctx.report_helper_version,
     )?;
     if crate::tool_seed::any_job_has_seed(jobs)? {
         return Err(RenderError::InvalidWorkflow(

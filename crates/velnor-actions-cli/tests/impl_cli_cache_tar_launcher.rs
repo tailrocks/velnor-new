@@ -17,6 +17,7 @@ struct Fixture {
     root: PathBuf,
     helper: PathBuf,
     digest: String,
+    output: PathBuf,
 }
 
 impl Fixture {
@@ -28,10 +29,13 @@ impl Fixture {
         fs::copy(env!("CARGO_BIN_EXE_velnor-actions"), &helper)?;
         fs::set_permissions(&helper, fs::Permissions::from_mode(0o755))?;
         let digest = lower_hex(&Sha256::digest(fs::read(&helper)?));
+        let output = root.join("github-output.txt");
+        fs::write(&output, b"")?;
         Ok(Self {
             root,
             helper,
             digest,
+            output,
         })
     }
 
@@ -44,6 +48,7 @@ impl Fixture {
             .env("GITHUB_ACTIONS", "true")
             .env("GITHUB_RUN_ID", "700")
             .env("GITHUB_RUN_ATTEMPT", "1")
+            .env("GITHUB_OUTPUT", &self.output)
             .env("VELNOR_INTERNAL_OP", OP)
             .env("VELNOR_CACHE_TAR_VERSION", "0.1.0")
             .env("VELNOR_CACHE_TAR_SHA256", &self.digest);
@@ -70,6 +75,15 @@ fn installed_aliases_execute_the_verified_cli_and_share_its_inode() -> Result<()
     let fixture = Fixture::new("cache-tar-launcher")?;
     let installed = fixture.install()?;
     assert_eq!(code(&installed), 0, "{:?}", installed.stderr);
+    let inherited = std::env::var_os("PATH").unwrap_or_default();
+    let expected_path = std::env::join_paths(
+        std::iter::once(fs::canonicalize(&fixture.root)?.join("velnor/bin"))
+            .chain(std::env::split_paths(&inherited)),
+    )?;
+    assert_eq!(
+        fs::read_to_string(&fixture.output)?,
+        format!("path={}\n", expected_path.to_string_lossy())
+    );
 
     for alias in ["tar", "gtar"] {
         let output = Command::new(fixture.root.join("velnor/bin").join(alias))
@@ -106,6 +120,7 @@ fn foreign_alias_collision_is_preserved_and_partial_link_is_removed() -> Result<
     assert_eq!(fs::read(&foreign)?, before);
     assert!(!fixture.root.join("velnor/bin/tar").exists());
     assert_eq!(fs::metadata(&fixture.helper)?.nlink(), 1);
+    assert_eq!(fs::read(&fixture.output)?, b"");
     fixture.cleanup();
     Ok(())
 }

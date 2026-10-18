@@ -131,7 +131,8 @@ fn action_step_to_yaml(
         steps::scan_for_private_subcommands(key)?;
         steps::scan_for_private_subcommands(value)?;
     }
-    commands::validate_env(env)?;
+    let rendered_env = cache_action_env(step, env)?;
+    commands::validate_env(&rendered_env)?;
     let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
     crate::step_ids::push_step_id(&mut entries, step);
     if let Some(condition) = &step.condition {
@@ -149,6 +150,7 @@ fn action_step_to_yaml(
     let uses_value = if runtime_identity
         || uses == crate::tool_seed::TOOL_SEED_USES
         || uses == crate::cache_steps::TOOLS_RESTORE_USES
+        || uses == steps::CACHE_TAR_LAUNCHER_USES
         || uses == crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
         || crate::action_ref::is_generated_provider_prelude(uses)
         || crate::action_ref::is_crate_obligation_action(uses)
@@ -171,7 +173,7 @@ fn action_step_to_yaml(
         };
         entries.push(("with".to_owned(), with_yaml));
     }
-    let filtered_env: BTreeMap<String, String> = env
+    let filtered_env: BTreeMap<String, String> = rendered_env
         .iter()
         .filter(|(key, value)| job_env.get(*key).map(String::as_str) != Some(value.as_str()))
         .map(|(key, value)| (key.clone(), value.clone()))
@@ -181,6 +183,33 @@ fn action_step_to_yaml(
     }
     Ok(Yaml::Map(entries))
 }
+
+fn cache_action_env(
+    step: &Step,
+    env: &BTreeMap<String, String>,
+) -> Result<BTreeMap<String, String>, RenderError> {
+    let mut rendered = env.clone();
+    if crate::cache_tar_setup::requires_cache_tar_path(step.role) {
+        if rendered
+            .get("PATH")
+            .is_some_and(|value| value != steps::CACHE_TAR_LAUNCHER_PATH_OUTPUT_EXPR)
+        {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "cache_action_path_override:{}",
+                step.name
+            )));
+        }
+        rendered.insert(
+            "PATH".to_owned(),
+            steps::CACHE_TAR_LAUNCHER_PATH_OUTPUT_EXPR.to_owned(),
+        );
+    }
+    Ok(rendered)
+}
+
+#[cfg(test)]
+#[path = "document_steps_cache_path_tests.rs"]
+mod cache_path_tests;
 
 /// Sorted string map as YAML (shared by `with:` and `env:` emission).
 pub(crate) fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {

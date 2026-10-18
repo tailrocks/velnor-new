@@ -10,6 +10,8 @@ pub mod cache_elect;
 pub mod cache_p08;
 mod cache_p08_detect;
 mod cache_steps;
+mod cache_tar_action;
+mod cache_tar_setup;
 mod candidate;
 pub mod closure;
 mod closure_paths;
