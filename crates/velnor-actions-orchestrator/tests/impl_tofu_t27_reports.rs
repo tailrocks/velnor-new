@@ -20,6 +20,32 @@ use super::impl_common::{
 };
 use super::impl_orch_core::{merge, merge_request, set_task, success_jobs};
 
+/// Add successful results for other planned matrix jobs, preserving supplied outcomes.
+fn complete_matrix_job_results(
+    plan: &Plan,
+    request: &mut serde_json::Value,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut ids = request["required_job_ids"]
+        .as_array()
+        .ok_or("required job inventory")?
+        .iter()
+        .map(|id| id.as_str().map(str::to_owned).ok_or("job ID"))
+        .collect::<Result<Vec<_>, _>>()?;
+    ids.extend(plan.matrix.include.iter().map(|entry| entry.job_id.clone()));
+    ids.sort();
+    ids.dedup();
+    let jobs = request["required_jobs"]
+        .as_array_mut()
+        .ok_or("required job results")?;
+    for id in &ids {
+        if !jobs.iter().any(|job| job["job_id"] == id.as_str()) {
+            jobs.push(json!({"job_id": id, "conclusion": "success"}));
+        }
+    }
+    request["required_job_ids"] = json!(ids);
+    Ok(())
+}
+
 /// Git-initialized pure-tofu repo: `config` plus `files`, no Cargo.
 fn make_pure_tofu_repo(
     config: &str,
@@ -236,6 +262,7 @@ fn tofu_skipped_validator_fails_required_not_run() -> TestResult {
         &jobs,
     );
     request["required_job_ids"] = json!(["plan", "actionlint", "tofu-stacks-a"]);
+    complete_matrix_job_results(&plan, &mut request)?;
     assert_eq!(merge(&request)?.status, FinalStatus::NotRun);
     Ok(())
 }
@@ -258,6 +285,7 @@ fn tofu_cancelled_validator_fails_required_cancelled() -> TestResult {
         &jobs,
     );
     request["required_job_ids"] = json!(["plan", "actionlint", "tofu-stacks-a"]);
+    complete_matrix_job_results(&plan, &mut request)?;
     assert_eq!(merge(&request)?.status, FinalStatus::Cancelled);
     Ok(())
 }

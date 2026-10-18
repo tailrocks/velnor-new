@@ -9,6 +9,22 @@ use serde_json::Value as Json;
 use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
 use velnor_actions_orchestrator::plan_internal;
 
+/// Add successful results for the plan's matrix jobs to merge fixtures.
+fn with_successful_plan_jobs(plan: &Plan, extra: &Json) -> Json {
+    let mut ids = vec!["plan".to_owned()];
+    ids.extend(plan.matrix.include.iter().map(|entry| entry.job_id.clone()));
+    ids.sort();
+    ids.dedup();
+    let jobs: Vec<Json> = ids
+        .iter()
+        .map(|job_id| serde_json::json!({"job_id": job_id, "conclusion": "success"}))
+        .collect();
+    let mut merged = extra.as_object().cloned().unwrap_or_default();
+    merged.insert("required_job_ids".to_owned(), serde_json::json!(ids));
+    merged.insert("required_jobs".to_owned(), serde_json::json!(jobs));
+    Json::Object(merged)
+}
+
 #[test]
 fn generator_and_workflow_changes_broaden() -> TestResult {
     let (plan, warnings) = plan_change(
@@ -241,8 +257,9 @@ fn cache_miss_never_fails_task() -> TestResult {
     )?;
     report.validate()?;
     let reports = passing_reports(&plan)?;
+    let extra = with_successful_plan_jobs(&plan, &Json::Object(serde_json::Map::new()));
     assert_eq!(
-        merge_status(&plan, &reports, &[], &Json::Object(serde_json::Map::new()))?,
+        merge_status(&plan, &reports, &[], &extra)?,
         FinalStatus::Passed
     );
     Ok(())
@@ -258,7 +275,7 @@ fn shard_aggregation_rejects_mismatch_extra_and_unproven() -> TestResult {
         proof(&second, &input, 2, &[test_value("two")], &inv),
     ];
     let reports = sharded_reports(&plan, &[first.clone(), second.clone()])?;
-    let empty = Json::Object(serde_json::Map::new());
+    let empty = with_successful_plan_jobs(&plan, &Json::Object(serde_json::Map::new()));
     let mut mismatch = good.clone();
     mismatch[1]["archive_digest"] = Json::String(velnor_actions_contract::digest_b3(b"other"));
     assert_eq!(
@@ -294,14 +311,19 @@ fn shard_aggregation_rejects_mismatch_extra_and_unproven() -> TestResult {
                 &plan,
                 &reports,
                 &good,
-                &serde_json::json!({"limits": limits})
+                &with_successful_plan_jobs(&plan, &serde_json::json!({"limits": limits}))
             )?,
             FinalStatus::PlanningFailed,
             "{key}={value}"
         );
     }
     assert_eq!(
-        merge_status(&plan, &reports, &good, &empty)?,
+        merge_status(
+            &plan,
+            &reports,
+            &good,
+            &with_successful_plan_jobs(&plan, &empty)
+        )?,
         FinalStatus::Passed
     );
     Ok(())

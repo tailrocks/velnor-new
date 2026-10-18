@@ -311,14 +311,39 @@ fn tofu_validator_fold_marks_exact_set() -> TestResult {
     let reports = passing_reports(&plan)?;
     let matrix = serde_json::to_value(&plan.matrix)?;
     let plan_value = serde_json::to_value(&plan)?;
-    let inventory = json!(["plan", "actionlint", "tofu-stacks-a"]);
+    let mut inventory_ids = vec![
+        "plan".to_owned(),
+        "actionlint".to_owned(),
+        "tofu-stacks-a".to_owned(),
+    ];
+    inventory_ids.extend(plan.matrix.include.iter().map(|entry| entry.job_id.clone()));
+    inventory_ids.sort();
+    inventory_ids.dedup();
+    let inventory = json!(inventory_ids);
     let run = |jobs: serde_json::Value| {
+        let omitted_tofu = jobs
+            .as_array()
+            .is_some_and(|values| !values.iter().any(|job| job["job_id"] == "tofu-stacks-a"));
+        let mut job_results = jobs.as_array().cloned().unwrap_or_default();
+        for id in &inventory_ids {
+            if !(job_results.iter().any(|job| job["job_id"] == id.as_str())
+                || omitted_tofu && id == "tofu-stacks-a")
+            {
+                job_results.push(json!({"job_id": id, "conclusion": "success"}));
+            }
+        }
         let mut request = merge_request(
             &plan_value,
             &matrix,
             &serde_json::to_value(&reports)?,
-            &jobs,
+            &serde_json::Value::Array(job_results),
         );
+        if omitted_tofu {
+            request["required_jobs"]
+                .as_array_mut()
+                .ok_or("required job results")?
+                .retain(|job| job["job_id"] != "tofu-stacks-a");
+        }
         request["required_job_ids"] = inventory.clone();
         merge(&request)
     };
@@ -329,7 +354,7 @@ fn tofu_validator_fold_marks_exact_set() -> TestResult {
         {"job_id": "actionlint", "conclusion": "success"},
     ]);
     let report = run(jobs)?;
-    assert_eq!(report.status, FinalStatus::PlanningFailed);
+    assert_eq!(report.status, FinalStatus::PlanningFailed, "{report:?}");
     assert!(
         report
             .required_job_results
