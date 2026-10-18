@@ -7,7 +7,7 @@ use std::{
     process::ExitCode,
 };
 use velnor_actions_orchestrator::{
-    OrchestratorError, TapPromotionReceipt, prepare_homebrew_tap_from_env,
+    OrchestratorError, TapPromotionOutcome, TapPromotionReceipt, prepare_homebrew_tap_from_env,
     write_homebrew_tap_pr_from_env,
 };
 
@@ -121,10 +121,7 @@ fn append_writer_outputs(receipt: &TapPromotionReceipt) -> ExitCode {
     if !is_regular_file(&path) {
         return super::fail_internal("tap_writer_output_invalid");
     }
-    let outputs = format!(
-        "pr_number={}\nhead_sha={}\nbase_sha={}\n",
-        receipt.pull_request, receipt.head_sha, receipt.base_sha
-    );
+    let outputs = writer_outputs(receipt);
     match fs::OpenOptions::new()
         .append(true)
         .open(&path)
@@ -132,6 +129,31 @@ fn append_writer_outputs(receipt: &TapPromotionReceipt) -> ExitCode {
     {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => super::fail_internal(&format!("tap_writer_output_write:{:?}", error.kind())),
+    }
+}
+
+fn writer_outputs(receipt: &TapPromotionReceipt) -> String {
+    match &receipt.outcome {
+        TapPromotionOutcome::PullRequest {
+            pull_request,
+            head_sha,
+            base_sha,
+            candidate_proof_digest,
+            ..
+        } => format!(
+            "promotion_state=pull_request\npr_number={pull_request}\nhead_sha={head_sha}\nbase_sha={base_sha}\ncandidate_proof_digest={candidate_proof_digest}\n"
+        ),
+        TapPromotionOutcome::AlreadyPromoted {
+            pull_request,
+            head_sha,
+            base_sha,
+            candidate_proof_digest,
+            merge_sha,
+            merged_at,
+            ..
+        } => format!(
+            "promotion_state=already_promoted\npr_number={pull_request}\nhead_sha={head_sha}\nbase_sha={base_sha}\ncandidate_proof_digest={candidate_proof_digest}\nmerge_sha={merge_sha}\nmerged_at={merged_at}\n"
+        ),
     }
 }
 

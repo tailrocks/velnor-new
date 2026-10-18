@@ -39,6 +39,35 @@ archive = "tar.gz"
     ))
 }
 
+fn tap_enabled_config(stable: bool) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(format!(
+        "{}\n{}",
+        preview_config(stable)?,
+        r#"
+[distribution.homebrew_tap]
+enabled = true
+source = "rust.binary_release.preview"
+repository = "example/homebrew-tap"
+formula = "Formula/demo-preview.rb"
+environment = "tap-update"
+app_id_variable = "TAP_APP_ID"
+app_private_key_secret = "TAP_APP_PRIVATE_KEY"
+merge = "squash-after-gates"
+[distribution.homebrew_tap.updater]
+task = "package:update-preview"
+source = { mise_config = "mise.toml", working_directory = "." }
+runner = { label = "ubuntu-26.04", platform = "linux_x64", executor = "hosted" }
+inputs = ["mise.toml", "Formula/demo-preview.rb", "scripts/package-update.sh"]
+tools = ["jq", "python"]
+timeout_minutes = 30
+[distribution.homebrew_tap.review_completion]
+check_name = "Review completion"
+app_id_variable = "REVIEW_COMPLETION_APP_ID"
+expected_reviewers = [{ app_id_variable = "SECURITY_REVIEW_APP_ID" }]
+"#
+    ))
+}
+
 #[test]
 fn preview_generates_independently_with_sorted_static_inventory() -> TestResult {
     for stable in [false, true] {
@@ -89,6 +118,57 @@ fn preview_rejects_a_branch_that_cannot_pass_its_fixed_environment_policy() -> T
             .contains("preview_default_branch_must_be_main")
     );
     Ok(())
+}
+
+#[test]
+fn generator_emits_tap_jobs_from_native_distribution_config() -> TestResult {
+    let repo = binary_repo(&tap_enabled_config(false)?)?;
+    std::fs::write(
+        repo.path().join("mise.toml"),
+        "[tools]\nrust = '1.98.1'\n[tasks.release-preview]\nrun = 'true'\n",
+    )?;
+    git(&["add", "mise.toml"], repo.path())?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let workflow = tree
+        .get(".github/workflows/binary-preview.yml")
+        .ok_or("preview workflow missing")?;
+    let prepare = job(workflow, "preview-tap-prepare", Some("preview-tap-writer"))?;
+    let writer = job(workflow, "preview-tap-writer", Some("preview-tap-merge"))?;
+    let merge = job(workflow, "preview-tap-merge", None)?;
+
+    assert!(prepare.contains("prepare-homebrew-tap-v1"));
+    assert!(!prepare.contains("environment: tap-update"));
+    assert!(!prepare.contains("${{ secrets.TAP_APP_PRIVATE_KEY }}"));
+    assert!(!prepare.contains("contents: write"));
+    assert!(writer.contains("write-homebrew-tap-pr-v1"));
+    assert!(writer.contains("environment: tap-update"));
+    assert!(writer.contains("permission-contents: write"));
+    assert!(!writer.contains("permission-administration"));
+    assert!(merge.contains("merge-homebrew-tap-pr-v1"));
+    assert!(merge.contains("environment: tap-update"));
+    assert!(merge.contains("permission-checks: read"));
+    assert!(merge.contains("permission-administration: read"));
+    assert!(merge.contains("VELNOR_TAP_COMPLETION_APP_ID"));
+    Ok(())
+}
+
+fn job<'a>(
+    yaml: &'a str,
+    name: &str,
+    next: Option<&str>,
+) -> Result<&'a str, Box<dyn std::error::Error>> {
+    let start = yaml
+        .find(&format!("  {name}:\n"))
+        .ok_or("generated job missing")?;
+    let rest = &yaml[start..];
+    if let Some(next) = next {
+        let end = rest
+            .find(&format!("  {next}:\n"))
+            .ok_or("next generated job missing")?;
+        Ok(&rest[..end])
+    } else {
+        Ok(rest)
+    }
 }
 
 #[test]

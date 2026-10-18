@@ -1,7 +1,5 @@
 //! Complete, paginated pull-request feedback snapshot and trusted completion.
 
-use std::collections::BTreeMap;
-
 use serde_json::Value;
 use velnor_actions_contract::{
     digest_b3,
@@ -17,10 +15,12 @@ const PAGE_LIMIT: u32 = 100;
 const MAX_PAGES: u32 = 100;
 const MAX_FEEDBACK_RECORDS: usize = 20_000;
 const THREADS_QUERY: &str = "query($owner:String!,$name:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100,after:$cursor){nodes{id isResolved isOutdated} pageInfo{hasNextPage endCursor}}}}}";
+const OPINIONS_QUERY: &str = "query($owner:String!,$name:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$name){pullRequest(number:$number){latestOpinionatedReviews(first:100,after:$cursor){nodes{id state submittedAt author{__typename ... on User{databaseId} ... on Bot{databaseId}}} pageInfo{hasNextPage endCursor}}}}}";
 
 #[derive(serde::Serialize)]
 struct FeedbackRecords {
     reviews: Vec<Value>,
+    opinionated_reviews: Vec<Value>,
     review_comments: Vec<Value>,
     issue_comments: Vec<Value>,
     threads: Vec<Value>,
@@ -67,7 +67,9 @@ pub(super) fn capture_feedback(
         ),
     )?;
     let threads = paged_threads(api, context.repository, context.pull_request_number)?;
-    let outstanding_change_requests = outstanding_change_requests(&reviews)?;
+    let opinionated_reviews =
+        paged_opinionated_reviews(api, context.repository, context.pull_request_number)?;
+    let outstanding_change_requests = outstanding_change_requests(&opinionated_reviews)?;
     let unresolved_threads = u64::try_from(
         threads
             .iter()
@@ -77,6 +79,7 @@ pub(super) fn capture_feedback(
     .map_err(|_| internal("tap_merge_thread_count"))?;
     let records = FeedbackRecords {
         reviews,
+        opinionated_reviews,
         review_comments,
         issue_comments,
         threads,
@@ -99,6 +102,78 @@ pub(super) fn capture_feedback(
         snapshot,
         completion,
     })
+}
+
+fn paged_opinionated_reviews(
+    api: &TapMergeGitHub,
+    repository: &str,
+    number: u64,
+) -> Result<Vec<Value>, OrchestratorError> {
+    let (owner, name) = repository
+        .split_once('/')
+        .ok_or_else(|| internal("tap_merge_repository_invalid"))?;
+    let mut cursor = String::new();
+    let mut reviews = Vec::new();
+    for _ in 0..MAX_PAGES {
+        let mut fields = vec![
+            ("owner", owner.to_owned()),
+            ("name", name.to_owned()),
+            ("number", number.to_string()),
+        ];
+        if !cursor.is_empty() {
+            fields.push(("cursor", cursor.clone()));
+        }
+        let response: Value = api.graphql(OPINIONS_QUERY, &fields)?;
+        if response.get("errors").is_some() {
+            return Err(internal("tap_merge_opinions_query_failed"));
+        }
+        let connection = response
+            .pointer("/data/repository/pullRequest/latestOpinionatedReviews")
+            .ok_or_else(|| internal("tap_merge_opinions_missing"))?;
+        let nodes = connection["nodes"]
+            .as_array()
+            .ok_or_else(|| internal("tap_merge_opinions_invalid"))?;
+        if nodes.len() > PAGE_LIMIT as usize
+            || reviews.len().saturating_add(nodes.len()) > MAX_FEEDBACK_RECORDS
+        {
+            return Err(internal("tap_merge_opinions_invalid"));
+        }
+        reviews.extend(nodes.iter().cloned());
+        let page_info = connection
+            .get("pageInfo")
+            .ok_or_else(|| internal("tap_merge_opinions_page_info"))?;
+        if page_info["hasNextPage"].as_bool() == Some(false) {
+            validate_opinion_authors(&reviews)?;
+            return Ok(reviews);
+        }
+        if page_info["hasNextPage"].as_bool() != Some(true) {
+            return Err(internal("tap_merge_opinions_page_info"));
+        }
+        page_info["endCursor"]
+            .as_str()
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| internal("tap_merge_opinions_cursor"))?
+            .clone_into(&mut cursor);
+    }
+    Err(internal("tap_merge_opinions_page_limit"))
+}
+
+fn validate_opinion_authors(reviews: &[Value]) -> Result<(), OrchestratorError> {
+    let mut author_ids = std::collections::BTreeSet::new();
+    for review in reviews {
+        let author = review
+            .pointer("/author/databaseId")
+            .and_then(Value::as_u64)
+            .filter(|id| *id > 0)
+            .ok_or_else(|| internal("tap_merge_opinion_author_missing"))?;
+        let state = review["state"]
+            .as_str()
+            .ok_or_else(|| internal("tap_merge_opinion_state_missing"))?;
+        if !matches!(state, "APPROVED" | "CHANGES_REQUESTED") || !author_ids.insert(author) {
+            return Err(internal("tap_merge_opinion_state_or_author_invalid"));
+        }
+    }
+    Ok(())
 }
 
 fn paged_values(api: &TapMergeGitHub, route: &str) -> Result<Vec<Value>, OrchestratorError> {
@@ -179,40 +254,11 @@ fn paged_threads(
 }
 
 fn outstanding_change_requests(reviews: &[Value]) -> Result<u64, OrchestratorError> {
-    let mut latest = BTreeMap::<u64, (String, u64, String)>::new();
-    for review in reviews {
-        let user_id = review
-            .pointer("/user/id")
-            .and_then(Value::as_u64)
-            .filter(|id| *id > 0)
-            .ok_or_else(|| internal("tap_merge_review_author_missing"))?;
-        let review_id = review["id"]
-            .as_u64()
-            .filter(|id| *id > 0)
-            .ok_or_else(|| internal("tap_merge_review_id_missing"))?;
-        let state = review["state"]
-            .as_str()
-            .filter(|value| !value.is_empty())
-            .ok_or_else(|| internal("tap_merge_review_state_missing"))?
-            .to_ascii_uppercase();
-        if state == "PENDING" {
-            continue;
-        }
-        let submitted = review["submitted_at"]
-            .as_str()
-            .ok_or_else(|| internal("tap_merge_review_time_missing"))?;
-        let candidate = (submitted.to_owned(), review_id, state);
-        if latest
-            .get(&user_id)
-            .is_none_or(|existing| (&candidate.0, candidate.1) > (&existing.0, existing.1))
-        {
-            latest.insert(user_id, candidate);
-        }
-    }
+    validate_opinion_authors(reviews)?;
     u64::try_from(
-        latest
-            .values()
-            .filter(|(_, _, state)| state == "CHANGES_REQUESTED")
+        reviews
+            .iter()
+            .filter(|review| review["state"].as_str() == Some("CHANGES_REQUESTED"))
             .count(),
     )
     .map_err(|_| internal("tap_merge_review_count"))

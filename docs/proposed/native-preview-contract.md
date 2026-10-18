@@ -76,9 +76,20 @@ Configuration uses closed enums and `deny_unknown_fields`. No arbitrary workflow
 
 Producer and updater bindings are typed named Mise task projections. Each binds the exact tracked Mise configuration, working directory, tracked input closure, declared tools, runner placement, bounded timeout, and output contract. Resolve tools through the qualified setup path. During task execution disable hooks, ambient Mise config/environment loading, automatic tool installation, inherited credentials, and unsafe caches. The output manifest is untrusted input, never publication authority. No producer or updater task runs in a signer, publisher, App writer, or merge job.
 
-The producer receives only fixed `VELNOR_RELEASE_SOURCE_COMMIT`, `VELNOR_RELEASE_SOURCE_REF`, `VELNOR_RELEASE_VERSION`, `VELNOR_RELEASE_COMMIT_COUNT`, `VELNOR_RELEASE_OUTPUT_DIRECTORY`, `VELNOR_RELEASE_OUTPUT_MANIFEST`, `CARGO_BUILD_JOBS`, and configured application version variables. The two output-path variables are absolute paths for task convenience; the executor resolves them beneath the canonical checkout and requires them to correspond to the repository-relative configured output root and manifest. They do not grant path authority. The handoff manifest path passed to Velnor's verifier is the safe output-root-relative `package-output.json`. CI run identity is supplied independently to signer and publisher by the eligibility job; producer output never chooses that authority.
+The producer receives only fixed `VELNOR_RELEASE_SOURCE_COMMIT`, `VELNOR_RELEASE_SOURCE_REF`, `VELNOR_RELEASE_VERSION`, `VELNOR_RELEASE_COMMIT_COUNT`, `VELNOR_RELEASE_OUTPUT_DIRECTORY`, `VELNOR_RELEASE_OUTPUT_MANIFEST`, `CARGO_BUILD_JOBS`, and configured application version variables. The two output-path variables are absolute paths for task convenience; the executor resolves them beneath the canonical checkout and requires them to correspond to the repository-relative configured output root and manifest. They do not grant path authority. The producer-side verifier receives the configured manifest path relative to the output root; any safe descendant path is valid. After verification, Velnor copies that manifest to the fixed `package-output.json` name in the uploaded handoff, which the isolated signer independently verifies. CI run identity is supplied independently to signer and publisher by the eligibility job; producer output never chooses that authority.
 
 The static request is canonical `velnor.package-release-plan.v1` at `$RUNNER_TEMP/velnor/package-release-plan.json`. The private `execute-preview-producer-v1` operation accepts only a push on the configured default branch when repository, workflow path `.github/workflows/binary-preview.yml`, workflow SHA, and source SHA agree exactly. The producer emits its repository-local configured output; Velnor independently verifies it and copies the exact raw handoff plus admitted archives, companions, and SBOMs into `$RUNNER_TEMP/velnor/preview-output` for upload. The producer proof is stored outside that uploaded directory. The signer downloads the raw artifact as `preview-input` and independently validates it into a fresh `preview-signed` staging directory before signing. Capsule companion semantics remain application-level validation owned by Jackin's producer and tap tests; Velnor binds exact companion bytes and digest only.
+
+The closed producer handoff discriminator is `velnor.package-output.v1`. Its
+top-level fields are exactly `schema`, `source_commit`, `source_ref`, `version`,
+`payloads`, `companions`, and `sboms`. Each payload has `product_id`, `target`,
+`format`, `name`, and `sha256`; preview format is `tar-gz`. Each companion has
+`id`, `path`, `name`, and `sha256`. Each SBOM has `payload_name`, `name`, and
+`sha256`. Payload and SBOM rows are sorted by payload name; companion rows are
+sorted by ID. The producer generates the required SBOM bytes without signing
+authority, and Velnor independently verifies their standard CycloneDX file
+component name and SHA-256 binding. No `archives` or `archive_name` aliases are
+accepted. Velnor generates checksum sidecars and signs only admitted bytes.
 
 Every producer tool ID must resolve through Velnor's `qualified_tools` inventory for the producer platform. Updater tools must be qualified from the trusted tap source and must not be satisfied by source-controlled version installation during task execution. Inputs are explicit tracked paths, unique, safe, and include the task's Mise config; output directory and manifest cannot overlap trusted source inputs.
 
@@ -88,11 +99,11 @@ The native tap updater currently requires a catalogued GitHub-hosted runner. An 
 
 `homebrew_tap` binds a repository slug, one safe formula path, source channel, updater task, credential references, fixed environment, fixed merge policy, and exact-head review completion check. App credentials are environment variable/secret names, never config values. The App installation must be target-repository scoped and have no ruleset bypass. Tap-main checks and install tests use existing named `[[checks]]` and feed the required check.
 
-The `preview-publish` environment must contain `PREVIEW_IMMUTABILITY_READ_TOKEN`, a source-repository-scoped credential with Administration read permission only. The publisher and recovery operations receive it as `VELNOR_RELEASE_STATUS_TOKEN` for only the fixed immutable-release, main-branch, and effective-branch-rules GET routes. The workflow's `GH_TOKEN` is used only for fixed source-environment and deployment-branch-policy GET routes and GitHub attestation lookup. Neither credential is exposed to producer/updater tasks; the status credential is never exposed to the signer. Both must differ from the tap App token. Missing credentials, denied reads, disabled immutability, or ambiguous responses block every unfinished publication mutation. The immutable-status response's `enabled` field must be true; `enforced_by_owner` is parsed but owner-wide enforcement is not required. GitHub workflow `contents: write` does not grant Administration read.
+The `preview-publish` environment must contain `PREVIEW_IMMUTABILITY_READ_TOKEN`, a source-repository-scoped credential with Administration read permission only. The publisher and recovery operations receive it as `VELNOR_RELEASE_STATUS_TOKEN` for only the fixed immutable-release, main-branch, and effective-branch-rules GET routes. The workflow's `GH_TOKEN` is used only for fixed source-environment and deployment-branch-policy GET routes, source branch-head reads, original workflow-run/job and signed artifact lookup/download during retained-run recovery, and GitHub attestation lookup. These source-only reads require Contents:read, Actions:read, and Attestations:read as applicable; they do not authorize tap writes. Neither credential is exposed to producer/updater tasks; the status credential is never exposed to the signer. Both must differ from the tap App token. Missing credentials, denied reads, disabled immutability, or ambiguous responses block every unfinished publication mutation. The immutable-status response's `enabled` field must be true; owner-wide enforcement metadata is not an authorization condition. GitHub workflow `contents: write` does not grant Administration read.
 
 Before promotion, runtime checks the source default branch is protected and that effective protections include a pull-request rule (zero required approvals is valid), resolved review threads, nonempty required status checks, force-push prevention, and deletion prevention. It reads GitHub's effective active-rules endpoint for repository/organization rulesets and the classic branch-protection endpoint, combining protections from both. A classic branch-protection 404 counts only as an absent classic rule; ruleset protections must still satisfy any requirements the classic endpoint does not. The fixed `preview-publish` and `tap-update` environments must each have no approval/custom protection rule and must use custom deployment branch policies with the single exact `main` branch pattern; `protected_branches=true` alone is not an exact main-only restriction. The preview publisher checks `preview-publish`; the App writer and merge gate recheck `tap-update` immediately before their write/merge boundary. Stable publication retains its existing human-reviewed `consumer-binary-release` environment contract, including at least one reviewer and self-review prevention.
 
-These checks use GitHub's documented [branch protection](https://docs.github.com/en/rest/branches/branch-protection), [effective branch rules](https://docs.github.com/en/rest/repos/rules), [deployment environments](https://docs.github.com/en/rest/deployments/environments?apiVersion=2026-03-10), [deployment branch policies](https://docs.github.com/en/rest/deployments/branch-policies), and [immutable releases](https://docs.github.com/en/rest/repos/repos?piVersion=2022-11-28) endpoints. The status credential needs source repository Administration:read (also Metadata:read for effective rules); `GH_TOKEN` needs Actions:read for environment settings.
+These checks use GitHub's documented [branch protection](https://docs.github.com/en/rest/branches/branch-protection), [effective branch rules](https://docs.github.com/en/rest/repos/rules), [deployment environments](https://docs.github.com/en/rest/deployments/environments?apiVersion=2026-03-10), [deployment branch policies](https://docs.github.com/en/rest/deployments/branch-policies), and [immutable releases](https://docs.github.com/en/rest/repos/repos?piVersion=2022-11-28) endpoints. The status credential needs source repository Administration:read (also Metadata:read for effective rules); `GH_TOKEN` needs Actions:read for environment settings and retained workflow evidence, Contents:read for source identity, and Attestations:read for artifact verification.
 
 ## 2. Selection, version, and immutable identity
 
@@ -207,6 +218,34 @@ Retry identity is the full candidate tuple: repository ID, source SHA, workflow 
 
 An already complete immutable release may be inspected after source advances, but cannot authorize an obsolete formula downgrade. Exercise interruption after tag creation, draft creation, each asset upload, release publication, PR creation, and merge request.
 
+Tap reconciliation has separate typed preparation and promotion outcomes. The
+`velnor.homebrew-candidate.v2` proof distinguishes a changed formula from an
+already-current formula. The latter requires the exact independently derived
+canonical bytes for this signed receipt; formula equality alone does not prove
+that the native PR pipeline completed. The `velnor.homebrew-tap-pr.v2` receipt
+binds the current preparation proof and either an open PR candidate or an
+authenticated historical merged PR candidate. The historical candidate also
+binds its original reconstructed proof, merge commit, and merge time. No old
+handoff schema or compatibility parser remains.
+
+An already-promoted candidate authorizes no branch, commit, PR, or merge write.
+The independently authenticated merge boundary must prove the actual merged
+PR, original formula commit and base, expected bot and branch, canonical formula
+tree, signed-off commit, merge ancestry to captured tap main, exact current
+formula, required exact-head checks including DCO, and trusted completed review.
+A matching formula without that historical proof is blocked. A newer formula is
+not an already-current outcome for an older receipt and must never be downgraded.
+
+Changing the tap base does not discard earlier feedback. Merge admission must
+independently enumerate every same-receipt PR through a bounded complete listing,
+including closed PRs and deleted branches, and validate each PR's authenticated
+identity and complete current feedback. Each historical PR requires its own
+exact-head completion over its current snapshot; unresolved outdated threads,
+general comments without disposition, missing completion, changed head, or
+truncated history block promotion. Re-enumerate and revalidate this history in
+the final admission snapshot. The writer does not gain check-read permissions
+and cannot replace this merge-boundary proof with a self-reported history list.
+
 Draft recovery uses an exact bounded envelope containing the original canonical
 receipt and detached signature bundle, and requires the GitHub Actions bot author
 identity. The publisher independently reauthenticates that original receipt,
@@ -295,12 +334,13 @@ Focused tests cover the canonical receipt-to-promotion digest chain, raw stable
 handoff, preview privilege separation, retained-run recovery admission, required
 check identity, and stale source/base/head rejection. Full workspace gates and a
 settled-tree independent review remain mandatory for each release candidate.
+Scripted GitHub protocol tests cover interrupted PR creation and merge responses,
+authenticated already-promoted outcomes, complete historical PR feedback, and
+rejection of altered identity, formula, checks, or completion evidence without
+duplicate writes. These tests are local qualification, not live deployment proof.
 
 The following acceptance work remains before the feature is complete:
 
-- Qualify interrupted and completed tap promotion retries, including a lost merge
-  response and an already installed identical formula, as explicit authenticated
-  outcomes without duplicate PRs, empty commits, or unauthorized writes.
 - Measure ruleset bypass-list visibility with the actual read-only merge App
   credential. Missing visibility blocks merge; Administration:write is not an
   acceptable workaround for the writer.

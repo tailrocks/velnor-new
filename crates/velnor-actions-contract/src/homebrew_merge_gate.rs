@@ -8,6 +8,13 @@
 use crate::{ContractError, canonical_json_bytes, digest_b3, ids::is_lower_hex_len};
 use std::collections::BTreeSet;
 
+#[path = "homebrew_merge_gate_history.rs"]
+mod history;
+pub use history::{
+    TapCompletedMainObservation, TapCompletedPromotionObservation, TapHistoricalFeedback,
+    validate_tap_completed_promotion_gate, validate_tap_historical_feedback,
+};
+
 /// Authenticated required check result on the proposed formula commit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TapRequiredCheck {
@@ -123,6 +130,10 @@ pub struct TapMergeObservation {
     pub feedback: TapFeedbackSnapshot,
     /// Trusted exact-head completion check, if present.
     pub completion: Option<TapReviewCompletion>,
+    /// Every same-receipt PR was enumerated through the bounded complete API listing.
+    pub historical_feedback_complete: bool,
+    /// Sorted feedback for all other same-receipt PRs, including closed PRs.
+    pub historical_feedback: Vec<TapHistoricalFeedback>,
 }
 
 /// Validate the sole native squash-merge admission condition.
@@ -157,12 +168,38 @@ pub fn validate_tap_merge_gate(
     if observed.server_protection != TapServerMergeProtection::StrictWithoutWriterBypass {
         return Err(invalid("server_merge_protection_missing"));
     }
-    validate_checks(policy, observed)?;
-    let feedback = &observed.feedback;
-    if observed.pull_request_number == 0
+    validate_checks(
+        policy,
+        &observed.current_head_sha,
+        observed.required_checks_complete,
+        &observed.checks,
+    )?;
+    validate_feedback(
+        policy,
+        observed.pull_request_number,
+        &observed.current_head_sha,
+        &observed.feedback,
+        observed.completion.as_ref(),
+    )?;
+    history::validate_history(
+        policy,
+        observed.pull_request_number,
+        observed.historical_feedback_complete,
+        &observed.historical_feedback,
+    )
+}
+
+fn validate_feedback(
+    policy: &TapMergePolicy,
+    pull_request_number: u64,
+    head_sha: &str,
+    feedback: &TapFeedbackSnapshot,
+    completion: Option<&TapReviewCompletion>,
+) -> Result<(), ContractError> {
+    if pull_request_number == 0
         || feedback.repository != policy.repository
-        || feedback.pull_request_number != observed.pull_request_number
-        || feedback.head_sha != observed.current_head_sha
+        || feedback.pull_request_number != pull_request_number
+        || feedback.head_sha != head_sha
         || feedback.unresolved_threads != 0
         || feedback.unaddressed_findings != 0
         || feedback.outstanding_change_requests != 0
@@ -170,15 +207,12 @@ pub fn validate_tap_merge_gate(
     {
         return Err(invalid("unaddressed_feedback"));
     }
-    let completion = observed
-        .completion
-        .as_ref()
-        .ok_or_else(|| invalid("review_completion_missing"))?;
+    let completion = completion.ok_or_else(|| invalid("review_completion_missing"))?;
     if completion.repository != policy.repository
-        || completion.pull_request_number != observed.pull_request_number
+        || completion.pull_request_number != pull_request_number
         || completion.app_id != policy.completion_app_id
         || completion.check_name != policy.completion_check_name
-        || completion.head_sha != observed.current_head_sha
+        || completion.head_sha != head_sha
         || !completion.completed_successfully
         || completion.completed_reviewer_app_ids != policy.expected_reviewer_app_ids
         || completion.feedback_digest != feedback.canonical_digest()?
@@ -211,18 +245,20 @@ fn validate_policy(policy: &TapMergePolicy) -> Result<(), ContractError> {
 
 fn validate_checks(
     policy: &TapMergePolicy,
-    observed: &TapMergeObservation,
+    head_sha: &str,
+    complete: bool,
+    checks: &[TapRequiredCheck],
 ) -> Result<(), ContractError> {
-    if !observed.required_checks_complete || observed.checks.is_empty() {
+    if !complete || checks.is_empty() {
         return Err(invalid("required_checks_missing"));
     }
     let mut names = BTreeSet::new();
-    for check in &observed.checks {
+    for check in checks {
         if check.name.is_empty()
             || !names.insert(check.name.as_str())
             || check.app_id == 0
             || check.required_app_id != Some(check.app_id)
-            || check.head_sha != observed.current_head_sha
+            || check.head_sha != head_sha
             || !check.completed_successfully
         {
             return Err(invalid("required_check_failed_or_untrusted"));
@@ -231,7 +267,7 @@ fn validate_checks(
     if !names.contains("DCO") {
         return Err(invalid("required_dco_check_missing"));
     }
-    if !observed.checks.iter().any(|check| {
+    if !checks.iter().any(|check| {
         check.name == policy.completion_check_name
             && check.app_id == policy.completion_app_id
             && check.required_app_id == Some(policy.completion_app_id)

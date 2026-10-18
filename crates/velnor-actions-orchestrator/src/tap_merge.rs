@@ -2,10 +2,14 @@
 
 #[path = "tap_merge_candidate.rs"]
 mod candidate;
+#[path = "tap_merge_completed.rs"]
+mod completed;
 #[path = "tap_merge_feedback.rs"]
 mod feedback;
 #[path = "tap_merge_github.rs"]
 mod github;
+#[path = "tap_merge_history.rs"]
+mod history;
 #[path = "tap_merge_observation.rs"]
 mod observation;
 #[path = "tap_merge_protection.rs"]
@@ -45,6 +49,9 @@ pub fn merge_homebrew_tap_from_env() -> Result<(), OrchestratorError> {
     }
     let api = github::TapMergeGitHub::with_max_wait(merge_token, MAX_WAIT);
     let authority = observation::load_merge_authority(&candidate, &api)?;
+    if candidate.selection().merged.is_some() {
+        return completed::verify_already_promoted(&candidate, &authority, &api);
+    }
     let prior = poll_until_ready(
         || {
             crate::package_release_publish::verify_tap_update_environment(
@@ -85,7 +92,7 @@ pub fn merge_homebrew_tap_from_env() -> Result<(), OrchestratorError> {
     }
     let merged: serde_json::Value = api.merge(
         &candidate.policy.repository,
-        candidate.promotion.pull_request,
+        candidate.selection().pull_request,
         &final_observation.current_head_sha,
     )?;
     if merged["merged"].as_bool() != Some(true)
@@ -152,3 +159,7 @@ fn required_token(name: &str) -> Result<String, OrchestratorError> {
 #[cfg(test)]
 #[path = "tap_merge_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tap_merge_protocol_tests.rs"]
+mod protocol_tests;

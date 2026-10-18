@@ -12,10 +12,9 @@ use crate::{OrchestratorError, internal::internal};
 
 use super::{
     candidate::MergeCandidate,
-    feedback::{FeedbackContext, capture_feedback},
     github::TapMergeGitHub,
+    history::capture_all,
     protection::{ProtectionAuthority, exact_required_checks, resolve_protection},
-    tree::verify_formula_delta,
 };
 
 const PAGE_LIMIT: usize = 100;
@@ -25,12 +24,12 @@ use velnor_actions_contract::homebrew_review_completion::GITHUB_ACTIONS_APP_ID;
 pub(super) struct MergeAuthority {
     pub(super) policy: TapMergePolicy,
     pub(super) writer_app_id: u64,
-    completion_app_id: u64,
-    completion_name: String,
-    reviewer_ids: BTreeSet<u64>,
-    bot_login: String,
-    bot_user_id: u64,
-    repo_id: u64,
+    pub(super) completion_app_id: u64,
+    pub(super) completion_name: String,
+    pub(super) reviewer_ids: BTreeSet<u64>,
+    pub(super) bot_login: String,
+    pub(super) bot_user_id: u64,
+    pub(super) repo_id: u64,
 }
 
 pub(super) fn load_merge_authority(
@@ -129,10 +128,12 @@ pub(super) fn observe(
     authority: &MergeAuthority,
     api: &TapMergeGitHub,
 ) -> Result<Option<TapMergeObservation>, OrchestratorError> {
-    let number = candidate.promotion.pull_request;
+    let selection = candidate.selection();
+    if selection.merged.is_some() {
+        return Err(internal("tap_merge_open_pr_outcome_required"));
+    }
+    let number = selection.pull_request;
     let (current_base, current_head) = validate_pr_state(candidate, authority, api)?;
-    verify_commit(candidate, authority, api, &current_head)?;
-    verify_formula_delta(candidate, api)?;
     let protection = resolve_protection(
         api,
         &candidate.policy.repository,
@@ -145,25 +146,30 @@ pub(super) fn observe(
             completion_app_id: authority.completion_app_id,
         },
     )?;
-    let runs = check_runs(api, &candidate.policy.repository, &current_head)?;
-    if let Some(checks) = exact_required_checks(&protection, &runs, &current_head)? {
-        let feedback = capture_feedback(
-            api,
-            &FeedbackContext {
-                repository: &candidate.policy.repository,
-                pull_request_number: number,
-                head_sha: &current_head,
-                completion_app_id: authority.completion_app_id,
-                completion_check_name: &authority.completion_name,
-                expected_reviewer_app_ids: &authority.reviewer_ids,
-            },
-            &runs,
-        )?;
+    let history = capture_all(candidate, authority, api)?;
+    let selected = history
+        .iter()
+        .find(|pull| pull.number == number)
+        .ok_or_else(|| internal("tap_merge_selected_pr_missing_from_history"))?;
+    if selected.head_sha != current_head
+        || selected.base_sha != selection.base_sha
+        || selected.observed_base_sha != selection.base_sha
+        || selected.branch != selection.branch
+        || selected.merged
+    {
+        return Err(internal("tap_merge_selected_pr_history_mismatch"));
+    }
+    if let Some(checks) = exact_required_checks(&protection, &selected.check_runs, &current_head)? {
+        let historical_feedback = history
+            .iter()
+            .filter(|pull| pull.number != number)
+            .map(|pull| pull.feedback.clone())
+            .collect();
         let observed = TapMergeObservation {
             pull_request_number: number,
-            validated_base_sha: candidate.promotion.base_sha.clone(),
+            validated_base_sha: selection.base_sha.to_owned(),
             current_base_sha: current_base.clone(),
-            validated_head_sha: candidate.promotion.head_sha.clone(),
+            validated_head_sha: selection.head_sha.to_owned(),
             current_head_sha: current_head.clone(),
             expected_open_pull_request: true,
             server_protection: if protection.strict && !protection.writer_bypass {
@@ -173,8 +179,10 @@ pub(super) fn observe(
             },
             required_checks_complete: true,
             checks,
-            feedback: feedback.snapshot,
-            completion: feedback.completion,
+            feedback: selected.feedback.feedback.clone(),
+            completion: selected.feedback.completion.clone(),
+            historical_feedback_complete: true,
+            historical_feedback,
         };
         return Ok(Some(observed));
     }
@@ -186,7 +194,8 @@ fn validate_pr_state(
     authority: &MergeAuthority,
     api: &TapMergeGitHub,
 ) -> Result<(String, String), OrchestratorError> {
-    let number = candidate.promotion.pull_request;
+    let selection = candidate.selection();
+    let number = selection.pull_request;
     let pr: Value = api.get(&format!(
         "repos/{}/pulls/{number}",
         candidate.policy.repository
@@ -203,16 +212,14 @@ fn validate_pr_state(
         .pointer("/head/sha")
         .and_then(Value::as_str)
         .ok_or_else(|| internal("tap_merge_head_missing"))?;
-    let valid = current_base == candidate.promotion.base_sha
-        && current_head == candidate.promotion.head_sha
+    let valid = current_base == selection.base_sha
+        && current_head == selection.head_sha
         && pr["state"].as_str() == Some("open")
         && pr["draft"].as_bool() == Some(false)
         && pr.pointer("/base/ref").and_then(Value::as_str)
             == Some(candidate.plan.default_branch.as_str())
-        && pr.pointer("/base/sha").and_then(Value::as_str)
-            == Some(candidate.promotion.base_sha.as_str())
-        && pr.pointer("/head/ref").and_then(Value::as_str)
-            == Some(candidate.promotion.branch.as_str())
+        && pr.pointer("/base/sha").and_then(Value::as_str) == Some(selection.base_sha)
+        && pr.pointer("/head/ref").and_then(Value::as_str) == Some(selection.branch)
         && pr.pointer("/head/repo/full_name").and_then(Value::as_str)
             == Some(candidate.policy.repository.as_str())
         && pr.pointer("/user/login").and_then(Value::as_str) == Some(authority.bot_login.as_str())
@@ -227,56 +234,35 @@ fn validate_pr_state(
     Ok((current_base.to_owned(), current_head.to_owned()))
 }
 
-fn verify_commit(
-    candidate: &MergeCandidate,
-    authority: &MergeAuthority,
-    api: &TapMergeGitHub,
-    head_sha: &str,
-) -> Result<(), OrchestratorError> {
-    let commit: Value = api.get(&format!(
-        "repos/{}/git/commits/{head_sha}",
-        candidate.policy.repository
-    ))?;
-    let expected_message = format!(
-        "Update preview formula to {}\n\nSource: {}@{}\nRelease receipt: {}\n\nSigned-off-by: {} <{}+{}@users.noreply.github.com>",
-        candidate.proof.version,
-        candidate.proof.source_repository,
-        candidate.proof.source_sha,
-        candidate.proof.receipt_digest,
-        authority.bot_login,
-        authority.bot_user_id,
-        authority.bot_login,
-    );
-    let parents = commit["parents"]
-        .as_array()
-        .ok_or_else(|| internal("tap_merge_commit_parent"))?;
-    if commit["sha"].as_str() != Some(head_sha)
-        || commit.pointer("/commit/message").and_then(Value::as_str)
-            != Some(expected_message.as_str())
-        || parents.len() != 1
-        || parents[0]["sha"].as_str() != Some(candidate.promotion.base_sha.as_str())
-    {
-        return Err(internal("tap_merge_commit_identity_mismatch"));
-    }
-    Ok(())
-}
-
-fn expected_pr_title(candidate: &MergeCandidate) -> String {
+pub(super) fn expected_pr_title(candidate: &MergeCandidate) -> String {
     format!(
         "Update preview formula to {}",
         candidate.release.receipt.version.value
     )
 }
 
-fn expected_pr_body(candidate: &MergeCandidate) -> String {
+pub(super) fn expected_pr_body(candidate: &MergeCandidate) -> String {
+    let selection = candidate.selection();
+    expected_pr_body_for(
+        candidate,
+        selection.base_sha,
+        selection.candidate_proof_digest,
+    )
+}
+
+pub(super) fn expected_pr_body_for(
+    candidate: &MergeCandidate,
+    base_sha: &str,
+    proof_digest: &str,
+) -> String {
     format!(
         "Promotes immutable preview release `{}` from `{}` at `{}`.\n\nReceipt digest: `{}`\nCandidate proof digest: `{}`\nTap base: `{}`.",
         candidate.release.receipt.tag,
         candidate.release.receipt.repository.slug,
         candidate.release.receipt.source.commit_sha,
         candidate.release.receipt_digest,
-        candidate.promotion.candidate_proof_digest,
-        candidate.promotion.base_sha,
+        proof_digest,
+        base_sha,
     )
 }
 
@@ -307,7 +293,7 @@ pub(super) fn contents(
         .map_err(|_| internal("tap_merge_formula_base64"))
 }
 
-fn check_runs(
+pub(super) fn check_runs(
     api: &TapMergeGitHub,
     repository: &str,
     sha: &str,
@@ -365,7 +351,7 @@ fn verify_repo_id(value: Option<&Value>, expected: u64) -> Result<(), Orchestrat
     }
 }
 
-fn encode_segment(value: &str) -> String {
+pub(super) fn encode_segment(value: &str) -> String {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let mut encoded = String::with_capacity(value.len());
     for byte in value.bytes() {

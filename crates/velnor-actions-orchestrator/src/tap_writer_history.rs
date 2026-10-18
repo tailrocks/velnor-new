@@ -1,0 +1,372 @@
+//! Read-only reconciliation of a formula already promoted by an earlier run.
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+use serde::Deserialize;
+use velnor_actions_contract::{canonical_json_bytes, config::HomebrewTapConfig};
+
+use super::{
+    BotIdentity, OrchestratorError, TapGitHubApi, WriterInputs,
+    github::{BlobResponse, CommitResponse, PullRequestResponse},
+    gitops::{expected_pr_body, expected_pr_title, signed_off_message},
+    helpers::{branch_name, is_full_sha, sha256},
+    internal,
+};
+use crate::tap_prepare::reconstruct_historical_candidate_proof;
+
+const PAGE_SIZE: usize = 100;
+const MAX_PAGES: usize = 100;
+const TAP_BASE: &str = "main";
+
+#[path = "tap_writer_history_timestamp.rs"]
+mod timestamp;
+use timestamp::valid_timestamp;
+
+pub(super) struct HistoricalPromotion {
+    pub(super) pull_request: u64,
+    pub(super) head_sha: String,
+    pub(super) base_sha: String,
+    pub(super) branch: String,
+    pub(super) candidate_proof_digest: String,
+    pub(super) merge_sha: String,
+    pub(super) merged_at: String,
+}
+
+pub(super) fn find_already_promoted(
+    inputs: &WriterInputs,
+    bot: &BotIdentity,
+) -> Result<HistoricalPromotion, OrchestratorError> {
+    let pulls = all_pulls(&inputs.api)?;
+    let receipt_marker = format!("Receipt digest: `{}`", inputs.release.receipt_digest);
+    let branch_prefix = receipt_branch_prefix(&inputs.release.receipt_digest)?;
+    let expected_title = expected_pr_title(&inputs.release);
+    let mut candidates = Vec::new();
+    for pull in pulls {
+        let branch_match = pull.head.ref_name.starts_with(&branch_prefix);
+        let marker_match = pull
+            .body
+            .as_deref()
+            .is_some_and(|body| body.contains(&receipt_marker));
+        if !branch_match {
+            continue;
+        }
+        if !marker_match {
+            return Err(internal("tap_historical_receipt_marker_conflict"));
+        }
+        if pull.title != expected_title {
+            return Err(internal("tap_historical_receipt_title_conflict"));
+        }
+        candidates.push(pull);
+    }
+    if candidates.iter().any(|pull| pull.state == "open") {
+        return Err(internal("tap_already_current_open_pr_exists"));
+    }
+    let mut authenticated = Vec::new();
+    for summary in candidates {
+        if summary.state != "closed" {
+            return Err(internal("tap_historical_pr_state_invalid"));
+        }
+        let detail: PullRequestResponse = inputs
+            .api
+            .get_json(&inputs.api.repo_route(&format!("pulls/{}", summary.number)))?;
+        if detail.number != summary.number || detail.merged.is_none() {
+            return Err(internal("tap_historical_pr_detail_invalid"));
+        }
+        if detail.merged == Some(true) {
+            authenticated.push(authenticate_merged_pull(inputs, bot, &detail)?);
+        }
+    }
+    if authenticated.len() != 1 {
+        return Err(internal("tap_already_current_historical_pr_count"));
+    }
+    authenticated
+        .pop()
+        .ok_or_else(|| internal("tap_already_current_historical_pr_missing"))
+}
+
+fn receipt_branch_prefix(receipt_digest: &str) -> Result<String, OrchestratorError> {
+    let digest = receipt_digest
+        .strip_prefix("b3-")
+        .filter(|value| super::helpers::is_sha256(value))
+        .ok_or_else(|| internal("tap_historical_receipt_digest_invalid"))?;
+    Ok(format!("velnor/preview/{digest}-"))
+}
+
+fn all_pulls(api: &TapGitHubApi) -> Result<Vec<PullRequestResponse>, OrchestratorError> {
+    let mut pulls = Vec::new();
+    let mut seen = BTreeSet::new();
+    for page in 1..=MAX_PAGES {
+        let route = format!(
+            "{}?state=all&per_page={PAGE_SIZE}&page={page}",
+            api.repo_route("pulls")
+        );
+        let batch: Vec<PullRequestResponse> = api.get_json(&route)?;
+        let len = batch.len();
+        if len > PAGE_SIZE
+            || batch
+                .iter()
+                .any(|pull| pull.number == 0 || !seen.insert(pull.number))
+        {
+            return Err(internal("tap_historical_pull_page_invalid"));
+        }
+        pulls.extend(batch);
+        if len < PAGE_SIZE {
+            return Ok(pulls);
+        }
+    }
+    Err(internal("tap_historical_pull_listing_limit"))
+}
+
+fn authenticate_merged_pull(
+    inputs: &WriterInputs,
+    bot: &BotIdentity,
+    pull: &PullRequestResponse,
+) -> Result<HistoricalPromotion, OrchestratorError> {
+    let owner = inputs
+        .policy
+        .repository
+        .split_once('/')
+        .map(|(owner, _)| owner)
+        .ok_or_else(|| internal("tap_historical_repository_slug"))?;
+    if pull.number == 0
+        || pull.state != "closed"
+        || pull.merged != Some(true)
+        || pull.user.id != bot.user_id
+        || pull.user.login != bot.login
+        || pull.base.ref_name != TAP_BASE
+        || !same_repository(pull, &inputs.policy)
+    {
+        return Err(internal("tap_historical_pull_identity_mismatch"));
+    }
+    let head_sha = &pull.head.sha;
+    if !is_full_sha(head_sha) {
+        return Err(internal("tap_historical_head_sha_invalid"));
+    }
+    let head_commit = commit(&inputs.api, head_sha)?;
+    if head_commit.parents.len() != 1 || !is_full_sha(&head_commit.parents[0].sha) {
+        return Err(internal("tap_historical_head_parent_invalid"));
+    }
+    let base_sha = &head_commit.parents[0].sha;
+    let branch = branch_name(&inputs.release.receipt_digest, base_sha)?;
+    if pull.head.ref_name != branch
+        || pull.head.label != format!("{owner}:{branch}")
+        || pull.base.label != format!("{owner}:{TAP_BASE}")
+    {
+        return Err(internal("tap_historical_branch_mismatch"));
+    }
+    let base_commit = commit(&inputs.api, base_sha)?;
+    let head_tree = read_tree(&inputs.api, &head_commit.tree.sha)?;
+    let base_tree = read_tree(&inputs.api, &base_commit.tree.sha)?;
+    validate_single_formula_delta(&inputs.policy.formula, &base_tree, &head_tree)?;
+    let old_formula = read_formula_blob(&inputs.api, &base_tree, &inputs.policy.formula)?;
+    let proposed = read_formula_blob(&inputs.api, &head_tree, &inputs.policy.formula)?;
+    if old_formula == proposed {
+        return Err(internal("tap_historical_formula_not_changed"));
+    }
+    let proof = reconstruct_historical_candidate_proof(
+        &inputs.proof.source_repository,
+        &inputs.policy,
+        &inputs.plan,
+        &inputs.release,
+        base_sha,
+        &old_formula,
+        &proposed,
+    )?;
+    let proof_digest =
+        sha256(&canonical_json_bytes(&proof).map_err(|_| internal("tap_historical_proof_encode"))?);
+    if proof_digest != proof_digest_from_body(pull)?
+        || pull.body.as_deref()
+            != Some(expected_pr_body(&inputs.release, &proof_digest, base_sha).as_str())
+        || head_commit.message != signed_off_message(&proof, bot)
+    {
+        return Err(internal("tap_historical_candidate_proof_mismatch"));
+    }
+    let merge_sha = pull
+        .merge_commit_sha
+        .as_deref()
+        .filter(|sha| is_full_sha(sha))
+        .ok_or_else(|| internal("tap_historical_merge_sha_missing"))?;
+    let merged_at = pull
+        .merged_at
+        .as_deref()
+        .filter(|value| valid_timestamp(value))
+        .ok_or_else(|| internal("tap_historical_merge_time_missing"))?;
+    validate_squash_commit(&inputs.api, merge_sha, base_sha, &head_commit.tree.sha)?;
+    Ok(HistoricalPromotion {
+        pull_request: pull.number,
+        head_sha: head_sha.clone(),
+        base_sha: base_sha.clone(),
+        branch,
+        candidate_proof_digest: proof_digest,
+        merge_sha: merge_sha.to_owned(),
+        merged_at: merged_at.to_owned(),
+    })
+}
+
+fn same_repository(pull: &PullRequestResponse, policy: &HomebrewTapConfig) -> bool {
+    pull.head
+        .repo
+        .as_ref()
+        .is_some_and(|repo| repo.full_name == policy.repository)
+        && pull
+            .base
+            .repo
+            .as_ref()
+            .is_some_and(|repo| repo.full_name == policy.repository)
+}
+
+fn proof_digest_from_body(pull: &PullRequestResponse) -> Result<String, OrchestratorError> {
+    let body = pull
+        .body
+        .as_deref()
+        .ok_or_else(|| internal("tap_historical_pr_body_missing"))?;
+    let line = body
+        .lines()
+        .find(|line| line.starts_with("Candidate proof digest: `"))
+        .ok_or_else(|| internal("tap_historical_proof_digest_missing"))?;
+    let value = line
+        .strip_prefix("Candidate proof digest: `")
+        .and_then(|value| value.strip_suffix('`'))
+        .ok_or_else(|| internal("tap_historical_proof_digest_malformed"))?;
+    if value.len() != 64
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(internal("tap_historical_proof_digest_malformed"));
+    }
+    Ok(value.to_owned())
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubTree {
+    sha: String,
+    truncated: bool,
+    tree: Vec<GithubTreeEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubTreeEntry {
+    path: String,
+    mode: String,
+    #[serde(rename = "type")]
+    object_type: String,
+    sha: String,
+}
+
+fn commit(api: &TapGitHubApi, sha: &str) -> Result<CommitResponse, OrchestratorError> {
+    let commit: CommitResponse = api.get_json(&api.repo_route(&format!("git/commits/{sha}")))?;
+    if commit.sha != sha || !is_full_sha(&commit.tree.sha) {
+        return Err(internal("tap_historical_commit_invalid"));
+    }
+    Ok(commit)
+}
+
+fn read_tree(api: &TapGitHubApi, sha: &str) -> Result<GithubTree, OrchestratorError> {
+    let tree: GithubTree =
+        api.get_json(&api.repo_route(&format!("git/trees/{sha}?recursive=1")))?;
+    if tree.sha != sha || tree.truncated {
+        return Err(internal("tap_historical_tree_invalid"));
+    }
+    Ok(tree)
+}
+
+fn validate_single_formula_delta(
+    formula: &str,
+    base: &GithubTree,
+    head: &GithubTree,
+) -> Result<(), OrchestratorError> {
+    let base_entries = indexed_tree(base)?;
+    let head_entries = indexed_tree(head)?;
+    if base_entries
+        .get(formula)
+        .is_none_or(|entry| entry.mode != "100644" || entry.object_type != "blob")
+        || head_entries
+            .get(formula)
+            .is_none_or(|entry| entry.mode != "100644" || entry.object_type != "blob")
+    {
+        return Err(internal("tap_historical_formula_mode_invalid"));
+    }
+    let mut base_without_formula = base_entries;
+    let mut head_without_formula = head_entries;
+    base_without_formula.remove(formula);
+    head_without_formula.remove(formula);
+    if base_without_formula != head_without_formula {
+        return Err(internal("tap_historical_tree_delta_invalid"));
+    }
+    Ok(())
+}
+
+fn indexed_tree(tree: &GithubTree) -> Result<BTreeMap<&str, TreeIdentity<'_>>, OrchestratorError> {
+    let mut indexed = BTreeMap::new();
+    for entry in &tree.tree {
+        if indexed
+            .insert(
+                entry.path.as_str(),
+                TreeIdentity {
+                    mode: &entry.mode,
+                    object_type: &entry.object_type,
+                    sha: &entry.sha,
+                },
+            )
+            .is_some()
+        {
+            return Err(internal("tap_historical_tree_duplicate_path"));
+        }
+    }
+    Ok(indexed)
+}
+
+#[derive(PartialEq, Eq)]
+struct TreeIdentity<'a> {
+    mode: &'a str,
+    object_type: &'a str,
+    sha: &'a str,
+}
+
+fn read_formula_blob(
+    api: &TapGitHubApi,
+    tree: &GithubTree,
+    formula: &str,
+) -> Result<Vec<u8>, OrchestratorError> {
+    let entry = tree
+        .tree
+        .iter()
+        .find(|entry| entry.path == formula)
+        .ok_or_else(|| internal("tap_historical_formula_missing"))?;
+    let blob: BlobResponse = api.get_json(&api.repo_route(&format!("git/blobs/{}", entry.sha)))?;
+    if blob.sha != entry.sha || blob.encoding != "base64" {
+        return Err(internal("tap_historical_blob_invalid"));
+    }
+    STANDARD
+        .decode(blob.content.replace('\n', ""))
+        .map_err(|_| internal("tap_historical_blob_encoding"))
+}
+
+fn validate_squash_commit(
+    api: &TapGitHubApi,
+    merge_sha: &str,
+    original_base: &str,
+    candidate_tree: &str,
+) -> Result<(), OrchestratorError> {
+    let merged = commit(api, merge_sha)?;
+    if merged.tree.sha != candidate_tree
+        || merged.parents.len() != 1
+        || merged.parents[0].sha != original_base
+    {
+        return Err(internal("tap_historical_squash_commit_mismatch"));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "tap_writer_history_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "tap_writer_history_list_tests.rs"]
+mod list_tests;
+#[cfg(test)]
+#[path = "tap_writer_history_tamper_tests.rs"]
+mod tamper_tests;

@@ -59,7 +59,7 @@ pub(crate) struct PackageOutputManifest {
     pub payloads: Vec<PackageOutputPayload>,
     /// Producer companion inventory; rows sorted by companion ID.
     pub companions: Vec<PackageOutputCompanion>,
-    /// Producer SBOM inventory; rows sorted by archive name.
+    /// Producer SBOM inventory; rows sorted by payload name.
     pub sboms: Vec<PackageOutputSbom>,
 }
 
@@ -67,7 +67,7 @@ pub(crate) struct PackageOutputManifest {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PackageOutputPayload {
-    /// Trusted product ID expected for this archive.
+    /// Trusted product ID expected for this payload.
     pub product_id: String,
     /// Exact target triple.
     pub target: String,
@@ -93,7 +93,7 @@ pub(crate) struct PackageOutputCompanion {
     pub sha256: String,
 }
 
-/// Producer-declared `CycloneDX` archive binding and untrusted digest.
+/// Producer-declared `CycloneDX` payload binding and untrusted digest.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PackageOutputSbom {

@@ -6,7 +6,6 @@ use std::{
 };
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
     PackageReleasePlan, canonical_json_bytes,
     config::HomebrewTapConfig,
@@ -27,16 +26,23 @@ mod github;
 mod gitops;
 #[path = "tap_writer_identity.rs"]
 mod identity;
+#[path = "tap_writer_receipt.rs"]
+mod receipt;
 #[path = "tap_writer_result.rs"]
 mod result;
 use github::{
     BlobResponse, CommitResponse, RefResponse, TapGitHubApi, TreeResponse, encode_segment,
 };
-use gitops::{BranchRequest, create_or_reconcile_branch, create_or_reconcile_pr};
+use gitops::{
+    BranchRequest, PullRequestRequest, create_or_reconcile_branch, create_or_reconcile_pr,
+};
 use identity::{BotIdentity, verify_app_scope};
+pub use receipt::{TapPromotionOutcome, TapPromotionReceipt};
 use result::persist_result;
 #[path = "tap_writer_helpers.rs"]
 mod helpers;
+#[path = "tap_writer_history.rs"]
+mod history;
 use helpers::{
     branch_name, is_full_sha, is_sha256, parse_decimal_id, real_directory, required_env,
     safe_app_slug, sha256,
@@ -48,28 +54,6 @@ const PR_RECEIPT_FILE: &str = "tap-pr.json";
 
 /// Private writer operation selected only by the generated App-authenticated job.
 pub const WRITE_HOMEBREW_TAP_PR_OP: &str = "write-homebrew-tap-pr-v1";
-
-/// Durable, strict result consumed by the exact-head merge gate.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct TapPromotionReceipt {
-    /// Versioned result schema.
-    pub schema: String,
-    /// Target tap repository.
-    pub repository: String,
-    /// Pull request number.
-    pub pull_request: u64,
-    /// Exact PR head commit SHA.
-    pub head_sha: String,
-    /// Exact tap-main base SHA.
-    pub base_sha: String,
-    /// Deterministic branch for the release and tap base.
-    pub branch: String,
-    /// Canonical candidate proof digest.
-    pub candidate_proof_digest: String,
-    /// Authenticated source release receipt digest.
-    pub release_receipt_digest: String,
-}
 
 /// Reverify the source release and independently validate/write one PR candidate.
 /// # Errors
@@ -103,13 +87,18 @@ pub fn write_homebrew_tap_pr_from_env() -> Result<TapPromotionReceipt, Orchestra
     if canonical != inputs.proposed {
         return Err(internal("tap_writer_formula_noncanonical"));
     }
-    let proof_digest =
+    let preparation_proof_digest =
         sha256(&canonical_json_bytes(&inputs.proof).map_err(|_| internal("tap_proof_encode"))?);
+    if let Some(result) =
+        already_promoted(&inputs, &bot, &base_tree.bytes, &preparation_proof_digest)?
+    {
+        return Ok(result);
+    }
     let branch = branch_name(&inputs.release.receipt_digest, &base_sha)?;
-    verify_promotion_authority(&inputs)?;
+    let mut verify_current = || verify_promotion_authority(&inputs);
     let head_sha = create_or_reconcile_branch(
         &inputs.api,
-        &BranchRequest {
+        &mut BranchRequest {
             policy: &inputs.policy,
             proof: &inputs.proof,
             formula: &inputs.proposed,
@@ -117,30 +106,71 @@ pub fn write_homebrew_tap_pr_from_env() -> Result<TapPromotionReceipt, Orchestra
             base_tree_sha: &base_tree.tree_sha,
             branch: &branch,
             bot: &bot,
+            verify_current: &mut verify_current,
         },
     )?;
-    verify_promotion_authority(&inputs)?;
     let pull_request = create_or_reconcile_pr(
         &inputs.api,
-        &inputs.policy,
-        &branch,
-        &head_sha,
-        &base_sha,
-        &proof_digest,
-        &inputs.release,
+        &mut PullRequestRequest {
+            policy: &inputs.policy,
+            branch: &branch,
+            head_sha: &head_sha,
+            base_sha: &base_sha,
+            proof_digest: &preparation_proof_digest,
+            release: &inputs.release,
+            bot: &bot,
+            verify_current: &mut verify_current,
+        },
     )?;
     let result = TapPromotionReceipt {
-        schema: "velnor.homebrew-tap-pr.v1".to_owned(),
+        schema: "velnor.homebrew-tap-pr.v2".to_owned(),
         repository: inputs.policy.repository.clone(),
-        pull_request,
-        head_sha,
-        base_sha,
-        branch,
-        candidate_proof_digest: proof_digest,
         release_receipt_digest: inputs.release.receipt_digest,
+        preparation_proof_digest: preparation_proof_digest.clone(),
+        outcome: TapPromotionOutcome::PullRequest {
+            pull_request,
+            head_sha,
+            base_sha,
+            branch,
+            candidate_proof_digest: preparation_proof_digest,
+        },
     };
     persist_result(&inputs.root, &result)?;
     Ok(result)
+}
+
+fn already_promoted(
+    inputs: &WriterInputs,
+    bot: &BotIdentity,
+    current_formula: &[u8],
+    preparation_proof_digest: &str,
+) -> Result<Option<TapPromotionReceipt>, OrchestratorError> {
+    if inputs.proof.disposition != super::TapPreparationDisposition::FormulaAlreadyCurrent {
+        return Ok(None);
+    }
+    if inputs.proposed != current_formula
+        || inputs.proof.old_formula_sha256 != inputs.proof.new_formula_sha256
+    {
+        return Err(internal("tap_already_current_formula_mismatch"));
+    }
+    let historical = history::find_already_promoted(inputs, bot)?;
+    let result = TapPromotionReceipt {
+        schema: "velnor.homebrew-tap-pr.v2".to_owned(),
+        repository: inputs.policy.repository.clone(),
+        release_receipt_digest: inputs.release.receipt_digest.clone(),
+        preparation_proof_digest: preparation_proof_digest.to_owned(),
+        outcome: TapPromotionOutcome::AlreadyPromoted {
+            pull_request: historical.pull_request,
+            head_sha: historical.head_sha,
+            base_sha: historical.base_sha,
+            branch: historical.branch,
+            candidate_proof_digest: historical.candidate_proof_digest,
+            merge_sha: historical.merge_sha,
+            merged_at: historical.merged_at,
+        },
+    };
+    persist_result(&inputs.root, &result)?;
+    Ok(Some(result))
 }
 
 fn verify_promotion_authority(inputs: &WriterInputs) -> Result<(), OrchestratorError> {
@@ -240,7 +270,7 @@ fn validate_proof(
     plan: &PackageReleasePlan,
     release: &VerifiedPreviewRelease,
 ) -> Result<(), OrchestratorError> {
-    if proof.schema != "velnor.homebrew-candidate.v1"
+    if proof.schema != "velnor.homebrew-candidate.v2"
         || proof.candidate_formula != "formula.rb"
         || proof.formula_path != policy.formula
         || proof.tap_repository != policy.repository
@@ -254,6 +284,14 @@ fn validate_proof(
             != sha256(&canonical_json_bytes(policy).map_err(|_| internal("tap_policy_encode"))?)
         || !is_sha256(&proof.old_formula_sha256)
         || !is_sha256(&proof.new_formula_sha256)
+        || match proof.disposition {
+            super::TapPreparationDisposition::Changed => {
+                proof.old_formula_sha256 == proof.new_formula_sha256
+            }
+            super::TapPreparationDisposition::FormulaAlreadyCurrent => {
+                proof.old_formula_sha256 != proof.new_formula_sha256
+            }
+        }
     {
         return Err(internal("tap_candidate_proof_binding_mismatch"));
     }
@@ -336,6 +374,9 @@ fn read_formula_base(
     })
 }
 
+#[cfg(test)]
+#[path = "tap_writer_retry_tests.rs"]
+mod retry_tests;
 #[cfg(test)]
 #[path = "tap_writer_tests.rs"]
 mod tests;

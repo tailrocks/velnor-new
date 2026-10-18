@@ -7,26 +7,21 @@ use serde_json::Value;
 use crate::{OrchestratorError, internal::internal};
 
 use super::{
-    candidate::{MergeCandidate, validate_formula},
+    candidate::{MergeCandidate, validate_formula_at_base},
     github::TapMergeGitHub,
 };
 
 const TREE_LIMIT: usize = 100_000;
 
-pub(super) fn verify_formula_delta(
+pub(super) fn verify_formula_delta_at_base(
     candidate: &MergeCandidate,
     api: &TapMergeGitHub,
+    base_sha: &str,
+    head_sha: &str,
+    expected_formula: &[u8],
 ) -> Result<(), OrchestratorError> {
-    let base = commit_tree(
-        api,
-        &candidate.policy.repository,
-        &candidate.promotion.base_sha,
-    )?;
-    let head = commit_tree(
-        api,
-        &candidate.policy.repository,
-        &candidate.promotion.head_sha,
-    )?;
+    let base = commit_tree(api, &candidate.policy.repository, base_sha)?;
+    let head = commit_tree(api, &candidate.policy.repository, head_sha)?;
     let base_entries = recursive_tree(api, &candidate.policy.repository, &base)?;
     let head_entries = recursive_tree(api, &candidate.policy.repository, &head)?;
     if base_entries.len() != head_entries.len() {
@@ -52,22 +47,14 @@ pub(super) fn verify_formula_delta(
     if !base_entries.contains_key(formula) {
         return Err(internal("tap_merge_formula_missing_at_base"));
     }
-    let base_formula = super::observation::contents(
-        api,
-        &candidate.policy.repository,
-        formula,
-        &candidate.promotion.base_sha,
-    )?;
-    let head_formula = super::observation::contents(
-        api,
-        &candidate.policy.repository,
-        formula,
-        &candidate.promotion.head_sha,
-    )?;
-    if head_formula != candidate.formula {
+    let base_formula =
+        super::observation::contents(api, &candidate.policy.repository, formula, base_sha)?;
+    let head_formula =
+        super::observation::contents(api, &candidate.policy.repository, formula, head_sha)?;
+    if head_formula != expected_formula {
         return Err(internal("tap_merge_formula_head_mismatch"));
     }
-    validate_formula(candidate, &candidate.promotion.base_sha, &base_formula)
+    validate_formula_at_base(candidate, base_sha, &base_formula, expected_formula)
 }
 
 fn commit_tree(

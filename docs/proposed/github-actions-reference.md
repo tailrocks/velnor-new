@@ -145,3 +145,68 @@ also prereleases, while stable releases remain ordinary releases without being
 forced to latest. The release response has no `make_latest` field, so Velnor
 verifies the returned draft/prerelease/immutable state and exact assets without
 assuming that a newly published stable release becomes latest.
+
+### Review-completion provider qualification (2026-10-18)
+
+The [official Codex GitHub review guide](https://learn.chatgpt.com/docs/third-party/github)
+documents requested and automatic reviews, but does not establish a supported
+machine-state completion protocol. Native merge admission therefore continues
+to require the separately authenticated `velnor.review-completion.v1` check;
+reactions, table prose, and an absent finding are not substitutes.
+
+Observed Codex App `1144995` records do not yet qualify an adapter. Jackin tap
+PR 508 reports failed review because of usage limits. Public OpenAI repository
+records sampled during this investigation carried running or incomplete state.
+The [App-authored unsloth summary](https://github.com/unslothai/unsloth/pull/10502#issuecomment-5584670251)
+contains a completed security marker, but its merge gate is disabled and it
+does not bind complete code and security finding dispositions to one full head.
+These are observed implementation bytes, not a supported provider API.
+
+GitHub's [IssueComment GraphQL fields](https://docs.github.com/en/graphql/reference/issues#issuecomment)
+expose the latest editor and edit time. Any future adapter must authenticate
+the actual numeric App, author, and latest editor, independently fetch the PR's
+full current head, parse closed machine fields, and revalidate all current
+feedback. Positive exact-head completion and forged/edited-state rejection
+remain deployment gates. Unattended merging stays disabled until that proof
+exists; this research does not authorize a guessed success enum.
+
+The [required-review documentation](https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/approving-a-pull-request-with-required-reviews)
+distinguishes a comment from approval: a blocking change request requires the
+reviewer's subsequent approval or an actual review dismissal. A later comment
+must not clear that request. Native feedback aggregation must preserve this
+distinction independently of response order, and must reject unknown states.
+GitHub also exposes [current per-user review connections](https://docs.github.com/en/graphql/reference/pulls#pullrequest);
+any server-side opinion query must retain complete pagination and bind the same
+PR/head as the full feedback snapshot.
+
+Live GraphQL qualification confirmed the distinction. On `rust-lang/rust`
+PR 164353, the opinionated connection retained an approval and omitted a later
+comment review. On [godotengine/godot PR 118057](https://github.com/godotengine/godot/pull/118057),
+the complete reviews connection retained a dismissed review while the opinionated
+connection was empty. On [github-linguist/linguist PR 7763](https://github.com/github-linguist/linguist/pull/7763),
+the opinionated connection retained only the latest active change request and
+excluded a different reviewer's dismissed request. Native capture uses this
+paginated server-derived state alongside all underlying feedback records.
+Unexpected opinionated states still fail closed.
+
+### Historical pull-request response boundaries
+
+Live tap API responses confirm that the pull-request listing omits the `merged`
+boolean. Native completed reconciliation must fetch each matching PR's detail
+before trusting that state. A non-null merge SHA alone is insufficient because
+the [pull-request API](https://docs.github.com/en/rest/pulls/pulls#get-a-pull-request)
+also uses that field for a synthetic test merge before completion.
+
+The [Git Database commit endpoint](https://docs.github.com/en/rest/git/commits#get-a-commit-object)
+returns `message` at the top level; `commit.message` belongs to the repository
+commit response. Protocol fixtures must model the endpoint actually requested.
+Historical proof reconstruction binds the original branch base and commit parent,
+while the actual PR detail base is retained separately. Selected open and merged
+PRs must match that original base. A closed, unmerged historical PR may have
+observed a later base without losing its original proof or feedback obligations.
+
+The exact-head feedback query includes numeric actor identity for both `User` and
+`Bot` in `latestOpinionatedReviews`. Live GitHub GraphQL introspection on
+2026-10-18 confirmed `Bot.databaseId`; selecting only the `User` fragment would
+make a bot's opinionated review unidentifiable and block otherwise valid review
+history. A scripted protocol test exercises a bot's outstanding change request.

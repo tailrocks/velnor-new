@@ -105,10 +105,68 @@ fn recovery_artifact_must_belong_to_exact_repo_sha_and_default_branch() {
             repository_id: 9,
         }),
     };
-    assert!(validate_artifact(&artifact, 42, 9, "main", &"a".repeat(40)).is_ok());
-    assert!(validate_artifact(&artifact, 42, 10, "main", &"a".repeat(40)).is_err());
-    assert!(validate_artifact(&artifact, 42, 9, "main", &"b".repeat(40)).is_err());
-    assert!(validate_artifact(&artifact, 42, 9, "release", &"a".repeat(40)).is_err());
+    assert_eq!(
+        validate_artifact(&artifact, 42, 9, "main").expect("original artifact source"),
+        "a".repeat(40)
+    );
+    assert!(validate_artifact(&artifact, 42, 10, "main").is_err());
+    assert!(validate_artifact(&artifact, 42, 9, "release").is_err());
+}
+
+#[test]
+fn recovery_binds_receipt_to_original_artifact_not_current_dispatch_head_or_count() {
+    let original_sha = "a".repeat(40);
+    let current_dispatch_sha = "b".repeat(40);
+    let original_count = 17;
+    let current_dispatch_count = 23;
+    assert_ne!(original_sha, current_dispatch_sha);
+    assert_ne!(original_count, current_dispatch_count);
+
+    assert!(receipt_matches_original(
+        42,
+        2,
+        &original_sha,
+        Some(original_count),
+        42,
+        2,
+        &original_sha,
+    ));
+    assert!(!receipt_matches_original(
+        41,
+        2,
+        &original_sha,
+        Some(original_count),
+        42,
+        2,
+        &original_sha,
+    ));
+    assert!(!receipt_matches_original(
+        42,
+        1,
+        &original_sha,
+        Some(original_count),
+        42,
+        2,
+        &original_sha,
+    ));
+    assert!(!receipt_matches_original(
+        42,
+        2,
+        &current_dispatch_sha,
+        Some(original_count),
+        42,
+        2,
+        &original_sha,
+    ));
+    assert!(!receipt_matches_original(
+        42,
+        2,
+        &original_sha,
+        Some(0),
+        42,
+        2,
+        &original_sha,
+    ));
 }
 
 #[test]

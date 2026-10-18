@@ -237,7 +237,8 @@ impl ExactHeadReviewCheck {
         if self.check_name.is_empty()
             || self.check_name.len() > 200
             || self.check_name.trim() != self.check_name
-            || self.check_name.bytes().any(|byte| byte.is_ascii_control())
+            || self.check_name.contains("${{")
+            || self.check_name.chars().any(char::is_control)
         {
             return Err(config_error(
                 file,

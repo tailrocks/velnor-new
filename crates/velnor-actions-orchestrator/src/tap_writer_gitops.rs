@@ -18,14 +18,17 @@ pub(super) struct BranchRequest<'a> {
     pub(super) base_tree_sha: &'a str,
     pub(super) branch: &'a str,
     pub(super) bot: &'a BotIdentity,
+    pub(super) verify_current: &'a mut dyn FnMut() -> Result<(), OrchestratorError>,
 }
 
 pub(super) fn create_or_reconcile_branch(
     api: &TapGitHubApi,
-    request: &BranchRequest<'_>,
+    request: &mut BranchRequest<'_>,
 ) -> Result<String, OrchestratorError> {
+    (request.verify_current)()?;
     let blob: github::BlobCreateResponse =
         api.post_blob(&api.repo_route("git/blobs"), request.formula)?;
+    (request.verify_current)()?;
     let tree: github::TreeCreateResponse = api.post_fields(
         &api.repo_route("git/trees"),
         &[
@@ -48,6 +51,7 @@ pub(super) fn create_or_reconcile_branch(
         );
     }
     let email = bot_email(request.bot);
+    (request.verify_current)()?;
     let commit: github::CommitCreateResponse = api.post_fields(
         &api.repo_route("git/commits"),
         &[
@@ -67,6 +71,7 @@ pub(super) fn create_or_reconcile_branch(
     {
         return Err(internal("tap_writer_commit_response_mismatch"));
     }
+    (request.verify_current)()?;
     let create_ref = api.post_fields::<serde_json::Value>(
         &api.repo_route("git/refs"),
         &[
@@ -126,7 +131,7 @@ fn validate_existing_branch(
     Ok(commit.sha)
 }
 
-fn signed_off_message(proof: &HomebrewTapPreparationProof, bot: &BotIdentity) -> String {
+pub(super) fn signed_off_message(proof: &HomebrewTapPreparationProof, bot: &BotIdentity) -> String {
     format!(
         "Update preview formula to {}\n\nSource: {}@{}\nRelease receipt: {}\n\nSigned-off-by: {} <{}>",
         proof.version,
@@ -142,15 +147,23 @@ fn bot_email(bot: &BotIdentity) -> String {
     format!("{}+{}@users.noreply.github.com", bot.user_id, bot.login)
 }
 
+pub(super) struct PullRequestRequest<'a> {
+    pub(super) policy: &'a HomebrewTapConfig,
+    pub(super) branch: &'a str,
+    pub(super) head_sha: &'a str,
+    pub(super) base_sha: &'a str,
+    pub(super) proof_digest: &'a str,
+    pub(super) release: &'a VerifiedPreviewRelease,
+    pub(super) bot: &'a BotIdentity,
+    pub(super) verify_current: &'a mut dyn FnMut() -> Result<(), OrchestratorError>,
+}
+
 pub(super) fn create_or_reconcile_pr(
     api: &TapGitHubApi,
-    policy: &HomebrewTapConfig,
-    branch: &str,
-    head_sha: &str,
-    base_sha: &str,
-    proof_digest: &str,
-    release: &VerifiedPreviewRelease,
+    request: &mut PullRequestRequest<'_>,
 ) -> Result<u64, OrchestratorError> {
+    let policy = request.policy;
+    let branch = request.branch;
     let owner = policy
         .repository
         .split_once('/')
@@ -171,22 +184,14 @@ pub(super) fn create_or_reconcile_pr(
         return Err(internal("tap_writer_duplicate_pull_request"));
     }
     if let Some(pull) = matching.first() {
-        if pull.head.sha != head_sha
-            || pull.head.label != format!("{owner}:{branch}")
-            || pull.base.ref_name != TAP_BASE
-            || pull.base.sha != base_sha
-            || pull.state != "open"
-            || pull.merged
-            || pull.title != expected_pr_title(release)
-            || pull.body.as_deref()
-                != Some(expected_pr_body(release, proof_digest, base_sha).as_str())
-        {
+        if !matches_expected_pr(pull, request, owner) {
             return Err(internal("tap_writer_conflicting_pull_request_retry"));
         }
         return Ok(pull.number);
     }
-    let title = expected_pr_title(release);
-    let body = expected_pr_body(release, proof_digest, base_sha);
+    let title = expected_pr_title(request.release);
+    let body = expected_pr_body(request.release, request.proof_digest, request.base_sha);
+    (request.verify_current)()?;
     let created: PullRequestResponse = api.post_fields(
         &api.repo_route("pulls"),
         &[
@@ -197,29 +202,50 @@ pub(super) fn create_or_reconcile_pr(
             ("draft", "false".to_owned()),
         ],
     )?;
-    if created.head.sha != head_sha
-        || created.head.ref_name != branch
-        || created.head.label != format!("{owner}:{branch}")
-        || created.base.ref_name != TAP_BASE
-        || created.base.sha != base_sha
-        || created.state != "open"
-        || created.merged
-        || created.title != title
-        || created.body.as_deref() != Some(body.as_str())
-    {
+    if !matches_expected_pr(&created, request, owner) {
         return Err(internal("tap_writer_pull_request_response_mismatch"));
     }
     Ok(created.number)
 }
 
-fn expected_pr_title(release: &VerifiedPreviewRelease) -> String {
+fn matches_expected_pr(
+    pull: &PullRequestResponse,
+    request: &PullRequestRequest<'_>,
+    owner: &str,
+) -> bool {
+    pull.head.sha == request.head_sha
+        && pull.head.label == format!("{owner}:{}", request.branch)
+        && pull.base.ref_name == TAP_BASE
+        && pull.base.sha == request.base_sha
+        && pull.state == "open"
+        && pull.merged != Some(true)
+        && pull.user.id == request.bot.user_id
+        && pull.user.login == request.bot.login
+        && pull
+            .head
+            .repo
+            .as_ref()
+            .is_some_and(|repo| repo.full_name == request.policy.repository)
+        && pull
+            .base
+            .repo
+            .as_ref()
+            .is_some_and(|repo| repo.full_name == request.policy.repository)
+        && pull.title == expected_pr_title(request.release)
+        && pull.body.as_deref()
+            == Some(
+                expected_pr_body(request.release, request.proof_digest, request.base_sha).as_str(),
+            )
+}
+
+pub(super) fn expected_pr_title(release: &VerifiedPreviewRelease) -> String {
     format!(
         "Update preview formula to {}",
         release.receipt.version.value
     )
 }
 
-fn expected_pr_body(
+pub(super) fn expected_pr_body(
     release: &VerifiedPreviewRelease,
     proof_digest: &str,
     base_sha: &str,

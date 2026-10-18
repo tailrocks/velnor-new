@@ -6,6 +6,9 @@
 pub struct HomebrewTapPreparationProof {
     /// Versioned schema for the unprivileged candidate handoff.
     pub schema: String,
+    /// Whether preparation produced a new formula or found this exact release
+    /// already represented by the captured tap main.
+    pub disposition: TapPreparationDisposition,
     /// Captured immutable tap-main commit.
     pub base_sha: String,
     /// Only permitted changed path.
@@ -30,4 +33,14 @@ pub struct HomebrewTapPreparationProof {
     pub version: String,
     /// Exclusive path of the validated formula bytes for the isolated writer.
     pub candidate_formula: String,
+}
+
+/// Terminal result of preparing one release against captured tap main.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TapPreparationDisposition {
+    /// The formula differs from the captured base and requires a pull request.
+    Changed,
+    /// Captured main already contains the exact canonical formula for this release.
+    FormulaAlreadyCurrent,
 }

@@ -1,12 +1,7 @@
 //! Credential-free Homebrew updater execution from captured tap main.
 
-use crate::{OrchestratorError, check_runtime::preparation::prepare_check};
-use std::{
-    ffi::OsString,
-    fs,
-    path::{Path, PathBuf},
-    time::Duration,
-};
+use crate::OrchestratorError;
+use std::{fs, path::Path, time::Duration};
 use velnor_actions_contract::{
     PackageReleasePlan, canonical_json_bytes,
     config::{HomebrewTapConfig, MiseCheck, RustBinaryPreviewConfig},
@@ -16,20 +11,28 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::{CapturedTapMain, CheckDeadline};
 
+#[path = "tap_prepare_candidate.rs"]
+mod candidate;
 #[path = "tap_prepare_execute.rs"]
 mod execute;
 #[path = "tap_prepare_proof.rs"]
 mod proof;
 #[path = "tap_prepare_snapshot.rs"]
 mod snapshot;
+#[path = "tap_prepare_updater.rs"]
+mod updater;
 #[path = "tap_writer.rs"]
 mod writer;
+pub(crate) use candidate::reconstruct_historical_candidate_proof;
 pub use execute::{PREPARE_HOMEBREW_TAP_OP, prepare_homebrew_tap_from_env};
-pub use proof::HomebrewTapPreparationProof;
+pub use proof::{HomebrewTapPreparationProof, TapPreparationDisposition};
 pub(super) use snapshot::{
     read_formula, sha256, snapshot_tree, validate_formula_only_delta, validate_tree_snapshot,
 };
-pub use writer::{TapPromotionReceipt, WRITE_HOMEBREW_TAP_PR_OP, write_homebrew_tap_pr_from_env};
+pub use writer::{
+    TapPromotionOutcome, TapPromotionReceipt, WRITE_HOMEBREW_TAP_PR_OP,
+    write_homebrew_tap_pr_from_env,
+};
 
 pub(crate) fn writer_policy_from_env() -> Result<HomebrewTapConfig, OrchestratorError> {
     execute::static_tap_policy()
@@ -43,7 +46,6 @@ const TREE_LIMIT: usize = 50_000;
 const SNAPSHOT_BYTES_LIMIT: u64 = 512 * 1024 * 1024;
 const SNAPSHOT_FILE_LIMIT: u64 = 128 * 1024 * 1024;
 const TASK_OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
-const CANDIDATE_DIRECTORY: &str = "tap-candidate";
 
 /// Execute the trusted tap-main updater without write credentials.
 ///
@@ -131,8 +133,20 @@ fn prepare_captured_tap(
     {
         return Err(internal("tap_receipt_digest_mismatch"));
     }
-    let handoff = prepare_receipt_handoff(temp, &receipt_bytes)?;
-    run_updater(&UpdaterRun {
+    let handoff = updater::prepare_receipt_handoff(temp, &receipt_bytes)?;
+    if let Some(proof) = current_candidate_proof(&CurrentCandidate {
+        source_repository,
+        tap,
+        release,
+        plan,
+        temp,
+        base_sha: &captured.commit_sha,
+        formula: &base_formula,
+        formula_sha: &base_formula_sha,
+    })? {
+        return Ok(proof);
+    }
+    updater::run_updater(&updater::UpdaterRun {
         root: &captured.checkout,
         temp,
         discovered: &discovered,
@@ -163,16 +177,80 @@ fn prepare_captured_tap(
     if sha256(&canonical) == base_formula_sha {
         return Err(internal("tap_formula_candidate_is_unchanged"));
     }
-    persist_candidate(&CandidateProof {
+    candidate::persist_candidate(
         temp,
+        candidate::CandidateIdentity {
+            source_repository,
+            tap,
+            release,
+            base_sha: &captured.commit_sha,
+            old_sha: &base_formula_sha,
+            formula: &canonical,
+            plan,
+            disposition: TapPreparationDisposition::Changed,
+        },
+    )
+}
+
+fn is_exact_current_formula(
+    source_repository: &str,
+    tap: &HomebrewTapConfig,
+    plan: &PackageReleasePlan,
+    release: &VerifiedPreviewRelease,
+    base_sha: &str,
+    formula: &[u8],
+) -> bool {
+    validate_homebrew_formula_candidate(&HomebrewFormulaCandidate {
         source_repository,
-        tap,
-        release,
-        base_sha: &captured.commit_sha,
-        old_sha: &base_formula_sha,
-        formula: &canonical,
+        tap_repository: &tap.repository,
+        formula_path: &tap.formula,
+        captured_base_sha: base_sha,
+        base_bytes: formula,
+        proposed_bytes: formula,
         plan,
+        release,
     })
+    .is_ok_and(|canonical| canonical == formula)
+}
+
+struct CurrentCandidate<'a> {
+    source_repository: &'a str,
+    tap: &'a HomebrewTapConfig,
+    release: &'a VerifiedPreviewRelease,
+    plan: &'a PackageReleasePlan,
+    temp: &'a Path,
+    base_sha: &'a str,
+    formula: &'a [u8],
+    formula_sha: &'a str,
+}
+
+fn current_candidate_proof(
+    candidate: &CurrentCandidate<'_>,
+) -> Result<Option<HomebrewTapPreparationProof>, OrchestratorError> {
+    if !is_exact_current_formula(
+        candidate.source_repository,
+        candidate.tap,
+        candidate.plan,
+        candidate.release,
+        candidate.base_sha,
+        candidate.formula,
+    ) {
+        return Ok(None);
+    }
+    candidate::persist_candidate(
+        candidate.temp,
+        candidate::CandidateIdentity {
+            source_repository: candidate.source_repository,
+            tap: candidate.tap,
+            release: candidate.release,
+            base_sha: candidate.base_sha,
+            old_sha: candidate.formula_sha,
+            formula: candidate.formula,
+            plan: candidate.plan,
+            disposition: TapPreparationDisposition::FormulaAlreadyCurrent,
+        },
+    )
+    .map(Some)
 }
 
 struct CapturedTapBase {
@@ -248,146 +326,6 @@ fn updater_check<'a>(
         return Err(internal("tap_updater_binding_mismatch"));
     }
     Ok(check)
-}
-
-fn prepare_receipt_handoff(temp: &Path, bytes: &[u8]) -> Result<PathBuf, OrchestratorError> {
-    let directory = temp.join("tap-release-handoff");
-    crate::exclusive_write::create_dir_no_symlink(temp, &directory)?;
-    let path = directory.join("release.json");
-    crate::exclusive_write::write_exclusive(&path, bytes, "tap_release_handoff")?;
-    let mut permissions = fs::metadata(&path)
-        .map_err(|_| internal("tap_release_handoff_metadata"))?
-        .permissions();
-    permissions.set_readonly(true);
-    fs::set_permissions(&path, permissions)
-        .map_err(|_| internal("tap_release_handoff_permissions"))?;
-    Ok(path)
-}
-
-struct UpdaterRun<'a> {
-    root: &'a Path,
-    temp: &'a Path,
-    discovered: &'a velnor_actions_mise::DiscoveredCheck,
-    deadline: CheckDeadline,
-    receipt_path: &'a Path,
-    base_sha: &'a str,
-    formula: &'a str,
-    release: &'a VerifiedPreviewRelease,
-}
-
-fn run_updater(run: &UpdaterRun<'_>) -> Result<(), OrchestratorError> {
-    let UpdaterRun {
-        root,
-        temp,
-        discovered,
-        deadline,
-        receipt_path,
-        base_sha,
-        formula,
-        release,
-    } = run;
-    if discovered.check.runner.platform.os() != std::env::consts::OS
-        || discovered.check.runner.platform.arch() != std::env::consts::ARCH
-    {
-        return Err(internal("tap_updater_host_platform"));
-    }
-    let owned = prepare_check(root, temp, discovered, *deadline)?;
-    let handoff = [
-        ("VELNOR_TAP_BASE_SHA", (*base_sha).to_owned()),
-        ("VELNOR_TAP_FORMULA_PATH", (*formula).to_owned()),
-        (
-            "VELNOR_TAP_RELEASE_RECEIPT",
-            receipt_path
-                .to_str()
-                .ok_or_else(|| internal("tap_receipt_path_utf8"))?
-                .to_owned(),
-        ),
-        (
-            "VELNOR_TAP_RELEASE_RECEIPT_SHA256",
-            sha256(
-                &canonical_json_bytes(&release.receipt)
-                    .map_err(|_| internal("tap_receipt_encode"))?,
-            ),
-        ),
-        (
-            "VELNOR_TAP_RELEASE_VERSION",
-            release.receipt.version.value.clone(),
-        ),
-        ("VELNOR_TAP_RELEASE_TAG", release.receipt.tag.clone()),
-        (
-            "VELNOR_TAP_SOURCE_SHA",
-            release.receipt.source.commit_sha.clone(),
-        ),
-    ];
-    let pairs: Vec<(OsString, OsString)> = handoff
-        .into_iter()
-        .map(|(key, value)| (key.into(), value.into()))
-        .collect();
-    let command = owned
-        .command(*deadline)
-        .map_err(|error| internal(&error.to_string()))?
-        .with_env(&pairs)
-        .map_err(|error| internal(&error.to_string()))?;
-    command
-        .run_until(TASK_OUTPUT_LIMIT, *deadline)
-        .map_err(|error| internal(&error.to_string()))?
-        .require_success("tap-updater")
-        .map_err(|error| internal(&error.to_string()))?;
-    Ok(())
-}
-
-struct CandidateProof<'a> {
-    temp: &'a Path,
-    source_repository: &'a str,
-    tap: &'a HomebrewTapConfig,
-    release: &'a VerifiedPreviewRelease,
-    base_sha: &'a str,
-    old_sha: &'a str,
-    formula: &'a [u8],
-    plan: &'a PackageReleasePlan,
-}
-
-fn persist_candidate(
-    candidate: &CandidateProof<'_>,
-) -> Result<HomebrewTapPreparationProof, OrchestratorError> {
-    let CandidateProof {
-        temp,
-        source_repository,
-        tap,
-        release,
-        base_sha,
-        old_sha,
-        formula,
-        plan,
-    } = candidate;
-    let directory = temp.join(CANDIDATE_DIRECTORY);
-    crate::exclusive_write::create_dir_no_symlink(temp, &directory)?;
-    let candidate_path = directory.join("formula.rb");
-    crate::exclusive_write::write_exclusive(&candidate_path, formula, "tap_candidate_formula")?;
-    let proof = HomebrewTapPreparationProof {
-        schema: "velnor.homebrew-candidate.v1".to_owned(),
-        base_sha: (*base_sha).to_owned(),
-        formula_path: tap.formula.clone(),
-        old_formula_sha256: (*old_sha).to_owned(),
-        new_formula_sha256: sha256(formula),
-        receipt_digest: release.receipt_digest.clone(),
-        plan_digest: sha256(&canonical_json_bytes(plan).map_err(|_| internal("tap_plan_encode"))?),
-        tap_config_digest: sha256(
-            &canonical_json_bytes(tap).map_err(|_| internal("tap_policy_encode"))?,
-        ),
-        tap_repository: tap.repository.clone(),
-        source_repository: (*source_repository).to_owned(),
-        source_sha: release.receipt.source.commit_sha.clone(),
-        version: release.receipt.version.value.clone(),
-        candidate_formula: "formula.rb".to_owned(),
-    };
-    let bytes = canonical_json_bytes(&proof).map_err(|_| internal("tap_candidate_proof_encode"))?;
-    crate::exclusive_write::write_exclusive(
-        &directory.join("candidate.json"),
-        &bytes,
-        "tap_candidate_proof",
-    )?;
-    Ok(proof)
 }
 
 fn internal(problem: &str) -> OrchestratorError {

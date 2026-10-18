@@ -1,5 +1,8 @@
 use super::*;
 
+#[path = "homebrew_merge_gate_history_tests.rs"]
+mod history;
+
 fn fixture() -> (TapMergePolicy, TapMergeObservation) {
     let policy = TapMergePolicy {
         repository: "example/tap".to_owned(),
@@ -53,6 +56,8 @@ fn fixture() -> (TapMergePolicy, TapMergeObservation) {
             checks,
             feedback,
             completion: Some(completion),
+            historical_feedback_complete: true,
+            historical_feedback: Vec::new(),
         },
     )
 }

@@ -123,6 +123,9 @@ mod workflow_task_jobs;
 #[path = "test_render_capture_harness.rs"]
 mod test_render_capture_harness;
 
+#[cfg(test)]
+pub(crate) mod tap_test_support;
+
 pub use api::*;
 
 /// Version marker for the orchestrator shell.

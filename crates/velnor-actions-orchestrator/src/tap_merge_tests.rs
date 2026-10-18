@@ -105,6 +105,8 @@ fn incomplete_feedback_waits_only_until_completion_and_terminal_findings_fail() 
             outstanding_change_requests: 0,
         },
         completion: None,
+        historical_feedback_complete: true,
+        historical_feedback: Vec::new(),
     };
     let policy = TapMergePolicy {
         repository: "owner/tap".to_owned(),
@@ -137,8 +139,8 @@ fn canonical_receipt_to_completion_to_merge_contract_uses_real_digest_formats() 
     let (receipt_digest, base_sha, promotion) = promotion_fixture();
     let feedback = TapFeedbackSnapshot {
         repository: "owner/tap".to_owned(),
-        pull_request_number: promotion.pull_request,
-        head_sha: promotion.head_sha.clone(),
+        pull_request_number: pull_number(&promotion),
+        head_sha: pull_head(&promotion).to_owned(),
         records_digest: digest_b3(b"complete feedback records"),
         unresolved_threads: 0,
         unaddressed_findings: 0,
@@ -153,11 +155,11 @@ fn canonical_receipt_to_completion_to_merge_contract_uses_real_digest_formats() 
         expected_reviewer_app_ids: BTreeSet::from([23]),
     };
     let observation = TapMergeObservation {
-        pull_request_number: promotion.pull_request,
+        pull_request_number: pull_number(&promotion),
         validated_base_sha: base_sha.clone(),
         current_base_sha: base_sha,
-        validated_head_sha: promotion.head_sha.clone(),
-        current_head_sha: promotion.head_sha.clone(),
+        validated_head_sha: pull_head(&promotion).to_owned(),
+        current_head_sha: pull_head(&promotion).to_owned(),
         expected_open_pull_request: true,
         server_protection: TapServerMergeProtection::StrictWithoutWriterBypass,
         required_checks_complete: true,
@@ -166,25 +168,38 @@ fn canonical_receipt_to_completion_to_merge_contract_uses_real_digest_formats() 
                 name: "DCO".to_owned(),
                 app_id: 29,
                 required_app_id: Some(29),
-                head_sha: promotion.head_sha.clone(),
+                head_sha: pull_head(&promotion).to_owned(),
                 completed_successfully: true,
             },
             TapRequiredCheck {
                 name: "Review completion".to_owned(),
                 app_id: 19,
                 required_app_id: Some(19),
-                head_sha: promotion.head_sha.clone(),
+                head_sha: pull_head(&promotion).to_owned(),
                 completed_successfully: true,
             },
         ],
         feedback: feedback.clone(),
         completion: Some(completion),
+        historical_feedback_complete: true,
+        historical_feedback: Vec::new(),
     };
     validate_tap_merge_gate(&policy, &observation).expect("exact-head admission");
     let mut blocked = observation;
     blocked.feedback.unresolved_threads = 1;
     assert!(validate_tap_merge_gate(&policy, &blocked).is_err());
     assert!(receipt_digest.starts_with("b3-"));
+}
+
+#[test]
+fn shared_one_payload_fixture_has_a_valid_canonical_formula_update() {
+    let fixture = crate::tap_test_support::fixture();
+    fixture.plan.validate().expect("static plan");
+    fixture
+        .release
+        .validate(&fixture.plan.repository, &fixture.plan)
+        .expect("release matches plan");
+    assert_ne!(fixture.base_formula, fixture.proposed_formula);
 }
 
 fn promotion_fixture() -> (String, String, crate::tap_prepare::TapPromotionReceipt) {
@@ -197,7 +212,8 @@ fn promotion_fixture() -> (String, String, crate::tap_prepare::TapPromotionRecei
     let branch =
         candidate::expected_branch(&receipt_digest, &base_sha).expect("deterministic branch");
     let proof = crate::tap_prepare::HomebrewTapPreparationProof {
-        schema: "velnor.homebrew-candidate.v1".to_owned(),
+        schema: "velnor.homebrew-candidate.v2".to_owned(),
+        disposition: crate::tap_prepare::TapPreparationDisposition::Changed,
         base_sha: base_sha.clone(),
         formula_path: "Formula/example.rb".to_owned(),
         old_formula_sha256: "c".repeat(64),
@@ -213,16 +229,19 @@ fn promotion_fixture() -> (String, String, crate::tap_prepare::TapPromotionRecei
     };
     let proof_digest = sha256(&canonical_json_bytes(&proof).expect("proof bytes"));
     let promotion = crate::tap_prepare::TapPromotionReceipt {
-        schema: "velnor.homebrew-tap-pr.v1".to_owned(),
+        schema: "velnor.homebrew-tap-pr.v2".to_owned(),
         repository: "owner/tap".to_owned(),
-        pull_request: 4,
-        head_sha: "c".repeat(40),
-        base_sha: base_sha.clone(),
-        branch,
-        candidate_proof_digest: proof_digest,
         release_receipt_digest: receipt_digest.clone(),
+        preparation_proof_digest: proof_digest.clone(),
+        outcome: crate::tap_prepare::TapPromotionOutcome::PullRequest {
+            pull_request: 4,
+            head_sha: "c".repeat(40),
+            base_sha: base_sha.clone(),
+            branch,
+            candidate_proof_digest: proof_digest,
+        },
     };
-    assert_eq!(promotion.base_sha, proof.base_sha);
+    assert_eq!(pull_base(&promotion), proof.base_sha);
     (receipt_digest, base_sha, promotion)
 }
 
@@ -283,14 +302,14 @@ fn completion_for(
     let completion_payload = TapReviewCompletionPayload {
         schema: TAP_REVIEW_COMPLETION_SCHEMA.to_owned(),
         repository: "owner/tap".to_owned(),
-        pull_request_number: promotion.pull_request,
-        head_sha: promotion.head_sha.clone(),
+        pull_request_number: pull_number(promotion),
+        head_sha: pull_head(promotion).to_owned(),
         verdict: TapReviewVerdict::Complete,
         feedback_digest,
         has_unaddressed_findings: false,
         reviewers: vec![TapCompletedReviewer {
             app_id: 23,
-            head_sha: promotion.head_sha.clone(),
+            head_sha: pull_head(promotion).to_owned(),
             evidence_digest: digest_b3(b"review evidence"),
             complete: true,
             has_unaddressed_findings: false,
@@ -301,12 +320,35 @@ fn completion_for(
         &TapCompletionCheckMetadata {
             name: "Review completion".to_owned(),
             app_id: 19,
-            head_sha: promotion.head_sha.clone(),
+            head_sha: pull_head(promotion).to_owned(),
             completed_successfully: true,
         },
         &completion_bytes,
     )
     .expect("trusted completion parse")
+}
+
+fn pull_number(promotion: &crate::tap_prepare::TapPromotionReceipt) -> u64 {
+    match &promotion.outcome {
+        crate::tap_prepare::TapPromotionOutcome::PullRequest { pull_request, .. }
+        | crate::tap_prepare::TapPromotionOutcome::AlreadyPromoted { pull_request, .. } => {
+            *pull_request
+        }
+    }
+}
+
+fn pull_head(promotion: &crate::tap_prepare::TapPromotionReceipt) -> &str {
+    match &promotion.outcome {
+        crate::tap_prepare::TapPromotionOutcome::PullRequest { head_sha, .. }
+        | crate::tap_prepare::TapPromotionOutcome::AlreadyPromoted { head_sha, .. } => head_sha,
+    }
+}
+
+fn pull_base(promotion: &crate::tap_prepare::TapPromotionReceipt) -> &str {
+    match &promotion.outcome {
+        crate::tap_prepare::TapPromotionOutcome::PullRequest { base_sha, .. }
+        | crate::tap_prepare::TapPromotionOutcome::AlreadyPromoted { base_sha, .. } => base_sha,
+    }
 }
 
 fn sha256(bytes: &[u8]) -> String {

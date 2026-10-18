@@ -55,8 +55,9 @@ pub use super::root::resolve_root;
 pub use super::routing::{migrate_config, parse_dispatch_mode};
 pub use super::tap_merge::{MERGE_HOMEBREW_TAP_PR_OP, merge_homebrew_tap_from_env};
 pub use super::tap_prepare::{
-    HomebrewTapPreparationProof, PREPARE_HOMEBREW_TAP_OP, TapPromotionReceipt,
-    WRITE_HOMEBREW_TAP_PR_OP, prepare_homebrew_tap_from_env, write_homebrew_tap_pr_from_env,
+    HomebrewTapPreparationProof, PREPARE_HOMEBREW_TAP_OP, TapPreparationDisposition,
+    TapPromotionOutcome, TapPromotionReceipt, WRITE_HOMEBREW_TAP_PR_OP,
+    prepare_homebrew_tap_from_env, write_homebrew_tap_pr_from_env,
 };
 pub use super::task_execution::{
     GENERATOR_VERSION_ENV, RUNTIME_RUNNER_TEMP_ENV, TASK_EXECUTION_DIGEST_ENV,

@@ -17,7 +17,10 @@ use velnor_actions_contract::{
 use crate::{
     OrchestratorError,
     internal::internal,
-    tap_prepare::{HomebrewTapPreparationProof, TapPromotionReceipt},
+    tap_prepare::{
+        HomebrewTapPreparationProof, TapPreparationDisposition, TapPromotionOutcome,
+        TapPromotionReceipt,
+    },
 };
 
 const LIMIT: u64 = 1024 * 1024;
@@ -29,6 +32,57 @@ pub(super) struct MergeCandidate {
     pub(super) proof: HomebrewTapPreparationProof,
     pub(super) promotion: TapPromotionReceipt,
     pub(super) formula: Vec<u8>,
+}
+
+pub(super) struct PromotionSelection<'a> {
+    pub(super) pull_request: u64,
+    pub(super) head_sha: &'a str,
+    pub(super) base_sha: &'a str,
+    pub(super) branch: &'a str,
+    pub(super) candidate_proof_digest: &'a str,
+    pub(super) merged: Option<(&'a str, &'a str)>,
+}
+
+impl MergeCandidate {
+    pub(super) fn selection(&self) -> PromotionSelection<'_> {
+        match &self.promotion.outcome {
+            TapPromotionOutcome::PullRequest {
+                pull_request,
+                head_sha,
+                base_sha,
+                branch,
+                candidate_proof_digest,
+            } => PromotionSelection {
+                pull_request: *pull_request,
+                head_sha,
+                base_sha,
+                branch,
+                candidate_proof_digest,
+                merged: None,
+            },
+            TapPromotionOutcome::AlreadyPromoted {
+                pull_request,
+                head_sha,
+                base_sha,
+                branch,
+                candidate_proof_digest,
+                merge_sha,
+                merged_at,
+            } => PromotionSelection {
+                pull_request: *pull_request,
+                head_sha,
+                base_sha,
+                branch,
+                candidate_proof_digest,
+                merged: Some((merge_sha, merged_at)),
+            },
+        }
+    }
+
+    pub(super) fn selection_for(&self, pull_request: u64) -> Option<PromotionSelection<'_>> {
+        let selection = self.selection();
+        (selection.pull_request == pull_request).then_some(selection)
+    }
 }
 
 pub(super) fn load_candidate() -> Result<MergeCandidate, OrchestratorError> {
@@ -80,7 +134,7 @@ fn validate_handoff(
     );
     let tap_digest =
         sha256(&canonical_json_bytes(policy).map_err(|_| internal("tap_merge_policy_encode"))?);
-    if proof.schema != "velnor.homebrew-candidate.v1"
+    if proof.schema != "velnor.homebrew-candidate.v2"
         || proof.formula_path != policy.formula
         || proof.candidate_formula != "formula.rb"
         || proof.tap_repository != policy.repository
@@ -91,31 +145,55 @@ fn validate_handoff(
         || proof.plan_digest != plan_digest
         || proof.tap_config_digest != tap_digest
         || proof.new_formula_sha256 != sha256(formula)
-        || promotion.schema != "velnor.homebrew-tap-pr.v1"
+        || promotion.schema != "velnor.homebrew-tap-pr.v2"
         || promotion.repository != policy.repository
-        || promotion.base_sha != proof.base_sha
-        || promotion.candidate_proof_digest != sha256(&proof_bytes)
         || promotion.release_receipt_digest != release.receipt_digest
-        || promotion.branch != expected_branch(&release.receipt_digest, &proof.base_sha)?
-        || promotion.pull_request == 0
-        || !is_hex(&promotion.base_sha, 40)
-        || !is_hex(&promotion.head_sha, 40)
+        || promotion.preparation_proof_digest != sha256(&proof_bytes)
     {
         return Err(internal("tap_merge_handoff_binding_mismatch"));
+    }
+    match &promotion.outcome {
+        TapPromotionOutcome::PullRequest {
+            pull_request,
+            head_sha,
+            base_sha,
+            branch,
+            candidate_proof_digest,
+        } if proof.disposition == TapPreparationDisposition::Changed
+            && *pull_request > 0
+            && base_sha == &proof.base_sha
+            && branch == &expected_branch(&release.receipt_digest, base_sha)?
+            && candidate_proof_digest == &promotion.preparation_proof_digest
+            && is_hex(head_sha, 40)
+            && is_hex(base_sha, 40) => {}
+        TapPromotionOutcome::AlreadyPromoted {
+            pull_request,
+            head_sha,
+            base_sha,
+            branch,
+            candidate_proof_digest,
+            merge_sha,
+            merged_at,
+        } if proof.disposition == TapPreparationDisposition::FormulaAlreadyCurrent
+            && proof.old_formula_sha256 == proof.new_formula_sha256
+            && *pull_request > 0
+            && branch == &expected_branch(&release.receipt_digest, base_sha)?
+            && is_hex(candidate_proof_digest, 64)
+            && is_hex(head_sha, 40)
+            && is_hex(base_sha, 40)
+            && is_hex(merge_sha, 40)
+            && !merged_at.is_empty() => {}
+        _ => return Err(internal("tap_merge_handoff_binding_mismatch")),
     }
     Ok(())
 }
 
-pub(super) fn validate_formula(
+pub(super) fn validate_formula_at_base(
     candidate: &MergeCandidate,
     base_sha: &str,
     base_formula: &[u8],
+    proposed_formula: &[u8],
 ) -> Result<(), OrchestratorError> {
-    if base_sha != candidate.proof.base_sha
-        || sha256(base_formula) != candidate.proof.old_formula_sha256
-    {
-        return Err(internal("tap_merge_base_formula_mismatch"));
-    }
     let canonical = validate_homebrew_formula_candidate(&HomebrewFormulaCandidate {
         source_repository: &candidate.proof.source_repository,
         plan: &candidate.plan,
@@ -123,11 +201,11 @@ pub(super) fn validate_formula(
         formula_path: &candidate.policy.formula,
         captured_base_sha: base_sha,
         base_bytes: base_formula,
-        proposed_bytes: &candidate.formula,
+        proposed_bytes: proposed_formula,
         release: &candidate.release,
     })
     .map_err(|_| internal("tap_merge_formula_rejected"))?;
-    if canonical != candidate.formula {
+    if canonical != proposed_formula {
         return Err(internal("tap_merge_formula_noncanonical"));
     }
     Ok(())

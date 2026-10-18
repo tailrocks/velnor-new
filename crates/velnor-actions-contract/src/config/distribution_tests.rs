@@ -51,6 +51,22 @@ fn accepts_native_tap_policy_and_defaults_distribution_empty() {
 }
 
 #[test]
+fn review_check_name_is_literal_policy_not_a_workflow_expression() {
+    for name in [
+        "${{ secrets.HOMEBREW_TAP_APP_PRIVATE_KEY }}",
+        "Review ${{ github.sha }}",
+        "Review\u{0085}complete",
+    ] {
+        let mut policy = valid();
+        policy.review_completion.check_name = name.to_owned();
+        assert!(policy.validate("config.toml").is_err(), "name {name:?}");
+    }
+    let mut policy = valid();
+    policy.review_completion.check_name = "Révision terminée / exact head".to_owned();
+    assert!(policy.validate("config.toml").is_ok());
+}
+
+#[test]
 fn rejects_tap_runner_without_a_native_provisioning_lifecycle() {
     let mut config = valid();
     config.updater.runner.executor = crate::config::CheckExecutor::EphemeralSelfHosted;

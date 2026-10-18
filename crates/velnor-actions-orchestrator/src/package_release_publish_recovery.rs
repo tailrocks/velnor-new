@@ -72,12 +72,11 @@ fn verified_original()
         return Err(internal("package_recovery_artifact_not_unique"));
     }
     let artifact = matches[0];
-    validate_artifact(
+    let artifact_source_sha = validate_artifact(
         artifact,
         original_run_id,
         repository_id,
         &plan.default_branch,
-        &env_text("GITHUB_SHA")?,
     )?;
     let zip_bytes = api.download_artifact_archive(artifact.id)?;
     if zip_bytes.len() as u64 != artifact.size_in_bytes
@@ -92,11 +91,15 @@ fn verified_original()
     let input = root.join(INPUT_DIR);
     create_fresh_directory(&input)?;
     let receipt = archive::extract_signed_assets(&zip_bytes, &input, &plan)?;
-    if receipt.workflow.run_id != original_run_id
-        || receipt.workflow.run_attempt != original_attempt
-        || receipt.source.commit_sha != env_text("GITHUB_SHA")?
-        || receipt.version.commit_count != Some(positive_env("VELNOR_RELEASE_COMMIT_COUNT")?)
-    {
+    if !receipt_matches_original(
+        receipt.workflow.run_id,
+        receipt.workflow.run_attempt,
+        &receipt.source.commit_sha,
+        receipt.version.commit_count,
+        original_run_id,
+        original_attempt,
+        &artifact_source_sha,
+    ) {
         return Err(internal("package_recovery_receipt_run_mismatch"));
     }
     let identity = original_signing_identity(
@@ -141,8 +144,7 @@ fn validate_artifact(
     run_id: u64,
     repository_id: u64,
     default_branch: &str,
-    source_sha: &str,
-) -> Result<(), OrchestratorError> {
+) -> Result<String, OrchestratorError> {
     let Some(run) = artifact.workflow_run.as_ref() else {
         return Err(internal("package_recovery_artifact_run_missing"));
     };
@@ -151,13 +153,27 @@ fn validate_artifact(
         || artifact.size_in_bytes > MAX_ARCHIVE_BYTES
         || run.id != run_id
         || run.repository_id != repository_id
-        || run.head_sha != source_sha
         || !is_git_sha(&run.head_sha)
         || run.head_branch != default_branch
     {
         return Err(internal("package_recovery_artifact_invalid"));
     }
-    Ok(())
+    Ok(run.head_sha.clone())
+}
+
+fn receipt_matches_original(
+    receipt_run_id: u64,
+    receipt_attempt: u32,
+    receipt_source_sha: &str,
+    receipt_commit_count: Option<u64>,
+    original_run_id: u64,
+    original_attempt: u32,
+    artifact_source_sha: &str,
+) -> bool {
+    receipt_run_id == original_run_id
+        && receipt_attempt == original_attempt
+        && receipt_source_sha == artifact_source_sha
+        && receipt_commit_count.is_some_and(|count| count > 0)
 }
 
 fn original_signing_identity(

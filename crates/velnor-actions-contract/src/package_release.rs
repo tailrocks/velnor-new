@@ -179,7 +179,7 @@ pub struct PackageReleaseVersion {
     pub source_sha7: Option<String>,
 }
 
-/// One Cargo package product and its target archive matrix.
+/// One Cargo package product and its target payload matrix.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PackageReleaseProduct {
@@ -189,13 +189,13 @@ pub struct PackageReleaseProduct {
     pub package: String,
     /// Exact package version, equal to `version.base`.
     pub package_version: String,
-    /// Sorted executable members present in every archive.
+    /// Sorted executable members present in every payload.
     pub bins: Vec<String>,
-    /// One sorted archive per declared target.
+    /// One sorted payload per declared target.
     pub payloads: Vec<PackageReleasePayload>,
 }
 
-/// Product archive and exact regular-file executable members.
+/// Product payload and exact regular-file executable members.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PackageReleasePayload {
@@ -206,7 +206,7 @@ pub struct PackageReleasePayload {
     pub target: String,
     /// Canonical release asset name.
     pub name: String,
-    /// Sorted archive members, exactly equal to the product bins.
+    /// Sorted payload members, exactly equal to the product bins.
     pub members: Vec<String>,
 }
 
@@ -234,7 +234,7 @@ pub struct PackageReleaseCompanion {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PackageReleaseAssetKind {
-    /// Executable archive payload.
+    /// Executable release payload.
     Payload,
     /// SHA-256 sidecar for a payload.
     Sha256,
@@ -242,7 +242,7 @@ pub enum PackageReleaseAssetKind {
     SignatureBundle,
     /// SBOM sidecar for a payload.
     Sbom,
-    /// SHA-256 list for all payload archives.
+    /// SHA-256 list for all executable payloads.
     ChecksumList,
     /// Explicit companion payload.
     Companion,

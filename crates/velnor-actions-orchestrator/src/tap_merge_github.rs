@@ -3,6 +3,8 @@
 //! REST request shapes follow GitHub's current public REST API. Review-thread
 //! pagination uses the documented GraphQL `PullRequest.reviewThreads` edge.
 
+#[cfg(test)]
+use std::cell::RefCell;
 use std::{
     ffi::{OsStr, OsString},
     time::{Duration, Instant},
@@ -13,6 +15,9 @@ use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 
 use crate::{OrchestratorError, internal::internal};
 
+#[cfg(test)]
+type TestTransport = dyn FnMut(&[OsString]) -> Result<ApiResponse, OrchestratorError>;
+
 const API_VERSION: &str = "2026-03-10";
 const RESPONSE_LIMIT: usize = 16 * 1024 * 1024;
 const API_TIMEOUT: Duration = Duration::from_secs(90);
@@ -21,6 +26,8 @@ pub(super) struct TapMergeGitHub {
     catalog: ToolCatalog,
     token: String,
     deadline: Instant,
+    #[cfg(test)]
+    test_transport: Option<RefCell<Box<TestTransport>>>,
 }
 
 pub(super) struct ApiResponse {
@@ -34,6 +41,20 @@ impl TapMergeGitHub {
             catalog: ToolCatalog::pinned(),
             token,
             deadline: Instant::now() + max_wait,
+            #[cfg(test)]
+            test_transport: None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn with_test_transport(
+        transport: impl FnMut(&[OsString]) -> Result<ApiResponse, OrchestratorError> + 'static,
+    ) -> Self {
+        Self {
+            catalog: ToolCatalog::pinned(),
+            token: "test-only-token".to_owned(),
+            deadline: Instant::now() + Duration::from_secs(60),
+            test_transport: Some(RefCell::new(Box::new(transport))),
         }
     }
 
@@ -106,6 +127,10 @@ impl TapMergeGitHub {
     }
 
     fn request(&self, mut args: Vec<OsString>) -> Result<ApiResponse, OrchestratorError> {
+        #[cfg(test)]
+        if let Some(transport) = &self.test_transport {
+            return (transport.borrow_mut())(&args);
+        }
         let mut gh_args = vec![
             OsString::from("api"),
             OsString::from("--include"),
