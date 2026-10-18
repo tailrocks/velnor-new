@@ -19,4 +19,8 @@
   - Before every PR merge, read all reviews, comments, replies, and unresolved or outdated threads. Verify findings with independent subagents against code, tests, docs, and recorded decisions.
   - Accepted feedback: fix, verify, commit, push, and reply on GitHub with fixing commit URL before resolving. Rejected feedback: reply with evidence and rationale before resolving. Re-fetch feedback at final head SHA; merge only with zero unaddressed feedback and all required checks passing.
   - Keep agent instructions lean. Put explanations, plans, and progress in documentation, not here.
-- Verification gates: always verify from the repo root before committing or merging. Always run tests with `cargo nextest`; never use `cargo test`. Read `docs/implemented/repo-verification.md` for the exact required commands, purposes, and usage details.
+- Run relevant checks before each commit.
+- Run all required checks before release, activation, or merge.
+- Use Cargo Nextest for unit and integration tests.
+- Use the pinned MBX `test --doc` command for doctests only.
+- Read `docs/implemented/repo-verification.md` for the required commands.
