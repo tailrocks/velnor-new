@@ -6,7 +6,9 @@ use crate::workflow::{
     QualificationPhase, QualificationRunRef, WorkflowEvent,
 };
 use crate::{
-    RunnerSelection, Trust, digest_b3,
+    RunnerSelection, Trust,
+    cachekey::{ToolchainInputs, toolchain_id},
+    digest_b3,
     ids::{plan_id_for_run, run_key_for_ci},
 };
 
@@ -130,20 +132,31 @@ fn matrix_for_id(package_id: &str, input: &str) -> MatrixEntry {
         planned_platform: PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")
             .expect("planned platform"),
         cache_ids: Some(cache_ids()),
+        toolchain_inputs: Some(test_toolchain_inputs()),
         declared_outputs: Vec::new(),
         test_run: Vec::new(),
     }
 }
 
 fn cache_ids() -> EntryCacheIds {
+    let toolchain = toolchain_id(&test_toolchain_inputs()).expect("toolchain identity");
     EntryCacheIds::new(
         &digest_b3(b"workspace"),
         &digest_b3(b"lane"),
         &digest_b3(b"platform"),
-        &digest_b3(b"toolchain"),
+        &toolchain,
         &digest_b3(b"cache format"),
     )
     .expect("cache identity")
+}
+
+fn test_toolchain_inputs() -> ToolchainInputs {
+    ToolchainInputs {
+        tools: vec!["rust@1.98.1".to_owned()],
+        components: vec!["clippy".to_owned(), "rustfmt".to_owned()],
+        compile_driver: "cargo".to_owned(),
+        test_runner: "cargo_test".to_owned(),
+    }
 }
 
 fn qualification_context(run_id: u64, source_sha: String) -> QualificationDispatch {
@@ -163,5 +176,6 @@ fn qualification_context(run_id: u64, source_sha: String) -> QualificationDispat
             run_id: run_id - 1,
             run_attempt: 1,
         }),
+        scale_set_image_source_sha: None,
     }
 }

@@ -4,6 +4,7 @@ use super::cache_ids::EntryCacheIds;
 use super::execute::{ExecuteTaskIds, ExecuteTaskRef};
 use super::lanes::NamedCheckLaneVariant;
 use super::platform::PlannedPlatform;
+use crate::cachekey::{ToolchainInputs, toolchain_id};
 use crate::canonical::{normalize_posix_path, validate_digest};
 use crate::config::VelnorConfig;
 use crate::errors::ContractError;
@@ -49,6 +50,12 @@ pub struct MatrixEntry {
     /// Cache identity digests recorded in the plan (cache §1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_ids: Option<EntryCacheIds>,
+    /// Exact pinned tools and selected driver inputs behind `cache_ids.toolchain_id`.
+    ///
+    /// Qualification runtime checks need these pins to compare actual tool
+    /// observations with the plan. Older non-qualification plans may omit them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toolchain_inputs: Option<ToolchainInputs>,
     /// Declared task outputs reuse verification covers (cache §3).
     #[serde(default)]
     pub declared_outputs: Vec<String>,
@@ -138,6 +145,7 @@ impl MatrixEntry {
             execute_task_ids,
             input_digest: input_digest.to_owned(),
             cache_ids: None,
+            toolchain_inputs: None,
             declared_outputs: Vec::new(),
             test_run: Vec::new(),
         })
@@ -177,6 +185,20 @@ impl MatrixEntry {
                 return Err(ContractError::identity(
                     "cache_ids.platform_id",
                     "planned_platform_mismatch",
+                ));
+            }
+        }
+        if let Some(toolchain_inputs) = &self.toolchain_inputs {
+            let Some(cache_ids) = &self.cache_ids else {
+                return Err(ContractError::identity(
+                    "matrix.toolchain_inputs",
+                    "requires_cache_ids",
+                ));
+            };
+            if toolchain_id(toolchain_inputs)? != cache_ids.toolchain_id() {
+                return Err(ContractError::identity(
+                    "matrix.toolchain_inputs",
+                    "toolchain_id_mismatch",
                 ));
             }
         }

@@ -6,6 +6,9 @@ mod identity;
 mod receipt;
 mod runtime;
 
+#[cfg(test)]
+pub(crate) use identity::validate_runtime_identity;
+
 pub use directive::{
     QUALIFICATION_CACHE_DIRECTIVES_OUTPUT, QualificationCacheDirective,
     QualificationCacheLaneDirective, QualificationCacheLayerDirective,
@@ -14,9 +17,12 @@ pub use directive::{
 };
 pub use identity::{
     BoundQualificationCacheKeys, MAX_QUALIFICATION_CACHE_LANES, QualificationCacheLayer,
-    QualificationCacheRestoreExpectation, QualificationCacheSlot, QualificationRuntimeIdentity,
+    QualificationCacheRestoreExpectation, QualificationCacheSlot,
+    QualificationRuntimeAbiObservation, QualificationRuntimeIdentity,
     QualificationRuntimeIdentityField, QualificationRuntimeIdentityRequirements,
-    QualificationRuntimePlatform,
+    QualificationRuntimeImageDigests, QualificationRuntimeImageIdentity,
+    QualificationRuntimePlatform, QualificationRuntimeScaleSet,
+    QualificationRuntimeToolObservation,
 };
 pub use receipt::{
     MAX_QUALIFICATION_RECEIPT_BYTES, MAX_QUALIFICATION_RECEIPT_DEPTH,

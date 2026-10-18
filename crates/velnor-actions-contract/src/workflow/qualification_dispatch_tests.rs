@@ -16,7 +16,23 @@ fn dispatch() -> QualificationDispatch {
         run_id: 123,
         run_attempt: 1,
         predecessor: None,
+        scale_set_image_source_sha: None,
     }
+}
+
+#[test]
+fn image_source_is_distinct_from_the_consumer_dispatch_source() {
+    let mut value = dispatch();
+    value.scale_set_image_source_sha = Some("b".repeat(40));
+    assert_ne!(value.scale_set_image_source_sha.as_deref(), Some(SHA));
+    assert!(value.validate_for("main", "owner/project", SHA).is_ok());
+}
+
+#[test]
+fn malformed_image_source_is_rejected() {
+    let mut value = dispatch();
+    value.scale_set_image_source_sha = Some("A".repeat(40));
+    assert!(value.validate_shape().is_err());
 }
 
 #[test]

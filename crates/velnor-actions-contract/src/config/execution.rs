@@ -91,6 +91,9 @@ pub struct ExecutionProfile {
     /// Optional capability profile name.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capability_profile: Option<String>,
+    /// Expected source revision for the immutable Scale Set guest images.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_source_sha: Option<String>,
 }
 
 /// Per-logical-job placement override.
@@ -238,6 +241,14 @@ impl ExecutionConfig {
         ScaleSetSelector::try_new(name, &profile.labels)
     }
 
+    /// Expected Velnor source revision used to build Scale Set guest images.
+    #[must_use]
+    pub fn scale_set_image_source_sha(&self) -> Option<&str> {
+        self.profiles
+            .get(&self.scale_set_profile)
+            .and_then(|profile| profile.image_source_sha.as_deref())
+    }
+
     /// Validate profiles, platforms, and overrides.
     ///
     /// # Errors
@@ -281,6 +292,30 @@ impl ExecutionConfig {
                 file,
                 "execution.profiles",
                 "profile_field_mismatch",
+            ));
+        }
+        if hosted.image_source_sha.is_some() {
+            return Err(ContractError::config(
+                file,
+                format!(
+                    "execution.profiles.{}.image_source_sha",
+                    self.hosted_profile
+                ),
+                "hosted_profile_cannot_pin_scale_set_image_source",
+            ));
+        }
+        if scale
+            .image_source_sha
+            .as_deref()
+            .is_some_and(|value| !is_source_sha(value))
+        {
+            return Err(ContractError::config(
+                file,
+                format!(
+                    "execution.profiles.{}.image_source_sha",
+                    self.scale_set_profile
+                ),
+                "must_be_40_lowercase_hex",
             ));
         }
         if hosted.platform != LINUX_AMD64 || scale.platform != hosted.platform {
@@ -336,6 +371,7 @@ impl ExecutionProfile {
             labels: Vec::new(),
             platform: LINUX_AMD64.to_owned(),
             capability_profile: None,
+            image_source_sha: None,
         })
     }
 
@@ -349,9 +385,21 @@ impl ExecutionProfile {
             labels: selector.labels().to_vec(),
             platform: LINUX_AMD64.to_owned(),
             capability_profile: None,
+            image_source_sha: None,
         }
     }
 }
+
+fn is_source_sha(value: &str) -> bool {
+    value.len() == 40
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+#[cfg(test)]
+#[path = "execution_tests.rs"]
+mod tests;
 
 fn missing(key: &str) -> ContractError {
     ContractError::config("config.toml", key, "missing")

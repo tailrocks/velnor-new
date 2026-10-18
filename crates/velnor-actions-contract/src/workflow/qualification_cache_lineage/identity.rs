@@ -9,8 +9,11 @@ use crate::workflow::plan::{MatrixEntry, Plan};
 pub(crate) use super::runtime::validate_runtime_identity;
 pub use super::runtime::{
     BoundQualificationCacheKeys, QualificationCacheRestoreExpectation,
-    QualificationRuntimeIdentity, QualificationRuntimeIdentityField,
-    QualificationRuntimeIdentityRequirements, QualificationRuntimePlatform,
+    QualificationRuntimeAbiObservation, QualificationRuntimeIdentity,
+    QualificationRuntimeIdentityField, QualificationRuntimeIdentityRequirements,
+    QualificationRuntimeImageDigests, QualificationRuntimeImageIdentity,
+    QualificationRuntimePlatform, QualificationRuntimeScaleSet,
+    QualificationRuntimeToolObservation,
 };
 
 /// Maximum selected matrix lanes represented in a qualification directive.
@@ -84,6 +87,7 @@ struct StaticMatrixEntry<'a> {
     execute_task_ids: &'a crate::workflow::ExecuteTaskIds,
     job_id: &'a str,
     cache_ids: &'a Option<crate::workflow::EntryCacheIds>,
+    toolchain_inputs: &'a Option<crate::cachekey::ToolchainInputs>,
     declared_outputs: &'a [String],
 }
 
@@ -107,6 +111,8 @@ struct StaticPackage<'a> {
 #[derive(Serialize)]
 struct PlanConfiguration<'a> {
     runner: &'a crate::workflow::PlanRunner,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    scale_set_image_source_sha: Option<&'a str>,
     generator: &'a crate::workflow::PlanGenerator,
     packages: Vec<StaticPackage<'a>>,
     obligations: Vec<StaticObligation<'a>>,
@@ -185,12 +191,17 @@ pub(crate) fn configuration_commitment(plan: &Plan) -> Result<String, ContractEr
                 execute_task_ids: &entry.execute_task_ids,
                 job_id: &entry.job_id,
                 cache_ids: &entry.cache_ids,
+                toolchain_inputs: &entry.toolchain_inputs,
                 declared_outputs: &entry.declared_outputs,
             })
         })
         .collect::<Result<Vec<_>, ContractError>>()?;
     let configuration = PlanConfiguration {
         runner: &plan.runner,
+        scale_set_image_source_sha: plan
+            .qualification
+            .as_ref()
+            .and_then(|context| context.scale_set_image_source_sha.as_deref()),
         generator: &plan.generator,
         packages,
         obligations,
@@ -294,10 +305,31 @@ pub(crate) fn runtime_requirements(
     let target = crate::ReleaseTarget::for_runner_label(&plan.runner.label)
         .map(crate::ReleaseTarget::triple)
         .ok_or_else(|| ContractError::identity("qualification.runner", "unsupported_target"))?;
+    let runs_on = crate::RunsOn::parse(&entry.planned_platform.runs_on)?;
+    let scale_set_image_source_sha = if runs_on.is_scale_set() {
+        plan.qualification
+            .as_ref()
+            .and_then(|context| context.scale_set_image_source_sha.clone())
+    } else {
+        None
+    };
+    let toolchain_inputs = entry
+        .toolchain_inputs
+        .clone()
+        .ok_or_else(|| ContractError::identity("matrix.toolchain_inputs", "missing"))?;
+    if crate::cachekey::toolchain_id(&toolchain_inputs)? != ids.toolchain_id() {
+        return Err(ContractError::identity(
+            "matrix.toolchain_inputs",
+            "toolchain_id_mismatch",
+        ));
+    }
     Ok(QualificationRuntimeIdentityRequirements {
         runner_label: plan.runner.label.clone(),
+        runs_on: entry.planned_platform.runs_on.clone(),
+        scale_set_image_source_sha,
         target: target.to_owned(),
         toolchain_id: ids.toolchain_id().to_owned(),
+        toolchain_inputs,
         cache_format_id: ids.cache_format_id().to_owned(),
         require_abi: true,
         driver_id: digest_b3(&canonical_json_bytes(&canonical_adapter_metadata(
@@ -307,8 +339,7 @@ pub(crate) fn runtime_requirements(
         required_fields: vec![
             QualificationRuntimeIdentityField::RunnerOs,
             QualificationRuntimeIdentityField::RunnerArch,
-            QualificationRuntimeIdentityField::ImageOs,
-            QualificationRuntimeIdentityField::ImageVersion,
+            QualificationRuntimeIdentityField::ImageIdentity,
             QualificationRuntimeIdentityField::ToolchainId,
             QualificationRuntimeIdentityField::CacheFormatId,
             QualificationRuntimeIdentityField::AbiId,

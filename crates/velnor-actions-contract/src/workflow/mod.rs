@@ -87,9 +87,11 @@ pub use qualification_cache_lineage::{
     QualificationCacheRestoreExpectation, QualificationCacheRestorePolicy,
     QualificationCacheRestoreResult, QualificationCacheRunMetadata, QualificationCacheSave,
     QualificationCacheSaveActionResult, QualificationCacheSavePolicy, QualificationCacheSlot,
-    QualificationRuntimeIdentity, QualificationRuntimeIdentityField,
-    QualificationRuntimeIdentityRequirements, QualificationRuntimePlatform,
-    QualificationSourceDelta,
+    QualificationRuntimeAbiObservation, QualificationRuntimeIdentity,
+    QualificationRuntimeIdentityField, QualificationRuntimeIdentityRequirements,
+    QualificationRuntimeImageDigests, QualificationRuntimeImageIdentity,
+    QualificationRuntimePlatform, QualificationRuntimeScaleSet,
+    QualificationRuntimeToolObservation, QualificationSourceDelta,
 };
 pub use qualification_dispatch::{QualificationDispatch, QualificationRunRef};
 pub use qualification_phase::{

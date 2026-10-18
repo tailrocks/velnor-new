@@ -11,11 +11,12 @@ pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-
 pub const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
 /// Fixed local action path for the exact V2 tools-cache restore wrapper.
 pub const TOOLS_CACHE_RESTORE_USES: &str = "./.github/actions/velnor-tools-cache-restore";
-/// Fixed generated V2 identity-and-seed composites, one per hosted Ubuntu lane.
-pub const TOOLS_CACHE_PRELUDE_USES: [&str; 3] = [
+/// Fixed generated V2 identity-and-seed composites for the supported runner lanes.
+pub const TOOLS_CACHE_PRELUDE_USES: [&str; 4] = [
     "./.github/actions/velnor-tools-prelude-u22",
     "./.github/actions/velnor-tools-prelude-u24",
     "./.github/actions/velnor-tools-prelude-u26",
+    "./.github/actions/velnor-tools-prelude-scale-set",
 ];
 /// Static tool digest input for the runtime-qualified tools identity action.
 pub const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str = "d";

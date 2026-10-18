@@ -91,6 +91,9 @@ pub struct QualificationDispatch {
     /// Run and attempt that produced the required predecessor receipt.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub predecessor: Option<QualificationRunRef>,
+    /// Expected Velnor source revision for the verified Scale Set guest image.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scale_set_image_source_sha: Option<String>,
 }
 
 /// Lookup coordinates for a previous run; they grant no cache access.
@@ -213,6 +216,16 @@ impl QualificationDispatch {
         validate_campaign(&self.campaign)?;
         validate_repository(&self.repository)?;
         validate_source_binding(self)?;
+        if self
+            .scale_set_image_source_sha
+            .as_deref()
+            .is_some_and(|sha| !is_source_revision(sha))
+        {
+            return Err(ContractError::identity(
+                "qualification.scale_set_image_source_sha",
+                "invalid_sha",
+            ));
+        }
         validate_ref_binding(self)?;
         validate_run_identity(self)?;
         validate_predecessor(self)
@@ -353,6 +366,13 @@ fn valid_branch_name(branch: &str) -> bool {
 /// True for a lowercase hexadecimal Git object ID (SHA-1 or SHA-256).
 fn is_lower_hex_sha(value: &str) -> bool {
     matches!(value.len(), 40 | 64)
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn is_source_revision(value: &str) -> bool {
+    value.len() == 40
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
