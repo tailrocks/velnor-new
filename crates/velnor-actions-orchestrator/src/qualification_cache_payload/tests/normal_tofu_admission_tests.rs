@@ -1,4 +1,7 @@
-use super::*;
+use super::super::NormalTofuProvidersCachePayloadRequest;
+use super::backend::validate_restore_observation;
+use super::context::{GitHubRunContext, git_sha, positive_u64, validate_event_repository};
+use crate::cache_action_stage::CacheActionCompression;
 use crate::qualification_cache_payload::CacheActionObservation;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -102,9 +105,9 @@ fn cold_restore_requires_absent_backend_and_no_tar_outputs() {
         QualificationCacheBackendObservation::Absent,
     )
     .expect("verified cold miss");
-    assert!(absent.cache.is_none());
-    assert!(absent.compression.is_none());
-    assert!(absent.stage_claim.is_none());
+    assert!(absent.cache_entry().is_none());
+    assert!(absent.compression().is_none());
+    assert!(absent.stage_claim().is_none());
 
     assert_eq!(
         validate_restore_observation(
@@ -164,11 +167,14 @@ fn warm_restore_binds_action_key_compression_version_and_download_size() {
         QualificationCacheBackendObservation::Found(fixture.backend_entry(version.clone(), 1_024)),
     )
     .expect("backend-bound hit");
-    let record = admitted.cache.expect("exact backend record");
+    let record = admitted.cache_entry().expect("exact backend record");
     assert_eq!(record.id, 303);
     assert_eq!(record.version, version);
     assert_eq!(record.size_bytes, 1_024);
-    assert_eq!(admitted.stage_claim.expect("checked claim").length(), 1_024);
+    assert_eq!(
+        admitted.stage_claim().expect("checked claim").length(),
+        1_024
+    );
 
     assert_eq!(
         validate_restore_observation(
