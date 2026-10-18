@@ -188,6 +188,7 @@ fn generated_pinned_obligation_renders_through_shared_declared_task_action() {
 fn actual_nextest_producer_selector_passes_task_execution_contract() {
     let catalog = ToolCatalog::pinned();
     let task = velnor_actions_rust::propose_task(&TaskGroup {
+        all_features: false,
         task_id: "stack/rust/demo/nextest/default".to_owned(),
         package_id: String::new(),
         package_name: String::new(),

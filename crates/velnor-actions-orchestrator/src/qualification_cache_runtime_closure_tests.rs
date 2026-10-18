@@ -51,6 +51,7 @@ fn discovery_with_proposals(proposals: Vec<ProposedTask>) -> Discovery {
 
 fn rust_task() -> ProposedTask {
     let task = velnor_actions_rust::propose_task(&TaskGroup {
+        all_features: false,
         task_id: "stack/rust/root/clippy/default".to_owned(),
         package_id: "demo 0.1.0".to_owned(),
         package_name: "demo".to_owned(),

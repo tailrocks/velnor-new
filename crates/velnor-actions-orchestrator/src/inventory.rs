@@ -39,25 +39,35 @@ const MAX_METADATA_LANES: usize = 1;
 /// # Errors
 ///
 /// Returns `preparation_incomplete` when a fetch fails incompletely.
-pub(crate) fn run_inventories(
+pub(crate) fn run_inventories_with_all_features(
     root: &Path,
     candidates: &[StackCandidate],
     files: &[String],
     reads: &mut velnor_actions_tofu::FileCache,
+    all_features: bool,
     catalog: &ToolCatalog,
 ) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
-    run_inventories_inner(root, candidates, files, reads, None, catalog)
+    run_inventories_inner(root, candidates, files, reads, None, all_features, catalog)
 }
 
-pub(crate) fn run_inventories_with_phase_timings(
+pub(crate) fn run_inventories_with_phase_timings_and_all_features(
     root: &Path,
     candidates: &[StackCandidate],
     files: &[String],
     reads: &mut velnor_actions_tofu::FileCache,
     phases: &mut PlanPhaseTimings,
+    all_features: bool,
     catalog: &ToolCatalog,
 ) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
-    run_inventories_inner(root, candidates, files, reads, Some(phases), catalog)
+    run_inventories_inner(
+        root,
+        candidates,
+        files,
+        reads,
+        Some(phases),
+        all_features,
+        catalog,
+    )
 }
 
 fn run_inventories_inner(
@@ -66,6 +76,7 @@ fn run_inventories_inner(
     files: &[String],
     reads: &mut velnor_actions_tofu::FileCache,
     mut phases: Option<&mut PlanPhaseTimings>,
+    all_features: bool,
     catalog: &ToolCatalog,
 ) -> Result<(Inventories, Vec<TofuSelectionUnit>), OrchestratorError> {
     let mut manifests = Vec::with_capacity(candidates.len());
@@ -92,8 +103,16 @@ fn run_inventories_inner(
         require_rust_pin(catalog)?;
     }
     let known: BTreeSet<String> = manifests.iter().cloned().collect();
-    let mut load =
-        |manifest: &str| fetch_inventory(root, manifest, catalog, &known, phases.as_deref_mut());
+    let mut load = |manifest: &str| {
+        fetch_inventory(
+            root,
+            manifest,
+            catalog,
+            &known,
+            all_features,
+            phases.as_deref_mut(),
+        )
+    };
     let (rust_outcomes, inventories) = run_with(root, &rust_manifests, true, &mut load)?;
     let mut tofu_outcomes = BTreeMap::new();
     let mut tofu_selection = Vec::new();
@@ -245,10 +264,12 @@ fn fetch_inventory(
     manifest: &str,
     catalog: &ToolCatalog,
     known: &BTreeSet<String>,
+    all_features: bool,
     mut phases: Option<&mut PlanPhaseTimings>,
 ) -> Result<WorkspaceRecord, FetchFailure> {
     let path: PathBuf = root.join(manifest);
     let request = MetadataDiscovery::new(path)
+        .map(|request| request.with_all_features(all_features))
         .map_err(|err| FetchFailure::Incomplete(format!("bad_manifest_path:{err}")))?;
     let command = request
         .command(catalog)
@@ -324,9 +345,10 @@ pub(crate) fn require_rust_pin(catalog: &ToolCatalog) -> Result<(), Orchestrator
 /// A tool snapshot brackets the runs, failing closed on tool drift.
 /// # Errors
 /// Returns `preparation_incomplete` when a lockfile cannot be qualified.
-pub(crate) fn qualify_workspaces(
+pub(crate) fn qualify_workspaces_with_all_features(
     root: &Path,
     workspaces: &[PlannedWorkspace],
+    all_features: bool,
     catalog: &ToolCatalog,
 ) -> Result<(), OrchestratorError> {
     let tools = ToolSnapshot::capture(root);
@@ -342,12 +364,12 @@ pub(crate) fn qualify_workspaces(
             continue;
         }
         let manifest = workspace_manifest(&prefix);
-        let request = MetadataQualification::new(root.join(&manifest)).map_err(|err| {
-            OrchestratorError::PreparationIncomplete {
+        let request = MetadataQualification::new(root.join(&manifest))
+            .map(|request| request.with_all_features(all_features))
+            .map_err(|err| OrchestratorError::PreparationIncomplete {
                 manifest: manifest.clone(),
                 problem: format!("bad_manifest_path:{err}"),
-            }
-        })?;
+            })?;
         if let Err(err) = request.run(catalog) {
             let text = err.to_string();
             let first = text.lines().next().unwrap_or("metadata_offline");

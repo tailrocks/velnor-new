@@ -5,7 +5,8 @@ use velnor_actions_contract::StepKind;
 fn preview_fetch_removes_full_baseline_without_changing_probe_or_owned_homes() {
     let catalog = ToolCatalog::pinned();
     let roots = [String::new(), "nested".to_owned()];
-    let plan = fetch_steps_for_plan(&catalog, &roots).expect("plan preparation");
+    let plan =
+        fetch_steps_for_plan_with_all_features(&catalog, &roots, false).expect("plan preparation");
     let (_, env) = shell_parts(&plan[0].kind).expect("shell");
     let preview = fetch_steps_for_preview(&catalog, &roots, env).expect("preview preparation");
     let credentials = velnor_actions_workflow_renderer::toolchain_env::credential_scrub()
@@ -36,7 +37,8 @@ fn shell_parts(kind: &StepKind) -> Option<(&Vec<String>, &BTreeMap<String, Strin
 #[test]
 fn root_step_probes_before_fetch_with_miss_record() {
     let catalog = ToolCatalog::pinned();
-    let steps = fetch_steps_for_plan(&catalog, &[String::new()]).expect("fetch steps");
+    let steps = fetch_steps_for_plan_with_all_features(&catalog, &[String::new()], false)
+        .expect("fetch steps");
     assert_eq!(steps.len(), 1);
     assert_eq!(steps[0].name, FETCH_SOURCES_STEP);
     let (run, env) = shell_parts(&steps[0].kind).expect("fetch must be a shell step");
@@ -61,9 +63,32 @@ fn root_step_probes_before_fetch_with_miss_record() {
 }
 
 #[test]
+fn all_features_applies_only_to_project_plan_and_crate_probes() {
+    let catalog = ToolCatalog::pinned();
+    let roots = [String::new()];
+    let plan = fetch_steps_for_plan_with_all_features(&catalog, &roots, true)
+        .expect("all-features plan fetch");
+    let crates = fetch_steps_for_crate_with_all_features(&catalog, &roots, true)
+        .expect("all-features crate fetch");
+    for steps in [&plan, &crates] {
+        let (run, _) = shell_parts(&steps[0].kind).expect("fetch shell");
+        assert!(run[2].contains("metadata --locked --offline --all-features"));
+    }
+
+    let (_, env) = shell_parts(&plan[0].kind).expect("plan fetch shell");
+    let preview = fetch_steps_for_preview(&catalog, &roots, env).expect("preview fetch");
+    let (run, _) = shell_parts(&preview[0].kind).expect("preview fetch shell");
+    assert!(
+        !run[2].contains("--all-features"),
+        "preview keeps its existing probe"
+    );
+}
+
+#[test]
 fn crate_fetch_carries_full_validated_contract() {
     let catalog = ToolCatalog::pinned();
-    let steps = fetch_steps_for_crate(&catalog, &[String::new()]).expect("fetch steps");
+    let steps = fetch_steps_for_crate_with_all_features(&catalog, &[String::new()], false)
+        .expect("fetch steps");
     let (_, got) = shell_parts(&steps[0].kind).expect("fetch must be a shell step");
     for (key, value) in [
         ("MISE_NO_CONFIG", "1"),
@@ -107,7 +132,8 @@ fn crate_fetch_carries_full_validated_contract() {
 #[test]
 fn plan_fetch_uses_owned_homes_for_shared_snapshot() {
     let catalog = ToolCatalog::pinned();
-    let steps = fetch_steps_for_plan(&catalog, &[String::new()]).expect("fetch steps");
+    let steps = fetch_steps_for_plan_with_all_features(&catalog, &[String::new()], false)
+        .expect("fetch steps");
     let (_, got) = shell_parts(&steps[0].kind).expect("fetch must be a shell step");
     let shared =
         crate::matrix_step::task_step_env(&catalog, &BTreeMap::new(), true).expect("shared env");
@@ -120,7 +146,8 @@ fn plan_fetch_uses_owned_homes_for_shared_snapshot() {
 #[test]
 fn nested_step_names_its_manifest() {
     let catalog = ToolCatalog::pinned();
-    let steps = fetch_steps_for_plan(&catalog, &["nested".to_owned()]).expect("fetch steps");
+    let steps = fetch_steps_for_plan_with_all_features(&catalog, &["nested".to_owned()], false)
+        .expect("fetch steps");
     assert_eq!(steps.len(), 1);
     assert_eq!(steps[0].name, "Fetch Cargo sources (nested/Cargo.toml)");
     let (run, _) = shell_parts(&steps[0].kind).expect("fetch must be a shell step");
@@ -134,8 +161,10 @@ fn nested_step_names_its_manifest() {
 #[test]
 fn lockless_roots_emit_no_steps() {
     let catalog = ToolCatalog::pinned();
-    let crates = fetch_steps_for_crate(&catalog, &[]).expect("crate fetch steps");
-    let plan = fetch_steps_for_plan(&catalog, &[]).expect("plan fetch steps");
+    let crates =
+        fetch_steps_for_crate_with_all_features(&catalog, &[], false).expect("crate fetch steps");
+    let plan =
+        fetch_steps_for_plan_with_all_features(&catalog, &[], false).expect("plan fetch steps");
     assert!(crates.is_empty() && plan.is_empty());
 }
 

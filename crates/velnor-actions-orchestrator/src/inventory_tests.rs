@@ -237,8 +237,15 @@ fn missing_repo_pin_fails_closed_before_spawn() -> Result<(), String> {
         unit_root: String::new(),
     }];
     let mut reads = velnor_actions_tofu::FileCache::new();
-    let err = run_inventories(dir.path(), &candidates, &[], &mut reads, &resolved)
-        .expect_err("unsatisfiable pin must fail before spawning");
+    let err = run_inventories_with_all_features(
+        dir.path(),
+        &candidates,
+        &[],
+        &mut reads,
+        false,
+        &resolved,
+    )
+    .expect_err("unsatisfiable pin must fail before spawning");
     let OrchestratorError::Inventory { problem } = &err else {
         return Err(format!("expected inventory error, got {err}"));
     };
@@ -274,13 +281,19 @@ fn tofu_only_candidates_skip_the_rust_pin_gate() -> Result<(), String> {
         unit_root: String::new(),
     }];
     let mut reads = velnor_actions_tofu::FileCache::new();
-    let ((outcomes, inventories), _) =
-        run_inventories(dir.path(), &candidates, &[], &mut reads, &resolved)
-            .map_err(|err| format!("tofu-only must not require the rust pin: {err}"))?;
+    let ((outcomes, inventories), _) = run_inventories_with_all_features(
+        dir.path(),
+        &candidates,
+        &[],
+        &mut reads,
+        false,
+        &resolved,
+    )
+    .map_err(|err| format!("tofu-only must not require the rust pin: {err}"))?;
     assert_eq!(outcomes.len(), 1);
     assert!(outcomes[0].metadata_ok, "tofu outcome must succeed");
     assert!(inventories.is_empty(), "tofu yields no rust inventories");
-    qualify_workspaces(dir.path(), &[], &resolved)
+    qualify_workspaces_with_all_features(dir.path(), &[], false, &resolved)
         .map_err(|err| format!("empty qualification must not require the rust pin: {err}"))?;
     Ok(())
 }

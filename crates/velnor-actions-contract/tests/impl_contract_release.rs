@@ -244,6 +244,7 @@ fn release_wired_into_stack_validation_with_key_paths() {
         configurations: vec![RustConfiguration {
             name: "default".to_owned(),
             features: vec!["default".to_owned()],
+            all_features: false,
             target: "host".to_owned(),
         }],
         toolchain: None,

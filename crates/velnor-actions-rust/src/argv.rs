@@ -297,6 +297,10 @@ fn push_feature_args(args: &mut Vec<OsString>, group: &TaskGroup) -> Result<(), 
     if group.kind == TaskKind::Fmt {
         return Ok(());
     }
+    if group.all_features {
+        args.push(OsString::from("--all-features"));
+        return Ok(());
+    }
     if group.features.len() == 1 && group.features[0] == "default" {
         return Ok(());
     }

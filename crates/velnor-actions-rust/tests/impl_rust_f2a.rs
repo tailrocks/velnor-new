@@ -77,6 +77,7 @@ fn inputs<'a>(
     features: &'a [String],
 ) -> DeriveInputs<'a> {
     DeriveInputs {
+        all_features: false,
         package,
         profile,
         configuration: "default",
@@ -250,6 +251,7 @@ fn archive_trust_follows_source_build() {
         graph_digest: "graph",
         targets: &targets,
         features: &features,
+        all_features: false,
         target: "host",
         driver: CompileDriver::Cargo,
         runner: TestRunner::CargoNextest,

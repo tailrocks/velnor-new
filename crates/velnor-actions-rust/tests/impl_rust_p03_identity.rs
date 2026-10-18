@@ -65,6 +65,7 @@ fn clippy() -> TestResult<TaskGroup> {
     let profile = profile();
     let features = vec!["default".to_owned()];
     let groups = derive_task_groups(&DeriveInputs {
+        all_features: false,
         package: &package,
         profile: &profile,
         configuration: "default",
@@ -234,6 +235,7 @@ fn identity_paths_preserve_case_unicode_and_reject_bad() -> TestResult {
             .is_ok()
     );
     let hostile = TaskGroup {
+        all_features: false,
         declared_inputs: vec!["../escape".to_owned()],
         ..group.clone()
     };

@@ -131,6 +131,11 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
     };
     let needs = PlanJobToolNeeds {
         rust,
+        all_features: input.config.stacks.rust.as_ref().is_some_and(|rust| {
+            rust.configurations
+                .iter()
+                .any(|configuration| configuration.all_features)
+        }),
         nextest: plan_uses_nextest(input.discovery),
         opentofu: plan_uses_opentofu(input.discovery),
         gh: policy == WorkflowPolicy::VelnorRepositoryV1 || has_qualification,

@@ -2,7 +2,8 @@
 //!
 //! The `rust-task-identity-v1` extension MUST record package, workspace,
 //! graph, targets, features, profile, driver, runner, config digests,
-//! Nextest digest, kind, and archive identity before selection. The
+//! Nextest digest, kind, and archive identity before selection. Optional
+//! adapter-owned mode fields are type-checked when present. The
 //! orchestrator stays opaque to adapter data; this validator pins the
 //! required slots so reuse never rests on a partial extension.
 
@@ -61,6 +62,15 @@ pub fn validate_rust_extension(extension: &StackExtension) -> Result<(), Contrac
     validate_digest(slot_str(data, "config_digest"))?;
     check_string_array(data, "targets")?;
     check_string_array(data, "features")?;
+    if data
+        .get("all_features")
+        .is_some_and(|value| value.as_bool().is_none())
+    {
+        return Err(ContractError::identity(
+            "stack_extension.data.all_features",
+            "must_be_boolean",
+        ));
+    }
     check_nullable_text(data, "nextest_digest")?;
     check_nullable_text(data, "archive")?;
     Ok(())

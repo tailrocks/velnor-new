@@ -113,6 +113,7 @@ pub(super) fn discovery_with(task_ids: &[&str]) -> Discovery {
             .iter()
             .map(|id| {
                 let group = TaskGroup {
+                    all_features: false,
                     task_id: (*id).to_owned(),
                     package_id: "demo".to_owned(),
                     package_name: "demo".to_owned(),

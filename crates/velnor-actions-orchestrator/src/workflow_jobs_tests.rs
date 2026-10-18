@@ -129,6 +129,32 @@ fn plan_job_writes_request_before_plan() {
 }
 
 #[test]
+fn all_features_plan_need_reaches_locked_offline_source_probe() {
+    let catalog = ToolCatalog::pinned();
+    let job = plan_job(
+        "ubuntu-26.04",
+        None,
+        &catalog,
+        PlanJobToolNeeds {
+            all_features: true,
+            ..needs(PlanRustNeed::Compiler)
+        },
+        &[String::new()],
+        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+    )
+    .expect("all-features plan job");
+    let fetch = job
+        .steps
+        .iter()
+        .find(|step| step.name == crate::source_prep::FETCH_SOURCES_STEP)
+        .expect("root source preparation");
+    let StepKind::Shell { run, .. } = &fetch.kind else {
+        panic!("source preparation is a shell step");
+    };
+    assert!(run[2].contains("metadata --locked --offline --all-features"));
+}
+
+#[test]
 fn qualification_resolver_is_scoped_between_request_and_plan() {
     let catalog = ToolCatalog::pinned();
     let job = plan_job(

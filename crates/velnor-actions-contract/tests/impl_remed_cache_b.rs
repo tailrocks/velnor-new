@@ -230,6 +230,12 @@ fn cache_extension_slots_require_workspace_and_profile() {
         }),
     };
     assert_eq!(validate_rust_extension(&good), Ok(()));
+    let mut all_features = good.clone();
+    all_features.data["all_features"] = serde_json::json!(true);
+    assert_eq!(validate_rust_extension(&all_features), Ok(()));
+    let mut malformed_all_features = good.clone();
+    malformed_all_features.data["all_features"] = serde_json::json!("true");
+    assert!(validate_rust_extension(&malformed_all_features).is_err());
     let mut unknown = good.clone();
     unknown.schema = "rust-task-v2".to_owned();
     assert!(validate_rust_extension(&unknown).is_err());

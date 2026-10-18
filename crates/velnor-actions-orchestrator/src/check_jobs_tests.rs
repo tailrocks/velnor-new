@@ -85,6 +85,7 @@ fn assert_named_check_plan_entries(
 
 fn rust_proposal() -> velnor_actions_contract::ProposedTask {
     let group = TaskGroup {
+        all_features: false,
         task_id: "stack/rust/root/clippy/default".to_owned(),
         package_id: "demo 0.1.0".to_owned(),
         package_name: "demo".to_owned(),

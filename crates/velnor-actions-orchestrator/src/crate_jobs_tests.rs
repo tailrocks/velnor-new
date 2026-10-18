@@ -10,8 +10,18 @@ use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, Te
 
 /// Runnable fixture proposal for one package/kind pair.
 pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> ProposedTask {
+    group_with_all_features(package, kind, gated_by, false)
+}
+
+fn group_with_all_features(
+    package: &str,
+    kind: TaskKind,
+    gated_by: &[&str],
+    all_features: bool,
+) -> ProposedTask {
     let key = if package == "demo" { "root" } else { package };
     let group = TaskGroup {
+        all_features,
         task_id: format!("stack/rust/{key}/{}/default", kind.as_str()),
         package_id: format!("{package} 0.1.0"),
         package_name: package.to_owned(),
@@ -113,6 +123,38 @@ fn drivers_follow_per_crate_selection() {
     assert!(steps.contains(&"Restore MBX objects"), "{steps:?}");
     let steps = names(&found.jobs[1].1);
     assert!(!steps.contains(&"Restore MBX objects"), "{steps:?}");
+}
+
+#[test]
+fn all_features_obligation_selects_all_features_source_probe() {
+    let source_roots = [String::new()];
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &discovery(vec![group_with_all_features(
+            "demo",
+            TaskKind::Clippy,
+            &[],
+            true,
+        )]),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &source_roots,
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+    })
+    .expect("crate jobs");
+    let fetch = found.jobs[0]
+        .1
+        .steps
+        .iter()
+        .find(|step| step.name == crate::source_prep::FETCH_SOURCES_STEP)
+        .expect("crate source probe");
+    let velnor_actions_contract::StepKind::Shell { run, .. } = &fetch.kind else {
+        panic!("source probe must be a shell step");
+    };
+    assert!(run[2].contains("metadata --locked --offline --all-features"));
 }
 
 #[test]

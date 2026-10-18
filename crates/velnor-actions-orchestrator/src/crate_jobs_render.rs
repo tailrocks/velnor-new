@@ -62,14 +62,16 @@ pub(super) fn render_job(
         )?);
     }
     if use_rust {
+        let all_features = obligations_use_all_features(&model.obligations);
         let scoped_roots = crate::source_prep::crate_fetch_roots(
             &model.manifest,
             fetch_roots,
             policy == WorkflowPolicy::VelnorRepositoryV1 && needs_validators,
         );
-        steps.extend(crate::source_prep::fetch_steps_for_crate(
+        steps.extend(crate::source_prep::fetch_steps_for_crate_with_all_features(
             catalog,
             &scoped_roots,
+            all_features,
         )?);
     }
     steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(
@@ -102,6 +104,14 @@ pub(super) fn render_job(
         steps,
         cache_mode: None,
     })
+}
+
+fn obligations_use_all_features(
+    obligations: &[velnor_actions_contract::workflow::CrateObligation],
+) -> bool {
+    obligations
+        .iter()
+        .any(|obligation| obligation.run.iter().any(|arg| arg == "--all-features"))
 }
 
 fn render_obligation_steps(

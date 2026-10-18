@@ -99,6 +99,9 @@ pub fn propose_task(group: &TaskGroup) -> Result<ProposedTask, ContractError> {
             features: group.features.clone(),
             flags: {
                 let mut f = group.target_flags.clone();
+                if group.all_features {
+                    f.push("--all-features".to_owned());
+                }
                 f.sort();
                 f
             },

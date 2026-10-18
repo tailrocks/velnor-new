@@ -49,6 +49,7 @@ fn config_validation_reports_key_paths() {
                 configurations: vec![RustConfiguration {
                     name: "default".to_owned(),
                     features: vec!["default".to_owned()],
+                    all_features: false,
                     target: "host".to_owned(),
                 }],
                 toolchain: None,
@@ -176,6 +177,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
         configurations: vec![RustConfiguration {
             name: "Default".to_owned(),
             features: vec![],
+            all_features: false,
             target: "host".to_owned(),
         }],
         ..RustStackConfig::default_config()

@@ -16,6 +16,7 @@ fn digest_full(
     closure: &str,
 ) -> String {
     let group = TaskGroup {
+        all_features: false,
         task_id: format!("stack/rust/root/{}/default", kind.as_str()),
         package_id: package_id.to_owned(),
         package_name: "demo".to_owned(),

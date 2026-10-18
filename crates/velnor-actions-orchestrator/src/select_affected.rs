@@ -237,6 +237,7 @@ mod tests {
         use velnor_actions_rust::{TaskGroup, TaskKind};
         let mut discovery = two_package_discovery();
         let group = |package: &str| TaskGroup {
+            all_features: false,
             task_id: format!("stack/rust/{package}/clippy/default"),
             package_id: package.to_owned(),
             package_name: package.to_owned(),
@@ -301,6 +302,7 @@ mod tests {
         use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
         let mut discovery = two_package_discovery();
         let group = TaskGroup {
+            all_features: false,
             task_id: "stack/rust/a/clippy/default".to_owned(),
             package_id: "a".to_owned(),
             package_name: "a".to_owned(),

@@ -90,7 +90,8 @@ pub use stability::{
 };
 pub use tasks::{
     DeriveInputs, TaskGroup, TaskKind, derive_task_groups, derive_workspace_fmt,
-    derive_workspace_fmt_if_explicit,
+    derive_workspace_fmt_if_explicit, derive_workspace_fmt_if_explicit_with_features,
+    derive_workspace_fmt_with_features,
 };
 pub use toolfiles::{
     FOREIGN_TOOL_FILES, MISSING_RECOMMENDED_INPUT, OWNED_SYMBOLS, RUST_TOOLCHAIN_FILE,

@@ -24,6 +24,8 @@ const CARGO_METADATA: &str = "metadata";
 pub struct MetadataDiscovery {
     /// Manifest whose metadata is requested.
     manifest: PathBuf,
+    /// Resolve metadata with every declared feature activated.
+    all_features: bool,
 }
 
 impl MetadataDiscovery {
@@ -38,7 +40,17 @@ impl MetadataDiscovery {
                 path: String::new(),
             });
         }
-        Ok(Self { manifest })
+        Ok(Self {
+            manifest,
+            all_features: false,
+        })
+    }
+
+    /// Select all Cargo features for metadata resolution.
+    #[must_use]
+    pub fn with_all_features(mut self, enabled: bool) -> Self {
+        self.all_features = enabled;
+        self
     }
 
     /// Manifest whose metadata is requested.
@@ -50,15 +62,21 @@ impl MetadataDiscovery {
     /// Cargo-side payload arguments, byte-exact per the contract.
     #[must_use]
     pub fn cargo_argv(&self) -> Vec<OsString> {
-        vec![
+        let mut args = vec![
             OsString::from(CARGO_PROGRAM),
             OsString::from(CARGO_METADATA),
             OsString::from("--format-version"),
             OsString::from("1"),
             OsString::from("--no-deps"),
+        ];
+        if self.all_features {
+            args.push(OsString::from("--all-features"));
+        }
+        args.extend([
             OsString::from("--manifest-path"),
             self.manifest.as_os_str().to_owned(),
-        ]
+        ]);
+        args
     }
 
     /// Full mise argument vector including the program.
@@ -101,6 +119,8 @@ impl MetadataDiscovery {
 pub struct MetadataQualification {
     /// Workspace-root manifest whose resolution is qualified.
     workspace_manifest: PathBuf,
+    /// Resolve metadata with every declared feature activated.
+    all_features: bool,
 }
 
 impl MetadataQualification {
@@ -115,7 +135,17 @@ impl MetadataQualification {
                 path: String::new(),
             });
         }
-        Ok(Self { workspace_manifest })
+        Ok(Self {
+            workspace_manifest,
+            all_features: false,
+        })
+    }
+
+    /// Select all Cargo features for locked/offline qualification.
+    #[must_use]
+    pub fn with_all_features(mut self, enabled: bool) -> Self {
+        self.all_features = enabled;
+        self
     }
 
     /// Workspace-root manifest whose resolution is qualified.
@@ -127,16 +157,22 @@ impl MetadataQualification {
     /// Cargo-side payload arguments, byte-exact per the contract.
     #[must_use]
     pub fn cargo_argv(&self) -> Vec<OsString> {
-        vec![
+        let mut args = vec![
             OsString::from(CARGO_PROGRAM),
             OsString::from(CARGO_METADATA),
             OsString::from("--format-version"),
             OsString::from("1"),
             OsString::from("--locked"),
             OsString::from("--offline"),
+        ];
+        if self.all_features {
+            args.push(OsString::from("--all-features"));
+        }
+        args.extend([
             OsString::from("--manifest-path"),
             self.workspace_manifest.as_os_str().to_owned(),
-        ]
+        ]);
+        args
     }
 
     /// Full mise argument vector including the program.

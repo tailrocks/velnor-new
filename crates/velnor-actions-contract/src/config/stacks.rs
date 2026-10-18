@@ -80,6 +80,7 @@ fn default_configurations() -> Vec<RustConfiguration> {
     vec![RustConfiguration {
         name: "default".to_owned(),
         features: vec!["default".to_owned()],
+        all_features: false,
         target: "host".to_owned(),
     }]
 }
@@ -93,8 +94,19 @@ pub struct RustConfiguration {
     /// Cargo features for this variant.
     #[serde(default)]
     pub features: Vec<String>,
+    /// Activate every feature declared by each package in this variant.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub all_features: bool,
     /// Target triple or `host`.
     pub target: String,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if needs a reference predicate"
+)]
+const fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// True for a render-safe Rust target: `host` or a lowercase triple over
@@ -248,6 +260,16 @@ impl RustStackConfig {
                     ));
                 }
             }
+            if config.all_features
+                && !config.features.is_empty()
+                && !(config.features.len() == 1 && config.features[0] == "default")
+            {
+                return Err(ContractError::config(
+                    file,
+                    "stacks.rust.configurations.features",
+                    "features_conflict_all_features",
+                ));
+            }
         }
         if let Some(mode) = &self.run_ignored
             && !matches!(mode.as_str(), "all" | "only" | "ignored-only" | "default")
@@ -302,10 +324,45 @@ mod tests {
         stack.configurations = vec![RustConfiguration {
             name: "default".to_owned(),
             features: Vec::new(),
+            all_features: false,
             target: "${{ secrets.CARGO_REGISTRY_TOKEN }}".to_owned(),
         }];
         let err = stack.validate("config.toml").expect_err("PoC target fails");
         assert!(err.to_string().contains("bad_target"), "{err}");
+    }
+
+    #[test]
+    fn omitted_all_features_preserves_legacy_configuration_bytes() {
+        let legacy = r#"{"name":"default","features":["default"],"target":"host"}"#;
+        let config: RustConfiguration = serde_json::from_str(legacy).expect("legacy config");
+
+        assert!(!config.all_features);
+        assert_eq!(serde_json::to_string(&config).expect("serialize"), legacy);
+    }
+
+    #[test]
+    fn all_features_rejects_a_conflicting_feature_subset() {
+        let mut stack = RustStackConfig::default_config();
+        stack.configurations[0].all_features = true;
+        stack.configurations[0].features = vec!["serde".to_owned()];
+
+        let err = stack
+            .validate("config.toml")
+            .expect_err("conflicting subset");
+        assert!(
+            err.to_string().contains("features_conflict_all_features"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn all_features_accepts_empty_list_and_default_sentinel() {
+        for features in [Vec::new(), vec!["default".to_owned()]] {
+            let mut stack = RustStackConfig::default_config();
+            stack.configurations[0].all_features = true;
+            stack.configurations[0].features = features;
+            assert!(stack.validate("config.toml").is_ok());
+        }
     }
     #[test]
     fn ignore_admission_uses_typed_stack_eligibility() {

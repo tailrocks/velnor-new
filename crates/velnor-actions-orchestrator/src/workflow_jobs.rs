@@ -19,7 +19,7 @@ use velnor_actions_workflow_renderer::steps::{
 };
 
 use crate::OrchestratorError;
-use crate::source_prep::fetch_steps_for_plan;
+use crate::source_prep::fetch_steps_for_plan_with_all_features;
 use crate::utf8::{strings_of, strings_of_env};
 
 /// Rust needs of the planner job, including the optional format components.
@@ -42,9 +42,14 @@ impl PlanRustNeed {
 }
 
 /// Named planner tool needs; named fields prevent resolver/tool roles swapping.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "the independent planner tool requirements are opt-in signals"
+)]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub(crate) struct PlanJobToolNeeds {
     pub(crate) rust: PlanRustNeed,
+    pub(crate) all_features: bool,
     pub(crate) nextest: bool,
     pub(crate) opentofu: bool,
     pub(crate) gh: bool,
@@ -95,7 +100,11 @@ pub(crate) fn plan_job(
     let cached =
         crate::workflow_jobs_cache::cache_steps_for_plan(label, catalog, fetch_roots, policy)?;
     steps.extend(cached.restore);
-    steps.extend(fetch_steps_for_plan(catalog, fetch_roots)?);
+    steps.extend(fetch_steps_for_plan_with_all_features(
+        catalog,
+        fetch_roots,
+        needs.all_features,
+    )?);
     steps.extend(cached.save);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);

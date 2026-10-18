@@ -22,7 +22,10 @@ use crate::OrchestratorError;
 use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::discover_index::build_file_index;
 use crate::internal::phase_timing::PlanPhaseTimings;
-use crate::inventory::{qualify_workspaces, run_inventories, run_inventories_with_phase_timings};
+use crate::inventory::{
+    qualify_workspaces_with_all_features, run_inventories_with_all_features,
+    run_inventories_with_phase_timings_and_all_features,
+};
 use crate::recommendations::collect_recommendations;
 #[path = "consumer_manifest.rs"]
 mod consumer_manifest;
@@ -132,20 +135,29 @@ fn discover_inner(
         problem: err.to_string(),
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
+    let all_features = rust_all_features(config);
     #[expect(
         clippy::needless_option_as_deref,
         reason = "the original Option must remain available after this branch"
     )]
     let inventory_result = match phases.as_deref_mut() {
-        Some(phases) => run_inventories_with_phase_timings(
+        Some(phases) => run_inventories_with_phase_timings_and_all_features(
             root,
             &candidates,
             index.files(),
             &mut reads,
             phases,
+            all_features,
             catalog,
         ),
-        None => run_inventories(root, &candidates, index.files(), &mut reads, catalog),
+        None => run_inventories_with_all_features(
+            root,
+            &candidates,
+            index.files(),
+            &mut reads,
+            all_features,
+            catalog,
+        ),
     };
     let ((outcomes, inventories), tofu_units) = inventory_result?;
     let statuses = check_candidate_outcomes(initial, &outcomes).map_err(|err| {
@@ -154,7 +166,7 @@ fn discover_inner(
         }
     })?;
     let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
-    qualify_workspaces(root, &workspaces, catalog)?;
+    qualify_workspaces_with_all_features(root, &workspaces, all_features, catalog)?;
     let (mut proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
     let mise_checks =
         velnor_actions_mise::discover_checks(root, &config.checks, &config.qualified_tools)
@@ -182,6 +194,14 @@ fn discover_inner(
         skipped_non_utf8,
         tofu_note: tofu_step.note,
         tofu_units,
+    })
+}
+
+fn rust_all_features(config: &VelnorConfig) -> bool {
+    config.stacks.rust.as_ref().is_some_and(|rust| {
+        rust.configurations
+            .iter()
+            .any(|configuration| configuration.all_features)
     })
 }
 

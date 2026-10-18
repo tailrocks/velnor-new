@@ -157,6 +157,7 @@ fn quoted_argv_rejects_malformed_parameter_expansion() {
 /// Minimal proposal with one compile driver.
 fn group_with_driver(driver: velnor_actions_rust::CompileDriver) -> ProposedTask {
     let group = velnor_actions_rust::TaskGroup {
+        all_features: false,
         task_id: "stack/rust/root/clippy/default".to_owned(),
         package_id: String::new(),
         package_name: String::new(),
