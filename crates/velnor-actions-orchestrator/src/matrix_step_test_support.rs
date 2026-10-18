@@ -127,6 +127,7 @@ pub(super) fn renderer_context(
         report_helper_version: generator_version,
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
+        scale_set_image_source_sha: None,
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses,
         validator_commands: Vec::new(),

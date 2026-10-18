@@ -2,15 +2,17 @@
 
 use std::fs;
 use std::io::Read;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::strict_json::parse_strict_json_bytes;
 use velnor_actions_contract::workflow::{
     QualificationCacheAdmission, QualificationCacheBackendEntry, QualificationCacheDirective,
-    QualificationCacheLayer, QualificationRuntimeIdentity, Trust, WorkflowEvent,
+    QualificationCacheLayer, QualificationRuntimeIdentity, QualificationRuntimeImageDigests,
+    QualificationRuntimeImageIdentity, QualificationRuntimeScaleSet, Trust, WorkflowEvent,
 };
-use velnor_actions_contract::{canonical_json_str, run_key_for_ci};
+use velnor_actions_contract::{RunsOn, canonical_json_str, run_key_for_ci};
 
 use crate::OrchestratorError;
 use crate::internal::internal;
@@ -32,6 +34,9 @@ pub(crate) const QUALIFICATION_CACHE_DIRECTIVE_MAX_BYTES: usize =
 /// variable name and separators are included.
 const MAX_RUNTIME_IDENTITY_JSON_BYTES: usize = 65_536;
 const MAX_PLAN_JSON_BYTES: u64 = crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES;
+const GUEST_IMAGE_PROJECTION_PATH: &str = "/opt/velnor/guest-image.json";
+const GUEST_IMAGE_PROJECTION_SCHEMA: &str = "velnor.guest-image/v1";
+const MAX_GUEST_IMAGE_PROJECTION_BYTES: usize = 65_536;
 
 /// Current runner facts checked against the staged qualification plan.
 #[derive(Debug, Clone)]
@@ -61,9 +66,9 @@ pub struct QualificationCacheBindingRequest<'a> {
     /// Actual runner architecture.
     pub runner_arch: &'a str,
     /// Verified runner image family.
-    pub image_os: &'a str,
+    pub image_os: Option<&'a str>,
     /// Verified runner image version.
-    pub image_version: &'a str,
+    pub image_version: Option<&'a str>,
     /// Selected plan matrix key.
     pub matrix_key: &'a str,
     /// Closed layer wire name.
@@ -135,13 +140,31 @@ pub fn bind_qualification_cache_runtime(
         request.runtime_identity_json,
         MAX_RUNTIME_IDENTITY_JSON_BYTES,
     )?;
-    validate_runtime_environment(&evidence, &plan.runner.label, request)?;
     let entry = plan
         .matrix
         .include
         .iter()
         .find(|entry| entry.matrix_key == request.matrix_key)
         .ok_or_else(|| internal("qualification_cache_matrix_key_missing"))?;
+    let image_identity = match RunsOn::parse(&entry.planned_platform.runs_on)
+        .map_err(crate::internal::internal_contract)?
+    {
+        RunsOn::Hosted(_) => None,
+        RunsOn::ScaleSet(selector) => {
+            let expected_source_sha = plan
+                .qualification
+                .as_ref()
+                .and_then(|context| context.scale_set_image_source_sha.as_deref())
+                .ok_or_else(|| internal("qualification_guest_image_source_authority_missing"))?;
+            let projection = read_guest_image_projection()?;
+            Some(verified_scale_set_image_identity(
+                &projection,
+                expected_source_sha,
+                &selector,
+            )?)
+        }
+    };
+    validate_runtime_environment(&evidence, &plan, entry, request, image_identity.as_ref())?;
     let lane = directive
         .lanes
         .iter()
@@ -270,18 +293,137 @@ fn read_admission(
     Ok(Some(admission))
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct GuestImageProjection {
+    schema: String,
+    source_sha: String,
+    guest_platform: String,
+    scale_set: QualificationRuntimeScaleSet,
+    images: GuestImageDigests,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct GuestImageDigests {
+    runner: QualificationRuntimeImageDigests,
+    dind: QualificationRuntimeImageDigests,
+}
+
+fn read_guest_image_projection() -> Result<GuestImageProjection, OrchestratorError> {
+    let path = Path::new(GUEST_IMAGE_PROJECTION_PATH);
+    for directory in [Path::new("/opt"), Path::new("/opt/velnor")] {
+        let metadata = fs::symlink_metadata(directory)
+            .map_err(|_| internal("qualification_guest_image_directory_missing"))?;
+        if metadata.file_type().is_symlink()
+            || !metadata.is_dir()
+            || metadata.uid() != 0
+            || metadata.mode() & 0o022 != 0
+        {
+            return Err(internal("qualification_guest_image_directory_untrusted"));
+        }
+    }
+    let bytes = read_readonly_projection_file(path)?;
+    let text =
+        std::str::from_utf8(&bytes).map_err(|_| internal("qualification_guest_image_encoding"))?;
+    parse_canonical(text, MAX_GUEST_IMAGE_PROJECTION_BYTES)
+}
+
+fn read_readonly_projection_file(path: &Path) -> Result<Vec<u8>, OrchestratorError> {
+    let fd = rustix::fs::open(
+        path,
+        rustix::fs::OFlags::RDONLY
+            | rustix::fs::OFlags::NOFOLLOW
+            | rustix::fs::OFlags::NONBLOCK
+            | rustix::fs::OFlags::CLOEXEC,
+        rustix::fs::Mode::empty(),
+    )
+    .map_err(|_| internal("qualification_guest_image_unreadable"))?;
+    let stat =
+        rustix::fs::fstat(&fd).map_err(|_| internal("qualification_guest_image_unreadable"))?;
+    if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::RegularFile
+        || stat.st_mode & 0o222 != 0
+    {
+        return Err(internal("qualification_guest_image_file_untrusted"));
+    }
+    let mut file = fs::File::from(fd).take(
+        u64::try_from(MAX_GUEST_IMAGE_PROJECTION_BYTES)
+            .map_err(|_| internal("qualification_guest_image_limit"))?
+            .saturating_add(1),
+    );
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)
+        .map_err(|_| internal("qualification_guest_image_unreadable"))?;
+    if bytes.len() > MAX_GUEST_IMAGE_PROJECTION_BYTES {
+        return Err(internal("qualification_guest_image_oversize"));
+    }
+    Ok(bytes)
+}
+
+fn verified_scale_set_image_identity(
+    projection: &GuestImageProjection,
+    source_sha: &str,
+    selector: &velnor_actions_contract::ScaleSetSelector,
+) -> Result<QualificationRuntimeImageIdentity, OrchestratorError> {
+    if projection.schema != GUEST_IMAGE_PROJECTION_SCHEMA
+        || projection.source_sha != source_sha
+        || projection.guest_platform != "linux/amd64"
+        || projection.scale_set.name != selector.name()
+        || projection.scale_set.labels != selector.labels()
+    {
+        return Err(internal("qualification_guest_image_binding_mismatch"));
+    }
+    Ok(QualificationRuntimeImageIdentity::ScaleSet {
+        source_sha: projection.source_sha.clone(),
+        guest_platform: projection.guest_platform.clone(),
+        scale_set: Box::new(projection.scale_set.clone()),
+        runner_image: Box::new(projection.images.runner.clone()),
+        dind_image: Box::new(projection.images.dind.clone()),
+    })
+}
+
 fn validate_runtime_environment(
     evidence: &QualificationRuntimeIdentity,
-    runner_label: &str,
+    plan: &velnor_actions_contract::Plan,
+    entry: &velnor_actions_contract::workflow::MatrixEntry,
     request: &QualificationCacheBindingRequest<'_>,
+    scale_set_image: Option<&QualificationRuntimeImageIdentity>,
 ) -> Result<(), OrchestratorError> {
     if evidence.platform.os != request.runner_os
         || evidence.platform.arch != request.runner_arch
-        || evidence.platform.image_os != request.image_os
-        || evidence.platform.image_version != request.image_version
-        || evidence.platform.runs_on != runner_label
+        || evidence.platform.runner_label != plan.runner.label
+        || evidence.platform.runs_on != entry.planned_platform.runs_on
+        || evidence.platform.target != entry.planned_platform.target
     {
         return Err(internal("qualification_cache_runtime_environment_mismatch"));
+    }
+    match RunsOn::parse(&entry.planned_platform.runs_on)
+        .map_err(crate::internal::internal_contract)?
+    {
+        RunsOn::Hosted(_) => {
+            let QualificationRuntimeImageIdentity::Hosted {
+                image_os,
+                image_version,
+            } = &evidence.platform.image_identity
+            else {
+                return Err(internal(
+                    "qualification_cache_runtime_image_source_mismatch",
+                ));
+            };
+            if request.image_os != Some(image_os.as_str())
+                || request.image_version != Some(image_version.as_str())
+            {
+                return Err(internal("qualification_cache_runtime_image_mismatch"));
+            }
+        }
+        RunsOn::ScaleSet(_) => {
+            if request.image_os.is_some()
+                || request.image_version.is_some()
+                || scale_set_image != Some(&evidence.platform.image_identity)
+            {
+                return Err(internal("qualification_cache_runtime_image_mismatch"));
+            }
+        }
     }
     Ok(())
 }

@@ -16,7 +16,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
     ContractError, NamedCheckLane, Plan, PlanBaseline, PlanMatrix, PlanRunner, ProposedTask,
-    RunnerSelection, WorkflowEvent, canonical_json_bytes, plan_id_for_run,
+    RunnerSelection, RunsOn, WorkflowEvent, canonical_json_bytes, plan_id_for_run,
 };
 use velnor_actions_mise::ToolCatalog;
 
@@ -112,6 +112,16 @@ fn plan_internal_inner(
         &prep.default_branch,
         prep.config.workflow.verification_branch.as_deref(),
     )?;
+    let scale_set_image_source_sha = prep
+        .config
+        .execution
+        .as_ref()
+        .and_then(|execution| execution.scale_set_image_source_sha())
+        .map(str::to_owned);
+    if let Some(context) = request.qualification.as_mut() {
+        context.scale_set_image_source_sha = scale_set_image_source_sha.clone();
+        context.validate_shape().map_err(internal_contract)?;
+    }
     let named_check_lanes = named_lanes::resolve(&prep, request.named_check_lanes.take())?;
     let catalog = &prep.catalog;
     let mut warnings = Vec::new();
@@ -142,6 +152,26 @@ fn plan_internal_inner(
         warnings,
         timings.as_deref_mut(),
     )?;
+    let has_scale_set_lane = plan.matrix.include.iter().any(|entry| {
+        RunsOn::parse(&entry.planned_platform.runs_on).is_ok_and(|runs_on| runs_on.is_scale_set())
+    });
+    if request.event == WorkflowEvent::Qualification
+        && has_scale_set_lane
+        && scale_set_image_source_sha.is_none()
+    {
+        let profile = prep
+            .config
+            .execution
+            .as_ref()
+            .map_or("scale_set", |execution| {
+                execution.scale_set_profile.as_str()
+            });
+        return Err(OrchestratorError::config(
+            crate::config::CONFIG_REL,
+            format!("execution.profiles.{profile}.image_source_sha"),
+            "required_for_scale_set_qualification",
+        ));
+    }
     let manifest = request.baseline_manifest.and_then(|value| {
         serde_json::from_value::<BaselineManifest>(value)
             .inspect_err(|_| {

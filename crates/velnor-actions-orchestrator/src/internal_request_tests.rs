@@ -75,6 +75,7 @@ fn cold_qualification_response() -> String {
             run_id: 123,
             run_attempt: 1,
             predecessor: None,
+            scale_set_image_source_sha: None,
         }),
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),

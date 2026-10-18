@@ -31,7 +31,7 @@ use crate::internal_plan::snapshot::{
 use crate::internal_plan::wire_w2::{self, GroupWire};
 use crate::internal_plan::{
     IdentityInputs, adapter_metadata, cache_ids_for, evidence_for_group, execute_ids,
-    nextest_config_for, record_task_cache, task_identity_digest, toolchain_id,
+    nextest_config_for, record_task_cache, task_identity_digest,
 };
 use crate::schedule::assign_lanes;
 use crate::select::group_changed;
@@ -230,7 +230,11 @@ pub(crate) fn plan_group(
         );
     }
     let _ = inputs.lane;
-    let toolchain = toolchain_id(task, inputs.catalog).map_err(internal_contract)?;
+    let toolchain_inputs =
+        crate::internal_plan::identities::toolchain_inputs_for(task, inputs.catalog)
+            .map_err(internal_contract)?;
+    let toolchain = velnor_actions_contract::cachekey::toolchain_id(&toolchain_inputs)
+        .map_err(internal_contract)?;
     let argv = task_argv(task, inputs.catalog)?;
     let platform_id = platform_id_for_group(inputs.label, task).map_err(internal_contract)?;
     let identity = planned_identity(inputs, &argv, &toolchain, &platform_id, &mut *reads)?;
@@ -272,6 +276,7 @@ pub(crate) fn plan_group(
         inputs,
         &argv,
         &toolchain,
+        toolchain_inputs,
         &input_digest,
         closure_digest,
         reuse,
@@ -284,6 +289,7 @@ fn complete_group(
     inputs: &GroupInputs<'_>,
     argv: &[String],
     toolchain: &str,
+    toolchain_inputs: velnor_actions_contract::cachekey::ToolchainInputs,
     input_digest: &str,
     closure_digest: String,
     reuse: wire_w2::ReuseOutcome,
@@ -334,6 +340,7 @@ fn complete_group(
     let cache_ids = cache_ids_for(task, inputs.label, toolchain).map_err(internal_contract)?;
     record_lane_target_dir(&mut entry.adapter_metadata, cache_ids.lane_id());
     entry.cache_ids = Some(cache_ids);
+    entry.toolchain_inputs = Some(toolchain_inputs);
     Ok((obligation, entry))
 }
 

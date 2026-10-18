@@ -8,10 +8,15 @@ use velnor_actions_contract::workflow::{
     EntryCacheIds, ExecuteTaskIds, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
     PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlannedPlatform,
     QualificationDispatch, QualificationPhase, QualificationRunRef,
-    QualificationRuntimeIdentityRequirements, QualificationRuntimePlatform,
+    QualificationRuntimeAbiObservation, QualificationRuntimeIdentityRequirements,
+    QualificationRuntimeImageDigests, QualificationRuntimeImageIdentity,
+    QualificationRuntimePlatform, QualificationRuntimeScaleSet,
+    QualificationRuntimeToolObservation,
 };
 use velnor_actions_contract::{
-    RunnerSelection, canonical_json_str, digest_b3, plan_id_for_run, run_key_for_ci,
+    RunnerSelection, ScaleSetSelector,
+    cachekey::{ToolchainInputs, toolchain_id},
+    canonical_json_str, digest_b3, plan_id_for_run, run_key_for_ci,
 };
 
 const SOURCE: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -109,6 +114,7 @@ fn large_valid_directive_is_read_from_the_run_artifact() {
         )
         .expect("cache-test lane");
         entry.cache_ids = template.cache_ids.clone();
+        entry.toolchain_inputs = template.toolchain_inputs.clone();
         plan.matrix.include.push(entry);
     }
     plan.matrix
@@ -211,6 +217,84 @@ fn missing_warm_predecessor_artifact_fails_closed() {
     let fixture = Fixture::warm_without_admission();
     let request = fixture.request();
     assert!(bind_result(&request).is_err());
+}
+
+#[test]
+fn scale_set_without_configured_runner_image_source_fails_before_projection_read() {
+    let fixture = Fixture::cold();
+    let mut plan = fixture.plan.clone();
+    let selector = ScaleSetSelector::try_new(
+        "ubuntu-26.04-scale-set",
+        &["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()],
+    )
+    .expect("Scale Set selector");
+    let planned = PlannedPlatform::new(&selector.token(), "x86_64-unknown-linux-gnu")
+        .expect("Scale Set platform");
+    let entry = &mut plan.matrix.include[0];
+    entry.planned_platform = planned.clone();
+    let toolchain_inputs = entry
+        .toolchain_inputs
+        .as_ref()
+        .expect("plan toolchain inputs");
+    entry.cache_ids = Some(
+        EntryCacheIds::new(
+            &digest_b3(b"workspace"),
+            &digest_b3(b"lane"),
+            &planned.platform_id,
+            &toolchain_id(toolchain_inputs).expect("toolchain identity"),
+            &digest_b3(b"cache format"),
+        )
+        .expect("cache identity"),
+    );
+    fixture.write_plan(&plan);
+
+    let error = bind_result(&fixture.request()).expect_err("Scale Set image source is absent");
+    assert!(
+        error
+            .to_string()
+            .contains("qualification_guest_image_source_authority_missing"),
+        "unexpected error: {error}"
+    );
+}
+
+#[test]
+fn guest_projection_uses_runner_image_source_separate_from_consumer_source() {
+    let consumer_source = "a".repeat(40);
+    let runner_image_source = "b".repeat(40);
+    let selector = ScaleSetSelector::try_new(
+        "ubuntu-26.04-scale-set",
+        &["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()],
+    )
+    .expect("Scale Set selector");
+    let image = || QualificationRuntimeImageDigests {
+        archive_sha256: "1".repeat(64),
+        archive_index_digest: "2".repeat(64),
+        image_index_digest: None,
+        manifest_digest: format!("sha256:{}", "3".repeat(64)),
+        config_digest: format!("sha256:{}", "4".repeat(64)),
+    };
+    let projection = GuestImageProjection {
+        schema: GUEST_IMAGE_PROJECTION_SCHEMA.to_owned(),
+        source_sha: runner_image_source.clone(),
+        guest_platform: "linux/amd64".to_owned(),
+        scale_set: QualificationRuntimeScaleSet {
+            name: selector.name().to_owned(),
+            labels: selector.labels().to_vec(),
+        },
+        images: GuestImageDigests {
+            runner: image(),
+            dind: image(),
+        },
+    };
+
+    let identity = verified_scale_set_image_identity(&projection, &runner_image_source, &selector)
+        .expect("configured runner image source matches projection");
+    let QualificationRuntimeImageIdentity::ScaleSet { source_sha, .. } = identity else {
+        panic!("Scale Set projection creates Scale Set identity");
+    };
+    assert_eq!(source_sha, runner_image_source);
+    assert_ne!(source_sha, consumer_source);
+    assert!(verified_scale_set_image_identity(&projection, &consumer_source, &selector).is_err());
 }
 
 #[test]
@@ -318,8 +402,8 @@ impl Fixture {
             source_sha: &context.source_sha,
             runner_os: "Linux",
             runner_arch: "X64",
-            image_os: "ubuntu26",
-            image_version: "2026.10.18",
+            image_os: Some("ubuntu26"),
+            image_version: Some("2026.10.18"),
             matrix_key: &self.matrix_key,
             layer: &self.layer,
             runtime_identity_json: &self.runtime_identity_json,
@@ -419,6 +503,7 @@ fn qualification_plan(
             run_id,
             run_attempt: 1,
             predecessor,
+            scale_set_image_source_sha: None,
         }),
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
@@ -481,34 +566,87 @@ fn qualification_entry(
         platform.clone(),
     )
     .expect("matrix entry");
+    let toolchain_inputs = test_toolchain_inputs();
     entry.cache_ids = Some(
         EntryCacheIds::new(
             &digest_b3(b"workspace"),
             &digest_b3(b"lane"),
             platform.platform_id.as_str(),
-            &digest_b3(b"toolchain"),
+            &toolchain_id(&toolchain_inputs).expect("toolchain identity"),
             &digest_b3(b"cache format"),
         )
         .expect("cache identities"),
     );
+    entry.toolchain_inputs = Some(toolchain_inputs);
     entry
 }
 
 fn runtime_identity(
     requirements: &QualificationRuntimeIdentityRequirements,
 ) -> QualificationRuntimeIdentity {
+    let tools = requirements
+        .toolchain_inputs
+        .tools
+        .iter()
+        .map(|selector| {
+            let (_, version) = selector.rsplit_once('@').expect("pinned tool selector");
+            QualificationRuntimeToolObservation {
+                selector: selector.clone(),
+                reported_version: version.to_owned(),
+                executable_sha256: "a".repeat(64),
+            }
+        })
+        .collect();
+    let mut abi = vec![QualificationRuntimeAbiObservation::Host {
+        os: "Linux".to_owned(),
+        arch: "x86_64".to_owned(),
+        kernel: "6.12.0".to_owned(),
+        libc: Some("glibc 2.39".to_owned()),
+    }];
+    if let Some(version) = requirements
+        .toolchain_inputs
+        .tools
+        .iter()
+        .find_map(|selector| selector.strip_prefix("rust@"))
+    {
+        abi.push(QualificationRuntimeAbiObservation::Rust {
+            host: "x86_64-unknown-linux-gnu".to_owned(),
+            target: requirements.target.clone(),
+            version_verbose: format!(
+                "rustc {version} (test build)\nhost: x86_64-unknown-linux-gnu\nrelease: {version}"
+            ),
+            target_cfg: "target_arch=\"x86_64\"\ntarget_os=\"linux\"".to_owned(),
+            installed_components: requirements
+                .toolchain_inputs
+                .components
+                .iter()
+                .filter(|component| matches!(component.as_str(), "clippy" | "rustfmt"))
+                .cloned()
+                .collect(),
+        });
+    }
     QualificationRuntimeIdentity {
         platform: QualificationRuntimePlatform {
             os: "Linux".to_owned(),
             arch: "X64".to_owned(),
-            runs_on: requirements.runner_label.clone(),
-            image_os: "ubuntu26".to_owned(),
-            image_version: "2026.10.18".to_owned(),
+            runner_label: requirements.runner_label.clone(),
+            runs_on: requirements.runs_on.clone(),
+            image_identity: QualificationRuntimeImageIdentity::Hosted {
+                image_os: "ubuntu26".to_owned(),
+                image_version: "2026.10.18".to_owned(),
+            },
             target: requirements.target.clone(),
         },
-        toolchain_id: requirements.toolchain_id.clone(),
-        cache_format_id: requirements.cache_format_id.clone(),
-        abi_id: digest_b3(b"runtime abi"),
-        driver_id: requirements.driver_id.clone(),
+        tools,
+        abi,
+    }
+}
+
+fn test_toolchain_inputs() -> ToolchainInputs {
+    ToolchainInputs {
+        tools: vec!["rust@1.98.1".to_owned()],
+        components: vec!["clippy".to_owned(), "rustfmt".to_owned()],
+        compile_driver: "cargo".to_owned(),
+        test_runner: "cargo_test".to_owned(),
     }
 }

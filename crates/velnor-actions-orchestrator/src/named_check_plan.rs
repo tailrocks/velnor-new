@@ -1,7 +1,8 @@
 //! Named checks complete through the existing obligation and matrix envelopes.
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
-use crate::internal_plan::identities::{platform_id_for_group, toolchain_digest_for};
+use crate::internal_plan::identities::platform_id_for_group;
+use crate::internal_plan::named_checks::toolchain_inputs;
 use crate::internal_plan::snapshot::canonical_digest;
 use crate::internal_plan::snapshot::platform_target_for_group;
 use crate::internal_plan::{IdentityInputs, execute_ids, task_identity_digest};
@@ -62,7 +63,9 @@ pub(crate) fn derive_lanes_until(
     }
     let task = &item.proposal;
     let argv = crate::vectors::task_argv(task, catalog)?;
-    let toolchain = toolchain_digest_for(task, catalog).map_err(internal_contract)?;
+    let toolchain_inputs = toolchain_inputs(task, catalog).map_err(internal_contract)?;
+    let toolchain = velnor_actions_contract::cachekey::toolchain_id(&toolchain_inputs)
+        .map_err(internal_contract)?;
     let platform =
         platform_id_for_group(&item.check.runner.label, task).map_err(internal_contract)?;
     let planned_platform = planned_platform_for_check(&item.check.runner.label, task)?;
@@ -131,6 +134,7 @@ pub(crate) fn derive_lanes_until(
             .iter()
             .map(|evidence| evidence.path.clone())
             .collect();
+        entry.toolchain_inputs = Some(toolchain_inputs.clone());
         entries.push(entry);
     }
     Ok((obligation, entries))

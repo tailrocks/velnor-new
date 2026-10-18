@@ -110,6 +110,7 @@ pub(crate) fn qualification_dispatch_for_parts(
         run_id,
         run_attempt,
         predecessor,
+        scale_set_image_source_sha: None,
     };
     context
         .validate_shape()

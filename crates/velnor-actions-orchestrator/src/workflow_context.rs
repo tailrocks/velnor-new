@@ -45,11 +45,18 @@ pub(super) fn render_context(
     let validator_commands = validator_commands(&input)?;
     let candidate = candidate_spec_for(&input)?;
     let scale_set_selector = scale_set_selector(input.config, None)?;
+    let scale_set_image_source_sha = input
+        .config
+        .execution
+        .as_ref()
+        .and_then(|execution| execution.scale_set_image_source_sha())
+        .map(str::to_owned);
     Ok(RenderContext {
         generator_version: input.generator_version.to_owned(),
         report_helper_version: input.report_helper_version.to_owned(),
         runs_on: input.label.to_owned(),
         scale_set_selector,
+        scale_set_image_source_sha,
         staged_binary: format!("{STAGED_BINARY_PREFIX}{}", input.report_helper_version),
         request_dir: REQUEST_DIR.to_owned(),
         checkout_uses: CHECKOUT_USES.to_owned(),
