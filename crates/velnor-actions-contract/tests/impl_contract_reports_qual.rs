@@ -56,6 +56,7 @@ fn sample_qualification_plan() -> Result<Plan, ContractError> {
             source_sha: head,
             run_id: 3,
             run_attempt: 1,
+            scale_set_image_source_sha: None,
             predecessor: Some(velnor_actions_contract::QualificationRunRef {
                 run_id: 2,
                 run_attempt: 1,
