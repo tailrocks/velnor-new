@@ -3,6 +3,8 @@ use super::dispatch::WorkflowDispatch;
 use super::jobs::is_safe_display_name;
 use super::permissions::{PermissionLevel, Permissions};
 pub use super::step::{Step, StepKind};
+#[path = "job_graph_validation.rs"]
+mod job_graph_validation;
 #[path = "job_validation.rs"]
 mod job_validation;
 use super::timeout::JobTimeout;
@@ -227,6 +229,7 @@ impl WorkflowIr {
         for (id, job) in &self.jobs {
             job.validate(id, &ids, &self.permissions, pr_triggered)?;
         }
+        job_graph_validation::validate(&self.jobs)?;
         Ok(())
     }
 }

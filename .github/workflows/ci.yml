@@ -61,6 +61,8 @@ jobs:
     name: Actionlint
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    needs:
+      - plan
     steps:
       - &s1
         name: Checkout
@@ -69,6 +71,7 @@ jobs:
           persist-credentials: "false"
       - &s2
         name: Download helper (pre-seed trust-on-review)
+        if: success() && needs.plan.result == 'success'
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           name: velnor-preseed-helper
@@ -129,6 +132,8 @@ jobs:
     name: Alint
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    needs:
+      - plan
     steps:
       - *s1
       - *s2
@@ -146,6 +151,8 @@ jobs:
     name: Cargo Deny
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    needs:
+      - plan
     steps:
       - *s1
       - *s2
@@ -167,6 +174,8 @@ jobs:
     name: Cargo Machete
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    needs:
+      - plan
     steps:
       - *s1
       - *s2
@@ -202,11 +211,15 @@ jobs:
         with:
           fetch-depth: "0"
           persist-credentials: "false"
+      - &s10
+        name: Require successful pre-seed plan
+        if: always() && needs.plan.result != 'success'
+        run: sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; exit 1'
       - *s2
       - *s3
       - *s4
       - *s7
-      - &s10
+      - &s11
         name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -256,7 +269,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks install rust@1.99.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.148 gh@2.102.0
-      - &s11
+      - &s12
         name: Verify Rust before MBX action
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -265,7 +278,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; [ -d \"$RUNNER_TEMP\" ] || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must exist'\\'' >&2; exit 1; }; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP path contains a symlink'\\'' >&2; exit 1; }; mbx_cache_dir=\"$RUNNER_TEMP/velnor/mbx\"; [ \"${MBX_CACHE_DIR:-}\" = \"$mbx_cache_dir\" ] || { printf '\\''%s\\n'\\'' '\\''MBX_CACHE_DIR must use the stable runner-temp path'\\'' >&2; exit 1; }; [ ! -L \"$RUNNER_TEMP/velnor\" ] || { printf '\\''%s\\n'\\'' '\\''Velnor temp root must not be a symlink'\\'' >&2; exit 1; }; if [ ! -e \"$RUNNER_TEMP/velnor\" ]; then (umask 077 && mkdir -m 700 \"$RUNNER_TEMP/velnor\"); fi; [ -d \"$RUNNER_TEMP/velnor\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" || { printf '\\''%s\\n'\\'' '\\''Velnor temp root must be a real directory'\\'' >&2; exit 1; }; [ ! -e \"$mbx_cache_dir\" ] && [ ! -L \"$mbx_cache_dir\" ] || { printf '\\''%s\\n'\\'' '\\''MBX store root already exists in this private runner namespace'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$mbx_cache_dir\" && mkdir -m 700 \"$mbx_cache_dir/actions\") || { printf '\\''%s\\n'\\'' '\\''could not reserve the MBX store root'\\'' >&2; exit 1; }; [ -n \"${GITHUB_ENV:-}\" ] && [ -f \"$GITHUB_ENV\" ] && [ ! -L \"$GITHUB_ENV\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_ENV must be a regular runner file'\\'' >&2; exit 1; }; check_no_symlink \"$GITHUB_ENV\" || { printf '\\''%s\\n'\\'' '\\''GITHUB_ENV path contains a symlink'\\'' >&2; exit 1; }; printf '\\''MBX_CACHE_DIR=%s\\n'\\'' \"$mbx_cache_dir\" >> \"$GITHUB_ENV\"; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; case \"$GITHUB_RUN_ID\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run id must be numeric'\\'' >&2; exit 1 ;; esac; case \"$GITHUB_RUN_ATTEMPT\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run attempt must be numeric'\\'' >&2; exit 1 ;; esac; probe_dir=\"$RUNNER_TEMP/velnor-mbx-preflight-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; [ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '\\''%s\\n'\\'' '\\''preflight scratch already exists'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve preflight scratch'\\'' >&2; exit 1; }; cleanup() { rm -f \"$probe_dir/rust-root\" \"$probe_dir/rustc-output\"; rmdir \"$probe_dir\"; }; trap cleanup EXIT; trap '\\''exit 1'\\'' HUP INT TERM; mise --no-config --no-env --no-hooks where '\\''rust@1.99.1'\\'' > \"$probe_dir/rust-root\"; exec 3< \"$probe_dir/rust-root\"; IFS= read -r rust_root <&3 || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''Mise returned multiple Rust install paths'\\'' >&2; exit 1; fi; exec 3<&-; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Rust install path must be absolute'\\'' >&2; exit 1 ;; esac; rustc_bin=\"$rust_root/rustc\"; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.99.1'\\'' -vV > \"$probe_dir/rustc-output\"; grep -Fqx '\\''release: 1.99.1'\\'' \"$probe_dir/rustc-output\" || { printf '\\''Rustup did not report exact toolchain 1.99.1\\n'\\'' >&2; exit 1; }; printf '\\''%s\\n'\\'' \"$rust_root\" >> \"$GITHUB_PATH\"; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; mbx_disk_sample before-action-restore'"
-      - &s12
+      - &s13
         name: Restore MBX objects
         if: github.event_name != 'workflow_dispatch'
         uses: jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240
@@ -286,7 +299,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-      - &s13
+      - &s14
         name: Verify native MBX version
         id: mbx-ready
         env:
@@ -297,13 +310,13 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] || { printf '\\''%s\\n'\\'' '\\''MBX_CACHE_DIR changed from its stable runner-temp path'\\'' >&2; exit 1; }; [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX store directories are missing'\\'' >&2; exit 1; }; check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path contains a symlink'\\'' >&2; exit 1; }; case \"$GITHUB_RUN_ID\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run id must be numeric'\\'' >&2; exit 1 ;; esac; case \"$GITHUB_RUN_ATTEMPT\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run attempt must be numeric'\\'' >&2; exit 1 ;; esac; probe_dir=\"$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; [ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '\\''%s\\n'\\'' '\\''verification scratch already exists'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve verification scratch'\\'' >&2; exit 1; }; cleanup() { rm -f \"$probe_dir/version\" \"$probe_dir/cache-dir\"; rmdir \"$probe_dir\"; }; trap cleanup EXIT; trap '\\''exit 1'\\'' HUP INT TERM; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$mbx_bin\" --version > \"$probe_dir/version\"; exec 3< \"$probe_dir/version\"; IFS= read -r version_line <&3 || { printf '\\''%s\\n'\\'' '\\''MBX version output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX version output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$version_line\" = '\\''mbx 1.24.1'\\'' ] || { printf '\\''%s\\n'\\'' '\\''MBX on PATH does not match the pinned action version'\\'' >&2; exit 1; }; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$mbx_bin\" cache dir > \"$probe_dir/cache-dir\"; exec 3< \"$probe_dir/cache-dir\"; IFS= read -r cache_dir <&3 || { printf '\\''%s\\n'\\'' '\\''MBX cache dir output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX cache dir output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$cache_dir\" = \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX reported an unexpected object store path'\\'' >&2; exit 1; }; python3 -c '\\''exec(\"import os, pathlib, shutil, subprocess\\nws = os.environ.get(\\\"GITHUB_WORKSPACE\\\", \\\"\\\")\\nif ws and os.path.exists(os.path.join(ws, \\\".git\\\")):\\n    dirty = {p.decode() for p in subprocess.check_output([\\\"git\\\", \\\"-C\\\", ws, \\\"diff\\\", \\\"--name-only\\\", \\\"-z\\\", \\\"HEAD\\\"]).split(b\\\"\\\\0\\\") if p}\\n    cur = {}\\n    for entry in subprocess.check_output([\\\"git\\\", \\\"-C\\\", ws, \\\"ls-files\\\", \\\"-s\\\", \\\"-z\\\"]).split(b\\\"\\\\0\\\"):\\n        if entry:\\n            meta, rel_b = entry.split(b\\\"\\\\t\\\", 1)\\n            cur[rel_b.decode()] = meta.split()[1].decode()\\n    for oids_file in pathlib.Path(ws).glob(\\\"**/target/debug/.mbx-build-script-shims/.velnor-source-oids\\\"):\\n        shims = oids_file.parent\\n        td = shims.parent.parent\\n        vdoc = shims / \\\".velnor-doc\\\"\\n        doc = td / \\\"doc\\\"\\n        if vdoc.is_dir() and not vdoc.is_symlink():\\n            shutil.rmtree(doc, ignore_errors=True)\\n            shutil.move(str(vdoc), str(doc))\\n        for line in oids_file.read_text().splitlines():\\n            if not line:\\n                continue\\n            oid, ns_s, rel = line.split(\\\"\\\\t\\\", 2)\\n            if rel not in dirty and cur.get(rel) == oid:\\n                full = os.path.join(ws, rel)\\n                if os.path.isfile(full) and not os.path.islink(full):\\n                    ns = int(ns_s)\\n                    os.utime(full, ns=(ns, ns))\\n\")'\\''; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; mbx_disk_sample after-cache-restore'"
-      - &s14
+      - &s15
         name: Fetch Cargo sources
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
-      - &s15
+      - &s16
         name: Fetch Cargo sources (crates/velnor-runner/Cargo.toml)
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -374,7 +387,7 @@ jobs:
           name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - &s16
+      - &s17
         name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
         env:
@@ -390,12 +403,13 @@ jobs:
     timeout-minutes: 10
     needs:
       - required
+      - plan
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - *s2
       - *s3
       - *s4
-      - *s10
+      - *s11
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
@@ -426,11 +440,12 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s9
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s7
-      - *s10
+      - *s11
       - name: Execute named check
         env:
           VELNOR_CHECK_ID: maintenance-helpers
@@ -439,7 +454,7 @@ jobs:
           VELNOR_INTERNAL_OP: execute-check-v1
           VELNOR_TASK_ID: stack/mise/maintenance-helpers/check/default
         run: *r1
-      - &s17
+      - &s18
         name: Record Qualification source evidence
         env:
           VELNOR_INTERNAL_OP: write-qualification-source-evidence-v1
@@ -563,6 +578,7 @@ jobs:
     if: always()
     steps:
       - *s7
+      - *s10
       - *s2
       - *s3
       - *s4
@@ -620,18 +636,19 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - &s18
+      - &s19
         name: V2 identity
         id: v2
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 440a49afd3d7b3cf7dad08caa72dc80a555e98f95134c8bc2345247970a458c5
-      - &s19
+      - &s20
         name: Restore Mise tools
         id: tools-cache-restore
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'
@@ -642,14 +659,14 @@ jobs:
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
       - *s7
-      - *s10
-      - &s20
+      - *s11
+      - &s21
         name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks install rust@1.99.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.148
-      - &s21
+      - &s22
         name: Prepare Rust components
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -657,7 +674,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks exec rust@1.99.1 -- rustup component add --toolchain 1.99.1-x86_64-unknown-linux-gnu clippy rustfmt
-      - &s22
+      - &s23
         name: Restore Cargo sources
         if: github.event_name != 'workflow_dispatch'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -667,8 +684,8 @@ jobs:
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.99.1-
         env:
           PATH: ${{ steps.cache-tar-launchers.outputs.path }}
-      - *s11
-      - &s23
+      - *s12
+      - &s24
         name: Restore MBX objects
         if: github.event_name != 'workflow_dispatch'
         uses: jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240
@@ -690,13 +707,13 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-      - *s13
-      - *s15
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-04e4f77fa51d288c # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -706,7 +723,7 @@ jobs:
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
       - *s8
-      - &s24
+      - &s25
         name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
         env:
@@ -731,26 +748,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-0738ac8105e5e469 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -759,7 +777,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-0738ac8105e5e469
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-0745c4f5cd520152:
     name: Rust / velnor-runner-github
     runs-on: ubuntu-26.04
@@ -775,26 +793,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-0745c4f5cd520152 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -803,7 +822,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-0745c4f5cd520152
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-0a7a564168b37c36:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
@@ -819,26 +838,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-0a7a564168b37c36 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -847,7 +867,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-0a7a564168b37c36
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-11d2a2f5394bdff6:
     name: Rust / velnor-runner-core
     runs-on: ubuntu-26.04
@@ -863,26 +883,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-11d2a2f5394bdff6 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -891,7 +912,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-11d2a2f5394bdff6
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-1490dead3dc125c0:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
@@ -907,37 +928,38 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - &s25
+      - &s26
         name: V2 identity
         id: v2
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 2f97ef9916450ad2b65c44bd59a9cd7527ba0d48a13754ed3d29c4d7d8b12e36
-      - *s19
+      - *s20
       - *s7
-      - *s10
-      - &s26
+      - *s11
+      - &s27
         name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks install rust@1.99.1 opentofu@1.13.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.148
-      - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-1490dead3dc125c0 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -947,7 +969,7 @@ jobs:
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
       - *s8
-      - *s16
+      - *s17
   rust-qualification-163ef16efec7c4ef:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
@@ -963,26 +985,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s25
-      - *s19
-      - *s7
-      - *s10
       - *s26
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s27
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-163ef16efec7c4ef # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -991,7 +1014,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-163ef16efec7c4ef
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-167c225e22fadf7f:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
@@ -1007,38 +1030,39 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - &s27
+      - &s28
         name: V2 identity
         id: v2
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 97a9558ae051bfb52d44da5bbbdfcb8201266ea820eabfb39af8c6312f3b4423
-      - *s19
+      - *s20
       - *s7
-      - *s10
-      - &s28
+      - *s11
+      - &s29
         name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks install rust@1.99.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.148
-      - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
       - *s15
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-167c225e22fadf7f # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1048,7 +1072,7 @@ jobs:
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
       - *s8
-      - *s16
+      - *s17
   rust-qualification-1e785f3f6e8a0aec:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -1064,27 +1088,28 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s27
-      - *s19
-      - *s7
-      - *s10
       - *s28
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s29
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
       - *s15
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-1e785f3f6e8a0aec # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1093,7 +1118,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-1e785f3f6e8a0aec
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-25773bb32466089a:
     name: Rust / velnor-actions-tofu
     runs-on: ubuntu-26.04
@@ -1109,26 +1134,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-25773bb32466089a # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1137,7 +1163,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-25773bb32466089a
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-25ea841b74e98709:
     name: Rust / velnor-runner-github
     runs-on: ubuntu-26.04
@@ -1153,26 +1179,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-25ea841b74e98709 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1181,7 +1208,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-25ea841b74e98709
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-28f60b0d77d49fc1:
     name: Rust / velnor-resource-probe
     runs-on: ubuntu-26.04
@@ -1197,26 +1224,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-28f60b0d77d49fc1 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1225,7 +1253,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-28f60b0d77d49fc1
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-2e184614bdff13d7:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
@@ -1241,26 +1269,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-2e184614bdff13d7 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1269,7 +1298,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-2e184614bdff13d7
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-2e688720f071f25c:
     name: Rust / velnor-resource-probe
     runs-on: ubuntu-26.04
@@ -1285,26 +1314,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-2e688720f071f25c # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1313,7 +1343,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-2e688720f071f25c
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-37421428dfc6d0bc:
     name: Rust / velnor-resource-probe
     runs-on: ubuntu-26.04
@@ -1329,26 +1359,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-37421428dfc6d0bc # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1357,7 +1388,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-37421428dfc6d0bc
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-43550b2728a6bb47:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
@@ -1373,26 +1404,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-43550b2728a6bb47 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1401,7 +1433,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-43550b2728a6bb47
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-509e0d93a1b120dd:
     name: Rust / velnor-runner-host
     runs-on: ubuntu-26.04
@@ -1417,26 +1449,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-509e0d93a1b120dd # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1445,7 +1478,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-509e0d93a1b120dd
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-53482d622c7ec440:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -1461,27 +1494,28 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s27
-      - *s19
-      - *s7
-      - *s10
       - *s28
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s29
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
       - *s15
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-53482d622c7ec440 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1490,7 +1524,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-53482d622c7ec440
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-5469534559a12d36:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
@@ -1506,26 +1540,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-5469534559a12d36 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1534,7 +1569,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-5469534559a12d36
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-5bfa1ac4c56189d6:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
@@ -1550,26 +1585,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-5bfa1ac4c56189d6 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1578,7 +1614,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-5bfa1ac4c56189d6
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-648d9a1631425363:
     name: Rust / velnor-actions-actionlint
     runs-on: ubuntu-26.04
@@ -1594,26 +1630,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-648d9a1631425363 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1622,7 +1659,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-648d9a1631425363
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-67ee20a34e48b6e3:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
@@ -1638,27 +1675,28 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s27
-      - *s19
-      - *s7
-      - *s10
       - *s28
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s29
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
       - *s15
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-67ee20a34e48b6e3 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1667,7 +1705,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-67ee20a34e48b6e3
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-6aff2f670ddaa697:
     name: Rust / velnor-actions-tofu
     runs-on: ubuntu-26.04
@@ -1683,26 +1721,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-6aff2f670ddaa697 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1711,7 +1750,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-6aff2f670ddaa697
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-708e095ab9f500b4:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
@@ -1727,26 +1766,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-708e095ab9f500b4 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1755,7 +1795,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-708e095ab9f500b4
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-73af7643baa6c3d3:
     name: Rust / velnor-runner-host
     runs-on: ubuntu-26.04
@@ -1771,26 +1811,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-73af7643baa6c3d3 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1799,7 +1840,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-73af7643baa6c3d3
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-7453ab9ff0d4f64d:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
@@ -1815,27 +1856,28 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s27
-      - *s19
-      - *s7
-      - *s10
       - *s28
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s29
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
       - *s15
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-7453ab9ff0d4f64d # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1844,7 +1886,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-7453ab9ff0d4f64d
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-7569343f915bb22f:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
@@ -1860,27 +1902,28 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s27
-      - *s19
-      - *s7
-      - *s10
       - *s28
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s29
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
       - *s15
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-7569343f915bb22f # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1889,7 +1932,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-7569343f915bb22f
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-77462f2d8169613d:
     name: Rust / velnor-actions-tofu
     runs-on: ubuntu-26.04
@@ -1905,26 +1948,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-77462f2d8169613d # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1933,7 +1977,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-77462f2d8169613d
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-78b6ede3e488982b:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
@@ -1949,26 +1993,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-78b6ede3e488982b # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -1977,7 +2022,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-78b6ede3e488982b
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-79bd9be4270b8945:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
@@ -1993,26 +2038,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-79bd9be4270b8945 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2021,7 +2067,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-79bd9be4270b8945
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-7b460e04b25ef8f4:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
@@ -2037,26 +2083,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-7b460e04b25ef8f4 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2065,7 +2112,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-7b460e04b25ef8f4
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-81305c234c22a275:
     name: Rust / velnor-actions-actionlint
     runs-on: ubuntu-26.04
@@ -2081,26 +2128,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-81305c234c22a275 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2109,7 +2157,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-81305c234c22a275
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-81f6e0cba54c2186:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
@@ -2125,26 +2173,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-81f6e0cba54c2186 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2153,7 +2202,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-81f6e0cba54c2186
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-8265037fd459347e:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
@@ -2169,26 +2218,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s25
-      - *s19
-      - *s7
-      - *s10
       - *s26
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s27
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-8265037fd459347e # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2197,7 +2247,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-8265037fd459347e
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-8759f3cfd795025d:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -2213,27 +2263,28 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s27
-      - *s19
-      - *s7
-      - *s10
       - *s28
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s29
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
       - *s15
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-8759f3cfd795025d # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2242,7 +2293,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-8759f3cfd795025d
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-8887de4a4a14f095:
     name: Rust / velnor-actions-actionlint
     runs-on: ubuntu-26.04
@@ -2258,26 +2309,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-8887de4a4a14f095 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2286,7 +2338,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-8887de4a4a14f095
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-8a54150842ee7bf6:
     name: Rust / velnor-runner-core
     runs-on: ubuntu-26.04
@@ -2302,26 +2354,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-8a54150842ee7bf6 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2330,7 +2383,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-8a54150842ee7bf6
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-8fb51f44c0f08321:
     name: Rust / velnor-resource-probe
     runs-on: ubuntu-26.04
@@ -2346,26 +2399,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-8fb51f44c0f08321 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2374,7 +2428,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-8fb51f44c0f08321
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-904a957ae01ca7bb:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
@@ -2390,26 +2444,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-904a957ae01ca7bb # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2418,7 +2473,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-904a957ae01ca7bb
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-9109428e72a8fcba:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
@@ -2434,26 +2489,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-9109428e72a8fcba # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2462,7 +2518,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-9109428e72a8fcba
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-9279d117d6f68a52:
     name: Rust / velnor-runner-github
     runs-on: ubuntu-26.04
@@ -2478,26 +2534,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-9279d117d6f68a52 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2506,7 +2563,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-9279d117d6f68a52
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-93a4593c9a3c3085:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
@@ -2522,27 +2579,28 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s27
-      - *s19
-      - *s7
-      - *s10
       - *s28
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s29
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
       - *s15
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-93a4593c9a3c3085 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2551,7 +2609,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-93a4593c9a3c3085
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-93aa743354796b58:
     name: Rust / velnor-actions-actionlint
     runs-on: ubuntu-26.04
@@ -2567,26 +2625,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-93aa743354796b58 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2595,7 +2654,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-93aa743354796b58
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-98b1e6d8c684a9d6:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
@@ -2611,26 +2670,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-98b1e6d8c684a9d6 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2639,7 +2699,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-98b1e6d8c684a9d6
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-a5dbb5f0a62733b2:
     name: Rust / velnor-runner-host
     runs-on: ubuntu-26.04
@@ -2655,26 +2715,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-a5dbb5f0a62733b2 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2683,7 +2744,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-a5dbb5f0a62733b2
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-af2807043d348ff9:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
@@ -2699,26 +2760,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-af2807043d348ff9 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2727,7 +2789,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-af2807043d348ff9
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-b717b98bc29a9439:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
@@ -2743,26 +2805,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-b717b98bc29a9439 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2771,7 +2834,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-b717b98bc29a9439
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-b9195ee6ee4dd6e3:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
@@ -2787,26 +2850,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-b9195ee6ee4dd6e3 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2815,7 +2879,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-b9195ee6ee4dd6e3
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-b95f6d48f7fe11d7:
     name: Rust / velnor-actions-tofu
     runs-on: ubuntu-26.04
@@ -2831,26 +2895,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-b95f6d48f7fe11d7 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2859,7 +2924,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-b95f6d48f7fe11d7
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-bbe589a41e95aa9d:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
@@ -2875,26 +2940,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-bbe589a41e95aa9d # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2903,7 +2969,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-bbe589a41e95aa9d
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-bc2fa3aa4b165882:
     name: Rust / velnor-runner-host
     runs-on: ubuntu-26.04
@@ -2919,26 +2985,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-bc2fa3aa4b165882 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2947,7 +3014,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-bc2fa3aa4b165882
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-bcbc84ca75945c65:
     name: Rust / velnor-runner-github
     runs-on: ubuntu-26.04
@@ -2963,26 +3030,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-bcbc84ca75945c65 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -2991,7 +3059,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-bcbc84ca75945c65
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-bd50ead8abc290b2:
     name: Rust / velnor-runner-github
     runs-on: ubuntu-26.04
@@ -3007,26 +3075,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-bd50ead8abc290b2 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3035,7 +3104,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-bd50ead8abc290b2
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-bd60c8a0929d1a4f:
     name: Rust / velnor-actions-tofu
     runs-on: ubuntu-26.04
@@ -3051,26 +3120,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-bd60c8a0929d1a4f # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3079,7 +3149,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-bd60c8a0929d1a4f
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-c25a6078a8f7d5eb:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
@@ -3095,26 +3165,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-c25a6078a8f7d5eb # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3123,7 +3194,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-c25a6078a8f7d5eb
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-c5523b46fce19a70:
     name: Rust / velnor-runner-core
     runs-on: ubuntu-26.04
@@ -3139,26 +3210,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-c5523b46fce19a70 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3167,7 +3239,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-c5523b46fce19a70
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-c76a13c0b8b3eb12:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
@@ -3183,26 +3255,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-c76a13c0b8b3eb12 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3211,7 +3284,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-c76a13c0b8b3eb12
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-c8b6d171011e01a9:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
@@ -3227,26 +3300,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-c8b6d171011e01a9 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3255,7 +3329,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-c8b6d171011e01a9
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-cb59aaefe5dfc948:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
@@ -3271,26 +3345,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-cb59aaefe5dfc948 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3299,7 +3374,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-cb59aaefe5dfc948
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-d04b7f8f31103a5a:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
@@ -3315,26 +3390,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-d04b7f8f31103a5a # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3343,7 +3419,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-d04b7f8f31103a5a
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-d242a293677bbbe9:
     name: Rust / velnor-runner-core
     runs-on: ubuntu-26.04
@@ -3359,26 +3435,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-d242a293677bbbe9 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3387,7 +3464,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-d242a293677bbbe9
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-d39383082418218e:
     name: Rust / velnor-actions-actionlint
     runs-on: ubuntu-26.04
@@ -3403,26 +3480,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-d39383082418218e # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3431,7 +3509,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-d39383082418218e
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-d527b3c2db3ecd48:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
@@ -3447,26 +3525,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s25
-      - *s19
-      - *s7
-      - *s10
       - *s26
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s27
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-d527b3c2db3ecd48 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3475,7 +3554,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-d527b3c2db3ecd48
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-db6a670047663c4c:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
@@ -3491,26 +3570,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-db6a670047663c4c # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3519,7 +3599,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-db6a670047663c4c
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-dc52cf6a2a0c1601:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
@@ -3535,26 +3615,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s25
-      - *s19
-      - *s7
-      - *s10
       - *s26
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s27
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-dc52cf6a2a0c1601 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3563,7 +3644,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-dc52cf6a2a0c1601
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-de621063b566a463:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -3579,27 +3660,28 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s27
-      - *s19
-      - *s7
-      - *s10
       - *s28
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s29
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
       - *s15
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-de621063b566a463 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3608,7 +3690,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-de621063b566a463
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-e1b463721251430d:
     name: Rust / velnor-runner-github
     runs-on: ubuntu-26.04
@@ -3624,26 +3706,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-e1b463721251430d # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3652,7 +3735,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-e1b463721251430d
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-e4d25084222c0611:
     name: Rust / velnor-runner-core
     runs-on: ubuntu-26.04
@@ -3668,26 +3751,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-e4d25084222c0611 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3696,7 +3780,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-e4d25084222c0611
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-e4f4c72dff4c3345:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
@@ -3712,26 +3796,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s25
-      - *s19
-      - *s7
-      - *s10
       - *s26
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s27
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-e4f4c72dff4c3345 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3740,7 +3825,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-e4f4c72dff4c3345
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-e960c40109276ee0:
     name: Rust / velnor-actions-tofu
     runs-on: ubuntu-26.04
@@ -3756,26 +3841,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-e960c40109276ee0 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3784,7 +3870,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-e960c40109276ee0
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-eb38cb9f8a3753dd:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
@@ -3800,26 +3886,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-eb38cb9f8a3753dd # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3828,7 +3915,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-eb38cb9f8a3753dd
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-ec68c018d2ac9504:
     name: Rust / velnor-resource-probe
     runs-on: ubuntu-26.04
@@ -3844,26 +3931,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-ec68c018d2ac9504 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3872,7 +3960,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-ec68c018d2ac9504
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-ecdec2e058a7da89:
     name: Rust / velnor-actions-actionlint
     runs-on: ubuntu-26.04
@@ -3888,26 +3976,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-ecdec2e058a7da89 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3916,7 +4005,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-ecdec2e058a7da89
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-ef7925bd89944999:
     name: Rust / velnor-resource-probe
     runs-on: ubuntu-26.04
@@ -3932,26 +4021,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-ef7925bd89944999 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -3960,7 +4050,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-ef7925bd89944999
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-f31fcb1a405715c5:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -3976,27 +4066,28 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s27
-      - *s19
-      - *s7
-      - *s10
       - *s28
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s29
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
       - *s15
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-f31fcb1a405715c5 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -4005,7 +4096,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-f31fcb1a405715c5
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-qualification-f42e2f75a3efef36:
     name: Rust / velnor-runner-host
     runs-on: ubuntu-26.04
@@ -4021,26 +4112,27 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-f42e2f75a3efef36 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -4049,7 +4141,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-f42e2f75a3efef36
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-qualification-fb610837e234df52:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -4065,27 +4157,28 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s27
-      - *s19
-      - *s7
-      - *s10
       - *s28
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s29
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
       - *s15
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-qualification-fb610837e234df52 # zizmor: ignore[self-repository]
         with:
           covered_tasks: ${{needs.plan.outputs.covered_tasks}}
-      - *s17
+      - *s18
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -4094,7 +4187,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-qualification-fb610837e234df52
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-velnor-actions-actionlint:
     name: Rust / velnor-actions-actionlint
     runs-on: ubuntu-26.04
@@ -4110,21 +4203,22 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-velnor-actions-actionlint # zizmor: ignore[self-repository]
         with:
@@ -4137,7 +4231,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-actionlint
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-velnor-actions-cli:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
@@ -4153,22 +4247,23 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s27
-      - *s19
-      - *s7
-      - *s10
       - *s28
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s29
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
       - *s15
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-velnor-actions-cli # zizmor: ignore[self-repository]
         with:
@@ -4181,7 +4276,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-cli
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-velnor-actions-contract:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
@@ -4197,21 +4292,22 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-velnor-actions-contract # zizmor: ignore[self-repository]
         with:
@@ -4224,7 +4320,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-contract
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-velnor-actions-mise:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
@@ -4240,21 +4336,22 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s25
-      - *s19
-      - *s7
-      - *s10
       - *s26
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s27
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-velnor-actions-mise # zizmor: ignore[self-repository]
         with:
@@ -4267,7 +4364,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-mise
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-velnor-actions-orchestrator:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -4283,22 +4380,23 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s27
-      - *s19
-      - *s7
-      - *s10
       - *s28
-      - *s21
-      - *s22
+      - *s20
+      - *s7
       - *s11
+      - *s29
+      - *s22
+      - *s23
       - *s12
       - *s13
       - *s14
       - *s15
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-velnor-actions-orchestrator # zizmor: ignore[self-repository]
         with:
@@ -4311,7 +4409,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-orchestrator
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-velnor-actions-rust:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
@@ -4327,21 +4425,22 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-velnor-actions-rust # zizmor: ignore[self-repository]
         with:
@@ -4354,7 +4453,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-rust
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-velnor-actions-tofu:
     name: Rust / velnor-actions-tofu
     runs-on: ubuntu-26.04
@@ -4370,21 +4469,22 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-velnor-actions-tofu # zizmor: ignore[self-repository]
         with:
@@ -4397,7 +4497,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-tofu
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-velnor-actions-workflow-renderer:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
@@ -4413,21 +4513,22 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
+      - *s23
       - *s12
       - *s13
       - *s14
+      - *s15
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-velnor-actions-workflow-renderer # zizmor: ignore[self-repository]
         with:
@@ -4440,7 +4541,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-actions-workflow-renderer
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s16
+      - *s17
   rust-velnor-resource-probe:
     name: Rust / velnor-resource-probe
     runs-on: ubuntu-26.04
@@ -4456,21 +4557,22 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-velnor-resource-probe # zizmor: ignore[self-repository]
         with:
@@ -4483,7 +4585,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-resource-probe
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-velnor-runner-cli:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
@@ -4499,21 +4601,22 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-velnor-runner-cli # zizmor: ignore[self-repository]
         with:
@@ -4526,7 +4629,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-runner-cli
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-velnor-runner-core:
     name: Rust / velnor-runner-core
     runs-on: ubuntu-26.04
@@ -4542,21 +4645,22 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-velnor-runner-core # zizmor: ignore[self-repository]
         with:
@@ -4569,7 +4673,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-runner-core
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-velnor-runner-github:
     name: Rust / velnor-runner-github
     runs-on: ubuntu-26.04
@@ -4585,21 +4689,22 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-velnor-runner-github # zizmor: ignore[self-repository]
         with:
@@ -4612,7 +4717,7 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-runner-github
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   rust-velnor-runner-host:
     name: Rust / velnor-runner-host
     runs-on: ubuntu-26.04
@@ -4628,21 +4733,22 @@ jobs:
     if: always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
     steps:
       - *s1
+      - *s10
       - *s2
       - *s3
       - *s4
       - *s5
-      - *s18
       - *s19
-      - *s7
-      - *s10
       - *s20
+      - *s7
+      - *s11
       - *s21
       - *s22
-      - *s11
       - *s23
-      - *s13
-      - *s15
+      - *s12
+      - *s24
+      - *s14
+      - *s16
       - name: Run crate obligations
         uses: ./.github/actions/crate-obligation-rust-velnor-runner-host # zizmor: ignore[self-repository]
         with:
@@ -4655,11 +4761,13 @@ jobs:
           name: velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-rust-velnor-runner-host
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
-      - *s24
+      - *s25
   zizmor:
     name: Zizmor
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    needs:
+      - plan
     steps:
       - *s1
       - *s2

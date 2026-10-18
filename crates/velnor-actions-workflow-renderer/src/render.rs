@@ -213,7 +213,7 @@ fn finalize_jobs_with_routing(
     // Both cache families are validated globally before either gets a save.
     cache_p08::elect_cache_writers_with_policy(&mut jobs, ctx.pull_request_cache_policy)?;
     closure::check_plan_anchor(&jobs)?;
-    preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
+    preseed_closure::check_preseed_closure(&mut jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
     closure::insert_request_closure(&mut jobs)?;
     closure::insert_task_closure(&mut jobs)?;
