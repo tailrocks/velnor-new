@@ -15,9 +15,8 @@ const ROOTS_SCHEMA: &str = "velnor.qualification-cache-roots/v1";
 const MAX_ROOTS_JSON_BYTES: usize = 65_536;
 const MAX_ROOTS: usize = 8;
 const MAX_ROOT_PATH_BYTES: usize = 4_096;
-pub(crate) const ROOTS_ENV: &str = "VELNOR_QUALIFICATION_CACHE_ROOTS";
 
-#[path = "dispatch_cache_roots_environment.rs"]
+#[path = "roots_environment.rs"]
 mod environment;
 pub(crate) use environment::expected_paths_for_environment;
 
@@ -96,7 +95,7 @@ pub(crate) struct CacheRootSet {
 }
 
 impl CacheRootSet {
-    /// Parse a bounded canonical collector result and bind it to this job lane.
+    /// Parse a bounded collector result with the required JSON spelling and bind it to this lane.
     pub(crate) fn parse(
         text: &str,
         matrix_key: &str,
@@ -263,5 +262,5 @@ fn string_field<'a>(
 }
 
 #[cfg(test)]
-#[path = "../tests/dispatch_cache_roots_tests.rs"]
+#[path = "tests/dispatch_cache_roots_tests.rs"]
 mod tests;

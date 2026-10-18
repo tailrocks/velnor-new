@@ -2,8 +2,8 @@ use super::super::manifest::PayloadRoot;
 use super::super::roots::{CacheRootId, CacheRootObservation, CacheRootSet};
 use super::cleanup::{remove_owned_at, remove_tree_at};
 use super::dirs::{
-    c_name, ensure_owned_directory_path, open_owned_directory, same_object, same_version,
-    stat_optional,
+    c_name, ensure_owned_directory_path, ensure_owned_directory_path_from, open_owned_directory,
+    same_object, same_version, stat_optional,
 };
 use super::engine::{snapshot_roots, useful_state_digest};
 use super::files::copy_file_to_new_owned;
@@ -32,9 +32,52 @@ pub(super) fn install_roots(
     payload_roots: &[PayloadRoot],
     expected_state: &str,
 ) -> Result<(), &'static str> {
+    install_roots_with_home(
+        stage_path,
+        roots,
+        runner_temp,
+        None,
+        payload_roots,
+        expected_state,
+    )
+}
+
+pub(super) fn install_normal_tools_roots(
+    stage_path: &Path,
+    roots: &CacheRootSet,
+    runner_temp: &Path,
+    home: &Path,
+    payload_roots: &[PayloadRoot],
+    expected_state: &str,
+) -> Result<(), &'static str> {
+    install_roots_with_home(
+        stage_path,
+        roots,
+        runner_temp,
+        Some(home),
+        payload_roots,
+        expected_state,
+    )
+}
+
+fn install_roots_with_home(
+    stage_path: &Path,
+    roots: &CacheRootSet,
+    runner_temp: &Path,
+    normal_home: Option<&Path>,
+    payload_roots: &[PayloadRoot],
+    expected_state: &str,
+) -> Result<(), &'static str> {
     let mut prepared = Vec::with_capacity(roots.roots.len());
     for (index, (root, payload_root)) in roots.roots.iter().zip(payload_roots).enumerate() {
-        match prepare_root(stage_path, runner_temp, root, payload_root, index) {
+        match prepare_root(
+            stage_path,
+            runner_temp,
+            normal_home,
+            root,
+            payload_root,
+            index,
+        ) {
             Ok(item) => prepared.push(item),
             Err(error) => {
                 cleanup_prepared(&prepared)?;
@@ -69,6 +112,7 @@ pub(super) fn install_roots(
 fn prepare_root(
     stage_path: &Path,
     runner_temp: &Path,
+    normal_home: Option<&Path>,
     root: &CacheRootObservation,
     payload_root: &PayloadRoot,
     index: usize,
@@ -77,7 +121,16 @@ fn prepare_root(
         .path
         .parent()
         .ok_or("qualification_cache_root_path_invalid")?;
-    ensure_owned_directory_path(parent_path, runner_temp)?;
+    if root.id == CacheRootId::MiseData
+        && let Some(home) = normal_home
+    {
+        if parent_path != home.join(".local/share") {
+            return Err("qualification_cache_root_path_invalid");
+        }
+        ensure_owned_directory_path_from(parent_path, home)?;
+    } else {
+        ensure_owned_directory_path(parent_path, runner_temp)?;
+    }
     let parent = open_owned_directory(parent_path)?;
     let destination_os = root
         .path
@@ -238,5 +291,5 @@ fn validate_destination_root(stat: &Stat, id: CacheRootId) -> Result<(), &'stati
 }
 
 #[cfg(test)]
-#[path = "../tests/dispatch_cache_transfer_install_tests.rs"]
+#[path = "tests/dispatch_cache_transfer_install_tests.rs"]
 mod tests;

@@ -1,26 +1,68 @@
-use super::super::roots::{self, CacheRootSet};
-use super::engine::validate_clean_absolute;
-use super::engine::{export_payload, import_payload};
-use super::{
-    ACTION_HIT_ENV, ACTION_MATCHED_KEY_ENV, CacheExportProof, CacheRestoreProof,
-    CacheRestoreStatus, MAX_ACTION_KEY_BYTES,
-};
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
+
 use velnor_actions_contract::workflow::QualificationCacheBackendObservation;
 use velnor_actions_orchestrator::{
-    QualificationCacheBindingOutputs, bind_qualification_cache_runtime,
-    observe_qualification_cache_backend,
+    CacheActionObservation, CacheRestoreStatus, QualificationCacheBindingRequest,
+    QualificationCachePayloadContext, QualificationCachePayloadExport,
+    QualificationCachePayloadImport, QualificationCacheRootEnvironment,
+    bind_qualification_cache_runtime, export_qualification_cache_payload,
+    import_qualification_cache_payload, validate_qualification_cache_root_observation,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct RestoreActionObservation {
-    hit: bool,
-    matched_key: Option<String>,
+const ROOTS_ENV: &str = "VELNOR_QUALIFICATION_CACHE_ROOTS";
+const ACTION_HIT_ENV: &str = "VELNOR_QUALIFICATION_CACHE_HIT";
+const ACTION_MATCHED_KEY_ENV: &str = "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY";
+
+#[derive(Debug, Default)]
+struct RootPaths {
+    mbx_cache_dir: Option<PathBuf>,
+    cargo_home: Option<PathBuf>,
+    mise_cargo_home: Option<PathBuf>,
+    mise_data_dir: Option<PathBuf>,
+    rustup_home: Option<PathBuf>,
+    mise_rustup_home: Option<PathBuf>,
+    tofu_plugin_cache_dir: Option<PathBuf>,
+    mise_task_cache_dir: Option<PathBuf>,
 }
 
-/// Stage a typed cache export and append its bounded evidence outputs.
+impl RootPaths {
+    fn from_environment() -> Self {
+        Self {
+            mbx_cache_dir: read_path("MBX_CACHE_DIR"),
+            cargo_home: read_path("CARGO_HOME"),
+            mise_cargo_home: read_path("MISE_CARGO_HOME"),
+            mise_data_dir: read_path("MISE_DATA_DIR"),
+            rustup_home: read_path("RUSTUP_HOME"),
+            mise_rustup_home: read_path("MISE_RUSTUP_HOME"),
+            tofu_plugin_cache_dir: read_path("TF_PLUGIN_CACHE_DIR"),
+            mise_task_cache_dir: read_path("MISE_TASK_CACHE_DIR"),
+        }
+    }
+
+    fn observation(&self) -> QualificationCacheRootEnvironment<'_> {
+        QualificationCacheRootEnvironment {
+            mbx_cache_dir: self.mbx_cache_dir.as_deref(),
+            cargo_home: self.cargo_home.as_deref(),
+            mise_cargo_home: self.mise_cargo_home.as_deref(),
+            mise_data_dir: self.mise_data_dir.as_deref(),
+            rustup_home: self.rustup_home.as_deref(),
+            mise_rustup_home: self.mise_rustup_home.as_deref(),
+            tofu_plugin_cache_dir: self.tofu_plugin_cache_dir.as_deref(),
+            mise_task_cache_dir: self.mise_task_cache_dir.as_deref(),
+        }
+    }
+}
+
+pub(super) fn validate_root_observation(
+    request: &QualificationCacheBindingRequest<'_>,
+    roots_json: &str,
+) -> Result<(), &'static str> {
+    let roots = RootPaths::from_environment();
+    validate_qualification_cache_root_observation(request, roots_json, roots.observation())
+}
+
 pub(crate) fn run_export() -> ExitCode {
     match run_export_inner() {
         Ok(body) => append_operation_output(&body, "cache export"),
@@ -29,18 +71,21 @@ pub(crate) fn run_export() -> ExitCode {
 }
 
 fn run_export_inner() -> Result<String, &'static str> {
-    let inputs =
-        super::super::read_inputs(|name| env::var(name).map_err(|_| env::VarError::NotPresent))
-            .map_err(|_| "qualification_cache_binding_inputs_invalid")?;
+    let inputs = read_binding_inputs()?;
     let request = inputs.request();
-    let binding = bind_qualification_cache_runtime(&request)
-        .map_err(|_| "qualification_cache_binding_invalid")?;
-    let roots = read_bound_roots(&binding, request.runner_temp)?;
-    let proof = export_payload(&binding, &roots, request.runner_temp)?;
-    export_output_body(&proof)
+    let roots_json = read_roots_json()?;
+    let root_paths = RootPaths::from_environment();
+    let context = QualificationCachePayloadContext {
+        binding: &request,
+        roots_json: &roots_json,
+        root_environment: root_paths.observation(),
+    };
+    let result = export_qualification_cache_payload(&context)?;
+    export_output_body(&result)
 }
 
-fn export_output_body(proof: &CacheExportProof) -> Result<String, &'static str> {
+fn export_output_body(result: &QualificationCachePayloadExport) -> Result<String, &'static str> {
+    let proof = &result.proof;
     let save_requested = proof.save_key.is_some();
     let fields = [
         ("snapshot_admitted", "true".to_owned()),
@@ -71,7 +116,6 @@ fn export_output_body(proof: &CacheExportProof) -> Result<String, &'static str> 
     output_body(&fields)
 }
 
-/// Admit a restored stage only after backend, manifest, digest, and import checks.
 pub(crate) fn run_import() -> ExitCode {
     match run_import_inner() {
         Ok(body) => append_operation_output(&body, "cache import"),
@@ -80,83 +124,27 @@ pub(crate) fn run_import() -> ExitCode {
 }
 
 fn run_import_inner() -> Result<String, &'static str> {
-    let inputs =
-        super::super::read_inputs(|name| env::var(name).map_err(|_| env::VarError::NotPresent))
-            .map_err(|_| "qualification_cache_binding_inputs_invalid")?;
+    let inputs = read_binding_inputs()?;
     let request = inputs.request();
     let binding = bind_qualification_cache_runtime(&request)
         .map_err(|_| "qualification_cache_binding_invalid")?;
-    let roots = read_bound_roots(&binding, request.runner_temp)?;
+    let roots_json = read_roots_json()?;
+    let root_paths = RootPaths::from_environment();
+    let context = QualificationCachePayloadContext {
+        binding: &request,
+        roots_json: &roots_json,
+        root_environment: root_paths.observation(),
+    };
     let action = read_restore_action(binding.restore_key.is_some())?;
-    let observed = if let Some(key) = binding.restore_key.as_deref() {
-        let workspace = workspace_path(env::var("GITHUB_WORKSPACE"))?;
-        observe_qualification_cache_backend(&workspace, request.repository, key, request.git_ref)
-            .map_err(|_| "qualification_cache_backend_unavailable")?
-    } else {
-        QualificationCacheBackendObservation::NotQueried
-    };
-    let proof = import_payload(
-        &binding,
-        &roots,
-        request.runner_temp,
-        action.hit,
-        action.matched_key.as_deref(),
-        &observed,
-    )?;
-    import_output_body(&binding, &action, &observed, &proof)
-}
-
-fn read_bound_roots(
-    binding: &QualificationCacheBindingOutputs,
-    runner_temp: &Path,
-) -> Result<CacheRootSet, &'static str> {
-    let layer = roots::parse_layer(&binding.layer).ok_or("qualification_cache_roots_invalid")?;
-    let text = env::var(roots::ROOTS_ENV).map_err(|_| "qualification_cache_roots_missing")?;
-    let roots = CacheRootSet::parse(&text, &binding.matrix_key, layer)?;
-    let expected =
-        roots::expected_paths_for_environment(layer, runner_temp, |name| env::var(name).ok())?;
-    roots.validate_expected_paths(&expected)?;
-    Ok(roots)
-}
-
-fn read_restore_action(restore_requested: bool) -> Result<RestoreActionObservation, &'static str> {
-    let hit_text = env::var(ACTION_HIT_ENV)
-        .ok()
-        .filter(|value| !value.is_empty());
-    let hit = match hit_text.as_deref() {
-        Some("true") => true,
-        Some("false") => false,
-        None if !restore_requested => false,
-        _ => return Err("qualification_cache_action_hit_invalid"),
-    };
-    let matched_key = env::var(ACTION_MATCHED_KEY_ENV)
-        .ok()
-        .filter(|value| !value.is_empty());
-    if matched_key.as_ref().is_some_and(|value| {
-        value.len() > MAX_ACTION_KEY_BYTES || !value.bytes().all(|byte| byte.is_ascii_graphic())
-    }) {
-        return Err("qualification_cache_action_key_invalid");
-    }
-    Ok(RestoreActionObservation { hit, matched_key })
-}
-
-fn workspace_path(value: Result<String, env::VarError>) -> Result<PathBuf, &'static str> {
-    let text = value.map_err(|_| "missing_github_workspace")?;
-    let path = PathBuf::from(&text);
-    validate_clean_absolute(&path).map_err(|_| "github_workspace_path_invalid")?;
-    if text.len() > 4_096 {
-        return Err("github_workspace_path_invalid");
-    }
-    Ok(path)
+    let result = import_qualification_cache_payload(&context, &action)?;
+    import_output_body(&result, &action)
 }
 
 fn import_output_body(
-    binding: &QualificationCacheBindingOutputs,
-    action: &RestoreActionObservation,
-    observed: &QualificationCacheBackendObservation,
-    proof: &CacheRestoreProof,
+    result: &QualificationCachePayloadImport,
+    action: &CacheActionObservation,
 ) -> Result<String, &'static str> {
-    let (status, cache) = match observed {
+    let (status, cache) = match &result.backend {
         QualificationCacheBackendObservation::Absent => ("absent", None),
         QualificationCacheBackendObservation::Found(entry) => ("found", Some(entry)),
         QualificationCacheBackendObservation::NotQueried => ("not_queried", None),
@@ -164,13 +152,15 @@ fn import_output_body(
             return Err("qualification_cache_backend_unavailable");
         }
     };
-    let result = match proof.status {
+    let proof = &result.proof;
+    let restore_result = match proof.status {
         CacheRestoreStatus::Disabled => "disabled",
         CacheRestoreStatus::Miss => "miss",
         CacheRestoreStatus::Hit => "hit",
     };
-    let mut fields = vec![
-        ("restore_result", result.to_owned()),
+    let binding = &result.binding;
+    let fields = vec![
+        ("restore_result", restore_result.to_owned()),
         ("matrix_key", binding.matrix_key.clone()),
         ("layer", binding.layer.clone()),
         (
@@ -215,6 +205,7 @@ fn import_output_body(
                 .map_or_else(String::new, |path| path.display().to_string()),
         ),
     ];
+    let mut fields = fields;
     if proof.status != CacheRestoreStatus::Disabled {
         fields.push(("backend_admitted", "true".to_owned()));
     }
@@ -223,6 +214,37 @@ fn import_output_body(
         fields.push(("restore_admitted", "true".to_owned()));
     }
     output_body(&fields)
+}
+
+fn read_binding_inputs() -> Result<super::super::BindInputs, &'static str> {
+    super::super::read_inputs(|name| env::var(name))
+        .map_err(|_| "qualification_cache_binding_inputs_invalid")
+}
+
+fn read_roots_json() -> Result<String, &'static str> {
+    env::var(ROOTS_ENV).map_err(|_| "qualification_cache_roots_missing")
+}
+
+fn read_restore_action(restore_requested: bool) -> Result<CacheActionObservation, &'static str> {
+    let hit_text = env::var(ACTION_HIT_ENV)
+        .ok()
+        .filter(|value| !value.is_empty());
+    let hit = match hit_text.as_deref() {
+        Some("true") => true,
+        Some("false") => false,
+        None if !restore_requested => false,
+        _ => return Err("qualification_cache_action_hit_invalid"),
+    };
+    let matched_key = env::var(ACTION_MATCHED_KEY_ENV)
+        .ok()
+        .filter(|value| !value.is_empty());
+    Ok(CacheActionObservation { hit, matched_key })
+}
+
+fn read_path(name: &str) -> Option<PathBuf> {
+    env::var_os(name)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
 }
 
 fn output_body(fields: &[(&str, String)]) -> Result<String, &'static str> {
@@ -250,15 +272,11 @@ fn append_operation_output(body: &str, operation: &str) -> ExitCode {
     }
 }
 
-fn fail_operation(operation: &str, problem: &str) -> ExitCode {
-    eprintln!("velnor-actions: {operation} failed: {problem}");
-    ExitCode::from(1)
-}
-
 fn bool_text(value: bool) -> &'static str {
     if value { "true" } else { "false" }
 }
 
-#[cfg(test)]
-#[path = "../tests/dispatch_cache_transfer_operation_tests.rs"]
-mod tests;
+fn fail_operation(operation: &str, problem: &str) -> ExitCode {
+    eprintln!("velnor-actions: {operation} failed: {problem}");
+    ExitCode::from(1)
+}

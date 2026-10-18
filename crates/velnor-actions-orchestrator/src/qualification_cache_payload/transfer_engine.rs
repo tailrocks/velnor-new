@@ -8,22 +8,23 @@ use super::files::digest_file_with_mode;
 use super::install::install_roots;
 use super::payload;
 use super::stage::{verify_staged_payload, write_new_payload};
-use super::{
-    CacheExportProof, CacheRestoreProof, CacheRestoreStatus, STATE_DOMAIN, digest_bytes,
-    is_file_root, root_name, update_bytes,
-};
+use super::{CacheExportProof, CacheRestoreProof, CacheRestoreStatus};
+use super::{STATE_DOMAIN, digest_bytes, is_file_root, root_name, update_bytes};
+use crate::qualification_cache_backend::validate_qualification_cache_backend_observation;
+use crate::qualification_cache_runtime::QualificationCacheBindingOutputs;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use velnor_actions_contract::workflow::{
     BoundQualificationCacheKeys, QualificationCacheBackendObservation,
     QualificationCacheRestoreExpectation,
 };
-use velnor_actions_orchestrator::{
-    QualificationCacheBindingOutputs, validate_qualification_cache_backend_observation,
-};
 
-/// Snapshot roots into the exact stage path derived from the bound save key.
-/// The returned state digest is computed from descriptor-inventoried root bytes.
+#[path = "transfer_normal_engine.rs"]
+pub(crate) mod normal;
+pub(crate) use normal::{export_normal_payload, import_normal_payload};
+
+/// Copy checked roots into the stage path derived from the bound save key.
+/// The state digest comes from the bytes inventoried through open descriptors.
 pub(crate) fn export_payload(
     binding: &QualificationCacheBindingOutputs,
     roots: &CacheRootSet,
@@ -51,12 +52,12 @@ pub(crate) fn export_payload(
             manifest_digest: None,
         });
     };
-    let stage_path = PathBuf::from(super::super::stage_path(
+    let stage_path = super::super::qualification_cache_stage_path(
         runner_temp,
         &binding.campaign,
         &binding.layer,
         cache_key,
-    )?);
+    )?;
     let manifest =
         PayloadManifest::for_save(binding, roots, cache_key, &state_digest, payload_roots)?;
     let manifest_text = manifest.canonical_json()?;
@@ -75,7 +76,7 @@ pub(crate) fn export_payload(
 }
 
 /// Validate backend and staged-payload evidence, then install all roots.
-/// A cache miss is admitted as a miss without importing any bytes.
+/// A cache miss is recorded without importing any bytes.
 pub(crate) fn import_payload(
     binding: &QualificationCacheBindingOutputs,
     roots: &CacheRootSet,
@@ -105,12 +106,12 @@ pub(crate) fn import_payload(
         .restore_key
         .as_deref()
         .ok_or("qualification_cache_restore_key_missing")?;
-    let stage_path = PathBuf::from(super::super::stage_path(
+    let stage_path = super::super::qualification_cache_stage_path(
         runner_temp,
         &binding.campaign,
         &binding.layer,
         restore_key,
-    )?);
+    )?;
     if binding.expected_cache.is_none() {
         if path_exists_no_follow(&stage_path)? {
             return Err("qualification_cache_restore_unexpected_stage_on_miss");
@@ -140,7 +141,7 @@ pub(crate) fn import_payload(
     })
 }
 
-pub(super) fn validate_binding_roots(
+pub(crate) fn validate_binding_roots(
     binding: &QualificationCacheBindingOutputs,
     roots: &CacheRootSet,
 ) -> Result<(), &'static str> {

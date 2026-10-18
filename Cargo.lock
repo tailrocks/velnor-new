@@ -991,7 +991,6 @@ dependencies = [
 name = "velnor-actions-cli"
 version = "0.1.13"
 dependencies = [
- "blake3",
  "clap",
  "proc-macro2",
  "rustix",
@@ -1046,6 +1045,7 @@ name = "velnor-actions-orchestrator"
 version = "0.1.13"
 dependencies = [
  "base64",
+ "blake3",
  "flate2",
  "lzma-rust2",
  "proc-macro2",

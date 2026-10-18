@@ -10,10 +10,17 @@ pub(super) fn ensure_owned_directory_path(
     path: &Path,
     runner_temp: &Path,
 ) -> Result<(), &'static str> {
+    ensure_owned_directory_path_from(path, runner_temp)
+}
+
+pub(super) fn ensure_owned_directory_path_from(
+    path: &Path,
+    anchor: &Path,
+) -> Result<(), &'static str> {
     let relative = path
-        .strip_prefix(runner_temp)
+        .strip_prefix(anchor)
         .map_err(|_| "qualification_cache_root_path_invalid")?;
-    let mut fd = open_owned_directory(runner_temp)?;
+    let mut fd = open_owned_directory(anchor)?;
     for component in relative.components() {
         let Component::Normal(name) = component else {
             return Err("qualification_cache_root_path_invalid");

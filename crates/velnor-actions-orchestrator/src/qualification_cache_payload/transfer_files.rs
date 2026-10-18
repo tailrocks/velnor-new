@@ -239,5 +239,5 @@ pub(super) fn digest_file_with_mode(path: &Path) -> Result<Option<(String, u32)>
 }
 
 #[cfg(test)]
-#[path = "../tests/dispatch_cache_transfer_file_tests.rs"]
+#[path = "tests/dispatch_cache_transfer_file_tests.rs"]
 mod tests;

@@ -5,6 +5,8 @@ mod impl_archive_guard_builder;
 mod impl_cli;
 #[path = "impl_cli_args.rs"]
 mod impl_cli_args;
+#[path = "impl_cli_cache_normal_transfer.rs"]
+mod impl_cli_cache_normal_transfer;
 #[path = "impl_cli_gate.rs"]
 mod impl_cli_gate;
 #[path = "impl_cli_gate_cache_bind.rs"]

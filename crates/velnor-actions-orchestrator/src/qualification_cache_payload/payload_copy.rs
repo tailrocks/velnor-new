@@ -9,7 +9,7 @@ use rustix::fs::{AtFlags, FileType, Mode, OFlags, Stat, fchmod, open, openat, st
 use super::super::{CreatedPayload, cleanup};
 use super::digest_open_directory;
 
-#[path = "dispatch_cache_payload_copy_walk.rs"]
+#[path = "payload_copy_walk.rs"]
 mod walk;
 
 /// Copy a non-empty validated tree into a new directory.
@@ -235,9 +235,9 @@ fn same_object(left: &Stat, right: &Stat) -> bool {
 }
 
 #[cfg(test)]
-#[path = "../tests/dispatch_cache_payload_copy_tests.rs"]
+#[path = "tests/dispatch_cache_payload_copy_tests.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "../tests/dispatch_cache_payload_tests.rs"]
+#[path = "tests/dispatch_cache_payload_tests.rs"]
 mod digest_tests;

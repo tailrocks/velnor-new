@@ -1,7 +1,7 @@
 use super::{PayloadManifest, PayloadRoot};
+use crate::qualification_cache_runtime::QualificationCacheBindingOutputs;
 use serde_json::{Value, json};
 use velnor_actions_contract::{canonical_json_str, workflow::QualificationCacheBackendEntry};
-use velnor_actions_orchestrator::QualificationCacheBindingOutputs;
 
 use super::super::roots::{CacheRootId, CacheRootSet};
 

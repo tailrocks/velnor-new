@@ -33,33 +33,12 @@ where
     stage_path(&runner_temp, &key)
 }
 
-fn stage_path(runner_temp: &Path, key: &str) -> Result<String, &'static str> {
-    let runner_temp = runner_temp
-        .to_str()
-        .ok_or("normal_cache_stage_path_invalid")?;
-    let Some(identity) = key.strip_prefix("mise-tools-v2-payload-v3-") else {
-        return Err("normal_cache_key_invalid");
-    };
-    if identity.len() != 64
-        || !identity
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
-        return Err("normal_cache_key_invalid");
-    }
-    let key_digest = blake3::hash(key.as_bytes()).to_hex();
-    let path = format!("{runner_temp}/velnor/normal-cache-v3/mise_tools/{key_digest}/payload");
-    if path.len() > 4_096 {
-        return Err("normal_cache_stage_path_invalid");
-    }
-    Ok(path)
+pub(crate) fn stage_path(runner_temp: &Path, key: &str) -> Result<String, &'static str> {
+    velnor_actions_orchestrator::normal_tools_cache_stage_path(runner_temp, key)
+        .map(|path| path.display().to_string())
 }
 
 fn fail(problem: &str) -> ExitCode {
     eprintln!("velnor-actions: normal tools cache stage failed: {problem}");
     ExitCode::from(1)
 }
-
-#[cfg(test)]
-#[path = "../tests/dispatch_cache_normal_stage_tests.rs"]
-mod tests;

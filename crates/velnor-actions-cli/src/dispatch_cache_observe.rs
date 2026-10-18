@@ -238,7 +238,3 @@ fn fail(problem: &str) -> ExitCode {
     eprintln!("velnor-actions: cache backend observation failed: {problem}");
     ExitCode::from(1)
 }
-
-#[cfg(test)]
-#[path = "../tests/dispatch_cache_observe_tests.rs"]
-mod tests;

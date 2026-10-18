@@ -3,7 +3,7 @@ use super::super::{
     useful_state_digest,
 };
 use super::{CACHE_VERSION, binding_with_keys};
-use crate::dispatch::cache_bind::roots::{CacheRootId, CacheRootObservation, CacheRootSet};
+use crate::qualification_cache_payload::roots::{CacheRootId, CacheRootObservation, CacheRootSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use velnor_actions_contract::workflow::{
@@ -51,10 +51,13 @@ fn roundtrip(layer: QualificationCacheLayer, name: &str, ids: &[CacheRootId]) {
     let warm_temp = runner_temp(&warm);
     let warm_roots = root_set(&warm_temp, layer, ids);
     fill_roots(&warm_roots, "stale");
-    let warm_stage = PathBuf::from(
-        crate::dispatch::cache_bind::stage_path(&warm_temp, "campaign-1", name, &key)
-            .expect("warm restore path"),
-    );
+    let warm_stage = crate::qualification_cache_payload::qualification_cache_stage_path(
+        &warm_temp,
+        "campaign-1",
+        name,
+        &key,
+    )
+    .expect("warm restore path");
     fs::create_dir_all(warm_stage.parent().expect("stage parent")).expect("stage parents");
     payload::copy_tree_to_new_dir(&stage, &warm_stage).expect("restore staged payload");
     let entry = cache_entry(&key);

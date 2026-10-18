@@ -12,7 +12,7 @@ const MAX_TOTAL_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 const MAX_PATH_BYTES: usize = 4_096;
 const MAX_DEPTH: usize = 128;
 
-#[path = "dispatch_cache_payload_scan.rs"]
+#[path = "payload_scan.rs"]
 mod scan;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -322,7 +322,7 @@ fn update_bytes(hasher: &mut blake3::Hasher, bytes: &[u8]) {
     hasher.update(bytes);
 }
 
-#[path = "dispatch_cache_payload_copy.rs"]
+#[path = "payload_copy.rs"]
 mod copy;
 pub(crate) use copy::copy_tree_to_new_dir;
 pub(super) use copy::copy_tree_to_new_dir_owned;

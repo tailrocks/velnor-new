@@ -97,6 +97,10 @@ enum InternalOp {
     ExportQualificationCachePayload,
     /// Get the isolated staging path for the normal tools cache.
     NormalToolsCacheStagePath,
+    /// Import an authenticated normal tools payload.
+    ImportNormalToolsCachePayload,
+    /// Export a normal tools payload to isolated staging.
+    ExportNormalToolsCachePayload,
     /// Data-only task execution record resolution for a generated wrapper.
     ResolveTaskExecution,
     /// Isolated, credentialed signing of a plan-bound package release.
@@ -156,6 +160,12 @@ fn internal_op() -> Option<InternalOp> {
             InternalOp::ExportQualificationCachePayload
         }
         Ok(tag) if tag == cache_bind::normal_stage::OP => InternalOp::NormalToolsCacheStagePath,
+        Ok(tag) if tag == cache_bind::transfer::normal::IMPORT_OP => {
+            InternalOp::ImportNormalToolsCachePayload
+        }
+        Ok(tag) if tag == cache_bind::transfer::normal::EXPORT_OP => {
+            InternalOp::ExportNormalToolsCachePayload
+        }
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
         Ok(tag) if tag == SIGN_PACKAGE_RELEASE_OP => InternalOp::PackageSigner,
         Ok(tag) if tag == PUBLISH_PACKAGE_RELEASE_OP => InternalOp::PackagePublisher,
@@ -181,6 +191,8 @@ fn gate_request() -> Option<InternalRequest> {
             | InternalOp::ImportQualificationCachePayload
             | InternalOp::ExportQualificationCachePayload
             | InternalOp::NormalToolsCacheStagePath
+            | InternalOp::ImportNormalToolsCachePayload
+            | InternalOp::ExportNormalToolsCachePayload
     ) {
         return cache_runner_request(op);
     }
@@ -258,6 +270,8 @@ fn gate_request_file(op: InternalOp) -> Option<InternalRequest> {
         | InternalOp::ImportQualificationCachePayload
         | InternalOp::ExportQualificationCachePayload
         | InternalOp::NormalToolsCacheStagePath
+        | InternalOp::ImportNormalToolsCachePayload
+        | InternalOp::ExportNormalToolsCachePayload
         | InternalOp::ResolveTaskExecution => {}
     }
     Some(InternalRequest { op, path })
@@ -330,6 +344,8 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::ImportQualificationCachePayload => cache_bind::transfer::run_import(),
         InternalOp::ExportQualificationCachePayload => cache_bind::transfer::run_export(),
         InternalOp::NormalToolsCacheStagePath => cache_bind::normal_stage::run(),
+        InternalOp::ImportNormalToolsCachePayload => cache_bind::transfer::normal::run_import(),
+        InternalOp::ExportNormalToolsCachePayload => cache_bind::transfer::normal::run_export(),
         InternalOp::ResolveTaskExecution => match resolve_task_execution() {
             Ok(frame) => match std::io::stdout().lock().write_all(&frame) {
                 Ok(()) => ExitCode::SUCCESS,

@@ -10,12 +10,8 @@ use velnor_actions_orchestrator::{
     QUALIFICATION_CACHE_BIND_OP, QualificationCacheBindingRequest, bind_qualification_cache_runtime,
 };
 
-#[path = "dispatch_cache_manifest.rs"]
-pub(crate) mod manifest;
 #[path = "dispatch_cache_normal_stage.rs"]
 pub(crate) mod normal_stage;
-#[path = "dispatch_cache_roots.rs"]
-pub(crate) mod roots;
 #[path = "dispatch_cache_transfer.rs"]
 pub(crate) mod transfer;
 
@@ -28,6 +24,7 @@ const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 const MATRIX_KEY_ENV: &str = "VELNOR_QUALIFICATION_CACHE_MATRIX_KEY";
 const LAYER_ENV: &str = "VELNOR_QUALIFICATION_CACHE_LAYER";
 const RUNTIME_IDENTITY_ENV: &str = "VELNOR_QUALIFICATION_RUNTIME_IDENTITY";
+const ROOTS_ENV: &str = "VELNOR_QUALIFICATION_CACHE_ROOTS";
 
 #[derive(Debug)]
 pub(crate) struct BindInputs {
@@ -101,15 +98,10 @@ pub(crate) fn run() -> ExitCode {
 }
 
 fn validate_optional_root_observation(inputs: &BindInputs) -> Result<(), &'static str> {
-    let Ok(text) = env::var(roots::ROOTS_ENV) else {
+    let Ok(text) = env::var(ROOTS_ENV) else {
         return Ok(());
     };
-    let layer = roots::parse_layer(&inputs.layer).ok_or("qualification_cache_roots_invalid")?;
-    let observed = roots::CacheRootSet::parse(&text, &inputs.matrix_key, layer)?;
-    let expected = roots::expected_paths_for_environment(layer, &inputs.runner_temp, |name| {
-        env::var(name).ok()
-    })?;
-    observed.validate_expected_paths(&expected)
+    transfer::validate_root_observation(&inputs.request(), &text)
 }
 
 pub(crate) fn append_owned_output(path: &std::ffi::OsStr, body: &[u8]) -> std::io::Result<()> {
@@ -244,20 +236,54 @@ fn output_body(
     outputs: &velnor_actions_orchestrator::QualificationCacheBindingOutputs,
     runner_temp: &std::path::Path,
 ) -> Result<String, &'static str> {
+    let fields = output_fields(outputs, runner_temp)?;
+    let mut body = String::new();
+    for (name, value) in fields {
+        if value.chars().any(|ch| matches!(ch, '\n' | '\r')) {
+            return Err("cache_binding_output_invalid");
+        }
+        body.push_str(name);
+        body.push('=');
+        body.push_str(&value);
+        body.push('\n');
+    }
+    Ok(body)
+}
+
+fn output_fields(
+    outputs: &velnor_actions_orchestrator::QualificationCacheBindingOutputs,
+    runner_temp: &std::path::Path,
+) -> Result<Vec<(&'static str, String)>, &'static str> {
     let cache = outputs.expected_cache.as_ref();
     let restore_stage_path = outputs
         .restore_key
         .as_deref()
-        .map(|key| stage_path(runner_temp, &outputs.campaign, &outputs.layer, key))
+        .map(|key| {
+            velnor_actions_orchestrator::qualification_cache_stage_path(
+                runner_temp,
+                &outputs.campaign,
+                &outputs.layer,
+                key,
+            )
+            .map(|path| path.display().to_string())
+        })
         .transpose()?
         .unwrap_or_default();
     let save_stage_path = outputs
         .save_key
         .as_deref()
-        .map(|key| stage_path(runner_temp, &outputs.campaign, &outputs.layer, key))
+        .map(|key| {
+            velnor_actions_orchestrator::qualification_cache_stage_path(
+                runner_temp,
+                &outputs.campaign,
+                &outputs.layer,
+                key,
+            )
+            .map(|path| path.display().to_string())
+        })
         .transpose()?
         .unwrap_or_default();
-    let fields = [
+    Ok(vec![
         ("active", bool_text(outputs.active).to_owned()),
         ("campaign", outputs.campaign.clone()),
         ("phase", outputs.phase.clone()),
@@ -307,81 +333,7 @@ fn output_body(
             "runtime_identity_digest",
             outputs.runtime_identity_digest.clone().unwrap_or_default(),
         ),
-    ];
-    let mut body = String::new();
-    for (name, value) in fields {
-        if value.chars().any(|ch| matches!(ch, '\n' | '\r')) {
-            return Err("cache_binding_output_invalid");
-        }
-        body.push_str(name);
-        body.push('=');
-        body.push_str(&value);
-        body.push('\n');
-    }
-    Ok(body)
-}
-
-/// Stable absolute staging path for an exact, typed campaign/layer/cache key.
-/// The path deliberately excludes the workflow run/attempt so a cold save and
-/// warm restore of the same key use the same action-cache archive version.
-pub(crate) fn stage_path(
-    runner_temp: &std::path::Path,
-    campaign: &str,
-    layer: &str,
-    key: &str,
-) -> Result<String, &'static str> {
-    let runner_temp = runner_temp
-        .to_str()
-        .ok_or("cache_binding_stage_path_invalid")?;
-    if runner_temp.len() > 4_096
-        || !runner_temp.starts_with('/')
-        || runner_temp == "/"
-        || runner_temp
-            .bytes()
-            .any(|byte| matches!(byte, 0 | b'\n' | b'\r'))
-        || runner_temp
-            .split('/')
-            .skip(1)
-            .any(|part| part.is_empty() || part == "." || part == "..")
-    {
-        return Err("cache_binding_stage_path_invalid");
-    }
-    if [campaign, layer, key]
-        .iter()
-        .any(|value| value.chars().any(|ch| matches!(ch, '\n' | '\r')))
-    {
-        return Err("cache_binding_output_invalid");
-    }
-    let valid_campaign = !campaign.is_empty()
-        && campaign.len() <= 64
-        && campaign
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
-    let valid_layer = matches!(
-        layer,
-        "mbx_objects" | "cargo_sources" | "mise_tools" | "tofu_providers" | "task_result"
-    );
-    let valid_key = !key.is_empty()
-        && key.len() <= velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES
-        && key.bytes().all(|byte| {
-            byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"-_".contains(&byte)
-        })
-        && key.starts_with(&format!(
-            "velnor-qcache-v{}-{campaign}-{layer}-",
-            velnor_actions_contract::workflow::QUALIFICATION_CACHE_FORMAT_VERSION
-        ));
-    if !valid_campaign || !valid_layer || !valid_key {
-        return Err("cache_binding_stage_path_invalid");
-    }
-    let key_digest = blake3::hash(key.as_bytes()).to_hex();
-    let path = format!(
-        "{runner_temp}/velnor/qualification-cache-v{}/{campaign}/{layer}/{key_digest}/payload",
-        velnor_actions_contract::workflow::QUALIFICATION_CACHE_FORMAT_VERSION
-    );
-    if path.len() > 4_096 {
-        return Err("cache_binding_stage_path_invalid");
-    }
-    Ok(path)
+    ])
 }
 
 fn bool_text(value: bool) -> &'static str {
@@ -392,7 +344,3 @@ fn fail(problem: &str) -> ExitCode {
     eprintln!("velnor-actions: cache binding failed: {problem}");
     ExitCode::from(1)
 }
-
-#[cfg(test)]
-#[path = "../tests/dispatch_cache_bind_tests.rs"]
-mod tests;

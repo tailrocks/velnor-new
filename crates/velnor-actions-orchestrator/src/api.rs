@@ -48,6 +48,15 @@ pub use super::provenance::{EvidenceProvenance, ProfileProvenance};
 pub use super::qualification_cache_backend::{
     observe_qualification_cache_backend, validate_qualification_cache_backend_observation,
 };
+pub use super::qualification_cache_payload::{
+    CacheActionObservation, CacheExportProof, CacheRestoreProof, CacheRestoreStatus,
+    NormalToolsCachePayloadRequest, QualificationCachePayloadContext,
+    QualificationCachePayloadExport, QualificationCachePayloadImport,
+    QualificationCacheRootEnvironment, export_normal_tools_cache_payload,
+    export_qualification_cache_payload, import_normal_tools_cache_payload,
+    import_qualification_cache_payload, normal_tools_cache_stage_path,
+    qualification_cache_stage_path, validate_qualification_cache_root_observation,
+};
 pub use super::qualification_cache_runtime::{
     QUALIFICATION_CACHE_BIND_OP, QualificationCacheBindingOutputs,
     QualificationCacheBindingRequest, bind_qualification_cache_runtime,

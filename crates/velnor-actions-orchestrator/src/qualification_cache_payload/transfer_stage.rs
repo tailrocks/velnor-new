@@ -11,13 +11,13 @@ use super::payload;
 use super::{
     MANIFEST_FILENAME, MAX_ENTRIES, MAX_MANIFEST_BYTES, ROOTS_DIRECTORY, is_file_root, root_name,
 };
+use crate::qualification_cache_runtime::QualificationCacheBindingOutputs;
 use rustix::fs::{AtFlags, Dir, Mode, OFlags, Stat, openat, statat};
 use std::collections::BTreeSet;
 use std::ffi::CString;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
-use velnor_actions_orchestrator::QualificationCacheBindingOutputs;
 
 pub(super) fn write_new_payload(
     stage_path: &Path,
@@ -45,6 +45,37 @@ pub(super) struct CreatedStage {
     name: CString,
     descriptor: rustix::fd::OwnedFd,
     stat: Stat,
+}
+
+pub(super) fn remove_untrusted_stage(
+    stage_path: &Path,
+    runner_temp: &Path,
+) -> Result<bool, &'static str> {
+    let relative = stage_path
+        .strip_prefix(runner_temp)
+        .map_err(|_| "qualification_cache_stage_path_invalid")?;
+    if relative.as_os_str().is_empty()
+        || relative
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return Err("qualification_cache_stage_path_invalid");
+    }
+    let (parent, name) = super::dirs::open_parent(stage_path)?;
+    super::dirs::validate_owned_directory(&parent)?;
+    let Some(stat) = super::dirs::stat_optional(&parent, name.as_c_str())? else {
+        return Ok(false);
+    };
+    let directory = open_directory_at(&parent, name.as_c_str())?;
+    validate_owned_directory(&directory)?;
+    if !same_version(
+        &stat,
+        &rustix::fs::fstat(&directory).map_err(|_| "qualification_cache_stage_changed")?,
+    ) {
+        return Err("qualification_cache_stage_changed");
+    }
+    remove_created_at(&parent, name.as_c_str(), &directory, &stat)?;
+    Ok(true)
 }
 
 impl CreatedStage {
@@ -100,17 +131,45 @@ pub(super) fn verify_staged_payload(
     cache_key: &str,
     restore: bool,
 ) -> Result<PayloadManifest, &'static str> {
+    verify_staged_payload_with(stage_path, |manifest_text| {
+        if restore {
+            PayloadManifest::parse_for_restore(manifest_text, binding, roots, cache_key)
+        } else {
+            PayloadManifest::parse_for_save(manifest_text, binding, roots, cache_key)
+        }
+    })
+}
+
+pub(super) fn verify_staged_normal_payload(
+    stage_path: &Path,
+    roots: &CacheRootSet,
+    cache_key: &str,
+    runtime_identity_digest: &str,
+) -> Result<PayloadManifest, &'static str> {
+    verify_staged_payload_with(stage_path, |manifest_text| {
+        PayloadManifest::parse_for_normal_restore(
+            manifest_text,
+            cache_key,
+            runtime_identity_digest,
+            roots,
+        )
+    })
+}
+
+fn verify_staged_payload_with<F>(
+    stage_path: &Path,
+    parse_manifest: F,
+) -> Result<PayloadManifest, &'static str>
+where
+    F: FnOnce(&str) -> Result<PayloadManifest, &'static str>,
+{
     let stage_fd = open_owned_directory(stage_path)?;
     let expected_top = BTreeSet::from([MANIFEST_FILENAME.to_owned(), ROOTS_DIRECTORY.to_owned()]);
     if read_names(&stage_fd)? != expected_top {
         return Err("qualification_cache_payload_layout_invalid");
     }
     let manifest_text = read_manifest_at(&stage_fd)?;
-    let manifest = if restore {
-        PayloadManifest::parse_for_restore(&manifest_text, binding, roots, cache_key)?
-    } else {
-        PayloadManifest::parse_for_save(&manifest_text, binding, roots, cache_key)?
-    };
+    let manifest = parse_manifest(&manifest_text)?;
     let roots_name = stage_name(ROOTS_DIRECTORY)?;
     let roots_fd = open_directory_at(&stage_fd, roots_name.as_c_str())?;
     validate_owned_directory(&roots_fd)?;

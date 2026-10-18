@@ -3,16 +3,20 @@
 //! The manifest does not use a workflow run ID.
 //! Cold and warm jobs use the same checked cache key.
 
+use crate::qualification_cache_runtime::QualificationCacheBindingOutputs;
 use serde_json::{Map, Value, json};
 use velnor_actions_contract::{canonical_json_str, strict_json::parse_strict_json_with_limit};
-use velnor_actions_orchestrator::QualificationCacheBindingOutputs;
 
 use super::roots::{CacheRootId, CacheRootSet};
-#[path = "dispatch_cache_manifest_roots.rs"]
+#[path = "manifest_normal_key.rs"]
+mod normal_key;
+#[path = "manifest_roots.rs"]
 mod root;
+use normal_key::valid_normal_tools_key;
 use root::{parse_root, root_id_text, root_kind, valid_root_mode, validate_payload_roots};
 
 const NAMESPACE: &str = "qualification";
+const NORMAL_NAMESPACE: &str = "normal_tools";
 const MAX_MANIFEST_BYTES: usize = 65_536;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,13 +29,21 @@ pub(crate) struct PayloadRoot {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PayloadManifest {
-    pub(crate) campaign: String,
-    pub(crate) matrix_key: String,
-    pub(crate) layer: String,
+    pub(crate) scope: PayloadScope,
     pub(crate) cache_key: String,
     pub(crate) runtime_identity_digest: String,
     pub(crate) state_digest: String,
     pub(crate) roots: Vec<PayloadRoot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum PayloadScope {
+    Qualification {
+        campaign: String,
+        matrix_key: String,
+        layer: String,
+    },
+    NormalTools,
 }
 
 impl PayloadManifest {
@@ -57,9 +69,11 @@ impl PayloadManifest {
             return Err("qualification_cache_manifest_binding_mismatch");
         }
         Ok(Self {
-            campaign: binding.campaign.clone(),
-            matrix_key: binding.matrix_key.clone(),
-            layer: binding.layer.clone(),
+            scope: PayloadScope::Qualification {
+                campaign: binding.campaign.clone(),
+                matrix_key: binding.matrix_key.clone(),
+                layer: binding.layer.clone(),
+            },
             cache_key: cache_key.to_owned(),
             runtime_identity_digest: runtime_identity_digest.to_owned(),
             state_digest: state_digest.to_owned(),
@@ -100,9 +114,12 @@ impl PayloadManifest {
             || binding.matrix_key != roots.matrix_key
             || binding.expected_cache.is_none()
             || binding.restore_key.as_deref() != Some(cache_key)
-            || manifest.campaign != binding.campaign
-            || manifest.matrix_key != binding.matrix_key
-            || manifest.layer != binding.layer
+            || manifest.scope
+                != (PayloadScope::Qualification {
+                    campaign: binding.campaign.clone(),
+                    matrix_key: binding.matrix_key.clone(),
+                    layer: binding.layer.clone(),
+                })
             || manifest.cache_key != cache_key
             || manifest.runtime_identity_digest != runtime_identity_digest
             || manifest.state_digest != expected_state_digest
@@ -129,13 +146,58 @@ impl PayloadManifest {
             || binding.layer != roots.layer.as_str()
             || binding.matrix_key != roots.matrix_key
             || binding.save_key.as_deref() != Some(cache_key)
-            || manifest.campaign != binding.campaign
-            || manifest.matrix_key != binding.matrix_key
-            || manifest.layer != binding.layer
+            || manifest.scope
+                != (PayloadScope::Qualification {
+                    campaign: binding.campaign.clone(),
+                    matrix_key: binding.matrix_key.clone(),
+                    layer: binding.layer.clone(),
+                })
             || manifest.cache_key != cache_key
             || manifest.runtime_identity_digest != runtime_identity_digest
         {
             return Err("qualification_cache_manifest_binding_mismatch");
+        }
+        validate_payload_roots(roots, &manifest.roots)?;
+        Ok(manifest)
+    }
+
+    pub(crate) fn for_normal_save(
+        cache_key: &str,
+        runtime_identity_digest: &str,
+        state_digest: &str,
+        roots: &CacheRootSet,
+        payload_roots: Vec<PayloadRoot>,
+    ) -> Result<Self, &'static str> {
+        validate_digest(runtime_identity_digest)?;
+        validate_digest(state_digest)?;
+        validate_payload_roots(roots, &payload_roots)?;
+        if roots.layer.as_str() != "mise_tools" || !valid_normal_tools_key(cache_key) {
+            return Err("normal_cache_manifest_binding_mismatch");
+        }
+        Ok(Self {
+            scope: PayloadScope::NormalTools,
+            cache_key: cache_key.to_owned(),
+            runtime_identity_digest: runtime_identity_digest.to_owned(),
+            state_digest: state_digest.to_owned(),
+            roots: payload_roots,
+        })
+    }
+
+    pub(crate) fn parse_for_normal_restore(
+        text: &str,
+        cache_key: &str,
+        runtime_identity_digest: &str,
+        roots: &CacheRootSet,
+    ) -> Result<Self, &'static str> {
+        let manifest = parse_canonical(text)?;
+        validate_digest(runtime_identity_digest)?;
+        if roots.layer.as_str() != "mise_tools"
+            || !valid_normal_tools_key(cache_key)
+            || manifest.scope != PayloadScope::NormalTools
+            || manifest.cache_key != cache_key
+            || manifest.runtime_identity_digest != runtime_identity_digest
+        {
+            return Err("normal_cache_manifest_binding_mismatch");
         }
         validate_payload_roots(roots, &manifest.roots)?;
         Ok(manifest)
@@ -173,17 +235,32 @@ impl PayloadManifest {
                 })
             })
             .collect::<Vec<_>>();
-        let value = json!({
-            "cache_key": self.cache_key,
-            "campaign": self.campaign,
-            "layer": self.layer,
-            "matrix_key": self.matrix_key,
-            "namespace": NAMESPACE,
-            "roots": roots,
-            "runtime_identity_digest": self.runtime_identity_digest,
-            "schema": schema(),
-            "state_digest": self.state_digest,
-        });
+        let value = match &self.scope {
+            PayloadScope::Qualification {
+                campaign,
+                matrix_key,
+                layer,
+            } => json!({
+                "cache_key": self.cache_key,
+                "campaign": campaign,
+                "layer": layer,
+                "matrix_key": matrix_key,
+                "namespace": NAMESPACE,
+                "roots": roots,
+                "runtime_identity_digest": self.runtime_identity_digest,
+                "schema": schema(),
+                "state_digest": self.state_digest,
+            }),
+            PayloadScope::NormalTools => json!({
+                "cache_key": self.cache_key,
+                "layer": "mise_tools",
+                "namespace": NORMAL_NAMESPACE,
+                "roots": roots,
+                "runtime_identity_digest": self.runtime_identity_digest,
+                "schema": schema(),
+                "state_digest": self.state_digest,
+            }),
+        };
         let text =
             canonical_json_str(&value).map_err(|_| "qualification_cache_manifest_invalid")?;
         if text.len() > MAX_MANIFEST_BYTES {
@@ -210,8 +287,14 @@ fn parse_canonical(text: &str) -> Result<PayloadManifest, &'static str> {
 fn parse_value(value: &Value) -> Result<PayloadManifest, &'static str> {
     let object = value
         .as_object()
-        .filter(|object| {
-            has_exact_keys(
+        .ok_or("qualification_cache_manifest_invalid")?;
+    if string_field(object, "schema")? != schema() {
+        return Err("qualification_cache_manifest_schema_invalid");
+    }
+    let namespace = string_field(object, "namespace")?;
+    let scope = match namespace {
+        NAMESPACE
+            if has_exact_keys(
                 object,
                 &[
                     "cache_key",
@@ -224,14 +307,32 @@ fn parse_value(value: &Value) -> Result<PayloadManifest, &'static str> {
                     "schema",
                     "state_digest",
                 ],
-            )
-        })
-        .ok_or("qualification_cache_manifest_invalid")?;
-    if string_field(object, "schema")? != schema()
-        || string_field(object, "namespace")? != NAMESPACE
-    {
-        return Err("qualification_cache_manifest_schema_invalid");
-    }
+            ) =>
+        {
+            PayloadScope::Qualification {
+                campaign: string_field(object, "campaign")?.to_owned(),
+                matrix_key: string_field(object, "matrix_key")?.to_owned(),
+                layer: string_field(object, "layer")?.to_owned(),
+            }
+        }
+        NORMAL_NAMESPACE
+            if has_exact_keys(
+                object,
+                &[
+                    "cache_key",
+                    "layer",
+                    "namespace",
+                    "roots",
+                    "runtime_identity_digest",
+                    "schema",
+                    "state_digest",
+                ],
+            ) && string_field(object, "layer")? == "mise_tools" =>
+        {
+            PayloadScope::NormalTools
+        }
+        _ => return Err("qualification_cache_manifest_invalid"),
+    };
     let state_digest = string_field(object, "state_digest")?.to_owned();
     validate_digest(&state_digest)?;
     let roots_value = object
@@ -250,9 +351,7 @@ fn parse_value(value: &Value) -> Result<PayloadManifest, &'static str> {
         return Err("qualification_cache_manifest_roots_order_invalid");
     }
     Ok(PayloadManifest {
-        campaign: string_field(object, "campaign")?.to_owned(),
-        matrix_key: string_field(object, "matrix_key")?.to_owned(),
-        layer: string_field(object, "layer")?.to_owned(),
+        scope,
         cache_key: string_field(object, "cache_key")?.to_owned(),
         runtime_identity_digest: string_field(object, "runtime_identity_digest")?.to_owned(),
         state_digest,
@@ -294,5 +393,5 @@ fn string_field<'a>(object: &'a Map<String, Value>, key: &str) -> Result<&'a str
 }
 
 #[cfg(test)]
-#[path = "../tests/dispatch_cache_manifest_tests.rs"]
+#[path = "tests/dispatch_cache_manifest_tests.rs"]
 mod tests;

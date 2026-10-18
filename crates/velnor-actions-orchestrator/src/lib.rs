@@ -73,6 +73,7 @@ mod product_release_pins;
 mod provenance;
 mod publish_job;
 mod qualification_cache_backend;
+mod qualification_cache_payload;
 mod qualification_cache_runtime;
 mod qualification_resolver;
 mod qualify;
