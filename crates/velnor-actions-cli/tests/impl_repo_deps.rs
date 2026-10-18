@@ -8,6 +8,8 @@ use std::error::Error;
 
 #[path = "impl_repo_archive_deps.rs"]
 pub(crate) mod archive_deps;
+#[path = "impl_repo_deps_process_methods.rs"]
+mod process_methods;
 #[path = "impl_repo_size_limits.rs"]
 mod size_limits;
 #[path = "impl_repo_workflow_yaml_deps.rs"]
@@ -227,9 +229,6 @@ fn direct_tool_policy_violation(source: &str) -> Option<String> {
     for token in [
         "process::Command",
         "Command::new",
-        ".spawn(",
-        ".status()",
-        ".output()",
         "\"gh\"",
         "shell",
         "Shell",
