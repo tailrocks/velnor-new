@@ -52,12 +52,13 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "check_runtime.rs",
             "owned_tool_preview.rs",
             "prepare.rs",
+            "qualification_cache_backend.rs",
             "qualification_resolver.rs",
             "routing.rs",
             "tap_prepare.rs",
             "tap_prepare_execute.rs",
         ],
-        "preparation, execution, routing, owned preview, qualification admission, and captured tap preparation load configuration at their boundaries"
+        "The listed operations read configuration at their required boundaries."
     );
     Ok(())
 }
