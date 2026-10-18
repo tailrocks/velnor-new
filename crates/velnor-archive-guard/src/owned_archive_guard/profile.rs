@@ -4,6 +4,13 @@ pub(super) enum ArchiveEncoding {
     Gzip,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum PaxMode {
+    Forbidden,
+    Safe,
+    CachePaths,
+}
+
 #[derive(Clone, Copy)]
 pub(super) struct Profile {
     pub(super) encoding: ArchiveEncoding,
@@ -12,7 +19,7 @@ pub(super) struct Profile {
     pub(super) payload_limit: u64,
     pub(super) member_limit: usize,
     pub(super) allowed_types: u8,
-    pub(super) allow_pax: bool,
+    pub(super) pax_mode: PaxMode,
 }
 
 const CARGO_PACKAGE_INPUT_LIMIT: u64 = 128 * 1024 * 1024;
@@ -22,13 +29,19 @@ const CANDIDATE_PAYLOAD_LIMIT: u64 = 1024 * 1024 * 1024;
 const CANDIDATE_ARCHIVE_LIMIT: u64 = CANDIDATE_PAYLOAD_LIMIT + 64 * 1024 * 1024;
 const MANY_MEMBERS: usize = 30_000;
 const CANDIDATE_MEMBERS: usize = 16;
+const CACHE_TRANSPORT_LIMIT: u64 = 20 * 1024 * 1024 * 1024;
+const CACHE_PAYLOAD_LIMIT: u64 = 16 * 1024 * 1024 * 1024;
+const CACHE_MEMBER_LIMIT: usize = 250_000;
 
 const REGULAR_DIRECTORY: u8 = 0b011;
+const SYMBOLIC_LINK: u8 = 0b100;
+const HARD_LINK: u8 = 0b1000;
 
 pub(super) fn profile(mode: &str) -> Result<Profile, String> {
     match mode {
         "candidate" => Ok(candidate_profile()),
         "cargo-package" => Ok(cargo_package_profile()),
+        "cache-payload" => Ok(cache_payload_profile()),
         _ => Err(format!("unknown archive guard mode: {mode}")),
     }
 }
@@ -41,7 +54,7 @@ fn candidate_profile() -> Profile {
         payload_limit: CANDIDATE_PAYLOAD_LIMIT,
         member_limit: CANDIDATE_MEMBERS,
         allowed_types: REGULAR_DIRECTORY,
-        allow_pax: false,
+        pax_mode: PaxMode::Forbidden,
     }
 }
 
@@ -53,6 +66,18 @@ fn cargo_package_profile() -> Profile {
         payload_limit: CARGO_PACKAGE_PAYLOAD_LIMIT,
         member_limit: MANY_MEMBERS,
         allowed_types: REGULAR_DIRECTORY,
-        allow_pax: true,
+        pax_mode: PaxMode::Safe,
+    }
+}
+
+fn cache_payload_profile() -> Profile {
+    Profile {
+        encoding: ArchiveEncoding::RawTar,
+        input_limit: CACHE_TRANSPORT_LIMIT,
+        archive_limit: CACHE_TRANSPORT_LIMIT,
+        payload_limit: CACHE_PAYLOAD_LIMIT,
+        member_limit: CACHE_MEMBER_LIMIT,
+        allowed_types: REGULAR_DIRECTORY | SYMBOLIC_LINK | HARD_LINK,
+        pax_mode: PaxMode::CachePaths,
     }
 }

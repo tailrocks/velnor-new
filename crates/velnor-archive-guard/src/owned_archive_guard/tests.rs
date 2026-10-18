@@ -4,6 +4,7 @@ use std::io::{self, Write};
 use flate2::Compression as GzipLevel;
 use flate2::write::GzEncoder;
 
+use super::profile::PaxMode;
 use super::{ArchiveEncoding, Profile, validate, validate_with_profile};
 
 fn header(name: &str, kind: u8, size: u64) -> [u8; 512] {
@@ -274,7 +275,7 @@ fn sparse_members_and_member_limits_are_rejected() -> Result<(), Box<dyn Error>>
         payload_limit: 10,
         member_limit: 1,
         allowed_types: 0b011,
-        allow_pax: false,
+        pax_mode: PaxMode::Forbidden,
     };
     let problem = match validate_with_profile(gzip(&archive)?.as_slice(), policy) {
         Ok(()) => return Err(io::Error::other("member limit unexpectedly passed").into()),
@@ -314,7 +315,7 @@ fn decompression_limit_covers_tail_after_tar_end_markers() -> Result<(), Box<dyn
         payload_limit: 1024,
         member_limit: 1,
         allowed_types: 0b011,
-        allow_pax: false,
+        pax_mode: PaxMode::Forbidden,
     };
     policy.archive_limit = 2048;
     let compressed = gzip(&archive)?;
