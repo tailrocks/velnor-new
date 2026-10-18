@@ -5,15 +5,12 @@ use flate2::write::GzEncoder;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::Path;
-use std::process::Command;
 use std::time::Duration;
+use velnor_actions_mise::{ZstdFilterMode, run_zstd_file_filter};
 
 pub(crate) const MAX_ARCHIVE_BYTES: u64 = 20 * 1024 * 1024 * 1024;
 const ZSTD_TIMEOUT: Duration = Duration::from_secs(300);
-const PIPE_POLL_INTERVAL: Duration = Duration::from_millis(2);
 
-#[path = "compression_process.rs"]
-mod process;
 #[cfg(test)]
 #[path = "compression_tests.rs"]
 mod tests;
@@ -58,13 +55,14 @@ pub(crate) fn decode_archive(
         }
         ArchiveCompression::Zstd | ArchiveCompression::ZstdLong => {
             let program = checked_zstd(zstd_path)?;
-            let long_mode = if compression == ArchiveCompression::ZstdLong {
-                "--long=30"
+            let mode = if compression == ArchiveCompression::ZstdLong {
+                ZstdFilterMode::DecodeLong
             } else {
-                "--no-progress"
+                ZstdFilterMode::Decode
             };
-            process::run_filter(
-                Command::new(program).args(["-d", "-q", "-c", long_mode]),
+            run_zstd_file_filter(
+                program,
+                mode,
                 archive,
                 &mut decoded,
                 MAX_ARCHIVE_BYTES,
@@ -106,13 +104,14 @@ pub(crate) fn encode_archive(
             let program = checked_zstd(zstd_path)?;
             raw.seek(SeekFrom::Start(0))
                 .map_err(|_| "cache_tar_temporary_file_failed")?;
-            let long_mode = if compression == ArchiveCompression::ZstdLong {
-                "--long=30"
+            let mode = if compression == ArchiveCompression::ZstdLong {
+                ZstdFilterMode::EncodeLong
             } else {
-                "--no-progress"
+                ZstdFilterMode::Encode
             };
-            process::run_filter(
-                Command::new(program).args(["-q", "-T0", "-c", long_mode]),
+            run_zstd_file_filter(
+                program,
+                mode,
                 raw,
                 output,
                 MAX_ARCHIVE_BYTES,

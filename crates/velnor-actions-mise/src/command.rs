@@ -1,7 +1,10 @@
 //! Fixed subprocess wrapper: the sole `std::process::Command` constructor.
 //! Policy (`command_env.rs`) and output (`command_output.rs`) declare here.
+#[path = "command_bounded_file_filter.rs"]
+mod bounded_file_filter;
 #[path = "command_cancellable.rs"]
 mod cancellable;
+pub(crate) use bounded_file_filter::command_for_file_filter;
 #[path = "check_command.rs"]
 mod check;
 #[path = "command_env.rs"]
