@@ -183,13 +183,25 @@ esac
         );
         assert_eq!(
             calls.lines().next(),
-            Some("api --include repos/tailrocks/velnor-new/git/ref/tags/v0.1.15")
+            Some(
+                format!(
+                    "api --include repos/tailrocks/velnor-new/git/ref/tags/v{}",
+                    super::super::release_version()
+                )
+                .as_str()
+            )
         );
         assert_eq!(calls.lines().count(), if accepted { 2 } else { 1 });
         if accepted {
             assert_eq!(
                 calls.lines().nth(1),
-                Some("api --include repos/tailrocks/velnor-new/releases/tags/v0.1.15")
+                Some(
+                    format!(
+                        "api --include repos/tailrocks/velnor-new/releases/tags/v{}",
+                        super::super::release_version()
+                    )
+                    .as_str()
+                )
             );
         }
     }

@@ -26,6 +26,9 @@ use velnor_actions_workflow_renderer::{
     schema2::{ConsumerPreviewSpec, ConsumerPreviewTapSpec, render_consumer_preview},
 };
 
+#[path = "preview_source_prep.rs"]
+mod source_preparation;
+
 pub(crate) fn files(
     prep: &GenerationPreparation,
     routing: &velnor_actions_workflow_renderer::WorkflowRoutingPolicy,
@@ -64,6 +67,10 @@ pub(crate) fn files(
         Vec::<OsString>::new(),
     )
     .map_err(|error| internal(&error.to_string()))?;
+    let (producer_source_prep, producer_cargo_env) = source_preparation::for_roots(
+        &prep.catalog,
+        &crate::source_prep::lockful_roots(&prep.root, &prep.discovery.workspaces),
+    )?;
     let spec = ConsumerPreviewSpec {
         generator_version: version.to_owned(),
         plan,
@@ -78,6 +85,8 @@ pub(crate) fn files(
         )?,
         install_rust_argv: strings_of(rust_install.argv(&prep.catalog))
             .map_err(|error| internal(&error))?,
+        producer_source_prep,
+        producer_cargo_env,
         install_gh_argv: strings_of(install.argv(&native_catalog))
             .map_err(|error| internal(&error))?,
         gh_argv: strings_of(exec.argv(&native_catalog)).map_err(|error| internal(&error))?,
