@@ -20,7 +20,8 @@ pub use export::{NormalTofuProvidersCacheExport, export_normal_tofu_providers_ca
 #[path = "normal_tofu_admission.rs"]
 mod admission;
 pub use admission::{
-    NormalTofuProvidersCacheBackendEvidence, observe_normal_tofu_providers_cache_backend,
+    NormalTofuProvidersCacheBackendEvidence, NormalTofuProvidersCacheRestorePreflight,
+    observe_normal_tofu_providers_cache_backend, preflight_normal_tofu_providers_cache_restore,
 };
 
 /// Inputs for one normal `OpenTofu` provider-cache payload operation.

@@ -38,6 +38,8 @@ mod cache_tar;
 mod cache_tar_launcher;
 #[path = "dispatch_internal_run.rs"]
 mod internal_run;
+#[path = "dispatch_cache_normal_tofu_preflight.rs"]
+mod normal_tofu_cache_preflight;
 #[path = "dispatch_owned_tool_publication.rs"]
 mod owned_publication;
 #[path = "dispatch_package_release.rs"]
@@ -48,6 +50,8 @@ mod package_release_publish;
 mod package_release_recovery;
 #[path = "dispatch_run_context.rs"]
 mod run_context;
+#[path = "dispatch_source_evidence_gate.rs"]
+mod source_evidence_gate;
 #[path = "dispatch_tap_merge.rs"]
 mod tap_merge;
 #[path = "dispatch_tap_prepare.rs"]
@@ -105,6 +109,8 @@ enum InternalOp {
     ExportNormalToolsCachePayload,
     /// Install verified tar and gtar aliases for cache action steps.
     InstallCacheTarLaunchers,
+    /// Check exact normal `Tofu` backend and storage limits before archive download.
+    PreflightNormalTofuCacheRestore,
     /// Record source and report observations for one Qualification lane.
     WriteQualificationSourceEvidence,
     /// Data-only task execution record resolution for a generated wrapper.
@@ -199,6 +205,9 @@ fn internal_op() -> Option<InternalOp> {
             InternalOp::ExportNormalToolsCachePayload
         }
         Ok(tag) if tag == cache_tar_launcher::OP => InternalOp::InstallCacheTarLaunchers,
+        Ok(tag) if tag == normal_tofu_cache_preflight::OP => {
+            InternalOp::PreflightNormalTofuCacheRestore
+        }
         Ok(tag) if tag == SOURCE_EVIDENCE_OP => InternalOp::WriteQualificationSourceEvidence,
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
         Ok(tag) if tag == SIGN_PACKAGE_RELEASE_OP => InternalOp::PackageSigner,
@@ -228,11 +237,12 @@ fn gate_request() -> Option<InternalRequest> {
             | InternalOp::ImportNormalToolsCachePayload
             | InternalOp::ExportNormalToolsCachePayload
             | InternalOp::InstallCacheTarLaunchers
+            | InternalOp::PreflightNormalTofuCacheRestore
     ) {
         return cache_runner_request(op);
     }
     if op == InternalOp::WriteQualificationSourceEvidence {
-        return qualification_source_evidence_request(op);
+        return source_evidence_gate::request(op);
     }
     if op == InternalOp::ResolveTaskExecution {
         if !env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
@@ -311,35 +321,11 @@ fn gate_request_file(op: InternalOp) -> Option<InternalRequest> {
         | InternalOp::ImportNormalToolsCachePayload
         | InternalOp::ExportNormalToolsCachePayload
         | InternalOp::InstallCacheTarLaunchers
+        | InternalOp::PreflightNormalTofuCacheRestore
         | InternalOp::WriteQualificationSourceEvidence
         | InternalOp::ResolveTaskExecution => {}
     }
     Some(InternalRequest { op, path })
-}
-
-fn qualification_source_evidence_request(op: InternalOp) -> Option<InternalRequest> {
-    if !run_context::valid_run_coordinates()
-        || !env::var(GITHUB_EVENT_ENV).is_ok_and(|event| event == "workflow_dispatch")
-        || !matches!(
-            env::var("GITHUB_REF_PROTECTED").as_deref(),
-            Ok("true" | "false")
-        )
-        || [
-            "GITHUB_EVENT_PATH",
-            "GITHUB_WORKSPACE",
-            "GITHUB_JOB",
-            "GITHUB_REPOSITORY",
-            "GITHUB_REF",
-            "GITHUB_WORKFLOW_REF",
-            "GITHUB_WORKFLOW_SHA",
-            "GITHUB_SHA",
-        ]
-        .into_iter()
-        .any(|name| env::var_os(name).is_none_or(|value| value.is_empty()))
-    {
-        return None;
-    }
-    runner_velnor_dir().map(|path| InternalRequest { op, path })
 }
 
 /// Require both GitHub run coordinates before entering cache operations.
