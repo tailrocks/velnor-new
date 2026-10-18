@@ -22,6 +22,24 @@ fn inputs<'a>(
     rustup_toolchain: Option<&'a str>,
     components: &'a [String],
 ) -> ToolsCacheInputs<'a> {
+    inputs_with_source(
+        runs_on,
+        mise_setup,
+        specs,
+        rustup_toolchain,
+        components,
+        None,
+    )
+}
+
+fn inputs_with_source<'a>(
+    runs_on: &'a str,
+    mise_setup: &'a MiseSetup,
+    specs: &'a [String],
+    rustup_toolchain: Option<&'a str>,
+    components: &'a [String],
+    scale_set_image_source_sha: Option<&'a str>,
+) -> ToolsCacheInputs<'a> {
     ToolsCacheInputs {
         runs_on,
         target: "x86_64-unknown-linux-gnu",
@@ -29,6 +47,7 @@ fn inputs<'a>(
         tool_specs: specs,
         rustup_toolchain,
         rustup_components: components,
+        scale_set_image_source_sha,
     }
 }
 
@@ -64,6 +83,7 @@ fn rendered_condition(step: &Step) -> String {
         report_helper_version: "0.1.0".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
+        scale_set_image_source_sha: None,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),
@@ -119,6 +139,10 @@ fn payload_paths_and_restore_save_inputs_are_identical() {
     assert_eq!(uses, crate::cache_steps::TOOLS_RESTORE_USES);
     assert!(env.is_empty());
     assert_eq!(
+        restore.id,
+        Some(velnor_actions_contract::StepId::ToolsCacheRestore)
+    );
+    assert_eq!(
         crate::cache_steps::validate_tools_restore_call(&restore).expect("registered wrapper call"),
         payload.key_expression()
     );
@@ -169,6 +193,9 @@ fn restore_wrapper_admission_rejects_mutated_calls() {
     let mut untyped = restore.clone();
     untyped.role = None;
     assert!(crate::cache_steps::validate_tools_restore_call(&untyped).is_err());
+    let mut missing_id = restore.clone();
+    missing_id.id = None;
+    assert!(crate::cache_steps::validate_tools_restore_call(&missing_id).is_err());
     assert_eq!(
         restore.condition.as_deref(),
         Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
@@ -203,6 +230,8 @@ fn restore_composite_binds_marker_pin_key_and_paths() {
     assert!(bytes.contains("restore-keys: \"\""));
     assert!(bytes.contains("outputs.cache-hit"));
     assert!(bytes.contains("outputs.cache-matched-key"));
+    assert!(bytes.contains("value: ${{ steps.restore.outputs.cache-hit }}"));
+    assert!(bytes.contains("value: ${{ steps.restore.outputs.cache-matched-key }}"));
     assert!(bytes.contains("rm -rf"));
     crate::cache_steps::assert_rendered_admission_parses(bytes);
 }
@@ -245,12 +274,14 @@ fn static_identity_canonicalizes_inputs_and_binds_runner_selector() {
         Some("1.98.1"),
         &components_b,
     ));
-    let scale_set = payload(inputs(
+    let image_source_sha = "b".repeat(40);
+    let scale_set = payload(inputs_with_source(
         "scale-set:velnor+ubuntu-26.04-scale-set",
         &setup,
         &specs_a,
         Some("1.98.1"),
         &components_a,
+        Some(&image_source_sha),
     ));
     assert_eq!(first.static_digest(), reordered.static_digest());
     assert_ne!(first.static_digest(), scale_set.static_digest());
@@ -260,6 +291,58 @@ fn static_identity_canonicalizes_inputs_and_binds_runner_selector() {
             .static_digest()
             .bytes()
             .all(|byte| byte.is_ascii_hexdigit())
+    );
+}
+
+#[test]
+fn scale_set_cache_identity_requires_and_hashes_the_validated_image_source() {
+    let setup = pinned_mise();
+    let specs = vec!["rust@1.98.1".to_owned()];
+    let scale_set = "scale-set:velnor+ubuntu-26.04-scale-set";
+    let missing = payload(inputs(scale_set, &setup, &specs, Some("1.98.1"), &[]));
+    assert!(!missing.runtime_identity_supported());
+
+    let source_a = "a".repeat(40);
+    let source_b = "b".repeat(40);
+    let first = payload(inputs_with_source(
+        scale_set,
+        &setup,
+        &specs,
+        Some("1.98.1"),
+        &[],
+        Some(&source_a),
+    ));
+    let second = payload(inputs_with_source(
+        scale_set,
+        &setup,
+        &specs,
+        Some("1.98.1"),
+        &[],
+        Some(&source_b),
+    ));
+    assert_ne!(first.static_digest(), second.static_digest());
+
+    assert!(
+        ToolsCachePayload::new(inputs_with_source(
+            scale_set,
+            &setup,
+            &specs,
+            Some("1.98.1"),
+            &[],
+            Some(&"A".repeat(40)),
+        ))
+        .is_err()
+    );
+    assert!(
+        ToolsCachePayload::new(inputs_with_source(
+            "ubuntu-26.04",
+            &setup,
+            &specs,
+            Some("1.98.1"),
+            &[],
+            Some(&source_a),
+        ))
+        .is_err()
     );
 }
 

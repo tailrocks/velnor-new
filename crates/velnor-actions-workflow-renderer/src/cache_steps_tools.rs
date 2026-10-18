@@ -3,7 +3,7 @@
 //! Declared via `#[path]` from `cache_steps.rs` (no `lib.rs` edit;
 //! split under the 400-line size gate, bodies byte-identical).
 
-use velnor_actions_contract::{Step, StepRole};
+use velnor_actions_contract::{Step, StepId, StepRole};
 
 #[path = "cache_steps_tools_restore.rs"]
 mod restore_action;
@@ -71,6 +71,7 @@ pub(super) fn cache_step(
                 ),
             ]),
         )?;
+        step.id = Some(StepId::ToolsCacheRestore);
         step.condition = condition;
         step.role = Some(StepRole::ToolsCacheRestore);
         return Ok(step);

@@ -1,6 +1,6 @@
 //! Generated composite for the fixed V2 tools-cache restore payload.
 
-use velnor_actions_contract::{Step, StepKind, StepRole};
+use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 use crate::{RenderError, marker, steps, tree::RenderedFile, yaml::Yaml};
 
@@ -17,7 +17,7 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
     })?;
     let seed_admitted = with.get(super::TOOLS_SEED_ADMITTED_INPUT);
     if step.role != Some(StepRole::ToolsCacheRestore)
-        || step.id.is_some()
+        || step.id != Some(StepId::ToolsCacheRestore)
         || uses != super::TOOLS_RESTORE_USES
         || !env.is_empty()
         || with.len() != 2
@@ -148,6 +148,37 @@ fn action_body() -> Result<Yaml, RenderError> {
                         ),
                         ("required".to_owned(), Yaml::Bool(false)),
                         ("default".to_owned(), Yaml::quoted("false")),
+                    ]),
+                ),
+            ]),
+        ),
+        (
+            "outputs".to_owned(),
+            Yaml::Map(vec![
+                (
+                    "cache-hit".to_owned(),
+                    Yaml::Map(vec![
+                        (
+                            "description".to_owned(),
+                            Yaml::str("Whether the exact tools cache key was restored."),
+                        ),
+                        (
+                            "value".to_owned(),
+                            Yaml::str("${{ steps.restore.outputs.cache-hit }}"),
+                        ),
+                    ]),
+                ),
+                (
+                    "cache-matched-key".to_owned(),
+                    Yaml::Map(vec![
+                        (
+                            "description".to_owned(),
+                            Yaml::str("The exact tools cache key matched by the restore."),
+                        ),
+                        (
+                            "value".to_owned(),
+                            Yaml::str("${{ steps.restore.outputs.cache-matched-key }}"),
+                        ),
                     ]),
                 ),
             ]),
