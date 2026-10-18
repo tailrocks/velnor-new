@@ -109,7 +109,7 @@ enum InternalOp {
     ExportNormalToolsCachePayload,
     /// Install verified tar and gtar aliases for cache action steps.
     InstallCacheTarLaunchers,
-    /// Check exact normal `Tofu` backend and storage limits before archive download.
+    /// Do a check of the normal `Tofu` backend and storage limits before archive download.
     PreflightNormalTofuCacheRestore,
     /// Record source and report observations for one Qualification lane.
     WriteQualificationSourceEvidence,

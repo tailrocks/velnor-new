@@ -2,6 +2,7 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
+use crate::cache_action_stage::{checked_stat_u32, checked_stat_u64};
 use rustix::fs::{AtFlags, FileType, Mode, OFlags, Stat, openat, statat};
 
 const DOMAIN: &[u8] = b"velnor-qualification-cache-useful-state\0";
@@ -121,11 +122,12 @@ fn hash_file(
         return Err("qualification_cache_payload_file_changed");
     }
     let identity = file_identity(metadata)?;
-    let links = tree
-        .file_links
-        .entry(identity)
-        .or_insert((u64::from(metadata.st_nlink), 0));
-    if links.0 != u64::from(metadata.st_nlink) {
+    let link_count = checked_stat_u64(
+        metadata.st_nlink,
+        "qualification_cache_payload_file_changed",
+    )?;
+    let links = tree.file_links.entry(identity).or_insert((link_count, 0));
+    if links.0 != link_count {
         return Err("qualification_cache_payload_file_changed");
     }
     links.1 = links
@@ -163,7 +165,10 @@ fn hash_file(
     Ok(Entry {
         path: relative,
         kind: b'f',
-        mode: u32::from(metadata.st_mode & 0o777),
+        mode: checked_stat_u32(
+            metadata.st_mode & 0o777,
+            "qualification_cache_payload_file_changed",
+        )?,
         size,
         content_digest: *file_digest.finalize().as_bytes(),
         file_identity: Some(identity),
@@ -206,7 +211,10 @@ fn hash_symlink(
     Ok(Entry {
         path: relative,
         kind: b'l',
-        mode: u32::from(metadata.st_mode & 0o777),
+        mode: checked_stat_u32(
+            metadata.st_mode & 0o777,
+            "qualification_cache_payload_file_changed",
+        )?,
         size,
         content_digest: *blake3::hash(target.as_bytes()).as_bytes(),
         file_identity: None,
@@ -217,8 +225,8 @@ fn hash_symlink(
 
 fn file_identity(stat: &Stat) -> Result<(u64, u64), &'static str> {
     Ok((
-        u64::try_from(stat.st_dev).map_err(|_| "qualification_cache_payload_file_changed")?,
-        stat.st_ino,
+        checked_stat_u64(stat.st_dev, "qualification_cache_payload_file_changed")?,
+        checked_stat_u64(stat.st_ino, "qualification_cache_payload_file_changed")?,
     ))
 }
 

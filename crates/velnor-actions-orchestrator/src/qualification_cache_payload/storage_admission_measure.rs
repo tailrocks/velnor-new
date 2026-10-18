@@ -1,4 +1,4 @@
-//! Count actual cache aliases and check their current runner-work filesystem.
+//! This module measures cache use and available space in the runner work directory.
 
 #[cfg(target_os = "linux")]
 use super::RunnerWorkFilesystem;
@@ -74,8 +74,7 @@ fn filesystem_capacity(
 
     let stat =
         rustix::fs::fstat(directory).map_err(|_| "cache_storage_filesystem_observation_failed")?;
-    let device =
-        u64::try_from(stat.st_dev).map_err(|_| "cache_storage_filesystem_identity_invalid")?;
+    let device = stat.st_dev;
     let observed = statx(
         directory,
         "",

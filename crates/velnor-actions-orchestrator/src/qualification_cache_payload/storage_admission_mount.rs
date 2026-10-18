@@ -29,7 +29,8 @@ impl MountObservation {
     }
 }
 
-/// Read bounded projection bytes and record the actual fixed mount identity.
+/// This function reads no more than the byte limit.
+/// It returns the mount identity that it observes.
 pub(super) fn read_projection() -> Result<(Vec<u8>, MountObservation), &'static str> {
     #[cfg(target_os = "linux")]
     {
@@ -43,10 +44,16 @@ pub(super) fn read_projection() -> Result<(Vec<u8>, MountObservation), &'static 
 
 #[cfg(target_os = "linux")]
 fn read_linux_projection() -> Result<(Vec<u8>, MountObservation), &'static str> {
-    use rustix::fs::{AtFlags, FileType, Mode, OFlags, StatxFlags, open, openat, statx};
-    use std::fs::File;
-    use std::io::Read;
-    use std::os::fd::AsFd;
+    let directory = open_job_facts_directory()?;
+    let observation = observe_job_facts_mount(&directory)?;
+    validate_current_mountinfo(observation)?;
+    let bytes = read_projection_file(&directory)?;
+    Ok((bytes, observation))
+}
+
+#[cfg(target_os = "linux")]
+fn open_job_facts_directory() -> Result<rustix::fd::OwnedFd, &'static str> {
+    use rustix::fs::{Mode, OFlags, open, openat};
     use std::path::{Component, Path};
 
     let mut directory = open(
@@ -74,23 +81,42 @@ fn read_linux_projection() -> Result<(Vec<u8>, MountObservation), &'static str> 
         )
         .map_err(|_| "cache_storage_mount_open_failed")?;
         let stat = rustix::fs::fstat(&next).map_err(|_| "cache_storage_mount_stat_failed")?;
-        let mode = u32::from(stat.st_mode) & 0o7777;
-        if FileType::from_raw_mode(stat.st_mode) != FileType::Directory
-            || stat.st_uid != ROOT_UID
-            || mode & 0o022 != 0
-        {
-            return Err("cache_storage_mount_parent_invalid");
-        }
-        if name == "job-facts" && mode != 0o555 {
-            return Err("cache_storage_mount_directory_invalid");
-        }
+        validate_job_facts_parent(&stat, name == "job-facts")?;
         directory = next;
     }
+    Ok(directory)
+}
+
+#[cfg(target_os = "linux")]
+fn validate_job_facts_parent(
+    stat: &rustix::fs::Stat,
+    is_job_facts: bool,
+) -> Result<(), &'static str> {
+    use rustix::fs::FileType;
+
+    let mode = stat.st_mode & 0o7777;
+    if FileType::from_raw_mode(stat.st_mode) != FileType::Directory
+        || stat.st_uid != ROOT_UID
+        || mode & 0o022 != 0
+    {
+        return Err("cache_storage_mount_parent_invalid");
+    }
+    if is_job_facts && mode != 0o555 {
+        return Err("cache_storage_mount_directory_invalid");
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn observe_job_facts_mount(
+    directory: &rustix::fd::OwnedFd,
+) -> Result<MountObservation, &'static str> {
+    use rustix::fs::{AtFlags, FileType, StatxFlags, statx};
 
     let directory_stat =
-        rustix::fs::fstat(&directory).map_err(|_| "cache_storage_mount_stat_failed")?;
+        rustix::fs::fstat(directory).map_err(|_| "cache_storage_mount_stat_failed")?;
     let directory_x = statx(
-        &directory,
+        directory,
         "",
         AtFlags::EMPTY_PATH,
         StatxFlags::BASIC_STATS | StatxFlags::MNT_ID,
@@ -100,26 +126,31 @@ fn read_linux_projection() -> Result<(Vec<u8>, MountObservation), &'static str> 
     if !mask.contains(StatxFlags::BASIC_STATS | StatxFlags::MNT_ID)
         || FileType::from_raw_mode(directory_stat.st_mode) != FileType::Directory
         || directory_x.stx_uid != ROOT_UID
-        || u32::from(directory_stat.st_mode) & 0o7777 != 0o555
+        || directory_stat.st_mode & 0o7777 != 0o555
         || directory_stat.st_nlink < 2
     {
         return Err("cache_storage_mount_directory_invalid");
     }
-    let device =
-        u64::try_from(directory_stat.st_dev).map_err(|_| "cache_storage_mount_device_invalid")?;
+    let device = directory_stat.st_dev;
     if directory_x.stx_ino != directory_stat.st_ino
-        || u64::from(directory_x.stx_dev_major) != u64::from(rustix::fs::major(device))
-        || u64::from(directory_x.stx_dev_minor) != u64::from(rustix::fs::minor(device))
+        || directory_x.stx_dev_major != rustix::fs::major(device)
+        || directory_x.stx_dev_minor != rustix::fs::minor(device)
     {
         return Err("cache_storage_mount_identity_mismatch");
     }
-    let observation = MountObservation {
+    Ok(MountObservation {
         mount_id: directory_x.stx_mnt_id,
         device_major: directory_x.stx_dev_major,
         device_minor: directory_x.stx_dev_minor,
         directory_device: device,
         directory_inode: directory_stat.st_ino,
-    };
+    })
+}
+
+#[cfg(target_os = "linux")]
+fn validate_current_mountinfo(observation: MountObservation) -> Result<(), &'static str> {
+    use std::fs::File;
+    use std::io::Read;
 
     let mut mountinfo =
         File::open(MOUNTINFO_PATH).map_err(|_| "cache_storage_mountinfo_read_failed")?;
@@ -134,9 +165,18 @@ fn read_linux_projection() -> Result<(Vec<u8>, MountObservation), &'static str> 
     let mountinfo =
         std::str::from_utf8(&mountinfo_bytes).map_err(|_| "cache_storage_mountinfo_invalid")?;
     validate_mountinfo(mountinfo, observation)?;
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+fn read_projection_file(directory: &rustix::fd::OwnedFd) -> Result<Vec<u8>, &'static str> {
+    use rustix::fs::{FileType, Mode, OFlags, openat};
+    use std::fs::File;
+    use std::io::Read;
+    use std::os::fd::AsFd;
 
     let file_descriptor = openat(
-        &directory,
+        directory,
         JOB_FACTS_FILE,
         OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
         Mode::empty(),
@@ -146,7 +186,7 @@ fn read_linux_projection() -> Result<(Vec<u8>, MountObservation), &'static str> 
         rustix::fs::fstat(&file_descriptor).map_err(|_| "cache_storage_projection_stat_failed")?;
     if FileType::from_raw_mode(file_stat.st_mode) != FileType::RegularFile
         || file_stat.st_uid != ROOT_UID
-        || u32::from(file_stat.st_mode) & 0o7777 != 0o444
+        || file_stat.st_mode & 0o7777 != 0o444
         || file_stat.st_nlink != 1
         || file_stat.st_size <= 0
         || u64::try_from(file_stat.st_size).unwrap_or(u64::MAX) > 64 * 1024
@@ -176,7 +216,7 @@ fn read_linux_projection() -> Result<(Vec<u8>, MountObservation), &'static str> 
     {
         return Err("cache_storage_projection_changed");
     }
-    Ok((bytes, observation))
+    Ok(bytes)
 }
 
 fn validate_mountinfo(mountinfo: &str, expected: MountObservation) -> Result<(), &'static str> {

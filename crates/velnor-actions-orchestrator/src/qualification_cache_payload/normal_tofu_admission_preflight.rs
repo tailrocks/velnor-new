@@ -1,4 +1,4 @@
-//! Check an exact cache entry and local byte authority before SDK download.
+//! Do a check of the cache entry and local byte limit before SDK download.
 
 use super::super::NormalTofuProvidersCachePayloadRequest;
 use super::context::{GitHubRunContext, read_github_run_context};
@@ -25,58 +25,58 @@ pub struct NormalTofuProvidersCacheRestorePreflight {
 }
 
 impl NormalTofuProvidersCacheRestorePreflight {
-    /// Gives the exact key checked by the backend census.
+    /// This method returns the cache key used in the cache service query.
     #[must_use]
     pub fn cache_key(&self) -> &str {
         &self.cache_key
     }
 
-    /// Gives the repository used by the backend census.
+    /// This method returns the repository used in the cache service query.
     #[must_use]
     pub fn repository(&self) -> &str {
         &self.repository
     }
 
-    /// Gives the exact ref used by the backend census.
+    /// This method returns the ref used in the cache service query.
     #[must_use]
     pub fn git_ref(&self) -> &str {
         &self.git_ref
     }
 
-    /// Gives the unique cache object found before the restore action.
+    /// This method returns the one cache object found before restore.
     #[must_use]
     pub fn cache_entry(&self) -> Option<&QualificationCacheBackendEntry> {
         self.cache_entry.as_ref()
     }
 
-    /// Gives the path-derived SDK compression identity for the cache object.
+    /// This method returns the compression method that matches the cache version in the action path.
     #[must_use]
     pub const fn compression(&self) -> Option<CacheActionCompression> {
         self.compression
     }
 
-    /// Gives the maximum compressed bytes accepted before restore.
+    /// This method returns the maximum compressed size allowed before restore.
     #[must_use]
     pub const fn max_download_bytes(&self) -> Option<u64> {
         self.max_download_bytes
     }
 
-    /// Gives the maximum raw single-file stage bytes accepted after restore.
+    /// This method returns the maximum size of one uncompressed file after restore.
     #[must_use]
     pub const fn max_raw_stage_bytes(&self) -> Option<u64> {
         self.max_raw_stage_bytes
     }
 }
 
-/// Check backend identity and storage limits before the SDK may download an archive.
+/// Do a check of the cache service identity and storage limits before SDK download.
 ///
-/// A returned value is only a preflight observation. Import still rechecks the
-/// cache object, action output, stage claim, compression, and payload bytes.
+/// The returned value contains facts from before download. Import still does a check
+/// of the cache object, action output, previous import record, compression method, and payload bytes.
 ///
 /// # Errors
 ///
-/// Gives a static error code when the runner context, backend census, projection,
-/// filesystem, cache object, or capacity checks do not agree.
+/// This method returns an error code when runner context, cache service data, projection,
+/// filesystem, cache object, or capacity values conflict.
 pub fn preflight_normal_tofu_providers_cache_restore(
     request: &NormalTofuProvidersCachePayloadRequest<'_>,
 ) -> Result<NormalTofuProvidersCacheRestorePreflight, &'static str> {

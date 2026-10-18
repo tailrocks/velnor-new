@@ -1,4 +1,5 @@
 use super::StageError;
+use super::checked_stat_u64;
 use super::context::StageContext;
 use super::receipt::StageReceiptClaim;
 use super::stage_parent::{
@@ -268,7 +269,7 @@ fn verify_file(
 ) -> Result<(), StageError> {
     let stat = rustix::fs::fstat(file.as_fd()).map_err(|_| "cache_stage_stat_failed")?;
     validate_stat(&stat)?;
-    if u64::try_from(stat.st_dev).ok() != Some(claim.device())
+    if checked_stat_u64(stat.st_dev, "cache_stage_stat_failed")? != claim.device()
         || stat.st_ino != claim.inode()
         || u64::try_from(stat.st_size).ok() != Some(claim.length())
         || !path_matches(parent, &stat)?
@@ -300,7 +301,7 @@ fn claim_for_file(file: &mut File, parent: &StageParent) -> Result<StageReceiptC
         return Err("cache_stage_changed");
     }
     Ok(StageReceiptClaim::new(
-        u64::try_from(after.st_dev).map_err(|_| "cache_stage_stat_failed")?,
+        checked_stat_u64(after.st_dev, "cache_stage_stat_failed")?,
         after.st_ino,
         u64::try_from(after.st_size).map_err(|_| "cache_stage_stat_failed")?,
         digest,

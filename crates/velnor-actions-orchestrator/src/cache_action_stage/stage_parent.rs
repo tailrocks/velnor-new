@@ -1,4 +1,5 @@
 use super::StageError;
+use super::checked_stat_u64;
 use super::context::StageContext;
 use rustix::fs::{AtFlags, Mode, OFlags, mkdirat, open, openat, statat};
 use rustix::io::Errno;
@@ -115,8 +116,11 @@ pub(super) fn open_stage_parent(
     let runner_temp_stat =
         rustix::fs::fstat(runner_temp.as_fd()).map_err(|_| "cache_stage_parent_stat_failed")?;
     let filesystem_device =
-        u64::try_from(runner_temp_stat.st_dev).map_err(|_| "cache_stage_parent_stat_failed")?;
-    let filesystem_mount_id = directory_mount_id(runner_temp).transpose()?;
+        checked_stat_u64(runner_temp_stat.st_dev, "cache_stage_parent_stat_failed")?;
+    #[cfg(target_os = "linux")]
+    let filesystem_mount_id = Some(directory_mount_id(runner_temp)?);
+    #[cfg(not(target_os = "linux"))]
+    let filesystem_mount_id = None;
 
     for component in context.stage_directory_components()? {
         let name = CString::new(component).map_err(|_| "cache_stage_path_invalid")?;
@@ -236,8 +240,8 @@ fn same_directory(left: &rustix::fs::Stat, right: &rustix::fs::Stat) -> bool {
 
 fn directory_identity(stat: &rustix::fs::Stat) -> Result<(u64, u64), StageError> {
     Ok((
-        u64::try_from(stat.st_dev).map_err(|_| "cache_stage_parent_stat_failed")?,
-        stat.st_ino,
+        checked_stat_u64(stat.st_dev, "cache_stage_parent_stat_failed")?,
+        checked_stat_u64(stat.st_ino, "cache_stage_parent_stat_failed")?,
     ))
 }
 
@@ -247,33 +251,27 @@ fn validate_stage_directory(
     filesystem_mount_id: Option<u64>,
 ) -> Result<(), StageError> {
     let stat = rustix::fs::fstat(fd.as_fd()).map_err(|_| "cache_stage_parent_stat_failed")?;
-    let device = u64::try_from(stat.st_dev).map_err(|_| "cache_stage_parent_stat_failed")?;
-    if device != filesystem_device || directory_mount_id(fd).transpose()? != filesystem_mount_id {
+    let device = checked_stat_u64(stat.st_dev, "cache_stage_parent_stat_failed")?;
+    #[cfg(target_os = "linux")]
+    let mount_id = Some(directory_mount_id(fd)?);
+    #[cfg(not(target_os = "linux"))]
+    let mount_id = None;
+    if device != filesystem_device || mount_id != filesystem_mount_id {
         return Err("cache_stage_filesystem_changed");
     }
     validate_private_directory(fd)
 }
 
-fn directory_mount_id(fd: &OwnedFd) -> Option<Result<u64, StageError>> {
-    #[cfg(target_os = "linux")]
-    {
-        use rustix::fs::{AtFlags, StatxFlags, statx};
+#[cfg(target_os = "linux")]
+fn directory_mount_id(fd: &OwnedFd) -> Result<u64, StageError> {
+    use rustix::fs::{AtFlags, StatxFlags, statx};
 
-        let identity = statx(fd, "", AtFlags::EMPTY_PATH, StatxFlags::MNT_ID)
-            .map_err(|_| "cache_stage_mount_identity_unavailable")
-            .and_then(|stat| {
-                if !StatxFlags::from_bits_retain(stat.stx_mask).contains(StatxFlags::MNT_ID) {
-                    Err("cache_stage_mount_identity_unavailable")
-                } else {
-                    Ok(stat.stx_mnt_id)
-                }
-            });
-        Some(identity)
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        let _ = fd;
-        None
+    let stat = statx(fd, "", AtFlags::EMPTY_PATH, StatxFlags::MNT_ID)
+        .map_err(|_| "cache_stage_mount_identity_unavailable")?;
+    if StatxFlags::from_bits_retain(stat.stx_mask).contains(StatxFlags::MNT_ID) {
+        Ok(stat.stx_mnt_id)
+    } else {
+        Err("cache_stage_mount_identity_unavailable")
     }
 }
 

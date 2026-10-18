@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::Path;
 
+use crate::cache_action_stage::checked_stat_u32;
 use rustix::fs::{AtFlags, Mode, OFlags, Stat, openat, statat};
 
 use super::{
@@ -96,7 +97,10 @@ pub(super) fn inventory_from_tree(
             }
         })
         .collect::<Vec<_>>();
-    let root_mode = u32::from(root_stat.st_mode) & 0o777;
+    let root_mode = checked_stat_u32(
+        root_stat.st_mode & 0o777,
+        "qualification_cache_payload_file_changed",
+    )?;
     let digest = digest_archive_entries(root_mode, &entries)?;
     Ok(ArchiveInventory {
         root_mode,

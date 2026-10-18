@@ -2,6 +2,7 @@ use super::dirs::{open_parent, same_object, same_version, validate_file_stat};
 use super::source::SourceFileGuard;
 use super::{CreatedPayload, cleanup};
 use super::{FILE_DOMAIN, MAX_FILE_BYTES};
+use crate::cache_action_stage::checked_stat_u32;
 use rustix::fs::{AtFlags, Mode, OFlags, fchmod, openat, statat};
 use std::fs;
 use std::io::{Read, Write};
@@ -102,9 +103,13 @@ fn copy_file_bytes(
     if size > MAX_FILE_BYTES {
         return Err("qualification_cache_payload_limit");
     }
+    let mode = checked_stat_u32(
+        source_stat.st_mode & 0o777,
+        "qualification_cache_payload_file_changed",
+    )?;
     let mut digest = blake3::Hasher::new();
     digest.update(FILE_DOMAIN);
-    digest.update(&(u32::from(source_stat.st_mode) & 0o777).to_be_bytes());
+    digest.update(&mode.to_be_bytes());
     digest.update(&size.to_be_bytes());
     let mut copied = 0_u64;
     let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
@@ -182,9 +187,13 @@ pub(super) fn digest_file_with_mode(path: &Path) -> Result<Option<(String, u32)>
     if size > MAX_FILE_BYTES {
         return Err("qualification_cache_payload_limit");
     }
+    let mode = checked_stat_u32(
+        before.st_mode & 0o777,
+        "qualification_cache_payload_file_changed",
+    )?;
     let mut digest = blake3::Hasher::new();
     digest.update(FILE_DOMAIN);
-    digest.update(&(u32::from(before.st_mode) & 0o777).to_be_bytes());
+    digest.update(&mode.to_be_bytes());
     digest.update(&size.to_be_bytes());
     let mut count = 0_u64;
     let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
@@ -207,10 +216,7 @@ pub(super) fn digest_file_with_mode(path: &Path) -> Result<Option<(String, u32)>
         return Err("qualification_cache_payload_file_changed");
     }
     source_guard.revalidate(&file)?;
-    Ok(Some((
-        format!("b3-{}", digest.finalize().to_hex()),
-        u32::from(before.st_mode) & 0o777,
-    )))
+    Ok(Some((format!("b3-{}", digest.finalize().to_hex()), mode)))
 }
 
 #[cfg(test)]

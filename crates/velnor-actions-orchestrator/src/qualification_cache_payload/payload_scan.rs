@@ -1,5 +1,6 @@
 //! Walk a payload tree through no-follow directory descriptors.
 
+use crate::cache_action_stage::checked_stat_u32;
 use rustix::fs::{AtFlags, Dir, FileType, Mode, OFlags, openat, statat};
 
 use super::{Entry, MAX_DEPTH, MAX_ENTRIES, MAX_PATH_BYTES, Tree};
@@ -116,7 +117,10 @@ fn collect_directory(
     tree.entries.push(Entry {
         path: relative.to_owned(),
         kind: b'd',
-        mode: u32::from(stat.st_mode & 0o777),
+        mode: checked_stat_u32(
+            stat.st_mode & 0o777,
+            "qualification_cache_payload_file_changed",
+        )?,
         size: 0,
         content_digest: [0; 32],
         file_identity: None,

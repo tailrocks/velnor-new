@@ -52,7 +52,7 @@ pub(super) fn version_agrees_with_action_compression(
     Ok(version_for_action_compression(action_path, compression)? == version)
 }
 
-/// Identify one pinned SDK method from its exact path-derived cache version.
+/// This function finds the SDK compression method that matches the cache version in the action path.
 pub(super) fn compression_for_action_version(
     action_path: &Path,
     version: &str,

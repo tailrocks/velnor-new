@@ -7,6 +7,7 @@ use super::payload::{
 };
 use super::transport_envelope::write_envelope;
 use super::{FILE_DOMAIN, MAX_FILE_BYTES, root_name};
+use crate::cache_action_stage::checked_stat_u32;
 use std::fs::File;
 use std::io::{self, Read, Seek, Write};
 use std::path::Path;
@@ -147,7 +148,10 @@ fn append_root_file<W: Write>(
     if size > MAX_FILE_BYTES {
         return Err("qualification_cache_payload_limit");
     }
-    let mode = u32::from(stat.st_mode & 0o777);
+    let mode = checked_stat_u32(
+        stat.st_mode & 0o777,
+        "qualification_cache_payload_file_changed",
+    )?;
     if Some(&mode) != expected.mode.as_ref() {
         return Err("qualification_cache_payload_file_changed");
     }

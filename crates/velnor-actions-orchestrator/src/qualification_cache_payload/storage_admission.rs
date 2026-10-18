@@ -1,4 +1,4 @@
-//! Verify the retained host storage authority for one runner job.
+//! This module makes sure that one runner job uses the host storage limits.
 
 #[cfg(any(target_os = "linux", test))]
 use super::storage_admission_types::StorageCacheAdmissionV1;
@@ -29,7 +29,7 @@ const ROLE_NAMES: &[&str] = &[
     "engine-metadata",
 ];
 
-/// Opaque byte and inode authority from the immutable, read-only job facts.
+/// Byte and inode limits from the immutable, read-only job facts.
 #[derive(Debug, Clone)]
 pub(super) struct VerifiedCacheBudget {
     live_bytes: u64,
@@ -53,7 +53,7 @@ pub(super) struct RunnerWorkFilesystem {
 }
 
 impl VerifiedCacheBudget {
-    /// Bound an import read by its request and remaining live-cache allowance.
+    /// The maximum import size is the lowest of the request, operation, transport, live-cache, and stage limits.
     pub(super) fn operation_limit(
         &self,
         requested: u64,
@@ -132,7 +132,7 @@ impl VerifiedCacheBudget {
     }
 }
 
-/// Parse and verify exact canonical host-projection bytes.
+/// This test function parses the host projection and makes sure that its bytes are canonical.
 #[cfg(test)]
 pub(super) fn parse_projection(
     bytes: &[u8],
@@ -151,7 +151,7 @@ pub(super) fn parse_projection(
     Ok(budget_from_document(&document))
 }
 
-/// Read the fixed, controller-mounted projection and verify its observed mount.
+/// This function reads the fixed projection from the controller mount. It makes sure that the observed mount identity agrees with the projection.
 pub(super) fn read_verified_budget(
     runner_temp: &Path,
     runner_name: &str,

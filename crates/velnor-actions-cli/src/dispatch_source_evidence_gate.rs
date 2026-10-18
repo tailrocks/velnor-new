@@ -1,4 +1,4 @@
-//! Runner-context gate for qualification source evidence.
+//! This module does a check of runner context for qualification source evidence.
 
 use std::env;
 

@@ -7,6 +7,7 @@ use super::payload;
 use super::stage::{verify_staged_payload, write_new_payload};
 use super::{CacheExportProof, CacheRestoreProof, CacheRestoreStatus};
 use super::{STATE_DOMAIN, digest_bytes, is_file_root, root_name, update_bytes};
+use crate::cache_action_stage::checked_stat_u32;
 use crate::qualification_cache_backend::validate_qualification_cache_backend_observation;
 use crate::qualification_cache_runtime::QualificationCacheBindingOutputs;
 use std::path::Path;
@@ -281,7 +282,11 @@ pub(super) fn digest_directory(path: &Path) -> Result<Option<(String, u32)>, &'s
         return Err("qualification_cache_root_changed");
     }
     source.revalidate()?;
-    Ok(digest.map(|digest| (digest, u32::from(before.st_mode) & 0o777)))
+    let mode = checked_stat_u32(
+        before.st_mode & 0o777,
+        "qualification_cache_payload_file_changed",
+    )?;
+    Ok(digest.map(|digest| (digest, mode)))
 }
 
 pub(crate) fn useful_state_digest(roots: &[PayloadRoot]) -> Result<String, &'static str> {
