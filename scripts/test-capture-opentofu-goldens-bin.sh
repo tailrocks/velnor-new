@@ -38,7 +38,16 @@ cleanup_work() {
 trap cleanup_work EXIT
 STUB_BIN="$WORK/stub bin"
 MARKER="$WORK/cargo-invoked"
+MISE_TRACE="$WORK/mise-release-fetches"
 ORIGINAL_PATH="$PATH"
+REAL_MISE_BIN="$(command -v mise)"
+RUST_POLICY="$(awk -v key=rust -f "$ROOT/scripts/toml-tool-pin.awk" \
+  "$ROOT/.velnor/version-policy.toml")"
+RUST_INSTALL_PATH="$(MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false \
+  "$REAL_MISE_BIN" --no-config --no-env --no-hooks ls --json rust \
+  | jq -er --arg version "$RUST_POLICY" \
+    '[.[] | select(.version == $version and .installed == true) | .install_path] | if length == 1 then .[0] else error("missing or duplicate installed Rust pin") end')"
+CANONICAL_RUSTUP_HOME="$(cd "${RUSTUP_HOME:-$HOME/.rustup}" && pwd -P)"
 mkdir -p "$STUB_BIN" "$WORK/tmp workspace"
 # Only `cargo build` is the collector's implicit debug build. `plan` runs
 # `cargo metadata` through the real toolchain; poisoning that call makes
@@ -54,6 +63,46 @@ export PATH
 exec cargo "$@"
 STUB
 chmod u+x "$STUB_BIN/cargo"
+cat >"$STUB_BIN/mise" <<'STUB'
+#!/bin/sh
+case " $* " in
+  *" install "*) echo "unexpected Mise install" >&2; exit 80 ;;
+  *" cargo fetch --locked --manifest-path "*)
+    if [ "${MISE_AUTO_INSTALL-}" != false ] || [ "${MISE_EXEC_AUTO_INSTALL-}" != false ]; then
+      echo "release cargo fetch did not disable Mise auto-install" >&2
+      exit 81
+    fi
+    case "${CARGO_HOME-}" in
+      "${VELNOR_TEST_PRIVATE_TMPDIR-}"/velnor-goldens-work.*/stage/dogfood/cargo-home) ;;
+      *) echo "release cargo fetch did not use its private Cargo cache" >&2; exit 82 ;;
+    esac
+    if [ "${RUSTUP_HOME-}" != "${VELNOR_TEST_CANONICAL_RUSTUP_HOME-}" ]; then
+      echo "release cargo fetch did not use the canonical Rustup home" >&2
+      exit 83
+    fi
+    printf '%s\n' "$*" >>"$VELNOR_TEST_MISE_TRACE"
+    ;;
+esac
+exec "$VELNOR_TEST_REAL_MISE_BIN" "$@"
+STUB
+chmod u+x "$STUB_BIN/mise"
+if ! bash "$ROOT/scripts/generator-release/test-release-rust-toolchain.sh"; then
+  echo "FAIL: guarded release Rust toolchain regression failed" >&2
+  exit 1
+fi
+
+rust_install_snapshot() {
+  python3 - "$RUST_INSTALL_PATH" <<'PY'
+import os
+import stat
+import sys
+
+path = sys.argv[1]
+info = os.lstat(path)
+target = os.readlink(path) if stat.S_ISLNK(info.st_mode) else ""
+print(f"{info.st_dev}:{info.st_ino}:{info.st_mode:o}:{target}")
+PY
+}
 
 test_file_sha256() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -149,10 +198,15 @@ write_test_manifest() {
 source "$ROOT/scripts/generator-release/test-qualification-output-bindings.sh"
 
 expect_release_check_match() {
-  local status=0 log="$WORK/release-check.log" after
+  local status=0 log="$WORK/release-check.log" after before
+  before="$(rust_install_snapshot)" || exit 2
   GITHUB_SHA="$SOURCE_SHA" GITHUB_REPOSITORY=tailrocks/velnor-new \
+    TMPDIR="$WORK/tmp workspace" \
     PATH="$STUB_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
     VELNOR_TEST_REAL_CARGO_PATH="$ORIGINAL_PATH" \
+    VELNOR_TEST_REAL_MISE_BIN="$REAL_MISE_BIN" VELNOR_TEST_MISE_TRACE="$MISE_TRACE" \
+    VELNOR_TEST_PRIVATE_TMPDIR="$WORK/tmp workspace" \
+    VELNOR_TEST_CANONICAL_RUSTUP_HOME="$CANONICAL_RUSTUP_HOME" \
     "$SCRIPT" check-release "$CLI_BIN" "$WORK/valid manifest.json" \
       "$(test_file_sha256 "$WORK/valid manifest.json")" >"$log" 2>&1 || status=$?
   if [ "$status" -ne 0 ] || ! grep -Fq 'ALL RELEASE FIXTURE GOLDENS AND DOGFOOD PARITY MATCH' "$log"; then
@@ -161,6 +215,15 @@ expect_release_check_match() {
     exit 1
   fi
   if [ -e "$MARKER" ]; then echo "FAIL: release qualification invoked cargo build" >&2; exit 1; fi
+  if [ "$(wc -l <"$MISE_TRACE" | tr -d ' ')" -ne 2 ]; then
+    echo "FAIL: release qualification did not use guarded Mise for both lockfiles" >&2
+    exit 1
+  fi
+  after="$(rust_install_snapshot)" || exit 2
+  if [ "$before" != "$after" ]; then
+    echo "FAIL: release qualification changed the installed Rust alias" >&2
+    exit 1
+  fi
   after="$(golden_fingerprint)" || exit 2
   if [ "$after" != "$BEFORE" ]; then echo "FAIL: successful release check changed goldens" >&2; exit 1; fi
   echo "passed positive release candidate fixture oracle"
