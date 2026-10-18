@@ -18,6 +18,9 @@ not a pass.
 Run checks for both workspaces when both exist.
 Run `bash scripts/verify-local.sh` from the repository root.
 The script uses pinned Mise tools without project configuration.
+The script makes a private `CARGO_HOME` for the pinned Nextest command.
+Its `ln -s` entries use only the existing registry and Git caches and the pinned executable.
+It does not copy global Cargo configuration or credentials.
 Nextest runs ordinary unit and integration tests.
 MBX `test --doc` runs doctests as a separate stage.
 Nextest does not run doctests.

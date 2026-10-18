@@ -70,8 +70,15 @@ fn staged_calls(script: &str) -> Result<Vec<String>, Box<dyn Error>> {
 #[test]
 fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
     let script = entrypoint_text()?;
+    assert_stage_inventory(&script)?;
+    assert_failure_and_policy_contracts(&script);
+    assert_locked_commands_and_workspace_inventory(&script);
+    Ok(())
+}
+
+fn assert_stage_inventory(script: &str) -> Result<(), Box<dyn Error>> {
     assert_eq!(
-        inline_stages(&script),
+        inline_stages(script),
         [
             "toolchain",
             "generated-selector",
@@ -82,7 +89,7 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
         "exact inline stage inventory"
     );
     assert_eq!(
-        staged_calls(&script)?,
+        staged_calls(script)?,
         [
             "fmt",
             "root-deny",
@@ -99,6 +106,10 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
         ],
         "exact staged-call inventory"
     );
+    Ok(())
+}
+
+fn assert_failure_and_policy_contracts(script: &str) {
     // Fail-closed shape: strict mode, recorded failures, nonzero exit.
     assert!(script.contains("set -uo pipefail"), "strict mode");
     assert!(
@@ -136,6 +147,9 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
         ),
         "nested dependency audit"
     );
+}
+
+fn assert_locked_commands_and_workspace_inventory(script: &str) {
     // Every build cargo invocation passes `--locked` (`fmt` takes no
     // such flag; version probes build nothing). The trailing space
     // keeps echo text (`... falls back to cargo test"`) out of the
@@ -171,7 +185,6 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
         script.contains("run --workspace --locked"),
         "nextest integration run is locked"
     );
-    Ok(())
 }
 
 #[test]
@@ -182,7 +195,7 @@ fn verify_local_nextest_route_rejects_missing_or_wrong_pins() -> Result<(), Box<
         .split("if ! nextest_route_is_pinned ")
         .nth(1)
         .and_then(|body| body.split("\nfi").next())
-        .ok_or("Nextest route guard call is missing")?;
+        .ok_or("Nextest version guard call is missing")?;
     assert!(route_check.contains("exit 1"), "route failures exit early");
 
     let executable = std::env::current_exe()?;
@@ -208,7 +221,7 @@ esac
             .output()?;
         assert!(
             output.status.success(),
-            "Nextest route guard rejected {case}: {}",
+            "Nextest version guard rejected {case}: {}",
             String::from_utf8_lossy(&output.stderr)
         );
     }
@@ -270,7 +283,7 @@ fn verify_local_log_parent() -> Result<PathBuf, Box<dyn Error>> {
     let mise = bin.join("mise");
     fs::write(
         &mise,
-        "#!/bin/sh\ncase \"$1\" in\n  --version) printf '2026.10.6\\n' ;;\n  install) printf '%s\\n' \"$VERIFY_LOCAL_LOG_TEST_MARKER\" >&2; exit 1 ;;\n  *) exit 2 ;;\nesac\n",
+        "#!/bin/sh\nif [ \"$1\" = --no-config ]; then shift; fi\ncase \"$1\" in\n  --version) printf '2026.10.6\\n' ;;\n  install) printf '%s\\n' \"$VERIFY_LOCAL_LOG_TEST_MARKER\" >&2; exit 1 ;;\n  *) exit 2 ;;\nesac\n",
     )?;
     fs::set_permissions(&mise, fs::Permissions::from_mode(0o700))?;
     Ok(parent)
@@ -344,3 +357,7 @@ fn verify_local_failure_logs_are_private_and_isolated() -> Result<(), Box<dyn Er
     fs::remove_dir_all(parent)?;
     Ok(())
 }
+
+#[cfg(unix)]
+#[path = "impl_cli_verify_local_cargo_home.rs"]
+mod cargo_home;

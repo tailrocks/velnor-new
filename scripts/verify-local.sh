@@ -30,7 +30,7 @@
 # The script uses the selected Rust toolchain's `bin` directory first.
 # Specs come from .velnor/version-policy.toml; mise.toml holds
 # local developer selections and may differ without changing the CI pins.
-# The script does not use project wrappers or ambient Rust tool versions.
+# It does not use project wrappers or other Rust tools on PATH.
 # It uses MBX for builds, tests, docs, and strict Clippy checks.
 # Nextest runs ordinary suites. MBX `test --doc` runs doctests separately.
 # Build commands use `--locked`.
@@ -43,6 +43,7 @@ set -uo pipefail
 ROOT=""
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT" || exit 1
+CARGO_CACHE_HOME="${CARGO_HOME:-${HOME:?}/.cargo}"
 
 create_log_dir() {
   local parent candidate fallback
@@ -109,6 +110,21 @@ stage() {
   else
     fail "$name (log: $log)"
   fi
+}
+
+prepare_isolated_cargo_home() {
+  local source_home="$1" isolated_home="$2" nextest_binary="$3" cache
+  [ -x "$nextest_binary" ] || return 1
+  (umask 077; mkdir "$isolated_home" && mkdir "$isolated_home/bin") || return 1
+  if [ -d "$source_home" ]; then
+    source_home="$(cd -P "$source_home" 2>/dev/null && pwd -P)" || return 1
+    for cache in registry git; do
+      if [ -d "$source_home/$cache" ]; then
+        ln -s "$source_home/$cache" "$isolated_home/$cache" || return 1
+      fi
+    done
+  fi
+  ln -s "$nextest_binary" "$isolated_home/bin/cargo-nextest"
 }
 
 if ! command -v mise >/dev/null 2>&1; then
@@ -206,6 +222,7 @@ RUSTFMT_EFFECTIVE_PATH="$(effective_path rustfmt)"
 RUSTC_VER="$("${RUST_EXEC[@]}" rustc --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
 CARGO_VER="$("${RUST_EXEC[@]}" cargo --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
 CLIPPY_VER="$("${RUST_EXEC[@]}" cargo clippy --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
+MBX_CLIPPY_VER="$("${RUST_EXEC[@]}" mbx clippy --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
 RUSTFMT_VER="$("${RUST_EXEC[@]}" cargo fmt --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
 RUSTFMT_BIN_VER="$("${RUST_EXEC[@]}" rustfmt --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
 CLIPPY_BIN_VER=""
@@ -242,7 +259,8 @@ POLICY_MISE="$(repo_policy mise-version 2>"$MISE_POLICY_LOG")"
 # Compare actual tool paths and versions before verification starts.
 MBX_VER="$("${RUST_EXEC[@]}" mbx --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
 echo "effective: rustc $RUSTC_VER [$RUSTC_EFFECTIVE_PATH], cargo $CARGO_VER [$CARGO_EFFECTIVE_PATH]"
-echo "effective: clippy $CLIPPY_VER [$CLIPPY_EFFECTIVE_PATH], cargo-fmt $RUSTFMT_VER [$CARGO_FMT_EFFECTIVE_PATH]"
+echo "effective: clippy $CLIPPY_VER [$CLIPPY_EFFECTIVE_PATH], MBX clippy $MBX_CLIPPY_VER"
+echo "effective: cargo-fmt $RUSTFMT_VER [$CARGO_FMT_EFFECTIVE_PATH]"
 echo "effective: rustfmt $RUSTFMT_BIN_VER [$RUSTFMT_EFFECTIVE_PATH], mbx $MBX_VER"
 echo "effective: cargo-deny $CARGO_DENY_VER [$CARGO_DENY_BIN]"
 if [ "$RUSTC_VER" != "$RUST_PIN" ] || [ "$CARGO_VER" != "$RUST_PIN" ] ||
@@ -253,6 +271,7 @@ if [ "$RUSTC_VER" != "$RUST_PIN" ] || [ "$CARGO_VER" != "$RUST_PIN" ] ||
    [ "$CARGO_FMT_EFFECTIVE_PATH" != "$CARGO_FMT_TOOL_PATH" ] ||
    [ "$RUSTFMT_EFFECTIVE_PATH" != "$RUSTFMT_TOOL_PATH" ] ||
    [ "$CLIPPY_VER" != "$CLIPPY_BIN_VER" ] ||
+   [ "$MBX_CLIPPY_VER" != "$CLIPPY_BIN_VER" ] ||
    [ "$RUSTFMT_VER" != "$CARGO_FMT_BIN_VER" ] ||
    [ "$CARGO_FMT_BIN_VER" != "$RUSTFMT_BIN_VER" ] ||
    [ "$CARGO_DENY_VER" != "$CARGO_DENY_PIN" ]; then
@@ -260,8 +279,8 @@ if [ "$RUSTC_VER" != "$RUST_PIN" ] || [ "$CARGO_VER" != "$RUST_PIN" ] ||
   echo "verify-local: FAIL:$FAILURES"
   exit 1
 fi
-# Resolve the pinned Nextest executable with mise.
-# Put its directory first inside Mise's environment for `mbx nextest`.
+# Find the pinned Nextest executable with Mise.
+# Put the private bin first to select the pinned cargo-nextest.
 NEXTEST_RUN=()
 nextest_route_is_pinned() {
   local bin="$1" binary_version="$2" route_version="$3" expected_version="$4"
@@ -277,10 +296,17 @@ if [ -n "$NEXTEST_BIN" ]; then
 fi
 if [ -n "$NEXTEST_BIN" ] && [ "$NEXTEST_BIN_VER" = "$NEXTEST_PIN" ]; then
   NEXTEST_DIR="$(dirname "$NEXTEST_BIN")"
-  # Resolve the pinned binary in the child shell using its explicit directory.
+  ISOLATED_CARGO_HOME="$LOG_DIR/cargo-home"
+  if ! prepare_isolated_cargo_home "$CARGO_CACHE_HOME" "$ISOLATED_CARGO_HOME" "$NEXTEST_BIN"; then
+    fail "toolchain (cannot prepare a private CARGO_HOME; log: $TOOLCHAIN_LOG)"
+    echo "verify-local: FAIL:$FAILURES"
+    exit 1
+  fi
+  # Set the private CARGO_HOME.
+  # Put its bin directory before the other command directories.
   # shellcheck disable=SC2016
-  NEXTEST_RUN=("${RUST_EXEC[@]}" env "NEXTEST_DIR=$NEXTEST_DIR" sh -c \
-    'PATH="$NEXTEST_DIR:$PATH" exec mbx nextest "$@"' verify-local-nextest)
+  NEXTEST_RUN=("${RUST_EXEC[@]}" env "CARGO_HOME=$ISOLATED_CARGO_HOME" "NEXTEST_DIR=$NEXTEST_DIR" sh -c \
+    'PATH="$CARGO_HOME/bin:$NEXTEST_DIR:$PATH" exec mbx nextest "$@"' verify-local-nextest)
   NEXTEST_RUN_VER="$("${NEXTEST_RUN[@]}" --version 2>/dev/null | awk 'NR==1{print $2}')"
   echo "effective: nextest $NEXTEST_RUN_VER via pinned mise path and MBX"
 else
@@ -397,7 +423,7 @@ else
 fi
 
 # --- checked-in integration fixtures -------------------------------------------
-# Runs the fixture-consuming suites by name so a stale or unexercised
+# Runs the fixture-consuming suites by name so a missing or unexercised
 # `tests/fixtures` tree fails here even when the broad integration pass
 # below stays green (e.g. after a filter/rename silently drops them).
 echo "--- verify-local: fixtures"
