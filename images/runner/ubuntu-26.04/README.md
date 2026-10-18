@@ -39,8 +39,9 @@ not set it and does not set `RUNNER_ALLOW_RUNASROOT`.
 Controller must:
 
 - Pass one JIT payload on stdin, or on inherited fd 3 if that fd is already
-  open. Empty stdin/fd exits non-zero. Do not put JIT in Docker Env, Cmd,
-  labels, build args, or host argv. Arguments to the entrypoint are ignored.
+  open. Empty stdin/fd exits non-zero. Do not put JIT in Docker `Config.Env`,
+  `Cmd`, labels, build args, host argv, journal, or evidence. The entrypoint
+  rejects a JIT value supplied in its own environment and ignores arguments.
 - Leave the entrypoint as `/usr/local/bin/velnor-runner-entrypoint` (mode `0755`).
 - Mount this worker's private socket so `/var/run/docker.sock` is not the
   outer engine socket. Do not mount the host socket, host home, Keychain,
@@ -49,6 +50,22 @@ Controller must:
   register the JIT runner with `workFolder: "_work"`. The official runner
   resolves that folder under `/home/runner`; it contains work, `_temp`,
   `_actions`, and `_tool`. Share the same absolute path with this worker's DinD
-  container. The entrypoint stages JIT in a private, mode-`0600` `/tmp` file,
-  removes it before listener start, and never stores it in the work volume.
-  `externals` is `/home/runner/externals`.
+  container. The entrypoint stages the raw JIT in a private, mode-`0600`
+  `/tmp` file, removes it before listener start, and passes it only as the
+  short-lived `ACTIONS_RUNNER_INPUT_JITCONFIG` environment value on the
+  `Runner.Listener run` exec. The listener's argument vector contains only
+  `run`. The entrypoint caps the raw JIT at 131040 bytes because Linux's
+  per-string exec limit includes the environment key, `=`, and terminating
+  NUL. The official runner may materialize its own one-job runner
+  configuration and credential files under `/home/runner`; those files are
+  removed with this job's runner container. The JIT is not secret from its
+  job: same-UID processes may inspect the listener's initial `/proc/1/environ`
+  and accessible runner files. Controller API credentials never enter the
+  runner. Treat this runner container as the JIT credential boundary for one
+  job, not as a boundary against that job. Host and sibling-container process
+  isolation still require live verification. `externals` is
+  `/home/runner/externals`.
+
+`jit-input-test.sh` checks this entrypoint handoff with a synthetic canary and
+fake helpers/listener. It does not exercise the official listener or prove
+host, sibling-container, or same-job isolation.

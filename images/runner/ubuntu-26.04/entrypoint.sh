@@ -1,5 +1,5 @@
 #!/bin/bash
-# linux/amd64. One JIT payload from fd 3, or stdin. Not printed. Not exported.
+# linux/amd64. One JIT payload from fd 3, or stdin. Never printed or placed in argv.
 set +o xtrace
 set +o allexport
 set -euo pipefail
@@ -8,8 +8,17 @@ root="/home/runner"
 work="${root}/_work"
 listener="${root}/bin/Runner.Listener"
 entrypoint_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-# Stay under Linux MAX_ARG_STRLEN so --jitconfig fits in one argv slot.
-max=131071
+# Linux MAX_ARG_STRLEN is 131072 bytes on this linux/amd64 image. An env entry
+# includes its name, '=', and NUL, so reserve those bytes from the JIT value.
+jit_env_name='ACTIONS_RUNNER_INPUT_JITCONFIG'
+max=$((131072 - ${#jit_env_name} - 2))
+
+# Docker configuration must not carry JIT. The official listener consumes its
+# supported ACTIONS_RUNNER_INPUT_JITCONFIG input from the environment at exec.
+if [[ "${ACTIONS_RUNNER_INPUT_JITCONFIG+x}" ]]; then
+  echo "jit must arrive on the private input channel" >&2
+  exit 2
+fi
 
 if [[ ! -x "$listener" ]]; then
   echo "runner listener missing" >&2
@@ -50,11 +59,13 @@ if [[ -z "$payload" ]]; then
 fi
 
 cd "$root"
-# Shell variable only. No export. Image ENV/ARG/labels never carry this.
+# Keep the payload in this shell until exec. Image ENV/ARG/labels and the
+# listener's argv never carry it; the official runner input is a short-lived
+# environment assignment for Runner.Listener only.
 # DinD links the public socket after dockerd is ready. Wait before the listener.
 /usr/local/bin/wait-docker-sock
 /usr/local/bin/clear-dockerenv
 # A present socket is not a serving API. Refuse to start on a stalled daemon.
 # (/var/run/docker.sock and /run/docker.sock are the same file.)
 "${entrypoint_dir}/velnor-wait-docker-api" "unix:///var/run/docker.sock"
-exec "$listener" run --jitconfig "$payload"
+ACTIONS_RUNNER_INPUT_JITCONFIG="$payload" exec "$listener" run
