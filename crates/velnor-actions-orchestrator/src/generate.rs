@@ -24,6 +24,8 @@ mod preserve;
 
 #[path = "generate_render.rs"]
 mod render;
+#[path = "generate_runner_labels.rs"]
+mod runner_labels;
 
 /// Stage and publish fresh preview output transactionally.
 #[path = "generate_preview.rs"]

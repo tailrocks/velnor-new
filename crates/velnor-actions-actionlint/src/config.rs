@@ -68,7 +68,7 @@ pub struct ActionlintConfigInput {
     /// bridge: the label must come from configuration, never from a
     /// hardcoded default.
     pub runner_label: Option<String>,
-    /// Extra scale-set labels appended after the hosted bridge label.
+    /// Configured scale-set and canonical generated hosted labels appended after the hosted bridge label.
     pub extra_runner_labels: Vec<String>,
 }
 
@@ -180,7 +180,7 @@ pub fn render_actionlint_yaml(
     })
 }
 
-/// Hosted bridge label, then any extra scale-set labels in given order.
+/// Hosted bridge label, then configured scale-set and canonical generated hosted labels in given order.
 fn bridge_labels(input: &ActionlintConfigInput) -> Result<Vec<String>, ActionlintError> {
     let mut labels = Vec::new();
     if let Some(label) = bridge_label(input)? {

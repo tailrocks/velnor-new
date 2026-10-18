@@ -201,12 +201,18 @@ fn assert_generator_publisher_metadata_surface(all: &str) {
         "--source-digest",
         "--signer-digest",
         "release-manifest.json",
-        "velnor-actions-0.1.14-x86_64-apple-darwin",
         "--target",
         "if $expected_draft then true else .html_url == $html_url end",
     ] {
         assert!(all.contains(required), "missing {required}");
     }
+    assert!(
+        all.contains(&format!(
+            "velnor-actions-{}-x86_64-apple-darwin",
+            env!("CARGO_PKG_VERSION")
+        )),
+        "generator asset does not use the compiled package version"
+    );
 }
 
 #[test]
@@ -235,15 +241,23 @@ fn generator_publisher_stays_inside_the_typed_release_graph() {
 fn generator_prepare_uses_the_canonical_inventory_and_manifest_bytes() {
     let generator =
         family::prepare_script(Family::Generator, &test_pins()).expect("generator prepare script");
+    let version = env!("CARGO_PKG_VERSION");
+    let linux_checksum =
+        format!("$temp_dir/linux-assets/velnor-actions-{version}-x86_64-unknown-linux-gnu.sha256");
+    let arm_checksum =
+        format!("$temp_dir/macos-assets/velnor-actions-{version}-aarch64-apple-darwin.sha256");
+    let intel_checksum =
+        format!("$temp_dir/macos-intel-assets/velnor-actions-{version}-x86_64-apple-darwin.sha256");
+    let tag = format!("readonly fixed_tag='v{version}'");
     for required in [
         "--dir \"$temp_dir/linux-assets\"",
         "--dir \"$temp_dir/macos-assets\"",
         "--dir \"$temp_dir/macos-intel-assets\"",
-        "$temp_dir/linux-assets/velnor-actions-0.1.14-x86_64-unknown-linux-gnu.sha256",
-        "$temp_dir/macos-assets/velnor-actions-0.1.14-aarch64-apple-darwin.sha256",
-        "$temp_dir/macos-intel-assets/velnor-actions-0.1.14-x86_64-apple-darwin.sha256",
+        &linux_checksum,
+        &arm_checksum,
+        &intel_checksum,
         "cmp release-manifest.json manifest-assets/release-manifest.json",
-        "readonly fixed_tag='v0.1.14'",
+        &tag,
         ".target_commitish == $sha",
         "tag does not resolve to the exact source commit",
     ] {
