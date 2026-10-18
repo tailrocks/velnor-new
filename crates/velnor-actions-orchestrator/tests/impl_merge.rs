@@ -28,10 +28,8 @@ pub(crate) fn merge_request(
     reports: &serde_json::Value,
     jobs: &serde_json::Value,
 ) -> serde_json::Value {
-    let ids: Vec<serde_json::Value> = jobs
-        .as_array()
-        .map(|jobs| jobs.iter().map(|job| job["job_id"].clone()).collect())
-        .unwrap_or_default();
+    let jobs = with_matrix_owner_results(plan, jobs);
+    let ids: Vec<serde_json::Value> = job_ids(&jobs);
     let plan_value = serde_json::to_value(plan).unwrap_or(serde_json::Value::Null);
     serde_json::json!({
         "schema": 1,
@@ -44,6 +42,44 @@ pub(crate) fn merge_request(
         "required_job_ids": ids,
         "required_jobs": jobs,
     })
+}
+
+/// Add successful Required results for every owner in this plan matrix.
+pub(crate) fn with_matrix_owner_results(
+    plan: &Plan,
+    jobs: &serde_json::Value,
+) -> Vec<serde_json::Value> {
+    let mut jobs = jobs.as_array().cloned().unwrap_or_default();
+    let owner_conclusion = jobs
+        .iter()
+        .find(|job| job.get("job_id").and_then(serde_json::Value::as_str) == Some("plan"))
+        .and_then(|job| job.get("conclusion"))
+        .and_then(serde_json::Value::as_str)
+        .map(|conclusion| {
+            if conclusion == "success" {
+                "success"
+            } else {
+                "skipped"
+            }
+        });
+    let Some(owner_conclusion) = owner_conclusion else {
+        return jobs;
+    };
+    let mut present: std::collections::BTreeSet<String> = jobs
+        .iter()
+        .filter_map(|job| job.get("job_id")?.as_str().map(str::to_owned))
+        .collect();
+    for job_id in plan.matrix.include.iter().map(|entry| &entry.job_id) {
+        if present.insert(job_id.clone()) {
+            jobs.push(serde_json::json!({"job_id": job_id, "conclusion": owner_conclusion}));
+        }
+    }
+    jobs
+}
+
+/// Required owner IDs corresponding to [`with_matrix_owner_results`].
+pub(crate) fn job_ids(jobs: &[serde_json::Value]) -> Vec<serde_json::Value> {
+    jobs.iter().map(|job| job["job_id"].clone()).collect()
 }
 
 /// Consistent per-task files for a plan plus its matrix reports.

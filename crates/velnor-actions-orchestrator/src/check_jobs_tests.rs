@@ -2,8 +2,11 @@
 
 use super::*;
 use velnor_actions_contract::config::{CheckPlatform, CheckRunner, MiseCheck, QualifiedTool};
-use velnor_actions_contract::{JobConclusion, RequiredJobResult, StepKind, VelnorConfig};
+use velnor_actions_contract::{
+    JobConclusion, RequiredJobResult, StepKind, VelnorConfig, WorkflowEvent,
+};
 use velnor_actions_mise::PinnedTool;
+use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
 
 fn check(id: &str, runner: CheckRunner) -> MiseCheck {
     MiseCheck {
@@ -41,12 +44,89 @@ fn named_workflow(
         .expect("named checks workflow")
 }
 
+fn named_step(job: &velnor_actions_contract::Job) -> &velnor_actions_contract::Step {
+    job.steps
+        .iter()
+        .find(|step| step.name == "Execute named check")
+        .expect("named check step")
+}
+
+fn assert_named_check_plan_entries(
+    root: &std::path::Path,
+    discovery: &Discovery,
+    required: &std::collections::BTreeSet<&str>,
+) {
+    for item in &discovery.mise_checks {
+        let job_id = crate::crate_job_ids::job_id_for_member(
+            &discovery.proposals,
+            &item.proposal,
+            WorkflowEvent::Qualification,
+        )
+        .expect("named-check plan owner");
+        let lane = velnor_actions_contract::NamedCheckLane {
+            variant: None,
+            job_id: job_id.clone(),
+            runs_on: Some(item.check.runner.label.clone()),
+        };
+        let (_, entries) = crate::internal_plan::named_checks::plan::derive_lanes(
+            root,
+            item,
+            "local",
+            &crate::internal_plan::default_generator(),
+            &ToolCatalog::pinned(),
+            &[lane],
+        )
+        .expect("named-check plan entry");
+        assert_eq!(entries.len(), 1, "{job_id}");
+        assert_eq!(entries[0].job_id, job_id);
+        assert!(required.contains(entries[0].job_id.as_str()));
+    }
+}
+
+fn rust_proposal() -> velnor_actions_contract::ProposedTask {
+    let group = TaskGroup {
+        task_id: "stack/rust/root/clippy/default".to_owned(),
+        package_id: "demo 0.1.0".to_owned(),
+        package_name: "demo".to_owned(),
+        manifest_key: "root".to_owned(),
+        kind: TaskKind::Clippy,
+        configuration: "default".to_owned(),
+        features: Vec::new(),
+        target: "host".to_owned(),
+        gated_by: Vec::new(),
+        depends_on: Vec::new(),
+        target_flags: Vec::new(),
+        no_test_targets: false,
+        package_arg: None,
+        compile_driver: CompileDriver::Cargo,
+        test_runner: TestRunner::CargoTest,
+        nextest_profile: NextestProfile::Default,
+        declared_inputs: Vec::new(),
+        undeclared_reads: false,
+        uses_network: false,
+        uses_clock: false,
+        uses_random: false,
+        run_ignored: None,
+    };
+    velnor_actions_rust::propose_task(&group).expect("Rust proposal")
+}
+
+fn tofu_proposal() -> velnor_actions_contract::ProposedTask {
+    let group = velnor_actions_tofu::TofuTaskGroup {
+        root: "stacks/demo".to_owned(),
+        kind: velnor_actions_tofu::TofuTaskKind::Validate,
+        configuration: "default".to_owned(),
+        no_targets: false,
+    };
+    velnor_actions_tofu::propose_task(&group).expect("Tofu proposal")
+}
+
 fn fixture_with_tools(
     checks: &[MiseCheck],
     tools: &[QualifiedTool],
 ) -> (tempfile::TempDir, Discovery) {
     let root = tempfile::tempdir().expect("temporary repository");
-    let source = "[tasks.\"check:all\"]\nrun = 'true'\n";
+    let source = "[tasks.\"check:all\"]\nrun = 'true'\n[tasks.\"check:java\"]\nrun = 'true'\n[tasks.\"check:frontend\"]\nrun = 'true'\n";
     std::fs::write(root.path().join("mise.toml"), source).expect("native task source");
     let checks = velnor_actions_mise::discover_checks(root.path(), checks, tools)
         .expect("discover explicit checks");
@@ -238,6 +318,130 @@ fn mixed_platform_checks_keep_exact_tools_and_unconditional_reports() {
             )
         );
     }
+}
+
+#[test]
+fn mixed_rust_tofu_and_named_checks_bind_qualification_plan_to_required_jobs() {
+    let mut java = check("java", hosted("ubuntu-26.04", CheckPlatform::LinuxX64));
+    java.task = "check:java".to_owned();
+    let mut frontend = check("frontend", hosted("ubuntu-26.04", CheckPlatform::LinuxX64));
+    frontend.task = "check:frontend".to_owned();
+    let (root, mut discovery) = fixture(&[java, frontend]);
+    discovery
+        .proposals
+        .extend([rust_proposal(), tofu_proposal()]);
+    std::fs::create_dir(root.path().join(".velnor")).expect("config directory");
+    std::fs::write(
+        root.path().join(".velnor/config.toml"),
+        "schema = 1\n[workflow]\npolicy = 'velnor-repository-v1'\n",
+    )
+    .expect("config");
+    let config = crate::config::load_config(root.path()).expect("defaulted config");
+    let workflow = named_workflow(root.path(), &config, &discovery);
+
+    let required: std::collections::BTreeSet<&str> = workflow.ir.jobs["required"]
+        .needs
+        .iter()
+        .map(String::as_str)
+        .collect();
+    let mut planned = Vec::new();
+    for task in &discovery.proposals {
+        let job_id = crate::crate_job_ids::job_id_for_member(
+            &discovery.proposals,
+            task,
+            WorkflowEvent::Qualification,
+        )
+        .expect("Qualification plan owner");
+        assert!(workflow.ir.jobs.contains_key(&job_id), "{job_id}");
+        assert!(
+            required.contains(job_id.as_str()),
+            "Required omits {job_id}"
+        );
+        planned.push(job_id);
+    }
+    planned.sort();
+    let required_qualification: Vec<&str> = required
+        .iter()
+        .copied()
+        .filter(|job_id| {
+            job_id.starts_with("rust-qualification-")
+                || job_id.starts_with("tofu-qualification-")
+                || job_id.starts_with(velnor_actions_contract::QUALIFICATION_CHECK_JOB_PREFIX)
+        })
+        .collect();
+    assert_eq!(
+        required_qualification,
+        planned.iter().map(String::as_str).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        workflow.ir.jobs["qualification-check-java"].check_runner,
+        workflow.ir.jobs["check-java"].check_runner
+    );
+    assert_eq!(
+        workflow.ir.jobs["qualification-check-frontend"].check_runner,
+        workflow.ir.jobs["check-frontend"].check_runner
+    );
+
+    assert_named_check_plan_entries(root.path(), &discovery, &required);
+}
+
+#[test]
+fn qualification_named_check_keeps_command_but_uses_its_own_report_identity() {
+    let (_root, discovery) = fixture(&[check(
+        "java",
+        hosted("ubuntu-26.04", CheckPlatform::LinuxX64),
+    )]);
+    let normal = build_check_jobs(
+        WorkflowPolicy::VelnorRepositoryV1,
+        &discovery,
+        &ToolCatalog::pinned(),
+    )
+    .expect("normal check");
+    let qualification = build_qualification_check_jobs(
+        WorkflowPolicy::VelnorRepositoryV1,
+        &discovery,
+        &ToolCatalog::pinned(),
+    )
+    .expect("Qualification check");
+    let (normal_id, normal_job) = &normal[0];
+    let (qualification_id, qualification_job) = &qualification[0];
+    assert_eq!(normal_id, "check-java");
+    assert_eq!(qualification_id, "qualification-check-java");
+    assert_eq!(normal_job.runs_on, qualification_job.runs_on);
+    assert_eq!(normal_job.check_runner, qualification_job.check_runner);
+
+    let (
+        StepKind::Shell {
+            run: normal_run,
+            env: normal_env,
+        },
+        StepKind::Shell {
+            run: qualification_run,
+            env: qualification_env,
+        },
+    ) = (
+        &named_step(normal_job).kind,
+        &named_step(qualification_job).kind,
+    )
+    else {
+        panic!("named check command");
+    };
+    assert_eq!(normal_run, qualification_run);
+    let mut qualification_env = qualification_env.clone();
+    qualification_env.remove(NAMED_CHECK_JOB_ID_ENV);
+    let mut normal_env = normal_env.clone();
+    normal_env.remove(NAMED_CHECK_JOB_ID_ENV);
+    assert_eq!(normal_env, qualification_env);
+    assert_eq!(normal_env["VELNOR_CHECK_ID"], "java");
+
+    let upload_name = |job: &velnor_actions_contract::Job| {
+        let StepKind::Action { with, .. } = &job.steps.last().expect("upload step").kind else {
+            panic!("report upload");
+        };
+        with["name"].clone()
+    };
+    assert_ne!(upload_name(normal_job), upload_name(qualification_job));
+    assert!(upload_name(qualification_job).ends_with("-qualification-check-java"));
 }
 
 #[test]

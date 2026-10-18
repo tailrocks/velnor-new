@@ -213,12 +213,12 @@ fn build_workflow_jobs(
         set_crate_job_condition(&mut job, true);
         insert_job(&mut jobs, id, job)?;
     }
-    for (id, job) in
-        check_jobs::build_check_jobs(prepared.policy, input.discovery, &prepared.catalog)?
-    {
-        required_ids.push(id.clone());
-        jobs.insert(id, job);
-    }
+    required_ids.extend(insert_check_jobs(
+        &mut jobs,
+        input,
+        prepared,
+        qualification_jobs_enabled,
+    )?);
     let (suite_jobs, suite_required_ids) = crate::rust_suites_emit::build_ci_jobs(
         input.root,
         input.config,
@@ -249,6 +249,35 @@ fn build_workflow_jobs(
     Ok(jobs)
 }
 
+fn insert_check_jobs(
+    jobs: &mut BTreeMap<String, Job>,
+    input: &WorkflowBuildInput<'_>,
+    prepared: &PreparedWorkflow,
+    qualification_jobs_enabled: bool,
+) -> Result<Vec<String>, OrchestratorError> {
+    let mut required_ids = Vec::new();
+    for (id, mut job) in
+        check_jobs::build_check_jobs(prepared.policy, input.discovery, &prepared.catalog)?
+    {
+        if qualification_jobs_enabled {
+            set_normal_check_condition(&mut job);
+        }
+        required_ids.push(id.clone());
+        insert_job(jobs, id, job)?;
+    }
+    if qualification_jobs_enabled {
+        for (id, job) in check_jobs::build_qualification_check_jobs(
+            prepared.policy,
+            input.discovery,
+            &prepared.catalog,
+        )? {
+            required_ids.push(id.clone());
+            insert_job(jobs, id, job)?;
+        }
+    }
+    Ok(required_ids)
+}
+
 /// Whether this workflow includes the Qualification executor set.
 fn qualification_jobs_enabled(config: &VelnorConfig) -> bool {
     config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
@@ -269,6 +298,18 @@ fn set_crate_job_condition(job: &mut Job, qualification: bool) {
     job.condition = Some(format!(
         "always() && needs.plan.result == 'success' && {mode}"
     ));
+}
+
+fn set_normal_check_condition(job: &mut Job) {
+    job.condition = Some(
+        if job.check_runner.as_ref().is_some_and(|runner| {
+            runner.executor == velnor_actions_contract::config::CheckExecutor::EphemeralSelfHosted
+        }) {
+            velnor_actions_contract::config::NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned()
+        } else {
+            velnor_actions_contract::config::NORMAL_CHECK_ADMISSION_CONDITION.to_owned()
+        },
+    );
 }
 
 /// Insert one generated job without replacing an existing identity.

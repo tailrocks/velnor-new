@@ -90,7 +90,7 @@ fn validate_lane(
         if layer.layer != expected {
             return Err(invalid("layers_not_closed_and_sorted"));
         }
-        validate_layer(plan, entry, layer, &requirements, node, previous)?;
+        validate_layer(plan, entry, layer, requirements.as_ref(), node, previous)?;
     }
     if node.receipt.phase == QualificationPhase::Third {
         let prior = previous
@@ -115,7 +115,7 @@ fn validate_layer(
     plan: &Plan,
     entry: &crate::workflow::MatrixEntry,
     layer: &QualificationCacheLayerReceipt,
-    requirements: &super::super::super::runtime::QualificationRuntimeIdentityRequirements,
+    requirements: Option<&super::super::super::runtime::QualificationRuntimeIdentityRequirements>,
     node: &AdmissionNode,
     previous: Option<&AdmissionNode>,
 ) -> Result<(), ContractError> {
@@ -131,6 +131,8 @@ fn validate_layer(
     if !expected_active {
         return validate_disabled_layer(layer);
     }
+    let requirements =
+        requirements.ok_or_else(|| invalid("active_runtime_requirements_missing"))?;
     let state_digest = layer
         .state_digest
         .as_deref()

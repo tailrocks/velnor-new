@@ -111,15 +111,19 @@ pub(crate) fn parse_needs(
     (expected, results)
 }
 
-/// Whether an ID names a generated Rust or `OpenTofu` executor job.
+/// Whether an ID names a stack executor or a named-check consumer.
 fn is_crate_executor(job_id: &str) -> bool {
     job_id.starts_with(velnor_actions_contract::CRATE_JOB_ID_PREFIX)
         || job_id.starts_with(velnor_actions_contract::TOFU_JOB_ID_PREFIX)
+        || job_id.starts_with("check-")
+        || job_id.starts_with(velnor_actions_contract::QUALIFICATION_CHECK_JOB_PREFIX)
 }
 
 /// Whether an ID names the one-entry Qualification executor set.
 fn is_qualification_executor(job_id: &str) -> bool {
-    job_id.starts_with("rust-qualification-") || job_id.starts_with("tofu-qualification-")
+    job_id.starts_with("rust-qualification-")
+        || job_id.starts_with("tofu-qualification-")
+        || job_id.starts_with(velnor_actions_contract::QUALIFICATION_CHECK_JOB_PREFIX)
 }
 
 /// Rendered expected inventory minus the matrix-driver job.
@@ -260,6 +264,57 @@ mod tests {
             errors,
             ["inactive_crate_job_not_skipped:rust-qualification-0123456789abcdef"]
         );
+    }
+
+    #[test]
+    fn mixed_stack_qualification_keeps_only_its_active_rust_tofu_and_check_jobs() {
+        let expected = r#"["check-frontend","qualification-check-frontend","plan","rust-demo","rust-qualification-0123456789abcdef","tofu-demo","tofu-qualification-fedcba9876543210"]"#;
+        let (inventory, _, errors) = parse_for_event(
+            r#"{"check-frontend":"skipped","qualification-check-frontend":"success","plan":"success","rust-demo":"skipped","rust-qualification-0123456789abcdef":"success","tofu-demo":"skipped","tofu-qualification-fedcba9876543210":"success"}"#,
+            expected,
+            WorkflowEvent::Qualification,
+        );
+        assert_eq!(
+            inventory,
+            [
+                "plan",
+                "qualification-check-frontend",
+                "rust-qualification-0123456789abcdef",
+                "tofu-qualification-fedcba9876543210"
+            ]
+        );
+        assert!(errors.is_empty(), "{errors:?}");
+
+        let (inventory, _, errors) = parse_for_event(
+            r#"{"check-frontend":"success","qualification-check-frontend":"skipped","plan":"success","rust-demo":"success","rust-qualification-0123456789abcdef":"skipped","tofu-demo":"success","tofu-qualification-fedcba9876543210":"skipped"}"#,
+            expected,
+            WorkflowEvent::Push,
+        );
+        assert_eq!(
+            inventory,
+            ["check-frontend", "plan", "rust-demo", "tofu-demo"]
+        );
+        assert!(errors.is_empty(), "{errors:?}");
+    }
+
+    #[test]
+    fn named_check_id_cannot_collide_with_qualification_classification() {
+        let expected = r#"["check-qualification-frontend","qualification-check-frontend"]"#;
+        let (inventory, _, errors) = parse_for_event(
+            r#"{"check-qualification-frontend":"skipped","qualification-check-frontend":"success"}"#,
+            expected,
+            WorkflowEvent::Qualification,
+        );
+        assert_eq!(inventory, ["qualification-check-frontend"]);
+        assert!(errors.is_empty(), "{errors:?}");
+
+        let (inventory, _, errors) = parse_for_event(
+            r#"{"check-qualification-frontend":"success","qualification-check-frontend":"skipped"}"#,
+            expected,
+            WorkflowEvent::Push,
+        );
+        assert_eq!(inventory, ["check-qualification-frontend"]);
+        assert!(errors.is_empty(), "{errors:?}");
     }
 
     fn parse_for_event(

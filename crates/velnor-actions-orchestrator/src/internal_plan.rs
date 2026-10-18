@@ -126,6 +126,17 @@ pub(crate) fn cache_ids_for(
     label: &str,
     toolchain: &str,
 ) -> Result<EntryCacheIds, ContractError> {
+    let platform_id = identities::platform_id_for_group(label, task)?;
+    cache_ids_for_platform(task, toolchain, &platform_id)
+}
+
+/// Build cache IDs from an already validated planned platform identity.
+/// # Errors
+pub(crate) fn cache_ids_for_platform(
+    task: &ProposedTask,
+    toolchain: &str,
+    platform_id: &str,
+) -> Result<EntryCacheIds, ContractError> {
     if Stack::require_known(&task.stack_id)? == Stack::Mise {
         return Err(ContractError::identity(
             "cache",
@@ -141,7 +152,7 @@ pub(crate) fn cache_ids_for(
     EntryCacheIds::new(
         &workspace_id,
         &identities::lane_id_for(task, &workspace_id),
-        &identities::platform_id_for_group(label, task)?,
+        platform_id,
         toolchain,
         &format_id,
     )

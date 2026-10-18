@@ -50,19 +50,23 @@ fn stage_downloads(plan: &Plan, temp: &TempDir) {
 /// Non-fork PR payload: the fixture plan is a PR plan, so assembly must
 /// capture `pull_request` or trust coherence fails the merge closed.
 const PR_PAYLOAD: &str = r#"{"pull_request":{"head":{"repo":{"fork":false}}}}"#;
+const TWO_JOB_NEEDS: &str = r#"{"plan":"success","crate_clippy":"success","crate_test":"success"}"#;
+const TWO_JOB_EXPECTED: &str = r#"["plan","crate_clippy","crate_test"]"#;
+const ONE_JOB_NEEDS: &str = r#"{"plan":"success","crate_clippy":"success"}"#;
+const ONE_JOB_EXPECTED: &str = r#"["plan","crate_clippy"]"#;
 
 #[test]
 fn merge_flips_not_run_to_executed_end_to_end() {
     let plan = fixture_plan();
     let temp = staged_run(&plan, "local");
     let run = temp.path().join("velnor").join("local");
-    let needs = Some(r#"{"plan":"success"}"#);
+    let needs = Some(TWO_JOB_NEEDS);
 
     let bare = assemble_with_needs(
         "local",
         &run,
         needs,
-        Some(r#"["plan"]"#),
+        Some(TWO_JOB_EXPECTED),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -90,7 +94,7 @@ fn merge_flips_not_run_to_executed_end_to_end() {
         "local",
         &run,
         needs,
-        Some(r#"["plan"]"#),
+        Some(TWO_JOB_EXPECTED),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -119,7 +123,7 @@ fn merge_fails_failing_obligation_and_blocks_downstream() {
     let plan = fixture_plan();
     let temp = staged_run(&plan, "local");
     let run = temp.path().join("velnor").join("local");
-    let needs = Some(r#"{"plan":"success"}"#);
+    let needs = Some(TWO_JOB_NEEDS);
 
     let reported =
         write_task_report_to("local", CLIPPY, 1, None, &[], temp.path()).expect("clippy fails");
@@ -133,7 +137,7 @@ fn merge_fails_failing_obligation_and_blocks_downstream() {
         "local",
         &run,
         needs,
-        Some(r#"["plan"]"#),
+        Some(TWO_JOB_EXPECTED),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -215,8 +219,8 @@ fn merge_rejects_hosted_observation_for_custom_plan_entry() {
     let request = assemble_with_needs(
         "local",
         &run,
-        Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(TWO_JOB_NEEDS),
+        Some(TWO_JOB_EXPECTED),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -249,8 +253,8 @@ fn merge_blocks_all_skipped_noop_end_to_end() {
     let full = assemble_with_needs(
         "local",
         &run,
-        Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(TWO_JOB_NEEDS),
+        Some(TWO_JOB_EXPECTED),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -288,8 +292,8 @@ fn merge_lists_shared_job_artifact_once() {
     let full = assemble_with_needs(
         "local",
         &run,
-        Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(ONE_JOB_NEEDS),
+        Some(ONE_JOB_EXPECTED),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )

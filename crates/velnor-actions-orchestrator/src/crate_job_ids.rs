@@ -8,6 +8,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use velnor_actions_contract::workflow::QUALIFICATION_CHECK_JOB_PREFIX;
 use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, ProposedTask, Stack, TOFU_JOB_ID_PREFIX, WorkflowEvent,
     assign_crate_job_ids, matrix_id_for_task_group, matrix_key_for_id,
@@ -26,14 +27,14 @@ pub(crate) fn job_id_for_member(
     member: &ProposedTask,
     event: WorkflowEvent,
 ) -> Option<String> {
+    if event == WorkflowEvent::Qualification {
+        return qualification_job_id_for_member(member).ok();
+    }
     if Stack::from_id(&member.stack_id) == Some(Stack::Mise) {
         return Some(format!("check-{}", member.identity.unit_id));
     }
     if member.identity.unit_id.is_empty() {
         return Some(PLAN_JOB_ID.to_owned());
-    }
-    if event == WorkflowEvent::Qualification {
-        return qualification_job_id_for_member(member).ok();
     }
     let grouped = group_runnable(tasks);
     let assigned = assign_group_ids(&grouped);
@@ -52,9 +53,76 @@ pub(crate) fn job_id_for_member(
 pub(crate) fn qualification_job_id_for_member(
     member: &ProposedTask,
 ) -> Result<String, velnor_actions_contract::ContractError> {
+    if Stack::from_id(&member.stack_id) == Some(Stack::Mise) {
+        return Ok(format!(
+            "{QUALIFICATION_CHECK_JOB_PREFIX}{}",
+            member.identity.unit_id
+        ));
+    }
     let id = matrix_id_for_task_group(&member.stack_id, &member.task_id)?;
     let key = matrix_key_for_id(&id)?;
     qualification_job_id_for_key(&member.stack_id, &key)
+}
+
+/// Map each per-entry Qualification crate job to its ordinary grouped job.
+///
+/// The renderer uses this map to keep the source job's runner override while
+/// splitting Qualification into one physical job per matrix entry.
+/// # Errors
+pub(crate) fn qualification_job_sources(
+    tasks: &[ProposedTask],
+) -> Result<BTreeMap<String, String>, velnor_actions_contract::ContractError> {
+    let assigned = assign_group_ids(&group_runnable(tasks));
+    let mut sources = BTreeMap::new();
+    for task in tasks {
+        if !crate::crate_jobs::is_runnable(task)
+            || Stack::from_id(&task.stack_id) == Some(Stack::Mise)
+        {
+            continue;
+        }
+        let group = (task.identity.unit_id.clone(), task.configuration.clone());
+        let source_id = assigned.get(&group).ok_or_else(|| {
+            velnor_actions_contract::ContractError::identity(
+                "qualification.sources",
+                "grouped_job_missing",
+            )
+        })?;
+        let qualification_id = qualification_job_id_for_member(task)?;
+        if sources
+            .insert(qualification_id, source_id.clone())
+            .is_some()
+        {
+            return Err(velnor_actions_contract::ContractError::Collision(
+                "qualification source job".to_owned(),
+            ));
+        }
+    }
+    Ok(sources)
+}
+
+/// Keep source bindings only for jobs present in this workflow IR.
+/// # Errors
+pub(crate) fn qualification_job_sources_for_ir(
+    tasks: &[ProposedTask],
+    ir: &velnor_actions_contract::WorkflowIr,
+) -> Result<BTreeMap<String, String>, velnor_actions_contract::ContractError> {
+    let sources = qualification_job_sources(tasks)?;
+    for id in ir.jobs.keys().filter(|id| is_qualification_crate_job(id)) {
+        if !sources.contains_key(id) {
+            return Err(velnor_actions_contract::ContractError::identity(
+                "qualification.sources",
+                "source_job_missing",
+            ));
+        }
+    }
+    Ok(sources
+        .into_iter()
+        .filter(|(id, _)| ir.jobs.contains_key(id))
+        .collect())
+}
+
+fn is_qualification_crate_job(id: &str) -> bool {
+    id.starts_with("rust-qualification-") || id.starts_with("tofu-qualification-")
 }
 
 /// Stable one-entry job ID for one validated stack and matrix key.

@@ -3,7 +3,7 @@
 use super::*;
 use crate::config::{CheckExecutor, CheckPlatform, CheckRunner, ExecutionOverride, ExecutionRole};
 use crate::workflow::{Concurrency, Job, JobTimeout, Permissions, Step, Trigger, WorkflowIr};
-use crate::{VelnorConfig, expand_workflow};
+use crate::{VelnorConfig, expand_workflow, expand_workflow_with_qualification_sources};
 use std::collections::{BTreeMap, BTreeSet};
 
 fn runner(label: &str, platform: CheckPlatform) -> CheckRunner {
@@ -80,7 +80,9 @@ fn job(id: &str, check_runner: Option<CheckRunner>, needs: &[&str]) -> Job {
         check_runner,
         timeout_minutes: JobTimeout::new(30).expect("timeout"),
         needs: needs.iter().map(ToString::to_string).collect(),
-        condition: None,
+        condition: id
+            .starts_with(QUALIFICATION_CHECK_JOB_PREFIX)
+            .then(|| crate::config::QUALIFICATION_CHECK_ADMISSION_CONDITION.to_owned()),
         permissions: Some(Permissions::default()),
         cache_mode: None,
         environment: None,
@@ -151,6 +153,48 @@ fn ir(checks: &[(&str, CheckRunner)]) -> WorkflowIr {
         },
         jobs,
     }
+}
+
+fn qualification_crate_ir() -> WorkflowIr {
+    let mut source = ir(&[]);
+    let qualification_ids = [
+        "rust-qualification-0123456789abcdef",
+        "tofu-qualification-fedcba9876543210",
+    ];
+    for id in ["rust-demo", "tofu-demo"]
+        .into_iter()
+        .chain(qualification_ids)
+    {
+        source.jobs.insert(id.to_owned(), job(id, None, &["plan"]));
+    }
+    source.jobs.get_mut("required").expect("Required job").needs =
+        qualification_ids.iter().map(ToString::to_string).collect();
+    source
+}
+
+fn mixed_qualification_ir() -> WorkflowIr {
+    let check_runner = runner("ubuntu-26.04", CheckPlatform::LinuxX64);
+    let mut source = qualification_crate_ir();
+    for id in [
+        "check-java",
+        "qualification-check-java",
+        "check-frontend",
+        "qualification-check-frontend",
+    ] {
+        source.jobs.insert(
+            id.to_owned(),
+            job(id, Some(check_runner.clone()), &["plan"]),
+        );
+    }
+    source.jobs.get_mut("required").expect("Required job").needs = [
+        "rust-qualification-0123456789abcdef",
+        "tofu-qualification-fedcba9876543210",
+        "qualification-check-java",
+        "qualification-check-frontend",
+    ]
+    .map(ToString::to_string)
+    .to_vec();
+    source
 }
 
 #[test]
@@ -235,6 +279,291 @@ fn both_emits_coherent_named_check_and_required_proof_lanes() {
     let decoded: BTreeMap<String, Vec<NamedCheckLane>> =
         serde_json::from_str(encoded).expect("typed lane map");
     assert_eq!(decoded, expected);
+}
+
+#[test]
+fn qualification_named_checks_follow_hosted_scale_set_and_both_placement() {
+    let source = ir(&[
+        (
+            "check-linux",
+            runner("ubuntu-26.04", CheckPlatform::LinuxX64),
+        ),
+        (
+            "qualification-check-linux",
+            runner("ubuntu-26.04", CheckPlatform::LinuxX64),
+        ),
+    ]);
+    let scale_set = "scale-set:velnor+orbstack-linux";
+    let cases = [
+        (
+            ExecutionMode::Hosted,
+            vec![("qualification-check-linux", "ubuntu-26.04")],
+        ),
+        (
+            ExecutionMode::ScaleSet,
+            vec![("qualification-check-linux", scale_set)],
+        ),
+        (
+            ExecutionMode::Both,
+            vec![
+                ("qualification-check-linux__hosted", "ubuntu-26.04"),
+                ("qualification-check-linux__local", scale_set),
+            ],
+        ),
+    ];
+
+    for (mode, expected_lanes) in cases {
+        let config = config(mode);
+        let expanded = expand_workflow(&source, &config, None).expect("expanded workflow");
+        let lanes = named_check_lanes(&source, &config, None).expect("qualification lane map");
+        let qualification_lanes = &lanes["qualification-check-linux"];
+        assert_eq!(
+            qualification_lanes
+                .iter()
+                .map(|lane| (
+                    lane.job_id.as_str(),
+                    lane.runs_on.as_deref().unwrap_or_default()
+                ))
+                .collect::<Vec<_>>(),
+            expected_lanes,
+            "plan lane map for {mode:?}"
+        );
+
+        let required = &expanded.jobs["required"];
+        for (job_id, runs_on) in &expected_lanes {
+            assert!(required.needs.iter().any(|need| need == job_id), "{job_id}");
+            let job = &expanded.jobs[*job_id];
+            assert_eq!(job.runs_on, *runs_on, "{job_id}");
+            assert_eq!(
+                job.condition.as_deref(),
+                Some(crate::config::QUALIFICATION_CHECK_ADMISSION_CONDITION),
+                "{job_id}"
+            );
+        }
+
+        let StepKind::Internal { env, .. } = &expanded.jobs["plan"].steps[0].kind else {
+            panic!("plan request");
+        };
+        let encoded = &env[NAMED_CHECK_LANES_ENV];
+        let decoded: BTreeMap<String, Vec<NamedCheckLane>> =
+            serde_json::from_str(encoded).expect("typed lane map");
+        assert_eq!(
+            decoded["qualification-check-linux"], *qualification_lanes,
+            "plan receives the same lane map used by Required for {mode:?}"
+        );
+    }
+}
+
+#[test]
+fn qualification_named_check_inherits_its_source_override() {
+    let source = ir(&[
+        (
+            "check-linux",
+            runner("ubuntu-26.04", CheckPlatform::LinuxX64),
+        ),
+        (
+            "qualification-check-linux",
+            runner("ubuntu-26.04", CheckPlatform::LinuxX64),
+        ),
+    ]);
+    let mut config = config(ExecutionMode::Hosted);
+    let execution = config.execution.as_mut().expect("execution config");
+    execution.mode = None;
+    execution.overrides.insert(
+        "check-linux".to_owned(),
+        ExecutionOverride {
+            profile: "local".to_owned(),
+            role: ExecutionRole::Verification,
+        },
+    );
+
+    let expanded = expand_workflow(&source, &config, None).expect("source override applies");
+    assert_eq!(
+        expanded.jobs["qualification-check-linux"].runs_on,
+        "scale-set:velnor+orbstack-linux"
+    );
+    assert_eq!(
+        expanded.jobs["qualification-check-linux"]
+            .condition
+            .as_deref(),
+        Some(crate::config::QUALIFICATION_CHECK_ADMISSION_CONDITION)
+    );
+    let lanes = named_check_lanes(&source, &config, None).expect("qualification lane map");
+    assert_eq!(
+        lanes["qualification-check-linux"][0].runs_on.as_deref(),
+        Some("scale-set:velnor+orbstack-linux")
+    );
+}
+
+#[test]
+fn qualification_crate_lanes_match_hosted_scale_set_and_both_jobs() {
+    let source = qualification_crate_ir();
+    let sources = BTreeMap::from([
+        (
+            "rust-qualification-0123456789abcdef".to_owned(),
+            "rust-demo".to_owned(),
+        ),
+        (
+            "tofu-qualification-fedcba9876543210".to_owned(),
+            "tofu-demo".to_owned(),
+        ),
+    ]);
+    let scale_set = "scale-set:velnor+orbstack-linux";
+    for (mode, expected) in [
+        (
+            ExecutionMode::Hosted,
+            vec![
+                ("rust-qualification-0123456789abcdef", "ubuntu-26.04"),
+                ("tofu-qualification-fedcba9876543210", "ubuntu-26.04"),
+            ],
+        ),
+        (
+            ExecutionMode::ScaleSet,
+            vec![
+                ("rust-qualification-0123456789abcdef", scale_set),
+                ("tofu-qualification-fedcba9876543210", scale_set),
+            ],
+        ),
+        (
+            ExecutionMode::Both,
+            vec![
+                (
+                    "rust-qualification-0123456789abcdef__hosted",
+                    "ubuntu-26.04",
+                ),
+                ("rust-qualification-0123456789abcdef__local", scale_set),
+                (
+                    "tofu-qualification-fedcba9876543210__hosted",
+                    "ubuntu-26.04",
+                ),
+                ("tofu-qualification-fedcba9876543210__local", scale_set),
+            ],
+        ),
+    ] {
+        let config = config(mode);
+        let lanes = qualification_job_lanes(&source, &config, None, &sources)
+            .expect("Qualification lane map");
+        let expanded = expand_workflow_with_qualification_sources(&source, &config, None, &sources)
+            .expect("expanded workflow");
+        let required: BTreeSet<&str> = expanded.jobs["required"]
+            .needs
+            .iter()
+            .map(String::as_str)
+            .collect();
+        let actual: Vec<(&str, &str)> = lanes
+            .values()
+            .flatten()
+            .map(|lane| {
+                (
+                    lane.job_id.as_str(),
+                    lane.runs_on.as_deref().unwrap_or_default(),
+                )
+            })
+            .collect();
+        assert_eq!(actual, expected);
+        for (job_id, runs_on) in &expected {
+            assert!(required.contains(job_id), "Required omits {job_id}");
+            assert_eq!(expanded.jobs[*job_id].runs_on, *runs_on, "{job_id}");
+        }
+        let StepKind::Internal { env, .. } = &expanded.jobs["plan"].steps[0].kind else {
+            panic!("plan request");
+        };
+        let encoded = &env[NAMED_CHECK_LANES_ENV];
+        let decoded: BTreeMap<String, Vec<NamedCheckLane>> =
+            serde_json::from_str(encoded).expect("typed lane map");
+        assert_eq!(decoded, lanes);
+    }
+}
+
+#[test]
+fn qualification_crate_lanes_inherit_source_runner_override() {
+    let source = qualification_crate_ir();
+    let sources = BTreeMap::from([
+        (
+            "rust-qualification-0123456789abcdef".to_owned(),
+            "rust-demo".to_owned(),
+        ),
+        (
+            "tofu-qualification-fedcba9876543210".to_owned(),
+            "tofu-demo".to_owned(),
+        ),
+    ]);
+    let mut config = config(ExecutionMode::Hosted);
+    let execution = config.execution.as_mut().expect("execution");
+    execution.mode = None;
+    execution.overrides.insert(
+        "rust-demo".to_owned(),
+        ExecutionOverride {
+            profile: "local".to_owned(),
+            role: ExecutionRole::Verification,
+        },
+    );
+    let lanes =
+        qualification_job_lanes(&source, &config, None, &sources).expect("Qualification lane map");
+    assert_eq!(
+        lanes["rust-qualification-0123456789abcdef"][0]
+            .runs_on
+            .as_deref(),
+        Some("scale-set:velnor+orbstack-linux")
+    );
+}
+
+#[test]
+fn mixed_qualification_jobs_keep_required_and_plan_lanes_aligned() {
+    let source = mixed_qualification_ir();
+    let sources = BTreeMap::from([
+        (
+            "rust-qualification-0123456789abcdef".to_owned(),
+            "rust-demo".to_owned(),
+        ),
+        (
+            "tofu-qualification-fedcba9876543210".to_owned(),
+            "tofu-demo".to_owned(),
+        ),
+    ]);
+    for mode in [
+        ExecutionMode::Hosted,
+        ExecutionMode::ScaleSet,
+        ExecutionMode::Both,
+    ] {
+        let config = config(mode);
+        let mut lanes = named_check_lanes(&source, &config, None).expect("named-check lanes");
+        for (id, entries) in
+            qualification_job_lanes(&source, &config, None, &sources).expect("crate lanes")
+        {
+            assert!(lanes.insert(id, entries).is_none());
+        }
+        let expanded = expand_workflow_with_qualification_sources(&source, &config, None, &sources)
+            .expect("expanded workflow");
+        let required: BTreeSet<&str> = expanded.jobs["required"]
+            .needs
+            .iter()
+            .map(String::as_str)
+            .collect();
+        for id in [
+            "rust-qualification-0123456789abcdef",
+            "tofu-qualification-fedcba9876543210",
+            "qualification-check-java",
+            "qualification-check-frontend",
+        ] {
+            for lane in &lanes[id] {
+                assert!(
+                    required.contains(lane.job_id.as_str()),
+                    "{mode:?}: {lane:?}"
+                );
+                assert!(
+                    expanded.jobs.contains_key(&lane.job_id),
+                    "{mode:?}: {lane:?}"
+                );
+            }
+        }
+        let StepKind::Internal { env, .. } = &expanded.jobs["plan"].steps[0].kind else {
+            panic!("plan request");
+        };
+        let decoded: BTreeMap<String, Vec<NamedCheckLane>> =
+            serde_json::from_str(&env[NAMED_CHECK_LANES_ENV]).expect("typed lane map");
+        assert_eq!(decoded, lanes, "plan lane map for {mode:?}");
+    }
 }
 
 #[test]

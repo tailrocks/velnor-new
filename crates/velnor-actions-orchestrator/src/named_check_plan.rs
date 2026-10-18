@@ -25,6 +25,7 @@ pub(crate) fn derive(
     let lane = NamedCheckLane {
         variant: None,
         job_id,
+        runs_on: None,
     };
     let (obligation, mut entries) = derive_lanes(root, item, run_key, generator, catalog, &[lane])?;
     let entry = entries
@@ -68,7 +69,7 @@ pub(crate) fn derive_lanes_until(
         .map_err(internal_contract)?;
     let platform =
         platform_id_for_group(&item.check.runner.label, task).map_err(internal_contract)?;
-    let planned_platform = planned_platform_for_check(&item.check.runner.label, task)?;
+    let logical_platform = planned_platform_for_check(&item.check.runner.label, task)?;
     let graph =
         canonical_digest(&(&item.check.id, &item.check.directory)).map_err(internal_contract)?;
     let mut closure =
@@ -112,17 +113,54 @@ pub(crate) fn derive_lanes_until(
     };
     let run = velnor_actions_workflow_renderer::join_argv_for_run(&argv)
         .map_err(|e| internal(&e.to_string()))?;
+    let entries = derive_entries(
+        item,
+        &run,
+        lanes,
+        &NamedCheckEntryContext {
+            task_digest: &task_digest,
+            input_digest: &input_digest,
+            run_key,
+            toolchain_inputs: &toolchain_inputs,
+            toolchain_id: &toolchain,
+            logical_platform: &logical_platform,
+        },
+    )?;
+    Ok((obligation, entries))
+}
+
+struct NamedCheckEntryContext<'a> {
+    task_digest: &'a str,
+    input_digest: &'a str,
+    run_key: &'a str,
+    toolchain_inputs: &'a velnor_actions_contract::cachekey::ToolchainInputs,
+    toolchain_id: &'a str,
+    logical_platform: &'a PlannedPlatform,
+}
+
+fn derive_entries(
+    item: &DiscoveredCheck,
+    run: &str,
+    lanes: &[NamedCheckLane],
+    context: &NamedCheckEntryContext<'_>,
+) -> Result<Vec<MatrixEntry>, OrchestratorError> {
+    let task = &item.proposal;
     let mut entries = Vec::with_capacity(lanes.len());
     for lane in lanes {
+        let planned_platform = match lane.runs_on.as_deref() {
+            Some(runs_on) => PlannedPlatform::new(runs_on, &context.logical_platform.target)
+                .map_err(internal_contract)?,
+            None => context.logical_platform.clone(),
+        };
         let mut entry = MatrixEntry::derive_for_lane(
             &task.stack_id,
             &task.task_id,
-            &run,
-            &task_digest,
+            run,
+            context.task_digest,
             super::metadata_for(item).map_err(internal_contract)?,
             execute_ids(task),
-            &input_digest,
-            run_key,
+            context.input_digest,
+            context.run_key,
             &lane.job_id,
             lane.variant,
             planned_platform.clone(),
@@ -134,10 +172,11 @@ pub(crate) fn derive_lanes_until(
             .iter()
             .map(|evidence| evidence.path.clone())
             .collect();
-        entry.toolchain_inputs = Some(toolchain_inputs.clone());
+        entry.toolchain_inputs = Some(context.toolchain_inputs.clone());
+        entry.toolchain_id = Some(context.toolchain_id.to_owned());
         entries.push(entry);
     }
-    Ok((obligation, entries))
+    Ok(entries)
 }
 
 /// Bind one named check's plan identity to its effective runner label.

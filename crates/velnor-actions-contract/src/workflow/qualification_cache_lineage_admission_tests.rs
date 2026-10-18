@@ -50,7 +50,12 @@ fn complete_cold_warm_third_useful_delta_and_control_admission_paths() -> TestRe
         Some(&third_admission),
         &entry.matrix_key,
         QualificationCacheLayer::CargoSources,
-        &super::directive_tests::runtime_identity(&sources.runtime),
+        &super::directive_tests::runtime_identity(
+            sources
+                .runtime
+                .as_ref()
+                .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?,
+        ),
     )?;
     assert!(
         keys.restore
@@ -158,7 +163,12 @@ fn native_mbx_receipt_and_directive_use_the_object_layer_only() -> TestResult {
         None,
         &entry.matrix_key,
         QualificationCacheLayer::MbxObjects,
-        &super::directive_tests::runtime_identity(&native.runtime),
+        &super::directive_tests::runtime_identity(
+            native
+                .runtime
+                .as_ref()
+                .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?,
+        ),
     )?;
     assert!(keys.restore.is_some() && keys.save_key.is_some());
 
@@ -172,7 +182,12 @@ fn native_mbx_receipt_and_directive_use_the_object_layer_only() -> TestResult {
                 None,
                 &entry.matrix_key,
                 QualificationCacheLayer::MbxObjects,
-                &super::directive_tests::runtime_identity(&native.runtime),
+                &super::directive_tests::runtime_identity(
+                    native
+                        .runtime
+                        .as_ref()
+                        .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?,
+                ),
             )
             .is_err()
     );

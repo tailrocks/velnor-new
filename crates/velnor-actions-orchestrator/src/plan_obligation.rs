@@ -215,7 +215,12 @@ pub(crate) fn plan_group(
     if Stack::from_id(&task.stack_id) == Some(Stack::Mise) {
         let item = crate::internal_plan::named_checks::discovered(inputs.discovery, task)
             .map_err(internal_contract)?;
-        let job_id = format!("check-{}", item.check.id);
+        let job_id = if inputs.wire.event == velnor_actions_contract::WorkflowEvent::Qualification {
+            crate::crate_job_ids::qualification_job_id_for_member(task)
+                .map_err(internal_contract)?
+        } else {
+            format!("check-{}", item.check.id)
+        };
         let check_lanes = inputs
             .named_check_lanes
             .get(&job_id)
@@ -276,12 +281,11 @@ pub(crate) fn plan_group(
         inputs,
         &argv,
         &toolchain,
-        toolchain_inputs,
+        &toolchain_inputs,
         &input_digest,
         closure_digest,
         reuse,
     )
-    .map(|(obligation, entry)| (obligation, vec![entry]))
 }
 
 /// Complete existing matrix transport after execution disposition is decided.
@@ -289,11 +293,11 @@ fn complete_group(
     inputs: &GroupInputs<'_>,
     argv: &[String],
     toolchain: &str,
-    toolchain_inputs: velnor_actions_contract::cachekey::ToolchainInputs,
+    toolchain_inputs: &velnor_actions_contract::cachekey::ToolchainInputs,
     input_digest: &str,
     closure_digest: String,
     reuse: wire_w2::ReuseOutcome,
-) -> Result<(PlanObligation, MatrixEntry), OrchestratorError> {
+) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
     let task = inputs.task;
     let task_digest = task_digest(&task.task_id, argv, toolchain).map_err(internal_contract)?;
     // The persisted input digest flows through the validated reuse
@@ -327,38 +331,100 @@ fn complete_group(
         inputs.wire.event,
     )
     .ok_or_else(|| internal("crate_job_id_missing"))?;
-    let planned_platform = planned_platform_for_group(inputs.label, task)?;
-    let mut entry = MatrixEntry::derive(
-        &task.stack_id,
-        &task.task_id,
-        &run,
-        &task_digest,
-        metadata,
-        execute_ids(task),
-        input_digest,
-        inputs.run_key,
-        &job_id,
-        planned_platform,
-    )
-    .map_err(internal_contract)?;
-    let cache_ids = cache_ids_for(task, inputs.label, toolchain).map_err(internal_contract)?;
-    record_lane_target_dir(&mut entry.adapter_metadata, cache_ids.lane_id());
-    entry.cache_ids = Some(cache_ids);
-    entry.toolchain_inputs = Some(toolchain_inputs);
-    Ok((obligation, entry))
+    let lanes = inputs
+        .named_check_lanes
+        .get(&job_id)
+        .cloned()
+        .unwrap_or_else(|| {
+            vec![NamedCheckLane {
+                variant: None,
+                job_id,
+                runs_on: Some(inputs.label.to_owned()),
+            }]
+        });
+    if lanes.is_empty() {
+        return Err(internal("qualification_executor_lane_missing"));
+    }
+    let target = platform_target_for_group(inputs.label, task).map_err(internal_contract)?;
+    let entries = derive_lane_entries(
+        &LaneEntryInputs {
+            task,
+            run: &run,
+            task_digest: &task_digest,
+            metadata: &metadata,
+            execute_task_ids: &execute_ids(task),
+            input_digest,
+            run_key: inputs.run_key,
+            target: &target,
+            default_runs_on: inputs.label,
+            toolchain,
+            toolchain_inputs,
+        },
+        lanes,
+    )?;
+    Ok((obligation, entries))
 }
 
-/// Bind one task group's canonical plan identity to its selected label and target.
-fn planned_platform_for_group(
-    label: &str,
-    task: &ProposedTask,
-) -> Result<PlannedPlatform, OrchestratorError> {
-    let target = platform_target_for_group(label, task).map_err(internal_contract)?;
-    let planned = PlannedPlatform::new(label, &target).map_err(internal_contract)?;
-    if planned.platform_id != platform_id_for_group(label, task).map_err(internal_contract)? {
-        return Err(internal("planned_platform_identity_mismatch"));
+/// Inputs shared by every lane derived for one obligation.
+struct LaneEntryInputs<'a> {
+    task: &'a ProposedTask,
+    run: &'a str,
+    task_digest: &'a str,
+    metadata: &'a serde_json::Value,
+    execute_task_ids: &'a velnor_actions_contract::ExecuteTaskIds,
+    input_digest: &'a str,
+    run_key: &'a str,
+    target: &'a str,
+    default_runs_on: &'a str,
+    toolchain: &'a str,
+    toolchain_inputs: &'a velnor_actions_contract::cachekey::ToolchainInputs,
+}
+
+/// Derive the exact persisted `MatrixEntry` identities for physical lanes.
+fn derive_lane_entries(
+    inputs: &LaneEntryInputs<'_>,
+    lanes: Vec<NamedCheckLane>,
+) -> Result<Vec<MatrixEntry>, OrchestratorError> {
+    let mut entries = Vec::with_capacity(lanes.len());
+    for lane in lanes {
+        let runs_on = lane.runs_on.as_deref().unwrap_or(inputs.default_runs_on);
+        let planned_platform =
+            PlannedPlatform::new(runs_on, inputs.target).map_err(internal_contract)?;
+        let platform_id = planned_platform.platform_id.clone();
+        let mut entry = MatrixEntry::derive_for_lane(
+            &inputs.task.stack_id,
+            &inputs.task.task_id,
+            inputs.run,
+            inputs.task_digest,
+            inputs.metadata.clone(),
+            inputs.execute_task_ids.clone(),
+            inputs.input_digest,
+            inputs.run_key,
+            &lane.job_id,
+            lane.variant,
+            planned_platform,
+        )
+        .map_err(internal_contract)?;
+        let cache_ids = if velnor_actions_contract::RunsOn::parse(runs_on)
+            .map_err(internal_contract)?
+            .is_scale_set()
+        {
+            crate::internal_plan::cache_ids_for_platform(
+                inputs.task,
+                inputs.toolchain,
+                &platform_id,
+            )
+        } else {
+            cache_ids_for(inputs.task, runs_on, inputs.toolchain)
+        }
+        .map_err(internal_contract)?;
+        record_lane_target_dir(&mut entry.adapter_metadata, cache_ids.lane_id());
+        entry.cache_ids = Some(cache_ids);
+        entry.toolchain_inputs = Some(inputs.toolchain_inputs.clone());
+        entry.toolchain_id = Some(inputs.toolchain.to_owned());
+        entries.push(entry);
     }
-    Ok(planned)
+    Ok(entries)
 }
 
 /// Record the lane's isolated `CARGO_TARGET_DIR` on entry metadata.

@@ -164,7 +164,11 @@ fn layer_receipt(
     if !planned.active {
         return Ok(disabled_layer(planned));
     }
-    let identity = runtime_identity(&planned.runtime);
+    let runtime = planned
+        .runtime
+        .as_ref()
+        .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?;
+    let identity = runtime_identity(runtime);
     let keys = directive.bind_runtime(plan, admission, &entry.matrix_key, layer, &identity)?;
     let bound_restore = keys
         .restore

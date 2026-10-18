@@ -148,6 +148,7 @@ fn matrix_for_id(package_id: &str, input: &str) -> MatrixEntry {
             .expect("planned platform"),
         cache_ids: Some(cache_ids()),
         toolchain_inputs: Some(test_toolchain_inputs()),
+        toolchain_id: Some(toolchain_id(&test_toolchain_inputs()).expect("toolchain identity")),
         declared_outputs: Vec::new(),
         test_run: Vec::new(),
     }

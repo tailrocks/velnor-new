@@ -88,6 +88,7 @@ struct StaticMatrixEntry<'a> {
     job_id: &'a str,
     cache_ids: &'a Option<crate::workflow::EntryCacheIds>,
     toolchain_inputs: &'a Option<crate::cachekey::ToolchainInputs>,
+    toolchain_id: &'a Option<String>,
     declared_outputs: &'a [String],
 }
 
@@ -142,6 +143,14 @@ struct IdentityPreimage<'a> {
     cache_format_id: &'a str,
 }
 
+#[derive(Serialize)]
+struct DisabledLayerIdentityPreimage<'a> {
+    schema: u32,
+    configuration_digest: &'a str,
+    matrix_key: &'a str,
+    layer: QualificationCacheLayer,
+}
+
 /// Derive the stable configuration commitment shared by all runs in a campaign.
 pub(crate) fn configuration_commitment(plan: &Plan) -> Result<String, ContractError> {
     let mut packages: Vec<_> = plan
@@ -192,6 +201,7 @@ pub(crate) fn configuration_commitment(plan: &Plan) -> Result<String, ContractEr
                 job_id: &entry.job_id,
                 cache_ids: &entry.cache_ids,
                 toolchain_inputs: &entry.toolchain_inputs,
+                toolchain_id: &entry.toolchain_id,
                 declared_outputs: &entry.declared_outputs,
             })
         })
@@ -260,10 +270,22 @@ pub(crate) fn identity_commitment(
         .qualification
         .as_ref()
         .ok_or_else(|| ContractError::identity("qualification", "missing_dispatch_context"))?;
-    let ids = entry
-        .cache_ids
-        .as_ref()
-        .ok_or_else(|| ContractError::identity("qualification.cache_ids", "missing"))?;
+    let configuration_digest = configuration_commitment(plan)?;
+    let Some(ids) = entry.cache_ids.as_ref() else {
+        if super::receipt::layer_applies(entry, layer) {
+            return Err(ContractError::identity(
+                "qualification.cache_ids",
+                "missing_for_active_layer",
+            ));
+        }
+        let preimage = DisabledLayerIdentityPreimage {
+            schema: 1,
+            configuration_digest: &configuration_digest,
+            matrix_key: &entry.matrix_key,
+            layer,
+        };
+        return Ok(digest_b3(&canonical_json_bytes(&preimage)?));
+    };
     ids.validate()?;
     let target = crate::ReleaseTarget::for_runner_label(&plan.runner.label)
         .map(crate::ReleaseTarget::triple)
@@ -274,7 +296,7 @@ pub(crate) fn identity_commitment(
         schema: 1,
         repository: &dispatch.repository,
         campaign: &dispatch.campaign,
-        configuration_digest: &configuration_commitment(plan)?,
+        configuration_digest: &configuration_digest,
         runner_label: &plan.runner.label,
         target,
         matrix_key: &entry.matrix_key,
@@ -296,11 +318,11 @@ pub(crate) fn identity_commitment(
 pub(crate) fn runtime_requirements(
     plan: &Plan,
     entry: &MatrixEntry,
-) -> Result<QualificationRuntimeIdentityRequirements, ContractError> {
-    let ids = entry
-        .cache_ids
-        .as_ref()
-        .ok_or_else(|| ContractError::identity("qualification.cache_ids", "missing"))?;
+) -> Result<Option<QualificationRuntimeIdentityRequirements>, ContractError> {
+    let Some(ids) = entry.cache_ids.as_ref() else {
+        validate_uncached_identity(entry)?;
+        return Ok(None);
+    };
     ids.validate()?;
     let target = crate::ReleaseTarget::for_runner_label(&plan.runner.label)
         .map(crate::ReleaseTarget::triple)
@@ -317,13 +339,19 @@ pub(crate) fn runtime_requirements(
         .toolchain_inputs
         .clone()
         .ok_or_else(|| ContractError::identity("matrix.toolchain_inputs", "missing"))?;
-    if crate::cachekey::toolchain_id(&toolchain_inputs)? != ids.toolchain_id() {
+    let computed_toolchain_id = crate::cachekey::toolchain_id(&toolchain_inputs)?;
+    if computed_toolchain_id != ids.toolchain_id()
+        || entry
+            .toolchain_id
+            .as_deref()
+            .is_some_and(|toolchain_id| toolchain_id != computed_toolchain_id)
+    {
         return Err(ContractError::identity(
             "matrix.toolchain_inputs",
             "toolchain_id_mismatch",
         ));
     }
-    Ok(QualificationRuntimeIdentityRequirements {
+    Ok(Some(QualificationRuntimeIdentityRequirements {
         runner_label: plan.runner.label.clone(),
         runs_on: entry.planned_platform.runs_on.clone(),
         scale_set_image_source_sha,
@@ -345,7 +373,40 @@ pub(crate) fn runtime_requirements(
             QualificationRuntimeIdentityField::AbiId,
             QualificationRuntimeIdentityField::DriverId,
         ],
-    })
+    }))
+}
+
+fn validate_uncached_identity(entry: &MatrixEntry) -> Result<(), ContractError> {
+    if [
+        QualificationCacheLayer::MbxObjects,
+        QualificationCacheLayer::CargoSources,
+        QualificationCacheLayer::MiseTools,
+        QualificationCacheLayer::TofuProviders,
+        QualificationCacheLayer::TaskResult,
+    ]
+    .into_iter()
+    .any(|layer| super::receipt::layer_applies(entry, layer))
+    {
+        return Err(ContractError::identity(
+            "qualification.cache_ids",
+            "missing_for_active_layer",
+        ));
+    }
+    let toolchain_inputs = entry
+        .toolchain_inputs
+        .as_ref()
+        .ok_or_else(|| ContractError::identity("matrix.toolchain_inputs", "missing"))?;
+    let toolchain_id = entry
+        .toolchain_id
+        .as_deref()
+        .ok_or_else(|| ContractError::identity("matrix.toolchain_id", "missing"))?;
+    if crate::cachekey::toolchain_id(toolchain_inputs)? != toolchain_id {
+        return Err(ContractError::identity(
+            "matrix.toolchain_id",
+            "toolchain_inputs_mismatch",
+        ));
+    }
+    Ok(())
 }
 
 /// Construct a stable archive key from validated identity and one typed slot.

@@ -7,14 +7,18 @@ use super::ValidatorKind;
 use super::ir::{Job, WorkflowIr};
 use super::jobs::{PLAN_JOB_ID, REQUIRED_JOB_ID};
 use super::named_check_lanes::add_named_check_lanes;
+use super::named_check_lanes::qualification_check_source_id;
 pub use super::named_check_lanes::{
     NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NAMED_CHECK_LANES_ENV, NamedCheckLane,
-    NamedCheckLaneVariant, named_check_lanes,
+    NamedCheckLaneVariant, QUALIFICATION_CHECK_JOB_PREFIX, named_check_lanes,
+    qualification_job_lanes,
 };
 use crate::config::{
     CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION, ExecutionConfig,
-    ExecutionMode, ExecutionRole, RUNNER_LABEL_CATALOG, RunsOn, VelnorConfig, VerificationRunner,
-    WORKFLOW_TASK_JOB_PREFIX, WorkflowTask,
+    ExecutionMode, ExecutionRole, NORMAL_CHECK_ADMISSION_CONDITION,
+    NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION, QUALIFICATION_CHECK_ADMISSION_CONDITION,
+    RUNNER_LABEL_CATALOG, RunsOn, VelnorConfig, VerificationRunner, WORKFLOW_TASK_JOB_PREFIX,
+    WorkflowTask,
 };
 use crate::errors::ContractError;
 use std::collections::BTreeMap;
@@ -81,6 +85,20 @@ pub fn expand_workflow(
     config: &VelnorConfig,
     dispatch: Option<ExecutionMode>,
 ) -> Result<WorkflowIr, ContractError> {
+    expand_workflow_with_qualification_sources(ir, config, dispatch, &BTreeMap::new())
+}
+
+/// Expand jobs using source-job identities for per-entry Qualification jobs.
+///
+/// The source map binds each individual Rust or `ToFu` Qualification job to
+/// its grouped verification job so existing runner overrides stay in force.
+/// # Errors
+pub fn expand_workflow_with_qualification_sources(
+    ir: &WorkflowIr,
+    config: &VelnorConfig,
+    dispatch: Option<ExecutionMode>,
+    qualification_sources: &std::collections::BTreeMap<String, String>,
+) -> Result<WorkflowIr, ContractError> {
     if config.schema != 2 {
         return Ok(ir.clone());
     }
@@ -89,17 +107,33 @@ pub fn expand_workflow(
         .as_ref()
         .ok_or_else(|| ContractError::config("config.toml", "execution", "missing_execution"))?;
     check_override_keys(ir, execution)?;
-    let check_lanes = named_check_lanes(ir, config, dispatch)?;
-    let map = id_map(ir, config, execution, dispatch)?;
+    let mut executor_lanes = named_check_lanes(ir, config, dispatch)?;
+    for (job_id, lanes) in qualification_job_lanes(ir, config, dispatch, qualification_sources)? {
+        if executor_lanes.insert(job_id, lanes).is_some() {
+            return Err(ContractError::identity(
+                "workflow.executor_lanes",
+                "duplicate_executor_lane_map",
+            ));
+        }
+    }
+    let map = id_map(ir, config, execution, dispatch, qualification_sources)?;
     let mut jobs = std::collections::BTreeMap::new();
     for (id, job) in &ir.jobs {
         let class = lane_class(id);
-        let placement = placement_for(config, execution, dispatch, class, id, job)?;
+        let placement = placement_for_executor(
+            config,
+            execution,
+            dispatch,
+            class,
+            id,
+            job,
+            qualification_sources,
+        )?;
         emit_job(&mut jobs, id, job, execution, class, placement, &map)?;
     }
     let mut expanded = ir.clone();
     expanded.jobs = jobs;
-    add_named_check_lanes(&mut expanded, &check_lanes)?;
+    add_named_check_lanes(&mut expanded, &executor_lanes)?;
     Ok(expanded)
 }
 
@@ -121,10 +155,19 @@ fn id_map(
     config: &VelnorConfig,
     execution: &ExecutionConfig,
     dispatch: Option<ExecutionMode>,
+    qualification_sources: &std::collections::BTreeMap<String, String>,
 ) -> Result<std::collections::BTreeMap<String, Vec<String>>, ContractError> {
     let mut map = std::collections::BTreeMap::new();
     for (id, job) in &ir.jobs {
-        let placement = placement_for(config, execution, dispatch, lane_class(id), id, job)?;
+        let placement = placement_for_executor(
+            config,
+            execution,
+            dispatch,
+            lane_class(id),
+            id,
+            job,
+            qualification_sources,
+        )?;
         let ids = match placement {
             Placement::Both => vec![
                 format!("{id}{HOSTED_SUFFIX}"),
@@ -145,12 +188,52 @@ pub(super) fn placement_for(
     job_id: &str,
     job: &Job,
 ) -> Result<Placement, ContractError> {
-    if let Some(over) = execution.overrides.get(job_id)
+    let override_id = qualification_check_source_id(job_id).unwrap_or_else(|| job_id.to_owned());
+    placement_for_source(
+        config,
+        execution,
+        dispatch,
+        class,
+        job_id,
+        &override_id,
+        job,
+    )
+}
+
+fn placement_for_executor(
+    config: &VelnorConfig,
+    execution: &ExecutionConfig,
+    dispatch: Option<ExecutionMode>,
+    class: LaneClass,
+    job_id: &str,
+    job: &Job,
+    qualification_sources: &std::collections::BTreeMap<String, String>,
+) -> Result<Placement, ContractError> {
+    let source_id = qualification_check_source_id(job_id)
+        .or_else(|| qualification_sources.get(job_id).cloned());
+    match source_id {
+        Some(source_id) => {
+            placement_for_source(config, execution, dispatch, class, job_id, &source_id, job)
+        }
+        None => placement_for(config, execution, dispatch, class, job_id, job),
+    }
+}
+
+pub(super) fn placement_for_source(
+    config: &VelnorConfig,
+    execution: &ExecutionConfig,
+    dispatch: Option<ExecutionMode>,
+    class: LaneClass,
+    job_id: &str,
+    override_id: &str,
+    job: &Job,
+) -> Result<Placement, ContractError> {
+    if let Some(over) = execution.overrides.get(override_id)
         && !role_matches(over.role, class)
     {
         return Err(ContractError::config(
             "config.toml",
-            format!("execution.overrides.{job_id}.role"),
+            format!("execution.overrides.{override_id}.role"),
             "role_not_eligible",
         ));
     }
@@ -159,7 +242,7 @@ pub(super) fn placement_for(
         return Ok(match mode {
             ExecutionMode::Hosted => Placement::HostedOnly,
             ExecutionMode::ScaleSet => {
-                require_scale_set_support(supports_scale_set, execution, job_id, job)?;
+                require_scale_set_support(supports_scale_set, execution, job_id, override_id, job)?;
                 Placement::ScaleSetOnly
             }
             ExecutionMode::Both => {
@@ -176,14 +259,14 @@ pub(super) fn placement_for(
     }
     let key = execution
         .overrides
-        .get(job_id)
+        .get(override_id)
         .map_or(execution.default_profile.as_str(), |over| {
             over.profile.as_str()
         });
     if key == execution.hosted_profile {
         Ok(Placement::HostedOnly)
     } else if key == execution.scale_set_profile {
-        require_scale_set_support(supports_scale_set, execution, job_id, job)?;
+        require_scale_set_support(supports_scale_set, execution, job_id, override_id, job)?;
         Ok(Placement::ScaleSetOnly)
     } else {
         Err(ContractError::config(
@@ -254,6 +337,7 @@ fn require_scale_set_support(
     supports_scale_set: bool,
     execution: &ExecutionConfig,
     job_id: &str,
+    override_id: &str,
     job: &Job,
 ) -> Result<(), ContractError> {
     if supports_scale_set {
@@ -274,7 +358,7 @@ fn require_scale_set_support(
     };
     let key = if execution
         .overrides
-        .get(job_id)
+        .get(override_id)
         .is_some_and(|over| over.profile == execution.scale_set_profile)
     {
         format!("execution.overrides.{job_id}.profile")
@@ -364,7 +448,16 @@ fn retarget(
     if let Some(token) = runs_on {
         token.clone_into(&mut next.runs_on);
         if next.check_runner.is_some() {
-            next.condition = Some(EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned());
+            next.condition = Some(if qualification_check_source_id(source_id).is_some() {
+                QUALIFICATION_CHECK_ADMISSION_CONDITION.to_owned()
+            } else if matches!(
+                job.condition.as_deref(),
+                Some(NORMAL_CHECK_ADMISSION_CONDITION | NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION)
+            ) {
+                NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned()
+            } else {
+                EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned()
+            });
         }
     }
     retarget_check_identity(&mut next, source_id, output_id, lane);

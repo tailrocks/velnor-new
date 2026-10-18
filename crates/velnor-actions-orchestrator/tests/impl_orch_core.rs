@@ -38,10 +38,37 @@ pub(crate) fn merge_request(
     reports: &serde_json::Value,
     jobs: &serde_json::Value,
 ) -> serde_json::Value {
-    let ids: Vec<serde_json::Value> = jobs
-        .as_array()
-        .map(|jobs| jobs.iter().map(|job| job["job_id"].clone()).collect())
-        .unwrap_or_default();
+    let mut jobs = jobs.as_array().cloned().unwrap_or_default();
+    let owner_conclusion = jobs
+        .iter()
+        .find(|job| job.get("job_id").and_then(Value::as_str) == Some("plan"))
+        .and_then(|job| job.get("conclusion"))
+        .and_then(Value::as_str)
+        .map(|conclusion| {
+            if conclusion == "success" {
+                "success"
+            } else {
+                "skipped"
+            }
+        });
+    let mut present: BTreeSet<String> = jobs
+        .iter()
+        .filter_map(|job| job.get("job_id")?.as_str().map(str::to_owned))
+        .collect();
+    if let Some(owner_conclusion) = owner_conclusion {
+        for job_id in matrix
+            .get("include")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| entry.get("job_id")?.as_str())
+        {
+            if present.insert(job_id.to_owned()) {
+                jobs.push(json!({"job_id": job_id, "conclusion": owner_conclusion}));
+            }
+        }
+    }
+    let ids: Vec<serde_json::Value> = jobs.iter().map(|job| job["job_id"].clone()).collect();
     serde_json::json!({
         "schema": 1,
         "run_key": "local",

@@ -51,8 +51,9 @@ pub use jobs::{
 };
 pub use lanes::{
     HOSTED_SUFFIX, LaneClass, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
-    NAMED_CHECK_LANES_ENV, NamedCheckLane, NamedCheckLaneVariant, SCALE_SUFFIX, expand_workflow,
-    lane_class, named_check_lanes,
+    NAMED_CHECK_LANES_ENV, NamedCheckLane, NamedCheckLaneVariant, QUALIFICATION_CHECK_JOB_PREFIX,
+    SCALE_SUFFIX, expand_workflow, expand_workflow_with_qualification_sources, lane_class,
+    named_check_lanes, qualification_job_lanes,
 };
 pub use needs::{
     NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions,

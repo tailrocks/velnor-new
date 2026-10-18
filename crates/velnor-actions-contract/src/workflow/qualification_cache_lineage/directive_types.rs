@@ -70,8 +70,9 @@ pub struct QualificationCacheLayerDirective {
     pub active: bool,
     /// Stable configuration/workspace/lane/cache-format identity commitment.
     pub identity_digest: String,
-    /// Required actual runner facts before key use.
-    pub runtime: QualificationRuntimeIdentityRequirements,
+    /// Required actual runner facts for an active cache layer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runtime: Option<QualificationRuntimeIdentityRequirements>,
     /// Prior admitted runtime facts; current observations must equal these.
     pub expected_runtime: Option<QualificationRuntimeIdentity>,
     /// Exact restore expectation; stage action output before import.

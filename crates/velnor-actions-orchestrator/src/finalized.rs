@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, WorkflowPolicy, expand_workflow};
+use velnor_actions_contract::{Job, WorkflowPolicy, expand_workflow_with_qualification_sources};
 use velnor_actions_workflow_renderer::finalize_jobs as finalize_render_jobs;
 
 use crate::OrchestratorError;
@@ -64,10 +64,21 @@ pub fn finalized_jobs(
 ) -> Result<BTreeMap<String, Job>, OrchestratorError> {
     let owned = owned_preparation(prep)?;
     let mise = resolve_mise_setup(&owned.config, &owned.runner_label)?;
-    let ir = expand_workflow(&owned.workflow.ir, &owned.config, None).map_err(|err| {
-        OrchestratorError::Contract {
-            problem: err.to_string(),
-        }
+    let qualification_sources = crate::crate_job_ids::qualification_job_sources_for_ir(
+        &owned.discovery.proposals,
+        &owned.workflow.ir,
+    )
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
+    let ir = expand_workflow_with_qualification_sources(
+        &owned.workflow.ir,
+        &owned.config,
+        None,
+        &qualification_sources,
+    )
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
     })?;
     Ok(finalize_render_jobs(
         &ir,

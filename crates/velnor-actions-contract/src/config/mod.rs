@@ -101,6 +101,17 @@ use serde::{Deserialize, Serialize};
 /// event classes and fork PRs cannot enter this execution environment.
 pub const EPHEMERAL_CHECK_ADMISSION_CONDITION: &str = "github.event_name == 'push' || github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)";
 
+/// Job admission for a named check's Qualification consumer.
+pub const QUALIFICATION_CHECK_ADMISSION_CONDITION: &str =
+    "always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign != ''";
+
+/// Job admission for the ordinary named-check consumers when Qualification is configured.
+pub const NORMAL_CHECK_ADMISSION_CONDITION: &str =
+    "always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''";
+
+/// Admission for an ordinary named check routed to a Scale Set while Qualification is configured.
+pub const NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION: &str = "always() && needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == '' && (github.event_name == 'push' || github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))";
+
 /// Top-level `.velnor/config.toml` document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

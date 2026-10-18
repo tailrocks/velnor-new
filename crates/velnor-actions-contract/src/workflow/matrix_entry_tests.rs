@@ -1,6 +1,7 @@
 //! Paired named-check matrix rows bind lane, report, and artifact identities.
 
 use super::*;
+use crate::cachekey::{ToolchainInputs, toolchain_id};
 use crate::workflow::execute::{ExecuteTaskIds, ExecuteTaskRef};
 use std::collections::BTreeMap;
 
@@ -64,4 +65,43 @@ fn lane_identity_rejects_wrong_stack_or_emitted_job_suffix() {
         error.to_string().contains("lane_job_id_mismatch"),
         "{error}"
     );
+}
+
+#[test]
+fn uncached_named_check_binds_its_toolchain_without_cache_ids() {
+    let mut check = entry(NamedCheckLaneVariant::Hosted, "check-demo__hosted");
+    let inputs = ToolchainInputs {
+        tools: vec!["java@21.0.2".to_owned()],
+        components: Vec::new(),
+        compile_driver: "mise".to_owned(),
+        test_runner: "mise".to_owned(),
+    };
+    let identity = toolchain_id(&inputs).expect("toolchain identity");
+    check.toolchain_inputs = Some(inputs);
+    check.toolchain_id = Some(identity);
+
+    check.validate("local").expect("uncached check identity");
+    assert!(check.cache_ids.is_none());
+}
+
+#[test]
+fn uncached_named_check_rejects_missing_or_mismatched_toolchain_id() {
+    let mut check = entry(NamedCheckLaneVariant::Hosted, "check-demo__hosted");
+    let inputs = ToolchainInputs {
+        tools: vec!["java@21.0.2".to_owned()],
+        components: Vec::new(),
+        compile_driver: "mise".to_owned(),
+        test_runner: "mise".to_owned(),
+    };
+    check.toolchain_inputs = Some(inputs.clone());
+    let missing = check
+        .validate("local")
+        .expect_err("missing toolchain commitment must fail");
+    assert!(missing.to_string().contains("requires_toolchain_id"));
+
+    check.toolchain_id = Some(crate::digest_b3(b"different toolchain"));
+    let mismatch = check
+        .validate("local")
+        .expect_err("mismatched toolchain commitment must fail");
+    assert!(mismatch.to_string().contains("toolchain_inputs_mismatch"));
 }

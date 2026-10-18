@@ -2,7 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::config::{CheckExecutor, EPHEMERAL_CHECK_ADMISSION_CONDITION};
+use velnor_actions_contract::config::{
+    CheckExecutor, EPHEMERAL_CHECK_ADMISSION_CONDITION, QUALIFICATION_CHECK_ADMISSION_CONDITION,
+};
 use velnor_actions_contract::{
     Job, JobTimeout, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Permissions, Step,
     WorkflowPolicy,
@@ -32,7 +34,37 @@ pub(crate) fn build_check_jobs(
             WorkflowPolicy::VelnorRepositoryV1 => None,
         };
         let id = format!("check-{}", check.id);
-        jobs.push((id.clone(), check_job(discovered, &id, acquire, catalog)?));
+        jobs.push((
+            id.clone(),
+            check_job(discovered, &id, acquire, catalog, false)?,
+        ));
+    }
+    jobs.sort_by(|left, right| left.0.cmp(&right.0));
+    Ok(jobs)
+}
+
+/// Build one separate Qualification consumer for each discovered named check.
+pub(crate) fn build_qualification_check_jobs(
+    policy: WorkflowPolicy,
+    discovery: &Discovery,
+    catalog: &ToolCatalog,
+) -> Result<Vec<(String, Job)>, OrchestratorError> {
+    let mut jobs = Vec::with_capacity(discovery.mise_checks.len());
+    for discovered in &discovery.mise_checks {
+        let id = crate::crate_job_ids::qualification_job_id_for_member(&discovered.proposal)
+            .map_err(crate::internal::internal_contract)?;
+        let acquire = match policy {
+            WorkflowPolicy::ConsumerV1 => Some(crate::pins::consumer_acquire_for_runner(
+                &discovered.check.runner,
+                env!("CARGO_PKG_VERSION"),
+                discovery.consumer_manifest_json.as_deref(),
+            )?),
+            WorkflowPolicy::VelnorRepositoryV1 => None,
+        };
+        jobs.push((
+            id.clone(),
+            check_job(discovered, &id, acquire, catalog, true)?,
+        ));
     }
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
     Ok(jobs)
@@ -43,12 +75,13 @@ fn check_job(
     job_id: &str,
     acquire: Option<Step>,
     catalog: &ToolCatalog,
+    qualification: bool,
 ) -> Result<Job, OrchestratorError> {
     let check = &discovered.check;
     let mut steps = vec![crate::workflow::wire_w1::checkout_step_full()?];
     steps.extend(acquire);
     steps.push(crate::matrix_step::download_plan_step()?);
-    steps.push(execute_check_step(discovered, catalog)?);
+    steps.push(execute_check_step(discovered, job_id, catalog)?);
     let mut upload = crate::matrix_step::crate_upload_step(job_id)?;
     upload.condition = Some("always()".to_owned());
     steps.push(upload);
@@ -62,8 +95,12 @@ fn check_job(
         check_runner: Some(check.runner.clone()),
         timeout_minutes: JobTimeout::new(minutes)?,
         needs: vec![PLAN_JOB_ID.to_owned()],
-        condition: (check.runner.executor == CheckExecutor::EphemeralSelfHosted)
-            .then(|| EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned()),
+        condition: if qualification {
+            Some(QUALIFICATION_CHECK_ADMISSION_CONDITION.to_owned())
+        } else {
+            (check.runner.executor == CheckExecutor::EphemeralSelfHosted)
+                .then(|| EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned())
+        },
         permissions: Some(Permissions::default()),
         environment: None,
         steps,
@@ -75,14 +112,12 @@ fn check_job(
 /// The check stays unconditional: opaque checks cannot inherit Rust reuse.
 fn execute_check_step(
     discovered: &DiscoveredCheck,
+    job_id: &str,
     catalog: &ToolCatalog,
 ) -> Result<Step, OrchestratorError> {
     let identity = BTreeMap::from([
         ("VELNOR_CHECK_ID".to_owned(), discovered.check.id.clone()),
-        (
-            NAMED_CHECK_JOB_ID_ENV.to_owned(),
-            format!("check-{}", discovered.check.id),
-        ),
+        (NAMED_CHECK_JOB_ID_ENV.to_owned(), job_id.to_owned()),
         (NAMED_CHECK_LANE_VARIANT_ENV.to_owned(), "single".to_owned()),
         (
             "VELNOR_TASK_ID".to_owned(),

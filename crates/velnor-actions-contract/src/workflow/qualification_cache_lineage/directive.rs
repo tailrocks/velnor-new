@@ -135,7 +135,11 @@ impl QualificationCacheDirective {
                 runtime_identity_digest: None,
             });
         }
-        let runtime_digest = validate_runtime_identity(&directive.runtime, evidence)?;
+        let requirements = directive
+            .runtime
+            .as_ref()
+            .ok_or_else(|| invalid("active_layer_runtime_requirements_missing"))?;
+        let runtime_digest = validate_runtime_identity(requirements, evidence)?;
         if directive
             .expected_runtime
             .as_ref()
@@ -229,6 +233,9 @@ fn layer_directive(
         && phase != QualificationPhase::Control;
     let identity = identity_commitment(plan, entry, layer)?;
     let runtime = runtime_requirements(plan, entry)?;
+    if active && runtime.is_none() {
+        return Err(invalid("active_layer_runtime_requirements_missing"));
+    }
     if !active {
         return Ok(QualificationCacheLayerDirective {
             layer,

@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use velnor_actions_actionlint::render_actionlint_yaml;
-use velnor_actions_contract::{ExecutionMode, expand_workflow};
+use velnor_actions_contract::{ExecutionMode, expand_workflow_with_qualification_sources};
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
 use velnor_actions_workflow_renderer::render::RenderedTree;
 use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
@@ -171,10 +171,21 @@ fn render_all(
     let version = env!("CARGO_PKG_VERSION");
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
     let routing = workflow_routing_policy(&prep.config, dispatch)?;
-    let ir = expand_workflow(&prep.workflow.ir, &prep.config, dispatch).map_err(|err| {
-        OrchestratorError::Contract {
-            problem: err.to_string(),
-        }
+    let qualification_sources = crate::crate_job_ids::qualification_job_sources_for_ir(
+        &prep.discovery.proposals,
+        &prep.workflow.ir,
+    )
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
+    let ir = expand_workflow_with_qualification_sources(
+        &prep.workflow.ir,
+        &prep.config,
+        dispatch,
+        &qualification_sources,
+    )
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
     })?;
     let mut render_context = prep.workflow.context.clone();
     render_context.scale_set_selector = scale_set_selector_for_dispatch(&prep.config, dispatch)?;

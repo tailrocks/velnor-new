@@ -42,7 +42,12 @@ fn serialized_disabled_layers_cannot_authorize_cache_access() -> TestResult {
             .layer(&entry.matrix_key, layer)
             .ok_or_else(|| std::io::Error::other("layer directive missing"))?;
         assert!(!layer_directive.active);
-        let evidence = runtime_identity(&layer_directive.runtime);
+        let evidence = runtime_identity(
+            layer_directive
+                .runtime
+                .as_ref()
+                .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?,
+        );
         let mut serialized = serde_json::to_value(&directive)?;
         let layers = serialized["lanes"][0]["layers"]
             .as_array_mut()
@@ -82,7 +87,12 @@ fn plan_reconstructed_cold_directive_binds_runtime_identity() -> TestResult {
         None,
         &entry.matrix_key,
         QualificationCacheLayer::CargoSources,
-        &runtime_identity(&layer_directive.runtime),
+        &runtime_identity(
+            layer_directive
+                .runtime
+                .as_ref()
+                .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?,
+        ),
     )?;
     assert!(keys.restore.is_some());
     assert!(keys.save_key.is_some());
@@ -177,6 +187,7 @@ fn qualification_entry(
         &crate::cachekey::toolchain_id(&toolchain_inputs)?,
         &digest_b3(b"cache format"),
     )?);
+    entry.toolchain_id = Some(crate::cachekey::toolchain_id(&toolchain_inputs)?);
     entry.toolchain_inputs = Some(toolchain_inputs);
     Ok(entry)
 }

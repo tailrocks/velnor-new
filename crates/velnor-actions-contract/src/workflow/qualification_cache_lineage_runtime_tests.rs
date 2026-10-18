@@ -14,10 +14,12 @@ fn runtime_identity_binds_actual_tools_and_abi_facts() -> TestResult {
     let directive = QualificationCacheDirective::for_plan(&plan, None)?
         .ok_or_else(|| std::io::Error::other("qualification directive missing"))?;
     let entry = &plan.matrix.include[0];
-    let runtime = &directive
+    let runtime = directive
         .layer(&entry.matrix_key, QualificationCacheLayer::CargoSources)
         .ok_or_else(|| std::io::Error::other("cache layer missing"))?
-        .runtime;
+        .runtime
+        .as_ref()
+        .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?;
     let mut evidence = runtime_identity(runtime);
     let digest = validate_runtime_identity(runtime, &evidence)?;
 
@@ -134,14 +136,15 @@ fn scale_set_image_source_is_expected_independently_of_consumer_source() -> Test
         .layer(&matrix_key, layer)
         .ok_or_else(|| std::io::Error::other("cache layer missing"))?
         .runtime
-        .clone();
+        .as_ref()
+        .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?;
     assert_eq!(
         runtime.scale_set_image_source_sha.as_deref(),
         Some(image_source.as_str())
     );
     assert_ne!(consumer_source, image_source);
 
-    let identity = scale_set_runtime_identity(&runtime, &selector, &image_source);
+    let identity = scale_set_runtime_identity(runtime, &selector, &image_source);
     assert!(
         directive
             .bind_runtime(&plan, None, &matrix_key, layer, &identity)
@@ -149,7 +152,7 @@ fn scale_set_image_source_is_expected_independently_of_consumer_source() -> Test
     );
 
     let wrong_image_source = "c".repeat(40);
-    let wrong_identity = scale_set_runtime_identity(&runtime, &selector, &wrong_image_source);
+    let wrong_identity = scale_set_runtime_identity(runtime, &selector, &wrong_image_source);
     assert!(
         directive
             .bind_runtime(&plan, None, &matrix_key, layer, &wrong_identity)
@@ -166,7 +169,8 @@ fn scale_set_image_source_is_expected_independently_of_consumer_source() -> Test
         .layer(&matrix_key, layer)
         .ok_or_else(|| std::io::Error::other("cache layer missing"))?
         .runtime
-        .clone();
+        .as_ref()
+        .ok_or_else(|| std::io::Error::other("runtime requirements missing"))?;
     assert!(
         missing_source_directive
             .bind_runtime(
@@ -174,7 +178,7 @@ fn scale_set_image_source_is_expected_independently_of_consumer_source() -> Test
                 None,
                 &matrix_key,
                 layer,
-                &scale_set_runtime_identity(&missing_runtime, &selector, &image_source),
+                &scale_set_runtime_identity(missing_runtime, &selector, &image_source),
             )
             .is_err()
     );

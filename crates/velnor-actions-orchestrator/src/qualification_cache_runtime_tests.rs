@@ -118,6 +118,7 @@ fn large_valid_directive_is_read_from_the_run_artifact() {
         .expect("cache-test lane");
         entry.cache_ids = template.cache_ids.clone();
         entry.toolchain_inputs = template.toolchain_inputs.clone();
+        entry.toolchain_id = template.toolchain_id.clone();
         plan.matrix.include.push(entry);
     }
     plan.matrix
@@ -370,7 +371,12 @@ impl Fixture {
                 .clone();
             (
                 canonical_json_str(&directive).expect("directive JSON"),
-                canonical_json_str(&runtime_identity(&requirements)).expect("runtime identity"),
+                canonical_json_str(&runtime_identity(
+                    requirements
+                        .as_ref()
+                        .expect("active cache runtime requirements"),
+                ))
+                .expect("runtime identity"),
             )
         };
         if !directive_json.is_empty() {
@@ -570,17 +576,19 @@ fn qualification_entry(
     )
     .expect("matrix entry");
     let toolchain_inputs = test_toolchain_inputs();
+    let expected_toolchain_id = toolchain_id(&toolchain_inputs).expect("toolchain identity");
     entry.cache_ids = Some(
         EntryCacheIds::new(
             &digest_b3(b"workspace"),
             &digest_b3(b"lane"),
             platform.platform_id.as_str(),
-            &toolchain_id(&toolchain_inputs).expect("toolchain identity"),
+            &expected_toolchain_id,
             &digest_b3(b"cache format"),
         )
         .expect("cache identities"),
     );
     entry.toolchain_inputs = Some(toolchain_inputs);
+    entry.toolchain_id = Some(expected_toolchain_id);
     entry
 }
 
