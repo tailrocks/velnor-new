@@ -165,10 +165,16 @@ pub(super) fn calculate(
     let total_cpu = u64::from(guest.cpus)
         .checked_mul(NANO_CPUS_PER_CPU)
         .ok_or_else(|| capacity_error("docker capacity"))?;
-    let usable_cpu = total_cpu.saturating_sub(NANO_CPUS_PER_CPU);
-    let pair_fits = usable_cpu >= pair_cpu && guest.memory_bytes >= pair_memory;
+    let reserve = budget.admission_reserve();
+    let reserve_cpu = reserve
+        .cpu_millicores
+        .checked_mul(NANO_CPUS_PER_MILLICORE)
+        .ok_or_else(|| capacity_error("docker capacity"))?;
+    let usable_cpu = total_cpu.saturating_sub(reserve_cpu);
+    let usable_memory = guest.memory_bytes.saturating_sub(reserve.memory_bytes);
+    let pair_fits = usable_cpu >= pair_cpu && usable_memory >= pair_memory;
     let cpu_slots = remaining(usable_cpu, occupied.nano_cpus) / pair_cpu;
-    let memory_slots = remaining(guest.memory_bytes, occupied.memory_bytes) / pair_memory;
+    let memory_slots = remaining(usable_memory, occupied.memory_bytes) / pair_memory;
     let free_permits = ceiling.saturating_sub(occupied.permits);
     let additional = cpu_slots.min(memory_slots).min(u64::from(free_permits));
     let additional = u32::try_from(additional).map_err(|_| capacity_error("docker capacity"))?;

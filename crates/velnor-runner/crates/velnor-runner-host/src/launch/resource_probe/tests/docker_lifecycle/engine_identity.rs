@@ -22,6 +22,7 @@ impl ImageProvider for FixtureProvider {
         Ok(Some(VerifiedCandidate {
             runtime_id: RUNTIME_ID.to_owned(),
             platform: "linux/amd64".to_owned(),
+            daemon_architecture: "x86_64".to_owned(),
             source_revision: REVISION.to_owned(),
             binding_fingerprint: BINDING.to_owned(),
             config: expected_image_config(REVISION),
@@ -40,8 +41,8 @@ async fn engine_change_before_create_blocks_mutation_and_keeps_row_recoverable()
         .bind_engine(ENGINE_ID)
         .await
         .map_err(|error| error.to_string())?;
-    let info_a = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
-    let info_b = r#"{"ID":"other-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
+    let info_a = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
+    let info_b = r#"{"ID":"other-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
     let docker = DockerStub::open(vec![
         http(200, info_a),
         http(200, info_b),
@@ -78,8 +79,8 @@ async fn root_change_before_create_blocks_mutation_then_recovers_original_bindin
         .bind_engine(ENGINE_ID)
         .await
         .map_err(|error| error.to_string())?;
-    let original = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
-    let replacement = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker-next","NCPU":8,"MemTotal":17179869184}"#;
+    let original = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
+    let replacement = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker-next","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
     let changed = DockerStub::open(vec![
         http(200, original),
         http(200, replacement),
@@ -134,9 +135,9 @@ async fn root_change_before_create_blocks_mutation_then_recovers_original_bindin
 async fn engine_change_after_create_blocks_start_then_cleans_on_bound_engine() -> Result<(), String>
 {
     let (_scratch, journal, projection) = prepared().await?;
-    let info_a = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker"}"#;
-    let info_a_full = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
-    let info_b = r#"{"ID":"other-engine","DockerRootDir":"/var/lib/docker"}"#;
+    let info_a = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64"}"#;
+    let info_a_full = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
+    let info_b = r#"{"ID":"other-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64"}"#;
     let changed = DockerStub::open(vec![
         http(200, info_a),
         http(200, &format!(r#"{{"Id":"{CONTAINER_ID}","Warnings":[]}}"#)),
@@ -217,9 +218,9 @@ async fn engine_change_after_create_blocks_start_then_cleans_on_bound_engine() -
 async fn root_change_after_create_blocks_start_then_cleans_on_original_root() -> Result<(), String>
 {
     let (_scratch, journal, projection) = prepared().await?;
-    let original = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker"}"#;
-    let original_full = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
-    let replacement = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker-next"}"#;
+    let original = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64"}"#;
+    let original_full = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
+    let replacement = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker-next","OSType":"linux","Architecture":"x86_64"}"#;
     let changed = DockerStub::open(vec![
         http(200, original),
         http(200, &format!(r#"{{"Id":"{CONTAINER_ID}","Warnings":[]}}"#)),

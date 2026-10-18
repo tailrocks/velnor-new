@@ -177,8 +177,7 @@ async fn prepared_restart_aborts_and_unverified_provider_stays_closed() -> Resul
     let journal = Journal::open(&scratch.file())
         .await
         .map_err(|error| error.to_string())?;
-    let info =
-        r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":8589934592}"#;
+    let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":8589934592}"#;
     let docker = DockerStub::open(vec![http(200, info)])?;
     let sample = Box::pin(lifecycle::collect(
         &docker.docker,
@@ -235,6 +234,7 @@ async fn prepared() -> Result<(Scratch, Journal, ProbeProjection), String> {
         VerifiedProbeImage::from_verified_provider(
             RUNTIME_ID.to_owned(),
             "linux/amd64".to_owned(),
+            "x86_64".to_owned(),
             REVISION.to_owned(),
             BINDING.to_owned(),
             &expected_image_config(REVISION),
@@ -263,14 +263,14 @@ fn start_responses(projection: &ProbeProjection) -> Result<Vec<DockerResponse>, 
     Ok(vec![
         http(
             200,
-            r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#,
+            r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#,
         ),
         http(200, &format!(r#"{{"Id":"{CONTAINER_ID}","Warnings":[]}}"#)),
         http(200, &inspect(projection, "created", 0)?),
         http(200, &inspect(projection, "created", 0)?),
         http(
             200,
-            r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker"}"#,
+            r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64"}"#,
         ),
     ])
 }
@@ -282,7 +282,7 @@ fn append_cleanup(
     exit_code: i64,
     first_info_delay: Duration,
 ) -> Result<(), String> {
-    let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker"}"#;
+    let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64"}"#;
     let absent = "{}";
     responses.push(delayed_http(200, info, first_info_delay));
     responses.extend([

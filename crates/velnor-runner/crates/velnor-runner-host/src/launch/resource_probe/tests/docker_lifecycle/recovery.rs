@@ -4,7 +4,7 @@ use serde_json::Value;
 #[tokio::test]
 async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Result<(), String> {
     let (scratch, journal, projection) = prepared().await?;
-    let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
+    let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
     let delay = Duration::from_millis(150);
     let mut responses = start_responses(&projection)?;
     responses.extend([
@@ -84,6 +84,7 @@ async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Resul
 fn assert_persisted_projection_rebuilds(row: &crate::journal::ProbeRow) -> Result<(), String> {
     let image = VerifiedProbeImage::from_journal(
         row.runtime_image_id.clone(),
+        "x86_64".to_owned(),
         row.source_revision.clone(),
         row.image_binding_digest.clone(),
     )
@@ -148,7 +149,7 @@ async fn failed_quarantine_commit_is_propagated_without_lifecycle_retry() -> Res
         .await
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "probe row disappeared before recovery".to_owned())?;
-    let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","NCPU":8,"MemTotal":17179869184}"#;
+    let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
     let mut malformed = serde_json::from_str::<Value>(&inspect(&projection, "created", 0)?)
         .map_err(|error| error.to_string())?;
     malformed["Config"]["WorkingDir"] = serde_json::json!("/tmp");

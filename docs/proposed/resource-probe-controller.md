@@ -1,10 +1,8 @@
 # Controller-owned guest resource probe
 
-**Status:** Proposed controller contract. Source-level implementation may
-exercise injected test providers, but the production image provider remains
-unavailable until its verifier and source-bound image release are qualified.
-This document does not claim a qualified probe, live installation, or safe
-Scale Set capacity.
+**Status:** Proposed controller contract. Source code includes a production
+image provider. The provider verifies the release. This document does not claim
+a qualified probe, live installation, or safe Scale Set capacity.
 
 This contract implements the controller boundary referenced by the
 [resource-admission policy](runner-resource-admission.md). The selected Docker
@@ -59,6 +57,14 @@ engine, and operation labels. The projection has a fixed executable and
 configuration, no arguments or environment values, no writable mounts, no
 restart, a fixed numeric non-root UID/GID, a read-only root, no network, no
 privileges, all capabilities dropped, and no-new-privileges.
+
+The current projection caps the probe at 100 millicores, 128 MiB memory and
+swap, and four PIDs. The shared one-vCPU admission reserve includes that CPU
+cap; the shared memory reserve separately includes the full 128 MiB cap plus
+the required operator-set operational memory margin. These hard container
+limits bound the probe itself. They do not establish that the additional
+operational margin covers runtime startup growth; that requires live peak
+measurement against the final image and selected engine.
 
 The only bind is the canonical, normalized, absolute, non-root
 `DockerRootDir` reported by that selected engine, read-only at one fixed target.

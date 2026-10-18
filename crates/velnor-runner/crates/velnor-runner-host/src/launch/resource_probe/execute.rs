@@ -16,6 +16,7 @@ use super::recover;
 
 pub(super) struct ObservedProbeRecord {
     pub(super) record: ProbeRecord,
+    pub(super) sample_generation_id: String,
     pub(super) observed_at: Instant,
 }
 
@@ -52,6 +53,7 @@ async fn execute(
     deadline
         .within(journal.bind_probe_container(&projection.operation_id, &id))
         .await??;
+    recover::verify_current_projection(docker, journal, projection, deadline).await?;
     verify_created(docker, projection, &id, deadline).await?;
     let record = execute_started(docker, journal, projection, &id, memory_total, deadline).await?;
     let row = deadline
@@ -100,7 +102,9 @@ async fn execute_started(
         ))
         .await??;
     recover::verify_current_projection(docker, journal, projection, deadline).await?;
-    if ops::start(docker, id, deadline).await.is_err() {
+    let start_result = ops::start(docker, id, deadline).await;
+    recover::verify_current_projection(docker, journal, projection, deadline).await?;
+    if start_result.is_err() {
         verify_started_after_lost_reply(docker, projection, id, deadline).await?;
     }
     deadline
@@ -145,6 +149,7 @@ async fn execute_started(
         .await??;
     Ok(ObservedProbeRecord {
         record,
+        sample_generation_id: projection.operation_id.clone(),
         observed_at,
     })
 }

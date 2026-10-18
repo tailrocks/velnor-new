@@ -194,6 +194,10 @@ async fn remove_owned(
         .is_none();
     if !absent {
         verify_bound_engine(docker, row, projection, deadline).await?;
+        inspect_pair(docker, projection, id, deadline)
+            .await?
+            .ok_or(HostError::Ownership)?;
+        verify_bound_engine(docker, row, projection, deadline).await?;
         let _retry = ops::remove(docker, id, deadline).await;
     }
     if inspect_pair(docker, projection, id, deadline)
@@ -220,7 +224,10 @@ async fn verify_bound_engine(
         .map_err(|_| HostError::Docker)?;
     let engine_id = info.id.as_deref().ok_or(HostError::Identity)?;
     let root = DockerRoot::parse(info.docker_root_dir.as_deref().ok_or(HostError::Path)?)?;
-    if engine_id == row.engine_id
+    if super::provider::daemon_platform_matches(&info)
+        && super::provider::daemon_architecture(&info)
+            == Some(projection.image.daemon_architecture())
+        && engine_id == row.engine_id
         && engine_id == projection.engine_id
         && root.digest() == row.docker_root_digest
         && root.digest() == projection.root.digest()
@@ -252,18 +259,28 @@ async fn inspect_pair(
 }
 
 fn persisted_projection(row: &ProbeRow, root: &DockerRoot) -> Result<ProbeProjection, HostError> {
-    let image = VerifiedProbeImage::from_journal(
-        row.runtime_image_id.clone(),
-        row.source_revision.clone(),
-        row.image_binding_digest.clone(),
-    )?;
-    let projection = ProbeProjection::build(
-        row.operation_id.clone(),
-        row.instance_id.clone(),
-        row.engine_id.clone(),
-        root.path(),
-        image,
-    )?;
+    let mut matched = None;
+    for daemon_architecture in ["x86_64", "aarch64"] {
+        let image = VerifiedProbeImage::from_journal(
+            row.runtime_image_id.clone(),
+            daemon_architecture.to_owned(),
+            row.source_revision.clone(),
+            row.image_binding_digest.clone(),
+        )?;
+        let projection = ProbeProjection::build(
+            row.operation_id.clone(),
+            row.instance_id.clone(),
+            row.engine_id.clone(),
+            root.path(),
+            image,
+        )?;
+        if row.projection_digest == projection.projection_digest
+            && matched.replace(projection).is_some()
+        {
+            return Err(HostError::Ownership);
+        }
+    }
+    let projection = matched.ok_or(HostError::Ownership)?;
     if row.role != "resource-probe"
         || row.operation_name != projection.name
         || row.projection_digest != projection.projection_digest

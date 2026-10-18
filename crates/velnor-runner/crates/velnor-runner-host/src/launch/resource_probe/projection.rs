@@ -9,6 +9,7 @@ use bollard::query_parameters::CreateContainerOptions;
 use sha2::{Digest, Sha256};
 
 use crate::error::HostError;
+use crate::worker::{AdmissionReserve, PROBE_CPU_MILLICORES, PROBE_MEMORY_LIMIT_BYTES};
 
 #[path = "projection/canonical.rs"]
 mod canonical;
@@ -18,14 +19,35 @@ const PROBE_PLATFORM: &str = "linux/amd64";
 const PROBE_ENTRYPOINT: &str = "/velnor/resource-probe";
 const PROBE_USER: &str = "65532:65532";
 const PROBE_WORKING_DIR: &str = "/";
+const PROBE_CPU_PERIOD: i64 = 100_000;
+const PROBE_CPU_QUOTA: i64 = 10_000;
+const PROBE_MEMORY_BYTES: i64 = PROBE_MEMORY_LIMIT_BYTES.cast_signed();
+const PROBE_PIDS_LIMIT: i64 = 4;
+const MILLICORES_PER_VCPU: u64 = 1_000;
 const PATH_ENV: &str = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 const SOURCE_LABEL: &str = "org.opencontainers.image.revision";
+const DAEMON_ARCH_LABEL: &str = "velnor.daemon.architecture";
 const DIGEST_DOMAIN: &[u8] = b"velnor-resource-probe-root-v1\0";
+
+pub(in crate::launch) const fn total_cpu_millicores(cpus: u32) -> Option<u64> {
+    (cpus as u64).checked_mul(MILLICORES_PER_VCPU)
+}
+
+const fn probe_cpu_millicores() -> u64 {
+    (PROBE_CPU_QUOTA as u64 * MILLICORES_PER_VCPU) / PROBE_CPU_PERIOD as u64
+}
+
+const _: () = assert!(probe_cpu_millicores() == PROBE_CPU_MILLICORES);
+const _: () = assert!(probe_cpu_millicores() <= AdmissionReserve::OPERATIONAL_CPU_MILLICORES);
+const _: () = assert!(PROBE_MEMORY_BYTES > 0);
 
 /// Daemon-specific immutable image reference returned by the future verifier.
 pub(super) struct VerifiedProbeImage {
     runtime_id: String,
+    /// Verified image platform. This remains `linux/amd64` under emulation.
     platform: String,
+    /// Selected Docker engine architecture, separate from the image platform.
+    daemon_architecture: String,
     source_revision: String,
     binding_fingerprint: String,
 }
@@ -36,6 +58,7 @@ impl fmt::Debug for VerifiedProbeImage {
             .debug_struct("VerifiedProbeImage")
             .field("runtime_id", &self.runtime_id)
             .field("platform", &self.platform)
+            .field("daemon_architecture", &self.daemon_architecture)
             .field("source_revision", &self.source_revision)
             .field("binding_fingerprint", &self.binding_fingerprint)
             .finish()
@@ -47,12 +70,14 @@ impl VerifiedProbeImage {
     pub(super) fn from_verified_provider(
         runtime_id: String,
         platform: String,
+        daemon_architecture: String,
         source_revision: String,
         binding_fingerprint: String,
         config: &ContainerConfig,
     ) -> Result<Self, HostError> {
         if !digest_reference(&runtime_id)
             || platform != PROBE_PLATFORM
+            || !valid_daemon_architecture(&daemon_architecture)
             || !hex_string(&source_revision, 40)
             || !hex_string(&binding_fingerprint, 64)
             || !image_config_matches(config, &source_revision)
@@ -62,6 +87,7 @@ impl VerifiedProbeImage {
         Ok(Self {
             runtime_id,
             platform,
+            daemon_architecture,
             source_revision,
             binding_fingerprint,
         })
@@ -69,10 +95,12 @@ impl VerifiedProbeImage {
 
     pub(super) fn from_journal(
         runtime_id: String,
+        daemon_architecture: String,
         source_revision: String,
         binding_fingerprint: String,
     ) -> Result<Self, HostError> {
         if !digest_reference(&runtime_id)
+            || !valid_daemon_architecture(&daemon_architecture)
             || !hex_string(&source_revision, 40)
             || !hex_string(&binding_fingerprint, 64)
         {
@@ -81,6 +109,7 @@ impl VerifiedProbeImage {
         Ok(Self {
             runtime_id,
             platform: PROBE_PLATFORM.to_owned(),
+            daemon_architecture,
             source_revision,
             binding_fingerprint,
         })
@@ -88,6 +117,10 @@ impl VerifiedProbeImage {
 
     pub(super) fn runtime_id(&self) -> &str {
         &self.runtime_id
+    }
+
+    pub(super) fn daemon_architecture(&self) -> &str {
+        &self.daemon_architecture
     }
 
     pub(super) fn source_revision(&self) -> &str {
@@ -106,6 +139,7 @@ impl VerifiedProbeImage {
         Self {
             runtime_id: id,
             platform: PROBE_PLATFORM.to_owned(),
+            daemon_architecture: "x86_64".to_owned(),
             source_revision: revision,
             binding_fingerprint: fingerprint,
         }
@@ -237,6 +271,10 @@ fn config(
         image.binding_fingerprint.clone(),
     );
     labels.insert(SOURCE_LABEL.to_owned(), image.source_revision.clone());
+    labels.insert(
+        DAEMON_ARCH_LABEL.to_owned(),
+        image.daemon_architecture.clone(),
+    );
     ContainerCreateBody {
         image: Some(image.runtime_id.clone()),
         user: Some(PROBE_USER.to_owned()),
@@ -261,6 +299,8 @@ fn host_config(root: &DockerRoot) -> HostConfig {
     HostConfig {
         auto_remove: Some(false),
         cap_drop: Some(vec!["ALL".to_owned()]),
+        cpu_period: Some(PROBE_CPU_PERIOD),
+        cpu_quota: Some(PROBE_CPU_QUOTA),
         mounts: Some(vec![Mount {
             target: Some(PROBE_TARGET.to_owned()),
             source: Some(root.path.clone()),
@@ -274,10 +314,23 @@ fn host_config(root: &DockerRoot) -> HostConfig {
         }]),
         network_mode: Some("none".to_owned()),
         privileged: Some(false),
+        memory: Some(PROBE_MEMORY_BYTES),
+        memory_swap: Some(PROBE_MEMORY_BYTES),
+        pids_limit: Some(PROBE_PIDS_LIMIT),
         readonly_rootfs: Some(true),
         security_opt: Some(vec!["no-new-privileges:true".to_owned()]),
         ..Default::default()
     }
+}
+
+pub(super) const fn resource_limits() -> (i64, i64, i64, i64, i64) {
+    (
+        PROBE_CPU_PERIOD,
+        PROBE_CPU_QUOTA,
+        PROBE_MEMORY_BYTES,
+        PROBE_MEMORY_BYTES,
+        PROBE_PIDS_LIMIT,
+    )
 }
 
 fn projection_digest(
@@ -309,6 +362,10 @@ fn digest_reference(value: &str) -> bool {
     value
         .strip_prefix("sha256:")
         .is_some_and(|hex| hex_string(hex, 64))
+}
+
+fn valid_daemon_architecture(value: &str) -> bool {
+    matches!(value, "x86_64" | "aarch64")
 }
 
 fn hex_string(value: &str, len: usize) -> bool {

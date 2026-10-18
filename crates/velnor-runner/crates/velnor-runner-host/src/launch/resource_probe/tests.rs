@@ -99,6 +99,11 @@ fn projection_is_private_and_uses_only_the_fixed_guest_mount() {
             assert_eq!(host.network_mode.as_deref(), Some("none"));
             assert_eq!(host.readonly_rootfs, Some(true));
             assert_eq!(host.privileged, Some(false));
+            assert_eq!(host.cpu_period, Some(100_000));
+            assert_eq!(host.cpu_quota, Some(10_000));
+            assert_eq!(host.memory, Some(128 * 1024 * 1024));
+            assert_eq!(host.memory_swap, Some(128 * 1024 * 1024));
+            assert_eq!(host.pids_limit, Some(4));
             assert_eq!(host.cap_drop.as_ref().map(Vec::len), Some(1));
             assert_eq!(
                 host.cap_drop
@@ -123,6 +128,7 @@ fn verified_image_requires_exact_source_config_and_immutable_platform_id() {
     let valid = VerifiedProbeImage::from_verified_provider(
         id.clone(),
         "linux/amd64".to_owned(),
+        "x86_64".to_owned(),
         revision.clone(),
         fingerprint.clone(),
         &config,
@@ -132,6 +138,7 @@ fn verified_image_requires_exact_source_config_and_immutable_platform_id() {
         VerifiedProbeImage::from_verified_provider(
             "velnor/resource-probe:latest".to_owned(),
             "linux/amd64".to_owned(),
+            "x86_64".to_owned(),
             revision.clone(),
             fingerprint.clone(),
             &config,
@@ -142,6 +149,7 @@ fn verified_image_requires_exact_source_config_and_immutable_platform_id() {
         VerifiedProbeImage::from_verified_provider(
             id,
             "linux/arm64".to_owned(),
+            "x86_64".to_owned(),
             revision.clone(),
             fingerprint,
             &config,
@@ -154,6 +162,7 @@ fn verified_image_requires_exact_source_config_and_immutable_platform_id() {
         VerifiedProbeImage::from_verified_provider(
             format!("sha256:{}", "a".repeat(64)),
             "linux/amd64".to_owned(),
+            "x86_64".to_owned(),
             revision,
             "c".repeat(64),
             &untrusted,

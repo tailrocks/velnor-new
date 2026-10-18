@@ -147,9 +147,27 @@ fn host_matches(projection: &ProbeProjection, response: &ContainerInspectRespons
     let Some(actual) = response.host_config.as_ref() else {
         return false;
     };
+    let (cpu_period, cpu_quota, memory, memory_swap, pids_limit) =
+        super::projection::resource_limits();
     actual.auto_remove == Some(false)
         && actual.privileged == Some(false)
         && actual.readonly_rootfs == Some(true)
+        && actual.cpu_period == Some(cpu_period)
+        && actual.cpu_quota == Some(cpu_quota)
+        && actual.memory == Some(memory)
+        && actual.memory_swap == Some(memory_swap)
+        && actual.pids_limit == Some(pids_limit)
+        && no_resource_limit(actual.cpu_shares)
+        && no_resource_limit(actual.cpu_realtime_period)
+        && no_resource_limit(actual.cpu_realtime_runtime)
+        && actual.cpuset_cpus.as_deref().is_none_or(str::is_empty)
+        && actual.cpuset_mems.as_deref().is_none_or(str::is_empty)
+        && no_resource_limit(actual.memory_reservation)
+        && no_resource_limit(actual.memory_swappiness)
+        && no_resource_limit(actual.nano_cpus)
+        && actual.oom_kill_disable.is_none_or(|disabled| !disabled)
+        && no_resource_limit(actual.cpu_count)
+        && no_resource_limit(actual.cpu_percent)
         && actual.network_mode.as_deref() == Some("none")
         && actual.cap_drop.as_deref() == Some(["ALL".to_owned()].as_slice())
         && actual.cap_add.as_ref().is_none_or(Vec::is_empty)
@@ -181,6 +199,10 @@ fn host_matches(projection: &ProbeProjection, response: &ContainerInspectRespons
                     .is_some_and(|kind| kind.to_string() == "bind")
                 && mounts[0].read_only == Some(true)
         })
+}
+
+fn no_resource_limit(value: Option<i64>) -> bool {
+    value.is_none_or(|value| value == 0)
 }
 
 fn mounts_match(projection: &ProbeProjection, response: &ContainerInspectResponse) -> bool {

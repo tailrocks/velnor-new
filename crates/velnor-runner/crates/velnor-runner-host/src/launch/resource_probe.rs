@@ -6,8 +6,8 @@ use crate::journal::Journal;
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
-use self::provider::UnavailableImageProvider;
-pub(super) use self::sample::StartPermit;
+use self::provider::ReleaseImageProvider;
+pub(crate) use self::sample::StartPermit;
 
 mod execute;
 mod inspect;
@@ -19,6 +19,12 @@ mod record;
 mod recover;
 mod sample;
 
+/// Report only whether this binary has a valid trusted release source pin.
+/// This does not claim that GitHub, the release, or any Docker image is ready.
+pub(crate) fn build_pin_status() -> Result<(), &'static str> {
+    provider::build_pin_status()
+}
+
 #[cfg(test)]
 mod tests;
 
@@ -27,70 +33,43 @@ pub(super) async fn start_permit(
     docker: &Docker,
     journal: &Journal,
     budget: ResourceBudget,
-    test_admission: super::drive::GuestAdmission,
+    pat: &str,
 ) -> Option<StartPermit> {
-    #[cfg(test)]
-    if let TestOverride::Permit(permit) = test_override(test_admission) {
-        return Some(permit);
-    }
-    #[cfg(test)]
-    if matches!(test_admission, super::drive::GuestAdmission::Unavailable) {
-        return None;
-    }
-    #[cfg(not(test))]
-    let _ = test_admission;
-
-    Box::pin(lifecycle::collect(
-        docker,
-        journal,
-        &UnavailableImageProvider,
-    ))
-    .await
-    .ok()
-    .flatten()
-    .and_then(|sample| sample.into_start_permit(budget))
-}
-
-#[cfg(test)]
-enum TestOverride {
-    Permit(StartPermit),
-    Deny,
-}
-
-#[cfg(test)]
-fn test_override(admission: super::drive::GuestAdmission) -> TestOverride {
-    match admission {
-        super::drive::GuestAdmission::FreshSample => {
-            TestOverride::Permit(StartPermit::test_fixture())
+    let provider = match ReleaseImageProvider::from_compiled_source(pat) {
+        Ok(provider) => provider,
+        Err(error) => {
+            eprintln!("resource_probe=unavailable reason={}", error.code());
+            return None;
         }
-        super::drive::GuestAdmission::Unavailable => TestOverride::Deny,
+    };
+    match Box::pin(lifecycle::collect(docker, journal, &provider)).await {
+        Ok(Some(sample)) => sample.into_start_permit(budget),
+        Ok(None) | Err(_) => None,
     }
 }
 
-/// Obtain a separate sample for D21 poll-header adjustment; it never authorizes a start.
-#[cfg(test)]
-pub(super) async fn pressure_sample(
-    _docker: &Docker,
-    _journal: &Journal,
-) -> Option<super::pressure::Sample> {
-    std::future::ready(None).await
-}
-
-/// Obtain a separate sample for D21 poll-header adjustment; it never authorizes a start.
-#[cfg(not(test))]
+/// Obtain a fresh selected-guest sample for D21 poll-header adjustment.
+///
+/// This sample never authorizes a start.
 pub(super) async fn pressure_sample(
     docker: &Docker,
     journal: &Journal,
+    pat: &str,
 ) -> Option<super::pressure::Sample> {
-    Box::pin(lifecycle::collect(
-        docker,
-        journal,
-        &UnavailableImageProvider,
-    ))
-    .await
-    .ok()
-    .flatten()
-    .and_then(sample::Observation::pressure)
+    let provider = match ReleaseImageProvider::from_compiled_source(pat) {
+        Ok(provider) => provider,
+        Err(error) => {
+            eprintln!(
+                "resource_probe=pressure_unavailable reason={}",
+                error.code()
+            );
+            return None;
+        }
+    };
+    match Box::pin(lifecycle::collect(docker, journal, &provider)).await {
+        Ok(Some(observation)) => observation.pressure(),
+        Ok(None) | Err(_) => None,
+    }
 }
 
 pub(super) fn consume_permit(permit: StartPermit, engine_id: &str, root_digest: &str) -> bool {

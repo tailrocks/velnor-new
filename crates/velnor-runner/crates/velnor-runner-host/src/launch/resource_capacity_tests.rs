@@ -34,8 +34,11 @@ fn configured_pair_cost_and_occupied_limits_bound_static_capacity() -> Result<()
 fn exact_old_container_limits_and_changed_current_budget_use_checked_totals() -> Result<(), String>
 {
     let budget = test_resource_budget().map_err(|error| error.to_string())?;
-    let guest =
-        guest_totals(Some(5), Some(8 * 1024 * 1024 * 1024)).ok_or("guest totals missing")?;
+    let reserve = budget.admission_reserve();
+    let memory_total_bytes = 8 * GIB + reserve.memory_bytes;
+    let memory_total =
+        i64::try_from(memory_total_bytes).map_err(|_| "guest memory total overflow")?;
+    let guest = guest_totals(Some(5), Some(memory_total)).ok_or("guest totals missing")?;
     let occupied = OccupiedResources {
         permits: 1,
         nano_cpus: 4_000_000_000,
@@ -84,6 +87,47 @@ fn occupied_permits_do_not_turn_impossible_guest_totals_into_a_start_permit() ->
         assert_eq!(capacity.poll_header(), 1);
         assert!(!capacity.permits_start());
     }
+    Ok(())
+}
+
+#[test]
+fn static_capacity_exactly_reserves_probe_and_operational_headroom() -> Result<(), String> {
+    let budget = test_resource_budget().map_err(|error| error.to_string())?;
+    let pair = budget.pair();
+    let reserve = budget.admission_reserve();
+    let exact_memory = i64::try_from(pair.memory_bytes + reserve.memory_bytes)
+        .map_err(|_| "reserve total overflow")?;
+    let exact = calculate(
+        guest_totals(Some(5), Some(exact_memory)).ok_or("exact totals missing")?,
+        OccupiedResources::default(),
+        budget,
+        8,
+    )
+    .map_err(|error| error.to_string())?;
+    assert_eq!(exact.total(), 1);
+    assert!(exact.permits_start());
+
+    let one_byte_short = calculate(
+        guest_totals(Some(5), Some(exact_memory - 1)).ok_or("short totals missing")?,
+        OccupiedResources::default(),
+        budget,
+        8,
+    )
+    .map_err(|error| error.to_string())?;
+    assert_eq!(one_byte_short.total(), 0);
+    assert_eq!(one_byte_short.poll_header(), 1);
+    assert!(!one_byte_short.permits_start());
+
+    let one_cpu_short = calculate(
+        guest_totals(Some(4), Some(exact_memory)).ok_or("CPU totals missing")?,
+        OccupiedResources::default(),
+        budget,
+        8,
+    )
+    .map_err(|error| error.to_string())?;
+    assert_eq!(one_cpu_short.total(), 0);
+    assert!(!one_cpu_short.permits_start());
+    assert!(guest_totals(Some(i64::MAX), Some(exact_memory)).is_none());
     Ok(())
 }
 
@@ -194,6 +238,10 @@ async fn docker_info_failure_cannot_fall_back_to_the_configured_ceiling() -> Res
 
 #[tokio::test]
 async fn absent_half_is_charged_at_current_limit_only_after_exact_404() -> Result<(), String> {
+    let budget = test_resource_budget().map_err(|error| error.to_string())?;
+    let reserve = budget.admission_reserve();
+    let memory_total_bytes = 8 * GIB + reserve.memory_bytes;
+    i64::try_from(memory_total_bytes).map_err(|_| "guest memory total overflow")?;
     let (_scratch, journal) = journal("resource-absent-half").await?;
     journal
         .bind_engine(ENGINE)
@@ -212,7 +260,7 @@ async fn absent_half_is_charged_at_current_limit_only_after_exact_404() -> Resul
         .await
         .map_err(|error| error.to_string())?;
     let stub = DockerStub::open(vec![
-        http(200, &docker_info(5, 8 * GIB, ENGINE)),
+        http(200, &docker_info(5, memory_total_bytes, ENGINE)),
         http(
             200,
             &container(RUNNER_ID, VOLUME, "runner", 1_000_000_000, 2 * GIB),
@@ -220,14 +268,7 @@ async fn absent_half_is_charged_at_current_limit_only_after_exact_404() -> Resul
         http(404, r#"{"message":"not found"}"#),
     ])?;
 
-    let capacity = discover_after(
-        &stub.docker,
-        &journal,
-        test_resource_budget().map_err(|error| error.to_string())?,
-        8,
-        Duration::from_secs(1),
-    )
-    .await;
+    let capacity = discover_after(&stub.docker, &journal, budget, 8, Duration::from_secs(1)).await;
     stub.finish().await?;
 
     assert_eq!(

@@ -20,9 +20,22 @@ async fn inspect_config_includes_inherited_profile_and_rejects_drift() -> Result
         ("NetworkDisabled", json!(false)),
         ("WorkingDir", json!("/tmp")),
         ("Entrypoint", json!(["/tmp/untrusted-probe"])),
+        ("HostConfig.Memory", json!(64 * 1024 * 1024)),
+        ("HostConfig.MemorySwap", json!(256 * 1024 * 1024)),
+        ("HostConfig.PidsLimit", json!(0)),
+        ("HostConfig.CpuQuota", json!(20_000)),
     ] {
         let mut changed = config.clone();
-        changed["Config"][field] = value;
+        let mut path = field.split('.');
+        let root = path
+            .next()
+            .ok_or_else(|| "missing config root".to_owned())?;
+        let leaf = path.next();
+        if let Some(leaf) = leaf {
+            changed[root][leaf] = value;
+        } else {
+            changed["Config"][field] = value;
+        }
         let response = serde_json::from_value::<ContainerInspectResponse>(changed)
             .map_err(|error| error.to_string())?;
         assert!(!crate::launch::resource_probe::inspect::matches(

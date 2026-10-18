@@ -22,40 +22,61 @@ pub(super) async fn collect<P: ImageProvider>(
     journal: &Journal,
     provider: &P,
 ) -> Result<Option<Observation>, HostError> {
-    let deadline = Deadline::new();
-    let mut active = deadline.within(journal.active_probe()).await??;
+    let preparation_deadline = Deadline::new();
+    let mut active = preparation_deadline
+        .within(journal.active_probe())
+        .await??;
     if let Some(row) = active.as_ref()
         && row.phase == ProbePhase::Prepared
     {
-        deadline
+        preparation_deadline
             .within(journal.abort_prepared_probe(&row.operation_id))
             .await??;
         active = None;
     }
-    let before = info(docker, &deadline).await?;
+    let before = info(docker, &preparation_deadline).await?;
     if let Some(row) = active.as_ref()
         && before.id.as_deref() != Some(row.engine_id.as_str())
     {
         return Err(HostError::Identity);
     }
-    let (engine_id, root, cpu_count, memory_total) = bind_info(&before, journal, &deadline).await?;
+    let (engine_id, root, _, _) = bind_info(&before, journal, &preparation_deadline).await?;
     if let Some(row) = active {
         Box::pin(recover::active(
-            docker, journal, &before, &root, &deadline, row,
+            docker,
+            journal,
+            &before,
+            &root,
+            &preparation_deadline,
+            row,
         ))
         .await?;
     }
-    let Some(candidate) = deadline
-        .within(provider.verified_candidate(docker, &engine_id, &before))
-        .await??
+    let Some(candidate) = provider
+        .verified_candidate(docker, &engine_id, &before)
+        .await?
     else {
         return Ok(None);
     };
+    let daemon_architecture = super::provider::daemon_architecture(&before)
+        .ok_or(HostError::Identity)?
+        .to_owned();
+    // Release preparation may take minutes. Start the fresh-sample budget only
+    // after the verified image has been rebound to the selected daemon.
+    let deadline = Deadline::new();
+    let selected = info(docker, &deadline).await?;
+    if !same_guest(&selected, &engine_id, &root, &daemon_architecture)? {
+        return Err(HostError::Identity);
+    }
+    let (cpu_count, memory_total) = guest_capacity(&selected)?;
     let image = verified_image(candidate)?;
     let projection = projection(journal, &root, &engine_id, image, &deadline).await?;
     let output = execute::run(docker, journal, &projection, memory_total, &deadline).await?;
     let after = info(docker, &deadline).await?;
-    if !same_guest(&after, &engine_id, &root)? {
+    if !same_guest(&after, &engine_id, &root, &daemon_architecture)? {
+        return Err(HostError::Identity);
+    }
+    if guest_capacity(&after)? != (cpu_count, memory_total) {
         return Err(HostError::Identity);
     }
     Ok(observation(
@@ -80,6 +101,7 @@ pub(super) fn observation(
         memory_total,
         engine_id,
         root_digest,
+        output.sample_generation_id,
         output.observed_at,
     )
 }
@@ -88,6 +110,7 @@ fn verified_image(candidate: VerifiedCandidate) -> Result<VerifiedProbeImage, Ho
     VerifiedProbeImage::from_verified_provider(
         candidate.runtime_id,
         candidate.platform,
+        candidate.daemon_architecture,
         candidate.source_revision,
         candidate.binding_fingerprint,
         &candidate.config,
@@ -113,6 +136,14 @@ async fn bind_info(
         .ok_or(HostError::Identity)?;
     let bound = deadline.within(journal.engine_id()).await??;
     let root = DockerRoot::parse(info.docker_root_dir.as_deref().ok_or(HostError::Path)?)?;
+    let (cpu_count, memory_total) = guest_capacity(info)?;
+    if engine_id != bound {
+        return Err(HostError::Identity);
+    }
+    Ok((engine_id, root, cpu_count, memory_total))
+}
+
+fn guest_capacity(info: &SystemInfo) -> Result<(u32, u64), HostError> {
     let cpu_count = u32::try_from(info.ncpu.ok_or(HostError::Docker)?)
         .ok()
         .filter(|value| *value > 0)
@@ -121,10 +152,7 @@ async fn bind_info(
         .ok()
         .filter(|value| *value > 0)
         .ok_or(HostError::Docker)?;
-    if engine_id != bound {
-        return Err(HostError::Identity);
-    }
-    Ok((engine_id, root, cpu_count, memory_total))
+    Ok((cpu_count, memory_total))
 }
 
 async fn projection(
@@ -159,10 +187,18 @@ async fn projection(
     Ok(projection)
 }
 
-fn same_guest(info: &SystemInfo, engine_id: &str, root: &DockerRoot) -> Result<bool, HostError> {
+fn same_guest(
+    info: &SystemInfo,
+    engine_id: &str,
+    root: &DockerRoot,
+    daemon_architecture: &str,
+) -> Result<bool, HostError> {
     let current_id = info.id.as_deref().ok_or(HostError::Identity)?;
     let current_root = DockerRoot::parse(info.docker_root_dir.as_deref().ok_or(HostError::Path)?)?;
-    Ok(current_id == engine_id && current_root.digest() == root.digest())
+    Ok(super::provider::daemon_platform_matches(info)
+        && super::provider::daemon_architecture(info) == Some(daemon_architecture)
+        && current_id == engine_id
+        && current_root.digest() == root.digest())
 }
 
 pub(super) struct Deadline {
