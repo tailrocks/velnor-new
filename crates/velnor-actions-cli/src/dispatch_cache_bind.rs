@@ -19,7 +19,7 @@ const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 const MATRIX_KEY_ENV: &str = "VELNOR_QUALIFICATION_CACHE_MATRIX_KEY";
 const LAYER_ENV: &str = "VELNOR_QUALIFICATION_CACHE_LAYER";
 const RUNTIME_IDENTITY_ENV: &str = "VELNOR_QUALIFICATION_RUNTIME_IDENTITY";
-const QUALIFICATION_CACHE_STAGE_ROOT: &str = "/home/runner/_work/_temp/velnor/qualification-cache";
+const QUALIFICATION_CACHE_STAGE_ROOT: &str = "velnor/qualification-cache-v2";
 
 #[derive(Debug)]
 pub(crate) struct BindInputs {
@@ -79,7 +79,7 @@ pub(crate) fn run() -> ExitCode {
     let Some(path) = env::var_os(GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty()) else {
         return fail("missing_github_output");
     };
-    let body = match output_body(&outputs) {
+    let body = match output_body(&outputs, &inputs.runner_temp) {
         Ok(body) => body,
         Err(problem) => return fail(problem),
     };
@@ -219,18 +219,19 @@ fn parse_decimal(text: &str, field: &str) -> Result<u64, String> {
 
 fn output_body(
     outputs: &velnor_actions_orchestrator::QualificationCacheBindingOutputs,
+    runner_temp: &std::path::Path,
 ) -> Result<String, &'static str> {
     let cache = outputs.expected_cache.as_ref();
     let restore_stage_path = outputs
         .restore_key
         .as_deref()
-        .map(|key| stage_path(&outputs.campaign, &outputs.layer, key))
+        .map(|key| stage_path(runner_temp, &outputs.campaign, &outputs.layer, key))
         .transpose()?
         .unwrap_or_default();
     let save_stage_path = outputs
         .save_key
         .as_deref()
-        .map(|key| stage_path(&outputs.campaign, &outputs.layer, key))
+        .map(|key| stage_path(runner_temp, &outputs.campaign, &outputs.layer, key))
         .transpose()?
         .unwrap_or_default();
     let fields = [
@@ -300,7 +301,28 @@ fn output_body(
 /// Stable absolute staging path for an exact, typed campaign/layer/cache key.
 /// The path deliberately excludes the workflow run/attempt so a cold save and
 /// warm restore of the same key use the same action-cache archive version.
-fn stage_path(campaign: &str, layer: &str, key: &str) -> Result<String, &'static str> {
+fn stage_path(
+    runner_temp: &std::path::Path,
+    campaign: &str,
+    layer: &str,
+    key: &str,
+) -> Result<String, &'static str> {
+    let runner_temp = runner_temp
+        .to_str()
+        .ok_or("cache_binding_stage_path_invalid")?;
+    if runner_temp.len() > 4_096
+        || !runner_temp.starts_with('/')
+        || runner_temp == "/"
+        || runner_temp
+            .bytes()
+            .any(|byte| matches!(byte, 0 | b'\n' | b'\r'))
+        || runner_temp
+            .split('/')
+            .skip(1)
+            .any(|part| part.is_empty() || part == "." || part == "..")
+    {
+        return Err("cache_binding_stage_path_invalid");
+    }
     if [campaign, layer, key]
         .iter()
         .any(|value| value.chars().any(|ch| matches!(ch, '\n' | '\r')))
@@ -325,7 +347,10 @@ fn stage_path(campaign: &str, layer: &str, key: &str) -> Result<String, &'static
     if !valid_campaign || !valid_layer || !valid_key {
         return Err("cache_binding_stage_path_invalid");
     }
-    let path = format!("{QUALIFICATION_CACHE_STAGE_ROOT}/{campaign}/{layer}/{key}/payload");
+    let key_digest = blake3::hash(key.as_bytes()).to_hex();
+    let path = format!(
+        "{runner_temp}/{QUALIFICATION_CACHE_STAGE_ROOT}/{campaign}/{layer}/{key_digest}/payload"
+    );
     if path.len() > 4_096 {
         return Err("cache_binding_stage_path_invalid");
     }

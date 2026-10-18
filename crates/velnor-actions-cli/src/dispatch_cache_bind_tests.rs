@@ -149,7 +149,8 @@ fn output_body_uses_fixed_single_line_names() {
         expected_prior_state_digest: None,
         runtime_identity_digest: Some("b3-identity".to_owned()),
     };
-    let body = output_body(&outputs).expect("output body");
+    let runner_temp = std::path::Path::new("/home/runner/_work/_temp");
+    let body = output_body(&outputs, runner_temp).expect("output body");
     assert!(body.lines().any(|line| line == "active=true"));
     assert!(
         body.lines()
@@ -159,11 +160,20 @@ fn output_body_uses_fixed_single_line_names() {
         body.lines()
             .any(|line| line == "save_key=velnor-qcache-v1-campaign-1-cargo_sources-k1")
     );
-    assert!(body.lines().any(|line| {
-        line == "restore_stage_path=/home/runner/_work/_temp/velnor/qualification-cache/campaign-1/cargo_sources/velnor-qcache-v1-campaign-1-cargo_sources-k1/payload"
-    }));
-    assert!(body.lines().any(|line| {
-        line == "save_stage_path=/home/runner/_work/_temp/velnor/qualification-cache/campaign-1/cargo_sources/velnor-qcache-v1-campaign-1-cargo_sources-k1/payload"
+    let key_digest = blake3::hash(b"velnor-qcache-v1-campaign-1-cargo_sources-k1").to_hex();
+    let expected_stage_path = format!(
+        "restore_stage_path=/home/runner/_work/_temp/velnor/qualification-cache-v2/campaign-1/cargo_sources/{key_digest}/payload"
+    );
+    assert!(body.lines().any(|line| line == expected_stage_path));
+    let expected_save_path =
+        expected_stage_path.replacen("restore_stage_path", "save_stage_path", 1);
+    assert!(body.lines().any(|line| line == expected_save_path));
+    let hosted_temp = std::path::Path::new("/Users/runner/work/_temp");
+    let hosted_body = output_body(&outputs, hosted_temp).expect("hosted output body");
+    assert!(hosted_body.lines().any(|line| {
+        line.starts_with(
+            "restore_stage_path=/Users/runner/work/_temp/velnor/qualification-cache-v2/campaign-1/cargo_sources/",
+        )
     }));
     assert!(
         body.lines()
@@ -176,11 +186,13 @@ fn output_body_uses_fixed_single_line_names() {
 
 #[test]
 fn stable_stage_path_is_exact_key_scoped_and_run_independent() {
+    let runner_temp = std::path::Path::new("/home/runner/_work/_temp");
     let k1 = "velnor-qcache-v1-campaign-1-mise_tools-identity-runtime-k1";
     let k2 = "velnor-qcache-v1-campaign-1-mise_tools-identity-runtime-k2";
-    let cold_save = stage_path("campaign-1", "mise_tools", k1).expect("K1 save path");
-    let warm_restore = stage_path("campaign-1", "mise_tools", k1).expect("K1 restore path");
-    let warm_save = stage_path("campaign-1", "mise_tools", k2).expect("K2 save path");
+    let cold_save = stage_path(runner_temp, "campaign-1", "mise_tools", k1).expect("K1 save path");
+    let warm_restore =
+        stage_path(runner_temp, "campaign-1", "mise_tools", k1).expect("K1 restore path");
+    let warm_save = stage_path(runner_temp, "campaign-1", "mise_tools", k2).expect("K2 save path");
 
     assert_eq!(cold_save, warm_restore);
     assert_ne!(cold_save, warm_save);
@@ -189,8 +201,10 @@ fn stable_stage_path_is_exact_key_scoped_and_run_independent() {
 
 #[test]
 fn stable_stage_path_rejects_untyped_components_and_traversal() {
+    let runner_temp = std::path::Path::new("/home/runner/_work/_temp");
     assert_eq!(
         stage_path(
+            runner_temp,
             "campaign-1",
             "unknown",
             "velnor-qcache-v1-campaign-1-unknown-k1"
@@ -198,14 +212,24 @@ fn stable_stage_path_rejects_untyped_components_and_traversal() {
         Err("cache_binding_stage_path_invalid")
     );
     assert_eq!(
-        stage_path("campaign-1", "mise_tools", "../payload"),
+        stage_path(runner_temp, "campaign-1", "mise_tools", "../payload"),
         Err("cache_binding_stage_path_invalid")
     );
     assert_eq!(
         stage_path(
+            runner_temp,
             "campaign/other",
             "mise_tools",
             "velnor-qcache-v1-campaign/other-mise_tools-k1"
+        ),
+        Err("cache_binding_stage_path_invalid")
+    );
+    assert_eq!(
+        stage_path(
+            std::path::Path::new("/home/runner/_work/../tmp"),
+            "campaign-1",
+            "mise_tools",
+            "velnor-qcache-v1-campaign-1-mise_tools-k1"
         ),
         Err("cache_binding_stage_path_invalid")
     );
@@ -229,7 +253,10 @@ fn output_body_rejects_line_injection() {
         runtime_identity_digest: None,
     };
     outputs.campaign = "campaign-1\nforged=true".to_owned();
-    assert_eq!(output_body(&outputs), Err("cache_binding_output_invalid"));
+    assert_eq!(
+        output_body(&outputs, std::path::Path::new("/tmp/runner")),
+        Err("cache_binding_output_invalid")
+    );
 }
 
 #[test]
