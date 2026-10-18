@@ -6,8 +6,8 @@ use std::time::{Duration, Instant};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
+use super::download::{DownloadVerification, download_to_file_with_timeout_observed};
 use super::{ProviderFailure, Workspace, download_to_file, download_to_file_with_timeout};
-use super::download::DownloadVerification;
 
 #[tokio::test]
 async fn bounded_download_writes_only_exact_size_and_digest() -> Result<(), String> {
@@ -118,6 +118,55 @@ async fn cancelling_download_removes_partial_file_and_stops_child() -> Result<()
 }
 
 #[tokio::test]
+async fn cancelling_after_stdout_eof_removes_file_and_stops_child() -> Result<(), String> {
+    let pid_path = std::env::temp_dir().join(format!("velnor-gh-eof-{}.pid", Uuid::new_v4()));
+    let script = format!(
+        "printf '%s\\n' \"$$\" > '{}'; printf 'abcd'; exec 1>&-; exec /bin/sleep 30",
+        shell_path(&pid_path)
+    );
+    let workspace = workspace(&script)?;
+    let destination = workspace.assets().join("eof-cancelled.tar");
+    let (copy_complete_tx, copy_complete_rx) = tokio::sync::oneshot::channel();
+    let mut transfer = Box::pin(download_to_file_with_timeout_observed(
+        &workspace,
+        "test-secret",
+        std::iter::empty(),
+        &destination,
+        DownloadVerification {
+            expected_size: 4,
+            max_size: 4,
+            expected_sha256: sha256(b"abcd"),
+            timeout: Duration::from_secs(5),
+        },
+        copy_complete_tx,
+    ));
+    tokio::select! {
+        result = &mut transfer => return Err(format!("download ended before cancellation: {result:?}")),
+        result = copy_complete_rx => result.map_err(|error| error.to_string())?,
+    }
+    drop(transfer);
+
+    let pid = fs::read_to_string(&pid_path).map_err(|error| error.to_string())?;
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            let alive = std::process::Command::new("/bin/kill")
+                .args(["-0", pid.trim()])
+                .stderr(std::process::Stdio::null())
+                .status()
+                .is_ok_and(|status| status.success());
+            if !destination.exists() && !alive {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .map_err(|_| "EOF cancellation did not clean the file and stop the child".to_owned())?;
+    fs::remove_file(pid_path).map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tokio::test]
 async fn download_timeout_kills_child_and_removes_partial_file() -> Result<(), String> {
     let pid_path = std::env::temp_dir().join(format!("velnor-gh-timeout-{}.pid", Uuid::new_v4()));
     let script = format!(
@@ -127,23 +176,28 @@ async fn download_timeout_kills_child_and_removes_partial_file() -> Result<(), S
     let workspace = workspace(&script)?;
     let destination = workspace.assets().join("timed-out.tar");
     let digest = sha256(b"abcd");
-    let result = tokio::time::timeout(
-        Duration::from_secs(5),
-        download_to_file_with_timeout(
-            &workspace,
-            "test-secret",
-            std::iter::empty(),
-            &destination,
-            DownloadVerification {
-                expected_size: 4,
-                max_size: 4,
-                expected_sha256: digest,
-                timeout: Duration::from_secs(1),
-            },
-        ),
-    )
-    .await
-    .map_err(|_| "download timeout did not stop the child".to_owned())?;
+    let mut transfer = Box::pin(download_to_file_with_timeout(
+        &workspace,
+        "test-secret",
+        std::iter::empty(),
+        &destination,
+        DownloadVerification {
+            expected_size: 4,
+            max_size: 4,
+            expected_sha256: digest,
+            timeout: Duration::from_secs(5),
+        },
+    ));
+    tokio::select! {
+        result = &mut transfer => return Err(format!("download ended before timeout: {result:?}")),
+        result = async {
+            wait_for_file(&pid_path).await?;
+            wait_for_partial_file(&destination, 3).await
+        } => result?,
+    }
+    let result = tokio::time::timeout(Duration::from_secs(7), &mut transfer)
+        .await
+        .map_err(|_| "download timeout did not stop the child".to_owned())?;
 
     assert_eq!(result, Err(ProviderFailure::GhTimeout));
     assert!(!destination.exists());
@@ -169,6 +223,19 @@ async fn wait_for_partial_file(path: &Path, expected_size: u64) -> Result<(), St
     })
     .await
     .map_err(|_| "download did not write the partial file".to_owned())
+}
+
+async fn wait_for_file(path: &Path) -> Result<(), String> {
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            if path.is_file() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .map_err(|_| "child did not write its process marker".to_owned())
 }
 
 #[tokio::test]

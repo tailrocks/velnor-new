@@ -26,7 +26,7 @@ pub(in crate::launch::resource_probe::provider) struct DownloadVerification {
 }
 
 enum FirstCompletion {
-    Copy(Result<Result<(), ProviderFailure>, tokio::task::JoinError>),
+    Copy(Result<(), ProviderFailure>),
     Child(std::io::Result<std::process::ExitStatus>),
     Timeout,
     Cancelled,
@@ -41,6 +41,8 @@ struct DownloadTask {
     cancel: oneshot::Receiver<()>,
     ready: oneshot::Sender<Result<(), ProviderFailure>>,
     commit: oneshot::Receiver<()>,
+    #[cfg(test)]
+    copy_complete: Option<oneshot::Sender<()>>,
 }
 
 pub(in crate::launch::resource_probe::provider) async fn download_to_file<I>(
@@ -76,6 +78,52 @@ pub(in crate::launch::resource_probe::provider) async fn download_to_file_with_t
     arguments: I,
     destination: &Path,
     verification: DownloadVerification,
+) -> Result<(), ProviderFailure>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    download_to_file_inner(
+        workspace,
+        pat,
+        arguments,
+        destination,
+        verification,
+        #[cfg(test)]
+        None,
+    )
+    .await
+}
+
+#[cfg(test)]
+pub(super) async fn download_to_file_with_timeout_observed<I>(
+    workspace: &Workspace,
+    pat: &str,
+    arguments: I,
+    destination: &Path,
+    verification: DownloadVerification,
+    copy_complete: oneshot::Sender<()>,
+) -> Result<(), ProviderFailure>
+where
+    I: IntoIterator<Item = OsString>,
+{
+    download_to_file_inner(
+        workspace,
+        pat,
+        arguments,
+        destination,
+        verification,
+        Some(copy_complete),
+    )
+    .await
+}
+
+async fn download_to_file_inner<I>(
+    workspace: &Workspace,
+    pat: &str,
+    arguments: I,
+    destination: &Path,
+    verification: DownloadVerification,
+    #[cfg(test)] copy_complete: Option<oneshot::Sender<()>>,
 ) -> Result<(), ProviderFailure>
 where
     I: IntoIterator<Item = OsString>,
@@ -134,6 +182,8 @@ where
         cancel: cancel_rx,
         ready: ready_tx,
         commit: commit_rx,
+        #[cfg(test)]
+        copy_complete,
     }));
     let _cancel = cancel_tx;
 
@@ -162,6 +212,8 @@ async fn supervise_download(task: DownloadTask) -> Result<(), ProviderFailure> {
         cancel,
         ready,
         commit,
+        #[cfg(test)]
+        copy_complete,
     } = task;
     let Some(stdout) = stdout else {
         kill_child_and_wait(&mut child).await;
@@ -172,15 +224,18 @@ async fn supervise_download(task: DownloadTask) -> Result<(), ProviderFailure> {
         }
         return Err(error);
     };
-    let copy = tokio::spawn(copy_verified_asset(
+    let result = finish_download(
+        child,
         stdout,
         file,
-        verification.expected_size,
-        verification.max_size,
-        verification.expected_sha256,
-    ));
-    let result =
-        finish_download(child, copy, verification.timeout, cancel, ready, commit).await;
+        verification,
+        cancel,
+        ready,
+        commit,
+        #[cfg(test)]
+        copy_complete,
+    )
+    .await;
     if result.is_err() && remove_partial_file(&destination).await.is_err() {
         return Err(ProviderFailure::GhOutput);
     }
@@ -193,13 +248,23 @@ async fn remove_partial_file(destination: &Path) -> std::io::Result<()> {
 
 async fn finish_download(
     mut child: Child,
-    mut copy: tokio::task::JoinHandle<Result<(), ProviderFailure>>,
-    timeout: Duration,
+    stdout: ChildStdout,
+    file: tokio::fs::File,
+    verification: DownloadVerification,
     mut cancel: oneshot::Receiver<()>,
     ready: oneshot::Sender<Result<(), ProviderFailure>>,
     commit: oneshot::Receiver<()>,
+    #[cfg(test)] copy_complete: Option<oneshot::Sender<()>>,
 ) -> Result<(), ProviderFailure> {
-    let deadline_at = tokio::time::Instant::now() + timeout;
+    let deadline_at = tokio::time::Instant::now() + verification.timeout;
+    let copy = copy_verified_asset(
+        stdout,
+        file,
+        verification.expected_size,
+        verification.max_size,
+        verification.expected_sha256,
+    );
+    tokio::pin!(copy);
     let first = {
         let wait = child.wait();
         tokio::pin!(wait);
@@ -214,7 +279,16 @@ async fn finish_download(
         }
     };
 
-    let result = complete_transfer(first, &mut child, &mut copy, &mut cancel, deadline_at).await;
+    let result = complete_transfer(
+        first,
+        &mut child,
+        copy.as_mut(),
+        &mut cancel,
+        deadline_at,
+        #[cfg(test)]
+        copy_complete,
+    )
+    .await;
     if let Err(error) = result {
         let _ready_result = ready.send(Err(error));
         return Err(error);
@@ -229,19 +303,27 @@ async fn finish_download(
     }
 }
 
-async fn complete_transfer(
+async fn complete_transfer<C>(
     first: FirstCompletion,
     child: &mut Child,
-    copy: &mut tokio::task::JoinHandle<Result<(), ProviderFailure>>,
+    mut copy: std::pin::Pin<&mut C>,
     cancel: &mut oneshot::Receiver<()>,
     deadline_at: tokio::time::Instant,
-) -> Result<(), ProviderFailure> {
+    #[cfg(test)] copy_complete: Option<oneshot::Sender<()>>,
+) -> Result<(), ProviderFailure>
+where
+    C: std::future::Future<Output = Result<(), ProviderFailure>>,
+{
     match first {
-        FirstCompletion::Copy(Ok(Ok(()))) => {
+        FirstCompletion::Copy(Ok(())) => {
+            #[cfg(test)]
+            if let Some(copy_complete) = copy_complete {
+                let _send_result = copy_complete.send(());
+            }
             tokio::select! {
                 biased;
                 _ = &mut *cancel => {
-                    stop_child(child, copy).await;
+                    kill_child_and_wait(child).await;
                     Err(ProviderFailure::GhOutput)
                 }
                 result = tokio::time::timeout_at(deadline_at, child.wait()) => match result {
@@ -259,39 +341,34 @@ async fn complete_transfer(
             tokio::select! {
                 biased;
                 _ = &mut *cancel => {
-                    stop_child(child, copy).await;
+                    kill_child_and_wait(child).await;
                     Err(ProviderFailure::GhOutput)
                 }
-                result = tokio::time::timeout_at(deadline_at, &mut *copy) => match result {
-                Ok(Ok(Ok(()))) if status.success() => Ok(()),
-                Ok(Ok(Ok(()))) => Err(ProviderFailure::GhCommand),
-                Ok(Ok(Err(error))) => Err(error),
-                Ok(Err(_)) => Err(ProviderFailure::GhOutput),
+                result = tokio::time::timeout_at(deadline_at, copy.as_mut()) => match result {
+                Ok(Ok(())) if status.success() => Ok(()),
+                Ok(Ok(())) => Err(ProviderFailure::GhCommand),
+                Ok(Err(error)) => Err(error),
                 Err(_) => {
-                    stop_child(child, copy).await;
+                    kill_child_and_wait(child).await;
                     Err(ProviderFailure::GhTimeout)
                 }
                 }
             }
         }
-        FirstCompletion::Copy(Ok(Err(error))) => {
+        FirstCompletion::Copy(Err(error)) => {
             kill_child_and_wait(child).await;
             Err(error)
         }
-        FirstCompletion::Copy(Err(_)) => {
+        FirstCompletion::Child(Err(_)) => {
             kill_child_and_wait(child).await;
             Err(ProviderFailure::GhUnavailable)
         }
-        FirstCompletion::Child(Err(_)) => {
-            stop_child(child, copy).await;
-            Err(ProviderFailure::GhUnavailable)
-        }
         FirstCompletion::Timeout => {
-            stop_child(child, copy).await;
+            kill_child_and_wait(child).await;
             Err(ProviderFailure::GhTimeout)
         }
         FirstCompletion::Cancelled => {
-            stop_child(child, copy).await;
+            kill_child_and_wait(child).await;
             Err(ProviderFailure::GhOutput)
         }
     }
@@ -337,15 +414,6 @@ where
         return Err(ProviderFailure::ReleaseAssets);
     }
     Ok(())
-}
-
-async fn stop_child(
-    child: &mut Child,
-    copy: &mut tokio::task::JoinHandle<Result<(), ProviderFailure>>,
-) {
-    copy.abort();
-    let _copy_result = copy.await;
-    kill_child_and_wait(child).await;
 }
 
 async fn kill_child_and_wait(child: &mut Child) {
