@@ -2,6 +2,7 @@
 
 use super::step_identity::{
     MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole, TOFU_PROVIDER_ADMISSION_USES,
+    TOOLS_CACHE_RESTORE_USES,
 };
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -190,6 +191,9 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
             matches!(kind, StepKind::Internal { operation, .. } if operation == "publish-baseline-v1")
         }
         StepId::ToolsCacheIdentity => super::step_identity::valid_tools_cache_identity(kind),
+        StepId::ToolsCacheRestore => {
+            matches!(kind, StepKind::Action { uses, .. } if uses == TOOLS_CACHE_RESTORE_USES)
+        }
         StepId::TofuProviders => {
             matches!(kind, StepKind::Action { uses, .. } if uses == TOFU_PROVIDER_ADMISSION_USES)
         }

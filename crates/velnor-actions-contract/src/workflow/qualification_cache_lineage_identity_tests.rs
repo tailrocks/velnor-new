@@ -13,6 +13,21 @@ use crate::{
 };
 
 #[test]
+fn qualification_cache_keys_use_the_v2_namespace() {
+    let key = key_for_slot(
+        "identity-test",
+        QualificationCacheLayer::CargoSources,
+        &digest_b3(b"identity"),
+        &digest_b3(b"runtime"),
+        QualificationCacheSlot::K1,
+    )
+    .expect("cache key");
+
+    assert!(key.starts_with("velnor-qcache-v2-"));
+    assert!(!key.starts_with("velnor-qcache-v1-"));
+}
+
+#[test]
 fn cache_identity_survives_checkout_relocation_and_useful_source_edit() {
     let before = plan_for_checkout(
         "/home/runner/work/velnor/velnor",

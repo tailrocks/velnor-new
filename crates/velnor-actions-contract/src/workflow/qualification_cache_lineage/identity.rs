@@ -359,7 +359,7 @@ pub(crate) fn key_for_slot(
     validate_digest(identity_digest)?;
     validate_digest(runtime_digest)?;
     let key = format!(
-        "velnor-qcache-v1-{campaign}-{}-{identity_digest}-{runtime_digest}-{}",
+        "velnor-qcache-v2-{campaign}-{}-{identity_digest}-{runtime_digest}-{}",
         layer.as_str(),
         slot.as_str()
     );

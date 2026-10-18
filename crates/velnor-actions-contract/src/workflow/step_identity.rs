@@ -11,6 +11,8 @@ pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-
 pub const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
 /// Fixed local action path for the exact V2 tools-cache restore wrapper.
 pub const TOOLS_CACHE_RESTORE_USES: &str = "./.github/actions/velnor-tools-cache-restore";
+/// Fixed outer step ID exposing the restore wrapper's exact action outputs.
+pub const TOOLS_CACHE_RESTORE_ID: &str = "tools-cache-restore";
 /// Fixed generated V2 identity-and-seed composites for the supported runner lanes.
 pub const TOOLS_CACHE_PRELUDE_USES: [&str; 4] = [
     "./.github/actions/velnor-tools-prelude-u22",
@@ -41,6 +43,8 @@ pub enum StepId {
     PublishBaseline,
     /// V2 hosted tools-cache output consumed by restore and save.
     ToolsCacheIdentity,
+    /// Exact cache-hit and matched-key outputs from the V2 restore wrapper.
+    ToolsCacheRestore,
     /// `OpenTofu` provider-cache composite outputs consumed by the save step.
     TofuProviders,
     /// Successful MBX version/store guard that enables final workspace cleanup.
@@ -55,6 +59,7 @@ impl StepId {
             Self::Plan => "plan",
             Self::PublishBaseline => "publish-baseline",
             Self::ToolsCacheIdentity => "v2",
+            Self::ToolsCacheRestore => TOOLS_CACHE_RESTORE_ID,
             Self::TofuProviders => "tofu-providers",
             Self::MbxReady => "mbx-ready",
         }
@@ -235,6 +240,7 @@ impl StepRole {
             Self::PlanProducer => Some(StepId::Plan),
             Self::BaselinePublisher => Some(StepId::PublishBaseline),
             Self::ToolsCacheIdentity => Some(StepId::ToolsCacheIdentity),
+            Self::ToolsCacheRestore => Some(StepId::ToolsCacheRestore),
             Self::TofuProvidersRestore => Some(StepId::TofuProviders),
             Self::MbxVersionCheck => Some(StepId::MbxReady),
             _ => None,
@@ -247,6 +253,7 @@ impl StepRole {
             StepId::Plan => Self::PlanProducer,
             StepId::PublishBaseline => Self::BaselinePublisher,
             StepId::ToolsCacheIdentity => Self::ToolsCacheIdentity,
+            StepId::ToolsCacheRestore => Self::ToolsCacheRestore,
             StepId::TofuProviders => Self::TofuProvidersRestore,
             StepId::MbxReady => Self::MbxVersionCheck,
         }
@@ -389,3 +396,7 @@ fn validate_step_identities(steps: &[Step], scope: &str) -> Result<(), ContractE
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "step_identity_tests.rs"]
+mod tests;
