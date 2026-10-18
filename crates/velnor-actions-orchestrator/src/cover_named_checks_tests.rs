@@ -25,7 +25,7 @@ fn exact_baseline_match_still_executes_named_check() {
         tools: Vec::new(),
         system_tools: Vec::new(),
         evidence: None,
-        timeout_minutes: 10,
+        timeout_minutes: 5,
     };
     let catalog = velnor_actions_mise::ToolCatalog::pinned();
     let item = velnor_actions_mise::discover_checks(temp.path(), &[check], &[])

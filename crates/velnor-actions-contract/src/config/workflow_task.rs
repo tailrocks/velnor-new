@@ -82,7 +82,7 @@ mod tests {
                 working_directory: ".".to_owned(),
             },
             runner: VerificationRunner::MacosArm64,
-            timeout_minutes: 10,
+            timeout_minutes: 5,
         })
     }
 
@@ -96,7 +96,7 @@ mod tests {
             },
             tools: vec!["mr-boxington".to_owned(), "rust".to_owned()],
             runner: BuildTaskRunner::Macos26Arm64,
-            timeout_minutes: 120,
+            timeout_minutes: 5,
             cargo_build_jobs: 2,
             nextest_test_threads: 2,
         })
@@ -107,7 +107,7 @@ mod tests {
             id: id.to_owned(),
             platform: NativeImagePlatform::LinuxArm64,
             script: "maintained-image-build/arm64-image-validation.sh".to_owned(),
-            timeout_minutes: 60,
+            timeout_minutes: 5,
             cache: NativeImageCachePolicy::TaskOwnedBuilder,
         })
     }
@@ -135,15 +135,15 @@ mod tests {
         assert_eq!(decoded, task);
         assert!(serde_json::from_str::<WorkflowTask>(r#"{"kind":"unknown","id":"x"}"#).is_err());
         assert!(serde_json::from_str::<WorkflowTask>(
-            r#"{"kind":"verification","id":"x","mise_task":"check","runner":"linux-x64","timeout_minutes":10,"extra":true}"#
+            r#"{"kind":"verification","id":"x","mise_task":"check","runner":"linux-x64","timeout_minutes":5,"extra":true}"#
         )
         .is_err());
         assert!(serde_json::from_str::<WorkflowTask>(
-            r#"{"kind":"verification","id":"x","mise_task":"check","runner":"linux-x64","timeout_minutes":10}"#
+            r#"{"kind":"verification","id":"x","mise_task":"check","runner":"linux-x64","timeout_minutes":5}"#
         )
         .is_err(), "verification source is required");
         assert!(serde_json::from_str::<WorkflowTask>(
-            r#"{"id":"native-desktop","mise_task":"desktop-ci","tools":["mr-boxington","rust"],"runner":"macos-26-arm64","timeout_minutes":120,"cargo_build_jobs":2,"nextest_test_threads":2}"#
+            r#"{"id":"native-desktop","mise_task":"desktop-ci","tools":["mr-boxington","rust"],"runner":"macos-26-arm64","timeout_minutes":5,"cargo_build_jobs":2,"nextest_test_threads":2}"#
         )
         .is_err(), "the discriminator is required");
         let verification = verification("native-format");
@@ -176,7 +176,7 @@ mod tests {
             task
         );
         assert!(serde_json::from_str::<WorkflowTask>(
-            r#"{"kind":"native-image","id":"x","platform":"linux-arm64","script":"maintained-image-build/x.sh","timeout_minutes":60,"cache":"global"}"#
+            r#"{"kind":"native-image","id":"x","platform":"linux-arm64","script":"maintained-image-build/x.sh","timeout_minutes":5,"cache":"global"}"#
         )
         .is_err());
     }

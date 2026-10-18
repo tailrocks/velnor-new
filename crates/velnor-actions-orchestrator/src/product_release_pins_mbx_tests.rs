@@ -94,3 +94,43 @@ fn release_qualification_uses_catalog_action_and_exact_version_probe() {
     assert!(!command.contains("-- mbx --version"));
     assert!(command.contains(&format!("mbx {mbx_ver}")));
 }
+
+#[test]
+fn production_host_build_uses_pinned_mbx_for_only_the_nested_host_binary() {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let config = crate::config::load_config(&root).expect("repository release configuration");
+    let pins = super::resolve(&config).expect("production release pins");
+    let catalog = ToolCatalog::pinned();
+    let rust = format!("rust@{}", catalog.version(PinnedTool::Rust));
+    let mbx = format!("mr-boxington@{}", catalog.version(PinnedTool::MrBoxington));
+    assert_eq!(
+        strings(&pins.runner_build_argv),
+        [
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+            rust.as_str(),
+            mbx.as_str(),
+            "--",
+            "mbx",
+            "build",
+            "--locked",
+            "--manifest-path",
+            "crates/velnor-runner/Cargo.toml",
+            "--release",
+            "--package",
+            "velnor-runner-cli",
+            "--bin",
+            "velnor-host",
+        ]
+    );
+    assert!(pins.install_build_tools_argv.contains(&mbx));
+    assert!(!pins.install_runner_build_tools_argv.contains(&mbx));
+    assert!(
+        pins.resource_probe_build_argv
+            .iter()
+            .any(|arg| arg == "cargo")
+    );
+}

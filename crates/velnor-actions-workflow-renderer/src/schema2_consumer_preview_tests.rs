@@ -71,7 +71,7 @@ fn fixture() -> ConsumerPreviewSpec {
             }],
         },
         producer_runner: VerificationRunner::Macos26Arm64,
-        producer_timeout_minutes: 120,
+        producer_timeout_minutes: 5,
         linux_acquire: acquire.clone(),
         producer_acquire: acquire,
         producer_setup: setup_fixture(),
@@ -134,6 +134,12 @@ fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
     let rendered = render_preview(&fixture()).expect("preview");
     assert_eq!(rendered.path, ".github/workflows/binary-preview.yml");
     let yaml = &rendered.bytes;
+    let triggers = &yaml[..yaml.find("jobs:").expect("jobs")];
+    assert!(triggers.contains("workflow_run:"));
+    assert!(triggers.contains("workflows:"));
+    assert!(triggers.contains("- CI"));
+    assert!(triggers.contains("- completed"));
+    assert!(!triggers.contains("  push:"));
     let eligibility = job(yaml, "preview-eligibility", Some("preview-producer"));
     assert!(eligibility.contains("ref: ${{ github.sha }}"));
     assert_eq!(eligibility.matches("actions/checkout").count(), 1);
@@ -192,7 +198,7 @@ fn manual_recovery_has_no_build_or_signing_authority() {
         ("preview-signer", "preview-publisher"),
         ("preview-publisher", "preview-recovery"),
     ] {
-        assert!(job(yaml, name, Some(next)).contains("github.event_name == 'push'"));
+        assert!(job(yaml, name, Some(next)).contains("github.event_name == 'workflow_run'"));
     }
     let recovery = job(yaml, "preview-recovery", None);
     assert!(recovery.contains("github.event_name == 'workflow_dispatch'"));
@@ -237,7 +243,7 @@ fn with_tap() -> ConsumerPreviewSpec {
                     "Formula/scanner-preview.rb".to_owned(),
                 ],
                 tools: vec!["python".to_owned()],
-                timeout_minutes: 30,
+                timeout_minutes: 5,
             },
             environment: TapUpdateEnvironment::TapUpdate,
             app_id_variable: "TAP_APP_ID".to_owned(),
@@ -362,3 +368,22 @@ fn scale_set_rejects_the_native_preview_producer_with_a_specific_error() {
         )
     );
 }
+
+#[test]
+fn preview_rejects_unbounded_producer_limits_before_rendering() {
+    for minutes in [0, 6, 30, 120, 360, u16::MAX] {
+        let mut spec = fixture();
+        spec.producer_timeout_minutes = minutes;
+        assert!(
+            render_consumer_preview(
+                &spec,
+                &crate::workflow_routing::WorkflowRoutingPolicy::Preserve
+            )
+            .is_err(),
+            "{minutes}"
+        );
+    }
+}
+
+#[path = "schema2_consumer_preview_trigger_tests.rs"]
+mod triggers;

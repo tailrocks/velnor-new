@@ -308,7 +308,7 @@ profile = "full"
 run_ignored = "only"
 partitions = 12
 build = "archive"
-timeout_minutes = 60
+timeout_minutes = 5
 triggers = ["schedule", "workflow_dispatch"]
 schedule = ["0 2 * * *"]
 dispatch_inputs = { tier = ["full", "all"] }
@@ -320,7 +320,7 @@ profile = "full"
 run_ignored = "only"
 partitions = 12
 build = "archive"
-timeout_minutes = 60
+timeout_minutes = 5
 triggers = ["workflow_dispatch"]
 allow_failure = true
 dispatch_inputs = { tier = ["capture"] }
@@ -335,7 +335,7 @@ Each `[[stacks.rust.suites]]` entry validates fail-closed before rendering:
 - `run_ignored`: optional `"default" | "only" | "all"` (alias `"ignored-only"` for `"only"`), passing `--run-ignored only` or `--run-ignored all` when non-default; `[stacks.rust] run_ignored` sets the workspace-level default for standard crate tasks.
 - `partitions`: `1..=64` (default `1`), rendered as a GitHub Actions `strategy.matrix.shard` (`[1..=N]`, `fail-fast: false`) with `VELNOR_SUITE_SHARD: ${{ matrix.shard }}` in step `env` and `--partition "hash:$VELNOR_SUITE_SHARD/<N>"` passed to `nextest run`, independent of `resources.test_process_budget`.
 - `build`: `"inline" | "archive"` (default `"inline"`). When `partitions > 1` and `build = "archive"`, Velnor emits `suite-build-<id>` (`nextest archive` + archive artifact upload) and `suite-<id>` (`needs: [suite-build-<id>]`, downloading the archive and running `cargo nextest run --archive-file ... --workspace-remap . --extract-to . --extract-overwrite`).
-- `timeout_minutes`: `1..=360` (default `30`).
+- `timeout_minutes`: `1..=5` (default `5`).
 - `test_threads`: optional `1..=64`, exported as `NEXTEST_TEST_THREADS`.
 - `runner_label`: optional catalog runner label override; defaults to `workflow.runner_label` or the latest pinned default.
 - `workflow`: optional standalone workflow slug (`[a-z0-9][a-z0-9_-]*` without `.yml`, default `"suites"` emitting `.github/workflows/suites.yml`); reserved generator slugs (`ci`, `freshness`, `release`, `binary-release`, `tofu-apply`, `qualification`, `product-release`, `monitoring`) are rejected.

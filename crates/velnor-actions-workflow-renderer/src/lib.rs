@@ -80,6 +80,7 @@ pub mod verification_jobs;
 mod workflow_policy;
 pub mod workflow_routing;
 mod workflow_size;
+mod workflow_timeout;
 pub mod yaml;
 
 mod root_api;

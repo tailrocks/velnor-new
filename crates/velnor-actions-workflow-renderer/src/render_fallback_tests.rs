@@ -20,7 +20,10 @@ fn workflow(command: &str, repeats: usize) -> Yaml {
         "jobs".to_owned(),
         Yaml::Map(vec![(
             "job".to_owned(),
-            Yaml::Map(vec![("steps".to_owned(), Yaml::Seq(steps))]),
+            Yaml::Map(vec![
+                ("timeout-minutes".to_owned(), Yaml::Int(5)),
+                ("steps".to_owned(), Yaml::Seq(steps)),
+            ]),
         )]),
     )])
 }

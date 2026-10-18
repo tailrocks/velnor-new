@@ -27,11 +27,7 @@ pub(super) fn signing_identity_from_env(
     let source_ref = required_env("GITHUB_REF")?;
     let workflow_ref = required_env("GITHUB_WORKFLOW_REF")?;
     let workflow_sha = required_env("GITHUB_WORKFLOW_SHA")?;
-    let event = match required_env("GITHUB_EVENT_NAME")?.as_str() {
-        "push" => PackageReleaseEvent::Push,
-        "workflow_dispatch" => PackageReleaseEvent::WorkflowDispatch,
-        _ => return Err(internal("package_signer_event_invalid")),
-    };
+    let event = signing_event(plan, &required_env("GITHUB_EVENT_NAME")?)?;
     let repository_id = query_repository_id(&repository)?;
     let run_id = positive_u64("GITHUB_RUN_ID")?;
     let run_attempt = positive_u32("GITHUB_RUN_ATTEMPT")?;
@@ -61,6 +57,17 @@ pub(super) fn signing_identity_from_env(
     Ok(identity)
 }
 
+pub(super) fn signing_event(
+    plan: &PackageReleasePlan,
+    actual: &str,
+) -> Result<PackageReleaseEvent, OrchestratorError> {
+    let expected = plan.channel.event();
+    if actual != expected.as_str() {
+        return Err(internal("package_signer_event_invalid"));
+    }
+    Ok(expected)
+}
+
 pub(super) fn validate_identity(
     plan: &PackageReleasePlan,
     identity: &PackageReleaseSigningIdentity,
@@ -82,12 +89,11 @@ pub(super) fn validate_identity(
         || identity.ci_run_attempt == 0
         || match plan.channel {
             PackageReleaseChannel::Preview => {
-                identity.event != PackageReleaseEvent::Push
+                identity.event != plan.channel.event()
                     || identity.commit_count.is_none_or(|count| count == 0)
             }
             PackageReleaseChannel::Stable => {
-                identity.event != PackageReleaseEvent::WorkflowDispatch
-                    || identity.commit_count.is_some()
+                identity.event != plan.channel.event() || identity.commit_count.is_some()
             }
         }
     {

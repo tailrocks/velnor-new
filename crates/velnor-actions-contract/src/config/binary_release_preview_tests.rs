@@ -34,6 +34,7 @@ fn enabled_preview() -> RustBinaryPreviewConfig {
 fn preview_defaults_independently_disabled_with_mandatory_evidence() {
     let preview = RustBinaryPreviewConfig::default();
     assert!(!preview.enabled);
+    assert_eq!(preview.producer.timeout_minutes, 5);
     assert_eq!(preview.version_env, "");
     assert_eq!(
         preview.evidence.profile,
@@ -77,7 +78,7 @@ fn rejects_duplicate_or_unsafe_inventory_and_unbounded_producer_settings() {
     preview.companions[0].path = "../formula.rb".to_owned();
     assert!(preview.validate("config.toml").is_err());
     let mut preview = enabled_preview();
-    preview.producer.timeout_minutes = 361;
+    preview.producer.timeout_minutes = 6;
     assert!(preview.validate("config.toml").is_err());
     let mut preview = enabled_preview();
     preview.producer.build_jobs = 65;
@@ -102,7 +103,7 @@ fn preview_version_variable_cannot_name_control_environment() {
 
 #[test]
 fn evidence_profile_has_no_boolean_escape_hatches() {
-    let json = r#"{"enabled":true,"versioning":"package-preview-commit-count-sha7","version_env":"JACKIN_VERSION_OVERRIDE","environment":"preview-publish","producer":{"task":"release:preview-package","source":{"mise_config":"mise.toml","working_directory":"."},"output_directory":"dist/preview","manifest":"dist/preview/package-output.json","tools":["rust"],"inputs":["Cargo.lock","mise.toml"],"runner":"linux-x64","timeout_minutes":120,"build_jobs":2},"products":[{"id":"jackin","package":"jackin","bins":["jackin"],"targets":["aarch64-apple-darwin"],"archive":"tar.gz"}],"companions":[],"evidence":{"profile":"signed-sbom-v1","checksums":false}}"#;
+    let json = r#"{"enabled":true,"versioning":"package-preview-commit-count-sha7","version_env":"JACKIN_VERSION_OVERRIDE","environment":"preview-publish","producer":{"task":"release:preview-package","source":{"mise_config":"mise.toml","working_directory":"."},"output_directory":"dist/preview","manifest":"dist/preview/package-output.json","tools":["rust"],"inputs":["Cargo.lock","mise.toml"],"runner":"linux-x64","timeout_minutes":5,"build_jobs":2},"products":[{"id":"jackin","package":"jackin","bins":["jackin"],"targets":["aarch64-apple-darwin"],"archive":"tar.gz"}],"companions":[],"evidence":{"profile":"signed-sbom-v1","checksums":false}}"#;
     assert!(serde_json::from_str::<RustBinaryPreviewConfig>(json).is_err());
     let valid = json.replace(",\"checksums\":false", "");
     let config = serde_json::from_str::<RustBinaryPreviewConfig>(&valid).expect("valid preview");
@@ -278,4 +279,18 @@ fn rejects_inventory_larger_than_canonical_receipt_limits() {
         })
         .collect();
     assert!(preview.validate("config.toml").is_err());
+}
+
+#[test]
+fn timeout_preserves_shorter_budgets_and_rejects_above_five() {
+    for minutes in 1..=5 {
+        let mut value = enabled_preview();
+        value.producer.timeout_minutes = minutes;
+        assert!(value.validate("config.toml").is_ok(), "{minutes}");
+    }
+    for minutes in [0, 6, 30, 360, u16::MAX] {
+        let mut value = enabled_preview();
+        value.producer.timeout_minutes = minutes;
+        assert!(value.validate("config.toml").is_err(), "{minutes}");
+    }
 }

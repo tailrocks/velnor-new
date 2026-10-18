@@ -146,7 +146,7 @@ pub struct RustBinaryPreviewProducer {
     /// Fixed supported runner placement.
     #[serde(default = "default_preview_runner")]
     pub runner: VerificationRunner,
-    /// Per-job timeout, bounded to one through 360 minutes.
+    /// Per-job timeout, bounded to one through five minutes.
     #[serde(default = "default_preview_timeout")]
     pub timeout_minutes: u16,
     /// Maximum concurrent build processes.
@@ -220,7 +220,7 @@ fn default_preview_runner() -> VerificationRunner {
     VerificationRunner::LinuxX64
 }
 const fn default_preview_timeout() -> u16 {
-    120
+    crate::workflow::timeout::JobTimeout::DEFAULT.minutes()
 }
 const fn default_build_jobs() -> u16 {
     2

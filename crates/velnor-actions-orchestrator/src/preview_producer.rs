@@ -10,10 +10,16 @@ use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::fs;
 use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use velnor_actions_contract::config::RustBinaryPreviewConfig;
 use velnor_actions_contract::preview_identity::PreviewIdentity;
 use velnor_actions_mise::{CheckDeadline, GitRequest, IsolatedCommand, ProcessOutput};
+
+#[path = "preview_producer_inputs.rs"]
+mod inputs;
+use inputs::require_tracked_clean_input;
+#[cfg(test)]
+use inputs::valid_stage_zero_regular_file;
 
 const MAX_TASK_OUTPUT: usize = 8 * 1024 * 1024;
 
@@ -55,17 +61,15 @@ fn execute_preview_task(
     source_ref: &str,
     preview: &RustBinaryPreviewConfig,
     qualified_tools: &[velnor_actions_contract::config::QualifiedTool],
+    deadline: CheckDeadline,
 ) -> Result<PreviewProducerProof, OrchestratorError> {
+    checkpoint(deadline)?;
     preview.validate(".velnor/config.toml")?;
     if !preview.enabled || !valid_source_ref(source_ref) || !canonical_identity(identity) {
         return Err(internal("preview_producer_identity"));
     }
     let producer = &preview.producer;
     let root = root.canonicalize().map_err(|_| internal("preview_root"))?;
-    let deadline = CheckDeadline::after(Duration::from_secs(
-        u64::from(producer.timeout_minutes) * 60,
-    ))
-    .map_err(|error| internal(&error.to_string()))?;
     validate_preview_source(&root, identity, deadline)?;
     let discovered =
         velnor_actions_mise::discover_preview_producer(&root, producer, qualified_tools, deadline)
@@ -78,7 +82,7 @@ fn execute_preview_task(
 
     let mut inputs: BTreeSet<String> = producer.inputs.iter().cloned().collect();
     inputs.extend(discovered.config_inputs.iter().cloned());
-    validate_inputs(&root, &inputs, false)?;
+    validate_inputs(&root, &inputs, false, deadline)?;
 
     let output = root.join(&producer.output_directory);
     reject_link_components(&root, &producer.output_directory)?;
@@ -101,8 +105,9 @@ fn execute_preview_task(
         .with_env(&pairs)
         .map_err(|error| internal(&error.to_string()))?;
     let task_output = run_preview_task(&command, deadline)?;
-    validate_inputs(&root, &inputs, true)?;
+    validate_inputs(&root, &inputs, true, deadline)?;
     validate_preview_source(&root, identity, deadline)?;
+    checkpoint(deadline)?;
     let task_exit_code = task_output.code.unwrap_or(-1);
     Ok(PreviewProducerProof {
         source_sha: identity.source_sha.clone(),
@@ -180,8 +185,10 @@ fn validate_inputs(
     root: &Path,
     inputs: &BTreeSet<String>,
     after_task: bool,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     for input in inputs {
+        checkpoint(deadline)?;
         reject_link_components(root, input)?;
         let missing = if after_task {
             "preview_input_missing_after_task"
@@ -197,7 +204,7 @@ fn validate_inputs(
         if !metadata.file_type().is_file() {
             return Err(internal(regular));
         }
-        require_tracked_clean_input(root, input)?;
+        require_tracked_clean_input(root, input, deadline)?;
     }
     Ok(())
 }
@@ -329,68 +336,11 @@ fn valid_source_ref(source_ref: &str) -> bool {
         .is_some_and(velnor_actions_contract::is_valid_branch_name)
 }
 
-fn require_tracked_clean_input(root: &Path, input: &str) -> Result<(), OrchestratorError> {
-    let listed = GitRequest::ls_files(vec![
-        "--error-unmatch".into(),
-        "--stage".into(),
-        "--".into(),
-        input.into(),
-    ])
-    .run_in(root)
-    .map_err(|error| internal(&error.to_string()))?;
-    if !listed.success || !valid_stage_zero_regular_file(&listed.stdout, input) {
-        return Err(internal("preview_input_not_tracked_regular"));
-    }
-    let changed = GitRequest::diff(vec![
-        "--quiet".into(),
-        "HEAD".into(),
-        "--".into(),
-        input.into(),
-    ])
-    .run_in(root)
-    .map_err(|error| internal(&error.to_string()))?;
-    if !changed.success {
-        return Err(internal("preview_input_not_source_clean"));
-    }
-    let untracked = GitRequest::ls_files(vec![
-        "--others".into(),
-        "--exclude-standard".into(),
-        "--".into(),
-        input.into(),
-    ])
-    .run_in(root)
-    .map_err(|error| internal(&error.to_string()))?;
-    if !untracked.success || !untracked.stdout.is_empty() {
-        return Err(internal("preview_input_untracked_content"));
-    }
-    Ok(())
-}
-
-fn valid_stage_zero_regular_file(output: &[u8], expected: &str) -> bool {
-    let Ok(text) = std::str::from_utf8(output) else {
-        return false;
-    };
-    let mut lines = text.lines();
-    let Some(line) = lines.next() else {
-        return false;
-    };
-    if lines.next().is_some() {
-        return false;
-    }
-    let Some((metadata, path)) = line.split_once('\t') else {
-        return false;
-    };
-    let mut fields = metadata.split_ascii_whitespace();
-    matches!(fields.next(), Some("100644" | "100755"))
-        && fields.next().is_some_and(|object| {
-            matches!(object.len(), 40 | 64)
-                && object
-                    .bytes()
-                    .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
-        })
-        && fields.next() == Some("0")
-        && fields.next().is_none()
-        && path == expected
+fn checkpoint(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
+    deadline
+        .remaining()
+        .map(|_| ())
+        .map_err(|error| internal(&error.to_string()))
 }
 
 #[cfg(test)]

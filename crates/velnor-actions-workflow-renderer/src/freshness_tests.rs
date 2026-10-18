@@ -88,7 +88,7 @@ fn renders_schedule_only_read_only_probe() {
         "checkout, Mise setup, Rust install, and probe are ordered:\n{yaml}"
     );
     assert!(
-        yaml.contains("timeout-minutes: 10"),
+        yaml.contains("timeout-minutes: 5"),
         "explicit timeout:\n{yaml}"
     );
     assert!(

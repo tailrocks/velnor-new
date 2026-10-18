@@ -1,4 +1,4 @@
-use velnor_actions_contract::RoutingWorkflow;
+use velnor_actions_contract::{JobTimeout, RoutingWorkflow};
 
 use super::{
     RunnerSpec, Schema2WorkflowRequest, classes, features, mbx_qualification,
@@ -21,7 +21,7 @@ pub(super) fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
                 "verify-hosted",
                 "Verify / GitHub hosted / Linux x64",
                 &hosted,
-                30,
+                JobTimeout::DEFAULT,
                 Vec::new(),
                 "Qualify hosted lane",
                 "echo qualification-hosted",
@@ -33,7 +33,7 @@ pub(super) fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
                 "verify-scale-set",
                 "Verify / Velnor Scale Set / Linux x64",
                 &scale,
-                30,
+                JobTimeout::DEFAULT,
                 Vec::new(),
                 "Qualify scale-set lane",
                 "echo qualification-scale-set",
@@ -45,7 +45,7 @@ pub(super) fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
                 "compare",
                 "Compare hosted and Velnor execution",
                 &hosted,
-                10,
+                JobTimeout::DEFAULT,
                 vec!["verify-hosted".to_owned(), "verify-scale-set".to_owned()],
                 "Compare lanes",
                 "echo compare-lanes",
@@ -154,7 +154,7 @@ pub(super) fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, Rende
                 "scale-set-lane",
                 "Scale set lane",
                 &scale,
-                30,
+                JobTimeout::DEFAULT,
                 Vec::new(),
                 "Run scale-set lane",
                 "echo scale-set-lane",
@@ -163,7 +163,7 @@ pub(super) fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, Rende
                 "queue-monitor",
                 "Queue monitor",
                 &hosted,
-                10,
+                JobTimeout::DEFAULT,
                 Vec::new(),
                 "Watch admission",
                 "echo queue-monitor",
@@ -209,7 +209,7 @@ fn job(
     id: &str,
     name: &str,
     runner: &RunnerSpec,
-    timeout: i64,
+    timeout: JobTimeout,
     needs: Vec<String>,
     step_name: &str,
     run: &str,
@@ -217,7 +217,10 @@ fn job(
     let mut fields = vec![
         ("name".to_owned(), Yaml::str(name)),
         ("runs-on".to_owned(), runner.runs_on.clone()),
-        ("timeout-minutes".to_owned(), Yaml::Int(timeout)),
+        (
+            "timeout-minutes".to_owned(),
+            Yaml::Int(i64::from(timeout.minutes())),
+        ),
     ];
     runner.push_default_shell(&mut fields, false);
     if !needs.is_empty() {

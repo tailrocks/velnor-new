@@ -8,7 +8,11 @@ exclude = List(
 )
 
 steps {
-  ["cargo_fmt"] = Builtins.cargo_fmt
+  ["cargo_fmt"] = (Builtins.cargo_fmt) {
+    check = "cargo fmt --check --manifest-path {{workspace_indicator}} --all"
+    check_list_files = "cargo fmt --check --manifest-path {{workspace_indicator}} --all -- --files-with-diff"
+    fix = "cargo fmt --manifest-path {{workspace_indicator}} --all"
+  }
   ["cargo_clippy"] = Builtins.cargo_clippy
 }
 

@@ -197,7 +197,7 @@ fn workflow_tasks_require_sorted_unique_safe_ids() {
             mise_task: format!("check-{id}"),
             source: MiseTaskSource::default(),
             runner: VerificationRunner::LinuxX64,
-            timeout_minutes: 10,
+            timeout_minutes: 5,
         })
     };
     let mut valid = named("CI");
@@ -228,7 +228,7 @@ fn workflow_task_variants_share_sorted_unique_ids_and_build_bound() {
             source: MiseTaskSource::default(),
             tools: vec!["mr-boxington".to_owned(), "rust".to_owned()],
             runner: BuildTaskRunner::Macos26Arm64,
-            timeout_minutes: 120,
+            timeout_minutes: 5,
             cargo_build_jobs: 2,
             nextest_test_threads: 2,
         })
@@ -260,7 +260,7 @@ fn workflow_task_variants_share_sorted_unique_ids_and_build_bound() {
             mise_task: "desktop-format-check".to_owned(),
             source: MiseTaskSource::default(),
             runner: VerificationRunner::MacosArm64,
-            timeout_minutes: 10,
+            timeout_minutes: 5,
         }),
     ];
     let error = valid
@@ -324,7 +324,7 @@ fn native_image_tasks_share_ids_and_have_one_hosted_capability_slot() {
             id: id.to_owned(),
             platform: NativeImagePlatform::LinuxArm64,
             script: "maintained-image-build/arm64-image-validation.sh".to_owned(),
-            timeout_minutes: 60,
+            timeout_minutes: 5,
             cache: NativeImageCachePolicy::TaskOwnedBuilder,
         })
     };

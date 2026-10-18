@@ -217,7 +217,7 @@ fn release_jobs_carry_timeout_minutes_by_construction() -> Result<(), RenderErro
         "fixture must carry jobs for the timeout audit to mean anything"
     );
     assert_eq!(
-        text.matches("timeout-minutes: 10").count(),
+        text.matches("timeout-minutes: 5").count(),
         jobs,
         "every release job carries the RELEASE bound"
     );

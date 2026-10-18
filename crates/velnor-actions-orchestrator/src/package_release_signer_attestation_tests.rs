@@ -13,7 +13,7 @@ fn expectations() -> AttestationExpectation<'static> {
         run_id: 200,
         run_attempt: 2,
         repository_id: "123456".to_owned(),
-        trigger: "push",
+        trigger: "workflow_run",
         invocation_uri: "https://github.com/jackin-project/jackin/actions/runs/200/attempts/2",
     }
 }
@@ -43,7 +43,7 @@ fn output() -> Value {
     json!([{
         "attestation": {},
         "verificationResult": {
-            "statement": {"predicateType":PREDICATE,"subject":subjects,"predicate":{}},
+            "statement": {"predicateType":PREDICATE,"subject":subjects,"predicate":{"buildDefinition":{"internalParameters":{"github":{"event_name":expected.trigger}}}}},
             "signature": {"certificate": {
                 "issuer": OIDC_ISSUER,
                 "subjectAlternativeName": expected.workflow_uri,
@@ -121,7 +121,7 @@ fn signer_workflow_argument_pins_host_repository_path_and_ref() {
         source_sha: "a12e73afd75b944a872e8295d61a15f93f5789a2".to_owned(),
         source_ref: "refs/heads/main".to_owned(),
         default_branch: "main".to_owned(),
-        event: velnor_actions_contract::package_release::PackageReleaseEvent::Push,
+        event: velnor_actions_contract::package_release::PackageReleaseEvent::WorkflowRun,
         workflow_path: ".github/workflows/binary-preview.yml".to_owned(),
         workflow_ref: "jackin-project/jackin/.github/workflows/binary-preview.yml@refs/heads/main"
             .to_owned(),
@@ -169,6 +169,7 @@ fn rejects_wrong_source_workflow_issuer_or_run_claims() {
         ),
         ("buildConfigDigest", "b".repeat(40)),
         ("buildTrigger", "workflow_dispatch".to_owned()),
+        ("buildTrigger", "push".to_owned()),
         (
             "runInvocationURI",
             "https://github.com/jackin-project/jackin/actions/runs/199/attempts/2".to_owned(),
@@ -180,6 +181,41 @@ fn rejects_wrong_source_workflow_issuer_or_run_claims() {
         data[0]["verificationResult"]["signature"]["certificate"][field] = Value::String(value);
         assert!(validate(&data).is_err(), "must reject {field}");
     }
+}
+
+#[test]
+fn slsa_event_binds_actual_channel_and_rejects_old_push_or_missing_event() {
+    assert!(validate(&output()).is_ok());
+    let pointer = "/0/verificationResult/statement/predicate/buildDefinition/internalParameters/github/event_name";
+    for event in [
+        json!("push"),
+        json!("pull_request"),
+        json!("workflow_dispatch"),
+        Value::Null,
+    ] {
+        let mut value = output();
+        *value.pointer_mut(pointer).expect("SLSA event") = event;
+        assert!(validate(&value).is_err());
+    }
+    let mut missing = output();
+    missing[0]["verificationResult"]["statement"]["predicate"]["buildDefinition"]["internalParameters"]
+        ["github"] = json!({});
+    assert!(validate(&missing).is_err());
+    let mut stable = output();
+    *stable.pointer_mut(pointer).expect("stable SLSA event") = json!("workflow_dispatch");
+    stable[0]["verificationResult"]["signature"]["certificate"]["buildTrigger"] =
+        json!("workflow_dispatch");
+    let subjects = subjects();
+    let mut expected = expectations();
+    expected.trigger = "workflow_dispatch";
+    validate_output(
+        stable.to_string().as_bytes(),
+        &subjects,
+        &expected,
+        "jackin-aarch64-apple-darwin.tar.gz",
+        &"a".repeat(64),
+    )
+    .expect("matching stable certificate and SLSA event");
 }
 
 #[test]

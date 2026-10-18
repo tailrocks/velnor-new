@@ -6,14 +6,11 @@ use super::{
     features::{base, finish, run_step},
 };
 use crate::{
-    RenderError,
-    commands::join_argv_for_run,
-    document_steps::non_internal_step_to_yaml,
-    marker::with_marker,
-    render::RenderedFile,
-    yaml::{Yaml, render_yaml},
+    RenderError, commands::join_argv_for_run, document_steps::non_internal_step_to_yaml,
+    render::RenderedFile, yaml::Yaml,
 };
 use std::collections::BTreeMap;
+use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::{
     Step, config::VerificationRunner, package_release::PackageReleaseChannel,
     package_release_plan::PackageReleasePlan,
@@ -73,7 +70,7 @@ pub fn render_consumer_preview(
     spec.producer_setup.validate()?;
     if spec.plan.channel != PackageReleaseChannel::Preview
         || spec.plan.default_branch != "main"
-        || !(1..=360).contains(&spec.producer_timeout_minutes)
+        || !JobTimeout::is_valid_minutes(u32::from(spec.producer_timeout_minutes))
     {
         return Err(RenderError::InvalidWorkflow(
             "preview_spec_invalid".to_owned(),
@@ -99,16 +96,15 @@ pub fn render_consumer_preview(
         jobs.extend(tap::jobs(spec, tap)?);
     }
     let document = Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Rust binary preview")),
+        (
+            "name".to_owned(),
+            Yaml::str(spec.plan.channel.workflow_name()),
+        ),
         (
             "on".to_owned(),
             Yaml::Map(vec![
-                (
-                    "push".to_owned(),
-                    Yaml::Map(vec![(
-                        "branches".to_owned(),
-                        Yaml::Seq(vec![Yaml::str(&spec.plan.default_branch)]),
-                    )]),
+                super::consumer_release_eligibility::preview_trigger::trigger(
+                    &spec.plan.default_branch,
                 ),
                 ("workflow_dispatch".to_owned(), steps::recovery_inputs()),
             ]),
@@ -133,8 +129,23 @@ pub fn render_consumer_preview(
     )?;
     Ok(RenderedFile {
         path: PackageReleaseChannel::Preview.workflow_path().to_owned(),
-        bytes: with_marker(&spec.generator_version, &render_yaml(&document))?,
+        bytes: render_preview_document(spec, &document)?,
     })
+}
+
+fn render_preview_document(
+    spec: &ConsumerPreviewSpec,
+    document: &Yaml,
+) -> Result<String, RenderError> {
+    super::consumer_release_eligibility::preview_trigger::validate(
+        document,
+        steps::recovery_inputs(),
+    )?;
+    crate::render::fallback::render_checked_workflow(
+        PackageReleaseChannel::Preview.workflow_path(),
+        document,
+        &spec.generator_version,
+    )
 }
 
 fn acquire(step: &Step, job: &str, runner: &str) -> Result<Yaml, RenderError> {
@@ -145,8 +156,12 @@ fn eligibility(spec: &ConsumerPreviewSpec, gate: &str) -> Result<(String, Yaml),
     let mut fields = base(
         "Verify exact-commit Required CI",
         Yaml::str("ubuntu-26.04"),
-        75,
+        JobTimeout::DEFAULT,
     );
+    fields.push((
+        "if".to_owned(),
+        Yaml::str("${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}"),
+    ));
     fields.push((
         "permissions".to_owned(),
         permissions(&[("actions", "read"), ("contents", "read")]),
@@ -191,11 +206,11 @@ fn producer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
     let mut fields = base(
         "Build preview archives without publication credentials",
         Yaml::str(runner),
-        spec.producer_timeout_minutes.into(),
+        JobTimeout::new(spec.producer_timeout_minutes).map_err(RenderError::Contract)?,
     );
     fields.push((
         "if".to_owned(),
-        Yaml::str("${{ github.event_name == 'push' }}"),
+        Yaml::str("${{ github.event_name == 'workflow_run' }}"),
     ));
     fields.push(("needs".to_owned(), needs(&["preview-eligibility"])));
     fields.push((
@@ -250,11 +265,11 @@ fn signer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
     let mut fields = base(
         "Independently validate and sign preview bytes",
         Yaml::str("ubuntu-26.04"),
-        30,
+        JobTimeout::DEFAULT,
     );
     fields.push((
         "if".to_owned(),
-        Yaml::str("${{ github.event_name == 'push' }}"),
+        Yaml::str("${{ github.event_name == 'workflow_run' }}"),
     ));
     fields.push((
         "needs".to_owned(),
@@ -292,11 +307,11 @@ fn publisher(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> 
     let mut fields = base(
         "Publish immutable authenticated preview",
         Yaml::str("ubuntu-26.04"),
-        75,
+        JobTimeout::DEFAULT,
     );
     fields.push((
         "if".to_owned(),
-        Yaml::str("${{ github.event_name == 'push' }}"),
+        Yaml::str("${{ github.event_name == 'workflow_run' }}"),
     ));
     fields.push((
         "needs".to_owned(),
@@ -331,7 +346,7 @@ fn recovery(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
     let mut fields = base(
         "Recover original signed preview without rebuilding",
         Yaml::str("ubuntu-26.04"),
-        75,
+        JobTimeout::DEFAULT,
     );
     fields.push((
         "if".to_owned(),

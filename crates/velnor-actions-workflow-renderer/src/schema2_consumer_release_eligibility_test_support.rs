@@ -36,11 +36,17 @@ pub(super) struct Scenario {
     pub(super) runs: String,
     pub(super) second_runs: Option<String>,
     pub(super) jobs: String,
+    pub(super) completion_event: Option<String>,
+    pub(super) completion_run: Option<String>,
+    pub(super) ci_workflow: Option<String>,
 }
 
 impl Scenario {
     pub(super) fn valid() -> Self {
         Self {
+            completion_event: None,
+            completion_run: None,
+            ci_workflow: None,
             repository: REPOSITORY.to_owned(),
             ref_name: format!("refs/heads/{DEFAULT_BRANCH}"),
             event: "workflow_dispatch".to_owned(),
@@ -49,7 +55,9 @@ impl Scenario {
             ),
             source_sha: None,
             authority_sha: None,
-            default_branch_response: format!(r#"{{"default_branch":"{DEFAULT_BRANCH}"}}"#),
+            default_branch_response: format!(
+                r#"{{"id":100,"full_name":"{REPOSITORY}","default_branch":"{DEFAULT_BRANCH}"}}"#
+            ),
             tip: format!(r#"[{{"sha":"{SOURCE_TOKEN}"}}]"#),
             second_tip: None,
             runs: pages(&[
@@ -148,6 +156,8 @@ case "$endpoint" in
     [ -f "$response" ] || response="$VELNOR_TEST_FIXTURES/tip.json"
     cat "$response"
     ;;
+  "repos/$VELNOR_TEST_REPOSITORY/actions/workflows/ci.yml") cat "$VELNOR_TEST_FIXTURES/workflow.json" ;;
+  "repos/$VELNOR_TEST_REPOSITORY/actions/runs/42") cat "$VELNOR_TEST_FIXTURES/completion-run.json" ;;
   "repos/$VELNOR_TEST_REPOSITORY/actions/workflows/ci.yml/runs")
     need_pages
     counter="$VELNOR_TEST_FIXTURES/runs-count"
@@ -278,6 +288,7 @@ fn write_fixtures(
     )?;
     fs::write(&fixture.calls, "")?;
     fs::write(&fixture.output, "")?;
+    execution::write_completion_fixtures(fixture, scenario, source_sha)?;
     write_executable(&fixture.bin.join("gh"), GH_STUB)
 }
 
@@ -307,7 +318,7 @@ pub(super) fn ci_run(
 ) -> String {
     let (status, conclusion) = outcome;
     format!(
-        r#"{{"id":{id},"run_number":{run_number},"run_attempt":{attempt},"head_repository":{{"full_name":"{REPOSITORY}"}},"head_sha":"{sha}","head_branch":"{branch}","event":"{event}","status":"{status}","conclusion":"{conclusion}","path":".github/workflows/ci.yml"}}"#
+        r#"{{"id":{id},"run_number":{run_number},"run_attempt":{attempt},"head_repository":{{"id":100,"full_name":"{REPOSITORY}"}},"repository":{{"id":100,"full_name":"{REPOSITORY}"}},"workflow_id":200,"name":"CI","head_sha":"{sha}","head_branch":"{branch}","event":"{event}","status":"{status}","conclusion":"{conclusion}","path":".github/workflows/ci.yml"}}"#
     )
 }
 

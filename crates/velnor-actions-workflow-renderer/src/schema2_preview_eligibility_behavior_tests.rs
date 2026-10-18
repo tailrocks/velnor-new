@@ -7,14 +7,14 @@ use std::error::Error;
 
 fn preview() -> Scenario {
     let mut scenario = Scenario::valid();
-    scenario.event = "push".to_owned();
+    scenario.event = "workflow_run".to_owned();
     scenario.workflow_ref =
         format!("{REPOSITORY}/.github/workflows/binary-preview.yml@refs/heads/{DEFAULT_BRANCH}");
     scenario
 }
 
 #[test]
-fn preview_push_requires_exact_successful_ci_attempt() -> Result<(), Box<dyn Error>> {
+fn preview_completion_requires_exact_successful_ci_attempt() -> Result<(), Box<dyn Error>> {
     let result = execute_preview(&preview())?;
     assert!(result.success, "{}", result.stderr);
     assert!(result.output.contains("ci_run_id=42\nci_attempt=3\n"));
@@ -27,7 +27,7 @@ fn preview_rejects_fork_events_and_alternate_workflow_authority() -> Result<(), 
     for event in [
         "pull_request",
         "pull_request_target",
-        "workflow_run",
+        "push",
         "repository_dispatch",
     ] {
         let mut scenario = preview();

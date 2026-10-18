@@ -54,11 +54,11 @@ fn generated_ci_bounds_every_job_per_kind() -> TestResult {
         assert_eq!(minutes.len(), 1, "job {id} must carry exactly one timeout");
     }
     for (id, want) in [
-        ("plan", "20"),
-        ("required", "10"),
-        ("actionlint", "10"),
-        ("rust-demo", "30"),
-        ("publish-baseline", "10"),
+        ("plan", "5"),
+        ("required", "5"),
+        ("actionlint", "5"),
+        ("rust-demo", "5"),
+        ("publish-baseline", "5"),
     ] {
         assert_eq!(
             timeouts.get(id).map(Vec::as_slice),

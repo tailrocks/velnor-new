@@ -48,7 +48,7 @@ impl CosignCertificateIdentity {
                 .bytes()
                 .all(|byte| byte.is_ascii_alphanumeric() || b"._/-".contains(&byte))
             || !is_sha(workflow_sha)
-            || !matches!(trigger, "push" | "workflow_dispatch")
+            || !matches!(trigger, "workflow_run" | "workflow_dispatch")
         {
             return Err(invalid("certificate_identity"));
         }

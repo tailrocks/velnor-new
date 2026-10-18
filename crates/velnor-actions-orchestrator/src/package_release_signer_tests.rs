@@ -33,11 +33,7 @@ fn identity(plan: &PackageReleasePlan) -> PackageReleaseSigningIdentity {
         source_sha: "a12e73afd75b944a872e8295d61a15f93f5789a2".to_owned(),
         source_ref: "refs/heads/main".to_owned(),
         default_branch: "main".to_owned(),
-        event: if plan.channel == PackageReleaseChannel::Preview {
-            PackageReleaseEvent::Push
-        } else {
-            PackageReleaseEvent::WorkflowDispatch
-        },
+        event: plan.channel.event(),
         workflow_path: plan.channel.workflow_path().to_owned(),
         workflow_ref: format!(
             "{}/{}@refs/heads/main",
@@ -66,6 +62,27 @@ fn exact_channel_source_workflow_identity_is_required() {
     facts = identity(&preview);
     facts.workflow_sha = "b".repeat(40);
     assert!(validate_identity(&preview, &facts).is_err());
+}
+
+#[test]
+fn signer_event_admission_rejects_old_push_and_wrong_channel_before_credentials() {
+    let preview = plan(PackageReleaseChannel::Preview);
+    assert_eq!(
+        runtime::signing_event(&preview, "workflow_run").expect("preview"),
+        PackageReleaseEvent::WorkflowRun
+    );
+    for event in ["push", "workflow_dispatch", "pull_request", ""] {
+        assert!(
+            runtime::signing_event(&preview, event).is_err(),
+            "accepted {event}"
+        );
+    }
+    let stable = plan(PackageReleaseChannel::Stable);
+    assert_eq!(
+        runtime::signing_event(&stable, "workflow_dispatch").expect("stable"),
+        PackageReleaseEvent::WorkflowDispatch
+    );
+    assert!(runtime::signing_event(&stable, "workflow_run").is_err());
 }
 
 #[test]

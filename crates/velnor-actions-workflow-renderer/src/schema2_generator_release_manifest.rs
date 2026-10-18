@@ -2,6 +2,7 @@
 
 use crate::RenderError;
 use crate::yaml::Yaml;
+use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::RELEASE_MANIFEST_FILENAME;
 
 use super::super::features::{base, finish};
@@ -60,7 +61,11 @@ pub(super) fn job(
     ];
     let mut fields = with_needs(
         with_permissions(
-            base("Attest generator release manifest", hosted, 30),
+            base(
+                "Attest generator release manifest",
+                hosted,
+                JobTimeout::DEFAULT,
+            ),
             workflow_steps::perm(&[
                 ("actions", "write"),
                 ("artifact-metadata", "write"),

@@ -179,18 +179,36 @@ fn recovery_original_run_must_match_exact_workflow_source_and_attempt() {
         path: Some(".github/workflows/binary-preview.yml".to_owned()),
         head_sha: Some(sha.clone()),
         head_branch: Some("main".to_owned()),
-        event: Some("push".to_owned()),
+        event: Some("workflow_run".to_owned()),
+        name: Some("Rust binary preview".to_owned()),
+        workflow_id: Some(7),
+        run_number: Some(12),
+        head_repository: Some(RunRepository { id: 9 }),
         status: Some("completed".to_owned()),
         conclusion: Some("failure".to_owned()),
         repository: Some(RunRepository { id: 9 }),
     };
-    assert!(source_run_matches(&run, &plan, &sha, 42, 2, 9));
-    assert!(!source_run_matches(&run, &plan, &sha, 42, 1, 9));
-    assert!(!source_run_matches(&run, &plan, &sha, 42, 2, 10));
+    let workflow = WorkflowMetadata {
+        state: "active".to_owned(),
+        id: 7,
+        path: plan.channel.workflow_path().to_owned(),
+        name: plan.channel.workflow_name().to_owned(),
+    };
+    assert!(source_run_matches(&run, &plan, &sha, 42, 2, 9, &workflow));
+    assert!(!source_run_matches(&run, &plan, &sha, 42, 1, 9, &workflow));
+    assert!(!source_run_matches(&run, &plan, &sha, 42, 2, 10, &workflow));
 
     let mut wrong_path = run;
     wrong_path.path = Some(".github/workflows/binary-release.yml".to_owned());
-    assert!(!source_run_matches(&wrong_path, &plan, &sha, 42, 2, 9));
+    assert!(!source_run_matches(
+        &wrong_path,
+        &plan,
+        &sha,
+        42,
+        2,
+        9,
+        &workflow
+    ));
 }
 
 #[test]
@@ -204,4 +222,26 @@ fn recovery_rejects_a_retained_zip_without_the_signed_receipt() {
         archive::extract_signed_assets(&bytes, scratch.path(), &preview_plan()).is_err(),
         "artifact admission requires a receipt before accepting any retained bytes"
     );
+}
+
+#[test]
+fn recovery_rejects_original_push_or_dispatch_instead_of_workflow_run() {
+    let plan = preview_plan();
+    let workflow = WorkflowMetadata {
+        state: "active".to_owned(),
+        id: 7,
+        path: plan.channel.workflow_path().to_owned(),
+        name: plan.channel.workflow_name().to_owned(),
+    };
+    let sha = "a".repeat(40);
+    for event in ["push", "workflow_dispatch", "pull_request"] {
+        let run: WorkflowRunResponse = serde_json::from_value(serde_json::json!({
+            "id":42,"run_attempt":2,"run_number":12,"workflow_id":7,
+            "path":workflow.path,"name":workflow.name,"head_sha":sha,
+            "head_branch":"main","event":event,"status":"completed","conclusion":"failure",
+            "repository":{"id":9},"head_repository":{"id":9}
+        }))
+        .expect("run fixture");
+        assert!(!source_run_matches(&run, &plan, &sha, 42, 2, 9, &workflow));
+    }
 }

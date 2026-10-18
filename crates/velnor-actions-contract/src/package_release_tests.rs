@@ -8,6 +8,7 @@ pub(crate) mod support;
 fn validates_preview_receipt_and_round_trips_canonical_bytes() {
     let receipt = fixture(PackageReleaseChannel::Preview);
     receipt.validate().expect("valid preview receipt");
+    assert_eq!(receipt.source.event, PackageReleaseEvent::WorkflowRun);
     let bytes = receipt.canonical_bytes().expect("canonical serialization");
     assert_eq!(
         parse_package_release_receipt(&bytes).expect("canonical parse"),
@@ -19,6 +20,16 @@ fn validates_preview_receipt_and_round_trips_canonical_bytes() {
             .expect("retry digest")
             .starts_with("b3-")
     );
+}
+
+#[test]
+fn preview_receipt_rejects_dispatch_and_legacy_push_producing_events() {
+    let mut receipt = fixture(PackageReleaseChannel::Preview);
+    receipt.source.event = PackageReleaseEvent::WorkflowDispatch;
+    assert!(receipt.validate().is_err());
+    let mut value = serde_json::to_value(fixture(PackageReleaseChannel::Preview)).expect("receipt");
+    value["source"]["event"] = serde_json::json!("push");
+    assert!(serde_json::from_value::<PackageReleaseReceipt>(value).is_err());
 }
 
 #[test]
@@ -85,9 +96,10 @@ fn stable_v2_receipt_preserves_raw_binary_payload_name_and_channel_identity() {
 
 #[test]
 fn stable_receipt_rejects_push_event() {
-    let mut receipt = fixture(PackageReleaseChannel::Stable);
-    receipt.source.event = PackageReleaseEvent::Push;
-    assert!(receipt.validate().is_err());
+    let receipt = fixture(PackageReleaseChannel::Stable);
+    let mut value = serde_json::to_value(receipt).expect("receipt JSON");
+    value["source"]["event"] = serde_json::json!("push");
+    assert!(serde_json::from_value::<PackageReleaseReceipt>(value).is_err());
 }
 
 #[test]

@@ -1,4 +1,4 @@
-use super::{PackageReleaseChannel, PackageReleaseEvent, PackageReleaseReceipt, invalid};
+use super::{PackageReleaseChannel, PackageReleaseReceipt, invalid};
 use crate::{ContractError, config::is_exact_semver, is_valid_branch_name};
 
 pub(super) fn validate(receipt: &PackageReleaseReceipt) -> Result<(), ContractError> {
@@ -25,10 +25,7 @@ fn validate_source(receipt: &PackageReleaseReceipt) -> Result<(), ContractError>
         || source.source_ref != format!("refs/heads/{}", source.default_branch)
         || source.ci_run_id == 0
         || source.ci_run_attempt == 0
-        || match receipt.channel {
-            PackageReleaseChannel::Preview => source.event != PackageReleaseEvent::Push,
-            PackageReleaseChannel::Stable => source.event != PackageReleaseEvent::WorkflowDispatch,
-        }
+        || source.event != receipt.channel.event()
     {
         return Err(invalid("bad_source_identity"));
     }

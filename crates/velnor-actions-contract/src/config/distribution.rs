@@ -93,7 +93,7 @@ pub struct TapUpdaterBinding {
 }
 
 fn default_updater_timeout() -> u32 {
-    30
+    u32::from(crate::workflow::timeout::JobTimeout::DEFAULT.minutes())
 }
 
 /// The only supported write environment name.
@@ -225,7 +225,7 @@ impl TapUpdaterBinding {
         if self.tools.is_empty() || !unique_names(&self.tools) {
             return Err(bad("updater.tools", "invalid_task_tools"));
         }
-        if !(1..=360).contains(&self.timeout_minutes) {
+        if !crate::workflow::timeout::JobTimeout::is_valid_minutes(self.timeout_minutes) {
             return Err(bad("updater.timeout_minutes", "bad_task_timeout"));
         }
         Ok(())

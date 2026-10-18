@@ -1,6 +1,7 @@
 //! Caller and reusable-workflow YAML for the product-release DAG.
 
 use crate::yaml::Yaml;
+use velnor_actions_contract::JobTimeout;
 
 use super::super::release_eligibility;
 use super::{Family, HOSTED_RUNS_ON, RELEASE_CONCURRENCY};
@@ -140,7 +141,10 @@ fn caller_validation_job() -> (String, Yaml) {
             Yaml::str("Verify caller release authority"),
         ),
         ("runs-on".to_owned(), Yaml::str(HOSTED_RUNS_ON)),
-        ("timeout-minutes".to_owned(), Yaml::Int(5)),
+        (
+            "timeout-minutes".to_owned(),
+            Yaml::Int(i64::from(JobTimeout::DEFAULT.minutes())),
+        ),
         (
             "permissions".to_owned(),
             Yaml::Map(vec![("contents".to_owned(), Yaml::str("read"))]),

@@ -28,9 +28,13 @@ use identity::{
 #[path = "package_release_publish_github.rs"]
 mod github;
 use github::{
-    BranchResponse, GitHubApi, GitRefResponse, ReleaseResponse, RunRepository, TagObservation,
-    WorkflowRunResponse, encode_segment, sha256, unique_release,
+    BranchResponse, GitHubApi, GitRefResponse, ReleaseResponse, TagObservation, encode_segment,
+    sha256, unique_release,
 };
+
+#[path = "package_release_run_identity.rs"]
+mod run_identity;
+use run_identity::RunSource;
 
 /// Private operation that publishes one authenticated native release.
 pub const PUBLISH_PACKAGE_RELEASE_OP: &str = "publish-package-release-v1";
@@ -187,6 +191,13 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
         if identity != self.identity || self.signed.receipt() != &self.receipt {
             return Err(internal("package_publish_original_changed"));
         }
+        self.api.verify_release_run(
+            &self.receipt,
+            matches!(
+                &self.original_verification,
+                OriginalVerification::RetainedRun { .. }
+            ),
+        )?;
         Ok(identity)
     }
 
@@ -237,34 +248,24 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
             "heads/{}",
             encode_segment(&self.receipt.source.default_branch)
         );
+        let source = RunSource {
+            repository_id: self.receipt.repository.id,
+            sha: &self.receipt.source.commit_sha,
+            branch: &self.receipt.source.default_branch,
+        };
+        self.api.verify_ci_identity(
+            self.receipt.source.ci_run_id,
+            self.receipt.source.ci_run_attempt,
+            source,
+            false,
+        )?;
+        self.api
+            .verify_ci_identity(self.current_ci.0, self.current_ci.1, source, true)?;
         let current: GitRefResponse = self
             .api
             .get_json(&self.api.route(&format!("git/ref/{branch_ref}")))?;
-        let source_ci = self.api.workflow_run(
-            self.receipt.source.ci_run_id,
-            self.receipt.source.ci_run_attempt,
-        )?;
-        let latest_ci = self
-            .api
-            .workflow_run(self.current_ci.0, self.current_ci.1)?;
         Ok(current.object.object_type == "commit"
-            && current.object.sha == self.receipt.source.commit_sha
-            && ci_run_is_success(
-                &source_ci,
-                self.receipt.source.ci_run_id,
-                self.receipt.source.ci_run_attempt,
-                self.receipt.repository.id,
-                &self.receipt.source.commit_sha,
-                &self.receipt.source.default_branch,
-            )
-            && ci_run_is_success(
-                &latest_ci,
-                self.current_ci.0,
-                self.current_ci.1,
-                self.receipt.repository.id,
-                &self.receipt.source.commit_sha,
-                &self.receipt.source.default_branch,
-            ))
+            && current.object.sha == self.receipt.source.commit_sha)
     }
 
     fn create_tag(&mut self) -> Result<(), OrchestratorError> {
@@ -370,27 +371,6 @@ fn current_ci_from_env() -> Result<(u64, u32), OrchestratorError> {
         .filter(|value| *value > 0)
         .ok_or_else(|| internal("package_publish_current_ci_attempt_invalid"))?;
     Ok((run_id, attempt))
-}
-
-fn ci_run_is_success(
-    run: &WorkflowRunResponse,
-    expected_run_id: u64,
-    expected_attempt: u32,
-    repository_id: u64,
-    source_sha: &str,
-    default_branch: &str,
-) -> bool {
-    run.id == Some(expected_run_id)
-        && run.run_attempt == Some(expected_attempt)
-        && run.head_sha.as_deref() == Some(source_sha)
-        && run.head_branch.as_deref() == Some(default_branch)
-        && run.event.as_deref() == Some("push")
-        && run.status.as_deref() == Some("completed")
-        && run.conclusion.as_deref() == Some("success")
-        && run
-            .repository
-            .as_ref()
-            .is_some_and(|repo: &RunRepository| repo.id == repository_id)
 }
 
 #[cfg(test)]

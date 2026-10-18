@@ -81,7 +81,7 @@ fn verification_policy() -> VerificationTaskPolicy {
             mise_task: "desktop-format-check".to_owned(),
             source: velnor_actions_contract::MiseTaskSource::default(),
             runner: VerificationRunner::MacosArm64,
-            timeout_minutes: 10,
+            timeout_minutes: 5,
         },
         runner_label: "macos-15".to_owned(),
         scale_set_token: None,

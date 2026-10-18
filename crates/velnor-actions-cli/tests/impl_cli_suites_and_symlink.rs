@@ -54,7 +54,7 @@ profile = "full"
 run_ignored = "only"
 partitions = 12
 build = "archive"
-timeout_minutes = 60
+timeout_minutes = 5
 test_threads = 4
 triggers = ["schedule", "workflow_dispatch"]
 schedule = ["0 2 * * *"]
@@ -70,7 +70,7 @@ profile = "full"
 run_ignored = "only"
 partitions = 12
 build = "archive"
-timeout_minutes = 60
+timeout_minutes = 5
 triggers = ["workflow_dispatch"]
 allow_failure = true
 dispatch_inputs = { tier = ["capture"] }
@@ -91,7 +91,7 @@ fail-fast = false
 retries = 2
 ";
 
-const CUSTOM_AUDIT_WORKFLOW: &[u8] = b"name: Custom Audit\non:\n  workflow_dispatch:\njobs:\n  audit:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 10\n    steps:\n      - run: echo ok\n";
+const CUSTOM_AUDIT_WORKFLOW: &[u8] = b"name: Custom Audit\non:\n  workflow_dispatch:\njobs:\n  audit:\n    runs-on: ubuntu-24.04\n    timeout-minutes: 5\n    steps:\n      - run: echo ok\n";
 
 #[test]
 fn default_schema1_config_emits_byte_identical_github_tree() -> Result<(), Box<dyn Error>> {

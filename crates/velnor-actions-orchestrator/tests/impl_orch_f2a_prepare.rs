@@ -29,13 +29,26 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         discover_calls[0].starts_with("prepare.rs"),
         "{discover_calls:?}"
     );
+    assert_configuration_admission_boundaries(&config_calls);
+    let internal = std::fs::read_to_string(orch_src().join("internal.rs"))?;
+    assert!(internal.contains("prepare(&root)"), "plan runs prepare");
+    let generate = std::fs::read_to_string(orch_src().join("generate.rs"))?;
+    assert!(
+        generate.contains("prep: &GenerationPreparation"),
+        "generate consumes preparation"
+    );
+    Ok(())
+}
+
+fn assert_configuration_admission_boundaries(config_calls: &[String]) {
     // Preparation discovers repository evidence, execution reloads the
     // source-bound definition, routing reloads before schema migration,
     // the owned-tool preview reloads at its CLI-gated boundary, qualification
     // admission reloads for the repo-resolved catalog, and tap preparation
     // reloads the captured tap's own config before using its updater task.
-    // Backend cache operations read the source configuration before each request.
-    assert_eq!(config_calls.len(), 8, "{config_calls:?}");
+    // Backend cache operations read source configuration before each request.
+    // Preview admission and producer checks load configuration at separate boundaries.
+    assert_eq!(config_calls.len(), 9, "{config_calls:?}");
     assert!(
         config_calls
             .iter()
@@ -69,6 +82,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
     assert!(
         config_calls.iter().all(|call| {
             call.starts_with("prepare.rs")
+                || call.starts_with("preview_producer_entry.rs")
                 || call.starts_with("check_runtime.rs")
                 || call.starts_with("routing.rs")
                 || call.starts_with("owned_tool_preview.rs")
@@ -79,12 +93,4 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         }),
         "{config_calls:?}"
     );
-    let internal = std::fs::read_to_string(orch_src().join("internal.rs"))?;
-    assert!(internal.contains("prepare(&root)"), "plan runs prepare");
-    let generate = std::fs::read_to_string(orch_src().join("generate.rs"))?;
-    assert!(
-        generate.contains("prep: &GenerationPreparation"),
-        "generate consumes preparation"
-    );
-    Ok(())
 }

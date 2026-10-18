@@ -338,7 +338,7 @@ fn named_check_reuses_its_task_and_input_closure_derivation() {
         tools: Vec::new(),
         system_tools: Vec::new(),
         evidence: None,
-        timeout_minutes: 10,
+        timeout_minutes: 5,
     };
     let (planned_discovery, planned_check) = check_discovery(root.path(), &check);
     let (obligation, entry) = crate::internal_plan::named_checks::plan::derive(

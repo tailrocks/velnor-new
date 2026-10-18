@@ -7,7 +7,7 @@ fn identity() -> Result<CosignCertificateIdentity, MiseError> {
         ".github/workflows/binary-preview.yml",
         "refs/heads/main",
         "0123456789abcdef0123456789abcdef01234567",
-        "push",
+        "workflow_run",
     )
 }
 
@@ -16,6 +16,24 @@ fn certificate_identity_is_exact_and_bound_to_workflow_ref() {
     assert_eq!(
         identity().map(|value| value.certificate_identity()),
         Ok("https://github.com/jackin-project/velnor/.github/workflows/binary-preview.yml@refs/heads/main".to_owned())
+    );
+}
+
+#[test]
+fn certificate_constraints_accept_workflow_run_and_reject_legacy_push() {
+    assert_eq!(
+        identity().expect("preview identity").trigger,
+        "workflow_run"
+    );
+    assert!(
+        CosignCertificateIdentity::new(
+            "jackin-project/velnor",
+            ".github/workflows/binary-preview.yml",
+            "refs/heads/main",
+            "0123456789abcdef0123456789abcdef01234567",
+            "push"
+        )
+        .is_err()
     );
 }
 
@@ -30,28 +48,28 @@ fn certificate_identity_rejects_untrusted_identity_components() {
             workflow,
             source_ref,
             sha,
-            "push",
+            "workflow_run",
         ),
         (
             "jackin-project/velnor",
             ".github/workflows/../evil.yml",
             "refs/heads/main",
             sha,
-            "push",
+            "workflow_run",
         ),
         (
             "jackin-project/velnor",
             workflow,
             "refs/pull/4/merge",
             sha,
-            "push",
+            "workflow_run",
         ),
         (
             "jackin-project/velnor",
             workflow,
             source_ref,
             "0123456789abcdef0123456789abcdef0123456G",
-            "push",
+            "workflow_run",
         ),
         (
             "jackin-project/velnor",

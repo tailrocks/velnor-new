@@ -257,7 +257,7 @@ fn preview_receipt(source_sha: &str) -> PackageReleaseReceipt {
             commit_sha: source_sha.to_owned(),
             source_ref: "refs/heads/main".to_owned(),
             default_branch: "main".to_owned(),
-            event: PackageReleaseEvent::Push,
+            event: PackageReleaseEvent::WorkflowRun,
             ci_run_id: 1,
             ci_run_attempt: 1,
         },

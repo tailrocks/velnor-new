@@ -44,10 +44,13 @@ pub(crate) struct TagObservation {
     pub source_sha: String,
     pub message: Option<String>,
 }
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub(crate) struct WorkflowRunResponse {
     pub id: Option<u64>,
     pub run_attempt: Option<u32>,
+    pub run_number: Option<u64>,
+    pub workflow_id: Option<u64>,
+    pub name: Option<String>,
     pub path: Option<String>,
     pub head_sha: Option<String>,
     pub head_branch: Option<String>,
@@ -55,10 +58,24 @@ pub(crate) struct WorkflowRunResponse {
     pub status: Option<String>,
     pub conclusion: Option<String>,
     pub repository: Option<RunRepository>,
+    pub head_repository: Option<RunRepository>,
 }
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub(crate) struct RunRepository {
     pub id: u64,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct WorkflowMetadata {
+    pub id: u64,
+    pub name: String,
+    pub path: String,
+    pub state: String,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct WorkflowRunList {
+    pub workflow_runs: Vec<WorkflowRunResponse>,
 }
 #[derive(Deserialize)]
 pub(crate) struct WorkflowJobList {

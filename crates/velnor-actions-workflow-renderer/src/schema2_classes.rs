@@ -10,6 +10,7 @@ use super::features::{
 };
 use crate::yaml::Yaml;
 use velnor_actions_actionlint::GITHUB_SCRIPT_ACTION_USES;
+use velnor_actions_contract::JobTimeout;
 
 #[path = "schema2_empty_cache.rs"]
 mod empty_cache;
@@ -274,8 +275,12 @@ fn lane<'a>(
 }
 
 fn emit(job: Lane<'_>, extras: Extras) -> (String, Yaml) {
-    let mut fields =
-        lane_base_with_container(&job.heading(), job.runner, 20, extras.container.is_some());
+    let mut fields = lane_base_with_container(
+        &job.heading(),
+        job.runner,
+        JobTimeout::DEFAULT,
+        extras.container.is_some(),
+    );
     push_needs(&mut fields, job.needs);
     push_opt(&mut fields, "permissions", extras.permissions);
     push_opt(&mut fields, "container", extras.container);

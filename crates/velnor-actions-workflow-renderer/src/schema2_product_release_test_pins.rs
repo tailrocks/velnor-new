@@ -170,6 +170,8 @@ fn build_argv(catalog: &ToolCatalog) -> BuildArgv {
             "--release",
             "--package",
             "velnor-runner-cli",
+            "--bin",
+            "velnor-host",
         ],
         catalog,
     );

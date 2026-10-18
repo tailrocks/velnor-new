@@ -124,7 +124,7 @@ inputs = [
   "mise.toml",
 ]
 tools = ["cargo-nextest", "rust"]
-timeout_minutes = 60
+timeout_minutes = 5
 [checks.runner]
 label = "ubuntu-26.04"
 platform = "linux_x64"

@@ -21,7 +21,6 @@ use velnor_actions_contract::package_release::{PackageReleaseAsset, PackageRelea
 
 #[path = "package_release_artifacts_tree.rs"]
 mod tree;
-
 pub(crate) use tree::validate_source_tree;
 
 /// Compare every untrusted handoff row to the exact trusted inventory.
@@ -392,7 +391,9 @@ fn hex_lower(bytes: &[u8]) -> String {
 }
 
 fn check_deadline(started: Instant) -> Result<(), OrchestratorError> {
-    if started.elapsed() > Duration::from_secs(120) {
+    if velnor_actions_mise::CheckDeadline::check_scope().is_err()
+        || started.elapsed() > Duration::from_secs(120)
+    {
         return Err(invalid("package_output_verification_timeout"));
     }
     Ok(())

@@ -152,7 +152,7 @@ fn declared_jobs_are_exact_sorted_and_unique() {
     changed.insert(
         id,
         Job {
-            timeout_minutes: velnor_actions_contract::JobTimeout::new(119).expect("timeout"),
+            timeout_minutes: velnor_actions_contract::JobTimeout::new(4).expect("timeout"),
             ..job
         },
     );

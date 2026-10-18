@@ -215,3 +215,7 @@ fn file(path: &str, version: &str, body: &Yaml) -> Result<RenderedFile, RenderEr
         bytes,
     })
 }
+
+#[cfg(test)]
+#[path = "schema2_timeout_tests.rs"]
+mod timeout_tests;

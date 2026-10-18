@@ -2,6 +2,7 @@
 
 use crate::RenderError;
 use crate::yaml::Yaml;
+use velnor_actions_contract::JobTimeout;
 
 use super::super::features::{base, finish};
 use super::assets::ProductAsset;
@@ -86,7 +87,7 @@ pub(super) fn job(
     )?;
     let mut fields = with_permissions(
         workflow_steps::with_needs(
-            base(job.name, job.runs_on, 120),
+            base(job.name, job.runs_on, JobTimeout::DEFAULT),
             &[job.build_job, "candidate-manifest"],
         ),
         workflow_steps::qualification_permissions(),

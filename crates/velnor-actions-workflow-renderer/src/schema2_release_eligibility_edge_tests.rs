@@ -47,7 +47,9 @@ fn fails_closed_on_changed_tip_and_unfinished_latest_run() -> Result<(), Box<dyn
     assert!(
         result
             .stderr
-            .contains("did not become successful before timeout")
+            .contains("latest exact-source CI run is not complete"),
+        "{}",
+        result.stderr
     );
     Ok(())
 }
@@ -87,7 +89,9 @@ fn rejects_events_repository_refs_authority_and_stale_ci_sources() -> Result<(),
     assert!(
         result
             .stderr
-            .contains("did not become successful before timeout")
+            .contains("latest exact-source CI run is missing"),
+        "{}",
+        result.stderr
     );
     Ok(())
 }
@@ -101,7 +105,9 @@ fn rejects_ci_run_from_wrong_head_repository() -> Result<(), Box<dyn Error>> {
     assert!(
         result
             .stderr
-            .contains("did not become successful before timeout")
+            .contains("latest exact-source CI run is missing"),
+        "{}",
+        result.stderr
     );
     Ok(())
 }

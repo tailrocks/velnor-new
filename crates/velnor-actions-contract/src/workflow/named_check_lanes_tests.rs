@@ -78,7 +78,7 @@ fn job(id: &str, check_runner: Option<CheckRunner>, needs: &[&str]) -> Job {
             .as_ref()
             .map_or_else(|| "ubuntu-26.04".to_owned(), |row| row.label.clone()),
         check_runner,
-        timeout_minutes: JobTimeout::new(30).expect("timeout"),
+        timeout_minutes: JobTimeout::new(5).expect("timeout"),
         needs: needs.iter().map(ToString::to_string).collect(),
         condition: id
             .starts_with(QUALIFICATION_CHECK_JOB_PREFIX)

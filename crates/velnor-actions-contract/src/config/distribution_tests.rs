@@ -28,7 +28,7 @@ pub(super) fn valid() -> HomebrewTapConfig {
                 "scripts/package-update.sh".to_owned(),
             ],
             tools: vec!["jq".to_owned(), "python".to_owned()],
-            timeout_minutes: 30,
+            timeout_minutes: 5,
         },
         environment: TapUpdateEnvironment::TapUpdate,
         app_id_variable: "HOMEBREW_TAP_APP_ID".to_owned(),
@@ -106,7 +106,7 @@ fn rejects_unqualified_inputs_tools_and_unbounded_task() {
     config.updater.tools.push("jq".to_owned());
     assert!(config.validate("config.toml").is_err());
     config = valid();
-    config.updater.timeout_minutes = 361;
+    config.updater.timeout_minutes = 6;
     assert!(config.validate("config.toml").is_err());
     config = valid();
     config.updater.inputs.retain(|path| path != "mise.toml");
@@ -156,4 +156,28 @@ fn closed_enums_reject_arbitrary_source_environment_and_merge_values() {
         );
         assert!(serde_json::from_str::<HomebrewTapConfig>(&json).is_err());
     }
+}
+
+#[test]
+fn timeout_preserves_shorter_budgets_and_rejects_above_five() {
+    for minutes in 1..=5 {
+        let mut value = valid();
+        value.updater.timeout_minutes = minutes;
+        assert!(value.validate("config.toml").is_ok(), "{minutes}");
+    }
+    for minutes in [0, 6, 30, 360, u32::MAX] {
+        let mut value = valid();
+        value.updater.timeout_minutes = minutes;
+        assert!(value.validate("config.toml").is_err(), "{minutes}");
+    }
+}
+
+#[test]
+fn omitted_timeout_uses_the_shared_five_minute_default() {
+    let mut json = serde_json::to_value(valid().updater).expect("serialize");
+    json.as_object_mut()
+        .expect("object")
+        .remove("timeout_minutes");
+    let value: TapUpdaterBinding = serde_json::from_value(json).expect("default timeout");
+    assert_eq!(value.timeout_minutes, 5);
 }

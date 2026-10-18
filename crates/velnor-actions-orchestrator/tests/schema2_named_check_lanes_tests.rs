@@ -10,7 +10,7 @@ use velnor_actions_orchestrator::{plan_internal, prepare, render_staged_tree};
 
 fn check_config(id: &str, task: &str, label: &str, platform: &str) -> String {
     format!(
-        "[[checks]]\nid = \"{id}\"\ntask = \"{task}\"\ndirectory = \".\"\ninputs = [\"mise.toml\"]\ntools = []\ntimeout_minutes = 20\n[checks.runner]\nlabel = \"{label}\"\nplatform = \"{platform}\"\nexecutor = \"hosted\"\n"
+        "[[checks]]\nid = \"{id}\"\ntask = \"{task}\"\ndirectory = \".\"\ninputs = [\"mise.toml\"]\ntools = []\ntimeout_minutes = 5\n[checks.runner]\nlabel = \"{label}\"\nplatform = \"{platform}\"\nexecutor = \"hosted\"\n"
     )
 }
 

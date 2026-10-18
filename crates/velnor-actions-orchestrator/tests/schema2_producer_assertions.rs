@@ -37,9 +37,14 @@ pub(super) fn assert_macos_producer(body: &str) -> TestResult {
         )),
         "{build}"
     );
-    assert!(body.contains(
-        "cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-runner-cli"
-    ));
+    assert!(
+        build.contains(&format!(
+            "mise --no-config --no-env --no-hooks exec rust@{} mr-boxington@{} -- mbx build --locked --manifest-path crates/velnor-runner/Cargo.toml --release --package velnor-runner-cli --bin velnor-host",
+            velnor_actions_mise::catalog::RUST_VERSION,
+            velnor_actions_mise::catalog::MR_BOXINGTON_VERSION
+        )),
+        "{build}"
+    );
     assert!(body.contains("Mach-O"));
     assert!(body.contains("arm64"));
     assert!(body.contains("shasum -a 256"));

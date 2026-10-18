@@ -4,21 +4,23 @@ use velnor_actions_contract::{RunsOn, Step, StepKind, StepRole};
 
 /// Keep helper acquisition and cache-tar setup before the steps shared by jobs.
 pub(super) fn peel_cache_helper_prefix(steps: &[Step]) -> Option<(Vec<Step>, &[Step])> {
-    let end = steps
-        .iter()
-        .take_while(|step| {
-            matches!(
-                step.role,
-                Some(
-                    StepRole::AcquireVelnor
-                        | StepRole::PreseedDownload
-                        | StepRole::PreseedVerifyManifest
-                        | StepRole::PreseedStage
-                        | StepRole::CacheTarLaunchers
+    let start = usize::from(steps.first().is_some_and(is_preseed_plan_failure_guard));
+    let end = start
+        + steps[start..]
+            .iter()
+            .take_while(|step| {
+                matches!(
+                    step.role,
+                    Some(
+                        StepRole::AcquireVelnor
+                            | StepRole::PreseedDownload
+                            | StepRole::PreseedVerifyManifest
+                            | StepRole::PreseedStage
+                            | StepRole::CacheTarLaunchers
+                    )
                 )
-            )
-        })
-        .count();
+            })
+            .count();
     let prefix = &steps[..end];
     let acquire = prefix
         .iter()
@@ -43,7 +45,11 @@ pub(super) fn peel_cache_helper_prefix(steps: &[Step]) -> Option<(Vec<Step>, &[S
         StepRole::PreseedVerifyManifest,
         StepRole::PreseedStage,
     ];
-    let preseed_valid = preseed_roles.is_empty() || preseed_roles == preseed_order;
+    let preseed_valid = if start > 0 {
+        preseed_roles == preseed_order
+    } else {
+        preseed_roles.is_empty() || preseed_roles == preseed_order
+    };
     let source_count = acquire + usize::from(!preseed_roles.is_empty());
     if acquire > 1
         || (acquire > 0 && !preseed_roles.is_empty())
@@ -60,6 +66,22 @@ pub(super) fn peel_cache_helper_prefix(steps: &[Step]) -> Option<(Vec<Step>, &[S
     Some((prefix.to_vec(), &steps[end..]))
 }
 
+fn is_preseed_plan_failure_guard(step: &Step) -> bool {
+    step.name == "Require successful pre-seed plan"
+        && step.id.is_none()
+        && step.role.is_none()
+        && step.condition.as_deref() == Some("always() && needs.plan.result != 'success'")
+        && matches!(
+            &step.kind,
+            StepKind::Shell { run, env }
+                if run == &[
+                    "sh".to_owned(),
+                    "-c".to_owned(),
+                    crate::toolchain_env::with_credential_unset_script("exit 1"),
+                ] && env == &crate::toolchain_env::credential_scrub()
+        )
+}
+
 /// If the Scale Set lane cannot access the cache, keep the launcher in the hosted job only.
 pub(super) fn same_cache_helper_prefix_shape(
     hosted: &[Step],
@@ -69,6 +91,15 @@ pub(super) fn same_cache_helper_prefix_shape(
     hosted_has_cache_prelude: bool,
     local_has_cache_prelude: bool,
 ) -> bool {
+    let hosted_guard = hosted
+        .first()
+        .filter(|step| is_preseed_plan_failure_guard(step));
+    let local_guard = local
+        .first()
+        .filter(|step| is_preseed_plan_failure_guard(step));
+    if hosted_guard != local_guard {
+        return false;
+    }
     let is_helper_source = |step: &&Step| {
         matches!(
             step.role,
@@ -309,3 +340,7 @@ fn same_seed_admission_input(
     hosted.get(field).map(String::as_str) == Some(expected)
         && local.get(field).map(String::as_str) == Some(expected)
 }
+
+#[cfg(test)]
+#[path = "lane_share_runtime_tests.rs"]
+mod preseed_guard_tests;
