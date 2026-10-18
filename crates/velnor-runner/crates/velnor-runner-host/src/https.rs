@@ -119,8 +119,21 @@ pub(super) fn trace_lines(
 }
 
 fn run_curl(config: &str) -> Result<u16, CurlFail> {
-    let mut child = Command::new("curl")
-        .args(CURL_ARGV)
+    run_curl_with_home(config, None)
+}
+
+#[cfg(test)]
+pub(super) fn run_curl_in_home(config: &str, home: &Path) -> Result<u16, &'static str> {
+    run_curl_with_home(config, Some(home)).map_err(|_| "curl failed")
+}
+
+fn run_curl_with_home(config: &str, home: Option<&Path>) -> Result<u16, CurlFail> {
+    let mut command = Command::new("curl");
+    command.args(CURL_ARGV);
+    if let Some(home) = home {
+        command.env("CURL_HOME", home).env("HOME", home);
+    }
+    let mut child = command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
@@ -153,7 +166,9 @@ fn parse_status(stdout: &[u8]) -> Result<u16, CurlFail> {
     }
 }
 
-pub(crate) const CURL_ARGV: &[&str] = &["--silent", "--show-error", "--config", "-"];
+// curl only honors -q when it is the first argument. This prevents an
+// operator's .curlrc from adding retries or changing mutating request behavior.
+pub(crate) const CURL_ARGV: &[&str] = &["-q", "--silent", "--show-error", "--config", "-"];
 
 fn curl_config(
     url: &str,

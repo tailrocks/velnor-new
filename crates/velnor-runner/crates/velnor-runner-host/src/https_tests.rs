@@ -1,8 +1,15 @@
-//! Curl argv and URL joins. These tests do not open a socket.
+//! Curl transport tests use only local fixtures.
+
+use std::fs;
+use std::io::{Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::path::PathBuf;
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 use velnor_runner_github::{Method, SessionRequest};
 
-use super::https::{CURL_ARGV, HttpsTransport, join_url, trace_lines};
+use super::https::{CURL_ARGV, HttpsTransport, join_url, run_curl_in_home, trace_lines};
 use crate::error::HostError;
 
 #[test]
@@ -54,7 +61,31 @@ fn curl_argv_has_no_header() {
     let rendered = format!("{request:?}");
     assert!(rendered.contains("[redacted]"));
     assert!(!rendered.contains("secret"));
+    assert_eq!(CURL_ARGV.first(), Some(&"-q"));
     assert!(!CURL_ARGV.iter().any(|arg| arg.contains("Authorization")));
+}
+
+#[test]
+fn curl_ignores_retrying_curlrc_before_a_post() {
+    let home = CurlHome::new();
+    fs::write(
+        home.path.join(".curlrc"),
+        "retry = 1\nretry-all-errors\nretry-delay = 0\n",
+    )
+    .unwrap();
+    let server = RetryFixture::start();
+    let output = home.path.join("response");
+    let config = format!(
+        "request = \"POST\"\nurl = \"http://{}/create\"\noutput = \"{}\"\nwrite-out = \"%{{http_code}}\"\nmax-time = 5\n",
+        server.address,
+        output.display()
+    );
+
+    let result = run_curl_in_home(&config, &home.path);
+    let requests = server.finish();
+
+    assert!(matches!(result, Ok(503)));
+    assert_eq!(requests, 1);
 }
 
 #[test]
@@ -102,4 +133,95 @@ fn trace_request() -> SessionRequest {
         headers: Vec::new(),
         body: Vec::new(),
     }
+}
+
+struct CurlHome {
+    path: PathBuf,
+}
+
+impl CurlHome {
+    fn new() -> Self {
+        let path = std::env::temp_dir().join(format!("velnor-curl-home-{}", uuid::Uuid::new_v4()));
+        fs::create_dir(&path).unwrap();
+        Self { path }
+    }
+}
+
+impl Drop for CurlHome {
+    fn drop(&mut self) {
+        let _removed = fs::remove_dir_all(&self.path);
+    }
+}
+
+struct RetryFixture {
+    address: std::net::SocketAddr,
+    requests: JoinHandle<usize>,
+}
+
+impl RetryFixture {
+    fn start() -> Self {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let requests = thread::spawn(move || serve_retry_fixture(listener));
+        Self { address, requests }
+    }
+
+    fn finish(self) -> usize {
+        self.requests.join().unwrap()
+    }
+}
+
+fn serve_retry_fixture(listener: TcpListener) -> usize {
+    let (mut first, _) = listener.accept().unwrap();
+    read_headers(&mut first).unwrap();
+    respond(&mut first, 503).unwrap();
+    listener.set_nonblocking(true).unwrap();
+
+    let deadline = Instant::now() + Duration::from_millis(750);
+    loop {
+        match listener.accept() {
+            Ok((mut retry, _)) => {
+                read_headers(&mut retry).unwrap();
+                respond(&mut retry, 409).unwrap();
+                return 2;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                if Instant::now() >= deadline {
+                    return 1;
+                }
+                thread::sleep(Duration::from_millis(5));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => panic!("accept failed: {error}"),
+        }
+    }
+}
+
+fn read_headers(stream: &mut TcpStream) -> std::io::Result<()> {
+    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+    let mut bytes = Vec::new();
+    let mut chunk = [0; 1024];
+    while !bytes.windows(4).any(|window| window == b"\r\n\r\n") {
+        let count = stream.read(&mut chunk)?;
+        if count == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&chunk[..count]);
+        if bytes.len() > 16 * 1024 {
+            return Err(std::io::Error::other("request headers exceeded bound"));
+        }
+    }
+    Ok(())
+}
+
+fn respond(stream: &mut TcpStream, status: u16) -> std::io::Result<()> {
+    let reason = if status == 503 {
+        "Service Unavailable"
+    } else {
+        "Conflict"
+    };
+    write!(
+        stream,
+        "HTTP/1.1 {status} {reason}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+    )
 }
