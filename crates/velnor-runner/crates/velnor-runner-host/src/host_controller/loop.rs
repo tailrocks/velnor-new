@@ -9,7 +9,7 @@ use velnor_runner_github::QueueSession;
 
 use crate::config::{HostConfig, RepositoryConnection};
 use crate::controller_ipc::{ControlServer, ControlState};
-use crate::daemon_lock::{EngineLineageGuard, canonical_journal_path};
+use crate::daemon_lock::{DaemonLock, EngineLineageGuard, canonical_journal_path};
 use crate::docker_client::{connect_unix, docker_deadline};
 use crate::error::HostError;
 use crate::journal::{
@@ -17,7 +17,8 @@ use crate::journal::{
 };
 use crate::launch::{
     CompletionWorker, ReleaseReadSecret, SelectedEngineContext, SessionDeleteOutcome,
-    delete_removed_connection_session, open_connection_session, poll_scoped_connection_once,
+    SessionRefreshStartupAuthority, delete_removed_connection_session, open_connection_session,
+    poll_scoped_connection_once,
 };
 use crate::launch_blocking::ListenFault;
 use crate::listen::Link;
@@ -32,21 +33,48 @@ const CONFIG_RELOAD_PAUSE: Duration = Duration::from_secs(2);
 /// # Errors
 ///
 /// Returns [`ListenFault`] if the selected engine, journal, or local controller fails to start.
-pub fn run_host_blocking(config: &HostConfig, state: &Path) -> Result<(), ListenFault> {
+pub fn run_host_blocking(
+    config: &HostConfig,
+    state: &Path,
+    daemon_lock: &DaemonLock,
+) -> Result<(), ListenFault> {
+    let state_root = std::fs::canonicalize(state).map_err(|_| HostError::Path)?;
+    if !state_root.is_dir() {
+        return Err(HostError::Path.into());
+    }
+    if !daemon_lock.matches_path(&state_root.join("daemon.lock")) {
+        return Err(HostError::Lock.into());
+    }
     let release_read_secret = ReleaseReadSecret::load(config)?;
     let _capacity = crate::launch::install_job_capacity(config.max_jobs());
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|_| HostError::Journal)?;
-    runtime.block_on(run_controller(config.clone(), state, release_read_secret))
+    runtime.block_on(run_controller(
+        config.clone(),
+        state,
+        daemon_lock,
+        release_read_secret,
+    ))
 }
 
 async fn run_controller(
     mut current: HostConfig,
     state: &Path,
+    daemon_lock: &DaemonLock,
     mut _release_read_secret: ReleaseReadSecret,
 ) -> Result<(), ListenFault> {
+    let state_root = std::fs::canonicalize(state).map_err(|_| HostError::Path)?;
+    if !state_root.is_dir() {
+        return Err(HostError::Path.into());
+    }
+    let state = state_root.as_path();
+    let daemon_lock_path = state.join("daemon.lock");
+    if !daemon_lock.matches_path(&daemon_lock_path) {
+        return Err(HostError::Lock.into());
+    }
+
     let docker = connect_unix(&current.docker.endpoint)?;
     let selected_info = docker_deadline(docker.info())
         .await?
@@ -69,7 +97,7 @@ async fn run_controller(
     let instance_id = journal.instance_id().await?;
     let revision = journal.revision().await?;
     lineage.verify_lineage(&journal_path, &instance_id, revision)?;
-    journal.attach_lineage_guard(lineage)?;
+    journal.attach_lineage_guard(lineage.clone())?;
 
     let legacy_reconcile = crate::launch::reconcile_gate(&journal, &docker).await?;
     eprintln!(
@@ -79,6 +107,21 @@ async fn run_controller(
     configure_shared_capacity(&journal, &current).await?;
     journal.bootstrap_header_authority().await?;
     journal.validate_header_authority().await?;
+    let fresh_info = docker_deadline(docker.info())
+        .await?
+        .map_err(|_| HostError::Docker)?;
+    let startup_authority = SessionRefreshStartupAuthority::after_validated_startup(
+        daemon_lock,
+        state,
+        &lineage,
+        &journal,
+        &selected_engine,
+        &fresh_info,
+    )
+    .await?;
+    journal
+        .recover_interrupted_session_refreshes(startup_authority)
+        .await?;
     let mut connection_sessions =
         prepare_active_connections(&journal, &current, &selected_engine, &docker).await?;
     let (_server, control_state) = ControlServer::start(state, journal.clone(), &current)?;
@@ -89,6 +132,9 @@ async fn run_controller(
     // admission remains closed until every durable admission proof is wired.
     loop {
         tokio::time::sleep(CONFIG_RELOAD_PAUSE).await;
+        if !daemon_lock.matches_path(&daemon_lock_path) {
+            return Err(HostError::Lock.into());
+        }
         let config_path = state.join("host.toml");
         let next = match super::config_watch::read_host_config(&config_path) {
             Ok(next) => next,

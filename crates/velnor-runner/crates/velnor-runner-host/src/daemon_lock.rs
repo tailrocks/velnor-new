@@ -229,6 +229,14 @@ impl EngineLineageGuard {
         Ok(())
     }
 
+    pub(crate) fn engine_id(&self) -> &str {
+        &self.inner.engine_id
+    }
+
+    pub(crate) fn same_guard(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
+
     /// Advance the external anchor after the matching database commit.
     ///
     /// # Errors

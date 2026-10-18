@@ -1,4 +1,4 @@
-//! Scope-bound header intent and atomic session retirement.
+//! Header intent within one connection scope and atomic session retirement.
 
 use crate::error::HostError;
 use crate::journal::ConnectionJournal;
@@ -11,7 +11,7 @@ use crate::journal::connection::storage::{
 use crate::launch::{CompletedHeaderPoll, DeletedSession204};
 
 impl ConnectionJournal {
-    /// Read whether this exact session has no other connection work to drain.
+    /// Read whether all other work for this session's connection is complete.
     pub(crate) async fn session_work_drained(
         &self,
         session_intent_id: i64,
@@ -30,7 +30,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Read the exact live allocation bound to one returned session.
+    /// Read the live header allocation for the session ID in this journal record.
     pub(crate) async fn session_header_allocation(
         &self,
         session_intent_id: i64,
@@ -52,7 +52,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Reserve this bound session's header against the host-wide budget.
+    /// Record a capacity reservation for this session's header within the host budget.
     pub(crate) async fn reserve_session_header(
         &self,
         session_intent_id: i64,
@@ -78,7 +78,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Commit one exact session poll before sending it.
+    /// Before you send a session poll, record its session ID and request with a database commit.
     pub(crate) async fn begin_session_poll(
         &self,
         session_intent_id: i64,
@@ -90,7 +90,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Commit the required zero-header poll before sending it.
+    /// Before you send the necessary zero-header poll, record its session ID and request with a database commit.
     pub(crate) async fn begin_zero_header_poll(
         &self,
         session_intent_id: i64,
@@ -102,7 +102,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Record the exact handled response for the sent poll.
+    /// After the poll response and any necessary acknowledgement are complete, record the result.
     pub(crate) async fn settle_session_poll(
         &self,
         session_intent_id: i64,
@@ -113,7 +113,7 @@ impl ConnectionJournal {
             .await
     }
 
-    /// Keep the session charge when a sent poll has an unknown result.
+    /// If a sent poll has an unknown result, keep its header allocation in the host budget.
     pub(crate) async fn mark_session_poll_uncertain(
         &self,
         session_intent_id: i64,
@@ -123,7 +123,7 @@ impl ConnectionJournal {
             .await
     }
 
-    /// Commit the exact DELETE attempt after the session and its work drain.
+    /// Record the session DELETE attempt with a database commit after the zero-header poll and other connection work are complete.
     pub(crate) async fn begin_session_delete(
         &self,
         session_intent_id: i64,
@@ -158,7 +158,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Keep the header and session intent charged after an ambiguous DELETE.
+    /// If the DELETE result is unknown, keep the header allocation and session intent in the journal.
     pub(crate) async fn mark_session_delete_uncertain(
         &self,
         session_intent_id: i64,
@@ -181,7 +181,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Retire the session intent and its shared header in one journal transaction.
+    /// In one database transaction, record session intent cleanup and the end of its header allocation.
     pub(crate) async fn retire_session_after_delete(
         &self,
         session_intent_id: i64,
@@ -283,7 +283,7 @@ impl ConnectionJournal {
     }
 }
 
-async fn active_session_id(
+pub(super) async fn active_session_id(
     connection: &turso::Connection,
     scope: &ConnectionJournal,
     scale_set_id: i64,
@@ -328,7 +328,7 @@ async fn has_other_session_work(
     }
     let mut rows = connection
         .query(
-            "SELECT EXISTS (SELECT 1 FROM connection_intents WHERE connection_id = ?1 AND id != ?2 AND cleanup_proven = 0) OR EXISTS (SELECT 1 FROM connection_completion_inbox WHERE connection_id = ?1) OR EXISTS (SELECT 1 FROM capacity_reservations WHERE connection_id = ?1 AND state != 'released') OR EXISTS (SELECT 1 FROM connection_session_creates WHERE connection_id = ?1 AND state IN ('prepared', 'requested', 'uncertain'))",
+            "SELECT EXISTS (SELECT 1 FROM connection_intents WHERE connection_id = ?1 AND id != ?2 AND cleanup_proven = 0) OR EXISTS (SELECT 1 FROM connection_completion_inbox WHERE connection_id = ?1) OR EXISTS (SELECT 1 FROM capacity_reservations WHERE connection_id = ?1 AND state != 'released') OR EXISTS (SELECT 1 FROM connection_session_creates WHERE connection_id = ?1 AND state IN ('prepared', 'requested', 'uncertain')) OR EXISTS (SELECT 1 FROM connection_session_refreshes AS r WHERE r.intent_id = ?2 AND r.state IN ('requested', 'transport_error', 'abandoned_uncertain', 'uncertain') AND r.generation = (SELECT MAX(latest.generation) FROM connection_session_refreshes AS latest WHERE latest.intent_id = r.intent_id))",
             (connection_id, session_intent_id),
         )
         .await

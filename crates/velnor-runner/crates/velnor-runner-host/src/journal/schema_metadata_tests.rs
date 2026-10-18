@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::Journal;
+use super::{Journal, schema::JOURNAL_VERSION};
 
 struct Scratch {
     path: PathBuf,
@@ -286,7 +286,7 @@ async fn integer_primary_key_completion_tables_accept_fresh_and_v3_schemas() -> 
             .await
             .map_err(|error| error.to_string())?,
     );
-    assert_remote_primary_key_metadata(&path, 13).await?;
+    assert_remote_primary_key_metadata(&path, JOURNAL_VERSION).await?;
 
     // Version 3 already used INTEGER PRIMARY KEY. Remove tables introduced by
     // later migrations so the version-three path validates its own schema.
@@ -316,7 +316,7 @@ async fn integer_primary_key_completion_tables_accept_fresh_and_v3_schemas() -> 
             .await
             .map_err(|error| error.to_string())?,
     );
-    assert_remote_primary_key_metadata(&path, 13).await
+    assert_remote_primary_key_metadata(&path, JOURNAL_VERSION).await
 }
 
 async fn assert_remote_primary_key_metadata(

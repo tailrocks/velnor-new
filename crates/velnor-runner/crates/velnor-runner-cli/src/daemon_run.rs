@@ -66,7 +66,7 @@ fn serve(state: &Path, lock: &DaemonLock) -> ExitCode {
             pause();
             continue;
         };
-        return drive(state, &config);
+        return drive(state, &config, lock);
     }
 }
 
@@ -91,8 +91,8 @@ fn read_config_file(path: &Path) -> std::io::Result<Option<String>> {
     Ok(Some(text))
 }
 
-fn drive(state: &Path, config: &HostConfig) -> ExitCode {
-    match run_host_blocking(config, state) {
+fn drive(state: &Path, config: &HostConfig, lock: &DaemonLock) -> ExitCode {
+    match run_host_blocking(config, state, lock) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => report_listen_error(&error),
     }

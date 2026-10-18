@@ -20,6 +20,7 @@ pub(crate) use reservation::{
 pub(crate) use runtime::{ConnectionScaleSet, EngineContext, SourceAuthorizationBinding};
 pub(crate) use session::{
     BoundConnectionSession, SessionCreateClaim, SessionCreateRecord, SessionCreateState,
+    SessionRefreshClaim, SessionRefreshRecord, SessionRefreshState,
 };
 
 use crate::config::ConnectionId;

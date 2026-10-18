@@ -46,7 +46,8 @@ pub(crate) use resource_probe::StartPermit;
 pub(crate) use resource_probe::VerifiedProbeCleanup;
 pub(crate) use resource_probe::build_pin_status;
 pub(crate) use session::{
-    CompletedHeaderPoll, DeletedSession204, SessionDeleteOutcome,
+    CompletedHeaderPoll, DeletedSession204, ReturnedSessionRefreshTransportError,
+    SessionDeleteOutcome, SessionRefreshStartupAuthority, VerifiedSessionRefresh,
     delete_removed_connection_session, open_connection_session,
 };
 pub(crate) use slot::HOLDS_ROWS_SQL;

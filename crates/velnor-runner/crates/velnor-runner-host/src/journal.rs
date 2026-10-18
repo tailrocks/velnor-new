@@ -20,6 +20,7 @@ pub(in crate::journal) mod request_lifecycle;
 mod resource_probe;
 mod scale_set_create;
 mod schema;
+mod session_refresh;
 mod source_authorization;
 mod sql;
 mod transaction;
@@ -44,7 +45,7 @@ pub(crate) use connection::{
     OperationalCapacityLimits, PhysicalRunnerJitState, PhysicalRunnerOwnership,
     PhysicalRunnerReservation, ReservationRequest, ReservationResult, ReservationSnapshot,
     ReservationState, SessionCreateClaim, SessionCreateRecord, SessionCreateState,
-    SourceAuthorizationBinding,
+    SessionRefreshClaim, SessionRefreshRecord, SessionRefreshState, SourceAuthorizationBinding,
 };
 pub(crate) use image_import::{
     ImageImportClaim, ImageImportDescriptor, ImageImportId, ImageImportIdentity,
