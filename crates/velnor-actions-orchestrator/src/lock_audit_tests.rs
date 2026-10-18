@@ -54,6 +54,7 @@ fn ir_for(job: Job) -> WorkflowIr {
             push_branches: Vec::new(),
             merge_group: false,
             workflow_dispatch: None,
+            workflow_call: false,
             schedule: None,
         },
         permissions: Permissions::default(),

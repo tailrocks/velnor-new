@@ -49,16 +49,42 @@ fn request() -> Schema2WorkflowRequest {
 }
 
 #[test]
-fn scale_set_mode_rejects_qualification_with_a_darwin_job() {
+fn scale_set_mode_emits_only_the_full_ci_verification_wrapper() {
     let mut request = request();
     request.routing =
         WorkflowRoutingPolicy::from_mode(ExecutionMode::ScaleSet, request.scale_set.clone());
-    let error = render_schema2_workflows(&request).expect_err("Darwin workload must fail closed");
+    let workflow = render_schema2_workflows(&request)
+        .expect("scale-set wrapper renders without host jobs")
+        .into_iter()
+        .find(|file| file.path == super::QUALIFICATION_WORKFLOW)
+        .expect("qualification wrapper exists");
+    let yaml = workflow.bytes.as_str();
     assert!(
-        error
-            .to_string()
-            .contains("unsupported_darwin_workload:.github/workflows/qualification.yml:mise-pin-macos-x64:macos-15-intel"),
-        "{error}"
+        yaml.contains("mode:") && yaml.contains("verification-only"),
+        "{yaml}"
+    );
+    assert!(yaml.contains("campaign:"), "{yaml}");
+    assert!(yaml.contains("phase:"), "{yaml}");
+    assert!(yaml.contains("predecessor_run_id:"), "{yaml}");
+    assert!(yaml.contains("predecessor_run_attempt:"), "{yaml}");
+    assert!(yaml.contains("uses: ./.github/workflows/ci.yml"), "{yaml}");
+    assert!(yaml.contains("actions: read"), "{yaml}");
+    assert!(yaml.contains("cancel-in-progress: false"), "{yaml}");
+    assert!(
+        !yaml.contains("runs-on:"),
+        "wrapper must not start a runner: {yaml}"
+    );
+    assert!(
+        !yaml.contains("hosted"),
+        "wrapper must expose no hosted mode: {yaml}"
+    );
+    assert!(
+        !yaml.contains("macos"),
+        "wrapper must expose no Darwin job: {yaml}"
+    );
+    assert!(
+        !yaml.contains("mbx-cache-write"),
+        "wrapper must not emit a separate cache writer: {yaml}"
     );
 }
 

@@ -17,6 +17,9 @@ use crate::errors::ContractError;
 /// Generated main workflow path (P05-8: `ci.yml`, display `CI`).
 pub const CI_WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
 
+/// Generated qualification workflow path.
+pub const QUALIFICATION_WORKFLOW_PATH: &str = ".github/workflows/qualification.yml";
+
 /// Stale generated workflow paths the generator deletes on migration.
 pub const STALE_WORKFLOW_PATHS: [&str; 1] = [".github/workflows/velnor.yml"];
 

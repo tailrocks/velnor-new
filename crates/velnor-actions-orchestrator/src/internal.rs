@@ -107,7 +107,11 @@ fn plan_internal_inner(
     } else {
         prepare(&root)?
     };
-    validate_qualification_request(&request, &prep.default_branch)?;
+    validate_qualification_request(
+        &request,
+        &prep.default_branch,
+        prep.config.workflow.verification_branch.as_deref(),
+    )?;
     let named_check_lanes = named_lanes::resolve(&prep, request.named_check_lanes.take())?;
     let catalog = &prep.catalog;
     let mut warnings = Vec::new();
@@ -176,6 +180,7 @@ fn plan_internal_inner(
 fn validate_qualification_request(
     request: &PlanRequest,
     default_branch: &str,
+    verification_branch: Option<&str>,
 ) -> Result<(), OrchestratorError> {
     match (request.event, request.qualification.as_ref()) {
         (WorkflowEvent::Qualification, Some(context)) => {
@@ -184,7 +189,12 @@ fn validate_qualification_request(
                 .as_deref()
                 .ok_or_else(|| internal("missing_qualification_repository"))?;
             context
-                .validate_for(default_branch, repository, &request.head)
+                .validate_for_config(
+                    default_branch,
+                    verification_branch,
+                    repository,
+                    &request.head,
+                )
                 .map_err(internal_contract)
         }
         (WorkflowEvent::Qualification, None) => Err(internal("missing_qualification_context")),

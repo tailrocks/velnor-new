@@ -38,9 +38,20 @@ pub struct Trigger {
     /// Optional `workflow_dispatch` inputs (exact-plan bootstrap dispatch).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workflow_dispatch: Option<WorkflowDispatch>,
+    /// Whether this workflow can be called by another generated workflow.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub workflow_call: bool,
     /// Optional cron schedule.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schedule: Option<ScheduleTrigger>,
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if requires a reference predicate"
+)]
+const fn is_false(value: &bool) -> bool {
+    !*value
 }
 /// Concurrency group.
 #[derive(Debug, Clone, Serialize, Deserialize)]

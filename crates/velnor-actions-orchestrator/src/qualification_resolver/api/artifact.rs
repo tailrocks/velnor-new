@@ -164,9 +164,13 @@ fn verify_artifact_run(
     artifact: &QualificationCacheArtifact,
     metadata: &QualificationCacheRunMetadata,
 ) -> Result<(), OrchestratorError> {
+    let branch = metadata
+        .git_ref
+        .strip_prefix("refs/heads/")
+        .ok_or_else(|| internal("qualification_artifact_ref_invalid"))?;
     if artifact.name != velnor_actions_contract::QUALIFICATION_CACHE_RECEIPT_ARTIFACT
         || artifact.workflow_run_id != metadata.run.run_id
-        || artifact.workflow_head_branch != metadata.default_branch
+        || artifact.workflow_head_branch != branch
         || artifact.workflow_head_sha != metadata.head_sha
     {
         return Err(internal("qualification_artifact_run_mismatch"));

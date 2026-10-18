@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::errors::ContractError;
+use crate::workflow::QUALIFICATION_WORKFLOW_PATH;
 use crate::workflow::jobs::CI_WORKFLOW_PATH;
 use crate::workflow::plan::{ObligationDecision, Plan, WorkflowEvent};
 use crate::workflow::qualification_phase::QualificationPhase;
@@ -130,6 +131,26 @@ impl QualificationDispatch {
         expected_repository: &str,
         expected_source_sha: &str,
     ) -> Result<(), ContractError> {
+        self.validate_for_config(
+            default_branch,
+            None,
+            expected_repository,
+            expected_source_sha,
+        )
+    }
+
+    /// Compare the dispatch source with the default and configured verification
+    /// branches. Only qualification.yml can supply the configured non-default
+    /// source. Direct ci.yml dispatch requires the protected default branch.
+    ///
+    /// # Errors
+    pub fn validate_for_config(
+        &self,
+        default_branch: &str,
+        verification_branch: Option<&str>,
+        expected_repository: &str,
+        expected_source_sha: &str,
+    ) -> Result<(), ContractError> {
         self.validate_shape()?;
         if self.repository != expected_repository {
             return Err(ContractError::identity(
@@ -137,24 +158,36 @@ impl QualificationDispatch {
                 "repository_mismatch",
             ));
         }
-        if self.default_branch != default_branch
-            || self.git_ref != format!("refs/heads/{default_branch}")
-        {
+        if self.default_branch != default_branch {
             return Err(ContractError::identity(
                 "qualification.ref",
-                "not_default_branch",
+                "default_branch_mismatch",
             ));
         }
-        if !self.ref_protected {
+        let branch = self
+            .git_ref
+            .strip_prefix("refs/heads/")
+            .ok_or_else(|| ContractError::identity("qualification.ref", "not_branch_ref"))?;
+        let path = workflow_path(&self.workflow_ref, &self.repository).ok_or_else(|| {
+            ContractError::identity("qualification.workflow_ref", "workflow_ref_mismatch")
+        })?;
+        let is_default_ci = branch == default_branch && path == CI_WORKFLOW_PATH;
+        let is_default_wrapper = branch == default_branch && path == QUALIFICATION_WORKFLOW_PATH;
+        let is_verification_wrapper =
+            verification_branch == Some(branch) && path == QUALIFICATION_WORKFLOW_PATH;
+        if !(is_default_ci || is_default_wrapper || is_verification_wrapper) {
+            return Err(ContractError::identity(
+                "qualification.ref",
+                "not_configured_verification_ref",
+            ));
+        }
+        if branch == default_branch && !self.ref_protected {
             return Err(ContractError::identity(
                 "qualification.ref_protected",
-                "unprotected_ref",
+                "default_ref_unprotected",
             ));
         }
-        let expected_workflow_ref = format!(
-            "{}/{CI_WORKFLOW_PATH}@refs/heads/{default_branch}",
-            self.repository
-        );
+        let expected_workflow_ref = format!("{}/{path}@{}", self.repository, self.git_ref);
         if self.workflow_ref != expected_workflow_ref {
             return Err(ContractError::identity(
                 "qualification.workflow_ref",
@@ -244,19 +277,17 @@ fn validate_source_binding(context: &QualificationDispatch) -> Result<(), Contra
     if !is_lower_hex_sha(&context.source_sha) || !is_lower_hex_sha(&context.workflow_sha) {
         return Err(ContractError::identity("qualification.sha", "invalid_sha"));
     }
-    if context.source_sha != context.workflow_sha || !context.ref_protected {
+    if context.source_sha != context.workflow_sha {
         return Err(ContractError::identity(
             "qualification.provenance",
-            "unprotected_or_unbound_workflow",
+            "unbound_workflow",
         ));
     }
     Ok(())
 }
 
 fn validate_ref_binding(context: &QualificationDispatch) -> Result<(), ContractError> {
-    if !valid_branch_name(&context.default_branch)
-        || context.git_ref != format!("refs/heads/{}", context.default_branch)
-    {
+    if !valid_branch_name(&context.default_branch) {
         return Err(ContractError::identity(
             "qualification.default_branch",
             "default_branch_mismatch",
@@ -268,12 +299,14 @@ fn validate_ref_binding(context: &QualificationDispatch) -> Result<(), ContractE
             "not_branch_ref",
         ));
     };
-    if branch.is_empty()
-        || context.workflow_ref
-            != format!(
-                "{}/{CI_WORKFLOW_PATH}@{}",
-                context.repository, context.git_ref
-            )
+    let Some(path) = workflow_path(&context.workflow_ref, &context.repository) else {
+        return Err(ContractError::identity(
+            "qualification.workflow_ref",
+            "workflow_ref_mismatch",
+        ));
+    };
+    if !valid_branch_name(branch)
+        || context.workflow_ref != format!("{}/{path}@{}", context.repository, context.git_ref)
     {
         return Err(ContractError::identity(
             "qualification.workflow_ref",
@@ -281,6 +314,15 @@ fn validate_ref_binding(context: &QualificationDispatch) -> Result<(), ContractE
         ));
     }
     Ok(())
+}
+
+fn workflow_path<'a>(workflow_ref: &'a str, repository: &str) -> Option<&'a str> {
+    let suffix = workflow_ref.strip_prefix(&format!("{repository}/"))?;
+    let (path, git_ref) = suffix.split_once('@')?;
+    if !git_ref.starts_with("refs/heads/") {
+        return None;
+    }
+    matches!(path, CI_WORKFLOW_PATH | QUALIFICATION_WORKFLOW_PATH).then_some(path)
 }
 
 fn validate_run_identity(context: &QualificationDispatch) -> Result<(), ContractError> {

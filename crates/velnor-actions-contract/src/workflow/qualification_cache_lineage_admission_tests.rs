@@ -77,6 +77,48 @@ fn complete_cold_warm_third_useful_delta_and_control_admission_paths() -> TestRe
 }
 
 #[test]
+fn completed_receipt_uses_the_unprotected_verification_branch_identity() -> TestResult {
+    let mut plan = qualification_plan(QualificationPhase::Cold, 740, SOURCE_A, None)?;
+    let context = plan
+        .qualification
+        .as_mut()
+        .ok_or_else(|| std::io::Error::other("qualification context missing"))?;
+    context.git_ref = "refs/heads/sea/integration".to_owned();
+    context.ref_protected = false;
+    context.workflow_ref = format!(
+        "{}/{}@{}",
+        context.repository,
+        crate::workflow::QUALIFICATION_WORKFLOW_PATH,
+        context.git_ref
+    );
+    plan.validate()?;
+
+    let node = completed_node(&plan, None, None)?;
+    let metadata: crate::workflow::QualificationCacheRunMetadata =
+        serde_json::from_value(node.value["metadata"].clone())?;
+    assert_eq!(metadata.git_ref, "refs/heads/sea/integration");
+    assert!(!metadata.ref_protected);
+    assert_eq!(node.artifact.workflow_head_branch, "sea/integration");
+
+    let mut wrong_ref = metadata.clone();
+    wrong_ref.git_ref = "refs/heads/main".to_owned();
+    assert!(
+        node.document
+            .to_bounded_json(&plan, &wrong_ref, None)
+            .is_err()
+    );
+
+    let mut wrong_protection = metadata;
+    wrong_protection.ref_protected = true;
+    assert!(
+        node.document
+            .to_bounded_json(&plan, &wrong_protection, None)
+            .is_err()
+    );
+    Ok(())
+}
+
+#[test]
 fn native_mbx_receipt_and_directive_use_the_object_layer_only() -> TestResult {
     let mut plan = qualification_plan(QualificationPhase::Cold, 705, SOURCE_A, None)?;
     plan.matrix.include[0].adapter_metadata["compile_driver"] = serde_json::json!("mbx");

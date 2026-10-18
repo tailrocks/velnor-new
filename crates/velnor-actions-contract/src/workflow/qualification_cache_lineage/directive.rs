@@ -39,7 +39,9 @@ impl QualificationCacheDirective {
                 Ok(None)
             };
         };
-        context.validate_for(&context.default_branch, &context.repository, &plan.head)?;
+        // Plan::validate has already compared this immutable context with the
+        // plan. The orchestrator compares the ref with the configured refs
+        // before planning. This stage keeps that ref for separate cache keys.
         if plan.matrix.include.len() > MAX_QUALIFICATION_CACHE_LANES {
             return Err(invalid("too_many_lanes"));
         }

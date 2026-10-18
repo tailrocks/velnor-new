@@ -52,6 +52,60 @@ fn rejects_each_unbound_dispatch_identity() {
 }
 
 #[test]
+fn admits_only_the_configured_verification_wrapper_ref() {
+    let mut value = dispatch();
+    value.git_ref = "refs/heads/sea/integration".to_owned();
+    value.ref_protected = false;
+    value.workflow_ref =
+        "owner/project/.github/workflows/qualification.yml@refs/heads/sea/integration".to_owned();
+    assert!(
+        value
+            .validate_for_config("main", Some("sea/integration"), "owner/project", SHA)
+            .is_ok()
+    );
+    assert!(
+        value
+            .validate_for_config("main", None, "owner/project", SHA)
+            .is_err(),
+        "unconfigured non-default refs must fail"
+    );
+
+    value.workflow_ref =
+        "owner/project/.github/workflows/ci.yml@refs/heads/sea/integration".to_owned();
+    assert!(
+        value
+            .validate_for_config("main", Some("sea/integration"), "owner/project", SHA)
+            .is_err(),
+        "the direct CI workflow cannot dispatch from the verification branch"
+    );
+}
+
+#[test]
+fn wrapper_dispatch_remains_protected_on_the_default_branch() {
+    let mut value = dispatch();
+    value.workflow_ref =
+        "owner/project/.github/workflows/qualification.yml@refs/heads/main".to_owned();
+    assert!(
+        value
+            .validate_for_config("main", Some("sea/integration"), "owner/project", SHA)
+            .is_ok()
+    );
+    value.ref_protected = false;
+    assert!(
+        value
+            .validate_for_config("main", Some("sea/integration"), "owner/project", SHA)
+            .is_err()
+    );
+}
+
+#[test]
+fn shape_rejects_workflow_ref_for_a_different_runner_ref() {
+    let mut value = dispatch();
+    value.git_ref = "refs/heads/sea/integration".to_owned();
+    assert!(value.validate_shape().is_err());
+}
+
+#[test]
 fn rejects_unscoped_campaign_and_run_identity() {
     let mut value = dispatch();
     value.campaign = "../shared".to_owned();

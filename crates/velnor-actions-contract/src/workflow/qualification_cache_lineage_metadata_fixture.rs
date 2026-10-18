@@ -23,16 +23,21 @@ pub(super) fn run_metadata(
     plan: &crate::workflow::Plan,
 ) -> super::TestResult<QualificationCacheRunMetadata> {
     let context = dispatch(plan)?;
+    let branch = context
+        .git_ref
+        .strip_prefix("refs/heads/")
+        .ok_or_else(|| std::io::Error::other("qualification branch missing"))?;
+    let path = context
+        .workflow_ref
+        .strip_prefix(&format!("{}/", context.repository))
+        .and_then(|value| value.split_once('@').map(|(path, _)| path))
+        .ok_or_else(|| std::io::Error::other("qualification workflow path missing"))?;
     Ok(QualificationCacheRunMetadata {
         repository: context.repository.clone(),
         default_branch: context.default_branch.clone(),
         git_ref: context.git_ref.clone(),
         ref_protected: context.ref_protected,
-        workflow_path_ref: format!(
-            "{}@{}",
-            crate::workflow::CI_WORKFLOW_PATH,
-            context.default_branch
-        ),
+        workflow_path_ref: format!("{path}@{branch}"),
         workflow_ref: context.workflow_ref.clone(),
         workflow_sha: context.workflow_sha.clone(),
         head_sha: context.source_sha.clone(),
@@ -47,6 +52,10 @@ pub(super) fn artifact_metadata(
     size_bytes: usize,
 ) -> super::TestResult<QualificationCacheArtifact> {
     let context = dispatch(plan)?;
+    let branch = context
+        .git_ref
+        .strip_prefix("refs/heads/")
+        .ok_or_else(|| std::io::Error::other("qualification branch missing"))?;
     Ok(QualificationCacheArtifact {
         id: context.run_id + 1_000,
         name: crate::workflow::QUALIFICATION_CACHE_RECEIPT_ARTIFACT.to_owned(),
@@ -54,7 +63,7 @@ pub(super) fn artifact_metadata(
         size_bytes: size_bytes as u64,
         expired: false,
         workflow_run_id: context.run_id,
-        workflow_head_branch: context.default_branch.clone(),
+        workflow_head_branch: branch.to_owned(),
         workflow_head_sha: context.source_sha.clone(),
     })
 }

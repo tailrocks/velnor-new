@@ -213,6 +213,9 @@ fn file(path: &str, version: &str, body: &Yaml) -> Result<RenderedFile, RenderEr
 }
 
 fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
+    if request.routing.is_scale_set() {
+        return Ok(verification_only_qualification());
+    }
     let hosted = RunnerSpec::hosted(&request.hosted_label)?;
     let scale = RunnerSpec::scale_set(runs_on_yaml(&request.scale_set.token())?);
     let echo = "inputs.mode == 'both'";
@@ -272,6 +275,108 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
         ));
     }
     Ok(document("Qualification", mode_trigger(), jobs))
+}
+
+fn verification_only_qualification() -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("Qualification")),
+        ("on".to_owned(), verification_dispatch_trigger()),
+        (
+            "permissions".to_owned(),
+            Yaml::Map(vec![
+                ("actions".to_owned(), Yaml::str("read")),
+                ("contents".to_owned(), Yaml::str("read")),
+            ]),
+        ),
+        (
+            "concurrency".to_owned(),
+            Yaml::Map(vec![
+                (
+                    "group".to_owned(),
+                    Yaml::str("velnor-verification-wrapper-${{ github.ref }}"),
+                ),
+                ("cancel-in-progress".to_owned(), Yaml::Bool(false)),
+            ]),
+        ),
+        (
+            "jobs".to_owned(),
+            Yaml::Map(vec![(
+                "verify-full-ci".to_owned(),
+                Yaml::Map(vec![
+                    (
+                        "name".to_owned(),
+                        Yaml::str("Run CI verification on the Velnor Scale Set"),
+                    ),
+                    (
+                        "if".to_owned(),
+                        Yaml::str("inputs.mode == 'verification-only'"),
+                    ),
+                    ("uses".to_owned(), Yaml::str("./.github/workflows/ci.yml")),
+                ]),
+            )]),
+        ),
+    ])
+}
+
+fn verification_dispatch_trigger() -> Yaml {
+    Yaml::Map(vec![(
+        "workflow_dispatch".to_owned(),
+        Yaml::Map(vec![("inputs".to_owned(), verification_dispatch_inputs())]),
+    )])
+}
+
+fn verification_dispatch_inputs() -> Yaml {
+    let inputs = vec![
+        (
+            "mode".to_owned(),
+            Yaml::Map(vec![
+                ("type".to_owned(), Yaml::str("choice")),
+                ("required".to_owned(), Yaml::Bool(true)),
+                (
+                    "options".to_owned(),
+                    Yaml::Seq(vec![Yaml::str("verification-only")]),
+                ),
+            ]),
+        ),
+        (
+            "campaign".to_owned(),
+            Yaml::Map(vec![
+                ("type".to_owned(), Yaml::str("string")),
+                ("required".to_owned(), Yaml::Bool(true)),
+            ]),
+        ),
+        (
+            "phase".to_owned(),
+            Yaml::Map(vec![
+                ("type".to_owned(), Yaml::str("choice")),
+                ("required".to_owned(), Yaml::Bool(true)),
+                (
+                    "options".to_owned(),
+                    Yaml::Seq(
+                        ["cold", "control", "third", "useful_delta", "warm"]
+                            .into_iter()
+                            .map(Yaml::str)
+                            .collect(),
+                    ),
+                ),
+            ]),
+        ),
+        (
+            "predecessor_run_id".to_owned(),
+            Yaml::Map(vec![
+                ("type".to_owned(), Yaml::str("string")),
+                ("required".to_owned(), Yaml::Bool(false)),
+            ]),
+        ),
+        (
+            "predecessor_run_attempt".to_owned(),
+            Yaml::Map(vec![
+                ("type".to_owned(), Yaml::str("string")),
+                ("required".to_owned(), Yaml::Bool(false)),
+            ]),
+        ),
+    ];
+    Yaml::Map(inputs)
 }
 
 fn with_if((id, body): (String, Yaml), when: &str) -> (String, Yaml) {

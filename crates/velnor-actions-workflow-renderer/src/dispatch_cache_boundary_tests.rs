@@ -179,6 +179,7 @@ fn dispatch_ir(job: Job) -> WorkflowIr {
                     default: Some("cold".to_owned()),
                 }],
             }),
+            workflow_call: false,
             schedule: None,
         },
         permissions: Permissions::default(),

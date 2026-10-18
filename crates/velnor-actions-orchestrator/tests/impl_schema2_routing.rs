@@ -160,6 +160,39 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
 }
 
 #[test]
+fn scale_set_qualification_wrapper_calls_full_ci_on_the_configured_verification_ref() -> TestResult
+{
+    let config = format!(
+        "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\nverification_branch = \"sea/integration\"\n[execution]\ndefault_profile = \"local\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nmode = \"scale-set\"\nworkflows = [\"qualification\"]\n{}",
+        profiles()
+    );
+    let repo = make_repo(&config)?;
+    let prep = prepare(repo.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let wrapper = required_file(&tree, ".github/workflows/qualification.yml")?;
+    let ci = required_file(&tree, ".github/workflows/ci.yml")?;
+    assert!(wrapper.contains("mode:"), "{wrapper}");
+    assert!(wrapper.contains("verification-only"), "{wrapper}");
+    assert!(
+        wrapper.contains("uses: ./.github/workflows/ci.yml"),
+        "{wrapper}"
+    );
+    assert!(!wrapper.contains("runs-on:"), "{wrapper}");
+    assert!(!wrapper.contains("hosted"), "{wrapper}");
+    assert!(!wrapper.contains("macos"), "{wrapper}");
+    assert!(ci.contains("workflow_call:"), "{ci}");
+    assert!(
+        !ci.contains("workflow_dispatch:"),
+        "consumer CI stays non-dispatchable: {ci}"
+    );
+    assert!(
+        ci.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
+        "{ci}"
+    );
+    Ok(())
+}
+
+#[test]
 fn committed_release_files_match_schema2_bytes() -> TestResult {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let tree = render_staged_tree(&prepare(&root)?)?;

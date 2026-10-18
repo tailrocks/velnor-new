@@ -36,7 +36,12 @@ impl QualificationRequest {
         }
         let prepared = prepare(root)?;
         self.context
-            .validate_for(&prepared.default_branch, &self.repository, &self.head)
+            .validate_for_config(
+                &prepared.default_branch,
+                prepared.config.workflow.verification_branch.as_deref(),
+                &self.repository,
+                &self.head,
+            )
             .map_err(crate::internal::internal_contract)?;
         validate_runner_request(self, &self.context)
     }

@@ -42,6 +42,7 @@ pub(super) fn bare_ir(jobs: BTreeMap<String, velnor_actions_contract::Job>) -> W
             push_branches: Vec::new(),
             merge_group: false,
             workflow_dispatch: None,
+            workflow_call: false,
             schedule: None,
         },
         permissions: Permissions::default(),

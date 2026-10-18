@@ -58,28 +58,24 @@ fn validate_run(
         || value.status.as_deref() != Some("completed")
         || event != "workflow_dispatch"
         || conclusion != "success"
-        || head_branch != client.default_branch()
+        || head_branch != client.branch()
         || head_repo != client.repository()
         || !valid_sha(head_sha)
-        || !workflow_path_matches(path, client.default_branch())
+        || !workflow_path_matches(path, client.workflow_path(), client.branch())
     {
         return Err(internal("qualification_run_authority_mismatch"));
     }
     Ok(QualificationCacheRunMetadata {
         repository: client.repository().to_owned(),
         default_branch: client.default_branch().to_owned(),
-        git_ref: format!("refs/heads/{}", client.default_branch()),
-        ref_protected: true,
-        workflow_path_ref: format!(
-            "{}@{}",
-            velnor_actions_workflow_renderer::render::WORKFLOW_PATH,
-            client.default_branch()
-        ),
+        git_ref: format!("refs/heads/{}", client.branch()),
+        ref_protected: client.ref_protected(),
+        workflow_path_ref: format!("{}@{}", client.workflow_path(), client.branch()),
         workflow_ref: format!(
             "{}/{}@refs/heads/{}",
             client.repository(),
-            velnor_actions_workflow_renderer::render::WORKFLOW_PATH,
-            client.default_branch()
+            client.workflow_path(),
+            client.branch()
         ),
         workflow_sha: head_sha.to_owned(),
         head_sha: head_sha.to_owned(),
@@ -99,8 +95,7 @@ fn required<'a>(value: Option<&'a str>, error: &'static str) -> Result<&'a str, 
         .ok_or_else(|| internal(error))
 }
 
-fn workflow_path_matches(value: &str, branch: &str) -> bool {
-    let path = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
+fn workflow_path_matches(value: &str, path: &str, branch: &str) -> bool {
     if value == path {
         return true;
     }

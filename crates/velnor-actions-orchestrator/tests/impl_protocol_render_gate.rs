@@ -32,6 +32,20 @@ fn internal_env_pairs(text: &str) -> Vec<(String, String)> {
     pairs
 }
 
+fn trigger() -> Trigger {
+    Trigger {
+        pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        push_branches: vec!["main".to_owned()],
+        merge_group: true,
+        workflow_dispatch: None,
+        workflow_call: false,
+        schedule: None,
+    }
+}
+
 /// Render the plan job, extract its gate env, run the gate logic, accept.
 #[test]
 fn render_gate_roundtrip_accepts_plan() -> TestResult {
@@ -58,16 +72,7 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
     );
     let ir = WorkflowIr {
         name: "CI".to_owned(),
-        triggers: Trigger {
-            pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
-                .iter()
-                .map(ToString::to_string)
-                .collect(),
-            push_branches: vec!["main".to_owned()],
-            merge_group: true,
-            workflow_dispatch: None,
-            schedule: None,
-        },
+        triggers: trigger(),
         permissions: Permissions::default(),
         concurrency: Concurrency {
             group: CONCURRENCY_GROUP.to_owned(),

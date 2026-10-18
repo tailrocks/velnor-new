@@ -35,8 +35,8 @@ pub fn resolve_qualification_admission(request_path: &Path) -> Result<(), Orches
     request.validate(&root)?;
     let config = crate::config::load_config(&root)?;
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&root, &config)?;
-    let client = api::GitHub::for_repository(&catalog, &request.repository)?;
-    client.validate_current_branch(&request.context.default_branch)?;
+    let client = api::GitHub::for_repository(&catalog, &request.context)?;
+    client.validate_current_branch()?;
     let Some(predecessor) = request.context.predecessor else {
         return Ok(());
     };

@@ -45,6 +45,7 @@ pub(super) fn workflow_ir() -> WorkflowIr {
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,
+            workflow_call: false,
             schedule: None,
         },
         permissions: Permissions::default(),

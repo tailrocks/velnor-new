@@ -34,6 +34,9 @@ pub struct WorkflowConfig {
     /// Default branch; required when `origin/HEAD` cannot be resolved.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_branch: Option<String>,
+    /// Optional non-default branch for verification-only runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verification_branch: Option<String>,
     /// Generator validation mode.
     pub generator_validation: GeneratorValidation,
     /// Maximum parallel matrix jobs.
@@ -181,6 +184,22 @@ impl WorkflowConfig {
                 "workflow.default_branch",
                 "malformed_branch",
             ));
+        }
+        if let Some(branch) = &self.verification_branch {
+            if !crate::is_valid_branch_name(branch) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verification_branch",
+                    "malformed_branch",
+                ));
+            }
+            if self.default_branch.as_deref() == Some(branch.as_str()) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.verification_branch",
+                    "must_differ_from_default_branch",
+                ));
+            }
         }
         if let Some(label) = &self.runner_label
             && !RUNNER_LABEL_CATALOG.contains(&label.as_str())

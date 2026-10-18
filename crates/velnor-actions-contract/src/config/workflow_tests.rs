@@ -12,6 +12,7 @@ fn named(name: &str) -> WorkflowConfig {
         name: name.to_owned(),
         policy: WorkflowPolicy::ConsumerV1,
         default_branch: None,
+        verification_branch: None,
         generator_validation: GeneratorValidation::Bootstrap,
         mise_quiet: true,
         max_parallel_jobs: 2,
@@ -290,6 +291,30 @@ fn default_branch_rejects_yaml_and_git_injection() {
     let mut config = named("CI");
     config.default_branch = Some("release/1.2".to_owned());
     assert_eq!(config.validate("config.toml"), Ok(()));
+}
+
+#[test]
+fn verification_branch_is_valid_and_distinct_from_configured_default() {
+    let mut config = named("CI");
+    config.default_branch = Some("main".to_owned());
+    config.verification_branch = Some("sea/integration".to_owned());
+    assert_eq!(config.validate("config.toml"), Ok(()));
+
+    config.verification_branch = Some("main".to_owned());
+    let error = config
+        .validate("config.toml")
+        .expect_err("verification branch cannot be the default branch");
+    assert!(
+        error
+            .to_string()
+            .contains("must_differ_from_default_branch")
+    );
+
+    config.verification_branch = Some("sea/../main".to_owned());
+    let error = config
+        .validate("config.toml")
+        .expect_err("malformed verification branch must fail");
+    assert!(error.to_string().contains("malformed_branch"));
 }
 
 #[test]

@@ -21,6 +21,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             name: "CI".to_owned(),
             policy: WorkflowPolicy::ConsumerV1,
             default_branch: None,
+            verification_branch: None,
             generator_validation: velnor_actions_contract::GeneratorValidation::Bootstrap,
             mise_quiet: true,
             max_parallel_jobs: 2,

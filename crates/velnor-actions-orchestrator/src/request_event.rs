@@ -71,6 +71,13 @@ pub(crate) fn qualification_dispatch_for_parts(
     if payload_repository != repository || payload_ref != git_ref {
         return Err(internal("qualification_payload_context_mismatch"));
     }
+    let workflow_ref = required_context(runner.workflow_ref, "workflow_ref")?;
+    if git_ref != format!("refs/heads/{default_branch}")
+        && workflow_ref.contains("/.github/workflows/qualification.yml@")
+        && inputs["mode"].as_str() != Some("verification-only")
+    {
+        return Err(internal("qualification_wrapper_requires_verification_only"));
+    }
     let campaign = nonempty(inputs["campaign"].as_str())
         .ok_or_else(|| internal("missing_qualification_campaign"))?;
     let phase = match inputs["phase"].as_str() {
@@ -97,7 +104,7 @@ pub(crate) fn qualification_dispatch_for_parts(
         default_branch,
         git_ref,
         ref_protected: runner.ref_protected == Some("true"),
-        workflow_ref: required_context(runner.workflow_ref, "workflow_ref")?,
+        workflow_ref,
         workflow_sha: required_context(runner.workflow_sha, "workflow_sha")?,
         source_sha: required_context(runner.source_sha, "source_sha")?,
         run_id,
@@ -238,6 +245,17 @@ mod qualification_tests {
         }
     }
 
+    fn wrapper_runner() -> QualificationRunnerContext<'static> {
+        QualificationRunnerContext {
+            workflow_ref: Some(
+                "owner/project/.github/workflows/qualification.yml@refs/heads/sea/integration",
+            ),
+            git_ref: Some("refs/heads/sea/integration"),
+            ref_protected: Some("false"),
+            ..runner()
+        }
+    }
+
     #[test]
     fn dispatch_inputs_select_typed_phase_and_bind_runner_identity() {
         let payload = serde_json::json!({
@@ -263,6 +281,59 @@ mod qualification_tests {
         assert_eq!(
             context.predecessor.as_ref().map(|value| value.run_id),
             Some(39)
+        );
+    }
+
+    #[test]
+    fn qualification_wrapper_requires_verification_only_mode() {
+        let payload = serde_json::json!({
+            "inputs": {
+                "mode": "verification-only",
+                "campaign": "campaign-2030",
+                "phase": "cold"
+            },
+            "ref": "refs/heads/sea/integration",
+            "repository": {
+                "full_name": "owner/project",
+                "default_branch": "main"
+            }
+        });
+        assert!(
+            qualification_dispatch_for_parts("workflow_dispatch", &payload, wrapper_runner())
+                .expect("wrapper dispatch")
+                .is_some()
+        );
+
+        let mut legacy = payload;
+        legacy["inputs"]["mode"] = serde_json::json!("both");
+        assert!(
+            qualification_dispatch_for_parts("workflow_dispatch", &legacy, wrapper_runner())
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn default_branch_qualification_keeps_legacy_modes() {
+        let payload = serde_json::json!({
+            "inputs": {
+                "mode": "both",
+                "campaign": "campaign-2030",
+                "phase": "cold"
+            },
+            "ref": "refs/heads/main",
+            "repository": {
+                "full_name": "owner/project",
+                "default_branch": "main"
+            }
+        });
+        let context = QualificationRunnerContext {
+            workflow_ref: Some("owner/project/.github/workflows/qualification.yml@refs/heads/main"),
+            ..runner()
+        };
+        assert!(
+            qualification_dispatch_for_parts("workflow_dispatch", &payload, context)
+                .expect("default qualification dispatch")
+                .is_some()
         );
     }
 

@@ -109,6 +109,11 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
     let validation = input.config.workflow.generator_validation;
     let verify = crate::verify::verify_kinds(&input.config.workflow.verify.jobs)?;
     let support = support_workflow(policy, validation, input.discovery, &verify);
+    let has_qualification = input.config.execution.as_ref().is_some_and(|execution| {
+        execution
+            .workflows
+            .contains(&velnor_actions_contract::RoutingWorkflow::Qualification)
+    });
     let acquire = match policy {
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(
             input.label,
@@ -127,7 +132,7 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         rust,
         nextest: plan_uses_nextest(input.discovery),
         opentofu: plan_uses_opentofu(input.discovery),
-        gh: policy == WorkflowPolicy::VelnorRepositoryV1,
+        gh: policy == WorkflowPolicy::VelnorRepositoryV1 || has_qualification,
     };
     Ok(PreparedWorkflow {
         catalog: catalog.clone(),
@@ -159,7 +164,7 @@ fn build_workflow_plan(
     if let Some(format) = prepared.format.take() {
         insert_format_step(&mut plan, format);
     }
-    if prepared.policy == WorkflowPolicy::VelnorRepositoryV1 {
+    if prepared.needs.gh {
         plan.permissions = Some(crate::workflow_jobs::read_actions_permissions());
     }
     Ok(plan)

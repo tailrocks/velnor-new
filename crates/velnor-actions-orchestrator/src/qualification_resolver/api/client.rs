@@ -4,6 +4,7 @@ use std::ffi::{OsStr, OsString};
 use std::time::Duration;
 
 use serde::de::DeserializeOwned;
+use velnor_actions_contract::QualificationDispatch;
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 
 use crate::OrchestratorError;
@@ -18,14 +19,17 @@ pub(in crate::qualification_resolver) struct GitHub<'a> {
     catalog: &'a ToolCatalog,
     repository: String,
     default_branch: String,
+    branch: String,
+    ref_protected: bool,
+    workflow_path: String,
 }
 
 impl<'a> GitHub<'a> {
     pub(in crate::qualification_resolver) fn for_repository(
         catalog: &'a ToolCatalog,
-        repository: &str,
+        context: &QualificationDispatch,
     ) -> Result<Self, OrchestratorError> {
-        let repository = validate_repository_slug(repository)
+        let repository = validate_repository_slug(&context.repository)
             .ok_or_else(|| internal("qualification_repository_invalid"))?;
         let route = format!("repos/{repository}");
         let repo: RepositoryResponse = Self::json(catalog, &route)?;
@@ -34,10 +38,33 @@ impl<'a> GitHub<'a> {
         }
         let default_branch = required(repo.default_branch, "qualification_default_branch")?;
         validate_branch_name(&default_branch)?;
+        if default_branch != context.default_branch {
+            return Err(internal("qualification_default_branch_mismatch"));
+        }
+        let branch = context
+            .git_ref
+            .strip_prefix("refs/heads/")
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| internal("qualification_branch_invalid"))?
+            .to_owned();
+        validate_branch_name(&branch)?;
+        let workflow_path = context
+            .workflow_ref
+            .strip_prefix(&format!("{repository}/"))
+            .and_then(|value| value.split_once('@').map(|(path, _)| path))
+            .filter(|path| {
+                *path == velnor_actions_workflow_renderer::render::WORKFLOW_PATH
+                    || *path == velnor_actions_contract::QUALIFICATION_WORKFLOW_PATH
+            })
+            .ok_or_else(|| internal("qualification_workflow_invalid"))?
+            .to_owned();
         Ok(Self {
             catalog,
             repository,
             default_branch,
+            branch,
+            ref_protected: context.ref_protected,
+            workflow_path,
         })
     }
 
@@ -53,18 +80,28 @@ impl<'a> GitHub<'a> {
         &self.default_branch
     }
 
+    pub(in crate::qualification_resolver) fn branch(&self) -> &str {
+        &self.branch
+    }
+
+    pub(in crate::qualification_resolver) fn workflow_path(&self) -> &str {
+        &self.workflow_path
+    }
+
+    pub(in crate::qualification_resolver) fn ref_protected(&self) -> bool {
+        self.ref_protected
+    }
+
     pub(in crate::qualification_resolver) fn validate_current_branch(
         &self,
-        expected: &str,
     ) -> Result<(), OrchestratorError> {
-        if expected != self.default_branch {
-            return Err(internal("qualification_default_branch_mismatch"));
-        }
-        let branch = percent_encode_path_segment(expected);
+        let branch = percent_encode_path_segment(&self.branch);
         let route = format!("repos/{}/branches/{branch}", self.repository);
         let response: BranchResponse = Self::json(self.catalog, &route)?;
-        if response.protected != Some(true) {
-            return Err(internal("qualification_default_branch_unprotected"));
+        if response.protected != Some(self.ref_protected)
+            || (self.branch == self.default_branch && !self.ref_protected)
+        {
+            return Err(internal("qualification_branch_protection_mismatch"));
         }
         Ok(())
     }

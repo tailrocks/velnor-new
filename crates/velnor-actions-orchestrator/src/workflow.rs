@@ -134,6 +134,11 @@ fn workflow_ir(
             merge_group: true,
             workflow_dispatch: (policy == WorkflowPolicy::VelnorRepositoryV1)
                 .then(workflow_dispatch::qualification_dispatch),
+            workflow_call: config.execution.as_ref().is_some_and(|execution| {
+                execution
+                    .workflows
+                    .contains(&velnor_actions_contract::RoutingWorkflow::Qualification)
+            }),
             schedule: None,
         },
         permissions: Permissions::default(),

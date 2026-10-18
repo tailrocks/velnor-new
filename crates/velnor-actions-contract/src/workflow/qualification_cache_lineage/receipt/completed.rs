@@ -59,12 +59,25 @@ impl QualificationCacheReceiptArtifactDocument {
         metadata: &QualificationCacheRunMetadata,
         current_run: QualificationRunRef,
     ) -> Result<(), ContractError> {
+        let branch = context
+            .git_ref
+            .strip_prefix("refs/heads/")
+            .filter(|branch| crate::is_valid_branch_name(branch))
+            .ok_or_else(|| invalid("completed_dispatch_ref_invalid"))?;
+        let workflow_path = context
+            .workflow_ref
+            .strip_prefix(&format!("{}/", context.repository))
+            .and_then(|suffix| suffix.split_once('@').map(|(path, _)| path))
+            .filter(|path| {
+                *path == crate::workflow::CI_WORKFLOW_PATH
+                    || *path == crate::workflow::QUALIFICATION_WORKFLOW_PATH
+            })
+            .ok_or_else(|| invalid("completed_dispatch_workflow_invalid"))?;
         if self.schema != 2
             || self.producer.repository != context.repository
             || self.producer.default_branch != context.default_branch
             || self.producer.git_ref != context.git_ref
             || self.producer.ref_protected != context.ref_protected
-            || !self.producer.ref_protected
             || self.producer.workflow_ref != context.workflow_ref
             || self.producer.workflow_sha != context.workflow_sha
             || self.producer.workflow_sha != context.source_sha
@@ -74,17 +87,13 @@ impl QualificationCacheReceiptArtifactDocument {
             || metadata.repository != context.repository
             || metadata.default_branch != context.default_branch
             || metadata.git_ref != context.git_ref
-            || !metadata.ref_protected
+            || metadata.ref_protected != context.ref_protected
             || metadata.workflow_ref != self.producer.workflow_ref
             || metadata.workflow_sha != self.producer.workflow_sha
             || metadata.head_sha != context.source_sha
             || metadata.event != "workflow_dispatch"
-            || metadata.workflow_path_ref
-                != format!(
-                    "{}@{}",
-                    crate::workflow::CI_WORKFLOW_PATH,
-                    context.default_branch
-                )
+            || metadata.workflow_path_ref != format!("{workflow_path}@{branch}")
+            || metadata.workflow_ref != context.workflow_ref
             || self.receipt.plan_id != plan.plan_id
             || self.receipt.run != current_run
             || self.receipt.campaign != context.campaign
@@ -138,6 +147,11 @@ impl QualificationCacheReceiptArtifactDocument {
         admission: Option<&QualificationCacheAdmission>,
         current_run: QualificationRunRef,
     ) -> Result<(), ContractError> {
+        let branch = context
+            .git_ref
+            .strip_prefix("refs/heads/")
+            .filter(|branch| crate::is_valid_branch_name(branch))
+            .ok_or_else(|| invalid("completed_dispatch_ref_invalid"))?;
         let artifact = QualificationCacheArtifact {
             id: 1,
             name: QUALIFICATION_CACHE_RECEIPT_ARTIFACT.to_owned(),
@@ -145,7 +159,7 @@ impl QualificationCacheReceiptArtifactDocument {
             size_bytes: 1,
             expired: false,
             workflow_run_id: current_run.run_id,
-            workflow_head_branch: context.default_branch.clone(),
+            workflow_head_branch: branch.to_owned(),
             workflow_head_sha: context.source_sha.clone(),
         };
         let node = AdmissionNode {

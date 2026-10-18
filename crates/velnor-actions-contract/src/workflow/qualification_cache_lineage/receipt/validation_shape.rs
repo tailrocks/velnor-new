@@ -23,11 +23,14 @@ pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_node_m
         .ok_or_else(|| invalid("missing_dispatch"))?;
     let producer = &node.producer;
     let metadata = &node.metadata;
+    let branch = dispatch_branch(context)?;
+    let workflow_path = dispatch_workflow_path(context)?;
+    let workflow_path_ref = format!("{workflow_path}@{branch}");
     if producer.repository != metadata.repository
         || producer.default_branch != metadata.default_branch
         || producer.git_ref != metadata.git_ref
-        || !producer.ref_protected
-        || !metadata.ref_protected
+        || producer.ref_protected != context.ref_protected
+        || metadata.ref_protected != context.ref_protected
         || producer.workflow_ref != metadata.workflow_ref
         || producer.workflow_sha != metadata.workflow_sha
         || producer.source_sha != metadata.head_sha
@@ -37,30 +40,44 @@ pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_node_m
         || node.receipt.campaign != context.campaign
         || metadata.repository != context.repository
         || metadata.default_branch != context.default_branch
-        || metadata.git_ref != format!("refs/heads/{}", context.default_branch)
+        || metadata.git_ref != context.git_ref
         || metadata.event != "workflow_dispatch"
         || metadata.conclusion != "success"
-        || metadata.workflow_path_ref
-            != format!(
-                "{}@{}",
-                crate::workflow::CI_WORKFLOW_PATH,
-                context.default_branch
-            )
-        || metadata.workflow_ref
-            != format!(
-                "{}/{}@refs/heads/{}",
-                context.repository,
-                crate::workflow::CI_WORKFLOW_PATH,
-                context.default_branch
-            )
+        || metadata.workflow_path_ref != workflow_path_ref
+        || metadata.workflow_ref != context.workflow_ref
         || metadata.run != node.receipt.run
         || node.artifact.workflow_run_id != node.receipt.run.run_id
-        || node.artifact.workflow_head_branch != context.default_branch
+        || node.artifact.workflow_head_branch != branch
         || node.artifact.workflow_head_sha != node.receipt.source_sha
     {
         return Err(invalid("run_provenance_mismatch"));
     }
     Ok(())
+}
+
+fn dispatch_branch(
+    context: &crate::workflow::QualificationDispatch,
+) -> Result<&str, ContractError> {
+    context
+        .git_ref
+        .strip_prefix("refs/heads/")
+        .filter(|branch| crate::is_valid_branch_name(branch))
+        .ok_or_else(|| invalid("dispatch_ref_invalid"))
+}
+
+fn dispatch_workflow_path(
+    context: &crate::workflow::QualificationDispatch,
+) -> Result<&str, ContractError> {
+    let prefix = format!("{}/", context.repository);
+    context
+        .workflow_ref
+        .strip_prefix(&prefix)
+        .and_then(|suffix| suffix.split_once('@').map(|(path, _)| path))
+        .filter(|path| {
+            *path == crate::workflow::CI_WORKFLOW_PATH
+                || *path == crate::workflow::QUALIFICATION_WORKFLOW_PATH
+        })
+        .ok_or_else(|| invalid("dispatch_workflow_invalid"))
 }
 
 pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_metadata(

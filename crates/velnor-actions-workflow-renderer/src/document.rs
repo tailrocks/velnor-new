@@ -201,6 +201,9 @@ fn triggers_to_yaml(triggers: &Trigger) -> Yaml {
             Yaml::Map(vec![("inputs".to_owned(), Yaml::Map(inputs))]),
         ));
     }
+    if triggers.workflow_call {
+        entries.push(("workflow_call".to_owned(), Yaml::Map(Vec::new())));
+    }
     entries.push(("merge_group".to_owned(), Yaml::Null));
     Yaml::Map(entries)
 }
