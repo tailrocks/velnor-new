@@ -23,6 +23,7 @@ fn job(kind: InnerKind, request_id: Option<i64>) -> InnerJob {
         runner_name: None,
         result: None,
         fields: Vec::new(),
+        source: Default::default(),
     }
 }
 

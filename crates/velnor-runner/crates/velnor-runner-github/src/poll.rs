@@ -79,6 +79,61 @@ pub struct InnerJob {
     pub labels: Vec<String>,
     /// Object keys. Names only, so a live trace can show the shape.
     pub fields: Vec<String>,
+    /// Source values from this job message. Missing values stay absent.
+    pub source: SourceMetadata,
+}
+
+/// Source values that the pinned Scale Set message can provide.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct SourceMetadata {
+    /// `ownerName` when present.
+    pub owner_name: Option<String>,
+    /// `repositoryName` when present.
+    pub repository_name: Option<String>,
+    /// `jobWorkflowRef` when present.
+    pub job_workflow_ref: Option<String>,
+    /// `workflowRunId` when present.
+    pub workflow_run_id: Option<i64>,
+    /// `eventName` when present.
+    pub event_name: Option<String>,
+}
+
+impl SourceMetadata {
+    /// Return source values only when each field is present and usable.
+    #[must_use]
+    pub fn complete(&self) -> Option<CompleteSourceMetadata<'_>> {
+        let owner_name = non_empty(self.owner_name.as_deref())?;
+        let repository_name = non_empty(self.repository_name.as_deref())?;
+        let job_workflow_ref = non_empty(self.job_workflow_ref.as_deref())?;
+        let workflow_run_id = self.workflow_run_id.filter(|value| *value > 0)?;
+        let event_name = non_empty(self.event_name.as_deref())?;
+        Some(CompleteSourceMetadata {
+            owner_name,
+            repository_name,
+            job_workflow_ref,
+            workflow_run_id,
+            event_name,
+        })
+    }
+}
+
+/// Complete source values borrowed from one job message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CompleteSourceMetadata<'a> {
+    /// GitHub account name.
+    pub owner_name: &'a str,
+    /// GitHub repository name.
+    pub repository_name: &'a str,
+    /// Workflow path and ref from the job message.
+    pub job_workflow_ref: &'a str,
+    /// GitHub Actions workflow run identifier.
+    pub workflow_run_id: i64,
+    /// GitHub event name.
+    pub event_name: &'a str,
+}
+
+fn non_empty(value: Option<&str>) -> Option<&str> {
+    value.filter(|text| !text.trim().is_empty())
 }
 
 /// `statistics` object from the pinned Go struct.
@@ -205,6 +260,7 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
         other => InnerKind::Unsupported(other.to_owned()),
     };
     let runner_fields = message_runner_fields(value, &kind)?;
+    let source = source_metadata(value)?;
     Ok(InnerJob {
         kind,
         request_id,
@@ -214,6 +270,17 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
         job_id,
         labels,
         fields,
+        source,
+    })
+}
+
+fn source_metadata(value: &Value) -> Result<SourceMetadata, WireError> {
+    Ok(SourceMetadata {
+        owner_name: optional_string(value, "ownerName")?,
+        repository_name: optional_string(value, "repositoryName")?,
+        job_workflow_ref: optional_string(value, "jobWorkflowRef")?,
+        workflow_run_id: optional_i64(value, "workflowRunId")?,
+        event_name: optional_string(value, "eventName")?,
     })
 }
 

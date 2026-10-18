@@ -118,6 +118,7 @@ fn job(kind: InnerKind) -> InnerJob {
         runner_name: None,
         result: None,
         fields: Vec::new(),
+        source: Default::default(),
     }
 }
 

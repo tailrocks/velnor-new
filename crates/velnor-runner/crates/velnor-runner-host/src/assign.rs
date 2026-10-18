@@ -100,6 +100,7 @@ mod tests {
             runner_name: None,
             result: None,
             fields: Vec::new(),
+            source: Default::default(),
         }
     }
 

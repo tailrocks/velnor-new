@@ -265,6 +265,7 @@ fn progress_job(kind: InnerKind) -> InnerJob {
         runner_name: None,
         result: None,
         fields: Vec::new(),
+        source: Default::default(),
     }
 }
 
@@ -298,6 +299,7 @@ fn kind_wait(message_id: i64, assigned: i64, kind: InnerKind) -> Poll {
             runner_name: None,
             result: None,
             fields: Vec::new(),
+            source: Default::default(),
         }],
     })
 }
@@ -319,6 +321,7 @@ pub(crate) fn available(ids: &[i64]) -> Poll {
                 runner_name: None,
                 result: None,
                 fields: Vec::new(),
+                source: Default::default(),
             })
             .collect(),
     })

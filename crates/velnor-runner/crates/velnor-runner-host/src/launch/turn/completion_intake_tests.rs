@@ -23,6 +23,7 @@ fn completed(request_id: Option<i64>, runner_id: Option<i64>, name: Option<&str>
             runner_name: name.map(str::to_owned),
             result: Some("Succeeded".to_owned()),
             fields: Vec::new(),
+            source: Default::default(),
         }],
     })
 }
@@ -199,6 +200,7 @@ async fn oversized_completion_data_fails_before_inbox_write() -> Result<(), Stri
             runner_name: None,
             result: None,
             fields: Vec::new(),
+            source: Default::default(),
         }],
     });
     assert!(record_completed(&journal, 7, &oversized).await.is_err());

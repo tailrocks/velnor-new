@@ -307,6 +307,7 @@ fn unmatched_mixed_event(message_id: i64) -> Poll {
                 runner_name: None,
                 result: None,
                 fields: Vec::new(),
+                source: Default::default(),
             },
             InnerJob {
                 kind: InnerKind::Completed,
@@ -317,6 +318,7 @@ fn unmatched_mixed_event(message_id: i64) -> Poll {
                 runner_name: Some("v0".to_owned()),
                 result: Some("Succeeded".to_owned()),
                 fields: Vec::new(),
+                source: Default::default(),
             },
         ],
     })
