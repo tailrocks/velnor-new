@@ -9,6 +9,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+bytes = { version = "=1.12.1" }
 bollard = { workspace = true }
 flate2 = { workspace = true }
 futures-util = { version = "=0.3.34" }
@@ -20,7 +21,7 @@ rustix = { workspace = true }
 sha2 = { workspace = true }
 tar = { version = "=0.4.46" }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["fs"] }
 toml = { workspace = true }
 turso = { workspace = true }
 uuid = { version = "=1.28.0", features = ["v4"] }

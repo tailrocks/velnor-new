@@ -19,6 +19,7 @@ mod identity;
 mod release;
 #[cfg(test)]
 mod tests;
+mod worker_stream;
 mod worker_verify;
 
 pub(super) use failure::ProviderFailure;
