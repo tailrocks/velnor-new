@@ -57,6 +57,32 @@ fn qualification_named_check_keeps_command_but_uses_its_own_report_identity() {
     };
     assert_ne!(upload_name(normal_job), upload_name(qualification_job));
     assert!(upload_name(qualification_job).ends_with("-qualification-check-java"));
+    let step_names: Vec<&str> = qualification_job
+        .steps
+        .iter()
+        .map(|step| step.name.as_str())
+        .collect();
+    let execute = step_names
+        .iter()
+        .position(|name| *name == "Execute named check")
+        .expect("check execution");
+    let evidence = step_names
+        .iter()
+        .position(|name| *name == crate::qualification_source_evidence::SOURCE_EVIDENCE_STEP_NAME)
+        .expect("source evidence");
+    assert!(
+        execute < evidence && evidence + 2 == step_names.len(),
+        "{step_names:?}"
+    );
+    assert!(normal_job.steps.iter().all(|step| {
+        step.name != crate::qualification_source_evidence::SOURCE_EVIDENCE_STEP_NAME
+    }));
+    assert!(matches!(
+        &qualification_job.steps[evidence].kind,
+        StepKind::Shell { env, .. }
+            if env.get(INTERNAL_OP_ENV)
+                .is_some_and(|op| op == crate::qualification_source_evidence::SOURCE_EVIDENCE_OP)
+    ));
 }
 
 #[test]

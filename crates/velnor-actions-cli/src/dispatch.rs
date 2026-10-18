@@ -23,11 +23,12 @@ use velnor_actions_orchestrator::{
     MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP,
     PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PUBLISH_PACKAGE_RELEASE_OP,
     PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV,
-    SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP,
-    WRITE_REQUEST_OP, execute_check, execute_preview_producer, merge_internal, merge_passed,
-    plan_internal, plan_outputs_from_staged_admission, publish_final_report,
-    publish_plan_files_with_outputs, resolve_task_execution, response_path_for, retrieve_reports,
-    write_preseed_manifest, write_request, write_task_report,
+    SIGN_PACKAGE_RELEASE_OP, SOURCE_EVIDENCE_OP, TASK_EXECUTION_RESOLVER_OP,
+    WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, execute_check, execute_preview_producer,
+    merge_internal, merge_passed, plan_internal, plan_outputs_from_staged_admission,
+    publish_final_report, publish_plan_files_with_outputs, resolve_task_execution,
+    response_path_for, retrieve_reports, write_preseed_manifest,
+    write_qualification_source_evidence, write_request, write_task_report,
 };
 
 use crate::dispatch_publish::run_publish_internal;
@@ -101,6 +102,8 @@ enum InternalOp {
     ImportNormalToolsCachePayload,
     /// Export a normal tools payload to isolated staging.
     ExportNormalToolsCachePayload,
+    /// Record source and report observations for one Qualification lane.
+    WriteQualificationSourceEvidence,
     /// Data-only task execution record resolution for a generated wrapper.
     ResolveTaskExecution,
     /// Isolated, credentialed signing of a plan-bound package release.
@@ -166,6 +169,7 @@ fn internal_op() -> Option<InternalOp> {
         Ok(tag) if tag == cache_bind::transfer::normal::EXPORT_OP => {
             InternalOp::ExportNormalToolsCachePayload
         }
+        Ok(tag) if tag == SOURCE_EVIDENCE_OP => InternalOp::WriteQualificationSourceEvidence,
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
         Ok(tag) if tag == SIGN_PACKAGE_RELEASE_OP => InternalOp::PackageSigner,
         Ok(tag) if tag == PUBLISH_PACKAGE_RELEASE_OP => InternalOp::PackagePublisher,
@@ -195,6 +199,9 @@ fn gate_request() -> Option<InternalRequest> {
             | InternalOp::ExportNormalToolsCachePayload
     ) {
         return cache_runner_request(op);
+    }
+    if op == InternalOp::WriteQualificationSourceEvidence {
+        return qualification_source_evidence_request(op);
     }
     if op == InternalOp::ResolveTaskExecution {
         if !env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
@@ -272,9 +279,35 @@ fn gate_request_file(op: InternalOp) -> Option<InternalRequest> {
         | InternalOp::NormalToolsCacheStagePath
         | InternalOp::ImportNormalToolsCachePayload
         | InternalOp::ExportNormalToolsCachePayload
+        | InternalOp::WriteQualificationSourceEvidence
         | InternalOp::ResolveTaskExecution => {}
     }
     Some(InternalRequest { op, path })
+}
+
+fn qualification_source_evidence_request(op: InternalOp) -> Option<InternalRequest> {
+    if !valid_run_coordinates()
+        || !env::var(GITHUB_EVENT_ENV).is_ok_and(|event| event == "workflow_dispatch")
+        || !matches!(
+            env::var("GITHUB_REF_PROTECTED").as_deref(),
+            Ok("true" | "false")
+        )
+        || [
+            "GITHUB_EVENT_PATH",
+            "GITHUB_WORKSPACE",
+            "GITHUB_JOB",
+            "GITHUB_REPOSITORY",
+            "GITHUB_REF",
+            "GITHUB_WORKFLOW_REF",
+            "GITHUB_WORKFLOW_SHA",
+            "GITHUB_SHA",
+        ]
+        .into_iter()
+        .any(|name| env::var_os(name).is_none_or(|value| value.is_empty()))
+    {
+        return None;
+    }
+    runner_velnor_dir().map(|path| InternalRequest { op, path })
 }
 
 /// Require both GitHub run coordinates before entering cache operations.
@@ -346,6 +379,11 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::NormalToolsCacheStagePath => cache_bind::normal_stage::run(),
         InternalOp::ImportNormalToolsCachePayload => cache_bind::transfer::normal::run_import(),
         InternalOp::ExportNormalToolsCachePayload => cache_bind::transfer::normal::run_export(),
+        InternalOp::WriteQualificationSourceEvidence => match write_qualification_source_evidence()
+        {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
         InternalOp::ResolveTaskExecution => match resolve_task_execution() {
             Ok(frame) => match std::io::stdout().lock().write_all(&frame) {
                 Ok(()) => ExitCode::SUCCESS,

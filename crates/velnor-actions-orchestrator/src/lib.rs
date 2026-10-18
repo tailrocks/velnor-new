@@ -76,6 +76,7 @@ mod qualification_cache_backend;
 mod qualification_cache_payload;
 mod qualification_cache_runtime;
 mod qualification_resolver;
+mod qualification_source_evidence;
 mod qualify;
 mod recommendations;
 mod release_checkouts;

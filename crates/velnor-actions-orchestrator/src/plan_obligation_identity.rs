@@ -1,0 +1,130 @@
+//! Shared task-identity derivation for planning and source observation.
+
+use std::path::Path;
+
+use velnor_actions_contract::{PlanGenerator, ProposedTask, Stack, StackExtension};
+use velnor_actions_rust::extension_for_proposal;
+
+use crate::OrchestratorError;
+use crate::discover::Discovery;
+use crate::internal::{internal, internal_contract};
+use crate::internal_plan::closure::resolve_closure_at_root;
+use crate::internal_plan::identities::{ExtensionBundle, extension_bundle_with_snapshot};
+use crate::internal_plan::snapshot::{ExecutionSnapshot, canonical_digest};
+use crate::internal_plan::{IdentityInputs, nextest_config_for, task_identity_digest};
+
+/// Extension bundle plus closure-bound identity digests for one task.
+pub(crate) struct TaskIdentityDerivation {
+    /// Snapshot-indexed bundle with checkout-bound lock/Nextest digests.
+    pub(crate) bundle: ExtensionBundle,
+    /// Whether the stack extension permits reuse.
+    pub(crate) reuse_eligible: bool,
+    /// Canonical digest over the complete input closure.
+    pub(crate) closure_digest: String,
+    /// Input digest with the closure digest bound into the envelope.
+    pub(crate) input_digest: String,
+}
+
+/// Inputs shared by plan-time and post-task task-identity derivation.
+pub(crate) struct TaskIdentityDerivationInputs<'a> {
+    /// Repository checkout.
+    pub(crate) root: &'a Path,
+    /// Current source inventory.
+    pub(crate) discovery: &'a Discovery,
+    /// Universe member to identify.
+    pub(crate) task: &'a ProposedTask,
+    /// Fixed command vector.
+    pub(crate) argv: &'a [String],
+    /// Selected toolchain digest.
+    pub(crate) toolchain: &'a str,
+    /// Selected platform digest.
+    pub(crate) platform_id: &'a str,
+    /// Generator identity recorded by the plan.
+    pub(crate) generator: &'a PlanGenerator,
+    /// Snapshot of the same source inventory.
+    pub(crate) snapshot: &'a ExecutionSnapshot,
+}
+
+/// Derive the extension and input closure for one current source task.
+///
+/// Rust tasks use the Rust adapter's cached closure resolver. `ToFu` tasks use
+/// the `ToFu` adapter's checkout-bound lockfile resolver. Both produce the same
+/// stack-neutral identity envelope used by the plan.
+/// # Errors
+pub(crate) fn derive_task_identity(
+    inputs: &TaskIdentityDerivationInputs<'_>,
+    reads: &mut velnor_actions_tofu::FileCache,
+) -> Result<TaskIdentityDerivation, OrchestratorError> {
+    let task = inputs.task;
+    let nextest_config = nextest_config_for(inputs.discovery, task);
+    let bundle = extension_bundle_with_snapshot(
+        inputs.snapshot,
+        inputs.discovery,
+        task,
+        Some(inputs.root),
+        nextest_config.as_deref(),
+    );
+    let (extension, reuse_eligible) = extension_for_task(task, inputs.root, &bundle, reads)?;
+    let closure = if Stack::from_id(&task.stack_id) == Some(Stack::Rust) {
+        inputs
+            .snapshot
+            .resolve_rust_closure(
+                inputs.root,
+                task,
+                nextest_config.as_deref(),
+                bundle.graph_digest(),
+                inputs.toolchain,
+                inputs.platform_id,
+            )
+            .map_err(internal_contract)?
+    } else {
+        resolve_closure_at_root(
+            inputs.root,
+            task,
+            nextest_config.as_deref(),
+            bundle.graph_digest(),
+            inputs.toolchain,
+            inputs.platform_id,
+            reads,
+        )
+        .map_err(internal_contract)?
+    };
+    let closure_digest = canonical_digest(&closure).map_err(internal_contract)?;
+    let input_digest = task_identity_digest(&IdentityInputs {
+        task,
+        argv: inputs.argv,
+        toolchain_id: inputs.toolchain,
+        platform_id: inputs.platform_id,
+        manifest: &task.identity.unit_path,
+        generator: inputs.generator,
+        extension,
+        closure_digest: &closure_digest,
+    })
+    .map_err(internal_contract)?;
+    Ok(TaskIdentityDerivation {
+        bundle,
+        reuse_eligible,
+        closure_digest,
+        input_digest,
+    })
+}
+
+/// Stack-extension envelope plus reuse eligibility for one task.
+pub(super) fn extension_for_task(
+    task: &ProposedTask,
+    root: &Path,
+    bundle: &ExtensionBundle,
+    reads: &mut velnor_actions_tofu::FileCache,
+) -> Result<(StackExtension, bool), OrchestratorError> {
+    let stack = Stack::require_known(&task.stack_id).map_err(internal_contract)?;
+    if stack == Stack::Mise {
+        return Err(internal("named_check_definition_required"));
+    }
+    if stack == Stack::Tofu {
+        let ext = crate::internal_plan::tofu_extension_for(task, root, bundle, reads)
+            .map_err(internal_contract)?;
+        return Ok((ext.to_stack_extension(), ext.reuse_eligible().is_ok()));
+    }
+    let ext = extension_for_proposal(task, &bundle.inputs()).map_err(internal_contract)?;
+    Ok((ext.to_stack_extension(), ext.reuse_eligible().is_ok()))
+}

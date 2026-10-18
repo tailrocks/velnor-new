@@ -70,6 +70,9 @@ pub use super::qualification_resolver::{
     QUALIFICATION_ADMISSION_FILENAME, QUALIFICATION_RESOLVER_OP, read_qualification_admission,
     resolve_qualification_admission,
 };
+pub use super::qualification_source_evidence::{
+    SOURCE_EVIDENCE_OP, write_qualification_source_evidence,
+};
 pub use super::qualify::qualify_argv_staged;
 pub use super::retrieve_reports::{FETCH_OP, retrieve_reports};
 pub use super::root::resolve_root;
