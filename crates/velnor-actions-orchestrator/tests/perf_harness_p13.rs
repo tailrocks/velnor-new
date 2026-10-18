@@ -196,8 +196,9 @@ pub(crate) fn metadata_baseline_ms(
 pub(crate) fn toolchain_metadata(
     root: &Path,
     toolchain: &str,
+    rustup: &Path,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let output = std::process::Command::new("rustup")
+    let output = std::process::Command::new(rustup)
         .args([
             "run",
             toolchain,
@@ -215,6 +216,57 @@ pub(crate) fn toolchain_metadata(
         return Err(format!("cargo metadata failed under {toolchain}").into());
     }
     Ok(String::from_utf8(output.stdout)?)
+}
+
+/// Resolve Rustup even when the test runner narrows `PATH`.
+pub(crate) fn rustup_executable() -> Result<std::path::PathBuf, std::io::Error> {
+    let executable = format!("rustup{}", std::env::consts::EXE_SUFFIX);
+    let mut candidates = Vec::new();
+    if let Some(path) = std::env::var_os("PATH") {
+        candidates
+            .extend(std::env::split_paths(&path).map(|directory| directory.join(&executable)));
+    }
+    if let Some(cargo_home) = std::env::var_os("CARGO_HOME") {
+        candidates.push(
+            std::path::PathBuf::from(cargo_home)
+                .join("bin")
+                .join(&executable),
+        );
+    }
+    if let Some(home) = std::env::var_os("HOME") {
+        candidates.push(
+            std::path::PathBuf::from(home)
+                .join(".cargo")
+                .join(&executable),
+        );
+    }
+    candidates
+        .into_iter()
+        .find(|candidate| is_executable_file(candidate))
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "rustup executable was not found in PATH, CARGO_HOME/bin, or HOME/.cargo/bin",
+            )
+        })
+}
+
+fn is_executable_file(path: &Path) -> bool {
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return false;
+    };
+    if !metadata.is_file() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        metadata.permissions().mode() & 0o111 != 0
+    }
+    #[cfg(not(unix))]
+    {
+        true
+    }
 }
 
 /// Short digest over the sorted obligation task IDs: equal sets hash equal.

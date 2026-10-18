@@ -17,6 +17,9 @@ use std::process::Command;
 #[cfg(unix)]
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[path = "impl_cli_verify_local_nextest_guard.rs"]
+mod nextest_guard;
+
 use crate::impl_repo_policy::p12_harness as freshness;
 
 /// Workspace root derived from this crate's manifest dir.
@@ -185,50 +188,6 @@ fn assert_locked_commands_and_workspace_inventory(script: &str) {
         script.contains("run --workspace --locked"),
         "nextest integration run is locked"
     );
-}
-
-#[test]
-fn verify_local_nextest_route_rejects_missing_or_wrong_pins() -> Result<(), Box<dyn Error>> {
-    let script = workspace_root().join("scripts/verify-local.sh");
-    let source = fs::read_to_string(&script)?;
-    let route_check = source
-        .split("if ! nextest_route_is_pinned ")
-        .nth(1)
-        .and_then(|body| body.split("\nfi").next())
-        .ok_or("Nextest version guard call is missing")?;
-    assert!(
-        route_check.contains("exit 1"),
-        "version failures exit early"
-    );
-
-    let executable = std::env::current_exe()?;
-    let guard = r#"
-source <(sed -n '/^nextest_route_is_pinned() {/,/^}/p' "$1")
-case "$2" in
-  valid) nextest_route_is_pinned "$3" pinned pinned pinned ;;
-  missing) ! nextest_route_is_pinned "" pinned pinned pinned ;;
-  binary-version) ! nextest_route_is_pinned "$3" wrong pinned pinned ;;
-  route-version) ! nextest_route_is_pinned "$3" pinned wrong pinned ;;
-  *) exit 2 ;;
-esac
-"#;
-
-    for case in ["valid", "missing", "binary-version", "route-version"] {
-        let output = Command::new("bash")
-            .arg("-c")
-            .arg(guard)
-            .arg("verify-local-nextest-guard")
-            .arg(&script)
-            .arg(case)
-            .arg(&executable)
-            .output()?;
-        assert!(
-            output.status.success(),
-            "Nextest version guard rejected {case}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-    Ok(())
 }
 
 #[test]
