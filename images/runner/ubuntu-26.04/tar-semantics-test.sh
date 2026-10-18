@@ -5,9 +5,11 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
 
-if ! command -v busybox >/dev/null 2>&1 || ! command -v tar.gnu >/dev/null 2>&1 || \
-  ! command -v perl >/dev/null 2>&1 || ! command -v runuser >/dev/null 2>&1 || \
-  [ "$(id -u)" -ne 0 ] || [ ! -d /lowdisk ]; then
+if [ "${VELNOR_ONLY_LINK_PARSER:-0}" != 1 ] && {
+  ! command -v busybox >/dev/null 2>&1 || ! command -v tar.gnu >/dev/null 2>&1 || \
+    ! command -v perl >/dev/null 2>&1 || ! command -v runuser >/dev/null 2>&1 || \
+    [ "$(id -u)" -ne 0 ] || [ ! -d /lowdisk ];
+}; then
   exec docker run --rm \
     -e DEBIAN_FRONTEND=noninteractive \
     -e VELNOR_PERF_COUNT \
@@ -496,6 +498,83 @@ run_confined_restore() {
     -C /home/runner/work/repo/repo >"$output" 2>&1
 }
 
+assert_listed_link() {
+  local archive="$1" expected_target="$2" expected_name="$3"
+  perl "$rundir/tar-member.pl" --list-confined <"$archive" |
+    awk -v expected_target="$expected_target" -v expected_name="$expected_name" '
+      {
+        fields[(NR - 1) % 5] = $0
+        if (NR % 5 == 0 && fields[1] == "2" && fields[2] == expected_target &&
+            fields[3] == expected_name) found = 1
+      }
+      END { exit !found }
+    '
+}
+
+assert_no_link_metadata() {
+  perl - "$1" <<'PERL'
+use strict;
+use warnings;
+use bytes;
+local $/;
+my $path = shift @ARGV;
+open my $fh, "<:raw", $path or die "$path: $!\n";
+my $archive = <$fh>;
+close $fh or die "$path: $!\n";
+my $offset = 0;
+while ($offset + 512 <= length $archive) {
+    my $header = substr $archive, $offset, 512;
+    last if $header eq "\0" x 512;
+    my $type = substr $header, 156, 1;
+    die "emitted archive keeps a GNU link header\n" if $type eq "K";
+    my $size_field = substr $header, 124, 12;
+    $size_field =~ s/\0.*//s;
+    $size_field =~ s/\s+//g;
+    my $size = $size_field eq "" ? 0 : oct $size_field;
+    my $body = substr $archive, $offset + 512, $size;
+    die "emitted archive has a short member\n" if length($body) != $size;
+    if ($type eq "g" || $type eq "x" || $type eq "X") {
+        my $at = 0;
+        while ($at < length $body) {
+            my $space = index $body, " ", $at;
+            die "emitted archive has a bad PAX record\n" if $space < 0;
+            my $record_length = substr $body, $at, $space - $at;
+            die "emitted archive has a bad PAX length\n" if $record_length !~ /^\d+$/;
+            my $record = substr $body, $at, int($record_length);
+            die "emitted archive has a short PAX record\n"
+                if length($record) != int($record_length);
+            die "emitted archive keeps a PAX link target\n"
+                if $record =~ /^\d+ linkpath=/;
+            $at += int $record_length;
+        }
+    }
+    $offset += 512 + $size + ((512 - ($size % 512)) % 512);
+}
+PERL
+}
+
+emit_confined_link() {
+  local archive="$1" index="$2" target="$3" output="$4"
+  local emit_dir="$5" reader_pid status=0
+  mkdir -p -- "$emit_dir" || return 1
+  mkfifo "$emit_dir/0.fifo" || return 1
+  : >"$emit_dir/done"
+  printf '%s\n' "$index" >"$emit_dir/plan"
+  printf '%s\t%s\t%s\n' "$index" current "$target" >"$emit_dir/map"
+  cat "$emit_dir/0.fifo" >"$output" &
+  reader_pid=$!
+  perl "$rundir/tar-member.pl" --emit-confined \
+    "$emit_dir/plan" "$emit_dir" "$emit_dir/map" <"$archive" || status=$?
+  if [ "$status" -ne 0 ]; then
+    kill "$reader_pid" 2>/dev/null || true
+    wait "$reader_pid" 2>/dev/null || true
+    return "$status"
+  fi
+  wait "$reader_pid" || return 1
+  assert_no_link_metadata "$output" || return 1
+  assert_listed_link "$output" "$target" current
+}
+
 case_confined_scope() {
   local case_root="$cache_test_root/scope"
   local cache prefix outside err status=0
@@ -697,6 +776,77 @@ case_confined_link_overrides() {
   [ ! -e "$cache/inside.txt" ] || return 1
 }
 
+case_confined_link_metadata_orders() {
+  local case_root="$work/link-metadata-orders"
+  local prefix archive cache expected_target=versions/pax err
+  local -a archives=(
+    "$work/link-metadata-pax-then-gnu.tar"
+    "$work/link-metadata-gnu-then-pax.tar"
+  )
+  cache="$(confined_cache_root link-metadata-orders)"
+  prefix="$(confined_archive_prefix link-metadata-orders)"
+  rm -rf -- "$case_root"
+  mkdir -p "$case_root"
+  if [ "${VELNOR_ONLY_LINK_PARSER:-0}" != 1 ]; then
+    mkdir -p /home/runner/work/repo/repo
+  fi
+  write_ustar "${archives[0]}" \
+    f "$prefix/versions/pax" PAX \
+    f "$prefix/versions/gnu" GNU \
+    l PaxHeaders/link versions/pax \
+    K GNU.longlink versions/gnu \
+    s "$prefix/current" versions/header || return 1
+  write_ustar "${archives[1]}" \
+    f "$prefix/versions/pax" PAX \
+    f "$prefix/versions/gnu" GNU \
+    K GNU.longlink versions/gnu \
+    l PaxHeaders/link versions/pax \
+    s "$prefix/current" versions/header || return 1
+  for archive in "${archives[@]}"; do
+    printf 'LINK_METADATA_INPUT %s\n' "$(basename "$archive")"
+    assert_listed_link "$archive" "$expected_target" "$prefix/current" || {
+      printf 'Parser selected an unexpected target for %s.\n' "$(basename "$archive")" >&2
+      return 1
+    }
+    emit_confined_link "$archive" 2 "$expected_target" \
+      "$case_root/emitted-$(basename "$archive")" \
+      "$case_root/emit-$(basename "$archive")" || {
+        printf 'Serializer output did not preserve the selected target for %s.\n' \
+          "$(basename "$archive")" >&2
+        return 1
+      }
+    [ "${VELNOR_ONLY_LINK_PARSER:-0}" = 1 ] && continue
+    rm -rf -- "$cache"
+    err="$case_root/$(basename "$archive").err"
+    run_confined_restore "$cache" "$archive" "$err" || {
+      printf 'Confined restore failed for %s.\n' "$(basename "$archive")" >&2
+      cat -- "$err" >&2
+      return 1
+    }
+    local actual_target actual_content
+    actual_target="$(readlink "$cache/current" 2>&1)" || {
+      printf 'The extracted symlink is missing for %s: %s\n' \
+        "$(basename "$archive")" "$actual_target" >&2
+      return 1
+    }
+    [ "$actual_target" = "$expected_target" ] || {
+      printf 'Extracted target differs for %s: expected=%s actual=%s\n' \
+        "$(basename "$archive")" "$expected_target" "$actual_target" >&2
+      return 1
+    }
+    actual_content="$(cat "$cache/current" 2>&1)" || {
+      printf 'The extracted symlink cannot read its target for %s: %s\n' \
+        "$(basename "$archive")" "$actual_content" >&2
+      return 1
+    }
+    [ "$actual_content" = PAX ] || {
+      printf 'Extracted content differs for %s: expected=PAX actual=%s\n' \
+        "$(basename "$archive")" "$actual_content" >&2
+      return 1
+    }
+  done
+}
+
 case_confined_existing_symlink_parent() {
   local case_root="$cache_test_root/existing-link"
   local cache prefix outside err status=0
@@ -788,6 +938,13 @@ BASH
   cmp -s "$source" "$evil" || return 1
 }
 
+if [ "${VELNOR_ONLY_LINK_PARSER:-0}" = 1 ]; then
+  run_case confined-link-metadata-orders case_confined_link_metadata_orders
+  printf 'RESULT pass=%s fail=%s\n' "$pass" "$fail"
+  [ "$fail" -eq 0 ]
+  exit
+fi
+
 if [ "${VELNOR_ONLY_CONFINED:-0}" = 1 ]; then
   run_case record-failure-removes-batch case_record_failure_removes_batch
   run_case confined-member-scope case_confined_scope
@@ -799,6 +956,7 @@ if [ "${VELNOR_ONLY_CONFINED:-0}" = 1 ]; then
   run_case confined-gnu-path case_confined_gnu_path
   run_case confined-symlink-targets case_confined_symlink_targets
   run_case confined-link-overrides case_confined_link_overrides
+  run_case confined-link-metadata-orders case_confined_link_metadata_orders
   run_case confined-existing-symlink-parent case_confined_existing_symlink_parent
   run_case confined-hardlink-target case_confined_hardlink_target
   run_case confined-internal-hardlink case_confined_internal_hardlink
@@ -854,6 +1012,7 @@ run_case confined-gnu-sparse-rejected case_confined_gnu_sparse
 run_case confined-gnu-path case_confined_gnu_path
 run_case confined-symlink-targets case_confined_symlink_targets
 run_case confined-link-overrides case_confined_link_overrides
+run_case confined-link-metadata-orders case_confined_link_metadata_orders
 run_case confined-existing-symlink-parent case_confined_existing_symlink_parent
 run_case confined-hardlink-target case_confined_hardlink_target
 run_case confined-internal-hardlink case_confined_internal_hardlink

@@ -540,9 +540,10 @@ extract_confined_archive() {
     [ -n "${mem_confined_path[$i]}" ] || continue
     indices+=("$i")
     printf '%s\t%s' "$i" "${mem_confined_path[$i]}" >>"$map_file"
-    if [ "${mem_type[$i]}" = 1 ]; then
-      printf '\t%s' "${mem_confined_link[$i]}" >>"$map_file"
-    fi
+    case "${mem_type[$i]}" in
+      1) printf '\t%s' "${mem_confined_link[$i]}" >>"$map_file" ;;
+      2) printf '\t%s' "${mem_link[$i]}" >>"$map_file" ;;
+    esac
     printf '\n' >>"$map_file"
   done
   [ "${#indices[@]}" -gt 0 ] || return 0

@@ -37,6 +37,43 @@ sub pax_meta_archive {
     return $header . $body . ("\0" x $padding);
 }
 
+sub remove_pax_linkpath {
+    my ($raw, $header, $body) = @_;
+    my ($filtered, $changed) = ("", 0);
+    my $i = 0;
+    my $n = length $body;
+    while ($i < $n) {
+        my $sp = index $body, " ", $i;
+        die "velnor-tar-member: The PAX record is invalid.\n" if $sp < 0;
+        my $digits = substr $body, $i, $sp - $i;
+        die "velnor-tar-member: The PAX record length is invalid.\n"
+            if $digits !~ /^\d+$/;
+        my $length = int $digits;
+        die "velnor-tar-member: The PAX record length is invalid.\n"
+            if $length <= 0 || $i + $length > $n;
+        my $record = substr $body, $i, $length;
+        $i += $length;
+        die "velnor-tar-member: The PAX record is invalid.\n"
+            if $record !~ /^(\d+) ([^=\0]+)=([^\0]*)\n\z/s || int($1) != $length;
+        if ($2 eq "linkpath") {
+            $changed = 1;
+        } else {
+            $filtered .= $record;
+        }
+    }
+    return $raw if !$changed;
+    return "" if $filtered eq "";
+
+    my $rewritten_header = $header;
+    substr($rewritten_header, 124, 12) = tar_octal(length($filtered), 12);
+    substr($rewritten_header, 148, 8) = "        ";
+    my $sum = 0;
+    $sum += ord $_ for split //, $rewritten_header;
+    substr($rewritten_header, 148, 8) = sprintf("%06o\0 ", $sum);
+    my $padding = (512 - (length($filtered) % 512)) % 512;
+    return $rewritten_header . $filtered . ("\0" x $padding);
+}
+
 sub tar_octal {
     my ($value, $width) = @_;
     my $digits = sprintf "%0*o", $width - 1, $value;
@@ -106,12 +143,14 @@ sub rewrite_member {
 }
 
 sub rewrite_member_with_link {
-    my ($path, $link, $index, $header, $state) = @_;
+    my ($path, $link, $index, $header, $state, $canonical_link) = @_;
     my ($pax, $rewritten_header) = rewrite_member($path, $index, $header, $state);
     my $needs_link_pax = length($link) > 100
-        || exists $state->{local}{linkpath}
-        || exists $state->{global}{linkpath}
-        || defined $state->{gnu_link};
+        || (!$canonical_link && (
+            exists $state->{local}{linkpath}
+            || exists $state->{global}{linkpath}
+            || defined $state->{gnu_link}
+        ));
     if ($needs_link_pax) {
         if ($pax ne "") {
             $pax = pax_meta_archive($index, "path", $path, "linkpath", $link);

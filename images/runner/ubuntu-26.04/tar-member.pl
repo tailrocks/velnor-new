@@ -267,11 +267,19 @@ sub walk {
             my ($body, $padded) = read_padded(\*STDIN, $size);
             my $raw = $hdr . $padded;
             apply_meta($type, $body, $state, $confined);
+            my $emit_raw = $raw;
+            if ($confined) {
+                if ($type eq "K") {
+                    $emit_raw = "";
+                } elsif ($type eq "g" || $type eq "x" || $type eq "X") {
+                    $emit_raw = remove_pax_linkpath($raw, $hdr, $body);
+                }
+            }
             if ($type eq "g" && !$in_prelude) {
-                push @globals, $raw;
+                push @globals, $emit_raw if $emit_raw ne "";
             } else {
                 $in_prelude = 1;
-                $prelude .= $raw;
+                $prelude .= $emit_raw;
             }
             next;
         }
@@ -363,6 +371,9 @@ sub cmd_emit {
         sub {
             my ($index, $type, $name, $link, $hdr, $size, $prelude, $globals, $state) = @_;
             return if !exists $seq_of{$index};
+            die "velnor-tar-member: confined link target is missing from rewrite map\n"
+                if $confined && ($type eq "1" || $type eq "2")
+                && (!exists $rewrite{$index} || !defined $rewrite{$index}[1]);
             my $group = $seq_of{$index};
             if (defined $out && $group != $writing_seq) {
                 die "velnor-tar-member: group split\n";
@@ -384,7 +395,7 @@ sub cmd_emit {
                 my ($pax, $rewritten_hdr);
                 if (defined $rewrite_link) {
                     ($pax, $rewritten_hdr) = rewrite_member_with_link(
-                        $rewrite_path, $rewrite_link, $index, $hdr, $state,
+                        $rewrite_path, $rewrite_link, $index, $hdr, $state, $confined,
                     );
                 } else {
                     ($pax, $rewritten_hdr) = rewrite_member(
