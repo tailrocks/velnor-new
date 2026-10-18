@@ -53,6 +53,13 @@ async fn validate_auth_row(conn: &turso::Connection, row: &turso::Row) -> Result
         .ok_or(HostError::Journal)?;
     let has_start = started_digest.is_some();
     let has_completion = completed_digest.is_some();
+    let event_state_allowed = matches!(
+        acquire_state.as_str(),
+        "acquired" | "already_acquired" | "uncertain" | "requested"
+    ) || (acquire_state == "authorized"
+        && !has_start
+        && has_completion
+        && completed_runner_id.is_none());
     if connection_id.is_empty()
         || scale_set_id <= 0
         || request_id <= 0
@@ -115,10 +122,7 @@ async fn validate_auth_row(conn: &turso::Connection, row: &turso::Row) -> Result
         || completed_runner_name
             .as_deref()
             .is_some_and(|value| !valid_event_text(value, 128))
-        || !matches!(
-            acquire_state.as_str(),
-            "acquired" | "already_acquired" | "uncertain" | "requested"
-        ) && (has_start || has_completion)
+        || !event_state_allowed && (has_start || has_completion)
     {
         return Err(HostError::Journal);
     }
@@ -205,7 +209,8 @@ pub(super) async fn validate_jit_rows(conn: &turso::Connection) -> Result<(), Ho
                     | "cleaned"
             )
             || !jit_requested
-            || (state == "cleaned") != cleaned
+            || (state == "cleaned" && !cleaned)
+            || (cleaned && completed_request.is_some() && state != "cleaned")
             || witness_state != "acquired"
             || stored_witness != witness
             || !assignment_key.starts_with(&format!("v1|{connection_id}|{set_id}|remote|6:runner|"))

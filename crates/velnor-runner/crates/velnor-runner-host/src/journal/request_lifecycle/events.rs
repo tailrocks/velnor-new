@@ -71,7 +71,14 @@ impl ConnectionJournal {
             };
             if let Some(existing) = event_state.started_digest.as_deref() {
                 if existing == event_digest {
-                    return Ok(event_state.intent_id.ok_or(HostError::Journal)?);
+                    return exact_started_intent(
+                        connection,
+                        &connection_id,
+                        set_id,
+                        request_id,
+                        runner,
+                    )
+                    .await;
                 }
                 return Err(HostError::Identity);
             }
@@ -259,7 +266,7 @@ impl ConnectionJournal {
 
 mod storage;
 use storage::{
-    bind_completed_pair, insert_completion_cleanup, matching_runner_intent,
+    bind_completed_pair, exact_started_intent, insert_completion_cleanup, matching_runner_intent,
     request_completed_runnerless, request_event_state,
 };
 

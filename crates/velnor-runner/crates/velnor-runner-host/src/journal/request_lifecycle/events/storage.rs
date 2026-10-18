@@ -73,6 +73,41 @@ pub(super) async fn matching_runner_intent(
     Ok(intent_id)
 }
 
+pub(super) async fn exact_started_intent(
+    connection: &turso::Connection,
+    connection_id: &str,
+    set_id: i64,
+    request_id: i64,
+    runner: &velnor_runner_github::RunnerReference,
+) -> Result<i64, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT j.intent_id, i.assignment_key FROM connection_runner_jits AS j JOIN connection_intents AS i ON i.id = j.intent_id AND i.connection_id = j.connection_id WHERE j.connection_id = ?1 AND j.scale_set_id = ?2 AND j.started_request_id = ?3 AND j.runner_id = ?4 AND j.runner_name = ?5 AND i.scale_set_id = ?2 AND i.github_runner_id = ?6 AND i.runner_name = ?5 LIMIT 2",
+            (connection_id, set_id, request_id, runner.id, runner.name.as_str(), runner.id.to_string()),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+        return Err(HostError::Identity);
+    };
+    let intent_id: i64 = row.get(0).map_err(|_| HostError::Journal)?;
+    let assignment_key: String = row.get(1).map_err(|_| HostError::Journal)?;
+    let expected_prefix = format!("v1|{connection_id}|{set_id}|remote|6:runner|32:");
+    let nonce = assignment_key.strip_prefix(&expected_prefix);
+    if intent_id <= 0
+        || nonce.is_none_or(|value| {
+            value.len() != 32
+                || !value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        })
+        || rows.next().await.map_err(|_| HostError::Journal)?.is_some()
+    {
+        return Err(HostError::Identity);
+    }
+    Ok(intent_id)
+}
+
 pub(super) async fn bind_completed_pair(
     connection: &turso::Connection,
     connection_id: &str,

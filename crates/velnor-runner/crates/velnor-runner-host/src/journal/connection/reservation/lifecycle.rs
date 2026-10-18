@@ -101,6 +101,13 @@ impl ConnectionJournal {
                     )
                     .await
                     .map_err(|_| HostError::Journal)?;
+                connection
+                    .execute(
+                        "UPDATE connection_runner_jits SET state = 'cleaned' WHERE connection_id = ?1 AND intent_id = (SELECT intent_id FROM capacity_reservations WHERE id = ?2 AND connection_id = ?1) AND completed_request_id IS NOT NULL AND state = 'completed'",
+                        (self.connection_id.as_str(), reservation_id),
+                    )
+                    .await
+                    .map_err(|_| HostError::Journal)?;
             }
             Ok(())
         })
