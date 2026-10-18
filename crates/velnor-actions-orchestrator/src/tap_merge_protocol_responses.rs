@@ -195,7 +195,13 @@ fn add_protection_responses(
         format!("repos/{repository}/branches/main/protection"),
         json!({
             "enforce_admins": {"enabled": true},
-            "required_pull_request_reviews": {"bypass_pull_request_allowances": {"apps": [], "users": [], "teams": []}},
+            "required_pull_request_reviews": {
+                "required_approving_review_count": 0,
+                "bypass_pull_request_allowances": {"apps": [], "users": [], "teams": []}
+            },
+            "required_conversation_resolution": {"enabled": true},
+            "allow_force_pushes": {"enabled": false},
+            "allow_deletions": {"enabled": false},
             "required_status_checks": {"strict": true, "checks": [
                 {"context": "DCO", "app_id": DCO_APP},
                 {"context": authority.completion_name, "app_id": authority.completion_app_id}
@@ -214,11 +220,20 @@ fn add_protection_responses(
         format!("repos/{repository}/rulesets/5?includes_parents=true"),
         json!({
             "id": 5, "source_type": "Repository", "source": repository, "target": "branch",
-            "enforcement": "active", "bypass_actors": [], "rules": [{"type": "required_status_checks",
-            "parameters": {"strict_required_status_checks_policy": true, "required_status_checks": [
-                {"context": "DCO", "integration_id": DCO_APP},
-                {"context": authority.completion_name, "integration_id": authority.completion_app_id}
-            ]}}]
+            "enforcement": "active", "bypass_actors": [], "rules": [
+                {"type": "pull_request", "parameters": {
+                    "required_approving_review_count": 0,
+                    "required_review_thread_resolution": true
+                }},
+                {"type": "required_status_checks", "parameters": {
+                    "strict_required_status_checks_policy": true, "required_status_checks": [
+                        {"context": "DCO", "integration_id": DCO_APP},
+                        {"context": authority.completion_name, "integration_id": authority.completion_app_id}
+                    ]
+                }},
+                {"type": "non_fast_forward"},
+                {"type": "deletion"}
+            ]
         }),
     );
 }

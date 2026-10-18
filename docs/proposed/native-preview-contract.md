@@ -314,15 +314,22 @@ the exact-head checks, and current feedback before calling the pure merge
 admission contract.
 
 The [merge REST API](https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request)
-provides a head-SHA precondition, not a base-SHA precondition. Therefore the tap
-must also enforce strict up-to-date required checks on the server, with no writer
-App bypass. Otherwise tap main could advance between the final read and the merge
-request, allowing an older formula to merge after a newer preview. Native merge
-admission fails if this server protection is absent or bypassable. Re-reading the
-base immediately before merge is necessary but does not replace that protection.
+provides a head-SHA precondition, not a base-SHA precondition. Therefore tap main
+must require pull requests, resolved review threads, and strict up-to-date status
+checks, with no writer App bypass. GitHub documents that required status checks
+alone still allow commits to be pushed directly to the protected branch; strictness
+only requires branches to be current before merging. A PR-only promotion contract
+must therefore authenticate the server's PR rule separately. Force-pushes and
+deletion must also be blocked so tap history cannot be rewritten or removed to
+evade monotonic version checks. Otherwise tap main could advance between the final
+read and merge request, or be rewritten afterward, allowing an older formula to
+replace a newer preview. Native merge admission fails if any of these controls is
+absent or bypassable. Re-reading the base immediately before merge is necessary
+but does not replace server enforcement.
 If classic protection exempts administrators, native admission requires active
-effective rulesets to supply PR protection, strict checks, DCO and completion
-bindings, and every required classic check binding, with no writer bypass.
+effective rulesets to supply PR and resolved-thread protection, strict checks,
+force-push and deletion protection, DCO and completion bindings, and every
+required classic check binding, with no writer bypass.
 Strictness evidence requires a nonempty validated check list from that same
 source; an empty strict rule cannot qualify checks supplied only by a loose
 source. Absent classic protection does not invent an administrator exemption. This keeps

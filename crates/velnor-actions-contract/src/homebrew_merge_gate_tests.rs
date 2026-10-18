@@ -51,7 +51,7 @@ fn fixture() -> (TapMergePolicy, TapMergeObservation) {
             validated_head_sha: head.clone(),
             current_head_sha: head,
             expected_open_pull_request: true,
-            server_protection: TapServerMergeProtection::StrictWithoutWriterBypass,
+            server_protection: TapServerMergeProtection::PullRequestProtected,
             required_checks_complete: true,
             checks,
             feedback,

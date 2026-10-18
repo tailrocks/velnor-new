@@ -107,7 +107,7 @@ pub fn validate_tap_completed_promotion_gate(
     {
         return Err(invalid("unproven_completed_promotion"));
     }
-    if observed.server_protection != TapServerMergeProtection::StrictWithoutWriterBypass {
+    if observed.server_protection != TapServerMergeProtection::PullRequestProtected {
         return Err(invalid("server_merge_protection_missing"));
     }
     validate_checks(

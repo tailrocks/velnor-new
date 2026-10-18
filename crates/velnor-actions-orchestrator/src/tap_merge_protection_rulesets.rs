@@ -7,7 +7,7 @@ use serde_json::Value;
 use crate::{OrchestratorError, internal::internal};
 
 use super::super::github::TapMergeGitHub;
-use super::RulesetProtection;
+use super::{BranchControl, BranchControls, RulesetProtection};
 
 const RULES_PAGE_SIZE: usize = 100;
 const MAX_RULE_PAGES: u64 = 100;
@@ -145,16 +145,26 @@ pub(super) fn parse_ruleset(
     }
     let mut checks = Vec::new();
     let mut strict_checks = false;
-    let mut pull_request = false;
+    let mut controls = BranchControls::default();
     let rules = ruleset["rules"]
         .as_array()
         .ok_or_else(|| internal("tap_merge_ruleset_rules_unreadable"))?;
     for rule in rules {
         match rule["type"].as_str() {
-            Some("pull_request") => pull_request |= valid_pull_request_rule(rule)?,
+            Some("pull_request") => {
+                let (required, resolved_threads) = valid_pull_request_rule(rule)?;
+                if required {
+                    controls.insert(BranchControl::PullRequest);
+                }
+                if resolved_threads {
+                    controls.insert(BranchControl::ThreadResolution);
+                }
+            }
             Some("required_status_checks") => {
                 strict_checks |= parse_required_status_checks(rule, &mut checks)?;
             }
+            Some("non_fast_forward") => controls.insert(BranchControl::NoForcePush),
+            Some("deletion") => controls.insert(BranchControl::NoDeletion),
             _ => {}
         }
     }
@@ -162,11 +172,11 @@ pub(super) fn parse_ruleset(
         checks,
         writer_bypass,
         strict: strict_checks,
-        pull_request,
+        controls,
     })
 }
 
-fn valid_pull_request_rule(rule: &Value) -> Result<bool, OrchestratorError> {
+fn valid_pull_request_rule(rule: &Value) -> Result<(bool, bool), OrchestratorError> {
     let params = rule
         .get("parameters")
         .and_then(Value::as_object)
@@ -180,7 +190,7 @@ fn valid_pull_request_rule(rule: &Value) -> Result<bool, OrchestratorError> {
         .get("required_review_thread_resolution")
         .and_then(Value::as_bool)
         .ok_or_else(|| internal("tap_merge_ruleset_pull_request_unreadable"))?;
-    Ok(approvals <= 100 && threads)
+    Ok((approvals <= 100, threads))
 }
 
 fn parse_required_status_checks(

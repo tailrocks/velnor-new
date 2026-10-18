@@ -1,5 +1,7 @@
 //! Fail-closed resolution of GitHub's active branch check and bypass rules.
 
+use std::collections::BTreeSet;
+
 use serde_json::Value;
 use velnor_actions_contract::homebrew_merge_gate::TapRequiredCheck;
 
@@ -10,6 +12,10 @@ use super::github::TapMergeGitHub;
 #[path = "tap_merge_protection_rulesets.rs"]
 mod rulesets;
 use rulesets::{effective_branch_rules, load_effective_rulesets, parse_ruleset};
+
+#[path = "tap_merge_protection_classic.rs"]
+mod classic;
+use classic::parse_classic_protection;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct ProtectionFacts {
@@ -32,6 +38,7 @@ struct ClassicProtection {
     strict: bool,
     writer_bypass: bool,
     admins_enforced: bool,
+    controls: BranchControls,
 }
 
 #[derive(Debug, Default)]
@@ -39,7 +46,52 @@ struct RulesetProtection {
     checks: Vec<(String, u64)>,
     writer_bypass: bool,
     strict: bool,
-    pull_request: bool,
+    controls: BranchControls,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum BranchControl {
+    PullRequest,
+    ThreadResolution,
+    NoForcePush,
+    NoDeletion,
+}
+
+#[derive(Debug, Default)]
+struct BranchControls(BTreeSet<BranchControl>);
+
+impl BranchControls {
+    #[cfg(test)]
+    fn set(&mut self, control: BranchControl, enabled: bool) {
+        if enabled {
+            self.insert(control);
+        } else {
+            self.0.remove(&control);
+        }
+    }
+
+    fn insert(&mut self, control: BranchControl) {
+        self.0.insert(control);
+    }
+
+    fn extend(&mut self, other: &Self) {
+        self.0.extend(other.0.iter().copied());
+    }
+
+    fn contains(&self, control: BranchControl) -> bool {
+        self.0.contains(&control)
+    }
+
+    fn contains_required_controls(&self) -> bool {
+        [
+            BranchControl::PullRequest,
+            BranchControl::ThreadResolution,
+            BranchControl::NoForcePush,
+            BranchControl::NoDeletion,
+        ]
+        .into_iter()
+        .all(|control| self.contains(control))
+    }
 }
 
 pub(super) fn resolve_protection(
@@ -66,7 +118,7 @@ pub(super) fn resolve_protection(
     let effective_rules = effective_branch_rules(api, repository, &encoded_branch)?;
     let rulesets = load_effective_rulesets(api, &effective_rules, repository)?;
     let mut ruleset_strict = false;
-    let mut ruleset_pull_request = false;
+    let mut ruleset_controls = BranchControls::default();
     for ruleset in &rulesets {
         let parsed = parse_ruleset(
             ruleset,
@@ -74,13 +126,13 @@ pub(super) fn resolve_protection(
             authority.writer_bot_user_id,
         )?;
         ruleset_checks.extend(parsed.checks.iter().cloned());
-        ruleset_pull_request |= parsed.pull_request;
+        ruleset_controls.extend(&parsed.controls);
         checks.extend(parsed.checks);
         writer_bypass |= parsed.writer_bypass;
         ruleset_strict |= parsed.strict;
     }
     let admin_rule_coverage = ruleset_strict
-        && ruleset_pull_request
+        && ruleset_controls.contains_required_controls()
         && !writer_bypass
         && ruleset_checks.iter().any(|(name, _)| name == "DCO")
         && ruleset_checks.contains(&(
@@ -93,6 +145,12 @@ pub(super) fn resolve_protection(
             .all(|check| ruleset_checks.contains(check));
     if classic_present && !legacy.admins_enforced && !admin_rule_coverage {
         return Err(internal("tap_merge_admin_protection_unproven"));
+    }
+    let mut combined_controls = BranchControls::default();
+    combined_controls.extend(&legacy.controls);
+    combined_controls.extend(&ruleset_controls);
+    if !combined_controls.contains_required_controls() || !(legacy.strict || ruleset_strict) {
+        return Err(internal("tap_merge_branch_controls_incomplete"));
     }
     checks.sort();
     checks.dedup();
@@ -175,100 +233,6 @@ pub(super) fn exact_required_checks(
         });
     }
     Ok((!pending).then_some(resolved))
-}
-
-fn parse_classic_protection(
-    value: &Value,
-    writer_app_id: u64,
-    writer_bot_login: &str,
-) -> Result<ClassicProtection, OrchestratorError> {
-    let admins_enforced = value
-        .pointer("/enforce_admins/enabled")
-        .and_then(Value::as_bool)
-        .ok_or_else(|| internal("tap_merge_admin_protection_unreadable"))?;
-    let writer_bypass = classic_writer_bypass(value, writer_app_id, writer_bot_login)?;
-    let Some(status_checks) = value.get("required_status_checks") else {
-        return Ok(ClassicProtection {
-            writer_bypass,
-            admins_enforced,
-            ..ClassicProtection::default()
-        });
-    };
-    if status_checks.is_null() {
-        return Ok(ClassicProtection {
-            writer_bypass,
-            admins_enforced,
-            ..ClassicProtection::default()
-        });
-    }
-    let strict = status_checks.get("strict").and_then(Value::as_bool) == Some(true);
-    let raw = status_checks
-        .get("checks")
-        .and_then(Value::as_array)
-        .ok_or_else(|| internal("tap_merge_protection_checks_unreadable"))?;
-    let checks = raw
-        .iter()
-        .map(|entry| {
-            let name = entry["context"]
-                .as_str()
-                .filter(|name| !name.is_empty())
-                .ok_or_else(|| internal("tap_merge_protection_context_invalid"))?;
-            let app = entry["app_id"]
-                .as_u64()
-                .filter(|id| *id > 0)
-                .ok_or_else(|| internal("tap_merge_protection_app_unbound"))?;
-            Ok::<_, OrchestratorError>((name.to_owned(), app))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let strict = strict && !checks.is_empty();
-    Ok(ClassicProtection {
-        checks,
-        strict,
-        writer_bypass,
-        admins_enforced,
-    })
-}
-
-fn classic_writer_bypass(
-    value: &Value,
-    writer_app_id: u64,
-    writer_bot_login: &str,
-) -> Result<bool, OrchestratorError> {
-    let Some(review) = value
-        .get("required_pull_request_reviews")
-        .filter(|review| !review.is_null())
-    else {
-        return Ok(false);
-    };
-    let allowances = review
-        .get("bypass_pull_request_allowances")
-        .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
-    let apps = allowances["apps"]
-        .as_array()
-        .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
-    let users = allowances["users"]
-        .as_array()
-        .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
-    let teams = allowances["teams"]
-        .as_array()
-        .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
-    let app_bypass = apps.iter().try_fold(false, |found, app| {
-        let id = app["id"]
-            .as_u64()
-            .filter(|id| *id > 0)
-            .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
-        Ok::<_, OrchestratorError>(found || id == writer_app_id)
-    })?;
-    let user_bypass = users.iter().try_fold(false, |found, user| {
-        let login = user["login"]
-            .as_str()
-            .filter(|login| !login.is_empty())
-            .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
-        Ok::<_, OrchestratorError>(found || login.eq_ignore_ascii_case(writer_bot_login))
-    })?;
-    // Team membership is not visible at this credential boundary, so any
-    // configured team allowance is ambiguous with respect to the writer bot.
-    Ok(app_bypass || user_bypass || !teams.is_empty())
 }
 
 fn encode_segment(value: &str) -> String {

@@ -84,7 +84,7 @@ pub(super) fn verify_already_promoted(
         },
         expected_merged_pull_request: selected.merged,
         server_protection: if protection.strict && !protection.writer_bypass {
-            TapServerMergeProtection::StrictWithoutWriterBypass
+            TapServerMergeProtection::PullRequestProtected
         } else {
             TapServerMergeProtection::MissingOrBypassable
         },

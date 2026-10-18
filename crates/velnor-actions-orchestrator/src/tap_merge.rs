@@ -85,8 +85,7 @@ pub fn merge_homebrew_tap_from_env() -> Result<(), OrchestratorError> {
         .map_err(|_| internal("tap_merge_final_gate_rejected"))?;
     if final_observation.current_head_sha != prior.current_head_sha
         || final_observation.current_base_sha != prior.current_base_sha
-        || final_observation.server_protection
-            != TapServerMergeProtection::StrictWithoutWriterBypass
+        || final_observation.server_protection != TapServerMergeProtection::PullRequestProtected
     {
         return Err(internal("tap_merge_final_state_changed"));
     }

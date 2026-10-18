@@ -114,6 +114,10 @@ fn completed_retry_rejects_mutated_authority_and_receipt_evidence_without_writes
         CompletedMutation::Formula,
         CompletedMutation::Dco,
         CompletedMutation::Completion,
+        CompletedMutation::MissingPullRequest,
+        CompletedMutation::MissingThreadResolution,
+        CompletedMutation::MissingForcePushBlock,
+        CompletedMutation::MissingDeletionBlock,
     ] {
         let mut responses = base_map.clone();
         apply_mutation(&mut responses, &candidate, mutation);
@@ -151,6 +155,10 @@ enum CompletedMutation {
     Formula,
     Dco,
     Completion,
+    MissingPullRequest,
+    MissingThreadResolution,
+    MissingForcePushBlock,
+    MissingDeletionBlock,
 }
 
 fn apply_mutation(
@@ -209,8 +217,75 @@ fn apply_mutation(
             );
             responses.insert(route, checks);
         }
+        CompletedMutation::MissingPullRequest
+        | CompletedMutation::MissingThreadResolution
+        | CompletedMutation::MissingForcePushBlock
+        | CompletedMutation::MissingDeletionBlock => {
+            mutate_protection(responses, &candidate.policy.repository, mutation);
+        }
     }
     responses.insert(pull_route, detail);
+}
+
+fn mutate_protection(
+    responses: &mut BTreeMap<String, serde_json::Value>,
+    repository: &str,
+    mutation: CompletedMutation,
+) {
+    let classic_route = format!("repos/{repository}/branches/main/protection");
+    let mut classic = responses[&classic_route].clone();
+    let ruleset_route = format!("repos/{repository}/rulesets/5?includes_parents=true");
+    let mut ruleset = responses[&ruleset_route].clone();
+    match mutation {
+        CompletedMutation::MissingPullRequest => {
+            classic["required_pull_request_reviews"] = serde_json::Value::Null;
+            ruleset["rules"] = remove_rule(&ruleset["rules"], "pull_request");
+        }
+        CompletedMutation::MissingThreadResolution => {
+            classic["required_conversation_resolution"]["enabled"] = json!(false);
+            ruleset["rules"] = set_thread_resolution(&ruleset["rules"], false);
+        }
+        CompletedMutation::MissingForcePushBlock => {
+            classic["allow_force_pushes"]["enabled"] = json!(true);
+            ruleset["rules"] = remove_rule(&ruleset["rules"], "non_fast_forward");
+        }
+        CompletedMutation::MissingDeletionBlock => {
+            classic["allow_deletions"]["enabled"] = json!(true);
+            ruleset["rules"] = remove_rule(&ruleset["rules"], "deletion");
+        }
+        _ => unreachable!(),
+    }
+    responses.insert(classic_route, classic);
+    responses.insert(ruleset_route, ruleset);
+}
+
+fn remove_rule(rules: &serde_json::Value, kind: &str) -> serde_json::Value {
+    json!(
+        rules
+            .as_array()
+            .expect("rules")
+            .iter()
+            .filter(|rule| rule["type"] != kind)
+            .cloned()
+            .collect::<Vec<_>>()
+    )
+}
+
+fn set_thread_resolution(rules: &serde_json::Value, required: bool) -> serde_json::Value {
+    json!(
+        rules
+            .as_array()
+            .expect("rules")
+            .iter()
+            .cloned()
+            .map(|mut rule| {
+                if rule["type"] == "pull_request" {
+                    rule["parameters"]["required_review_thread_resolution"] = json!(required);
+                }
+                rule
+            })
+            .collect::<Vec<_>>()
+    )
 }
 
 #[test]

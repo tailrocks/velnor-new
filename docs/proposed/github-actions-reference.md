@@ -223,3 +223,10 @@ combined; malformed present controls must not become positive protection evidenc
 Sources: [ruleset layering](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets),
 [strict and loose status checks](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets),
 and [classic branch protection API](https://docs.github.com/en/rest/branches/branch-protection).
+
+GitHub's [protected-branch documentation](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
+states that after required status checks pass, commits may be pushed directly to
+the protected branch or merged through a pull request. Strict status checks only
+require the PR branch to be current before merging. Therefore a workflow whose
+contract promises PR-only promotion must independently require the server-side
+pull-request rule; required checks and a client-side PR workflow are insufficient.

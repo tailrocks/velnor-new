@@ -1,5 +1,7 @@
 #[path = "tap_merge_protection_resolution_tests.rs"]
 mod resolution;
+#[path = "tap_merge_protection_resolution_support.rs"]
+mod support;
 
 use super::rulesets::ruleset_detail_route;
 use super::*;
@@ -91,9 +93,10 @@ fn pending_earlier_check_does_not_hide_later_terminal_failure() {
 fn branch_api_requires_app_bound_checks_and_dco() {
     let json = serde_json::json!({
         "enforce_admins": {"enabled": true},
-        "required_pull_request_reviews": {"bypass_pull_request_allowances": {
-            "users": [], "teams": [], "apps": []
-        }},
+        "required_pull_request_reviews": {
+            "required_approving_review_count": 0,
+            "bypass_pull_request_allowances": {"users": [], "teams": [], "apps": []}
+        },
         "required_status_checks": {
             "strict": true,
             "checks": [
@@ -108,9 +111,10 @@ fn branch_api_requires_app_bound_checks_and_dco() {
     assert!(!classic.writer_bypass);
     let missing_app = serde_json::json!({
         "enforce_admins": {"enabled": true},
-        "required_pull_request_reviews": {"bypass_pull_request_allowances": {
-            "users": [], "teams": [], "apps": []
-        }},
+        "required_pull_request_reviews": {
+            "required_approving_review_count": 0,
+            "bypass_pull_request_allowances": {"users": [], "teams": [], "apps": []}
+        },
         "required_status_checks": {"strict": true, "checks": [{"context": "CI", "app_id": null}]}
     });
     assert!(parse_classic_protection(&missing_app, 17, "tap-bot[bot]").is_err());
@@ -124,9 +128,12 @@ fn branch_api_requires_app_bound_checks_and_dco() {
     assert!(parse_classic_protection(&serde_json::json!({}), 17, "tap-bot[bot]").is_err());
     let bypasses_writer = serde_json::json!({
         "enforce_admins": {"enabled": true},
-        "required_pull_request_reviews": {"bypass_pull_request_allowances": {
-            "users": [{"login": "tap-bot[bot]"}], "teams": [], "apps": [{"id": 17}]
-        }}
+        "required_pull_request_reviews": {
+            "required_approving_review_count": 0,
+            "bypass_pull_request_allowances": {
+                "users": [{"login": "tap-bot[bot]"}], "teams": [], "apps": [{"id": 17}]
+            }
+        }
     });
     let classic =
         parse_classic_protection(&bypasses_writer, 17, "tap-bot[bot]").expect("read bypasses");

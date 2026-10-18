@@ -173,7 +173,7 @@ pub(super) fn observe(
             current_head_sha: current_head.clone(),
             expected_open_pull_request: true,
             server_protection: if protection.strict && !protection.writer_bypass {
-                TapServerMergeProtection::StrictWithoutWriterBypass
+                TapServerMergeProtection::PullRequestProtected
             } else {
                 TapServerMergeProtection::MissingOrBypassable
             },

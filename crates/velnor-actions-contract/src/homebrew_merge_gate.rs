@@ -99,9 +99,10 @@ pub struct TapMergePolicy {
 /// GitHub protection required to close the base-advance merge race.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TapServerMergeProtection {
-    /// Required checks enforce an up-to-date branch; the writer cannot bypass.
-    StrictWithoutWriterBypass,
-    /// Protection is absent, non-strict, bypassable, or unproven.
+    /// Server requires PRs, resolved threads, up-to-date checks, and prevents
+    /// force-pushes/deletion; the writer cannot bypass those protections.
+    PullRequestProtected,
+    /// A required PR/thread/check control is absent, bypassable, or unproven.
     MissingOrBypassable,
 }
 
@@ -165,7 +166,7 @@ pub fn validate_tap_merge_gate(
     {
         return Err(invalid("stale_or_unexpected_pull_request"));
     }
-    if observed.server_protection != TapServerMergeProtection::StrictWithoutWriterBypass {
+    if observed.server_protection != TapServerMergeProtection::PullRequestProtected {
         return Err(invalid("server_merge_protection_missing"));
     }
     validate_checks(

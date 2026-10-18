@@ -77,7 +77,7 @@ fn incomplete_feedback_waits_only_until_completion_and_terminal_findings_fail() 
         validated_head_sha: head.clone(),
         current_head_sha: head.clone(),
         expected_open_pull_request: true,
-        server_protection: TapServerMergeProtection::StrictWithoutWriterBypass,
+        server_protection: TapServerMergeProtection::PullRequestProtected,
         required_checks_complete: true,
         checks: vec![
             TapRequiredCheck {
@@ -161,7 +161,7 @@ fn canonical_receipt_to_completion_to_merge_contract_uses_real_digest_formats() 
         validated_head_sha: pull_head(&promotion).to_owned(),
         current_head_sha: pull_head(&promotion).to_owned(),
         expected_open_pull_request: true,
-        server_protection: TapServerMergeProtection::StrictWithoutWriterBypass,
+        server_protection: TapServerMergeProtection::PullRequestProtected,
         required_checks_complete: true,
         checks: vec![
             TapRequiredCheck {
