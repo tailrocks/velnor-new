@@ -5,7 +5,9 @@ use crate::error::HostError;
 pub(super) struct RequestEventState {
     pub(super) acquire_state: String,
     pub(super) started_digest: Option<String>,
+    pub(super) started_job_id: Option<String>,
     pub(super) completed_digest: Option<String>,
+    pub(super) completed_job_id: Option<String>,
     pub(super) intent_id: Option<i64>,
 }
 
@@ -17,7 +19,7 @@ pub(super) async fn request_event_state(
 ) -> Result<Option<RequestEventState>, HostError> {
     let mut rows = connection
         .query(
-            "SELECT acquire_state, started_event_digest, completed_event_digest, completed_intent_id FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3 AND authority_model = 'created_empty_exclusive_admin_session_v1'",
+            "SELECT acquire_state, started_event_digest, started_job_id, completed_event_digest, completed_job_id, completed_intent_id FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3 AND authority_model = 'created_empty_exclusive_admin_session_v1'",
             (connection_id, set_id, request_id),
         )
         .await
@@ -27,12 +29,16 @@ pub(super) async fn request_event_state(
     };
     let state: String = row.get(0).map_err(|_| HostError::Journal)?;
     let started_digest: Option<String> = row.get(1).map_err(|_| HostError::Journal)?;
-    let completed_digest: Option<String> = row.get(2).map_err(|_| HostError::Journal)?;
-    let intent_id: Option<i64> = row.get(3).map_err(|_| HostError::Journal)?;
+    let started_job_id: Option<String> = row.get(2).map_err(|_| HostError::Journal)?;
+    let completed_digest: Option<String> = row.get(3).map_err(|_| HostError::Journal)?;
+    let completed_job_id: Option<String> = row.get(4).map_err(|_| HostError::Journal)?;
+    let intent_id: Option<i64> = row.get(5).map_err(|_| HostError::Journal)?;
     Ok(Some(RequestEventState {
         acquire_state: state,
         started_digest,
+        started_job_id,
         completed_digest,
+        completed_job_id,
         intent_id,
     }))
 }

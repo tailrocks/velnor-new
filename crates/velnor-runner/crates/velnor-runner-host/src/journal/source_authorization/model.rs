@@ -6,6 +6,15 @@ use crate::error::HostError;
 use crate::launch::steps::source::AuthorizedSourceReceipt;
 use velnor_runner_github::workflow_run::{VerifiedWorkflowSource, WorkflowRefKind};
 
+#[derive(Clone, Copy, Serialize)]
+pub(in crate::journal) struct EventSource<'a> {
+    pub(in crate::journal) owner_name: Option<&'a str>,
+    pub(in crate::journal) repository_name: Option<&'a str>,
+    pub(in crate::journal) job_workflow_ref: Option<&'a str>,
+    pub(in crate::journal) workflow_run_id: Option<i64>,
+    pub(in crate::journal) event_name: Option<&'a str>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct StoredSource {
@@ -54,6 +63,24 @@ impl StoredSource {
 
     pub(super) fn json(&self) -> Result<String, HostError> {
         serde_json::to_string(self).map_err(|_| HostError::Journal)
+    }
+
+    pub(super) fn matches_event_source(&self, event: EventSource<'_>) -> bool {
+        event
+            .owner_name
+            .is_none_or(|value| self.owner_name == value)
+            && event
+                .repository_name
+                .is_none_or(|value| self.repository_name == value)
+            && event
+                .job_workflow_ref
+                .is_none_or(|value| self.job_workflow_ref == value)
+            && event
+                .workflow_run_id
+                .is_none_or(|value| self.workflow_run_id == value)
+            && event
+                .event_name
+                .is_none_or(|value| self.event_name == value)
     }
 
     fn from_verified(source: &VerifiedWorkflowSource) -> Self {

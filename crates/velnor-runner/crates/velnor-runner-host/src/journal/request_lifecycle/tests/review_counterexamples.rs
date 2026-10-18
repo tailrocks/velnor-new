@@ -1,5 +1,7 @@
 use super::admission::{JOB_LIMIT, physical_intent};
-use super::helpers::{Scratch, binding, created_scope, receipt, record_acquired, runner_name};
+use super::helpers::{
+    Scratch, binding, created_scope, event_source, receipt, record_acquired, runner_name,
+};
 use crate::error::HostError;
 use crate::journal::{AssignmentIdentity, AssignmentKey, ConnectionJournal, Journal};
 use velnor_runner_github::RunnerReference;
@@ -60,25 +62,32 @@ async fn review_exact_started_replay_survives_completion_and_restart() -> Result
     let f = ready().await?;
     assert_eq!(
         f.scope
-            .record_job_started(&f.request, 701, &f.runner, None)
+            .record_job_started(&f.request, 701, &event_source(101, 1070), &f.runner, None)
             .await?,
         f.intent
     );
     assert_eq!(
         f.scope
-            .record_job_started(&f.request, 701, &f.runner, None)
+            .record_job_started(&f.request, 701, &event_source(101, 1070), &f.runner, None)
             .await,
         Ok(f.intent)
     );
     assert_eq!(
         f.scope
-            .record_job_completed(&f.request, 704, Some("success"), Some(&f.runner), None)
+            .record_job_completed(
+                &f.request,
+                704,
+                &event_source(101, 1070),
+                Some("success"),
+                Some(&f.runner),
+                None,
+            )
             .await?,
         Some(f.intent)
     );
     assert_eq!(
         f.scope
-            .record_job_started(&f.request, 701, &f.runner, None)
+            .record_job_started(&f.request, 701, &event_source(101, 1070), &f.runner, None)
             .await?,
         f.intent
     );
@@ -93,7 +102,7 @@ async fn review_exact_started_replay_survives_completion_and_restart() -> Result
         .await?;
     assert_eq!(
         scope
-            .record_job_started(&request, 701, &f.runner, None)
+            .record_job_started(&request, 701, &event_source(101, 1070), &f.runner, None)
             .await?,
         f.intent
     );
@@ -114,7 +123,14 @@ async fn review_runnerless_completion_before_acquire_remains_reopenable() -> Res
     scope.record_source_authorization(&request, &source).await?;
     assert_eq!(
         scope
-            .record_job_completed(&request, 702, Some("cancelled"), None, None)
+            .record_job_completed(
+                &request,
+                702,
+                &event_source(101, 1071),
+                Some("cancelled"),
+                None,
+                None,
+            )
             .await?,
         None
     );
@@ -132,7 +148,14 @@ async fn review_completed_runner_cleanup_remains_reopenable() -> Result<(), Host
     let f = ready().await?;
     assert_eq!(
         f.scope
-            .record_job_completed(&f.request, 703, Some("success"), Some(&f.runner), None)
+            .record_job_completed(
+                &f.request,
+                703,
+                &event_source(101, 1070),
+                Some("success"),
+                Some(&f.runner),
+                None,
+            )
             .await?,
         Some(f.intent)
     );
@@ -197,13 +220,20 @@ async fn independent_completed_cleanup_allows_new_demand_after_restart() -> Resu
     let f = ready().await?;
     assert_eq!(
         f.scope
-            .record_job_started(&f.request, 701, &f.runner, None)
+            .record_job_started(&f.request, 701, &event_source(101, 1070), &f.runner, None)
             .await?,
         f.intent
     );
     assert_eq!(
         f.scope
-            .record_job_completed(&f.request, 703, Some("success"), Some(&f.runner), None)
+            .record_job_completed(
+                &f.request,
+                703,
+                &event_source(101, 1070),
+                Some("success"),
+                Some(&f.runner),
+                None,
+            )
             .await?,
         Some(f.intent)
     );
@@ -229,7 +259,7 @@ async fn independent_completed_cleanup_allows_new_demand_after_restart() -> Resu
         .await?;
     assert_eq!(
         scope
-            .record_job_started(&request, 701, &f.runner, None)
+            .record_job_started(&request, 701, &event_source(101, 1070), &f.runner, None)
             .await?,
         f.intent
     );
@@ -258,7 +288,14 @@ async fn independent_authorized_runnerless_cancel_keeps_physical_charge_after_re
         .await?;
     assert_eq!(
         f.scope
-            .record_job_completed(&cancel, 702, Some("cancelled"), None, None)
+            .record_job_completed(
+                &cancel,
+                702,
+                &event_source(101, 1071),
+                Some("cancelled"),
+                None,
+                None,
+            )
             .await?,
         None
     );

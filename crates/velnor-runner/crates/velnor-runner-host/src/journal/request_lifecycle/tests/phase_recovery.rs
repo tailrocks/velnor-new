@@ -1,5 +1,5 @@
 use super::admission::{JOB_LIMIT, physical_intent};
-use super::helpers::{Scratch, binding, created_scope, record_acquired, runner_name};
+use super::helpers::{Scratch, binding, created_scope, event_source, record_acquired, runner_name};
 use crate::error::HostError;
 use crate::journal::{CapacityLimits, Journal, ReservationState};
 use crate::reconcile::LaunchPhase;
@@ -44,7 +44,7 @@ async fn runner_started_phase_and_capacity_survive_restart() -> Result<(), HostE
         .await?;
     assert_eq!(
         scope
-            .record_job_started(&request, 701, &runner, None)
+            .record_job_started(&request, 701, &event_source(101, 1070), &runner, None)
             .await?,
         intent_id
     );

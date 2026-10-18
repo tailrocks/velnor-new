@@ -10,6 +10,7 @@ use crate::journal::connection::ConnectionJournal;
 use crate::journal::scale_set_create::{CreatedScaleSetResponse, ScaleSetCreateRequest};
 use crate::journal::{Journal, SourceAuthorizationResult};
 use crate::launch::steps::source::{AuthorizedSourceReceipt, test_receipt};
+use velnor_runner_github::SourceMetadata;
 use velnor_runner_github::workflow_run::{
     VerifiedJobWorkflowRef, VerifiedWorkflowSource, WorkflowRefKind,
 };
@@ -123,6 +124,18 @@ pub(super) fn source(repository_id: i64, run_id: i64) -> VerifiedWorkflowSource 
         },
         workflow_source_sha: None,
         run_attempt: 1,
+    }
+}
+
+pub(super) fn event_source(repository_id: i64, run_id: i64) -> SourceMetadata {
+    SourceMetadata {
+        owner_name: Some(format!("owner-{repository_id}")),
+        repository_name: Some(format!("repo-{repository_id}")),
+        job_workflow_ref: Some(format!(
+            "owner-{repository_id}/repo-{repository_id}/.github/workflows/build.yml@refs/heads/main"
+        )),
+        workflow_run_id: Some(run_id),
+        event_name: Some("push".to_owned()),
     }
 }
 

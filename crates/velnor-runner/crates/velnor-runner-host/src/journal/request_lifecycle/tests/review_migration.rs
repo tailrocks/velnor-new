@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use super::admission::physical_intent;
-use super::helpers::{record_acquired, runner_name};
+use super::helpers::{event_source, record_acquired, runner_name};
 use super::review_counterexamples::ready;
 use crate::error::HostError;
 use crate::journal::{Journal, ReservationState};
@@ -26,7 +26,13 @@ async fn version_ten_migration_preserves_ready_runner_and_capacity_charge() -> R
     );
     assert_eq!(
         scope
-            .record_job_started(&fixture.request, 701, &fixture.runner, None)
+            .record_job_started(
+                &fixture.request,
+                701,
+                &event_source(101, 1070),
+                &fixture.runner,
+                None,
+            )
             .await?,
         fixture.intent
     );
@@ -38,13 +44,20 @@ async fn version_ten_cleaned_runner_migrates_and_allows_new_jit() -> Result<(), 
     let fixture = ready().await?;
     fixture
         .scope
-        .record_job_started(&fixture.request, 701, &fixture.runner, None)
+        .record_job_started(
+            &fixture.request,
+            701,
+            &event_source(101, 1070),
+            &fixture.runner,
+            None,
+        )
         .await?;
     fixture
         .scope
         .record_job_completed(
             &fixture.request,
             703,
+            &event_source(101, 1070),
             Some("success"),
             Some(&fixture.runner),
             None,
@@ -82,6 +95,7 @@ async fn version_ten_cleaned_runner_migrates_and_allows_new_jit() -> Result<(), 
             .record_job_completed(
                 &fixture.request,
                 703,
+                &event_source(101, 1070),
                 Some("success"),
                 Some(&fixture.runner),
                 None,

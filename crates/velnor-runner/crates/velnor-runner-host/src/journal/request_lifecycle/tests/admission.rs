@@ -1,4 +1,6 @@
-use super::helpers::{Scratch, binding, created_scope, receipt, record_acquired, runner_name};
+use super::helpers::{
+    Scratch, binding, created_scope, event_source, receipt, record_acquired, runner_name,
+};
 use crate::error::HostError;
 use crate::journal::{
     AssignedAcquireResult, AssignmentIdentity, AssignmentKey, CapacityLimits, ConnectionJournal,
@@ -347,7 +349,14 @@ async fn completion_for_request_b_does_not_release_runner_a_and_cancel_is_reques
 
     assert_eq!(
         scope
-            .record_job_completed(&cancel, 263, Some("cancelled"), None, Some("opaque"))
+            .record_job_completed(
+                &cancel,
+                263,
+                &event_source(101, 1063),
+                Some("cancelled"),
+                None,
+                Some("opaque"),
+            )
             .await?,
         None
     );
@@ -359,6 +368,7 @@ async fn completion_for_request_b_does_not_release_runner_a_and_cancel_is_reques
             .record_job_completed(
                 &request_b,
                 264,
+                &event_source(101, 1062),
                 Some("success"),
                 Some(&runner),
                 Some("opaque-job-id"),
@@ -368,7 +378,13 @@ async fn completion_for_request_b_does_not_release_runner_a_and_cancel_is_reques
     );
     assert_eq!(
         scope
-            .record_job_started(&request_b, 265, &runner, Some("opaque-job-id"))
+            .record_job_started(
+                &request_b,
+                265,
+                &event_source(101, 1062),
+                &runner,
+                Some("opaque-job-id"),
+            )
             .await?,
         intent_id
     );

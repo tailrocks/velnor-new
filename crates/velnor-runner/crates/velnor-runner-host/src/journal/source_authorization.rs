@@ -8,6 +8,7 @@ mod tests;
 use crate::error::HostError;
 use crate::journal::connection::{AssignmentIdentity, ConnectionJournal};
 use crate::launch::steps::source::AuthorizedSourceReceipt;
+pub(in crate::journal) use model::EventSource;
 use model::StoredSource;
 
 pub(in crate::journal) fn validate_stored_source(
@@ -83,6 +84,25 @@ pub(in crate::journal) async fn source_authorized_for_intent(
         request_id,
         intent_id,
         binding_digest,
+    )
+    .await
+}
+
+pub(in crate::journal) async fn event_source_matches(
+    connection: &turso::Connection,
+    connection_id: &str,
+    scale_set_id: i64,
+    request_id: i64,
+    binding_digest: &str,
+    event: EventSource<'_>,
+) -> Result<bool, HostError> {
+    storage::event_source_matches(
+        connection,
+        connection_id,
+        scale_set_id,
+        request_id,
+        binding_digest,
+        event,
     )
     .await
 }

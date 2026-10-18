@@ -1,4 +1,6 @@
-use super::helpers::{Scratch, binding, created_scope, receipt, record_acquired, runner_name};
+use super::helpers::{
+    Scratch, binding, created_scope, event_source, receipt, record_acquired, runner_name,
+};
 use crate::error::HostError;
 use crate::journal::{
     AssignmentKey, CapacityLimits, Journal, ReservationRequest, ReservationResult, ReservationState,
@@ -96,6 +98,7 @@ async fn jit_witness_does_not_bind_the_started_request_and_events_replay_exactly
         .record_job_completed(
             &canceled_identity,
             303,
+            &event_source(101, 1102),
             Some("cancelled"),
             None,
             Some("opaque-job"),
@@ -111,6 +114,7 @@ async fn jit_witness_does_not_bind_the_started_request_and_events_replay_exactly
         .record_job_completed(
             &running,
             404,
+            &event_source(101, 1101),
             Some("success"),
             Some(&runner),
             Some("opaque-job-101"),
@@ -119,13 +123,25 @@ async fn jit_witness_does_not_bind_the_started_request_and_events_replay_exactly
     assert_eq!(completed, Some(intent_id));
     assert_eq!(
         scope
-            .record_job_started(&running, 405, &runner, Some("opaque-job-101"))
+            .record_job_started(
+                &running,
+                405,
+                &event_source(101, 1101),
+                &runner,
+                Some("opaque-job-101"),
+            )
             .await?,
         intent_id
     );
     assert_eq!(
         scope
-            .record_job_started(&running, 405, &runner, Some("opaque-job-101"))
+            .record_job_started(
+                &running,
+                405,
+                &event_source(101, 1101),
+                &runner,
+                Some("opaque-job-101"),
+            )
             .await?,
         intent_id
     );
@@ -134,6 +150,7 @@ async fn jit_witness_does_not_bind_the_started_request_and_events_replay_exactly
             .record_job_completed(
                 &running,
                 404,
+                &event_source(101, 1101),
                 Some("success"),
                 Some(&runner),
                 Some("opaque-job-101"),

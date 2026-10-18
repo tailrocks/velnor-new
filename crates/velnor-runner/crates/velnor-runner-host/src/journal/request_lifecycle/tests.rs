@@ -2,6 +2,7 @@
 
 mod admission;
 mod correlation;
+mod event_source;
 mod helpers;
 mod phase_recovery;
 mod review_counterexamples;
