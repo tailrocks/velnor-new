@@ -18,6 +18,10 @@ type JobMap = BTreeMap<String, Job>;
 #[path = "render_emit.rs"]
 mod emit;
 
+#[path = "render_routing.rs"]
+mod routing;
+pub use self::routing::render_workflow_ir_strict_shared_with_routing;
+
 #[path = "render_fallback.rs"]
 pub(crate) mod fallback;
 
@@ -134,8 +138,27 @@ pub fn finalize_jobs(
     ctx: &RenderContext,
     mise: &MiseSetup,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
+    finalize_jobs_with_routing(
+        ir,
+        policy,
+        support,
+        ctx,
+        mise,
+        &crate::workflow_routing::WorkflowRoutingPolicy::Preserve,
+    )
+}
+
+fn finalize_jobs_with_routing(
+    ir: &WorkflowIr,
+    policy: WorkflowPolicy,
+    support: Option<&VelnorSupportWorkflow>,
+    ctx: &RenderContext,
+    mise: &MiseSetup,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
+) -> Result<BTreeMap<String, Job>, RenderError> {
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
+    crate::workflow_routing::route_jobs(&mut jobs, routing)?;
     for (id, job) in &mut jobs {
         let bootstrap_plan = ctx.preseed && id == PLAN_JOB_ID;
         if bootstrap_plan {

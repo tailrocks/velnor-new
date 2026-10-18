@@ -1,7 +1,7 @@
 //! Shared placement policy for every generated workflow document.
 
 use velnor_actions_contract::{
-    ExecutionMode, RunnerPlatform, RunsOn, ScaleSetSelector, runner_platform,
+    ExecutionMode, Job, RunnerPlatform, RunsOn, ScaleSetSelector, runner_platform,
 };
 
 use crate::{RenderError, RenderedFile, yaml::Yaml};
@@ -110,6 +110,48 @@ pub(crate) fn route_workflow_yaml(
         fields[runs_on_index].1 = replacement;
     }
     Ok(workflow)
+}
+
+/// Apply the selected runner placement after policy jobs have been merged.
+///
+/// Keeping this on the typed job map covers support jobs added after the
+/// user's workflow IR, including repository lint jobs.
+pub(crate) fn route_jobs(
+    jobs: &mut std::collections::BTreeMap<String, Job>,
+    policy: &WorkflowRoutingPolicy,
+) -> Result<(), RenderError> {
+    let WorkflowRoutingPolicy::ScaleSet(selector) = policy else {
+        return Ok(());
+    };
+    for (job_id, job) in jobs {
+        match RunsOn::parse(&job.runs_on).map_err(|_| {
+            invalid(format!(
+                "unsupported_runs_on_for_linux_amd64_scale_set:.github/workflows/ci.yml:{job_id}:{}",
+                job.runs_on
+            ))
+        })? {
+            RunsOn::ScaleSet(existing) if existing == *selector => {}
+            RunsOn::ScaleSet(_) => {
+                return Err(invalid(format!(
+                    "scale_set_selector_mismatch:.github/workflows/ci.yml:{job_id}"
+                )));
+            }
+            RunsOn::Hosted(label) => match runner_platform(&label) {
+                Some(RunnerPlatform::Darwin) => {
+                    return Err(invalid(format!(
+                        "unsupported_darwin_workload:.github/workflows/ci.yml:{job_id}:{label}"
+                    )));
+                }
+                Some(RunnerPlatform::LinuxAmd64) => job.runs_on = selector.token(),
+                Some(RunnerPlatform::LinuxArm64) | None => {
+                    return Err(invalid(format!(
+                        "unsupported_workload_for_linux_amd64_scale_set:.github/workflows/ci.yml:{job_id}:{label}"
+                    )));
+                }
+            },
+        }
+    }
+    Ok(())
 }
 
 /// Examine every job runner and reusable-workflow call in the final workflow files.

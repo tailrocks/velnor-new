@@ -1,6 +1,8 @@
-use velnor_actions_contract::{ExecutionMode, ScaleSetSelector};
+use std::collections::BTreeMap;
 
-use super::{WorkflowRoutingPolicy, route_workflow_yaml};
+use velnor_actions_contract::{ExecutionMode, Job, JobTimeout, ScaleSetSelector};
+
+use super::{WorkflowRoutingPolicy, route_jobs, route_workflow_yaml};
 use crate::{RenderError, yaml::Yaml};
 
 fn selector() -> ScaleSetSelector {
@@ -76,6 +78,39 @@ fn non_linux_and_unknown_runner_labels_fail_closed() {
         )
         .expect_err("unsupported workload must not be rewritten to Linux");
         assert_eq!(error, RenderError::InvalidWorkflow(expected.to_owned()));
+    }
+}
+
+#[test]
+fn typed_policy_routes_late_added_jobs_and_rejects_darwin() {
+    let mut jobs = BTreeMap::from([("alint".to_owned(), job("ubuntu-26.04"))]);
+    route_jobs(&mut jobs, &policy(ExecutionMode::ScaleSet))
+        .expect("late support jobs use the selected Linux Scale Set");
+    assert_eq!(jobs["alint"].runs_on, selector().token());
+
+    let mut darwin = BTreeMap::from([("native".to_owned(), job("macos-15"))]);
+    let error = route_jobs(&mut darwin, &policy(ExecutionMode::ScaleSet))
+        .expect_err("a Darwin job cannot be assigned to the Linux Scale Set");
+    assert_eq!(
+        error,
+        RenderError::InvalidWorkflow(
+            "unsupported_darwin_workload:.github/workflows/ci.yml:native:macos-15".to_owned()
+        )
+    );
+}
+
+fn job(runs_on: &str) -> Job {
+    Job {
+        display_name: "Runner routing fixture".to_owned(),
+        runs_on: runs_on.to_owned(),
+        check_runner: None,
+        timeout_minutes: JobTimeout::CRATE,
+        needs: Vec::new(),
+        condition: None,
+        permissions: None,
+        cache_mode: None,
+        environment: None,
+        steps: Vec::new(),
     }
 }
 

@@ -9,7 +9,13 @@ pub(super) fn peel_cache_helper_prefix(steps: &[Step]) -> Option<(Vec<Step>, &[S
         .take_while(|step| {
             matches!(
                 step.role,
-                Some(StepRole::AcquireVelnor | StepRole::CacheTarLaunchers)
+                Some(
+                    StepRole::AcquireVelnor
+                        | StepRole::PreseedDownload
+                        | StepRole::PreseedVerifyManifest
+                        | StepRole::PreseedStage
+                        | StepRole::CacheTarLaunchers
+                )
             )
         })
         .count();
@@ -18,10 +24,37 @@ pub(super) fn peel_cache_helper_prefix(steps: &[Step]) -> Option<(Vec<Step>, &[S
         .iter()
         .filter(|step| step.role == Some(StepRole::AcquireVelnor))
         .count();
+    let preseed_roles = prefix
+        .iter()
+        .filter_map(|step| match step.role {
+            Some(
+                StepRole::PreseedDownload
+                | StepRole::PreseedVerifyManifest
+                | StepRole::PreseedStage,
+            ) => step.role,
+            _ => None,
+        })
+        .collect::<Vec<_>>();
     let launcher = prefix
         .iter()
         .position(|step| step.role == Some(StepRole::CacheTarLaunchers));
-    if acquire > 1 || launcher.is_some_and(|index| acquire != 1 || index == 0) {
+    let preseed_order = [
+        StepRole::PreseedDownload,
+        StepRole::PreseedVerifyManifest,
+        StepRole::PreseedStage,
+    ];
+    let preseed_valid = preseed_roles.is_empty() || preseed_roles == preseed_order;
+    let source_count = acquire + usize::from(!preseed_roles.is_empty());
+    if acquire > 1
+        || (acquire > 0 && !preseed_roles.is_empty())
+        || !preseed_valid
+        || launcher.is_some_and(|index| source_count != 1 || index == 0)
+        || prefix
+            .iter()
+            .filter(|step| step.role == Some(StepRole::CacheTarLaunchers))
+            .count()
+            > 1
+    {
         return None;
     }
     Some((prefix.to_vec(), &steps[end..]))
@@ -36,14 +69,25 @@ pub(super) fn same_cache_helper_prefix_shape(
     hosted_has_cache_prelude: bool,
     local_has_cache_prelude: bool,
 ) -> bool {
+    let is_helper_source = |step: &&Step| {
+        matches!(
+            step.role,
+            Some(
+                StepRole::AcquireVelnor
+                    | StepRole::PreseedDownload
+                    | StepRole::PreseedVerifyManifest
+                    | StepRole::PreseedStage
+            )
+        )
+    };
     let hosted_stages = hosted
         .iter()
-        .filter(|step| step.role == Some(StepRole::AcquireVelnor))
+        .filter(is_helper_source)
         .cloned()
         .collect::<Vec<_>>();
     let local_stages = local
         .iter()
-        .filter(|step| step.role == Some(StepRole::AcquireVelnor))
+        .filter(is_helper_source)
         .cloned()
         .collect::<Vec<_>>();
     if hosted_stages != local_stages {

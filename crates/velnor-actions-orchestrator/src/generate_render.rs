@@ -45,13 +45,15 @@ pub(super) fn render_all(
         &ir,
         render_context.scale_set_selector.as_ref(),
     );
-    let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
-        &ir,
-        prep.config.workflow.policy,
-        prep.workflow.support.as_ref(),
-        &render_context,
-        &mise,
-    )?;
+    let rendered =
+        velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared_with_routing(
+            &ir,
+            prep.config.workflow.policy,
+            prep.workflow.support.as_ref(),
+            &render_context,
+            &mise,
+            &routing,
+        )?;
     let workflow = rendered.yaml;
     let actionlint = render_actionlint_yaml(&actionlint_input)?;
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;

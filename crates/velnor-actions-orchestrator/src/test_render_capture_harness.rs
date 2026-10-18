@@ -33,7 +33,10 @@ fn capture_exact_consumer_marked_workflow_before_size_guard()
     );
 
     velnor_actions_workflow_renderer::render::test_render_capture::clear();
-    let tree = crate::render_staged_tree_with(&preparation, None)?;
+    let tree =
+        velnor_actions_workflow_renderer::render::test_render_capture::with_full_tree_capture(
+            || crate::render_staged_tree_with(&preparation, None),
+        )?;
     crate::validate::validate_staged(&tree)?;
     let capture = velnor_actions_workflow_renderer::render::test_render_capture::take()
         .ok_or("render boundary did not record a workflow")?;
