@@ -44,7 +44,9 @@ pub use super::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMo
 pub use super::prepare::{GenerationPreparation, prepare};
 pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use super::provenance::{EvidenceProvenance, ProfileProvenance};
-pub use super::qualification_cache_backend::observe_qualification_cache_backend;
+pub use super::qualification_cache_backend::{
+    observe_qualification_cache_backend, validate_qualification_cache_backend_observation,
+};
 pub use super::qualification_cache_runtime::{
     QUALIFICATION_CACHE_BIND_OP, QualificationCacheBindingOutputs,
     QualificationCacheBindingRequest, bind_qualification_cache_runtime,

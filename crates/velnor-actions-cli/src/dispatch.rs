@@ -33,6 +33,8 @@ mod public;
 pub(crate) use public::run_public;
 #[path = "dispatch_cache_bind.rs"]
 mod cache_bind;
+#[path = "dispatch_cache_observe.rs"]
+mod cache_observe;
 #[path = "dispatch_owned_tool_publication.rs"]
 mod owned_publication;
 
@@ -72,6 +74,8 @@ enum InternalOp {
     ResolveQualification,
     /// Select one cache layer for the validated qualification plan.
     BindQualificationCache,
+    /// Validate one restored cache against the backend census.
+    ObserveQualificationCacheBackend,
     /// Data-only task execution record resolution for a generated wrapper.
     ResolveTaskExecution,
 }
@@ -115,10 +119,14 @@ fn gate_request() -> Option<InternalRequest> {
             InternalOp::ResolveQualification
         }
         Ok(tag) if tag == cache_bind::OP => InternalOp::BindQualificationCache,
+        Ok(tag) if tag == cache_observe::OP => InternalOp::ObserveQualificationCacheBackend,
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
         _ => return None,
     };
-    if op == InternalOp::BindQualificationCache {
+    if matches!(
+        op,
+        InternalOp::BindQualificationCache | InternalOp::ObserveQualificationCacheBackend
+    ) {
         if !["GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"]
             .iter()
             .all(|name| env::var(name).is_ok_and(|value| !value.is_empty()))
@@ -177,6 +185,7 @@ fn gate_request() -> Option<InternalRequest> {
         | InternalOp::RepoPolicy
         | InternalOp::ExecuteCheck
         | InternalOp::BindQualificationCache
+        | InternalOp::ObserveQualificationCacheBackend
         | InternalOp::ResolveTaskExecution => {}
     }
     Some(InternalRequest { op, path })
@@ -222,6 +231,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
         InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
         InternalOp::BindQualificationCache => cache_bind::run(),
+        InternalOp::ObserveQualificationCacheBackend => cache_observe::run(),
         InternalOp::ResolveTaskExecution => match resolve_task_execution() {
             Ok(frame) => match std::io::stdout().lock().write_all(&frame) {
                 Ok(()) => ExitCode::SUCCESS,

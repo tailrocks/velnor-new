@@ -9,6 +9,8 @@ mod impl_cli_args;
 mod impl_cli_gate;
 #[path = "impl_cli_gate_cache_bind.rs"]
 mod impl_cli_gate_cache_bind;
+#[path = "impl_cli_gate_cache_observe.rs"]
+mod impl_cli_gate_cache_observe;
 #[path = "impl_cli_gate_preseed.rs"]
 mod impl_cli_gate_preseed;
 #[path = "impl_cli_gate_qualification.rs"]
