@@ -110,32 +110,44 @@ fn expand_matrix(
     }
     if let Some(include) = matrix.iter().find(|(name, _)| name == "include") {
         let includes = matrix_objects(&include.1, path, job_id, "include")?;
-        if axes.is_empty() {
-            combinations.clear();
-            combinations.extend(includes);
-        } else {
-            for include in includes {
-                let mut merged = false;
-                for combination in &mut combinations {
-                    let conflicts_with_axis = axes.iter().any(|(name, _)| {
-                        include.get(*name).is_some_and(|value| {
-                            combination
-                                .get(*name)
-                                .is_some_and(|original| original != value)
-                        })
-                    });
-                    if !conflicts_with_axis {
-                        combination.extend(include.clone());
-                        merged = true;
-                    }
-                }
-                if !merged {
-                    combinations.push(include);
-                }
-                if combinations.len() > MAX_MATRIX_COMBINATIONS {
-                    return Err(invalid(format!("matrix_too_large:{path}:{job_id}")));
-                }
+        combinations = apply_includes(combinations, &axes, includes, path, job_id)?;
+    }
+    Ok(combinations)
+}
+
+fn apply_includes(
+    mut combinations: Vec<std::collections::BTreeMap<String, Yaml>>,
+    axes: &[(&String, Vec<Yaml>)],
+    includes: Vec<std::collections::BTreeMap<String, Yaml>>,
+    path: &str,
+    job_id: &str,
+) -> Result<Vec<std::collections::BTreeMap<String, Yaml>>, RenderError> {
+    if axes.is_empty() {
+        combinations.clear();
+        combinations.extend(includes);
+        return Ok(combinations);
+    }
+    let original_rows = combinations.clone();
+    for include in includes {
+        let mut merged = false;
+        for (index, original) in original_rows.iter().enumerate() {
+            let conflicts_with_axis = axes.iter().any(|(name, _)| {
+                include.get(*name).is_some_and(|value| {
+                    original
+                        .get(*name)
+                        .is_some_and(|axis_value| axis_value != value)
+                })
+            });
+            if !conflicts_with_axis {
+                combinations[index].extend(include.clone());
+                merged = true;
             }
+        }
+        if !merged {
+            combinations.push(include);
+        }
+        if combinations.len() > MAX_MATRIX_COMBINATIONS {
+            return Err(invalid(format!("matrix_too_large:{path}:{job_id}")));
         }
     }
     Ok(combinations)

@@ -3,6 +3,9 @@ use velnor_actions_contract::{ExecutionMode, ScaleSetSelector};
 use super::super::{MAX_MATRIX_COMBINATIONS, WorkflowRoutingPolicy, route_workflow_yaml};
 use crate::{RenderError, yaml::Yaml};
 
+#[path = "workflow_routing_matrix_include_tests.rs"]
+mod include_tests;
+
 fn selector() -> ScaleSetSelector {
     ScaleSetSelector::try_new(
         "linux-amd64",
