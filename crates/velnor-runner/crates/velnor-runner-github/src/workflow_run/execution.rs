@@ -9,6 +9,9 @@ use super::{
 use crate::CompleteSourceMetadata;
 use crate::session::Transport;
 
+mod validation;
+use validation::{parse_pull_request_number, repository_parts, valid_nonce, valid_sha};
+
 /// Durable facts captured when the controller confirms a base-ref change.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PullRequestRetargetAcknowledgement {
@@ -375,41 +378,4 @@ where
         return Err(PullRequestExecutionMismatch::BaseAncestry.into());
     }
     Ok(())
-}
-
-fn repository_parts(expected: RepositoryTarget<'_>) -> Result<(&str, &str), WorkflowRunError> {
-    if expected.id <= 0 || !path_part(expected.owner) || !path_part(expected.name) {
-        return Err(WorkflowRunError::InvalidRequest);
-    }
-    Ok((expected.owner, expected.name))
-}
-
-fn parse_pull_request_number(reference: &str) -> Option<i64> {
-    reference
-        .strip_prefix("refs/pull/")?
-        .strip_suffix("/merge")?
-        .parse::<i64>()
-        .ok()
-        .filter(|number| *number > 0)
-}
-
-fn valid_sha(value: &str) -> bool {
-    matches!(value.len(), 40 | 64)
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
-fn valid_nonce(value: &str) -> bool {
-    value.len() == 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
-fn path_part(value: &str) -> bool {
-    !value.is_empty()
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
