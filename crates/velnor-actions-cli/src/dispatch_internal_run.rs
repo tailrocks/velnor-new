@@ -16,8 +16,8 @@ use velnor_actions_orchestrator::{
 
 use super::{
     GITHUB_OUTPUT_ENV, InternalOp, InternalRequest, RUNNER_TEMP_ENV, cache_bind, cache_observe,
-    fail_internal, package_release, package_release_publish, package_release_recovery,
-    run_publish_internal, tap_merge, tap_prepare,
+    cache_tar_launcher, fail_internal, package_release, package_release_publish,
+    package_release_recovery, run_publish_internal, tap_merge, tap_prepare,
 };
 
 /// Run one validated private operation.
@@ -59,6 +59,7 @@ pub(super) fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::NormalToolsCacheStagePath => cache_bind::normal_stage::run(),
         InternalOp::ImportNormalToolsCachePayload => cache_bind::transfer::normal::run_import(),
         InternalOp::ExportNormalToolsCachePayload => cache_bind::transfer::normal::run_export(),
+        InternalOp::InstallCacheTarLaunchers => cache_tar_launcher::run(),
         InternalOp::WriteQualificationSourceEvidence => match write_qualification_source_evidence()
         {
             Ok(()) => ExitCode::SUCCESS,

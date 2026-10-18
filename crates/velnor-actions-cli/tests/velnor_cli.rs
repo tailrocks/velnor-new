@@ -7,6 +7,8 @@ mod impl_cli;
 mod impl_cli_args;
 #[path = "impl_cli_cache_normal_transfer.rs"]
 mod impl_cli_cache_normal_transfer;
+#[path = "impl_cli_cache_tar_launcher.rs"]
+mod impl_cli_cache_tar_launcher;
 #[path = "impl_cli_cache_tar_routing.rs"]
 mod impl_cli_cache_tar_routing;
 #[path = "impl_cli_gate.rs"]

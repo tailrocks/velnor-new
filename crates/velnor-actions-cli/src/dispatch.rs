@@ -34,6 +34,8 @@ mod cache_bind;
 mod cache_observe;
 #[path = "dispatch_cache_tar.rs"]
 mod cache_tar;
+#[path = "dispatch_cache_tar_launcher.rs"]
+mod cache_tar_launcher;
 #[path = "dispatch_internal_run.rs"]
 mod internal_run;
 #[path = "dispatch_owned_tool_publication.rs"]
@@ -101,6 +103,8 @@ enum InternalOp {
     ImportNormalToolsCachePayload,
     /// Export a normal tools payload to isolated staging.
     ExportNormalToolsCachePayload,
+    /// Install verified tar and gtar aliases for cache action steps.
+    InstallCacheTarLaunchers,
     /// Record source and report observations for one Qualification lane.
     WriteQualificationSourceEvidence,
     /// Data-only task execution record resolution for a generated wrapper.
@@ -146,7 +150,10 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 pub(crate) fn try_cache_tar_entrypoint() -> Option<ExitCode> {
     let mut args = env::args_os();
     let program = args.next()?;
-    if !is_cache_tar_program(&program) {
+    if !matches!(
+        Path::new(&program).file_name(),
+        Some(name) if name == "tar" || name == "gtar"
+    ) {
         return None;
     }
     let args: Vec<_> = args.collect();
@@ -159,13 +166,6 @@ pub(crate) fn try_cache_tar_entrypoint() -> Option<ExitCode> {
         return Some(fail_internal("cache_tar_runner_context_invalid"));
     }
     Some(cache_tar::run(&args))
-}
-
-fn is_cache_tar_program(program: &std::ffi::OsStr) -> bool {
-    matches!(
-        Path::new(program).file_name(),
-        Some(name) if name == "tar" || name == "gtar"
-    )
 }
 
 fn internal_op() -> Option<InternalOp> {
@@ -198,6 +198,7 @@ fn internal_op() -> Option<InternalOp> {
         Ok(tag) if tag == cache_bind::transfer::normal::EXPORT_OP => {
             InternalOp::ExportNormalToolsCachePayload
         }
+        Ok(tag) if tag == cache_tar_launcher::OP => InternalOp::InstallCacheTarLaunchers,
         Ok(tag) if tag == SOURCE_EVIDENCE_OP => InternalOp::WriteQualificationSourceEvidence,
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
         Ok(tag) if tag == SIGN_PACKAGE_RELEASE_OP => InternalOp::PackageSigner,
@@ -226,6 +227,7 @@ fn gate_request() -> Option<InternalRequest> {
             | InternalOp::NormalToolsCacheStagePath
             | InternalOp::ImportNormalToolsCachePayload
             | InternalOp::ExportNormalToolsCachePayload
+            | InternalOp::InstallCacheTarLaunchers
     ) {
         return cache_runner_request(op);
     }
@@ -308,6 +310,7 @@ fn gate_request_file(op: InternalOp) -> Option<InternalRequest> {
         | InternalOp::NormalToolsCacheStagePath
         | InternalOp::ImportNormalToolsCachePayload
         | InternalOp::ExportNormalToolsCachePayload
+        | InternalOp::InstallCacheTarLaunchers
         | InternalOp::WriteQualificationSourceEvidence
         | InternalOp::ResolveTaskExecution => {}
     }
