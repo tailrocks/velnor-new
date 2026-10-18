@@ -70,8 +70,10 @@ pub use mise::{
     MiseCheck, is_valid_check_system_build, is_valid_check_system_version, is_valid_mise_task_name,
 };
 pub use qualified_tools::{
-    QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend,
-    QualifiedToolExecutable, QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe,
+    QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolArtifactRecipe,
+    QualifiedToolBackend, QualifiedToolExecutable, QualifiedToolExecutableRecipe,
+    QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe, QualifiedToolRecipe,
+    QualifiedToolRecipePlatform, validate_qualified_tool_recipe, validate_qualified_tool_recipes,
     validate_qualified_tools,
 };
 pub use release::{BootstrapRelease, ReleaseAuthentication, RustReleaseConfig};

@@ -1,8 +1,8 @@
 //! Strict upstream URL admission for the supported backend families.
-use super::{safe_name, sha256};
+use super::recipe_validation::safe_name;
 use crate::config::{
-    QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend,
-    QualifiedToolOptions, QualifiedToolPlatform,
+    CheckPlatform, QualifiedCargoInstallation, QualifiedToolBackend, QualifiedToolOptions,
+    QualifiedToolRecipe, QualifiedToolRecipePlatform,
 };
 use crate::errors::ContractError;
 use std::collections::BTreeSet;
@@ -85,14 +85,15 @@ fn crate_archive(host: &str, path: &str) -> Option<(String, String)> {
 }
 
 fn source_allowed(
-    tool: &QualifiedTool,
-    artifact: &QualifiedToolArtifact,
+    tool: &QualifiedToolRecipe,
+    platform: CheckPlatform,
+    artifact: &str,
     dependency: bool,
 ) -> bool {
-    let Some((host, path)) = url_parts(&artifact.url) else {
-        return false;
-    };
     if dependency {
+        let Some((host, path)) = url_parts(artifact) else {
+            return false;
+        };
         return matches!(
             tool.options,
             QualifiedToolOptions::Cargo {
@@ -101,6 +102,12 @@ fn source_allowed(
             }
         ) && crate_archive(host, path).is_some();
     }
+    if matches!(&tool.backend, QualifiedToolBackend::Core { tool: name } if name == "python") {
+        return python_source_allowed(artifact, &tool.version, platform);
+    }
+    let Some((host, path)) = url_parts(artifact) else {
+        return false;
+    };
     match &tool.backend {
         QualifiedToolBackend::Core { tool: name } if name == "rust" => {
             host == "static.rust-lang.org"
@@ -117,6 +124,15 @@ fn source_allowed(
         }
         QualifiedToolBackend::Core { tool: name } if name == "bun" => {
             host == "github.com" && github_release(path, "oven-sh/bun", &tool.version)
+        }
+        QualifiedToolBackend::Core { tool: name } if name == "zig" => {
+            let platform_name = zig_platform_name(platform);
+            host == "ziglang.org"
+                && path
+                    == format!(
+                        "download/{}/zig-{platform_name}-{}.tar.xz",
+                        tool.version, tool.version
+                    )
         }
         QualifiedToolBackend::Aqua { package } => {
             let repository = package.split('/').take(2).collect::<Vec<_>>().join("/");
@@ -138,9 +154,63 @@ fn source_allowed(
     }
 }
 
-pub(super) fn validate_platform_sources(
-    tool: &QualifiedTool,
-    platform: &QualifiedToolPlatform,
+fn zig_platform_name(platform: CheckPlatform) -> &'static str {
+    match platform {
+        CheckPlatform::LinuxX64 => "x86_64-linux",
+        CheckPlatform::MacosArm64 => "aarch64-macos",
+        CheckPlatform::MacosX64 => "x86_64-macos",
+    }
+}
+
+fn python_source_allowed(url: &str, version: &str, platform: CheckPlatform) -> bool {
+    let Some(rest) =
+        url.strip_prefix("https://github.com/astral-sh/python-build-standalone/releases/download/")
+    else {
+        return false;
+    };
+    let Some((date, filename)) = rest.split_once('/') else {
+        return false;
+    };
+    let triple = python_platform_triple(platform);
+    valid_release_date(date)
+        && filename == format!("cpython-{version}%2B{date}-{triple}-install_only_stripped.tar.gz")
+}
+
+fn python_platform_triple(platform: CheckPlatform) -> &'static str {
+    match platform {
+        CheckPlatform::LinuxX64 => "x86_64-unknown-linux-gnu",
+        CheckPlatform::MacosArm64 => "aarch64-apple-darwin",
+        CheckPlatform::MacosX64 => "x86_64-apple-darwin",
+    }
+}
+
+fn valid_release_date(value: &str) -> bool {
+    if value.len() != 8 || !value.bytes().all(|byte| byte.is_ascii_digit()) {
+        return false;
+    }
+    let year = value[..4].parse::<u32>().ok();
+    let month = value[4..6].parse::<u32>().ok();
+    let day = value[6..].parse::<u32>().ok();
+    let (Some(year), Some(month), Some(day)) = (year, month, day) else {
+        return false;
+    };
+    if year == 0 {
+        return false;
+    }
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
+    };
+    day > 0 && day <= days
+}
+
+pub(super) fn validate_platform_recipe_sources(
+    tool: &QualifiedToolRecipe,
+    platform: &QualifiedToolRecipePlatform,
     file: &str,
     key: &str,
 ) -> Result<(), ContractError> {
@@ -163,9 +233,8 @@ pub(super) fn validate_platform_sources(
             return Err(bad("qualified_artifacts_must_be_sorted_unique"));
         }
         for artifact in artifacts {
-            if !sha256(&artifact.sha256)
-                || !urls.insert(&artifact.url)
-                || !source_allowed(tool, artifact, dependency)
+            if !urls.insert(&artifact.url)
+                || !source_allowed(tool, platform.platform, &artifact.url, dependency)
             {
                 return Err(bad("invalid_qualified_artifact_source"));
             }

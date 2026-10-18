@@ -24,17 +24,20 @@ pub(crate) fn scrub_bound_acquisition(name: &str, code: &str) -> String {
 }
 
 fn retain_unapproved_identifier(identifier: &str, output: &mut String) {
-    if !matches!(identifier, "fetch_extract" | "qualified_fetch_command") {
+    if !matches!(
+        identifier,
+        "fetch_extract" | "fetch_archives" | "qualified_fetch_command"
+    ) {
         output.push_str(identifier);
     }
 }
 
 #[test]
 fn acquisition_exception_is_exact_and_runtime_only() {
-    let approved = "fetch_extract qualified_fetch_command";
+    let approved = "fetch_extract fetch_archives qualified_fetch_command";
     assert_eq!(
         scrub_bound_acquisition("check_tool_acquire.rs", approved),
-        " "
+        "  "
     );
     for name in ["deps.rs", "analyze.rs", "internal_plan.rs"] {
         assert_eq!(scrub_bound_acquisition(name, approved), approved);
@@ -45,6 +48,10 @@ fn acquisition_exception_is_exact_and_runtime_only() {
         "qualified_fetch_command_unchecked",
         "fetch_extract_unchecked",
         "unchecked_fetch_extract",
+        "fetch_archives_unchecked",
+        "unchecked_fetch_archives",
+        "λfetch_archives",
+        "fetch_archives\u{0301}",
         "λfetch_extract",
         "fetch_extract\u{0301}",
         "λqualified_fetch_command",
@@ -68,7 +75,9 @@ fn acquisition_requires_bound_plan_and_verified_archive() -> TestResult {
         ],
     )?;
     let preparation = std::fs::read_to_string(super::orch_src().join("check_prepare.rs"))?;
-    assert!(preparation.contains("#[path = \"check_tool_acquire.rs\"]\nmod acquisition;"));
+    assert!(
+        preparation.contains("#[path = \"check_tool_acquire.rs\"]\npub(crate) mod acquisition;")
+    );
     assert!(preparation.contains("acquisition::acquire(&qualified, check, home, deadline)?;"));
     let acquisition = std::fs::read_to_string(super::orch_src().join("check_tool_acquire.rs"))?;
     assert!(acquisition.contains("pub(super) fn acquire("));
@@ -81,6 +90,14 @@ fn acquisition_requires_bound_plan_and_verified_archive() -> TestResult {
             "sha256_with_deadline(&bytes, deadline)? != artifact.sha256",
             "write_exclusive_until(",
             "archive::extract_archive(&verified, &root, &artifact.url, expanded, deadline)",
+        ],
+    )?;
+    assert_order(
+        &acquisition,
+        &[
+            "run(handle.qualified_link_command(&tool.id), deadline)?;",
+            "validate_installations(",
+            "Ok(receipts)",
         ],
     )?;
     Ok(())

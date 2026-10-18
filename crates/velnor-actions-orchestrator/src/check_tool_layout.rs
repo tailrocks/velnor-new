@@ -2,7 +2,9 @@
 use crate::OrchestratorError;
 use crate::internal::internal;
 use std::path::{Path, PathBuf};
-use velnor_actions_contract::config::{CheckPlatform, QualifiedTool, QualifiedToolBackend};
+use velnor_actions_contract::config::{
+    CheckPlatform, QualifiedTool, QualifiedToolBackend, QualifiedToolRecipe,
+};
 use velnor_actions_mise::CheckDeadline;
 
 #[path = "check_tool_cargo_vendor.rs"]
@@ -24,7 +26,7 @@ pub(super) fn prepare_cargo_source(
     cargo::prepare_cargo_source(tool, platform, home, primary, dependencies, deadline)
 }
 
-pub(super) fn normalize_payload(
+pub(crate) fn normalize_payload(
     tool: &QualifiedTool,
     platform: CheckPlatform,
     roots: &[PathBuf],
@@ -33,6 +35,26 @@ pub(super) fn normalize_payload(
 ) -> Result<(), OrchestratorError> {
     check_deadline(deadline)?;
     tool.validate("qualified_tools", &tool.id)
+        .map_err(crate::internal::internal_contract)?;
+    normalize_recipe_payload(
+        &QualifiedToolRecipe::from(tool),
+        platform,
+        roots,
+        prefix,
+        deadline,
+    )
+}
+
+/// Normalize only an admitted hash-free layout; runtime callers validate full pins first.
+pub(crate) fn normalize_recipe_payload(
+    tool: &QualifiedToolRecipe,
+    platform: CheckPlatform,
+    roots: &[PathBuf],
+    prefix: &Path,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    check_deadline(deadline)?;
+    tool.validate("qualification_recipe", &tool.id)
         .map_err(crate::internal::internal_contract)?;
     if !prefix.is_absolute() || roots.iter().any(|root| !root.is_absolute()) {
         return Err(internal("qualified_payload_requires_absolute_paths"));
@@ -78,7 +100,7 @@ pub(super) fn normalize_payload(
 
 fn matches_executables(
     root: &Path,
-    qualified: &velnor_actions_contract::config::QualifiedToolPlatform,
+    qualified: &velnor_actions_contract::config::QualifiedToolRecipePlatform,
     deadline: CheckDeadline,
 ) -> Result<bool, OrchestratorError> {
     let metadata =

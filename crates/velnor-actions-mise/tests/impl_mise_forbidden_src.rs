@@ -72,6 +72,7 @@ const EXPECTED_MODULES: &[&str] = &[
     "package_release_tools.rs",
     "package_release_tools_tests.rs",
     "qualified_acquisition.rs",
+    "qualified_acquisition_tests.rs",
     "release_plz.rs",
     "requests.rs",
     "requests_app_token_tests.rs",

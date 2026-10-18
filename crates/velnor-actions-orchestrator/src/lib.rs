@@ -72,6 +72,7 @@ mod preview_producer;
 mod product_release_pins;
 mod provenance;
 mod publish_job;
+mod qualification_candidate;
 mod qualification_resolver;
 mod qualify;
 mod recommendations;
@@ -127,6 +128,7 @@ mod test_render_capture_harness;
 pub(crate) mod tap_test_support;
 
 pub use api::*;
+pub use qualification_candidate::qualify_tools;
 
 /// Version marker for the orchestrator shell.
 pub const ORCHESTRATOR_VERSION: u32 = 0;

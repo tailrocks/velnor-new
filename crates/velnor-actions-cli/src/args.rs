@@ -43,6 +43,22 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: ConfigCommand,
     },
+    /// Author qualified-tool candidates offline from independently pinned local archives.
+    ///
+    /// Supply archive SHA-256 values independently. Runs fixed version probes on
+    /// the native process platform, without fetching or compiling tools. Output
+    /// is authoring evidence; runtime verification and configuration stay unchanged.
+    QualifyTools {
+        /// Strict versioned request JSON; absolute path.
+        #[arg(long, value_name = "ABS")]
+        request: PathBuf,
+        /// Fresh owned staging directory; must not exist.
+        #[arg(long, value_name = "FRESHABS")]
+        work_dir: PathBuf,
+        /// New authoring candidate JSON; must not exist.
+        #[arg(long, value_name = "NEWABS")]
+        output: PathBuf,
+    },
     /// Check a local two-target release manifest against supplied binary files.
     VerifyReleaseManifest {
         /// Release-manifest JSON file.

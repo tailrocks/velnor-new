@@ -8,6 +8,10 @@ use velnor_actions_contract::config::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolBackend, QualifiedToolOptions,
 };
 
+#[cfg(test)]
+#[path = "qualified_acquisition_tests.rs"]
+mod tests;
+
 impl QualifiedCheck {
     /// Owned installation state for a selected qualified tool.
     /// # Errors
