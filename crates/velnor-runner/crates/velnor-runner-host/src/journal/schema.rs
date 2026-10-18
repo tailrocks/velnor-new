@@ -82,27 +82,30 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
 }
 
 async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError> {
-    match journal_version(conn).await? {
-        0 => migration::from_version_zero(conn).await,
-        1 => migration::from_version_one(conn).await,
-        2 => migration::from_version_two(conn).await,
-        3 => migration::from_version_three(conn).await,
-        4 => migration::from_version_four(conn).await,
-        JOURNAL_VERSION => {
-            connection::validate_connection_schema(conn).await?;
-            validate_current_schema(conn).await?;
-            remote::validate(conn).await?;
-            image_import::validate(conn).await?;
-            migration::ensure_completion_objects(conn).await?;
-            crate::journal_schema::bootstrap(conn).await?;
-            crate::journal_schema::install_revision_triggers(conn).await?;
-            validate_current_schema(conn).await?;
-            connection::validate_connection_schema(conn).await?;
-            remote::validate(conn).await?;
-            image_import::validate(conn).await
+    let version = journal_version(conn).await?;
+    if version == JOURNAL_VERSION {
+        validate_persisted_schema(conn).await?;
+        migration::ensure_completion_objects(conn).await?;
+        crate::journal_schema::bootstrap(conn).await?;
+        crate::journal_schema::install_revision_triggers(conn).await?;
+    } else {
+        match version {
+            0 => migration::from_version_zero(conn).await?,
+            1 => migration::from_version_one(conn).await?,
+            2 => migration::from_version_two(conn).await?,
+            3 => migration::from_version_three(conn).await?,
+            4 => migration::from_version_four(conn).await?,
+            _ => return Err(HostError::Journal),
         }
-        _ => Err(HostError::Journal),
     }
+    validate_persisted_schema(conn).await
+}
+
+async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_current_schema(conn).await?;
+    connection::validate_connection_schema(conn).await?;
+    remote::validate(conn).await?;
+    image_import::validate(conn).await
 }
 
 async fn journal_version(conn: &turso::Connection) -> Result<i64, HostError> {

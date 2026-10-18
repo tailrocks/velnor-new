@@ -78,11 +78,16 @@ async fn prepare_claim_and_verified_completion_are_idempotent() -> Result<(), Ho
         first_journal.claim_image_import_effect(prepared.id, &artifact),
         second_journal.claim_image_import_effect(prepared.id, &artifact),
     );
-    assert_ne!(first_claim?, second_claim?);
+    let first_claim = first_claim?;
+    let second_claim = second_claim?;
+    assert_ne!(first_claim.is_some(), second_claim.is_some());
+    let claim = first_claim.or(second_claim).ok_or(HostError::Journal)?;
+    assert!(!journal.is_drained().await?);
     assert!(
-        !journal
+        journal
             .claim_image_import_effect(prepared.id, &artifact)
             .await?
+            .is_none()
     );
 
     let image_id = format!("sha256:{}", "f".repeat(64));
@@ -113,8 +118,9 @@ async fn prepare_claim_and_verified_completion_are_idempotent() -> Result<(), Ho
         artifact.daemon_architecture(),
         &image_id,
     )?;
-    journal.complete_image_import(prepared.id, &receipt).await?;
-    journal.complete_image_import(prepared.id, &receipt).await?;
+    journal
+        .complete_claimed_image_import(claim, &receipt)
+        .await?;
     let completed = journal.prepare_image_import(artifact.clone()).await?;
     assert_eq!(completed.id, prepared.id);
     assert_eq!(completed.state, ImageImportState::Completed);
@@ -132,6 +138,68 @@ async fn prepare_claim_and_verified_completion_are_idempotent() -> Result<(), Ho
 }
 
 #[tokio::test]
+async fn preloaded_completion_requires_an_unclaimed_prepared_row() -> Result<(), HostError> {
+    let scratch = Scratch::new()?;
+    let journal = bound_journal(&scratch.file()).await?;
+    let request = request("engine-a")?;
+    let prepared = journal.prepare_image_import(request.clone()).await?;
+    let inspection = verified_inspection(&request)?;
+    journal
+        .complete_preloaded_image_import(prepared.id, &request, &inspection)
+        .await?;
+    assert!(journal.is_drained().await?);
+    assert!(
+        journal
+            .claim_image_import_effect(prepared.id, &request)
+            .await?
+            .is_none()
+    );
+    assert!(
+        journal
+            .complete_preloaded_image_import(prepared.id, &request, &inspection)
+            .await
+            .is_err()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn claimed_import_authority_is_bound_to_its_journal_file() -> Result<(), HostError> {
+    let first_scratch = Scratch::new()?;
+    let second_scratch = Scratch::new()?;
+    let first_journal = bound_journal(&first_scratch.file()).await?;
+    let second_journal = bound_journal(&second_scratch.file()).await?;
+    let request = request("engine-a")?;
+    let first = first_journal.prepare_image_import(request.clone()).await?;
+    let second = second_journal.prepare_image_import(request.clone()).await?;
+    let first_claim = first_journal
+        .claim_image_import_effect(first.id, &request)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let second_claim = second_journal
+        .claim_image_import_effect(second.id, &request)
+        .await?
+        .ok_or(HostError::Journal)?;
+
+    let inspection = verified_inspection(&request)?;
+    assert!(
+        second_journal
+            .complete_claimed_image_import(first_claim, &inspection)
+            .await
+            .is_err()
+    );
+    assert!(
+        first_journal
+            .complete_claimed_image_import(second_claim, &inspection)
+            .await
+            .is_err()
+    );
+    assert!(!first_journal.is_drained().await?);
+    assert!(!second_journal.is_drained().await?);
+    Ok(())
+}
+
+#[tokio::test]
 async fn requested_and_uncertain_imports_survive_restart_without_reclaim() -> Result<(), HostError>
 {
     let scratch = Scratch::new()?;
@@ -139,14 +207,11 @@ async fn requested_and_uncertain_imports_survive_restart_without_reclaim() -> Re
     let journal = bound_journal(&path).await?;
     let request = request("engine-a")?;
     let requested = journal.prepare_image_import(request.clone()).await?;
-    assert!(
-        journal
-            .claim_image_import_effect(requested.id, &request)
-            .await?
-    );
-    journal
-        .mark_image_import_uncertain(requested.id, &request)
-        .await?;
+    let claim = journal
+        .claim_image_import_effect(requested.id, &request)
+        .await?
+        .ok_or(HostError::Journal)?;
+    journal.mark_image_import_uncertain(claim).await?;
     assert!(!journal.is_drained().await?);
     drop(journal);
 
@@ -162,26 +227,52 @@ async fn requested_and_uncertain_imports_survive_restart_without_reclaim() -> Re
         Err(HostError::Journal)
     );
     assert!(
-        !journal
+        journal
             .claim_image_import_effect(replay.id, &request)
             .await?
+            .is_none()
     );
     assert!(
         journal
-            .complete_image_import(
-                replay.id,
-                &ImageImportInspection::verified(
-                    &request,
-                    request.engine_id(),
-                    request.docker_root_digest(),
-                    request.daemon_architecture(),
-                    &format!("sha256:{}", "f".repeat(64)),
-                )?,
-            )
+            .complete_preloaded_image_import(replay.id, &request, &verified_inspection(&request)?,)
             .await
-            .is_ok()
+            .is_err()
     );
-    assert!(journal.is_drained().await?);
+    assert!(!journal.is_drained().await?);
+    Ok(())
+}
+
+#[tokio::test]
+async fn requested_replay_cannot_complete_from_inspection_while_claim_is_lost()
+-> Result<(), HostError> {
+    let scratch = Scratch::new()?;
+    let path = scratch.file();
+    let journal = bound_journal(&path).await?;
+    let request = request("engine-a")?;
+    let prepared = journal.prepare_image_import(request.clone()).await?;
+    let claim = journal
+        .claim_image_import_effect(prepared.id, &request)
+        .await?
+        .ok_or(HostError::Journal)?;
+    drop(claim);
+    drop(journal);
+
+    let journal = bound_journal(&path).await?;
+    let replay = journal.prepare_image_import(request.clone()).await?;
+    assert_eq!(replay.state, ImageImportState::Requested);
+    assert!(
+        journal
+            .claim_image_import_effect(replay.id, &request)
+            .await?
+            .is_none()
+    );
+    assert!(
+        journal
+            .complete_preloaded_image_import(replay.id, &request, &verified_inspection(&request)?,)
+            .await
+            .is_err()
+    );
+    assert!(!journal.is_drained().await?);
     Ok(())
 }
 
@@ -195,9 +286,10 @@ async fn only_pre_effect_abort_allows_a_new_attempt() -> Result<(), HostError> {
         .abort_image_import_before_effect(first.id, &artifact)
         .await?;
     assert!(
-        !journal
+        journal
             .claim_image_import_effect(first.id, &artifact)
             .await?
+            .is_none()
     );
     let second = journal.prepare_image_import(artifact).await?;
     assert_ne!(first.id, second.id);
@@ -211,6 +303,16 @@ async fn only_pre_effect_abort_allows_a_new_attempt() -> Result<(), HostError> {
     );
     assert!(!journal.is_drained().await?);
     Ok(())
+}
+
+fn verified_inspection(request: &ImageImportRequest) -> Result<ImageImportInspection, HostError> {
+    ImageImportInspection::verified(
+        request,
+        request.engine_id(),
+        request.docker_root_digest(),
+        request.daemon_architecture(),
+        &format!("sha256:{}", "f".repeat(64)),
+    )
 }
 
 #[tokio::test]

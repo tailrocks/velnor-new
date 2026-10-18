@@ -3,7 +3,8 @@
 use crate::error::HostError;
 
 use super::{
-    ImageImportId, ImageImportInspection, ImageImportRecord, ImageImportRequest, ImageImportState,
+    ImageImportClaim, ImageImportId, ImageImportInspection, ImageImportRecord, ImageImportRequest,
+    ImageImportState,
 };
 use crate::journal::connection::storage::in_transaction;
 use crate::journal::sql::one_row;
@@ -38,13 +39,13 @@ pub(super) async fn claim(
     journal: &crate::journal::Journal,
     id: ImageImportId,
     request: &ImageImportRequest,
-) -> Result<bool, HostError> {
+) -> Result<Option<ImageImportClaim>, HostError> {
     request.validate()?;
     in_transaction(journal, async |connection| {
         verify_engine(connection, request).await?;
         let record = record_by_id(connection, id, request).await?;
         if record.state != ImageImportState::Prepared {
-            return Ok(false);
+            return Ok(None);
         }
         let changed = connection
             .execute(
@@ -54,64 +55,99 @@ pub(super) async fn claim(
             .await
             .map_err(|_| HostError::Journal)?;
         one_row(changed)?;
-        Ok(true)
+        Ok(Some(ImageImportClaim::new(journal, id, request)))
     })
     .await
 }
 
 pub(super) async fn mark_uncertain(
     journal: &crate::journal::Journal,
-    id: ImageImportId,
-    request: &ImageImportRequest,
+    claim: ImageImportClaim,
 ) -> Result<(), HostError> {
+    let ImageImportClaim {
+        journal: claim_journal,
+        id,
+        request,
+    } = claim;
+    if journal != &claim_journal {
+        return Err(HostError::Identity);
+    }
     request.validate()?;
     in_transaction(journal, async |connection| {
-        verify_engine(connection, request).await?;
-        let record = record_by_id(connection, id, request).await?;
-        match record.state {
-            ImageImportState::Uncertain => Ok(()),
-            ImageImportState::Requested => {
-                let changed = connection
-                    .execute(
-                        "UPDATE image_imports SET state = 'uncertain' WHERE id = ?1 AND state = 'requested'",
-                        [id.0],
-                    )
-                    .await
-                    .map_err(|_| HostError::Journal)?;
-                one_row(changed)
-            }
-            _ => Err(HostError::Journal),
-        }
-    })
-    .await
-}
-
-pub(super) async fn complete(
-    journal: &crate::journal::Journal,
-    id: ImageImportId,
-    inspection: &ImageImportInspection,
-) -> Result<(), HostError> {
-    inspection.request.validate()?;
-    in_transaction(journal, async |connection| {
-        verify_engine(connection, &inspection.request).await?;
-        let record = record_by_id(connection, id, &inspection.request).await?;
-        if record.state == ImageImportState::Completed {
-            return (record.image_id.as_deref() == Some(&inspection.image_id))
-                .then_some(())
-                .ok_or(HostError::Journal);
-        }
-        if !matches!(
-            record.state,
-            ImageImportState::Prepared
-                | ImageImportState::Requested
-                | ImageImportState::Uncertain
-        ) {
+        verify_engine(connection, &request).await?;
+        let record = record_by_id(connection, id, &request).await?;
+        if record.state != ImageImportState::Requested {
             return Err(HostError::Journal);
         }
         let changed = connection
             .execute(
-                "UPDATE image_imports SET state = 'completed', image_id = ?1 WHERE id = ?2 AND state = ?3",
-                (inspection.image_id.as_str(), id.0, record.state.as_str()),
+                "UPDATE image_imports SET state = 'uncertain' WHERE id = ?1 AND state = 'requested'",
+                [id.0],
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        one_row(changed)
+    })
+    .await
+}
+
+pub(super) async fn complete_claimed(
+    journal: &crate::journal::Journal,
+    claim: ImageImportClaim,
+    inspection: &ImageImportInspection,
+) -> Result<(), HostError> {
+    let ImageImportClaim {
+        journal: claim_journal,
+        id,
+        request,
+    } = claim;
+    if journal != &claim_journal {
+        return Err(HostError::Identity);
+    }
+    request.validate()?;
+    inspection.request.validate()?;
+    if request != inspection.request {
+        return Err(HostError::Identity);
+    }
+    in_transaction(journal, async |connection| {
+        verify_engine(connection, &request).await?;
+        let record = record_by_id(connection, id, &request).await?;
+        if record.state != ImageImportState::Requested {
+            return Err(HostError::Journal);
+        }
+        let changed = connection
+            .execute(
+                "UPDATE image_imports SET state = 'completed', image_id = ?1 WHERE id = ?2 AND state = 'requested'",
+                (inspection.image_id.as_str(), id.0),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        one_row(changed)
+    })
+    .await
+}
+
+pub(super) async fn complete_preloaded(
+    journal: &crate::journal::Journal,
+    id: ImageImportId,
+    request: &ImageImportRequest,
+    inspection: &ImageImportInspection,
+) -> Result<(), HostError> {
+    request.validate()?;
+    inspection.request.validate()?;
+    if request != &inspection.request {
+        return Err(HostError::Identity);
+    }
+    in_transaction(journal, async |connection| {
+        verify_engine(connection, request).await?;
+        let record = record_by_id(connection, id, request).await?;
+        if record.state != ImageImportState::Prepared {
+            return Err(HostError::Journal);
+        }
+        let changed = connection
+            .execute(
+                "UPDATE image_imports SET state = 'completed', image_id = ?1 WHERE id = ?2 AND state = 'prepared'",
+                (inspection.image_id.as_str(), id.0),
             )
             .await
             .map_err(|_| HostError::Journal)?;

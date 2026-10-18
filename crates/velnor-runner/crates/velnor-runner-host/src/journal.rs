@@ -24,6 +24,9 @@ mod worker_volume;
 #[path = "journal/connection_tests.rs"]
 mod connection_tests;
 #[cfg(test)]
+#[path = "journal/migration_tests.rs"]
+mod migration_tests;
+#[cfg(test)]
 mod schema_metadata_tests;
 pub(crate) use completion::{
     CleanupClaim, CompletedLaunch, CompletionIdentity, CompletionInboxEntry,
@@ -35,7 +38,7 @@ pub(crate) use connection::{
     ReservationSnapshot, ReservationState,
 };
 pub(crate) use image_import::{
-    ImageImportId, ImageImportIdentity, ImageImportInspection, ImageImportRecord,
+    ImageImportClaim, ImageImportId, ImageImportIdentity, ImageImportInspection, ImageImportRecord,
     ImageImportRequest, ImageImportState,
 };
 use sql::{intent_row, one_row, same_ids, token_rejected};

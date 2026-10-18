@@ -163,6 +163,24 @@ impl ImageImportState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ImageImportId(i64);
 
+/// In-memory authority for the one live import request claimed by this caller.
+#[derive(Debug)]
+pub(crate) struct ImageImportClaim {
+    journal: Journal,
+    id: ImageImportId,
+    request: ImageImportRequest,
+}
+
+impl ImageImportClaim {
+    pub(super) fn new(journal: &Journal, id: ImageImportId, request: &ImageImportRequest) -> Self {
+        Self {
+            journal: journal.clone(),
+            id,
+            request: request.clone(),
+        }
+    }
+}
+
 /// Durable import attempt returned by prepare and read operations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ImageImportRecord {
@@ -187,26 +205,35 @@ impl Journal {
         &self,
         id: ImageImportId,
         request: &ImageImportRequest,
-    ) -> Result<bool, HostError> {
+    ) -> Result<Option<ImageImportClaim>, HostError> {
         storage::claim(self, id, request).await
     }
 
     /// Mark a post-claim Docker result uncertain; uncertainty cannot be retried.
     pub(crate) async fn mark_image_import_uncertain(
         &self,
-        id: ImageImportId,
-        request: &ImageImportRequest,
+        claim: ImageImportClaim,
     ) -> Result<(), HostError> {
-        storage::mark_uncertain(self, id, request).await
+        storage::mark_uncertain(self, claim).await
     }
 
-    /// Complete only from the exact selected-daemon inspection receipt.
-    pub(crate) async fn complete_image_import(
+    /// Complete the claimed load after its stream succeeds and inspection matches.
+    pub(crate) async fn complete_claimed_image_import(
         &self,
-        id: ImageImportId,
+        claim: ImageImportClaim,
         inspection: &ImageImportInspection,
     ) -> Result<(), HostError> {
-        storage::complete(self, id, inspection).await
+        storage::complete_claimed(self, claim, inspection).await
+    }
+
+    /// Complete a verified preloaded image only before any import claim.
+    pub(crate) async fn complete_preloaded_image_import(
+        &self,
+        id: ImageImportId,
+        request: &ImageImportRequest,
+        inspection: &ImageImportInspection,
+    ) -> Result<(), HostError> {
+        storage::complete_preloaded(self, id, request, inspection).await
     }
 
     /// Abandon only an intent whose one-shot effect was never claimed.
