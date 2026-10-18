@@ -23,7 +23,7 @@ fn record(id: u64, key: &str, git_ref: &str) -> serde_json::Value {
     })
 }
 
-fn page(total_count: u64, entries: Vec<serde_json::Value>) -> Vec<u8> {
+fn page(total_count: u64, entries: &[serde_json::Value]) -> Vec<u8> {
     serde_json::to_vec(&serde_json::json!({
         "total_count": total_count,
         "actions_caches": entries
@@ -39,7 +39,7 @@ fn census_selects_only_exact_key_and_ref() {
             1,
             &page(
                 3,
-                vec![
+                &[
                     record(1, "velnor-qualification-tools-abc123-prefix", REF),
                     record(2, KEY, "refs/heads/other"),
                     record(3, KEY, REF),
@@ -62,7 +62,7 @@ fn census_selects_only_exact_key_and_ref() {
 #[test]
 fn empty_complete_census_is_absent() {
     let mut census = QualificationCacheCensus::new(KEY, REF).expect("census");
-    census.push_page(1, &page(0, vec![])).expect("empty page");
+    census.push_page(1, &page(0, &[])).expect("empty page");
     assert_eq!(
         census.finish().expect("complete census"),
         Observation::Absent
@@ -72,9 +72,9 @@ fn empty_complete_census_is_absent() {
 #[test]
 fn census_requires_every_page() {
     let mut census = QualificationCacheCensus::new(KEY, REF).expect("census");
-    let entries = (1..=100).map(|id| record(id, "other-key", REF)).collect();
+    let entries: Vec<_> = (1..=100).map(|id| record(id, "other-key", REF)).collect();
     census
-        .push_page(1, &page(101, entries))
+        .push_page(1, &page(101, &entries))
         .expect("first page");
     assert_eq!(census.finish(), Err("cache_census_incomplete"));
 }
@@ -83,11 +83,11 @@ fn census_requires_every_page() {
 fn census_checks_page_order_and_size() {
     let mut census = QualificationCacheCensus::new(KEY, REF).expect("census");
     assert_eq!(
-        census.push_page(2, &page(0, vec![])),
+        census.push_page(2, &page(0, &[])),
         Err("cache_census_page_order_invalid")
     );
     assert_eq!(
-        census.push_page(1, &page(1, vec![])),
+        census.push_page(1, &page(1, &[])),
         Err("cache_census_page_size_invalid")
     );
 }
@@ -95,12 +95,12 @@ fn census_checks_page_order_and_size() {
 #[test]
 fn census_rejects_total_changes_between_pages() {
     let mut census = QualificationCacheCensus::new(KEY, REF).expect("census");
-    let entries = (1..=100).map(|id| record(id, "other-key", REF)).collect();
+    let entries: Vec<_> = (1..=100).map(|id| record(id, "other-key", REF)).collect();
     census
-        .push_page(1, &page(101, entries))
+        .push_page(1, &page(101, &entries))
         .expect("first page");
     assert_eq!(
-        census.push_page(2, &page(100, vec![record(101, "other-key", REF)])),
+        census.push_page(2, &page(100, &[record(101, "other-key", REF)])),
         Err("cache_census_total_changed")
     );
 }
@@ -127,13 +127,13 @@ fn census_rejects_duplicate_ids_and_exact_matches() {
     duplicate_id
         .push_page(
             1,
-            &page(2, vec![record(7, "other-key", REF), record(7, KEY, REF)]),
+            &page(2, &[record(7, "other-key", REF), record(7, KEY, REF)]),
         )
         .expect_err("duplicate ID must fail");
 
     let mut ambiguous = QualificationCacheCensus::new(KEY, REF).expect("census");
     ambiguous
-        .push_page(1, &page(2, vec![record(7, KEY, REF), record(8, KEY, REF)]))
+        .push_page(1, &page(2, &[record(7, KEY, REF), record(8, KEY, REF)]))
         .expect_err("duplicate exact objects must fail");
 }
 
@@ -143,7 +143,7 @@ fn census_rejects_invalid_backend_versions() {
     value["version"] = serde_json::json!("not-a-version");
     let mut census = QualificationCacheCensus::new(KEY, REF).expect("census");
     assert_eq!(
-        census.push_page(1, &page(1, vec![value])),
+        census.push_page(1, &page(1, &[value])),
         Err("cache_census_entry_invalid")
     );
 }
@@ -154,7 +154,7 @@ fn census_rejects_unknown_fields_and_duplicate_json_keys() {
     value["extra"] = serde_json::json!(true);
     let mut unknown = QualificationCacheCensus::new(KEY, REF).expect("census");
     assert_eq!(
-        unknown.push_page(1, &page(1, vec![value])),
+        unknown.push_page(1, &page(1, &[value])),
         Err("cache_census_page_shape_invalid")
     );
 
@@ -175,7 +175,7 @@ fn census_requires_every_current_github_cache_record_field() {
         .remove("created_at");
     let mut census = QualificationCacheCensus::new(KEY, REF).expect("census");
     assert_eq!(
-        census.push_page(1, &page(1, vec![value])),
+        census.push_page(1, &page(1, &[value])),
         Err("cache_census_page_shape_invalid")
     );
 }
@@ -215,7 +215,7 @@ fn census_rejects_overlong_keys_refs_and_returned_record_identity() {
     ] {
         let mut census = QualificationCacheCensus::new(KEY, REF).expect("census");
         assert_eq!(
-            census.push_page(1, &page(1, vec![invalid])),
+            census.push_page(1, &page(1, &[invalid])),
             Err("cache_census_entry_invalid")
         );
     }

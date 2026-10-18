@@ -187,10 +187,11 @@ impl QualificationCacheCensus {
             if !self.ids.insert(entry.id) {
                 return Err("cache_census_duplicate_id");
             }
-            if entry.key == self.expected_key && entry.git_ref == self.expected_ref {
-                if self.exact_entry.replace(entry).is_some() {
-                    return Err("cache_census_exact_match_ambiguous");
-                }
+            if entry.key == self.expected_key
+                && entry.git_ref == self.expected_ref
+                && self.exact_entry.replace(entry).is_some()
+            {
+                return Err("cache_census_exact_match_ambiguous");
             }
             self.seen_entries += 1;
         }
