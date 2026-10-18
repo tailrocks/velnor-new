@@ -137,9 +137,9 @@ fn measure_tree(root: &rustix::fd::OwnedFd) -> Result<CacheTreeUsage, &'static s
 
 #[cfg(target_os = "linux")]
 struct MeasureState {
-    root_device: i32,
+    root_device: u64,
     entries: usize,
-    seen_files: HashSet<(i32, u64)>,
+    seen_files: HashSet<(u64, u64)>,
     bytes: u64,
     inodes: u64,
 }
@@ -217,7 +217,7 @@ fn walk_entry(
 ) -> Result<(), &'static str> {
     let stat = statat(directory, name, AtFlags::SYMLINK_NOFOLLOW)
         .map_err(|_| "cache_storage_tree_changed")?;
-    if stat.st_dev != state.root_device || stat.st_mode & 0o7000 != 0 {
+    if stat.st_dev != state.root_device || stat.st_mode & 0o7000_u32 != 0 {
         return Err("cache_storage_tree_entry_invalid");
     }
     match FileType::from_raw_mode(stat.st_mode) {
@@ -302,7 +302,7 @@ fn measure_symlink(
 fn validate_directory(stat: &Stat) -> Result<(), &'static str> {
     if FileType::from_raw_mode(stat.st_mode) != FileType::Directory
         || stat.st_uid != crate::process_owner::effective_uid()
-        || stat.st_mode & 0o7000 != 0
+        || stat.st_mode & 0o7000_u32 != 0
     {
         return Err("cache_storage_tree_entry_invalid");
     }

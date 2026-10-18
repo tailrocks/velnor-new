@@ -124,7 +124,7 @@ fn read_linux_projection() -> Result<(Vec<u8>, MountObservation), &'static str> 
     let mut mountinfo =
         File::open(MOUNTINFO_PATH).map_err(|_| "cache_storage_mountinfo_read_failed")?;
     let mut mountinfo_bytes = Vec::new();
-    mountinfo
+    (&mut mountinfo)
         .take(u64::try_from(MAX_MOUNTINFO_BYTES + 1).unwrap_or(u64::MAX))
         .read_to_end(&mut mountinfo_bytes)
         .map_err(|_| "cache_storage_mountinfo_read_failed")?;
@@ -159,7 +159,8 @@ fn read_linux_projection() -> Result<(Vec<u8>, MountObservation), &'static str> 
             .unwrap_or_default()
             .min(64 * 1024),
     );
-    file.take(64 * 1024 + 1)
+    (&mut file)
+        .take(64 * 1024 + 1)
         .read_to_end(&mut bytes)
         .map_err(|_| "cache_storage_projection_read_failed")?;
     let after =
