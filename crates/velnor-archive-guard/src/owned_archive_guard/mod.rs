@@ -158,7 +158,7 @@ fn handle_extension<R: Read>(
                 return Err("multiple local tar extension headers".to_owned());
             }
             let body = read_metadata(reader, size)?;
-            parse_pax(&body)?;
+            parse_pax(&body, profile.pax_mode)?;
             state.pending_extension = true;
         }
         b'g' => return Err("global PAX tar extensions are forbidden".to_owned()),
@@ -181,6 +181,7 @@ fn scan_member<R: Read>(
         0 | b'0' => profile.allowed_types & 0b001 != 0,
         b'5' => profile.allowed_types & 0b010 != 0,
         b'2' => profile.allowed_types & 0b100 != 0,
+        b'1' => profile.allowed_types & 0b1000 != 0,
         _ => false,
     };
     if !allowed {
@@ -189,6 +190,9 @@ fn scan_member<R: Read>(
     let old_v7_directory = kind == 0 && raw_name_ends_with_slash(raw_name);
     if (kind == b'5' || kind == b'2' || old_v7_directory) && size != 0 {
         return Err("directory and symlink tar members must have zero size".to_owned());
+    }
+    if kind == b'1' && size != 0 {
+        return Err("hardlink tar members must have zero size".to_owned());
     }
     if state.members >= profile.member_limit {
         return Err("tar member count limit exceeded".to_owned());

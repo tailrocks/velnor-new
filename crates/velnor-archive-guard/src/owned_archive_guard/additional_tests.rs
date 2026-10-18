@@ -1,5 +1,8 @@
-use super::super::{ArchiveEncoding, Profile, validate_with_profile};
-use super::{append_member, assert_rejected_tar, finish_archive, gzip, pax_record};
+use super::super::profile::PaxMode;
+use super::super::{ArchiveEncoding, Profile, validate, validate_with_profile};
+use super::{
+    append_member, assert_rejected_raw_tar, assert_rejected_tar, finish_archive, gzip, pax_record,
+};
 use std::error::Error;
 
 fn profile(input_limit: u64, archive_limit: u64, payload_limit: u64) -> Profile {
@@ -10,8 +13,21 @@ fn profile(input_limit: u64, archive_limit: u64, payload_limit: u64) -> Profile 
         payload_limit,
         member_limit: 1024,
         allowed_types: 0b011,
-        allow_pax: true,
+        pax_mode: PaxMode::Safe,
     }
+}
+
+#[test]
+fn cache_payload_profile_has_fixed_raw_tar_bounds_and_member_types() -> Result<(), Box<dyn Error>> {
+    let policy = super::super::profile("cache-payload")?;
+    assert!(matches!(policy.encoding, ArchiveEncoding::RawTar));
+    assert_eq!(policy.input_limit, 20 * 1024 * 1024 * 1024);
+    assert_eq!(policy.archive_limit, 20 * 1024 * 1024 * 1024);
+    assert_eq!(policy.payload_limit, 16 * 1024 * 1024 * 1024);
+    assert_eq!(policy.member_limit, 250_000);
+    assert_eq!(policy.allowed_types, 0b1111);
+    assert!(matches!(policy.pax_mode, PaxMode::CachePaths));
+    Ok(())
 }
 
 #[test]
@@ -83,5 +99,115 @@ fn gzip_crc_corruption_is_rejected() -> Result<(), Box<dyn Error>> {
         "cargo-package",
         "archive read failed",
     )?;
+    Ok(())
+}
+
+#[test]
+fn cache_payload_accepts_writer_path_pax_and_hardlink_records() -> Result<(), Box<dyn Error>> {
+    let mut archive = Vec::new();
+    let mut file_path = pax_record("path", "roots/tofu_plugins/providers/long-provider-name");
+    append_member(&mut archive, "PaxHeaders/file", b'x', &file_path)?;
+    append_member(&mut archive, "entry", b'0', b"provider")?;
+
+    file_path.clear();
+    file_path.extend_from_slice(&pax_record("path", "roots/tofu_plugins/providers/copy"));
+    file_path.extend_from_slice(&pax_record(
+        "linkpath",
+        "roots/tofu_plugins/providers/long-provider-name",
+    ));
+    append_member(&mut archive, "PaxHeaders/link", b'x', &file_path)?;
+    append_member(&mut archive, "link", b'1', b"")?;
+    finish_archive(&mut archive);
+
+    validate(archive.as_slice(), "cache-payload").map_err(std::io::Error::other)?;
+    Ok(())
+}
+
+#[test]
+fn cache_payload_rejects_other_pax_keys_duplicate_keys_and_nonzero_hardlinks()
+-> Result<(), Box<dyn Error>> {
+    let mut unsupported_key = Vec::new();
+    append_member(
+        &mut unsupported_key,
+        "PaxHeaders/file",
+        b'x',
+        &pax_record("mtime", "0"),
+    )?;
+    append_member(&mut unsupported_key, "file", b'0', b"x")?;
+    finish_archive(&mut unsupported_key);
+    assert_rejected_raw_tar(
+        &unsupported_key,
+        "cache-payload",
+        "unsupported PAX key for cache payload",
+    )?;
+
+    let mut duplicate_key = Vec::new();
+    let mut duplicate_path = pax_record("path", "one");
+    duplicate_path.extend_from_slice(&pax_record("path", "two"));
+    append_member(&mut duplicate_key, "PaxHeaders/file", b'x', &duplicate_path)?;
+    append_member(&mut duplicate_key, "file", b'0', b"x")?;
+    finish_archive(&mut duplicate_key);
+    assert_rejected_raw_tar(
+        &duplicate_key,
+        "cache-payload",
+        "duplicate PAX key for cache payload",
+    )?;
+
+    let mut sized_hardlink = Vec::new();
+    append_member(&mut sized_hardlink, "link", b'1', b"x")?;
+    finish_archive(&mut sized_hardlink);
+    assert_rejected_raw_tar(
+        &sized_hardlink,
+        "cache-payload",
+        "hardlink tar members must have zero size",
+    )
+}
+
+#[test]
+fn cache_payload_rejects_malformed_and_global_pax_headers_and_bad_checksums()
+-> Result<(), Box<dyn Error>> {
+    let mut malformed = Vec::new();
+    append_member(&mut malformed, "PaxHeaders/file", b'x', b"99 path=x\n")?;
+    finish_archive(&mut malformed);
+    assert_rejected_raw_tar(&malformed, "cache-payload", "malformed PAX record boundary")?;
+
+    let mut global = Vec::new();
+    append_member(
+        &mut global,
+        "GlobalHead",
+        b'g',
+        &pax_record("path", "roots/tofu_plugins/providers/file"),
+    )?;
+    finish_archive(&mut global);
+    assert_rejected_raw_tar(
+        &global,
+        "cache-payload",
+        "global PAX tar extensions are forbidden",
+    )?;
+
+    let mut bad_checksum = Vec::new();
+    append_member(&mut bad_checksum, "file", b'0', b"payload")?;
+    finish_archive(&mut bad_checksum);
+    bad_checksum[0] ^= 1;
+    assert_rejected_raw_tar(
+        &bad_checksum,
+        "cache-payload",
+        "tar header checksum mismatch",
+    )
+}
+
+#[test]
+fn cache_payload_rejects_gzip_and_other_profiles_still_reject_hardlinks()
+-> Result<(), Box<dyn Error>> {
+    let mut archive = Vec::new();
+    append_member(&mut archive, "link", b'1', b"")?;
+    finish_archive(&mut archive);
+    let compressed = gzip(&archive)?;
+
+    let raw_error = validate(compressed.as_slice(), "cache-payload")
+        .expect_err("cache payload profile accepts only raw tar");
+    assert_ne!(raw_error, "");
+    assert_rejected_raw_tar(&archive, "candidate", "unsupported tar member type")?;
+    assert_rejected_tar(&archive, "cargo-package", "unsupported tar member type")?;
     Ok(())
 }

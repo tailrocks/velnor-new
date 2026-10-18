@@ -4,15 +4,17 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use bollard::models::SystemInfo;
-use velnor_runner_github::{QueueSession, Transport, delete_session};
+use velnor_runner_github::{
+    QueueSession, SessionError, Transport, delete_session, refresh_session,
+};
 
 use crate::daemon_lock::{DaemonLock, EngineLineageGuard, canonical_journal_path};
 use crate::error::HostError;
 use crate::journal::{
     ConnectionJournal, EngineContext, HeaderAllocation, HeaderDeleteAttempt, HeaderPollAttempt,
-    Journal, SessionCreateState,
+    Journal, SessionCreateState, SessionRefreshClaim,
 };
-use crate::listen::{Link, OWNER_NAME, Secret, annotate};
+use crate::listen::{Link, OWNER_NAME, Secret, annotate, validate_queue_url};
 use crate::scale_set::EnsureError;
 
 /// Evidence that one exact refresh generation returned the bound session ID.
@@ -27,6 +29,20 @@ pub(crate) struct VerifiedSessionRefresh {
 }
 
 impl VerifiedSessionRefresh {
+    fn after_response(
+        claim: &SessionRefreshClaim,
+        session: &QueueSession,
+    ) -> Result<Self, EnsureError> {
+        if session.session_id != claim.session_id() {
+            return Err(EnsureError::AdmissionClosed);
+        }
+        Ok(Self {
+            session_intent_id: claim.session_intent_id(),
+            session_id: claim.session_id().to_owned(),
+            generation: claim.generation(),
+        })
+    }
+
     pub(crate) fn session_intent_id(&self) -> i64 {
         self.session_intent_id
     }
@@ -61,6 +77,17 @@ pub(crate) struct ReturnedSessionRefreshTransportError {
 }
 
 impl ReturnedSessionRefreshTransportError {
+    fn from_returned_result(
+        claim: &SessionRefreshClaim,
+        result: &Result<QueueSession, SessionError>,
+    ) -> Option<Self> {
+        matches!(result, Err(SessionError::Uncertain)).then(|| Self {
+            session_intent_id: claim.session_intent_id(),
+            session_id: claim.session_id().to_owned(),
+            generation: claim.generation(),
+        })
+    }
+
     pub(crate) fn session_intent_id(&self) -> i64 {
         self.session_intent_id
     }
@@ -321,6 +348,27 @@ pub(crate) async fn open_connection_session(
     if active.len() > 1 {
         return Err(EnsureError::Uncertain);
     }
+    if let Some(record) = active
+        .first()
+        .filter(|record| record.state() == SessionCreateState::Bound)
+    {
+        let session_id = record.session_id().ok_or(EnsureError::AdmissionClosed)?;
+        let session_intent_id = record.intent_id().ok_or(EnsureError::AdmissionClosed)?;
+        let allocation = journal
+            .session_header_allocation(session_intent_id)
+            .await
+            .map_err(map_journal)?;
+        if allocation.connection_id() != journal.connection_id()
+            || allocation.scale_set_id() != set_id
+            || allocation.session_id() != session_id
+        {
+            return Err(EnsureError::AdmissionClosed);
+        }
+        let session =
+            refresh_bound_connection_session(link, journal, session_intent_id, set_id, session_id)
+                .await?;
+        return Ok((session, session_intent_id, allocation));
+    }
     let nonce = match active.first() {
         Some(record) if record.state() == SessionCreateState::Prepared => {
             record.local_nonce().to_owned()
@@ -328,9 +376,7 @@ pub(crate) async fn open_connection_session(
         Some(record)
             if matches!(
                 record.state(),
-                SessionCreateState::Requested
-                    | SessionCreateState::Uncertain
-                    | SessionCreateState::Bound
+                SessionCreateState::Requested | SessionCreateState::Uncertain
             ) =>
         {
             // A lost create response or a bound session needs exact recovery
@@ -373,6 +419,122 @@ pub(crate) async fn open_connection_session(
         .await
         .map_err(map_journal)?;
     Ok((session, bound.intent_id(), bound.allocation().clone()))
+}
+
+/// Refresh one bound session after a durable generation claim.
+///
+/// The returned queue credentials stay in memory and are usable only after the
+/// exact ID, queue route, and generation receipt all pass.
+pub(crate) async fn refresh_bound_connection_session(
+    link: &mut Link,
+    scoped: &ConnectionJournal,
+    session_intent_id: i64,
+    scale_set_id: i64,
+    expected_session_id: &str,
+) -> Result<QueueSession, EnsureError> {
+    let admin_token = Secret::new(link.token());
+    let admin_base = link.base().to_owned();
+    refresh_bound_connection_session_with(
+        link.transport(),
+        admin_token.expose(),
+        &admin_base,
+        scoped,
+        session_intent_id,
+        scale_set_id,
+        expected_session_id,
+    )
+    .await
+}
+
+async fn refresh_bound_connection_session_with<T: Transport + ?Sized>(
+    transport: &mut T,
+    admin_token: &str,
+    admin_base: &str,
+    scoped: &ConnectionJournal,
+    session_intent_id: i64,
+    scale_set_id: i64,
+    expected_session_id: &str,
+) -> Result<QueueSession, EnsureError> {
+    let allocation = scoped
+        .session_header_allocation(session_intent_id)
+        .await
+        .map_err(map_journal)?;
+    if session_intent_id <= 0
+        || scale_set_id <= 0
+        || expected_session_id.is_empty()
+        || allocation.connection_id() != scoped.connection_id()
+        || allocation.scale_set_id() != scale_set_id
+        || allocation.session_id() != expected_session_id
+    {
+        return Err(EnsureError::AdmissionClosed);
+    }
+
+    let claim = scoped
+        .claim_session_refresh(session_intent_id, expected_session_id)
+        .await
+        .map_err(map_journal)?
+        .ok_or(EnsureError::Uncertain)?;
+    if claim.session_intent_id() != session_intent_id
+        || claim.scale_set_id() != scale_set_id
+        || claim.session_id() != expected_session_id
+    {
+        scoped
+            .mark_session_refresh_uncertain(claim)
+            .await
+            .map_err(map_journal)?;
+        return Err(EnsureError::AdmissionClosed);
+    }
+
+    let returned = refresh_session(transport, scale_set_id, expected_session_id, admin_token);
+    let transport_proof =
+        ReturnedSessionRefreshTransportError::from_returned_result(&claim, &returned);
+    let session = match returned {
+        Ok(session) => session,
+        Err(error) => {
+            if let Some(proof) = transport_proof {
+                scoped
+                    .record_session_refresh_transport_error(claim, proof)
+                    .await
+                    .map_err(map_journal)?;
+            } else {
+                scoped
+                    .mark_session_refresh_uncertain(claim)
+                    .await
+                    .map_err(map_journal)?;
+            }
+            return Err(annotate(error, "refresh-session"));
+        }
+    };
+
+    if session.session_id != expected_session_id {
+        scoped
+            .mark_session_refresh_uncertain(claim)
+            .await
+            .map_err(map_journal)?;
+        return Err(EnsureError::AdmissionClosed);
+    }
+    if let Err(error) = validate_queue_url(admin_base, &session.message_queue_url) {
+        scoped
+            .mark_session_refresh_uncertain(claim)
+            .await
+            .map_err(map_journal)?;
+        return Err(error);
+    }
+    let proof = match VerifiedSessionRefresh::after_response(&claim, &session) {
+        Ok(proof) => proof,
+        Err(error) => {
+            scoped
+                .mark_session_refresh_uncertain(claim)
+                .await
+                .map_err(map_journal)?;
+            return Err(error);
+        }
+    };
+    scoped
+        .record_session_refreshed(claim, proof)
+        .await
+        .map_err(map_journal)?;
+    Ok(session)
 }
 
 /// Delete only the exact bound session after its zero-header poll and local drain.
@@ -463,6 +625,7 @@ fn map_journal(error: HostError) -> EnsureError {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::VecDeque;
     use std::path::PathBuf;
 
     use crate::config::{
@@ -470,11 +633,17 @@ mod tests {
         SourcePolicyMode, WorkflowEvent,
     };
     use crate::connect::SetOwnership;
-    use crate::journal::{CapacityLimits, ConnectionJournal, HeaderAllocation, Journal};
-    use velnor_runner_github::{Exchange, Method, SessionRequest, Transport, TransportFail};
+    use crate::journal::{
+        CapacityLimits, ConnectionJournal, HeaderAllocation, Journal, SessionRefreshState,
+    };
+    use velnor_runner_github::{
+        Exchange, Method, Poll, RefreshGate, SessionRequest, Transport, TransportFail, WireError,
+        poll,
+    };
 
     use super::{
         CompletedHeaderPoll, SessionDeleteOutcome, delete_removed_connection_session_with,
+        refresh_bound_connection_session_with,
     };
 
     struct Scratch(PathBuf);
@@ -553,6 +722,36 @@ mod tests {
         }
     }
 
+    struct RefreshTransport {
+        responses: VecDeque<Result<Exchange, TransportFail>>,
+        requests: Vec<SessionRequest>,
+    }
+
+    impl RefreshTransport {
+        fn new(responses: impl IntoIterator<Item = Result<Exchange, TransportFail>>) -> Self {
+            Self {
+                responses: responses.into_iter().collect(),
+                requests: Vec::new(),
+            }
+        }
+    }
+
+    impl Transport for RefreshTransport {
+        fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
+            self.requests.push(request.clone());
+            self.responses
+                .pop_front()
+                .unwrap_or(Err(TransportFail::Reset))
+        }
+    }
+
+    fn refreshed_body(session_id: &str, queue_url: &str, token: &str) -> Vec<u8> {
+        format!(
+            r#"{{"sessionId":"{session_id}","messageQueueUrl":"{queue_url}","messageQueueAccessToken":"{token}"}}"#
+        )
+        .into_bytes()
+    }
+
     async fn bound_session(
         scratch: &Scratch,
         target: u32,
@@ -605,6 +804,243 @@ mod tests {
             bound.intent_id(),
             bound.allocation().clone(),
         ))
+    }
+
+    #[tokio::test]
+    async fn exact_refresh_receipt_builds_next_poll_with_new_memory_credentials()
+    -> Result<(), String> {
+        let scratch = Scratch::new()?;
+        let session_id = "session-refresh-exact";
+        let (journal, scope, intent_id, allocation) =
+            bound_session(&scratch, 0, session_id).await?;
+        let mut transport = RefreshTransport::new([
+            Ok(Exchange {
+                status: 200,
+                body: refreshed_body(session_id, "messages-new", "queue-token-new"),
+            }),
+            Ok(Exchange {
+                status: 202,
+                body: Vec::new(),
+            }),
+        ]);
+
+        let refreshed = refresh_bound_connection_session_with(
+            &mut transport,
+            "admin-token",
+            "https://admin.example.test",
+            &scope,
+            intent_id,
+            allocation.scale_set_id(),
+            session_id,
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+        let poll_result = poll(
+            &mut transport,
+            "messages-new",
+            0,
+            0,
+            refreshed.token(),
+            &RefreshGate::new(),
+            || Ok::<(), WireError>(()),
+        );
+
+        assert!(matches!(poll_result, Ok(Poll::Empty)));
+        assert_eq!(transport.requests.len(), 2);
+        assert_eq!(transport.requests[0].method, Method::Patch);
+        assert_eq!(
+            transport.requests[0].path,
+            format!(
+                "_apis/runtime/runnerscalesets/{}/sessions/{session_id}",
+                allocation.scale_set_id()
+            )
+        );
+        assert!(transport.requests[0].headers.iter().any(|(name, value)| {
+            name.eq_ignore_ascii_case("authorization") && value == "Bearer admin-token"
+        }));
+        assert_eq!(transport.requests[1].method, Method::Get);
+        assert_eq!(transport.requests[1].path, "messages-new");
+        assert!(transport.requests[1].headers.iter().any(|(name, value)| {
+            name.eq_ignore_ascii_case("authorization") && value == "Bearer queue-token-new"
+        }));
+        let records = scope
+            .session_refreshes(intent_id)
+            .await
+            .map_err(|error| error.to_string())?;
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].state(), SessionRefreshState::Succeeded);
+        assert_eq!(
+            journal
+                .charged_header_capacity()
+                .await
+                .map_err(|error| error.to_string())?,
+            0
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn returned_transport_uncertainty_allows_only_a_new_durable_generation()
+    -> Result<(), String> {
+        let scratch = Scratch::new()?;
+        let session_id = "session-refresh-retry";
+        let (_journal, scope, intent_id, allocation) =
+            bound_session(&scratch, 0, session_id).await?;
+        let mut first = RefreshTransport::new([Err(TransportFail::Reset)]);
+        let first_result = refresh_bound_connection_session_with(
+            &mut first,
+            "admin-token",
+            "https://admin.example.test",
+            &scope,
+            intent_id,
+            allocation.scale_set_id(),
+            session_id,
+        )
+        .await;
+        assert!(matches!(
+            first_result,
+            Err(crate::scale_set::EnsureError::Uncertain)
+        ));
+        assert_eq!(first.requests.len(), 1);
+
+        let mut second = RefreshTransport::new([Ok(Exchange {
+            status: 200,
+            body: refreshed_body(session_id, "messages-next", "queue-token-next"),
+        })]);
+        let refreshed = refresh_bound_connection_session_with(
+            &mut second,
+            "admin-token",
+            "https://admin.example.test",
+            &scope,
+            intent_id,
+            allocation.scale_set_id(),
+            session_id,
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+        assert_eq!(refreshed.session_id, session_id);
+        assert_eq!(second.requests.len(), 1);
+        assert_eq!(second.requests[0].method, Method::Patch);
+        let records = scope
+            .session_refreshes(intent_id)
+            .await
+            .map_err(|error| error.to_string())?;
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].generation(), 1);
+        assert_eq!(records[0].state(), SessionRefreshState::TransportError);
+        assert_eq!(records[1].generation(), 2);
+        assert_eq!(records[1].state(), SessionRefreshState::Succeeded);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn incorrect_id_or_queue_route_stays_uncertain_and_never_installs_credentials()
+    -> Result<(), String> {
+        for (name, returned_id, queue_url) in [
+            ("incorrect-id", "foreign-session", "messages"),
+            (
+                "incorrect-route",
+                "session-refresh-invalid",
+                "http://queue.example/messages",
+            ),
+        ] {
+            let scratch = Scratch::new()?;
+            let session_id = if name == "incorrect-id" {
+                "session-refresh-expected"
+            } else {
+                "session-refresh-invalid"
+            };
+            let (_journal, scope, intent_id, allocation) =
+                bound_session(&scratch, 0, session_id).await?;
+            let mut transport = RefreshTransport::new([Ok(Exchange {
+                status: 200,
+                body: refreshed_body(returned_id, queue_url, "must-not-install"),
+            })]);
+            let result = refresh_bound_connection_session_with(
+                &mut transport,
+                "admin-token",
+                "https://admin.example.test",
+                &scope,
+                intent_id,
+                allocation.scale_set_id(),
+                session_id,
+            )
+            .await;
+
+            assert!(result.is_err(), "{name} must not return queue credentials");
+            assert_eq!(transport.requests.len(), 1);
+            let records = scope
+                .session_refreshes(intent_id)
+                .await
+                .map_err(|error| error.to_string())?;
+            assert_eq!(records.len(), 1);
+            assert_eq!(records[0].state(), SessionRefreshState::Uncertain);
+            assert!(
+                scope
+                    .claim_session_refresh(intent_id, session_id)
+                    .await
+                    .map_err(|error| error.to_string())?
+                    .is_none()
+            );
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn rejected_refresh_and_wrong_durable_id_send_no_retryable_request() -> Result<(), String>
+    {
+        let scratch = Scratch::new()?;
+        let session_id = "session-refresh-rejected";
+        let (_journal, scope, intent_id, allocation) =
+            bound_session(&scratch, 0, session_id).await?;
+        let mut transport = RefreshTransport::new([Ok(Exchange {
+            status: 409,
+            body: Vec::new(),
+        })]);
+        let result = refresh_bound_connection_session_with(
+            &mut transport,
+            "admin-token",
+            "https://admin.example.test",
+            &scope,
+            intent_id,
+            allocation.scale_set_id(),
+            session_id,
+        )
+        .await;
+        assert!(matches!(
+            result,
+            Err(crate::scale_set::EnsureError::Conflict)
+        ));
+        assert_eq!(transport.requests.len(), 1);
+        let records = scope
+            .session_refreshes(intent_id)
+            .await
+            .map_err(|error| error.to_string())?;
+        assert_eq!(records[0].state(), SessionRefreshState::Uncertain);
+        assert!(
+            scope
+                .claim_session_refresh(intent_id, session_id)
+                .await
+                .map_err(|error| error.to_string())?
+                .is_none()
+        );
+
+        let mut wrong_id_transport = RefreshTransport::new([]);
+        assert!(
+            refresh_bound_connection_session_with(
+                &mut wrong_id_transport,
+                "admin-token",
+                "https://admin.example.test",
+                &scope,
+                intent_id,
+                allocation.scale_set_id(),
+                "different-session",
+            )
+            .await
+            .is_err()
+        );
+        assert!(wrong_id_transport.requests.is_empty());
+        Ok(())
     }
 
     async fn settle_zero_poll(
