@@ -9,6 +9,10 @@ use super::{Schema2WorkflowRequest, product_release, resource_probe_image};
 use crate::workflow_routing::WorkflowRoutingPolicy;
 use crate::yaml::{Yaml, render_yaml};
 
+const IMAGE_BUILD_SCRIPT: &str =
+    include_str!("../../../images/resource-probe/build-runner-images.sh");
+const PROBE_BUILD_SCRIPT: &str = include_str!("../../../images/resource-probe/build-image.sh");
+
 #[test]
 fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result<(), Box<dyn Error>>
 {
@@ -92,6 +96,32 @@ fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result
 }
 
 fn assert_image_save_preserves_validated_probe(rendered: &str) {
+    let source_binding = rendered
+        .find("Bind resource probe to the release source")
+        .expect("probe source revision is bound before compilation");
+    let probe_build = rendered
+        .find("Build locked resource probe")
+        .expect("probe compile step is present");
+    let probe_image = rendered
+        .find("Build and smoke-test resource-probe image")
+        .expect("probe image is built before the runner images");
+    let runner_images = rendered
+        .find("bash images/resource-probe/build-runner-images.sh")
+        .expect("Runner and DinD use the shared static probe context");
+    assert!(
+        source_binding < probe_build,
+        "Set the source revision before compile."
+    );
+    assert!(
+        probe_build < probe_image,
+        "Build the probe executable first."
+    );
+    assert!(
+        probe_image < runner_images,
+        "Runner and DinD use the checked probe"
+    );
+    assert!(rendered.contains("VELNOR_SOURCE_REVISION=%s"));
+    assert!(rendered.contains("missing source revision"));
     assert!(
         rendered.contains("docker save --output velnor-runner-linux-amd64.tar"),
         "runner archive remains produced by the existing image-save step"
@@ -108,6 +138,12 @@ fn assert_image_save_preserves_validated_probe(rendered: &str) {
         rendered.contains("test -s velnor-resource-probe-linux-amd64.tar"),
         "the later save step must verify the already-produced probe archive"
     );
+    assert!(IMAGE_BUILD_SCRIPT.contains("--build-context \"resource_probe=$context\""));
+    assert!(IMAGE_BUILD_SCRIPT.contains("resource probe does not contain its source revision"));
+    assert!(IMAGE_BUILD_SCRIPT.contains("--entrypoint /usr/bin/sha256sum"));
+    assert!(IMAGE_BUILD_SCRIPT.contains("[[ \"$actual_sha256\" == \"$expected_sha256\" ]]"));
+    assert!(PROBE_BUILD_SCRIPT.contains("source_revision=\"${VELNOR_SOURCE_REVISION:?"));
+    assert!(PROBE_BUILD_SCRIPT.contains("[[ \"$source_revision\" == \"$source_sha\" ]]"));
 }
 
 fn field<'a>(value: &'a Yaml, key: &str) -> Result<&'a Yaml, Box<dyn Error>> {

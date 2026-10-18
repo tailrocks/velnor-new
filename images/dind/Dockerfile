@@ -18,9 +18,7 @@ RUN apt-get update \
         tar \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 999 docker \
-    && mkdir -p /var/lib/docker /run /home/runner/_work \
-    && chown 1000:1000 /home/runner/_work \
-    && chmod 0755 /home/runner/_work \
+    && mkdir -p /var/lib/docker /run \
     && curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz \
         "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz" \
     && echo "${DOCKER_SHA256}  /tmp/docker.tgz" | sha256sum -c - \
@@ -49,6 +47,9 @@ RUN mkdir -p /etc/docker /usr/local/libexec/velnor /usr/share/doc/velnor-dind \
         '  "data-root": "/var/lib/docker",' \
         '  "iptables": true' \
         '}' > /etc/docker/daemon.json
+
+COPY --from=resource_probe resource-probe /velnor/resource-probe
+RUN chmod 0555 /velnor/resource-probe
 
 # This bounded wrapper adapts the cgroup-v2 block from Moby hack/dind at
 # 8d9e3502aba39127e4d12196dae16d306f76993d. The pinned upstream source SHA-256

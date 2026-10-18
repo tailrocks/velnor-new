@@ -2,9 +2,16 @@
 
 Platform: `linux/amd64`. ARM64 is not the baseline. One `dockerd` per worker.
 
+The DinD image tag is `velnor-dind:29.9.1`.
+
 ```sh
-docker build --platform linux/amd64 -t velnor-dind:29.9.1 images/dind
+bash images/resource-probe/build-runner-images.sh
 ```
+
+Run this command from the repository root. The script does a check of the
+probe executable and its source revision. It uses one named build context for
+both images. See the Runner README for the pinned toolchain and probe build
+steps.
 
 The base is pinned to the Ubuntu 26.04 `linux/amd64` manifest digest in
 `.velnor/runner.lock`. Docker Engine `29.9.1` is downloaded from the official
@@ -33,9 +40,18 @@ The image does not set `privileged`. The controller must:
   private dockerd needs. Do not publish a TCP port.
 - Mount a private named volume at `/run` so the socket is
   `/var/run/docker.sock`, and another at `/var/lib/docker`.
-- Mount the runner's work volume at `/home/runner/_work`. The image seeds that
-  path as uid/gid `1000:1000`, mode `0755`, before Docker copies it into a new
-  empty named volume.
+- Mount the same fresh Runner home volume at `/home/runner` in both containers.
+- Set `NoCopy` on the Runner home volume mount.
+- Set the Runner home volume root owner to UID/GID `1000:1000`.
+- The Runner entrypoint copies the Runner seed into the Runner home volume
+  before it reads JIT input. DinD does not copy the Runner seed into that volume.
+- Mount the separate Work volume at `/home/runner/_work`.
+- Set `NoCopy` on the Work volume mount.
+- Both containers use the same absolute path.
 - Never mount the host or outer engine socket.
 - Share that socket (and the runner work paths) with the matching runner
   container so both resolve `/var/run/docker.sock` to this worker only.
+
+The image includes the same static `/velnor/resource-probe` file as the Runner
+image. The release build does a check of the probe architecture, source
+revision, and digest.

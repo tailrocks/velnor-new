@@ -2,7 +2,53 @@
 # JIT is not a build ARG, ENV, label, or layer.
 # disableUpdate is a scale-set registration invariant, not an image setting.
 # Do not set RUNNER_ALLOW_RUNASROOT. The runner user is not root.
-FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a
+FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a AS gnu-tar-build
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN test "$(dpkg --print-architecture)" = amd64 \
+    && test "$(uname -m)" = x86_64
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        acl \
+        attr \
+        autoconf \
+        automake \
+        autopoint \
+        bison \
+        build-essential \
+        ca-certificates \
+        debhelper \
+        dh-exec \
+        gettext \
+        gzip \
+        gpgv \
+        libacl1-dev \
+        libcap2-bin \
+        libselinux1-dev \
+        lzip \
+        lzop \
+        patch \
+        pkg-config \
+        python3 \
+        texinfo \
+        util-linux \
+        zstd \
+        xz-utils \
+    && rm -rf /var/lib/apt/lists/* \
+    && if id ubuntu >/dev/null 2>&1; then userdel --remove ubuntu; fi \
+    && if getent group ubuntu >/dev/null; then groupdel ubuntu; fi \
+    && groupadd --gid 1000 tarbuilder \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash tarbuilder
+
+WORKDIR /build
+COPY build-gnu-tar.sh gnu-tar-source.lock.json gnu-tar-openat2-declaration.patch /build/
+RUN --mount=type=tmpfs,target=/tmp,size=15032385536 \
+    chmod 0755 /build/build-gnu-tar.sh \
+    && TMPDIR=/tmp /build/build-gnu-tar.sh /out
+
+FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a AS runner
 
 ARG RUNNER_VERSION=2.338.0
 ARG RUNNER_SHA256=af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32
@@ -23,6 +69,9 @@ RUN apt-get update \
         curl \
         git \
         gzip \
+        libacl1 \
+        libselinux1 \
+        python3 \
         sudo \
         tar \
     && rm -rf /var/lib/apt/lists/* \
@@ -34,28 +83,44 @@ RUN apt-get update \
     && printf 'runner ALL=(ALL) NOPASSWD:ALL\n' > /etc/sudoers.d/runner \
     && chmod 0440 /etc/sudoers.d/runner \
     && visudo -cf /etc/sudoers.d/runner \
-    && mkdir -p /home/runner/_work /home/runner/work \
-    && chown -R runner:runner /home/runner
+    && mkdir -p /home/runner/_work /home/runner/work
+
+COPY --from=gnu-tar-build /out/usr/bin/tar /usr/bin/tar
+RUN echo '035ec786cea68c6da6065e8c8d78e9b08aed5bbd168dee4e52da4a56417ba4c6  /usr/bin/tar' | sha256sum -c - \
+    && /usr/bin/tar --version | grep -F 'tar (GNU tar) 1.35'
 
 WORKDIR /home/runner
 
-# GNU tar from Ubuntu 26.04 calls openat2. qemu-user returns ENOSYS, and
-# glibc does not fall back, so extract fails with "Function not implemented".
-# busybox tar unpacks the official tarball and stays the tar the runner execs.
 USER root
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends busybox \
+COPY runner-home.py /usr/local/libexec/velnor/runner-home.py
+RUN chmod 0555 /usr/local/libexec/velnor/runner-home.py \
+    && mkdir -p /opt/runner /usr/share/velnor \
     && curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/actions-runner.tar.gz \
         "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" \
     && echo "${RUNNER_SHA256}  /tmp/actions-runner.tar.gz" | sha256sum -c - \
-    && busybox tar -xzf /tmp/actions-runner.tar.gz -C /home/runner \
+    && /usr/bin/tar -xzf /tmp/actions-runner.tar.gz -C /opt/runner \
     && rm -f /tmp/actions-runner.tar.gz \
-    && chown -R runner:runner /home/runner \
-    && rm -rf /var/lib/apt/lists/*
+    && chown -R root:root /opt/runner \
+    && python3 /usr/local/libexec/velnor/runner-home.py manifest \
+        --root /opt/runner \
+        --runner-version "${RUNNER_VERSION}" \
+        --archive-url "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" \
+        --archive-sha256 "${RUNNER_SHA256}" \
+        --output /tmp/runner-home-manifest.before.json \
+    && /opt/runner/bin/installdependencies.sh \
+    && python3 /usr/local/libexec/velnor/runner-home.py manifest \
+        --root /opt/runner \
+        --runner-version "${RUNNER_VERSION}" \
+        --archive-url "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz" \
+        --archive-sha256 "${RUNNER_SHA256}" \
+        --output /tmp/runner-home-manifest.after.json \
+    && cmp -s /tmp/runner-home-manifest.before.json /tmp/runner-home-manifest.after.json \
+    && install -o root -g root -m 0444 /tmp/runner-home-manifest.before.json /usr/share/velnor/runner-home-manifest.json \
+    && chown -R root:root /opt/runner \
+    && test -x /opt/runner/bin/Runner.Listener
 
-# Official dependency installer. Does not patch Runner.Listener or os-release.
-RUN /home/runner/bin/installdependencies.sh \
-    && rm -rf /var/lib/apt/lists/*
+# The official dependency installer does not change the Runner seed.
+RUN rm -rf /var/lib/apt/lists/*
 
 RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz \
         "https://download.docker.com/linux/static/stable/x86_64/docker-${DOCKER_VERSION}.tgz" \
@@ -80,19 +145,7 @@ COPY entrypoint.sh /usr/local/bin/velnor-runner-entrypoint
 COPY wait-docker-sock.sh /usr/local/bin/wait-docker-sock
 COPY wait-docker-api.sh /usr/local/bin/velnor-wait-docker-api
 COPY clear-dockerenv.sh /usr/local/bin/clear-dockerenv
-COPY tar-shim.sh /usr/local/bin/velnor-tar
-COPY tar-absolute.sh /usr/local/bin/tar-absolute.sh
-COPY tar-extract.sh /usr/local/bin/tar-extract.sh
-COPY tar-extract-plan.sh /usr/local/bin/tar-extract-plan.sh
-COPY tar-member.pl /usr/local/bin/tar-member.pl
-COPY tar-dir-meta.pl /usr/local/bin/tar-dir-meta.pl
-COPY tar-member-stream.pl /usr/local/bin/tar-member-stream.pl
-COPY tar-member-rewrite.pl /usr/local/bin/tar-member-rewrite.pl
-COPY tar-pax.pl /usr/local/bin/velnor-tar-pax
-# zstd and git-lfs are installed before the tar divert. dpkg needs GNU tar to unpack.
-# After the divert, /usr/bin/tar is the BusyBox shim, not GNU tar.
-# netcat-openbsd provides `nc -z`. Cancel-service probes the service port with it.
-RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docker-sock /usr/local/bin/velnor-wait-docker-api /usr/local/bin/clear-dockerenv /usr/local/bin/velnor-tar /usr/local/bin/velnor-tar-pax /usr/local/bin/tar-member.pl \
+RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docker-sock /usr/local/bin/velnor-wait-docker-api /usr/local/bin/clear-dockerenv \
     && apt-get update \
     && apt-get install -y --no-install-recommends build-essential clang cmake git-lfs jq libclang-dev libssl-dev netcat-openbsd perl pkg-config protobuf-compiler python3 zstd \
     && cc --version \
@@ -108,89 +161,26 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docke
     && test -s /tmp/m.pb \
     && rm -rf /var/lib/apt/lists/* \
     && git lfs version \
-    && chown -R runner:runner /home/runner \
-    && dpkg-divert --local --rename --divert /usr/bin/tar.gnu --add /usr/bin/tar \
-    && ln -s /usr/local/bin/velnor-tar /usr/bin/tar \
-    && mkdir -p /tmp/tar-src/dir \
-    && echo ok > /tmp/tar-src/dir/file \
-    && busybox tar -czf /tmp/tar-probe.tgz -C /tmp/tar-src dir \
-    && mkdir -p /tmp/tar-out \
-    && tar -xzf /tmp/tar-probe.tgz -C /tmp/tar-out \
-    && test "$(cat /tmp/tar-out/dir/file)" = ok \
-    && mkdir -p /tmp/tar-old \
-    && tar xz -C /tmp/tar-old -f /tmp/tar-probe.tgz \
-    && test "$(cat /tmp/tar-old/dir/file)" = ok \
-    && echo cfz-ok > /tmp/tar-src/cfz.txt \
-    && tar cfz /tmp/cfz.tgz -C /tmp/tar-src cfz.txt \
-    && mkdir -p /tmp/cfz-out \
-    && tar xfz /tmp/cfz.tgz -C /tmp/cfz-out \
-    && test "$(cat /tmp/cfz-out/cfz.txt)" = cfz-ok \
-    && tar --zstd --version \
-    && echo cache-ok > /tmp/tar-src/g4-cache.txt \
-    && printf '%s\n' g4-cache.txt > /tmp/tar-manifest \
-    && tar -cf /tmp/cache.tgz --exclude cache.tgz -P -C /tmp/tar-src --files-from /tmp/tar-manifest -z \
-    && mkdir -p /tmp/tar-cache-out \
-    && tar -xf /tmp/cache.tgz -P -C /tmp/tar-cache-out -z \
-    && test "$(cat /tmp/tar-cache-out/g4-cache.txt)" = cache-ok \
-    && tar -cf /tmp/cache.tzst --exclude cache.tzst -P -C /tmp/tar-src --files-from /tmp/tar-manifest --use-compress-program zstdmt \
-    && mkdir -p /tmp/tar-zstd-out \
-    && tar -xf /tmp/cache.tzst -P -C /tmp/tar-zstd-out --use-compress-program unzstd \
-    && test "$(cat /tmp/tar-zstd-out/g4-cache.txt)" = cache-ok \
-    && perl -e 'my $limit = 2097152; my $dir = "/tmp/argv-src"; mkdir $dir or die $!; open my $m, ">", "/tmp/argv-manifest" or die $!; my $leaf = "a" x 200; my $bytes = 0; my $n = 0; while ($bytes <= $limit) { $n++; my $name = sprintf("%s-%05d", $leaf, $n); open my $f, ">", "$dir/$name" or die $!; print $f "ok"; close $f; print $m "$name\n"; $bytes += length($name) + 1; } open my $s, ">", "$dir/short-ok" or die $!; print $s "ok"; close $s; print $m "short-ok\n"; $n++; open my $c, ">", "/tmp/argv-count" or die $!; print $c $n; close $c;' \
-    && tar -cf /tmp/argv.tar -C /tmp/argv-src --files-from /tmp/argv-manifest \
-    && test "$(tar.gnu -tf /tmp/argv.tar | wc -l | tr -d " ")" = "$(cat /tmp/argv-count)" \
-    && mkdir -p /tmp/argv-out \
-    && tar -xf /tmp/argv.tar -C /tmp/argv-out \
-    && test "$(cat /tmp/argv-out/short-ok)" = ok \
-    && printf "%s\n" short-ok > /tmp/argv-one \
-    && mkdir -p /tmp/argv-one-out \
-    && tar -xf /tmp/argv.tar -C /tmp/argv-one-out --files-from /tmp/argv-one \
-    && test "$(cat /tmp/argv-one-out/short-ok)" = ok \
-    && test "$(find /tmp/argv-one-out -type f | wc -l | tr -d " ")" = 1 \
-    && long="$(printf 'n%.0s' $(seq 1 90))" \
-    && mkdir -p "/tmp/p-home/runner/_work/repo/repo" \
-    && mkdir -p "/tmp/p-home/runner/.cache/mbx/${long}/sub" \
-    && echo mbx-ok > /tmp/p-home/runner/.cache/mbx/marker \
-    && echo long-ok > "/tmp/p-home/runner/.cache/mbx/${long}/sub/file" \
-    && echo stay > /tmp/p-home/runner/_work/repo/repo/keep.txt \
-    && printf '%s\n' ../../../.cache/mbx/marker "../../../.cache/mbx/${long}/sub/file" keep.txt > /tmp/p-manifest \
-    && tar -cf /tmp/p-abs.tar -P -C /tmp/p-home/runner/_work/repo/repo --files-from /tmp/p-manifest \
-    && tar.gnu -tf /tmp/p-abs.tar | grep -qx '../../../.cache/mbx/marker' \
-    && tar.gnu -tf /tmp/p-abs.tar | grep -qx "../../../.cache/mbx/${long}/sub/file" \
-    && tar -cf /tmp/p.tzst -P -C /tmp/p-home/runner/_work/repo/repo --files-from /tmp/p-manifest --use-compress-program zstdmt \
-    && echo abs-ok > /tmp/abs-marker \
-    && tar -cf /tmp/abs.tar -P /tmp/abs-marker \
-    && rm -rf /tmp/p-home/runner/.cache /tmp/abs-marker \
-    && rm -f /tmp/p-home/runner/_work/repo/repo/keep.txt \
-    && tar -xf /tmp/p-abs.tar -P -C /tmp/p-home/runner/_work/repo/repo \
-    && test "$(cat /tmp/p-home/runner/.cache/mbx/marker)" = mbx-ok \
-    && test "$(cat "/tmp/p-home/runner/.cache/mbx/${long}/sub/file")" = long-ok \
-    && test "$(cat /tmp/p-home/runner/_work/repo/repo/keep.txt)" = stay \
-    && test ! -e /tmp/p-home/runner/_work/repo/repo/.cache \
-    && rm -rf /tmp/p-home/runner/.cache \
-    && rm -f /tmp/p-home/runner/_work/repo/repo/keep.txt \
-    && if tar -xf /tmp/p-abs.tar -C /tmp/p-home/runner/_work/repo/repo; then exit 1; fi \
-    && test ! -e /tmp/p-home/runner/.cache \
-    && test ! -e /tmp/p-home/runner/_work/repo/repo/.cache \
-    && test ! -e /tmp/p-home/runner/_work/repo/repo/keep.txt \
-    && mkdir -p /tmp/abs-out \
-    && tar -xf /tmp/abs.tar -P -C /tmp/abs-out \
-    && test "$(cat /tmp/abs-marker)" = abs-ok \
-    && test ! -e /tmp/abs-out/tmp/abs-marker \
-    && rm -rf /tmp/p-home/runner/.cache /tmp/p-home/runner/_work/repo/repo/.cache \
-    && tar -xf /tmp/p.tzst -P -C /tmp/p-home/runner/_work/repo/repo --use-compress-program unzstd \
-    && test "$(cat /tmp/p-home/runner/.cache/mbx/marker)" = mbx-ok \
-    && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-old /tmp/tar-probe.tgz /tmp/tar-manifest /tmp/cache.tgz /tmp/cache.tzst /tmp/tar-cache-out /tmp/tar-zstd-out /tmp/p-home /tmp/p-manifest /tmp/p-abs.tar /tmp/p.tzst /tmp/abs-marker /tmp/abs.tar /tmp/abs-out /tmp/cfz.tgz /tmp/cfz-out /tmp/m.proto /tmp/m.pb /tmp/argv-src /tmp/argv-manifest /tmp/argv-count /tmp/argv.tar /tmp/argv-out /tmp/argv-one /tmp/argv-one-out
+    && echo '035ec786cea68c6da6065e8c8d78e9b08aed5bbd168dee4e52da4a56417ba4c6  /usr/bin/tar' | sha256sum -c -
+
+COPY --from=resource_probe resource-probe /velnor/resource-probe
+RUN chmod 0555 /velnor/resource-probe
+
+COPY tar-semantics-test.sh tar-semantics-planned-test.sh tar-absolute-test.sh tar-absolute-test-extended.sh /tmp/velnor-gnu-tar-tests/
+RUN chmod 0755 /tmp/velnor-gnu-tar-tests/*.sh \
+    && for test_file in /tmp/velnor-gnu-tar-tests/*.sh; do "$test_file"; done \
+    && rm -rf /tmp/velnor-gnu-tar-tests
+
+COPY runner-home.py runner-home-test.py /tmp/velnor-runner-home-tests/
+RUN python3 /tmp/velnor-runner-home-tests/runner-home-test.py \
+    && rm -rf /tmp/velnor-runner-home-tests
 
 # Job steps call `node` on PATH. The runner's private action runtime is separate
 # and is Node 24 in actions/runner 2.338.0.
-# /usr/bin/tar is the job shim after the divert. Listing that trusted vendor
-# archive goes through GNU tar and does not finish under qemu-user. BusyBox
-# unpacks it. Job archives still enter the shim.
 RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz \
         "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.gz" \
     && echo "${NODE_SHA256}  /tmp/node.tar.gz" | sha256sum -c - \
-    && busybox tar -xzf /tmp/node.tar.gz --strip-components=1 -C /usr/local \
+    && /usr/bin/tar -xzf /tmp/node.tar.gz --strip-components=1 -C /usr/local \
     && rm -f /tmp/node.tar.gz \
     && test "$(node --version)" = "v${NODE_VERSION}" \
     && test "$(node -e 'console.log("js-action-ok")')" = js-action-ok

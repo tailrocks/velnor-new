@@ -21,37 +21,8 @@ use velnor_actions_contract::ReleaseTarget;
 const MACOS_RUNS_ON: &str = "macos-15";
 /// `actions/attest-build-provenance` tag `v4.2.2` (commit, not a floating tag).
 const ASSET_DIR: &str = "assets";
-const CHECKSUMS: &str = "SHA256SUMS";
-const RUNNER_TAR: &str = "velnor-runner-linux-amd64.tar";
-const DIND_TAR: &str = "velnor-dind-linux-amd64.tar";
-const RESOURCE_PROBE_TAR: &str = "velnor-resource-probe-linux-amd64.tar";
-const RESOURCE_PROBE_MANIFEST: &str = "RESOURCE_PROBE_MANIFEST.json";
+pub(super) const CHECKSUMS: &str = "SHA256SUMS";
 const HOST_BIN: &str = "velnor-host";
-
-const IMAGE_BUILD: &str = "\
-set -eu
-docker build --platform linux/amd64 -t velnor-runner:linux-amd64 images/runner/ubuntu-26.04
-docker build --platform linux/amd64 -t velnor-dind:linux-amd64 images/dind";
-
-const IMAGE_VERIFY: &str = "\
-set -eu
-runner=\"$(docker image inspect --format '{{.Architecture}}' velnor-runner:linux-amd64)\"
-dind=\"$(docker image inspect --format '{{.Architecture}}' velnor-dind:linux-amd64)\"
-test \"$runner\" = amd64
-test \"$dind\" = amd64";
-
-const IMAGE_SAVE: &str = "\
-set -eu
-docker save --output velnor-runner-linux-amd64.tar velnor-runner:linux-amd64
-docker save --output velnor-dind-linux-amd64.tar velnor-dind:linux-amd64
-test -s velnor-runner-linux-amd64.tar
-test -s velnor-dind-linux-amd64.tar
-test -s velnor-resource-probe-linux-amd64.tar
-test -s RESOURCE_PROBE_MANIFEST.json";
-
-const IMAGE_SUM: &str = "\
-set -eu
-sha256sum velnor-runner-linux-amd64.tar velnor-dind-linux-amd64.tar velnor-resource-probe-linux-amd64.tar RESOURCE_PROBE_MANIFEST.json > SHA256SUMS";
 
 const BINARY_VERIFY: &str = "\
 set -eu
@@ -71,59 +42,7 @@ shasum -a 256 velnor-host > SHA256SUMS";
 ///
 /// An illegal hosted label fails.
 pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
-    let pins = request
-        .product_release
-        .as_ref()
-        .ok_or_else(|| RenderError::InvalidWorkflow("product_release_pins_missing".to_owned()))?;
-    let hosted = runs_on_yaml(&request.hosted_label)?;
-    let files = [
-        RUNNER_TAR,
-        DIND_TAR,
-        RESOURCE_PROBE_TAR,
-        RESOURCE_PROBE_MANIFEST,
-        CHECKSUMS,
-    ];
-    let mut build_steps = vec![run_step("Build runner and DinD images", IMAGE_BUILD)];
-    build_steps.extend(super::resource_probe_image::build_steps(pins)?);
-    build_steps.extend([
-        run_step("Verify image architectures", IMAGE_VERIFY),
-        run_step("Save image archives", IMAGE_SAVE),
-        run_step("Checksum built bytes", IMAGE_SUM),
-    ]);
-    Ok(document(
-        "Image release",
-        vec![
-            build_job(
-                "build-images",
-                "Build runner images",
-                hosted.clone(),
-                JobTimeout::DEFAULT,
-                build_steps,
-                "Upload image assets",
-                &files,
-            ),
-            attest_job(
-                "attest-images",
-                "Attest runner images",
-                hosted.clone(),
-                "build-images",
-                "image-assets",
-                &files,
-            ),
-            publish_job(
-                hosted,
-                &Publish {
-                    id: "publish-images",
-                    name: "Publish runner images",
-                    needs: "attest-images",
-                    artifact: "image-assets",
-                    prefix: "runner",
-                    notes: "Runner image assets built from ${GITHUB_SHA}.",
-                    files: &files,
-                },
-            ),
-        ],
-    ))
+    super::schema2_image_release::render(request)
 }
 
 /// macOS binary release. Every job uses `macos-15`, never the Ubuntu label.
@@ -185,7 +104,7 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
     ))
 }
 
-fn build_job(
+pub(super) fn build_job(
     id: &str,
     name: &str,
     runs_on: Yaml,
@@ -204,7 +123,7 @@ fn build_job(
     )
 }
 
-fn attest_job(
+pub(super) fn attest_job(
     id: &str,
     name: &str,
     runs_on: Yaml,
@@ -225,17 +144,17 @@ fn attest_job(
     )
 }
 
-struct Publish<'a> {
-    id: &'a str,
-    name: &'a str,
-    needs: &'a str,
-    artifact: &'a str,
-    prefix: &'a str,
-    notes: &'a str,
-    files: &'a [&'a str],
+pub(super) struct Publish<'a> {
+    pub(super) id: &'a str,
+    pub(super) name: &'a str,
+    pub(super) needs: &'a str,
+    pub(super) artifact: &'a str,
+    pub(super) prefix: &'a str,
+    pub(super) notes: &'a str,
+    pub(super) files: &'a [&'a str],
 }
 
-fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
+pub(super) fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
     finish(
         spec.id,
         with_needs(
@@ -381,7 +300,7 @@ fn release_command(prefix: &str, notes: &str, files: &[&str]) -> String {
     )
 }
 
-fn document(name: &str, jobs: Vec<(String, Yaml)>) -> Yaml {
+pub(super) fn document(name: &str, jobs: Vec<(String, Yaml)>) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
         (

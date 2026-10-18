@@ -2,9 +2,32 @@
 
 Platform: `linux/amd64`. ARM64 is not the baseline.
 
+The Runner image tag is `velnor-runner:ubuntu-26.04-2.338.0`.
+
 ```sh
-docker build --platform linux/amd64 -t velnor-runner:ubuntu-26.04-2.338.0 images/runner/ubuntu-26.04
+cat > "${TMPDIR:-/tmp}/velnor-zig-musl-linker" <<'EOF'
+#!/bin/sh
+exec zig cc -target x86_64-linux-musl "$@"
+EOF
+chmod 0755 "${TMPDIR:-/tmp}/velnor-zig-musl-linker"
+mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \
+  rustup target add x86_64-unknown-linux-musl
+export VELNOR_SOURCE_REVISION="$(git rev-parse HEAD)"
+export CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER="${TMPDIR:-/tmp}/velnor-zig-musl-linker"
+export RUSTFLAGS='-C link-self-contained=no'
+mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \
+  cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml \
+    --package velnor-resource-probe --bin velnor-resource-probe --release \
+    --target x86_64-unknown-linux-musl
+bash images/resource-probe/build-runner-images.sh
 ```
+
+Install Zig `0.17.0` before this build. The release workflow builds the helper
+with its pinned Rust toolchain and the exact release source commit.
+
+Set the OrbStack Linux guest memory to at least 20 GiB. The GNU tar build uses
+a 14 GiB temporary filesystem at `/tmp`. The mount lets the build run executable files. The build
+uses a memory limit of 20 GiB and a CPU quota of 400000.
 
 The base is pinned to the Ubuntu 26.04 `linux/amd64` manifest digest in
 `.velnor/runner.lock`. Official `actions/runner` `2.338.0` linux-x64 comes
@@ -13,19 +36,44 @@ SHA256 is
 `af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32`.
 The official archive is extracted as published; Runner.Listener and its
 embedded Node 24 runtime are not patched. No `/proc` spoof, no fake
-`os-release`. `/usr/bin/tar` is
-`tar-shim.sh` runs BusyBox tar. Unimplemented semantic GNU flags fail
-closed. A newline in a member name fails closed. Without `-P`, a symlink
-target outside the extract root fails closed. With `-P`, relative symlink
-targets may resolve outside `-C`; an archive member that walks through an
-archive symlink or a symlink already on disk still fails closed. Modes,
-executable bits, directory timestamps, empty directories, and pax paths
-longer than the ustar name field round-trip. `--zstd`, `--files-from`, and `-P` are implemented. `-v` does not
-change archive bytes. `--strip-components` is unsupported and fails closed.
-Ubuntu 26.04 GNU tar calls `openat2`, and qemu-user fails
-that with `ENOSYS`, so GNU tar stays at `/usr/bin/tar.gnu` and is not the
-`tar` on `PATH`. `zstd` is installed so cache archives match hosted runners.
-`git-lfs` is installed before the tar divert so `git lfs` is on `PATH`.
+`os-release`.
+
+The image does a check of the archive SHA256 before it extracts Runner into
+`/opt/runner`. The official dependency installer must leave every Runner seed
+entry unchanged. The image does a check of the Runner seed with a deterministic
+manifest. The Runner seed stays owned by root. The manifest stays outside the
+Runner home volume.
+
+The entrypoint does a check of a fresh Runner home volume before it reads JIT
+input. It does a check of the volume owner, Work volume mount, Runner seed
+manifest, and free space. It copies the full Runner seed into `/home/runner`
+through a private staging directory. It does not copy `_work`. It starts only the
+listener from `/home/runner` after it makes sure the copied files are correct.
+The Runner seed and a 512 MiB allowance must fit within the 2 GiB Runner home volume
+limit. The allowance is for Runner configuration and diagnostics.
+
+`/usr/bin/tar` is GNU tar 1.35. The build does a check of Ubuntu's signed source
+index, source files, all 28 Ubuntu patches, and one local GNUlib declaration
+patch. The build does a check of the package and executable hashes. The source
+lock is `gnu-tar-source.lock.json`. The build sets
+`ac_cv_func_openat2=no`, so GNU tar uses its bundled fallback. The source
+build instructions do not prove atomic behavior for a concurrent directory
+rename that uses `openat2`.
+
+PAX stores paths and metadata that do not fit the old tar format. The cache
+tests use the pinned Linux `actions/cache` save and restore commands for gzip.
+The tests use the same action's save, list, and restore commands for zstd
+without long mode.
+Other tests include GNU tar zstd long mode, PAX paths, and long manifests. GNU
+tar uses its documented path rules. Without `-P`, GNU tar removes leading
+absolute and parent path parts. GNU tar blocks extraction through archive and
+pre-existing symlinks. With `-P`, GNU tar keeps absolute and parent paths.
+Use `-P` only with trusted archives. This image does not use the old Velnor list of accepted cache paths or rules
+that remove partial files after an error. GNU tar does not take
+an archive snapshot. It can leave extracted files after an error.
+
+`zstd` is installed so cache archives match hosted runners.
+`git-lfs` is installed so `git lfs` is on `PATH`.
 Node.js `26.12.0` linux-x64 is on `PATH` for job steps. That is not the
 runner's private action runtime; actions use the embedded Node 24 supplied
 with the unmodified official Runner archive. Docker Engine `29.9.1`, Buildx
@@ -38,7 +86,7 @@ That is progressive-distribution evidence, not evidence that `2.338.0` is
 rejected. Scale-set registration and a live job with this release are still
 required before qualification.
 
-The image is not privileged and has no Docker socket, host home, Keychain,
+The image is not privileged and has no Docker socket, host home directory, Keychain,
 SSH agent, or controller config. UID `1000` (`runner`), group `docker` GID `999`.
 In-container passwordless sudo is for job steps only. The entrypoint also
 removes `/.dockerenv` before the listener so Testcontainers reaches published
@@ -50,36 +98,53 @@ budget; the runner does not infer compile parallelism from host `nproc`.
 `disableUpdate=true` is a scale-set registration invariant. This image does
 not set it and does not set `RUNNER_ALLOW_RUNASROOT`.
 
-Controller must:
+The controller must:
 
 - Pass one JIT payload on stdin, or on inherited fd 3 if that fd is already
-  open. Empty stdin/fd exits non-zero. Do not put JIT in Docker `Config.Env`,
+  open. The entrypoint exits with a non-zero status for empty stdin or fd 3.
+  Do not put JIT in Docker `Config.Env`,
   `Cmd`, labels, build args, host argv, journal, or evidence. The entrypoint
   rejects a JIT value supplied in its own environment and ignores arguments.
 - Leave the entrypoint as `/usr/local/bin/velnor-runner-entrypoint` (mode `0755`).
 - Mount this worker's private socket so `/var/run/docker.sock` is not the
-  outer engine socket. Do not mount the host socket, host home, Keychain,
+  outer engine socket. Do not mount the host socket, host home directory, Keychain,
   SSH agent, or controller config.
-- Mount a named volume at `/home/runner/_work` writable by uid `1000`, and
-  register the JIT runner with `workFolder: "_work"`. The official runner
-  resolves that folder under `/home/runner`; it contains work, `_temp`,
-  `_actions`, and `_tool`. Share the same absolute path with this worker's DinD
-  container. The entrypoint stages the raw JIT in a private, mode-`0600`
-  `/tmp` file, removes it before listener start, and passes it only as the
-  short-lived `ACTIONS_RUNNER_INPUT_JITCONFIG` environment value on the
-  `Runner.Listener run` exec. The listener's argument vector contains only
-  `run`. The maximum raw JIT size is 131040 bytes.
+- Mount a fresh Runner home volume at `/home/runner`.
+- Set the Runner home volume root owner to UID/GID `1000:1000`.
+- Set `NoCopy` on the Runner home volume mount.
+- Mount a separate Work volume at `/home/runner/_work`.
+- Set `NoCopy` on the Work volume mount.
+- Mount the same Runner home volume and Work volume in this worker's DinD
+  container. DinD must not copy the Runner seed into that volume.
+- Register the JIT runner with `workFolder: "_work"`. The official Runner
+  resolves that folder under `/home/runner`. It contains work, `_temp`,
+  `_actions`, and `_tool`. Both containers use the same paths.
+- Start the Runner entrypoint. The entrypoint copies the Runner seed into the
+  Runner home volume before it reads JIT input. The entrypoint writes raw JIT
+  data to a private `/tmp` file with mode `0600`. The entrypoint removes the file before
+  listener start. The entrypoint puts JIT in the
+  `ACTIONS_RUNNER_INPUT_JITCONFIG` process environment when it runs
+  `Runner.Listener run`. The command arguments contain only `run`.
+  `CommandSettings` reads the value into its input map and removes the
+  environment variable. It adds the value to `SecretMasker`. The Runner
+  does not add `--jitconfig` to the command arguments. The maximum raw JIT
+  size is 131040 bytes.
   The calculation uses the 131072-byte Linux limit for one exec string on a system with 4-KiB pages.
   This limit includes the environment key, `=`, and the final NUL. The official runner may
-  make its own one-job runner configuration and credential files under
-  `/home/runner`; those files are removed with this job's runner container.
+  make its own one-job Runner configuration and credential files under
+  `/home/runner`. These files stay on the Runner home volume after the
+  Runner container exits. Remove this owned volume after terminal cleanup.
   The JIT is not secret from its job. Same-UID processes may examine the
   listener's initial `/proc/1/environ` and accessible runner files. Controller
-  API credentials never enter the runner. Treat the runner container as a
-  one-job boundary; it does not hide the JIT from that job. Host and
-  sibling-container process isolation still require live verification.
+  API credentials never enter the runner. The Runner container runs one job. The job can read the JIT. Live tests must
+  measure whether the host or another job's Runner or DinD container can read
+  these values. A host or controller administrator can examine the Runner
+  container and its process environment and arguments.
   `externals` is `/home/runner/externals`.
 
-`jit-input-test.sh` does a check of the entrypoint input channel with a synthetic canary and test programs.
-It does not run the official listener or prove
-host, sibling-container, or same-job isolation.
+`runner-home-test.py` does a check of Runner seed files and copy rules
+with a fixture. `jit-input-test.sh` does a check of the entrypoint with a
+synthetic canary. These tests do not run the official listener. These tests
+give no evidence that the host or another job's containers can read these
+values. These tests give no evidence about which values same-job processes can
+read.

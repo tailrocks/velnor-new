@@ -115,6 +115,6 @@ e05d7e7b3c14aaa3bcc4b6ed89747405c21f46683527818bdc238c98c331591d  ./.github/acti
 c85eb358536b9aa91fb715b6743f320cc853a393bb53824e4eeaca5c124c3bf4  ./.github/workflows/freshness.yml
 8e8c3100e4febbbad5b739995c7bf069967810379051694e7f6da6070d5c1fd8  ./.github/workflows/product-release-binary.yml
 9a598d77a3130d17ab48c44e5f858dc77d2f966316f74f8d835817574ea5b1f6  ./.github/workflows/product-release-generator.yml
-b8ed901a2b65f051553211ba9f2a4587bdcb40d0c5a03e00ff157903d17c9484  ./.github/workflows/product-release-images.yml
+8da5f7b8a51bd37bd318b7883e393538546e503605308dbedf067e4849a735a3  ./.github/workflows/product-release-images.yml
 ac0854af843769ad7103c10a4fd5adf1d5d36d8cb28d2a94c917f41cc40c94ae  ./.github/workflows/product-release.yml
 0180f7d7c44d84cda03e893da4dae4205b605df68553e94f6107f1eb0f706307  ./.github/workflows/qualification.yml

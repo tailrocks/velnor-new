@@ -61,6 +61,8 @@ mod release;
 pub mod release_eligibility;
 #[path = "schema2_resource_probe_image.rs"]
 mod resource_probe_image;
+#[path = "schema2_image_release.rs"]
+mod schema2_image_release;
 pub use product_release_pins::ProductReleasePins;
 
 /// Render the generic one-package consumer binary release workflow.

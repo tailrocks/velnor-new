@@ -8,6 +8,7 @@ root="/home/runner"
 work="${root}/_work"
 listener="${root}/bin/Runner.Listener"
 entrypoint_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+home_initializer="/usr/local/libexec/velnor/runner-home.py"
 # Use the conservative 4-KiB-page Linux MAX_ARG_STRLEN of 131072 bytes. An env
 # entry includes its name, '=', and NUL, so reserve those bytes from the JIT.
 jit_env_name='ACTIONS_RUNNER_INPUT_JITCONFIG'
@@ -16,16 +17,28 @@ max=$((131072 - ${#jit_env_name} - 2))
 # Docker configuration must not carry JIT. The official listener consumes its
 # supported ACTIONS_RUNNER_INPUT_JITCONFIG input from the environment at exec.
 if [[ "${ACTIONS_RUNNER_INPUT_JITCONFIG+x}" ]]; then
-  echo "jit must arrive on the private input channel" >&2
+  echo "JIT input must arrive through the private input channel." >&2
   exit 2
 fi
 
+if [[ ! -r "$home_initializer" ]]; then
+  echo "The program that copies the Runner seed into the Runner home volume is missing." >&2
+  exit 1
+fi
+python3 "$home_initializer" initialize \
+  --seed /opt/runner \
+  --home "$root" \
+  --manifest /usr/share/velnor/runner-home-manifest.json
+
 if [[ ! -x "$listener" ]]; then
-  echo "runner listener missing" >&2
+  echo "The Runner listener is missing." >&2
   exit 1
 fi
 
-mkdir -p "$work"
+if [[ ! -d "$work" ]]; then
+  echo "The Work volume mount is missing." >&2
+  exit 1
+fi
 umask 077
 jit_file="$(mktemp /tmp/velnor-jit.XXXXXX)"
 chmod 0600 "$jit_file"
@@ -42,11 +55,11 @@ chmod 0600 "$jit_file"
 
 size="$(stat -c '%s' "$jit_file")"
 if [[ "$size" -eq 0 ]]; then
-  echo "empty jit" >&2
+  echo "The JIT input is empty." >&2
   exit 2
 fi
 if [[ "$size" -gt "$max" ]]; then
-  echo "jit too large" >&2
+  echo "The JIT input is too large." >&2
   exit 2
 fi
 
@@ -54,14 +67,15 @@ payload="$(<"$jit_file")"
 rm -f "$jit_file"
 trap - EXIT
 if [[ -z "$payload" ]]; then
-  echo "empty jit" >&2
+  echo "The JIT input is empty." >&2
   exit 2
 fi
 
 cd "$root"
-# Keep the payload in this shell until exec. Image ENV/ARG/labels and the
-# listener's argv never carry it; the official runner input is a short-lived
-# environment assignment for Runner.Listener only.
+# Keep the payload in this shell until exec.
+# Do not put JIT in image ENV, ARG, or labels.
+# The listener receives this input in its process environment at exec.
+# Keep the payload out of the listener's command arguments.
 # DinD links the public socket after dockerd is ready. Wait before the listener.
 /usr/local/bin/wait-docker-sock
 /usr/local/bin/clear-dockerenv

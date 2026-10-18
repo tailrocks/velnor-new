@@ -5,15 +5,18 @@ readonly image='velnor-resource-probe:linux-amd64'
 readonly archive='velnor-resource-probe-linux-amd64.tar'
 readonly target_dir="${CARGO_TARGET_DIR:-crates/velnor-runner/target}"
 readonly source_sha="${VELNOR_SOURCE_SHA:?missing exact source SHA}"
+readonly source_revision="${VELNOR_SOURCE_REVISION:?missing resource-probe source revision}"
 readonly authority_sha="${VELNOR_WORKFLOW_AUTHORITY_SHA:?missing workflow authority SHA}"
 
 [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
+[[ "$source_revision" == "$source_sha" ]]
 [[ "$authority_sha" =~ ^[0-9a-f]{40}$ ]]
 [[ "${GITHUB_REPOSITORY:?missing repository}" == tailrocks/velnor-new ]]
 [[ "${GITHUB_REF:?missing source ref}" == refs/heads/main ]]
 [[ "${GITHUB_SHA:?missing workflow SHA}" == "$source_sha" ]]
 
 python3 -B images/resource-probe/test_write_manifest.py
+python3 -B images/resource-probe/test_validate_smoke.py
 
 workdir="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/resource-probe-build.XXXXXXXX")"
 readonly workdir
@@ -33,6 +36,15 @@ case "$file_description" in
   *'ELF 64-bit LSB'*x86-64*static*) ;;
   *) printf 'resource probe is not a static ELF64 x86-64 executable: %s\n' "$file_description" >&2; exit 1 ;;
 esac
+python3 - "$context/resource-probe" "$source_revision" <<'PY'
+import pathlib
+import sys
+
+binary = pathlib.Path(sys.argv[1]).read_bytes()
+revision = sys.argv[2].encode("ascii")
+if revision not in binary:
+    raise SystemExit("resource probe does not contain its source revision")
+PY
 
 docker build --platform linux/amd64 --network none --build-arg "SOURCE_SHA=$source_sha" --tag "$image" "$context"
 chmod 0755 "$smoke_root"
