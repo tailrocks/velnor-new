@@ -127,23 +127,27 @@ fn matrix_runner_axis_remains_in_scope_when_include_is_present() {
 }
 
 #[test]
-fn unresolved_matrix_include_runner_fails_closed() {
+fn matrix_include_runner_must_be_explicit_even_with_base_axes() {
     let runner_job = Yaml::Map(vec![
         ("runs-on".to_owned(), Yaml::str("${{ matrix.runner }}")),
         (
             "strategy".to_owned(),
             Yaml::Map(vec![(
                 "matrix".to_owned(),
-                Yaml::Map(vec![(
-                    "include".to_owned(),
-                    Yaml::Seq(vec![
-                        Yaml::Map(vec![("runner".to_owned(), Yaml::str("ubuntu-26.04"))]),
-                        Yaml::Map(vec![(
-                            "target".to_owned(),
-                            Yaml::str("x86_64-unknown-linux-gnu"),
-                        )]),
-                    ]),
-                )]),
+                Yaml::Map(vec![
+                    (
+                        "runner".to_owned(),
+                        Yaml::Seq(vec![Yaml::str("ubuntu-26.04")]),
+                    ),
+                    ("os".to_owned(), Yaml::Seq(vec![Yaml::str("linux")])),
+                    (
+                        "include".to_owned(),
+                        Yaml::Seq(vec![Yaml::Map(vec![(
+                            "os".to_owned(),
+                            Yaml::str("windows"),
+                        )])]),
+                    ),
+                ]),
             )]),
         ),
     ]);
@@ -152,7 +156,7 @@ fn unresolved_matrix_include_runner_fails_closed() {
         workflow(vec![("build", runner_job)]),
         &scale_set(),
     )
-    .expect_err("every include-only row must resolve the runner expression");
+    .expect_err("an unmatched include row must resolve the runner expression");
     assert_eq!(
         error,
         RenderError::InvalidWorkflow(

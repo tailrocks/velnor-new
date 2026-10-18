@@ -33,7 +33,7 @@ impl WorkflowRoutingPolicy {
     }
 }
 
-/// Apply the effective policy to one typed workflow document.
+/// Use the selected policy for one typed workflow document.
 pub(crate) fn route_workflow_yaml(
     path: &str,
     mut workflow: Yaml,
@@ -216,7 +216,7 @@ fn matrix_runner_labels(
             };
             if let Some((_, value)) = entries.iter().find(|(name, _)| name == key) {
                 labels.push(matrix_include_runner(value, path, job_id, key)?);
-            } else if runner_axis.is_none() {
+            } else {
                 return Err(invalid(format!(
                     "matrix_runner_value_missing:{path}:{job_id}:{key}"
                 )));
