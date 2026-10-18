@@ -94,6 +94,67 @@ fn preview_generates_independently_with_sorted_static_inventory() -> TestResult 
 }
 
 #[test]
+fn xcode_preview_and_macos26_named_check_pass_real_staged_validators() -> TestResult {
+    let config = preview_config(false)?
+        .replace(
+            "[stacks.rust.binary_release.preview.producer]",
+            "[stacks.rust.binary_release.preview.producer]\nrunner = \"xcode-27-arm64\"",
+        )
+        .replace("platform = \"linux_x64\"", "platform = \"macos_arm64\"")
+        .replace(
+            "rust-1.98.1-x86_64-unknown-linux-gnu",
+            "rust-1.98.1-aarch64-apple-darwin",
+        );
+    let config = format!(
+        "{config}\n{}",
+        r#"[[checks]]
+id = "native"
+task = "verify-native"
+inputs = ["mise.toml"]
+tools = []
+[checks.runner]
+label = "macos-26"
+platform = "macos_arm64"
+executor = "hosted"
+"#
+    );
+    let repo = binary_repo(&config)?;
+    std::fs::write(
+        repo.path().join("mise.toml"),
+        "[tasks.release-preview]\nrun = 'true'\n[tasks.verify-native]\nrun = 'true'\n",
+    )?;
+    git(&["add", "mise.toml"], repo.path())?;
+    let prep = prepare(repo.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let preview = tree
+        .get(".github/workflows/binary-preview.yml")
+        .ok_or("preview missing")?;
+    assert!(preview.contains("runs-on: xcode-27"));
+    let ci = tree.get(".github/workflows/ci.yml").ok_or("CI missing")?;
+    assert!(ci.contains("check-native:"));
+    assert!(ci.contains("runs-on: macos-26"));
+    let actionlint = tree
+        .get(".github/actionlint.yaml")
+        .ok_or("actionlint config missing")?;
+    assert!(actionlint.contains("    - xcode-27\n"));
+    assert!(actionlint.contains("    - macos-26\n"));
+    let output = tempfile::tempdir()?;
+    let report = velnor_actions_orchestrator::generate(
+        &prep,
+        &velnor_actions_orchestrator::GenerateOptions {
+            output_dir: Some(output.path().join("preview")),
+        },
+    )?;
+    assert!(
+        report
+            .files_written
+            .iter()
+            .any(|path| path == ".github/workflows/binary-preview.yml")
+    );
+    Ok(())
+}
+
+#[test]
 fn preview_refuses_unknown_binary_before_emitting_publication_workflow() -> TestResult {
     let config = preview_config(false)?.replace("bins = [\"demo\"]", "bins = [\"missing\"]");
     let repo = binary_repo(&config)?;

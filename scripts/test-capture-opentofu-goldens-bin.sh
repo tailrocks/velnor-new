@@ -24,7 +24,18 @@ if [ ! -f "$CLI_BIN" ] || [ ! -x "$CLI_BIN" ]; then
 fi
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/velnor-goldens-bin-test.XXXXXX")" || exit 2
-trap 'rm -rf "$WORK"' EXIT
+WORK="$(cd "$WORK" && pwd -P)" || exit 2
+cleanup_work() {
+  local status=$?
+  trap - EXIT
+  if [ "$status" -eq 0 ]; then
+    rm -rf "$WORK"
+  else
+    printf 'retaining failed golden harness workspace: %s\n' "$WORK" >&2
+  fi
+  exit "$status"
+}
+trap cleanup_work EXIT
 STUB_BIN="$WORK/stub bin"
 MARKER="$WORK/cargo-invoked"
 ORIGINAL_PATH="$PATH"

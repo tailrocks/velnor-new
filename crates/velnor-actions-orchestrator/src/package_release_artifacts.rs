@@ -28,6 +28,9 @@ mod checksums;
 #[path = "package_release_artifacts_inventory.rs"]
 mod inventory;
 #[cfg(test)]
+#[path = "package_release_artifacts_real_tests.rs"]
+mod real_tests;
+#[cfg(test)]
 #[path = "package_release_artifacts_tests.rs"]
 mod tests;
 

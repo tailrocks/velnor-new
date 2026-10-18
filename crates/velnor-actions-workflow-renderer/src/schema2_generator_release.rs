@@ -1,7 +1,7 @@
 //! Generator release for all supported Linux and macOS `velnor-actions` assets.
 //!
-//! The next immutable release is `v0.1.14`. Attest jobs never receive
-//! `contents: write`. Only publish does.
+//! The compiled package version is the next immutable release authority.
+//! Attest jobs never receive `contents: write`; only publication does.
 
 use super::{ProductReleasePins, Schema2WorkflowRequest};
 use crate::RenderError;
