@@ -117,7 +117,10 @@ fn assert_product(workflows: &[&str], actions: &Actions) -> Result<(), Box<dyn s
 
     let all_workflows = workflows.join("\n");
     let all = format!("{all_workflows}\n{}", action_text(actions));
-    assert!(all.contains("v0.1.15"), "{all}");
+    assert!(
+        all.contains(&format!("v{}", env!("CARGO_PKG_VERSION"))),
+        "{all}"
+    );
     assert!(!all.contains("velnor-actions-0.1.0"), "{all}");
     assert!(!all.contains("generator-${GITHUB_SHA}"), "{all}");
     assert_permissions(images, binary, generator)?;

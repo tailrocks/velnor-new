@@ -127,6 +127,10 @@ mod test_render_capture_harness;
 #[cfg(test)]
 pub(crate) mod tap_test_support;
 
+#[cfg(test)]
+#[path = "../../test_support/git_fixture.rs"]
+pub(crate) mod git_fixture;
+
 pub use api::*;
 pub use qualification_candidate::qualify_tools;
 

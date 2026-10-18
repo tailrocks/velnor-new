@@ -6,8 +6,7 @@ use std::{ffi::OsString, time::Duration};
 use velnor_actions_contract::preview_identity::PreviewIdentity;
 use velnor_actions_mise::{CheckDeadline, IsolatedCommand};
 
-#[path = "../../test_support/git_fixture.rs"]
-mod git_fixture;
+use crate::git_fixture;
 
 fn fixture_git(root: &std::path::Path, args: &[&str]) -> std::process::Output {
     git_fixture::command(root)

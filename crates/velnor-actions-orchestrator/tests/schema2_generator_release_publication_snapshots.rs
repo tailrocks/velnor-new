@@ -18,6 +18,7 @@ pub(super) fn assert_pinned_gh_policy(actions: &Actions) {
 }
 
 pub(super) fn assert_asset_catalog(body: &str) {
+    let version = env!("CARGO_PKG_VERSION");
     assert!(body.contains("release-manifest.json"), "{body}");
     assert!(
         body.contains("cmp release-manifest.json manifest-assets/release-manifest.json"),
@@ -25,11 +26,11 @@ pub(super) fn assert_asset_catalog(body: &str) {
     );
     assert!(body.contains("sha256sum --check"), "{body}");
     for binary in [
-        "velnor-actions-0.1.15-x86_64-unknown-linux-gnu",
-        "velnor-actions-0.1.15-aarch64-apple-darwin",
-        "velnor-actions-0.1.15-x86_64-apple-darwin",
+        format!("velnor-actions-{version}-x86_64-unknown-linux-gnu"),
+        format!("velnor-actions-{version}-aarch64-apple-darwin"),
+        format!("velnor-actions-{version}-x86_64-apple-darwin"),
     ] {
-        assert!(body.contains(binary), "missing {binary}");
+        assert!(body.contains(&binary), "missing {binary}");
     }
     for archive in [
         "generator-linux-assets.tar",
@@ -42,11 +43,14 @@ pub(super) fn assert_asset_catalog(body: &str) {
         );
     }
     for provenance in [
-        "velnor-actions-0.1.15-x86_64-unknown-linux-gnu.provenance.json",
-        "velnor-actions-0.1.15-aarch64-apple-darwin.provenance.json",
-        "velnor-actions-0.1.15-x86_64-apple-darwin.provenance.json",
+        format!("velnor-actions-{version}-x86_64-unknown-linux-gnu.provenance.json"),
+        format!("velnor-actions-{version}-aarch64-apple-darwin.provenance.json"),
+        format!("velnor-actions-{version}-x86_64-apple-darwin.provenance.json"),
     ] {
-        assert!(body.contains(provenance), "missing provenance {provenance}");
+        assert!(
+            body.contains(&provenance),
+            "missing provenance {provenance}"
+        );
     }
     assert!(!body.contains("ubuntu-26.04-scale-set"), "{body}");
     assert!(!body.contains("runs-on: [velnor"), "{body}");
@@ -106,31 +110,32 @@ fn assert_candidate_qualifications(
     body: &str,
     actions: &Actions,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let version = env!("CARGO_PKG_VERSION");
     for (job, action_id, build, directory, binary) in [
         (
             "qualify-linux",
             "generator-release-qualify-linux",
             "build-linux",
             "linux-assets",
-            "velnor-actions-0.1.15-x86_64-unknown-linux-gnu",
+            format!("velnor-actions-{version}-x86_64-unknown-linux-gnu"),
         ),
         (
             "qualify-macos",
             "generator-release-qualify-macos",
             "build-macos",
             "macos-assets",
-            "velnor-actions-0.1.15-aarch64-apple-darwin",
+            format!("velnor-actions-{version}-aarch64-apple-darwin"),
         ),
         (
             "qualify-macos-intel",
             "generator-release-qualify-macos-intel",
             "build-macos-intel",
             "macos-intel-assets",
-            "velnor-actions-0.1.15-x86_64-apple-darwin",
+            format!("velnor-actions-{version}-x86_64-apple-darwin"),
         ),
     ] {
         qualification_snapshots::assert_candidate_qualification(
-            body, actions, job, action_id, build, directory, binary,
+            body, actions, job, action_id, build, directory, &binary,
         )?;
     }
     Ok(())
@@ -274,10 +279,11 @@ fn assert_manifest_attestation_job(
 }
 
 fn assert_manifest_builder_contract(manifest: &str) {
+    let version = env!("CARGO_PKG_VERSION");
     assert!(
-        manifest.contains(
-            "create-release-manifest.sh '0.1.15' 'tailrocks/velnor-new' '1.99.1' '1.24.1'"
-        ),
+        manifest.contains(&format!(
+            "create-release-manifest.sh '{version}' 'tailrocks/velnor-new' '1.99.1' '1.24.1'"
+        )),
         "{manifest}"
     );
     assert!(manifest.contains("release-manifest.json"), "{manifest}");
@@ -350,7 +356,10 @@ pub(super) fn assert_publish_job(
         "{publish_action}"
     );
     assert!(publish_action.contains(".intoto.jsonl"), "{publish_action}");
-    assert!(publish_action.contains("v0.1.15"), "{publish_action}");
+    assert!(
+        publish_action.contains(&format!("v{}", env!("CARGO_PKG_VERSION"))),
+        "{publish_action}"
+    );
     assert!(
         publish_action.contains("inputs:\n  linux_artifact_id:"),
         "{publish_action}"

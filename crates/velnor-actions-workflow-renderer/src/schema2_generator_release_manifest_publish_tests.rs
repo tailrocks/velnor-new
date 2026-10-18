@@ -1,4 +1,4 @@
-use super::{manifest, test_pins};
+use super::{manifest, release_version, test_pins};
 use std::error::Error;
 use std::fs;
 use std::path::Path;
@@ -82,6 +82,7 @@ fn acceptance_inventory_uses_the_canonical_manifest_and_every_release_asset() {
 }
 
 pub(super) fn assert_success_receipt(root: &Path) -> Result<(), Box<dyn Error>> {
+    let version = release_version();
     let manifest_name = manifest::acceptance_artifact_paths()[0];
     let receipt_name = manifest::acceptance_artifact_paths()[1];
     let source_manifest = root.join(manifest::candidate_path());
@@ -102,7 +103,7 @@ pub(super) fn assert_success_receipt(root: &Path) -> Result<(), Box<dyn Error>> 
         let digest = super::sha256(&file)?;
         let size = fs::metadata(&file)?.len();
         let url = format!(
-            "https://github.com/{}/releases/download/v0.1.15/{name}",
+            "https://github.com/{}/releases/download/v{version}/{name}",
             super::REPOSITORY
         );
         expected_assets.push(format!(
@@ -122,7 +123,7 @@ pub(super) fn assert_success_receipt(root: &Path) -> Result<(), Box<dyn Error>> 
             super::REPOSITORY,
             "--arg",
             "version",
-            "0.1.15",
+            version,
             "--arg",
             "source",
             super::SOURCE_SHA,
@@ -137,7 +138,7 @@ pub(super) fn assert_success_receipt(root: &Path) -> Result<(), Box<dyn Error>> 
             "2",
             "--arg",
             "tag",
-            "v0.1.15",
+            &format!("v{version}"),
             "--arg",
             "manifest_name",
             "release-manifest.json",

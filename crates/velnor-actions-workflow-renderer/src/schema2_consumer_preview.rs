@@ -49,6 +49,10 @@ pub struct ConsumerPreviewSpec {
     pub install_gh_argv: Vec<String>,
     /// Exact pinned metadata compiler installation argv, before source discovery.
     pub install_rust_argv: Vec<String>,
+    /// Explicit P08 probe/fetch steps for every lockful workspace runtime discovers.
+    pub producer_source_prep: Vec<Step>,
+    /// Shared owned homes for installation, source preparation, and offline metadata.
+    pub producer_cargo_env: BTreeMap<String, String>,
     /// Fixed qualified GitHub CLI argv prefix.
     pub gh_argv: Vec<String>,
     /// Independently enabled downstream PR promotion, with isolated task and App boundaries.
@@ -190,22 +194,48 @@ fn producer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
         "permissions".to_owned(),
         permissions(&[("contents", "read")]),
     ));
+    crate::toolchain_env::check_toolchain_homes(&spec.producer_cargo_env)?;
+    crate::toolchain_env::reject_denied_step_keys(&spec.producer_cargo_env)?;
     let checkout = steps::checkout("${{ needs.preview-eligibility.outputs.source_sha }}");
-    Ok(finish(
-        "preview-producer",
-        fields,
-        vec![
-            checkout,
-            setup(&spec.producer_setup),
-            run_step(
-                "Install pinned Cargo metadata toolchain",
-                &join_argv_for_run(&spec.install_rust_argv)?,
-            ),
-            acquire(&spec.producer_acquire, "preview-producer", runner)?,
-            operation(spec, "execute-preview-producer-v1", false)?,
-            transfer(false, Artifact::Producer),
-        ],
-    ))
+    let mut producer_steps = vec![
+        checkout,
+        setup(&spec.producer_setup),
+        run_step(
+            "Create owned Cargo metadata homes",
+            "mkdir -p \"$MISE_CARGO_HOME\" \"$MISE_RUSTUP_HOME\"",
+        ),
+        run_step(
+            "Install pinned Cargo metadata toolchain",
+            &join_argv_for_run(&spec.install_rust_argv)?,
+        ),
+    ];
+    for step in &spec.producer_source_prep {
+        let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+            return Err(RenderError::InvalidWorkflow(
+                "preview_source_preparation_not_shell".to_owned(),
+            ));
+        };
+        if env != &spec.producer_cargo_env {
+            return Err(RenderError::InvalidWorkflow(
+                "preview_source_preparation_home_mismatch".to_owned(),
+            ));
+        }
+        producer_steps.push(non_internal_step_to_yaml(
+            "preview-producer",
+            step,
+            &BTreeMap::new(),
+            runner,
+        )?);
+    }
+    producer_steps.extend([
+        acquire(&spec.producer_acquire, "preview-producer", runner)?,
+        operation(spec, "execute-preview-producer-v1", false)?,
+        transfer(false, Artifact::Producer),
+    ]);
+    for step in &mut producer_steps {
+        steps::with_producer_homes(step, &spec.producer_cargo_env)?;
+    }
+    Ok(finish("preview-producer", fields, producer_steps))
 }
 
 fn signer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {

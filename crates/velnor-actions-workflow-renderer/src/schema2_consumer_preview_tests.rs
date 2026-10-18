@@ -5,6 +5,9 @@ use velnor_actions_contract::{
     package_release::PackageReleasePayloadFormat,
 };
 
+#[path = "schema2_consumer_preview_source_tests.rs"]
+mod sources;
+
 fn fixture() -> ConsumerPreviewSpec {
     let acquire = provision_acquire_step(&HelperProvenance::ReleaseAsset {
         url: "https://github.com/tailrocks/velnor-new/releases/download/v0.1.12/velnor-actions-0.1.12-x86_64-unknown-linux-gnu".to_owned(),
@@ -59,6 +62,26 @@ fn fixture() -> ConsumerPreviewSpec {
             "install".to_owned(),
             "rust@1.98.1".to_owned(),
         ],
+        producer_source_prep: Vec::new(),
+        producer_cargo_env: BTreeMap::from([
+            (
+                "MISE_CARGO_HOME".to_owned(),
+                "${{ runner.temp }}/velnor/cargo".to_owned(),
+            ),
+            (
+                "MISE_RUSTUP_HOME".to_owned(),
+                "${{ runner.temp }}/velnor/rustup".to_owned(),
+            ),
+            (
+                "CARGO_HOME".to_owned(),
+                "${{ runner.temp }}/velnor/cargo".to_owned(),
+            ),
+            (
+                "RUSTUP_HOME".to_owned(),
+                "${{ runner.temp }}/velnor/rustup".to_owned(),
+            ),
+            ("RUSTUP_TOOLCHAIN".to_owned(), "1.98.1".to_owned()),
+        ]),
         gh_argv: vec!["gh".to_owned()],
         homebrew_tap: None,
     }
