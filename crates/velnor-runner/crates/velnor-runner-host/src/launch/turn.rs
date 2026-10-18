@@ -12,7 +12,7 @@ use super::completion::CompletionWorker;
 use super::slot;
 use super::steps;
 use super::trace;
-use super::{Ready, Rest, ack_ready, drive_ready, scale_session};
+use super::{Ready, Rest, ack_ready, drive_ready};
 
 mod completion_intake;
 mod pump;
@@ -38,7 +38,11 @@ pub(super) async fn poll_and_drive(
     trace::session(session);
     let mut workers = Vec::new();
     let ceiling = capacity::job_capacity();
-    let capacity = super::pressure::advertise(ceiling);
+    let capacity = if rest.scoped_journal.is_some() {
+        super::pressure::advertise_allocated(rest.allocated_header)
+    } else {
+        super::pressure::advertise(ceiling)
+    };
     if rest.resource_budget.is_none() {
         return Err(EnsureError::Unexpected {
             status: 0,
@@ -52,19 +56,6 @@ pub(super) async fn poll_and_drive(
         admin_token.to_owned(),
     )
     .map_err(|_| completion_error())?;
-    if rest.permits_start() {
-        let population = session
-            .statistics()
-            .map_or(0, velnor_runner_github::Statistics::assigned_population);
-        let occupied = slot::occupied(journal).await?;
-        let running = slot::running_count(journal, docker).await?;
-        if !capacity::statistics_blocked(occupied, running, capacity, population)
-            && let Some(started) =
-                scale_session(link, set_id, session, admin_token, journal, docker, rest).await?
-        {
-            workers.push(started);
-        }
-    }
     let target = capacity::admit_target(capacity);
     let mut turn = Turn {
         link,
@@ -100,7 +91,12 @@ pub(super) async fn poll_and_drive(
 fn queue_stays(error: Option<&EnsureError>) -> bool {
     matches!(
         error,
-        Some(EnsureError::NameSteady | EnsureError::NameCleared)
+        Some(
+            EnsureError::NameSteady
+                | EnsureError::NameCleared
+                | EnsureError::SourceBlocked { .. }
+                | EnsureError::AdmissionClosed
+        )
     )
 }
 
@@ -168,9 +164,7 @@ struct Turn<'a> {
 
 impl Turn<'_> {
     async fn drive_poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
-        if self.rest.permits_start() {
-            self.fit_pressure().await?;
-        }
+        self.rest.source_authorized = false;
         let (saved, path) = point_at_queue(self.link, &self.session.message_queue_url)?;
         let queue = saved.as_ref().map(|_| self.link.base().to_owned());
         let now = std::time::Instant::now();
@@ -179,6 +173,11 @@ impl Turn<'_> {
         restore_base(self.link, saved)?;
         let polled = polled?;
         trace::batch(&polled);
+        if self.rest.permits_start() {
+            super::steps::authorize_poll_rest(&self.rest, &polled)?;
+            self.rest.source_authorized = true;
+            self.fit_pressure().await?;
+        }
         let link = &mut *self.link;
         let session = self.session;
         let set_id = self.set_id;
@@ -211,8 +210,14 @@ impl Turn<'_> {
 
     async fn fit_pressure(&mut self) -> Result<(), EnsureError> {
         let running_now = slot::running_count(self.journal, self.docker).await?;
-        let ceiling = capacity::job_capacity();
-        let sample = super::resource_probe::pressure_sample(self.docker, self.journal).await;
+        let ceiling = if self.rest.scoped_journal.is_some() {
+            self.rest.allocated_header
+        } else {
+            capacity::job_capacity()
+        };
+        let host_journal = self.rest.host_journal.unwrap_or(self.journal);
+        let sample =
+            super::resource_probe::pressure_sample(self.docker, host_journal, self.rest.pat).await;
         let next = super::pressure::adjust_with_sample(self.capacity, running_now, ceiling, sample);
         if self.target == self.capacity {
             self.target = next;

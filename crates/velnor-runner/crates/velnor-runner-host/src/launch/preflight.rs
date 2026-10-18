@@ -4,7 +4,6 @@ use std::time::Duration;
 
 use bollard::Docker;
 
-use crate::docker_client::DOCKER_OPERATION_TIMEOUT;
 use crate::journal::Journal;
 use crate::scale_set::EnsureError;
 use crate::stage::PairEngine;
@@ -12,24 +11,6 @@ use crate::worker::ResourceBudget;
 
 use super::resource_capacity::{self, Discovery, JobCapacity};
 use super::slot;
-
-pub(super) async fn run<E: PairEngine + ?Sized>(
-    docker: &Docker,
-    cleanup_engine: &E,
-    journal: &Journal,
-    budget: ResourceBudget,
-    ceiling: u32,
-) -> Result<JobCapacity, EnsureError> {
-    run_after(
-        docker,
-        cleanup_engine,
-        journal,
-        budget,
-        ceiling,
-        DOCKER_OPERATION_TIMEOUT,
-    )
-    .await
-}
 
 async fn run_after<E: PairEngine + ?Sized>(
     docker: &Docker,

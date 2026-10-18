@@ -115,7 +115,7 @@ impl PairEngine for Docker {
     async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError> {
         let mounts = crate::worker::dind_mounts(volume)?;
         Box::pin(docker_deadline(create_named_volumes(self, volume, &mounts))).await??;
-        crate::work_owner::own_work_volume(self, &format!("{volume}-work")).await
+        Ok(())
     }
 
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {

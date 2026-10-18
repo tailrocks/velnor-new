@@ -240,6 +240,12 @@ pub(crate) fn ctx() -> Drive {
         owner: String::new(),
         repo: String::new(),
         pat: String::new(),
+        connection: None,
+        host_journal: None,
+        scoped_journal: None,
+        allocated_header: 0,
+        source_authorized: false,
+        admission_state: None,
     }
 }
 

@@ -65,6 +65,12 @@ async fn malformed_event_is_quarantined_then_later_offer_admits() -> Result<(), 
         owner: String::new(),
         repo: String::new(),
         pat: String::new(),
+        connection: None,
+        host_journal: None,
+        scoped_journal: None,
+        allocated_header: 0,
+        source_authorized: false,
+        admission_state: None,
     };
     let ack_batch = ParsedBatch {
         message_id: event.message_id,
@@ -125,6 +131,12 @@ async fn inbox_conflict_prevents_quarantine_ack() -> Result<(), String> {
         owner: String::new(),
         repo: String::new(),
         pat: String::new(),
+        connection: None,
+        host_journal: None,
+        scoped_journal: None,
+        allocated_header: 0,
+        source_authorized: false,
+        admission_state: None,
     };
     let batch = ParsedBatch {
         message_id: 59,
@@ -179,6 +191,12 @@ async fn overflow_body_survives_restart_and_mixed_offer_starts_once() -> Result<
         owner: String::new(),
         repo: String::new(),
         pat: String::new(),
+        connection: None,
+        host_journal: None,
+        scoped_journal: None,
+        allocated_header: 0,
+        source_authorized: false,
+        admission_state: None,
     };
     let starts = start_overflow_offer(&journal, &event, &context).await?;
     drop(journal);

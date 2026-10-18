@@ -78,7 +78,10 @@ where
             .await;
         }
     };
-    let bound = super::super::bind::Bind::new(journal, id);
+    let bound = match ctx.scoped_journal.as_ref() {
+        Some(scoped) => super::super::bind::Bind::scoped(scoped, id),
+        None => super::super::bind::Bind::new(journal, id),
+    };
     let Ok(volume) = crate::worker::new_worker_volume() else {
         return hold(
             journal,

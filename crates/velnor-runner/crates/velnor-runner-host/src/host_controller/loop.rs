@@ -8,7 +8,8 @@ use crate::controller_ipc::{ControlServer, ControlState};
 use crate::daemon_lock::{EngineLineageGuard, canonical_journal_path};
 use crate::docker_client::{connect_unix, docker_deadline};
 use crate::error::HostError;
-use crate::journal::{CapacityLimits, Journal};
+use crate::journal::{CapacityLimits, EngineContext, Journal};
+use crate::launch::SelectedEngineContext;
 use crate::launch_blocking::ListenFault;
 
 const CONFIG_RELOAD_PAUSE: Duration = Duration::from_secs(2);
@@ -31,12 +32,20 @@ pub fn run_host_blocking(config: &HostConfig, state: &Path) -> Result<(), Listen
 
 async fn run_controller(mut current: HostConfig, state: &Path) -> Result<(), ListenFault> {
     let docker = connect_unix(&current.docker.endpoint)?;
-    let engine_id = docker_deadline(docker.info())
+    let selected_info = docker_deadline(docker.info())
         .await?
-        .map_err(|_| HostError::Docker)?
+        .map_err(|_| HostError::Docker)?;
+    let engine_id = selected_info
         .id
+        .clone()
         .filter(|id| !id.trim().is_empty())
         .ok_or(HostError::Docker)?;
+    let durable_engine = EngineContext {
+        engine_id: engine_id.clone(),
+        endpoint: current.docker.endpoint.clone(),
+        platform: current.docker.platform.clone(),
+    };
+    let selected_engine = SelectedEngineContext::capture(&durable_engine, &selected_info)?;
     let journal_path = canonical_journal_path(&state.join("launch.db"))?;
     let lineage = EngineLineageGuard::acquire(&engine_id)?;
     let journal = Journal::open(&journal_path).await?;
@@ -52,7 +61,7 @@ async fn run_controller(mut current: HostConfig, state: &Path) -> Result<(), Lis
         crate::launch::gate_line(&legacy_reconcile)
     );
     configure_shared_capacity(&journal, &current).await?;
-    bind_active_connections(&journal, &current, &engine_id).await?;
+    bind_active_connections(&journal, &current, &selected_engine).await?;
     let (_server, control_state) = ControlServer::start(state, journal.clone(), &current)?;
     let mut pending_retirements = Vec::new();
     discover_retirements(state, &current, &mut pending_retirements);
@@ -73,7 +82,7 @@ async fn run_controller(mut current: HostConfig, state: &Path) -> Result<(), Lis
             state,
             journal: &journal,
             control_state: &control_state,
-            engine_id: &engine_id,
+            selected_engine: &selected_engine,
         };
         if let Some(next) = next
             && next != current
@@ -139,10 +148,10 @@ async fn configure_shared_capacity(
 async fn bind_active_connections(
     journal: &Journal,
     config: &HostConfig,
-    engine_id: &str,
+    selected_engine: &SelectedEngineContext,
 ) -> Result<(), HostError> {
     for binding in config.connections() {
-        bind_connection(journal, binding, config, engine_id).await?;
+        bind_connection(journal, binding, config, selected_engine).await?;
     }
     Ok(())
 }
@@ -151,11 +160,23 @@ async fn bind_connection(
     journal: &Journal,
     binding: &RepositoryConnection,
     config: &HostConfig,
-    engine_id: &str,
+    selected_engine: &SelectedEngineContext,
 ) -> Result<(), HostError> {
+    let selected = EngineContext {
+        engine_id: selected_engine.engine_id().to_owned(),
+        endpoint: config.docker.endpoint.clone(),
+        platform: config.docker.platform.clone(),
+    };
+    if !selected_engine.matches_selection(&selected) {
+        return Err(HostError::Ownership);
+    }
     let scoped = journal.connection_scope(binding).await?;
     scoped
-        .bind_engine_context(engine_id, &config.docker.endpoint, &config.docker.platform)
+        .bind_engine_context(
+            selected_engine.engine_id(),
+            &config.docker.endpoint,
+            &config.docker.platform,
+        )
         .await
 }
 
@@ -223,7 +244,7 @@ struct JournalEffects<'a> {
     state: &'a Path,
     journal: &'a Journal,
     control_state: &'a ControlState,
-    engine_id: &'a str,
+    selected_engine: &'a SelectedEngineContext,
 }
 
 impl TransitionEffects for JournalEffects<'_> {
@@ -237,9 +258,17 @@ impl TransitionEffects for JournalEffects<'_> {
         config: &HostConfig,
     ) -> Result<(), HostError> {
         let scoped = self.journal.connection_scope(binding).await?;
+        let selected = EngineContext {
+            engine_id: self.selected_engine.engine_id().to_owned(),
+            endpoint: config.docker.endpoint.clone(),
+            platform: config.docker.platform.clone(),
+        };
+        if !self.selected_engine.matches_selection(&selected) {
+            return Err(HostError::Ownership);
+        }
         scoped
             .bind_engine_context(
-                self.engine_id,
+                self.selected_engine.engine_id(),
                 &config.docker.endpoint,
                 &config.docker.platform,
             )

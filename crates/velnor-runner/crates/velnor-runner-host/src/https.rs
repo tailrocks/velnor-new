@@ -168,7 +168,15 @@ fn parse_status(stdout: &[u8]) -> Result<u16, CurlFail> {
 
 // curl only honors -q when it is the first argument. This prevents an
 // operator's .curlrc from adding retries or changing mutating request behavior.
-pub(crate) const CURL_ARGV: &[&str] = &["-q", "--silent", "--show-error", "--config", "-"];
+pub(crate) const CURL_ARGV: &[&str] = &[
+    "-q",
+    "--silent",
+    "--show-error",
+    "--config",
+    "-",
+    "--retry",
+    "0",
+];
 
 fn curl_config(
     url: &str,

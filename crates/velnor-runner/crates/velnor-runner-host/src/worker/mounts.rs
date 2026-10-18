@@ -9,16 +9,18 @@ use std::path::Path;
 
 use bollard::models::{
     HostConfig, HostConfigCgroupnsModeEnum, Mount as DockerMount, MountBindOptions, MountType,
+    MountVolumeOptions,
 };
 
 use super::CreateProjection;
 use super::projection_types::BindMountKind;
 use crate::docker_spec::Mount;
 use crate::error::HostError;
+use velnor_runner_core::runner_work_path;
 
 pub(super) fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostError> {
     let budget = spec.resource_budget;
-    let mut mounts = docker_mounts(&spec.mounts)?.unwrap_or_default();
+    let mut mounts = docker_mounts(&spec.mounts, spec.privileged)?.unwrap_or_default();
     mounts.extend(bind_mounts(spec)?);
     let limits = if spec.privileged {
         budget.dind()
@@ -99,24 +101,33 @@ fn bind_mounts(spec: &CreateProjection) -> Result<Vec<DockerMount>, HostError> {
         .collect())
 }
 
-fn docker_mounts(mounts: &[Mount]) -> Result<Option<Vec<DockerMount>>, HostError> {
+fn docker_mounts(
+    mounts: &[Mount],
+    no_copy_work: bool,
+) -> Result<Option<Vec<DockerMount>>, HostError> {
     if mounts.is_empty() {
         return Ok(None);
     }
     let mut out = Vec::with_capacity(mounts.len());
     for mount in mounts {
-        out.push(docker_mount(mount)?);
+        out.push(docker_mount(mount, no_copy_work)?);
     }
     Ok(Some(out))
 }
 
-fn docker_mount(mount: &Mount) -> Result<DockerMount, HostError> {
+fn docker_mount(mount: &Mount, no_copy_work: bool) -> Result<DockerMount, HostError> {
     let (typ, source) = mount_source(&mount.source)?;
+    let volume_options =
+        (no_copy_work && mount.target == runner_work_path()).then_some(MountVolumeOptions {
+            no_copy: Some(true),
+            ..Default::default()
+        });
     Ok(DockerMount {
         target: Some(mount.target.clone()),
         source: Some(source),
         typ: Some(typ),
         read_only: seed_read_only(&mount.source),
+        volume_options,
         ..Default::default()
     })
 }

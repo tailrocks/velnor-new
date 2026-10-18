@@ -41,6 +41,15 @@ pub(super) fn rest() -> crate::launch::Rest<'static> {
         resource_budget: crate::worker::test_resource_budget().ok(),
         static_capacity: true,
         guest_admission: crate::launch::drive::GuestAdmission::FreshSample,
+        connection: None,
+        host_journal: None,
+        scoped_journal: None,
+        allocated_header: 0,
+        source_authorized: false,
+        admission_state: None,
+        worker_images: None,
+        selected_engine: None,
+        guest_image: None,
     }
 }
 

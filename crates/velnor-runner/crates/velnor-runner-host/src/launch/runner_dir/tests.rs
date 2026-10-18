@@ -20,6 +20,12 @@ fn creds() -> Drive {
         owner: "acme".to_owned(),
         repo: "widget".to_owned(),
         pat: "test-pat".to_owned(),
+        connection: None,
+        host_journal: None,
+        scoped_journal: None,
+        allocated_header: 0,
+        source_authorized: false,
+        admission_state: None,
     }
 }
 

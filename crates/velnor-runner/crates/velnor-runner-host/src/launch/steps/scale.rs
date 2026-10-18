@@ -25,6 +25,14 @@ where
     S: Fn(&str, &[u8], super::super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
+    if ctx.scoped_journal.is_some() || !ctx.source_authorized {
+        super::authorize_population_message(
+            ctx.scoped_journal.is_some(),
+            ctx.connection.as_ref(),
+            &ctx.pat,
+            batch,
+        )?;
+    }
     let name = format!("m{}", batch.message_id);
     let subject = name.clone();
     ensure_runner(lane, ctx, journal, &name, &subject, Some(batch), start).await

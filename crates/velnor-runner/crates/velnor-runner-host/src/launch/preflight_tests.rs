@@ -34,13 +34,13 @@ async fn reject_before_cleanup(label: &str, bound: Option<&str>) -> Result<(), S
     seed_done_journal(&journal).await?;
     let stub = DockerStub::open(vec![http(200, &docker_info(ENGINE_ID))])?;
 
-    let result = crate::launch::launch_once(
-        "",
-        "owner",
-        "repo",
+    let result = run_after(
+        &stub.docker,
         &stub.docker,
         &journal,
         test_resource_budget().map_err(|error| error.to_string())?,
+        1,
+        Duration::from_millis(300),
     )
     .await;
     let requests = stub.finish().await?;

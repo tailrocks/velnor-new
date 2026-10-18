@@ -2,130 +2,17 @@
 
 use velnor_runner_github::{
     AdminConnection, AdminConnectionCall, Poll, QueueSession, RefreshGate, RegistrationScope,
-    RegistrationTokenCall, SessionError, WireError, admin_connection, create_session,
-    delete_session, poll, registration_token,
+    RegistrationTokenCall, SessionError, WireError, admin_connection, poll, registration_token,
 };
 use zeroize::Zeroize;
-
-use crate::Offer;
-use crate::offer;
 
 use crate::error::HostError;
 use crate::https::HttpsTransport;
 use crate::scale_set::EnsureError;
-use crate::scale_set::ensure_product_scale_set;
 
 /// Session owner sent to the scale-set service.
 pub(crate) const OWNER_NAME: &str = "velnor-host";
 pub(crate) const GITHUB_API: &str = "https://api.github.com";
-
-/// Counts from session create. No token and no queue URL.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SessionCensus {
-    /// Scale-set id.
-    pub set_id: i64,
-    /// The create body included `statistics`.
-    pub statistics_present: bool,
-    /// `totalAvailableJobs`. Zero when statistics were absent.
-    pub available_jobs: i64,
-    /// `totalAcquiredJobs`.
-    pub acquired_jobs: i64,
-    /// `totalAssignedJobs`.
-    pub assigned_jobs: i64,
-    /// `totalRunningJobs`.
-    pub running_jobs: i64,
-    /// `totalRegisteredRunners`.
-    pub registered_runners: i64,
-    /// `totalBusyRunners`.
-    pub busy_runners: i64,
-    /// `totalIdleRunners`.
-    pub idle_runners: i64,
-}
-
-/// Open one session, read its statistics, then delete it. Does not poll.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when registration, the session, or the delete is refused.
-pub fn session_census(pat: &str, owner: &str, repo: &str) -> Result<SessionCensus, EnsureError> {
-    let set = ensure_product_scale_set(pat, owner, repo)?;
-    let mut link = admin_link(pat, owner, repo)?;
-    let token = Secret::new(link.token());
-    let session = create_session(&mut link.transport, set.id, OWNER_NAME, token.expose())
-        .map_err(|err| annotate(err, "create-session"))?;
-    let census = census_of(set.id, &session);
-    delete_session(
-        &mut link.transport,
-        set.id,
-        &session.session_id,
-        token.expose(),
-    )
-    .map_err(map_listen)?;
-    Ok(census)
-}
-
-fn census_of(set_id: i64, session: &QueueSession) -> SessionCensus {
-    let Some(stats) = session.statistics() else {
-        return SessionCensus {
-            set_id,
-            statistics_present: false,
-            available_jobs: 0,
-            acquired_jobs: 0,
-            assigned_jobs: 0,
-            running_jobs: 0,
-            registered_runners: 0,
-            busy_runners: 0,
-            idle_runners: 0,
-        };
-    };
-    SessionCensus {
-        set_id,
-        statistics_present: true,
-        available_jobs: stats.total_available_jobs,
-        acquired_jobs: stats.total_acquired_jobs,
-        assigned_jobs: stats.total_assigned_jobs,
-        running_jobs: stats.total_running_jobs,
-        registered_runners: stats.total_registered_runners,
-        busy_runners: stats.total_busy_runners,
-        idle_runners: stats.total_idle_runners,
-    }
-}
-
-/// What one short session saw. No token and no queue URL.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SessionProbe {
-    /// Scale-set id.
-    pub set_id: i64,
-    /// A `JobAvailable` id was waiting. It was not acquired.
-    pub available: bool,
-}
-
-/// Open one session, poll once, then delete that session.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when registration, the session, or the delete is refused.
-/// The session delete still runs when the poll fails.
-pub fn probe_once(pat: &str, owner: &str, repo: &str) -> Result<SessionProbe, EnsureError> {
-    let set = ensure_product_scale_set(pat, owner, repo)?;
-    let mut link = admin_link(pat, owner, repo)?;
-    let token = Secret::new(link.token());
-    let session = create_session(&mut link.transport, set.id, OWNER_NAME, token.expose())
-        .map_err(|err| annotate(err, "create-session"))?;
-    let polled = poll_available(&mut link, &session);
-    let closed = delete_session(
-        &mut link.transport,
-        set.id,
-        &session.session_id,
-        token.expose(),
-    );
-    let available = polled?;
-    closed.map_err(map_listen)?;
-    Ok(SessionProbe {
-        set_id: set.id,
-        available,
-    })
-}
 
 /// Path relative to the admin origin. Absolute URLs that are not under `base` are rejected.
 #[must_use]
@@ -232,15 +119,6 @@ pub(crate) fn admin_link(pat: &str, owner: &str, repo: &str) -> Result<Link, Ens
         admin,
         base,
     })
-}
-
-fn poll_available(link: &mut Link, session: &QueueSession) -> Result<bool, EnsureError> {
-    let (saved, path) = point_at_queue(link, &session.message_queue_url)?;
-    let advertised = crate::launch::advertise_capacity(crate::launch::job_capacity());
-    let polled = poll_path(link, session, &path, advertised, 0);
-    restore_base(link, saved)?;
-    let polled = polled?;
-    Ok(matches!(offer(&polled), Offer::Acquire { .. }))
 }
 
 /// Move onto an absolute queue host. `None` means the queue is already on this origin.

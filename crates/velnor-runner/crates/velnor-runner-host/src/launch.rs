@@ -9,15 +9,13 @@ use velnor_runner_github::{
     Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail,
 };
 
-use crate::ensure_product_scale_set;
 use crate::error::HostError;
 use crate::journal::Journal;
-use crate::listen::{Link, Secret, admin_link};
-use crate::reconcile::Reconcile;
+use crate::listen::Link;
 use crate::scale_set::EnsureError;
-use crate::worker::ResourceBudget;
 use crate::worker::Started;
 
+mod admission_gate;
 mod bind;
 #[cfg(all(test, unix))]
 mod busy_slot_tests;
@@ -26,32 +24,44 @@ mod completion;
 mod drive;
 #[cfg(all(test, unix))]
 mod effect_tests;
+mod engine_context;
 mod gate;
 mod inspect;
 #[cfg(all(test, unix))]
 mod inspect_tests;
 mod name_taken;
+#[cfg(test)]
 mod preflight;
 mod resource_capacity;
 mod resource_probe;
 mod runner_dir;
 
+pub(crate) use admission_gate::lock_connection;
 pub(crate) use drive::{Drive, Lane, Rest};
+pub(crate) use engine_context::SelectedEngineContext;
 pub(crate) use inspect::classify_inspect;
+pub(crate) use resource_probe::StartPermit;
+pub(crate) use resource_probe::build_pin_status;
 pub(crate) use slot::HOLDS_ROWS_SQL;
 mod mint_origin;
 mod pressure;
 mod session;
 mod slot;
+#[cfg(all(test, unix))]
+#[path = "launch/source_order_tests.rs"]
+mod source_order_tests;
 mod steady;
-mod steps;
+pub(crate) mod steps;
 #[cfg(test)]
 mod subject_tests;
 mod trace;
 mod turn;
+pub(crate) mod verified_images;
 
 pub(crate) use capacity::{install_job_capacity, job_capacity};
+pub(crate) use gate::{gate_line, reconcile_gate};
 pub(crate) use pressure::advertise as advertise_capacity;
+pub(crate) use verified_images::{VerifiedImageIdentity, VerifiedWorkerImages};
 
 #[cfg(test)]
 pub(crate) use capacity::{
@@ -64,84 +74,6 @@ pub(crate) use name_taken::{fail_unstarted, should_ack};
 pub(crate) use steps::{Idle, idle};
 #[cfg(test)]
 pub(crate) use turn::admission;
-
-/// What one launch attempt started. No JIT and no token.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LaunchReport {
-    /// Scale-set id.
-    pub set_id: i64,
-    /// First worker started in this call. Absent when the queue had no job.
-    pub started: Option<Started>,
-    /// Every worker started in this call, in start order. No JIT and no token.
-    pub workers: Vec<Started>,
-}
-
-/// Open one session, start the admitted workers, then delete that session.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when registration, acquire, JIT, Docker, or the
-/// session delete fails. A failed delete is returned even when the poll failed,
-/// because a leaked session blocks the next create. The next open deletes only
-/// session ids this journal recorded. Timeout after acquire keeps the journal
-/// row uncertain and does not acknowledge. `VELNOR_RECONCILE=1` can fail the
-/// journal read before a session exists, and a hold skips it. The session stays
-/// open while an owned launch container is still running.
-pub async fn launch_once(
-    pat: &str,
-    owner: &str,
-    repo: &str,
-    docker: &bollard::Docker,
-    journal: &Journal,
-    resource_budget: ResourceBudget,
-) -> Result<LaunchReport, EnsureError> {
-    let ceiling = job_capacity();
-    let capacity = preflight::run(docker, docker, journal, resource_budget, ceiling).await?;
-    let _capacity = install_job_capacity(capacity.poll_header());
-    let set = ensure_product_scale_set(pat, owner, repo)?;
-    if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
-        let decision = gate::reconcile_gate(journal, docker).await?;
-        eprintln!("reconcile={}", gate::gate_line(&decision));
-        if let Reconcile::Hold { .. } = decision {
-            return Ok(LaunchReport {
-                set_id: set.id,
-                started: None,
-                workers: Vec::new(),
-            });
-        }
-    }
-    let mut link = admin_link(pat, owner, repo)?;
-    let admin = Secret::new(link.token());
-    let (session, row) = session::open_session(&mut link, set.id, admin.expose(), journal).await?;
-    let rest = Rest {
-        owner,
-        repo,
-        pat,
-        resource_budget: Some(resource_budget),
-        static_capacity: capacity.permits_start(),
-        guest_admission: drive::GuestAdmission::Unavailable,
-    };
-    let driven = turn::poll_and_drive(
-        &mut link,
-        set.id,
-        &session,
-        admin.expose(),
-        journal,
-        docker,
-        rest,
-    )
-    .await;
-    let closed = session::close_session(
-        &mut link,
-        set.id,
-        &session.session_id,
-        row,
-        admin.expose(),
-        journal,
-    )
-    .await;
-    report(set.id, driven, closed)
-}
 
 /// Acquire, JIT, and start for one poll. No session create.
 ///
@@ -173,94 +105,6 @@ where
     steps::launch_id(lane, ctx, batch, journal, request_id, start).await
 }
 
-fn report(
-    set_id: i64,
-    driven: Result<Vec<Started>, EnsureError>,
-    closed: Result<(), EnsureError>,
-) -> Result<LaunchReport, EnsureError> {
-    match (driven, closed) {
-        (Ok(workers), Ok(())) => {
-            let started = workers.first().cloned();
-            Ok(LaunchReport {
-                set_id,
-                started,
-                workers,
-            })
-        }
-        (_, Err(error)) | (Err(error), Ok(())) => Err(error),
-    }
-}
-
-async fn scale_session(
-    link: &mut Link,
-    set_id: i64,
-    session: &QueueSession,
-    admin_token: &str,
-    journal: &Journal,
-    docker: &bollard::Docker,
-    rest: Rest<'_>,
-) -> Result<Option<Started>, EnsureError> {
-    if !rest.permits_start() {
-        return Ok(None);
-    }
-    let population = session
-        .statistics()
-        .map_or(0, velnor_runner_github::Statistics::assigned_population);
-    if population <= 0 {
-        return Ok(None);
-    }
-    let resource_budget = rest.resource_budget.ok_or(EnsureError::Unexpected {
-        status: 0,
-        step: "resource budget",
-    })?;
-    let Some(permit) =
-        resource_probe::start_permit(docker, journal, resource_budget, rest.guest_admission).await
-    else {
-        return Ok(None);
-    };
-    let mut ctx = Drive::from_rest(
-        set_id,
-        String::new(),
-        session.token().to_owned(),
-        admin_token.to_owned(),
-        rest,
-    );
-    let Some((engine_id, root_digest)) = resource_probe::engine_binding(docker).await.ok() else {
-        return Ok(None);
-    };
-    if !resource_probe::consume_permit(permit, &engine_id, &root_digest) {
-        return Ok(None);
-    }
-    ctx.docker_engine_id = Some(engine_id);
-    let admin = link.base().to_owned();
-    let mut lane = HostLane {
-        link,
-        admin,
-        queue: None,
-    };
-    let name = runner_name(&session.session_id);
-    steps::scale_unacked(&mut lane, &ctx, journal, &name, |volume, jit, bind| {
-        let volume = volume.to_owned();
-        let payload = jit.to_vec();
-        async move { bind::start_bound(docker, &volume, &payload, resource_budget, &bind).await }
-    })
-    .await
-}
-
-fn runner_name(session_id: &str) -> String {
-    let mut name = String::from("s");
-    for ch in session_id.chars().filter(char::is_ascii_alphanumeric) {
-        name.push(ch);
-        if name.len() == 13 {
-            break;
-        }
-    }
-    if name.len() == 1 {
-        name.push('0');
-    }
-    name
-}
-
 struct Ready<'a> {
     set_id: i64,
     session: &'a QueueSession,
@@ -283,6 +127,27 @@ where
     if !rest.permits_start() {
         return Ok(None);
     }
+    let (connection, images, selected_engine, guest_image) = match (
+        rest.connection,
+        rest.worker_images,
+        rest.selected_engine,
+        rest.guest_image,
+    ) {
+        (Some(connection), Some(images), Some(engine), Some(guest_image))
+            if engine.matches_images(images) =>
+        {
+            (connection, images, engine, guest_image)
+        }
+        _ => return Ok(None),
+    };
+    let mut ctx = Drive::from_rest(
+        ready.set_id,
+        ready.path,
+        ready.session.token().to_owned(),
+        ready.admin_token.to_owned(),
+        rest,
+    );
+    steps::authorize_poll(&mut ctx, ready.polled)?;
     let except = steps::mint_subject(ready.polled);
     if slot::busy_except(journal, docker, capacity, except.as_deref()).await? {
         return Ok(None);
@@ -292,17 +157,10 @@ where
         step: "resource budget",
     })?;
     let Some(permit) =
-        resource_probe::start_permit(docker, journal, resource_budget, rest.guest_admission).await
+        resource_probe::start_permit(docker, journal, resource_budget, rest.pat).await
     else {
         return Ok(None);
     };
-    let mut ctx = Drive::from_rest(
-        ready.set_id,
-        ready.path,
-        ready.session.token().to_owned(),
-        ready.admin_token.to_owned(),
-        rest,
-    );
     let Some((engine_id, root_digest)) = resource_probe::engine_binding(docker).await.ok() else {
         return Ok(None);
     };
@@ -313,7 +171,20 @@ where
     drive_offer(lane, &ctx, ready.polled, journal, |volume, jit, bind| {
         let volume = volume.to_owned();
         let payload = jit.to_vec();
-        async move { bind::start_bound(docker, &volume, &payload, resource_budget, &bind).await }
+        async move {
+            bind::start_bound(
+                docker,
+                &volume,
+                &payload,
+                resource_budget,
+                connection,
+                images,
+                selected_engine,
+                guest_image,
+                &bind,
+            )
+            .await
+        }
     })
     .await
 }
@@ -347,6 +218,15 @@ fn ack_ready(
             resource_budget: None,
             static_capacity: false,
             guest_admission: drive::GuestAdmission::Unavailable,
+            connection: None,
+            host_journal: None,
+            scoped_journal: None,
+            allocated_header: 0,
+            source_authorized: false,
+            admission_state: None,
+            worker_images: None,
+            selected_engine: None,
+            guest_image: None,
         },
     );
     let admin = link.base().to_owned();

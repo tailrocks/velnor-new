@@ -100,7 +100,7 @@ mod tests {
         pump(&mut host, &mut workers, 8)
             .await
             .map_err(|err| err.to_string())?;
-        // Bound 8 used to return before this poll. `launch_once` deletes only after return.
+        // The bounded turn may return before another poll; its scoped caller closes the session.
         assert!(host.polls >= 9, "{}", host.polls);
         Ok(())
     }
