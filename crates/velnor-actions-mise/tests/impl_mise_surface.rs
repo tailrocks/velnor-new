@@ -26,7 +26,7 @@ fn homes() -> Result<ToolHomes, String> {
 /// Every mise-owned argv shape, including the program token.
 fn all_mise_vectors() -> Result<Vec<Vec<OsString>>, String> {
     let catalog = pinned();
-    let specs = vec!["rust@1.98.1".to_owned()];
+    let specs = vec!["rust@1.99.1".to_owned()];
     let payload = vec![OsString::from("cargo"), OsString::from("--version")];
     let mut vectors = vec![
         IsolatedCommand::mise_exec(&specs, &payload)
@@ -177,7 +177,7 @@ fn catalog_pins_ignore_project_selectors() -> Result<(), String> {
     assert_eq!(first.argv(&pinned()), second.argv(&pinned()));
     assert_eq!(
         catalog.tool_spec(PinnedTool::MrBoxington),
-        "mr-boxington@1.21.1",
+        "mr-boxington@1.24.1",
         "the action-owned MBX pin remains exact in the catalog"
     );
     assert!(

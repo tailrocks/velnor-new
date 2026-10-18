@@ -70,8 +70,8 @@ fn verify_selects_cargo_route_with_one_probe() -> Result<(), String> {
     assert_eq!(step.driver(), RouteDriver::Cargo);
     assert_eq!(step.runner(), TestRunner::CargoTest);
     assert_eq!(step.runner().as_str(), "cargo_test");
-    assert_eq!(step.identity_specs(), &["rust@1.98.1".to_owned()]);
-    assert_eq!(step.probe_specs(), &["rust@1.98.1".to_owned()]);
+    assert_eq!(step.identity_specs(), &["rust@1.99.1".to_owned()]);
+    assert_eq!(step.probe_specs(), &["rust@1.99.1".to_owned()]);
     assert!(velnor_actions_contract::is_valid_digest(
         step.cache_format_id()
     ));
@@ -83,7 +83,7 @@ fn verify_selects_cargo_route_with_one_probe() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            "rust@1.99.1",
             "--",
             "cargo",
             "--version",
@@ -109,16 +109,16 @@ fn verify_mbx_route_selects_action_identity_and_rust_probe() -> Result<(), Strin
     .map_err(|err| err.to_string())?;
     assert_eq!(
         step.identity_specs(),
-        &["rust@1.98.1".to_owned(), "mr-boxington@1.21.1".to_owned()]
+        &["rust@1.99.1".to_owned(), "mr-boxington@1.24.1".to_owned()]
     );
-    assert_eq!(step.probe_specs(), &["rust@1.98.1".to_owned()]);
+    assert_eq!(step.probe_specs(), &["rust@1.99.1".to_owned()]);
     let probes = step.probes(&catalog);
     assert_eq!(probes.len(), 1, "route probe covers cargo_test: {probes:?}");
     assert!(
-        !probes[0].iter().any(|arg| arg == "mr-boxington@1.21.1"),
+        !probes[0].iter().any(|arg| arg == "mr-boxington@1.24.1"),
         "Mise must not install or select action-owned MBX: {probes:?}"
     );
-    assert!(probes[0].iter().any(|arg| arg == "rust@1.98.1"));
+    assert!(probes[0].iter().any(|arg| arg == "rust@1.99.1"));
     assert_eq!(probes[0][probes[0].len() - 2], OsString::from("mbx"));
     assert_eq!(probes[0].last(), Some(&OsString::from("--version")));
     assert_eq!(step.target(), "x86_64-unknown-linux-gnu");
@@ -140,7 +140,7 @@ fn verify_nextest_adds_runner_probe_per_driver() -> Result<(), String> {
                 "--no-env",
                 "--no-hooks",
                 "exec",
-                "rust@1.98.1",
+                "rust@1.99.1",
                 "--",
                 "cargo",
                 "--version",
@@ -151,7 +151,7 @@ fn verify_nextest_adds_runner_probe_per_driver() -> Result<(), String> {
                 "--no-env",
                 "--no-hooks",
                 "exec",
-                "rust@1.98.1",
+                "rust@1.99.1",
                 "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
                 "--",
                 "cargo",
@@ -171,7 +171,7 @@ fn verify_nextest_adds_runner_probe_per_driver() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            "rust@1.99.1",
             "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
             "--",
             "mbx",
@@ -180,7 +180,7 @@ fn verify_nextest_adds_runner_probe_per_driver() -> Result<(), String> {
         ])
     );
     assert!(
-        !probes[1].iter().any(|arg| arg == "mr-boxington@1.21.1"),
+        !probes[1].iter().any(|arg| arg == "mr-boxington@1.24.1"),
         "Nextest route must use action-owned MBX, not Mise: {probes:?}"
     );
     Ok(())
@@ -208,7 +208,7 @@ fn verify_commands_match_probes_and_env() -> Result<(), String> {
         ("MISE_EXEC_AUTO_INSTALL", "false"),
         ("MISE_RUSTUP_HOME", "/velnor/rustup"),
         ("MISE_CARGO_HOME", "/velnor/cargo"),
-        ("RUSTUP_TOOLCHAIN", "1.98.1"),
+        ("RUSTUP_TOOLCHAIN", "1.99.1"),
     ] {
         assert!(
             env.iter()
