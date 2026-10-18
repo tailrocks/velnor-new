@@ -21,11 +21,11 @@ pub const SCALE_SET_PROFILE_ID: &str = "local";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ExecutionMode {
-    /// Every eligible workload stays on the hosted profile.
+    /// Every job keeps its configured runner.
     Hosted,
-    /// Eligible workloads use the scale-set profile. Control stays hosted.
+    /// Every Linux/amd64 job uses the configured Scale Set.
     ScaleSet,
-    /// Eligible workloads run on both profiles.
+    /// Eligible Linux/amd64 verification jobs run on both profiles.
     Both,
 }
 
@@ -213,10 +213,10 @@ impl ExecutionConfig {
             None => {
                 workflows
                     || self.default_profile == self.scale_set_profile
-                    || self.overrides.values().any(|item| {
-                        item.role == ExecutionRole::Verification
-                            && item.profile == self.scale_set_profile
-                    })
+                    || self
+                        .overrides
+                        .values()
+                        .any(|item| item.profile == self.scale_set_profile)
             }
         }
     }

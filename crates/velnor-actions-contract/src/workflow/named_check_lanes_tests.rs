@@ -1,7 +1,7 @@
 //! Schema-2 named-check lanes use distinct jobs, report identities and proofs.
 
 use super::*;
-use crate::config::{CheckExecutor, CheckPlatform, CheckRunner};
+use crate::config::{CheckExecutor, CheckPlatform, CheckRunner, ExecutionOverride, ExecutionRole};
 use crate::workflow::{Concurrency, Job, JobTimeout, Permissions, Step, Trigger, WorkflowIr};
 use crate::{VelnorConfig, expand_workflow};
 use std::collections::{BTreeMap, BTreeSet};
@@ -129,6 +129,10 @@ fn ir(checks: &[(&str, CheckRunner)]) -> WorkflowIr {
             &checks.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
         ),
     );
+    jobs.insert(
+        "publish-baseline".to_owned(),
+        job("publish-baseline", None, &["required"]),
+    );
     WorkflowIr {
         name: "CI".to_owned(),
         triggers: Trigger {
@@ -170,6 +174,10 @@ fn both_emits_coherent_named_check_and_required_proof_lanes() {
     );
     assert_eq!(expanded.jobs["check-mac"].runs_on, "macos-15");
     assert!(expanded.jobs.contains_key("check-mac"));
+    for id in ["plan", "required", "publish-baseline"] {
+        assert_eq!(expanded.jobs[id].runs_on, "ubuntu-26.04", "{id}");
+    }
+    assert_eq!(expanded.jobs["publish-baseline"].needs, ["required"]);
     let required: BTreeSet<&str> = expanded.jobs["required"]
         .needs
         .iter()
@@ -226,6 +234,119 @@ fn both_emits_coherent_named_check_and_required_proof_lanes() {
     let decoded: BTreeMap<String, Vec<NamedCheckLane>> =
         serde_json::from_str(encoded).expect("typed lane map");
     assert_eq!(decoded, expected);
+}
+
+#[test]
+fn hosted_mode_keeps_configured_runners_and_one_writer() {
+    let source = ir(&[
+        (
+            "check-linux",
+            runner("ubuntu-26.04", CheckPlatform::LinuxX64),
+        ),
+        ("check-mac", runner("macos-15", CheckPlatform::MacosArm64)),
+    ]);
+    let expanded = expand_workflow(&source, &config(ExecutionMode::Hosted), None)
+        .expect("hosted mode keeps configured runners");
+
+    assert_eq!(expanded.jobs.len(), source.jobs.len());
+    assert_eq!(expanded.jobs["plan"].runs_on, "ubuntu-26.04");
+    assert_eq!(expanded.jobs["check-linux"].runs_on, "ubuntu-26.04");
+    assert_eq!(expanded.jobs["check-mac"].runs_on, "macos-15");
+    assert_eq!(expanded.jobs["required"].runs_on, "ubuntu-26.04");
+    assert_eq!(expanded.jobs["publish-baseline"].runs_on, "ubuntu-26.04");
+}
+
+#[test]
+fn scale_set_routes_linux_jobs_once_including_controls_and_writers() {
+    let source = ir(&[(
+        "check-linux",
+        runner("ubuntu-26.04", CheckPlatform::LinuxX64),
+    )]);
+    let expanded = expand_workflow(&source, &config(ExecutionMode::ScaleSet), None)
+        .expect("scale-set mode routes every Linux job");
+    let runner = "scale-set:velnor+orbstack-linux";
+
+    assert_eq!(expanded.jobs.len(), 4);
+    for id in ["plan", "check-linux", "required", "publish-baseline"] {
+        assert_eq!(expanded.jobs[id].runs_on, runner, "{id}");
+    }
+    assert!(expanded.jobs["plan"].needs.is_empty());
+    assert_eq!(expanded.jobs["required"].needs, ["check-linux"]);
+    assert_eq!(expanded.jobs["publish-baseline"].needs, ["required"]);
+    assert_eq!(
+        expanded.jobs["check-linux"].condition.as_deref(),
+        Some(crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION)
+    );
+}
+
+#[test]
+fn scale_set_mode_rejects_darwin_jobs_with_platform_evidence() {
+    let source = ir(&[("check-mac", runner("macos-15", CheckPlatform::MacosArm64))]);
+    let error = expand_workflow(&source, &config(ExecutionMode::ScaleSet), None)
+        .expect_err("Linux scale set cannot run a Darwin job");
+    assert!(
+        error
+            .to_string()
+            .contains("unsupported_darwin_workload:check-mac:macos-15"),
+        "{error}"
+    );
+}
+
+#[test]
+fn scale_set_default_profile_routes_control_and_writer_roles() {
+    let source = ir(&[(
+        "check-linux",
+        runner("ubuntu-26.04", CheckPlatform::LinuxX64),
+    )]);
+    let mut config = config(ExecutionMode::Hosted);
+    let execution = config.execution.as_mut().expect("execution config");
+    execution.mode = None;
+    execution.default_profile = "local".to_owned();
+
+    let expanded = expand_workflow(&source, &config, None).expect("default Scale Set profile");
+    for id in ["plan", "check-linux", "required", "publish-baseline"] {
+        assert_eq!(
+            expanded.jobs[id].runs_on, "scale-set:velnor+orbstack-linux",
+            "{id}"
+        );
+    }
+}
+
+#[test]
+fn role_overrides_route_control_and_writer_jobs_when_mode_is_unset() {
+    let source = ir(&[(
+        "check-linux",
+        runner("ubuntu-26.04", CheckPlatform::LinuxX64),
+    )]);
+    let mut config = config(ExecutionMode::Hosted);
+    let execution = config.execution.as_mut().expect("execution config");
+    execution.mode = None;
+    execution.overrides.insert(
+        "plan".to_owned(),
+        ExecutionOverride {
+            profile: "local".to_owned(),
+            role: ExecutionRole::Control,
+        },
+    );
+    execution.overrides.insert(
+        "publish-baseline".to_owned(),
+        ExecutionOverride {
+            profile: "local".to_owned(),
+            role: ExecutionRole::Release,
+        },
+    );
+
+    let expanded = expand_workflow(&source, &config, None).expect("role-scoped overrides");
+    assert_eq!(
+        expanded.jobs["plan"].runs_on,
+        "scale-set:velnor+orbstack-linux"
+    );
+    assert_eq!(expanded.jobs["check-linux"].runs_on, "ubuntu-26.04");
+    assert_eq!(expanded.jobs["required"].runs_on, "ubuntu-26.04");
+    assert_eq!(
+        expanded.jobs["publish-baseline"].runs_on,
+        "scale-set:velnor+orbstack-linux"
+    );
 }
 
 #[test]

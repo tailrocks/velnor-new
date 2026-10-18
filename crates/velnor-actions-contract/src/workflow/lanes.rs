@@ -1,7 +1,7 @@
 //! Expand one logical job graph into hosted and scale-set lanes.
 //!
-//! Schema 1 returns the same jobs. Control and single-writer jobs stay
-//! one hosted job. `both` duplicates eligible verification only.
+//! Schema 1 returns the same jobs. `hosted` keeps configured runners.
+//! `scale-set` routes every supported job once. `both` duplicates eligible verification.
 
 use super::ValidatorKind;
 use super::ir::{Job, WorkflowIr};
@@ -13,8 +13,8 @@ pub use super::named_check_lanes::{
 };
 use crate::config::{
     CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION, ExecutionConfig,
-    ExecutionMode, ExecutionRole, VelnorConfig, VerificationRunner, WORKFLOW_TASK_JOB_PREFIX,
-    WorkflowTask,
+    ExecutionMode, ExecutionRole, RUNNER_LABEL_CATALOG, RunsOn, VelnorConfig, VerificationRunner,
+    WORKFLOW_TASK_JOB_PREFIX, WorkflowTask,
 };
 use crate::errors::ContractError;
 use std::collections::BTreeMap;
@@ -154,37 +154,24 @@ pub(super) fn placement_for(
             "role_not_eligible",
         ));
     }
-    if class != LaneClass::Verification {
-        return Ok(Placement::HostedOnly);
-    }
-    if !workflow_task_supports_scale_set(job_id, job, config)? {
-        if execution
-            .overrides
-            .get(job_id)
-            .is_some_and(|over| over.profile == execution.scale_set_profile)
-        {
-            let hosted_only = config.workflow.tasks.iter().any(|task| {
-                matches!(task, WorkflowTask::Build(_) | WorkflowTask::NativeImage(_))
-                    && format!("{WORKFLOW_TASK_JOB_PREFIX}{}", task.id()) == job_id
-            });
-            let issue = if hosted_only {
-                "workflow_task_hosted_only_scale_set_override"
-            } else {
-                "verification_runner_incompatible_with_scale_set"
-            };
-            return Err(ContractError::config(
-                "config.toml",
-                format!("execution.overrides.{job_id}.profile"),
-                issue,
-            ));
-        }
-        return Ok(Placement::HostedOnly);
-    }
+    let supports_scale_set = job_supports_scale_set(job_id, job, config)?;
     if let Some(mode) = dispatch.or(execution.mode) {
         return Ok(match mode {
             ExecutionMode::Hosted => Placement::HostedOnly,
-            ExecutionMode::ScaleSet => Placement::ScaleSetOnly,
-            ExecutionMode::Both => Placement::Both,
+            ExecutionMode::ScaleSet => {
+                require_scale_set_support(supports_scale_set, execution, job_id, job)?;
+                Placement::ScaleSetOnly
+            }
+            ExecutionMode::Both => {
+                if class == LaneClass::Verification
+                    && supports_scale_set
+                    && supports_hosted_scale_set_pair(job)
+                {
+                    Placement::Both
+                } else {
+                    Placement::HostedOnly
+                }
+            }
         });
     }
     let key = execution
@@ -196,6 +183,7 @@ pub(super) fn placement_for(
     if key == execution.hosted_profile {
         Ok(Placement::HostedOnly)
     } else if key == execution.scale_set_profile {
+        require_scale_set_support(supports_scale_set, execution, job_id, job)?;
         Ok(Placement::ScaleSetOnly)
     } else {
         Err(ContractError::config(
@@ -206,19 +194,23 @@ pub(super) fn placement_for(
     }
 }
 
-/// Only Linux-x64 verification variants can use the Linux/amd64 Scale Set.
-fn workflow_task_supports_scale_set(
+/// Check whether a job can run on the Linux/amd64 Scale Set.
+fn job_supports_scale_set(
     job_id: &str,
     job: &Job,
     config: &VelnorConfig,
 ) -> Result<bool, ContractError> {
     if let Some(check) = &job.check_runner {
-        return Ok(
-            check.platform == CheckPlatform::LinuxX64 && check.executor == CheckExecutor::Hosted
-        );
+        return Ok(check.platform == CheckPlatform::LinuxX64);
     }
     let Some(task_id) = job_id.strip_prefix(WORKFLOW_TASK_JOB_PREFIX) else {
-        return Ok(true);
+        return Ok(match RunsOn::parse(&job.runs_on) {
+            Ok(RunsOn::ScaleSet(_)) => true,
+            Ok(RunsOn::Hosted(label)) => {
+                RUNNER_LABEL_CATALOG.contains(&label.as_str()) && !label.ends_with("-arm")
+            }
+            Err(_) => false,
+        });
     };
     let tasks = &config.workflow.tasks;
     let Some(task) = tasks.iter().find(|task| task.id() == task_id) else {
@@ -244,6 +236,54 @@ fn workflow_task_supports_scale_set(
         ));
     }
     Ok(supports_scale_set)
+}
+
+fn supports_hosted_scale_set_pair(job: &Job) -> bool {
+    let hosted_label = match crate::config::RunsOn::parse(&job.runs_on) {
+        Ok(crate::config::RunsOn::Hosted(_)) => true,
+        Ok(crate::config::RunsOn::ScaleSet(_)) | Err(_) => false,
+    };
+    hosted_label
+        && job
+            .check_runner
+            .as_ref()
+            .is_none_or(|runner| runner.executor == CheckExecutor::Hosted)
+}
+
+fn require_scale_set_support(
+    supports_scale_set: bool,
+    execution: &ExecutionConfig,
+    job_id: &str,
+    job: &Job,
+) -> Result<(), ContractError> {
+    if supports_scale_set {
+        return Ok(());
+    }
+    let issue = if job.runs_on.starts_with("macos-")
+        || job
+            .check_runner
+            .as_ref()
+            .is_some_and(|runner| runner.platform != CheckPlatform::LinuxX64)
+    {
+        format!("unsupported_darwin_workload:{job_id}:{}", job.runs_on)
+    } else {
+        format!(
+            "unsupported_workload_for_linux_amd64_scale_set:{job_id}:{}",
+            job.runs_on
+        )
+    };
+    let key = if execution
+        .overrides
+        .get(job_id)
+        .is_some_and(|over| over.profile == execution.scale_set_profile)
+    {
+        format!("execution.overrides.{job_id}.profile")
+    } else if execution.default_profile == execution.scale_set_profile {
+        "execution.default_profile".to_owned()
+    } else {
+        "execution.mode".to_owned()
+    };
+    Err(ContractError::config("config.toml", key, issue))
 }
 
 fn role_matches(role: ExecutionRole, class: LaneClass) -> bool {
