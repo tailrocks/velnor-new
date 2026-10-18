@@ -90,6 +90,7 @@ fn run_control(
     let bytes = serde_json::to_vec(&request)?;
     let mut child = Command::new(HOST)
         .arg(FLAG)
+        .arg(timeout_ms.to_string())
         .env_clear()
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -101,6 +102,35 @@ fn run_control(
     input.write_all(&bytes)?;
     drop(input);
     Ok(child.wait_with_output()?)
+}
+
+fn wait_bounded(
+    child: &mut std::process::Child,
+    bound: Duration,
+) -> Result<std::process::ExitStatus, Box<dyn Error>> {
+    let deadline = Instant::now() + bound;
+    loop {
+        if let Some(status) = child.try_wait()? {
+            return Ok(status);
+        }
+        if Instant::now() >= deadline {
+            child.kill()?;
+            let _ = child.wait()?;
+            return Err("helper exceeded its deadline".into());
+        }
+        thread::sleep(Duration::from_millis(2));
+    }
+}
+
+fn start_open_stdin(timeout_arg: &str) -> Result<std::process::Child, Box<dyn Error>> {
+    Ok(Command::new(HOST)
+        .arg(FLAG)
+        .arg(timeout_arg)
+        .env_clear()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?)
 }
 
 #[test]
@@ -147,5 +177,96 @@ fn helper_rejects_unknown_request_fields_without_a_boolean_result() -> Result<()
     let output = run_control(state.path(), 2_000, true)?;
     assert!(!output.status.success());
     assert_eq!(output.stdout, Vec::<u8>::new());
+    Ok(())
+}
+
+#[test]
+fn parent_deadline_bounds_stdin_held_open() -> Result<(), Box<dyn Error>> {
+    let mut child = start_open_stdin("120")?;
+    let started = Instant::now();
+    let status = wait_bounded(&mut child, Duration::from_secs(2))?;
+    let output = child.wait_with_output()?;
+    assert!(!status.success());
+    assert_eq!(output.stdout, Vec::<u8>::new());
+    assert!(started.elapsed() < Duration::from_secs(2));
+    Ok(())
+}
+
+#[test]
+fn parent_deadline_bounds_partial_stdin() -> Result<(), Box<dyn Error>> {
+    let mut child = start_open_stdin("120")?;
+    let Some(stdin) = child.stdin.as_mut() else {
+        return Err("helper stdin missing".into());
+    };
+    stdin.write_all(br#"{"operation":"drain""#)?;
+    let status = wait_bounded(&mut child, Duration::from_secs(2))?;
+    let output = child.wait_with_output()?;
+    assert!(!status.success());
+    assert_eq!(output.stdout, Vec::<u8>::new());
+    Ok(())
+}
+
+#[test]
+fn malformed_timeout_is_rejected_before_reading_stdin() -> Result<(), Box<dyn Error>> {
+    let mut child = start_open_stdin("0120")?;
+    let status = wait_bounded(&mut child, Duration::from_secs(3))?;
+    let output = child.wait_with_output()?;
+    assert!(!status.success());
+    assert_eq!(output.stdout, Vec::<u8>::new());
+    Ok(())
+}
+
+#[test]
+fn child_and_boolean_output_share_the_input_deadline() -> Result<(), Box<dyn Error>> {
+    let state = OwnedState::new()?;
+    let listener = state.listener()?;
+    let (release_peer, wait_for_release) = mpsc::channel();
+    let peer = thread::spawn(move || -> Result<(), Box<dyn Error + Send + Sync>> {
+        let mut stream = accept(&listener)?;
+        read_request(&mut stream)?;
+        wait_for_release.recv_timeout(Duration::from_secs(5))?;
+        Ok(())
+    });
+    let request = serde_json::to_vec(&serde_json::json!({
+        "operation": "drain",
+        "state": state.path(),
+        "timeout_ms": 2_000,
+    }))?;
+    let mut child = Command::new(HOST)
+        .arg(FLAG)
+        .arg("2000")
+        .env_clear()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()?;
+    let Some(mut input) = child.stdin.take() else {
+        return Err("helper stdin missing".into());
+    };
+    let writer = thread::spawn(move || -> Result<(), Box<dyn Error + Send + Sync>> {
+        thread::sleep(Duration::from_secs(1));
+        input.write_all(&request)?;
+        drop(input);
+        Ok(())
+    });
+    let started = Instant::now();
+    let status = wait_bounded(&mut child, Duration::from_secs(5))?;
+    let output = child.wait_with_output()?;
+    writer
+        .join()
+        .map_err(|_| "input writer panicked")?
+        .map_err(|error| error.to_string())?;
+    let released = release_peer.send(()).is_ok();
+    peer.join()
+        .map_err(|_| "peer panicked")?
+        .map_err(|error| error.to_string())?;
+    assert!(status.success());
+    assert_eq!(output.stdout, b"false\n");
+    assert!(released, "the helper did not finish its child operation");
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < Duration::from_millis(3_400),
+        "input and child phases took {elapsed:?}, exceeding one 2,000 ms budget"
+    );
     Ok(())
 }
