@@ -12,7 +12,8 @@ use fixtures::{
 use velnor_runner_github::workflow_run::{
     GITHUB_API_VERSION, PullRequest, PullRequestMismatch, ReferencedWorkflow, RepositoryTarget,
     SourceMismatch, WorkflowRefKind, WorkflowRun, WorkflowRunError, get_pull_request,
-    get_repository_scope, get_workflow_run, verify_pull_request, verify_workflow_source,
+    get_repository_scope, get_workflow_run, verify_pull_request,
+    verify_pull_request_run_association, verify_workflow_source,
 };
 use velnor_runner_github::{
     CompleteSourceMetadata, Exchange, Method, SessionRequest, SourceMetadata, Transport,
@@ -365,6 +366,92 @@ fn pull_request_check_keeps_run_head_and_merge_identity_separate() -> Result<(),
         .map_err(|_| "separate current merge")?;
     assert_eq!(changed.run_head_sha, HEAD_SHA);
     assert_eq!(changed.merge_commit_sha.as_deref(), Some(BASE_SHA));
+    Ok(())
+}
+
+#[test]
+fn historical_pull_request_source_ignores_mutable_nested_refs_but_keeps_identity_checks()
+-> Result<(), &'static str> {
+    let mut run: WorkflowRun = serde_json::from_str(&pull_request_run_json()).map_err(|_| "run")?;
+    let source = CompleteSourceMetadata {
+        owner_name: OWNER,
+        repository_name: REPOSITORY,
+        job_workflow_ref: "ChainArgos/java-monorepo/.github/workflows/ci.yml@refs/pull/2110/merge",
+        workflow_run_id: RUN_ID,
+        event_name: "pull_request",
+    };
+
+    run.head_sha = "dddddddddddddddddddddddddddddddddddddddd".to_owned();
+    let pull = run.pull_requests.first_mut().ok_or("pull request")?;
+    pull.head.reference = "updated-feature-name".to_owned();
+    pull.head.sha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee".to_owned();
+    pull.base.reference = "updated-base-name".to_owned();
+    pull.base.sha = "ffffffffffffffffffffffffffffffffffffffff".to_owned();
+    assert_eq!(
+        verify_workflow_source(source, &run, target())
+            .map_err(|_| "historical pull request source")?
+            .head_sha,
+        run.head_sha
+    );
+    let association =
+        verify_pull_request_run_association(&run, 2110, REPOSITORY_ID, HEAD_REPOSITORY_ID)
+            .map_err(|_| "historical pull request association")?;
+    assert_eq!(association.run_head_sha, run.head_sha);
+    assert_eq!(association.head_repository_id, HEAD_REPOSITORY_ID);
+    assert_eq!(association.base_repository_id, REPOSITORY_ID);
+
+    let mut wrong_fork = run.clone();
+    let pull = wrong_fork.pull_requests.first_mut().ok_or("pull request")?;
+    let head_repository = pull.head.repository.as_mut().ok_or("head repository")?;
+    head_repository.id += 1;
+    assert_eq!(
+        verify_workflow_source(source, &wrong_fork, target()),
+        Err(SourceMismatch::WorkflowRef)
+    );
+    assert_eq!(
+        verify_pull_request_run_association(&wrong_fork, 2110, REPOSITORY_ID, HEAD_REPOSITORY_ID,),
+        Err(PullRequestMismatch::HeadRepository)
+    );
+
+    let mut wrong_base = run.clone();
+    let pull = wrong_base.pull_requests.first_mut().ok_or("pull request")?;
+    let base_repository = pull.base.repository.as_mut().ok_or("base repository")?;
+    base_repository.id += 1;
+    assert_eq!(
+        verify_workflow_source(source, &wrong_base, target()),
+        Err(SourceMismatch::WorkflowRef)
+    );
+
+    let mut duplicate = run.clone();
+    let pull = duplicate
+        .pull_requests
+        .first()
+        .ok_or("pull request")?
+        .clone();
+    duplicate.pull_requests.push(pull);
+    assert_eq!(
+        verify_workflow_source(source, &duplicate, target()),
+        Err(SourceMismatch::WorkflowRef)
+    );
+    assert_eq!(
+        verify_pull_request_run_association(&duplicate, 2110, REPOSITORY_ID, HEAD_REPOSITORY_ID,),
+        Err(PullRequestMismatch::Number)
+    );
+    assert_eq!(
+        verify_pull_request_run_association(&run, 2111, REPOSITORY_ID, HEAD_REPOSITORY_ID,),
+        Err(PullRequestMismatch::Number)
+    );
+    let mut wrong_repository = run.clone();
+    wrong_repository.repository.id += 1;
+    assert_eq!(
+        verify_pull_request_run_association(
+            &wrong_repository,
+            2110,
+            REPOSITORY_ID,
+            HEAD_REPOSITORY_ID,
+        ),
+        Err(PullRequestMismatch::BaseRepository)
+    );
     Ok(())
 }
 

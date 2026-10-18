@@ -1,9 +1,15 @@
 //! GitHub workflow and pull request source records.
 
+mod base_update;
+mod execution;
+mod git_commit;
+mod nonce_commit;
+mod reference;
 mod source;
+mod timeline;
 mod workflow_ref;
 
-use source::verify_repository_scope;
+use source::{verify_repository_identity, verify_repository_scope};
 
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -11,9 +17,28 @@ use serde::de::DeserializeOwned;
 use crate::TransportFail;
 use crate::session::{Exchange, Method, SessionRequest, Transport};
 
+pub use base_update::{
+    PullRequestBaseUpdateReceipt, PullRequestBaseUpdateRequest, update_pull_request_base,
+};
+pub use execution::{
+    PullRequestExecutionContext, PullRequestExecutionError, PullRequestExecutionMismatch,
+    PullRequestNoncePublication, PullRequestRetargetAcknowledgement, VerifiedPullRequestExecution,
+    verify_pull_request_execution,
+};
+pub use git_commit::{
+    GitCommit, GitCommitParent, GitCommitTree, get_git_commit, is_commit_ancestor,
+};
+pub use nonce_commit::{PullRequestNonceCommitReceipt, create_pull_request_nonce_commit};
+pub use reference::{GitReference, GitReferenceObject, publish_pull_request_nonce_commit};
 pub use source::{
     PullRequestMismatch, RepositoryTarget, SourceMismatch, VerifiedPullRequest,
-    VerifiedRepositoryScope, VerifiedWorkflowSource, verify_pull_request, verify_workflow_source,
+    VerifiedPullRequestRunAssociation, VerifiedRepositoryIdentity, VerifiedRepositoryScope,
+    VerifiedWorkflowSource, verify_pull_request, verify_pull_request_run_association,
+    verify_workflow_source,
+};
+pub use timeline::{
+    BaseRefChangedEvent, PullRequestBaseHistory, get_pull_request_base_history, new_retarget_event,
+    ordered_base_changes, retarget_event_after_acknowledgement,
 };
 pub use workflow_ref::{VerifiedJobWorkflowRef, WorkflowRefKind};
 
@@ -219,6 +244,31 @@ where
     let path = repository_path(expected.owner, expected.name, "")?;
     let repository: GitHubRepository = get_json(transport, path, token)?;
     verify_repository_scope(&repository, expected).map_err(|_| WorkflowRunError::RepositoryMismatch)
+}
+
+/// Authenticate an exact repository identity without assuming its visibility.
+///
+/// This is used for a pull request head repository, which may be a fork. The base repository
+/// still uses [`get_repository_scope`] and must be private.
+///
+/// # Errors
+///
+/// Gives [`WorkflowRunError`] when the endpoint, token, or repository identity is incorrect.
+pub fn get_repository_identity<T>(
+    transport: &mut T,
+    expected: RepositoryTarget<'_>,
+    token: &str,
+) -> Result<VerifiedRepositoryIdentity, WorkflowRunError>
+where
+    T: Transport + ?Sized,
+{
+    if expected.id <= 0 {
+        return Err(WorkflowRunError::InvalidRequest);
+    }
+    let path = repository_path(expected.owner, expected.name, "")?;
+    let repository: GitHubRepository = get_json(transport, path, token)?;
+    verify_repository_identity(&repository, expected)
+        .map_err(|_| WorkflowRunError::RepositoryMismatch)
 }
 
 /// Get one pull request from the GitHub REST API.

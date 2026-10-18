@@ -44,6 +44,41 @@ impl VerifiedRepositoryScope {
     }
 }
 
+/// Repository identity returned only after an authenticated exact-scope lookup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifiedRepositoryIdentity {
+    id: i64,
+    owner: String,
+    name: String,
+    private: bool,
+}
+
+impl VerifiedRepositoryIdentity {
+    /// Immutable repository ID from GitHub.
+    #[must_use]
+    pub const fn id(&self) -> i64 {
+        self.id
+    }
+
+    /// Canonical owner login from GitHub.
+    #[must_use]
+    pub fn owner(&self) -> &str {
+        &self.owner
+    }
+
+    /// Canonical repository name from GitHub.
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Whether GitHub marks the repository private.
+    #[must_use]
+    pub const fn is_private(&self) -> bool {
+        self.private
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum RepositoryScopeMismatch {
     Id,
@@ -74,6 +109,30 @@ pub(super) fn verify_repository_scope(
         id: repository.id,
         owner: repository.owner.login.clone(),
         name: repository.name.clone(),
+    })
+}
+
+pub(super) fn verify_repository_identity(
+    repository: &super::GitHubRepository,
+    expected: RepositoryTarget<'_>,
+) -> Result<VerifiedRepositoryIdentity, RepositoryScopeMismatch> {
+    if expected.id <= 0 || repository.id != expected.id {
+        return Err(RepositoryScopeMismatch::Id);
+    }
+    let full_name = format!("{}/{}", expected.owner, expected.name);
+    if expected.owner.is_empty()
+        || expected.name.is_empty()
+        || !same_name(&repository.owner.login, expected.owner)
+        || !same_name(&repository.name, expected.name)
+        || !same_name(&repository.full_name, &full_name)
+    {
+        return Err(RepositoryScopeMismatch::Name);
+    }
+    Ok(VerifiedRepositoryIdentity {
+        id: repository.id,
+        owner: repository.owner.login.clone(),
+        name: repository.name.clone(),
+        private: repository.private,
     })
 }
 
@@ -129,6 +188,19 @@ pub struct VerifiedPullRequest {
     ///
     /// The workflow run record does not prove that the run used this commit.
     pub merge_commit_sha: Option<String>,
+}
+
+/// Pull request identity tied to an immutable workflow run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifiedPullRequestRunAssociation {
+    /// Pull request number from the workflow ref and run record.
+    pub number: i64,
+    /// Base repository ID from the immutable workflow run.
+    pub base_repository_id: i64,
+    /// Head repository ID from the immutable workflow run.
+    pub head_repository_id: i64,
+    /// Workflow run commit. Its role requires a separate Git graph check.
+    pub run_head_sha: String,
 }
 
 /// Workflow source values that are different from the GitHub API values.
@@ -287,6 +359,74 @@ pub fn verify_pull_request(
     })
 }
 
+/// Verify the immutable run, repository, fork, and pull request association.
+///
+/// This function does not compare mutable head or base refs from the run's PR snapshot.
+///
+/// # Errors
+///
+/// Gives [`PullRequestMismatch`] when the run does not identify the exact PR scope.
+pub fn verify_pull_request_run_association(
+    run: &WorkflowRun,
+    pull_number: i64,
+    expected_base_repository_id: i64,
+    expected_head_repository_id: i64,
+) -> Result<VerifiedPullRequestRunAssociation, PullRequestMismatch> {
+    if run.event != "pull_request"
+        || pull_number <= 0
+        || expected_base_repository_id <= 0
+        || expected_head_repository_id <= 0
+    {
+        return Err(PullRequestMismatch::Event);
+    }
+    if run.repository.id != expected_base_repository_id {
+        return Err(PullRequestMismatch::BaseRepository);
+    }
+    let mut matching = run
+        .pull_requests
+        .iter()
+        .filter(|pull| pull.number == pull_number);
+    let Some(run_pull) = matching.next() else {
+        return Err(PullRequestMismatch::Number);
+    };
+    if matching.next().is_some() {
+        return Err(PullRequestMismatch::Number);
+    }
+    let run_head_repository = run
+        .head_repository
+        .as_ref()
+        .ok_or(PullRequestMismatch::HeadRepository)?;
+    let pull_head_repository = run_pull
+        .head
+        .repository
+        .as_ref()
+        .ok_or(PullRequestMismatch::HeadRepository)?;
+    let pull_base_repository = run_pull
+        .base
+        .repository
+        .as_ref()
+        .ok_or(PullRequestMismatch::BaseRepository)?;
+    let head_repository_id = run_head_repository.id;
+    if head_repository_id <= 0
+        || head_repository_id != expected_head_repository_id
+        || pull_head_repository.id != head_repository_id
+    {
+        return Err(PullRequestMismatch::HeadRepository);
+    }
+    if pull_base_repository.id != expected_base_repository_id {
+        return Err(PullRequestMismatch::BaseRepository);
+    }
+    if !valid_commit_sha(&run.head_sha) {
+        return Err(PullRequestMismatch::CommitSha);
+    }
+    Ok(VerifiedPullRequestRunAssociation {
+        number: pull_number,
+        base_repository_id: run.repository.id,
+        head_repository_id,
+        run_head_sha: run.head_sha.clone(),
+    })
+}
+
 fn matching_run_pull<'a>(
     run: &'a WorkflowRun,
     pull: &PullRequest,
@@ -410,9 +550,28 @@ fn pull_request_ref_matches(run: &WorkflowRun, reference: &str) -> bool {
     let Some(pull_request) = pull_requests.next() else {
         return false;
     };
-    pull_requests.next().is_none()
-        && run.head_branch.as_deref() == Some(pull_request.head.reference.as_str())
-        && run.head_sha == pull_request.head.sha
+    if pull_requests.next().is_some() {
+        return false;
+    }
+    let Some(head_repository) = run.head_repository.as_ref() else {
+        return false;
+    };
+    if head_repository.id <= 0 {
+        return false;
+    }
+    let Some(run_head_repository) = pull_request.head.repository.as_ref() else {
+        return false;
+    };
+    let Some(run_base_repository) = pull_request.base.repository.as_ref() else {
+        return false;
+    };
+    run_head_repository.id > 0
+        && !run_head_repository.name.is_empty()
+        && run_head_repository.id == head_repository.id
+        && same_name(&run_head_repository.name, &head_repository.name)
+        && run_base_repository.id == run.repository.id
+        && !run_base_repository.name.is_empty()
+        && same_name(&run_base_repository.name, &run.repository.name)
 }
 
 fn valid_commit_sha(sha: &str) -> bool {
