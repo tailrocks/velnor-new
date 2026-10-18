@@ -2,6 +2,7 @@
 
 use std::future::Future;
 
+use sha2::{Digest, Sha256};
 use velnor_runner_github::{Poll, Transport};
 
 use crate::error::HostError;
@@ -110,12 +111,29 @@ async fn validate_scope_binding(
         .source_authorization_binding()
         .await
         .map_err(super::map_journal)?;
+    let digest = canonical_binding_digest(connection)?;
     if binding.connection_id() == &connection.connection_id
         && binding.connection_id() == scoped.connection_id()
         && binding.scale_set_id() == set_id
+        && binding.binding_digest() == digest
     {
         Ok(())
     } else {
         Err(EnsureError::Uncertain)
     }
+}
+
+fn canonical_binding_digest(
+    connection: &crate::config::RepositoryConnection,
+) -> Result<String, EnsureError> {
+    let identity = connection
+        .canonical_identity_bytes()
+        .map_err(|_| EnsureError::Uncertain)?;
+    let digest = Sha256::digest(identity);
+    let mut output = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write as _;
+        write!(&mut output, "{byte:02x}").map_err(|_| EnsureError::Uncertain)?;
+    }
+    Ok(output)
 }

@@ -89,6 +89,20 @@ async fn acquire_rejects_connection_scale_set_and_request_identity_mismatches_be
             .await
             .is_err()
     );
+    let mut wrong_repository = fixture.binding.clone();
+    wrong_repository.repository = "owner/other-repository".to_owned();
+    assert!(
+        validate_scope_binding(&wrong_repository, &fixture.scope, SET_ID)
+            .await
+            .is_err()
+    );
+    let mut wrong_policy = fixture.binding.clone();
+    wrong_policy.source_policy.events.clear();
+    assert!(
+        validate_scope_binding(&wrong_policy, &fixture.scope, SET_ID)
+            .await
+            .is_err()
+    );
     Ok(())
 }
 
