@@ -338,6 +338,7 @@ fn open_directory_path(path: &Path) -> Result<OwnedFd, StageError> {
         Mode::empty(),
     )
     .map_err(|_| "cache_stage_parent_open_failed")?;
+    validate_ancestor(&fd)?;
     for component in path.components() {
         match component {
             Component::RootDir => {}
@@ -355,6 +356,7 @@ fn open_directory_path(path: &Path) -> Result<OwnedFd, StageError> {
                     Mode::empty(),
                 )
                 .map_err(|_| "cache_stage_parent_open_failed")?;
+                validate_ancestor(&fd)?;
             }
             Component::CurDir | Component::ParentDir | Component::Prefix(_) => {
                 return Err("cache_stage_path_invalid");
@@ -362,6 +364,23 @@ fn open_directory_path(path: &Path) -> Result<OwnedFd, StageError> {
         }
     }
     Ok(fd)
+}
+
+fn validate_ancestor(fd: &OwnedFd) -> Result<(), StageError> {
+    let stat = rustix::fs::fstat(fd.as_fd()).map_err(|_| "cache_stage_parent_stat_failed")?;
+    let owner = stat.st_uid;
+    let root_uid = rustix::process::Uid::ROOT.as_raw();
+    let current_uid = crate::process_owner::effective_uid();
+    let mode = stat.st_mode & 0o7777;
+    let writable_by_others = mode & 0o0022 != 0;
+    let protected_by_sticky_bit = mode & 0o1000 != 0;
+    if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::Directory
+        || (owner != root_uid && owner != current_uid)
+        || (writable_by_others && !protected_by_sticky_bit)
+    {
+        return Err("cache_stage_ancestor_owner_or_mode_invalid");
+    }
+    Ok(())
 }
 
 fn validate_parent(fd: &OwnedFd) -> Result<(), StageError> {

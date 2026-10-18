@@ -83,3 +83,76 @@ fn explicit_rewrite_requires_the_current_claim() -> Result<(), Box<dyn std::erro
     assert_eq!(actual, b"after");
     Ok(())
 }
+
+#[test]
+fn stage_creation_accepts_a_sticky_shared_temporary_ancestor()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = tempfile::tempdir()?;
+    let shared = root.path().join("shared-temp");
+    std::fs::create_dir(&shared)?;
+    std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o1777))?;
+    let runner_temp = shared.join("runner-temp");
+    let workspace = root.path().join("workspace");
+    std::fs::create_dir(&runner_temp)?;
+    std::fs::create_dir(&workspace)?;
+    std::fs::set_permissions(&runner_temp, std::fs::Permissions::from_mode(0o700))?;
+    let key = format!("mise-tools-v2-payload-v3-{}", "b".repeat(64));
+    let context = StageContext::normal(&runner_temp, &workspace, &key)?;
+
+    let writer = create_stage(&context)?;
+    let claim = writer.finish()?;
+    assert_eq!(claim.length(), 0);
+    assert_eq!(
+        std::fs::metadata(context.action_path())?
+            .permissions()
+            .mode()
+            & 0o7777,
+        0o600
+    );
+    Ok(())
+}
+
+#[test]
+fn stage_creation_rejects_a_writable_nonsticky_ancestor_before_creating_file()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = tempfile::tempdir()?;
+    let shared = root.path().join("shared-temp");
+    std::fs::create_dir(&shared)?;
+    std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o777))?;
+    let runner_temp = shared.join("runner-temp");
+    let workspace = root.path().join("workspace");
+    std::fs::create_dir(&runner_temp)?;
+    std::fs::create_dir(&workspace)?;
+    std::fs::set_permissions(&runner_temp, std::fs::Permissions::from_mode(0o700))?;
+    let key = format!("mise-tools-v2-payload-v3-{}", "c".repeat(64));
+    let context = StageContext::normal(&runner_temp, &workspace, &key)?;
+
+    assert!(create_stage(&context).is_err());
+    assert!(!context.action_path().exists());
+    Ok(())
+}
+
+#[test]
+fn stage_creation_rejects_a_symlink_replacing_the_trusted_root()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = tempfile::tempdir()?;
+    let context = context(root.path())?;
+    let original = root.path().join("runner-temp");
+    let moved = root.path().join("runner-temp-moved");
+    std::fs::rename(&original, &moved)?;
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&moved, &original)?;
+
+    assert!(create_stage(&context).is_err());
+    assert!(
+        !moved
+            .join(
+                context
+                    .action_path()
+                    .file_name()
+                    .ok_or("missing stage leaf")?
+            )
+            .exists()
+    );
+    Ok(())
+}
