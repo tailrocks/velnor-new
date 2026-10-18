@@ -152,6 +152,85 @@ fn nested_index_rejects_foreign_tags_and_wrong_descriptor_identity() -> Result<(
 }
 
 #[test]
+fn accepts_only_the_two_local_tag_and_digest_spellings_and_keeps_evidence() -> Result<(), HostError>
+{
+    let request = worker_request()?;
+    let (name, _) = request.image_reference.split_once(':').unwrap_or_default();
+    let digest = request.image_index_digest.as_deref().unwrap_or_default();
+    for tag in [
+        request.image_reference.clone(),
+        format!("docker.io/library/{}", request.image_reference),
+    ] {
+        for repo_digest in [
+            format!("{name}@{digest}"),
+            format!("docker.io/library/{name}@{digest}"),
+        ] {
+            let mut observation = containerd_observation(&request);
+            if let ImageImportObservation::Containerd {
+                repo_tags,
+                repo_digests,
+                ..
+            } = &mut observation
+            {
+                *repo_tags = vec![tag.clone()];
+                *repo_digests = vec![repo_digest.clone()];
+            }
+            let receipt = ImageImportInspection::verified(
+                &request,
+                request.engine_id(),
+                request.docker_root_digest(),
+                request.daemon_architecture(),
+                observation.clone(),
+            )?;
+            assert_eq!(receipt.image_id(), digest);
+            let serialized = observation.receipt()?;
+            assert_eq!(
+                ImageImportObservation::from_receipt(&serialized)?,
+                observation
+            );
+            assert!(serialized.contains(&tag));
+            assert!(serialized.contains(&repo_digest));
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn rejects_nonlocal_or_extended_tag_and_repo_digest_spellings() -> Result<(), HostError> {
+    let request = worker_request()?;
+    let (name, _) = request.image_reference.split_once(':').unwrap_or_default();
+    let digest = request.image_index_digest.as_deref().unwrap_or_default();
+    for tag in [
+        format!("ghcr.io/library/{}", request.image_reference),
+        format!("docker.io/other/{}", request.image_reference),
+        format!("{}-foreign", request.image_reference),
+    ] {
+        let mut observation = containerd_observation(&request);
+        if let ImageImportObservation::Containerd { repo_tags, .. } = &mut observation {
+            *repo_tags = vec![tag];
+        }
+        assert!(observation.validate_for(&request).is_err());
+    }
+    for repo_digest in [
+        format!("ghcr.io/library/{name}@{digest}"),
+        format!("docker.io/other/{name}@{digest}"),
+        format!("{name}@{}0", digest),
+    ] {
+        let mut observation = containerd_observation(&request);
+        if let ImageImportObservation::Containerd { repo_digests, .. } = &mut observation {
+            *repo_digests = vec![repo_digest];
+        }
+        assert!(observation.validate_for(&request).is_err());
+    }
+    let mut duplicated = containerd_observation(&request);
+    if let ImageImportObservation::Containerd { repo_tags, .. } = &mut duplicated {
+        repo_tags.push(request.image_reference.clone());
+    }
+    assert!(duplicated.validate_for(&request).is_err());
+    Ok(())
+}
+
+#[test]
 fn classic_store_requires_config_id_and_exact_worker_tag() -> Result<(), HostError> {
     let request = worker_request()?;
     let observation = ImageImportObservation::Classic {

@@ -50,7 +50,7 @@ impl ImageImportObservation {
             } => {
                 if image_id != &request.config_digest
                     || repo_tags.len() != 1
-                    || repo_tags[0] != request.image_reference
+                    || !accepted_local_tag(&repo_tags[0], &request.image_reference)
                 {
                     return Err(HostError::Identity);
                 }
@@ -114,12 +114,14 @@ fn validate_containerd(
         ),
     ]);
     let expected_repo_digest = format!("docker.io/library/{name}@{digest}");
+    let bare_repo_digest = format!("{name}@{digest}");
     let repo_digests_match = repo_digests.is_empty()
-        || (repo_digests.len() == 1 && repo_digests[0] == expected_repo_digest);
+        || (repo_digests.len() == 1
+            && (repo_digests[0] == expected_repo_digest || repo_digests[0] == bare_repo_digest));
     if image_id != digest
         || !valid_digest(image_id)
         || repo_tags.len() != 1
-        || repo_tags[0] != request.image_reference
+        || !accepted_local_tag(&repo_tags[0], &request.image_reference)
         || !repo_digests_match
         || descriptor.digest != digest
         || descriptor.media_type != media_type
@@ -130,4 +132,8 @@ fn validate_containerd(
         return Err(HostError::Identity);
     }
     Ok(())
+}
+
+fn accepted_local_tag(observed: &str, expected: &str) -> bool {
+    observed == expected || observed == format!("docker.io/library/{expected}")
 }
