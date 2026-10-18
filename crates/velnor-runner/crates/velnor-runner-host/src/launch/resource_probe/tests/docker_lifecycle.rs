@@ -27,6 +27,19 @@ const ROOT: &str = "/var/lib/docker";
 const REVISION: &str = "b7c3309d33451f8e256a7e255239e9dc9285f042";
 const BINDING: &str = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 const RUNTIME_ID: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const SELECTED_INFO: &str = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64"}"#;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RequestKind {
+    Info,
+    Create,
+    Inspect,
+    Start,
+    Wait,
+    Logs,
+    Remove,
+    Other,
+}
 
 #[tokio::test]
 async fn completed_probe_cleans_the_exact_container_before_returning_metrics() -> Result<(), String>
@@ -35,6 +48,7 @@ async fn completed_probe_cleans_the_exact_container_before_returning_metrics() -
     let cleanup_delay = Duration::from_millis(80);
     let mut responses = start_responses(&projection)?;
     responses.push(http(200, "{}"));
+    responses.push(http(200, SELECTED_INFO));
     responses.push(http(200, r#"{"StatusCode":0,"Error":null}"#));
     responses.push(http(200, &inspect(&projection, "exited", 0)?));
     responses.push(raw_http(200, log_frame(&record_bytes())?));
@@ -50,16 +64,21 @@ async fn completed_probe_cleans_the_exact_container_before_returning_metrics() -
     )
     .await;
     let requests = docker.finish_observed().await?;
+    let mut expected = start_request_order();
+    expected.extend([
+        RequestKind::Start,
+        RequestKind::Info,
+        RequestKind::Wait,
+        RequestKind::Inspect,
+        RequestKind::Logs,
+    ]);
+    expected.extend(cleanup_request_order());
+    assert_request_order(&requests, &expected)?;
     let output = output.map_err(|error| format!("{error}; requests: {requests:?}"))?;
     let observed_at = output.observed_at;
     assert!(observed_at.elapsed() >= cleanup_delay);
 
-    assert_eq!(requests.len(), 20);
-    assert!(requests[1].starts_with("POST /containers/create?"));
-    assert!(requests[5].ends_with("/start HTTP/1.1"));
-    assert!(requests[6].contains("/wait?"));
-    assert!(requests[8].contains("/logs?"));
-    assert!(requests[13].starts_with("DELETE /containers/"));
+    assert_eq!(requests.len(), 22);
     assert!(
         journal
             .active_probe()
@@ -100,37 +119,7 @@ async fn lost_or_invalid_execution_results_cleanup_without_a_permit() -> Result<
     ] {
         let (scratch, journal, projection) = prepared().await?;
         let mut responses = start_responses(&projection)?;
-        let cleanup_state = match failure {
-            Failure::StartLost => {
-                responses.push(closed());
-                responses.push(http(200, &inspect(&projection, "created", 0)?));
-                "created"
-            }
-            Failure::WaitLost => {
-                responses.push(http(200, "{}"));
-                responses.push(closed());
-                "exited"
-            }
-            Failure::WaitNonzero => {
-                responses.push(http(200, "{}"));
-                responses.push(http(200, r#"{"StatusCode":9,"Error":null}"#));
-                "exited"
-            }
-            Failure::LogsLost => {
-                responses.push(http(200, "{}"));
-                responses.push(http(200, r#"{"StatusCode":0,"Error":null}"#));
-                responses.push(http(200, &inspect(&projection, "exited", 0)?));
-                responses.push(closed());
-                "exited"
-            }
-            Failure::InvalidRecord => {
-                responses.push(http(200, "{}"));
-                responses.push(http(200, r#"{"StatusCode":0,"Error":null}"#));
-                responses.push(http(200, &inspect(&projection, "exited", 0)?));
-                responses.push(raw_http(200, log_frame(b"{}\n")?));
-                "exited"
-            }
-        };
+        let cleanup_state = append_failure_responses(&mut responses, &projection, failure)?;
         append_cleanup(
             &mut responses,
             &projection,
@@ -153,11 +142,7 @@ async fn lost_or_invalid_execution_results_cleanup_without_a_permit() -> Result<
             "failure case {failure:?} unexpectedly yielded metrics"
         );
         let requests = docker.finish_observed().await?;
-        assert!(
-            requests
-                .iter()
-                .any(|request| request.starts_with("DELETE "))
-        );
+        assert_request_order(&requests, &failure_request_order(failure))?;
         assert!(
             journal
                 .active_probe()
@@ -204,7 +189,7 @@ async fn prepared_restart_aborts_and_unverified_provider_stays_closed() -> Resul
     Ok(())
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 enum Failure {
     StartLost,
     WaitLost,
@@ -266,13 +251,179 @@ fn start_responses(projection: &ProbeProjection) -> Result<Vec<DockerResponse>, 
             r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#,
         ),
         http(200, &format!(r#"{{"Id":"{CONTAINER_ID}","Warnings":[]}}"#)),
+        http(200, SELECTED_INFO),
         http(200, &inspect(projection, "created", 0)?),
         http(200, &inspect(projection, "created", 0)?),
-        http(
-            200,
-            r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64"}"#,
-        ),
+        http(200, SELECTED_INFO),
     ])
+}
+
+fn start_request_order() -> Vec<RequestKind> {
+    vec![
+        RequestKind::Info,
+        RequestKind::Create,
+        RequestKind::Info,
+        RequestKind::Inspect,
+        RequestKind::Inspect,
+        RequestKind::Info,
+    ]
+}
+
+fn cleanup_request_order() -> Vec<RequestKind> {
+    vec![
+        RequestKind::Info,
+        RequestKind::Inspect,
+        RequestKind::Inspect,
+        RequestKind::Info,
+        RequestKind::Remove,
+        RequestKind::Info,
+        RequestKind::Inspect,
+        RequestKind::Inspect,
+        RequestKind::Inspect,
+        RequestKind::Inspect,
+        RequestKind::Info,
+    ]
+}
+
+fn recovery_request_order() -> Vec<RequestKind> {
+    vec![
+        RequestKind::Info,
+        RequestKind::Info,
+        RequestKind::Inspect,
+        RequestKind::Inspect,
+        RequestKind::Info,
+        RequestKind::Remove,
+        RequestKind::Info,
+        RequestKind::Inspect,
+        RequestKind::Inspect,
+        RequestKind::Inspect,
+        RequestKind::Inspect,
+        RequestKind::Info,
+    ]
+}
+
+fn timeout_request_order() -> Vec<RequestKind> {
+    let mut expected = start_request_order();
+    expected.extend([
+        RequestKind::Start,
+        RequestKind::Info,
+        RequestKind::Wait,
+        RequestKind::Inspect,
+        RequestKind::Logs,
+        RequestKind::Info,
+        RequestKind::Info,
+    ]);
+    expected
+}
+
+fn assert_start_rebind_blocks_effects(requests: &[String]) -> Result<(), String> {
+    assert_request_order(
+        requests,
+        &[
+            RequestKind::Info,
+            RequestKind::Create,
+            RequestKind::Info,
+            RequestKind::Inspect,
+            RequestKind::Inspect,
+            RequestKind::Info,
+            RequestKind::Info,
+        ],
+    )?;
+    if requests.iter().any(|request| {
+        request.starts_with(&format!("POST /containers/{CONTAINER_ID}/start?"))
+            || request.starts_with(&format!("POST /containers/{CONTAINER_ID}/stop?"))
+            || request.starts_with(&format!("DELETE /containers/{CONTAINER_ID}?"))
+    }) {
+        return Err(format!("rebound engine received an effect: {requests:?}"));
+    }
+    Ok(())
+}
+
+fn assert_recovered_container_cleanup(requests: &[String]) -> Result<(), String> {
+    assert_request_order(requests, &recovery_request_order())
+}
+
+fn append_failure_responses(
+    responses: &mut Vec<DockerResponse>,
+    projection: &ProbeProjection,
+    failure: Failure,
+) -> Result<&'static str, String> {
+    if matches!(failure, Failure::StartLost) {
+        responses.push(closed());
+        responses.push(http(200, SELECTED_INFO));
+        responses.push(http(200, &inspect(projection, "created", 0)?));
+        return Ok("created");
+    }
+    responses.extend([http(200, "{}"), http(200, SELECTED_INFO)]);
+    match failure {
+        Failure::WaitLost => responses.push(closed()),
+        Failure::WaitNonzero => responses.push(http(200, r#"{"StatusCode":9,"Error":null}"#)),
+        Failure::LogsLost => responses.extend([
+            http(200, r#"{"StatusCode":0,"Error":null}"#),
+            http(200, &inspect(projection, "exited", 0)?),
+            closed(),
+        ]),
+        Failure::InvalidRecord => responses.extend([
+            http(200, r#"{"StatusCode":0,"Error":null}"#),
+            http(200, &inspect(projection, "exited", 0)?),
+            raw_http(200, log_frame(b"{}\n")?),
+        ]),
+        Failure::StartLost => unreachable!(),
+    }
+    Ok("exited")
+}
+
+fn failure_request_order(failure: Failure) -> Vec<RequestKind> {
+    let mut expected = start_request_order();
+    expected.push(RequestKind::Start);
+    match failure {
+        Failure::StartLost => expected.extend([RequestKind::Info, RequestKind::Inspect]),
+        Failure::WaitLost | Failure::WaitNonzero => {
+            expected.extend([RequestKind::Info, RequestKind::Wait]);
+        }
+        Failure::LogsLost | Failure::InvalidRecord => expected.extend([
+            RequestKind::Info,
+            RequestKind::Wait,
+            RequestKind::Inspect,
+            RequestKind::Logs,
+        ]),
+    }
+    expected.extend(cleanup_request_order());
+    expected
+}
+
+fn assert_request_order(requests: &[String], expected: &[RequestKind]) -> Result<(), String> {
+    let actual = requests
+        .iter()
+        .map(|request| request_kind(request))
+        .collect::<Vec<_>>();
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(format!(
+            "unexpected Docker request order: {actual:?}; requests: {requests:?}"
+        ))
+    }
+}
+
+fn request_kind(request: &str) -> RequestKind {
+    let mut parts = request.split_whitespace();
+    let (Some(method), Some(target)) = (parts.next(), parts.next()) else {
+        return RequestKind::Other;
+    };
+    let path = target.split('?').next().unwrap_or(target);
+    match (method, path) {
+        ("GET", "/info") => RequestKind::Info,
+        ("POST", "/containers/create") => RequestKind::Create,
+        ("GET", path) if path.starts_with("/containers/") && path.ends_with("/json") => {
+            RequestKind::Inspect
+        }
+        ("POST", path) if path == format!("/containers/{CONTAINER_ID}/start") => RequestKind::Start,
+        ("POST", path) if path == format!("/containers/{CONTAINER_ID}/wait") => RequestKind::Wait,
+        ("GET", path) if path == format!("/containers/{CONTAINER_ID}/logs") => RequestKind::Logs,
+        ("DELETE", path) if path == format!("/containers/{CONTAINER_ID}") => RequestKind::Remove,
+        _ => RequestKind::Other,
+    }
 }
 
 fn append_cleanup(
@@ -360,7 +511,7 @@ fn record_bytes() -> Vec<u8> {
         "{{\"schema_version\":1,\"docker_root_free_bytes\":{},\"docker_root_total_bytes\":{},\"memory_available_bytes\":{},\"load_milli\":125,\"memory_psi_some_avg10_bps\":null}}\n",
         32_u64 * 1024 * 1024 * 1024,
         40_u64 * 1024 * 1024 * 1024,
-        9_u64 * 1024 * 1024 * 1024,
+        10_u64 * 1024 * 1024 * 1024,
     )
     .into_bytes()
 }

@@ -5,10 +5,11 @@ use serde_json::Value;
 async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Result<(), String> {
     let (scratch, journal, projection) = prepared().await?;
     let info = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
-    let delay = Duration::from_millis(150);
+    let delay = Duration::from_millis(600);
     let mut responses = start_responses(&projection)?;
     responses.extend([
         http(200, "{}"),
+        http(200, info),
         http(200, r#"{"StatusCode":0,"Error":null}"#),
         http(200, &inspect(&projection, "exited", 0)?),
         raw_http(200, log_frame(&record_bytes())?),
@@ -21,11 +22,12 @@ async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Resul
         &journal,
         &projection,
         16 * 1024 * 1024 * 1024,
-        &Deadline::test_with_timeouts(Duration::from_millis(800), Duration::from_millis(80)),
+        &Deadline::test_with_timeouts(Duration::from_secs(10), Duration::from_millis(500)),
     )
     .await;
     assert!(matches!(result, Err(HostError::DockerTimeout)));
     let requests = docker.finish_observed().await?;
+    assert_request_order(&requests, &timeout_request_order())?;
     assert!(requests.iter().any(|request| request.contains("/info")));
     let retained = journal
         .active_probe()
@@ -65,6 +67,7 @@ async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Resul
     let recovery_requests = recovery.finish_observed().await?;
     let sample = result.map_err(|error| format!("{error}; requests: {recovery_requests:?}"))?;
     assert!(sample.is_none());
+    assert_recovered_container_cleanup(&recovery_requests)?;
     assert_eq!(recovery_requests.len(), 12);
     assert!(
         recovery_requests
