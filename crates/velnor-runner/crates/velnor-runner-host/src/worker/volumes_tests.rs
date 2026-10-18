@@ -93,7 +93,7 @@ async fn created_volumes_have_exact_worker_and_role_labels() -> Result<(), Strin
         .collect();
     let stub = DockerStub::open(responses)?;
     let mounts = crate::worker::dind_mounts(WORKER).map_err(|error| error.to_string())?;
-    let created = create_named_volumes(&stub.docker, WORKER, &mounts).await;
+    let created = create_named_volumes(&stub.docker, WORKER, &mounts, || async { Ok(()) }).await;
     let requests = stub.finish().await?;
 
     assert_eq!(created, Ok(()));

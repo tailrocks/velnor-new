@@ -3,7 +3,7 @@ use std::sync::Mutex;
 
 use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
 use crate::launch_harness::{Mode, Script};
-use crate::stage::PairEngine;
+use crate::stage::{PairEngine, StageAdmission};
 use crate::worker::{CreateProjection, WorkerVolumeRole, WorkerVolumeVerification};
 use crate::{HostError, Journal, Outcome};
 
@@ -167,7 +167,13 @@ impl PairEngine for Engine {
         }
     }
 
-    async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError> {
+    async fn prepare_volumes(
+        &self,
+        volume: &str,
+        _admission: &StageAdmission,
+        _expected: &SelectedEngineContext,
+        _images: &VerifiedWorkerImages,
+    ) -> Result<(), HostError> {
         self.plant_worker_volumes(volume)
     }
 

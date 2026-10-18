@@ -5,7 +5,9 @@ use std::sync::Mutex;
 
 use super::HostError;
 use super::launch::{SelectedEngineContext, VerifiedWorkerImages};
-use super::stage::{Forget, PairEngine, PairSink, PairStop, PartialPair, decide, drive};
+use super::stage::{
+    Forget, PairEngine, PairSink, PairStop, PartialPair, StageAdmission, decide, drive,
+};
 use super::worker::guest_image::test_support::TestGuestImage;
 use super::worker::{
     CreateProjection, ResourceBudget, WorkerVolumeRole, WorkerVolumeVerification,
@@ -105,7 +107,13 @@ impl PairEngine for Fake {
         }
     }
 
-    async fn prepare_volumes(&self, _volume: &str) -> Result<(), HostError> {
+    async fn prepare_volumes(
+        &self,
+        _volume: &str,
+        _admission: &StageAdmission,
+        _expected: &SelectedEngineContext,
+        _images: &VerifiedWorkerImages,
+    ) -> Result<(), HostError> {
         push(&self.events, "volumes")
     }
 
@@ -211,9 +219,33 @@ async fn drive_test<E: PairEngine, S: PairSink>(
         &input.images,
         &input.selected_engine,
         &input.file,
+        StageAdmission::test_fixture_for(&input.selected_engine),
         sink,
     )
     .await
+}
+
+#[tokio::test]
+async fn expired_admission_stops_before_the_first_docker_effect() -> Result<(), HostError> {
+    let engine = Fake::new();
+    let input = TestGuestImage::new()?;
+    let result = drive(
+        &engine,
+        "worker_a",
+        test_resource_budget()?,
+        b"opaque-jit",
+        PairStop::Jit,
+        &input.connection,
+        &input.images,
+        &input.selected_engine,
+        &input.file,
+        StageAdmission::test_stale_fixture_for(&input.selected_engine),
+        &Forget,
+    )
+    .await;
+    assert_eq!(result, Err(HostError::Ownership));
+    assert!(engine.events().is_empty());
+    Ok(())
 }
 
 #[tokio::test]

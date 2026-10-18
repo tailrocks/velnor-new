@@ -29,8 +29,7 @@ async fn unresolved_volume_row_keeps_occupancy(label: &str, uncertain: bool) -> 
         .await
         .map_err(|err| err.to_string())?;
     engine
-        .prepare_volumes(&volume)
-        .await
+        .plant_worker_volumes(&volume)
         .map_err(|err| err.to_string())?;
     if uncertain {
         journal
@@ -122,8 +121,7 @@ async fn completed_worker_exit_recovers_ids_cleans_pair_and_starts_new_generatio
         .await
         .map_err(|err| err.to_string())?;
     engine
-        .prepare_volumes(&next_volume)
-        .await
+        .plant_worker_volumes(&next_volume)
         .map_err(|err| err.to_string())?;
     assert_eq!(
         engine
@@ -155,8 +153,7 @@ async fn create_unbound_pair(
         .await
         .map_err(|err| err.to_string())?;
     engine
-        .prepare_volumes(&volume)
-        .await
+        .plant_worker_volumes(&volume)
         .map_err(|err| err.to_string())?;
     let resource_budget = test_resource_budget().map_err(|err| err.to_string())?;
     let dind = engine
@@ -246,8 +243,7 @@ async fn foreign_container_at_owned_name_is_not_adopted_or_removed() -> Result<(
         .await
         .map_err(|err| err.to_string())?;
     engine
-        .prepare_volumes(&volume)
-        .await
+        .plant_worker_volumes(&volume)
         .map_err(|err| err.to_string())?;
     let foreign = crate::launch_test_support::hex(77);
     engine

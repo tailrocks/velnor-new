@@ -69,6 +69,7 @@ async fn incomplete_source_stops_scoped_launch_before_docker() -> Result<(), Str
                 guest_admission: GuestAdmission::FreshSample,
                 connection: Some(connection),
                 host_journal: Some(&journal),
+                release_read_secret: None,
                 scoped_journal: Some(&scope),
                 allocated_header: 1,
                 source_authorized: false,

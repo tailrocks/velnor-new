@@ -1,6 +1,7 @@
 //! Named volumes belong to one durable worker identity.
 
 use std::collections::HashMap;
+use std::future::Future;
 
 use bollard::Docker;
 use bollard::errors::Error as DockerError;
@@ -97,11 +98,16 @@ pub(crate) enum WorkerVolumeRemoval {
     StillPresent,
 }
 
-pub(crate) async fn create_named_volumes(
+pub(crate) async fn create_named_volumes<F, Fut>(
     docker: &Docker,
     worker: &str,
     mounts: &[PlannedMount],
-) -> Result<(), HostError> {
+    mut before_create: F,
+) -> Result<(), HostError>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<(), HostError>>,
+{
     let volumes = volumes(worker)?;
     if mounts.len() != volumes.len()
         || mounts.iter().zip(&volumes).any(|(mount, volume)| {
@@ -116,6 +122,7 @@ pub(crate) async fn create_named_volumes(
         }
     }
     for volume in volumes {
+        before_create().await?;
         let created = docker_deadline(docker.create_volume(VolumeCreateRequest {
             name: Some(volume.name.clone()),
             labels: Some(labels(&volume.worker, volume.role.label())),

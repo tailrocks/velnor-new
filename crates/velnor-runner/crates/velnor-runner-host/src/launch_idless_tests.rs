@@ -4,7 +4,7 @@ use crate::launch::{Admit, SelectedEngineContext, VerifiedWorkerImages, admissio
 use crate::launch_harness::{
     absent, assigned_wait, available, open, started_progress, started_wait,
 };
-use crate::stage::PairEngine;
+use crate::stage::{PairEngine, StageAdmission};
 use crate::worker::{CreateProjection, WorkerVolumeRole, WorkerVolumeVerification};
 use crate::{HostError, Journal, Outcome};
 
@@ -27,7 +27,13 @@ impl PairEngine for Idle {
         }
     }
 
-    async fn prepare_volumes(&self, _volume: &str) -> Result<(), HostError> {
+    async fn prepare_volumes(
+        &self,
+        _volume: &str,
+        _admission: &StageAdmission,
+        _expected: &SelectedEngineContext,
+        _images: &VerifiedWorkerImages,
+    ) -> Result<(), HostError> {
         Ok(())
     }
 

@@ -18,6 +18,8 @@ use support::{
     selected_engine, test_images,
 };
 
+#[path = "runner_tests/docker_pair.rs"]
+mod docker_pair;
 #[path = "runner_tests/support.rs"]
 mod support;
 
@@ -160,7 +162,7 @@ async fn exact_acquire_jit_and_bounded_docker_preflight_use_one_physical_nonce()
         &docker.docker,
         &selected,
         &images,
-        move |_, _, _| {
+        move |_, _, _, _| {
             callback_calls.fetch_add(1, Ordering::SeqCst);
             std::future::ready(Ok(Started {
                 runner_id: "runner-container".to_owned(),
@@ -237,7 +239,7 @@ async fn expiry_after_acquire_keeps_charge_and_sends_no_jit_or_docker_request() 
         &docker.docker,
         &selected,
         &images,
-        move |_, _, _| {
+        move |_, _, _, _| {
             callback_calls.fetch_add(1, Ordering::SeqCst);
             std::future::ready(Ok(Started {
                 runner_id: "unexpected-runner".to_owned(),

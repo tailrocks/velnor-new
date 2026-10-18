@@ -28,7 +28,7 @@ pub(in crate::launch) async fn launch_scoped<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: Transport + Lane,
-    S: FnOnce(&str, &[u8], crate::launch::bind::Bind) -> F,
+    S: FnOnce(&str, &[u8], crate::launch::bind::Bind, crate::stage::StageAdmission) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     let (connection, scoped, state) = scoped_context(ctx)?;

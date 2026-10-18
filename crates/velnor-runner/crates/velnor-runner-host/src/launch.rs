@@ -40,6 +40,8 @@ pub(crate) use admission_gate::lock_connection;
 pub(crate) use drive::{Drive, Lane, Rest};
 pub(crate) use engine_context::SelectedEngineContext;
 pub(crate) use inspect::classify_inspect;
+pub(crate) use resource_probe::ReleaseReadSecret;
+pub(crate) use resource_probe::StartObservationWitness;
 pub(crate) use resource_probe::StartPermit;
 pub(crate) use resource_probe::build_pin_status;
 pub(crate) use slot::HOLDS_ROWS_SQL;
@@ -156,8 +158,11 @@ where
         status: 0,
         step: "resource budget",
     })?;
+    let Some(release_read_secret) = rest.release_read_secret else {
+        return Ok(None);
+    };
     let Some(permit) =
-        resource_probe::start_permit(docker, journal, resource_budget, rest.pat).await
+        resource_probe::start_permit(docker, journal, resource_budget, release_read_secret).await
     else {
         return Ok(None);
     };
@@ -180,7 +185,7 @@ where
         docker,
         selected_engine,
         images,
-        |volume, jit, bind| {
+        |volume, jit, bind, admission| {
             let volume = volume.to_owned();
             let payload = jit.to_vec();
             async move {
@@ -193,6 +198,7 @@ where
                     images,
                     selected_engine,
                     guest_image,
+                    admission,
                     &bind,
                 )
                 .await
@@ -233,6 +239,7 @@ fn ack_ready(
             guest_admission: drive::GuestAdmission::Unavailable,
             connection: None,
             host_journal: None,
+            release_read_secret: None,
             scoped_journal: None,
             allocated_header: 0,
             source_authorized: false,

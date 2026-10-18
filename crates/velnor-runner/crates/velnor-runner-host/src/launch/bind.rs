@@ -4,7 +4,7 @@ use super::{SelectedEngineContext, VerifiedWorkerImages};
 use crate::config::RepositoryConnection;
 use crate::error::HostError;
 use crate::journal::{ConnectionJournal, Journal};
-use crate::stage::{PairSink, PairStop, drive};
+use crate::stage::{PairSink, PairStop, StageAdmission, drive};
 use crate::worker::guest_image::GuestImageFile;
 use crate::worker::{ResourceBudget, Started};
 
@@ -69,6 +69,7 @@ pub(super) async fn start_bound(
     images: &VerifiedWorkerImages,
     expected_engine: &SelectedEngineContext,
     guest_image: &GuestImageFile,
+    admission: StageAdmission,
     bind: &Bind,
 ) -> Result<Started, HostError> {
     let partial = Box::pin(drive(
@@ -81,6 +82,7 @@ pub(super) async fn start_bound(
         images,
         expected_engine,
         guest_image,
+        admission,
         bind,
     ))
     .await?;

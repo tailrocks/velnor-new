@@ -9,8 +9,7 @@ use crate::daemon_lock::{EngineLineageGuard, canonical_journal_path};
 use crate::docker_client::{connect_unix, docker_deadline};
 use crate::error::HostError;
 use crate::journal::{CapacityLimits, EngineContext, Journal};
-use crate::keychain::load_secret;
-use crate::launch::SelectedEngineContext;
+use crate::launch::{ReleaseReadSecret, SelectedEngineContext};
 use crate::launch_blocking::ListenFault;
 
 const CONFIG_RELOAD_PAUSE: Duration = Duration::from_secs(2);
@@ -23,28 +22,20 @@ const CONFIG_RELOAD_PAUSE: Duration = Duration::from_secs(2);
 ///
 /// Returns [`ListenFault`] if the selected engine, journal, or local controller fails to start.
 pub fn run_host_blocking(config: &HostConfig, state: &Path) -> Result<(), ListenFault> {
-    ensure_release_read_credential(config)?;
+    let release_read_secret = ReleaseReadSecret::load(config)?;
     let _capacity = crate::launch::install_job_capacity(config.max_jobs());
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .map_err(|_| HostError::Journal)?;
-    runtime.block_on(run_controller(config.clone(), state))
+    runtime.block_on(run_controller(config.clone(), state, release_read_secret))
 }
 
-fn ensure_release_read_credential(config: &HostConfig) -> Result<(), HostError> {
-    let reference = config
-        .release_read_credential_ref()
-        .ok_or(HostError::Keychain)?;
-    let secret = load_secret(reference.service(), reference.account())?;
-    let token = std::str::from_utf8(secret.as_slice()).map_err(|_| HostError::Keychain)?;
-    if token.trim().is_empty() {
-        return Err(HostError::EmptySecret);
-    }
-    Ok(())
-}
-
-async fn run_controller(mut current: HostConfig, state: &Path) -> Result<(), ListenFault> {
+async fn run_controller(
+    mut current: HostConfig,
+    state: &Path,
+    mut _release_read_secret: ReleaseReadSecret,
+) -> Result<(), ListenFault> {
     let docker = connect_unix(&current.docker.endpoint)?;
     let selected_info = docker_deadline(docker.info())
         .await?
@@ -101,14 +92,20 @@ async fn run_controller(mut current: HostConfig, state: &Path) -> Result<(), Lis
         if let Some(next) = next
             && next != current
         {
-            match apply_config_transition(&current, &next, &mut effects).await {
-                Ok(removed) => {
-                    current = next;
-                    pending_retirements.extend(removed);
+            match ReleaseReadSecret::load(&next) {
+                Ok(next_secret) => {
+                    match apply_config_transition(&current, &next, &mut effects).await {
+                        Ok(removed) => {
+                            current = next;
+                            _release_read_secret = next_secret;
+                            pending_retirements.extend(removed);
+                        }
+                        Err(error) => {
+                            eprintln!("host controller config transition held: {error}");
+                        }
+                    }
                 }
-                Err(error) => {
-                    eprintln!("host controller config transition held: {error}");
-                }
+                Err(error) => eprintln!("host controller release-reader reload held: {error}"),
             }
         }
         discover_retirements(state, &current, &mut pending_retirements);

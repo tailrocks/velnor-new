@@ -216,8 +216,12 @@ impl Turn<'_> {
             capacity::job_capacity()
         };
         let host_journal = self.rest.host_journal.unwrap_or(self.journal);
-        let sample =
-            super::resource_probe::pressure_sample(self.docker, host_journal, self.rest.pat).await;
+        let sample = match self.rest.release_read_secret {
+            Some(secret) => {
+                super::resource_probe::pressure_sample(self.docker, host_journal, secret).await
+            }
+            None => None,
+        };
         let next = super::pressure::adjust_with_sample(self.capacity, running_now, ceiling, sample);
         if self.target == self.capacity {
             self.target = next;

@@ -10,7 +10,7 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::oneshot;
 
 use crate::HostError;
-use crate::stage::{Forget, PairStop, drive};
+use crate::stage::{Forget, PairStop, StageAdmission, drive};
 use crate::worker::guest_image::test_support::TestGuestImage;
 use crate::worker::{
     VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
@@ -36,6 +36,7 @@ async fn empty_jit_does_not_create() -> Result<(), String> {
                 &input.images,
                 &input.selected_engine,
                 &input.file,
+                StageAdmission::test_fixture_for(&input.selected_engine),
                 &Forget,
             )
             .await,

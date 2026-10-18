@@ -16,12 +16,15 @@ mod lifecycle;
 mod ops;
 mod projection;
 mod provider;
+mod release_secret;
 
 pub(in crate::launch) use provider::VerifiedWorkerImageIdentityProof;
 
 mod record;
 mod recover;
 mod sample;
+
+pub(crate) use release_secret::ReleaseReadSecret;
 
 /// Report only whether this binary has a valid trusted release source pin.
 /// This does not claim that GitHub, the release, or any Docker image is ready.
@@ -43,9 +46,10 @@ pub(crate) async fn prepare_worker_images(
     docker: &Docker,
     journal: &Journal,
     expected: &SelectedEngineContext,
-    release_read_secret: &str,
+    release_read_secret: &ReleaseReadSecret,
 ) -> Result<VerifiedWorkerImages, crate::error::HostError> {
-    provider::prepare_worker_images(docker, journal, expected, release_read_secret).await
+    let token = release_read_secret.as_provider_token()?;
+    provider::prepare_worker_images(docker, journal, expected, token).await
 }
 
 #[cfg(test)]
@@ -56,9 +60,10 @@ pub(super) async fn start_permit(
     docker: &Docker,
     journal: &Journal,
     budget: ResourceBudget,
-    pat: &str,
+    release_read_secret: &ReleaseReadSecret,
 ) -> Option<StartPermit> {
-    let provider = match ReleaseImageProvider::from_compiled_source(pat) {
+    let token = release_read_secret.as_provider_token().ok()?;
+    let provider = match ReleaseImageProvider::from_compiled_source(token) {
         Ok(provider) => provider,
         Err(error) => {
             eprintln!("resource_probe=unavailable reason={}", error.code());
@@ -77,9 +82,10 @@ pub(super) async fn start_permit(
 pub(super) async fn pressure_sample(
     docker: &Docker,
     journal: &Journal,
-    pat: &str,
+    release_read_secret: &ReleaseReadSecret,
 ) -> Option<super::pressure::Sample> {
-    let provider = match ReleaseImageProvider::from_compiled_source(pat) {
+    let token = release_read_secret.as_provider_token().ok()?;
+    let provider = match ReleaseImageProvider::from_compiled_source(token) {
         Ok(provider) => provider,
         Err(error) => {
             eprintln!(

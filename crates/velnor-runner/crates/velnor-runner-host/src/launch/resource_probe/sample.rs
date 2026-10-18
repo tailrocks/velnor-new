@@ -186,6 +186,7 @@ impl StartPermit {
 }
 
 /// Freshness evidence for an already charged reservation; it cannot reserve capacity.
+#[derive(Debug, Clone)]
 pub(crate) struct StartObservationWitness {
     engine_id: String,
     docker_root_digest: String,
@@ -206,6 +207,29 @@ impl StartObservationWitness {
             && self.docker_root_digest == docker_root_digest
             && self.sample_generation_id == sample_generation_id
             && self.observed_at.elapsed() <= MAX_OBSERVATION_AGE
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_fixture_for(
+        engine_id: &str,
+        docker_root_digest: &str,
+        stale: bool,
+    ) -> (Self, String) {
+        static NEXT_GENERATION: AtomicU64 = AtomicU64::new(0);
+        let generation = format!("{:032x}", NEXT_GENERATION.fetch_add(1, Ordering::Relaxed));
+        let mut observed_at = Instant::now();
+        if stale {
+            observed_at -= MAX_OBSERVATION_AGE + Duration::from_millis(1);
+        }
+        (
+            Self {
+                engine_id: engine_id.to_owned(),
+                docker_root_digest: docker_root_digest.to_owned(),
+                sample_generation_id: generation.clone(),
+                observed_at,
+            },
+            generation,
+        )
     }
 
     #[cfg(test)]

@@ -8,7 +8,7 @@ use crate::journal::{ConnectionJournal, Journal};
 use crate::worker::guest_image::GuestImageFile;
 use zeroize::Zeroize;
 
-use super::{SelectedEngineContext, VerifiedWorkerImages};
+use super::{ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages};
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
@@ -63,6 +63,8 @@ pub(crate) struct Rest<'a> {
     pub(crate) connection: Option<&'a RepositoryConnection>,
     /// Shared host journal for capacity and selected-engine probes.
     pub(crate) host_journal: Option<&'a Journal>,
+    /// Dedicated host credential for verified release and probe access.
+    pub(crate) release_read_secret: Option<&'a ReleaseReadSecret>,
     /// Scoped journal for connection-owned records.
     pub(crate) scoped_journal: Option<&'a ConnectionJournal>,
     /// Header capacity allocated by the shared host controller.

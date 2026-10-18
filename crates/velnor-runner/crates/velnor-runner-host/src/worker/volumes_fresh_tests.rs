@@ -11,7 +11,7 @@ async fn existing_owned_volume_prevents_all_create_requests() -> Result<(), Stri
         responses.push(http(200, &volume_json(name, WORKER, role)));
         let stub = DockerStub::open(responses)?;
         let mounts = dind_mounts(WORKER).map_err(|error| error.to_string())?;
-        let result = create_named_volumes(&stub.docker, WORKER, &mounts).await;
+        let result = create_named_volumes(&stub.docker, WORKER, &mounts, || async { Ok(()) }).await;
         let requests = stub.finish().await?;
         assert_eq!(result, Err(HostError::Ownership));
         assert_eq!(requests.len(), index + 1);
@@ -25,11 +25,56 @@ async fn uncertain_volume_inspect_prevents_all_create_requests() -> Result<(), S
     for status in [401, 403, 500, 503] {
         let stub = DockerStub::open(vec![http(status, r#"{"message":"unavailable"}"#)])?;
         let mounts = dind_mounts(WORKER).map_err(|error| error.to_string())?;
-        let result = create_named_volumes(&stub.docker, WORKER, &mounts).await;
+        let result = create_named_volumes(&stub.docker, WORKER, &mounts, || async { Ok(()) }).await;
         let requests = stub.finish().await?;
         assert_eq!(result, Err(HostError::Docker));
         assert_eq!(requests.len(), 1);
         assert!(requests[0].starts_with("GET "));
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn failed_freshness_check_stops_the_next_volume_create() -> Result<(), String> {
+    for failed_check in 0..3 {
+        let names = volume_names();
+        let mut responses: Vec<_> = names
+            .iter()
+            .map(|_| http(404, r#"{"message":"missing"}"#))
+            .collect();
+        responses.extend(
+            names
+                .iter()
+                .take(failed_check)
+                .map(|(name, role)| http(201, &volume_json(name, WORKER, role))),
+        );
+        let stub = DockerStub::open(responses)?;
+        let mounts = dind_mounts(WORKER).map_err(|error| error.to_string())?;
+        let mut checks = 0;
+        let result = create_named_volumes(&stub.docker, WORKER, &mounts, || {
+            let check = checks;
+            checks += 1;
+            async move {
+                if check == failed_check {
+                    Err(HostError::Ownership)
+                } else {
+                    Ok(())
+                }
+            }
+        })
+        .await;
+        let requests = stub.finish().await?;
+
+        assert_eq!(result, Err(HostError::Ownership));
+        assert_eq!(checks, failed_check + 1);
+        assert_eq!(requests.len(), 3 + failed_check);
+        assert_eq!(
+            requests
+                .iter()
+                .filter(|request| request.starts_with("POST "))
+                .count(),
+            failed_check
+        );
     }
     Ok(())
 }

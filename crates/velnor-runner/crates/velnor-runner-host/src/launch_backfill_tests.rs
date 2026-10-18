@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::launch::{Admit, admission, drive_offer, statistics_blocked};
 use crate::launch_harness::{absent, assigned_wait, ctx, open};
 use crate::launch_test_support::{Engine, hex, script, seed_done};
-use crate::stage::{PairStop, drive};
+use crate::stage::{PairStop, StageAdmission, drive};
 use crate::worker::guest_image::test_support::TestGuestImage;
 use crate::{EnsureError, HostError, IntentState, Outcome, Started};
 
@@ -204,6 +204,7 @@ async fn uncertain_dind_only_recovery_keeps_reservation_and_owned_resources() ->
                     &images,
                     &selected_engine,
                     &guest_file,
+                    StageAdmission::test_fixture_for(&selected_engine),
                     &bind,
                 )
                 .await?;

@@ -10,7 +10,7 @@ use crate::config::RepositoryConnection;
 use crate::docker_client::docker_deadline;
 use crate::docker_spec::{DeleteDecision, delete_decision, runner_plan};
 use crate::error::HostError;
-use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
+use crate::launch::{SelectedEngineContext, StartObservationWitness, VerifiedWorkerImages};
 use crate::worker::guest_image::GuestImageFile;
 use crate::worker::{
     CreateProjection, ResourceBudget, WorkerVolumeRole, WorkerVolumeVerification,
@@ -44,13 +44,81 @@ pub struct PartialPair {
     pub runner_id: Option<String>,
 }
 
+/// Per-admission evidence checked after image inspection and before each Docker effect.
+#[derive(Debug, Clone)]
+pub(crate) struct StageAdmission {
+    observation: StartObservationWitness,
+    sample_generation_id: String,
+}
+
+impl StageAdmission {
+    pub(crate) fn from_observation(
+        observation: &StartObservationWitness,
+        sample_generation_id: &str,
+    ) -> Self {
+        Self {
+            observation: observation.clone(),
+            sample_generation_id: sample_generation_id.to_owned(),
+        }
+    }
+
+    fn check_fresh(&self, expected: &SelectedEngineContext) -> Result<(), HostError> {
+        if self.observation.is_fresh_for(
+            expected.engine_id(),
+            expected.docker_root_digest(),
+            &self.sample_generation_id,
+        ) {
+            Ok(())
+        } else {
+            Err(HostError::Ownership)
+        }
+    }
+
+    async fn verify<E: PairEngine + ?Sized>(
+        &self,
+        engine: &E,
+        expected: &SelectedEngineContext,
+        images: &VerifiedWorkerImages,
+    ) -> Result<(), HostError> {
+        self.check_fresh(expected)?;
+        verify_worker_images(engine, expected, images).await?;
+        self.check_fresh(expected)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_fixture_for(expected: &SelectedEngineContext) -> Self {
+        let (observation, generation) = StartObservationWitness::test_fixture_for(
+            expected.engine_id(),
+            expected.docker_root_digest(),
+            false,
+        );
+        Self::from_observation(&observation, &generation)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_stale_fixture_for(expected: &SelectedEngineContext) -> Self {
+        let (observation, generation) = StartObservationWitness::test_fixture_for(
+            expected.engine_id(),
+            expected.docker_root_digest(),
+            true,
+        );
+        Self::from_observation(&observation, &generation)
+    }
+}
+
 pub(crate) trait PairEngine {
     async fn verify_worker_images(
         &self,
         expected: &SelectedEngineContext,
         images: &VerifiedWorkerImages,
     ) -> Result<(), HostError>;
-    async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError>;
+    async fn prepare_volumes(
+        &self,
+        volume: &str,
+        admission: &StageAdmission,
+        expected: &SelectedEngineContext,
+        images: &VerifiedWorkerImages,
+    ) -> Result<(), HostError>;
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError>;
     async fn start(&self, id: &str) -> Result<(), HostError>;
     async fn write_jit(&self, id: &str, jit: &[u8]) -> Result<(), HostError>;
@@ -112,9 +180,22 @@ impl PairEngine for Docker {
         images.verify_for_engine(self, expected).await
     }
 
-    async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError> {
+    async fn prepare_volumes(
+        &self,
+        volume: &str,
+        admission: &StageAdmission,
+        expected: &SelectedEngineContext,
+        images: &VerifiedWorkerImages,
+    ) -> Result<(), HostError> {
         let mounts = crate::worker::dind_mounts(volume)?;
-        Box::pin(docker_deadline(create_named_volumes(self, volume, &mounts))).await??;
+        let mut verify = || async { admission.verify(self, expected, images).await };
+        Box::pin(docker_deadline(create_named_volumes(
+            self,
+            volume,
+            &mounts,
+            &mut verify,
+        )))
+        .await??;
         Ok(())
     }
 
@@ -194,6 +275,7 @@ pub(crate) async fn drive<E: PairEngine, S: PairSink>(
     images: &VerifiedWorkerImages,
     expected_engine: &SelectedEngineContext,
     guest_image: &GuestImageFile,
+    admission: StageAdmission,
     sink: &S,
 ) -> Result<PartialPair, HostError> {
     if jit.is_empty() {
@@ -203,47 +285,84 @@ pub(crate) async fn drive<E: PairEngine, S: PairSink>(
     let plan = runner_plan(private_volume)?;
     let runner = runner_create_verified(&plan, resource_budget, connection, images, guest_image)?;
     let dind = dind_create_verified(private_volume, resource_budget, images)?;
-    verify_worker_images(engine, expected_engine, images).await?;
+    admission.verify(engine, expected_engine, images).await?;
     sink.volume(private_volume).await?;
-    verify_worker_images(engine, expected_engine, images).await?;
-    engine.prepare_volumes(private_volume).await?;
+    admission.check_fresh(expected_engine)?;
+    engine
+        .prepare_volumes(private_volume, &admission, expected_engine, images)
+        .await?;
     if stop == PairStop::Volumes {
         return Ok(PartialPair::none());
     }
-    verify_worker_images(engine, expected_engine, images).await?;
+    admission.verify(engine, expected_engine, images).await?;
     let dind_id = engine.create(&dind).await?;
     if let Err(error) = sink.dind(&dind_id).await {
-        return drop_id(engine, expected_engine, images, &dind_id, error).await;
+        return drop_id(engine, expected_engine, images, &admission, &dind_id, error).await;
     }
     if stop == PairStop::DindCreated {
         return Ok(PartialPair::dind(dind_id));
     }
-    start_or_drop(engine, expected_engine, images, &dind_id).await?;
+    start_or_drop(engine, expected_engine, images, &admission, &dind_id).await?;
     if stop == PairStop::DindStarted {
         return Ok(PartialPair::dind(dind_id));
     }
-    let spec = join_or_drop(engine, expected_engine, images, runner, &dind_id).await?;
-    verify_worker_images(engine, expected_engine, images).await?;
+    let spec = join_or_drop(
+        engine,
+        expected_engine,
+        images,
+        &admission,
+        runner,
+        &dind_id,
+    )
+    .await?;
+    admission.verify(engine, expected_engine, images).await?;
     let runner_id = match engine.create(&spec).await {
         Ok(id) => id,
-        Err(error) => drop_id(engine, expected_engine, images, &dind_id, error).await?,
+        Err(error) => drop_id(engine, expected_engine, images, &admission, &dind_id, error).await?,
     };
     if let Err(error) = sink.runner(&runner_id).await {
-        return drop_both(engine, expected_engine, images, &dind_id, &runner_id, error).await;
+        return drop_both(
+            engine,
+            expected_engine,
+            images,
+            &admission,
+            &dind_id,
+            &runner_id,
+            error,
+        )
+        .await;
     }
     if stop == PairStop::RunnerCreated {
         return Ok(PartialPair::both(dind_id, runner_id));
     }
-    verify_worker_images(engine, expected_engine, images).await?;
+    admission.verify(engine, expected_engine, images).await?;
     if let Err(error) = engine.start(&runner_id).await {
-        return drop_both(engine, expected_engine, images, &dind_id, &runner_id, error).await;
+        return drop_both(
+            engine,
+            expected_engine,
+            images,
+            &admission,
+            &dind_id,
+            &runner_id,
+            error,
+        )
+        .await;
     }
     if stop == PairStop::RunnerStarted {
         return Ok(PartialPair::both(dind_id, runner_id));
     }
-    verify_worker_images(engine, expected_engine, images).await?;
+    admission.verify(engine, expected_engine, images).await?;
     if let Err(error) = engine.write_jit(&runner_id, jit).await {
-        return drop_both(engine, expected_engine, images, &dind_id, &runner_id, error).await;
+        return drop_both(
+            engine,
+            expected_engine,
+            images,
+            &admission,
+            &dind_id,
+            &runner_id,
+            error,
+        )
+        .await;
     }
     Ok(PartialPair::both(dind_id, runner_id))
 }
@@ -290,11 +409,12 @@ async fn start_or_drop<E: PairEngine>(
     engine: &E,
     expected_engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
+    admission: &StageAdmission,
     id: &str,
 ) -> Result<(), HostError> {
-    verify_worker_images(engine, expected_engine, images).await?;
+    admission.verify(engine, expected_engine, images).await?;
     if let Err(error) = engine.start(id).await {
-        return drop_id(engine, expected_engine, images, id, error).await;
+        return drop_id(engine, expected_engine, images, admission, id, error).await;
     }
     Ok(())
 }
@@ -303,12 +423,13 @@ async fn join_or_drop<E: PairEngine>(
     engine: &E,
     expected_engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
+    admission: &StageAdmission,
     runner: CreateProjection,
     dind_id: &str,
 ) -> Result<CreateProjection, HostError> {
     match join_dind_net(runner, dind_id) {
         Ok(spec) => Ok(spec),
-        Err(error) => drop_id(engine, expected_engine, images, dind_id, error).await,
+        Err(error) => drop_id(engine, expected_engine, images, admission, dind_id, error).await,
     }
 }
 
@@ -316,10 +437,11 @@ async fn drop_id<E: PairEngine, T>(
     engine: &E,
     expected_engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
+    admission: &StageAdmission,
     id: &str,
     error: HostError,
 ) -> Result<T, HostError> {
-    let _kept = decide_verified(engine, expected_engine, images, id, id)
+    let _kept = decide_verified(engine, expected_engine, images, admission, id, id)
         .await
         .err();
     Err(error)
@@ -329,27 +451,37 @@ async fn drop_both<E: PairEngine, T>(
     engine: &E,
     expected_engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
+    admission: &StageAdmission,
     dind_id: &str,
     runner_id: &str,
     error: HostError,
 ) -> Result<T, HostError> {
-    let _runner = decide_verified(engine, expected_engine, images, runner_id, runner_id)
-        .await
-        .err();
-    drop_id(engine, expected_engine, images, dind_id, error).await
+    let _runner = decide_verified(
+        engine,
+        expected_engine,
+        images,
+        admission,
+        runner_id,
+        runner_id,
+    )
+    .await
+    .err();
+    drop_id(engine, expected_engine, images, admission, dind_id, error).await
 }
 
 async fn decide_verified<E: PairEngine + ?Sized>(
     engine: &E,
     expected_engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
+    admission: &StageAdmission,
     owned_id: &str,
     name: &str,
 ) -> Result<DeleteDecision, HostError> {
+    admission.verify(engine, expected_engine, images).await?;
     let observed = engine.id_for_name(name).await?;
     let decision = delete_decision(owned_id, observed.as_deref());
     if decision == DeleteDecision::Delete {
-        verify_worker_images(engine, expected_engine, images).await?;
+        admission.verify(engine, expected_engine, images).await?;
         engine.remove(owned_id).await?;
     }
     Ok(decision)

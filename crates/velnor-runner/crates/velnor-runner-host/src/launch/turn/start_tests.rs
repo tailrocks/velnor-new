@@ -43,6 +43,7 @@ pub(super) fn rest() -> crate::launch::Rest<'static> {
         guest_admission: crate::launch::drive::GuestAdmission::FreshSample,
         connection: None,
         host_journal: None,
+        release_read_secret: None,
         scoped_journal: None,
         allocated_header: 0,
         source_authorized: false,

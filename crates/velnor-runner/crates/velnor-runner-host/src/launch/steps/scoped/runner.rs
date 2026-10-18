@@ -93,7 +93,7 @@ pub(super) async fn start<T, S, F>(
 ) -> Result<Started, EnsureError>
 where
     T: Transport + Lane,
-    S: FnOnce(&str, &[u8], crate::launch::bind::Bind) -> F,
+    S: FnOnce(&str, &[u8], crate::launch::bind::Bind, crate::stage::StageAdmission) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     let binding = scoped
@@ -175,7 +175,7 @@ async fn start_docker<S, F>(
     start: S,
 ) -> Result<Started, EnsureError>
 where
-    S: FnOnce(&str, &[u8], crate::launch::bind::Bind) -> F,
+    S: FnOnce(&str, &[u8], crate::launch::bind::Bind, crate::stage::StageAdmission) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     let volume = crate::worker::new_worker_volume().map_err(|_| EnsureError::Uncertain)?;
@@ -201,7 +201,11 @@ where
         return Err(EnsureError::Uncertain);
     }
     let bind = crate::launch::bind::Bind::scoped(scoped, physical.intent_id);
-    let started = match start(&volume, jit_config.as_bytes(), bind).await {
+    let admission = crate::stage::StageAdmission::from_observation(
+        &physical.observation,
+        &physical.sample_generation_id,
+    );
+    let started = match start(&volume, jit_config.as_bytes(), bind, admission).await {
         Ok(started) => started,
         Err(_) => {
             scoped

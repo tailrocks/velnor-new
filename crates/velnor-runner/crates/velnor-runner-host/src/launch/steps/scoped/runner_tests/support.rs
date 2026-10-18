@@ -22,7 +22,7 @@ use crate::launch::{
 pub(super) const SET_ID: i64 = 501;
 pub(super) const REQUEST_ID: i64 = 41;
 const MESSAGE_ID: i64 = 77;
-const DOCKER_ROOT: &str = "/var/lib/docker";
+pub(super) const DOCKER_ROOT: &str = "/var/lib/docker";
 
 pub(super) struct Fixture {
     _scratch: Scratch,
@@ -292,7 +292,7 @@ pub(super) fn assert_runner_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn engine_info(engine_id: &str, root: &str, architecture: &str) -> String {
+pub(super) fn engine_info(engine_id: &str, root: &str, architecture: &str) -> String {
     json!({
         "ID": engine_id,
         "OSType": "linux",
@@ -302,7 +302,7 @@ fn engine_info(engine_id: &str, root: &str, architecture: &str) -> String {
     .to_string()
 }
 
-fn image_inspect(
+pub(super) fn image_inspect(
     images: &VerifiedWorkerImages,
     name: &str,
     identity: &VerifiedImageIdentity,

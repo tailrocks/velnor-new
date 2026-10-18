@@ -78,6 +78,7 @@ async fn busy_slot_does_not_ack_scale_assignment() -> Result<(), String> {
                     guest_admission: super::drive::GuestAdmission::FreshSample,
                     connection: None,
                     host_journal: None,
+                    release_read_secret: None,
                     scoped_journal: None,
                     allocated_header: 0,
                     source_authorized: false,
