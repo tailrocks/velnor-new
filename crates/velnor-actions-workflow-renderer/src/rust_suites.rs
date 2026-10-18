@@ -86,10 +86,10 @@ pub fn render_suites_workflow(spec: &RustSuitesRenderSpec) -> Result<Option<Stri
     render_suites_workflow_with_helpers(spec, &BTreeMap::new())
 }
 
-/// Render the default suite document with verified helper acquisition steps.
+/// Render the default suite workflow with verified Velnor program steps.
 ///
-/// Map keys are exact runner labels. A job without a matching helper keeps
-/// its pinned Mise setup and omits cache actions that require the helper.
+/// Use exact runner labels as map keys. If no matching steps exist, keep the
+/// pinned Mise setup. Do not add cache actions that need the verified program.
 /// # Errors
 pub fn render_suites_workflow_with_helpers(
     spec: &RustSuitesRenderSpec,
@@ -141,10 +141,10 @@ pub fn render_suites_workflows_with_routing(
     render_suites_workflows_with_routing_and_helpers(spec, routing, &BTreeMap::new())
 }
 
-/// Render standalone suite workflows with verified helper steps by runner label.
+/// Render standalone suite workflows with verified Velnor program steps for each runner label.
 ///
-/// Jobs without a helper retain their pinned Mise setup but omit cache actions
-/// that require the staged helper.
+/// If no matching steps exist for a job, keep its pinned Mise setup. Do not
+/// add cache actions that need the verified program.
 /// # Errors
 pub fn render_suites_workflows_with_routing_and_helpers(
     spec: &RustSuitesRenderSpec,

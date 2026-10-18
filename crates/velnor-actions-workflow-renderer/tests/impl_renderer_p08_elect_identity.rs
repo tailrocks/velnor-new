@@ -15,8 +15,8 @@ fn tools_cache_election_binds_restore_to_static_identity_digest() -> Result<(), 
         ("rust-a".to_owned(), keyed_job("actionlint@1.7.12")?),
         ("rust-b".to_owned(), keyed_job("actionlint@1.7.12")?),
     ]);
-    // Same canonical restore key, but a retargeted static digest splits the
-    // election: each identity elects its own writer.
+    // Both jobs use the same restore key, but their static digests differ.
+    // The writer job then differs for each identity.
     let owner = jobs
         .get_mut("rust-b")
         .and_then(|job| job.steps.first_mut())

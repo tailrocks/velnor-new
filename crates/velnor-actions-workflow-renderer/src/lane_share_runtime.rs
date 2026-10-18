@@ -2,7 +2,7 @@
 
 use velnor_actions_contract::{RunsOn, Step, StepKind, StepRole};
 
-/// Peel the leading verified-helper and cache-tar steps before lane sharing.
+/// Keep helper acquisition and cache-tar setup before the steps shared by jobs.
 pub(super) fn peel_cache_helper_prefix(steps: &[Step]) -> Option<(Vec<Step>, &[Step])> {
     let end = steps
         .iter()
@@ -60,7 +60,7 @@ pub(super) fn peel_cache_helper_prefix(steps: &[Step]) -> Option<(Vec<Step>, &[S
     Some((prefix.to_vec(), &steps[end..]))
 }
 
-/// Allow a hosted-only launcher when the Scale Set lane has no cache access.
+/// If the Scale Set lane cannot access the cache, keep the launcher in the hosted job only.
 pub(super) fn same_cache_helper_prefix_shape(
     hosted: &[Step],
     local: &[Step],
@@ -112,7 +112,7 @@ pub(super) fn same_cache_helper_prefix_shape(
         && matches!(RunsOn::parse(local_runs_on), Ok(RunsOn::ScaleSet(_)))
 }
 
-/// Peel typed runtime identity, seed, and restore steps before lane sharing.
+/// Keep tools-cache identity and restore steps outside the steps shared by runner lanes.
 pub(super) fn peel_tools_cache_prelude(
     steps: &[Step],
     runs_on: &str,

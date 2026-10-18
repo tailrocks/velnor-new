@@ -36,20 +36,20 @@ pub(crate) const TOOLS_CACHE_KEY_EXPRESSION: &str =
 /// Composite-action input carrying the V2 static tools digest.
 pub(crate) const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str =
     velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
-/// Restore gate for jobs with a direct dependency on the plan job.
+/// Condition for cache restore when a job needs the plan job.
 pub const TOOLS_CACHE_NORMAL_RUN_CONDITION: &str =
     "needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''";
-/// Jobs without a direct plan dependency cannot inspect plan outputs.
+/// Jobs that do not need the plan job cannot read its outputs.
 pub const TOOLS_CACHE_PLAN_RUN_CONDITION: &str = "github.event_name != 'workflow_dispatch'";
 /// A tool seed may run only after its runtime identity action succeeds.
 pub const TOOLS_CACHE_IDENTITY_CONDITION: &str = "steps.v2.outputs.enabled == 'true'";
 /// Restore only in a normal planned run with a qualified runtime identity.
 pub const TOOLS_CACHE_RESTORE_CONDITION: &str = "needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'";
-/// Jobs without a direct plan dependency use the event guard and their local identity.
+/// These jobs use the event condition and the identity from their own run.
 pub const TOOLS_CACHE_PLAN_RESTORE_CONDITION: &str =
     "github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'";
 
-/// Configuration needed when the setup pipeline decides whether cache actions can run.
+/// This configuration controls whether setup steps can use cache actions.
 #[derive(Clone, Copy)]
 pub(crate) struct ToolsCacheRenderOptions<'a> {
     pub target: &'a str,
@@ -118,10 +118,10 @@ pub(crate) fn ensure_tools_cache_v2_with_source(
     )
 }
 
-/// Insert the typed tools-cache prelude under the caller's helper requirement.
+/// Put the tools-cache steps in the job when its settings require the verified Velnor program.
 ///
-/// Jobs without a verified helper may keep setup while skipping cache actions
-/// only in source/bootstrap contexts that explicitly allow the omission.
+/// If a source build has no verified Velnor program, keep setup steps. Leave out
+/// cache actions only when its settings allow this.
 /// # Errors
 pub(crate) fn ensure_tools_cache_v2_with_helper_policy(
     job_id: &str,

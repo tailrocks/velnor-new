@@ -36,7 +36,7 @@ pub(crate) struct LaneShare {
     pub checkouts: BTreeMap<String, Step>,
     /// Original step lists used to derive job-level environment values.
     pub env_steps: BTreeMap<String, Vec<Step>>,
-    /// Verified helper and runner-specific cache steps before the shared action.
+    /// Keep the verified Velnor program steps and cache-tar setup before shared steps.
     pub runtime_preludes: BTreeMap<String, Vec<Step>>,
     /// Common setup steps rendered before each lane's cache-specific prelude.
     pub prefixes: BTreeMap<String, Vec<Step>>,

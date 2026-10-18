@@ -221,8 +221,8 @@ fn finalize_jobs_with_routing(
     Ok(jobs)
 }
 
-/// Add runner-specific verified helper steps before cache use when the
-/// orchestrator supplied them for this exact runner label.
+/// If the orchestrator supplied verified helper steps for a runner label, put
+/// those steps before cache use for that runner.
 fn insert_verified_cache_helper(
     job_id: &str,
     job: &mut Job,
