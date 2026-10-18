@@ -10,6 +10,8 @@ mod registration;
 mod runner;
 mod secret;
 
+pub mod workflow_run;
+
 pub mod session;
 
 pub use acquire::{AcquireOutcome, Certainty, TransportFail, classify_acquire, effect_certainty};
