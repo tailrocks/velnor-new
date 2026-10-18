@@ -252,7 +252,7 @@ async fn version_five_migration_adds_scale_set_intent_table() -> Result<(), Host
     drop(database);
 
     let _journal = Journal::open(&path).await?;
-    assert_eq!(journal_version(&path).await?, 10);
+    assert_eq!(journal_version(&path).await?, 11);
     let (_, connection) = raw_database(&path).await?;
     let mut rows = connection
         .query("PRAGMA table_info(connection_scale_set_intents)", ())

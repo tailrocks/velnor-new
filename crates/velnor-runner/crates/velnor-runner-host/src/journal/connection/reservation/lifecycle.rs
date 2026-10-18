@@ -101,13 +101,22 @@ impl ConnectionJournal {
                     )
                     .await
                     .map_err(|_| HostError::Journal)?;
-                connection
-                    .execute(
-                        "UPDATE connection_runner_jits SET state = 'cleaned' WHERE connection_id = ?1 AND intent_id = (SELECT intent_id FROM capacity_reservations WHERE id = ?2 AND connection_id = ?1) AND completed_request_id IS NOT NULL AND state = 'completed'",
-                        (self.connection_id.as_str(), reservation_id),
-                    )
+                let intent_id: i64 = connection
+                    .query("SELECT intent_id FROM capacity_reservations WHERE id = ?1 AND connection_id = ?2", (reservation_id, self.connection_id.as_str()))
                     .await
+                    .map_err(|_| HostError::Journal)?
+                    .next()
+                    .await
+                    .map_err(|_| HostError::Journal)?
+                    .ok_or(HostError::Journal)?
+                    .get(0)
                     .map_err(|_| HostError::Journal)?;
+                crate::journal::request_lifecycle::physical::mark_runner_cleaned_after_cleanup(
+                    connection,
+                    self.connection_id.as_str(),
+                    intent_id,
+                )
+                .await?;
             }
             Ok(())
         })

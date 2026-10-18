@@ -10,8 +10,16 @@ const AUTH_TABLE: &str = "connection_request_authorizations";
 const JIT_TABLE: &str = "connection_runner_jits";
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_schema(conn, false).await
+}
+
+pub(super) async fn validate_v10(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_schema(conn, true).await
+}
+
+async fn validate_schema(conn: &turso::Connection, version_ten: bool) -> Result<(), HostError> {
     validate_auth_table(conn).await?;
-    validate_jit_table(conn).await?;
+    validate_jit_table(conn, version_ten).await?;
     validate_indexes(conn).await?;
     rows::validate_auth_rows(conn).await?;
     rows::validate_jit_rows(conn).await
@@ -58,7 +66,12 @@ async fn validate_auth_table(conn: &turso::Connection) -> Result<(), HostError> 
     .await
 }
 
-async fn validate_jit_table(conn: &turso::Connection) -> Result<(), HostError> {
+async fn validate_jit_table(conn: &turso::Connection, version_ten: bool) -> Result<(), HostError> {
+    let completion_check = if version_ten {
+        "check (state not in ('completed', 'cleaned') or completed_request_id is not null)"
+    } else {
+        "check (state != 'completed' or completed_request_id is not null)"
+    };
     validate_table(
         conn,
         JIT_TABLE,
@@ -81,6 +94,7 @@ async fn validate_jit_table(conn: &turso::Connection) -> Result<(), HostError> {
             "witness_request_id",
             "state in",
             "cleaned",
+            completion_check,
         ],
     )
     .await

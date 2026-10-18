@@ -98,7 +98,7 @@ async fn version_seven_migration_installs_current_source_authorization_schema() 
         .await
         .expect("reopen SQLite");
     let connection = database.connect().expect("connect SQLite");
-    assert_eq!(read_version(&connection).await, 10);
+    assert_eq!(read_version(&connection).await, 11);
     assert_eq!(
         table_count(&connection, "connection_source_authorizations").await,
         1

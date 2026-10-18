@@ -185,13 +185,12 @@ impl ConnectionJournal {
             if changed == 0 {
                 return Ok(false);
             }
-            connection
-                .execute(
-                    "UPDATE connection_runner_jits SET state = 'cleaned' WHERE intent_id = ?1 AND connection_id = ?2 AND scale_set_id = ?3 AND completed_request_id IS NOT NULL AND state = 'completed'",
-                    (id, self.connection_id().as_str(), set_id),
-                )
-                .await
-                .map_err(|_| HostError::Journal)?;
+            crate::journal::request_lifecycle::physical::mark_runner_cleaned_after_cleanup(
+                connection,
+                self.connection_id().as_str(),
+                id,
+            )
+            .await?;
             let retired = connection
                 .execute(
                     "UPDATE connection_completion_cleanup SET retry_after = 0, lease_until = 0 WHERE intent_id = ?1 AND connection_id = ?2 AND scale_set_id = ?3 AND claim_generation = ?4",

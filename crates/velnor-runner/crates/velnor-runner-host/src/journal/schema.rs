@@ -12,7 +12,7 @@ mod request_ledger;
 mod scale_set_create;
 mod source_authorization;
 
-const JOURNAL_VERSION: i64 = 10;
+const JOURNAL_VERSION: i64 = 11;
 const CURRENT_COLUMNS: [ColumnShape; 23] = [
     ColumnShape::new("id", "INTEGER", false, None),
     ColumnShape::new("kind", "TEXT", true, None),
@@ -103,6 +103,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
             7 => migration::from_version_seven(conn).await?,
             8 => migration::from_version_eight(conn).await?,
             9 => migration::from_version_nine(conn).await?,
+            10 => migration::from_version_ten(conn).await?,
             _ => return Err(HostError::Journal),
         }
     }

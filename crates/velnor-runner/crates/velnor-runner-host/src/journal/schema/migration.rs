@@ -113,7 +113,15 @@ pub(super) async fn from_version_eight(conn: &turso::Connection) -> Result<(), H
 
 pub(super) async fn from_version_nine(conn: &turso::Connection) -> Result<(), HostError> {
     request_ledger::bootstrap(conn).await?;
-    conn.execute("PRAGMA user_version = 10", ())
+    conn.execute("PRAGMA user_version = 11", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+pub(super) async fn from_version_ten(conn: &turso::Connection) -> Result<(), HostError> {
+    request_ledger::upgrade_cleaned_runner_state(conn).await?;
+    conn.execute("PRAGMA user_version = 11", ())
         .await
         .map_err(|_| HostError::Journal)?;
     Ok(())

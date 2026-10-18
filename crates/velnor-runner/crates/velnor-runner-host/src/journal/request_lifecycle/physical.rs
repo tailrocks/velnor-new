@@ -278,6 +278,24 @@ impl ConnectionJournal {
     }
 }
 
+pub(in crate::journal) async fn mark_runner_cleaned_after_cleanup(
+    connection: &turso::Connection,
+    connection_id: &str,
+    intent_id: i64,
+) -> Result<(), HostError> {
+    if intent_id <= 0 {
+        return Err(HostError::Journal);
+    }
+    connection
+        .execute(
+            "UPDATE connection_runner_jits SET state = 'cleaned' WHERE intent_id = ?1 AND connection_id = ?2 AND state IN ('bound', 'start_requested', 'start_uncertain', 'ready', 'started', 'completed') AND runner_id IS NOT NULL AND runner_name IS NOT NULL AND EXISTS (SELECT 1 FROM connection_intents WHERE id = ?1 AND connection_id = ?2 AND cleanup_proven = 1) AND (completed_request_id IS NOT NULL OR EXISTS (SELECT 1 FROM capacity_reservations AS r WHERE r.intent_id = ?1 AND r.connection_id = ?2 AND r.state = 'released' AND r.remote_cleanup_proven = 1 AND r.local_cleanup_proven = 1))",
+            (intent_id, connection_id),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
 fn validate_jit_claim(scope: &ConnectionJournal, claim: &RunnerJitClaim) -> Result<(), HostError> {
     if &claim.connection_id != scope.connection_id()
         || claim.scale_set_id <= 0
