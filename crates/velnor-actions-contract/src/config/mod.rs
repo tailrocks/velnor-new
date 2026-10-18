@@ -39,7 +39,9 @@ pub use binary_release::{
     RustBinaryPreviewProducer, RustBinaryPreviewProduct, RustBinaryPreviewVersioning,
     RustBinaryReleaseConfig,
 };
-pub use build_task::{BuildTask, BuildTaskRunner, is_valid_build_tool_key};
+pub use build_task::{
+    BuildTask, BuildTaskRunner, BuildTaskXcodeCapability, is_valid_build_tool_key,
+};
 pub use check_receipt_budget::{
     MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
     MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,

@@ -12,7 +12,10 @@ All changes must pass the full repository verification suite from the repo root 
 
 ## The Verification Suite
 
-Run all six checks sequentially from the workspace root.
+Run all six root-workspace checks sequentially from the workspace root. The
+nested runner is a separate Cargo workspace and needs its own formatting,
+lint, test, and dependency checks; root `cargo --workspace` and root formatting
+do not include it.
 
 If the workspace `target` is a symlink into an MBX-managed cache, direct Cargo
 commands do not hold an MBX cache lease. Use a separately owned absolute
@@ -36,9 +39,9 @@ bash scripts/check-freshness.sh
 ## Command Reference & Usage Details
 
 ### 1. Code Formatting: `cargo fmt --all -- --check`
-- **Purpose**: Validates that all Rust code across all workspace members strictly conforms to Rust 2024 edition formatting rules.
+- **Purpose**: Validates Rust formatting in the root Cargo workspace. The nested runner workspace is excluded and must also pass `cargo fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check`.
 - **Why It Matters**: Enforces zero format variance and uniform code aesthetics without manual style debates.
-- **Remediation**: If formatting fails, run `cargo fmt --all` to automatically format all files.
+- **Remediation**: Run `cargo fmt --all` for root files and `cargo fmt --manifest-path crates/velnor-runner/Cargo.toml --all` for runner files.
 
 ### 2. Static Analysis & Lints: `cargo clippy --locked --workspace --all-targets -- -D warnings`
 - **Purpose**: Runs the Clippy linter across all targets (libraries, binaries, integration tests, examples, benchmarks) with warnings treated as hard errors.
@@ -74,6 +77,7 @@ bash scripts/check-freshness.sh
 The runner controller and supervisor live in the nested virtual workspace `crates/velnor-runner`, which has its own `Cargo.toml`, `Cargo.lock`, and `deny.toml`. To verify the runner workspace (always using `cargo nextest`):
 
 ```bash
+cargo fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check
 cargo clippy --manifest-path crates/velnor-runner/Cargo.toml --locked --all-targets -- -D warnings
 cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked
 cargo deny --manifest-path crates/velnor-runner/Cargo.toml check

@@ -43,10 +43,14 @@ async fn unavailable_guest_sample_blocks_acquire_and_worker_start() -> Result<()
     assert_eq!(requests.as_slice().first(), None);
     assert_eq!(script.calls.first(), None);
     assert_eq!(workers.first(), None);
-    assert_eq!(journal
+    assert_eq!(
+        journal
             .rows()
             .await
-            .map_err(|error| error.to_string())?.first(), None);
+            .map_err(|error| error.to_string())?
+            .first(),
+        None
+    );
     absent(&scratch.file())
 }
 
@@ -181,9 +185,13 @@ async fn no_fit_case(name: &str, guest: GuestTotals, budget: ResourceBudget) -> 
     assert_eq!(requests.first(), None);
     assert_eq!(script.calls.first(), None);
     assert_eq!(workers.first(), None);
-    assert_eq!(journal
+    assert_eq!(
+        journal
             .rows()
             .await
-            .map_err(|error| error.to_string())?.first(), None);
+            .map_err(|error| error.to_string())?
+            .first(),
+        None
+    );
     absent(&scratch.file())
 }

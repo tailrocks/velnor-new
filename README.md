@@ -23,10 +23,10 @@ prints concise text instead of YAML, and writes no repository files.
 ## Local build from a clean checkout
 
 No ambient Cargo, Rust, or MBX is required: `mise.toml` pins the local
-developer tool selection (Rust 1.98.1, MBX 1.21.1, Nextest 0.9.146), and
+developer tool selection (Rust 1.99.1, MBX 1.24.1, Nextest 0.9.148), and
 `mise install` resolves those versions. Velnor's CI toolchain is owned by
 `.velnor/version-policy.toml` and the compiled catalog; it currently uses
-Rust 1.98.1 and Nextest 0.9.148 while the workspace MSRV remains Rust 1.98.
+Rust 1.99.1 and Nextest 0.9.148 while the workspace MSRV is Rust 1.99.
 Historical clean-checkout proof, 2026-10-01 at `34550e8` in a fresh clone
 with `cargo`/`mbx` absent from `PATH`:
 
@@ -43,14 +43,13 @@ mise exec -- cargo build --locked -p velnor-actions-cli
 diff -r .github /private/tmp/velnor-preview/.github  # no output: preview matches
 ```
 
-Velnor freshness evidence checked on 2026-10-17 includes Mise 2026.10.13,
+Historical freshness evidence checked on 2026-10-17 records Mise 2026.10.13,
 Rust 1.98.1, Nextest 0.9.148, and release-plz 0.3.172. The reviewed workflow
 pins are `jdx/mise-action` v5.2.0 and `asamarts/alint` v0.18.4. See
 [`freshness-evidence-2026-10-17.md`](docs/implemented/freshness-evidence-2026-10-17.md).
-Issue [#6](https://github.com/tailrocks/velnor-new/issues/6)
-proposes Rust 1.99.0, but this update keeps the selected toolchain aligned
-with the declared Rust 1.98 MSRV while a separate compatibility decision is
-pending. `mise.toml` remains a read-only local developer input.
+The current catalog selects Rust 1.99.1, MBX 1.24.1, and Nextest 0.9.148.
+The selected stable compiler and workspace MSRV are both Rust 1.99.1 and
+1.99, respectively. `mise.toml` remains a read-only local developer input.
 The workflow pins `jdx/mise-action` v5.2.0 to reviewed commit
 `9b200bcecbfd6303e69a4a261b2e09e3757440a7`; the action's
 `persist_github_token` default is false, and Velnor leaves it unset. This

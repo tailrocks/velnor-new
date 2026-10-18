@@ -205,10 +205,14 @@ async fn missing_current_census_blocks_ack_and_start() -> Result<(), String> {
     .await
     .map_err(|error| error.to_string())?;
     assert_eq!(decision, crate::launch::Admit::Error);
-    assert_eq!(journal
+    assert_eq!(
+        journal
             .rows()
             .await
-            .map_err(|error| error.to_string())?.first(), None);
+            .map_err(|error| error.to_string())?
+            .first(),
+        None
+    );
     absent(&scratch.file())
 }
 

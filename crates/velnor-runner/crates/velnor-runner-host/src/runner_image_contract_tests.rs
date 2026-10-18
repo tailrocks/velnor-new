@@ -62,7 +62,9 @@ fn checked_in_images_prepare_the_shared_path_for_runner_uid_1000() {
         "ARG DOCKER_SHA256=c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57"
     ));
     assert!(RUNNER_DOCKERFILE.contains("ARG COMPOSE_VERSION=5.6.0"));
-    assert!(RUNNER_DOCKERFILE.contains("ARG COMPOSE_SHA256=40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a"));
+    assert!(RUNNER_DOCKERFILE.contains(
+        "ARG COMPOSE_SHA256=40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a"
+    ));
     assert!(RUNNER_DOCKERFILE.contains("ARG BUILDX_VERSION=0.38.0"));
     assert!(RUNNER_DOCKERFILE.contains(
         "ARG BUILDX_SHA256=4fe4cc38adf48169132749b6ca22a990928db0118e3407584ee553723115d287"

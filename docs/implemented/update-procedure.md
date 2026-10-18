@@ -205,7 +205,7 @@ crate counts (`cargo nextest run --locked -p velnor-actions-cli -E
 'test(p12_property)'`). Unit-level strategies over validators, task-ID
 segments, and the final merge entrypoint migrate to `proptest` once the
 requested pin lands: proptest `1.11.0` (exact `=1.11.0`, `rust-version`
-1.85, inside MSRV 1.98; needs a manifest owner to add the dev-dependency
+1.85, inside MSRV 1.99; needs a manifest owner to add the dev-dependency
 plus lockfile entry).
 
 Fuzzing is infeasible in this wave, with evidence: a fuzz target needs a

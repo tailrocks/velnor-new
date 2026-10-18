@@ -7,7 +7,7 @@
 | D3 | Primary profile is `linux/amd64` even when the Docker VM is `aarch64`. Emulation is reported. ARM64 is never relabeled as the x64 baseline. |
 | D4 | One host-wide capacity authority. `max_jobs` defaults to 1. `N>1` is a qualification case, not a second authority. |
 | D5 | The official runner is not patched. No `/proc` spoof to bypass `AssertCompatibleOS`. |
-| D6 | The journal uses the embedded `turso` crate, local file only. Not Turso Cloud and not the `libsql` crate. `0.8.1` may require Rust newer than the repo MSRV 1.98. If it fails to compile, pin `0.7.2` and record the compiler error. Do not invent a version. |
+| D6 | The journal uses the embedded `turso` crate, local file only. Not Turso Cloud and not the `libsql` crate. `0.8.1` may require Rust newer than the repo MSRV 1.99. If it fails to compile, pin `0.7.2` and record the compiler error. Do not invent a version. |
 | D7 | Docker client is Bollard `0.21.1`, constructed with an explicit Unix socket. Never `connect_with_local_defaults`. |
 | D8 | Comparison fails closed. `NOT_PROVEN` is not success. |
 | D9 | `~/Library/Application Support/Velnor` from before `velnor-new` is legacy. The operator authorized wiping it. Fresh state is correct. |

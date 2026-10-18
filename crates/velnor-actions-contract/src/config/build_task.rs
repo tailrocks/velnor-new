@@ -41,7 +41,39 @@ pub enum BuildTaskRunner {
     Xcode27Arm64,
 }
 
+/// Exact Xcode installation advertised by one native build runner label.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BuildTaskXcodeCapability {
+    /// Xcode marketing version reported by `xcodebuild -version`.
+    pub version: &'static str,
+    /// Exact Xcode build identifier reported by `xcodebuild -version`.
+    pub build: &'static str,
+    /// macOS SDK version reported by `xcrun --sdk macosx --show-sdk-version`.
+    pub sdk_version: &'static str,
+    /// Canonical developer directory for this runner's selected Xcode.
+    pub developer_dir: &'static str,
+}
+
 impl BuildTaskRunner {
+    /// Exact Xcode capability selected by this runner label.
+    #[must_use]
+    pub const fn xcode_capability(self) -> BuildTaskXcodeCapability {
+        match self {
+            Self::Macos26Arm64 => BuildTaskXcodeCapability {
+                version: "26.6",
+                build: "17F113",
+                sdk_version: "26.5",
+                developer_dir: "/Applications/Xcode_26.6.app/Contents/Developer",
+            },
+            Self::Xcode27Arm64 => BuildTaskXcodeCapability {
+                version: "27.1",
+                build: "27A9275",
+                sdk_version: "27.0",
+                developer_dir: "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer",
+            },
+        }
+    }
+
     /// Exact GitHub-hosted runner label.
     #[must_use]
     pub const fn runs_on(self) -> &'static str {
