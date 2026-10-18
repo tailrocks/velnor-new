@@ -26,7 +26,10 @@ use velnor_actions_workflow_renderer::{
     schema2::{ConsumerPreviewSpec, ConsumerPreviewTapSpec, render_consumer_preview},
 };
 
-pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, OrchestratorError> {
+pub(crate) fn files(
+    prep: &GenerationPreparation,
+    routing: &velnor_actions_workflow_renderer::WorkflowRoutingPolicy,
+) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let Some(release) = prep
         .config
         .stacks
@@ -80,7 +83,7 @@ pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, O
         gh_argv: strings_of(exec.argv(&native_catalog)).map_err(|error| internal(&error))?,
         homebrew_tap: tap_spec(prep)?,
     };
-    Ok(vec![render_consumer_preview(&spec)?])
+    Ok(vec![render_consumer_preview(&spec, routing)?])
 }
 
 fn tap_spec(

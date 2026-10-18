@@ -58,7 +58,10 @@ pub struct ConsumerPreviewSpec {
 /// Render the independently enabled native preview workflow.
 /// # Errors
 /// Rejects malformed inventory, helper acquisition, pins, or generated commands.
-pub fn render_consumer_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFile, RenderError> {
+pub fn render_consumer_preview(
+    spec: &ConsumerPreviewSpec,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
+) -> Result<RenderedFile, RenderError> {
     spec.plan
         .validate()
         .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
@@ -119,6 +122,11 @@ pub fn render_consumer_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFil
         ),
         ("jobs".to_owned(), Yaml::Map(jobs)),
     ]);
+    let document = crate::workflow_routing::route_workflow_yaml(
+        PackageReleaseChannel::Preview.workflow_path(),
+        document,
+        routing,
+    )?;
     Ok(RenderedFile {
         path: PackageReleaseChannel::Preview.workflow_path().to_owned(),
         bytes: with_marker(&spec.generator_version, &render_yaml(&document))?,

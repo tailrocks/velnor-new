@@ -1,9 +1,36 @@
 use super::*;
 use crate::{HelperProvenance, provision_acquire_step};
 use velnor_actions_contract::{
-    PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlanProduct, config::RustBinaryPreviewCompanion,
+    ExecutionMode, PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlanProduct, ScaleSetSelector,
+    config::{RustBinaryPreviewCompanion, VerificationRunner},
     package_release::PackageReleasePayloadFormat,
 };
+
+fn hosted_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
+    crate::workflow_routing::WorkflowRoutingPolicy::from_mode(
+        ExecutionMode::Hosted,
+        scale_set_selector(),
+    )
+}
+
+fn scale_set_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
+    crate::workflow_routing::WorkflowRoutingPolicy::from_mode(
+        ExecutionMode::ScaleSet,
+        scale_set_selector(),
+    )
+}
+
+fn scale_set_selector() -> ScaleSetSelector {
+    ScaleSetSelector::try_new(
+        "ubuntu-26.04-scale-set",
+        &["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()],
+    )
+    .expect("valid selector")
+}
+
+fn render_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFile, RenderError> {
+    render_consumer_preview(spec, &hosted_policy())
+}
 
 fn fixture() -> ConsumerPreviewSpec {
     let acquire = provision_acquire_step(&HelperProvenance::ReleaseAsset {
@@ -82,7 +109,7 @@ fn job<'a>(yaml: &'a str, name: &str, next: Option<&str>) -> &'a str {
 
 #[test]
 fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
-    let rendered = render_consumer_preview(&fixture()).expect("preview");
+    let rendered = render_preview(&fixture()).expect("preview");
     assert_eq!(rendered.path, ".github/workflows/binary-preview.yml");
     let yaml = &rendered.bytes;
     let eligibility = job(yaml, "preview-eligibility", Some("preview-producer"));
@@ -121,20 +148,20 @@ fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
 fn preview_rejects_stable_plan_or_invalid_inventory_before_rendering() {
     let mut spec = fixture();
     spec.plan.channel = PackageReleaseChannel::Stable;
-    assert!(render_consumer_preview(&spec).is_err());
+    assert!(render_preview(&spec).is_err());
     spec.plan.channel = PackageReleaseChannel::Preview;
     spec.plan.default_branch = "develop".to_owned();
-    assert!(render_consumer_preview(&spec).is_err());
+    assert!(render_preview(&spec).is_err());
     spec.plan.default_branch = "main".to_owned();
     spec.plan.products[0]
         .targets
         .push("../../escape".to_owned());
-    assert!(render_consumer_preview(&spec).is_err());
+    assert!(render_preview(&spec).is_err());
 }
 
 #[test]
 fn manual_recovery_has_no_build_or_signing_authority() {
-    let rendered = render_consumer_preview(&fixture()).expect("preview");
+    let rendered = render_preview(&fixture()).expect("preview");
     let yaml = &rendered.bytes;
     assert!(yaml.contains("original_run_id:"));
     assert!(yaml.contains("original_run_attempt:"));
@@ -208,7 +235,7 @@ fn with_tap() -> ConsumerPreviewSpec {
 
 #[test]
 fn tap_jobs_separate_unprivileged_preparation_and_scoped_app_authority() {
-    let rendered = render_consumer_preview(&with_tap()).expect("tap workflow");
+    let rendered = render_preview(&with_tap()).expect("tap workflow");
     let yaml = &rendered.bytes;
     let prepare = job(yaml, "preview-tap-prepare", Some("preview-tap-writer"));
     assert!(prepare.contains("actions/checkout"));
@@ -255,7 +282,7 @@ fn credential_references_cannot_become_privileged_environment_keys() {
         .policy
         .review_completion
         .app_id_variable = "PATH".to_owned();
-    let yaml = render_consumer_preview(&spec)
+    let yaml = render_preview(&spec)
         .expect("literal variable reference")
         .bytes;
     let merge = job(&yaml, "preview-tap-merge", None);
@@ -275,5 +302,41 @@ fn tap_updater_rejects_self_hosted_execution_without_native_provisioning() {
         .runner;
     runner.executor = velnor_actions_contract::config::CheckExecutor::EphemeralSelfHosted;
     runner.label = "tap-updater".to_owned();
-    assert!(render_consumer_preview(&spec).is_err());
+    assert!(render_preview(&spec).is_err());
+}
+
+#[test]
+fn scale_set_routes_every_preview_and_tap_job_without_changing_job_policy() {
+    let mut spec = with_tap();
+    spec.producer_runner = VerificationRunner::LinuxX64;
+    let hosted = render_preview(&spec).expect("hosted preview");
+    let scale_set = render_consumer_preview(&spec, &scale_set_policy()).expect("Scale Set preview");
+    let hosted_label = "runs-on: ubuntu-26.04";
+    let selector = "runs-on: [velnor, ubuntu-26.04-scale-set]";
+    assert_eq!(
+        scale_set.bytes.matches(selector).count(),
+        8,
+        "every preview and tap job must use the selected Scale Set"
+    );
+    assert_eq!(
+        scale_set.bytes.replace(selector, hosted_label),
+        hosted.bytes
+    );
+    crate::workflow_routing::validate_generated_workflow_calls(
+        std::slice::from_ref(&scale_set),
+        &scale_set_policy(),
+    )
+    .expect("parsed final bytes inspect every routed preview and tap job");
+}
+
+#[test]
+fn scale_set_rejects_the_native_preview_producer_with_a_specific_error() {
+    let error = render_consumer_preview(&fixture(), &scale_set_policy())
+        .expect_err("a Linux-only Scale Set cannot run a Darwin producer");
+    assert_eq!(
+        error,
+        RenderError::InvalidWorkflow(
+            "unsupported_darwin_workload:.github/workflows/binary-preview.yml:preview-producer:macos-26".to_owned()
+        )
+    );
 }
