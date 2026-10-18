@@ -10,7 +10,7 @@ use std::os::fd::{AsFd, OwnedFd};
 use std::path::{Component, Path};
 
 const MAX_STAGE_BYTES: u64 = 20 * 1024 * 1024 * 1024;
-const STAGE_MODE: u16 = 0o600;
+const STAGE_MODE: Mode = Mode::from_bits_retain(0o600);
 const ROOT_UID: u32 = 0;
 
 /// Holds the verified stage file and its parent directory descriptors.
@@ -130,12 +130,11 @@ pub fn create_stage(context: &StageContext) -> Result<StageWriter, StageError> {
             | OFlags::NOFOLLOW
             | OFlags::NONBLOCK
             | OFlags::CLOEXEC,
-        Mode::from_raw_mode(STAGE_MODE),
+        STAGE_MODE,
     )
     .map_err(|_| "cache_stage_create_failed")?;
     let mut file = File::from(descriptor);
-    rustix::fs::fchmod(file.as_fd(), Mode::from_raw_mode(STAGE_MODE))
-        .map_err(|_| "cache_stage_create_failed")?;
+    rustix::fs::fchmod(file.as_fd(), STAGE_MODE).map_err(|_| "cache_stage_create_failed")?;
     let stat = rustix::fs::fstat(file.as_fd()).map_err(|_| "cache_stage_stat_failed")?;
     validate_stat(&stat)?;
     if stat.st_size != 0 || !path_matches(&parent, &name, &stat)? {
@@ -283,7 +282,7 @@ fn digest_file(file: &mut File) -> Result<[u8; 32], StageError> {
 fn validate_stat(stat: &rustix::fs::Stat) -> Result<(), StageError> {
     if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::RegularFile
         || stat.st_uid != crate::process_owner::effective_uid()
-        || stat.st_mode & 0o7777 != STAGE_MODE
+        || stat.st_mode & 0o7777 != STAGE_MODE.bits()
         || stat.st_nlink != 1
         || stat.st_size < 0
         || u64::try_from(stat.st_size).unwrap_or(u64::MAX) > MAX_STAGE_BYTES
