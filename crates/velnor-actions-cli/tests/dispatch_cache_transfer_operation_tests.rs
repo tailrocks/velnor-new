@@ -8,7 +8,7 @@ use velnor_actions_contract::workflow::{
 };
 use velnor_actions_orchestrator::QualificationCacheBindingOutputs;
 
-const KEY: &str = "velnor-qcache-v2-campaign-1-mise_tools-runtime-k1";
+const KEY: &str = "velnor-qcache-v3-campaign-1-mise_tools-runtime-k1";
 const DIGEST: &str = "b3-cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 
 #[test]

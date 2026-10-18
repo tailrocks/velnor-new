@@ -1,5 +1,5 @@
-use super::cleanup::remove_tree_at;
-use super::dirs::{open_parent, same_object, same_version, stat_optional, validate_file_stat};
+use super::dirs::{open_parent, same_object, same_version, validate_file_stat};
+use super::{CreatedPayload, cleanup};
 use super::{FILE_DOMAIN, MAX_FILE_BYTES};
 use rustix::fs::{AtFlags, Mode, OFlags, fchmod, openat, statat};
 use std::fs;
@@ -7,20 +7,13 @@ use std::io::{Read, Write};
 use std::path::Path;
 
 pub(super) fn copy_file_to_new(source: &Path, destination: &Path) -> Result<String, &'static str> {
-    let result = copy_file_to_new_inner(source, destination);
-    if result.is_err()
-        && let Ok((parent, name)) = open_parent(destination)
-        && let Ok(Some(stat)) = stat_optional(&parent, name.as_c_str())
-    {
-        remove_tree_at(&parent, name.as_c_str(), &stat)?;
-    }
-    result
+    copy_file_to_new_owned(source, destination).map(|created| created.digest)
 }
 
-pub(super) fn copy_file_to_new_inner(
+pub(super) fn copy_file_to_new_owned(
     source: &Path,
     destination: &Path,
-) -> Result<String, &'static str> {
+) -> Result<CreatedPayload, &'static str> {
     let (mut source_file, source_stat) = open_copy_source(source)?;
     let (destination_parent, destination_name) = open_parent(destination)?;
     let destination_fd = openat(
@@ -35,16 +28,55 @@ pub(super) fn copy_file_to_new_inner(
         Mode::from_raw_mode(source_stat.st_mode & 0o777),
     )
     .map_err(|_| "qualification_cache_payload_write_failed")?;
-    let destination_copy =
-        rustix::io::dup(&destination_fd).map_err(|_| "qualification_cache_payload_open_failed")?;
-    let mut destination_file = fs::File::from(destination_copy);
-    let expected = copy_file_bytes(&mut source_file, &mut destination_file, &source_stat)?;
-    verify_copied_file(
-        &destination_fd,
+    let destination_stat = rustix::fs::fstat(&destination_fd)
+        .map_err(|_| "qualification_cache_payload_open_failed")?;
+    let mut created = CreatedPayload {
+        digest: String::new(),
+        descriptor: destination_fd,
+        stat: destination_stat,
+    };
+    if let Err(error) = validate_file_stat(&created.stat) {
+        cleanup::remove_owned_at(&destination_parent, &destination_name, &created)?;
+        return Err(error);
+    }
+    let copied = copy_open_file(
+        &mut source_file,
+        &mut created.descriptor,
         &destination_parent,
         &destination_name,
         destination,
         &source_stat,
+    );
+    match copied {
+        Ok(digest) => {
+            created.digest = digest;
+            Ok(created)
+        }
+        Err(error) => {
+            cleanup::remove_owned_at(&destination_parent, &destination_name, &created)?;
+            Err(error)
+        }
+    }
+}
+
+fn copy_open_file(
+    source: &mut fs::File,
+    destination_fd: &mut rustix::fd::OwnedFd,
+    destination_parent: &rustix::fd::OwnedFd,
+    destination_name: &std::ffi::CString,
+    destination: &Path,
+    source_stat: &rustix::fs::Stat,
+) -> Result<String, &'static str> {
+    let destination_copy = rustix::io::dup(&mut *destination_fd)
+        .map_err(|_| "qualification_cache_payload_open_failed")?;
+    let mut destination_file = fs::File::from(destination_copy);
+    let expected = copy_file_bytes(source, &mut destination_file, source_stat)?;
+    verify_copied_file(
+        destination_fd,
+        destination_parent,
+        destination_name,
+        destination,
+        source_stat,
         &expected,
     )
 }
@@ -148,10 +180,15 @@ fn verify_copied_file(
 }
 
 pub(super) fn digest_file(path: &Path) -> Result<Option<String>, &'static str> {
+    Ok(digest_file_with_mode(path)?.map(|(digest, _)| digest))
+}
+
+pub(super) fn digest_file_with_mode(path: &Path) -> Result<Option<(String, u32)>, &'static str> {
     let (parent, name) = open_parent(path)?;
     let before = statat(&parent, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)
         .map_err(|_| "qualification_cache_payload_open_failed")?;
     validate_file_stat(&before)?;
+    super::payload::validate_payload_root_mode(&before)?;
     let fd = openat(
         &parent,
         name.as_c_str(),
@@ -195,5 +232,12 @@ pub(super) fn digest_file(path: &Path) -> Result<Option<String>, &'static str> {
     if count != size || !same_version(&before, &after) {
         return Err("qualification_cache_payload_file_changed");
     }
-    Ok(Some(format!("b3-{}", digest.finalize().to_hex())))
+    Ok(Some((
+        format!("b3-{}", digest.finalize().to_hex()),
+        u32::from(before.st_mode) & 0o777,
+    )))
 }
+
+#[cfg(test)]
+#[path = "../tests/dispatch_cache_transfer_file_tests.rs"]
+mod tests;

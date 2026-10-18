@@ -26,7 +26,6 @@ const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 const MATRIX_KEY_ENV: &str = "VELNOR_QUALIFICATION_CACHE_MATRIX_KEY";
 const LAYER_ENV: &str = "VELNOR_QUALIFICATION_CACHE_LAYER";
 const RUNTIME_IDENTITY_ENV: &str = "VELNOR_QUALIFICATION_RUNTIME_IDENTITY";
-const QUALIFICATION_CACHE_STAGE_ROOT: &str = "velnor/qualification-cache-v2";
 
 #[derive(Debug)]
 pub(crate) struct BindInputs {
@@ -365,13 +364,17 @@ pub(crate) fn stage_path(
         && key.bytes().all(|byte| {
             byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"-_".contains(&byte)
         })
-        && key.starts_with(&format!("velnor-qcache-v2-{campaign}-{layer}-"));
+        && key.starts_with(&format!(
+            "velnor-qcache-v{}-{campaign}-{layer}-",
+            velnor_actions_contract::workflow::QUALIFICATION_CACHE_FORMAT_VERSION
+        ));
     if !valid_campaign || !valid_layer || !valid_key {
         return Err("cache_binding_stage_path_invalid");
     }
     let key_digest = blake3::hash(key.as_bytes()).to_hex();
     let path = format!(
-        "{runner_temp}/{QUALIFICATION_CACHE_STAGE_ROOT}/{campaign}/{layer}/{key_digest}/payload"
+        "{runner_temp}/velnor/qualification-cache-v{}/{campaign}/{layer}/{key_digest}/payload",
+        velnor_actions_contract::workflow::QUALIFICATION_CACHE_FORMAT_VERSION
     );
     if path.len() > 4_096 {
         return Err("cache_binding_stage_path_invalid");

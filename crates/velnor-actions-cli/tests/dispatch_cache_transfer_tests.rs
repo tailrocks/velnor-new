@@ -9,7 +9,7 @@ use velnor_actions_contract::workflow::{
 };
 use velnor_actions_orchestrator::QualificationCacheBindingOutputs;
 
-const CACHE_KEY: &str = "velnor-qcache-v2-campaign-1-mise_tools-runtime-k1";
+const CACHE_KEY: &str = "velnor-qcache-v3-campaign-1-mise_tools-runtime-k1";
 const CACHE_VERSION: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 #[path = "dispatch_cache_transfer_layer_tests.rs"]
@@ -262,9 +262,9 @@ fn source_root_symlink_escape_is_rejected_before_stage_creation() {
     };
     fs::create_dir_all(&roots.roots[0].path).expect("mbx actions root");
     symlink("../../outside", roots.roots[0].path.join("escape")).expect("escaping link");
-    let binding = binding_for_layer("mbx_objects", "velnor-qcache-v2-campaign-1-mbx_objects-k1");
+    let binding = binding_for_layer("mbx_objects", "velnor-qcache-v3-campaign-1-mbx_objects-k1");
     assert!(export_payload(&binding, &roots, &runner_temp).is_err());
-    assert!(!runner_temp.join("velnor/qualification-cache-v2").exists());
+    assert!(!runner_temp.join("velnor/qualification-cache-v3").exists());
 }
 
 fn exported_fixture(
@@ -394,3 +394,6 @@ fn cache_entry() -> QualificationCacheBackendEntry {
         size_bytes: 512,
     }
 }
+
+#[path = "dispatch_cache_transfer_root_mode_tests.rs"]
+mod root_mode_tests;

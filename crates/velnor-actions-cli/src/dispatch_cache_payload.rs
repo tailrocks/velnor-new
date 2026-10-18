@@ -6,7 +6,7 @@ use std::path::Path;
 
 use rustix::fs::{AtFlags, FileType, Mode, OFlags, Stat, open, openat, statat};
 
-const DOMAIN: &[u8] = b"velnor-qualification-cache-useful-state-v1\0";
+const DOMAIN: &[u8] = b"velnor-qualification-cache-useful-state\0";
 const MAX_ENTRIES: usize = 250_000;
 const MAX_TOTAL_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 const MAX_PATH_BYTES: usize = 4_096;
@@ -56,6 +56,7 @@ fn digest_open_directory(root_fd: &rustix::fd::OwnedFd) -> Result<Option<String>
     let root_stat =
         rustix::fs::fstat(root_fd).map_err(|_| "qualification_cache_payload_open_failed")?;
     validate_directory(&root_stat)?;
+    validate_payload_root_mode(&root_stat)?;
     let mut tree = Tree::default();
     scan::collect(root_fd, "", 0, &mut tree)?;
     if tree.entries.is_empty() {
@@ -72,6 +73,8 @@ fn digest_open_directory(root_fd: &rustix::fd::OwnedFd) -> Result<Option<String>
         .sort_by(|left, right| left.path.cmp(&right.path));
     let mut digest = blake3::Hasher::new();
     digest.update(DOMAIN);
+    digest.update(&payload_format_version().to_be_bytes());
+    digest.update(&(u32::from(root_stat.st_mode) & 0o777).to_be_bytes());
     let mut first_paths = std::collections::BTreeMap::new();
     for entry in &tree.entries {
         if let Some(identity) = entry.file_identity {
@@ -106,6 +109,17 @@ fn digest_open_directory(root_fd: &rustix::fd::OwnedFd) -> Result<Option<String>
         }
     }
     Ok(Some(format!("b3-{}", digest.finalize().to_hex())))
+}
+
+fn payload_format_version() -> u8 {
+    velnor_actions_contract::workflow::QUALIFICATION_CACHE_FORMAT_VERSION
+}
+
+pub(super) fn validate_payload_root_mode(stat: &Stat) -> Result<(), &'static str> {
+    if stat.st_mode & 0o7000 != 0 || stat.st_mode & 0o022 != 0 {
+        return Err("qualification_cache_payload_owner_or_mode_invalid");
+    }
+    Ok(())
 }
 
 fn validate_directory(stat: &Stat) -> Result<(), &'static str> {
@@ -311,3 +325,4 @@ fn update_bytes(hasher: &mut blake3::Hasher, bytes: &[u8]) {
 #[path = "dispatch_cache_payload_copy.rs"]
 mod copy;
 pub(crate) use copy::copy_tree_to_new_dir;
+pub(super) use copy::copy_tree_to_new_dir_owned;

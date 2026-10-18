@@ -1,17 +1,8 @@
-use super::dirs::{open_directory_at, open_parent, same_object, stat_optional};
+use super::dirs::{open_directory_at, same_object, stat_optional};
 use super::stage::read_names;
 use super::{MAX_DEPTH, MAX_ENTRIES};
 use rustix::fs::{AtFlags, FileType, Stat, unlinkat};
 use std::ffi::CString;
-use std::path::Path;
-
-pub(super) fn discard_stage(path: &Path) -> Result<(), &'static str> {
-    let (parent, name) = open_parent(path)?;
-    let Some(stat) = stat_optional(&parent, name.as_c_str())? else {
-        return Ok(());
-    };
-    remove_tree_at(&parent, name.as_c_str(), &stat)
-}
 
 pub(super) fn remove_tree_at(
     parent: &rustix::fd::OwnedFd,
@@ -41,6 +32,34 @@ pub(super) fn remove_tree_at(
     } else {
         unlinkat(parent, name, AtFlags::empty()).map_err(|_| "qualification_cache_remove_failed")
     }
+}
+
+pub(super) fn remove_owned_at(
+    parent: &rustix::fd::OwnedFd,
+    name: &std::ffi::CStr,
+    owned: &super::CreatedPayload,
+) -> Result<(), &'static str> {
+    remove_created_at(parent, name, &owned.descriptor, &owned.stat)
+}
+
+pub(super) fn remove_created_at(
+    parent: &rustix::fd::OwnedFd,
+    name: &std::ffi::CStr,
+    descriptor: &rustix::fd::OwnedFd,
+    expected: &Stat,
+) -> Result<(), &'static str> {
+    let descriptor_stat =
+        rustix::fs::fstat(descriptor).map_err(|_| "qualification_cache_remove_changed")?;
+    if !same_object(expected, &descriptor_stat) {
+        return Err("qualification_cache_remove_changed");
+    }
+    let Some(current) = stat_optional(parent, name)? else {
+        return Ok(());
+    };
+    if !same_object(expected, &current) {
+        return Err("qualification_cache_remove_changed");
+    }
+    remove_tree_at(parent, name, &current)
 }
 
 pub(super) fn remove_directory_contents(

@@ -1,6 +1,6 @@
 use super::super::manifest::{PayloadManifest, PayloadRoot};
 use super::super::roots::{CacheRootObservation, CacheRootSet};
-use super::cleanup::remove_tree_at;
+use super::cleanup::remove_created_at;
 use super::dirs::{
     c_name, open_directory_at, open_owned_directory, same_object, same_version, validate_file_stat,
     validate_owned_directory,
@@ -24,14 +24,38 @@ pub(super) fn write_new_payload(
     runner_temp: &Path,
     roots: &CacheRootSet,
     manifest_text: &str,
-) -> Result<(), &'static str> {
+) -> Result<CreatedStage, &'static str> {
     let (parent, stage_name, stage_fd, stage_stat) =
         create_stage_directory(runner_temp, stage_path)?;
-    let result = populate_stage(&stage_fd, stage_path, roots, manifest_text);
-    if result.is_err() {
-        remove_tree_at(&parent, &stage_name, &stage_stat)?;
+    let created = CreatedStage {
+        parent,
+        name: stage_name,
+        descriptor: stage_fd,
+        stat: stage_stat,
+    };
+    if let Err(error) = populate_stage(&created.descriptor, stage_path, roots, manifest_text) {
+        created.remove()?;
+        return Err(error);
     }
-    result
+    Ok(created)
+}
+
+pub(super) struct CreatedStage {
+    parent: rustix::fd::OwnedFd,
+    name: CString,
+    descriptor: rustix::fd::OwnedFd,
+    stat: Stat,
+}
+
+impl CreatedStage {
+    pub(super) fn remove(&self) -> Result<(), &'static str> {
+        remove_created_at(
+            &self.parent,
+            self.name.as_c_str(),
+            &self.descriptor,
+            &self.stat,
+        )
+    }
 }
 
 fn populate_stage(
@@ -112,6 +136,7 @@ pub(super) fn verify_staged_payload(
             PayloadRoot {
                 id: expected.id,
                 present: false,
+                mode: None,
                 digest: None,
             }
         };
@@ -212,7 +237,7 @@ fn create_stage_directory(
         &stat,
         &rustix::fs::fstat(&stage_fd).map_err(|_| "qualification_cache_stage_open_failed")?,
     ) {
-        remove_tree_at(&parent, final_name.as_c_str(), &stat)?;
+        remove_created_at(&parent, final_name.as_c_str(), &stage_fd, &stat)?;
         return Err("qualification_cache_stage_changed");
     }
     Ok((parent, final_name, stage_fd, stat))

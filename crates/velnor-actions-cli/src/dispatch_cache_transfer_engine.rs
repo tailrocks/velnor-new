@@ -1,11 +1,10 @@
 use super::super::manifest::{PayloadManifest, PayloadRoot};
 use super::super::roots::{CacheRootId, CacheRootObservation, CacheRootSet};
-use super::cleanup::discard_stage;
 use super::dirs::{
     open_directory_path, path_exists_no_follow, path_points_to, same_version,
     validate_owned_directory,
 };
-use super::files::digest_file;
+use super::files::digest_file_with_mode;
 use super::install::install_roots;
 use super::payload;
 use super::stage::{verify_staged_payload, write_new_payload};
@@ -62,9 +61,9 @@ pub(crate) fn export_payload(
         PayloadManifest::for_save(binding, roots, cache_key, &state_digest, payload_roots)?;
     let manifest_text = manifest.canonical_json()?;
     let manifest_digest = digest_bytes(&manifest_text);
-    write_new_payload(&stage_path, runner_temp, roots, &manifest_text)?;
+    let created_stage = write_new_payload(&stage_path, runner_temp, roots, &manifest_text)?;
     if let Err(error) = verify_staged_payload(&stage_path, binding, roots, cache_key, false) {
-        discard_stage(&stage_path)?;
+        created_stage.remove()?;
         return Err(error);
     }
     Ok(CacheExportProof {
@@ -246,30 +245,33 @@ pub(crate) fn snapshot_root(root: &CacheRootObservation) -> Result<PayloadRoot, 
             return Ok(PayloadRoot {
                 id: root.id,
                 present: false,
+                mode: None,
                 digest: None,
             });
         }
         Err(_) => return Err("qualification_cache_root_inventory_failed"),
     };
-    let digest = if is_file_root(root.id) {
+    let observed = if is_file_root(root.id) {
         if !metadata.file_type().is_file() {
             return Err("qualification_cache_root_kind_mismatch");
         }
-        digest_file(&root.path)?
+        digest_file_with_mode(&root.path)?
     } else {
         if !metadata.file_type().is_dir() {
             return Err("qualification_cache_root_kind_mismatch");
         }
         digest_directory(&root.path)?
     };
+    let (digest, mode) = observed.map_or((None, None), |(digest, mode)| (Some(digest), Some(mode)));
     Ok(PayloadRoot {
         id: root.id,
         present: digest.is_some(),
+        mode,
         digest,
     })
 }
 
-pub(super) fn digest_directory(path: &Path) -> Result<Option<String>, &'static str> {
+pub(super) fn digest_directory(path: &Path) -> Result<Option<(String, u32)>, &'static str> {
     let opened = open_directory_path(path)?;
     validate_owned_directory(&opened)?;
     let before = rustix::fs::fstat(&opened).map_err(|_| "qualification_cache_root_read_failed")?;
@@ -278,7 +280,7 @@ pub(super) fn digest_directory(path: &Path) -> Result<Option<String>, &'static s
     if !same_version(&before, &after) || !path_points_to(path, &opened) {
         return Err("qualification_cache_root_changed");
     }
-    Ok(digest)
+    Ok(digest.map(|digest| (digest, u32::from(before.st_mode) & 0o777)))
 }
 
 pub(crate) fn useful_state_digest(roots: &[PayloadRoot]) -> Result<String, &'static str> {
@@ -294,16 +296,26 @@ pub(crate) fn useful_state_digest(roots: &[PayloadRoot]) -> Result<String, &'sta
     }
     let mut digest = blake3::Hasher::new();
     digest.update(STATE_DOMAIN);
+    digest.update(
+        &velnor_actions_contract::workflow::QUALIFICATION_CACHE_FORMAT_VERSION.to_be_bytes(),
+    );
     for root in roots {
         update_bytes(&mut digest, root_name(root.id).as_bytes());
         if root.present {
             digest.update(b"present\0");
+            let mode = root
+                .mode
+                .ok_or("qualification_cache_payload_root_mode_missing")?;
+            digest.update(&mode.to_be_bytes());
             let value = root
                 .digest
                 .as_deref()
                 .ok_or("qualification_cache_payload_digest_missing")?;
             update_bytes(&mut digest, value.as_bytes());
         } else {
+            if root.mode.is_some() {
+                return Err("qualification_cache_roots_mismatch");
+            }
             digest.update(b"absent\0");
         }
     }

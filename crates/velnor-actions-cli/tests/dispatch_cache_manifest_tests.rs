@@ -5,7 +5,7 @@ use velnor_actions_orchestrator::QualificationCacheBindingOutputs;
 
 use super::super::roots::{CacheRootId, CacheRootSet};
 
-const CACHE_KEY: &str = "velnor-qcache-v2-campaign-1-mbx_objects-k1";
+const CACHE_KEY: &str = "velnor-qcache-v3-campaign-1-mbx_objects-k1";
 const ROOT_DIGEST: &str = "b3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 #[test]
@@ -20,6 +20,7 @@ fn canonical_manifest_round_trips_only_for_the_exact_bound_predecessor() {
         vec![PayloadRoot {
             id: CacheRootId::MbxActions,
             present: true,
+            mode: Some(0o700),
             digest: Some(ROOT_DIGEST.to_owned()),
         }],
     )
@@ -49,6 +50,7 @@ fn manifest_rejects_stale_lane_identity_state_and_unadmitted_objects() {
         vec![PayloadRoot {
             id: CacheRootId::MbxActions,
             present: true,
+            mode: Some(0o700),
             digest: Some(ROOT_DIGEST.to_owned()),
         }],
     )
@@ -89,6 +91,7 @@ fn manifest_rejects_unknown_noncanonical_and_malformed_root_metadata() {
         vec![PayloadRoot {
             id: CacheRootId::MbxActions,
             present: true,
+            mode: Some(0o700),
             digest: Some(ROOT_DIGEST.to_owned()),
         }],
     )
@@ -124,6 +127,36 @@ fn manifest_rejects_unknown_noncanonical_and_malformed_root_metadata() {
         PayloadManifest::parse_for_restore(&malformed_digest, &binding, &roots, CACHE_KEY),
         Err("qualification_cache_manifest_digest_invalid")
     );
+
+    let mut old_payload_version: Value = serde_json::from_str(&encoded).expect("manifest JSON");
+    old_payload_version["schema"] = json!("velnor.cache-payload/v2");
+    let old_payload_version =
+        canonical_json_str(&old_payload_version).expect("canonicalize old version");
+    assert_eq!(
+        PayloadManifest::parse_for_restore(&old_payload_version, &binding, &roots, CACHE_KEY),
+        Err("qualification_cache_manifest_schema_invalid")
+    );
+
+    let mut missing_mode: Value = serde_json::from_str(&encoded).expect("manifest JSON");
+    missing_mode["roots"][0]
+        .as_object_mut()
+        .expect("root object")
+        .remove("mode");
+    let missing_mode = canonical_json_str(&missing_mode).expect("canonicalize missing mode");
+    assert_eq!(
+        PayloadManifest::parse_for_restore(&missing_mode, &binding, &roots, CACHE_KEY),
+        Err("qualification_cache_manifest_invalid")
+    );
+
+    for mode in [0o777, 0o4755] {
+        let mut invalid_mode: Value = serde_json::from_str(&encoded).expect("manifest JSON");
+        invalid_mode["roots"][0]["mode"] = json!(mode);
+        let invalid_mode = canonical_json_str(&invalid_mode).expect("canonicalize invalid mode");
+        assert_eq!(
+            PayloadManifest::parse_for_restore(&invalid_mode, &binding, &roots, CACHE_KEY),
+            Err("qualification_cache_manifest_root_mode_invalid")
+        );
+    }
 }
 
 fn roots() -> CacheRootSet {

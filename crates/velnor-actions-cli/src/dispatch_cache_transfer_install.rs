@@ -1,14 +1,14 @@
 use super::super::manifest::PayloadRoot;
 use super::super::roots::{CacheRootId, CacheRootObservation, CacheRootSet};
-use super::cleanup::remove_tree_at;
+use super::cleanup::{remove_owned_at, remove_tree_at};
 use super::dirs::{
     c_name, ensure_owned_directory_path, open_owned_directory, same_object, same_version,
     stat_optional,
 };
 use super::engine::{snapshot_roots, useful_state_digest};
-use super::files::copy_file_to_new;
+use super::files::copy_file_to_new_owned;
 use super::payload;
-use super::{ROOTS_DIRECTORY, is_file_root, root_name};
+use super::{CreatedPayload, ROOTS_DIRECTORY, is_file_root, root_name};
 use rustix::fs::{FileType, Stat, renameat};
 use std::ffi::CString;
 use std::path::{Path, PathBuf};
@@ -20,7 +20,7 @@ struct PreparedRoot {
     temporary_name: CString,
     backup_name: CString,
     previous: Option<Stat>,
-    temporary: Option<Stat>,
+    temporary: Option<CreatedPayload>,
     backup_moved: bool,
     replacement_installed: bool,
 }
@@ -111,19 +111,16 @@ fn prepare_root(
             .to_str()
             .map_err(|_| "qualification_cache_import_path_invalid")?;
         let destination = parent_path.join(temporary_text);
-        let digest = if is_file_root(root.id) {
-            copy_file_to_new(&source, &destination)?
+        let created = if is_file_root(root.id) {
+            copy_file_to_new_owned(&source, &destination)?
         } else {
-            payload::copy_tree_to_new_dir(&source, &destination)?
+            payload::copy_tree_to_new_dir_owned(&source, &destination)?
         };
-        if payload_root.digest.as_deref() != Some(digest.as_str()) {
-            let stat = stat_optional(&parent, temporary_name.as_c_str())?;
-            if let Some(stat) = stat {
-                remove_tree_at(&parent, temporary_name.as_c_str(), &stat)?;
-            }
+        if payload_root.digest.as_deref() != Some(created.digest.as_str()) {
+            remove_owned_at(&parent, temporary_name.as_c_str(), &created)?;
             return Err("qualification_cache_import_copy_mismatch");
         }
-        stat_optional(&parent, temporary_name.as_c_str())?
+        Some(created)
     } else {
         None
     };
@@ -169,7 +166,7 @@ fn commit_prepared(prepared: &mut [PreparedRoot]) -> Result<(), &'static str> {
             item.replacement_installed = true;
             let current = stat_optional(&item.parent, item.destination_name.as_c_str())?
                 .ok_or("qualification_cache_import_destination_changed")?;
-            if !same_object(temporary, &current) {
+            if !same_object(&temporary.stat, &current) {
                 return Err("qualification_cache_import_destination_changed");
             }
         }
@@ -185,11 +182,15 @@ fn rollback_prepared(prepared: &mut [PreparedRoot]) -> Result<(), &'static str> 
             if item
                 .temporary
                 .as_ref()
-                .is_none_or(|expected| !same_object(expected, &current))
+                .is_none_or(|expected| !same_object(&expected.stat, &current))
             {
                 return Err("qualification_cache_import_rollback_failed");
             }
-            remove_tree_at(&item.parent, item.destination_name.as_c_str(), &current)?;
+            let temporary = item
+                .temporary
+                .as_ref()
+                .ok_or("qualification_cache_import_rollback_failed")?;
+            remove_owned_at(&item.parent, item.destination_name.as_c_str(), temporary)?;
             item.replacement_installed = false;
         }
         if item.backup_moved {
@@ -211,8 +212,8 @@ fn rollback_prepared(prepared: &mut [PreparedRoot]) -> Result<(), &'static str> 
 
 fn cleanup_prepared(prepared: &[PreparedRoot]) -> Result<(), &'static str> {
     for item in prepared {
-        if let Some(temporary) = stat_optional(&item.parent, item.temporary_name.as_c_str())? {
-            remove_tree_at(&item.parent, item.temporary_name.as_c_str(), &temporary)?;
+        if let Some(temporary) = &item.temporary {
+            remove_owned_at(&item.parent, item.temporary_name.as_c_str(), temporary)?;
         }
         if item.backup_moved {
             return Err("qualification_cache_import_backup_leftover");
@@ -235,3 +236,7 @@ fn validate_destination_root(stat: &Stat, id: CacheRootId) -> Result<(), &'stati
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "../tests/dispatch_cache_transfer_install_tests.rs"]
+mod tests;

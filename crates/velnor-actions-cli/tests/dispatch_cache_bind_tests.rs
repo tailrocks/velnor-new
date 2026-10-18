@@ -133,18 +133,18 @@ fn output_body_uses_fixed_single_line_names() {
         run_key: "r700-a1".to_owned(),
         matrix_key: "matrix-key".to_owned(),
         layer: "cargo_sources".to_owned(),
-        restore_key: Some("velnor-qcache-v2-campaign-1-cargo_sources-k1".to_owned()),
+        restore_key: Some("velnor-qcache-v3-campaign-1-cargo_sources-k1".to_owned()),
         expected_cache: Some(
             velnor_actions_contract::workflow::QualificationCacheBackendEntry {
                 id: 91,
-                key: "velnor-qcache-v2-campaign-1-cargo_sources-k1".to_owned(),
+                key: "velnor-qcache-v3-campaign-1-cargo_sources-k1".to_owned(),
                 git_ref: "refs/heads/main".to_owned(),
                 version: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
                     .to_owned(),
                 size_bytes: 17,
             },
         ),
-        save_key: Some("velnor-qcache-v2-campaign-1-cargo_sources-k1".to_owned()),
+        save_key: Some("velnor-qcache-v3-campaign-1-cargo_sources-k1".to_owned()),
         save_if_state_changes: false,
         expected_prior_state_digest: None,
         runtime_identity_digest: Some("b3-identity".to_owned()),
@@ -154,15 +154,15 @@ fn output_body_uses_fixed_single_line_names() {
     assert!(body.lines().any(|line| line == "active=true"));
     assert!(
         body.lines()
-            .any(|line| line == "restore_key=velnor-qcache-v2-campaign-1-cargo_sources-k1")
+            .any(|line| line == "restore_key=velnor-qcache-v3-campaign-1-cargo_sources-k1")
     );
     assert!(
         body.lines()
-            .any(|line| line == "save_key=velnor-qcache-v2-campaign-1-cargo_sources-k1")
+            .any(|line| line == "save_key=velnor-qcache-v3-campaign-1-cargo_sources-k1")
     );
-    let key_digest = blake3::hash(b"velnor-qcache-v2-campaign-1-cargo_sources-k1").to_hex();
+    let key_digest = blake3::hash(b"velnor-qcache-v3-campaign-1-cargo_sources-k1").to_hex();
     let expected_stage_path = format!(
-        "restore_stage_path=/home/runner/_work/_temp/velnor/qualification-cache-v2/campaign-1/cargo_sources/{key_digest}/payload"
+        "restore_stage_path=/home/runner/_work/_temp/velnor/qualification-cache-v3/campaign-1/cargo_sources/{key_digest}/payload"
     );
     assert!(body.lines().any(|line| line == expected_stage_path));
     let expected_save_path =
@@ -172,7 +172,7 @@ fn output_body_uses_fixed_single_line_names() {
     let hosted_body = output_body(&outputs, hosted_temp).expect("hosted output body");
     assert!(hosted_body.lines().any(|line| {
         line.starts_with(
-            "restore_stage_path=/Users/runner/work/_temp/velnor/qualification-cache-v2/campaign-1/cargo_sources/",
+            "restore_stage_path=/Users/runner/work/_temp/velnor/qualification-cache-v3/campaign-1/cargo_sources/",
         )
     }));
     assert!(
@@ -187,8 +187,8 @@ fn output_body_uses_fixed_single_line_names() {
 #[test]
 fn stable_stage_path_is_exact_key_scoped_and_run_independent() {
     let runner_temp = std::path::Path::new("/home/runner/_work/_temp");
-    let k1 = "velnor-qcache-v2-campaign-1-mise_tools-identity-runtime-k1";
-    let k2 = "velnor-qcache-v2-campaign-1-mise_tools-identity-runtime-k2";
+    let k1 = "velnor-qcache-v3-campaign-1-mise_tools-identity-runtime-k1";
+    let k2 = "velnor-qcache-v3-campaign-1-mise_tools-identity-runtime-k2";
     let cold_save = stage_path(runner_temp, "campaign-1", "mise_tools", k1).expect("K1 save path");
     let warm_restore =
         stage_path(runner_temp, "campaign-1", "mise_tools", k1).expect("K1 restore path");
@@ -206,8 +206,17 @@ fn stable_stage_path_rejects_untyped_components_and_traversal() {
         stage_path(
             runner_temp,
             "campaign-1",
+            "mise_tools",
+            "velnor-qcache-v2-campaign-1-mise_tools-identity-runtime-k1"
+        ),
+        Err("cache_binding_stage_path_invalid")
+    );
+    assert_eq!(
+        stage_path(
+            runner_temp,
+            "campaign-1",
             "unknown",
-            "velnor-qcache-v2-campaign-1-unknown-k1"
+            "velnor-qcache-v3-campaign-1-unknown-k1"
         ),
         Err("cache_binding_stage_path_invalid")
     );
@@ -220,7 +229,7 @@ fn stable_stage_path_rejects_untyped_components_and_traversal() {
             runner_temp,
             "campaign/other",
             "mise_tools",
-            "velnor-qcache-v2-campaign/other-mise_tools-k1"
+            "velnor-qcache-v3-campaign/other-mise_tools-k1"
         ),
         Err("cache_binding_stage_path_invalid")
     );
@@ -229,7 +238,7 @@ fn stable_stage_path_rejects_untyped_components_and_traversal() {
             std::path::Path::new("/home/runner/_work/../tmp"),
             "campaign-1",
             "mise_tools",
-            "velnor-qcache-v2-campaign-1-mise_tools-k1"
+            "velnor-qcache-v3-campaign-1-mise_tools-k1"
         ),
         Err("cache_binding_stage_path_invalid")
     );

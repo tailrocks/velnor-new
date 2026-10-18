@@ -1,15 +1,17 @@
-//! Canonical manifest for one isolated cache payload.
+//! Manifest with fixed fields and root order for one isolated cache payload.
 //!
-//! The manifest is deliberately independent of a workflow run ID so the
-//! same admitted cache key can move from a cold producer to its warm consumer.
+//! The manifest does not use a workflow run ID.
+//! Cold and warm jobs use the same checked cache key.
 
 use serde_json::{Map, Value, json};
 use velnor_actions_contract::{canonical_json_str, strict_json::parse_strict_json_with_limit};
 use velnor_actions_orchestrator::QualificationCacheBindingOutputs;
 
 use super::roots::{CacheRootId, CacheRootSet};
+#[path = "dispatch_cache_manifest_roots.rs"]
+mod root;
+use root::{parse_root, root_id_text, root_kind, valid_root_mode, validate_payload_roots};
 
-const SCHEMA: &str = "velnor.cache-payload/v2";
 const NAMESPACE: &str = "qualification";
 const MAX_MANIFEST_BYTES: usize = 65_536;
 
@@ -17,6 +19,7 @@ const MAX_MANIFEST_BYTES: usize = 65_536;
 pub(crate) struct PayloadRoot {
     pub(crate) id: CacheRootId,
     pub(crate) present: bool,
+    pub(crate) mode: Option<u32>,
     pub(crate) digest: Option<String>,
 }
 
@@ -147,6 +150,8 @@ impl PayloadManifest {
             .any(|pair| root_id_text(pair[0].id) >= root_id_text(pair[1].id))
             || self.roots.iter().any(|root| {
                 root.present != root.digest.is_some()
+                    || root.present != root.mode.is_some()
+                    || root.mode.is_some_and(|mode| !valid_root_mode(mode))
                     || root
                         .digest
                         .as_deref()
@@ -163,6 +168,7 @@ impl PayloadManifest {
                     "digest": root.digest,
                     "id": root_id_text(root.id),
                     "kind": root_kind(root.id),
+                    "mode": root.mode,
                     "present": root.present,
                 })
             })
@@ -175,7 +181,7 @@ impl PayloadManifest {
             "namespace": NAMESPACE,
             "roots": roots,
             "runtime_identity_digest": self.runtime_identity_digest,
-            "schema": SCHEMA,
+            "schema": schema(),
             "state_digest": self.state_digest,
         });
         let text =
@@ -221,7 +227,8 @@ fn parse_value(value: &Value) -> Result<PayloadManifest, &'static str> {
             )
         })
         .ok_or("qualification_cache_manifest_invalid")?;
-    if string_field(object, "schema")? != SCHEMA || string_field(object, "namespace")? != NAMESPACE
+    if string_field(object, "schema")? != schema()
+        || string_field(object, "namespace")? != NAMESPACE
     {
         return Err("qualification_cache_manifest_schema_invalid");
     }
@@ -253,96 +260,11 @@ fn parse_value(value: &Value) -> Result<PayloadManifest, &'static str> {
     })
 }
 
-fn parse_root(value: &Value) -> Result<PayloadRoot, &'static str> {
-    let object = value
-        .as_object()
-        .filter(|object| has_exact_keys(object, &["digest", "id", "kind", "present"]))
-        .ok_or("qualification_cache_manifest_invalid")?;
-    let id =
-        parse_root_id(string_field(object, "id")?).ok_or("qualification_cache_manifest_invalid")?;
-    if string_field(object, "kind")? != root_kind(id) {
-        return Err("qualification_cache_manifest_root_kind_invalid");
-    }
-    let present = object
-        .get("present")
-        .and_then(Value::as_bool)
-        .ok_or("qualification_cache_manifest_invalid")?;
-    let digest = match object.get("digest") {
-        Some(Value::Null) if !present => None,
-        Some(Value::String(value)) if present => {
-            validate_digest(value)?;
-            Some(value.clone())
-        }
-        _ => return Err("qualification_cache_manifest_invalid"),
-    };
-    Ok(PayloadRoot {
-        id,
-        present,
-        digest,
-    })
-}
-
-fn validate_payload_roots(
-    roots: &CacheRootSet,
-    payload_roots: &[PayloadRoot],
-) -> Result<(), &'static str> {
-    if roots.roots.len() != payload_roots.len()
-        || roots
-            .roots
-            .iter()
-            .zip(payload_roots)
-            .any(|(observed, payload)| observed.id != payload.id)
-        || payload_roots.iter().any(|root| {
-            root.present != root.digest.is_some()
-                || root
-                    .digest
-                    .as_deref()
-                    .is_some_and(|digest| validate_digest(digest).is_err())
-        })
-    {
-        return Err("qualification_cache_manifest_roots_mismatch");
-    }
-    Ok(())
-}
-
-fn parse_root_id(value: &str) -> Option<CacheRootId> {
-    Some(match value {
-        "mbx_actions" => CacheRootId::MbxActions,
-        "cargo_git_db" => CacheRootId::CargoGitDb,
-        "cargo_registry_cache" => CacheRootId::CargoRegistryCache,
-        "cargo_registry_index" => CacheRootId::CargoRegistryIndex,
-        "cargo_bin" => CacheRootId::CargoBin,
-        "cargo_crates2_json" => CacheRootId::CargoCrates2Json,
-        "cargo_crates_toml" => CacheRootId::CargoCratesToml,
-        "mise_data" => CacheRootId::MiseData,
-        "rustup_home" => CacheRootId::RustupHome,
-        "tofu_plugins" => CacheRootId::TofuPlugins,
-        "task_artifacts" => CacheRootId::TaskArtifacts,
-        _ => return None,
-    })
-}
-
-fn root_id_text(id: CacheRootId) -> &'static str {
-    match id {
-        CacheRootId::MbxActions => "mbx_actions",
-        CacheRootId::CargoGitDb => "cargo_git_db",
-        CacheRootId::CargoRegistryCache => "cargo_registry_cache",
-        CacheRootId::CargoRegistryIndex => "cargo_registry_index",
-        CacheRootId::CargoBin => "cargo_bin",
-        CacheRootId::CargoCrates2Json => "cargo_crates2_json",
-        CacheRootId::CargoCratesToml => "cargo_crates_toml",
-        CacheRootId::MiseData => "mise_data",
-        CacheRootId::RustupHome => "rustup_home",
-        CacheRootId::TofuPlugins => "tofu_plugins",
-        CacheRootId::TaskArtifacts => "task_artifacts",
-    }
-}
-
-fn root_kind(id: CacheRootId) -> &'static str {
-    match id {
-        CacheRootId::CargoCrates2Json | CacheRootId::CargoCratesToml => "file",
-        _ => "directory",
-    }
+fn schema() -> String {
+    format!(
+        "velnor.cache-payload/v{}",
+        velnor_actions_contract::workflow::QUALIFICATION_CACHE_FORMAT_VERSION
+    )
 }
 
 fn validate_digest(value: &str) -> Result<(), &'static str> {

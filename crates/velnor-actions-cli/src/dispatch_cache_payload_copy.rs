@@ -6,10 +6,9 @@ use std::path::{Component, Path};
 
 use rustix::fs::{AtFlags, FileType, Mode, OFlags, Stat, fchmod, open, openat, statat};
 
+use super::super::{CreatedPayload, cleanup};
 use super::digest_open_directory;
 
-#[path = "dispatch_cache_payload_remove.rs"]
-mod remove;
 #[path = "dispatch_cache_payload_copy_walk.rs"]
 mod walk;
 
@@ -21,14 +20,34 @@ pub(crate) fn copy_tree_to_new_dir(
     source: &Path,
     destination: &Path,
 ) -> Result<String, &'static str> {
-    copy_tree_with_hook(source, destination, |_| {})
+    copy_tree_with_hook_owned(source, destination, |_| {}).map(|created| created.digest)
 }
 
+#[cfg(test)]
 fn copy_tree_with_hook<F>(
     source: &Path,
     destination: &Path,
     mut after_source_open: F,
 ) -> Result<String, &'static str>
+where
+    F: FnMut(&Path),
+{
+    copy_tree_with_hook_owned(source, destination, &mut after_source_open)
+        .map(|created| created.digest)
+}
+
+pub(crate) fn copy_tree_to_new_dir_owned(
+    source: &Path,
+    destination: &Path,
+) -> Result<CreatedPayload, &'static str> {
+    copy_tree_with_hook_owned(source, destination, |_| {})
+}
+
+fn copy_tree_with_hook_owned<F>(
+    source: &Path,
+    destination: &Path,
+    mut after_source_open: F,
+) -> Result<CreatedPayload, &'static str>
 where
     F: FnMut(&Path),
 {
@@ -59,12 +78,16 @@ where
     let destination_fd =
         destination_fd.filter(|fd| fstat(fd).is_ok_and(|opened| same_object(&created, &opened)));
     let Some(destination_fd) = destination_fd else {
-        remove::remove_created_tree(&parent_fd, name.as_c_str(), &created);
         return Err("qualification_cache_payload_open_failed");
+    };
+    let mut owned = CreatedPayload {
+        digest: String::new(),
+        descriptor: destination_fd,
+        stat: created,
     };
     let copied = copy_created_tree(
         &source_fd,
-        &destination_fd,
+        &owned.descriptor,
         &source_stat,
         &expected,
         &mut after_source_open,
@@ -72,16 +95,22 @@ where
     let result = if copied.is_ok()
         && (!same_directory_at_path(source, &source_fd)
             || !same_directory_at_path(destination_parent, &parent_fd)
-            || !same_entry_at_path(&parent_fd, name.as_c_str(), &created))
+            || !same_entry_at_path(&parent_fd, name.as_c_str(), &owned.stat))
     {
         Err("qualification_cache_payload_file_changed")
     } else {
         copied
     };
-    if result.is_err() {
-        remove::remove_created_tree(&parent_fd, name.as_c_str(), &created);
+    match result {
+        Ok(digest) => {
+            owned.digest = digest;
+            Ok(owned)
+        }
+        Err(error) => {
+            cleanup::remove_owned_at(&parent_fd, name.as_c_str(), &owned)?;
+            Err(error)
+        }
     }
-    result
 }
 
 fn validate_destination(

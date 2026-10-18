@@ -1,4 +1,5 @@
-//! Snapshot and import one typed cache payload without exposing live roots to extraction.
+//! Copy one typed cache payload to a staging directory.
+//! Import it into live roots after the manifest and cache receipt checks pass.
 
 use std::path::PathBuf;
 
@@ -23,7 +24,7 @@ pub(super) mod stage;
 
 const MANIFEST_FILENAME: &str = "manifest.json";
 const ROOTS_DIRECTORY: &str = "roots";
-const STATE_DOMAIN: &[u8] = b"velnor-cache-useful-state-v2\0";
+const STATE_DOMAIN: &[u8] = b"velnor-cache-useful-state\0";
 const FILE_DOMAIN: &[u8] = b"velnor-cache-payload-file-v1\0";
 const MAX_MANIFEST_BYTES: usize = 65_536;
 const MAX_FILE_BYTES: u64 = 16 * 1024 * 1024 * 1024;
@@ -32,6 +33,13 @@ const MAX_ENTRIES: usize = 250_000;
 const ACTION_HIT_ENV: &str = "VELNOR_QUALIFICATION_CACHE_HIT";
 const ACTION_MATCHED_KEY_ENV: &str = "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY";
 const MAX_ACTION_KEY_BYTES: usize = velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
+
+#[derive(Debug)]
+pub(super) struct CreatedPayload {
+    pub(super) digest: String,
+    pub(super) descriptor: rustix::fd::OwnedFd,
+    pub(super) stat: rustix::fs::Stat,
+}
 
 pub(crate) const EXPORT_OP: &str = "export-qualification-cache-payload-v1";
 pub(crate) const IMPORT_OP: &str = "import-qualification-cache-payload-v1";
