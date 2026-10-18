@@ -30,7 +30,7 @@ impl fmt::Debug for StageReader {
 }
 
 impl StageReader {
-    /// Rechecks the retained descriptor and its directory entry.
+    /// This method does another check of the kept descriptor and its directory entry.
     ///
     /// # Errors
     ///
@@ -80,7 +80,7 @@ impl StageWriter {
     ///
     /// # Errors
     ///
-    /// Returns an error when the stage file changed or failed validation.
+    /// This method gives an error if the stage file changed or its validation results are unsatisfactory.
     pub fn finish(mut self) -> Result<StageReceiptClaim, StageError> {
         self.file.flush().map_err(|_| "cache_stage_write_failed")?;
         self.file
@@ -114,7 +114,7 @@ impl Seek for StageWriter {
     }
 }
 
-/// Creates the exact stage file without adopting an existing path.
+/// This function makes a new stage file at the specified path. It does not use an existing file.
 ///
 /// # Errors
 ///

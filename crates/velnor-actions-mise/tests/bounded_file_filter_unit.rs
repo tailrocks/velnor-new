@@ -105,7 +105,7 @@ fn zstd_input_read_failure_kills_and_reaps_child() -> Result<(), Box<dyn std::er
         Duration::from_secs(2),
     );
     let Err(error) = error else {
-        return Err(io::Error::other("input failure must fail the filter").into());
+        return Err(io::Error::other("an input error must give a filter error").into());
     };
     assert_eq!(error, "cache_tar_archive_read_failed");
     assert_child_reaped(&pid_path)?;
@@ -132,7 +132,7 @@ fn zstd_output_write_failure_kills_and_reaps_child() -> Result<(), Box<dyn std::
         Duration::from_secs(2),
     );
     let Err(error) = error else {
-        return Err(io::Error::other("output failure must fail the filter").into());
+        return Err(io::Error::other("an output error must give a filter error").into());
     };
     assert_eq!(error, "cache_tar_archive_write_failed");
     assert_child_reaped(&pid_path)?;
@@ -157,7 +157,7 @@ fn zstd_output_limit_kills_and_reaps_child() -> Result<(), Box<dyn std::error::E
         Duration::from_secs(2),
     );
     let Err(error) = error else {
-        return Err(io::Error::other("output above its limit must fail").into());
+        return Err(io::Error::other("output above its limit must give an error").into());
     };
     assert_eq!(error, "cache_tar_archive_limit");
     assert_child_reaped(&pid_path)?;
@@ -180,7 +180,9 @@ fn zstd_hung_child_is_stopped_and_reaped_at_deadline() -> Result<(), Box<dyn std
         Duration::from_millis(200),
     );
     let Err(error) = error else {
-        return Err(io::Error::other("a hung filter must hit its deadline").into());
+        return Err(
+            io::Error::other("a filter that does not stop must give a timeout error").into(),
+        );
     };
     assert_eq!(error, "cache_tar_compression_timeout");
     assert!(started.elapsed() < Duration::from_secs(2));
@@ -224,7 +226,7 @@ fn zstd_filter_waits_for_exit_after_both_streams_close() {
     assert_eq!(output, b"complete stream");
     assert!(
         result.is_ok(),
-        "successful child failed after pipe EOF: {result:?}"
+        "the filter gave an error after child success and pipe EOF: {result:?}"
     );
 }
 
@@ -303,7 +305,7 @@ fn assert_child_reaped(pid_path: &std::path::Path) -> io::Result<()> {
         .status()?;
     if status.success() {
         return Err(io::Error::other(format!(
-            "child {} remained alive",
+            "child {} is still running",
             pid.trim()
         )));
     }
