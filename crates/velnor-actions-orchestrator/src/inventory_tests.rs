@@ -208,7 +208,10 @@ fn resolved_catalog_reaches_spawn_construction() -> Result<(), String> {
         .collect::<Vec<_>>()
         .join(" ");
     assert!(
-        pinned_text.contains("exec rust@1.98.1 -- cargo metadata"),
+        pinned_text.contains(&format!(
+            "exec rust@{} -- cargo metadata",
+            velnor_actions_mise::catalog::RUST_VERSION
+        )),
         "compile-time pin stays distinct: {pinned_text}"
     );
     Ok(())
