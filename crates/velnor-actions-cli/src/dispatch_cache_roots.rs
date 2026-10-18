@@ -160,13 +160,8 @@ where
             cargo_source_paths(&cargo)
         }
         QualificationCacheLayer::MiseTools => {
-            let home = required_env_path(&mut get, "HOME")?;
-            let mise_default = home.join(".local/share/mise");
-            let mise = get("MISE_DATA_DIR")
-                .map(|text| parse_env_path(&text))
-                .transpose()?
-                .unwrap_or(mise_default.clone());
-            if mise != mise_default {
+            let mise = required_env_path(&mut get, "MISE_DATA_DIR")?;
+            if mise != velnor_temp.join("mise") {
                 return Err("qualification_cache_root_environment_invalid");
             }
             let cargo = cargo_home(&mut get, &velnor_temp, true)?;
@@ -193,10 +188,7 @@ where
             vec![(CacheRootId::TofuPlugins, path)]
         }
         QualificationCacheLayer::TaskResult => {
-            let parent = get("MISE_TASK_CACHE_DIR")
-                .or_else(|| get("MISE_CACHE_DIR"))
-                .ok_or("qualification_cache_root_environment_missing")
-                .and_then(|text| parse_env_path(&text))?;
+            let parent = required_env_path(&mut get, "MISE_TASK_CACHE_DIR")?;
             validate_descendant(&parent, &velnor_temp.join("tasks"))?;
             vec![(CacheRootId::TaskArtifacts, parent.join("task-artifacts/v2"))]
         }

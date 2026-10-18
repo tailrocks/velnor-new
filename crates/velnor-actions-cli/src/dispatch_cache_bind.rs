@@ -10,6 +10,9 @@ use velnor_actions_orchestrator::{
     QUALIFICATION_CACHE_BIND_OP, QualificationCacheBindingRequest, bind_qualification_cache_runtime,
 };
 
+#[cfg(test)]
+#[path = "dispatch_cache_manifest.rs"]
+mod manifest;
 #[path = "dispatch_cache_roots.rs"]
 mod roots;
 
