@@ -163,19 +163,30 @@ pub(crate) fn point_at_queue(
     link: &mut Link,
     url: &str,
 ) -> Result<(Option<String>, String), EnsureError> {
-    if let Some(path) = queue_path(&link.base, url) {
+    let (origin, path) = resolve_queue_route(&link.base, url)?;
+    let Some(origin) = origin else {
+        return Ok((None, path));
+    };
+    let saved = link.base.clone();
+    link.transport.set_base(&origin).map_err(map_host)?;
+    link.base = origin;
+    Ok((Some(saved), path))
+}
+
+/// Check a refreshed queue URL with the same rules used before each queue request.
+pub(crate) fn validate_queue_url(base: &str, url: &str) -> Result<(), EnsureError> {
+    resolve_queue_route(base, url).map(|_| ())
+}
+
+fn resolve_queue_route(base: &str, url: &str) -> Result<(Option<String>, String), EnsureError> {
+    if let Some(path) = queue_path(base, url) {
         return Ok((None, path.to_owned()));
     }
     let absolute = absolute_https(url).ok_or(EnsureError::Unexpected {
         status: 0,
         step: "queue-path",
     })?;
-    let saved = link.base.clone();
-    link.transport
-        .set_base(&absolute.origin)
-        .map_err(map_host)?;
-    link.base = absolute.origin;
-    Ok((Some(saved), absolute.path))
+    Ok((Some(absolute.origin), absolute.path))
 }
 
 /// One poll on the current origin.
