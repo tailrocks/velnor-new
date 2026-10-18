@@ -16,6 +16,32 @@ pub struct StageContext {
 }
 
 impl StageContext {
+    /// Derive the normal tools action path with the same namespace hash used by
+    /// the descriptor-bound action adapter.
+    ///
+    /// # Errors
+    ///
+    /// Gives an error when the runner temp path or cache key is invalid.
+    pub(crate) fn normal_action_path(runner_temp: &Path, key: &str) -> Result<PathBuf, StageError> {
+        let identity = key
+            .strip_prefix("mise-tools-v2-payload-v3-")
+            .ok_or("cache_stage_context_invalid")?;
+        if identity.len() != 64
+            || !identity
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err("cache_stage_context_invalid");
+        }
+        validate_key(key)?;
+        let runner_temp = clean_absolute(runner_temp)?;
+        let metadata = std::fs::metadata(&runner_temp).map_err(|_| "cache_stage_path_invalid")?;
+        if !metadata.is_dir() {
+            return Err("cache_stage_path_invalid");
+        }
+        derive_action_path(&runner_temp, "normal-tools-v3", &[], key)
+    }
+
     /// This method makes a context for the selected normal-tools cache key.
     ///
     /// # Errors
@@ -94,24 +120,7 @@ impl StageContext {
         }
         let runner_temp_device = root_metadata.dev();
         let runner_temp_inode = root_metadata.ino();
-        let mut fields = Vec::with_capacity(scope.len() + 2);
-        fields.push(namespace);
-        fields.extend_from_slice(scope);
-        fields.push(key);
-        let mut hash = blake3::Hasher::new();
-        hash.update(STAGE_DOMAIN);
-        for field in &fields {
-            let length = u64::try_from(field.len()).map_err(|_| "cache_stage_context_invalid")?;
-            hash.update(&length.to_be_bytes());
-            hash.update(field.as_bytes());
-        }
-        let digest = hash.finalize();
-        let stage_digest = digest.to_hex().to_string();
-        let action_path = runner_temp
-            .join("velnor")
-            .join("cache-staging")
-            .join(&stage_digest)
-            .join("payload");
+        let action_path = derive_action_path(&runner_temp, namespace, scope, key)?;
         let member_path = relative_path(&workspace, &action_path)?;
         Ok(Self {
             runner_temp,
@@ -165,6 +174,31 @@ impl StageContext {
             digest.to_owned(),
         ])
     }
+}
+
+fn derive_action_path(
+    runner_temp: &Path,
+    namespace: &str,
+    scope: &[&str],
+    key: &str,
+) -> Result<PathBuf, StageError> {
+    let mut fields = Vec::with_capacity(scope.len() + 2);
+    fields.push(namespace);
+    fields.extend_from_slice(scope);
+    fields.push(key);
+    let mut hash = blake3::Hasher::new();
+    hash.update(STAGE_DOMAIN);
+    for field in &fields {
+        let length = u64::try_from(field.len()).map_err(|_| "cache_stage_context_invalid")?;
+        hash.update(&length.to_be_bytes());
+        hash.update(field.as_bytes());
+    }
+    let stage_digest = hash.finalize().to_hex().to_string();
+    Ok(runner_temp
+        .join("velnor")
+        .join("cache-staging")
+        .join(stage_digest)
+        .join("payload"))
 }
 
 fn clean_absolute(path: &Path) -> Result<PathBuf, StageError> {

@@ -20,6 +20,7 @@ impl Fixture {
         fs::create_dir_all(&root).expect("fixture root");
         let root = fs::canonicalize(root).expect("canonical fixture root");
         let runner_temp = root.join("temp");
+        fs::create_dir_all(&runner_temp).expect("runner temp");
         let home = root.join("home");
         let mise_data_dir = home.join(".local/share/mise");
         let cargo_home = runner_temp.join("velnor/cargo");
@@ -80,14 +81,14 @@ fn normal_stage_path_hashes_the_full_v3_key_and_rejects_old_namespaces() {
     let fixture = Fixture::new(temp.path(), "runner", "state");
     let path = normal_tools_cache_stage_path(&fixture.runner_temp, &fixture.cache_key)
         .expect("stage path");
-    let digest = blake3::hash(fixture.cache_key.as_bytes()).to_hex();
-
-    assert_eq!(
-        path,
-        fixture.runner_temp.join(format!(
-            "velnor/normal-cache-v3/mise_tools/{digest}/payload"
-        ))
-    );
+    let context = crate::cache_action_stage::StageContext::normal(
+        &fixture.runner_temp,
+        &fixture.runner_temp,
+        &fixture.cache_key,
+    )
+    .expect("stage context");
+    assert_eq!(path, context.action_path());
+    assert!(path.starts_with(fixture.runner_temp.join("velnor/cache-staging")));
     assert_eq!(path, fixture.stage_path());
     assert_eq!(
         normal_tools_cache_stage_path(

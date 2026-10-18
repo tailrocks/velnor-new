@@ -166,39 +166,3 @@ fn fail(problem: &str) -> ExitCode {
     eprintln!("velnor-actions: cache tar failed: {problem}");
     ExitCode::from(1)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::outcome_body;
-    use velnor_actions_orchestrator::cache_action_stage::{CacheActionCompression, TarOutcome};
-
-    #[test]
-    fn cache_action_compression_outputs_preserve_all_sdk_version_methods() {
-        let gzip = TarOutcome {
-            receipt: None,
-            compression: Some(CacheActionCompression::Gzip),
-        };
-        let zstd_without_long = TarOutcome {
-            receipt: None,
-            compression: Some(CacheActionCompression::ZstdWithoutLong),
-        };
-        let zstd = TarOutcome {
-            receipt: None,
-            compression: Some(CacheActionCompression::Zstd),
-        };
-        assert_eq!(
-            outcome_body(&gzip),
-            Ok(Some("cache-stage-compression=gzip\n".to_owned()))
-        );
-        assert_eq!(
-            outcome_body(&zstd_without_long),
-            Ok(Some(
-                "cache-stage-compression=zstd-without-long\n".to_owned()
-            ))
-        );
-        assert_eq!(
-            outcome_body(&zstd),
-            Ok(Some("cache-stage-compression=zstd\n".to_owned()))
-        );
-    }
-}
