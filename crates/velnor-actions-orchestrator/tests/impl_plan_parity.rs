@@ -295,7 +295,7 @@ fn parity_velnor_policy_lists_validators() -> TestResult {
         assert!(plan.contains("asamarts/alint@"), "plan pins alint:\n{plan}");
         // Merged support jobs never inflate the crate count.
         assert!(
-            plan.contains("Parallel: 1 independent crate job; no matrix fan-out"),
+            plan.contains("Parallel: 6 independent crate jobs; no matrix fan-out"),
             "parallel line:\n{plan}"
         );
         Ok(())
