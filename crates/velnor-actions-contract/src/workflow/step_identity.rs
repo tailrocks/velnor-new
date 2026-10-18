@@ -5,11 +5,11 @@ use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 mod payload;
-pub(super) use payload::valid_tools_cache_identity;
 use payload::{
     action_has_prefix_for_kind, internal_operation, valid_checkout_payload,
     valid_configured_checkout_payload, valid_mbx_cache, valid_mise_setup, valid_tool_seed_payload,
 };
+pub(super) use payload::{valid_cache_tar_launcher, valid_tools_cache_identity};
 
 /// Fixed local action path used for exact provider-cache admission.
 pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-admission";
@@ -56,17 +56,6 @@ pub const TOFU_PROVIDERS_KEY_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outpu
 pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-path }}";
 /// Run MBX workspace cleanup only after the exact-version/store guard passed.
 pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
-
-pub(super) fn valid_cache_tar_launcher(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, env }
-    if uses == CACHE_TAR_LAUNCHER_USES
-        && env.is_empty()
-        && with.len() == 1
-        && with.get(CACHE_TAR_LAUNCHER_SHA256_INPUT).is_some_and(|digest| {
-            crate::ids::is_lower_hex_len(digest, 64)
-                || digest == PRESEED_HELPER_SHA256_OUTPUT_EXPR
-        }))
-}
 
 /// Stable GitHub Actions id for a step whose outputs or outcome have consumers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
