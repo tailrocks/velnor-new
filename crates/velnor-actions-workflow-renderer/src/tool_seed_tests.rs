@@ -40,6 +40,7 @@ fn tools_payload() -> crate::cache_p08::ToolsCachePayload {
         tool_specs: &["rust@1.98.1".to_owned()],
         rustup_toolchain: Some("1.98.1"),
         rustup_components: &[],
+        scale_set_image_source_sha: None,
     })
     .expect("tools payload")
 }

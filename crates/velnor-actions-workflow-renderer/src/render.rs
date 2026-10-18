@@ -152,7 +152,15 @@ pub fn finalize_jobs(
         } else {
             mise.clone()
         };
-        cache_p08::ensure_tools_cache_v2(id, job, &setup, always, target, &ctx.checkout_uses)?;
+        cache_p08::ensure_tools_cache_v2_with_source(
+            id,
+            job,
+            &setup,
+            always,
+            target,
+            ctx.scale_set_image_source_sha.as_deref(),
+            &ctx.checkout_uses,
+        )?;
         cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;

@@ -34,6 +34,7 @@ pub(crate) fn keyed_job(tool: &str) -> Result<Job, RenderError> {
         tool_specs: &specs,
         rustup_toolchain: None,
         rustup_components: &[],
+        scale_set_image_source_sha: None,
     })?;
     Ok(Job {
         display_name: "Keyed".to_owned(),

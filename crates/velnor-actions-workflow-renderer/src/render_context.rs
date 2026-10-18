@@ -60,6 +60,9 @@ pub struct RenderContext {
     /// Scale Set selected by the validated execution profile, when present.
     /// Typed task steps can use only this exact Linux/amd64 selector.
     pub scale_set_selector: Option<ScaleSetSelector>,
+    /// Expected Velnor source revision used by the verified Scale Set images.
+    /// Hosted lanes do not use this value.
+    pub scale_set_image_source_sha: Option<String>,
     /// Digest-verified staged binary under runner temp.
     pub staged_binary: String,
     /// Internal request directory under runner temp.
@@ -128,6 +131,20 @@ impl RenderContext {
     pub fn validate(&self) -> Result<(), RenderError> {
         marker::validate_version(&self.generator_version)?;
         marker::validate_version(&self.report_helper_version)?;
+        if self
+            .scale_set_image_source_sha
+            .as_deref()
+            .is_some_and(|value| {
+                value.len() != 40
+                    || !value
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            })
+        {
+            return Err(RenderError::BadCommand(
+                "bad_scale_set_image_source_sha".to_owned(),
+            ));
+        }
         guard::validate_runs_on(&self.runs_on)?;
         guard::validate_staged_binary(&self.staged_binary, &self.report_helper_version)?;
         guard::validate_request_dir(&self.request_dir)?;
