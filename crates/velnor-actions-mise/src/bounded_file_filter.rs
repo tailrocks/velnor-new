@@ -21,6 +21,7 @@ pub enum ZstdFilterMode {
 }
 
 /// Runs zstd with regular-file streams, byte limits, and a deadline.
+/// The deadline applies to child execution. File operations can continue after this deadline.
 ///
 /// # Errors
 /// Returns an error code when a file, filter, stream, limit, or deadline fails.

@@ -11,6 +11,7 @@ use std::path::{Component, Path};
 
 const MAX_STAGE_BYTES: u64 = 20 * 1024 * 1024 * 1024;
 const STAGE_MODE: u16 = 0o600;
+const ROOT_UID: u32 = 0;
 
 /// Holds the verified stage file and its parent directory descriptors.
 pub struct StageReader {
@@ -369,13 +370,12 @@ fn open_directory_path(path: &Path) -> Result<OwnedFd, StageError> {
 fn validate_ancestor(fd: &OwnedFd) -> Result<(), StageError> {
     let stat = rustix::fs::fstat(fd.as_fd()).map_err(|_| "cache_stage_parent_stat_failed")?;
     let owner = stat.st_uid;
-    let root_uid = rustix::process::Uid::ROOT.as_raw();
     let current_uid = crate::process_owner::effective_uid();
     let mode = stat.st_mode & 0o7777;
     let writable_by_others = mode & 0o0022 != 0;
     let protected_by_sticky_bit = mode & 0o1000 != 0;
     if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::Directory
-        || (owner != root_uid && owner != current_uid)
+        || (owner != ROOT_UID && owner != current_uid)
         || (writable_by_others && !protected_by_sticky_bit)
     {
         return Err("cache_stage_ancestor_owner_or_mode_invalid");
