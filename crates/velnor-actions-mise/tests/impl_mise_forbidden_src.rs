@@ -193,11 +193,6 @@ const ALWAYS_BANNED: &[&str] = &[
     "apply_fix",
 ];
 
-/// Path-opening APIs are forbidden in the one module that writes filter output.
-/// That module receives its writer from the checked file-filter caller.
-const FILTER_PATH_OPEN_BANNED: &[&str] = &["std::fs", "libc::"];
-const FILTER_PATH_OPEN_IDENTIFIERS: &[&str] = &["open", "openat", "options", "OpenOptions"];
-
 /// Tool-file names allowed only in `toolfiles.rs` (read-only routing and
 /// inspection): owned Mise files plus foreign Rust files for routing.
 const TOOLFILES_ONLY: &[&str] = &[
@@ -228,6 +223,7 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
     let is_filter = name == "bounded_file_filter.rs";
     let write_expression = "output.write_all(&buffer[..count])";
     let metadata_expression = "std::fs::symlink_metadata(program)";
+    path_policy::check_path_openers(name, source, violations);
     if is_filter_process && compact.matches(write_expression).count() != 1 {
         violations.push(format!(
             "{name}: expected exactly one bounded output write `{write_expression}`"
@@ -247,26 +243,6 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
         violations.push(format!(
             "{name}: program metadata check is outside its approved module"
         ));
-    }
-    if is_filter_process {
-        for token in FILTER_PATH_OPEN_BANNED {
-            if compact.contains(token) {
-                violations.push(format!(
-                    "{name}: path-opening capability is forbidden in the output writer module: `{token}`"
-                ));
-            }
-        }
-        for (line, code) in code_of(source) {
-            let identifiers = code
-                .split(|character: char| !character.is_ascii_alphanumeric() && character != '_');
-            for token in FILTER_PATH_OPEN_IDENTIFIERS {
-                if identifiers.clone().any(|identifier| identifier == *token) {
-                    violations.push(format!(
-                        "{name}:{line}: path-opening identifier `{token}` is forbidden in the output writer module"
-                    ));
-                }
-            }
-        }
     }
     for (line, mut code) in code_of(source) {
         if is_filter_process && code.trim() == ".write_all(&buffer[..count])" {
@@ -299,3 +275,6 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
 
 #[path = "impl_mise_forbidden_src_filter_tests.rs"]
 mod filter_tests;
+
+#[path = "impl_mise_forbidden_src_path_policy.rs"]
+mod path_policy;
