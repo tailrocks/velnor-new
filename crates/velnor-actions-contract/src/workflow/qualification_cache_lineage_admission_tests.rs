@@ -257,6 +257,35 @@ fn receipt_admission_rejects_missing_extra_and_retired_layers() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn receipt_admission_requires_a_valid_backend_version() -> TestResult {
+    let plan = qualification_plan(QualificationPhase::Cold, 708, SOURCE_A, None)?;
+    let node = completed_node(&plan, None, None)?;
+    let mut malformed = node.value.clone();
+    let saved = malformed["receipt"]["lanes"][0]["layers"]
+        .as_array_mut()
+        .ok_or_else(|| std::io::Error::other("receipt layers are not an array"))?
+        .iter_mut()
+        .find(|layer| layer["save"]["after"]["status"] == "found")
+        .ok_or_else(|| std::io::Error::other("saved cache entry is missing"))?;
+    saved["save"]["after"]["entry"]["version"] = serde_json::json!("bad");
+    assert!(rejects_admission(&malformed, &plan, None));
+
+    let mut missing = node.value.clone();
+    let saved = missing["receipt"]["lanes"][0]["layers"]
+        .as_array_mut()
+        .ok_or_else(|| std::io::Error::other("receipt layers are not an array"))?
+        .iter_mut()
+        .find(|layer| layer["save"]["after"]["status"] == "found")
+        .ok_or_else(|| std::io::Error::other("saved cache entry is missing"))?;
+    saved["save"]["after"]["entry"]
+        .as_object_mut()
+        .ok_or_else(|| std::io::Error::other("cache entry is not an object"))?
+        .remove("version");
+    assert!(rejects_admission(&missing, &plan, None));
+    Ok(())
+}
+
 fn assert_warm_successor_is_selected(
     cold: &BuiltNode,
     warm: &BuiltNode,

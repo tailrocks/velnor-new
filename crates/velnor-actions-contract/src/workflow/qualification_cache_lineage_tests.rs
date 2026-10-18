@@ -27,6 +27,7 @@ fn restore_admission_requires_exact_matched_key_and_backend_id() {
         id: 41,
         key: "qualification-k1".to_owned(),
         git_ref: "refs/heads/main".to_owned(),
+        version: "a".repeat(64),
         size_bytes: 4096,
     };
     let keys = BoundQualificationCacheKeys {

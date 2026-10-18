@@ -47,7 +47,7 @@ pub enum QualificationCacheSaveActionResult {
     Disabled,
 }
 
-/// One exact key/ref record returned by the cache backend API.
+/// One exact key/ref/version record returned by the cache backend API.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualificationCacheBackendEntry {
@@ -57,6 +57,8 @@ pub struct QualificationCacheBackendEntry {
     pub key: String,
     /// GitHub cache ref scope.
     pub git_ref: String,
+    /// SHA-256 archive version returned by the cache API.
+    pub version: String,
     /// Archive size in bytes.
     pub size_bytes: u64,
 }

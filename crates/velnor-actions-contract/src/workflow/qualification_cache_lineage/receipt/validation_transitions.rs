@@ -92,6 +92,7 @@ pub(super) fn validate_restore(
             if restore.matched_key.as_deref() == Some(requested_key)
                 && restore.result == QualificationCacheRestoreResult::Hit
                 && expected.key == requested_key
+                && valid_cache_version(&expected.version)
                 && actual == expected =>
         {
             Ok(())
@@ -142,12 +143,20 @@ pub(super) fn validate_save(
         || after.id == 0
         || after.key != key
         || after.git_ref != metadata.git_ref
+        || !valid_cache_version(&after.version)
         || after.size_bytes == 0
         || receipt.run.run_id != metadata.run.run_id
     {
         return Err(invalid("archive_creation_not_proven"));
     }
     Ok(())
+}
+
+fn valid_cache_version(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 pub(super) fn validate_useful_delta_progress(

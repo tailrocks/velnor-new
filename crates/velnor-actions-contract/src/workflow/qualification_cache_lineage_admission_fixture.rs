@@ -269,6 +269,7 @@ fn save_observed(
         id: context.run_id * 10 + index + 1,
         key: key.to_owned(),
         git_ref: context.git_ref.clone(),
+        version: "a".repeat(64),
         size_bytes: 4_096,
     };
     Ok((

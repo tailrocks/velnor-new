@@ -63,6 +63,7 @@ fn lane(
             id: 8,
             key: "k3".to_owned(),
             git_ref: "refs/heads/main".to_owned(),
+            version: "a".repeat(64),
             size_bytes: 512,
         })
     } else {
