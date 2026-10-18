@@ -9,7 +9,10 @@ use self::admission_fixture::{
 use super::directive_tests::qualification_plan;
 use super::*;
 use crate::canonical::digest_b3;
-use crate::workflow::{QualificationCacheLayer, QualificationPhase, QualificationRunRef};
+use crate::workflow::{
+    QualificationCacheLayer, QualificationDispatchMode, QualificationPhase, QualificationRunRef,
+    verification_repeat_campaign,
+};
 
 type TestResult<T = ()> = Result<T, Box<dyn Error>>;
 
@@ -20,6 +23,7 @@ const SOURCE_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 fn complete_cold_warm_third_useful_delta_and_control_admission_paths() -> TestResult {
     let cold_plan = qualification_plan(QualificationPhase::Cold, 700, SOURCE_A, None)?;
     let cold = completed_node(&cold_plan, None, None)?;
+    assert_eq!(cold.value["producer"]["mode"], "controlled");
 
     let warm_plan = phase_plan(QualificationPhase::Warm, 701, SOURCE_A, 700)?;
     let cold_admission = admission_for(&cold, None)?;
@@ -96,6 +100,16 @@ fn completed_receipt_uses_the_unprotected_verification_branch_identity() -> Test
         crate::workflow::QUALIFICATION_WORKFLOW_PATH,
         context.git_ref
     );
+    context.mode = QualificationDispatchMode::VerificationOnly;
+    context.campaign = verification_repeat_campaign(
+        &context.repository,
+        &context.default_branch,
+        &context.git_ref,
+        &context.workflow_ref,
+        &context.workflow_sha,
+        &context.source_sha,
+        context.run_id,
+    );
     plan.validate()?;
 
     let node = completed_node(&plan, None, None)?;
@@ -104,6 +118,11 @@ fn completed_receipt_uses_the_unprotected_verification_branch_identity() -> Test
     assert_eq!(metadata.git_ref, "refs/heads/sea/integration");
     assert!(!metadata.ref_protected);
     assert_eq!(node.artifact.workflow_head_branch, "sea/integration");
+    assert_eq!(node.value["producer"]["mode"], "verification_only");
+
+    let mut wrong_mode = node.document.clone();
+    wrong_mode.producer.mode = QualificationDispatchMode::Controlled;
+    assert!(wrong_mode.to_bounded_json(&plan, &metadata, None).is_err());
 
     let mut wrong_ref = metadata.clone();
     wrong_ref.git_ref = "refs/heads/main".to_owned();
@@ -137,7 +156,7 @@ fn native_mbx_receipt_and_directive_use_the_object_layer_only() -> TestResult {
     assert_eq!(layers.len(), 5);
     assert!(objects.active && objects.state_digest.is_some());
     assert!(objects.runtime_identity.is_some());
-    assert_eq!(node.document.schema, 2);
+    assert_eq!(node.document.schema, 3);
     assert_eq!(node.receipt.schema, 2);
 
     let entry = &plan.matrix.include[0];
@@ -203,13 +222,14 @@ fn legacy_receipt_versions_and_artifact_identity_are_rejected() -> TestResult {
     assert!(rejects_admission(&old_receipt, &plan, None));
 
     let mut old_artifact = node.value.clone();
-    old_artifact["artifact"]["name"] = serde_json::json!("velnor-qualification-cache-receipt-v1");
+    old_artifact["artifact"]["name"] =
+        serde_json::json!("velnor-qualification-cache-receipt-v2-a1");
     assert!(rejects_admission(&old_artifact, &plan, None));
 
     let metadata: crate::workflow::QualificationCacheRunMetadata =
         serde_json::from_value(node.value["metadata"].clone())?;
     let mut old_document = node.document.clone();
-    old_document.schema = 1;
+    old_document.schema = 2;
     assert!(
         old_document
             .to_bounded_json(&plan, &metadata, None)

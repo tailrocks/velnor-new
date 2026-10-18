@@ -18,6 +18,7 @@ pub use types::{
     QualificationCacheReceiptArtifactDocument, QualificationCacheReceiptLink,
     QualificationCacheRestore, QualificationCacheRestoreResult, QualificationCacheRunMetadata,
     QualificationCacheSave, QualificationCacheSaveActionResult, QualificationSourceDelta,
+    qualification_cache_receipt_artifact_name,
 };
 pub(super) fn layer_applies(
     entry: &crate::workflow::MatrixEntry,

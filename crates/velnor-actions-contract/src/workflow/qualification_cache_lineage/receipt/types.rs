@@ -4,10 +4,11 @@ use serde::{Deserialize, Serialize};
 
 use super::super::identity::QualificationCacheLayer;
 use super::super::runtime::QualificationRuntimeIdentity;
-use crate::workflow::{QualificationPhase, QualificationRunRef};
+use crate::errors::ContractError;
+use crate::workflow::{QualificationDispatchMode, QualificationPhase, QualificationRunRef};
 
-/// Immutable uploaded receipt artifact name consumed by the dispatcher.
-pub const QUALIFICATION_CACHE_RECEIPT_ARTIFACT: &str = "velnor-qualification-cache-receipt-v2";
+/// Prefix for immutable receipt artifact names consumed by the dispatcher.
+pub const QUALIFICATION_CACHE_RECEIPT_ARTIFACT: &str = "velnor-qualification-cache-receipt-v3";
 /// The sole file inside each immutable qualification receipt artifact.
 pub const QUALIFICATION_CACHE_RECEIPT_FILENAME: &str = "qualification-cache-receipt.json";
 /// Maximum staged receipt document size before deserialization.
@@ -18,6 +19,19 @@ pub const MAX_QUALIFICATION_RECEIPT_DEPTH: usize = 4;
 pub(super) const MAX_JSON_NESTING: usize = 32;
 /// Maximum UTF-8 bytes in one externally supplied text field.
 pub(super) const MAX_RECEIPT_TEXT_BYTES: usize = 4_096;
+
+/// Give the artifact name for one exact workflow attempt.
+/// # Errors
+/// Gives an error when either run coordinate is zero or invalid.
+pub fn qualification_cache_receipt_artifact_name(
+    run: QualificationRunRef,
+) -> Result<String, ContractError> {
+    run.validate()?;
+    Ok(format!(
+        "{QUALIFICATION_CACHE_RECEIPT_ARTIFACT}-a{}",
+        run.run_attempt
+    ))
+}
 
 /// Exact cache restore result observed in a completed producer job.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -256,6 +270,8 @@ pub struct QualificationCacheArtifact {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualificationCacheProducerContext {
+    /// Dispatch flow authenticated by the runner.
+    pub mode: QualificationDispatchMode,
     /// Repository slug observed by the runner.
     pub repository: String,
     /// Default branch observed during planning.

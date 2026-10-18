@@ -327,57 +327,17 @@ fn verification_dispatch_trigger() -> Yaml {
 }
 
 fn verification_dispatch_inputs() -> Yaml {
-    let inputs = vec![
-        (
-            "mode".to_owned(),
-            Yaml::Map(vec![
-                ("type".to_owned(), Yaml::str("choice")),
-                ("required".to_owned(), Yaml::Bool(true)),
-                (
-                    "options".to_owned(),
-                    Yaml::Seq(vec![Yaml::str("verification-only")]),
-                ),
-            ]),
-        ),
-        (
-            "campaign".to_owned(),
-            Yaml::Map(vec![
-                ("type".to_owned(), Yaml::str("string")),
-                ("required".to_owned(), Yaml::Bool(true)),
-            ]),
-        ),
-        (
-            "phase".to_owned(),
-            Yaml::Map(vec![
-                ("type".to_owned(), Yaml::str("choice")),
-                ("required".to_owned(), Yaml::Bool(true)),
-                (
-                    "options".to_owned(),
-                    Yaml::Seq(
-                        ["cold", "control", "third", "useful_delta", "warm"]
-                            .into_iter()
-                            .map(Yaml::str)
-                            .collect(),
-                    ),
-                ),
-            ]),
-        ),
-        (
-            "predecessor_run_id".to_owned(),
-            Yaml::Map(vec![
-                ("type".to_owned(), Yaml::str("string")),
-                ("required".to_owned(), Yaml::Bool(false)),
-            ]),
-        ),
-        (
-            "predecessor_run_attempt".to_owned(),
-            Yaml::Map(vec![
-                ("type".to_owned(), Yaml::str("string")),
-                ("required".to_owned(), Yaml::Bool(false)),
-            ]),
-        ),
-    ];
-    Yaml::Map(inputs)
+    Yaml::Map(vec![(
+        "mode".to_owned(),
+        Yaml::Map(vec![
+            ("type".to_owned(), Yaml::str("choice")),
+            ("required".to_owned(), Yaml::Bool(true)),
+            (
+                "options".to_owned(),
+                Yaml::Seq(vec![Yaml::str("verification-only")]),
+            ),
+        ]),
+    )])
 }
 
 fn with_if((id, body): (String, Yaml), when: &str) -> (String, Yaml) {

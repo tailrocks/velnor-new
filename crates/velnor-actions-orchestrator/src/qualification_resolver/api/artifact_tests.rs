@@ -1,25 +1,36 @@
 use super::{validate_document, verify_artifact_run};
 use velnor_actions_contract::{
-    QUALIFICATION_CACHE_RECEIPT_ARTIFACT, QualificationCacheArtifact,
-    QualificationCacheProducerContext, QualificationCacheReceipt,
-    QualificationCacheReceiptArtifactDocument, QualificationCacheRunMetadata, QualificationPhase,
-    QualificationRunRef,
+    QualificationCacheArtifact, QualificationCacheProducerContext, QualificationCacheReceipt,
+    QualificationCacheReceiptArtifactDocument, QualificationCacheRunMetadata,
+    QualificationDispatchMode, QualificationPhase, QualificationRunRef,
+    qualification_cache_receipt_artifact_name,
 };
 
 #[test]
-fn resolver_accepts_only_schema_two_documents_and_artifact_names() {
+fn resolver_accepts_only_attempt_scoped_schema_three_documents() {
     let run = QualificationRunRef {
         run_id: 12,
         run_attempt: 1,
     };
-    assert!(validate_document(&document(2, run), run).is_ok());
-    assert!(validate_document(&document(1, run), run).is_err());
+    assert!(validate_document(&document(3, run), run).is_ok());
+    assert!(validate_document(&document(2, run), run).is_err());
 
-    let metadata = metadata(run);
+    let run_metadata = metadata(run);
     let old = artifact(run, "velnor-qualification-cache-receipt-v1");
-    assert!(verify_artifact_run(&old, &metadata).is_err());
-    let current = artifact(run, QUALIFICATION_CACHE_RECEIPT_ARTIFACT);
-    assert!(verify_artifact_run(&current, &metadata).is_ok());
+    assert!(verify_artifact_run(&old, &run_metadata).is_err());
+    let current_name = qualification_cache_receipt_artifact_name(run).expect("artifact name");
+    let current = artifact(run, &current_name);
+    assert!(verify_artifact_run(&current, &run_metadata).is_ok());
+
+    let later_attempt = QualificationRunRef {
+        run_id: run.run_id,
+        run_attempt: 2,
+    };
+    let stale_attempt = artifact(
+        later_attempt,
+        &qualification_cache_receipt_artifact_name(run).expect("first attempt name"),
+    );
+    assert!(verify_artifact_run(&stale_attempt, &metadata(later_attempt)).is_err());
 }
 
 fn document(schema: u32, run: QualificationRunRef) -> QualificationCacheReceiptArtifactDocument {
@@ -27,6 +38,7 @@ fn document(schema: u32, run: QualificationRunRef) -> QualificationCacheReceiptA
     QualificationCacheReceiptArtifactDocument {
         schema,
         producer: QualificationCacheProducerContext {
+            mode: QualificationDispatchMode::Controlled,
             repository: "owner/project".to_owned(),
             default_branch: "main".to_owned(),
             git_ref: "refs/heads/main".to_owned(),

@@ -63,10 +63,10 @@ fn scale_set_mode_emits_only_the_full_ci_verification_wrapper() {
         yaml.contains("mode:") && yaml.contains("verification-only"),
         "{yaml}"
     );
-    assert!(yaml.contains("campaign:"), "{yaml}");
-    assert!(yaml.contains("phase:"), "{yaml}");
-    assert!(yaml.contains("predecessor_run_id:"), "{yaml}");
-    assert!(yaml.contains("predecessor_run_attempt:"), "{yaml}");
+    assert!(!yaml.contains("campaign:"), "{yaml}");
+    assert!(!yaml.contains("phase:"), "{yaml}");
+    assert!(!yaml.contains("predecessor_run_id:"), "{yaml}");
+    assert!(!yaml.contains("predecessor_run_attempt:"), "{yaml}");
     assert!(yaml.contains("uses: ./.github/workflows/ci.yml"), "{yaml}");
     assert!(yaml.contains("actions: read"), "{yaml}");
     assert!(yaml.contains("cancel-in-progress: false"), "{yaml}");
@@ -86,6 +86,20 @@ fn scale_set_mode_emits_only_the_full_ci_verification_wrapper() {
         !yaml.contains("mbx-cache-write"),
         "wrapper must not emit a separate cache writer: {yaml}"
     );
+}
+
+#[test]
+fn hosted_qualification_keeps_its_both_mode_default() {
+    let workflow = render_schema2_workflows(&request())
+        .expect("hosted qualification renders")
+        .into_iter()
+        .find(|file| file.path == super::QUALIFICATION_WORKFLOW)
+        .expect("qualification file exists");
+    let yaml = workflow.bytes.as_str();
+
+    assert!(yaml.contains("default: both"), "{yaml}");
+    assert!(yaml.contains("verify-hosted:"), "{yaml}");
+    assert!(yaml.contains("verify-scale-set:"), "{yaml}");
 }
 
 #[test]

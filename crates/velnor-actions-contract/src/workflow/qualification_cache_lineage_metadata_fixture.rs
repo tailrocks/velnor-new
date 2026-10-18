@@ -1,6 +1,6 @@
 use crate::workflow::{
     QualificationCacheArtifact, QualificationCacheProducerContext, QualificationCacheRunMetadata,
-    QualificationDispatch, QualificationRunRef,
+    QualificationDispatch, QualificationRunRef, qualification_cache_receipt_artifact_name,
 };
 
 pub(super) fn producer_context(
@@ -8,6 +8,7 @@ pub(super) fn producer_context(
 ) -> super::TestResult<QualificationCacheProducerContext> {
     let context = dispatch(plan)?;
     Ok(QualificationCacheProducerContext {
+        mode: context.mode,
         repository: context.repository.clone(),
         default_branch: context.default_branch.clone(),
         git_ref: context.git_ref.clone(),
@@ -58,7 +59,7 @@ pub(super) fn artifact_metadata(
         .ok_or_else(|| std::io::Error::other("qualification branch missing"))?;
     Ok(QualificationCacheArtifact {
         id: context.run_id + 1_000,
-        name: crate::workflow::QUALIFICATION_CACHE_RECEIPT_ARTIFACT.to_owned(),
+        name: qualification_cache_receipt_artifact_name(run_ref(context))?,
         digest: format!("sha256:{:064x}", context.run_id),
         size_bytes: size_bytes as u64,
         expired: false,

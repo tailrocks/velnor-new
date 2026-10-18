@@ -9,8 +9,8 @@ use super::super::super::MAX_QUALIFICATION_CACHE_LANES;
 use super::super::errors::{check_text, invalid};
 use super::super::source_delta::validate_source_delta;
 use super::super::types::{
-    AdmissionNode, MAX_QUALIFICATION_RECEIPT_BYTES, QUALIFICATION_CACHE_RECEIPT_ARTIFACT,
-    QualificationCacheReceipt,
+    AdmissionNode, MAX_QUALIFICATION_RECEIPT_BYTES, QualificationCacheReceipt,
+    qualification_cache_receipt_artifact_name,
 };
 
 pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_node_metadata(
@@ -29,6 +29,7 @@ pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_node_m
     if producer.repository != metadata.repository
         || producer.default_branch != metadata.default_branch
         || producer.git_ref != metadata.git_ref
+        || producer.mode != context.mode
         || producer.ref_protected != context.ref_protected
         || metadata.ref_protected != context.ref_protected
         || producer.workflow_ref != metadata.workflow_ref
@@ -87,7 +88,7 @@ pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_metada
     node.producer.run.validate()?;
     node.receipt.run.validate()?;
     if node.artifact.id == 0
-        || node.artifact.name != QUALIFICATION_CACHE_RECEIPT_ARTIFACT
+        || node.artifact.name != qualification_cache_receipt_artifact_name(node.receipt.run)?
         || node.artifact.expired
         || node.artifact.size_bytes == 0
         || node.artifact.size_bytes > MAX_QUALIFICATION_RECEIPT_BYTES as u64

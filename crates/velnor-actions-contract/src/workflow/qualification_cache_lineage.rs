@@ -33,6 +33,7 @@ pub use receipt::{
     QualificationCacheReceiptArtifactDocument, QualificationCacheReceiptLink,
     QualificationCacheRestore, QualificationCacheRestoreResult, QualificationCacheRunMetadata,
     QualificationCacheSave, QualificationCacheSaveActionResult, QualificationSourceDelta,
+    qualification_cache_receipt_artifact_name,
 };
 
 #[cfg(test)]

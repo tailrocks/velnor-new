@@ -1,10 +1,10 @@
 use super::*;
 use crate::{
-    QUALIFICATION_CACHE_RECEIPT_ARTIFACT, QualificationCacheArtifact,
-    QualificationCacheBackendEntry, QualificationCacheBackendObservation,
-    QualificationCacheProducerContext, QualificationCacheReceipt, QualificationCacheRestore,
-    QualificationCacheRestoreResult, QualificationCacheRunMetadata, QualificationCacheSave,
-    QualificationCacheSaveActionResult,
+    QualificationCacheArtifact, QualificationCacheBackendEntry,
+    QualificationCacheBackendObservation, QualificationCacheProducerContext,
+    QualificationCacheReceipt, QualificationCacheRestore, QualificationCacheRestoreResult,
+    QualificationCacheRunMetadata, QualificationCacheSave, QualificationCacheSaveActionResult,
+    QualificationDispatchMode, qualification_cache_receipt_artifact_name,
 };
 
 #[test]
@@ -123,7 +123,7 @@ fn node(phase: QualificationPhase, lanes: Vec<QualificationCacheLaneReceipt>) ->
         },
         artifact: QualificationCacheArtifact {
             id: 4,
-            name: QUALIFICATION_CACHE_RECEIPT_ARTIFACT.to_owned(),
+            name: qualification_cache_receipt_artifact_name(run).expect("receipt artifact name"),
             digest: format!("sha256:{}", "b".repeat(64)),
             size_bytes: 512,
             expired: false,
@@ -132,6 +132,7 @@ fn node(phase: QualificationPhase, lanes: Vec<QualificationCacheLaneReceipt>) ->
             workflow_head_sha: "a".repeat(40),
         },
         producer: QualificationCacheProducerContext {
+            mode: QualificationDispatchMode::Controlled,
             repository: "owner/project".to_owned(),
             default_branch: "main".to_owned(),
             git_ref: "refs/heads/main".to_owned(),

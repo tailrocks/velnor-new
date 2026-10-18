@@ -97,6 +97,7 @@ pub use qualification_cache_lineage::{
     QualificationRuntimeImageDigests, QualificationRuntimeImageIdentity,
     QualificationRuntimePlatform, QualificationRuntimeScaleSet,
     QualificationRuntimeToolObservation, QualificationSourceDelta,
+    qualification_cache_receipt_artifact_name,
 };
 pub use qualification_dispatch::{
     QualificationDispatch, QualificationDispatchMode, QualificationRunRef,

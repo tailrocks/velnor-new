@@ -58,7 +58,7 @@ pub(super) fn completed_node(
     let metadata = run_metadata(plan)?;
     let receipt = completed_receipt(plan, previous_admission.as_ref(), previous, source_delta)?;
     let document = QualificationCacheReceiptArtifactDocument {
-        schema: 2,
+        schema: 3,
         producer,
         receipt: receipt.clone(),
     };

@@ -9,9 +9,9 @@ use super::super::identity::configuration_commitment;
 use super::admission::QualificationCacheAdmission;
 use super::errors::invalid;
 use super::types::{
-    AdmissionNode, MAX_QUALIFICATION_RECEIPT_BYTES, QUALIFICATION_CACHE_RECEIPT_ARTIFACT,
-    QualificationCacheArtifact, QualificationCacheReceiptArtifactDocument,
-    QualificationCacheRunMetadata,
+    AdmissionNode, MAX_QUALIFICATION_RECEIPT_BYTES, QualificationCacheArtifact,
+    QualificationCacheReceiptArtifactDocument, QualificationCacheRunMetadata,
+    qualification_cache_receipt_artifact_name,
 };
 use super::validation::{validate_lanes, validate_receipt_shape};
 
@@ -73,7 +73,8 @@ impl QualificationCacheReceiptArtifactDocument {
                     || *path == crate::workflow::QUALIFICATION_WORKFLOW_PATH
             })
             .ok_or_else(|| invalid("completed_dispatch_workflow_invalid"))?;
-        if self.schema != 2
+        if self.schema != 3
+            || self.producer.mode != context.mode
             || self.producer.repository != context.repository
             || self.producer.default_branch != context.default_branch
             || self.producer.git_ref != context.git_ref
@@ -154,7 +155,7 @@ impl QualificationCacheReceiptArtifactDocument {
             .ok_or_else(|| invalid("completed_dispatch_ref_invalid"))?;
         let artifact = QualificationCacheArtifact {
             id: 1,
-            name: QUALIFICATION_CACHE_RECEIPT_ARTIFACT.to_owned(),
+            name: qualification_cache_receipt_artifact_name(current_run)?,
             digest: format!("sha256:{}", "0".repeat(64)),
             size_bytes: 1,
             expired: false,
