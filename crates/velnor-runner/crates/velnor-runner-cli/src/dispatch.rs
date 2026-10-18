@@ -8,11 +8,12 @@ use std::time::Duration;
 use clap::Parser;
 use velnor_runner_host::{READINESS_BUDGET, Readiness, doctor_json, status_json};
 
-use crate::args::{Cli, Command, DaemonAction};
+use crate::args::{Cli, Command, CredentialAction, DaemonAction};
 
 mod connect;
 mod connect_config;
 mod connection_state;
+mod credential;
 mod disconnect;
 mod drain;
 mod marker;
@@ -47,6 +48,9 @@ fn dispatch(cli: &Cli) -> ExitCode {
         Command::Logs { follow } => logs(*follow),
         Command::Drain { wait } => drain(&state, *wait),
         Command::Resume => remove_flag(&state, "drain"),
+        Command::Credential { action } => match action {
+            CredentialAction::ImportReleaseRead => credential::import_release_read(&state),
+        },
         Command::Connect {
             connection_id,
             repo,
@@ -178,5 +182,7 @@ fn not_proven() -> ExitCode {
 
 #[cfg(test)]
 mod connect_tests;
+#[cfg(test)]
+mod credential_tests;
 #[cfg(test)]
 mod disconnect_tests;

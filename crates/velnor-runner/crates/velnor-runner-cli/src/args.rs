@@ -113,6 +113,12 @@ pub enum Command {
     },
     /// Allow admissions again.
     Resume,
+    /// Host credential operations.
+    Credential {
+        /// Action.
+        #[command(subcommand)]
+        action: CredentialAction,
+    },
     /// `LaunchAgent` lifecycle.
     Service {
         /// install, start, stop, or uninstall.
@@ -149,6 +155,13 @@ pub enum Command {
         #[arg(long)]
         wait: bool,
     },
+}
+
+/// Host credential actions.
+#[derive(Debug, Clone, Copy, Subcommand)]
+pub enum CredentialAction {
+    /// Read the release credential from stdin. Store it in Keychain.
+    ImportReleaseRead,
 }
 
 /// `service` actions.
