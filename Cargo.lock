@@ -921,6 +921,7 @@ dependencies = [
 name = "velnor-actions-cli"
 version = "0.1.12"
 dependencies = [
+ "blake3",
  "clap",
  "proc-macro2",
  "rustix",
