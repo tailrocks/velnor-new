@@ -15,6 +15,9 @@ use tokio::sync::oneshot;
 use super::super::ProviderFailure;
 use super::Workspace;
 
+mod transfer;
+use transfer::complete_transfer;
+
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(15);
 const DOWNLOAD_CHUNK_BYTES: usize = 64 * 1024;
 
@@ -25,7 +28,7 @@ pub(in crate::launch::resource_probe::provider) struct DownloadVerification {
     pub(in crate::launch::resource_probe::provider) timeout: Duration,
 }
 
-enum FirstCompletion {
+pub(super) enum FirstCompletion {
     Copy(Result<(), ProviderFailure>),
     Child(std::io::Result<std::process::ExitStatus>),
     Timeout,
@@ -216,7 +219,7 @@ async fn supervise_download(task: DownloadTask) -> Result<(), ProviderFailure> {
         copy_complete,
     } = task;
     let Some(stdout) = stdout else {
-        kill_child_and_wait(&mut child).await;
+        transfer::kill_child_and_wait(&mut child).await;
         let error = ProviderFailure::GhUnavailable;
         let _ready_result = ready.send(Err(error));
         if remove_partial_file(&destination).await.is_err() {
@@ -303,77 +306,6 @@ async fn finish_download(
     }
 }
 
-async fn complete_transfer<C>(
-    first: FirstCompletion,
-    child: &mut Child,
-    mut copy: std::pin::Pin<&mut C>,
-    cancel: &mut oneshot::Receiver<()>,
-    deadline_at: tokio::time::Instant,
-    #[cfg(test)] copy_complete: Option<oneshot::Sender<()>>,
-) -> Result<(), ProviderFailure>
-where
-    C: std::future::Future<Output = Result<(), ProviderFailure>>,
-{
-    match first {
-        FirstCompletion::Copy(Ok(())) => {
-            #[cfg(test)]
-            if let Some(copy_complete) = copy_complete {
-                let _send_result = copy_complete.send(());
-            }
-            tokio::select! {
-                biased;
-                _ = &mut *cancel => {
-                    kill_child_and_wait(child).await;
-                    Err(ProviderFailure::GhOutput)
-                }
-                result = tokio::time::timeout_at(deadline_at, child.wait()) => match result {
-                Ok(Ok(status)) if status.success() => Ok(()),
-                Ok(Ok(_)) => Err(ProviderFailure::GhCommand),
-                Ok(Err(_)) => Err(ProviderFailure::GhUnavailable),
-                Err(_) => {
-                    kill_child_and_wait(child).await;
-                    Err(ProviderFailure::GhTimeout)
-                }
-                }
-            }
-        }
-        FirstCompletion::Child(Ok(status)) => {
-            tokio::select! {
-                biased;
-                _ = &mut *cancel => {
-                    kill_child_and_wait(child).await;
-                    Err(ProviderFailure::GhOutput)
-                }
-                result = tokio::time::timeout_at(deadline_at, copy.as_mut()) => match result {
-                Ok(Ok(())) if status.success() => Ok(()),
-                Ok(Ok(())) => Err(ProviderFailure::GhCommand),
-                Ok(Err(error)) => Err(error),
-                Err(_) => {
-                    kill_child_and_wait(child).await;
-                    Err(ProviderFailure::GhTimeout)
-                }
-                }
-            }
-        }
-        FirstCompletion::Copy(Err(error)) => {
-            kill_child_and_wait(child).await;
-            Err(error)
-        }
-        FirstCompletion::Child(Err(_)) => {
-            kill_child_and_wait(child).await;
-            Err(ProviderFailure::GhUnavailable)
-        }
-        FirstCompletion::Timeout => {
-            kill_child_and_wait(child).await;
-            Err(ProviderFailure::GhTimeout)
-        }
-        FirstCompletion::Cancelled => {
-            kill_child_and_wait(child).await;
-            Err(ProviderFailure::GhOutput)
-        }
-    }
-}
-
 async fn copy_verified_asset<R>(
     mut reader: R,
     mut file: tokio::fs::File,
@@ -414,11 +346,6 @@ where
         return Err(ProviderFailure::ReleaseAssets);
     }
     Ok(())
-}
-
-async fn kill_child_and_wait(child: &mut Child) {
-    let _kill_result = child.start_kill();
-    let _wait_result = child.wait().await;
 }
 
 fn valid_sha256(value: &str) -> bool {
