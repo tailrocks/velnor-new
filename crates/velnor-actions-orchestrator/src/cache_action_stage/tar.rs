@@ -188,6 +188,9 @@ fn parse_args(args: &[OsString]) -> Result<ParsedArgs<'_>, StageError> {
             return Err("cache_tar_arguments_invalid");
         }
     }
+    if compression == ArchiveCompression::None {
+        return Err("cache_tar_compression_missing");
+    }
     Ok(ParsedArgs {
         operation,
         archive,
