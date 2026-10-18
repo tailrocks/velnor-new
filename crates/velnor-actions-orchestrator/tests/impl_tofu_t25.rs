@@ -21,6 +21,7 @@ use crate::impl_tofu_t24_gates::{crate_src, is_crate_job, token_hits};
 /// (every task shares it), and cover owns one for its closure plus
 /// extension check. The tofu adapter itself never constructs one:
 /// per-call fresh caches would share nothing.
+/// `qualification_cache_runtime_closure` uses one instance for its source check.
 #[test]
 fn file_cache_constructions_are_hoisted_per_phase() -> TestResult {
     let orch = crate_src("");
@@ -35,7 +36,12 @@ fn file_cache_constructions_are_hoisted_per_phase() -> TestResult {
         .collect();
     assert_eq!(
         files,
-        ["cover_identity.rs", "discover.rs", "internal.rs"],
+        [
+            "cover_identity.rs",
+            "discover.rs",
+            "internal.rs",
+            "qualification_cache_runtime_closure.rs",
+        ],
         "one hoisted construction per phase (the cfg(test) fixtures \
          companion is excluded): {sites:?}"
     );
