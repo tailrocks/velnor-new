@@ -1,6 +1,12 @@
-//! Immutable identities returned only after release and selected-daemon verification.
+//! Immutable identities supplied only after release and selected Docker engine verification.
 
-/// Verified runner and DinD images prepared for one selected Docker engine.
+use bollard::Docker;
+
+use crate::error::HostError;
+
+use super::SelectedEngineContext;
+
+/// Verified runner and `DinD` images prepared for one selected Docker engine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct VerifiedWorkerImages {
     engine_id: String,
@@ -13,6 +19,18 @@ pub(crate) struct VerifiedWorkerImages {
 }
 
 impl VerifiedWorkerImages {
+    /// Recheck the selected Docker engine and both immutable worker image identities.
+    pub(crate) async fn verify_for_engine(
+        &self,
+        docker: &Docker,
+        expected: &SelectedEngineContext,
+    ) -> Result<(), HostError> {
+        if !expected.matches_images(self) {
+            return Err(HostError::Ownership);
+        }
+        super::resource_probe::verify_worker_images_for_engine(docker, expected, self).await
+    }
+
     pub(crate) fn engine_id(&self) -> &str {
         &self.engine_id
     }
@@ -49,7 +67,9 @@ pub(crate) struct VerifiedImageIdentity {
     archive_sha256: String,
     archive_index_digest: String,
     image_index_digest: Option<String>,
+    image_index_size: Option<u64>,
     manifest_digest: String,
+    manifest_size: u64,
     config_digest: String,
 }
 
@@ -72,8 +92,16 @@ impl VerifiedImageIdentity {
         self.image_index_digest.as_deref()
     }
 
+    pub(crate) fn image_index_size(&self) -> Option<u64> {
+        self.image_index_size
+    }
+
     pub(crate) fn manifest_digest(&self) -> &str {
         &self.manifest_digest
+    }
+
+    pub(crate) fn manifest_size(&self) -> u64 {
+        self.manifest_size
     }
 
     pub(crate) fn config_digest(&self) -> &str {
@@ -84,6 +112,10 @@ impl VerifiedImageIdentity {
 #[cfg(test)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TestWorkerImageMutation {
+    EngineId,
+    DockerRootDigest,
+    DaemonArchitecture,
+    RunnerClassicStore,
     RunnerRuntimeId,
     RunnerIndexDigest,
     RunnerManifestDigest,
@@ -108,9 +140,21 @@ pub(crate) fn test_worker_images_with(
         source_sha: "a".repeat(40),
         platform: "linux/amd64".to_owned(),
         runner: test_image("d", "e", Some("f"), "a", "b"),
-        dind: test_image("8", "7", None, "6", "5"),
+        dind: test_image("8", "7", Some("9"), "6", "5"),
     };
     match mutation {
+        Some(TestWorkerImageMutation::EngineId) => {
+            images.engine_id = "different-engine".to_owned();
+        }
+        Some(TestWorkerImageMutation::DockerRootDigest) => {
+            images.docker_root_digest = "1".repeat(64);
+        }
+        Some(TestWorkerImageMutation::DaemonArchitecture) => {
+            images.daemon_architecture = "x86_64".to_owned();
+        }
+        Some(TestWorkerImageMutation::RunnerClassicStore) => {
+            images.runner.runtime_id = images.runner.config_digest.clone();
+        }
         Some(TestWorkerImageMutation::RunnerRuntimeId) => {
             images.runner.runtime_id = "mutable:tag".to_owned();
         }
@@ -135,6 +179,37 @@ pub(crate) fn test_worker_images_with(
 }
 
 #[cfg(test)]
+pub(crate) fn test_worker_images_for_root(root: &str) -> VerifiedWorkerImages {
+    test_worker_images_for_root_with_mutation(root, None)
+}
+
+#[cfg(test)]
+pub(crate) fn test_worker_images_for_root_with_mutation(
+    root: &str,
+    mutation: Option<TestWorkerImageMutation>,
+) -> VerifiedWorkerImages {
+    let mut images = test_worker_images_with(mutation);
+    images.docker_root_digest =
+        super::resource_probe::docker_root_digest(root).expect("test Docker root is valid");
+    images
+}
+
+#[cfg(test)]
+pub(crate) fn test_worker_images_for(
+    engine_id: &str,
+    docker_root_digest: &str,
+    daemon_architecture: &str,
+    platform: &str,
+) -> VerifiedWorkerImages {
+    let mut images = test_worker_images();
+    images.engine_id = engine_id.to_owned();
+    images.docker_root_digest = docker_root_digest.to_owned();
+    images.daemon_architecture = daemon_architecture.to_owned();
+    images.platform = platform.to_owned();
+    images
+}
+
+#[cfg(test)]
 fn test_image(
     archive_nibble: &str,
     archive_index_nibble: &str,
@@ -142,16 +217,17 @@ fn test_image(
     manifest_nibble: &str,
     config_nibble: &str,
 ) -> VerifiedImageIdentity {
-    let runtime_id = image_index_nibble
-        .map(|nibble| format!("sha256:{}", nibble.repeat(64)))
-        .unwrap_or_else(|| format!("sha256:{}", config_nibble.repeat(64)));
+    let runtime_nibble = image_index_nibble.unwrap_or(config_nibble);
+    let runtime_id = format!("sha256:{}", runtime_nibble.repeat(64));
     VerifiedImageIdentity {
         runtime_id,
         archive_sha256: archive_nibble.repeat(64),
         archive_index_digest: archive_index_nibble.repeat(64),
         image_index_digest: image_index_nibble
             .map(|nibble| format!("sha256:{}", nibble.repeat(64))),
+        image_index_size: image_index_nibble.map(|_| 856),
         manifest_digest: format!("sha256:{}", manifest_nibble.repeat(64)),
+        manifest_size: 4_472,
         config_digest: format!("sha256:{}", config_nibble.repeat(64)),
     }
 }

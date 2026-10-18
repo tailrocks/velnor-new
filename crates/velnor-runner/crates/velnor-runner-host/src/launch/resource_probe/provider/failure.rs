@@ -1,0 +1,56 @@
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::launch::resource_probe) enum ProviderFailure {
+    TrustedSourcePinMissing,
+    TrustedSourcePinInvalid,
+    CredentialMissing,
+    GhUnavailable,
+    GhVersion,
+    GhCommand,
+    GhTimeout,
+    GhOutput,
+    ReleaseMetadata,
+    ReleaseSignature,
+    ReleaseTarget,
+    ReleaseAssets,
+    AssetChecksum,
+    Attestation,
+    Manifest,
+    Archive,
+    ImageLoad,
+    ImageImportJournal,
+    ImageInspect,
+    ImageIdentity,
+    ImageConfig,
+    DaemonIdentity,
+    Timeout,
+}
+
+impl ProviderFailure {
+    pub(in crate::launch::resource_probe) const fn code(self) -> &'static str {
+        match self {
+            Self::TrustedSourcePinMissing => "trusted_source_pin_missing",
+            Self::TrustedSourcePinInvalid => "trusted_source_pin_invalid",
+            Self::CredentialMissing => "credential_missing",
+            Self::GhUnavailable => "gh_unavailable",
+            Self::GhVersion => "gh_version_mismatch",
+            Self::GhCommand => "release_verification_failed",
+            Self::GhTimeout => "release_verification_timeout",
+            Self::GhOutput => "release_verification_output_invalid",
+            Self::ReleaseMetadata => "release_metadata_invalid",
+            Self::ReleaseSignature => "release_signature_invalid",
+            Self::ReleaseTarget => "release_source_mismatch",
+            Self::ReleaseAssets => "release_assets_mismatch",
+            Self::AssetChecksum => "release_asset_checksum_mismatch",
+            Self::Attestation => "release_attestation_mismatch",
+            Self::Manifest => "resource_probe_manifest_mismatch",
+            Self::Archive => "resource_probe_archive_mismatch",
+            Self::ImageLoad => "selected_daemon_image_load_failed",
+            Self::ImageImportJournal => "selected_daemon_image_import_journal_failed",
+            Self::ImageInspect => "selected_daemon_image_inspect_failed",
+            Self::ImageIdentity => "selected_daemon_image_identity_mismatch",
+            Self::ImageConfig => "selected_daemon_image_config_mismatch",
+            Self::DaemonIdentity => "selected_daemon_identity_unavailable",
+            Self::Timeout => "provider_timeout",
+        }
+    }
+}

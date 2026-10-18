@@ -1,8 +1,9 @@
 //! Controller-only guest resource probe. Runner projections stay untouched.
 
-use bollard::Docker;
+use bollard::{Docker, models::SystemInfo};
 
 use crate::journal::Journal;
+use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
@@ -23,6 +24,15 @@ mod sample;
 /// This does not claim that GitHub, the release, or any Docker image is ready.
 pub(crate) fn build_pin_status() -> Result<(), &'static str> {
     provider::build_pin_status()
+}
+
+/// Re-read the selected engine and inspect both prepared worker images.
+pub(crate) async fn verify_worker_images_for_engine(
+    docker: &Docker,
+    expected: &SelectedEngineContext,
+    images: &VerifiedWorkerImages,
+) -> Result<(), crate::error::HostError> {
+    provider::verify_worker_images_for_engine(docker, expected, images).await
 }
 
 #[cfg(test)]
@@ -78,6 +88,14 @@ pub(super) fn consume_permit(permit: StartPermit, engine_id: &str, root_digest: 
 
 pub(super) fn docker_root_digest(path: &str) -> Result<String, crate::error::HostError> {
     projection::DockerRoot::parse(path).map(|root| root.digest().to_owned())
+}
+
+pub(super) fn daemon_architecture(info: &SystemInfo) -> Option<&'static str> {
+    provider::daemon_architecture(info)
+}
+
+pub(super) fn daemon_platform_matches(info: &SystemInfo) -> bool {
+    provider::daemon_platform_matches(info)
 }
 
 pub(super) async fn engine_binding(docker: &Docker) -> Result<(String, String), EnsureError> {

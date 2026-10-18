@@ -41,13 +41,17 @@ const CHECKSUM_ASSETS: [&str; 4] = [
 ];
 
 pub(super) struct PreparedRelease {
-    pub(super) archive: Vec<u8>,
+    pub(super) load_archive: Vec<u8>,
     pub(super) source_revision: String,
-    pub(super) index_digest: String,
+    pub(super) archive_sha256: String,
+    pub(super) archive_index_digest: String,
     pub(super) manifest_digest: String,
     pub(super) manifest_size: u64,
     pub(super) config_digest: String,
     pub(super) config: ContainerConfig,
+    pub(super) load_archive_sha256: String,
+    pub(super) load_archive_index_digest: String,
+    pub(super) image_reference: String,
 }
 
 struct VerifiedDownloads {
@@ -72,13 +76,17 @@ pub(super) async fn prepare(
     verify_asset_attestations(&workspace, pat, &tag, source_revision, &downloads).await?;
     let parsed = super::archive::verify(&downloads.archive, &downloads.manifest, source_revision)?;
     Ok(PreparedRelease {
-        archive: downloads.archive,
+        load_archive: parsed.load_archive,
         source_revision: source_revision.to_owned(),
-        index_digest: parsed.index_digest,
+        archive_sha256: parsed.archive_sha256,
+        archive_index_digest: parsed.archive_index_digest,
         manifest_digest: parsed.manifest_digest,
         manifest_size: parsed.manifest_size,
         config_digest: parsed.config_digest,
         config: parsed.config,
+        load_archive_sha256: parsed.load_archive_sha256,
+        load_archive_index_digest: parsed.load_archive_index_digest,
+        image_reference: parsed.image_reference,
     })
 }
 

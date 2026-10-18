@@ -2,23 +2,23 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use bollard::Docker;
-use bollard::models::{ContainerConfig, ImageConfig, ImageInspect, OciDescriptor, SystemInfo};
+use bollard::models::{ContainerConfig, SystemInfo};
 
 use crate::journal::{ImageImportState, Journal};
 use crate::launch_harness::Scratch;
 
 use super::release::PreparedRelease;
-use super::{
-    ProviderFailure, ReleaseImageProvider, build_pin_status, candidate, daemon_architecture,
-    selected_daemon, verify_daemon_image,
-};
+use super::selected_daemon;
+use super::{ProviderFailure, ReleaseImageProvider, build_pin_status};
 use crate::launch::inspect_tests::{DockerStub, http};
 
 fn prepared_release(source_revision: &str) -> PreparedRelease {
+    let archive_sha256 = "f".repeat(64);
     PreparedRelease {
-        archive: Vec::new(),
+        load_archive: Vec::new(),
         source_revision: source_revision.to_owned(),
-        index_digest: "b".repeat(64),
+        archive_sha256: archive_sha256.clone(),
+        archive_index_digest: "b".repeat(64),
         manifest_digest: format!("sha256:{}", "c".repeat(64)),
         manifest_size: 480,
         config_digest: format!("sha256:{}", "a".repeat(64)),
@@ -35,6 +35,9 @@ fn prepared_release(source_revision: &str) -> PreparedRelease {
             )])),
             ..Default::default()
         },
+        load_archive_sha256: "1".repeat(64),
+        load_archive_index_digest: "2".repeat(64),
+        image_reference: format!("velnor-resource-probe:v{source_revision}-{archive_sha256}"),
     }
 }
 
@@ -215,190 +218,112 @@ async fn unresolved_import_rows_do_not_inspect_or_repeat_the_load() -> Result<()
     Ok(())
 }
 
-#[test]
-fn containerd_store_accepts_the_verified_manifest_identity_and_descriptor() {
-    let revision = "a".repeat(40);
-    let release = prepared_release(&revision);
-    let image = ImageInspect {
-        id: Some(release.manifest_digest.clone()),
-        descriptor: Some(OciDescriptor {
-            media_type: Some("application/vnd.oci.image.manifest.v1+json".to_owned()),
-            digest: Some(release.manifest_digest.clone()),
-            size: Some(480),
-            annotations: Some(HashMap::from([
-                (
-                    "io.containerd.image.name".to_owned(),
-                    "docker.io/library/velnor-resource-probe:linux-amd64".to_owned(),
-                ),
-                (
-                    "org.opencontainers.image.ref.name".to_owned(),
-                    "linux-amd64".to_owned(),
-                ),
-            ])),
-            ..Default::default()
-        }),
-        os: Some("linux".to_owned()),
-        architecture: Some("amd64".to_owned()),
-        config: Some(ImageConfig {
-            user: release.config.user.clone(),
-            env: release.config.env.clone(),
-            working_dir: release.config.working_dir.clone(),
-            entrypoint: release.config.entrypoint.clone(),
-            labels: release.config.labels.clone(),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-    assert!(verify_daemon_image(&image, &release).is_ok());
-    let daemon = SystemInfo {
+#[tokio::test]
+async fn derived_reference_collision_stops_before_image_load() -> Result<(), String> {
+    let (_scratch, journal) = test_journal("provider-derived-reference-collision").await?;
+    journal
+        .bind_engine("selected-engine")
+        .await
+        .map_err(|error| error.to_string())?;
+    let provider = ReleaseImageProvider::with_source_revision("pat", &"a".repeat(40))
+        .map_err(|error| error.code().to_owned())?;
+    let release = prepared_release(&"a".repeat(40));
+    let info = SystemInfo {
         id: Some("selected-engine".to_owned()),
         os_type: Some("linux".to_owned()),
         architecture: Some("aarch64".to_owned()),
         docker_root_dir: Some("/var/lib/docker".to_owned()),
         ..Default::default()
     };
-    assert_eq!(daemon_architecture(&daemon), Some("aarch64"));
-    assert!(selected_daemon(&daemon, "selected-engine").is_ok());
-    let candidate = candidate("selected-engine", "aarch64", image, &release);
-    assert!(candidate.is_ok());
-    if let Ok(candidate) = candidate {
-        assert_eq!(candidate.platform, "linux/amd64");
-        assert_eq!(candidate.daemon_architecture, "aarch64");
-    }
+    let selected =
+        selected_daemon(&info, "selected-engine").map_err(|error| error.code().to_owned())?;
+    let foreign_image = format!(
+        r#"{{"Id":"sha256:{}","RepoTags":["{}"],"Os":"linux","Architecture":"amd64"}}"#,
+        "9".repeat(64),
+        release.image_reference
+    );
+    let docker = DockerStub::open(vec![http(200, &foreign_image)])?;
+
+    let result = provider
+        .inspect_or_load(&docker.docker, &journal, &selected, &release)
+        .await;
+    let requests = docker.finish().await?;
+    assert!(matches!(result, Err(ProviderFailure::ImageIdentity)));
+    assert_eq!(requests.len(), 1);
+    assert!(requests[0].starts_with("GET ") && requests[0].contains("/images/"));
+    assert!(
+        !requests
+            .iter()
+            .any(|request| request.contains("/images/load"))
+    );
+
+    let request = super::image_import_request(&selected, &release)
+        .map_err(|error| error.code().to_owned())?;
+    let row = journal
+        .prepare_image_import(request)
+        .await
+        .map_err(|error| error.to_string())?;
+    assert_eq!(row.state, ImageImportState::Prepared);
+    Ok(())
 }
 
-#[test]
-fn exact_daemon_identity_and_config_are_required() {
-    let revision = "a".repeat(40);
-    let release = prepared_release(&revision);
-    let image = ImageInspect {
-        id: Some(release.config_digest.clone()),
-        os: Some("linux".to_owned()),
-        architecture: Some("amd64".to_owned()),
-        config: Some(ImageConfig {
-            user: release.config.user.clone(),
-            env: release.config.env.clone(),
-            working_dir: release.config.working_dir.clone(),
-            entrypoint: release.config.entrypoint.clone(),
-            labels: release.config.labels.clone(),
-            ..Default::default()
-        }),
+#[tokio::test]
+async fn derived_reference_recheck_blocks_a_collision_after_claim() -> Result<(), String> {
+    let (_scratch, journal) = test_journal("provider-derived-reference-race").await?;
+    journal
+        .bind_engine("selected-engine")
+        .await
+        .map_err(|error| error.to_string())?;
+    let provider = ReleaseImageProvider::with_source_revision("pat", &"a".repeat(40))
+        .map_err(|error| error.code().to_owned())?;
+    let release = prepared_release(&"a".repeat(40));
+    let selected_info = r#"{"ID":"selected-engine","OSType":"linux","Architecture":"aarch64","DockerRootDir":"/var/lib/docker"}"#;
+    let colliding_image = format!(
+        r#"{{"Id":"sha256:{}","Os":"linux","Architecture":"amd64"}}"#,
+        "9".repeat(64)
+    );
+    let docker = DockerStub::open(vec![
+        http(404, r#"{"message":"not found"}"#),
+        http(404, r#"{"message":"not found"}"#),
+        http(404, r#"{"message":"not found"}"#),
+        http(200, selected_info),
+        http(200, selected_info),
+        http(200, &colliding_image),
+    ])?;
+    let info = SystemInfo {
+        id: Some("selected-engine".to_owned()),
+        os_type: Some("linux".to_owned()),
+        architecture: Some("aarch64".to_owned()),
+        docker_root_dir: Some("/var/lib/docker".to_owned()),
         ..Default::default()
     };
-    assert!(verify_daemon_image(&image, &release).is_ok());
+    let selected =
+        selected_daemon(&info, "selected-engine").map_err(|error| error.code().to_owned())?;
 
-    let bad_config = ImageInspect {
-        config: Some(ImageConfig::default()),
-        ..image
-    };
-    assert_eq!(
-        verify_daemon_image(&bad_config, &release),
-        Err(ProviderFailure::ImageConfig)
+    let result = provider
+        .inspect_or_load(&docker.docker, &journal, &selected, &release)
+        .await;
+    let requests = docker.finish().await?;
+    assert!(matches!(result, Err(ProviderFailure::ImageIdentity)));
+    assert_eq!(requests.len(), 6);
+    assert!(
+        !requests
+            .iter()
+            .any(|request| request.contains("/images/load"))
     );
-    assert!(candidate("selected-engine", "x86_64", bad_config, &release).is_err());
+    assert!(requests[5].starts_with("GET ") && requests[5].contains("/images/"));
+
+    let request = super::image_import_request(&selected, &release)
+        .map_err(|error| error.code().to_owned())?;
+    let row = journal
+        .prepare_image_import(request)
+        .await
+        .map_err(|error| error.to_string())?;
+    assert_eq!(row.state, ImageImportState::Uncertain);
+    Ok(())
 }
 
-#[test]
-fn classic_store_accepts_only_the_verified_config_identity_without_descriptor() {
-    let revision = "a".repeat(40);
-    let release = prepared_release(&revision);
-    let image = ImageInspect {
-        id: Some(release.config_digest.clone()),
-        os: Some("linux".to_owned()),
-        architecture: Some("amd64".to_owned()),
-        config: Some(ImageConfig {
-            user: release.config.user.clone(),
-            env: release.config.env.clone(),
-            working_dir: release.config.working_dir.clone(),
-            entrypoint: release.config.entrypoint.clone(),
-            labels: release.config.labels.clone(),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-    assert!(verify_daemon_image(&image, &release).is_ok());
-    assert!(candidate("selected-engine", "x86_64", image, &release).is_ok());
-}
-
-#[test]
-fn mismatched_store_identity_descriptor_and_index_digest_fail_closed() {
-    let revision = "a".repeat(40);
-    let release = prepared_release(&revision);
-    let containerd = ImageInspect {
-        id: Some(release.manifest_digest.clone()),
-        descriptor: Some(OciDescriptor {
-            media_type: Some("application/vnd.oci.image.manifest.v1+json".to_owned()),
-            digest: Some(release.manifest_digest.clone()),
-            size: Some(480),
-            annotations: Some(HashMap::from([
-                (
-                    "io.containerd.image.name".to_owned(),
-                    "docker.io/library/velnor-resource-probe:linux-amd64".to_owned(),
-                ),
-                (
-                    "org.opencontainers.image.ref.name".to_owned(),
-                    "linux-amd64".to_owned(),
-                ),
-            ])),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-    assert_eq!(
-        verify_daemon_image(
-            &ImageInspect {
-                descriptor: Some(OciDescriptor {
-                    digest: Some(release.config_digest.clone()),
-                    ..containerd.descriptor.clone().unwrap_or_default()
-                }),
-                ..containerd.clone()
-            },
-            &release
-        ),
-        Err(ProviderFailure::ImageIdentity)
-    );
-    assert_eq!(
-        verify_daemon_image(
-            &ImageInspect {
-                descriptor: Some(OciDescriptor {
-                    size: Some(481),
-                    ..containerd.descriptor.clone().unwrap_or_default()
-                }),
-                ..containerd.clone()
-            },
-            &release
-        ),
-        Err(ProviderFailure::ImageIdentity)
-    );
-    assert_eq!(
-        verify_daemon_image(
-            &ImageInspect {
-                descriptor: None,
-                id: Some(release.index_digest.clone()),
-                ..containerd.clone()
-            },
-            &release
-        ),
-        Err(ProviderFailure::ImageIdentity)
-    );
-    assert_eq!(
-        verify_daemon_image(
-            &ImageInspect {
-                descriptor: None,
-                id: Some(release.manifest_digest.clone()),
-                ..containerd
-            },
-            &release
-        ),
-        Err(ProviderFailure::ImageIdentity)
-    );
-}
-
-#[test]
-fn provider_does_not_accept_unknown_daemon_platform() {
-    let unknown = SystemInfo::default();
-    assert!(!super::daemon_platform_matches(&unknown));
-}
+mod image_identity;
 
 async fn test_journal(label: &str) -> Result<(Scratch, Journal), String> {
     let scratch = Scratch::new(label).map_err(|error| error.to_string())?;

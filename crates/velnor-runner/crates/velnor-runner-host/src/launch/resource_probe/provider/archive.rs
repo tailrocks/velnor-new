@@ -8,11 +8,13 @@ use flate2::read::GzDecoder;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
+mod load_archive;
 mod types;
 mod unpack;
 
 use super::release::ResourceManifest;
 use super::{IMAGE_TAG, ProviderFailure, hex, valid_hex, valid_sha};
+use load_archive::derive as derive_load_archive;
 use types::{Descriptor, ImageConfigFile, LegacyManifest, OciIndex, OciManifest, Platform, RootFs};
 use unpack::unpack;
 
@@ -26,11 +28,16 @@ const IMAGE_REVISION_LABEL: &str = "org.opencontainers.image.revision";
 const IMAGE_PATH: &str = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
 pub(super) struct ParsedArchive {
-    pub(super) index_digest: String,
+    pub(super) archive_sha256: String,
+    pub(super) archive_index_digest: String,
     pub(super) manifest_digest: String,
     pub(super) manifest_size: u64,
     pub(super) config_digest: String,
     pub(super) config: ContainerConfig,
+    pub(super) load_archive: Vec<u8>,
+    pub(super) load_archive_sha256: String,
+    pub(super) load_archive_index_digest: String,
+    pub(super) image_reference: String,
 }
 
 struct VerifiedOciImage {
@@ -59,12 +66,18 @@ pub(super) fn verify(
     let descriptor = index.manifests.first().ok_or(ProviderFailure::Archive)?;
     verify_index_descriptor(descriptor)?;
     let image = verify_oci_image(&files, descriptor, manifest, source_revision)?;
+    let load_archive = derive_load_archive(bytes, source_revision, &manifest.archive_sha256)?;
     Ok(ParsedArchive {
-        index_digest,
+        archive_sha256: manifest.archive_sha256.clone(),
+        archive_index_digest: index_digest,
         manifest_digest: image.manifest_digest,
         manifest_size: image.manifest_size,
         config_digest: image.config_digest,
         config: image.config,
+        load_archive: load_archive.bytes,
+        load_archive_sha256: load_archive.archive_sha256,
+        load_archive_index_digest: load_archive.index_digest,
+        image_reference: load_archive.image_reference,
     })
 }
 
