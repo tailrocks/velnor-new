@@ -74,7 +74,7 @@ pub(crate) fn extra_files(
     })
 }
 
-/// Resolve the one policy applied to every standalone generated workflow.
+/// Select the policy for every separate generated workflow.
 pub(crate) fn workflow_routing_policy(
     config: &VelnorConfig,
     dispatch: Option<ExecutionMode>,

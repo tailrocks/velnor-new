@@ -194,7 +194,7 @@ pub(super) fn placement_for(
     }
 }
 
-/// Check whether a job can run on the Linux/amd64 Scale Set.
+/// Make sure that a job can run on the Linux/amd64 Scale Set.
 fn job_supports_scale_set(
     job_id: &str,
     job: &Job,
