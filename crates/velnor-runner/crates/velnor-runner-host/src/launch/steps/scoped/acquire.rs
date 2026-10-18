@@ -1,5 +1,7 @@
 //! Durable request authorization and AcquireJobs effect.
 
+use std::cell::Cell;
+
 use velnor_runner_github::{
     AcquireOutcome, RefreshGate, SessionError, Transport, WireError, acquire,
 };
@@ -61,6 +63,7 @@ where
         return Err(EnsureError::Uncertain);
     }
     let gate = RefreshGate::new();
+    let refresh_requested = Cell::new(false);
     let result = acquire(
         lane,
         identity.scale_set_id(),
@@ -68,14 +71,25 @@ where
         &[],
         queue_token,
         &gate,
-        || Ok::<(), WireError>(()),
+        || {
+            refresh_requested.set(true);
+            Err::<(), WireError>(WireError::RefreshExhausted)
+        },
     );
-    let (durable, disposition) = classify(&result, request_id);
+    let (durable, disposition) = if refresh_requested.get() {
+        (
+            AssignedAcquireResult::Uncertain,
+            AcquireDisposition::Uncertain,
+        )
+    } else {
+        classify(&result, request_id)
+    };
     scoped
         .record_request_acquire(identity, durable)
         .await
         .map_err(super::super::map_journal)?;
     match disposition {
+        AcquireDisposition::Uncertain if refresh_requested.get() => Err(EnsureError::Uncertain),
         AcquireDisposition::Uncertain => match result {
             Err(error) => Err(crate::listen::map_listen(error)),
             Ok(_) => Err(EnsureError::Uncertain),
@@ -117,6 +131,10 @@ pub(super) fn classify(
         ),
         Ok(AcquireOutcome::Noop) => (
             AssignedAcquireResult::AlreadyAcquired,
+            AcquireDisposition::Uncertain,
+        ),
+        Err(SessionError::Wire(WireError::RefreshExhausted)) => (
+            AssignedAcquireResult::Uncertain,
             AcquireDisposition::Uncertain,
         ),
         Err(error) if error.certainty() == velnor_runner_github::Certainty::Definite => (

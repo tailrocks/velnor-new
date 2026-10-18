@@ -3,8 +3,8 @@
 use std::future::Future;
 
 use velnor_runner_github::{
-    Ack, AckScope, AcquireOutcome, Certainty, Poll, RefreshGate, SessionError, ack, acquire,
-    may_ack,
+    Ack, AckScope, AcquireOutcome, Certainty, Poll, RefreshGate, SessionError, WireError, ack,
+    acquire, may_ack,
 };
 
 use crate::Offer;
@@ -19,6 +19,10 @@ mod mint;
 mod scale;
 mod scoped;
 pub(crate) mod source;
+
+#[cfg(test)]
+#[path = "steps/stale_auth_tests.rs"]
+mod stale_auth_tests;
 
 use super::mint_origin::MintOrigin;
 use super::{Drive, Lane};
@@ -398,7 +402,7 @@ where
     T: velnor_runner_github::Transport + ?Sized,
 {
     let gate = RefreshGate::new();
-    let refresh = || Ok(());
+    let refresh = || Err(WireError::RefreshExhausted);
     acquire(
         lane,
         ctx.set_id,
@@ -415,7 +419,8 @@ async fn fail_acquire(
     id: i64,
     error: SessionError,
 ) -> Result<Option<Started>, EnsureError> {
-    if error.certainty() == Certainty::Uncertain {
+    let refresh_unavailable = matches!(error, SessionError::Wire(WireError::RefreshExhausted));
+    if error.certainty() == Certainty::Uncertain || refresh_unavailable {
         journal
             .finish(id, Outcome::Uncertain)
             .await
@@ -426,7 +431,11 @@ async fn fail_acquire(
             .await
             .map_err(map_journal)?;
     }
-    Err(map_listen(error))
+    if refresh_unavailable {
+        Err(EnsureError::Uncertain)
+    } else {
+        Err(map_listen(error))
+    }
 }
 
 async fn reject_empty(journal: &Journal, id: i64) -> Result<Option<Started>, EnsureError> {
@@ -450,7 +459,7 @@ where
 {
     lane.on_queue()?;
     let gate = RefreshGate::new();
-    let refresh = || Ok(());
+    let refresh = || Err(WireError::RefreshExhausted);
     let scope = AckScope {
         replay_safe: true,
         sole_unacquired_offer: false,
