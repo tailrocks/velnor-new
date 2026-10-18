@@ -60,6 +60,28 @@ fn worker_request() -> Result<ImageImportRequest, HostError> {
     })
 }
 
+fn derived_probe_identity() -> ImageImportIdentity {
+    let source = "a".repeat(40);
+    let archive = "c".repeat(64);
+    ImageImportIdentity {
+        engine_id: "engine-a".to_owned(),
+        docker_root_digest: "b".repeat(64),
+        daemon_architecture: "aarch64".to_owned(),
+        source_sha: source.clone(),
+        archive_sha256: archive.clone(),
+        archive_index_digest: "d".repeat(64),
+        platform: "linux/amd64".to_owned(),
+        manifest_digest: format!("sha256:{}", "e".repeat(64)),
+        manifest_size: 480,
+        config_digest: format!("sha256:{}", "f".repeat(64)),
+        image_index_digest: None,
+        image_index_size: None,
+        load_archive_sha256: Some("1".repeat(64)),
+        load_archive_index_digest: Some("2".repeat(64)),
+        image_reference: format!("velnor-resource-probe:v{source}-{archive}"),
+    }
+}
+
 fn descriptor(request: &ImageImportRequest) -> ImageImportDescriptor {
     let (name, tag) = request.image_reference.split_once(':').unwrap_or_default();
     ImageImportDescriptor {
@@ -188,6 +210,82 @@ fn direct_probe_uses_manifest_descriptor_without_worker_transport() -> Result<()
     };
     observation.validate_for(&request)?;
     Ok(())
+}
+
+#[test]
+fn direct_probe_accepts_content_addressed_load_with_manifest_identity() -> Result<(), HostError> {
+    let request = ImageImportRequest::new(derived_probe_identity())?;
+    assert!(request.image_index_digest.is_none());
+    assert!(request.load_archive_sha256.is_some());
+    assert!(request.load_archive_index_digest.is_some());
+    let (name, tag) = request.image_reference.split_once(':').unwrap_or_default();
+    let observation = ImageImportObservation::Containerd {
+        image_id: request.manifest_digest.clone(),
+        repo_tags: vec![request.image_reference.clone()],
+        repo_digests: vec![format!(
+            "docker.io/library/{name}@{}",
+            request.manifest_digest
+        )],
+        descriptor: ImageImportDescriptor {
+            digest: request.manifest_digest.clone(),
+            media_type: OCI_MANIFEST.to_owned(),
+            size: request.manifest_size,
+            annotations: BTreeMap::from([
+                (
+                    "io.containerd.image.name".to_owned(),
+                    format!("docker.io/library/{name}:{tag}"),
+                ),
+                (
+                    "org.opencontainers.image.ref.name".to_owned(),
+                    tag.to_owned(),
+                ),
+            ]),
+            has_extra_fields: false,
+        },
+    };
+    let receipt = ImageImportInspection::verified(
+        &request,
+        request.engine_id(),
+        request.docker_root_digest(),
+        request.daemon_architecture(),
+        observation.clone(),
+    )?;
+    observation.validate_for(&request)?;
+    assert_eq!(receipt.image_id(), request.manifest_digest);
+    Ok(())
+}
+
+#[test]
+fn direct_probe_rejects_wrong_prefix_tag_source_and_load_effect_identity() {
+    let identity = derived_probe_identity();
+
+    let mut wrong_archive_prefix = identity.clone();
+    wrong_archive_prefix.archive_index_digest = format!("sha256:{}", "d".repeat(64));
+    assert!(ImageImportRequest::new(wrong_archive_prefix).is_err());
+
+    let mut wrong_load_prefix = identity.clone();
+    wrong_load_prefix.load_archive_index_digest = Some(format!("sha256:{}", "2".repeat(64)));
+    assert!(ImageImportRequest::new(wrong_load_prefix).is_err());
+
+    let mut wrong_tag = identity.clone();
+    wrong_tag.image_reference = format!(
+        "velnor-resource-probe:v{}-{}",
+        wrong_tag.source_sha,
+        "9".repeat(64)
+    );
+    assert!(ImageImportRequest::new(wrong_tag).is_err());
+
+    let mut wrong_source = identity.clone();
+    wrong_source.source_sha = "9".repeat(40);
+    assert!(ImageImportRequest::new(wrong_source).is_err());
+
+    let mut missing_effect_hash = identity.clone();
+    missing_effect_hash.load_archive_index_digest = None;
+    assert!(ImageImportRequest::new(missing_effect_hash).is_err());
+
+    let mut missing_effect_index = identity;
+    missing_effect_index.load_archive_sha256 = None;
+    assert!(ImageImportRequest::new(missing_effect_index).is_err());
 }
 
 #[tokio::test]

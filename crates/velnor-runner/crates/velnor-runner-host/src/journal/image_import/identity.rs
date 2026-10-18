@@ -109,7 +109,7 @@ impl ImageImportRequest {
                 .load_archive_index_digest
                 .as_deref()
                 .is_none_or(|value| valid_hex(value, 64));
-        let derived_reference_ok = !has_load || self.is_canonical_worker_reference();
+        let derived_reference_ok = !has_load || self.is_canonical_image_reference();
         if !valid_engine
             || !valid_hex(&self.docker_root_digest, 64)
             || !matches!(self.daemon_architecture.as_str(), "x86_64" | "aarch64")
@@ -128,7 +128,6 @@ impl ImageImportRequest {
                 .is_some_and(|size| size > i64::MAX as u64)
             || !nested_digest_ok
             || !load_identity_matches
-            || (has_load && !has_nested_index)
             || !load_hashes_ok
             || !valid_image_reference(&self.image_reference)
             || !derived_reference_ok
@@ -138,12 +137,14 @@ impl ImageImportRequest {
         Ok(())
     }
 
-    fn is_canonical_worker_reference(&self) -> bool {
+    fn is_canonical_image_reference(&self) -> bool {
         let Some((name, tag)) = self.image_reference.split_once(':') else {
             return false;
         };
-        matches!(name, "velnor-runner" | "velnor-dind")
-            && tag == format!("v{}-{}", self.source_sha, self.archive_sha256)
+        matches!(
+            name,
+            "velnor-runner" | "velnor-dind" | "velnor-resource-probe"
+        ) && tag == format!("v{}-{}", self.source_sha, self.archive_sha256)
     }
 }
 

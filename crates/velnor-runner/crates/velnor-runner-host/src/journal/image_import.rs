@@ -44,7 +44,7 @@ impl ImageImportInspection {
         })
     }
 
-    pub(super) fn image_id(&self) -> &str {
+    pub(crate) fn image_id(&self) -> &str {
         self.observation.image_id()
     }
 
