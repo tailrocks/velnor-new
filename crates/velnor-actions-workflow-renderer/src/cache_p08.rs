@@ -35,7 +35,12 @@ pub(crate) const TOOLS_CACHE_KEY_EXPRESSION: &str = "mise-tools-v2-${{steps.v2.o
 pub(crate) const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str =
     velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
 /// Cache restore is unavailable unless runtime roots/image were qualified.
-pub const TOOLS_CACHE_RESTORE_CONDITION: &str = "steps.v2.outputs.enabled == 'true'";
+pub const TOOLS_CACHE_NORMAL_RUN_CONDITION: &str =
+    "needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''";
+/// A tool seed may run only after its runtime identity action succeeds.
+pub const TOOLS_CACHE_IDENTITY_CONDITION: &str = "steps.v2.outputs.enabled == 'true'";
+/// Restore only in a normal planned run with a qualified runtime identity.
+pub const TOOLS_CACHE_RESTORE_CONDITION: &str = "needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'";
 /// Cache writes require an eligible producer under `policy` and qualified identity.
 pub(crate) fn tools_cache_save_condition(
     policy: velnor_actions_contract::PullRequestCachePolicy,

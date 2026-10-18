@@ -39,6 +39,10 @@ fn scale_set_prelude_threads_the_validated_image_source_pin() -> Result<(), Rend
         payload_with_source("scale-set:velnor+ubuntu-26.04-scale-set", Some(&source_sha))?;
     assert!(payload.runtime_identity_supported());
     let step = payload.runtime_prelude_step()?;
+    assert_eq!(
+        step.condition.as_deref(),
+        Some(cache_p08::TOOLS_CACHE_NORMAL_RUN_CONDITION)
+    );
     let StepKind::Action { uses, with, env } = &step.kind else {
         return Err(RenderError::InvalidWorkflow(
             "scale_set_prelude_not_action".to_owned(),
@@ -87,6 +91,10 @@ fn fixed_composite_forwards_identity_and_runs_seed_before_outer_restore() -> Res
         let step = payload.runtime_prelude_step()?;
         assert_eq!(step.id, Some(StepId::ToolsCacheIdentity));
         assert_eq!(step.role, Some(StepRole::ToolsCacheIdentity));
+        assert_eq!(
+            step.condition.as_deref(),
+            Some(cache_p08::TOOLS_CACHE_NORMAL_RUN_CONDITION)
+        );
         let StepKind::Action { uses, with, env } = &step.kind else {
             return Err(RenderError::InvalidWorkflow(
                 "prelude_not_action".to_owned(),
@@ -116,7 +124,10 @@ fn fixed_composite_forwards_identity_and_runs_seed_before_outer_restore() -> Res
             .expect("seed child");
         let enabled_gate = file
             .bytes
-            .find(&format!("if: {}", cache_p08::TOOLS_CACHE_RESTORE_CONDITION))
+            .find(&format!(
+                "if: {}",
+                cache_p08::TOOLS_CACHE_IDENTITY_CONDITION
+            ))
             .expect("seed enabled gate");
         assert!(identity_at < enabled_gate && enabled_gate < seed_at);
         assert!(file.bytes.contains("id: v2"));
@@ -160,6 +171,10 @@ fn prelude_exposes_the_validated_seed_admission_output() -> Result<(), RenderErr
         ));
     };
     assert!(seed_entries.contains(&("id".to_owned(), Yaml::Str("seed".to_owned()))));
+    assert!(seed_entries.contains(&(
+        "if".to_owned(),
+        Yaml::Str(cache_p08::TOOLS_CACHE_IDENTITY_CONDITION.to_owned()),
+    )));
     let Yaml::Map(outputs) = super::output_map() else {
         return Err(RenderError::InvalidWorkflow(
             "prelude_outputs_not_mapping".to_owned(),
@@ -172,6 +187,44 @@ fn prelude_exposes_the_validated_seed_admission_output() -> Result<(), RenderErr
             Yaml::Str("${{ steps.seed.outputs.seed_admitted }}".to_owned()),
         )]),
     )));
+    Ok(())
+}
+
+#[test]
+fn normal_tools_cache_requires_a_successful_non_qualification_plan() -> Result<(), RenderError> {
+    let payload = payload("ubuntu-26.04")?;
+    let prelude = payload.runtime_prelude_step()?;
+    let restore = payload.restore_step()?;
+
+    assert_eq!(
+        prelude.condition.as_deref(),
+        Some("needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''")
+    );
+    assert_eq!(
+        restore.condition.as_deref(),
+        Some(
+            "needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'"
+        )
+    );
+
+    let mut unguarded_prelude = prelude.clone();
+    unguarded_prelude.condition = None;
+    let StepKind::Action { uses, with, env } = &unguarded_prelude.kind else {
+        return Err(RenderError::InvalidWorkflow(
+            "prelude_not_action".to_owned(),
+        ));
+    };
+    assert!(
+        crate::cache_p08::validate_runtime_identity_action(
+            &unguarded_prelude,
+            uses,
+            "ubuntu-26.04",
+            with,
+            env,
+        )
+        .is_err()
+    );
+
     Ok(())
 }
 
