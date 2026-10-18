@@ -80,3 +80,9 @@ fn publisher_ci_gate_binds_exact_run_and_attempt() {
     assert!(!ci_run_is_success(&run, 22, 2, 9, &"a".repeat(40), "main"));
     assert!(!ci_run_is_success(&run, 21, 3, 9, &"a".repeat(40), "main"));
 }
+
+#[test]
+fn stable_and_preview_publications_never_request_latest() {
+    assert!(!make_latest(PackageReleaseChannel::Stable));
+    assert!(!make_latest(PackageReleaseChannel::Preview));
+}

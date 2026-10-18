@@ -21,7 +21,10 @@ use velnor_actions_contract::{
 
 #[path = "schema2_consumer_preview_steps.rs"]
 mod steps;
-use steps::{needs, operation, outputs, permissions, setup, transfer};
+#[path = "schema2_consumer_preview_tap.rs"]
+mod tap;
+use steps::{Artifact, needs, operation, outputs, permissions, setup, transfer};
+pub use tap::ConsumerPreviewTapSpec;
 
 /// Generation-time, inventory-only authority for a native preview workflow.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,6 +51,8 @@ pub struct ConsumerPreviewSpec {
     pub install_rust_argv: Vec<String>,
     /// Fixed qualified GitHub CLI argv prefix.
     pub gh_argv: Vec<String>,
+    /// Independently enabled downstream PR promotion, with isolated task and App boundaries.
+    pub homebrew_tap: Option<ConsumerPreviewTapSpec>,
 }
 
 /// Render the independently enabled native preview workflow.
@@ -60,6 +65,7 @@ pub fn render_consumer_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFil
     spec.linux_setup.validate()?;
     spec.producer_setup.validate()?;
     if spec.plan.channel != PackageReleaseChannel::Preview
+        || spec.plan.default_branch != "main"
         || !(1..=360).contains(&spec.producer_timeout_minutes)
     {
         return Err(RenderError::InvalidWorkflow(
@@ -75,13 +81,16 @@ pub fn render_consumer_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFil
         &spec.gh_argv,
         false,
     )?;
-    let jobs = vec![
+    let mut jobs = vec![
         eligibility(spec, &gate)?,
         producer(spec)?,
         signer(spec)?,
         publisher(spec)?,
         recovery(spec)?,
     ];
+    if let Some(tap) = &spec.homebrew_tap {
+        jobs.extend(tap::jobs(spec, tap)?);
+    }
     let document = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Rust binary preview")),
         (
@@ -194,7 +203,7 @@ fn producer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
             ),
             acquire(&spec.producer_acquire, "preview-producer", runner)?,
             operation(spec, "execute-preview-producer-v1", false)?,
-            transfer(false, false),
+            transfer(false, Artifact::Producer),
         ],
     ))
 }
@@ -233,10 +242,10 @@ fn signer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
                 &join_argv_for_run(&spec.install_gh_argv)?,
             ),
             acquire(&spec.linux_acquire, "preview-signer", "ubuntu-26.04")?,
-            transfer(true, false),
+            transfer(true, Artifact::Producer),
             operation(spec, "sign-package-release-v1", true)?,
             steps::attest(&spec.plan),
-            transfer(false, true),
+            transfer(false, Artifact::Signed),
         ],
     ))
 }
@@ -274,7 +283,7 @@ fn publisher(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> 
                 &join_argv_for_run(&spec.install_gh_argv)?,
             ),
             acquire(&spec.linux_acquire, "preview-publisher", "ubuntu-26.04")?,
-            transfer(true, true),
+            transfer(true, Artifact::Signed),
             operation(spec, "publish-package-release-v1", true)?,
         ],
     ))

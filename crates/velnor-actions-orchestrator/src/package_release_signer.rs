@@ -21,7 +21,7 @@ use crate::{
 
 mod runtime;
 use runtime::{
-    absolute_env, preview_companions, preview_products, read_regular_file, release_version,
+    absolute_env, preview_companions, read_regular_file, release_version,
     require_private_directory, sha256, signing_identity_from_env, validate_identity,
     validate_release_directory, write_new_file,
 };
@@ -132,8 +132,24 @@ pub fn sign_package_release_from_env() -> Result<(), OrchestratorError> {
 /// Verify retained signer bytes and GitHub's exact run attestation before publication.
 pub(crate) fn verify_attested_signed_package_from_env()
 -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
+    if uses_retained_preview(
+        std::env::var("GITHUB_EVENT_NAME").ok().as_deref(),
+        std::env::var("VELNOR_INTERNAL_OP").ok().as_deref(),
+    ) {
+        return crate::package_release_publish::verify_original_for_promotion();
+    }
     let (plan, expected, input) = publisher_context_from_env()?;
     verify_attested_signed_package(&input, &plan, &expected)
+}
+
+fn uses_retained_preview(event: Option<&str>, operation: Option<&str>) -> bool {
+    event == Some("workflow_dispatch")
+        && matches!(
+            operation,
+            Some(
+                "prepare-homebrew-tap-v1" | "write-homebrew-tap-pr-v1" | "merge-homebrew-tap-pr-v1"
+            )
+        )
 }
 
 /// Verify signed assets and the GitHub attestation using an authenticated
@@ -178,13 +194,12 @@ pub(crate) fn sign_package_release(
         .map_err(|_| internal("package_signer_plan_invalid"))?;
     validate_identity(plan, identity)?;
     let (version, tag, commit_count, source_sha7) = release_version(plan, identity)?;
-    let products = preview_products(plan);
     let companions = preview_companions(plan);
     let verified = verify_package_output(
         input_dir,
         HANDOFF_FILE,
         output_dir,
-        &products,
+        &plan.products,
         &companions,
         PackageOutputIdentity {
             source_commit: &identity.source_sha,

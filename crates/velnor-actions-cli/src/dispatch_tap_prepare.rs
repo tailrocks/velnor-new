@@ -40,7 +40,7 @@ fn gate_common(path: &Path, writer: bool) -> Option<PathBuf> {
     if !is_real_directory(&root)
         || path != root.join(PLAN_FILE)
         || env::var_os(REQUEST_ENV).as_deref() != Some(path.as_os_str())
-        || !is_real_directory(&root.join(PACKAGE_INPUT_DIR))
+        || !package_input_available(&root)
     {
         return None;
     }
@@ -77,6 +77,19 @@ fn gate_common(path: &Path, writer: bool) -> Option<PathBuf> {
         return None;
     }
     Some(path.to_path_buf())
+}
+
+pub(crate) fn package_input_available(root: &Path) -> bool {
+    match env::var("GITHUB_EVENT_NAME").as_deref() {
+        Ok("push") => is_real_directory(&root.join(PACKAGE_INPUT_DIR)),
+        Ok("workflow_dispatch") => {
+            env::var("VELNOR_RELEASE_ORIGINAL_RUN_ID")
+                .is_ok_and(|value| value.parse::<u64>().is_ok_and(|id| id > 0))
+                && env::var("VELNOR_RELEASE_ORIGINAL_RUN_ATTEMPT")
+                    .is_ok_and(|value| value.parse::<u32>().is_ok_and(|attempt| attempt > 0))
+        }
+        _ => false,
+    }
 }
 
 /// Run the unprivileged updater and literal-only validator.

@@ -19,14 +19,14 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP, MERGE_OP,
-    OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PREPARE_HOMEBREW_TAP_OP,
-    PRESEED_MANIFEST_OP, PUBLISH_OP, PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode,
-    RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV, SIGN_PACKAGE_RELEASE_OP,
-    TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, execute_check,
-    execute_preview_producer, merge_internal, merge_passed, plan_internal, plan_outputs,
-    publish_final_report, publish_plan_files, resolve_task_execution, response_path_for,
-    retrieve_reports, write_preseed_manifest, write_request, write_task_report,
+    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP,
+    MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP,
+    PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PUBLISH_PACKAGE_RELEASE_OP,
+    PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV,
+    SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP,
+    WRITE_REQUEST_OP, execute_check, execute_preview_producer, merge_internal, merge_passed,
+    plan_internal, plan_outputs, publish_final_report, publish_plan_files, resolve_task_execution,
+    response_path_for, retrieve_reports, write_preseed_manifest, write_request, write_task_report,
 };
 
 use crate::dispatch_publish::run_publish_internal;
@@ -41,6 +41,8 @@ mod package_release;
 mod package_release_publish;
 #[path = "dispatch_package_release_recovery.rs"]
 mod package_release_recovery;
+#[path = "dispatch_tap_merge.rs"]
+mod tap_merge;
 #[path = "dispatch_tap_prepare.rs"]
 mod tap_prepare;
 
@@ -92,6 +94,8 @@ enum InternalOp {
     TapPrepare,
     /// Isolated App-authenticated PR writer for a validated tap candidate.
     TapWriter,
+    /// Isolated exact-head App-authenticated tap promotion merge.
+    TapMerge,
 }
 
 /// Validated private request: operation plus exact request-file path.
@@ -134,6 +138,7 @@ fn internal_op() -> Option<InternalOp> {
         Ok(tag) if tag == RECOVER_PACKAGE_RELEASE_OP => InternalOp::PackageRecovery,
         Ok(tag) if tag == PREPARE_HOMEBREW_TAP_OP => InternalOp::TapPrepare,
         Ok(tag) if tag == WRITE_HOMEBREW_TAP_PR_OP => InternalOp::TapWriter,
+        Ok(tag) if tag == MERGE_HOMEBREW_TAP_PR_OP => InternalOp::TapMerge,
         _ => return None,
     })
 }
@@ -202,6 +207,9 @@ fn gate_request() -> Option<InternalRequest> {
             return tap_prepare::gate_writer_request(&path)
                 .map(|path| InternalRequest { op, path });
         }
+        InternalOp::TapMerge => {
+            return tap_merge::gate_request(&path).map(|path| InternalRequest { op, path });
+        }
         InternalOp::Fetch
         | InternalOp::Report
         | InternalOp::PreseedManifest
@@ -267,6 +275,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::PackageRecovery => package_release_recovery::run(),
         InternalOp::TapPrepare => tap_prepare::run(),
         InternalOp::TapWriter => tap_prepare::run_writer(),
+        InternalOp::TapMerge => tap_merge::run(),
     }
 }
 

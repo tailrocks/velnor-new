@@ -1,6 +1,9 @@
 use super::*;
+use crate::package_release::PackageReleasePayloadFormat;
 use crate::package_release::tests::support;
-use crate::package_release_plan::{PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan};
+use crate::package_release_plan::{
+    PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,
+};
 
 use std::fmt::Write as _;
 
@@ -33,7 +36,7 @@ fn base_formula(release: &VerifiedPreviewRelease) -> Vec<u8> {
         .receipt
         .products
         .iter()
-        .flat_map(|product| product.archives.iter().map(|archive| archive.name.as_str()))
+        .flat_map(|product| product.payloads.iter().map(|payload| payload.name.as_str()))
     {
         let indent = if name.contains("capsule") {
             "    "
@@ -52,7 +55,7 @@ fn base_formula(release: &VerifiedPreviewRelease) -> Vec<u8> {
 }
 
 fn base_formula_subset(release: &VerifiedPreviewRelease) -> Vec<u8> {
-    let archive = release.receipt.products[0].archives[0].name.as_str();
+    let archive = release.receipt.products[0].payloads[0].name.as_str();
     format!(
         "# source-sha: {SOURCE_SHA}\nclass ExamplePreview < Formula\n  version \"1.2.3-preview.9+abcdef0\"\n    url \"https://github.com/jackin-project/jackin/releases/download/v1.2.3-preview.9+abcdef0/{archive}\"\n    sha256 \"{}\"\nend\n",
         "a".repeat(64)
@@ -61,7 +64,17 @@ fn base_formula_subset(release: &VerifiedPreviewRelease) -> Vec<u8> {
 }
 
 fn plan(policy: &crate::config::RustBinaryPreviewConfig) -> PackageReleasePlan {
-    let mut products = policy.products.clone();
+    let mut products = policy
+        .products
+        .iter()
+        .map(|product| PackageReleasePlanProduct {
+            id: product.id.clone(),
+            package: product.package.clone(),
+            bins: product.bins.clone(),
+            targets: product.targets.clone(),
+            format: PackageReleasePayloadFormat::TarGz,
+        })
+        .collect::<Vec<_>>();
     products.sort_by(|left, right| left.id.cmp(&right.id));
     for product in &mut products {
         product.bins.sort();

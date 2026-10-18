@@ -93,6 +93,12 @@ pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
 /// Selected release-plz coordinator release (tag `release-plz-v0.3.172`).
 /// Source: `https://crates.io/api/v1/crates/release-plz`; published 2026-10-12, checked 2026-10-12.
 pub const RELEASE_PLZ_VERSION: &str = "0.3.172";
+/// Fixed Cosign signer helper (release tag `v3.1.3`), not installed by Mise.
+/// Source release assets and GitHub API SHA-256 digest were verified 2026-10-18.
+pub const COSIGN_VERSION: &str = "3.1.3";
+/// Official Linux `x86_64` Cosign asset digest from the v3.1.3 release API.
+pub const COSIGN_LINUX_AMD64_SHA256: &str =
+    "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71";
 
 // Nextest needs its backend-qualified aqua-registry path: no `nextest`
 // shorthand exists, `github:` tags carry a `cargo-nextest-` prefix, and

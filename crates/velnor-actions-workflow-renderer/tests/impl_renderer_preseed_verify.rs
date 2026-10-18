@@ -127,7 +127,6 @@ fn preseed_verify_script_rejects_tampered_payload() -> Result<(), RenderError> {
 #[test]
 fn preseed_verify_fails_when_mise_emits_version_then_exits_nonzero()
 -> Result<(), Box<dyn std::error::Error>> {
-    use std::os::unix::fs::PermissionsExt;
     use std::process::Command;
 
     use super::impl_renderer_fixtures::mise_argv;
@@ -150,39 +149,40 @@ fn preseed_verify_fails_when_mise_emits_version_then_exits_nonzero()
         "velnor preseed mbx failure {} {nonce}",
         std::process::id()
     ));
-    let release = root.join("target/release");
-    let bin = root.join("bin");
-    std::fs::create_dir_all(&release)?;
-    std::fs::create_dir(&bin)?;
-    let helper = release.join("velnor-actions");
-    std::fs::write(&helper, "#!/bin/sh\nexit 0\n")?;
-    let mut permissions = std::fs::metadata(&helper)?.permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&helper, permissions)?;
-
     let marker = root.join("mise-was-called");
+    let mbx_marker = root.join("mbx-was-called");
     let runner_temp = root.join("runner-temp");
-    let mise = bin.join("mise");
-    std::fs::write(
-        &mise,
-        "#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\nprintf invoked > \"$MISE_MARKER\"\nexit 7\n",
-    )?;
-    let mut permissions = std::fs::metadata(&mise)?.permissions();
-    permissions.set_mode(0o755);
-    std::fs::set_permissions(&mise, permissions)?;
-    let inherited_path =
-        std::env::var_os("PATH").ok_or_else(|| std::io::Error::other("PATH is unavailable"))?;
-    let path =
-        std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(&inherited_path)))?;
+    let bin = prepare_failed_mise_fixture(&root)?;
+    let path = std::env::join_paths([
+        bin.as_path(),
+        std::path::Path::new("/usr/bin"),
+        std::path::Path::new("/bin"),
+    ])?;
     let output = Command::new("/bin/sh")
         .args(["-c", script])
         .current_dir(&root)
         .env("PATH", path)
         .env("RUNNER_TEMP", &runner_temp)
         .env("MISE_MARKER", &marker)
+        .env("MBX_MARKER", &mbx_marker)
         .output()?;
-    let called = std::fs::read_to_string(marker)?;
-    let version_output = std::fs::read_to_string(runner_temp.join("velnor/preseed-mbx-version"))?;
+    let read_output = |path: &std::path::Path| {
+        std::fs::read_to_string(path).map_err(|error| {
+            std::io::Error::other(format!(
+                "read {} after child status {:?}, stdout {:?}, stderr {:?}: {error}",
+                path.display(),
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            ))
+        })
+    };
+    let called = read_output(&marker)?;
+    let version_output = read_output(&runner_temp.join("velnor/preseed-mbx-version"))?;
+    assert!(
+        !mbx_marker.exists(),
+        "the fake MBX executable must not run after Mise exits unsuccessfully"
+    );
     std::fs::remove_dir_all(&root)?;
     assert_eq!(called, "invoked");
     assert_eq!(version_output, "mbx 1.21.1\n");
@@ -190,5 +190,39 @@ fn preseed_verify_fails_when_mise_emits_version_then_exits_nonzero()
         !output.status.success(),
         "the rendered verification step accepted a failed MBX producer"
     );
+    Ok(())
+}
+
+#[cfg(unix)]
+fn prepare_failed_mise_fixture(
+    root: &std::path::Path,
+) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let release = root.join("target/release");
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&release)?;
+    std::fs::create_dir(&bin)?;
+    write_executable(&release.join("velnor-actions"), "#!/bin/sh\nexit 0\n")?;
+    write_executable(
+        &bin.join("mise"),
+        "#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\nprintf invoked > \"$MISE_MARKER\"\nexit 7\n",
+    )?;
+    write_executable(
+        &bin.join("mbx"),
+        "#!/bin/sh\nprintf invoked > \"$MBX_MARKER\"\nprintf '%s\\n' 'mbx 1.21.1'\n",
+    )?;
+    Ok(bin)
+}
+
+#[cfg(unix)]
+fn write_executable(
+    path: &std::path::Path,
+    contents: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use std::os::unix::fs::PermissionsExt;
+
+    std::fs::write(path, contents)?;
+    let mut permissions = std::fs::metadata(path)?.permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(path, permissions)?;
     Ok(())
 }

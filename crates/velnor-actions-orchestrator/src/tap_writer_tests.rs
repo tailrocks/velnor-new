@@ -7,7 +7,7 @@ fn proof_json() -> serde_json::Value {
         "formula_path": "Formula/example.rb",
         "old_formula_sha256": "b".repeat(64),
         "new_formula_sha256": "c".repeat(64),
-        "receipt_digest": "d".repeat(64),
+        "receipt_digest": format!("b3-{}", "d".repeat(64)),
         "plan_digest": "e".repeat(64),
         "tap_config_digest": "f".repeat(64),
         "tap_repository": "owner/tap",
@@ -34,7 +34,7 @@ fn candidate_proof_uses_fixed_relative_formula_name() {
 
 #[test]
 fn branch_name_binds_receipt_and_tap_base() {
-    let receipt = "a".repeat(64);
+    let receipt = format!("b3-{}", "d".repeat(64));
     let first = "b".repeat(40);
     let second = "c".repeat(40);
     assert_eq!(

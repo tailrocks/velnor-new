@@ -1,5 +1,5 @@
 use super::*;
-use support::{archive_count, fixture, jackin_preview, jackin_receipt};
+use support::{archive_count, fixture, jackin_preview, jackin_receipt, stable_raw_fixture};
 
 #[path = "package_release_test_support.rs"]
 pub(crate) mod support;
@@ -25,6 +25,62 @@ fn validates_preview_receipt_and_round_trips_canonical_bytes() {
 fn preserves_stable_manual_dispatch_and_package_tag_identity() {
     let receipt = fixture(PackageReleaseChannel::Stable);
     receipt.validate().expect("stable receipt remains valid");
+}
+
+#[test]
+fn preview_receipt_requires_main_and_stable_receipt_keeps_custom_default_branch() {
+    let mut preview = fixture(PackageReleaseChannel::Preview);
+    preview.source.default_branch = "develop".to_owned();
+    preview.source.source_ref = "refs/heads/develop".to_owned();
+    preview.workflow.workflow_ref = preview.source.source_ref.clone();
+    preview.evidence.signer_workflow_ref = format!(
+        "{}/{}@{}",
+        preview.repository.slug, preview.workflow.path, preview.source.source_ref
+    );
+    assert!(preview.validate().is_err());
+
+    let mut stable = stable_raw_fixture();
+    stable.source.default_branch = "release/1.2".to_owned();
+    stable.source.source_ref = "refs/heads/release/1.2".to_owned();
+    stable.workflow.workflow_ref = stable.source.source_ref.clone();
+    stable.evidence.signer_workflow_ref = format!(
+        "{}/{}@{}",
+        stable.repository.slug, stable.workflow.path, stable.source.source_ref
+    );
+    stable
+        .validate()
+        .expect("stable release retains its configured branch");
+
+    stable.source.default_branch = "release/.hidden".to_owned();
+    stable.source.source_ref = "refs/heads/release/.hidden".to_owned();
+    stable.workflow.workflow_ref = stable.source.source_ref.clone();
+    stable.evidence.signer_workflow_ref = format!(
+        "{}/{}@{}",
+        stable.repository.slug, stable.workflow.path, stable.source.source_ref
+    );
+    assert!(stable.validate().is_err());
+}
+
+#[test]
+fn stable_v2_receipt_preserves_raw_binary_payload_name_and_channel_identity() {
+    let receipt = stable_raw_fixture();
+    receipt.validate().expect("stable raw payload receipt");
+    assert_eq!(receipt.source.event, PackageReleaseEvent::WorkflowDispatch);
+    assert_eq!(receipt.tag, "jackin-v1.2.3");
+    assert_eq!(receipt.version.commit_count, None);
+    assert_eq!(receipt.version.source_sha7, None);
+    assert_eq!(
+        receipt.products[0].payloads[0].format,
+        PackageReleasePayloadFormat::RawBinary
+    );
+    assert_eq!(
+        receipt.products[0].payloads[0].name,
+        "jackin-aarch64-apple-darwin"
+    );
+
+    let mut invalid = receipt;
+    invalid.products[0].payloads[0].name.push_str(".tar.gz");
+    assert!(invalid.validate().is_err());
 }
 
 #[test]

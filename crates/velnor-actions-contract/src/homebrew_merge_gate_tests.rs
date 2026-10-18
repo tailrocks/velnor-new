@@ -14,7 +14,7 @@ fn fixture() -> (TapMergePolicy, TapMergeObservation) {
         repository: "example/tap".to_owned(),
         pull_request_number: 42,
         head_sha: head.clone(),
-        records_digest: format!("b3:{}", "c".repeat(64)),
+        records_digest: format!("b3-{}", "c".repeat(64)),
         unresolved_threads: 0,
         unaddressed_findings: 0,
         outstanding_change_requests: 0,
@@ -29,12 +29,12 @@ fn fixture() -> (TapMergePolicy, TapMergeObservation) {
         feedback_digest: feedback.canonical_digest().expect("digest"),
         completed_reviewer_app_ids: BTreeSet::from([3, 4]),
     };
-    let checks = ["DCO", "Required"]
+    let checks = [("DCO", 5), ("Required", 5), ("Review Complete", 2)]
         .into_iter()
-        .map(|name| TapRequiredCheck {
+        .map(|(name, app_id)| TapRequiredCheck {
             name: name.to_owned(),
-            app_id: 5,
-            required_app_id: Some(5),
+            app_id,
+            required_app_id: Some(app_id),
             head_sha: head.clone(),
             completed_successfully: true,
         })
@@ -69,6 +69,48 @@ fn exact_head_success_requires_trusted_independent_completion() {
 }
 
 #[test]
+fn exact_dco_and_app_bound_completion_must_be_server_protected() {
+    for change in 0..5 {
+        let (policy, mut observed) = fixture();
+        match change {
+            0 => observed.checks.retain(|check| check.name != "DCO"),
+            1 => {
+                observed
+                    .checks
+                    .iter_mut()
+                    .find(|check| check.name == "DCO")
+                    .expect("DCO")
+                    .name = "DCO validation".to_owned();
+            }
+            2 => observed
+                .checks
+                .retain(|check| check.name != "Review Complete"),
+            3 => {
+                let check = observed
+                    .checks
+                    .iter_mut()
+                    .find(|check| check.name == "Review Complete")
+                    .expect("completion check");
+                check.name = "Review Complete extra".to_owned();
+            }
+            _ => {
+                let check = observed
+                    .checks
+                    .iter_mut()
+                    .find(|check| check.name == "Review Complete")
+                    .expect("completion check");
+                check.app_id = 3;
+                check.required_app_id = Some(3);
+            }
+        }
+        assert!(
+            validate_tap_merge_gate(&policy, &observed).is_err(),
+            "change {change}"
+        );
+    }
+}
+
+#[test]
 fn base_head_checks_and_credential_changes_block_merge() {
     for change in 0..9 {
         let (mut policy, mut observed) = fixture();
@@ -95,9 +137,23 @@ fn base_head_checks_and_credential_changes_block_merge() {
 }
 
 #[test]
+fn completion_app_cannot_also_serve_as_a_required_reviewer() {
+    let (mut policy, mut observed) = fixture();
+    policy
+        .expected_reviewer_app_ids
+        .insert(policy.completion_app_id);
+    let completion = observed.completion.clone().expect("fixture completion");
+    observed.completion = Some(TapReviewCompletion {
+        completed_reviewer_app_ids: policy.expected_reviewer_app_ids.clone(),
+        ..completion
+    });
+    assert!(validate_tap_merge_gate(&policy, &observed).is_err());
+}
+
+#[test]
 fn feedback_arriving_after_completion_invalidates_the_gate() {
     let (policy, mut observed) = fixture();
-    observed.feedback.records_digest = format!("b3:{}", "d".repeat(64));
+    observed.feedback.records_digest = format!("b3-{}", "d".repeat(64));
     assert!(validate_tap_merge_gate(&policy, &observed).is_err());
 }
 
@@ -141,5 +197,13 @@ fn different_app_reviewer_set_or_stale_completion_is_rejected() {
 fn server_must_close_the_base_advance_race_without_writer_bypass() {
     let (policy, mut observed) = fixture();
     observed.server_protection = TapServerMergeProtection::MissingOrBypassable;
+    assert!(validate_tap_merge_gate(&policy, &observed).is_err());
+}
+
+#[test]
+fn shared_actions_app_cannot_attest_independent_review_completion() {
+    let (mut policy, mut observed) = fixture();
+    policy.completion_app_id = crate::homebrew_review_completion::GITHUB_ACTIONS_APP_ID;
+    observed.completion.as_mut().expect("completion").app_id = policy.completion_app_id;
     assert!(validate_tap_merge_gate(&policy, &observed).is_err());
 }

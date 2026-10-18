@@ -11,9 +11,10 @@ use std::{
 use sha2::{Digest, Sha256};
 
 use super::{
-    ArtifactKind, ExpectedFile, MAX_ARCHIVE_BYTES, MAX_ARTIFACT_BYTES, MAX_HANDOFF_BYTES,
-    MAX_PATH_BYTES, MAX_SBOM_BYTES, MAX_TOTAL_BYTES, PackageOutputArchive, PackageOutputCompanion,
-    PackageOutputManifest, PackageOutputSbom, VerifiedPackageArtifact, invalid,
+    ArtifactKind, ExpectedFile, MAX_ARTIFACT_BYTES, MAX_HANDOFF_BYTES, MAX_PATH_BYTES,
+    MAX_PAYLOAD_BYTES, MAX_SBOM_BYTES, MAX_TOTAL_BYTES, PackageOutputCompanion,
+    PackageOutputManifest, PackageOutputPayload, PackageOutputSbom, VerifiedPackageArtifact,
+    invalid,
 };
 use crate::OrchestratorError;
 use velnor_actions_contract::package_release::{PackageReleaseAsset, PackageReleaseAssetKind};
@@ -28,9 +29,9 @@ pub(super) fn compare_manifest_inventory(
     manifest: &PackageOutputManifest,
     expected: &[ExpectedFile],
 ) -> Result<(), OrchestratorError> {
-    let archives = expected
+    let payloads = expected
         .iter()
-        .filter(|file| file.kind == ArtifactKind::Archive)
+        .filter(|file| file.kind == ArtifactKind::Payload)
         .collect::<Vec<_>>();
     let companions = expected
         .iter()
@@ -40,47 +41,50 @@ pub(super) fn compare_manifest_inventory(
         .iter()
         .filter(|file| file.kind == ArtifactKind::Sbom)
         .collect::<Vec<_>>();
-    if manifest.archives.len() != archives.len()
+    if manifest.payloads.len() != payloads.len()
         || manifest.companions.len() != companions.len()
         || manifest.sboms.len() != sboms.len()
     {
         return Err(invalid("handoff_inventory_count_mismatch"));
     }
-    compare_archive_inventory(&manifest.archives, &archives)?;
+    compare_payload_inventory(&manifest.payloads, &payloads)?;
     compare_companion_inventory(&manifest.companions, &companions)?;
     compare_sbom_inventory(&manifest.sboms, &sboms)
 }
 
-fn compare_archive_inventory(
-    actual_rows: &[PackageOutputArchive],
+fn compare_payload_inventory(
+    actual_rows: &[PackageOutputPayload],
     expected_rows: &[&ExpectedFile],
 ) -> Result<(), OrchestratorError> {
-    let mut expected_archives = expected_rows
+    let mut expected_payloads = expected_rows
         .iter()
         .map(|file| {
-            (
+            Ok((
                 file.name.as_str(),
                 file.product_id.as_deref().unwrap_or_default(),
                 file.target.as_deref().unwrap_or_default(),
-            )
+                file.payload_format
+                    .ok_or_else(|| invalid("expected_payload_format_missing"))?,
+            ))
         })
-        .collect::<Vec<_>>();
-    expected_archives.sort_unstable();
-    let mut actual_archives = actual_rows
+        .collect::<Result<Vec<_>, OrchestratorError>>()?;
+    expected_payloads.sort_unstable();
+    let mut actual_payloads = actual_rows
         .iter()
         .map(|row| {
             (
                 row.name.as_str(),
                 row.product_id.as_str(),
                 row.target.as_str(),
+                row.format,
             )
         })
         .collect::<Vec<_>>();
-    actual_archives.sort_unstable();
-    if actual_archives != expected_archives
+    actual_payloads.sort_unstable();
+    if actual_payloads != expected_payloads
         || actual_rows.iter().any(|row| !lower_sha256(&row.sha256))
     {
-        return Err(invalid("handoff_archive_inventory_mismatch"));
+        return Err(invalid("handoff_payload_inventory_mismatch"));
     }
     Ok(())
 }
@@ -129,7 +133,7 @@ fn compare_sbom_inventory(
     expected_sboms.sort_unstable();
     let mut actual_sboms = actual_rows
         .iter()
-        .map(|row| (row.archive_name.as_str(), row.name.as_str()))
+        .map(|row| (row.payload_name.as_str(), row.name.as_str()))
         .collect::<Vec<_>>();
     actual_sboms.sort_unstable();
     if actual_sboms != expected_sboms || actual_rows.iter().any(|row| !lower_sha256(&row.sha256)) {
@@ -167,7 +171,7 @@ pub(super) fn copy_expected_files(
         }
         let destination = staging.join(name_path);
         let max = match file.kind {
-            ArtifactKind::Archive => MAX_ARCHIVE_BYTES,
+            ArtifactKind::Payload => MAX_PAYLOAD_BYTES,
             ArtifactKind::Sbom => MAX_SBOM_BYTES,
             ArtifactKind::Companion => MAX_ARTIFACT_BYTES,
             ArtifactKind::Handoff => MAX_HANDOFF_BYTES,
@@ -184,7 +188,7 @@ pub(super) fn copy_expected_files(
             release_asset: PackageReleaseAsset {
                 name: file.name.clone(),
                 kind: match file.kind {
-                    ArtifactKind::Archive => PackageReleaseAssetKind::Payload,
+                    ArtifactKind::Payload => PackageReleaseAssetKind::Payload,
                     ArtifactKind::Companion => PackageReleaseAssetKind::Companion,
                     ArtifactKind::Sbom => PackageReleaseAssetKind::Sbom,
                     ArtifactKind::Handoff => return Err(invalid("handoff_asset_unexpected")),
@@ -203,7 +207,7 @@ pub(super) fn copy_expected_files(
 
 fn claimed_digests(manifest: &PackageOutputManifest) -> BTreeMap<&str, &str> {
     manifest
-        .archives
+        .payloads
         .iter()
         .map(|row| (row.name.as_str(), row.sha256.as_str()))
         .chain(

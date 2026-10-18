@@ -14,7 +14,10 @@ use velnor_actions_contract::{
 use crate::{
     OrchestratorError,
     internal::internal,
-    package_release_signer::{PackageReleaseSigningIdentity, verify_attested_signed_package},
+    package_release_signer::{
+        PackageReleaseSigningIdentity, VerifiedAttestedSignedPackage,
+        verify_attested_signed_package,
+    },
 };
 
 use super::{
@@ -30,6 +33,20 @@ const MAX_PLAN_BYTES: u64 = 1024 * 1024;
 const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 
 pub(super) fn recover() -> Result<super::PackagePublicationOutcome, OrchestratorError> {
+    let (signed, mode) = verified_original()?;
+    let current_ci = current_ci_from_env()?;
+    let mut backend = GitHubPackagePublisher::new(signed, current_ci, mode)?;
+    publish_package_release(&mut backend)
+}
+
+/// Authenticate original bytes for promotion without release-write authority.
+pub(crate) fn verify_original_for_promotion()
+-> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
+    verified_original().map(|(signed, _)| signed)
+}
+
+fn verified_original()
+-> Result<(VerifiedAttestedSignedPackage, OriginalVerification), OrchestratorError> {
     let root = runner_root()?;
     let plan_path = root.join(PLAN_FILE);
     if env_path("VELNOR_REQUEST_FILE")? != plan_path {
@@ -91,14 +108,12 @@ pub(super) fn recover() -> Result<super::PackagePublicationOutcome, Orchestrator
         repository_id,
     )?;
     let signed = verify_attested_signed_package(&input, &plan, &identity)?;
-    let current_ci = current_ci_from_env()?;
     let mode = OriginalVerification::RetainedRun {
         directory: Box::new(input),
         plan: Box::new(plan),
         identity: Box::new(identity),
     };
-    let mut backend = GitHubPackagePublisher::new(signed, current_ci, mode)?;
-    publish_package_release(&mut backend)
+    Ok((signed, mode))
 }
 
 fn validate_recovery_context(plan: &PackageReleasePlan) -> Result<(), OrchestratorError> {

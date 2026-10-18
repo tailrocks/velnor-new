@@ -47,6 +47,18 @@ fn immutable_status_requires_a_distinct_read_only_credential() {
 }
 
 #[test]
+fn immutable_status_ignores_owner_metadata_but_requires_enabled_true() {
+    let response: ImmutableResponse =
+        serde_json::from_str(r#"{"enabled":true,"enforced_by_owner":false}"#)
+            .expect("documented immutable settings response");
+    assert_eq!(response.enabled, Some(true));
+    let organization_enforced: ImmutableResponse =
+        serde_json::from_str(r#"{"enabled":true,"enforced_by_owner":true}"#)
+            .expect("owner enforcement is recorded independently");
+    assert_eq!(organization_enforced.enabled, Some(true));
+}
+
+#[test]
 fn annotated_tag_response_exposes_identity_message_and_commit_target() {
     let tag: GitTagResponse = serde_json::from_str(
         r#"{"tag":"v1.2.3-preview.7+abcdef0","message":"signed recovery envelope","object":{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","type":"commit"}}"#,

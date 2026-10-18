@@ -30,7 +30,7 @@ fn expected_bindings(
 ) -> Result<BTreeMap<String, Binding>, ContractError> {
     let mut expected = BTreeMap::<String, Binding>::new();
     for product in &receipt.products {
-        for archive in &product.archives {
+        for archive in &product.payloads {
             insert_archive_bindings(&mut expected, &product.id, &archive.name, &archive.target)?;
         }
     }

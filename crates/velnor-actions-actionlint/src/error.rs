@@ -38,7 +38,7 @@ pub enum ActionlintError {
         /// Machine-readable problem code plus detail.
         problem: String,
     },
-    /// A `uses:` value names an action outside the 9-entry allowlist.
+    /// A `uses:` value names an action outside the pinned allowlist.
     UnknownAction {
         /// Rejected `uses:` value.
         uses: String,

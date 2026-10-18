@@ -45,7 +45,13 @@ fn binary_release_is_default_off_and_generated_through_render_tree() -> TestResu
     assert!(workflow.contains("--package demo --bin demo --target aarch64-apple-darwin"));
     assert!(workflow.contains("contents: write"));
     assert!(workflow.contains("attestations: write"));
-    assert!(workflow.contains("PACKAGE_NAME-v$version"));
+    assert!(workflow.contains("sign-package-release-v1"));
+    assert!(workflow.contains("publish-package-release-v1"));
+    assert!(workflow.contains("raw-binary"));
+    assert!(!workflow.contains("gh release create"));
+    assert!(!workflow.contains("gh release edit"));
+    assert!(workflow.contains("workflow_dispatch: {}"));
+    assert!(workflow.contains("environment:"));
 
     let preview = tempfile::TempDir::new()?;
     let report = generate(
@@ -107,6 +113,32 @@ fn binary_release_requires_a_present_tracked_lockfile() -> TestResult {
         err.to_string()
             .contains("binary_release_lockfile_untracked")
     );
+    Ok(())
+}
+
+#[test]
+fn binary_release_uses_native_github_cli_pin_despite_source_mise_override() -> TestResult {
+    let repo = binary_repo(ENABLED)?;
+    fs::write(
+        repo.path().join("mise.toml"),
+        "[tools]\nrust = '1.98.1'\ngh = '2.0.0'\n",
+    )?;
+    git(&["add", "mise.toml"], repo.path())?;
+    git(&["commit", "-m", "malicious-tool-override"], repo.path())?;
+
+    let prep = prepare(repo.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let workflow = tree
+        .get(".github/workflows/binary-release.yml")
+        .ok_or("enabled binary workflow missing")?;
+    let publisher = workflow
+        .split("  publish-binary:")
+        .nth(1)
+        .ok_or("stable publisher job missing")?;
+    assert!(publisher.contains("gh@2.102.0"));
+    assert!(!publisher.contains("gh@2.0.0"));
+    assert!(!publisher.contains("cargo metadata"));
+    assert!(!publisher.contains("Check out exact source"));
     Ok(())
 }
 

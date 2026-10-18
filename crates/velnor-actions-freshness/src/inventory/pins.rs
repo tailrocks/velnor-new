@@ -6,9 +6,10 @@ use serde_json::Value;
 
 use crate::context::FreshnessContext;
 
-use super::{
-    ACTIONS, CAPABILITIES, CATALOG, CONFIG, EXPECTED_ACTIONS, EXPECTED_TOOLS, RENDERER, TOOLS,
-};
+use super::{ACTIONS, CATALOG, CONFIG, EXPECTED_ACTIONS, EXPECTED_TOOLS};
+
+#[path = "pins_mirrors.rs"]
+mod mirrors;
 
 pub(crate) fn check_local_pins(ctx: &mut FreshnessContext) {
     if reject_duplicate_inventory_rows(ctx) {
@@ -22,7 +23,7 @@ pub(crate) fn check_local_pins(ctx: &mut FreshnessContext) {
     }
     check_tool_pins(ctx);
     check_action_pins(ctx);
-    check_local_mirrors(ctx);
+    mirrors::check_local_mirrors(ctx);
     check_runner_pins(ctx);
 }
 
@@ -96,6 +97,15 @@ fn check_tool_pins(ctx: &mut FreshnessContext) {
             actual.as_deref(),
             tool.get("pinned").and_then(Value::as_str),
         );
+        if name == "cosign" {
+            let digest = ctx.rust_const(CATALOG, "COSIGN_LINUX_AMD64_SHA256");
+            compare_pin(
+                ctx,
+                "tool cosign Linux x86_64 release digest",
+                digest.as_deref(),
+                tool.get("sha256").and_then(Value::as_str),
+            );
+        }
     }
     for (name, _) in EXPECTED_TOOLS
         .iter()
@@ -192,56 +202,6 @@ fn compare_pin(
             ),
         );
     }
-}
-
-fn check_local_mirrors(ctx: &mut FreshnessContext) {
-    ctx.tool_pinned = ctx
-        .tools
-        .iter()
-        .filter_map(|tool| {
-            Some((
-                tool.get("name")?.as_str()?.to_owned(),
-                tool.get("pinned")?.clone(),
-            ))
-        })
-        .collect();
-    let value = ctx.rust_const(CAPABILITIES, "ACTIONLINT_VERSION");
-    let expected = ctx
-        .tool_pinned
-        .get("actionlint")
-        .and_then(Value::as_str)
-        .map(str::to_owned);
-    compare_pin(
-        ctx,
-        "tool actionlint mirror (capabilities.rs)",
-        value.as_deref(),
-        expected.as_deref(),
-    );
-    let value = ctx.rust_const(TOOLS, "SHELLCHECK_VERSION");
-    let expected = ctx
-        .tool_pinned
-        .get("shellcheck")
-        .and_then(Value::as_str)
-        .map(str::to_owned);
-    compare_pin(
-        ctx,
-        "tool shellcheck mirror (tools.rs)",
-        value.as_deref(),
-        expected.as_deref(),
-    );
-    let value = ctx.rust_const(RENDERER, "ALINT_BINARY_VERSION");
-    let expected = ctx
-        .action_pinned
-        .get("asamarts/alint")
-        .and_then(|action| action.get("pinned_version"))
-        .and_then(Value::as_str)
-        .map(str::to_owned);
-    compare_pin(
-        ctx,
-        "action asamarts/alint binary mirror (render.rs)",
-        value.as_deref(),
-        expected.as_deref(),
-    );
 }
 
 fn check_runner_pins(ctx: &mut FreshnessContext) {

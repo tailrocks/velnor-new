@@ -53,6 +53,7 @@ pub use super::qualify::qualify_argv_staged;
 pub use super::retrieve_reports::{FETCH_OP, retrieve_reports};
 pub use super::root::resolve_root;
 pub use super::routing::{migrate_config, parse_dispatch_mode};
+pub use super::tap_merge::{MERGE_HOMEBREW_TAP_PR_OP, merge_homebrew_tap_from_env};
 pub use super::tap_prepare::{
     HomebrewTapPreparationProof, PREPARE_HOMEBREW_TAP_OP, TapPromotionReceipt,
     WRITE_HOMEBREW_TAP_PR_OP, prepare_homebrew_tap_from_env, write_homebrew_tap_pr_from_env,

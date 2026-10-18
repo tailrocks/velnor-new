@@ -16,6 +16,8 @@ mod types;
 pub(super) use types::*;
 #[path = "package_release_publish_github_immutable_status.rs"]
 mod immutable_status;
+#[path = "package_release_publish_preflight.rs"]
+mod preflight;
 #[cfg(test)]
 use immutable_status::immutable_status_token;
 
@@ -258,6 +260,14 @@ impl GitHubApi {
         self.verify_immutable_status()
     }
 
+    pub(super) fn verify_release_channel_environment(
+        &self,
+        channel: velnor_actions_contract::package_release::PackageReleaseChannel,
+        branch: &str,
+    ) -> Result<(), OrchestratorError> {
+        preflight::verify_release_channel_environment(channel, self, branch)
+    }
+
     fn fields_request(
         &self,
         route: &str,
@@ -315,6 +325,13 @@ impl GitHubApi {
         }
         Ok(result.stdout)
     }
+}
+
+pub(super) fn verify_tap_update_environment(
+    repository: &str,
+    branch: &str,
+) -> Result<(), OrchestratorError> {
+    preflight::tap_update_environment(repository, branch)
 }
 
 fn annotated_tag_observation(

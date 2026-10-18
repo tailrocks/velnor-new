@@ -10,7 +10,7 @@ use std::{
 use sha2::{Digest, Sha256};
 use velnor_actions_contract::{
     PackageReleasePlan,
-    config::{RustBinaryPreviewArchive, RustBinaryPreviewCompanion, RustBinaryPreviewProduct},
+    config::RustBinaryPreviewCompanion,
     package_release::{PackageReleaseChannel, PackageReleaseEvent, PackageReleaseReceipt},
     preview_identity::PreviewIdentity,
 };
@@ -132,19 +132,6 @@ pub(super) fn release_version(
             ))
         }
     }
-}
-
-pub(super) fn preview_products(plan: &PackageReleasePlan) -> Vec<RustBinaryPreviewProduct> {
-    plan.products
-        .iter()
-        .map(|product| RustBinaryPreviewProduct {
-            id: product.id.clone(),
-            package: product.package.clone(),
-            bins: product.bins.clone(),
-            targets: product.targets.clone(),
-            archive: RustBinaryPreviewArchive::TarGz,
-        })
-        .collect()
 }
 
 pub(super) fn preview_companions(plan: &PackageReleasePlan) -> Vec<RustBinaryPreviewCompanion> {

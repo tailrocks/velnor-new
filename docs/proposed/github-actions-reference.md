@@ -140,7 +140,8 @@ Release responses do not include `make_latest` (confirmed against the official
 Velnor v0.1.12 API response). It is a request-only string enum. `gh api --field`
 converts literal booleans and expands `@file` values, so native release requests
 use `--raw-field` for string fields and `--field` only for draft/prerelease
-booleans. Preview admission verifies `prerelease: true`; GitHub excludes
-prereleases from latest releases. Stable publication additionally checks the
-latest-release endpoint immediately after publication. Completed older releases
-do not have to remain latest to reconcile safely.
+booleans. Both channels publish with `make_latest: false`; preview releases are
+also prereleases, while stable releases remain ordinary releases without being
+forced to latest. The release response has no `make_latest` field, so Velnor
+verifies the returned draft/prerelease/immutable state and exact assets without
+assuming that a newly published stable release becomes latest.

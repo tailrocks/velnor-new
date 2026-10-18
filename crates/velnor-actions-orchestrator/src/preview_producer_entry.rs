@@ -106,7 +106,7 @@ pub fn execute_preview_producer() -> Result<(), OrchestratorError> {
         &producer_root,
         manifest_relative,
         &verified_dir,
-        &preview.products,
+        &plan.products,
         &preview.companions,
         PackageOutputIdentity {
             source_commit: &source_sha,

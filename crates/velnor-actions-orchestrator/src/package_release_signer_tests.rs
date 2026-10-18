@@ -1,7 +1,7 @@
 use super::*;
 use velnor_actions_contract::{
-    config::{RustBinaryPreviewArchive, RustBinaryPreviewProduct},
-    package_release::PackageReleaseChannel,
+    PackageReleasePlanProduct,
+    package_release::{PackageReleaseChannel, PackageReleasePayloadFormat},
 };
 
 fn plan(channel: PackageReleaseChannel) -> PackageReleasePlan {
@@ -11,12 +11,16 @@ fn plan(channel: PackageReleaseChannel) -> PackageReleasePlan {
         repository: "jackin-project/jackin".to_owned(),
         default_branch: "main".to_owned(),
         base_version: "1.2.3".to_owned(),
-        products: vec![RustBinaryPreviewProduct {
+        products: vec![PackageReleasePlanProduct {
             id: "jackin".to_owned(),
             package: "jackin".to_owned(),
             bins: vec!["jackin".to_owned()],
             targets: vec!["x86_64-unknown-linux-gnu".to_owned()],
-            archive: RustBinaryPreviewArchive::TarGz,
+            format: if channel == PackageReleaseChannel::Stable {
+                PackageReleasePayloadFormat::RawBinary
+            } else {
+                PackageReleasePayloadFormat::TarGz
+            },
         }],
         companions: Vec::new(),
     }
@@ -88,4 +92,32 @@ fn stable_identity_keeps_dispatch_and_package_prefixed_tag() {
         release_version(&stable, &facts).expect("stable identity"),
         ("1.2.3".to_owned(), "jackin-v1.2.3".to_owned(), None, None)
     );
+}
+#[test]
+fn retained_preview_verification_is_closed_to_manual_tap_operations() {
+    for operation in [
+        "prepare-homebrew-tap-v1",
+        "write-homebrew-tap-pr-v1",
+        "merge-homebrew-tap-pr-v1",
+    ] {
+        assert!(super::uses_retained_preview(
+            Some("workflow_dispatch"),
+            Some(operation)
+        ));
+        for event in [None, Some("push"), Some("pull_request")] {
+            assert!(!super::uses_retained_preview(event, Some(operation)));
+        }
+    }
+    for operation in [
+        None,
+        Some("sign-package-release-v1"),
+        Some("publish-package-release-v1"),
+        Some("recover-package-release-v1"),
+        Some("unknown"),
+    ] {
+        assert!(!super::uses_retained_preview(
+            Some("workflow_dispatch"),
+            operation
+        ));
+    }
 }

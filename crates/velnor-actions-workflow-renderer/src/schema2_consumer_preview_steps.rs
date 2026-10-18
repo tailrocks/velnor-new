@@ -109,7 +109,13 @@ pub(super) fn operation(
             "${{ needs.preview-eligibility.outputs.ci_attempt }}",
         ),
     ];
-    if op == "recover-package-release-v1" {
+    if matches!(
+        op,
+        "recover-package-release-v1"
+            | "prepare-homebrew-tap-v1"
+            | "write-homebrew-tap-pr-v1"
+            | "merge-homebrew-tap-pr-v1"
+    ) {
         env.extend([
             (
                 "VELNOR_RELEASE_ORIGINAL_RUN_ID",
@@ -146,13 +152,23 @@ pub(super) fn operation(
     ))
 }
 
-pub(super) fn transfer(download: bool, signed: bool) -> Yaml {
-    let suffix = if signed { "signed" } else { "producer" };
-    let directory = match (download, signed) {
-        (true, false) => "preview-input",
-        (false, false) => "preview-output",
-        (true, true) => "preview-publish-input",
-        (false, true) => "preview-signed",
+#[derive(Clone, Copy)]
+pub(super) enum Artifact {
+    Producer,
+    Signed,
+    TapCandidate,
+    TapPr,
+}
+
+pub(super) fn transfer(download: bool, artifact: Artifact) -> Yaml {
+    let (suffix, directory) = match (download, artifact) {
+        (true, Artifact::Producer) => ("producer", "preview-input"),
+        (false, Artifact::Producer) => ("producer", "preview-output"),
+        (true, Artifact::Signed) => ("signed", "preview-publish-input"),
+        (false, Artifact::Signed) => ("signed", "preview-signed"),
+        (_, Artifact::TapCandidate) => ("tap-candidate", "tap-candidate"),
+        (true, Artifact::TapPr) => ("tap-pr", ""),
+        (false, Artifact::TapPr) => ("tap-pr", "tap-pr.json"),
     };
     let mut with = vec![
         (

@@ -82,13 +82,24 @@ The static request is canonical `velnor.package-release-plan.v1` at `$RUNNER_TEM
 
 Every producer tool ID must resolve through Velnor's `qualified_tools` inventory for the producer platform. Updater tools must be qualified from the trusted tap source and must not be satisfied by source-controlled version installation during task execution. Inputs are explicit tracked paths, unique, safe, and include the task's Mise config; output directory and manifest cannot overlap trusted source inputs.
 
+The native tap updater currently requires a catalogued GitHub-hosted runner. An ephemeral self-hosted executor is rejected at configuration validation and rendering because this promotion path has no native provisioning lifecycle for it.
+
 `producer.system_tools` is optional and reuses the strict named-check native host-tool contract. Its closed kinds are `swift` and `xcode`; each declaration pins exact version and build, entries are sorted and unique, and declarations are valid only for a macOS producer runner. Runtime verification must prove the selected developer directory and executable identity against these pins before running the producer. These pins observe existing host-installed tools; they do not install tools or declare arbitrary system dependencies. Jackin's producer runs on a native macOS runner and obtains its macOS SDK from that runner's exact pinned Xcode installation. It builds the macOS targets using that SDK and cross-builds Linux targets with pinned Zig/cargo-zigbuild. The producer must not download or extract an unverified SDK archive.
 
 `homebrew_tap` binds a repository slug, one safe formula path, source channel, updater task, credential references, fixed environment, fixed merge policy, and exact-head review completion check. App credentials are environment variable/secret names, never config values. The App installation must be target-repository scoped and have no ruleset bypass. Tap-main checks and install tests use existing named `[[checks]]` and feed the required check.
 
-The `preview-publish` environment must contain `PREVIEW_IMMUTABILITY_READ_TOKEN`, a source-repository-scoped credential with Administration read permission only. The publisher and recovery operations receive it as `VELNOR_RELEASE_STATUS_TOKEN` solely for the fixed immutable-release settings GET. It must differ from the workflow release-write token and tap App token. Producer, updater, and signer jobs never receive it. Missing credentials, denied reads, disabled immutability, or ambiguous responses block every unfinished publication mutation. GitHub workflow `contents: write` does not grant Administration read.
+The `preview-publish` environment must contain `PREVIEW_IMMUTABILITY_READ_TOKEN`, a source-repository-scoped credential with Administration read permission only. The publisher and recovery operations receive it as `VELNOR_RELEASE_STATUS_TOKEN` for only the fixed immutable-release, main-branch, and effective-branch-rules GET routes. The workflow's `GH_TOKEN` is used only for fixed source-environment and deployment-branch-policy GET routes and GitHub attestation lookup. Neither credential is exposed to producer/updater tasks; the status credential is never exposed to the signer. Both must differ from the tap App token. Missing credentials, denied reads, disabled immutability, or ambiguous responses block every unfinished publication mutation. The immutable-status response's `enabled` field must be true; `enforced_by_owner` is parsed but owner-wide enforcement is not required. GitHub workflow `contents: write` does not grant Administration read.
+
+Before promotion, runtime checks the source default branch is protected and that effective protections include a pull-request rule (zero required approvals is valid), resolved review threads, nonempty required status checks, force-push prevention, and deletion prevention. It reads GitHub's effective active-rules endpoint for repository/organization rulesets and the classic branch-protection endpoint, combining protections from both. A classic branch-protection 404 counts only as an absent classic rule; ruleset protections must still satisfy any requirements the classic endpoint does not. The fixed `preview-publish` and `tap-update` environments must each have no approval/custom protection rule and must use custom deployment branch policies with the single exact `main` branch pattern; `protected_branches=true` alone is not an exact main-only restriction. The preview publisher checks `preview-publish`; the App writer and merge gate recheck `tap-update` immediately before their write/merge boundary. Stable publication retains its existing human-reviewed `consumer-binary-release` environment contract, including at least one reviewer and self-review prevention.
+
+These checks use GitHub's documented [branch protection](https://docs.github.com/en/rest/branches/branch-protection), [effective branch rules](https://docs.github.com/en/rest/repos/rules), [deployment environments](https://docs.github.com/en/rest/deployments/environments?apiVersion=2026-03-10), [deployment branch policies](https://docs.github.com/en/rest/deployments/branch-policies), and [immutable releases](https://docs.github.com/en/rest/repos/repos?piVersion=2022-11-28) endpoints. The status credential needs source repository Administration:read (also Metadata:read for effective rules); `GH_TOKEN` needs Actions:read for environment settings.
 
 ## 2. Selection, version, and immutable identity
+
+The initial automatic preview policy requires the resolved default branch to be
+`main`, matching the fixed deployment-environment policies. Generation rejects a
+different branch before emitting an unusable publication workflow. Stable manual
+publication retains support for its configured default branch.
 
 Consumer policy validation evaluates stable, preview, and distribution independently. All four stable/preview enablement combinations are valid subject to each enabled policy's own fields. Distribution enabled with missing, disabled, or unsupported source channel is an error. Stable's protected `consumer-binary-release` environment and required human reviewer remain mandatory whenever stable publication is enabled; preview settings cannot weaken stable authorization.
 
@@ -156,7 +167,7 @@ The exact schema has these required keys and value shapes; `additionalProperties
   "version": {"base": "1.4.2", "value": "1.4.2-preview.381+0123abc", "commit_count": 381, "source_sha7": "0123abc"},
   "tag": "v1.4.2-preview.381+0123abc",
   "products": [
-    {"id": "jackin", "package": "jackin", "package_version": "1.4.2", "bins": ["jackin", "jackin-role", "jackin-usage-broker"], "archives": [{"target": "aarch64-apple-darwin", "name": "jackin-aarch64-apple-darwin.tar.gz", "members": ["jackin", "jackin-role", "jackin-usage-broker"]}]}
+    {"id": "jackin", "package": "jackin", "package_version": "1.4.2", "bins": ["jackin", "jackin-role", "jackin-usage-broker"], "payloads": [{"format": "tar-gz", "target": "aarch64-apple-darwin", "name": "jackin-aarch64-apple-darwin.tar.gz", "members": ["jackin", "jackin-role", "jackin-usage-broker"]}]}
   ],
   "companions": [{"id": "capsule-manifest", "name": "capsule-manifest.json"}],
   "assets": [{"name": "jackin-aarch64-apple-darwin.tar.gz", "kind": "payload", "product_id": "jackin", "target": "aarch64-apple-darwin", "subject_name": "jackin-aarch64-apple-darwin.tar.gz", "size": 1234, "sha256": "<64 lowercase hex>"}],
@@ -164,7 +175,7 @@ The exact schema has these required keys and value shapes; `additionalProperties
 }
 ```
 
-`products[*].archives` must enumerate every declared target; the abbreviated example shows one. `assets` must enumerate exactly the 27 payload/supporting assets other than `release.json` and its own signature bundle: six archives, 18 archive sidecars, `SHA256SUMS`, and the capsule manifest plus its bundle. Every asset record has exactly `name`, `kind`, `product_id`, `target`, `subject_name`, `size`, and `sha256`; `product_id` and `target` are JSON `null` when not applicable; payload and same-name sidecars set `subject_name` to the payload archive, while companion and companion bundle set it to `capsule-manifest.json`, and `SHA256SUMS` uses JSON `null`. `kind` is a closed enum: `payload`, `sha256`, `signature_bundle`, `sbom`, `checksum_list`, `companion`, `companion_signature_bundle`. Payload and sidecar records carry their owning `product_id` and archive `target`; `subject_name` identifies the signed or SBOM-bound file. Inventory association is fixed by the schema, never producer-selected.
+`products[*].payloads` must enumerate every declared target; the abbreviated example shows one. Preview payloads use `format: "tar-gz"`; stable's shared receipt uses `format: "raw-binary"` and the existing `<bin>-<target>` asset filename. `assets` must enumerate exactly the 27 preview payload/supporting assets other than `release.json` and its own signature bundle: six archives, 18 archive sidecars, `SHA256SUMS`, and the capsule manifest plus its bundle. Every asset record has exactly `name`, `kind`, `product_id`, `target`, `subject_name`, `size`, and `sha256`; `product_id` and `target` are JSON `null` when not applicable; payload and same-name sidecars set `subject_name` to the payload, while companion and companion bundle set it to `capsule-manifest.json`, and `SHA256SUMS` uses JSON `null`. `kind` is a closed enum: `payload`, `sha256`, `signature_bundle`, `sbom`, `checksum_list`, `companion`, `companion_signature_bundle`. Payload and sidecar records carry their owning `product_id` and target; `subject_name` identifies the signed or SBOM-bound file. Inventory association is fixed by the schema, never producer-selected.
 
 The separately published `release.json.bundle` and GitHub attestations are excluded from `assets` to avoid self-reference. The detached bundle authenticates `release.json` digest; verifier checks its exact preview signer workflow, ref, source authority and OIDC issuer. GitHub attestations are queried and verified by subject digest/name against GitHub's authenticated attestation service. The receipt fields bind repository slug and numeric ID; full source SHA/ref/branch/event and CI run attempt; workflow path/ref/authority SHA and run identities; exact package/version/bin/target/archive/member inventories; immutable version/tag; all 27 asset names/sizes/SHA-256 digests; evidence profile, signer workflow/ref/issuer, and attestation predicate/subject names. Stable uses the same schema with `channel: stable`, its own exact signer identity, and its existing human approval prerequisite. No receipt timestamp or release ID participates in identity. No fallback parser or dual v1/v2 publication.
 
@@ -249,7 +260,7 @@ The completion check's `output.text` is exact canonical UTF-8 JSON using
 `complete`), `feedback_digest`, `has_unaddressed_findings` (false), and a sorted
 unique `reviewers` array. Each reviewer has `app_id`, `head_sha`,
 `evidence_digest`, `complete` (true), and `has_unaddressed_findings` (false).
-Digests use the canonical `b3:<64 lowercase hex>` form. Unknown schemas, states,
+Digests use the canonical `b3-<64 lowercase hex>` form. Unknown schemas, states,
 fields, duplicate keys, noncanonical text, missing/duplicate reviewers, and a
 failed actual check reject. Numeric App identity, check name, actual head and
 actual result are fetched independently from GitHub; payload fields cannot
@@ -274,3 +285,33 @@ Required-check contexts must also bind an explicit numeric integration/App ID in
 repository protection. An unbound context cannot establish trusted CI merely by
 matching a display name, so native merge admission rejects it. Duplicate matching
 checks are ambiguous and block promotion.
+
+## Implementation qualification status
+
+The native publisher, shared stable/preview payload model, isolated tap preparation,
+App writer, and exact-head merge gate are implemented on the feature branch. This
+is not an official released generator or evidence of an operational Jackin pipeline.
+Focused tests cover the canonical receipt-to-promotion digest chain, raw stable
+handoff, preview privilege separation, retained-run recovery admission, required
+check identity, and stale source/base/head rejection. Full workspace gates and a
+settled-tree independent review remain mandatory for each release candidate.
+
+The following acceptance work remains before the feature is complete:
+
+- Qualify interrupted and completed tap promotion retries, including a lost merge
+  response and an already installed identical formula, as explicit authenticated
+  outcomes without duplicate PRs, empty commits, or unauthorized writes.
+- Measure ruleset bypass-list visibility with the actual read-only merge App
+  credential. Missing visibility blocks merge; Administration:write is not an
+  acceptable workaround for the writer.
+- Install a dedicated completion App, separate from the writer, reviewer Apps,
+  and generic GitHub Actions identity. Its credential belongs only to a trusted
+  main-only completion workflow that never executes PR code. Require its exact
+  name and numeric App ID in server-side branch checks. Observe positive exact-head
+  reviewer completion and test forged or edited machine-state rejection before
+  enabling unattended merge. A quiet PR or failed/quota-limited reviewer is not
+  completion.
+- Release and verify the official generator, migrate Jackin and the tap, configure
+  repository prerequisites, and prove two consecutive real prebuilt Homebrew
+  upgrades, signature/capsule loading, immutable first-release availability, and
+  the required negative scenarios.

@@ -1,8 +1,8 @@
 use super::*;
 use crate::{HelperProvenance, provision_acquire_step};
 use velnor_actions_contract::{
-    PACKAGE_RELEASE_PLAN_SCHEMA_V1,
-    config::{RustBinaryPreviewArchive, RustBinaryPreviewCompanion, RustBinaryPreviewProduct},
+    PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlanProduct, config::RustBinaryPreviewCompanion,
+    package_release::PackageReleasePayloadFormat,
 };
 
 fn fixture() -> ConsumerPreviewSpec {
@@ -18,12 +18,12 @@ fn fixture() -> ConsumerPreviewSpec {
     ];
     let products = [("capsule", &targets[..2]), ("scanner", &targets[..])]
         .into_iter()
-        .map(|(id, targets)| RustBinaryPreviewProduct {
+        .map(|(id, targets)| PackageReleasePlanProduct {
             id: id.to_owned(),
             package: id.to_owned(),
             bins: vec![id.to_owned()],
             targets: targets.iter().map(|target| (*target).to_owned()).collect(),
-            archive: RustBinaryPreviewArchive::TarGz,
+            format: PackageReleasePayloadFormat::TarGz,
         })
         .collect();
     ConsumerPreviewSpec {
@@ -60,6 +60,7 @@ fn fixture() -> ConsumerPreviewSpec {
             "rust@1.98.1".to_owned(),
         ],
         gh_argv: vec!["gh".to_owned()],
+        homebrew_tap: None,
     }
 }
 
@@ -122,6 +123,9 @@ fn preview_rejects_stable_plan_or_invalid_inventory_before_rendering() {
     spec.plan.channel = PackageReleaseChannel::Stable;
     assert!(render_consumer_preview(&spec).is_err());
     spec.plan.channel = PackageReleaseChannel::Preview;
+    spec.plan.default_branch = "develop".to_owned();
+    assert!(render_consumer_preview(&spec).is_err());
+    spec.plan.default_branch = "main".to_owned();
     spec.plan.products[0]
         .targets
         .push("../../escape".to_owned());
@@ -150,4 +154,126 @@ fn manual_recovery_has_no_build_or_signing_authority() {
     assert!(!recovery.contains("id-token"));
     assert!(!recovery.contains("attestations: write"));
     assert!(recovery.contains("${{ secrets.PREVIEW_IMMUTABILITY_READ_TOKEN }}"));
+}
+
+fn with_tap() -> ConsumerPreviewSpec {
+    use velnor_actions_contract::config::{
+        CheckExecutor, CheckPlatform, CheckRunner, ExactHeadReviewCheck, HomebrewTapConfig,
+        HomebrewTapSource, MiseTaskSource, ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment,
+        TapUpdaterBinding,
+    };
+    let mut spec = fixture();
+    spec.homebrew_tap = Some(ConsumerPreviewTapSpec {
+        updater_acquire: spec.linux_acquire.clone(),
+        updater_setup: setup_fixture(),
+        policy: HomebrewTapConfig {
+            enabled: true,
+            source: HomebrewTapSource::RustBinaryReleasePreview,
+            repository: "example/homebrew-tap".to_owned(),
+            formula: "Formula/scanner-preview.rb".to_owned(),
+            updater: TapUpdaterBinding {
+                task: "package:update-preview".to_owned(),
+                source: MiseTaskSource {
+                    mise_config: "mise.toml".to_owned(),
+                    working_directory: ".".to_owned(),
+                },
+                runner: CheckRunner {
+                    label: "ubuntu-26.04".to_owned(),
+                    platform: CheckPlatform::LinuxX64,
+                    executor: CheckExecutor::Hosted,
+                    container: None,
+                },
+                inputs: vec![
+                    "mise.toml".to_owned(),
+                    "Formula/scanner-preview.rb".to_owned(),
+                ],
+                tools: vec!["python".to_owned()],
+                timeout_minutes: 30,
+            },
+            environment: TapUpdateEnvironment::TapUpdate,
+            app_id_variable: "TAP_APP_ID".to_owned(),
+            app_private_key_secret: "TAP_APP_PRIVATE_KEY".to_owned(),
+            merge: TapMergePolicy::SquashAfterGates,
+            review_completion: ExactHeadReviewCheck {
+                check_name: "Review completion".to_owned(),
+                app_id_variable: "COMPLETION_APP_ID".to_owned(),
+                expected_reviewers: vec![ReviewAppIdentity {
+                    app_id_variable: "REVIEWER_APP_ID".to_owned(),
+                }],
+            },
+        },
+    });
+    spec
+}
+
+#[test]
+fn tap_jobs_separate_unprivileged_preparation_and_scoped_app_authority() {
+    let rendered = render_consumer_preview(&with_tap()).expect("tap workflow");
+    let yaml = &rendered.bytes;
+    let prepare = job(yaml, "preview-tap-prepare", Some("preview-tap-writer"));
+    assert!(prepare.contains("actions/checkout"));
+    assert!(!prepare.contains("environment:"));
+    assert!(!prepare.contains("create-github-app-token"));
+    assert!(!prepare.contains("${{ secrets.TAP_APP_PRIVATE_KEY }}"));
+    assert!(!prepare.contains("\n      contents: write\n"));
+    assert!(prepare.contains("needs.preview-recovery.result == 'success'"));
+    assert!(prepare.contains("needs.preview-publisher.result == 'success'"));
+    for (id, next) in [
+        ("preview-tap-writer", Some("preview-tap-merge")),
+        ("preview-tap-merge", None),
+    ] {
+        let privileged = job(yaml, id, next);
+        assert!(!privileged.contains("actions/checkout"));
+        assert!(!privileged.contains("id-token:"));
+        assert!(!privileged.contains("\n      contents: write\n"));
+        assert!(privileged.contains("environment: tap-update"));
+        assert!(privileged.contains("owner: example"));
+        assert!(privileged.contains("repositories: homebrew-tap"));
+        assert!(privileged.contains("skip-token-revoke: false"));
+        assert!(!privileged.contains("PREVIEW_IMMUTABILITY_READ_TOKEN"));
+        assert!(privileged.contains("VELNOR_RELEASE_ORIGINAL_RUN_ID:"));
+    }
+    let writer = job(yaml, "preview-tap-writer", Some("preview-tap-merge"));
+    assert!(!writer.contains("permission-administration"));
+    assert!(writer.contains("VELNOR_TAP_TOKEN:"));
+    assert!(!writer.contains("VELNOR_TAP_MERGE_TOKEN:"));
+    let merge = job(yaml, "preview-tap-merge", None);
+    assert!(merge.contains("permission-administration: read"));
+    assert!(merge.contains("permission-checks: read"));
+    assert!(merge.contains("VELNOR_TAP_MERGE_TOKEN:"));
+    assert!(!merge.contains("VELNOR_TAP_TOKEN:"));
+    assert!(merge.contains("VELNOR_TAP_COMPLETION_APP_ID:"));
+    assert!(merge.contains("VELNOR_TAP_REVIEWER_APP_ID_0:"));
+}
+
+#[test]
+fn credential_references_cannot_become_privileged_environment_keys() {
+    let mut spec = with_tap();
+    spec.homebrew_tap
+        .as_mut()
+        .expect("tap")
+        .policy
+        .review_completion
+        .app_id_variable = "PATH".to_owned();
+    let yaml = render_consumer_preview(&spec)
+        .expect("literal variable reference")
+        .bytes;
+    let merge = job(&yaml, "preview-tap-merge", None);
+    assert!(merge.contains("VELNOR_TAP_COMPLETION_APP_ID: ${{ vars.PATH }}"));
+    assert!(!merge.contains("\n          PATH:"));
+}
+
+#[test]
+fn tap_updater_rejects_self_hosted_execution_without_native_provisioning() {
+    let mut spec = with_tap();
+    let runner = &mut spec
+        .homebrew_tap
+        .as_mut()
+        .expect("tap")
+        .policy
+        .updater
+        .runner;
+    runner.executor = velnor_actions_contract::config::CheckExecutor::EphemeralSelfHosted;
+    runner.label = "tap-updater".to_owned();
+    assert!(render_consumer_preview(&spec).is_err());
 }

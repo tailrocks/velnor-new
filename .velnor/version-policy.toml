@@ -2,7 +2,9 @@
 # Header declares the policy schema, stable channel, release registry,
 # freshness cadence, and maximum exception age. The [tools] mirror MUST
 # equal the compiled catalog in velnor-actions-mise/src/catalog.rs (checked
-# by `verify_version_policy` during dogfood generate); the [[actions]]
+# by `verify_version_policy` during dogfood generate); `cosign` is the
+# fixed Velnor-owned signer helper and is checked by the release-tools
+# pin validator, not installed as a Mise consumer tool. The [[actions]]
 # mirror MUST equal the action pins in .velnor/freshness-inventory.json
 # (checked 2026-10-13; checked by scripts/check-freshness.sh).
 # [validation-tools] pins repo-local verification tools activated for
@@ -26,6 +28,7 @@ zizmor = "1.31.1"
 nextest = "0.9.148"
 opentofu = "1.13.1"
 release-plz = "0.3.172"
+cosign = "3.1.3"
 
 [github_runner_images.linux_x64]
 default = "ubuntu-26.04"
@@ -87,3 +90,15 @@ reviewed = "2026-10-06"
 
 [validation-tools]
 cargo-mutants = "27.1.0"
+
+[[actions]]
+name = "actions/attest-build-provenance"
+version = "v4.2.2"
+sha = "4d101475d8b20a2381f78447822ac1eab6504dd8"
+reviewed = "2026-10-18"
+
+[[actions]]
+name = "actions/create-github-app-token"
+version = "v3.3.0"
+sha = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510"
+reviewed = "2026-10-18"

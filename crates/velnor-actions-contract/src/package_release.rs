@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{ContractError, canonical::canonical_json_bytes};
 
+#[path = "package_release_parse.rs"]
+mod parse;
 #[cfg(test)]
 #[path = "package_release_tests.rs"]
 pub(crate) mod tests;
@@ -190,19 +192,32 @@ pub struct PackageReleaseProduct {
     /// Sorted executable members present in every archive.
     pub bins: Vec<String>,
     /// One sorted archive per declared target.
-    pub archives: Vec<PackageReleaseArchive>,
+    pub payloads: Vec<PackageReleasePayload>,
 }
 
 /// Product archive and exact regular-file executable members.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct PackageReleaseArchive {
+pub struct PackageReleasePayload {
+    /// Closed payload representation. Stable may publish its historical raw
+    /// single-binary asset; preview packages use deterministic tarballs.
+    pub format: PackageReleasePayloadFormat,
     /// Supported Rust target triple.
     pub target: String,
     /// Canonical release asset name.
     pub name: String,
     /// Sorted archive members, exactly equal to the product bins.
     pub members: Vec<String>,
+}
+
+/// Public artifact representation for one target-specific product payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PackageReleasePayloadFormat {
+    /// One raw executable, retained for the existing stable binary interface.
+    RawBinary,
+    /// A gzip-compressed tar archive containing the declared executables.
+    TarGz,
 }
 
 /// One explicitly declared non-binary package asset.
@@ -371,19 +386,4 @@ pub struct PackageReleaseAssetIdentity {
 ///
 /// Rejects oversized, invalid UTF-8, duplicate-key, unknown-field, malformed,
 /// noncanonical, or semantically invalid receipts.
-pub fn parse_package_release_receipt(bytes: &[u8]) -> Result<PackageReleaseReceipt, ContractError> {
-    let value = crate::strict_json::parse_strict_json_bytes(
-        bytes,
-        crate::strict_json::MAX_UNTRUSTED_DOCUMENT_BYTES,
-    )?;
-    let receipt: PackageReleaseReceipt = serde_json::from_value(value)
-        .map_err(|error| ContractError::identity("package_release", error.to_string()))?;
-    receipt.validate()?;
-    if receipt.canonical_bytes()?.as_slice() != bytes {
-        return Err(ContractError::identity(
-            "package_release",
-            "noncanonical_json_bytes",
-        ));
-    }
-    Ok(receipt)
-}
+pub use parse::parse_package_release_receipt;

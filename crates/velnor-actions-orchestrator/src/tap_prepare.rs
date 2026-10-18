@@ -30,6 +30,10 @@ pub(super) use snapshot::{
     read_formula, sha256, snapshot_tree, validate_formula_only_delta, validate_tree_snapshot,
 };
 pub use writer::{TapPromotionReceipt, WRITE_HOMEBREW_TAP_PR_OP, write_homebrew_tap_pr_from_env};
+
+pub(crate) fn writer_policy_from_env() -> Result<HomebrewTapConfig, OrchestratorError> {
+    execute::static_tap_policy()
+}
 #[cfg(test)]
 #[path = "tap_prepare_tests.rs"]
 mod tests;

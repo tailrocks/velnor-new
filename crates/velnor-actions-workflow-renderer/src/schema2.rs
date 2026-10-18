@@ -31,11 +31,9 @@ mod runner_spec;
 use runner_spec::RunnerSpec;
 #[path = "schema2_consumer_preview.rs"]
 mod consumer_preview;
-pub use consumer_preview::{ConsumerPreviewSpec, render_consumer_preview};
+pub use consumer_preview::{ConsumerPreviewSpec, ConsumerPreviewTapSpec, render_consumer_preview};
 #[path = "schema2_consumer_binary_release.rs"]
 mod consumer_binary_release;
-#[path = "schema2_consumer_binary_release_scripts.rs"]
-mod consumer_binary_release_scripts;
 #[path = "schema2_consumer_release_eligibility.rs"]
 mod consumer_release_eligibility;
 #[path = "schema2_features.rs"]

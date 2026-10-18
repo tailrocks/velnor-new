@@ -51,6 +51,14 @@ fn accepts_native_tap_policy_and_defaults_distribution_empty() {
 }
 
 #[test]
+fn rejects_tap_runner_without_a_native_provisioning_lifecycle() {
+    let mut config = valid();
+    config.updater.runner.executor = crate::config::CheckExecutor::EphemeralSelfHosted;
+    config.updater.runner.label = "tap-updater".to_owned();
+    assert!(config.validate("config.toml").is_err());
+}
+
+#[test]
 fn rejects_unqualified_destination_task_or_credentials() {
     let mut config = valid();
     config.repository = "https://github.com/jackin-project/homebrew-tap".to_owned();

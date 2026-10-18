@@ -6,7 +6,7 @@ use velnor_actions_contract::{
     ContractError,
     config::{RustBinaryPreviewConfig, RustBinaryPreviewProduct},
     is_exact_semver,
-    package_release::{PackageReleaseArchive, PackageReleaseProduct},
+    package_release::{PackageReleasePayload, PackageReleaseProduct},
 };
 
 use crate::metadata::{PackageRecord, WorkspaceRecord};
@@ -16,7 +16,7 @@ use crate::metadata::{PackageRecord, WorkspaceRecord};
 pub struct ResolvedPreviewProducts {
     /// Exact numeric Cargo package version shared by every product.
     pub base_version: String,
-    /// Products sorted by receipt product ID, with sorted archive/member inventories.
+    /// Products sorted by receipt product ID, with sorted payload/member inventories.
     pub products: Vec<PackageReleaseProduct>,
 }
 
@@ -66,9 +66,11 @@ pub fn resolve_preview_products(
         let bins = resolve_bins(package, declared)?;
         let mut targets = declared.targets.clone();
         targets.sort();
-        let archives = targets
+        let payloads = targets
             .into_iter()
-            .map(|target| PackageReleaseArchive {
+            .map(|target| PackageReleasePayload {
+                format:
+                    velnor_actions_contract::package_release::PackageReleasePayloadFormat::TarGz,
                 name: format!("{}-{target}.tar.gz", declared.id),
                 target,
                 members: bins.clone(),
@@ -79,7 +81,7 @@ pub fn resolve_preview_products(
             package: declared.package.clone(),
             package_version: package.version.clone(),
             bins,
-            archives,
+            payloads,
         });
     }
 

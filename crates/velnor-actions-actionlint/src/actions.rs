@@ -1,4 +1,4 @@
-//! Pinned action refs against the 9-entry allowlist.
+//! Pinned action refs against the 11-entry allowlist.
 //!
 //! Every ref pins `repo[/path]@sha` plus a `# vX.Y.Z` comment; no
 //! mutable-tag exceptions exist.
@@ -6,7 +6,7 @@
 use crate::ActionlintError;
 
 /// Exhaustive allowlist of `owner/repo[/path]` action keys.
-pub const ALLOWED_ACTIONS: [&str; 9] = [
+pub const ALLOWED_ACTIONS: [&str; 11] = [
     "jdx/mise-action",
     "actions/checkout",
     "actions/download-artifact",
@@ -16,7 +16,29 @@ pub const ALLOWED_ACTIONS: [&str; 9] = [
     "jdx/mr-boxington-action",
     "asamarts/alint",
     "aws-actions/configure-aws-credentials",
+    "actions/attest-build-provenance",
+    "actions/create-github-app-token",
 ];
+
+/// Action that creates a narrowly scoped GitHub App installation token.
+pub const CREATE_GITHUB_APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
+/// Reviewed immutable release of the GitHub App token action.
+pub const CREATE_GITHUB_APP_TOKEN_ACTION_VERSION: &str = "v3.3.0";
+/// Full commit SHA for [`CREATE_GITHUB_APP_TOKEN_ACTION_VERSION`].
+pub const CREATE_GITHUB_APP_TOKEN_ACTION_SHA: &str = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
+/// Complete immutable action ref for workflow rendering.
+pub const CREATE_GITHUB_APP_TOKEN_USES: &str =
+    "actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
+
+/// Action producing build-provenance attestations for release subjects.
+pub const ATTEST_BUILD_PROVENANCE_ACTION: &str = "actions/attest-build-provenance";
+/// Reviewed immutable release of the build-provenance action.
+pub const ATTEST_BUILD_PROVENANCE_ACTION_VERSION: &str = "v4.2.2";
+/// Full commit SHA for [`ATTEST_BUILD_PROVENANCE_ACTION_VERSION`].
+pub const ATTEST_BUILD_PROVENANCE_ACTION_SHA: &str = "4d101475d8b20a2381f78447822ac1eab6504dd8";
+/// Complete immutable action ref for workflow rendering.
+pub const ATTEST_BUILD_PROVENANCE_USES: &str =
+    "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 
 /// Action key for the repository-policy Alint job's pinned ref.
 pub const ALINT_ACTION: &str = "asamarts/alint";

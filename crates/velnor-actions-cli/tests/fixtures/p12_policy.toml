@@ -15,6 +15,7 @@ zizmor = "1.31.1"
 nextest = "0.9.148"
 opentofu = "1.13.1"
 release-plz = "0.3.172"
+cosign = "3.1.3"
 
 [github_runner_images.linux_x64]
 default = "ubuntu-26.04"
@@ -31,6 +32,18 @@ name = "actions/checkout"
 version = "v7.0.1"
 sha = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 reviewed = "2026-09-28"
+
+[[actions]]
+name = "actions/attest-build-provenance"
+version = "v4.2.2"
+sha = "4d101475d8b20a2381f78447822ac1eab6504dd8"
+reviewed = "2026-10-18"
+
+[[actions]]
+name = "actions/create-github-app-token"
+version = "v3.3.0"
+sha = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510"
+reviewed = "2026-10-18"
 
 [[actions]]
 name = "actions/download-artifact"

@@ -123,22 +123,22 @@ fn jackin_preview_resolves_six_archives_and_sorted_receipt_members()
         resolved.products[0].bins,
         ["jackin", "jackin-role", "jackin-usage-broker"]
     );
-    assert_eq!(resolved.products[0].archives.len(), 4);
+    assert_eq!(resolved.products[0].payloads.len(), 4);
     assert_eq!(
-        resolved.products[0].archives[0].name,
+        resolved.products[0].payloads[0].name,
         "jackin-aarch64-apple-darwin.tar.gz"
     );
     assert_eq!(
-        resolved.products[0].archives[0].members,
+        resolved.products[0].payloads[0].members,
         resolved.products[0].bins
     );
     assert_eq!(resolved.products[1].id, "jackin-capsule");
-    assert_eq!(resolved.products[1].archives.len(), 2);
+    assert_eq!(resolved.products[1].payloads.len(), 2);
     assert!(
         resolved
             .products
             .iter()
-            .flat_map(|product| &product.archives)
+            .flat_map(|product| &product.payloads)
             .all(|archive| archive.name.ends_with(".tar.gz"))
     );
     Ok(())

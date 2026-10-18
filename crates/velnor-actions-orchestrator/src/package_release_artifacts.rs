@@ -13,8 +13,9 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    config::{RustBinaryPreviewCompanion, RustBinaryPreviewProduct},
-    package_release::PackageReleaseAsset,
+    PackageReleasePlanProduct,
+    config::RustBinaryPreviewCompanion,
+    package_release::{PackageReleaseAsset, PackageReleasePayloadFormat},
     parse_strict_json,
 };
 
@@ -33,7 +34,7 @@ mod tests;
 const HANDOFF_SCHEMA: &str = "velnor.package-output.v1";
 const MAX_HANDOFF_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_SBOM_BYTES: u64 = 32 * 1024 * 1024;
-const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_PAYLOAD_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_ARTIFACT_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_FILE_COUNT: usize = 4096;
 const MAX_PATH_BYTES: usize = 4096;
@@ -54,23 +55,25 @@ pub(crate) struct PackageOutputManifest {
     pub source_ref: String,
     /// Exact Velnor-computed release version.
     pub version: String,
-    /// Producer archive inventory; rows sorted by archive name.
-    pub archives: Vec<PackageOutputArchive>,
+    /// Producer payload inventory; rows sorted by payload name.
+    pub payloads: Vec<PackageOutputPayload>,
     /// Producer companion inventory; rows sorted by companion ID.
     pub companions: Vec<PackageOutputCompanion>,
     /// Producer SBOM inventory; rows sorted by archive name.
     pub sboms: Vec<PackageOutputSbom>,
 }
 
-/// Producer-declared archive identity and untrusted digest.
+/// Producer-declared payload identity and untrusted digest.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct PackageOutputArchive {
+pub(crate) struct PackageOutputPayload {
     /// Trusted product ID expected for this archive.
     pub product_id: String,
     /// Exact target triple.
     pub target: String,
-    /// Archive name derived by Velnor.
+    /// Actual byte representation, cross-checked against the trusted plan.
+    pub format: PackageReleasePayloadFormat,
+    /// Payload name derived by Velnor.
     pub name: String,
     /// SHA-256 claimed by the producer, checked against copied bytes.
     pub sha256: String,
@@ -94,8 +97,8 @@ pub(crate) struct PackageOutputCompanion {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PackageOutputSbom {
-    /// Archive filename bound by the SBOM.
-    pub archive_name: String,
+    /// Payload filename bound by the SBOM.
+    pub payload_name: String,
     /// Exact sidecar filename derived by Velnor.
     pub name: String,
     /// SHA-256 claimed by the producer, checked against copied bytes.
@@ -143,7 +146,7 @@ pub(crate) struct PackageOutputIdentity<'a> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ArtifactKind {
-    Archive,
+    Payload,
     Companion,
     Sbom,
     Handoff,
@@ -158,6 +161,7 @@ struct ExpectedFile {
     target: Option<String>,
     companion_id: Option<String>,
     archive_subject: Option<String>,
+    payload_format: Option<PackageReleasePayloadFormat>,
     bins: Vec<String>,
 }
 
@@ -170,7 +174,7 @@ pub(crate) fn verify_package_output(
     producer_dir: &Path,
     manifest_path: &str,
     staging_dir: &Path,
-    products: &[RustBinaryPreviewProduct],
+    products: &[PackageReleasePlanProduct],
     companions: &[RustBinaryPreviewCompanion],
     identity: PackageOutputIdentity<'_>,
 ) -> Result<VerifiedPackageOutput, OrchestratorError> {
@@ -275,32 +279,37 @@ fn validate_manifest_identity(
 }
 
 fn expected_files(
-    products: &[RustBinaryPreviewProduct],
+    products: &[PackageReleasePlanProduct],
     companions: &[RustBinaryPreviewCompanion],
     manifest_path: &str,
 ) -> Result<Vec<ExpectedFile>, OrchestratorError> {
     let mut files = Vec::new();
     for product in products {
         for target in &product.targets {
-            let archive = format!("{}-{target}.tar.gz", product.id);
+            let payload = match product.format {
+                PackageReleasePayloadFormat::TarGz => format!("{}-{target}.tar.gz", product.id),
+                PackageReleasePayloadFormat::RawBinary => format!("{}-{target}", product.bins[0]),
+            };
             files.push(ExpectedFile {
-                path: archive.clone(),
-                name: archive.clone(),
-                kind: ArtifactKind::Archive,
+                path: payload.clone(),
+                name: payload.clone(),
+                kind: ArtifactKind::Payload,
                 product_id: Some(product.id.clone()),
                 target: Some(target.clone()),
                 companion_id: None,
-                archive_subject: Some(archive.clone()),
+                archive_subject: Some(payload.clone()),
+                payload_format: Some(product.format),
                 bins: product.bins.clone(),
             });
             files.push(ExpectedFile {
-                path: format!("{archive}.sbom.json"),
-                name: format!("{archive}.sbom.json"),
+                path: format!("{payload}.sbom.json"),
+                name: format!("{payload}.sbom.json"),
                 kind: ArtifactKind::Sbom,
                 product_id: Some(product.id.clone()),
                 target: Some(target.clone()),
                 companion_id: None,
-                archive_subject: Some(archive),
+                archive_subject: Some(payload),
+                payload_format: None,
                 bins: Vec::new(),
             });
         }
@@ -314,6 +323,7 @@ fn expected_files(
             target: None,
             companion_id: Some(companion.id.clone()),
             archive_subject: Some(companion.asset_name.clone()),
+            payload_format: None,
             bins: Vec::new(),
         });
     }
@@ -325,6 +335,7 @@ fn expected_files(
         target: None,
         companion_id: None,
         archive_subject: None,
+        payload_format: None,
         bins: Vec::new(),
     });
     files.sort_by(|left, right| left.path.cmp(&right.path));

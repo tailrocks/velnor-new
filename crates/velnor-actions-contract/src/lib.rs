@@ -126,7 +126,8 @@ pub use manifest::{
 };
 pub use marker::{MARKER_PREFIX, OLD_MARKER_PREFIX, is_generated_marker_line};
 pub use package_release_plan::{
-    PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, parse_package_release_plan,
+    PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,
+    parse_package_release_plan,
 };
 pub use policy::{
     FreshnessEntry, FreshnessStatus, GithubRunnerImages, NightlyRecord, PolicyException,

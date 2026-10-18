@@ -1,8 +1,7 @@
 use super::*;
 use velnor_actions_contract::{
-    PACKAGE_RELEASE_PLAN_SCHEMA_V1,
-    config::{RustBinaryPreviewArchive, RustBinaryPreviewProduct},
-    package_release::PackageReleaseChannel,
+    PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlanProduct,
+    package_release::{PackageReleaseChannel, PackageReleasePayloadFormat},
 };
 
 fn plan() -> PackageReleasePlan {
@@ -12,12 +11,12 @@ fn plan() -> PackageReleasePlan {
         repository: "owner/repo".to_owned(),
         default_branch: "main".to_owned(),
         base_version: "1.2.3".to_owned(),
-        products: vec![RustBinaryPreviewProduct {
+        products: vec![PackageReleasePlanProduct {
             id: "cli".to_owned(),
             package: "cli".to_owned(),
             bins: vec!["cli".to_owned()],
             targets: vec!["aarch64-apple-darwin".to_owned()],
-            archive: RustBinaryPreviewArchive::TarGz,
+            format: PackageReleasePayloadFormat::TarGz,
         }],
         companions: Vec::new(),
     }

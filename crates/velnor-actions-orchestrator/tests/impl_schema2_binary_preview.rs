@@ -14,7 +14,8 @@ fn preview_config(stable: bool) -> Result<String, Box<dyn std::error::Error>> {
         ENABLED.to_owned()
     } else {
         ENABLED.replacen("enabled = true", "enabled = false", 1)
-    };
+    }
+    .replace("default_branch = \"testmain\"", "default_branch = \"main\"");
     Ok(format!(
         "{stable_config}\n{}\n{}",
         r#"
@@ -71,5 +72,47 @@ fn preview_refuses_unknown_binary_before_emitting_publication_workflow() -> Test
         .err()
         .ok_or("missing binary accepted")?;
     assert!(error.to_string().contains("preview"));
+    Ok(())
+}
+
+#[test]
+fn preview_rejects_a_branch_that_cannot_pass_its_fixed_environment_policy() -> TestResult {
+    let config =
+        preview_config(false)?.replace("default_branch = \"main\"", "default_branch = \"develop\"");
+    let repo = binary_repo(&config)?;
+    let error = render_staged_tree(&prepare(repo.path())?)
+        .err()
+        .ok_or("unsupported preview branch accepted")?;
+    assert!(
+        error
+            .to_string()
+            .contains("preview_default_branch_must_be_main")
+    );
+    Ok(())
+}
+
+#[test]
+fn privileged_preview_gh_pin_cannot_come_from_consumer_catalog() -> TestResult {
+    use velnor_actions_mise::{PinnedTool, ToolCatalog};
+
+    let repo = binary_repo(&preview_config(false)?)?;
+    let mut prep = prepare(repo.path())?;
+    let pinned = ToolCatalog::pinned();
+    prep.catalog = ToolCatalog::new(
+        pinned.version(PinnedTool::Rust),
+        pinned.version(PinnedTool::MrBoxington),
+        "2.0.0",
+        pinned.version(PinnedTool::Actionlint),
+        pinned.version(PinnedTool::Shellcheck),
+        pinned.version(PinnedTool::Zizmor),
+        pinned.version(PinnedTool::Nextest),
+        pinned.version(PinnedTool::Opentofu),
+    )?;
+    let tree = render_staged_tree(&prep)?;
+    let workflow = tree
+        .get(".github/workflows/binary-preview.yml")
+        .ok_or("preview workflow missing")?;
+    assert!(workflow.contains(&format!("gh@{}", pinned.version(PinnedTool::Gh))));
+    assert!(!workflow.contains("gh@2.0.0"));
     Ok(())
 }

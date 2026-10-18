@@ -3,18 +3,19 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    ContractError,
-    config::{RustBinaryPreviewConfig, is_exact_semver},
-    package_release_plan::PackageReleasePlan,
+    ContractError, config::RustBinaryPreviewConfig, package_release_plan::PackageReleasePlan,
 };
 
 #[path = "package_release_asset_validation.rs"]
 mod assets;
+#[path = "package_release_identity_validation.rs"]
+mod identity;
 
 use super::{
     MAX_PACKAGE_RELEASE_ARCHIVES, MAX_PACKAGE_RELEASE_PRODUCTS, PACKAGE_RELEASE_EVIDENCE_PROFILE,
     PACKAGE_RELEASE_RECEIPT_BUNDLE_NAME, PACKAGE_RELEASE_RECEIPT_NAME, PACKAGE_RELEASE_SCHEMA_V2,
-    PackageReleaseChannel, PackageReleaseEvent, PackageReleaseReceipt, PackageReleaseSbomFormat,
+    PackageReleaseChannel, PackageReleaseEvent, PackageReleasePayloadFormat, PackageReleaseReceipt,
+    PackageReleaseSbomFormat,
 };
 
 const SHA256SUMS_NAME: &str = "SHA256SUMS";
@@ -25,10 +26,7 @@ pub(super) fn validate(receipt: &PackageReleaseReceipt) -> Result<(), ContractEr
     if receipt.schema != PACKAGE_RELEASE_SCHEMA_V2 {
         return Err(invalid("unsupported_schema"));
     }
-    validate_repository(receipt)?;
-    validate_source(receipt)?;
-    validate_workflow(receipt)?;
-    validate_version(receipt)?;
+    validate_identity(receipt)?;
     validate_products(receipt)?;
     validate_companions(receipt)?;
     assets::validate_assets(receipt)?;
@@ -54,15 +52,56 @@ pub(super) fn validate_against_plan(
 ) -> Result<(), ContractError> {
     receipt.validate()?;
     plan.validate()?;
-    if plan.channel != PackageReleaseChannel::Preview
-        || receipt.channel != plan.channel
+    if receipt.channel != plan.channel
         || receipt.repository.slug != plan.repository
         || receipt.source.default_branch != plan.default_branch
         || receipt.version.base != plan.base_version
     {
         return Err(invalid("preview_plan_identity_mismatch"));
     }
-    validate_against_inventory(receipt, &plan.products, &plan.companions)
+    if receipt.products.len() != plan.products.len()
+        || receipt.companions.len() != plan.companions.len()
+    {
+        return Err(invalid("plan_inventory_mismatch"));
+    }
+    for (actual, declared) in receipt.products.iter().zip(&plan.products) {
+        if actual.id != declared.id
+            || actual.package != declared.package
+            || actual.bins != declared.bins
+            || actual.package_version != plan.base_version
+            || actual.payloads.len() != declared.targets.len()
+        {
+            return Err(invalid("plan_product_inventory_mismatch"));
+        }
+        for (archive, target) in actual.payloads.iter().zip(&declared.targets) {
+            let expected_name = match declared.format {
+                PackageReleasePayloadFormat::TarGz => format!("{}-{target}.tar.gz", declared.id),
+                PackageReleasePayloadFormat::RawBinary => format!("{}-{target}", declared.bins[0]),
+            };
+            if archive.format != declared.format
+                || archive.target != *target
+                || archive.name != expected_name
+                || archive.members != actual.bins
+            {
+                return Err(invalid("plan_archive_inventory_mismatch"));
+            }
+        }
+    }
+    let mut expected_companions: Vec<_> = plan
+        .companions
+        .iter()
+        .map(|item| (item.id.as_str(), item.asset_name.as_str()))
+        .collect();
+    expected_companions.sort_unstable();
+    let actual_companions: Vec<_> = receipt
+        .companions
+        .iter()
+        .map(|item| (item.id.as_str(), item.name.as_str()))
+        .collect();
+    if actual_companions != expected_companions {
+        return Err(invalid("plan_companion_inventory_mismatch"));
+    }
+    Ok(())
 }
 
 fn validate_against_inventory(
@@ -79,13 +118,14 @@ fn validate_against_inventory(
         if product.id != declared.id
             || product.package != declared.package
             || product.bins != sorted_strings(&declared.bins)
-            || product.archives.len() != declared.targets.len()
+            || product.payloads.len() != declared.targets.len()
         {
             return Err(invalid("preview_product_inventory_mismatch"));
         }
         let targets = sorted_strings(&declared.targets);
-        for (archive, target) in product.archives.iter().zip(targets) {
-            if archive.target != target
+        for (archive, target) in product.payloads.iter().zip(targets) {
+            if archive.format != PackageReleasePayloadFormat::TarGz
+                || archive.target != target
                 || archive.name != format!("{}-{target}.tar.gz", declared.id)
                 || archive.members != product.bins
             {
@@ -151,85 +191,8 @@ fn expected_asset_names(
     names
 }
 
-fn validate_repository(receipt: &PackageReleaseReceipt) -> Result<(), ContractError> {
-    if receipt.repository.id == 0
-        || !crate::vcs::is_safe_github_repository(&receipt.repository.slug)
-    {
-        return Err(invalid("bad_repository_identity"));
-    }
-    Ok(())
-}
-
-fn validate_source(receipt: &PackageReleaseReceipt) -> Result<(), ContractError> {
-    let source = &receipt.source;
-    if !hex_string(&source.commit_sha, 40)
-        || !valid_branch(&source.default_branch)
-        || source.source_ref != format!("refs/heads/{}", source.default_branch)
-        || source.ci_run_id == 0
-        || source.ci_run_attempt == 0
-        || match receipt.channel {
-            PackageReleaseChannel::Preview => source.event != PackageReleaseEvent::Push,
-            PackageReleaseChannel::Stable => source.event != PackageReleaseEvent::WorkflowDispatch,
-        }
-    {
-        return Err(invalid("bad_source_identity"));
-    }
-    Ok(())
-}
-
-fn validate_workflow(receipt: &PackageReleaseReceipt) -> Result<(), ContractError> {
-    let workflow = &receipt.workflow;
-    if workflow.path != receipt.channel.workflow_path()
-        || workflow.workflow_ref != receipt.source.source_ref
-        || !hex_string(&workflow.authority_sha, 40)
-        || workflow.authority_sha != receipt.source.commit_sha
-        || workflow.run_id == 0
-        || workflow.run_attempt == 0
-        || workflow.producer_run_id == 0
-        || workflow.producer_run_attempt == 0
-        || workflow.producer_run_id != workflow.run_id
-        || workflow.producer_run_attempt != workflow.run_attempt
-        || workflow.signer_job_id != receipt.channel.signer_job_id()
-        || workflow.signer_workflow != receipt.channel.workflow_path()
-    {
-        return Err(invalid("bad_workflow_identity"));
-    }
-    Ok(())
-}
-
-fn validate_version(receipt: &PackageReleaseReceipt) -> Result<(), ContractError> {
-    let version = &receipt.version;
-    if !is_exact_semver(&version.base) {
-        return Err(invalid("bad_release_version_identity"));
-    }
-    match receipt.channel {
-        PackageReleaseChannel::Preview => {
-            let (Some(count), Some(sha7)) = (version.commit_count, version.source_sha7.as_deref())
-            else {
-                return Err(invalid("preview_version_identity_missing"));
-            };
-            if count == 0
-                || sha7.len() != 7
-                || !hex_string(sha7, 7)
-                || !receipt.source.commit_sha.starts_with(sha7)
-                || version.value != format!("{}-preview.{count}+{sha7}", version.base)
-                || receipt.tag != format!("v{}", version.value)
-            {
-                return Err(invalid("version_does_not_match_preview_policy"));
-            }
-        }
-        PackageReleaseChannel::Stable => {
-            if version.commit_count.is_some()
-                || version.source_sha7.is_some()
-                || version.value != version.base
-                || receipt.products.len() != 1
-                || receipt.tag != format!("{}-v{}", receipt.products[0].package, version.base)
-            {
-                return Err(invalid("version_does_not_match_stable_policy"));
-            }
-        }
-    }
-    Ok(())
+fn validate_identity(receipt: &PackageReleaseReceipt) -> Result<(), ContractError> {
+    identity::validate(receipt)
 }
 
 fn validate_products(receipt: &PackageReleaseReceipt) -> Result<(), ContractError> {
@@ -250,21 +213,31 @@ fn validate_products(receipt: &PackageReleaseReceipt) -> Result<(), ContractErro
         {
             return Err(invalid("bad_product_identity"));
         }
-        if product.archives.is_empty()
+        if product.payloads.is_empty()
             || !sorted_unique(
                 product
-                    .archives
+                    .payloads
                     .iter()
                     .map(|archive| archive.target.as_str()),
             )
         {
             return Err(invalid("archives_not_sorted_unique"));
         }
-        for archive in &product.archives {
+        for archive in &product.payloads {
             archive_count += 1;
-            let name = format!("{}-{}.tar.gz", product.id, archive.target);
+            let name_matches = match archive.format {
+                PackageReleasePayloadFormat::TarGz => {
+                    archive.name == format!("{}-{}.tar.gz", product.id, archive.target)
+                }
+                PackageReleasePayloadFormat::RawBinary => {
+                    receipt.channel == PackageReleaseChannel::Stable
+                        && product.bins.len() == 1
+                        && product.payloads.len() == 1
+                        && archive.name == format!("{}-{}", product.bins[0], archive.target)
+                }
+            };
             if !crate::package_release::is_supported_release_target(&archive.target)
-                || archive.name != name
+                || !name_matches
                 || !valid_asset_name(&archive.name)
                 || archive.members != product.bins
             {
@@ -322,7 +295,7 @@ fn validate_evidence(receipt: &PackageReleaseReceipt) -> Result<(), ContractErro
     let mut expected_subjects: Vec<_> = receipt
         .products
         .iter()
-        .flat_map(|product| product.archives.iter().map(|archive| archive.name.clone()))
+        .flat_map(|product| product.payloads.iter().map(|archive| archive.name.clone()))
         .chain(receipt.companions.iter().map(|item| item.name.clone()))
         .collect();
     expected_subjects.push(PACKAGE_RELEASE_RECEIPT_NAME.to_owned());
@@ -350,17 +323,6 @@ pub(super) fn sorted_unique<'a>(values: impl Iterator<Item = &'a str>) -> bool {
     true
 }
 
-fn valid_branch(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 255
-        && !value.starts_with('/')
-        && !value.ends_with('/')
-        && !value.contains("..")
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'/' | b'.'))
-}
-
 fn valid_identifier(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 100
@@ -376,13 +338,6 @@ pub(super) fn valid_asset_name(value: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
         && !matches!(value, "." | "..")
-}
-
-pub(super) fn hex_string(value: &str, len: usize) -> bool {
-    value.len() == len
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 pub(super) fn invalid(problem: &str) -> ContractError {

@@ -150,6 +150,14 @@ impl HomebrewTapConfig {
             return Err(config_error(file, key, "formula", "bad_formula_path"));
         }
         self.updater.validate(file, key)?;
+        if self.updater.runner.executor != super::CheckExecutor::Hosted {
+            return Err(config_error(
+                file,
+                key,
+                "updater.runner.executor",
+                "tap_updater_requires_hosted_runner",
+            ));
+        }
         if !self.updater.inputs.iter().any(|path| path == &self.formula) {
             return Err(config_error(
                 file,

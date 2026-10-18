@@ -10,8 +10,9 @@ use flate2::write::GzEncoder;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use tar::{Builder, Header};
-use velnor_actions_contract::config::{
-    RustBinaryPreviewArchive, RustBinaryPreviewCompanion, RustBinaryPreviewProduct,
+use velnor_actions_contract::config::RustBinaryPreviewCompanion;
+use velnor_actions_contract::{
+    PackageReleasePlanProduct, package_release::PackageReleasePayloadFormat,
 };
 
 use super::{HANDOFF_SCHEMA, PackageOutputManifest};
@@ -20,7 +21,7 @@ pub(super) struct Fixture {
     _root: tempfile::TempDir,
     pub producer: PathBuf,
     pub staging: PathBuf,
-    pub products: Vec<RustBinaryPreviewProduct>,
+    pub products: Vec<PackageReleasePlanProduct>,
     pub companions: Vec<RustBinaryPreviewCompanion>,
     pub commit: String,
     pub source_ref: String,
@@ -28,7 +29,7 @@ pub(super) struct Fixture {
 }
 
 pub(super) struct Expected {
-    pub archive_name: String,
+    pub payload_name: String,
     pub sbom_name: String,
 }
 
@@ -42,12 +43,12 @@ pub(super) fn fixture() -> Fixture {
         _root: root,
         producer,
         staging,
-        products: vec![RustBinaryPreviewProduct {
+        products: vec![PackageReleasePlanProduct {
             id: "cli".to_owned(),
             package: "jackin".to_owned(),
             bins: vec!["cli".to_owned()],
             targets: vec!["x86_64-unknown-linux-gnu".to_owned()],
-            archive: RustBinaryPreviewArchive::TarGz,
+            format: PackageReleasePayloadFormat::TarGz,
         }],
         companions: vec![RustBinaryPreviewCompanion {
             id: "license".to_owned(),
@@ -61,21 +62,21 @@ pub(super) fn fixture() -> Fixture {
 }
 
 pub(super) fn expected() -> Expected {
-    let archive_name = "cli-x86_64-unknown-linux-gnu.tar.gz".to_owned();
+    let payload_name = "cli-x86_64-unknown-linux-gnu.tar.gz".to_owned();
     Expected {
-        sbom_name: format!("{archive_name}.sbom.json"),
-        archive_name,
+        sbom_name: format!("{payload_name}.sbom.json"),
+        payload_name,
     }
 }
 
 pub(super) fn write_source_files(fixture: &Fixture, arch: &str, version: &str) {
     let expected = expected();
-    let archive_path = fixture.producer.join(&expected.archive_name);
+    let archive_path = fixture.producer.join(&expected.payload_name);
     write_archive(&archive_path, &[("cli", arch)], true);
     let archive_digest = sha256_file(&archive_path);
     write_sbom(
         &fixture.producer.join(&expected.sbom_name),
-        &expected.archive_name,
+        &expected.payload_name,
         &archive_digest,
     );
     let companion_path = fixture.producer.join(&fixture.companions[0].path);
@@ -101,6 +102,29 @@ pub(super) fn write_source_files(fixture: &Fixture, arch: &str, version: &str) {
         fixture,
         &serde_json::to_value(manifest).expect("manifest value"),
     );
+}
+
+pub(super) fn write_raw_source_files(fixture: &Fixture) {
+    let payload_name = "cli-x86_64-unknown-linux-gnu";
+    let payload_path = fixture.producer.join(payload_name);
+    fs::write(&payload_path, fake_executable("x86_64")).expect("raw binary");
+    let payload_digest = sha256_file(&payload_path);
+    let sbom_name = format!("{payload_name}.sbom.json");
+    write_sbom(
+        &fixture.producer.join(&sbom_name),
+        payload_name,
+        &payload_digest,
+    );
+    let companion_path = fixture.producer.join(&fixture.companions[0].path);
+    fs::create_dir_all(companion_path.parent().expect("companion parent"))
+        .expect("companion directory");
+    fs::write(&companion_path, b"license").expect("companion");
+    let manifest = make_manifest(fixture, &fixture.version);
+    fs::write(
+        fixture.producer.join("package-output.json"),
+        serde_json::to_vec(&manifest).expect("manifest JSON"),
+    )
+    .expect("write package output");
 }
 
 pub(super) fn write_archive(path: &std::path::Path, entries: &[(&str, &str)], executable: bool) {
@@ -239,7 +263,7 @@ fn append_fixture_executable(archive: &mut Builder<GzEncoder<Vec<u8>>>, name: &s
         .expect("append archive member");
 }
 
-pub(super) fn write_sbom(path: &std::path::Path, archive_name: &str, digest: &str) {
+pub(super) fn write_sbom(path: &std::path::Path, payload_name: &str, digest: &str) {
     let document = json!({
         "bomFormat": "CycloneDX",
         "specVersion": "1.6",
@@ -248,7 +272,7 @@ pub(super) fn write_sbom(path: &std::path::Path, archive_name: &str, digest: &st
         "metadata": {
             "component": {
                 "type": "file",
-                "name": archive_name,
+                "name": payload_name,
                 "hashes": [{"alg": "SHA-256", "content": digest}]
             }
         },
@@ -266,19 +290,26 @@ pub(super) fn write_manifest(fixture: &Fixture, value: &Value) {
 }
 
 fn make_manifest(fixture: &Fixture, version: &str) -> PackageOutputManifest {
-    let expected = expected();
-    let archive_path = fixture.producer.join(&expected.archive_name);
-    let sbom_path = fixture.producer.join(&expected.sbom_name);
+    let format = fixture.products[0].format;
+    let target = &fixture.products[0].targets[0];
+    let payload_name = match format {
+        PackageReleasePayloadFormat::TarGz => format!("cli-{target}.tar.gz"),
+        PackageReleasePayloadFormat::RawBinary => format!("cli-{target}"),
+    };
+    let sbom_name = format!("{payload_name}.sbom.json");
+    let archive_path = fixture.producer.join(&payload_name);
+    let sbom_path = fixture.producer.join(&sbom_name);
     let companion_path = fixture.producer.join(&fixture.companions[0].path);
     PackageOutputManifest {
         schema: HANDOFF_SCHEMA.to_owned(),
         source_commit: fixture.commit.clone(),
         source_ref: fixture.source_ref.clone(),
         version: version.to_owned(),
-        archives: vec![super::PackageOutputArchive {
+        payloads: vec![super::PackageOutputPayload {
             product_id: "cli".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
-            name: expected.archive_name.clone(),
+            format,
+            name: payload_name.clone(),
             sha256: sha256_file(&archive_path),
         }],
         companions: vec![super::PackageOutputCompanion {
@@ -288,8 +319,8 @@ fn make_manifest(fixture: &Fixture, version: &str) -> PackageOutputManifest {
             sha256: sha256_file(&companion_path),
         }],
         sboms: vec![super::PackageOutputSbom {
-            archive_name: expected.archive_name,
-            name: expected.sbom_name,
+            payload_name,
+            name: sbom_name,
             sha256: sha256_file(&sbom_path),
         }],
     }

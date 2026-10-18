@@ -37,8 +37,19 @@ pub const PUBLISH_PACKAGE_RELEASE_OP: &str = "publish-package-release-v1";
 /// Private operation that resumes publication from the exact retained signed preview artifact.
 pub const RECOVER_PACKAGE_RELEASE_OP: &str = "recover-package-release-v1";
 
+/// Recheck the source repository's main-only tap-update environment.
+/// # Errors
+/// Rejects an absent or invalid source-environment policy.
+pub(crate) fn verify_tap_update_environment(
+    repository: &str,
+    branch: &str,
+) -> Result<(), OrchestratorError> {
+    github::verify_tap_update_environment(repository, branch)
+}
+
 #[path = "package_release_publish_recovery.rs"]
 mod recovery;
+pub(crate) use recovery::verify_original_for_promotion;
 
 /// Reverify the downloaded signed package, then execute the GitHub publication transaction.
 /// # Errors
@@ -211,6 +222,10 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
 
     fn candidate_current(&mut self) -> Result<bool, OrchestratorError> {
         self.verify_remote_repository()?;
+        self.api.verify_release_channel_environment(
+            self.receipt.channel,
+            &self.receipt.source.default_branch,
+        )?;
         let branch = encode_segment(&self.receipt.source.default_branch);
         let branch_response: BranchResponse = self
             .api
@@ -322,7 +337,7 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
         let release = unique_release(&releases, &self.tag)?;
         let route = self.api.route(&format!("releases/{}", release.id));
         let prerelease = self.receipt.channel == PackageReleaseChannel::Preview;
-        let make_latest = self.receipt.channel == PackageReleaseChannel::Stable;
+        let make_latest = make_latest(self.receipt.channel);
         self.api.patch_fields(
             &route,
             &[
@@ -335,14 +350,12 @@ impl PackagePublicationBackend for GitHubPackagePublisher {
         if updated.draft != Some(false) || updated.prerelease != Some(prerelease) {
             return Err(internal("package_publish_release_postcondition"));
         }
-        if make_latest {
-            let latest: ReleaseResponse = self.api.get_json(&self.api.route("releases/latest"))?;
-            if latest.id != updated.id || latest.tag_name != self.tag {
-                return Err(internal("package_publish_latest_postcondition"));
-            }
-        }
         Ok(())
     }
+}
+
+fn make_latest(_channel: PackageReleaseChannel) -> bool {
+    false
 }
 
 fn current_ci_from_env() -> Result<(u64, u32), OrchestratorError> {

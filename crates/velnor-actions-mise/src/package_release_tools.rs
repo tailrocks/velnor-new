@@ -4,14 +4,10 @@ use std::{ffi::OsString, fs, io::Read, path::Path, time::Duration};
 
 use sha2::{Digest, Sha256};
 
+pub use crate::catalog::{COSIGN_LINUX_AMD64_SHA256, COSIGN_VERSION};
 use crate::{IsolatedCommand, MiseError, command::EnvPolicy};
 use velnor_actions_contract::vcs::is_safe_github_repository;
 
-/// Fixed Cosign release used by the Velnor native package signer.
-pub const COSIGN_VERSION: &str = "3.1.3";
-/// SHA-256 of the official Linux `x86_64` Cosign release executable.
-pub const COSIGN_LINUX_AMD64_SHA256: &str =
-    "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71";
 /// Maximum bytes accepted from the pinned Cosign download transport.
 pub const COSIGN_MAX_BYTES: usize = 128 * 1024 * 1024;
 /// Per-command captured output limit for fixed Cosign invocations.

@@ -3,11 +3,11 @@
 use velnor_actions_contract::{
     PackageReleasePlan,
     package_release::{
-        PACKAGE_RELEASE_EVIDENCE_PROFILE, PackageReleaseArchive, PackageReleaseAssetKind,
-        PackageReleaseChannel, PackageReleaseCompanion, PackageReleaseEvidence,
-        PackageReleaseProduct, PackageReleaseReceipt, PackageReleaseRepository,
-        PackageReleaseSbomFormat, PackageReleaseSource, PackageReleaseVersion,
-        PackageReleaseWorkflow,
+        PACKAGE_RELEASE_EVIDENCE_PROFILE, PackageReleaseAssetKind, PackageReleaseChannel,
+        PackageReleaseCompanion, PackageReleaseEvidence, PackageReleasePayload,
+        PackageReleasePayloadFormat, PackageReleaseProduct, PackageReleaseReceipt,
+        PackageReleaseRepository, PackageReleaseSbomFormat, PackageReleaseSource,
+        PackageReleaseVersion, PackageReleaseWorkflow,
     },
 };
 
@@ -89,10 +89,18 @@ fn release_products(plan: &PackageReleasePlan) -> Vec<PackageReleaseProduct> {
                 package: product.package.clone(),
                 package_version: plan.base_version.clone(),
                 bins: sorted(product.bins.clone()),
-                archives: targets
+                payloads: targets
                     .into_iter()
-                    .map(|target| PackageReleaseArchive {
-                        name: format!("{}-{target}.tar.gz", product.id),
+                    .map(|target| PackageReleasePayload {
+                        format: product.format,
+                        name: match product.format {
+                            PackageReleasePayloadFormat::TarGz => {
+                                format!("{}-{target}.tar.gz", product.id)
+                            }
+                            PackageReleasePayloadFormat::RawBinary => {
+                                format!("{}-{target}", product.bins[0])
+                            }
+                        },
                         target,
                         members: sorted(product.bins.clone()),
                     })
@@ -168,14 +176,23 @@ pub(super) fn require_expected_identity(
             || actual.package != declared.package
             || actual.package_version != plan.base_version
             || actual.bins != sorted(declared.bins.clone())
-            || actual.archives.len() != targets.len()
+            || actual.payloads.len() != targets.len()
             || actual
-                .archives
+                .payloads
                 .iter()
                 .zip(targets)
                 .any(|(archive, target)| {
-                    archive.target != target
-                        || archive.name != format!("{}-{target}.tar.gz", declared.id)
+                    let expected_name = match declared.format {
+                        PackageReleasePayloadFormat::TarGz => {
+                            format!("{}-{target}.tar.gz", declared.id)
+                        }
+                        PackageReleasePayloadFormat::RawBinary => {
+                            format!("{}-{target}", declared.bins[0])
+                        }
+                    };
+                    archive.format != declared.format
+                        || archive.target != target
+                        || archive.name != expected_name
                         || archive.members != actual.bins
                 })
         {

@@ -157,7 +157,7 @@ pub fn validate_tap_merge_gate(
     if observed.server_protection != TapServerMergeProtection::StrictWithoutWriterBypass {
         return Err(invalid("server_merge_protection_missing"));
     }
-    validate_checks(observed)?;
+    validate_checks(policy, observed)?;
     let feedback = &observed.feedback;
     if observed.pull_request_number == 0
         || feedback.repository != policy.repository
@@ -192,6 +192,7 @@ fn validate_policy(policy: &TapMergePolicy) -> Result<(), ContractError> {
     if !crate::vcs::is_safe_github_repository(&policy.repository)
         || policy.writer_app_id == 0
         || policy.completion_app_id == 0
+        || policy.completion_app_id == crate::homebrew_review_completion::GITHUB_ACTIONS_APP_ID
         || policy.writer_app_id == policy.completion_app_id
         || policy.completion_check_name.trim().is_empty()
         || policy.expected_reviewer_app_ids.is_empty()
@@ -199,13 +200,19 @@ fn validate_policy(policy: &TapMergePolicy) -> Result<(), ContractError> {
         || policy
             .expected_reviewer_app_ids
             .contains(&policy.writer_app_id)
+        || policy
+            .expected_reviewer_app_ids
+            .contains(&policy.completion_app_id)
     {
         return Err(invalid("invalid_credential_boundary"));
     }
     Ok(())
 }
 
-fn validate_checks(observed: &TapMergeObservation) -> Result<(), ContractError> {
+fn validate_checks(
+    policy: &TapMergePolicy,
+    observed: &TapMergeObservation,
+) -> Result<(), ContractError> {
     if !observed.required_checks_complete || observed.checks.is_empty() {
         return Err(invalid("required_checks_missing"));
     }
@@ -221,12 +228,22 @@ fn validate_checks(observed: &TapMergeObservation) -> Result<(), ContractError> 
             return Err(invalid("required_check_failed_or_untrusted"));
         }
     }
+    if !names.contains("DCO") {
+        return Err(invalid("required_dco_check_missing"));
+    }
+    if !observed.checks.iter().any(|check| {
+        check.name == policy.completion_check_name
+            && check.app_id == policy.completion_app_id
+            && check.required_app_id == Some(policy.completion_app_id)
+    }) {
+        return Err(invalid("protected_completion_check_missing"));
+    }
     Ok(())
 }
 
 fn valid_digest(value: &str) -> bool {
     value
-        .strip_prefix("b3:")
+        .strip_prefix("b3-")
         .is_some_and(|digest| is_lower_hex_len(digest, 64))
 }
 fn invalid(reason: &'static str) -> ContractError {

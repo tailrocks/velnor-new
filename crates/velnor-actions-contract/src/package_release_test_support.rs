@@ -1,7 +1,9 @@
-use super::super::*;
-use crate::config::{
-    RustBinaryPreviewArchive, RustBinaryPreviewCompanion, RustBinaryPreviewConfig,
-    RustBinaryPreviewProducer, RustBinaryPreviewProduct,
+use super::super::{
+    PACKAGE_RELEASE_EVIDENCE_PROFILE, PACKAGE_RELEASE_SCHEMA_V2, PackageReleaseAsset,
+    PackageReleaseAssetKind, PackageReleaseChannel, PackageReleaseCompanion, PackageReleaseEvent,
+    PackageReleaseEvidence, PackageReleasePayload, PackageReleasePayloadFormat,
+    PackageReleaseProduct, PackageReleaseReceipt, PackageReleaseRepository,
+    PackageReleaseSbomFormat, PackageReleaseSource, PackageReleaseVersion, PackageReleaseWorkflow,
 };
 
 pub(super) fn fixture(channel: PackageReleaseChannel) -> PackageReleaseReceipt {
@@ -38,6 +40,68 @@ pub(super) fn fixture(channel: PackageReleaseChannel) -> PackageReleaseReceipt {
         assets: fixture_assets(),
         evidence: fixture_evidence(channel),
     }
+}
+
+pub(super) fn stable_raw_fixture() -> PackageReleaseReceipt {
+    let mut receipt = fixture(PackageReleaseChannel::Stable);
+    let name = "jackin-aarch64-apple-darwin";
+    let target = "aarch64-apple-darwin";
+    receipt.products = vec![PackageReleaseProduct {
+        id: "jackin".to_owned(),
+        package: "jackin".to_owned(),
+        package_version: receipt.version.base.clone(),
+        bins: vec!["jackin".to_owned()],
+        payloads: vec![PackageReleasePayload {
+            format: PackageReleasePayloadFormat::RawBinary,
+            target: target.to_owned(),
+            name: name.to_owned(),
+            members: vec!["jackin".to_owned()],
+        }],
+    }];
+    receipt.companions.clear();
+    receipt.assets = vec![
+        asset(
+            name,
+            PackageReleaseAssetKind::Payload,
+            Some("jackin"),
+            Some(target),
+            Some(name),
+        ),
+        asset(
+            &format!("{name}.sha256"),
+            PackageReleaseAssetKind::Sha256,
+            Some("jackin"),
+            Some(target),
+            Some(name),
+        ),
+        asset(
+            &format!("{name}.bundle"),
+            PackageReleaseAssetKind::SignatureBundle,
+            Some("jackin"),
+            Some(target),
+            Some(name),
+        ),
+        asset(
+            &format!("{name}.sbom.json"),
+            PackageReleaseAssetKind::Sbom,
+            Some("jackin"),
+            Some(target),
+            Some(name),
+        ),
+        asset(
+            "SHA256SUMS",
+            PackageReleaseAssetKind::ChecksumList,
+            None,
+            None,
+            None,
+        ),
+    ];
+    receipt
+        .assets
+        .sort_by(|left, right| left.name.cmp(&right.name));
+    receipt.evidence.attested_subject_names = vec![name.to_owned(), "release.json".to_owned()];
+    receipt.evidence.attested_subject_names.sort();
+    receipt
 }
 
 pub(super) fn preview_value(base: &str, count: Option<u64>, sha7: Option<&str>) -> String {
@@ -86,7 +150,8 @@ pub(super) fn fixture_products(base: &str) -> Vec<PackageReleaseProduct> {
         package: "jackin".to_owned(),
         package_version: base.to_owned(),
         bins: vec!["jackin".to_owned()],
-        archives: vec![PackageReleaseArchive {
+        payloads: vec![PackageReleasePayload {
+            format: crate::package_release::PackageReleasePayloadFormat::TarGz,
             target: "aarch64-apple-darwin".to_owned(),
             name: "jackin-aarch64-apple-darwin.tar.gz".to_owned(),
             members: vec!["jackin".to_owned()],
@@ -189,193 +254,6 @@ pub(super) fn asset(
     }
 }
 
-pub(crate) fn jackin_preview() -> RustBinaryPreviewConfig {
-    RustBinaryPreviewConfig {
-        enabled: true,
-        version_env: "JACKIN_VERSION_OVERRIDE".to_owned(),
-        producer: RustBinaryPreviewProducer {
-            task: "release:preview-package".to_owned(),
-            tools: vec!["rust".to_owned()],
-            inputs: vec!["Cargo.lock".to_owned(), "mise.toml".to_owned()],
-            ..RustBinaryPreviewProducer::default()
-        },
-        products: vec![
-            preview_product(
-                "jackin",
-                "jackin",
-                &["jackin", "jackin-role", "jackin-usage-broker"],
-                &[
-                    "aarch64-apple-darwin",
-                    "x86_64-apple-darwin",
-                    "aarch64-unknown-linux-gnu",
-                    "x86_64-unknown-linux-gnu",
-                ],
-            ),
-            preview_product(
-                "jackin-capsule",
-                "jackin-capsule",
-                &["jackin-capsule"],
-                &["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"],
-            ),
-        ],
-        companions: vec![RustBinaryPreviewCompanion {
-            id: "capsule-manifest".to_owned(),
-            path: "capsule-manifest.json".to_owned(),
-            asset_name: "capsule-manifest.json".to_owned(),
-        }],
-        ..RustBinaryPreviewConfig::default()
-    }
-}
-
-pub(crate) fn jackin_receipt(preview: &RustBinaryPreviewConfig) -> PackageReleaseReceipt {
-    let mut receipt = fixture(PackageReleaseChannel::Preview);
-    receipt.products = jackin_products(preview, &receipt.version.base);
-    receipt.assets = jackin_assets(&receipt.products);
-    receipt.evidence.attested_subject_names = jackin_subjects(&receipt.products);
-    receipt
-}
-
-pub(super) fn jackin_products(
-    preview: &RustBinaryPreviewConfig,
-    base: &str,
-) -> Vec<PackageReleaseProduct> {
-    let mut products: Vec<_> = preview
-        .products
-        .iter()
-        .map(|product| PackageReleaseProduct {
-            id: product.id.clone(),
-            package: product.package.clone(),
-            package_version: base.to_owned(),
-            bins: sorted_strings(&product.bins),
-            archives: {
-                let mut archives: Vec<_> = product
-                    .targets
-                    .iter()
-                    .map(|target| PackageReleaseArchive {
-                        target: target.clone(),
-                        name: format!("{}-{target}.tar.gz", product.id),
-                        members: product.bins.clone(),
-                    })
-                    .collect();
-                archives.sort_by(|left, right| left.target.cmp(&right.target));
-                archives
-            },
-        })
-        .collect();
-    products.sort_by(|left, right| left.id.cmp(&right.id));
-    products
-}
-
-pub(super) fn jackin_assets(products: &[PackageReleaseProduct]) -> Vec<PackageReleaseAsset> {
-    let mut assets = Vec::new();
-    for product in products {
-        for archive in &product.archives {
-            assets.extend(archive_assets(product, archive));
-        }
-    }
-    assets.extend([
-        asset(
-            "capsule-manifest.json",
-            PackageReleaseAssetKind::Companion,
-            None,
-            None,
-            Some("capsule-manifest.json"),
-        ),
-        asset(
-            "capsule-manifest.json.bundle",
-            PackageReleaseAssetKind::CompanionSignatureBundle,
-            None,
-            None,
-            Some("capsule-manifest.json"),
-        ),
-        asset(
-            "SHA256SUMS",
-            PackageReleaseAssetKind::ChecksumList,
-            None,
-            None,
-            None,
-        ),
-    ]);
-    assets.sort_by(|left, right| left.name.cmp(&right.name));
-    assets
-}
-
-pub(super) fn archive_assets(
-    product: &PackageReleaseProduct,
-    archive: &PackageReleaseArchive,
-) -> [PackageReleaseAsset; 4] {
-    let owner = Some(product.id.as_str());
-    let target = Some(archive.target.as_str());
-    [
-        asset(
-            &archive.name,
-            PackageReleaseAssetKind::Payload,
-            owner,
-            target,
-            Some(&archive.name),
-        ),
-        asset(
-            &format!("{}.sha256", archive.name),
-            PackageReleaseAssetKind::Sha256,
-            owner,
-            target,
-            Some(&archive.name),
-        ),
-        asset(
-            &format!("{}.bundle", archive.name),
-            PackageReleaseAssetKind::SignatureBundle,
-            owner,
-            target,
-            Some(&archive.name),
-        ),
-        asset(
-            &format!("{}.sbom.json", archive.name),
-            PackageReleaseAssetKind::Sbom,
-            owner,
-            target,
-            Some(&archive.name),
-        ),
-    ]
-}
-
-pub(super) fn jackin_subjects(products: &[PackageReleaseProduct]) -> Vec<String> {
-    let mut subjects = products
-        .iter()
-        .flat_map(|product| product.archives.iter().map(|archive| archive.name.clone()))
-        .collect::<Vec<_>>();
-    subjects.extend([
-        "capsule-manifest.json".to_owned(),
-        "release.json".to_owned(),
-    ]);
-    subjects.sort();
-    subjects
-}
-
-pub(super) fn archive_count(receipt: &PackageReleaseReceipt) -> usize {
-    receipt
-        .products
-        .iter()
-        .map(|product| product.archives.len())
-        .sum()
-}
-
-fn sorted_strings(values: &[String]) -> Vec<String> {
-    let mut sorted = values.to_vec();
-    sorted.sort();
-    sorted
-}
-
-pub(super) fn preview_product(
-    id: &str,
-    package: &str,
-    bins: &[&str],
-    targets: &[&str],
-) -> RustBinaryPreviewProduct {
-    RustBinaryPreviewProduct {
-        id: id.to_owned(),
-        package: package.to_owned(),
-        bins: bins.iter().map(|bin| (*bin).to_owned()).collect(),
-        targets: targets.iter().map(|target| (*target).to_owned()).collect(),
-        archive: RustBinaryPreviewArchive::TarGz,
-    }
-}
+#[path = "package_release_test_support_inventory.rs"]
+mod inventory;
+pub(crate) use inventory::*;

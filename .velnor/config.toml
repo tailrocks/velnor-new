@@ -86,6 +86,7 @@ inputs = [
   "crates/velnor-actions-freshness/src/inventory/tests.rs",
   "crates/velnor-actions-freshness/src/inventory/mirror.rs",
   "crates/velnor-actions-freshness/src/inventory/pins.rs",
+  "crates/velnor-actions-freshness/src/inventory/pins_mirrors.rs",
   "crates/velnor-actions-freshness/src/lib.rs",
   "crates/velnor-actions-freshness/src/members.rs",
   "crates/velnor-actions-freshness/src/patterns.rs",

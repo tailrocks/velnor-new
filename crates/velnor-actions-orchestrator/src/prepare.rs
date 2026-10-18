@@ -41,9 +41,11 @@ pub struct GenerationPreparation {
     /// corrupt checksums. `generate` fails closed on any entry while
     /// `plan` reports them; also mirrored into recommendations.
     pub lock_audit_blocking: Vec<String>,
-    /// Repo-resolved tool catalog: every internal execution and every
+    /// Repo-resolved tool catalog: every source/check internal execution and
     /// derivation on this preparation uses this one catalog, never the
-    /// compile-time pins.
+    /// compile-time pins. Native security operations independently use the
+    /// generator's qualified fixed GitHub CLI and Cosign pins; repository
+    /// configuration cannot select their credential-bearing executables.
     pub catalog: ToolCatalog,
 }
 

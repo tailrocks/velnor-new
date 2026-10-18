@@ -1,5 +1,9 @@
 //! Closed check-output protocol for an independent exact-head completion App.
 
+/// GitHub's shared Actions App cannot independently authenticate review completion.
+/// Identity: `GET https://api.github.com/apps/github-actions`.
+pub const GITHUB_ACTIONS_APP_ID: u64 = 15_368;
+
 use crate::{
     ContractError, canonical_json_bytes, homebrew_merge_gate::TapReviewCompletion,
     ids::is_lower_hex_len,
@@ -130,7 +134,7 @@ pub fn parse_tap_review_completion(
 
 fn valid_digest(value: &str) -> bool {
     value
-        .strip_prefix("b3:")
+        .strip_prefix("b3-")
         .is_some_and(|digest| is_lower_hex_len(digest, 64))
 }
 fn invalid(reason: &'static str) -> ContractError {

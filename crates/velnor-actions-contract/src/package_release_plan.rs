@@ -2,10 +2,11 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::package_release::PackageReleaseChannel;
+use crate::config::{RustBinaryPreviewArchive, RustBinaryPreviewProduct};
+use crate::package_release::{PackageReleaseChannel, PackageReleasePayloadFormat};
 use crate::{
-    ContractError, canonical_json_bytes, config::RustBinaryPreviewCompanion,
-    config::RustBinaryPreviewProduct, is_exact_semver, is_valid_branch_name,
+    ContractError, canonical_json_bytes, config::RustBinaryPreviewCompanion, is_exact_semver,
+    is_valid_branch_name,
 };
 
 /// Static producer request schema. It contains inventory only, never task code.
@@ -26,9 +27,25 @@ pub struct PackageReleasePlan {
     /// Shared numeric Cargo package base version.
     pub base_version: String,
     /// Literal product inventory copied from source policy.
-    pub products: Vec<RustBinaryPreviewProduct>,
+    pub products: Vec<PackageReleasePlanProduct>,
     /// Literal companion inventory copied from source policy.
     pub companions: Vec<RustBinaryPreviewCompanion>,
+}
+
+/// Channel-neutral product matrix carried to isolated release jobs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PackageReleasePlanProduct {
+    /// Stable product identity.
+    pub id: String,
+    /// Exact Cargo package name.
+    pub package: String,
+    /// Exact executable targets in every payload.
+    pub bins: Vec<String>,
+    /// Rust target triples.
+    pub targets: Vec<String>,
+    /// Actual byte representation; never inferred from a filename.
+    pub format: PackageReleasePayloadFormat,
 }
 
 impl PackageReleasePlan {
@@ -44,6 +61,9 @@ impl PackageReleasePlan {
         }
         if !is_valid_branch_name(&self.default_branch) {
             return Err(invalid("bad_default_branch"));
+        }
+        if self.channel == PackageReleaseChannel::Preview && self.default_branch != "main" {
+            return Err(invalid("preview_requires_main_default_branch"));
         }
         if !is_exact_semver(&self.base_version) {
             return Err(invalid("base_version_must_be_numeric"));
@@ -66,12 +86,34 @@ impl PackageReleasePlan {
         {
             return Err(invalid("inventory_not_canonically_sorted"));
         }
+        let config_products = self
+            .products
+            .iter()
+            .map(|product| RustBinaryPreviewProduct {
+                id: product.id.clone(),
+                package: product.package.clone(),
+                bins: product.bins.clone(),
+                targets: product.targets.clone(),
+                archive: RustBinaryPreviewArchive::TarGz,
+            })
+            .collect::<Vec<_>>();
         crate::config::validate_static_release_inventory(
             "package-release-plan",
-            &self.products,
+            &config_products,
             &self.companions,
             None,
         )?;
+        for product in &self.products {
+            if (self.channel == PackageReleaseChannel::Preview
+                && product.format != PackageReleasePayloadFormat::TarGz)
+                || (self.channel == PackageReleaseChannel::Stable
+                    && (product.format != PackageReleasePayloadFormat::RawBinary
+                        || product.bins.len() != 1
+                        || product.targets.len() != 1))
+            {
+                return Err(invalid("product_inventory_invalid_for_channel"));
+            }
+        }
         Ok(())
     }
 

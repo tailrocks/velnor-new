@@ -7,7 +7,6 @@ use std::{
 
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use velnor_actions_contract::{
     PackageReleasePlan, canonical_json_bytes,
     config::HomebrewTapConfig,
@@ -36,6 +35,12 @@ use github::{
 use gitops::{BranchRequest, create_or_reconcile_branch, create_or_reconcile_pr};
 use identity::{BotIdentity, verify_app_scope};
 use result::persist_result;
+#[path = "tap_writer_helpers.rs"]
+mod helpers;
+use helpers::{
+    branch_name, is_full_sha, is_sha256, parse_decimal_id, real_directory, required_env,
+    safe_app_slug, sha256,
+};
 
 const CANDIDATE_LIMIT: u64 = 1024 * 1024;
 const CANDIDATE_DIR: &str = "tap-candidate";
@@ -101,6 +106,7 @@ pub fn write_homebrew_tap_pr_from_env() -> Result<TapPromotionReceipt, Orchestra
     let proof_digest =
         sha256(&canonical_json_bytes(&inputs.proof).map_err(|_| internal("tap_proof_encode"))?);
     let branch = branch_name(&inputs.release.receipt_digest, &base_sha)?;
+    verify_promotion_authority(&inputs)?;
     let head_sha = create_or_reconcile_branch(
         &inputs.api,
         &BranchRequest {
@@ -113,6 +119,7 @@ pub fn write_homebrew_tap_pr_from_env() -> Result<TapPromotionReceipt, Orchestra
             bot: &bot,
         },
     )?;
+    verify_promotion_authority(&inputs)?;
     let pull_request = create_or_reconcile_pr(
         &inputs.api,
         &inputs.policy,
@@ -134,6 +141,18 @@ pub fn write_homebrew_tap_pr_from_env() -> Result<TapPromotionReceipt, Orchestra
     };
     persist_result(&inputs.root, &result)?;
     Ok(result)
+}
+
+fn verify_promotion_authority(inputs: &WriterInputs) -> Result<(), OrchestratorError> {
+    crate::package_release_publish::verify_tap_update_environment(
+        &inputs.plan.repository,
+        &inputs.plan.default_branch,
+    )?;
+    crate::tap_source_freshness::verify_preview_source_is_current(
+        &inputs.plan.repository,
+        &inputs.plan.default_branch,
+        &inputs.release.receipt.source.commit_sha,
+    )
 }
 
 struct WriterInputs {
@@ -315,76 +334,6 @@ fn read_formula_base(
         bytes,
         tree_sha: tree.sha,
     })
-}
-
-fn branch_name(receipt_digest: &str, base_sha: &str) -> Result<String, OrchestratorError> {
-    if !is_sha256(receipt_digest) || !is_full_sha(base_sha) {
-        return Err(internal("tap_writer_branch_identity_invalid"));
-    }
-    Ok(format!(
-        "velnor/preview/{}-{}",
-        &receipt_digest[..16],
-        &base_sha[..16]
-    ))
-}
-
-fn is_full_sha(value: &str) -> bool {
-    matches!(value.len(), 40 | 64)
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-}
-
-fn is_sha256(value: &str) -> bool {
-    value.len() == 64
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-}
-
-fn sha256(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(64);
-    for byte in Sha256::digest(bytes) {
-        output.push(char::from(HEX[usize::from(byte >> 4)]));
-        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    output
-}
-
-fn required_env(key: &str) -> Result<String, OrchestratorError> {
-    let value = env::var(key).map_err(|_| internal("tap_writer_env_missing"))?;
-    if value.is_empty() || value.len() > 4096 {
-        return Err(internal("tap_writer_env_invalid"));
-    }
-    Ok(value)
-}
-
-fn parse_decimal_id(value: &str) -> Result<u64, OrchestratorError> {
-    let id = value
-        .parse::<u64>()
-        .map_err(|_| internal("tap_writer_id_invalid"))?;
-    if id == 0 || id.to_string() != value {
-        return Err(internal("tap_writer_id_invalid"));
-    }
-    Ok(id)
-}
-
-fn safe_app_slug(value: &str) -> Result<&str, OrchestratorError> {
-    if value.is_empty()
-        || value.len() > 100
-        || !value
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-    {
-        return Err(internal("tap_writer_app_slug_invalid"));
-    }
-    Ok(value)
-}
-
-fn real_directory(path: &Path) -> bool {
-    fs::symlink_metadata(path)
-        .is_ok_and(|metadata| metadata.is_dir() && !metadata.file_type().is_symlink())
 }
 
 #[cfg(test)]
