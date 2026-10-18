@@ -307,7 +307,9 @@ fn inspect_optional_identity_envelope(
 }
 
 fn check_deadline(started: Instant) -> Result<(), OrchestratorError> {
-    if started.elapsed() > super::VERIFY_TIMEOUT {
+    if velnor_actions_mise::CheckDeadline::check_scope().is_err()
+        || started.elapsed() > super::VERIFY_TIMEOUT
+    {
         return Err(invalid("package_output_verification_timeout"));
     }
     Ok(())

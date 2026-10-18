@@ -1,13 +1,7 @@
-//! Per-job `timeout-minutes`: bounded CI jobs, never the 6 h default.
+//! One five-minute ceiling for every executable generated job.
 //!
-//! A missing timeout lets a buggy or malicious PR burn GitHub's 360
-//! minute default per job (G4). The bound is structural: [`JobTimeout`]
-//! is a required [`crate::workflow::ir::Job`] field (and a required
-//! renderer `ReleaseJobSpec` field), so every generated job carries
-//! `timeout-minutes` by construction and the renderer emits it
-//! unconditionally. Defaults come from the measured green run
-//! in `docs/implemented/performance.md` (run 36777030585), never from
-//! guesswork; see each constant.
+//! Configured timeouts may be shorter; all built-in defaults use this ceiling.
+//! The required typed field and workflow validation also reject serde bypasses.
 
 use serde::{Deserialize, Serialize};
 
@@ -26,36 +20,33 @@ pub struct JobTimeout(u16);
 impl JobTimeout {
     /// Smallest meaningful bound: zero would fail every job instantly.
     pub const MIN_MINUTES: u16 = 1;
-    /// Largest admissible bound: GitHub's own 360 minute default. A
-    /// timeout above the default it exists to undercut is absurd.
-    pub const MAX_MINUTES: u16 = 360;
+    /// User-mandated maximum for every executable job.
+    pub const MAX_MINUTES: u16 = 5;
+    /// All built-in jobs use the shared maximum unless configured shorter.
+    pub const DEFAULT: Self = Self(Self::MAX_MINUTES);
 
-    /// Planner job. The small measured path is 88 s. Java run
-    /// 37346647634 spent 569 s in Checkout and the 10 minute bound
-    /// cancelled the job during Fetch Cargo sources, so Plan never ran.
-    /// Twenty minutes covers that checkout and the remaining plan steps.
-    pub const PLAN: Self = Self(20);
-    /// Crate job: measured max ~13 minutes (orchestrator: 686 s tests
-    /// plus setup), so 30 minutes is ~2.4x over the slowest suite.
-    pub const CRATE: Self = Self(30);
-    /// Required gate: measured 46 s (fetch-reports 33 s), so 10
-    /// minutes is ~13x over the merge plus download path.
-    pub const REQUIRED: Self = Self(10);
-    /// Validator job: each measured at most 20 s (cold installs
-    /// dominate), so 10 minutes bounds even the slowest analyzer.
-    pub const VALIDATOR: Self = Self(10);
-    /// Candidate job: unmeasured; build once plus qualify is
-    /// crate-shaped, so it carries the conservative crate bound.
-    pub const CANDIDATE: Self = Self(30);
-    /// Release job: two `gh` steps, no compile; matches the small-job
-    /// bound.
-    pub const RELEASE: Self = Self(10);
-    /// MSRV job: unmeasured; per-crate compile plus check is
-    /// crate-shaped, so it carries the conservative crate bound.
-    pub const MSRV: Self = Self(30);
-    /// Publish job: acquire plus plan download plus baseline upload,
-    /// no compile; matches the small-job bound.
-    pub const PUBLISH: Self = Self(10);
+    /// Planner job.
+    pub const PLAN: Self = Self::DEFAULT;
+    /// Crate job.
+    pub const CRATE: Self = Self::DEFAULT;
+    /// Required gate.
+    pub const REQUIRED: Self = Self::DEFAULT;
+    /// Validator job.
+    pub const VALIDATOR: Self = Self::DEFAULT;
+    /// Candidate job.
+    pub const CANDIDATE: Self = Self::DEFAULT;
+    /// Release job.
+    pub const RELEASE: Self = Self::DEFAULT;
+    /// MSRV job.
+    pub const MSRV: Self = Self::DEFAULT;
+    /// Publish job.
+    pub const PUBLISH: Self = Self::DEFAULT;
+
+    /// Validate minutes without narrowing wider configuration fields.
+    #[must_use]
+    pub fn is_valid_minutes(minutes: u32) -> bool {
+        (u32::from(Self::MIN_MINUTES)..=u32::from(Self::MAX_MINUTES)).contains(&minutes)
+    }
 
     /// Every per-kind default, for the audit test below.
     #[cfg(test)]
@@ -70,7 +61,7 @@ impl JobTimeout {
         Self::PUBLISH,
     ];
 
-    /// Bound `minutes` to `1..=360`.
+    /// Bound `minutes` to `1..=5`.
     /// # Errors
     pub fn new(minutes: u16) -> Result<Self, ContractError> {
         let timeout = Self(minutes);
@@ -81,7 +72,7 @@ impl JobTimeout {
     /// Re-check a deserialized value; the `Job` gate calls this.
     /// # Errors
     pub fn validate(&self) -> Result<(), ContractError> {
-        if self.0 < Self::MIN_MINUTES || self.0 > Self::MAX_MINUTES {
+        if !Self::is_valid_minutes(u32::from(self.0)) {
             return Err(ContractError::identity(
                 "job.timeout_minutes",
                 format!("bad_timeout:{}", self.0),
@@ -92,8 +83,19 @@ impl JobTimeout {
 
     /// Whole minutes for the renderer.
     #[must_use]
-    pub fn minutes(&self) -> u16 {
+    pub const fn minutes(&self) -> u16 {
         self.0
+    }
+}
+
+impl TryFrom<u32> for JobTimeout {
+    type Error = ContractError;
+
+    fn try_from(minutes: u32) -> Result<Self, Self::Error> {
+        let minutes = u16::try_from(minutes).map_err(|_| {
+            ContractError::identity("job.timeout_minutes", format!("bad_timeout:{minutes}"))
+        })?;
+        Self::new(minutes)
     }
 }
 
@@ -103,11 +105,35 @@ mod tests {
 
     #[test]
     fn range_edges_hold_and_beyond_fails() {
-        assert_eq!(JobTimeout::new(1).expect("fixture holds").minutes(), 1);
-        assert_eq!(JobTimeout::new(360).expect("fixture holds").minutes(), 360);
-        for bad in [0, 361, 1000, u16::MAX] {
+        for minutes in 1..=5 {
+            assert_eq!(
+                JobTimeout::new(minutes).expect("valid budget").minutes(),
+                minutes
+            );
+        }
+        assert!(!JobTimeout::is_valid_minutes(u32::MAX));
+        for bad in [0, 6, 360, 361, 1000, u16::MAX] {
             let err = JobTimeout::new(bad).expect_err("must reject");
             assert!(err.to_string().contains("bad_timeout"), "{err}");
+        }
+    }
+
+    #[test]
+    fn wide_constructor_preserves_boundaries_and_full_invalid_value() {
+        for minutes in [1_u32, 5] {
+            assert_eq!(
+                u32::from(JobTimeout::try_from(minutes).expect("valid").minutes()),
+                minutes
+            );
+        }
+        for minutes in [0_u32, 6, u32::MAX] {
+            let error = JobTimeout::try_from(minutes).expect_err("invalid budget");
+            assert!(
+                error
+                    .to_string()
+                    .contains(&format!("bad_timeout:{minutes}")),
+                "{error}"
+            );
         }
     }
 
@@ -115,9 +141,10 @@ mod tests {
     fn every_default_is_a_valid_bound() {
         for default in JobTimeout::DEFAULTS {
             assert!(default.validate().is_ok(), "{default:?} must validate");
+            assert_eq!(default, JobTimeout::DEFAULT);
         }
-        assert!(JobTimeout::CRATE.minutes() > JobTimeout::PLAN.minutes());
-        assert!(JobTimeout::CRATE.minutes() > JobTimeout::VALIDATOR.minutes());
+        assert_eq!(JobTimeout::CRATE, JobTimeout::DEFAULT);
+        assert_eq!(JobTimeout::DEFAULT.minutes(), 5);
     }
 
     #[test]
@@ -125,7 +152,7 @@ mod tests {
         let timeout: JobTimeout = serde_json::from_str("0").expect("fixture holds");
         let err = timeout.validate().expect_err("serde bypass must not hold");
         assert!(err.to_string().contains("bad_timeout"), "{err}");
-        let timeout: JobTimeout = serde_json::from_str("30").expect("fixture holds");
+        let timeout: JobTimeout = serde_json::from_str("5").expect("fixture holds");
         assert!(timeout.validate().is_ok());
     }
 
@@ -139,14 +166,14 @@ mod tests {
     #[test]
     fn workflow_gate_rejects_deserialized_zero_and_absurd_timeouts() {
         use crate::workflow::ir::WorkflowIr;
-        for bad in ["0", "361", "3600"] {
+        for bad in ["0", "6", "30", "360", "361", "3600"] {
             let workflow: WorkflowIr =
                 serde_json::from_str(&workflow_json(bad)).expect("fixture holds");
             let err = workflow.validate().expect_err("must reject");
             assert!(err.to_string().contains("bad_timeout"), "{err}");
         }
         let workflow: WorkflowIr =
-            serde_json::from_str(&workflow_json("10")).expect("fixture holds");
+            serde_json::from_str(&workflow_json("5")).expect("fixture holds");
         assert!(workflow.validate().is_ok());
     }
 }

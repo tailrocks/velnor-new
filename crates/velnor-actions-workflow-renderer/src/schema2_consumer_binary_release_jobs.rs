@@ -8,6 +8,7 @@ use super::{
         upload_artifact_step, valid_repository,
     },
 };
+use velnor_actions_contract::JobTimeout;
 #[path = "schema2_consumer_binary_release_io.rs"]
 mod io;
 use super::super::consumer_release_eligibility;
@@ -16,13 +17,12 @@ use crate::{
     RenderError,
     commands::join_argv_for_run,
     document_steps::non_internal_step_to_yaml,
-    marker::with_marker,
     render::RenderedFile,
     steps::{
         ATTEST_BUILD_PROVENANCE_USES, CHECKOUT_USES, DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES,
         validate_uses,
     },
-    yaml::{Yaml, render_yaml},
+    yaml::Yaml,
 };
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
@@ -51,7 +51,11 @@ pub(super) fn render(spec: &ConsumerBinaryReleaseSpec) -> Result<RenderedFile, R
         consumer_release_eligibility::consumer_script(&context, &spec.gh_argv, false)?;
     let asset = format!("{}-{CONSUMER_BINARY_TARGET}", spec.bin);
     let workflow = document(spec, &identity, &eligibility, &target_add, &build, &asset)?;
-    let bytes = with_marker(&spec.generator_version, &render_yaml(&workflow))?;
+    let bytes = crate::render::fallback::render_checked_workflow(
+        BINARY_RELEASE_WORKFLOW,
+        &workflow,
+        &spec.generator_version,
+    )?;
     Ok(RenderedFile {
         path: BINARY_RELEASE_WORKFLOW.to_owned(),
         bytes,
@@ -164,7 +168,7 @@ fn eligibility_job(
     let mut fields = base(
         "Check source and Required CI",
         Yaml::str("ubuntu-26.04"),
-        75,
+        JobTimeout::DEFAULT,
     );
     fields.push((
         "permissions".to_owned(),
@@ -217,7 +221,11 @@ fn build_job(
     build: &str,
     asset: &str,
 ) -> Result<(String, Yaml), RenderError> {
-    let mut fields = base("Build one Apple Silicon binary", Yaml::str("macos-15"), 120);
+    let mut fields = base(
+        "Build one Apple Silicon binary",
+        Yaml::str("macos-15"),
+        JobTimeout::DEFAULT,
+    );
     fields.push(("needs".to_owned(), needs(&["release-eligibility"])));
     fields.push((
         "permissions".to_owned(),
@@ -262,7 +270,7 @@ fn attest_job(
     let mut fields = base(
         "Independently validate and sign binary assets",
         Yaml::str("ubuntu-26.04"),
-        30,
+        JobTimeout::DEFAULT,
     );
     fields.push((
         "needs".to_owned(),
@@ -320,7 +328,7 @@ fn publish_job(spec: &ConsumerBinaryReleaseSpec) -> Result<(String, Yaml), Rende
     let mut fields = base(
         "Publish immutable stable release",
         Yaml::str("ubuntu-26.04"),
-        75,
+        JobTimeout::DEFAULT,
     );
     fields.push((
         "needs".to_owned(),

@@ -32,8 +32,11 @@ fn execute_channel(
         .env("VELNOR_TEST_FIXTURES", &fixture.directory)
         .env("VELNOR_TEST_CALLS", &fixture.calls)
         .env("VELNOR_TEST_REPOSITORY", REPOSITORY)
-        .env("VELNOR_RELEASE_CI_POLL_LIMIT", "2")
-        .env("VELNOR_RELEASE_CI_POLL_SECONDS", "0")
+        .env("GITHUB_REPOSITORY_ID", "100")
+        .env(
+            "GITHUB_EVENT_PATH",
+            fixture.directory.join("completion-event.json"),
+        )
         .env("GITHUB_REPOSITORY", &scenario.repository)
         .env("GITHUB_REF", &scenario.ref_name)
         .env("GITHUB_EVENT_NAME", &scenario.event)
@@ -62,4 +65,42 @@ pub(in super::super) fn assert_rejected(result: &Execution) {
         "rejected gate wrote outputs: {}",
         result.output
     );
+}
+
+pub(super) fn write_completion_fixtures(
+    fixture: &Fixture,
+    scenario: &Scenario,
+    source_sha: &str,
+) -> Result<(), Box<dyn Error>> {
+    let run = ci_run(
+        42,
+        12,
+        3,
+        SOURCE_TOKEN,
+        DEFAULT_BRANCH,
+        "push",
+        ("completed", "success"),
+    );
+    let event = format!(
+        r#"{{"action":"completed","repository":{{"id":100,"full_name":"{REPOSITORY}"}},"workflow":{{"id":200,"name":"CI","path":".github/workflows/ci.yml"}},"workflow_run":{run}}}"#
+    );
+    for (file, value) in [
+        (
+            "completion-event.json",
+            scenario.completion_event.as_deref().unwrap_or(&event),
+        ),
+        (
+            "completion-run.json",
+            scenario.completion_run.as_deref().unwrap_or(&run),
+        ),
+        (
+            "workflow.json",
+            scenario.ci_workflow.as_deref().unwrap_or(
+                r#"{"id":200,"name":"CI","path":".github/workflows/ci.yml","state":"active"}"#,
+            ),
+        ),
+    ] {
+        fs::write(fixture.directory.join(file), materialize(value, source_sha))?;
+    }
+    Ok(())
 }

@@ -96,7 +96,7 @@ the host's `xcode-select` setting.
   - Public repositories default to blocking workflows triggered by `pull_request_target`, `issue_comment`, `issues`, `discussion`, and `discussion_comment` from non-collaborators unless explicitly approved or relaxed by repository/organization policy.
 - **Velnor Implementation**:
   - `velnor-actions-contract` defines `ALLOWED_WORKFLOW_EVENTS` (`pull_request`, `push`, `merge_group`, `workflow_dispatch`, `schedule`), `RESTRICTED_ACTION_EVENTS` (the 11 restricted triggers above), and `DEFAULT_BLOCKED_PUBLIC_REPO_EVENTS`, along with `is_allowed_workflow_event`, `is_restricted_action_event`, `validate_workflow_trigger_event`, and `validate_workflow_trigger_events`.
-  - Velnor's `Trigger` IR is structurally disjoint from `RESTRICTED_ACTION_EVENTS`: generated workflows never emit `pull_request_target`, `workflow_run`, or comment/issue triggers, ensuring public-repository forks execute under `pull_request` with read-only permissions and no secrets without requiring manual maintainer approval for restricted triggers.
+  - Velnor's `Trigger` IR is structurally disjoint from `RESTRICTED_ACTION_EVENTS`: generic generated workflows never emit `pull_request_target`, `workflow_run`, or comment/issue triggers, ensuring public-repository forks execute under `pull_request` with read-only permissions and no secrets without requiring manual maintainer approval for restricted triggers.
 
 ### 3. Cache Access Control (`cache-mode`) — `2026-09-10`
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-09-10-actions-control-cache-access-in-workflows-with-cache-mode/)):
@@ -241,3 +241,97 @@ the protected branch or merged through a pull request. Strict status checks only
 require the PR branch to be current before merging. Therefore a workflow whose
 contract promises PR-only promotion must independently require the server-side
 pull-request rule; required checks and a client-side PR workflow are insufficient.
+
+## Five-minute job budgets and cancellation (2026-10-18)
+
+Compatibility was checked against original `actions/runner` commit
+[`9abfe11d2abd9de09d3a8d933d7ed701ea0518a3`](https://github.com/actions/runner/commit/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3).
+The runner's [executable-job schema](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Sdk/DTPipelines/workflow-v1.0.json#L55-L75)
+accepts `timeout-minutes` on a job with `runs-on`. GitHub's
+[job-timeout contract](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idtimeout-minutes)
+says expiration automatically cancels that job; its default is 360 minutes.
+Velnor must explicitly emit a timeout between one and five minutes on every
+executable job, including CI, qualification, native image, signing, publication,
+recovery, and reusable-workflow callees. GitHub provides no workflow-wide timeout
+keyword: queued time, environment approval, and successive jobs are separate
+from this per-job execution budget.
+
+A [reusable-workflow caller](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#supported-keywords-for-jobs-that-call-a-reusable-workflow)
+allows a restricted set of job keys that excludes `timeout-minutes`. Emit the
+limit on every concrete job inside the called workflow; adding it to a `uses`
+caller is invalid. The runner schema above describes executable jobs, not the
+GitHub service's reusable-call expansion; it does not establish caller syntax.
+
+Cancellation is not an instantaneous physical process cutoff. The listener
+[receives the server's cancellation message](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Listener/JobDispatcher.cs#L140-L154)
+and [starts a separate worker cancellation window](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Listener/JobDispatcher.cs#L1269-L1286).
+The worker [re-evaluates the running step's condition](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Worker/StepsRunner.cs#L145-L185)
+before canceling its token. The process invoker allows
+[7.5 seconds for SIGINT and 2.5 seconds for SIGTERM](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Sdk/ProcessInvoker.cs#L32-L33),
+then [kills the process tree if those signals did not finish the process](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Sdk/ProcessInvoker.cs#L443-L465).
+The [official cancellation contract](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation)
+also permits a five-minute cancellation grace before server-forced termination.
+These mechanisms cannot substantiate a claim that all processes disappear
+exactly 300 seconds after job start.
+
+Native producer execution therefore needs its own monotonic deadline shared
+across preparation, acquisition, probes, task execution, and output admission,
+with process-group termination and bounded reaping reserved within that budget.
+Starting a fresh timeout for each phase would permit cumulative overruns.
+Expiration must prevent a success proof or publication handoff; GitHub's outer
+job limit additionally bounds checkout, tool installation, and source fetch.
+
+
+## Native preview after completed CI (2026-10-18)
+
+The dedicated native preview renderer admits only the canonical CI completion
+trigger, outside the generic trigger IR. GitHub documents that `workflow_run`
+uses the default-branch commit/ref, can receive write tokens, and also fires for
+unsuccessful upstream completions. Its name and branch filters do not establish
+trusted source identity. See the [official event contract](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_run).
+
+Original runner commit
+[`9abfe11d2abd9de09d3a8d933d7ed701ea0518a3`](https://github.com/actions/runner/commit/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3)
+exports the actual [event, ref, SHA, and workflow SHA](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Worker/GitHubContext.cs#L14-L67)
+and [writes the webhook payload](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Worker/ExecutionContext.cs#L1320-L1337).
+The service's event selection and privilege semantics are documented contracts,
+not behavior proven by this runner implementation.
+
+Before producer execution, the eligibility job independently authenticates the
+canonical CI workflow and completed successful same-repository push run/attempt,
+Required job, and latest source head. The upstream head must equal the actual
+source SHA, workflow authority SHA, and live main tip. A completion for older,
+foreign, PR, failed, or superseded evidence cannot authorize preview. No CI
+artifact is consumed to select source. Signer and publisher retain isolated
+permissions and independent revalidation. Receipt, certificate and SLSA claims
+bind the true producing `workflow_run`; authenticated source CI remains `push`.
+
+
+The payload shape was checked against original `octokit/webhooks` commit
+`aa80c24a3f55354465b8b1438d33dd5602956d0d`: the
+[completed-event schema](https://github.com/octokit/webhooks/blob/aa80c24a3f55354465b8b1438d33dd5602956d0d/payload-schemas/api.github.com/workflow_run/completed.schema.json)
+requires the event action, repository, workflow, and workflow-run envelope; the
+[run schema](https://github.com/octokit/webhooks/blob/aa80c24a3f55354465b8b1438d33dd5602956d0d/payload-schemas/api.github.com/common/workflow-run.schema.json)
+provides the workflow ID/path/name, repository and head repository, attempt,
+source, and terminal status used by admission. The envelope's workflow identity
+must agree with independently fetched canonical CI metadata.
+
+
+## Native completion trigger scanner disposition (2026-10-18)
+
+Pinned zizmor 1.31.1, original commit
+`effdb35fa7868863f11655db256d9008922fa427`, emits `dangerous-triggers`
+[unconditionally for `workflow_run`](https://github.com/zizmorcore/zizmor/blob/effdb35fa7868863f11655db256d9008922fa427/crates/zizmor/src/audit/dangerous_triggers.rs#L51-L98).
+The rule includes a hidden location covering the entire `on` block. Its inline
+annotation can therefore suppress a dangerous sibling trigger as well; placement
+on the canonical CI scalar does not narrow that upstream suppression scope.
+Independent pinned-binary controls confirmed that sibling behavior and verified
+that unrelated template-injection findings remain active.
+
+Velnor accepts this finding only for its dedicated authenticated native completion
+protocol. Production structural admission requires exactly the native completion
+and manual recovery events, with canonical CI, completed activity and main branch
+filters. Mutation tests add dangerous sibling events while preserving the
+annotation and require rejection before output. The generic restricted-event
+policy, full staged scanner invocation, and other audits remain unchanged. An
+inline annotation alone is never sufficient release authority.

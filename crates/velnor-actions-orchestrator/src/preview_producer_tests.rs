@@ -86,17 +86,36 @@ fn producer_input_must_be_tracked_clean_and_regular() {
     let status = fixture_git(repo.path(), &["commit", "-qm", "fixture"]).status;
     assert!(status.success());
     assert!(
-        require_tracked_clean_input(repo.path(), "Cargo.toml").is_ok(),
+        require_tracked_clean_input(
+            repo.path(),
+            "Cargo.toml",
+            CheckDeadline::after(Duration::from_secs(5)).expect("deadline")
+        )
+        .is_ok(),
         "clean tracked input rejected"
     );
 
     std::fs::write(repo.path().join("Cargo.toml"), "modified\n").expect("modify");
-    assert!(require_tracked_clean_input(repo.path(), "Cargo.toml").is_err());
+    assert!(
+        require_tracked_clean_input(
+            repo.path(),
+            "Cargo.toml",
+            CheckDeadline::after(Duration::from_secs(5)).expect("deadline")
+        )
+        .is_err()
+    );
     std::fs::write(repo.path().join("Cargo.toml"), "[package]\nname='p'\n").expect("restore");
 
     std::fs::remove_file(repo.path().join("Cargo.toml")).expect("remove");
     std::os::unix::fs::symlink("/etc/passwd", repo.path().join("Cargo.toml")).expect("link");
-    assert!(require_tracked_clean_input(repo.path(), "Cargo.toml").is_err());
+    assert!(
+        require_tracked_clean_input(
+            repo.path(),
+            "Cargo.toml",
+            CheckDeadline::after(Duration::from_secs(5)).expect("deadline")
+        )
+        .is_err()
+    );
     // The executor's separate component/type check rejects the link before Git
     // cleanliness is considered.
     assert!(crate::check_evidence::reject_link_components(repo.path(), "Cargo.toml").is_err());
@@ -108,7 +127,14 @@ fn producer_input_rejects_untracked_content_at_same_path() {
     init_repo(repo.path());
     std::fs::write(repo.path().join("Cargo.toml"), "[package]\nname='p'\n").expect("file");
     // A regular file without a committed Git index entry never qualifies.
-    assert!(require_tracked_clean_input(repo.path(), "Cargo.toml").is_err());
+    assert!(
+        require_tracked_clean_input(
+            repo.path(),
+            "Cargo.toml",
+            CheckDeadline::after(Duration::from_secs(5)).expect("deadline")
+        )
+        .is_err()
+    );
 }
 
 #[test]

@@ -102,18 +102,12 @@ fn run_cosign(command: &velnor_actions_mise::IsolatedCommand) -> Result<(), Orch
 fn certificate_identity(
     identity: &PackageReleaseSigningIdentity,
 ) -> Result<CosignCertificateIdentity, OrchestratorError> {
-    let trigger = match identity.event {
-        velnor_actions_contract::package_release::PackageReleaseEvent::Push => "push",
-        velnor_actions_contract::package_release::PackageReleaseEvent::WorkflowDispatch => {
-            "workflow_dispatch"
-        }
-    };
     CosignCertificateIdentity::new(
         &identity.repository,
         &identity.workflow_path,
         &identity.source_ref,
         &identity.workflow_sha,
-        trigger,
+        identity.event.as_str(),
     )
     .map_err(|_| internal("cosign_certificate_identity_invalid"))
 }

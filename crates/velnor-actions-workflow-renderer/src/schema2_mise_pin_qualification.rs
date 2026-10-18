@@ -3,6 +3,7 @@
 use super::{MisePinQualificationPins, RunnerSpec};
 use crate::RenderError;
 use crate::yaml::Yaml;
+use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::ReleaseTarget;
 
 const MODE: &str = "inputs.mode == 'mise-pin'";
@@ -49,7 +50,7 @@ fn job(
     setup: &crate::setup::MiseSetup,
 ) -> Result<(String, Yaml), RenderError> {
     let hosted = RunnerSpec::hosted_release_target(runner, target)?;
-    let mut fields = super::features::lane_base(name, &hosted, 20);
+    let mut fields = super::features::lane_base(name, &hosted, JobTimeout::DEFAULT);
     fields.insert(1, ("if".to_owned(), Yaml::str(MODE)));
     fields.push(("permissions".to_owned(), mapping(&[("contents", "read")])));
     Ok(super::features::finish(

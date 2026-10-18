@@ -77,6 +77,7 @@ pub mod tree;
 pub mod verification_jobs;
 mod workflow_policy;
 mod workflow_size;
+mod workflow_timeout;
 pub mod yaml;
 
 mod root_api;

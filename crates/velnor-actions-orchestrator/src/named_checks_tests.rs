@@ -26,7 +26,7 @@ fn fixture() -> (TempDir, MiseCheck) {
         tools: Vec::new(),
         system_tools: Vec::new(),
         evidence: None,
-        timeout_minutes: 10,
+        timeout_minutes: 5,
     };
     (dir, check)
 }

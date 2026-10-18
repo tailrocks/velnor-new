@@ -15,7 +15,7 @@ fn check(id: &str, runner: CheckRunner) -> MiseCheck {
         tools: vec!["gh".to_owned()],
         system_tools: Vec::new(),
         evidence: None,
-        timeout_minutes: 20,
+        timeout_minutes: 5,
     }
 }
 

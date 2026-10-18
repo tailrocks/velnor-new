@@ -62,7 +62,7 @@ fn selected_check(declarations: &[QualifiedTool]) -> MiseCheck {
         tools: declarations.iter().map(|tool| tool.id.clone()).collect(),
         system_tools: Vec::new(),
         evidence: None,
-        timeout_minutes: 30,
+        timeout_minutes: 5,
     }
 }
 

@@ -84,7 +84,7 @@ fn validated_crate_jobs() -> BTreeMap<String, Job> {
                 display_name: format!("Rust / crate {index}"),
                 runs_on: "ubuntu-26.04".to_owned(),
                 check_runner: None,
-                timeout_minutes: JobTimeout::new(20).expect("valid timeout"),
+                timeout_minutes: JobTimeout::new(5).expect("valid timeout"),
                 needs: vec!["plan".to_owned()],
                 condition: Some("needs.plan.result == 'success'".to_owned()),
                 permissions: None,

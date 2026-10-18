@@ -28,11 +28,14 @@ fn consumer_gate_rejects_unsafe_identity_and_derives_channel_authority() {
     preview.channel = velnor_actions_contract::package_release::PackageReleaseChannel::Preview;
     let script = consumer_script(&preview, &["gh".to_owned()], false).expect("native preview");
     assert!(script.contains("binary-preview.yml@refs/heads/$default_branch"));
-    assert!(script.contains("push|workflow_dispatch) ;;"));
+    assert!(script.contains("workflow_run|workflow_dispatch) ;;"));
     let stable = consumer_script(&support::context(), &["gh".to_owned()], false).expect("stable");
     assert!(stable.contains("  workflow_dispatch) ;;"));
-    assert!(!stable.contains("push|workflow_dispatch) ;;"));
+    assert!(!stable.contains("workflow_run|workflow_dispatch) ;;"));
 }
 
 #[path = "schema2_preview_eligibility_behavior_tests.rs"]
 mod preview_behavior;
+
+#[path = "schema2_preview_completion_admission_tests.rs"]
+mod completion_admission;

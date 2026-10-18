@@ -28,7 +28,7 @@ runner = "xcode-27-arm64"
 inputs = ["Cargo.lock", "Cargo.toml", "mise.toml", "scripts/release-preview.sh"]
 tools = ["rust", "cargo-zigbuild", "jq", "tar", "zig"]
 system_tools = [{ kind = "xcode", version = "27.1", build = "27A9275", sdk_version = "27.0", developer_dir = "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer" }]
-timeout_minutes = 120
+timeout_minutes = 5
 build_jobs = 2
 output_directory = "dist/preview"
 manifest = "dist/preview/package-output.json"
@@ -60,7 +60,7 @@ enabled = true
 source = "rust.binary_release.preview"
 repository = "jackin-project/homebrew-tap"
 formula = "Formula/jackin-preview.rb"
-updater = { task = "package:update-preview", source = { mise_config = "mise.toml", working_directory = "." }, runner = { label = "ubuntu-26.04", platform = "linux_x64", executor = "hosted" }, inputs = ["mise.toml", "Formula/jackin-preview.rb", "scripts/package-update.sh"], tools = ["jq", "python"], timeout_minutes = 30 }
+updater = { task = "package:update-preview", source = { mise_config = "mise.toml", working_directory = "." }, runner = { label = "ubuntu-26.04", platform = "linux_x64", executor = "hosted" }, inputs = ["mise.toml", "Formula/jackin-preview.rb", "scripts/package-update.sh"], tools = ["jq", "python"], timeout_minutes = 5 }
 environment = "tap-update"
 app_id_variable = "HOMEBREW_TAP_APP_ID"
 app_private_key_secret = "HOMEBREW_TAP_APP_PRIVATE_KEY"
@@ -78,7 +78,7 @@ Producer and updater bindings are typed named Mise task projections. Each binds 
 
 The producer receives only fixed `VELNOR_RELEASE_SOURCE_COMMIT`, `VELNOR_RELEASE_SOURCE_REF`, `VELNOR_RELEASE_VERSION`, `VELNOR_RELEASE_COMMIT_COUNT`, `VELNOR_RELEASE_OUTPUT_DIRECTORY`, `VELNOR_RELEASE_OUTPUT_MANIFEST`, `CARGO_BUILD_JOBS`, and configured application version variables. The two output-path variables are absolute paths for task convenience; the executor resolves them beneath the canonical checkout and requires them to correspond to the repository-relative configured output root and manifest. They do not grant path authority. The producer-side verifier receives the configured manifest path relative to the output root; any safe descendant path is valid. After verification, Velnor copies that manifest to the fixed `package-output.json` name in the uploaded handoff, which the isolated signer independently verifies. CI run identity is supplied independently to signer and publisher by the eligibility job; producer output never chooses that authority.
 
-The static request is canonical `velnor.package-release-plan.v1` at `$RUNNER_TEMP/velnor/package-release-plan.json`. The private `execute-preview-producer-v1` operation accepts only a push on the configured default branch when repository, workflow path `.github/workflows/binary-preview.yml`, workflow SHA, and source SHA agree exactly. The producer emits its repository-local configured output; Velnor independently verifies it and copies the exact raw handoff plus admitted archives, companions, and SBOMs into `$RUNNER_TEMP/velnor/preview-output` for upload. The producer proof is stored outside that uploaded directory. The signer downloads the raw artifact as `preview-input` and independently validates it into a fresh `preview-signed` staging directory before signing. Capsule companion semantics remain application-level validation owned by Jackin's producer and tap tests; Velnor binds exact companion bytes and digest only.
+The static request is canonical `velnor.package-release-plan.v1` at `$RUNNER_TEMP/velnor/package-release-plan.json`. The private `execute-preview-producer-v1` operation accepts only a completed-CI `workflow_run` on the configured default branch when repository, workflow path `.github/workflows/binary-preview.yml`, workflow SHA, and source SHA agree exactly. The producer emits its repository-local configured output; Velnor independently verifies it and copies the exact raw handoff plus admitted archives, companions, and SBOMs into `$RUNNER_TEMP/velnor/preview-output` for upload. The producer proof is stored outside that uploaded directory. The signer downloads the raw artifact as `preview-input` and independently validates it into a fresh `preview-signed` staging directory before signing. Capsule companion semantics remain application-level validation owned by Jackin's producer and tap tests; Velnor binds exact companion bytes and digest only.
 
 The closed producer handoff discriminator is `velnor.package-output.v1`. Its
 top-level fields are exactly `schema`, `source_commit`, `source_ref`, `version`,
@@ -112,9 +112,15 @@ The initial automatic preview policy requires the resolved default branch to be
 different branch before emitting an unusable publication workflow. Stable manual
 publication retains support for its configured default branch.
 
+Native stable or preview publication requires `workflow.name = "CI"`, matching the canonical workflow trigger and authenticated CI authority. Configuration rejects any other name before generation; disabled native publication and generic workflows retain custom names.
+
 Consumer policy validation evaluates stable, preview, and distribution independently. All four stable/preview enablement combinations are valid subject to each enabled policy's own fields. Distribution enabled with missing, disabled, or unsupported source channel is an error. Stable's protected `consumer-binary-release` environment and required human reviewer remain mandatory whenever stable publication is enabled; preview settings cannot weaken stable authorization.
 
-Preview eligibility is a default-branch push at exact commit `S`. The workflow authority ref/SHA, push event SHA, checked-out SHA, and CI run's head SHA must equal `S`; the same run attempt must contain successful required `CI` checks. Candidate must still be the current default-branch head immediately before tag creation and publication. Candidate history must be complete and append-only. No PR head, stale run, or rerun against superseded source can publish. A bounded `workflow_dispatch` recovery accepts only an existing candidate SHA and original successful CI/build run identity; it may resume that candidate only while it remains current default-branch head. It cannot introduce a new candidate or bypass eligibility.
+Automatic preview starts only from `workflow_run: completed` for the canonical `CI` workflow on `main`. The dedicated native trigger does not extend the generic workflow event allowlist. Eligibility authenticates the triggering run and attempt through read-only GitHub APIs: canonical CI workflow name, path and numeric ID; source and head repository numeric identities; genuine upstream `push` event; exact default branch; completed success; latest relevant run and attempt; and one successful Required job on that attempt. Payload fields select the run to authenticate and never grant publication authority. No polling waits for CI inside a preview job.
+
+Pinned zizmor flags every `workflow_run` independently of authentication. The dedicated native trigger carries an audited `dangerous-triggers` annotation. In zizmor 1.31.1, that annotation applies to the same rule across the entire `on` block, so its position alone cannot protect against a dangerous sibling event. Before emission, native production admission therefore requires the exact closed event inventory (`workflow_run` and manual recovery `workflow_dispatch`) and canonical CI/completed/main filters. Added `pull_request_target`, `issue_comment`, unknown events, duplicate events, or changed completion filters must fail structural admission even when the annotation is present. Generic restricted-event rejection and every other staged scanner audit remain active.
+
+The authenticated CI head SHA, actual `GITHUB_SHA`, actual `GITHUB_WORKFLOW_SHA`, checked-out SHA, and live main tip must equal exact commit `S`. Reject stale completion events before executing producer code or obtaining signing authority. The original producing and signing event is strictly `workflow_run`, including receipt source event, Fulcio build trigger, provenance, and authenticated original-run recovery; the separately recorded upstream CI event remains `push`. Never rewrite the actual event or accept both events interchangeably. Candidate must still be the current default-branch head immediately before tag creation and publication. Candidate history must be complete and append-only. No PR head, stale run, or rerun against superseded source can publish. A bounded `workflow_dispatch` recovery accepts only an existing candidate SHA and original successful CI/build run identity; it may resume that candidate only while it remains current default-branch head. It cannot introduce a new candidate or bypass eligibility.
 
 Given numeric Cargo base version `P` (exact `X.Y.Z`, no leading `v`, prerelease, or build metadata), exact source commit `S`, and count `N` of commits reachable from the default branch through `S` (one-based), version is `P-preview.N+<S[0:7]>`; SHA is lowercase 40-character hex. Example: `1.4.2-preview.381+0123abc`. Count uses complete Git history and is deterministic for `S`. Any source rewrite changes `S` and therefore identity. Tag is exactly `v<version>`. Velnor passes this value only through the validated application `version_env`. The numeric prerelease count advances SemVer precedence; build metadata carries source disambiguation.
 
@@ -173,7 +179,7 @@ The exact schema has these required keys and value shapes; `additionalProperties
   "schema": "velnor.package-release.v2",
   "channel": "preview",
   "repository": {"slug": "jackin-project/jackin", "id": 123456789},
-  "source": {"commit_sha": "<40 lowercase hex>", "ref": "refs/heads/main", "default_branch": "main", "event": "push", "ci_run_id": 1, "ci_run_attempt": 1},
+  "source": {"commit_sha": "<40 lowercase hex>", "ref": "refs/heads/main", "default_branch": "main", "event": "workflow_run", "ci_run_id": 1, "ci_run_attempt": 1},
   "workflow": {"path": ".github/workflows/binary-preview.yml", "ref": "refs/heads/main", "authority_sha": "<40 lowercase hex>", "run_id": 2, "run_attempt": 1, "producer_run_id": 2, "producer_run_attempt": 1, "signer_job_id": "preview-signer", "signer_workflow": ".github/workflows/binary-preview.yml"},
   "version": {"base": "1.4.2", "value": "1.4.2-preview.381+0123abc", "commit_count": 381, "source_sha7": "0123abc"},
   "tag": "v1.4.2-preview.381+0123abc",
@@ -193,6 +199,8 @@ The separately published `release.json.bundle` and GitHub attestations are exclu
 ## 5. Job boundaries and credential projection
 
 Generated preview workflow is separate from CI and stable release. Its fixed DAG is eligibility; unprivileged producer; independent output/evidence validation; signer; immutable publisher; unprivileged tap preparation; isolated App PR writer; exact-head gated merge. Build has no OIDC, release write, or tap credentials. Signer does not execute repository code. Publisher has release contents permission only and no build/updater execution. The publisher and recovery verifier use an explicitly passed source-repository read token for GitHub attestation lookup; the pinned `gh` child receives only that token after clearing ambient credentials. Reject identical source-read and tap App tokens. Updater has no write credentials. App token exists only in isolated writer/merge boundary with target-scoped `contents:write` and `pull_requests:write`; no `actions:write`, admin, or bypass. Use clean ephemeral jobs, no persisted checkout token, hooks, filters, executable config, producer cache, or environment-file credential handoff.
+
+Manual stable/product release remains explicitly dispatched; eligibility fails immediately if exact-commit CI is not already complete. This scheduling rule grants no new stable release authorization.
 
 Publisher rechecks CI, exact head, environment restrictions, and immutable-release support before mutation. Formula updater receives verified receipt identity and immutable asset URLs, not arbitrary hosts. It checks current formula version and source identity and refuses downgrade or unrelated-source replacement.
 

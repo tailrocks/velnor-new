@@ -16,7 +16,7 @@ fn verification_task(task_name: &str, runner: VerificationRunner) -> Verificatio
             working_directory: ".".to_owned(),
         },
         runner,
-        timeout_minutes: 10,
+        timeout_minutes: 5,
     }
 }
 
@@ -211,7 +211,7 @@ fn nested_mbx_task_uses_its_declared_config_when_root_has_same_task_name() {
             working_directory: ".".to_owned(),
         },
         runner: VerificationRunner::LinuxX64,
-        timeout_minutes: 10,
+        timeout_minutes: 5,
     };
     let native_task = VerificationTask {
         id: "verify-native".to_owned(),
@@ -221,7 +221,7 @@ fn nested_mbx_task_uses_its_declared_config_when_root_has_same_task_name() {
             working_directory: "native".to_owned(),
         },
         runner: VerificationRunner::LinuxX64,
-        timeout_minutes: 10,
+        timeout_minutes: 5,
     };
 
     let root_tools = resolve_verification_tools(&checks, &root_task).expect("root task closure");

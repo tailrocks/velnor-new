@@ -104,7 +104,7 @@ fn valid_rust_suites_and_dispatch_pass_validation() {
     fast.run_ignored = Some(NextestRunIgnored::Only);
     fast.partitions = 2;
     fast.build = RustSuiteBuildMode::Archive;
-    fast.timeout_minutes = 30;
+    fast.timeout_minutes = 5;
     fast.test_threads = Some(4);
     fast.runner_label = Some("ubuntu-24.04".to_owned());
     fast.required = true;
@@ -119,7 +119,7 @@ fn valid_rust_suites_and_dispatch_pass_validation() {
     nightly.run_ignored = Some(NextestRunIgnored::All);
     nightly.partitions = 12;
     nightly.build = RustSuiteBuildMode::Archive;
-    nightly.timeout_minutes = 60;
+    nightly.timeout_minutes = 5;
     nightly.workflow = Some("nightly-suites".to_owned());
     nightly.triggers = vec![
         RustSuiteTrigger::Schedule,
@@ -166,7 +166,7 @@ fn rust_suite_id_profile_and_scalar_bounds_fail_closed() {
         "bad_suite_timeout",
     );
     chk(
-        |s| s.timeout_minutes = 361,
+        |s| s.timeout_minutes = 6,
         "timeout_minutes",
         "bad_suite_timeout",
     );

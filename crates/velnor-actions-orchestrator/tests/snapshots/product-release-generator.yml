@@ -46,7 +46,7 @@ jobs:
         run: "set -euo pipefail\n[[ \"$GITHUB_REPOSITORY\" == 'tailrocks/velnor-new' ]]\n[[ \"$GITHUB_REF\" == 'refs/heads/main' ]]\n[[ \"$GITHUB_WORKFLOW_REF\" == 'tailrocks/velnor-new/.github/workflows/product-release.yml@refs/heads/main' ]]\n[[ \"$GITHUB_EVENT_NAME\" == 'workflow_dispatch' ]]\n[[ \"$GITHUB_SHA\" == \"$VELNOR_SOURCE_SHA\" && \"$GITHUB_WORKFLOW_SHA\" == \"$VELNOR_WORKFLOW_AUTHORITY_SHA\" ]]\n[[ \"$GITHUB_RUN_ID\" == \"$VELNOR_CALLER_RUN_ID\" && \"$GITHUB_RUN_ATTEMPT\" == \"$VELNOR_CALLER_ATTEMPT\" ]]\n[[ \"$VELNOR_SOURCE_SHA\" =~ ^[0-9a-f]{40}$ && \"$VELNOR_WORKFLOW_AUTHORITY_SHA\" =~ ^[0-9a-f]{40}$ ]]\n[[ \"$VELNOR_CI_RUN_ID\" =~ ^[0-9]+$ && \"$VELNOR_CI_ATTEMPT\" =~ ^[0-9]+$ ]]\n[[ \"$VELNOR_RELEASE_ACTION\" == build || \"$VELNOR_RELEASE_ACTION\" == complete ]]"
   verify-release-source:
     runs-on: ubuntu-26.04
-    timeout-minutes: 20
+    timeout-minutes: 5
     permissions:
       actions: read
       contents: read
@@ -93,7 +93,7 @@ jobs:
         run: "gh() {\n  (\n    mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh \"$@\" & _velnor_gh_pid=$!\n    ( sleep 60; kill -TERM \"$_velnor_gh_pid\" 2>/dev/null; sleep 5; kill -KILL \"$_velnor_gh_pid\" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!\n    _velnor_gh_status=0\n    wait \"$_velnor_gh_pid\" || _velnor_gh_status=$?\n    kill -KILL \"$_velnor_gh_watch\" 2>/dev/null || true\n    wait \"$_velnor_gh_watch\" 2>/dev/null || true\n    exit \"$_velnor_gh_status\"\n  ) </dev/null\n}\nexport -f gh\nset -eu\ntest \"$GITHUB_REF\" = \"refs/heads/main\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(gh api repos/tailrocks/velnor-new/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
   build-linux:
     runs-on: ubuntu-26.04
-    timeout-minutes: 120
+    timeout-minutes: 5
     permissions:
       actions: write
       contents: read
@@ -125,7 +125,7 @@ jobs:
           retention-days: 1
   qualify-linux:
     runs-on: ubuntu-26.04
-    timeout-minutes: 120
+    timeout-minutes: 5
     permissions: {}
     needs:
       - verify-release-caller
@@ -146,7 +146,7 @@ jobs:
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   attest-linux:
     runs-on: ubuntu-26.04
-    timeout-minutes: 20
+    timeout-minutes: 5
     permissions:
       actions: write
       artifact-metadata: write
@@ -171,7 +171,7 @@ jobs:
           artifact_id: ${{ needs.build-linux.outputs.artifact_id }}
   build-macos:
     runs-on: macos-15
-    timeout-minutes: 120
+    timeout-minutes: 5
     permissions:
       actions: write
       contents: read
@@ -203,7 +203,7 @@ jobs:
           retention-days: 1
   qualify-macos:
     runs-on: macos-15
-    timeout-minutes: 120
+    timeout-minutes: 5
     permissions: {}
     needs:
       - verify-release-caller
@@ -224,7 +224,7 @@ jobs:
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   attest-macos:
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 5
     permissions:
       actions: write
       artifact-metadata: write
@@ -249,7 +249,7 @@ jobs:
           artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
   build-macos-intel:
     runs-on: macos-15
-    timeout-minutes: 120
+    timeout-minutes: 5
     permissions:
       actions: write
       contents: read
@@ -281,7 +281,7 @@ jobs:
           retention-days: 1
   qualify-macos-intel:
     runs-on: macos-15-intel
-    timeout-minutes: 120
+    timeout-minutes: 5
     permissions: {}
     needs:
       - verify-release-caller
@@ -302,7 +302,7 @@ jobs:
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   attest-macos-intel:
     runs-on: macos-15-intel
-    timeout-minutes: 20
+    timeout-minutes: 5
     permissions:
       actions: write
       artifact-metadata: write
@@ -327,7 +327,7 @@ jobs:
           artifact_id: ${{ needs.build-macos-intel.outputs.artifact_id }}
   candidate-manifest:
     runs-on: ubuntu-26.04
-    timeout-minutes: 20
+    timeout-minutes: 5
     permissions:
       actions: write
       contents: read
@@ -419,7 +419,7 @@ jobs:
           retention-days: 1
   attest-manifest:
     runs-on: ubuntu-26.04
-    timeout-minutes: 30
+    timeout-minutes: 5
     permissions:
       actions: write
       artifact-metadata: write
@@ -453,7 +453,7 @@ jobs:
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   publish-generator:
     runs-on: ubuntu-26.04
-    timeout-minutes: 30
+    timeout-minutes: 5
     permissions:
       actions: write
       contents: write

@@ -5,7 +5,18 @@ use std::sync::atomic::{AtomicU64, Ordering};
 static NEXT_TEMP_DIRECTORY_ID: AtomicU64 = AtomicU64::new(0);
 const MAX_TEMP_DIRECTORY_ATTEMPTS: usize = 1_024;
 
-struct TestTempDir(PathBuf);
+pub(crate) struct TestTempDir(PathBuf);
+
+impl TestTempDir {
+    /// Own one exclusively allocated fixture directory until this guard drops.
+    pub(crate) fn new(prefix: &str) -> io::Result<Self> {
+        unique_temp_dir(prefix).map(Self)
+    }
+
+    pub(crate) fn path(&self) -> &Path {
+        &self.0
+    }
+}
 
 impl Drop for TestTempDir {
     fn drop(&mut self) {
@@ -59,6 +70,21 @@ fn reserve_temp_directory_id(counter: &AtomicU64) -> io::Result<u64> {
             Err(observed) => current = observed,
         }
     }
+}
+
+#[test]
+fn owned_temp_directory_cleans_its_reservation_and_preserves_other_directories() -> io::Result<()> {
+    let sibling = TestTempDir::new("velnor-temp-ownership")?;
+    let owned_path;
+    {
+        let owned = TestTempDir::new("velnor-temp-ownership")?;
+        owned_path = owned.path().to_owned();
+        assert!(owned_path.is_dir());
+        assert_ne!(owned_path, sibling.path());
+    }
+    assert!(!owned_path.exists());
+    assert!(sibling.path().is_dir());
+    Ok(())
 }
 
 #[test]

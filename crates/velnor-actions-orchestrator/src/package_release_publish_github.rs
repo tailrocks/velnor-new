@@ -21,6 +21,10 @@ mod preflight;
 #[cfg(test)]
 use immutable_status::immutable_status_token;
 
+#[cfg(test)]
+#[path = "package_release_publish_github_fixture.rs"]
+mod fixture;
+
 const API_VERSION: &str = "2026-03-10";
 const JSON_LIMIT: usize = 1024 * 1024;
 const ASSET_LIMIT: usize = 1024 * 1024 * 1024;
@@ -30,6 +34,8 @@ const API_TIMEOUT: Duration = Duration::from_secs(90);
 pub(super) struct GitHubApi {
     catalog: ToolCatalog,
     repository: String,
+    #[cfg(test)]
+    fixture: Option<std::rc::Rc<fixture::JsonFixture>>,
 }
 
 impl GitHubApi {
@@ -37,6 +43,8 @@ impl GitHubApi {
         Self {
             catalog: ToolCatalog::pinned(),
             repository,
+            #[cfg(test)]
+            fixture: None,
         }
     }
 
@@ -48,6 +56,11 @@ impl GitHubApi {
         &self,
         route: &str,
     ) -> Result<T, OrchestratorError> {
+        #[cfg(test)]
+        if let Some(fixture) = &self.fixture {
+            return serde_json::from_value(fixture.read(route)?)
+                .map_err(|_| internal("package_publish_api_json"));
+        }
         let bytes = self.request(vec![OsString::from(route)], JSON_LIMIT)?;
         serde_json::from_slice(&bytes).map_err(|_| internal("package_publish_api_json"))
     }
@@ -142,24 +155,6 @@ impl GitHubApi {
             }
         }
         Err(internal("package_publish_release_pages_exceeded"))
-    }
-
-    pub(super) fn workflow_run(
-        &self,
-        run_id: u64,
-        attempt: u32,
-    ) -> Result<WorkflowRunResponse, OrchestratorError> {
-        self.get_json(&self.route(&format!("actions/runs/{run_id}/attempts/{attempt}")))
-    }
-
-    pub(super) fn workflow_jobs(
-        &self,
-        run_id: u64,
-        attempt: u32,
-    ) -> Result<WorkflowJobList, OrchestratorError> {
-        self.get_json(&self.route(&format!(
-            "actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100"
-        )))
     }
 
     pub(super) fn workflow_artifacts(
@@ -306,6 +301,10 @@ impl GitHubApi {
         limit: usize,
         accept: &str,
     ) -> Result<Vec<u8>, OrchestratorError> {
+        #[cfg(test)]
+        if self.fixture.is_some() {
+            return Err(internal("unexpected_fixture_transport_request"));
+        }
         let mut args = vec![OsString::from("api")];
         args.extend([
             OsString::from("-H"),

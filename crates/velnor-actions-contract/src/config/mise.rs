@@ -41,8 +41,8 @@ pub struct MiseCheck {
 fn default_directory() -> String {
     ".".to_owned()
 }
-const fn default_timeout() -> u32 {
-    30
+fn default_timeout() -> u32 {
+    u32::from(crate::workflow::timeout::JobTimeout::DEFAULT.minutes())
 }
 
 /// Runner label, explicit platform, and execution ownership.
@@ -180,7 +180,7 @@ impl MiseCheck {
         if self.tools.len() > 128 || !unique_values(&self.tools, safe_component) {
             return Err(bad("tools", "invalid_check_tools"));
         }
-        if !(1..=360).contains(&self.timeout_minutes) {
+        if !crate::workflow::timeout::JobTimeout::is_valid_minutes(self.timeout_minutes) {
             return Err(bad("timeout_minutes", "invalid_check_timeout"));
         }
         self.runner.validate(file, &format!("{key}.runner"))?;

@@ -7,10 +7,9 @@ use std::os::unix::process::CommandExt;
 use std::process::{Child, Stdio};
 use std::time::{Duration, Instant};
 
-#[cfg(unix)]
-const PROCESS_CLEANUP_GRACE: Duration = Duration::from_millis(250);
-
 impl IsolatedCommand {
+    pub(crate) const PROCESS_CLEANUP_GRACE: Duration = Duration::from_millis(250);
+
     /// Spawn the child under explicit bounds plus external cancellation.
     ///
     /// The child starts in a dedicated process group. Both pipes use nonblocking
@@ -67,6 +66,13 @@ impl IsolatedCommand {
         cancel: &CancelHandle,
         timeout_message: &str,
     ) -> Result<ProcessOutput, MiseError> {
+        let effective = deadline.effective();
+        let timeout_message = if effective == deadline {
+            timeout_message
+        } else {
+            super::SPAWN_DEADLINE_MESSAGE
+        };
+        let deadline = effective;
         let program = self.program.to_string_lossy().into_owned();
         let fail = |message: &str| MiseError::SpawnFailed {
             program: program.clone(),
@@ -298,7 +304,7 @@ fn terminate_group(child: &mut Child) -> Result<(), String> {
 #[cfg(unix)]
 fn reap_child(child: &mut Child) -> Result<(), String> {
     let deadline = Instant::now()
-        .checked_add(PROCESS_CLEANUP_GRACE)
+        .checked_add(IsolatedCommand::PROCESS_CLEANUP_GRACE)
         .ok_or_else(|| "cleanup_deadline_overflow".to_owned())?;
     loop {
         match child.try_wait() {

@@ -1,6 +1,6 @@
 use super::super::{
     PACKAGE_RELEASE_EVIDENCE_PROFILE, PACKAGE_RELEASE_SCHEMA_V2, PackageReleaseAsset,
-    PackageReleaseAssetKind, PackageReleaseChannel, PackageReleaseCompanion, PackageReleaseEvent,
+    PackageReleaseAssetKind, PackageReleaseChannel, PackageReleaseCompanion,
     PackageReleaseEvidence, PackageReleasePayload, PackageReleasePayloadFormat,
     PackageReleaseProduct, PackageReleaseReceipt, PackageReleaseRepository,
     PackageReleaseSbomFormat, PackageReleaseSource, PackageReleaseVersion, PackageReleaseWorkflow,
@@ -116,11 +116,7 @@ pub(super) fn fixture_source(channel: PackageReleaseChannel, commit: &str) -> Pa
         commit_sha: commit.to_owned(),
         source_ref: "refs/heads/main".to_owned(),
         default_branch: "main".to_owned(),
-        event: if channel == PackageReleaseChannel::Preview {
-            PackageReleaseEvent::Push
-        } else {
-            PackageReleaseEvent::WorkflowDispatch
-        },
+        event: channel.event(),
         ci_run_id: 100,
         ci_run_attempt: 1,
     }

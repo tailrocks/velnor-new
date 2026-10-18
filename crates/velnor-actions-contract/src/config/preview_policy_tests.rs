@@ -141,3 +141,68 @@ fn producer_respects_repository_compiler_budget() {
             .contains("exceeds_compiler_process_budget")
     );
 }
+
+#[test]
+fn native_binary_channels_require_the_canonical_ci_name() {
+    for (stable, preview) in [(true, false), (false, true), (true, true)] {
+        for name in ["Custom CI", "ci", " CI", "CI "] {
+            let mut value = config(stable, preview);
+            value.workflow.name = name.to_owned();
+            let error = value
+                .validate("config.toml")
+                .expect_err("noncanonical native CI");
+            assert!(
+                matches!(error, ContractError::Config { ref key_path, ref problem, .. }
+                if key_path == "workflow.name" && problem == "native_binary_release_requires_canonical_ci_name:CI"),
+                "{error}"
+            );
+        }
+        assert!(config(stable, preview).validate("config.toml").is_ok());
+    }
+}
+
+#[test]
+fn custom_ci_names_remain_valid_without_native_binary_publication() {
+    for name in ["Custom CI", "ci", " CI", "CI "] {
+        let mut value = config(false, false);
+        value.workflow.name = name.to_owned();
+        assert!(value.validate("config.toml").is_ok(), "{name:?}");
+        value.stacks.rust = None;
+        assert!(value.validate("config.toml").is_ok(), "{name:?}");
+    }
+}
+
+#[test]
+fn native_consumer_authorization_error_precedes_ci_name_restriction() {
+    let mut value = config(false, true);
+    value.workflow.name = "Custom CI".to_owned();
+    value.workflow.policy = WorkflowPolicy::VelnorRepositoryV1;
+    let error = value
+        .validate("config.toml")
+        .expect_err("nonconsumer native policy");
+    assert!(
+        matches!(error, ContractError::Config { ref key_path, ref problem, .. }
+        if key_path == "stacks.rust.binary_release.enabled" && problem == "binary_release_requires_consumer_policy"),
+        "{error}"
+    );
+}
+
+#[test]
+fn generic_ci_name_validation_retains_its_original_diagnostics() {
+    for (name, expected) in [
+        ("", "empty_name"),
+        ("${{ github.workflow }}", "bad_name"),
+        ("CI\n", "bad_name"),
+    ] {
+        let mut value = config(false, false);
+        value.workflow.name = name.to_owned();
+        let error = value
+            .validate("config.toml")
+            .expect_err("invalid generic name");
+        assert!(
+            matches!(error, ContractError::Config { ref key_path, ref problem, .. }
+            if key_path == "workflow.name" && problem == expected),
+            "{error}"
+        );
+    }
+}

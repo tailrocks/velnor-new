@@ -5,6 +5,7 @@ use crate::composite::{
     composite_yaml, composite_yaml_with_inputs, shared_call_named, shared_call_named_with_inputs,
 };
 use crate::yaml::Yaml;
+use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::ReleaseTarget;
 
 use super::super::features::{base, finish};
@@ -21,7 +22,7 @@ pub(super) fn build_job(
 ) -> Result<(String, Yaml), RenderError> {
     let call = local_action(action, name, steps, actions)?;
     let mut fields = workflow_steps::with_permissions(
-        base(name, runs_on, 120),
+        base(name, runs_on, JobTimeout::DEFAULT),
         workflow_steps::build_permissions(),
     );
     fields.retain(|(key, _)| key != "name");
@@ -108,7 +109,7 @@ pub(super) fn attest_job(
     )?;
     let mut fields = workflow_steps::with_needs(
         workflow_steps::with_permissions(
-            base(name, runs_on, 20),
+            base(name, runs_on, JobTimeout::DEFAULT),
             workflow_steps::attest_permissions(),
         ),
         &[product.build_job, product.qualify_job],
@@ -136,7 +137,7 @@ pub(super) fn publish_job(
     )?;
     let mut fields = workflow_steps::with_needs(
         workflow_steps::with_permissions(
-            base("Publish velnor-actions", hosted, 30),
+            base("Publish velnor-actions", hosted, JobTimeout::DEFAULT),
             workflow_steps::publish_permissions(),
         ),
         &[

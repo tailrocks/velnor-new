@@ -15,7 +15,7 @@ jobs:
     if: ${{ github.ref_protected == true }}
     runs-on: ubuntu-26.04
     environment: production
-    timeout-minutes: 60
+    timeout-minutes: 5
     env:
       ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
       ACTIONS_ID_TOKEN_REQUEST_URL: ""

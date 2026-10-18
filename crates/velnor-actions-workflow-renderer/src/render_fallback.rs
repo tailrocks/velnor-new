@@ -11,6 +11,7 @@ pub(super) fn render_marked_workflow(
     document: &Yaml,
     generator_version: &str,
 ) -> Result<String, RenderError> {
+    crate::workflow_timeout::validate(path, document)?;
     let canonical = marker::with_marker(generator_version, &render_yaml(document))?;
     if !workflow_size::is_workflow_path(path)
         || canonical.len() <= workflow_size::MAX_WORKFLOW_BYTES

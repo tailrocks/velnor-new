@@ -41,7 +41,7 @@ jobs:
   release-preflight:
     name: Release preflight
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: none
@@ -66,7 +66,7 @@ jobs:
   release-preparation:
     name: Release preparation
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
       contents: write
       pull-requests: write
@@ -77,7 +77,7 @@ jobs:
   release-publish:
     name: Release publish-oidc
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     environment: crates-io
     permissions:
       contents: write
@@ -106,7 +106,7 @@ jobs:
   release-reconcile:
     name: Release reconcile
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: read

@@ -63,7 +63,7 @@ pub(super) fn verify_release_attestation(
         run_id: expected.run_id,
         run_attempt: expected.run_attempt,
         repository_id: expected.repository_id.to_string(),
-        trigger: event_name(expected.event),
+        trigger: expected.event.as_str(),
         invocation_uri: &invocation_uri,
     };
 
@@ -199,6 +199,29 @@ struct Statement {
     #[serde(rename = "predicateType")]
     predicate_type: String,
     subject: Vec<Subject>,
+    predicate: SlsaPredicate,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SlsaPredicate {
+    build_definition: SlsaBuildDefinition,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SlsaBuildDefinition {
+    internal_parameters: SlsaInternalParameters,
+}
+
+#[derive(Debug, Deserialize)]
+struct SlsaInternalParameters {
+    github: SlsaGitHubParameters,
+}
+
+#[derive(Debug, Deserialize)]
+struct SlsaGitHubParameters {
+    event_name: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -265,6 +288,17 @@ fn validate_output(
     if verified.statement.predicate_type != PREDICATE {
         return Err(internal("package_attestation_predicate_mismatch"));
     }
+    if verified
+        .statement
+        .predicate
+        .build_definition
+        .internal_parameters
+        .github
+        .event_name
+        != expected.trigger
+    {
+        return Err(internal("package_attestation_event_mismatch"));
+    }
     let mut found = BTreeMap::new();
     for subject in &verified.statement.subject {
         let digest = subject
@@ -314,17 +348,6 @@ fn validate_output(
         return Err(internal("package_attestation_run_identity_mismatch"));
     }
     Ok(())
-}
-
-fn event_name(
-    event: velnor_actions_contract::package_release::PackageReleaseEvent,
-) -> &'static str {
-    match event {
-        velnor_actions_contract::package_release::PackageReleaseEvent::Push => "push",
-        velnor_actions_contract::package_release::PackageReleaseEvent::WorkflowDispatch => {
-            "workflow_dispatch"
-        }
-    }
 }
 
 fn sha256(bytes: &[u8]) -> String {

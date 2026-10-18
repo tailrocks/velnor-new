@@ -64,17 +64,17 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
             &catalog,
         )?,
         install_resource_probe_target_argv: resource_probe_target_argv(&catalog)?,
-        runner_build_argv: exec_argv(
-            &[PinnedTool::Rust],
-            "cargo",
+        runner_build_argv: mbx_locked_build_argv(
             &[
                 "build",
                 "--locked",
                 "--manifest-path",
                 "crates/velnor-runner/Cargo.toml",
                 "--release",
-                "-p",
+                "--package",
                 "velnor-runner-cli",
+                "--bin",
+                "velnor-host",
             ],
             &catalog,
         )?,

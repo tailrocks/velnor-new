@@ -66,8 +66,16 @@ pub(super) fn render(
         ));
         jobs.push(workflows::reusable_workflow_call(family));
     }
+    let workflow = workflows::document(jobs);
+    let mut documents = vec![(WORKFLOW_PATH, &workflow)];
+    documents.extend(
+        family_workflows
+            .iter()
+            .map(|(path, doc)| (path.as_str(), doc)),
+    );
+    crate::workflow_timeout::validate_tree(&documents)?;
     Ok(Some(ProductRelease {
-        workflow: workflows::document(jobs),
+        workflow,
         family_workflows,
         actions,
     }))

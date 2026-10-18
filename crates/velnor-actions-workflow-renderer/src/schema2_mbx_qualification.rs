@@ -16,6 +16,7 @@ use super::{MbxQualificationPins, RunnerSpec};
 use crate::cache_steps::MBX_ACTION_NAME;
 use crate::yaml::Yaml;
 use crate::{RenderError, steps::validate_uses};
+use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
 
 const MAIN_REF: &str = "github.ref == 'refs/heads/main' && github.ref_protected == true";
@@ -84,7 +85,7 @@ fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (St
             "mbx-cache-roundtrip",
         )
     };
-    let mut fields = lane_base(title, hosted, 45);
+    let mut fields = lane_base(title, hosted, JobTimeout::DEFAULT);
     if !writer {
         fields.push((
             "needs".to_owned(),

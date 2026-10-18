@@ -66,9 +66,9 @@ fn every_job_emits_its_per_kind_timeout() -> Result<(), RenderError> {
     assert_eq!(
         timeouts,
         BTreeMap::from([
-            ("plan".to_owned(), "20".to_owned()),
-            ("actionlint".to_owned(), "10".to_owned()),
-            ("required".to_owned(), "10".to_owned()),
+            ("plan".to_owned(), "5".to_owned()),
+            ("actionlint".to_owned(), "5".to_owned()),
+            ("required".to_owned(), "5".to_owned()),
         ]),
         "{text}"
     );
@@ -103,12 +103,12 @@ fn support_candidate_release_and_msrv_jobs_carry_per_kind_timeouts() -> Result<(
     )?;
     let timeouts = job_timeouts(&text);
     for (id, want) in [
-        ("alint", "10"),
-        ("cargo-deny", "10"),
-        ("cargo-machete", "10"),
-        ("zizmor", "10"),
-        ("candidate", "30"),
-        ("release", "10"),
+        ("alint", "5"),
+        ("cargo-deny", "5"),
+        ("cargo-machete", "5"),
+        ("zizmor", "5"),
+        ("candidate", "5"),
+        ("release", "5"),
     ] {
         assert_eq!(
             timeouts.get(id).map(String::as_str),

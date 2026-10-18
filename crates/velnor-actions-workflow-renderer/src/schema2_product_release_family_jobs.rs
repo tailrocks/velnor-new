@@ -1,5 +1,6 @@
 //! Composition of image and binary product-release jobs.
 
+use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::ReleaseTarget;
 
 use crate::yaml::Yaml;
@@ -79,7 +80,10 @@ pub(super) fn prepare_job(
             Yaml::str(format!("Prepare {} release", family.label())),
         ),
         ("runs-on".to_owned(), hosted),
-        ("timeout-minutes".to_owned(), Yaml::Int(30)),
+        (
+            "timeout-minutes".to_owned(),
+            Yaml::Int(i64::from(JobTimeout::DEFAULT.minutes())),
+        ),
         (
             "needs".to_owned(),
             Yaml::Seq(vec![Yaml::str(release_eligibility::JOB_ID)]),

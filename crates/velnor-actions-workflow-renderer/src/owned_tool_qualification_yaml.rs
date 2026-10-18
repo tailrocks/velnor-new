@@ -1,6 +1,7 @@
 //! Fresh read-only native qualification jobs; no source builds or signing.
 
 use crate::{Yaml, steps};
+use velnor_actions_contract::JobTimeout;
 
 use super::{OwnedPublicationSpec, document::map};
 
@@ -13,7 +14,10 @@ pub(super) fn job(spec: &OwnedPublicationSpec, include: Vec<Yaml>) -> Yaml {
         ("needs", Yaml::str("build")),
         ("if", Yaml::str("needs.build.result == 'success'")),
         ("runs-on", Yaml::str("${{ matrix.runner }}")),
-        ("timeout-minutes", Yaml::Int(20)),
+        (
+            "timeout-minutes",
+            Yaml::Int(i64::from(JobTimeout::DEFAULT.minutes())),
+        ),
         (
             "permissions",
             map([

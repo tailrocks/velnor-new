@@ -19,7 +19,7 @@ fn check() -> MiseCheck {
             path: "evidence/ffi.json".to_owned(),
             expected_scenarios: vec!["native".to_owned()],
         }),
-        timeout_minutes: 30,
+        timeout_minutes: 5,
     }
 }
 
@@ -130,4 +130,34 @@ fn native_only_check_requires_no_mise_installed_tools() {
     assert!(native.validate("config.toml", "checks[0]").is_ok());
     native.system_tools[0].build = "$(untrusted)".to_owned();
     assert!(native.validate("config.toml", "checks[0]").is_err());
+}
+
+#[test]
+fn timeout_preserves_shorter_budgets_and_rejects_above_five() {
+    for minutes in 1..=5 {
+        let mut value = check();
+        value.timeout_minutes = minutes;
+        assert!(
+            value.validate("config.toml", "checks[0]").is_ok(),
+            "{minutes}"
+        );
+    }
+    for minutes in [0, 6, 30, 360, u32::MAX] {
+        let mut value = check();
+        value.timeout_minutes = minutes;
+        assert!(
+            value.validate("config.toml", "checks[0]").is_err(),
+            "{minutes}"
+        );
+    }
+}
+
+#[test]
+fn omitted_timeout_uses_the_shared_five_minute_default() {
+    let mut json = serde_json::to_value(check()).expect("serialize");
+    json.as_object_mut()
+        .expect("object")
+        .remove("timeout_minutes");
+    let value: MiseCheck = serde_json::from_value(json).expect("default timeout");
+    assert_eq!(value.timeout_minutes, 5);
 }

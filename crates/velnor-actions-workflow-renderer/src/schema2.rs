@@ -2,6 +2,7 @@
 //! Emitted only when schema 2 requests them.
 
 use std::collections::BTreeSet;
+use velnor_actions_contract::JobTimeout;
 
 use velnor_actions_contract::{
     ReleaseTarget, RoutingWorkflow, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL,
@@ -199,7 +200,7 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
                 "verify-hosted",
                 "Verify / GitHub hosted / Linux x64",
                 &hosted,
-                30,
+                JobTimeout::DEFAULT,
                 Vec::new(),
                 "Qualify hosted lane",
                 "echo qualification-hosted",
@@ -211,7 +212,7 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
                 "verify-scale-set",
                 "Verify / Velnor Scale Set / Linux x64",
                 &scale,
-                30,
+                JobTimeout::DEFAULT,
                 Vec::new(),
                 "Qualify scale-set lane",
                 "echo qualification-scale-set",
@@ -223,7 +224,7 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
                 "compare",
                 "Compare hosted and Velnor execution",
                 &hosted,
-                10,
+                JobTimeout::DEFAULT,
                 vec!["verify-hosted".to_owned(), "verify-scale-set".to_owned()],
                 "Compare lanes",
                 "echo compare-lanes",
@@ -270,7 +271,7 @@ fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
                 "scale-set-lane",
                 "Scale set lane",
                 &scale,
-                30,
+                JobTimeout::DEFAULT,
                 Vec::new(),
                 "Run scale-set lane",
                 "echo scale-set-lane",
@@ -279,7 +280,7 @@ fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
                 "queue-monitor",
                 "Queue monitor",
                 &hosted,
-                10,
+                JobTimeout::DEFAULT,
                 Vec::new(),
                 "Watch admission",
                 "echo queue-monitor",
@@ -325,7 +326,7 @@ fn job(
     id: &str,
     name: &str,
     runner: &RunnerSpec,
-    timeout: i64,
+    timeout: JobTimeout,
     needs: Vec<String>,
     step_name: &str,
     run: &str,
@@ -333,7 +334,10 @@ fn job(
     let mut fields = vec![
         ("name".to_owned(), Yaml::str(name)),
         ("runs-on".to_owned(), runner.runs_on.clone()),
-        ("timeout-minutes".to_owned(), Yaml::Int(timeout)),
+        (
+            "timeout-minutes".to_owned(),
+            Yaml::Int(i64::from(timeout.minutes())),
+        ),
     ];
     runner.push_default_shell(&mut fields, false);
     if !needs.is_empty() {
@@ -351,3 +355,7 @@ fn job(
     ));
     (id.to_owned(), Yaml::Map(fields))
 }
+
+#[cfg(test)]
+#[path = "schema2_timeout_tests.rs"]
+mod timeout_tests;

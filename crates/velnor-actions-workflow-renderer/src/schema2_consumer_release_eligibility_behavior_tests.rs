@@ -75,7 +75,8 @@ fn rejects_wrong_source_event_and_branch_before_api_access() -> Result<(), Box<d
 }
 
 #[test]
-fn ignores_ci_runs_with_wrong_source_event_or_branch_and_times_out() -> Result<(), Box<dyn Error>> {
+fn rejects_ci_runs_with_wrong_source_event_or_branch_without_polling() -> Result<(), Box<dyn Error>>
+{
     let wrong_runs = [
         ci_run(
             42,
@@ -113,7 +114,7 @@ fn ignores_ci_runs_with_wrong_source_event_or_branch_and_times_out() -> Result<(
         assert!(
             result
                 .stderr
-                .contains("did not become successful before timeout")
+                .contains("latest exact-source CI run is missing")
         );
         assert_eq!(
             result
@@ -121,8 +122,8 @@ fn ignores_ci_runs_with_wrong_source_event_or_branch_and_times_out() -> Result<(
                 .lines()
                 .filter(|line| line.ends_with("actions/workflows/ci.yml/runs"))
                 .count(),
-            2,
-            "polling must stop at the configured limit"
+            1,
+            "an ineligible CI response must fail immediately"
         );
         assert!(!result.calls.contains("/attempts/"));
     }
@@ -138,7 +139,7 @@ fn rejects_missing_pending_and_failed_latest_runs() -> Result<(), Box<dyn Error>
     assert!(
         result
             .stderr
-            .contains("did not become successful before timeout")
+            .contains("latest exact-source CI run is missing")
     );
     assert_eq!(
         result
@@ -146,7 +147,7 @@ fn rejects_missing_pending_and_failed_latest_runs() -> Result<(), Box<dyn Error>
             .lines()
             .filter(|line| line.ends_with("actions/workflows/ci.yml/runs"))
             .count(),
-        2
+        1
     );
 
     let mut pending = Scenario::valid();
@@ -164,7 +165,7 @@ fn rejects_missing_pending_and_failed_latest_runs() -> Result<(), Box<dyn Error>
     assert!(
         result
             .stderr
-            .contains("did not become successful before timeout")
+            .contains("latest exact-source CI run is not complete")
     );
 
     let mut failed = Scenario::valid();

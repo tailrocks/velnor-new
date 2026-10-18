@@ -30,6 +30,7 @@ const EXPECTED_MODULES: &[&str] = &[
     "check_container_observation.rs",
     "check_container_observation_tests.rs",
     "check_deadline.rs",
+    "check_deadline_scope_tests.rs",
     "check_discovery.rs",
     "check_execution.rs",
     "check_file_read.rs",
