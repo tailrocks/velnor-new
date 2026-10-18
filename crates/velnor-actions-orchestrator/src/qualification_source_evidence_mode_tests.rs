@@ -80,7 +80,7 @@ fn write_and_check_modes() {
         &observed,
         reports,
     )
-    .expect("write source sidecar");
+    .expect("write source evidence file");
 
     let sidecar = temp
         .path()
@@ -89,7 +89,10 @@ fn write_and_check_modes() {
         .join(&entry.matrix_key)
         .join(SOURCE_EVIDENCE_FILENAME);
     assert_eq!(
-        fs::metadata(sidecar).expect("sidecar metadata").mode() & 0o777,
+        fs::metadata(sidecar)
+            .expect("source evidence file metadata")
+            .mode()
+            & 0o777,
         0o600
     );
 

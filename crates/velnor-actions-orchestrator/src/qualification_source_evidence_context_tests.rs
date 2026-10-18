@@ -1,4 +1,4 @@
-//! Runner-context parsing rejects noncanonical identity values.
+//! Runner-context parsing rejects run values outside the required form.
 
 use super::{parse_positive_u32, parse_positive_u64, parse_ref_protected};
 

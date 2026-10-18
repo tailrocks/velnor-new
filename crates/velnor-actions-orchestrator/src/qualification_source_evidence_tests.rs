@@ -1,4 +1,4 @@
-//! Source-sidecar input checks and exact report bindings.
+//! Source evidence file checks and exact report bindings.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -169,10 +169,10 @@ fn noncanonical_or_mismatched_matrix_report_is_rejected() {
     let bytes = fs::read(&matrix_path).expect("matrix report");
     let mut noncanonical = vec![b' '];
     noncanonical.extend(bytes);
-    fs::write(&matrix_path, noncanonical).expect("add noncanonical prefix");
+    fs::write(&matrix_path, noncanonical).expect("add extra report prefix");
 
     let error = read_successful_lane_reports(temp.path(), &plan, &entry, &entry.task_digest)
-        .expect_err("noncanonical report is rejected");
+        .expect_err("report with extra prefix is rejected");
     assert!(
         error
             .to_string()
@@ -224,7 +224,7 @@ fn source_sidecar_records_observations_but_never_claims_cache_completion() {
         &observed,
         reports,
     )
-    .expect("write sidecar");
+    .expect("write source evidence file");
 
     let path = temp
         .path()
@@ -232,9 +232,9 @@ fn source_sidecar_records_observations_but_never_claims_cache_completion() {
         .join(RUN_KEY)
         .join(&entry.matrix_key)
         .join(SOURCE_EVIDENCE_FILENAME);
-    let bytes = fs::read(path).expect("source sidecar");
+    let bytes = fs::read(path).expect("source evidence file");
     let value: QualificationSourceEvidenceDocument =
-        serde_json::from_slice(&bytes).expect("sidecar JSON");
+        serde_json::from_slice(&bytes).expect("source evidence file JSON");
     assert_eq!(value.evidence.source_sha, plan.head);
     assert_eq!(
         value.evidence.closure.observed_input_digest,
@@ -242,7 +242,7 @@ fn source_sidecar_records_observations_but_never_claims_cache_completion() {
     );
     assert!(!value.evidence.cache_evidence_complete);
     assert_eq!(
-        canonical_json_bytes(&value).expect("canonical sidecar"),
+        canonical_json_bytes(&value).expect("required source evidence file JSON"),
         bytes
     );
 }
@@ -290,7 +290,7 @@ fn source_sidecar_refuses_a_second_write() {
         &observed,
         reports,
     )
-    .expect("first sidecar");
+    .expect("first source evidence file write");
     let error = super::write_sidecar(
         temp.path(),
         &plan,
@@ -306,7 +306,7 @@ fn source_sidecar_refuses_a_second_write() {
         )
         .expect("reports remain available"),
     )
-    .expect_err("sidecar is write-once");
+    .expect_err("source evidence file allows one write");
     assert!(
         error
             .to_string()

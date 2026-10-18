@@ -1,4 +1,4 @@
-//! Recompute task input identities from the current source tree.
+//! Task input identities from the current source tree.
 
 use std::path::Path;
 
@@ -20,11 +20,11 @@ use crate::vectors::task_argv;
 #[path = "qualification_cache_runtime_closure_tests.rs"]
 mod tests;
 
-/// Source and plan inputs used to recompute one lane after its command ends.
+/// Source and plan inputs used to check one lane after its command ends.
 pub(crate) struct PostTaskClosureContext<'a> {
     /// Repository checkout.
     pub(crate) root: &'a Path,
-    /// Fresh source inventory.
+    /// Source inventory read after the command ends.
     pub(crate) discovery: &'a Discovery,
     /// Resolved tool versions.
     pub(crate) catalog: &'a ToolCatalog,
@@ -36,10 +36,10 @@ pub(crate) struct PostTaskClosureContext<'a> {
     pub(crate) logical_runner_label: &'a str,
 }
 
-/// Digests recomputed from the source and task data available after execution.
+/// Digests from source and task data available after execution.
 ///
-/// These fields contain the current observation. They never copy a digest from
-/// the plan; callers compare the observation with the planned values separately.
+/// These fields contain current values, not digests copied from the plan.
+/// Callers compare these values with the planned values separately.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ObservedLaneClosure {
     /// Matrix lane selected from the plan.
@@ -48,19 +48,19 @@ pub(crate) struct ObservedLaneClosure {
     pub(crate) task_id: String,
     /// Task command and toolchain digest from the current proposal.
     pub(crate) observed_task_digest: String,
-    /// Input identity recomputed from current task and source data.
+    /// Input identity from current task and source data.
     pub(crate) observed_input_digest: String,
-    /// Input closure digest recomputed from current source data.
+    /// Input closure digest from current source data.
     pub(crate) observed_closure_digest: String,
 }
 
-/// Recompute one planned lane's task and input identities after execution.
+/// Make task and input identities again for one planned lane after execution.
 ///
-/// `discovery` must come from a fresh source scan after the task command has
-/// finished. Rust and `ToFu` use the same identity derivation as plan creation.
-/// Named checks use the plan-time lane resolver again with the current check
-/// definition and current task configuration. `logical_runner_label` is the
-/// plan runner label; physical matrix lanes can use different runner labels.
+/// `discovery` must come from a new source scan after the task command ends.
+/// Rust and `ToFu` use the same identity method as plan creation. Named checks
+/// use the plan-time lane method with the current check definition and task
+/// settings. The logical runner label is the plan label. Physical matrix
+/// lanes can use different runner labels.
 /// # Errors
 pub(crate) fn recompute_post_task_closure(
     context: &PostTaskClosureContext<'_>,
@@ -80,7 +80,7 @@ pub(crate) fn recompute_post_task_closure(
     }
 }
 
-/// Compare a current observation with the planned entry and obligation.
+/// Compare current values with the planned entry and obligation.
 /// # Errors
 pub(crate) fn require_plan_match(
     observed: &ObservedLaneClosure,

@@ -1,4 +1,4 @@
-//! Authenticated Qualification context from the current runner environment.
+//! Qualification runner context from the current runner environment.
 
 use std::env;
 use std::path::PathBuf;
@@ -13,25 +13,25 @@ use crate::internal::internal;
 use crate::prepare::GenerationPreparation;
 use crate::request_event::{QualificationRunnerContext, qualification_dispatch_for_parts};
 
-/// Actual runner facts used by the source-evidence writer.
+/// Current runner facts used by the source evidence writer.
 pub(super) struct AuthenticatedProducerContext {
     /// Dispatch rebuilt from the current event payload and runner variables.
     pub(super) dispatch: QualificationDispatch,
-    /// Sidecar form of the same authenticated runner context.
+    /// Source evidence form of the same runner context.
     pub(super) producer: QualificationCacheProducerContext,
     /// Current runner temporary root.
     pub(super) runner_temp: PathBuf,
     /// Current generated job identity from GitHub.
     pub(super) job_id: String,
-    /// Canonical run key derived from the actual run and attempt.
+    /// Run key made from the actual run and attempt.
     pub(super) run_key: String,
 }
 
-/// Rebuild Qualification provenance from the current runner variables.
+/// Read Qualification context from the current runner environment.
 ///
 /// # Errors
 ///
-/// Gives an error when any required workflow value, event payload, or current
+/// Give an error when a required workflow value, event payload, or current
 /// repository configuration is absent or differs from the source plan.
 pub(super) fn read_authenticated_context(
     prepared: &GenerationPreparation,

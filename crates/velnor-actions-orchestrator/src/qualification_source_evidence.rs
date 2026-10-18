@@ -1,4 +1,4 @@
-//! Per-lane source evidence captured after a successful Qualification task.
+//! Source evidence for one lane after a successful Qualification task.
 
 use std::env;
 use std::fs;
@@ -24,23 +24,23 @@ mod reports;
 #[path = "qualification_source_evidence_types.rs"]
 mod types;
 
-/// Fixed internal operation that writes one source-evidence sidecar.
+/// Fixed internal operation that writes one source evidence file.
 pub const SOURCE_EVIDENCE_OP: &str = "write-qualification-source-evidence-v1";
-/// Fixed file name uploaded with the lane's task reports.
+/// Fixed file name uploaded with one lane's task reports.
 pub(crate) const SOURCE_EVIDENCE_FILENAME: &str = "qualification-source-evidence.json";
 /// Generated step name used by Rust, `ToFu`, and named-check lanes.
 pub(crate) const SOURCE_EVIDENCE_STEP_NAME: &str = "Record Qualification source evidence";
 
-/// Write actual source, closure, and report observations for the current lane.
+/// Write current source, closure, and report facts for one lane.
 ///
-/// The document stays incomplete until the cache steps provide separate
-/// action and backend evidence. This operation does not claim the workflow run
+/// The document is incomplete until cache steps provide separate action and
+/// backend evidence. This operation does not say that the workflow run
 /// finished successfully.
 ///
 /// # Errors
 ///
-/// Gives an error when the current dispatch, plan, source tree, report files,
-/// or exclusive sidecar path fails validation.
+/// Give an error when the current dispatch, plan, source tree, report files,
+/// or source evidence file path does not pass the required checks.
 pub fn write_qualification_source_evidence() -> Result<(), OrchestratorError> {
     let runner_temp = required_path("RUNNER_TEMP")?;
     let run_key = crate::internal_request::resolve_run_key(None)?;
@@ -91,11 +91,11 @@ pub fn write_qualification_source_evidence() -> Result<(), OrchestratorError> {
     )
 }
 
-/// Build the generated helper step used only by Qualification consumers.
+/// Make the generated helper step used only by Qualification consumers.
 ///
 /// # Errors
 ///
-/// Gives a render error when the fixed helper environment cannot be built.
+/// Give a render error when the helper environment cannot include each required value.
 pub(crate) fn source_evidence_step(
     catalog: &velnor_actions_mise::ToolCatalog,
 ) -> Result<velnor_actions_contract::Step, OrchestratorError> {
