@@ -42,6 +42,22 @@ impl StageContext {
         derive_action_path(&runner_temp, "normal-tools-v3", &[], key)
     }
 
+    /// Give the qualification action path without needing a workspace path.
+    ///
+    /// # Errors
+    ///
+    /// Gives an error when the scope, key, or runner temp path is invalid.
+    pub(crate) fn qualification_action_path(
+        runner_temp: &Path,
+        campaign: &str,
+        layer: &str,
+        key: &str,
+    ) -> Result<PathBuf, StageError> {
+        validate_scope(campaign, layer, key)?;
+        let runner_temp = clean_absolute(runner_temp)?;
+        derive_action_path(&runner_temp, "qualification-v3", &[campaign, layer], key)
+    }
+
     /// This method makes a context for the selected normal-tools cache key.
     ///
     /// # Errors

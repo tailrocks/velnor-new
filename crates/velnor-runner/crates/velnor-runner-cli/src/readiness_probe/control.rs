@@ -29,10 +29,13 @@ pub(crate) fn run_internal() -> Option<ExitCode> {
             Some(write_readiness(&PathBuf::from(state)))
         }
         flag if flag == OsStr::new(CONTROL_PARENT_FLAG) => {
+            let Some(timeout) = args.next() else {
+                return Some(ExitCode::from(2));
+            };
             if args.next().is_some() {
                 return Some(ExitCode::from(2));
             }
-            Some(run_control_parent())
+            Some(run_control_parent(&timeout))
         }
         flag if flag == OsStr::new(CONTROL_LEAF_FLAG) => {
             if args.next().is_some() {
@@ -201,20 +204,24 @@ fn control_command() -> std::io::Result<Command> {
     Ok(command)
 }
 
-fn run_control_parent() -> ExitCode {
-    let Ok(request) = read_control_input() else {
+fn run_control_parent(timeout: &OsStr) -> ExitCode {
+    let Some(timeout_ms) = timeout.to_str().and_then(parse_canonical_timeout) else {
         return ExitCode::from(2);
     };
-    let Some(timeout_ms) = request
+    let started = StdInstant::now();
+    let Some(deadline) = started.checked_add(Duration::from_millis(timeout_ms)) else {
+        return ExitCode::from(2);
+    };
+    let Ok(request) = read_control_input_until(deadline) else {
+        return ExitCode::from(2);
+    };
+    if request
         .get("timeout_ms")
         .and_then(serde_json::Value::as_u64)
-    else {
-        return ExitCode::from(2);
-    };
-    if timeout_ms == 0 || timeout_ms > 300_000 {
+        != Some(timeout_ms)
+    {
         return ExitCode::from(2);
     }
-    let deadline = StdInstant::now() + Duration::from_millis(timeout_ms);
     let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
         .enable_time()
         .enable_io()
@@ -230,6 +237,18 @@ fn run_control_parent() -> ExitCode {
         Ok(None) => write_control_result(false),
         Err(()) => ExitCode::from(1),
     }
+}
+
+fn parse_canonical_timeout(value: &str) -> Option<u64> {
+    if value.is_empty()
+        || value.len() > 6
+        || value.starts_with('0')
+        || !value.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    let timeout = value.parse::<u64>().ok()?;
+    (timeout <= 300_000).then_some(timeout)
 }
 
 fn run_control_leaf() -> ExitCode {
@@ -308,6 +327,43 @@ fn read_control_input() -> Result<serde_json::Value, ()> {
         .map_err(|_| ())?;
     if bytes.is_empty() || u64::try_from(bytes.len()).map_or(true, |size| size > MAX_CONTROL_BYTES)
     {
+        return Err(());
+    }
+    serde_json::from_slice(&bytes).map_err(|_| ())
+}
+
+fn read_control_input_until(deadline: StdInstant) -> Result<serde_json::Value, ()> {
+    use rustix::event::{PollFd, PollFlags, Timespec, poll};
+
+    let stdin = std::io::stdin();
+    let mut input = stdin.lock();
+    let mut bytes = Vec::new();
+    let mut buffer = [0_u8; 4096];
+    loop {
+        let remaining = deadline
+            .checked_duration_since(StdInstant::now())
+            .ok_or(())?;
+        if remaining.is_zero() {
+            return Err(());
+        }
+        let timeout = Timespec {
+            tv_sec: i64::try_from(remaining.as_secs()).map_err(|_| ())?,
+            tv_nsec: i64::from(remaining.subsec_nanos()),
+        };
+        let mut descriptors = [PollFd::new(&input, PollFlags::IN)];
+        if poll(&mut descriptors, Some(&timeout)).map_err(|_| ())? == 0 {
+            return Err(());
+        }
+        let count = input.read(&mut buffer).map_err(|_| ())?;
+        if count == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&buffer[..count]);
+        if bytes.len() > usize::try_from(MAX_CONTROL_BYTES).map_err(|_| ())? {
+            return Err(());
+        }
+    }
+    if bytes.is_empty() || StdInstant::now() >= deadline {
         return Err(());
     }
     serde_json::from_slice(&bytes).map_err(|_| ())
