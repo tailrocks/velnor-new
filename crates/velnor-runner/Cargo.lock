@@ -3375,6 +3375,7 @@ name = "velnor-runner-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "rustix 1.1.5",
  "security-framework",
  "serde_json",
  "tokio",
