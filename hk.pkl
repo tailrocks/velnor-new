@@ -1,0 +1,22 @@
+amends "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.7.0/hk@2.7.0#/Builtins.pkl"
+
+exclude = List(
+  "fixtures/**",
+  "crates/**/tests/fixtures/**",
+  "docs/proposed/opentofu-goldens/**",
+)
+
+steps {
+  ["cargo_fmt"] = Builtins.cargo_fmt
+  ["cargo_clippy"] = Builtins.cargo_clippy
+}
+
+hooks {
+  ["pre-commit"] {
+    fix = true
+    stash = "none"
+    stage = false
+    fail_on_fix = true
+  }
+}

@@ -1,5 +1,21 @@
 # Repository Verification Procedures
 
+## Git hooks
+
+Install the declared tools with `mise install`.
+Enable the Git hooks with `mise x -- hk install --global --mise`.
+Use one global installation on Git 2.54 or later.
+The configuration uses hk 2.7.0.
+The Rust steps use the nearest Cargo manifest for each changed file.
+The steps exclude test fixtures and generated golden files.
+The commit stops if a tool changes a file.
+The changed content stays outside the Git index.
+Review these changes before you add them to the Git index.
+The hook does not save unstaged changes before it runs.
+Keep the full verification procedure below.
+
+## Full verification
+
 Run `bash scripts/verify-local.sh` from the repository root.
 The script reads exact tool versions from `.velnor/version-policy.toml`.
 It loads no project Mise configuration.
