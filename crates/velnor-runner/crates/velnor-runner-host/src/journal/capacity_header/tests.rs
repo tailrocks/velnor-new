@@ -2,7 +2,7 @@ use std::error::Error;
 
 use super::{
     GenerationState, HeaderAllocation, HeaderGeneration, HeaderLedger, HeaderLedgerError,
-    PollOutcome, PollsSettledProof, SessionDeleteProof, SessionId,
+    PollOutcome, SessionId,
 };
 use crate::config::ConnectionId;
 use crate::error::HostError;
@@ -54,7 +54,7 @@ fn retry_reuses_charge_but_uncertainty_blocks_target_or_session_replacement() ->
     let mut ledger = HeaderLedger::new(4)?;
     let allocation = reserve(&mut ledger, connection("essential")?, 10, "session-a", 2)?;
     let request = ledger.begin_poll(&allocation)?;
-    ledger.finish_poll(request, PollOutcome::Unknown)?;
+    ledger.finish_poll(&request, PollOutcome::Unknown)?;
 
     let retry = reserve(&mut ledger, connection("essential")?, 10, "session-a", 2)?;
     assert_eq!(retry, allocation);
@@ -81,8 +81,33 @@ fn only_one_poll_is_in_flight_per_exact_session_generation() -> TestResult {
         ledger.begin_poll(&allocation),
         Err(HeaderLedgerError::PollAlreadyInFlight)
     );
-    ledger.finish_poll(first, PollOutcome::Response)?;
+    ledger.finish_poll(&first, PollOutcome::Response)?;
     assert_eq!(ledger.charged_capacity(), 1);
+    Ok(())
+}
+
+#[test]
+fn source_adapter_identity_checks_bind_allocation_poll_and_delete() -> TestResult {
+    let mut ledger = HeaderLedger::new(2)?;
+    let connection_id = connection("essential")?;
+    let allocation = reserve(&mut ledger, connection_id.clone(), 10, "session-a", 1)?;
+
+    assert_eq!(allocation.connection_id(), &connection_id);
+    assert_eq!(allocation.scale_set_id(), 10);
+    assert_eq!(allocation.session_id(), "session-a");
+    assert_eq!(allocation.target(), 1);
+    assert!(allocation.matches_session(&connection_id, 10, "session-a"));
+
+    let request = ledger.begin_poll(&allocation)?;
+    assert!(request.matches_session(&connection_id, 10, "session-a"));
+    assert!(!request.matches_session(&connection_id, 10, "session-b"));
+    ledger.finish_poll(&request, PollOutcome::Response)?;
+
+    let zero = ledger.begin_zero_poll(&allocation)?;
+    ledger.finish_poll(&zero, PollOutcome::Response)?;
+    let deletion = ledger.begin_delete(&allocation)?;
+    assert!(deletion.matches_session(&connection_id, 10, "session-a"));
+    assert!(!deletion.matches_session(&connection_id, 11, "session-a"));
     Ok(())
 }
 
@@ -92,10 +117,10 @@ fn stale_poll_result_cannot_change_the_current_attempt_or_release_charge() -> Te
     let allocation = reserve(&mut ledger, connection("essential")?, 10, "session-a", 1)?;
     let first = ledger.begin_poll(&allocation)?;
     let late_copy = first.duplicate_for_test();
-    ledger.finish_poll(first, PollOutcome::Unknown)?;
+    ledger.finish_poll(&first, PollOutcome::Unknown)?;
 
     assert_eq!(
-        ledger.finish_poll(late_copy, PollOutcome::Response),
+        ledger.finish_poll(&late_copy, PollOutcome::Response),
         Err(HeaderLedgerError::StaleAttempt)
     );
     let snapshot = ledger.snapshot();
@@ -141,7 +166,7 @@ fn timeout_or_restart_never_transfers_capacity_between_connections() -> TestResu
     let mut ledger = HeaderLedger::new(3)?;
     let first = reserve(&mut ledger, connection("essential")?, 10, "session-a", 2)?;
     let poll = ledger.begin_poll(&first)?;
-    ledger.finish_poll(poll, PollOutcome::Unknown)?;
+    ledger.finish_poll(&poll, PollOutcome::Unknown)?;
     let restored = HeaderLedger::restore(ledger.snapshot())?;
 
     assert_eq!(restored.charged_capacity(), 2);
@@ -159,21 +184,20 @@ fn release_requires_settled_polls_zero_header_and_exact_delete() -> TestResult {
     let mut ledger = HeaderLedger::new(3)?;
     let allocation = reserve(&mut ledger, connection("essential")?, 10, "session-a", 2)?;
     let in_flight = ledger.begin_poll(&allocation)?;
-    let polls_settled = PollsSettledProof::test_only(&allocation);
-    let deletion = SessionDeleteProof::test_only(&allocation);
     assert_eq!(
-        ledger.release(&polls_settled, &deletion),
+        ledger.begin_delete(&allocation),
         Err(HeaderLedgerError::PollStillInFlight)
     );
-    ledger.finish_poll(in_flight, PollOutcome::Response)?;
+    ledger.finish_poll(&in_flight, PollOutcome::Response)?;
     assert_eq!(
-        ledger.release(&polls_settled, &deletion),
+        ledger.begin_delete(&allocation),
         Err(HeaderLedgerError::ZeroHeaderNotSettled)
     );
     let zero_request = ledger.begin_zero_poll(&allocation)?;
     assert_eq!(zero_request.header_value(), 0);
-    ledger.finish_poll(zero_request, PollOutcome::Response)?;
-    ledger.release(&polls_settled, &deletion)?;
+    ledger.finish_poll(&zero_request, PollOutcome::Response)?;
+    let deletion = ledger.begin_delete(&allocation)?;
+    ledger.finish_delete(&deletion)?;
 
     assert_eq!(ledger.charged_capacity(), 0);
     assert_eq!(
@@ -189,20 +213,26 @@ fn restart_after_zero_poll_keeps_charge_until_exact_session_delete() -> TestResu
     let mut ledger = HeaderLedger::new(2)?;
     let allocation = reserve(&mut ledger, connection("essential")?, 10, "session-a", 2)?;
     let poll = ledger.begin_poll(&allocation)?;
-    ledger.finish_poll(poll, PollOutcome::Response)?;
+    ledger.finish_poll(&poll, PollOutcome::Response)?;
     let zero = ledger.begin_zero_poll(&allocation)?;
-    ledger.finish_poll(zero, PollOutcome::Response)?;
+    ledger.finish_poll(&zero, PollOutcome::Response)?;
+    let deletion = ledger.begin_delete(&allocation)?;
     let mut restored = HeaderLedger::restore(ledger.snapshot())?;
 
     assert_eq!(restored.charged_capacity(), 2);
     assert_eq!(
         restored.begin_poll(&allocation),
-        Err(HeaderLedgerError::ZeroHeaderSettled)
+        Err(HeaderLedgerError::DeleteOutcomeUncertain)
     );
-    let polls_settled = PollsSettledProof::test_only(&allocation);
-    let deletion = SessionDeleteProof::test_only(&allocation);
-    restored.release(&polls_settled, &deletion)?;
-    assert_eq!(restored.charged_capacity(), 0);
+    assert_eq!(
+        restored.begin_delete(&allocation),
+        Err(HeaderLedgerError::DeleteOutcomeUncertain)
+    );
+    assert_eq!(
+        restored.finish_delete(&deletion),
+        Err(HeaderLedgerError::StaleAttempt)
+    );
+    assert_eq!(restored.charged_capacity(), 2);
     Ok(())
 }
 
@@ -211,12 +241,9 @@ fn unknown_remote_poll_cannot_be_released_by_later_delete_proofs() -> TestResult
     let mut ledger = HeaderLedger::new(2)?;
     let allocation = reserve(&mut ledger, connection("essential")?, 10, "session-a", 1)?;
     let request = ledger.begin_poll(&allocation)?;
-    ledger.finish_poll(request, PollOutcome::Unknown)?;
-    let polls_settled = PollsSettledProof::test_only(&allocation);
-    let deletion = SessionDeleteProof::test_only(&allocation);
-
+    ledger.finish_poll(&request, PollOutcome::Unknown)?;
     assert_eq!(
-        ledger.release(&polls_settled, &deletion),
+        ledger.begin_delete(&allocation),
         Err(HeaderLedgerError::UnsettledPoll)
     );
     assert_eq!(
@@ -232,18 +259,41 @@ fn unknown_remote_poll_cannot_be_released_by_later_delete_proofs() -> TestResult
 }
 
 #[test]
-fn release_rejects_session_and_generation_mismatch() -> TestResult {
+fn late_delete_response_after_unknown_outcome_cannot_release_charge() -> TestResult {
     let mut ledger = HeaderLedger::new(3)?;
     let first = reserve(&mut ledger, connection("essential")?, 10, "session-a", 1)?;
-    let other = reserve(&mut ledger, connection("chainargos")?, 20, "session-b", 1)?;
-    let polls_settled = PollsSettledProof::test_only(&first);
-    let wrong_deletion = SessionDeleteProof::test_only(&other);
+    let zero = ledger.begin_zero_poll(&first)?;
+    ledger.finish_poll(&zero, PollOutcome::Response)?;
+    let delete = ledger.begin_delete(&first)?;
+    let late_response = delete.duplicate_for_test();
+    ledger.mark_delete_unknown(&delete)?;
 
     assert_eq!(
-        ledger.release(&polls_settled, &wrong_deletion),
-        Err(HeaderLedgerError::ReleaseEvidenceMismatch)
+        ledger.finish_delete(&late_response),
+        Err(HeaderLedgerError::StaleAttempt)
     );
-    assert_eq!(ledger.charged_capacity(), 2);
+    assert_eq!(ledger.charged_capacity(), 1);
+    Ok(())
+}
+
+#[test]
+fn interrupted_delete_is_sticky_across_restart() -> TestResult {
+    let mut ledger = HeaderLedger::new(2)?;
+    let allocation = reserve(&mut ledger, connection("essential")?, 10, "session-a", 2)?;
+    let zero = ledger.begin_zero_poll(&allocation)?;
+    ledger.finish_poll(&zero, PollOutcome::Response)?;
+    let _delete = ledger.begin_delete(&allocation)?;
+
+    let mut restored = HeaderLedger::restore(ledger.snapshot())?;
+    assert_eq!(restored.charged_capacity(), 2);
+    assert_eq!(
+        restored.begin_delete(&allocation),
+        Err(HeaderLedgerError::DeleteOutcomeUncertain)
+    );
+    assert_eq!(
+        reserve(&mut restored, connection("chainargos")?, 20, "session-b", 1),
+        Err(HeaderLedgerError::OverBudget)
+    );
     Ok(())
 }
 

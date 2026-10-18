@@ -6,12 +6,15 @@ use crate::config::ConnectionId;
 use crate::error::HostError;
 use crate::journal::Journal;
 use crate::journal::capacity_header::model::{
-    GenerationState, HeaderLedgerError, PollOutcome, PollsSettledProof, SessionDeleteProof,
+    GenerationState, HeaderGeneration, HeaderLedgerError, HeaderSessionIdentity, PollOutcome,
+    SessionId,
 };
 use crate::journal::connection::CapacityLimits;
+use crate::journal::connection::storage::in_transaction;
 
 use super::{
     MAX_SNAPSHOT_BYTES, bootstrap, check_snapshot_size, snapshot_digest, transition, validate,
+    validate_capacity_policy_connection,
 };
 
 static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
@@ -37,7 +40,11 @@ impl Scratch {
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
+        match std::fs::remove_dir_all(&self.0) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => eprintln!("could not remove header test data: {error}"),
+        }
     }
 }
 
@@ -94,7 +101,7 @@ async fn reopen_keeps_interrupted_poll_uncertain_and_charged() -> TestResult {
 }
 
 #[tokio::test]
-async fn lowering_host_limit_below_saved_charge_fails_closed() -> TestResult {
+async fn lowering_host_limit_below_saved_charge_rolls_back_in_one_transaction() -> TestResult {
     let scratch = Scratch::new()?;
     let journal = open_journal(&scratch, 3).await?;
     let essential = connection("essential")?;
@@ -103,28 +110,18 @@ async fn lowering_host_limit_below_saved_charge_fails_closed() -> TestResult {
     })
     .await?;
 
-    journal
-        .configure_capacity(CapacityLimits {
-            jobs: 1,
-            cpu_millicores: 1_000,
-            memory_bytes: 1_073_741_824,
-        })
-        .await?;
-    assert!(validate(&journal).await.is_err());
-    assert!(bootstrap(&journal).await.is_err());
-    assert!(
-        transition(&journal, |ledger| Ok(ledger.charged_capacity()))
+    let changed = in_transaction(&journal, async |connection| {
+        connection
+            .execute(
+                "UPDATE host_capacity_policy SET max_jobs = 1 WHERE singleton = 1",
+                (),
+            )
             .await
-            .is_err()
-    );
-
-    journal
-        .configure_capacity(CapacityLimits {
-            jobs: 3,
-            cpu_millicores: 1_000,
-            memory_bytes: 1_073_741_824,
-        })
-        .await?;
+            .map_err(|_| HostError::Journal)?;
+        validate_capacity_policy_connection(connection).await
+    })
+    .await;
+    assert!(changed.is_err());
     validate(&journal).await?;
     assert_eq!(
         transition(&journal, |ledger| Ok(ledger.charged_capacity())).await?,
@@ -170,7 +167,7 @@ async fn duplicate_reservation_is_idempotent_and_uncertainty_blocks_replacement(
 
     let attempt = transition(&journal, |ledger| ledger.begin_poll(&allocation)).await?;
     transition(&journal, |ledger| {
-        ledger.finish_poll(attempt, PollOutcome::Unknown)
+        ledger.finish_poll(&attempt, PollOutcome::Unknown)
     })
     .await?;
     let changed_target = transition(&journal, |ledger| {
@@ -207,7 +204,7 @@ async fn settled_zero_poll_and_exact_delete_are_durable_across_reopen() -> TestR
     at(
         "finish advertise",
         transition(&journal, |ledger| {
-            ledger.finish_poll(request, PollOutcome::Response)
+            ledger.finish_poll(&request, PollOutcome::Response)
         })
         .await,
     )?;
@@ -218,61 +215,99 @@ async fn settled_zero_poll_and_exact_delete_are_durable_across_reopen() -> TestR
     at(
         "finish zero",
         transition(&journal, |ledger| {
-            ledger.finish_poll(zero, PollOutcome::Response)
+            ledger.finish_poll(&zero, PollOutcome::Response)
         })
         .await,
     )?;
-    let polls = PollsSettledProof::test_only(&allocation);
-    let deletion = SessionDeleteProof::test_only(&allocation);
+    let deletion = at(
+        "begin exact delete",
+        transition(&journal, |ledger| ledger.begin_delete(&allocation)).await,
+    )?;
+    at(
+        "record exact delete response",
+        transition(&journal, |ledger| ledger.finish_delete(&deletion)).await,
+    )?;
     drop(journal);
 
-    let reopened = at("reopen before retirement", open_journal(&scratch, 2).await)?;
-    let before_retirement = at(
-        "release",
-        transition(&reopened, |ledger| {
-            let charged = ledger.charged_capacity();
-            ledger.release(&polls, &deletion)?;
-            Ok(charged)
-        })
-        .await,
-    )?;
-    assert_eq!(before_retirement, 2);
-    drop(reopened);
-
-    let after_delete = at("reopen after delete", open_journal(&scratch, 2).await)?;
+    let reopened = at("reopen after retirement", open_journal(&scratch, 2).await)?;
     let charged = at(
         "check final charge",
-        transition(&after_delete, |ledger| Ok(ledger.charged_capacity())).await,
+        transition(&reopened, |ledger| Ok(ledger.charged_capacity())).await,
     )?;
     assert_eq!(charged, 0);
     Ok(())
 }
 
 #[tokio::test]
-async fn forged_release_pair_and_corrupt_persisted_metadata_fail_closed() -> TestResult {
+async fn reopen_after_delete_intent_keeps_charge_and_blocks_replay() -> TestResult {
     let scratch = Scratch::new()?;
     let journal = open_journal(&scratch, 2).await?;
     let essential = connection("essential")?;
-    let chainargos = connection("chainargos")?;
-    let first = transition(&journal, |ledger| {
-        ledger.reserve(essential, 10, "session-a", 1)
+    let allocation = transition(&journal, |ledger| {
+        ledger.reserve(essential, 10, "session-a", 2)
     })
     .await?;
-    let second = transition(&journal, |ledger| {
-        ledger.reserve(chainargos, 20, "session-b", 1)
+    let zero = transition(&journal, |ledger| ledger.begin_zero_poll(&allocation)).await?;
+    transition(&journal, |ledger| {
+        ledger.finish_poll(&zero, PollOutcome::Response)
     })
     .await?;
-    let polls = PollsSettledProof::test_only(&first);
-    let wrong_delete = SessionDeleteProof::test_only(&second);
-    assert!(
-        transition(&journal, |ledger| ledger.release(&polls, &wrong_delete))
-            .await
-            .is_err()
-    );
-    assert_eq!(
-        transition(&journal, |ledger| Ok(ledger.charged_capacity())).await?,
-        2
-    );
+    transition(&journal, |ledger| ledger.begin_delete(&allocation)).await?;
+    drop(journal);
+
+    let reopened = open_journal(&scratch, 2).await?;
+    let (charged, retry) = transition(&reopened, |ledger| {
+        Ok((ledger.charged_capacity(), ledger.begin_delete(&allocation)))
+    })
+    .await?;
+    assert_eq!(charged, 2);
+    assert_eq!(retry, Err(HeaderLedgerError::DeleteOutcomeUncertain));
+    Ok(())
+}
+
+#[test]
+fn previous_snapshot_version_is_strictly_decoded_for_recovery() -> TestResult {
+    let previous = super::HeaderLedgerSnapshotV1 {
+        max_jobs: 2,
+        next_generation: 2,
+        records: vec![super::HeaderRecordV1 {
+            identity: HeaderSessionIdentity {
+                connection_id: connection("essential")?,
+                scale_set_id: 10,
+                session_id: SessionId("session-a".to_owned()),
+            },
+            generation: HeaderGeneration(1),
+            target: 2,
+            state: GenerationState::Pending,
+            attempt_sequence: 0,
+            in_flight_poll: None,
+            zero_header_settled: false,
+        }],
+    };
+    let bytes = serde_json::to_vec(&previous)?;
+    let json = std::str::from_utf8(&bytes)?;
+    let digest = snapshot_digest(&bytes);
+    let ledger = super::decode_snapshot(1, json, &digest, true)?;
+    assert_eq!(ledger.charged_capacity(), 2);
+
+    let mut malformed = serde_json::to_value(previous)?;
+    malformed["records"][0]["unreviewed"] = serde_json::Value::Bool(true);
+    let malformed_bytes = serde_json::to_vec(&malformed)?;
+    let malformed_json = std::str::from_utf8(&malformed_bytes)?;
+    let malformed_digest = snapshot_digest(&malformed_bytes);
+    assert!(super::decode_snapshot(1, malformed_json, &malformed_digest, true).is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn corrupt_persisted_metadata_fails_closed() -> TestResult {
+    let scratch = Scratch::new()?;
+    let journal = open_journal(&scratch, 2).await?;
+    let essential = connection("essential")?;
+    transition(&journal, |ledger| {
+        ledger.reserve(essential, 10, "session-a", 2)
+    })
+    .await?;
 
     let connection = journal.connection().await?;
     connection
@@ -297,7 +332,7 @@ async fn forged_release_pair_and_corrupt_persisted_metadata_fail_closed() -> Tes
     let digest = snapshot_digest(snapshot_json.as_bytes());
     connection
         .execute(
-            "UPDATE capacity_header_meta SET schema_version = 2, snapshot_digest = ?1 WHERE singleton = 1",
+            "UPDATE capacity_header_meta SET schema_version = 3, snapshot_digest = ?1 WHERE singleton = 1",
             [digest],
         )
         .await?;

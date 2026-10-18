@@ -8,32 +8,16 @@ pub(super) const MAX_HEADER_CAPACITY: u32 = i32::MAX as u32;
 pub(super) const MAX_SESSION_ID_BYTES: usize = 256;
 
 /// Exact identity of one Scale Set message session.
+#[expect(
+    clippy::struct_field_names,
+    reason = "these fields form one immutable connection and session identity"
+)]
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct HeaderSessionIdentity {
+pub(super) struct HeaderSessionIdentity {
     pub(super) connection_id: ConnectionId,
     pub(super) scale_set_id: i64,
     pub(super) session_id: SessionId,
-}
-
-impl HeaderSessionIdentity {
-    /// Return the immutable repository connection ID.
-    #[must_use]
-    pub(crate) fn connection_id(&self) -> &ConnectionId {
-        &self.connection_id
-    }
-
-    /// Return the positive GitHub Scale Set ID.
-    #[must_use]
-    pub(crate) const fn scale_set_id(&self) -> i64 {
-        self.scale_set_id
-    }
-
-    /// Return the exact session ID supplied by GitHub.
-    #[must_use]
-    pub(crate) fn session_id(&self) -> &str {
-        &self.session_id.0
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -53,15 +37,7 @@ impl SessionId {
 
 /// Monotonic identity for one exact session/header generation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub(crate) struct HeaderGeneration(pub(super) u64);
-
-impl HeaderGeneration {
-    /// Return the generation number.
-    #[must_use]
-    pub(crate) const fn get(self) -> u64 {
-        self.0
-    }
-}
+pub(super) struct HeaderGeneration(pub(super) u64);
 
 /// A reserved total-capacity header for one exact session generation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,22 +48,41 @@ pub(crate) struct HeaderAllocation {
 }
 
 impl HeaderAllocation {
-    /// Return the exact message-session identity.
+    /// Return the immutable repository connection ID.
     #[must_use]
-    pub(crate) const fn identity(&self) -> &HeaderSessionIdentity {
-        &self.identity
+    pub(crate) fn connection_id(&self) -> &ConnectionId {
+        &self.identity.connection_id
     }
 
-    /// Return the durable generation identity.
+    /// Return the positive GitHub Scale Set ID.
     #[must_use]
-    pub(crate) const fn generation(&self) -> HeaderGeneration {
-        self.generation
+    pub(crate) const fn scale_set_id(&self) -> i64 {
+        self.identity.scale_set_id
     }
 
-    /// Return the total capacity value to send on each poll.
+    /// Return the exact session ID supplied by GitHub.
+    #[must_use]
+    pub(crate) fn session_id(&self) -> &str {
+        &self.identity.session_id.0
+    }
+
+    /// Give the total capacity value reserved for this session.
     #[must_use]
     pub(crate) const fn target(&self) -> u32 {
         self.target
+    }
+
+    /// Return whether the allocation names this exact source session.
+    #[must_use]
+    pub(crate) fn matches_session(
+        &self,
+        connection_id: &ConnectionId,
+        scale_set_id: i64,
+        session_id: &str,
+    ) -> bool {
+        self.identity.connection_id == *connection_id
+            && self.identity.scale_set_id == scale_set_id
+            && self.identity.session_id.0 == session_id
     }
 }
 
@@ -102,6 +97,19 @@ pub(crate) struct HeaderPollAttempt {
 }
 
 impl HeaderPollAttempt {
+    /// Return whether this poll attempt names this exact source session.
+    #[must_use]
+    pub(crate) fn matches_session(
+        &self,
+        connection_id: &ConnectionId,
+        scale_set_id: i64,
+        session_id: &str,
+    ) -> bool {
+        self.identity.connection_id == *connection_id
+            && self.identity.scale_set_id == scale_set_id
+            && self.identity.session_id.0 == session_id
+    }
+
     /// Return the exact header value the request adapter must send.
     #[must_use]
     pub(crate) const fn header_value(&self) -> u32 {
@@ -116,6 +124,38 @@ impl HeaderPollAttempt {
             attempt: self.attempt,
             header_value: self.header_value,
             purpose: self.purpose,
+        }
+    }
+}
+
+/// Opaque token for one exact session deletion request.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct HeaderDeleteAttempt {
+    pub(super) identity: HeaderSessionIdentity,
+    pub(super) generation: HeaderGeneration,
+    pub(super) sequence: u64,
+}
+
+impl HeaderDeleteAttempt {
+    /// Return whether this delete attempt names this exact source session.
+    #[must_use]
+    pub(crate) fn matches_session(
+        &self,
+        connection_id: &ConnectionId,
+        scale_set_id: i64,
+        session_id: &str,
+    ) -> bool {
+        self.identity.connection_id == *connection_id
+            && self.identity.scale_set_id == scale_set_id
+            && self.identity.session_id.0 == session_id
+    }
+
+    #[cfg(test)]
+    pub(super) fn duplicate_for_test(&self) -> Self {
+        Self {
+            identity: self.identity.clone(),
+            generation: self.generation,
+            sequence: self.sequence,
         }
     }
 }
@@ -144,6 +184,12 @@ pub(super) struct InFlightPoll {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct InFlightDelete {
+    pub(super) sequence: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) enum GenerationState {
     Pending,
     Observed,
@@ -161,6 +207,12 @@ pub(super) struct HeaderRecord {
     pub(super) attempt_sequence: u64,
     pub(super) in_flight_poll: Option<InFlightPoll>,
     pub(super) zero_header_settled: bool,
+    #[serde(default)]
+    pub(super) delete_sequence: u64,
+    #[serde(default)]
+    pub(super) in_flight_delete: Option<InFlightDelete>,
+    #[serde(default)]
+    pub(super) delete_uncertain: bool,
 }
 
 impl HeaderRecord {
@@ -187,49 +239,6 @@ pub(crate) struct HeaderLedgerSnapshot {
     pub(super) max_jobs: u32,
     pub(super) next_generation: u64,
     pub(super) records: Vec<HeaderRecord>,
-}
-
-/// Opaque proof that all owned poll requests for this generation are settled.
-///
-/// There is no production constructor in this module. A source adapter must
-/// derive this only from durable completed-poll records. It cannot be made from
-/// a timeout, process exit, elapsed time, or DELETE response.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct PollsSettledProof {
-    pub(super) identity: HeaderSessionIdentity,
-    pub(super) generation: HeaderGeneration,
-}
-
-#[cfg(test)]
-impl PollsSettledProof {
-    pub(super) fn test_only(allocation: &HeaderAllocation) -> Self {
-        Self {
-            identity: allocation.identity.clone(),
-            generation: allocation.generation,
-        }
-    }
-}
-
-/// Opaque proof that GitHub acknowledged deletion of the exact session.
-///
-/// There is no production constructor in this module. A reviewed source
-/// adapter must bind the exact Scale Set/session DELETE request and its 204
-/// response. HTTP 204 indicates that the requested action was fulfilled; this
-/// proof does not establish that an earlier unresolved poll was fenced.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct SessionDeleteProof {
-    pub(super) identity: HeaderSessionIdentity,
-    pub(super) generation: HeaderGeneration,
-}
-
-#[cfg(test)]
-impl SessionDeleteProof {
-    pub(super) fn test_only(allocation: &HeaderAllocation) -> Self {
-        Self {
-            identity: allocation.identity.clone(),
-            generation: allocation.generation,
-        }
-    }
 }
 
 /// Fail-closed errors from the pure header ledger.
@@ -263,6 +272,12 @@ pub(crate) enum HeaderLedgerError {
     ZeroHeaderSettled,
     #[error("the session's zero-header poll has not settled")]
     ZeroHeaderNotSettled,
+    #[error("a session deletion request is already in flight")]
+    DeleteAlreadyInFlight,
+    #[error("an earlier session deletion has an unresolved remote outcome")]
+    DeleteOutcomeUncertain,
+    #[error("session deletion is not ready for this allocation")]
+    DeleteNotReady,
     #[error("poll attempt counter overflowed")]
     AttemptOverflow,
     #[error("poll result is not for the current in-flight attempt")]
@@ -271,8 +286,6 @@ pub(crate) enum HeaderLedgerError {
     PollStillInFlight,
     #[error("an earlier poll has an unresolved remote outcome")]
     UnsettledPoll,
-    #[error("release evidence does not match the exact session generation")]
-    ReleaseEvidenceMismatch,
     #[error("header generation counter overflowed")]
     GenerationOverflow,
     #[error("persisted header ledger is malformed or violates its invariants")]

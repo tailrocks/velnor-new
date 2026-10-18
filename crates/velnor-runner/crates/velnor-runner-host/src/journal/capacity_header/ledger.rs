@@ -5,10 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::config::ConnectionId;
 
 use super::model::{
-    GenerationState, HeaderAllocation, HeaderGeneration, HeaderLedgerError, HeaderLedgerSnapshot,
-    HeaderPollAttempt, HeaderRecord, HeaderSessionIdentity, InFlightPoll, MAX_HEADER_CAPACITY,
-    MAX_SESSION_ID_BYTES, PollOutcome, PollPurpose, PollsSettledProof, SessionDeleteProof,
-    SessionId,
+    GenerationState, HeaderAllocation, HeaderDeleteAttempt, HeaderGeneration, HeaderLedgerError,
+    HeaderLedgerSnapshot, HeaderPollAttempt, HeaderRecord, HeaderSessionIdentity, InFlightDelete,
+    InFlightPoll, MAX_HEADER_CAPACITY, MAX_SESSION_ID_BYTES, PollOutcome, PollPurpose, SessionId,
 };
 
 /// Aggregate reservation ledger for all Scale Set message sessions.
@@ -90,6 +89,9 @@ impl HeaderLedger {
             attempt_sequence: 0,
             in_flight_poll: None,
             zero_header_settled: false,
+            delete_sequence: 0,
+            in_flight_delete: None,
+            delete_uncertain: false,
         };
         let allocation = record.allocation();
         self.records.insert(identity, record);
@@ -105,6 +107,7 @@ impl HeaderLedger {
         if record.state == GenerationState::Uncertain {
             return Err(HeaderLedgerError::UnsettledPoll);
         }
+        Self::ensure_delete_not_started(record)?;
         if record.zero_header_settled {
             return Err(HeaderLedgerError::ZeroHeaderSettled);
         }
@@ -129,6 +132,7 @@ impl HeaderLedger {
         if record.state == GenerationState::Uncertain {
             return Err(HeaderLedgerError::UnsettledPoll);
         }
+        Self::ensure_delete_not_started(record)?;
         if record.zero_header_settled {
             return Err(HeaderLedgerError::ZeroHeaderSettled);
         }
@@ -138,7 +142,7 @@ impl HeaderLedger {
     /// Record that one owned poll request returned. No outcome releases charge.
     pub(crate) fn finish_poll(
         &mut self,
-        attempt: HeaderPollAttempt,
+        attempt: &HeaderPollAttempt,
         outcome: PollOutcome,
     ) -> Result<(), HeaderLedgerError> {
         let record = self
@@ -170,42 +174,91 @@ impl HeaderLedger {
         Ok(())
     }
 
-    /// Release one exact generation after poll settlement and session deletion.
-    ///
-    /// Production proof construction is intentionally unavailable. A reviewed
-    /// adapter must bind poll settlement and the exact session DELETE/204 to
-    /// this generation. A DELETE cannot settle an earlier unknown long poll.
-    pub(crate) fn release(
+    /// Persist an exact-session DELETE intent after zero-header settlement.
+    pub(crate) fn begin_delete(
         &mut self,
-        polls_settled: &PollsSettledProof,
-        deletion: &SessionDeleteProof,
-    ) -> Result<(), HeaderLedgerError> {
-        if polls_settled.identity != deletion.identity
-            || polls_settled.generation != deletion.generation
-        {
-            return Err(HeaderLedgerError::ReleaseEvidenceMismatch);
-        }
-        let record = self
-            .records
-            .get_mut(&polls_settled.identity)
-            .ok_or(HeaderLedgerError::UnknownAllocation)?;
-        if record.generation != polls_settled.generation {
-            return Err(HeaderLedgerError::ReleaseEvidenceMismatch);
+        allocation: &HeaderAllocation,
+    ) -> Result<HeaderDeleteAttempt, HeaderLedgerError> {
+        let record = self.record_for_allocation_mut(allocation)?;
+        if record.state == GenerationState::Uncertain {
+            return Err(HeaderLedgerError::UnsettledPoll);
         }
         if record.in_flight_poll.is_some() {
             return Err(HeaderLedgerError::PollStillInFlight);
         }
+        if !record.zero_header_settled {
+            return Err(HeaderLedgerError::ZeroHeaderNotSettled);
+        }
+        if record.delete_uncertain {
+            return Err(HeaderLedgerError::DeleteOutcomeUncertain);
+        }
+        if record.in_flight_delete.is_some() {
+            return Err(HeaderLedgerError::DeleteAlreadyInFlight);
+        }
+        if record.delete_sequence != 0 {
+            return Err(HeaderLedgerError::DeleteNotReady);
+        }
+        let sequence = record
+            .delete_sequence
+            .checked_add(1)
+            .ok_or(HeaderLedgerError::AttemptOverflow)?;
+        record.delete_sequence = sequence;
+        record.in_flight_delete = Some(InFlightDelete { sequence });
+        Ok(HeaderDeleteAttempt {
+            identity: allocation.identity.clone(),
+            generation: allocation.generation,
+            sequence,
+        })
+    }
+
+    /// Keep a timed-out or otherwise ambiguous deletion charged permanently.
+    pub(crate) fn mark_delete_unknown(
+        &mut self,
+        attempt: &HeaderDeleteAttempt,
+    ) -> Result<(), HeaderLedgerError> {
+        let record = self.record_for_delete_attempt_mut(attempt)?;
+        record.in_flight_delete = None;
+        record.delete_uncertain = true;
+        Ok(())
+    }
+
+    /// Release one generation after its source adapter proves exact DELETE 204.
+    pub(crate) fn finish_delete(
+        &mut self,
+        attempt: &HeaderDeleteAttempt,
+    ) -> Result<(), HeaderLedgerError> {
+        let record = self.record_for_delete_attempt_mut(attempt)?;
         if record.state == GenerationState::Uncertain {
             return Err(HeaderLedgerError::UnsettledPoll);
+        }
+        if record.in_flight_poll.is_some() {
+            return Err(HeaderLedgerError::PollStillInFlight);
         }
         if !record.zero_header_settled {
             return Err(HeaderLedgerError::ZeroHeaderNotSettled);
         }
-        if record.state == GenerationState::Released {
-            return Err(HeaderLedgerError::SessionRetired);
-        }
+        record.in_flight_delete = None;
         record.state = GenerationState::Released;
         Ok(())
+    }
+
+    fn record_for_delete_attempt_mut(
+        &mut self,
+        attempt: &HeaderDeleteAttempt,
+    ) -> Result<&mut HeaderRecord, HeaderLedgerError> {
+        let record = self
+            .records
+            .get_mut(&attempt.identity)
+            .ok_or(HeaderLedgerError::UnknownAllocation)?;
+        if record.generation != attempt.generation
+            || record.in_flight_delete
+                != Some(InFlightDelete {
+                    sequence: attempt.sequence,
+                })
+        {
+            return Err(HeaderLedgerError::StaleAttempt);
+        }
+        Ok(record)
     }
 
     /// Return the sum of all unreleased header targets.
@@ -218,6 +271,16 @@ impl HeaderLedger {
     #[must_use]
     pub(crate) const fn max_jobs(&self) -> u32 {
         self.max_jobs
+    }
+
+    /// Return every charged allocation in deterministic identity order.
+    #[must_use]
+    pub(crate) fn charged_allocations(&self) -> Vec<HeaderAllocation> {
+        self.records
+            .values()
+            .filter(|record| record.is_charged())
+            .map(HeaderRecord::allocation)
+            .collect()
     }
 
     /// Change the host ceiling only when every existing header still fits.
@@ -271,9 +334,14 @@ impl HeaderLedger {
                 return Err(HeaderLedgerError::InvalidSnapshot);
             }
             largest_generation = largest_generation.max(record.generation.0);
-            if recover_interrupted_polls && record.in_flight_poll.take().is_some() {
-                record.state = GenerationState::Uncertain;
-                record.zero_header_settled = false;
+            if recover_interrupted_polls {
+                if record.in_flight_poll.take().is_some() {
+                    record.state = GenerationState::Uncertain;
+                    record.zero_header_settled = false;
+                }
+                if record.in_flight_delete.take().is_some() {
+                    record.delete_uncertain = true;
+                }
             }
             if records.insert(record.identity.clone(), record).is_some() {
                 return Err(HeaderLedgerError::InvalidSnapshot);
@@ -340,6 +408,19 @@ impl HeaderLedger {
         })
     }
 
+    fn ensure_delete_not_started(record: &HeaderRecord) -> Result<(), HeaderLedgerError> {
+        if record.delete_uncertain {
+            return Err(HeaderLedgerError::DeleteOutcomeUncertain);
+        }
+        if record.in_flight_delete.is_some() {
+            return Err(HeaderLedgerError::DeleteAlreadyInFlight);
+        }
+        if record.delete_sequence != 0 {
+            return Err(HeaderLedgerError::DeleteNotReady);
+        }
+        Ok(())
+    }
+
     fn has_multiple_live_sessions_per_scale_set(&self) -> bool {
         let mut seen = BTreeSet::new();
         self.records
@@ -368,6 +449,7 @@ impl HeaderLedger {
 fn valid_record(record: &HeaderRecord) -> bool {
     let sequence = record.attempt_sequence;
     let in_flight = record.in_flight_poll;
+    let delete = record.in_flight_delete;
     let sequence_valid = match record.state {
         GenerationState::Pending => match in_flight {
             Some(_) => sequence > 0,
@@ -392,6 +474,23 @@ fn valid_record(record: &HeaderRecord) -> bool {
                 PollPurpose::ZeroHeader => poll.header_value == 0 && !record.zero_header_settled,
             }
     });
+    let delete_valid = match (record.delete_sequence, delete, record.delete_uncertain) {
+        (0, None, false) => true,
+        (sequence, Some(attempt), false) => {
+            sequence > 0
+                && attempt.sequence == sequence
+                && record.state == GenerationState::Observed
+                && record.zero_header_settled
+                && in_flight.is_none()
+        }
+        (sequence, None, true) => {
+            sequence > 0 && record.state == GenerationState::Observed && record.zero_header_settled
+        }
+        (sequence, None, false) => {
+            sequence > 0 && record.state == GenerationState::Released && record.zero_header_settled
+        }
+        _ => false,
+    };
     record.identity.scale_set_id > 0
         && !record.identity.session_id.0.is_empty()
         && record.identity.session_id.0.len() <= MAX_SESSION_ID_BYTES
@@ -401,4 +500,5 @@ fn valid_record(record: &HeaderRecord) -> bool {
         && sequence_valid
         && zero_poll_valid
         && in_flight_valid
+        && delete_valid
 }

@@ -1,14 +1,19 @@
 //! Durable header-ledger snapshots in the shared journal file.
 
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::error::HostError;
 use crate::journal::Journal;
 use crate::journal::connection::storage::{in_transaction, read_transaction};
 
+use super::model::{
+    GenerationState, HeaderGeneration, HeaderRecord, HeaderSessionIdentity, InFlightPoll,
+};
 use super::{HeaderLedger, HeaderLedgerError, HeaderLedgerSnapshot};
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
+const PREVIOUS_SCHEMA_VERSION: i64 = 1;
 const MAX_SNAPSHOT_BYTES: usize = 1_048_576;
 const CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS capacity_header_meta (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), schema_version INTEGER NOT NULL CHECK (schema_version > 0), snapshot_json TEXT NOT NULL CHECK (length(CAST(snapshot_json AS BLOB)) <= 1048576), snapshot_digest TEXT NOT NULL CHECK (length(snapshot_digest) = 64 AND snapshot_digest NOT GLOB '*[^0-9a-f]*'))";
 const EXPECTED_TABLE: &str = "CREATE TABLE capacity_header_meta (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), schema_version INTEGER NOT NULL CHECK (schema_version > 0), snapshot_json TEXT NOT NULL CHECK (length(CAST(snapshot_json AS BLOB)) <= 1048576), snapshot_digest TEXT NOT NULL CHECK (length(snapshot_digest) = 64 AND snapshot_digest NOT GLOB '*[^0-9a-f]*'))";
@@ -16,8 +21,8 @@ const EXPECTED_TABLE: &str = "CREATE TABLE capacity_header_meta (singleton INTEG
 /// Recover the snapshot at process startup using the journal's write transaction.
 ///
 /// Call only after this process owns the authoritative engine/journal guard.
-/// Any persisted in-flight poll is then treated as interrupted and held
-/// uncertain. Do not call during ordinary transactions or config reloads.
+/// Persisted in-flight polls and deletes are marked uncertain and remain charged.
+/// Do not call during ordinary transactions or config reloads.
 pub(in crate::journal) async fn bootstrap(journal: &Journal) -> Result<(), HostError> {
     in_transaction(journal, async |connection| {
         bootstrap_connection(connection).await
@@ -31,6 +36,17 @@ pub(in crate::journal) async fn validate(journal: &Journal) -> Result<(), HostEr
         validate_connection(connection).await
     })
     .await
+}
+
+/// Validate and persist the ledger after a caller changes the host job limit.
+///
+/// Call inside the same journal transaction that updates `host_capacity_policy`.
+/// The write fails when the new limit is below the sum of charged headers.
+pub(in crate::journal) async fn validate_capacity_policy_connection(
+    connection: &turso::Connection,
+) -> Result<(), HostError> {
+    let ledger = load(connection).await?;
+    save(connection, &ledger).await
 }
 
 /// Run one in-memory transition and save it in the same journal transaction.
@@ -271,7 +287,7 @@ fn decode_snapshot(
     digest: &str,
     recover_interrupted_polls: bool,
 ) -> Result<HeaderLedger, HostError> {
-    if version != SCHEMA_VERSION
+    if !matches!(version, SCHEMA_VERSION | PREVIOUS_SCHEMA_VERSION)
         || digest.len() != 64
         || !digest
             .bytes()
@@ -284,11 +300,21 @@ fn decode_snapshot(
     if snapshot_digest(bytes) != digest {
         return Err(HostError::Journal);
     }
-    let snapshot: HeaderLedgerSnapshot =
-        serde_json::from_slice(bytes).map_err(|_| HostError::Journal)?;
-    if serde_json::to_vec(&snapshot).map_err(|_| HostError::Journal)? != bytes {
-        return Err(HostError::Journal);
-    }
+    let snapshot = if version == PREVIOUS_SCHEMA_VERSION {
+        let previous: HeaderLedgerSnapshotV1 =
+            serde_json::from_slice(bytes).map_err(|_| HostError::Journal)?;
+        if serde_json::to_vec(&previous).map_err(|_| HostError::Journal)? != bytes {
+            return Err(HostError::Journal);
+        }
+        previous.into_current()
+    } else {
+        let snapshot: HeaderLedgerSnapshot =
+            serde_json::from_slice(bytes).map_err(|_| HostError::Journal)?;
+        if serde_json::to_vec(&snapshot).map_err(|_| HostError::Journal)? != bytes {
+            return Err(HostError::Journal);
+        }
+        snapshot
+    };
     if snapshot
         .records
         .windows(2)
@@ -302,6 +328,51 @@ fn decode_snapshot(
         HeaderLedger::restore_live
     };
     restore(snapshot).map_err(|_| HostError::Journal)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HeaderLedgerSnapshotV1 {
+    max_jobs: u32,
+    next_generation: u64,
+    records: Vec<HeaderRecordV1>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct HeaderRecordV1 {
+    identity: HeaderSessionIdentity,
+    generation: HeaderGeneration,
+    target: u32,
+    state: GenerationState,
+    attempt_sequence: u64,
+    in_flight_poll: Option<InFlightPoll>,
+    zero_header_settled: bool,
+}
+
+impl HeaderLedgerSnapshotV1 {
+    fn into_current(self) -> HeaderLedgerSnapshot {
+        HeaderLedgerSnapshot {
+            max_jobs: self.max_jobs,
+            next_generation: self.next_generation,
+            records: self
+                .records
+                .into_iter()
+                .map(|record| HeaderRecord {
+                    identity: record.identity,
+                    generation: record.generation,
+                    target: record.target,
+                    state: record.state,
+                    attempt_sequence: record.attempt_sequence,
+                    in_flight_poll: record.in_flight_poll,
+                    zero_header_settled: record.zero_header_settled,
+                    delete_sequence: 0,
+                    in_flight_delete: None,
+                    delete_uncertain: false,
+                })
+                .collect(),
+        }
+    }
 }
 
 fn check_snapshot_size(bytes: &[u8]) -> Result<(), HostError> {

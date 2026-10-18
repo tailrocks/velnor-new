@@ -13,14 +13,14 @@ mod storage;
 
 pub(crate) use ledger::HeaderLedger;
 #[cfg(test)]
-use model::{GenerationState, SessionId};
+use model::{GenerationState, HeaderGeneration, SessionId};
 pub(crate) use model::{
-    HeaderAllocation, HeaderGeneration, HeaderLedgerError, HeaderLedgerSnapshot, HeaderPollAttempt,
-    HeaderSessionIdentity, PollOutcome, PollsSettledProof, SessionDeleteProof,
+    HeaderAllocation, HeaderDeleteAttempt, HeaderLedgerError, HeaderLedgerSnapshot,
+    HeaderPollAttempt, PollOutcome,
 };
 pub(super) use storage::{
-    bootstrap, bootstrap_connection, bootstrap_schema_connection, load, save, transition, validate,
-    validate_connection,
+    bootstrap, bootstrap_schema_connection, load, transition, validate,
+    validate_capacity_policy_connection,
 };
 
 #[cfg(test)]
