@@ -9,7 +9,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    CRATE_JOB_ID_PREFIX, ProposedTask, Stack, TOFU_JOB_ID_PREFIX, assign_crate_job_ids,
+    CRATE_JOB_ID_PREFIX, ProposedTask, Stack, TOFU_JOB_ID_PREFIX, WorkflowEvent,
+    assign_crate_job_ids, matrix_id_for_task_group, matrix_key_for_id,
 };
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 
@@ -20,12 +21,19 @@ use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 /// assignment as the renderer, so the plan's job binding and the
 /// rendered jobs can never disagree. `None` only when the member
 /// is absent from the assignment inputs (never from the plan path).
-pub(crate) fn job_id_for_member(tasks: &[ProposedTask], member: &ProposedTask) -> Option<String> {
+pub(crate) fn job_id_for_member(
+    tasks: &[ProposedTask],
+    member: &ProposedTask,
+    event: WorkflowEvent,
+) -> Option<String> {
     if Stack::from_id(&member.stack_id) == Some(Stack::Mise) {
         return Some(format!("check-{}", member.identity.unit_id));
     }
     if member.identity.unit_id.is_empty() {
         return Some(PLAN_JOB_ID.to_owned());
+    }
+    if event == WorkflowEvent::Qualification {
+        return qualification_job_id_for_member(member).ok();
     }
     let grouped = group_runnable(tasks);
     let assigned = assign_group_ids(&grouped);
@@ -35,6 +43,43 @@ pub(crate) fn job_id_for_member(tasks: &[ProposedTask], member: &ProposedTask) -
             member.configuration.clone(),
         ))
         .cloned()
+}
+
+/// Stable one-entry job ID derived from the plan matrix key.
+///
+/// These IDs exist beside grouped crate IDs so Qualification can run
+/// each cache lane in its own job without changing ordinary CI grouping.
+pub(crate) fn qualification_job_id_for_member(
+    member: &ProposedTask,
+) -> Result<String, velnor_actions_contract::ContractError> {
+    let id = matrix_id_for_task_group(&member.stack_id, &member.task_id)?;
+    let key = matrix_key_for_id(&id)?;
+    qualification_job_id_for_key(&member.stack_id, &key)
+}
+
+/// Stable one-entry job ID for one validated stack and matrix key.
+pub(crate) fn qualification_job_id_for_key(
+    stack_id: &str,
+    matrix_key: &str,
+) -> Result<String, velnor_actions_contract::ContractError> {
+    let prefix = match Stack::from_id(stack_id) {
+        Some(Stack::Rust) => CRATE_JOB_ID_PREFIX,
+        Some(Stack::Tofu) => TOFU_JOB_ID_PREFIX,
+        _ => {
+            return Err(velnor_actions_contract::ContractError::identity(
+                "qualification.job_id",
+                "unsupported_stack",
+            ));
+        }
+    };
+    let suffix = matrix_key.strip_prefix("m-").ok_or_else(|| {
+        velnor_actions_contract::ContractError::identity(
+            "qualification.job_id",
+            "malformed_matrix_key",
+        )
+    })?;
+    velnor_actions_contract::validate_matrix_key(matrix_key)?;
+    Ok(format!("{prefix}qualification-{suffix}"))
 }
 
 /// Stable IDs for every runnable group, prefixed per stack.

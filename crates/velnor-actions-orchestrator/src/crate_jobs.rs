@@ -25,7 +25,9 @@ use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
 use crate::OrchestratorError;
-use crate::crate_job_ids::{assign_group_ids, group_is_tofu, group_runnable};
+use crate::crate_job_ids::{
+    assign_group_ids, group_is_tofu, group_runnable, qualification_job_id_for_member,
+};
 use crate::discover::Discovery;
 use crate::internal::internal;
 use crate::matrix_step::step_name_for;
@@ -39,6 +41,7 @@ pub(crate) use stage::needs;
 pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
 
 /// Built crate jobs plus their driver selections for MBX gating.
+#[derive(Default)]
 pub(crate) struct CrateBuild {
     /// `(job_id, job)` pairs in deterministic job-ID order.
     pub(crate) jobs: Vec<(String, Job)>,
@@ -57,7 +60,49 @@ pub(crate) fn build_for_workflow(
     acquire: Option<&Step>,
     helper_version: &str,
 ) -> Result<CrateBuild, OrchestratorError> {
-    build_crate_jobs(CrateJobInputs {
+    build_crate_jobs(workflow_job_inputs(
+        config,
+        label,
+        discovery,
+        catalog,
+        fetch_roots,
+        acquire,
+        helper_version,
+    ))
+}
+
+/// Build one Qualification executor per runnable plan matrix entry.
+pub(crate) fn build_qualification_for_workflow(
+    config: &VelnorConfig,
+    label: &str,
+    discovery: &Discovery,
+    catalog: &ToolCatalog,
+    fetch_roots: &[String],
+    acquire: Option<&Step>,
+    helper_version: &str,
+) -> Result<CrateBuild, OrchestratorError> {
+    build_qualification_crate_jobs(workflow_job_inputs(
+        config,
+        label,
+        discovery,
+        catalog,
+        fetch_roots,
+        acquire,
+        helper_version,
+    ))
+}
+
+/// Shared rendering inputs for grouped and Qualification jobs.
+fn workflow_job_inputs<'a>(
+    config: &'a VelnorConfig,
+    label: &'a str,
+    discovery: &'a Discovery,
+    catalog: &'a ToolCatalog,
+    fetch_roots: &'a [String],
+    acquire: Option<&'a Step>,
+    helper_version: &'a str,
+) -> CrateJobInputs<'a> {
+    CrateJobInputs {
         label,
         policy: config.workflow.policy,
         discovery,
@@ -67,7 +112,7 @@ pub(crate) fn build_for_workflow(
         max_parallel_jobs: config.workflow.max_parallel_jobs,
         helper_version,
         cache_policy: config.workflow.pull_request_cache_policy,
-    })
+    }
 }
 
 /// All authority and rendering inputs for one crate-job build.
@@ -98,78 +143,115 @@ pub(crate) struct CrateJobInputs<'a> {
 ///
 /// Returns contract, render-context, or tool-request errors.
 pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, OrchestratorError> {
-    let CrateJobInputs {
-        label,
-        policy,
-        discovery,
-        catalog,
-        fetch_roots,
-        acquire,
-        max_parallel_jobs,
-        helper_version,
-        cache_policy,
-    } = input;
-    let grouped = group_runnable(&discovery.proposals);
+    let grouped = group_runnable(&input.discovery.proposals);
     let assigned = assign_group_ids(&grouped);
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
     let mut tofu_ids = Vec::new();
     for ((package_id, configuration), tasks) in &grouped {
-        let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
         let key = (package_id.clone(), configuration.clone());
         let job_id = assigned
             .get(&key)
             .ok_or_else(|| internal("crate_job_id_missing"))?
             .clone();
-        let manifest = first.identity.unit_path.clone();
-        let display = if group_is_tofu(tasks) {
-            tofu_display_name(&first.display_name)
-        } else {
-            crate_display_name(&first.display_name, &manifest, configuration)
-        };
-        let use_rust = tasks.iter().any(|task| is_rust(task));
-        let use_mbx = tasks.iter().any(|task| is_mbx(task));
-        let use_nextest = tasks.iter().any(|task| is_nextest(task));
-        let use_opentofu = tasks.iter().any(|task| is_opentofu(task));
-        let driver = if use_mbx {
-            RenderDriver::Mbx
-        } else {
-            RenderDriver::Cargo
-        };
-        let model = CrateJob {
-            job_id: job_id.clone(),
-            display_name: display,
-            package_name: first.display_name.clone(),
-            package_id: package_id.clone(),
-            manifest,
-            configuration: configuration.clone(),
-            obligations: obligations_for(tasks, catalog)?,
-        };
-        model.validate()?;
-        let job = render_job(
-            label,
-            policy,
-            &model,
-            catalog,
-            fetch_roots,
-            use_rust,
-            use_mbx,
-            use_nextest,
-            use_opentofu,
-            acquire,
-            max_parallel_jobs,
-            helper_version,
-            cache_policy,
-        )?;
+        let (job, driver, use_opentofu) = build_job_for_members(input, &job_id, tasks)?;
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
             tofu_ids.push(job_id.clone());
         }
         jobs.push((job_id, job));
     }
-    stage::stage_tofu_root_jobs(&mut jobs, &tofu_ids, max_parallel_jobs);
+    stage::stage_tofu_root_jobs(&mut jobs, &tofu_ids, input.max_parallel_jobs);
     jobs.sort_by(|left, right| left.0.cmp(&right.0));
     Ok(CrateBuild { jobs, drivers })
+}
+
+/// Build one independently reported job for each executable matrix entry.
+///
+/// Ordinary CI keeps [`build_crate_jobs`] grouping. Qualification lanes
+/// need a distinct job per matrix key so cache restore and save evidence
+/// cannot combine unrelated task identities.
+pub(crate) fn build_qualification_crate_jobs(
+    input: CrateJobInputs<'_>,
+) -> Result<CrateBuild, OrchestratorError> {
+    let mut tasks: Vec<&ProposedTask> = input
+        .discovery
+        .proposals
+        .iter()
+        .filter(|task| is_runnable(task))
+        .collect();
+    tasks.sort_by(|left, right| left.task_id.cmp(&right.task_id));
+    let mut jobs = Vec::with_capacity(tasks.len());
+    let mut drivers = BTreeMap::new();
+    let mut tofu_ids = Vec::new();
+    for task in tasks {
+        let job_id =
+            qualification_job_id_for_member(task).map_err(crate::internal::internal_contract)?;
+        let (job, driver, use_opentofu) =
+            build_job_for_members(input, &job_id, std::slice::from_ref(&task))?;
+        drivers.insert(job_id.clone(), driver);
+        if use_opentofu {
+            tofu_ids.push(job_id.clone());
+        }
+        jobs.push((job_id, job));
+    }
+    stage::stage_tofu_root_jobs(&mut jobs, &tofu_ids, input.max_parallel_jobs);
+    jobs.sort_by(|left, right| left.0.cmp(&right.0));
+    if jobs.windows(2).any(|pair| pair[0].0 == pair[1].0) {
+        return Err(internal("qualification_crate_job_id_collision"));
+    }
+    Ok(CrateBuild { jobs, drivers })
+}
+
+/// Build and validate one crate job from its exact obligation slice.
+fn build_job_for_members(
+    input: CrateJobInputs<'_>,
+    job_id: &str,
+    tasks: &[&ProposedTask],
+) -> Result<(Job, RenderDriver, bool), OrchestratorError> {
+    let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
+    let manifest = first.identity.unit_path.clone();
+    let tofu = group_is_tofu(tasks);
+    let display = if tofu {
+        tofu_display_name(&first.display_name)
+    } else {
+        crate_display_name(&first.display_name, &manifest, &first.configuration)
+    };
+    let use_rust = tasks.iter().any(|task| is_rust(task));
+    let use_mbx = tasks.iter().any(|task| is_mbx(task));
+    let use_nextest = tasks.iter().any(|task| is_nextest(task));
+    let use_opentofu = tasks.iter().any(|task| is_opentofu(task));
+    let driver = if use_mbx {
+        RenderDriver::Mbx
+    } else {
+        RenderDriver::Cargo
+    };
+    let model = CrateJob {
+        job_id: job_id.to_owned(),
+        display_name: display,
+        package_name: first.display_name.clone(),
+        package_id: first.identity.unit_id.clone(),
+        manifest,
+        configuration: first.configuration.clone(),
+        obligations: obligations_for(tasks, input.catalog)?,
+    };
+    model.validate()?;
+    let job = render_job(
+        input.label,
+        input.policy,
+        &model,
+        input.catalog,
+        input.fetch_roots,
+        use_rust,
+        use_mbx,
+        use_nextest,
+        use_opentofu,
+        input.acquire,
+        input.max_parallel_jobs,
+        input.helper_version,
+        input.cache_policy,
+    )?;
+    Ok((job, driver, use_opentofu))
 }
 
 /// True when the task becomes a crate-job obligation.

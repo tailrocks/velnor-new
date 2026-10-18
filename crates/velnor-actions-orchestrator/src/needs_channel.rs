@@ -17,7 +17,7 @@
 //! The merge cannot distinguish legit regeneration from tampering;
 //! review is the trust root for the committed `needs` set.
 
-use velnor_actions_contract::JobConclusion;
+use velnor_actions_contract::{JobConclusion, WorkflowEvent};
 use velnor_actions_workflow_renderer::render::TASK_JOB_ID;
 
 /// Environment channel carrying the final gate's `needs` conclusions.
@@ -39,6 +39,7 @@ pub(crate) const NEEDS_ENV: &str = "VELNOR_NEEDS_JSON";
 pub(crate) fn parse_needs(
     needs: Option<&str>,
     expected: Option<&str>,
+    event: Option<WorkflowEvent>,
     errors: &mut Vec<String>,
 ) -> (Vec<String>, Vec<serde_json::Value>) {
     let Some(text) = needs.filter(|text| !text.trim().is_empty()) else {
@@ -57,11 +58,12 @@ pub(crate) fn parse_needs(
         errors.push("empty_needs".to_owned());
         return (Vec::new(), Vec::new());
     }
-    let Some(want) = parse_expected(expected, errors) else {
+    let Some(all_expected) = parse_expected(expected, errors) else {
         return (Vec::new(), Vec::new());
     };
     let mut observed = Vec::new();
     let mut results = Vec::new();
+    let mut conclusions = std::collections::BTreeMap::new();
     for (job_id, entry) in map {
         if job_id.trim().is_empty() {
             errors.push("bad_needs_job".to_owned());
@@ -75,14 +77,49 @@ pub(crate) fn parse_needs(
             continue;
         };
         observed.push(job_id.clone());
+        conclusions.insert(job_id.clone(), conclusion);
         results.push(serde_json::json!({"job_id": job_id, "conclusion": conclusion.as_str()}));
     }
     observed.sort();
     results.sort_by(|left, right| report_job(left).cmp(report_job(right)));
-    if observed != want {
+    if observed != all_expected {
         errors.push("needs_inventory_mismatch".to_owned());
     }
-    (want, results)
+
+    // The workflow declares both executor sets so the final job can see
+    // either event path. Only one set belongs to the current plan.
+    let qualification = event == Some(WorkflowEvent::Qualification);
+    let inactive: std::collections::BTreeSet<String> = all_expected
+        .iter()
+        .filter(|job_id| is_crate_executor(job_id))
+        .filter(|job_id| is_qualification_executor(job_id) != qualification)
+        .cloned()
+        .collect();
+    for job_id in &inactive {
+        if conclusions.get(job_id) != Some(&JobConclusion::Skipped) {
+            errors.push(format!("inactive_crate_job_not_skipped:{job_id}"));
+        }
+    }
+    let expected: Vec<String> = all_expected
+        .into_iter()
+        .filter(|job_id| !inactive.contains(job_id))
+        .collect();
+    let results: Vec<serde_json::Value> = results
+        .into_iter()
+        .filter(|result| !inactive.contains(report_job(result)))
+        .collect();
+    (expected, results)
+}
+
+/// Whether an ID names a generated Rust or `OpenTofu` executor job.
+fn is_crate_executor(job_id: &str) -> bool {
+    job_id.starts_with(velnor_actions_contract::CRATE_JOB_ID_PREFIX)
+        || job_id.starts_with(velnor_actions_contract::TOFU_JOB_ID_PREFIX)
+}
+
+/// Whether an ID names the one-entry Qualification executor set.
+fn is_qualification_executor(job_id: &str) -> bool {
+    job_id.starts_with("rust-qualification-") || job_id.starts_with("tofu-qualification-")
 }
 
 /// Rendered expected inventory minus the matrix-driver job.
@@ -148,7 +185,8 @@ mod tests {
         expected: Option<&str>,
     ) -> (Vec<String>, Vec<serde_json::Value>, Vec<String>) {
         let mut errors = Vec::new();
-        let (inventory, results) = parse_needs(needs, expected, &mut errors);
+        let (inventory, results) =
+            parse_needs(needs, expected, Some(WorkflowEvent::Push), &mut errors);
         (inventory, results, errors)
     }
 
@@ -182,6 +220,57 @@ mod tests {
         assert_eq!(inventory, ["plan"]);
         assert_eq!(results.len(), 1);
         assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn qualification_keeps_only_per_entry_jobs_and_requires_grouped_jobs_skipped() {
+        let (inventory, results, errors) = parse_for_event(
+            r#"{"plan":"success","rust-demo":"skipped","rust-qualification-0123456789abcdef":"success","actionlint":"success"}"#,
+            r#"["actionlint","plan","rust-demo","rust-qualification-0123456789abcdef"]"#,
+            WorkflowEvent::Qualification,
+        );
+        assert_eq!(
+            inventory,
+            ["actionlint", "plan", "rust-qualification-0123456789abcdef"]
+        );
+        assert_eq!(results.len(), 3);
+        assert!(errors.is_empty(), "{errors:?}");
+    }
+
+    #[test]
+    fn ordinary_event_keeps_grouped_jobs_and_requires_qualification_jobs_skipped() {
+        let (inventory, results, errors) = parse_for_event(
+            r#"{"plan":"success","rust-demo":"success","rust-qualification-0123456789abcdef":"skipped","actionlint":"success"}"#,
+            r#"["actionlint","plan","rust-demo","rust-qualification-0123456789abcdef"]"#,
+            WorkflowEvent::Push,
+        );
+        assert_eq!(inventory, ["actionlint", "plan", "rust-demo"]);
+        assert_eq!(results.len(), 3);
+        assert!(errors.is_empty(), "{errors:?}");
+    }
+
+    #[test]
+    fn inactive_executor_success_fails_closed() {
+        let (_, _, errors) = parse_for_event(
+            r#"{"plan":"success","rust-demo":"skipped","rust-qualification-0123456789abcdef":"success"}"#,
+            r#"["plan","rust-demo","rust-qualification-0123456789abcdef"]"#,
+            WorkflowEvent::Push,
+        );
+        assert_eq!(
+            errors,
+            ["inactive_crate_job_not_skipped:rust-qualification-0123456789abcdef"]
+        );
+    }
+
+    fn parse_for_event(
+        needs: &str,
+        expected: &str,
+        event: WorkflowEvent,
+    ) -> (Vec<String>, Vec<serde_json::Value>, Vec<String>) {
+        let mut errors = Vec::new();
+        let (inventory, results) =
+            parse_needs(Some(needs), Some(expected), Some(event), &mut errors);
+        (inventory, results, errors)
     }
 
     #[test]

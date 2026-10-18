@@ -12,6 +12,7 @@ use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
+use crate::internal::internal;
 use crate::pins::consumer_acquire_step;
 use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed};
 
@@ -177,6 +178,7 @@ fn build_workflow_jobs(
 ) -> Result<BTreeMap<String, Job>, OrchestratorError> {
     let mut jobs = BTreeMap::new();
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
+    let qualification_jobs_enabled = qualification_jobs_enabled(input.config);
     let built = crate::crate_jobs::build_for_workflow(
         input.config,
         input.label,
@@ -186,9 +188,30 @@ fn build_workflow_jobs(
         prepared.acquire.as_ref(),
         &prepared.report_helper_version,
     )?;
+    let qualification = if qualification_jobs_enabled {
+        crate::crate_jobs::build_qualification_for_workflow(
+            input.config,
+            input.label,
+            input.discovery,
+            &prepared.catalog,
+            input.fetch_roots,
+            prepared.acquire.as_ref(),
+            &prepared.report_helper_version,
+        )?
+    } else {
+        crate::crate_jobs::CrateBuild::default()
+    };
     let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
-    for (id, job) in built.jobs {
-        jobs.insert(id, job);
+    required_ids.extend(qualification.jobs.iter().map(|(id, _)| id.clone()));
+    for (id, mut job) in built.jobs {
+        if qualification_jobs_enabled {
+            set_crate_job_condition(&mut job, false);
+        }
+        insert_job(&mut jobs, id, job)?;
+    }
+    for (id, mut job) in qualification.jobs {
+        set_crate_job_condition(&mut job, true);
+        insert_job(&mut jobs, id, job)?;
     }
     for (id, job) in
         check_jobs::build_check_jobs(prepared.policy, input.discovery, &prepared.catalog)?
@@ -216,6 +239,46 @@ fn build_workflow_jobs(
         prepared.acquire.take(),
         &prepared.catalog,
     )?;
-    wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
+    let mut drivers = built.drivers;
+    for (id, driver) in qualification.drivers {
+        if drivers.insert(id.clone(), driver).is_some() {
+            return Err(internal("crate_job_driver_id_collision"));
+        }
+    }
+    wire_w1::check_crate_mbx_gating(&jobs, &drivers)?;
     Ok(jobs)
+}
+
+/// Whether this workflow includes the Qualification executor set.
+fn qualification_jobs_enabled(config: &VelnorConfig) -> bool {
+    config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1
+        || config.execution.as_ref().is_some_and(|execution| {
+            execution
+                .workflows
+                .contains(&velnor_actions_contract::RoutingWorkflow::Qualification)
+        })
+}
+
+/// Gate one static crate-job set on the validated Qualification output.
+fn set_crate_job_condition(job: &mut Job, qualification: bool) {
+    let mode = if qualification {
+        "needs.plan.outputs.qualification_campaign != ''"
+    } else {
+        "needs.plan.outputs.qualification_campaign == ''"
+    };
+    job.condition = Some(format!(
+        "always() && needs.plan.result == 'success' && {mode}"
+    ));
+}
+
+/// Insert one generated job without replacing an existing identity.
+fn insert_job(
+    jobs: &mut BTreeMap<String, Job>,
+    id: String,
+    job: Job,
+) -> Result<(), OrchestratorError> {
+    if jobs.insert(id, job).is_some() {
+        return Err(internal("workflow_job_id_collision"));
+    }
+    Ok(())
 }

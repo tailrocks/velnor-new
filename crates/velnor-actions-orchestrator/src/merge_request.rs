@@ -128,7 +128,7 @@ pub(crate) fn assemble_with_needs(
         u64::try_from(MAX_BASELINE_MANIFEST_BYTES).unwrap_or(u64::MAX),
         &mut errors,
     );
-    let (inventory, jobs) = parse_needs(needs, expected, &mut errors);
+    let (inventory, jobs) = parse_needs(needs, expected, actual_event, &mut errors);
     let attestation = read_attestation(run_dir, &inventory, &mut errors);
     let request = serde_json::json!({
         "schema": 1,

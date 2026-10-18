@@ -190,6 +190,55 @@ pub(crate) fn check_execute_inventory(
     }
 }
 
+/// Every planned matrix entry must name a required gate job.
+///
+/// Qualification and ordinary CI render separate executor sets. The
+/// event-selected plan must stay inside the corresponding final-gate
+/// inventory after the other static set is removed.
+pub(crate) fn check_matrix_job_inventory(
+    plan: &Plan,
+    request: &MergeRequest,
+    signals: &mut Signals,
+    miss_reasons: &mut BTreeSet<String>,
+) {
+    if !matrix_jobs_are_required(
+        plan.matrix
+            .include
+            .iter()
+            .map(|entry| entry.job_id.as_str()),
+        &request.required_job_ids,
+    ) {
+        signals.planning_failed = true;
+        miss_reasons.insert("no_entry".to_owned());
+    }
+}
+
+/// Check that each matrix owner occurs in the final-gate inventory.
+fn matrix_jobs_are_required<'a>(
+    matrix_jobs: impl IntoIterator<Item = &'a str>,
+    required_job_ids: &[String],
+) -> bool {
+    let required: BTreeSet<&str> = required_job_ids.iter().map(String::as_str).collect();
+    matrix_jobs
+        .into_iter()
+        .all(|job_id| required.contains(job_id))
+}
+
+#[test]
+fn matrix_job_inventory_requires_every_owner() {
+    assert!(matrix_jobs_are_required(
+        ["plan", "rust-qualification-0123456789abcdef"],
+        &[
+            "plan".to_owned(),
+            "rust-qualification-0123456789abcdef".to_owned(),
+        ],
+    ));
+    assert!(!matrix_jobs_are_required(
+        ["plan", "rust-qualification-0123456789abcdef"],
+        &["plan".to_owned(), "rust-demo".to_owned()],
+    ));
+}
+
 /// Expected entries keyed by report ID, sorted.
 pub(crate) fn plan_entries(plan: &Plan) -> BTreeMap<&str, &MatrixEntry> {
     plan.matrix
