@@ -90,7 +90,9 @@ pub(super) fn image_import_request(
     .map_err(|_| ProviderFailure::ImageImportJournal)
 }
 
-fn image_observation(image: &ImageInspect) -> Result<ImageImportObservation, ProviderFailure> {
+pub(super) fn image_observation(
+    image: &ImageInspect,
+) -> Result<ImageImportObservation, ProviderFailure> {
     let image_id = image.id.clone().ok_or(ProviderFailure::ImageIdentity)?;
     let repo_tags = image.repo_tags.clone().unwrap_or_default();
     match image.descriptor.as_ref() {

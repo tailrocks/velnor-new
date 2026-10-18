@@ -16,6 +16,6 @@ mod tests;
 
 pub(in crate::launch::resource_probe::provider) use derive::derive_load_archive;
 pub(in crate::launch::resource_probe::provider) use model::{
-    DerivedLoadArchive, ParsedWorkerArchive, WorkerImage,
+    DerivedLoadArchive, MAX_WORKER_ARCHIVE_BYTES, ParsedWorkerArchive, WorkerImage,
 };
 pub(in crate::launch::resource_probe::provider) use verify::verify;

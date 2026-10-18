@@ -16,6 +16,9 @@ mod lifecycle;
 mod ops;
 mod projection;
 mod provider;
+
+pub(in crate::launch) use provider::VerifiedWorkerImageIdentityProof;
+
 mod record;
 mod recover;
 mod sample;
@@ -33,6 +36,16 @@ pub(crate) async fn verify_worker_images_for_engine(
     images: &VerifiedWorkerImages,
 ) -> Result<(), crate::error::HostError> {
     provider::verify_worker_images_for_engine(docker, expected, images).await
+}
+
+/// Prepare the attested Runner and DinD images on the selected daemon.
+pub(crate) async fn prepare_worker_images(
+    docker: &Docker,
+    journal: &Journal,
+    expected: &SelectedEngineContext,
+    release_read_secret: &str,
+) -> Result<VerifiedWorkerImages, crate::error::HostError> {
+    provider::prepare_worker_images(docker, journal, expected, release_read_secret).await
 }
 
 #[cfg(test)]

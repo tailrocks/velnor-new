@@ -131,6 +131,105 @@ async fn changed_image_id_or_tag_stops_before_the_second_image_inspection() -> R
     Ok(())
 }
 
+#[tokio::test]
+async fn accepts_only_exact_bare_or_docker_hub_local_image_names() -> Result<(), String> {
+    let images = test_worker_images_for_root(DOCKER_ROOT);
+    let expected = selected_context(&images)?;
+    let identity = images.runner();
+    let reference = format!(
+        "velnor-runner:v{}-{}",
+        images.source_sha(),
+        identity.archive_sha256()
+    );
+    let digest = identity
+        .image_index_digest()
+        .expect("worker has selected index");
+    let accepted = [
+        (
+            reference.clone(),
+            format!("docker.io/library/velnor-runner@{digest}"),
+        ),
+        (
+            format!("docker.io/library/{reference}"),
+            format!("docker.io/library/velnor-runner@{digest}"),
+        ),
+        (reference.clone(), format!("velnor-runner@{digest}")),
+        (
+            format!("docker.io/library/{reference}"),
+            format!("velnor-runner@{digest}"),
+        ),
+    ];
+    for (tag, repo_digest) in accepted {
+        let mut inspection: Value =
+            serde_json::from_str(&image_inspect(&images, "velnor-runner", identity, false))
+                .map_err(|error| error.to_string())?;
+        inspection["RepoTags"] = json!([tag]);
+        inspection["RepoDigests"] = json!([repo_digest]);
+        let docker = DockerStub::open(vec![
+            http(200, &engine_info("selected-engine", DOCKER_ROOT, "aarch64")),
+            http(
+                200,
+                &serde_json::to_string(&inspection).map_err(|error| error.to_string())?,
+            ),
+            http(
+                200,
+                &image_inspect(&images, "velnor-dind", images.dind(), false),
+            ),
+            http(200, &engine_info("selected-engine", DOCKER_ROOT, "aarch64")),
+        ])?;
+
+        let result = verify_worker_images_for_engine(&docker.docker, &expected, &images).await;
+        let requests = docker.finish().await?;
+
+        assert_eq!(result, Ok(()));
+        assert_eq!(requests.len(), 4);
+        assert!(requests[1].contains("/images/"));
+    }
+
+    let invalid_tags = [
+        format!("ghcr.io/library/{reference}"),
+        format!("docker.io/other/{reference}"),
+        format!("{reference}-foreign"),
+        "velnor-runner:mutable".to_owned(),
+    ];
+    let invalid_digests = [
+        format!("ghcr.io/library/velnor-runner@{digest}"),
+        format!("docker.io/other/velnor-runner@{digest}"),
+        format!("docker.io/library/velnor-runner-foreign@{digest}"),
+        format!("velnor-runner@sha256:{}", "0".repeat(64)),
+    ];
+    for (tag, repo_digest) in invalid_tags
+        .into_iter()
+        .map(|tag| (tag, format!("docker.io/library/velnor-runner@{digest}")))
+        .chain(
+            invalid_digests
+                .into_iter()
+                .map(|repo_digest| (reference.clone(), repo_digest)),
+        )
+    {
+        let mut inspection: Value =
+            serde_json::from_str(&image_inspect(&images, "velnor-runner", identity, false))
+                .map_err(|error| error.to_string())?;
+        inspection["RepoTags"] = json!([tag]);
+        inspection["RepoDigests"] = json!([repo_digest]);
+        let docker = DockerStub::open(vec![
+            http(200, &engine_info("selected-engine", DOCKER_ROOT, "aarch64")),
+            http(
+                200,
+                &serde_json::to_string(&inspection).map_err(|error| error.to_string())?,
+            ),
+        ])?;
+
+        let result = verify_worker_images_for_engine(&docker.docker, &expected, &images).await;
+        let requests = docker.finish().await?;
+
+        assert!(result.is_err());
+        assert_eq!(requests.len(), 2);
+        assert!(requests[1].contains("/images/"));
+    }
+    Ok(())
+}
+
 #[derive(Clone, Copy)]
 enum MutateInspection {
     ImageId,

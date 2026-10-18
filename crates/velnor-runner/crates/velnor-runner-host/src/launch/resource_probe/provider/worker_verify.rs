@@ -92,7 +92,7 @@ fn verify_inspection(
         || !image
             .repo_tags
             .as_ref()
-            .is_some_and(|tags| tags.len() == 1 && tags[0] == reference)
+            .is_some_and(|tags| tags.len() == 1 && accepted_local_tag(&tags[0], reference))
         || image.manifests.is_some()
     {
         return Err(ProviderFailure::ImageIdentity);
@@ -138,8 +138,7 @@ fn verify_inspection(
                 return Err(ProviderFailure::ImageIdentity);
             }
             if let Some(repo_digests) = image.repo_digests.as_ref()
-                && !repo_digests.is_empty()
-                && repo_digests != &[format!("docker.io/library/{image_name}@{digest}")]
+                && !accepted_local_repo_digest(repo_digests, image_name, digest)
             {
                 return Err(ProviderFailure::ImageIdentity);
             }
@@ -147,6 +146,17 @@ fn verify_inspection(
         None => return Err(ProviderFailure::ImageIdentity),
     }
     Ok(())
+}
+
+fn accepted_local_tag(observed: &str, expected: &str) -> bool {
+    observed == expected || observed == format!("docker.io/library/{expected}")
+}
+
+fn accepted_local_repo_digest(observed: &[String], image_name: &str, digest: &str) -> bool {
+    observed.is_empty()
+        || (observed.len() == 1
+            && (observed[0] == format!("{image_name}@{digest}")
+                || observed[0] == format!("docker.io/library/{image_name}@{digest}")))
 }
 
 fn valid_digest(value: &str) -> bool {

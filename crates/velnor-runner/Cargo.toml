@@ -21,7 +21,7 @@ serde_json = { version = "=1.0.154" }
 rustix = { version = "=1.1.5", default-features = false, features = ["fs", "net", "process", "std"] }
 thiserror = { version = "=2.0.21" }
 clap = { version = "=4.6.7", features = ["derive"] }
-tokio = { version = "=1.53.3", features = ["rt-multi-thread", "macros", "time", "io-util", "sync", "net", "process"] }
+tokio = { version = "=1.53.3", features = ["rt-multi-thread", "macros", "time", "io-util", "sync", "net", "process", "fs"] }
 libc = { version = "=0.2.190" }
 bollard = { version = "=0.21.1", default-features = false, features = ["pipe"] }
 turso = { version = "=0.8.3" }

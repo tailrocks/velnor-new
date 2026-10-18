@@ -8,11 +8,16 @@ use std::path::Path;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
+use super::super::archive::worker::MAX_WORKER_ARCHIVE_BYTES;
 use super::super::{ProviderFailure, hex};
 use super::{
-    ASSETS, CHECKSUM_ASSETS, CHECKSUMS_FILE, MANIFEST_FILE, MAX_ARCHIVE_BYTES, MAX_CHECKSUMS_BYTES,
-    MAX_MANIFEST_BYTES, PROBE_ARCHIVE, RELEASE_SIGNER, SOURCE_REPOSITORY,
+    ASSETS, CHECKSUM_ASSETS, CHECKSUMS_FILE, DIND_ARCHIVE, MANIFEST_FILE, MAX_ARCHIVE_BYTES,
+    MAX_CHECKSUMS_BYTES, MAX_MANIFEST_BYTES, PROBE_ARCHIVE, RELEASE_SIGNER, RUNNER_ARCHIVE,
+    SOURCE_REPOSITORY,
 };
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct AssetMetadata {
@@ -72,6 +77,8 @@ pub(super) fn release_metadata(
         return Err(ProviderFailure::ReleaseAssets);
     }
     if assets[PROBE_ARCHIVE].size > MAX_ARCHIVE_BYTES
+        || assets[RUNNER_ARCHIVE].size > MAX_WORKER_ARCHIVE_BYTES
+        || assets[DIND_ARCHIVE].size > MAX_WORKER_ARCHIVE_BYTES
         || assets[MANIFEST_FILE].size > MAX_MANIFEST_BYTES
         || assets[CHECKSUMS_FILE].size > MAX_CHECKSUMS_BYTES
     {

@@ -3,7 +3,8 @@ use std::path::PathBuf;
 
 use bollard::models::ContainerConfig;
 
-pub(super) const MAX_WORKER_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
+pub(in crate::launch::resource_probe::provider) const MAX_WORKER_ARCHIVE_BYTES: u64 =
+    1024 * 1024 * 1024;
 pub(super) const MAX_WORKER_ENTRIES: usize = 64;
 pub(super) const MAX_METADATA_BYTES: u64 = 1024 * 1024;
 pub(super) const MAX_ARCHIVE_METADATA_BYTES: u64 = 2 * 1024 * 1024;
@@ -102,6 +103,27 @@ pub(in crate::launch::resource_probe::provider) struct ParsedWorkerArchive {
 }
 
 impl ParsedWorkerArchive {
+    #[cfg(test)]
+    pub(in crate::launch::resource_probe::provider) fn test_fixture(
+        config: ContainerConfig,
+        diff_ids: Vec<String>,
+        repo_tag: String,
+    ) -> Self {
+        Self {
+            archive_sha256: "1".repeat(64),
+            archive_index_digest: "2".repeat(64),
+            image_index_digest: format!("sha256:{}", "3".repeat(64)),
+            image_index_size: 856,
+            manifest_digest: format!("sha256:{}", "4".repeat(64)),
+            manifest_size: 4_472,
+            config_digest: format!("sha256:{}", "5".repeat(64)),
+            config,
+            diff_ids,
+            repo_tag,
+            blob_inventory: BTreeMap::new(),
+        }
+    }
+
     #[cfg(test)]
     pub(super) fn blob_inventory_len(&self) -> usize {
         self.blob_inventory.len()

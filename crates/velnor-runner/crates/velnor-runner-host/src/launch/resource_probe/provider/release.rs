@@ -23,7 +23,6 @@ const DIND_ARCHIVE: &str = "velnor-dind-linux-amd64.tar";
 const MANIFEST_FILE: &str = "RESOURCE_PROBE_MANIFEST.json";
 const CHECKSUMS_FILE: &str = "SHA256SUMS";
 const MAX_ARCHIVE_BYTES: u64 = 64 * 1024 * 1024;
-const MAX_WORKER_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_MANIFEST_BYTES: u64 = 16 * 1024;
 const MAX_CHECKSUMS_BYTES: u64 = 4 * 1024;
 const RELEASE_SIGNER: &str = "https://dotcom.releases.github.com";
@@ -346,7 +345,7 @@ fn prepare_worker_artifacts(
     for name in [RUNNER_ARCHIVE, DIND_ARCHIVE] {
         if assets
             .get(name)
-            .is_none_or(|asset| asset.size > MAX_WORKER_ARCHIVE_BYTES)
+            .is_none_or(|asset| asset.size > super::archive::worker::MAX_WORKER_ARCHIVE_BYTES)
         {
             return Err(ProviderFailure::ReleaseAssets);
         }

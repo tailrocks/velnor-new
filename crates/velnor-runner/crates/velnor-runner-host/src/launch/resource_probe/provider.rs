@@ -19,6 +19,8 @@ mod identity;
 mod release;
 #[cfg(test)]
 mod tests;
+mod worker_import;
+mod worker_prepare;
 mod worker_stream;
 mod worker_verify;
 
@@ -27,6 +29,7 @@ use identity::{
     SelectedDaemon, candidate, compiled_source_revision, image_import_request, inspect_image,
     selected_daemon, verified_import_inspection, verify_daemon_image, verify_selected_daemon,
 };
+pub(in crate::launch) use worker_import::VerifiedWorkerImageIdentityProof;
 
 const SOURCE_REPOSITORY: &str = "tailrocks/velnor-new";
 const SOURCE_REF: &str = "refs/heads/main";
@@ -47,6 +50,15 @@ pub(super) fn daemon_platform_matches(info: &SystemInfo) -> bool {
 
 pub(super) fn daemon_architecture(info: &SystemInfo) -> Option<&'static str> {
     identity::daemon_architecture(info)
+}
+
+pub(super) async fn prepare_worker_images(
+    docker: &Docker,
+    journal: &Journal,
+    expected: &crate::launch::SelectedEngineContext,
+    release_read_secret: &str,
+) -> Result<crate::launch::VerifiedWorkerImages, HostError> {
+    worker_prepare::prepare_worker_images(docker, journal, expected, release_read_secret).await
 }
 
 pub(super) async fn verify_worker_images_for_engine(
