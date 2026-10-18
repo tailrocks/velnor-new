@@ -9,6 +9,10 @@ license.workspace = true
 name = "velnor-resource-probe"
 path = "src/main.rs"
 
+[[bin]]
+name = "velnor-storage-init"
+path = "src/storage_init_main.rs"
+
 [dependencies]
 rustix.workspace = true
 serde.workspace = true
