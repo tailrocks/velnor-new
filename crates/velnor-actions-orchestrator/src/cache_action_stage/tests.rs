@@ -29,8 +29,29 @@ fn stage_creation_keeps_one_descriptor_bound_file_and_rejects_replacement()
     let root = tempfile::tempdir()?;
     let context = context(root.path())?;
     assert_eq!(
-        context.action_path().parent().and_then(Path::file_name),
-        Some(std::ffi::OsStr::new("runner-temp"))
+        context.action_path().file_name(),
+        Some(std::ffi::OsStr::new("payload"))
+    );
+    let operation_directory = context.action_path().parent().expect("operation directory");
+    let digest = operation_directory
+        .file_name()
+        .and_then(std::ffi::OsStr::to_str);
+    assert!(digest.is_some_and(|value| {
+        value.len() == 64
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    }));
+    assert_eq!(
+        operation_directory.parent().and_then(Path::file_name),
+        Some(std::ffi::OsStr::new("cache-staging"))
+    );
+    assert_eq!(
+        operation_directory
+            .parent()
+            .and_then(Path::parent)
+            .and_then(Path::file_name),
+        Some(std::ffi::OsStr::new("velnor"))
     );
     let mut writer = create_stage(&context)?;
     writer.write_all(b"verified transport")?;
@@ -55,6 +76,12 @@ fn stage_creation_does_not_adopt_or_remove_an_existing_file()
 -> Result<(), Box<dyn std::error::Error>> {
     let root = tempfile::tempdir()?;
     let context = context(root.path())?;
+    std::fs::create_dir_all(
+        context
+            .action_path()
+            .parent()
+            .ok_or("missing stage parent")?,
+    )?;
     std::fs::write(context.action_path(), b"foreign file")?;
     std::fs::set_permissions(
         context.action_path(),
@@ -62,6 +89,40 @@ fn stage_creation_does_not_adopt_or_remove_an_existing_file()
     )?;
     assert!(create_stage(&context).is_err());
     assert_eq!(std::fs::read(context.action_path())?, b"foreign file");
+    Ok(())
+}
+
+#[test]
+fn dropping_a_partial_writer_removes_only_its_owned_stage_file()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = tempfile::tempdir()?;
+    let context = context(root.path())?;
+    let mut writer = create_stage(&context)?;
+    writer.write_all(b"partial payload")?;
+    drop(writer);
+
+    assert!(!context.action_path().exists());
+    Ok(())
+}
+
+#[test]
+fn dropping_a_writer_preserves_a_replacement_stage_file() -> Result<(), Box<dyn std::error::Error>>
+{
+    let root = tempfile::tempdir()?;
+    let context = context(root.path())?;
+    let writer = create_stage(&context)?;
+    std::fs::remove_file(context.action_path())?;
+    std::fs::write(context.action_path(), b"foreign replacement")?;
+    std::fs::set_permissions(
+        context.action_path(),
+        std::fs::Permissions::from_mode(0o600),
+    )?;
+    drop(writer);
+
+    assert_eq!(
+        std::fs::read(context.action_path())?,
+        b"foreign replacement"
+    );
     Ok(())
 }
 
@@ -154,5 +215,49 @@ fn stage_creation_rejects_a_symlink_replacing_the_trusted_root()
             )
             .exists()
     );
+    Ok(())
+}
+
+#[test]
+fn stage_creation_rejects_a_symlink_at_the_fixed_quota_root()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = tempfile::tempdir()?;
+    let context = context(root.path())?;
+    let runner_temp = root.path().join("runner-temp");
+    let foreign = root.path().join("foreign");
+    std::fs::create_dir(&foreign)?;
+    std::os::unix::fs::symlink(&foreign, runner_temp.join("velnor"))?;
+
+    assert!(create_stage(&context).is_err());
+    assert!(!foreign.join("cache-staging").exists());
+    assert!(!context.action_path().exists());
+    Ok(())
+}
+
+#[test]
+fn retained_stage_parent_rejects_replacement_before_a_write()
+-> Result<(), Box<dyn std::error::Error>> {
+    let root = tempfile::tempdir()?;
+    let context = context(root.path())?;
+    let mut writer = create_stage(&context)?;
+    let runner_temp = root.path().join("runner-temp");
+    let stage_root = runner_temp.join("velnor/cache-staging");
+    let moved = runner_temp.join("velnor/cache-staging-moved");
+    std::fs::rename(&stage_root, &moved)?;
+    std::fs::create_dir(&stage_root)?;
+    std::fs::set_permissions(&stage_root, std::fs::Permissions::from_mode(0o700))?;
+
+    assert!(
+        writer
+            .write_all(b"must not be written through a replaced path")
+            .is_err()
+    );
+    assert!(!context.action_path().exists());
+    let digest = context
+        .action_path()
+        .parent()
+        .and_then(Path::file_name)
+        .ok_or("missing stage operation directory")?;
+    assert!(moved.join(digest).join("payload").exists());
     Ok(())
 }

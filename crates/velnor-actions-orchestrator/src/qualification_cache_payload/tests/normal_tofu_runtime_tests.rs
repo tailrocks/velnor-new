@@ -234,8 +234,22 @@ fn cold_export_records_absent_provider_root_in_the_isolated_v3_stage() {
     assert!(export.state_digest().starts_with("b3-"));
     assert!(export.manifest_digest().starts_with("b3-"));
     assert_eq!(
-        export.stage_path().parent(),
-        Some(fixture.runner_temp.as_path())
+        export.stage_path().file_name(),
+        Some(std::ffi::OsStr::new("payload"))
+    );
+    let operation_directory = export.stage_path().parent().expect("operation directory");
+    assert_eq!(
+        operation_directory
+            .parent()
+            .and_then(std::path::Path::file_name),
+        Some(std::ffi::OsStr::new("cache-staging"))
+    );
+    assert_eq!(
+        operation_directory
+            .parent()
+            .and_then(std::path::Path::parent)
+            .and_then(std::path::Path::file_name),
+        Some(std::ffi::OsStr::new("velnor"))
     );
 
     let context = crate::cache_action_stage::StageContext::normal_tofu_providers(

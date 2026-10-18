@@ -5,6 +5,7 @@ mod context;
 mod launcher;
 mod receipt;
 mod stage;
+mod stage_parent;
 mod tar;
 
 #[cfg(test)]
