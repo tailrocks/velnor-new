@@ -16,13 +16,13 @@ check_interval_hours = 24
 max_exception_days = 14
 
 [tools]
-mise = "2026.10.8"
+mise = "2026.10.13"
 rust = "1.98.1"
 mr-boxington = "1.21.1"
 gh = "2.102.0"
 actionlint = "1.7.12"
 shellcheck = "0.11.0"
-zizmor = "1.30.1"
+zizmor = "1.31.1"
 nextest = "0.9.148"
 opentofu = "1.13.1"
 release-plz = "0.3.172"
@@ -33,9 +33,9 @@ supported = ["ubuntu-26.04", "ubuntu-24.04", "ubuntu-22.04"]
 
 [[actions]]
 name = "jdx/mise-action"
-version = "v5.1.2"
-sha = "08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8"
-reviewed = "2026-10-12"
+version = "v5.2.0"
+sha = "9b200bcecbfd6303e69a4a261b2e09e3757440a7"
+reviewed = "2026-10-17"
 
 [[actions]]
 name = "actions/checkout"
@@ -75,9 +75,9 @@ reviewed = "2026-10-03"
 
 [[actions]]
 name = "asamarts/alint"
-version = "v0.18.1"
-sha = "f558d76d076710312c54723d18e44d8cd95b3977"
-reviewed = "2026-10-12"
+version = "v0.18.4"
+sha = "18e1a66db7444fed817c5d8c75292c7709fff32e"
+reviewed = "2026-10-17"
 
 [[actions]]
 name = "aws-actions/configure-aws-credentials"

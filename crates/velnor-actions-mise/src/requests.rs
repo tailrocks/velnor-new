@@ -6,179 +6,18 @@
 //! parsing; discovery and qualification return the raw metadata JSON string,
 //! and pinned exec returns the typed output.
 
-use std::ffi::{OsStr, OsString};
-use std::path::{Path, PathBuf};
-
 use crate::catalog::{PinnedTool, ToolCatalog};
 use crate::command::{
-    IsolatedCommand, ProcessOutput, mise_argv_tail, mise_install_argv_tail, redact_argv_for_debug,
+    IsolatedCommand, ProcessOutput, mise_install_argv_tail, redact_argv_for_debug,
 };
 use crate::error::MiseError;
-
-/// Cargo payload program executed after the `--` separator.
-const CARGO_PROGRAM: &str = "cargo";
-
-/// Cargo subcommand reporting workspace metadata as JSON.
-const CARGO_METADATA: &str = "metadata";
-
-/// Conservative discovery of one manifest through pinned Cargo.
-///
-/// Exact payload: `cargo metadata --format-version 1 --no-deps
-/// --manifest-path <manifest>`. No `--locked`/`--offline`: discovery must not
-/// wait for full resolution. `--no-deps` skips resolution entirely, so the
-/// probe performs no index access, network fetch, or repository write --
-/// not even for lockless-with-dependencies manifests (poison-fixture proven;
-/// the orchestrator also brackets every run with a tool snapshot that fails
-/// closed on drift). Full resolution is qualification's job, lockful-only.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MetadataDiscovery {
-    /// Manifest whose metadata is requested.
-    manifest: PathBuf,
-}
-
-impl MetadataDiscovery {
-    /// Discover metadata for one manifest path.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidManifestPath`] for an empty path.
-    pub fn new(manifest: PathBuf) -> Result<Self, MiseError> {
-        if manifest.as_os_str().is_empty() {
-            return Err(MiseError::InvalidManifestPath {
-                path: String::new(),
-            });
-        }
-        Ok(Self { manifest })
-    }
-
-    /// Manifest whose metadata is requested.
-    #[must_use]
-    pub fn manifest(&self) -> &Path {
-        &self.manifest
-    }
-
-    /// Cargo-side payload arguments, byte-exact per the contract.
-    #[must_use]
-    pub fn cargo_argv(&self) -> Vec<OsString> {
-        vec![
-            OsString::from(CARGO_PROGRAM),
-            OsString::from(CARGO_METADATA),
-            OsString::from("--format-version"),
-            OsString::from("1"),
-            OsString::from("--no-deps"),
-            OsString::from("--manifest-path"),
-            self.manifest.as_os_str().to_owned(),
-        ]
-    }
-
-    /// Full mise argument vector including the program.
-    #[must_use]
-    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        full_mise_argv(catalog, &[PinnedTool::Rust], &self.cargo_argv())
-    }
-
-    /// Isolated command running this discovery.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
-    /// empty, which the constructor rules out.
-    pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&[PinnedTool::Rust]);
-        IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
-    }
-
-    /// Run discovery and return the raw metadata JSON string.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::SpawnFailed`] when Cargo cannot launch,
-    /// [`MiseError::NonZeroExit`] on nonzero status, and
-    /// [`MiseError::InvalidUtf8`] when stdout is not text.
-    pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
-        let output = self.command(catalog)?.run()?;
-        output.require_success("mise")?;
-        output.stdout_text("mise")
-    }
-}
-
-/// Locked/offline qualification after dependency sources have been prepared.
-///
-/// Exact payload: `cargo metadata --format-version 1 --locked --offline
-/// --manifest-path <workspace-root>/Cargo.toml`. Missing offline
-/// dependencies surface as `preparation_incomplete` upstream, never a fetch.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MetadataQualification {
-    /// Workspace-root manifest whose resolution is qualified.
-    workspace_manifest: PathBuf,
-}
-
-impl MetadataQualification {
-    /// Qualify resolution for one workspace-root manifest.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidManifestPath`] for an empty path.
-    pub fn new(workspace_manifest: PathBuf) -> Result<Self, MiseError> {
-        if workspace_manifest.as_os_str().is_empty() {
-            return Err(MiseError::InvalidManifestPath {
-                path: String::new(),
-            });
-        }
-        Ok(Self { workspace_manifest })
-    }
-
-    /// Workspace-root manifest whose resolution is qualified.
-    #[must_use]
-    pub fn workspace_manifest(&self) -> &Path {
-        &self.workspace_manifest
-    }
-
-    /// Cargo-side payload arguments, byte-exact per the contract.
-    #[must_use]
-    pub fn cargo_argv(&self) -> Vec<OsString> {
-        vec![
-            OsString::from(CARGO_PROGRAM),
-            OsString::from(CARGO_METADATA),
-            OsString::from("--format-version"),
-            OsString::from("1"),
-            OsString::from("--locked"),
-            OsString::from("--offline"),
-            OsString::from("--manifest-path"),
-            self.workspace_manifest.as_os_str().to_owned(),
-        ]
-    }
-
-    /// Full mise argument vector including the program.
-    #[must_use]
-    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        full_mise_argv(catalog, &[PinnedTool::Rust], &self.cargo_argv())
-    }
-
-    /// Isolated command running this qualification.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
-    /// empty, which the constructor rules out.
-    pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&[PinnedTool::Rust]);
-        IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
-    }
-
-    /// Run qualification and return the raw metadata JSON string.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::SpawnFailed`] when Cargo cannot launch,
-    /// [`MiseError::NonZeroExit`] on nonzero status, and
-    /// [`MiseError::InvalidUtf8`] when stdout is not text.
-    pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
-        let output = self.command(catalog)?.run()?;
-        output.require_success("mise")?;
-        output.stdout_text("mise")
-    }
-}
+use std::ffi::{OsStr, OsString};
+#[path = "requests_helpers.rs"]
+mod helpers;
+use helpers::full_mise_argv;
+#[path = "requests_metadata.rs"]
+mod metadata;
+pub use metadata::{MetadataDiscovery, MetadataQualification};
 
 /// One payload program run under at least one pinned tool.
 ///
@@ -288,6 +127,26 @@ impl PinnedToolExec {
         Ok(command)
     }
 
+    /// Build a pinned GitHub CLI command using one explicitly selected token.
+    ///
+    /// Only the `gh` pinned tool may receive this credential. The token is
+    /// passed through the child environment and never through argv.
+    /// # Errors
+    /// Returns [`MiseError::InvalidStepInput`] for non-`gh` tools or malformed tokens.
+    pub fn command_with_github_token(
+        &self,
+        catalog: &ToolCatalog,
+        token: &str,
+    ) -> Result<IsolatedCommand, MiseError> {
+        if self.tools.as_slice() != [PinnedTool::Gh] || self.program != "gh" {
+            return Err(MiseError::InvalidStepInput {
+                field: "GH_TOKEN".to_owned(),
+                value: "credential_requires_pinned_gh".to_owned(),
+            });
+        }
+        self.command(catalog)?.with_github_token(token)
+    }
+
     /// Run the payload and return its typed output, whatever the exit is.
     ///
     /// # Errors
@@ -297,6 +156,29 @@ impl PinnedToolExec {
     pub fn run(&self, catalog: &ToolCatalog) -> Result<ProcessOutput, MiseError> {
         self.command(catalog)?.run()
     }
+}
+
+/// Reject `rustup` payloads (bare or absolute) and `cargo install` payloads.
+fn reject_forbidden_payload(program: &OsStr, args: &[OsString]) -> Result<(), MiseError> {
+    let stem = std::path::Path::new(program)
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if stem == FORBIDDEN_PROGRAM_STEM {
+        return Err(MiseError::ForbiddenPayload {
+            program: program.to_string_lossy().into_owned(),
+            reason: "rustup_forbidden".to_owned(),
+        });
+    }
+    let is_cargo_install =
+        program == OsStr::new("cargo") && args.first().is_some_and(|arg| arg == "install");
+    if is_cargo_install {
+        return Err(MiseError::ForbiddenPayload {
+            program: "cargo".to_owned(),
+            reason: "cargo_install_forbidden".to_owned(),
+        });
+    }
+    Ok(())
 }
 
 /// Bootstrap installation of exact catalog tools (the `mise install` step).
@@ -362,39 +244,4 @@ impl MiseInstall {
     pub fn run(&self, catalog: &ToolCatalog) -> Result<ProcessOutput, MiseError> {
         self.command(catalog)?.run()
     }
-}
-
-/// Reject `rustup` payloads (bare or absolute) and `cargo install` payloads.
-fn reject_forbidden_payload(program: &OsStr, args: &[OsString]) -> Result<(), MiseError> {
-    let stem = Path::new(program)
-        .file_stem()
-        .map(|stem| stem.to_string_lossy().into_owned())
-        .unwrap_or_default();
-    if stem == FORBIDDEN_PROGRAM_STEM {
-        return Err(MiseError::ForbiddenPayload {
-            program: program.to_string_lossy().into_owned(),
-            reason: "rustup_forbidden".to_owned(),
-        });
-    }
-    let is_cargo_install =
-        program == OsStr::new(CARGO_PROGRAM) && args.first().is_some_and(|arg| arg == "install");
-    if is_cargo_install {
-        return Err(MiseError::ForbiddenPayload {
-            program: CARGO_PROGRAM.to_owned(),
-            reason: "cargo_install_forbidden".to_owned(),
-        });
-    }
-    Ok(())
-}
-
-/// Full mise argv: program plus the shared globals/`exec`/specs/`--` tail.
-fn full_mise_argv(
-    catalog: &ToolCatalog,
-    tools: &[PinnedTool],
-    payload: &[OsString],
-) -> Vec<OsString> {
-    let specs = catalog.tool_specs(tools);
-    let mut argv = vec![OsString::from("mise")];
-    argv.extend(mise_argv_tail("exec", &specs, payload));
-    argv
 }

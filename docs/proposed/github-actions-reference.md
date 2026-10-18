@@ -107,3 +107,40 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
   - `velnor-actions-freshness` supports an optional `default_cooldown_days` integer header key in `.velnor/version-policy.toml` (`DEFAULT_COOLDOWN_DAYS = 3`, bounded `MIN_COOLDOWN_DAYS = 1` to `MAX_COOLDOWN_DAYS = 90`).
   - When `default_cooldown_days` is omitted from `.velnor/version-policy.toml`, the freshness policy header check defaults to `3` days; values outside `1..=90` or non-integers fail the `policy-header` gate.
   - Security advisory scanning via `cargo-deny` remains immediate and is never delayed by `default_cooldown_days`.
+
+## Native preview publication API boundaries (2026-10-18)
+
+The [workflow-jobs REST contract](https://docs.github.com/en/rest/actions/workflow-jobs#list-jobs-for-a-workflow-run-attempt)
+provides the attempt-specific endpoint
+`GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs`.
+The job response includes `run_id`, `head_sha`, and `head_branch`; it does not
+include a `run_attempt` property. Velnor binds the attempt through that endpoint,
+checks those returned identities and the single successful `Required` job, then
+re-fetches the latest workflow run and rejects a changed run ID or attempt.
+Executable API fixtures omit the nonexistent job property so they cannot conceal
+an incompatibility with the upstream response shape.
+
+The [repository REST contract](https://docs.github.com/en/rest/repos/repos#check-if-immutable-releases-are-enabled-for-a-repository)
+provides `GET /repos/{owner}/{repo}/immutable-releases` with `enabled` and
+`enforced_by_owner`. The [release REST contract](https://docs.github.com/en/rest/releases/releases)
+returns each published release's `immutable` status; its assets expose byte sizes
+and `sha256:` digests. Native publication must check the prerequisite before any
+unfinished mutation and independently verify the resulting immutable release.
+Draft creation, asset uploads, and publication are separate mutations. No
+observation authorizes replacing an asset, forcing a tag, or deleting a release.
+
+The immutable-release settings GET requires Administration read permission. The
+workflow token cannot request this permission through `permissions: contents`.
+Native publication therefore uses the separate `PREVIEW_IMMUTABILITY_READ_TOKEN`
+environment secret only for this fixed settings route, while release mutations
+continue using the workflow token. The settings credential is never forwarded
+to repository tasks, the signer, or tap promotion.
+
+Release responses do not include `make_latest` (confirmed against the official
+Velnor v0.1.12 API response). It is a request-only string enum. `gh api --field`
+converts literal booleans and expands `@file` values, so native release requests
+use `--raw-field` for string fields and `--field` only for draft/prerelease
+booleans. Preview admission verifies `prerelease: true`; GitHub excludes
+prereleases from latest releases. Stable publication additionally checks the
+latest-release endpoint immediately after publication. Completed older releases
+do not have to remain latest to reconcile safely.

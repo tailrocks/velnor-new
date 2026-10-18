@@ -75,7 +75,7 @@ pub(super) fn render_consumer_binary_release(
     let eligibility_context = ReleaseEligibilityContext {
         repository: spec.repository.clone(),
         default_branch: spec.default_branch.clone(),
-        workflow_path: BINARY_RELEASE_WORKFLOW.to_owned(),
+        channel: velnor_actions_contract::package_release::PackageReleaseChannel::Stable,
     };
     let eligibility =
         consumer_release_eligibility::consumer_script(&eligibility_context, &spec.gh_argv, false)?;
@@ -104,6 +104,7 @@ fn validate_spec(spec: &ConsumerBinaryReleaseSpec) -> Result<(), RenderError> {
         manifest_path: spec.manifest_path.clone(),
         package: spec.package.clone(),
         bin: spec.bin.clone(),
+        preview: velnor_actions_contract::config::RustBinaryPreviewConfig::default(),
     };
     config
         .validate("consumer-config.toml")

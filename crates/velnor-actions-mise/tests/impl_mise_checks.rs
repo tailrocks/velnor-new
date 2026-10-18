@@ -1,5 +1,8 @@
 use std::path::PathBuf;
-use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner, MiseCheck};
+use velnor_actions_contract::config::{
+    CheckExecutor, CheckPlatform, CheckRunner, MiseCheck, MiseTaskSource,
+    RustBinaryPreviewProducer, VerificationRunner,
+};
 use velnor_actions_mise as mise;
 use velnor_actions_mise::checks::*;
 
@@ -159,6 +162,104 @@ fn full_source_bytes_remain_bound_after_task_projection() -> TestResult {
     let check = root.discover("probe")?.remove(0);
     assert_eq!(check.config_source, source);
     assert!(!check.task_config.contains("[env]"));
+    Ok(())
+}
+
+#[test]
+fn preview_producer_binds_explicit_nested_source_and_sanitizes_task_projection() -> TestResult {
+    let root = Fixture::new("[tasks.wrong]\nrun='touch WRONG_SOURCE'\n")?;
+    let nested = root.0.join("native/apple");
+    std::fs::create_dir_all(&nested)?;
+    std::fs::write(root.0.join("native/Cargo.toml"), "[package]\nname='x'\n")?;
+    let source = "[env]\nPOISON='bad'\n[hooks]\nenter='touch POISON'\n[tools]\nrust='nightly'\n[tasks.helper]\nrun='true'\n[tasks.bundle-preview]\ndepends=['helper']\nrun='true'\n";
+    std::fs::write(root.0.join("native/mise.toml"), source)?;
+    let producer = RustBinaryPreviewProducer {
+        task: "bundle-preview".to_owned(),
+        source: MiseTaskSource {
+            mise_config: "native/mise.toml".to_owned(),
+            working_directory: "native/apple".to_owned(),
+        },
+        runner: VerificationRunner::Macos26Arm64,
+        inputs: vec!["native/Cargo.toml".to_owned()],
+        ..RustBinaryPreviewProducer::default()
+    };
+    let discovered = discover_preview_producer(
+        &root.0,
+        &producer,
+        &[],
+        mise::CheckDeadline::after(std::time::Duration::from_secs(30))?,
+    )?;
+
+    assert_eq!(discovered.check.directory, "native/apple");
+    assert_eq!(discovered.check.runner.label, "macos-26");
+    assert_eq!(discovered.check.runner.platform, CheckPlatform::MacosArm64);
+    assert_eq!(discovered.proposal.identity.unit_path, "native/mise.toml");
+    assert_eq!(discovered.config_source, source);
+    assert!(
+        discovered
+            .config_inputs
+            .contains(&"native/mise.toml".to_owned())
+    );
+    assert!(
+        discovered
+            .config_inputs
+            .contains(&"native/Cargo.toml".to_owned())
+    );
+    assert!(discovered.task_config.contains("[tasks.bundle-preview]"));
+    assert!(discovered.task_config.contains("[tasks.helper]"));
+    assert!(!discovered.task_config.contains("[env]"));
+    assert!(!discovered.task_config.contains("[hooks]"));
+    assert!(!discovered.task_config.contains("[tools]"));
+    assert!(!root.0.join("POISON").exists());
+    assert!(!root.0.join("WRONG_SOURCE").exists());
+
+    let nested_check = MiseCheck {
+        id: "native".into(),
+        task: "bundle-preview".into(),
+        directory: "native/apple".into(),
+        runner: CheckRunner {
+            label: "macos-26".into(),
+            platform: CheckPlatform::MacosArm64,
+            executor: CheckExecutor::Hosted,
+            container: None,
+        },
+        inputs: vec![],
+        tools: vec![],
+        system_tools: vec![],
+        evidence: None,
+        timeout_minutes: 30,
+    };
+    assert!(discover_checks(&root.0, &[nested_check], &[]).is_err());
+    Ok(())
+}
+
+#[test]
+fn preview_producer_rejects_includes_and_file_task_config_authority() -> TestResult {
+    let root = Fixture::new("[tasks.placeholder]\nrun='true'\n")?;
+    let producer = RustBinaryPreviewProducer {
+        task: "bundle-preview".to_owned(),
+        source: MiseTaskSource::default(),
+        inputs: vec!["Cargo.lock".to_owned()],
+        ..RustBinaryPreviewProducer::default()
+    };
+    for source in [
+        "includes=['other.toml']\n[tasks.bundle-preview]\nrun='true'\n",
+        "task_config='tasks'\n[tasks.bundle-preview]\nrun='true'\n",
+        "task_dir='tasks'\n[tasks.bundle-preview]\nrun='true'\n",
+        "task_dirs=['tasks']\n[tasks.bundle-preview]\nrun='true'\n",
+    ] {
+        std::fs::write(root.0.join("mise.toml"), source)?;
+        assert!(
+            discover_preview_producer(
+                &root.0,
+                &producer,
+                &[],
+                mise::CheckDeadline::after(std::time::Duration::from_secs(30))?,
+            )
+            .is_err(),
+            "source authority accepted: {source}"
+        );
+    }
     Ok(())
 }
 

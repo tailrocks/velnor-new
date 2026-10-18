@@ -1,0 +1,153 @@
+use super::*;
+use crate::{HelperProvenance, provision_acquire_step};
+use velnor_actions_contract::{
+    PACKAGE_RELEASE_PLAN_SCHEMA_V1,
+    config::{RustBinaryPreviewArchive, RustBinaryPreviewCompanion, RustBinaryPreviewProduct},
+};
+
+fn fixture() -> ConsumerPreviewSpec {
+    let acquire = provision_acquire_step(&HelperProvenance::ReleaseAsset {
+        url: "https://github.com/tailrocks/velnor-new/releases/download/v0.1.12/velnor-actions-0.1.12-x86_64-unknown-linux-gnu".to_owned(),
+        sha256: "a".repeat(64), commit: "b".repeat(40),
+    }, vec!["sh".to_owned(), "-c".to_owned(), r#"curl -fsSL "$VELNOR_ASSET_URL" -o "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.12" && printf '%s  %s\n' "$VELNOR_ASSET_SHA256" "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.12" | sha256sum -c -"#.to_owned()]).expect("pinned helper");
+    let targets = [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-apple-darwin",
+        "x86_64-unknown-linux-gnu",
+    ];
+    let products = [("capsule", &targets[..2]), ("scanner", &targets[..])]
+        .into_iter()
+        .map(|(id, targets)| RustBinaryPreviewProduct {
+            id: id.to_owned(),
+            package: id.to_owned(),
+            bins: vec![id.to_owned()],
+            targets: targets.iter().map(|target| (*target).to_owned()).collect(),
+            archive: RustBinaryPreviewArchive::TarGz,
+        })
+        .collect();
+    ConsumerPreviewSpec {
+        generator_version: "0.1.12".to_owned(),
+        plan: PackageReleasePlan {
+            schema: PACKAGE_RELEASE_PLAN_SCHEMA_V1.to_owned(),
+            channel: PackageReleaseChannel::Preview,
+            repository: "example/scanner".to_owned(),
+            default_branch: "main".to_owned(),
+            base_version: "1.2.3".to_owned(),
+            products,
+            companions: vec![RustBinaryPreviewCompanion {
+                id: "manifest".to_owned(),
+                path: "capsule.json".to_owned(),
+                asset_name: "capsule.json".to_owned(),
+            }],
+        },
+        producer_runner: VerificationRunner::Macos26Arm64,
+        producer_timeout_minutes: 120,
+        linux_acquire: acquire.clone(),
+        producer_acquire: acquire,
+        producer_setup: setup_fixture(),
+        linux_setup: setup_fixture(),
+        install_gh_argv: vec![
+            "mise".to_owned(),
+            "--no-config".to_owned(),
+            "install".to_owned(),
+            "gh@2.102.0".to_owned(),
+        ],
+        install_rust_argv: vec![
+            "mise".to_owned(),
+            "--no-config".to_owned(),
+            "install".to_owned(),
+            "rust@1.98.1".to_owned(),
+        ],
+        gh_argv: vec!["gh".to_owned()],
+    }
+}
+
+fn setup_fixture() -> MiseSetup {
+    MiseSetup {
+        uses: "jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7".to_owned(),
+        version: "2026.10.13".to_owned(),
+        sha256: "a".repeat(64),
+    }
+}
+
+fn job<'a>(yaml: &'a str, name: &str, next: Option<&str>) -> &'a str {
+    let start = yaml.find(&format!("  {name}:\n")).expect("job exists");
+    let rest = &yaml[start..];
+    next.map_or(rest, |next| {
+        &rest[..rest.find(&format!("  {next}:\n")).expect("next job")]
+    })
+}
+
+#[test]
+fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
+    let rendered = render_consumer_preview(&fixture()).expect("preview");
+    assert_eq!(rendered.path, ".github/workflows/binary-preview.yml");
+    let yaml = &rendered.bytes;
+    let eligibility = job(yaml, "preview-eligibility", Some("preview-producer"));
+    assert!(eligibility.contains("ref: ${{ github.sha }}"));
+    assert_eq!(eligibility.matches("actions/checkout").count(), 1);
+    assert!(eligibility.find("actions/checkout") < eligibility.find("Verify source and CI"));
+    assert!(eligibility.contains("fetch-depth: 0"));
+    assert!(eligibility.contains("persist-credentials: false"));
+    let producer = job(yaml, "preview-producer", Some("preview-signer"));
+    assert!(producer.contains("fetch-depth: 0"));
+    assert!(producer.contains("persist-credentials: false"));
+    assert!(!producer.contains("environment:"));
+    assert!(!producer.contains("GH_TOKEN: \"${{ github.token }}\""));
+    assert!(!producer.contains("id-token"));
+    assert!(!producer.contains("contents: write"));
+    assert!(!producer.contains("PREVIEW_IMMUTABILITY_READ_TOKEN"));
+    let signer = job(yaml, "preview-signer", Some("preview-publisher"));
+    assert!(!signer.contains("actions/checkout"));
+    assert!(signer.contains("id-token: write"));
+    assert!(signer.contains("contents: read"));
+    assert!(!signer.contains("contents: write"));
+    assert_eq!(signer.matches("/velnor/preview-signed/").count(), 8);
+    assert!(!signer.contains("artifact-metadata"));
+    assert!(signer.contains("create-storage-record: false"));
+    assert!(!signer.contains("PREVIEW_IMMUTABILITY_READ_TOKEN"));
+    let publisher = job(yaml, "preview-publisher", None);
+    assert!(!publisher.contains("actions/checkout"));
+    assert!(!publisher.contains("id-token"));
+    assert!(publisher.contains("contents: write"));
+    assert!(publisher.contains("publish-package-release-v1"));
+    assert!(publisher.contains("${{ secrets.PREVIEW_IMMUTABILITY_READ_TOKEN }}"));
+    assert!(!yaml.contains("tap-update"));
+}
+
+#[test]
+fn preview_rejects_stable_plan_or_invalid_inventory_before_rendering() {
+    let mut spec = fixture();
+    spec.plan.channel = PackageReleaseChannel::Stable;
+    assert!(render_consumer_preview(&spec).is_err());
+    spec.plan.channel = PackageReleaseChannel::Preview;
+    spec.plan.products[0]
+        .targets
+        .push("../../escape".to_owned());
+    assert!(render_consumer_preview(&spec).is_err());
+}
+
+#[test]
+fn manual_recovery_has_no_build_or_signing_authority() {
+    let rendered = render_consumer_preview(&fixture()).expect("preview");
+    let yaml = &rendered.bytes;
+    assert!(yaml.contains("original_run_id:"));
+    assert!(yaml.contains("original_run_attempt:"));
+    for (name, next) in [
+        ("preview-producer", "preview-signer"),
+        ("preview-signer", "preview-publisher"),
+        ("preview-publisher", "preview-recovery"),
+    ] {
+        assert!(job(yaml, name, Some(next)).contains("github.event_name == 'push'"));
+    }
+    let recovery = job(yaml, "preview-recovery", None);
+    assert!(recovery.contains("github.event_name == 'workflow_dispatch'"));
+    assert!(recovery.contains("recover-package-release-v1"));
+    assert!(!recovery.contains("actions/checkout"));
+    assert!(!recovery.contains("execute-preview-producer-v1"));
+    assert!(!recovery.contains("sign-package-release-v1"));
+    assert!(!recovery.contains("id-token"));
+    assert!(!recovery.contains("attestations: write"));
+    assert!(recovery.contains("${{ secrets.PREVIEW_IMMUTABILITY_READ_TOKEN }}"));
+}

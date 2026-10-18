@@ -962,6 +962,7 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
+ "sha2",
  "velnor-actions-contract",
  "velnor-actions-tofu",
 ]
@@ -970,6 +971,7 @@ dependencies = [
 name = "velnor-actions-orchestrator"
 version = "0.1.12"
 dependencies = [
+ "base64",
  "flate2",
  "lzma-rust2",
  "proc-macro2",

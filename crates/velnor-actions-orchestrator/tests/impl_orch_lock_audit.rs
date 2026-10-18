@@ -13,7 +13,7 @@ const PINS: [(&str, &str); 5] = [
     ("rust", "1.98.1"),
     ("actionlint", "1.7.12"),
     ("shellcheck", "0.11.0"),
-    ("zizmor", "1.30.1"),
+    ("zizmor", "1.31.1"),
     ("gh", "2.102.0"),
 ];
 
@@ -83,7 +83,7 @@ fn missing_lock_advises_and_generates() -> TestResult {
         "rust@1.98.1",
         "actionlint@1.7.12",
         "shellcheck@0.11.0",
-        "zizmor@1.30.1",
+        "zizmor@1.31.1",
         "gh@2.102.0",
     ] {
         assert!(summary.contains(tool), "{summary}");

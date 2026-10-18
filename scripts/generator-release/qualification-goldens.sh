@@ -3,6 +3,14 @@
 
 MAX_CANDIDATE_MANIFEST_BYTES=8388608
 
+candidate_tree_oid() {
+  if ! git -C "$ROOT" diff --quiet --; then
+    echo "FATAL: dogfood candidate has unstaged tracked changes" >&2
+    return 1
+  fi
+  git -C "$ROOT" write-tree
+}
+
 file_sha256() {
   local path="$1" output
   if command -v sha256sum >/dev/null 2>&1; then
@@ -300,12 +308,14 @@ normalize_candidate_digests() {
 }
 
 capture_release_dogfood() {
-  local out="$1" repo="$WORK/dogfood-repo" preview="$1/preview" diff_status
+  local out="$1" repo="$WORK/dogfood-repo" preview="$1/preview" diff_status candidate_tree
   mkdir -p "$repo" "$out" "$preview"
-  if ! git -C "$ROOT" archive --format=tar HEAD | tar -xf - -C "$repo" \
-    || ! rm -rf "$repo/.github" \
-    || ! copy_tree "$ROOT/.github/." "$repo/.github/"; then
-    echo "FATAL: could not stage committed dogfood source"
+  if ! candidate_tree="$(candidate_tree_oid)"; then
+    echo "FATAL: could not identify staged dogfood candidate tree"
+    exit 2
+  fi
+  if ! git -C "$ROOT" archive --format=tar "$candidate_tree" | tar -xf - -C "$repo"; then
+    echo "FATAL: could not stage indexed dogfood source"
     exit 2
   fi
   stage_candidate_manifest "$repo" dogfood

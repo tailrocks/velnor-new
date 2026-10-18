@@ -54,9 +54,16 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "prepare.rs",
             "qualification_resolver.rs",
             "routing.rs",
+            "tap_prepare.rs",
+            "tap_prepare_execute.rs",
         ],
-        "preparation, execution, routing, owned preview, and qualification admission load configuration at their boundaries"
+        "preparation, execution, routing, owned preview, qualification admission, and captured tap preparation load configuration at their boundaries"
     );
+    Ok(())
+}
+
+#[test]
+fn preparation_and_runtime_share_named_check_identity() -> TestResult {
     let internal = std::fs::read_to_string(orch_src().join("internal.rs"))?;
     assert!(internal.contains("prepare(&root)"), "plan runs preparation");
     let generate = std::fs::read_to_string(orch_src().join("generate.rs"))?;

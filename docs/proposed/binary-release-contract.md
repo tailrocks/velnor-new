@@ -3,6 +3,11 @@
 **Status:** Implemented as a disabled-by-default consumer workflow. This adds
 one generated workflow and does not change crates.io release-plz behavior.
 
+The independently enabled preview policy and downstream Homebrew promotion
+contract are specified in [native-preview-contract.md](native-preview-contract.md).
+That extension preserves the stable authorization requirements below; its runtime
+publisher must pass the separate acceptance gates before release.
+
 ## Configuration and selection
 
 The optional setting belongs to the consumer's `.velnor/config.toml`:

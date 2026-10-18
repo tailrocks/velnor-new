@@ -143,3 +143,6 @@ fn binary_release_rejects_dash_leading_workspace_path() -> TestResult {
     assert!(err.to_string().contains("leading_dash_manifest"));
     Ok(())
 }
+
+#[path = "impl_schema2_binary_preview.rs"]
+mod preview_tests;

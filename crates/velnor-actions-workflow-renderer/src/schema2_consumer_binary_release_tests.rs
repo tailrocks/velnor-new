@@ -30,9 +30,9 @@ fn exec_argv(tool: &str, program: &str, args: &[&str]) -> Vec<String> {
 
 fn spec() -> ConsumerBinaryReleaseSpec {
     let linux_setup = MiseSetup {
-        uses: "jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8".to_owned(),
-        version: "2026.10.8".to_owned(),
-        sha256: "c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428".to_owned(),
+        uses: "jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7".to_owned(),
+        version: "2026.10.13".to_owned(),
+        sha256: "94c45523c7b6760b7da704f16051171ca32e8447a849a02266a439a4455e9a12".to_owned(),
     };
     ConsumerBinaryReleaseSpec {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -43,9 +43,9 @@ fn spec() -> ConsumerBinaryReleaseSpec {
         bin: "repo-scan".to_owned(),
         linux_setup,
         macos_setup: MiseSetup {
-            uses: "jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8".to_owned(),
-            version: "2026.10.8".to_owned(),
-            sha256: "dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73".to_owned(),
+            uses: "jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7".to_owned(),
+            version: "2026.10.13".to_owned(),
+            sha256: "92fd6898dc213808d1c81f0bead9668dbea036e5946c94c0e82554603205a3aa".to_owned(),
         },
         install_tools_argv: install_argv(&["rust@1.98.1", "gh@2.102.0"]),
         install_rust_argv: install_argv(&["rust@1.98.1"]),
@@ -153,7 +153,7 @@ fn renders_four_isolated_jobs_bound_to_exact_package_and_source() {
     assert!(yaml.contains("assert_protected_environment"));
     assert!(yaml.contains("IMMUTABILITY_READ_TOKEN"));
     assert!(yaml.contains("consumer-binary-release"));
-    assert!(yaml.contains("2026.10.8"));
+    assert!(yaml.contains("2026.10.13"));
     assert!(yaml.contains("aarch64-apple-darwin"));
     assert!(yaml.contains("CARGO_TARGET_DIR"));
     assert!(yaml.contains("required-features"));

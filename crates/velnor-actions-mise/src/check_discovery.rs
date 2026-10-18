@@ -9,7 +9,10 @@ mod task_validation;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::Path;
-use velnor_actions_contract::config::{MiseCheck, QualifiedTool};
+use velnor_actions_contract::config::{
+    CheckExecutor, CheckPlatform, CheckRunner, MiseCheck, MiseTaskSource, QualifiedTool,
+    RustBinaryPreviewProducer, VerificationRunner,
+};
 use velnor_actions_contract::graph::{CachePolicy, ResourceClass, ResourceDemand};
 use velnor_actions_contract::propose::{IdentityInputs, ProposedTask};
 
@@ -45,7 +48,7 @@ pub fn discover_checks(
 ) -> Result<Vec<DiscoveredCheck>, MiseError> {
     checks
         .iter()
-        .map(|check| discover(root, check, qualified_tools, None))
+        .map(|check| discover(root, check, qualified_tools, None, None))
         .collect()
 }
 
@@ -60,8 +63,53 @@ pub fn discover_checks_until(
 ) -> Result<Vec<DiscoveredCheck>, MiseError> {
     checks
         .iter()
-        .map(|check| discover(root, check, qualified_tools, Some(deadline)))
+        .map(|check| discover(root, check, qualified_tools, Some(deadline), None))
         .collect()
+}
+
+/// Discover a preview producer from its explicitly configured native task source.
+///
+/// The producer shares named-check source parsing, task projection, and qualified
+/// tool closure resolution. It is a task binding only; it emits no CI check or
+/// evidence report.
+/// # Errors
+/// Rejects unsafe source paths, unsupported task syntax, missing tasks, and
+/// incomplete qualified-tool closure.
+pub fn discover_preview_producer(
+    root: &Path,
+    producer: &RustBinaryPreviewProducer,
+    qualified_tools: &[QualifiedTool],
+    deadline: crate::CheckDeadline,
+) -> Result<DiscoveredCheck, MiseError> {
+    validate_explicit_source(&producer.source)?;
+    let (label, platform) = match producer.runner {
+        VerificationRunner::LinuxX64 => ("ubuntu-26.04", CheckPlatform::LinuxX64),
+        VerificationRunner::MacosArm64 => ("macos-15", CheckPlatform::MacosArm64),
+        VerificationRunner::Macos26Arm64 => ("macos-26", CheckPlatform::MacosArm64),
+    };
+    let check = MiseCheck {
+        id: "preview-producer".to_owned(),
+        task: producer.task.clone(),
+        directory: producer.source.working_directory.clone(),
+        runner: CheckRunner {
+            label: label.to_owned(),
+            platform,
+            executor: CheckExecutor::Hosted,
+            container: None,
+        },
+        inputs: producer.inputs.clone(),
+        tools: producer.tools.clone(),
+        system_tools: producer.system_tools.clone(),
+        evidence: None,
+        timeout_minutes: u32::from(producer.timeout_minutes),
+    };
+    discover(
+        root,
+        &check,
+        qualified_tools,
+        Some(deadline),
+        Some(&producer.source),
+    )
 }
 
 fn discover(
@@ -69,11 +117,12 @@ fn discover(
     check: &MiseCheck,
     qualified_tools: &[QualifiedTool],
     deadline: Option<crate::CheckDeadline>,
+    source_override: Option<&MiseTaskSource>,
 ) -> Result<DiscoveredCheck, MiseError> {
     if !velnor_actions_contract::config::is_valid_mise_task_name(&check.task) {
         return Err(invalid("task", "invalid_named_task"));
     }
-    let (source, bytes) = read_source(root, check, deadline)?;
+    let (source, bytes) = read_source(root, check, source_override, deadline)?;
     let doc = task_validation::validated_tasks(&bytes, &check.task)?;
     let projection = task_validation::task_projection(&doc, &bytes);
     let mut inputs = check.inputs.clone();
@@ -106,8 +155,24 @@ fn discover(
 fn read_source(
     root: &Path,
     check: &MiseCheck,
+    source_override: Option<&MiseTaskSource>,
     deadline: Option<crate::CheckDeadline>,
 ) -> Result<(String, String), MiseError> {
+    if let Some(source) = source_override {
+        if check.directory != source.working_directory {
+            return Err(invalid("mise_source", "working_directory_mismatch"));
+        }
+        validate_explicit_source(source)?;
+        repository_path(root, &source.working_directory)?;
+        let path = repository_path(root, &source.mise_config)?;
+        let bytes = crate::checks::file_read::read_text(
+            &path,
+            velnor_actions_contract::MAX_CHECK_SOURCE_BYTES,
+            deadline,
+            "mise_config",
+        )?;
+        return Ok((source.mise_config.clone(), bytes));
+    }
     repository_path(root, &check.directory)?;
     let prefix = if check.directory == "." {
         String::new()
@@ -134,6 +199,52 @@ fn read_source(
         "mise_config",
     )?;
     Ok((source, bytes))
+}
+
+fn validate_explicit_source(source: &MiseTaskSource) -> Result<(), MiseError> {
+    let config = source.mise_config.as_str();
+    let working = source.working_directory.as_str();
+    let valid_path = |path: &str, root_allowed: bool| {
+        (root_allowed && path == ".")
+            || (!path.is_empty()
+                && path.len() <= 1024
+                && !path.starts_with('/')
+                && !path.ends_with('/')
+                && path.bytes().all(|byte| {
+                    byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-')
+                })
+                && path
+                    .split('/')
+                    .all(|segment| !segment.is_empty() && segment != "." && segment != ".."))
+    };
+    if !valid_path(config, false)
+        || !(config == crate::toolfiles::MISE_TOML_FILE
+            || config
+                .strip_suffix(crate::toolfiles::MISE_TOML_FILE)
+                .is_some_and(|prefix| prefix.is_empty() || prefix.ends_with('/')))
+    {
+        return Err(invalid("mise_source", "bad_config_path"));
+    }
+    if !valid_path(working, true) {
+        return Err(invalid("mise_source", "bad_working_directory"));
+    }
+    let config_suffix = format!("/{}", crate::toolfiles::MISE_TOML_FILE);
+    let config_directory = config
+        .strip_suffix(&config_suffix)
+        .filter(|directory| !directory.is_empty())
+        .unwrap_or(".");
+    if config_directory != "."
+        && working != config_directory
+        && !working
+            .strip_prefix(config_directory)
+            .is_some_and(|suffix| suffix.starts_with('/'))
+    {
+        return Err(invalid(
+            "mise_source",
+            "working_directory_outside_config_tree",
+        ));
+    }
+    Ok(())
 }
 
 fn check_identity(

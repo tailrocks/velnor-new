@@ -19,12 +19,14 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, OrchestratorError,
-    PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
-    REPORT_OP, REQUEST_FILE_ENV, TASK_EXECUTION_RESOLVER_OP, WRITE_REQUEST_OP, execute_check,
-    merge_internal, merge_passed, plan_internal, plan_outputs, publish_final_report,
-    publish_plan_files, resolve_task_execution, response_path_for, retrieve_reports,
-    write_preseed_manifest, write_request, write_task_report,
+    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP, MERGE_OP,
+    OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PREPARE_HOMEBREW_TAP_OP,
+    PRESEED_MANIFEST_OP, PUBLISH_OP, PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode,
+    RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV, SIGN_PACKAGE_RELEASE_OP,
+    TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, execute_check,
+    execute_preview_producer, merge_internal, merge_passed, plan_internal, plan_outputs,
+    publish_final_report, publish_plan_files, resolve_task_execution, response_path_for,
+    retrieve_reports, write_preseed_manifest, write_request, write_task_report,
 };
 
 use crate::dispatch_publish::run_publish_internal;
@@ -33,6 +35,14 @@ mod public;
 pub(crate) use public::run_public;
 #[path = "dispatch_owned_tool_publication.rs"]
 mod owned_publication;
+#[path = "dispatch_package_release.rs"]
+mod package_release;
+#[path = "dispatch_package_release_publish.rs"]
+mod package_release_publish;
+#[path = "dispatch_package_release_recovery.rs"]
+mod package_release_recovery;
+#[path = "dispatch_tap_prepare.rs"]
+mod tap_prepare;
 
 /// Environment variable selecting the private operation. Never printed.
 const OP_ENV: &str = "VELNOR_INTERNAL_OP";
@@ -52,6 +62,8 @@ enum InternalOp {
     WriteRequest,
     /// Execute one named hosted platform check.
     ExecuteCheck,
+    /// Run the credential-free native preview producer.
+    ExecutePreviewProducer,
     /// Plan operation.
     Plan,
     /// Merge operation.
@@ -70,6 +82,16 @@ enum InternalOp {
     ResolveQualification,
     /// Data-only task execution record resolution for a generated wrapper.
     ResolveTaskExecution,
+    /// Isolated, credentialed signing of a plan-bound package release.
+    PackageSigner,
+    /// Isolated publisher for an authenticated signed native package.
+    PackagePublisher,
+    /// Authenticated replay of a retained signed preview candidate.
+    PackageRecovery,
+    /// Credential-free updater prepared from captured public tap main.
+    TapPrepare,
+    /// Isolated App-authenticated PR writer for a validated tap candidate.
+    TapWriter,
 }
 
 /// Validated private request: operation plus exact request-file path.
@@ -91,14 +113,10 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
     Some(run_internal(&request))
 }
 
-/// Check the private gate: known op plus request-file presence by op.
-///
-/// Fetch and report take no request file: they need the runner-temp
-/// velnor directory plus the numeric run ID instead. The preseed-manifest op
-/// takes no request file either: runner temp scopes its output.
-fn gate_request() -> Option<InternalRequest> {
-    let op = match env::var(OP_ENV).as_deref() {
+fn internal_op() -> Option<InternalOp> {
+    Some(match env::var(OP_ENV).as_deref() {
         Ok(tag) if tag == EXECUTE_CHECK_OP => InternalOp::ExecuteCheck,
+        Ok(tag) if tag == EXECUTE_PREVIEW_PRODUCER_OP => InternalOp::ExecutePreviewProducer,
         Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
         Ok(tag) if tag == PLAN_OP => InternalOp::Plan,
         Ok(tag) if tag == MERGE_OP => InternalOp::Merge,
@@ -111,8 +129,22 @@ fn gate_request() -> Option<InternalRequest> {
             InternalOp::ResolveQualification
         }
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
+        Ok(tag) if tag == SIGN_PACKAGE_RELEASE_OP => InternalOp::PackageSigner,
+        Ok(tag) if tag == PUBLISH_PACKAGE_RELEASE_OP => InternalOp::PackagePublisher,
+        Ok(tag) if tag == RECOVER_PACKAGE_RELEASE_OP => InternalOp::PackageRecovery,
+        Ok(tag) if tag == PREPARE_HOMEBREW_TAP_OP => InternalOp::TapPrepare,
+        Ok(tag) if tag == WRITE_HOMEBREW_TAP_PR_OP => InternalOp::TapWriter,
         _ => return None,
-    };
+    })
+}
+
+/// Check the private gate: known op plus request-file presence by op.
+///
+/// Fetch and report take no request file: they need the runner-temp
+/// velnor directory plus the numeric run ID instead. The preseed-manifest op
+/// takes no request file either: runner temp scopes its output.
+fn gate_request() -> Option<InternalRequest> {
+    let op = internal_op()?;
     if op == InternalOp::ResolveTaskExecution {
         if !env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
             return None;
@@ -147,7 +179,10 @@ fn gate_request() -> Option<InternalRequest> {
                 return None;
             }
         }
-        InternalOp::Plan | InternalOp::Merge | InternalOp::Publish => {
+        InternalOp::Plan
+        | InternalOp::Merge
+        | InternalOp::Publish
+        | InternalOp::ExecutePreviewProducer => {
             if !path.is_file() {
                 return None;
             }
@@ -156,6 +191,16 @@ fn gate_request() -> Option<InternalRequest> {
             if !crate::dispatch_qualification::request_is_eligible(&path) {
                 return None;
             }
+        }
+        InternalOp::PackageSigner | InternalOp::PackagePublisher | InternalOp::PackageRecovery => {
+            return package_release::gate_request(&path).map(|path| InternalRequest { op, path });
+        }
+        InternalOp::TapPrepare => {
+            return tap_prepare::gate_request(&path).map(|path| InternalRequest { op, path });
+        }
+        InternalOp::TapWriter => {
+            return tap_prepare::gate_writer_request(&path)
+                .map(|path| InternalRequest { op, path });
         }
         InternalOp::Fetch
         | InternalOp::Report
@@ -183,6 +228,10 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
     match request.op {
         InternalOp::ExecuteCheck => match execute_check() {
             Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
+        InternalOp::ExecutePreviewProducer => match execute_preview_producer() {
+            Ok(()) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
         InternalOp::WriteRequest => match write_request() {
@@ -213,6 +262,11 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             },
             Err(error) => fail_internal(&error.to_string()),
         },
+        InternalOp::PackageSigner => package_release::run(),
+        InternalOp::PackagePublisher => package_release_publish::run(),
+        InternalOp::PackageRecovery => package_release_recovery::run(),
+        InternalOp::TapPrepare => tap_prepare::run(),
+        InternalOp::TapWriter => tap_prepare::run_writer(),
     }
 }
 

@@ -212,7 +212,6 @@ fn rejects_newer_failed_run_over_older_success_across_pages() -> Result<(), Box<
     ]);
     scenario.jobs = job_pages(&[vec![required_job(
         41,
-        1,
         SOURCE_TOKEN,
         DEFAULT_BRANCH,
         "completed",
@@ -235,12 +234,11 @@ fn rejects_duplicate_mismatched_or_failed_required_jobs() -> Result<(), Box<dyn 
     let bad_jobs = [
         job_pages(&[]),
         job_pages(&[vec![
-            required_job(42, 3, SOURCE_TOKEN, DEFAULT_BRANCH, "completed", "success"),
-            required_job(42, 3, SOURCE_TOKEN, DEFAULT_BRANCH, "completed", "success"),
+            required_job(42, SOURCE_TOKEN, DEFAULT_BRANCH, "completed", "success"),
+            required_job(42, SOURCE_TOKEN, DEFAULT_BRANCH, "completed", "success"),
         ]]),
         job_pages(&[vec![required_job(
             41,
-            3,
             SOURCE_TOKEN,
             DEFAULT_BRANCH,
             "completed",
@@ -248,15 +246,6 @@ fn rejects_duplicate_mismatched_or_failed_required_jobs() -> Result<(), Box<dyn 
         )]]),
         job_pages(&[vec![required_job(
             42,
-            2,
-            SOURCE_TOKEN,
-            DEFAULT_BRANCH,
-            "completed",
-            "success",
-        )]]),
-        job_pages(&[vec![required_job(
-            42,
-            3,
             OTHER_SHA,
             DEFAULT_BRANCH,
             "completed",
@@ -264,7 +253,6 @@ fn rejects_duplicate_mismatched_or_failed_required_jobs() -> Result<(), Box<dyn 
         )]]),
         job_pages(&[vec![required_job(
             42,
-            3,
             SOURCE_TOKEN,
             "feature",
             "completed",
@@ -272,7 +260,6 @@ fn rejects_duplicate_mismatched_or_failed_required_jobs() -> Result<(), Box<dyn 
         )]]),
         job_pages(&[vec![required_job(
             42,
-            3,
             SOURCE_TOKEN,
             DEFAULT_BRANCH,
             "completed",
@@ -280,7 +267,6 @@ fn rejects_duplicate_mismatched_or_failed_required_jobs() -> Result<(), Box<dyn 
         )]]),
         job_pages(&[vec![required_job(
             42,
-            3,
             SOURCE_TOKEN,
             DEFAULT_BRANCH,
             "in_progress",

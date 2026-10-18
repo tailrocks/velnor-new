@@ -7,6 +7,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::ContractError;
 
+#[path = "binary_release_preview.rs"]
+mod preview;
+pub(crate) use preview::validate_static_release_inventory;
+pub use preview::*;
+
 /// Only target supported by the initial consumer binary release path.
 pub const CONSUMER_BINARY_TARGET: &str = "aarch64-apple-darwin";
 
@@ -29,6 +34,9 @@ pub struct RustBinaryReleaseConfig {
     /// Exact Cargo binary target to build; required when enabled.
     #[serde(default)]
     pub bin: String,
+    /// Independently enabled preview publication policy.
+    #[serde(default)]
+    pub preview: RustBinaryPreviewConfig,
 }
 
 fn default_manifest_path() -> String {
@@ -42,6 +50,7 @@ impl Default for RustBinaryReleaseConfig {
             manifest_path: default_manifest_path(),
             package: String::new(),
             bin: String::new(),
+            preview: RustBinaryPreviewConfig::default(),
         }
     }
 }
@@ -57,6 +66,7 @@ impl RustBinaryReleaseConfig {
         validate_manifest_path(file, &self.manifest_path)?;
         validate_name(file, "package", &self.package, self.enabled)?;
         validate_name(file, "bin", &self.bin, self.enabled)?;
+        self.preview.validate(file)?;
         Ok(())
     }
 }
@@ -99,7 +109,7 @@ fn validate_manifest_path(file: &str, path: &str) -> Result<(), ContractError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CONSUMER_BINARY_TARGET, RustBinaryReleaseConfig};
+    use super::{CONSUMER_BINARY_TARGET, RustBinaryPreviewConfig, RustBinaryReleaseConfig};
 
     #[test]
     fn defaults_disabled_and_requires_one_explicit_package_and_binary() {
@@ -113,6 +123,7 @@ mod tests {
             manifest_path: "Cargo.toml".to_owned(),
             package: "repo-scan".to_owned(),
             bin: "repo-scan".to_owned(),
+            preview: RustBinaryPreviewConfig::default(),
         };
         assert!(enabled.validate("config.toml").is_ok());
         assert_eq!(CONSUMER_BINARY_TARGET, "aarch64-apple-darwin");
@@ -134,6 +145,7 @@ mod tests {
             manifest_path: "Cargo.toml".to_owned(),
             package: "repo-scan;id".to_owned(),
             bin: "repo-scan".to_owned(),
+            preview: RustBinaryPreviewConfig::default(),
         };
         let err = unsafe_name
             .validate("config.toml")

@@ -63,10 +63,10 @@ jobs:
           persist-credentials: "false"
           ref: ${{ inputs.source_sha }}
       - name: Setup Mise
-        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
+        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
         with:
-          version: 2026.10.8
-          sha256: dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73
+          version: 2026.10.13
+          sha256: 92fd6898dc213808d1c81f0bead9668dbea036e5946c94c0e82554603205a3aa
           install: "false"
           env: "false"
           cache: "false"
@@ -124,10 +124,10 @@ jobs:
     if: always() && (inputs.release_action == 'complete' || (inputs.release_action == 'build' && (needs.attest-binary.result == 'success')))
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8
+        uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
         with:
-          version: 2026.10.8
-          sha256: dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73
+          version: 2026.10.13
+          sha256: 92fd6898dc213808d1c81f0bead9668dbea036e5946c94c0e82554603205a3aa
           install: "false"
           env: "false"
           cache: "false"

@@ -59,7 +59,7 @@ fn probe_tool_rows() -> Vec<ProbeRow> {
         (
             "https://api.github.com/repos/zizmorcore/zizmor/releases/latest",
             "zizmor.json",
-            "{\"tag_name\": \"v1.30.1\"}",
+            "{\"tag_name\": \"v1.31.1\"}",
         ),
         (
             "https://crates.io/api/v1/crates/cargo-nextest",
@@ -85,7 +85,7 @@ fn probe_action_rows() -> Vec<ProbeRow> {
         (
             "https://api.github.com/repos/jdx/mise-action/releases/latest",
             "mise-action.json",
-            "{\"tag_name\": \"v5.1.2\"}",
+            "{\"tag_name\": \"v5.2.0\"}",
         ),
         (
             "https://api.github.com/repos/actions/checkout/releases/latest",
@@ -115,7 +115,7 @@ fn probe_action_rows() -> Vec<ProbeRow> {
         (
             "https://api.github.com/repos/asamarts/alint/releases/latest",
             "alint.json",
-            "{\"tag_name\": \"v0.18.1\"}",
+            "{\"tag_name\": \"v0.18.4\"}",
         ),
         (
             "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest",

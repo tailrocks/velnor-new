@@ -17,7 +17,7 @@ use velnor_actions_workflow_renderer::schema2::{
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
-use crate::pins::resolve_mise_setup_for_consumer_binary_release;
+use crate::pins::resolve_mise_setup_for_release_target;
 use crate::prepare::GenerationPreparation;
 use crate::release_identity::origin_repository;
 use crate::utf8::strings_of;
@@ -38,11 +38,11 @@ pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, O
         manifest_path: config.manifest_path.clone(),
         package: package.name.clone(),
         bin: config.bin.clone(),
-        linux_setup: resolve_mise_setup_for_consumer_binary_release(
+        linux_setup: resolve_mise_setup_for_release_target(
             &prep.config,
             ReleaseTarget::LinuxX86_64,
         )?,
-        macos_setup: resolve_mise_setup_for_consumer_binary_release(
+        macos_setup: resolve_mise_setup_for_release_target(
             &prep.config,
             ReleaseTarget::MacosArm64,
         )?,
@@ -56,7 +56,7 @@ pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, O
     Ok(vec![render_consumer_binary_release(&spec)?])
 }
 
-fn require_tracked_lockfile(
+pub(crate) fn require_tracked_lockfile(
     prep: &GenerationPreparation,
     config: &RustBinaryReleaseConfig,
 ) -> Result<(), OrchestratorError> {

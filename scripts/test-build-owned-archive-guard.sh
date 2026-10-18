@@ -13,6 +13,7 @@ trap cleanup EXIT
 case_home="$case_root/home"
 tool_bin="$case_root/tool-bin"
 mkdir -m 700 -- "$case_home" "$tool_bin"
+cp -- "$repository/.mise-version" "$tool_bin/pinned-mise-version"
 
 copy_checkout() {
   local destination="$1"
@@ -96,7 +97,7 @@ shift
 
 case "$command_name" in
   version)
-    printf '2026.10.8\n'
+    cat "$tool_state/pinned-mise-version"
     ;;
   install)
     [[ "${1:-}" == rust@1.98.1 ]]

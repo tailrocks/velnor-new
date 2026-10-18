@@ -123,6 +123,9 @@ struct PartialConfig {
     /// Explicit qualified repository tool closure for named checks.
     #[serde(default)]
     qualified_tools: Vec<QualifiedTool>,
+    /// Optional downstream package promotion.
+    #[serde(default)]
+    distribution: velnor_actions_contract::config::DistributionConfig,
     /// Optional exact `X.Y.Z` version overrides for generator-managed tools.
     #[serde(default)]
     tools: velnor_actions_contract::ToolsConfig,
@@ -222,6 +225,7 @@ impl PartialConfig {
             execution: self.execution,
             checks: self.checks,
             qualified_tools: self.qualified_tools,
+            distribution: self.distribution,
             tools: self.tools,
         })
     }
@@ -291,3 +295,7 @@ impl PartialActions {
 #[cfg(test)]
 #[path = "config_tests.rs"]
 mod config_tests;
+
+#[cfg(test)]
+#[path = "config_preview_tests.rs"]
+mod config_preview_tests;

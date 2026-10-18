@@ -31,25 +31,23 @@ pub const AWS_CREDENTIALS_ACTION_VERSION: &str = "v6.3.0";
 /// Full commit SHA for [`AWS_CREDENTIALS_ACTION_VERSION`].
 pub const AWS_CREDENTIALS_ACTION_SHA: &str = "e1253824e5c10ff9df46874f81ed3ec929e19cfd";
 
-/// Selected `asamarts/alint` candidate; the updated action is checked by CI.
-/// Source: `https://api.github.com/repos/asamarts/alint/releases/latest`; checked 2026-10-12.
-pub const ALINT_ACTION_VERSION: &str = "v0.18.1";
-/// Full commit SHA for [`ALINT_ACTION_VERSION`] (verified upstream tag `v0.18.1`, 2026-10-12).
-pub const ALINT_ACTION_SHA: &str = "f558d76d076710312c54723d18e44d8cd95b3977";
+/// Selected `asamarts/alint` release; candidate binary passed local checks
+/// 2026-10-17. Full hosted qualification remains part of the reviewed update.
+/// Source: `https://api.github.com/repos/asamarts/alint/releases/tags/v0.18.4`.
+pub const ALINT_ACTION_VERSION: &str = "v0.18.4";
+/// Full commit SHA for [`ALINT_ACTION_VERSION`] from its immutable tag ref.
+pub const ALINT_ACTION_SHA: &str = "18e1a66db7444fed817c5d8c75292c7709fff32e";
 
 /// Selected `jdx/mise-action` candidate; the updated action is checked by CI.
 ///
-/// v5.1.2 keeps every input Velnor uses (`version`, `sha256`, `install`,
-/// `env`, `cache`, `cache_save`, `cache_key`); its one breaking change
-/// (`minimum_release_age` defaulting to `24h`) applies only when
-/// `version` is unset, and Velnor always pins an explicit `version`.
-/// The v5.1.2 Windows update fallback also needs an unset version; Velnor
-/// pins the version, disables the action cache, and leaves `mise_dir` unset.
-/// `persist_github_token` defaults to false; Velnor leaves it unset.
-/// Source: `https://api.github.com/repos/jdx/mise-action/releases/latest`; checked 2026-10-12.
-pub const MISE_ACTION_VERSION: &str = "v5.1.2";
-/// Full commit SHA for [`MISE_ACTION_VERSION`] (tag object type `commit`).
-pub const MISE_ACTION_SHA: &str = "08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8";
+/// v5.2.0 retains every input Velnor uses. Its cache key changes have no
+/// effect because Velnor disables the cache, and monorepo behavior activates
+/// only for Mise configs declaring `monorepo.config_roots`; ours do not.
+/// Explicit version and SHA inputs remain supported. Source:
+/// `https://api.github.com/repos/jdx/mise-action/releases/tags/v5.2.0`.
+pub const MISE_ACTION_VERSION: &str = "v5.2.0";
+/// Full commit SHA for [`MISE_ACTION_VERSION`] from its immutable tag ref.
+pub const MISE_ACTION_SHA: &str = "9b200bcecbfd6303e69a4a261b2e09e3757440a7";
 /// Qualified `actions/checkout` release.
 /// Source: `https://api.github.com/repos/actions/checkout/releases/latest`; checked 2026-09-28.
 pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";

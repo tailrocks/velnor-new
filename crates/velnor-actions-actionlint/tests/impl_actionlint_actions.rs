@@ -88,7 +88,7 @@ fn alint_tag_refs_rejected() {
             format!("asamarts/alint@{ALINT_ACTION_VERSION}"),
             ALINT_ACTION_VERSION,
         ),
-        ("asamarts/alint@v0.18.1".to_owned(), "v0.18.1"),
+        ("asamarts/alint@v0.18.4".to_owned(), "v0.18.4"),
     ] {
         assert!(
             matches!(

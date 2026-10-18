@@ -115,7 +115,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
             role: None,
             condition: None,
             kind: StepKind::Action {
-                uses: "asamarts/alint@v0.18.1".to_owned(),
+                uses: "asamarts/alint@v0.18.4".to_owned(),
                 with: BTreeMap::new(),
                 env: BTreeMap::new(),
             },

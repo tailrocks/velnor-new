@@ -27,6 +27,9 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // fresh helper) and generator identity comparison; pure Rust, default
         // features only, so pin comparison uses the audited implementation.
         "sha2",
+        // Reviewed pure-Rust base64 encoding for GitHub blob requests and
+        // bounded signed receipt recovery envelopes; no executable payloads.
+        "base64",
         // HCL structural parser for tofu (T10, S8); hcl-rs 0.19.8 is
         // compile-gated at MSRV 1.98.1, default features only, with
         // facade-owned byte/count/depth caps and no expression evaluation.

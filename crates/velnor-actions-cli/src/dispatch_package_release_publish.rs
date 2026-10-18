@@ -1,0 +1,19 @@
+//! Private native package-release publication dispatch.
+
+use std::process::ExitCode;
+
+use velnor_actions_orchestrator::{OrchestratorError, publish_package_release_from_env};
+
+/// Publish a package only after the publisher verifies its signed evidence.
+pub(super) fn run() -> ExitCode {
+    match publish_package_release_from_env() {
+        Ok(_) => ExitCode::SUCCESS,
+        Err(error) => fail_internal(&error),
+    }
+}
+
+fn fail_internal(error: &OrchestratorError) -> ExitCode {
+    let message = error.to_string().replace(['\n', '\r'], " ");
+    eprintln!("velnor-actions: internal request failed: {message}");
+    ExitCode::from(1)
+}
