@@ -73,12 +73,18 @@ pub fn normal_tools_cache_stage_path(
     {
         return Err("normal_cache_key_invalid");
     }
-    let key_digest = blake3::hash(cache_key.as_bytes()).to_hex();
-    let path = format!("{runner_temp}/velnor/normal-cache-v3/mise_tools/{key_digest}/payload");
-    if path.len() > 4_096 {
+    let path = crate::cache_action_stage::StageContext::normal_action_path(
+        Path::new(runner_temp),
+        cache_key,
+    )
+    .map_err(|error| match error {
+        "cache_stage_context_invalid" => "normal_cache_key_invalid",
+        _ => "normal_cache_stage_path_invalid",
+    })?;
+    if path.as_os_str().len() > 4_096 {
         return Err("normal_cache_stage_path_invalid");
     }
-    Ok(PathBuf::from(path))
+    Ok(path)
 }
 
 fn clean_path_text<'a>(path: &'a Path, error: &'static str) -> Result<&'a str, &'static str> {
