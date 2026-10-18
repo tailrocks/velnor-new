@@ -3,6 +3,8 @@
 mod document;
 mod storage;
 #[cfg(test)]
+pub(crate) mod test_support;
+#[cfg(test)]
 mod tests;
 
 use std::path::{Path, PathBuf};

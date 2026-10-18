@@ -11,8 +11,6 @@ use tokio::io::AsyncWriteExt;
 use crate::docker_client::docker_deadline;
 use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_mounts, runner_plan};
 use crate::error::HostError;
-#[cfg(test)]
-use crate::stage::PairStop;
 
 pub(crate) mod resources;
 mod volumes;
@@ -249,38 +247,6 @@ pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostErro
             platform: PLATFORM.to_owned(),
         },
         config,
-    })
-}
-
-/// Create volumes, start `DinD`, start the runner, then write `jit` on stdin.
-///
-/// Empty `jit` returns before any container create. Failure after a create
-/// removes only ids this call created.
-///
-/// # Errors
-///
-/// Returns [`HostError::EmptyJit`] when `jit` is empty.
-/// Returns [`HostError::ForbiddenMount`] for a rejected volume name.
-/// Returns [`HostError::Docker`] when Docker rejects a call. The error text
-/// does not include `jit`.
-#[cfg(test)]
-pub(crate) async fn start_pair(
-    docker: &Docker,
-    private_volume: &str,
-    resource_budget: ResourceBudget,
-    jit: &[u8],
-) -> Result<Started, HostError> {
-    let partial = Box::pin(crate::stage::start_pair_until(
-        docker,
-        private_volume,
-        resource_budget,
-        jit,
-        PairStop::Jit,
-    ))
-    .await?;
-    Ok(Started {
-        dind_id: partial.dind_id.ok_or(HostError::Docker)?,
-        runner_id: partial.runner_id.ok_or(HostError::Docker)?,
     })
 }
 

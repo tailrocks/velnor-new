@@ -1,14 +1,18 @@
-//! Stage stops and recorded deletes drive `start_pair_until` and `remove_recorded`.
+//! Verified stage stops and recorded deletes drive `drive` and `remove_recorded`.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
 
 use super::HostError;
-use super::stage::{Forget, PairEngine, PairStop, decide, drive};
+use super::launch::{SelectedEngineContext, VerifiedWorkerImages};
+use super::stage::{Forget, PairEngine, PairSink, PairStop, PartialPair, decide, drive};
+use super::worker::guest_image::test_support::TestGuestImage;
 use super::worker::{
     CreateProjection, ResourceBudget, WorkerVolumeRole, WorkerVolumeVerification,
     test_resource_budget,
 };
+
+mod verified;
 
 // join_dind_net accepts only a 64-hex container id.
 const FIRST_CONTAINER_ID: &str = "0000000000000000000000000000000000000000000000000000000000000001";
@@ -18,6 +22,7 @@ struct Fake {
     ids: Mutex<Vec<String>>,
     names: Mutex<HashMap<String, String>>,
     removed: Mutex<Vec<String>>,
+    creates: Mutex<Vec<CreateProjection>>,
     budgets: Mutex<Vec<ResourceBudget>>,
     /// Fail the Nth call of this method name. `None` never fails.
     fail_at: Mutex<Option<(&'static str, u8)>>,
@@ -31,6 +36,7 @@ impl Fake {
             ids: Mutex::new(Vec::new()),
             names: Mutex::new(HashMap::new()),
             removed: Mutex::new(Vec::new()),
+            creates: Mutex::new(Vec::new()),
             budgets: Mutex::new(Vec::new()),
             fail_at: Mutex::new(None),
             counts: Mutex::new(HashMap::new()),
@@ -58,6 +64,13 @@ impl Fake {
             .unwrap_or_default()
     }
 
+    fn creates(&self) -> Vec<CreateProjection> {
+        self.creates
+            .lock()
+            .map(|guard| guard.clone())
+            .unwrap_or_default()
+    }
+
     fn hit(&self, event: &'static str) -> Result<(), HostError> {
         let mut counts = self.counts.lock().map_err(|_| HostError::Docker)?;
         let seen = counts.entry(event).or_insert(0);
@@ -80,12 +93,28 @@ impl Fake {
     reason = "fake engine matches the async trait and does not await"
 )]
 impl PairEngine for Fake {
+    async fn verify_worker_images(
+        &self,
+        expected: &SelectedEngineContext,
+        images: &VerifiedWorkerImages,
+    ) -> Result<(), HostError> {
+        if expected.matches_images(images) {
+            Ok(())
+        } else {
+            Err(HostError::Ownership)
+        }
+    }
+
     async fn prepare_volumes(&self, _volume: &str) -> Result<(), HostError> {
         push(&self.events, "volumes")
     }
 
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {
         self.hit("create")?;
+        self.creates
+            .lock()
+            .map_err(|_| HostError::Docker)?
+            .push(spec.clone());
         self.budgets
             .lock()
             .map_err(|_| HostError::Docker)?
@@ -163,10 +192,34 @@ fn push(events: &Mutex<Vec<&'static str>>, event: &'static str) -> Result<(), Ho
     Ok(())
 }
 
+async fn drive_test<E: PairEngine, S: PairSink>(
+    engine: &E,
+    private_volume: &str,
+    resource_budget: ResourceBudget,
+    jit: &[u8],
+    stop: PairStop,
+    sink: &S,
+) -> Result<PartialPair, HostError> {
+    let input = TestGuestImage::new()?;
+    drive(
+        engine,
+        private_volume,
+        resource_budget,
+        jit,
+        stop,
+        &input.connection,
+        &input.images,
+        &input.selected_engine,
+        &input.file,
+        sink,
+    )
+    .await
+}
+
 #[tokio::test]
 async fn dind_created_does_not_start() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(
+    let partial = drive_test(
         &engine,
         "worker_a",
         test_resource_budget()?,
@@ -178,21 +231,6 @@ async fn dind_created_does_not_start() -> Result<(), HostError> {
     assert_eq!(partial.dind_id.as_deref(), Some(FIRST_CONTAINER_ID));
     assert_eq!(partial.runner_id, None);
     assert_eq!(engine.events(), ["volumes", "create"]);
-    Ok(())
-}
-
-#[tokio::test]
-async fn jit_stop_writes_stdin_after_both_starts() -> Result<(), HostError> {
-    let engine = Fake::new();
-    let budget = test_resource_budget()?;
-    let partial = drive(&engine, "worker_a", budget, b"jit", PairStop::Jit, &Forget).await?;
-    assert!(partial.dind_id.is_some());
-    assert!(partial.runner_id.is_some());
-    assert_eq!(
-        engine.events(),
-        ["volumes", "create", "start", "create", "start", "jit"]
-    );
-    assert_eq!(engine.budgets(), [budget, budget]);
     Ok(())
 }
 
@@ -227,7 +265,7 @@ async fn remove_recorded_keeps_a_foreign_id() -> Result<(), HostError> {
 #[tokio::test]
 async fn volumes_stop_creates_no_container() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(
+    let partial = drive_test(
         &engine,
         "worker_a",
         test_resource_budget()?,
@@ -245,7 +283,7 @@ async fn volumes_stop_creates_no_container() -> Result<(), HostError> {
 #[tokio::test]
 async fn dind_started_does_not_create_the_runner() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(
+    let partial = drive_test(
         &engine,
         "worker_a",
         test_resource_budget()?,
@@ -263,7 +301,7 @@ async fn dind_started_does_not_create_the_runner() -> Result<(), HostError> {
 #[tokio::test]
 async fn runner_created_does_not_start() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(
+    let partial = drive_test(
         &engine,
         "worker_a",
         test_resource_budget()?,
@@ -280,7 +318,7 @@ async fn runner_created_does_not_start() -> Result<(), HostError> {
 #[tokio::test]
 async fn runner_started_does_not_write_jit() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(
+    let partial = drive_test(
         &engine,
         "worker_a",
         test_resource_budget()?,
@@ -306,7 +344,7 @@ async fn second_create_failure_removes_only_the_owned_dind() -> Result<(), HostE
         .lock()
         .map_err(|_| HostError::Docker)?
         .insert("foreign".to_owned(), "bbbbbbbbbbbb".to_owned());
-    let Err(error) = drive(
+    let Err(error) = drive_test(
         &engine,
         "worker_a",
         test_resource_budget()?,

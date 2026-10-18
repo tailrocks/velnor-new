@@ -10,9 +10,11 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::oneshot;
 
 use crate::HostError;
+use crate::stage::{Forget, PairStop, drive};
+use crate::worker::guest_image::test_support::TestGuestImage;
 use crate::worker::{
     VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
-    remove_verified_worker_volume, start_pair, verify_worker_volume,
+    remove_verified_worker_volume, verify_worker_volume,
 };
 
 const WORKER: &str = "wtransport";
@@ -21,13 +23,20 @@ const WORK_VOLUME: &str = "wtransport-work";
 #[tokio::test]
 async fn empty_jit_does_not_create() -> Result<(), String> {
     let idle = ScriptedDocker::open(Vec::new())?;
+    let input = TestGuestImage::new().map_err(|error| error.to_string())?;
     for volume in ["a/b", "worker_a"] {
         assert_eq!(
-            start_pair(
+            drive(
                 &idle.docker,
                 volume,
                 crate::worker::test_resource_budget().map_err(|error| error.to_string())?,
                 b"",
+                PairStop::Jit,
+                &input.connection,
+                &input.images,
+                &input.selected_engine,
+                &input.file,
+                &Forget,
             )
             .await,
             Err(HostError::EmptyJit)

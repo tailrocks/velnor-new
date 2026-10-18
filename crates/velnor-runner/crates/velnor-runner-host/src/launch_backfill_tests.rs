@@ -6,6 +6,7 @@ use crate::launch::{Admit, admission, drive_offer, statistics_blocked};
 use crate::launch_harness::{absent, assigned_wait, ctx, open};
 use crate::launch_test_support::{Engine, hex, script, seed_done};
 use crate::stage::{PairStop, drive};
+use crate::worker::guest_image::test_support::TestGuestImage;
 use crate::{EnsureError, HostError, IntentState, Outcome, Started};
 
 #[tokio::test]
@@ -177,6 +178,7 @@ async fn uncertain_dind_only_recovery_keeps_reservation_and_owned_resources() ->
     let engine = Arc::new(Engine::new());
     let foreign = hex(99);
     engine.foreign(&foreign).map_err(|err| err.to_string())?;
+    let guest_image = TestGuestImage::new().map_err(|err| err.to_string())?;
     let mut calls = script();
     let error = drive_offer(
         &mut calls,
@@ -187,6 +189,10 @@ async fn uncertain_dind_only_recovery_keeps_reservation_and_owned_resources() ->
             let engine = Arc::clone(&engine);
             let volume = volume.to_owned();
             let jit = jit.to_vec();
+            let connection = guest_image.connection.clone();
+            let images = guest_image.images.clone();
+            let selected_engine = guest_image.selected_engine.clone();
+            let guest_file = guest_image.file.clone();
             async move {
                 let partial = drive(
                     &*engine,
@@ -194,6 +200,10 @@ async fn uncertain_dind_only_recovery_keeps_reservation_and_owned_resources() ->
                     crate::worker::test_resource_budget()?,
                     &jit,
                     PairStop::DindCreated,
+                    &connection,
+                    &images,
+                    &selected_engine,
+                    &guest_file,
                     &bind,
                 )
                 .await?;

@@ -1,6 +1,6 @@
 //! A launch row without worker IDs stays occupied until cleanup is proven.
 
-use crate::launch::{Admit, admission};
+use crate::launch::{Admit, SelectedEngineContext, VerifiedWorkerImages, admission};
 use crate::launch_harness::{
     absent, assigned_wait, available, open, started_progress, started_wait,
 };
@@ -15,6 +15,18 @@ struct Idle;
     reason = "the trait is async and this engine never awaits"
 )]
 impl PairEngine for Idle {
+    async fn verify_worker_images(
+        &self,
+        expected: &SelectedEngineContext,
+        images: &VerifiedWorkerImages,
+    ) -> Result<(), HostError> {
+        if expected.matches_images(images) {
+            Ok(())
+        } else {
+            Err(HostError::Ownership)
+        }
+    }
+
     async fn prepare_volumes(&self, _volume: &str) -> Result<(), HostError> {
         Ok(())
     }

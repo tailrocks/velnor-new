@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
 use crate::launch_harness::{Mode, Script};
 use crate::stage::PairEngine;
 use crate::worker::{CreateProjection, WorkerVolumeRole, WorkerVolumeVerification};
@@ -154,6 +155,18 @@ impl Engine {
     reason = "fake engine matches the async trait without I/O"
 )]
 impl PairEngine for Engine {
+    async fn verify_worker_images(
+        &self,
+        expected: &SelectedEngineContext,
+        images: &VerifiedWorkerImages,
+    ) -> Result<(), HostError> {
+        if expected.matches_images(images) {
+            Ok(())
+        } else {
+            Err(HostError::Ownership)
+        }
+    }
+
     async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError> {
         self.plant_worker_volumes(volume)
     }

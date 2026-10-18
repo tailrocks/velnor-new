@@ -7,6 +7,7 @@ use std::sync::{
 use std::time::Duration;
 
 use crate::error::HostError;
+use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
 use crate::launch_identity::LaunchIdentity;
 use crate::stage::{ContainerRecord, DindProbe, PairEngine};
 use crate::worker::{CreateProjection, container_labels, container_name};
@@ -89,6 +90,18 @@ impl CompletionEngine {
     reason = "the test engine has no external waits"
 )]
 impl PairEngine for CompletionEngine {
+    async fn verify_worker_images(
+        &self,
+        expected: &SelectedEngineContext,
+        images: &VerifiedWorkerImages,
+    ) -> Result<(), HostError> {
+        if expected.matches_images(images) {
+            Ok(())
+        } else {
+            Err(HostError::Ownership)
+        }
+    }
+
     async fn prepare_volumes(&self, _identity: &LaunchIdentity) -> Result<(), HostError> {
         Ok(())
     }
