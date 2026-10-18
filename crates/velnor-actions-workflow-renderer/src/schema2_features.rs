@@ -7,6 +7,7 @@
 
 use super::{RunnerSpec, with_if};
 use crate::yaml::Yaml;
+use velnor_actions_contract::JobTimeout;
 
 const JS: &str = "inputs.mode == 'features' || inputs.mode == 'js'";
 const SERVICES: &str = "inputs.mode == 'features' || inputs.mode == 'services'";
@@ -107,7 +108,7 @@ pub(super) fn gated(job: (String, Yaml), when: &str) -> (String, Yaml) {
 fn js_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
     finish(
         id,
-        lane_base(name, runs_on, 20),
+        lane_base(name, runs_on, JobTimeout::DEFAULT),
         vec![
             checkout_step(),
             run_step("Record checkout", "git rev-parse HEAD"),
@@ -117,13 +118,13 @@ fn js_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
 }
 
 fn service_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
-    let mut fields = lane_base(name, runs_on, 20);
+    let mut fields = lane_base(name, runs_on, JobTimeout::DEFAULT);
     fields.push(("services".to_owned(), redis_service()));
     finish(id, fields, vec![run_step("Localhost port", PROBE_LOCAL)])
 }
 
 fn artifact_job(id: &str, name: &str, runs_on: &RunnerSpec, artifact: &str) -> (String, Yaml) {
-    let mut fields = lane_base(name, runs_on, 20);
+    let mut fields = lane_base(name, runs_on, JobTimeout::DEFAULT);
     fields.push(("permissions".to_owned(), artifact_permissions()));
     finish(
         id,
@@ -138,7 +139,7 @@ fn artifact_job(id: &str, name: &str, runs_on: &RunnerSpec, artifact: &str) -> (
 fn buildx_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
     finish(
         id,
-        lane_base(name, runs_on, 20),
+        lane_base(name, runs_on, JobTimeout::DEFAULT),
         vec![run_step("Buildx probe", BUILDX_RUN)],
     )
 }
@@ -146,7 +147,7 @@ fn buildx_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
 fn fail_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
     finish(
         id,
-        lane_base(name, runs_on, 10),
+        lane_base(name, runs_on, JobTimeout::DEFAULT),
         vec![run_step(
             "Intentional failure",
             "echo expected-negative && exit 1",
@@ -155,7 +156,11 @@ fn fail_job(id: &str, name: &str, runs_on: &RunnerSpec) -> (String, Yaml) {
 }
 
 /// Shared preamble for typed qualification lanes.
-pub(super) fn lane_base(name: &str, runner: &RunnerSpec, timeout: i64) -> Vec<(String, Yaml)> {
+pub(super) fn lane_base(
+    name: &str,
+    runner: &RunnerSpec,
+    timeout: JobTimeout,
+) -> Vec<(String, Yaml)> {
     lane_base_with_container(name, runner, timeout, false)
 }
 
@@ -163,7 +168,7 @@ pub(super) fn lane_base(name: &str, runner: &RunnerSpec, timeout: i64) -> Vec<(S
 pub(super) fn lane_base_with_container(
     name: &str,
     runner: &RunnerSpec,
-    timeout: i64,
+    timeout: JobTimeout,
     has_container: bool,
 ) -> Vec<(String, Yaml)> {
     let mut fields = base_fields(name, runner.runs_on.clone(), timeout);
@@ -172,15 +177,18 @@ pub(super) fn lane_base_with_container(
 }
 
 /// Shared preamble for hosted product-release families.
-pub(super) fn base(name: &str, runs_on: Yaml, timeout: i64) -> Vec<(String, Yaml)> {
+pub(super) fn base(name: &str, runs_on: Yaml, timeout: JobTimeout) -> Vec<(String, Yaml)> {
     base_fields(name, runs_on, timeout)
 }
 
-fn base_fields(name: &str, runs_on: Yaml, timeout: i64) -> Vec<(String, Yaml)> {
+fn base_fields(name: &str, runs_on: Yaml, timeout: JobTimeout) -> Vec<(String, Yaml)> {
     vec![
         ("name".to_owned(), Yaml::str(name)),
         ("runs-on".to_owned(), runs_on),
-        ("timeout-minutes".to_owned(), Yaml::Int(timeout)),
+        (
+            "timeout-minutes".to_owned(),
+            Yaml::Int(i64::from(timeout.minutes())),
+        ),
     ]
 }
 

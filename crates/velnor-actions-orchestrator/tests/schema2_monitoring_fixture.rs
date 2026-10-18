@@ -7,7 +7,7 @@ jobs:
   scale-set-lane:
     name: Scale set lane
     runs-on: [velnor, ubuntu-26.04-scale-set]
-    timeout-minutes: 30
+    timeout-minutes: 5
     defaults:
       run:
         shell: bash -e {0}
@@ -17,7 +17,7 @@ jobs:
   queue-monitor:
     name: Queue monitor
     runs-on: ubuntu-26.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - name: Watch admission
         run: echo queue-monitor

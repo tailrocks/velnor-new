@@ -6,14 +6,11 @@ use super::{
     features::{base, finish, run_step},
 };
 use crate::{
-    RenderError,
-    commands::join_argv_for_run,
-    document_steps::non_internal_step_to_yaml,
-    marker::with_marker,
-    render::RenderedFile,
-    yaml::{Yaml, render_yaml},
+    RenderError, commands::join_argv_for_run, document_steps::non_internal_step_to_yaml,
+    render::RenderedFile, yaml::Yaml,
 };
 use std::collections::BTreeMap;
+use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::{
     Step, config::VerificationRunner, package_release::PackageReleaseChannel,
     package_release_plan::PackageReleasePlan,
@@ -70,7 +67,7 @@ pub fn render_consumer_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFil
     spec.producer_setup.validate()?;
     if spec.plan.channel != PackageReleaseChannel::Preview
         || spec.plan.default_branch != "main"
-        || !(1..=360).contains(&spec.producer_timeout_minutes)
+        || !JobTimeout::is_valid_minutes(u32::from(spec.producer_timeout_minutes))
     {
         return Err(RenderError::InvalidWorkflow(
             "preview_spec_invalid".to_owned(),
@@ -125,7 +122,11 @@ pub fn render_consumer_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFil
     ]);
     Ok(RenderedFile {
         path: PackageReleaseChannel::Preview.workflow_path().to_owned(),
-        bytes: with_marker(&spec.generator_version, &render_yaml(&document))?,
+        bytes: crate::render::fallback::render_checked_workflow(
+            PackageReleaseChannel::Preview.workflow_path(),
+            &document,
+            &spec.generator_version,
+        )?,
     })
 }
 
@@ -137,7 +138,7 @@ fn eligibility(spec: &ConsumerPreviewSpec, gate: &str) -> Result<(String, Yaml),
     let mut fields = base(
         "Verify exact-commit Required CI",
         Yaml::str("ubuntu-26.04"),
-        75,
+        JobTimeout::DEFAULT,
     );
     fields.push((
         "permissions".to_owned(),
@@ -183,7 +184,7 @@ fn producer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
     let mut fields = base(
         "Build preview archives without publication credentials",
         Yaml::str(runner),
-        spec.producer_timeout_minutes.into(),
+        JobTimeout::new(spec.producer_timeout_minutes).map_err(RenderError::Contract)?,
     );
     fields.push((
         "if".to_owned(),
@@ -242,7 +243,7 @@ fn signer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
     let mut fields = base(
         "Independently validate and sign preview bytes",
         Yaml::str("ubuntu-26.04"),
-        30,
+        JobTimeout::DEFAULT,
     );
     fields.push((
         "if".to_owned(),
@@ -284,7 +285,7 @@ fn publisher(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> 
     let mut fields = base(
         "Publish immutable authenticated preview",
         Yaml::str("ubuntu-26.04"),
-        75,
+        JobTimeout::DEFAULT,
     );
     fields.push((
         "if".to_owned(),
@@ -323,7 +324,7 @@ fn recovery(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
     let mut fields = base(
         "Recover original signed preview without rebuilding",
         Yaml::str("ubuntu-26.04"),
-        75,
+        JobTimeout::DEFAULT,
     );
     fields.push((
         "if".to_owned(),

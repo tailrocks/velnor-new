@@ -55,19 +55,33 @@ pub struct GenerationPreparation {
 ///
 /// Returns root, config, branch, identity, discovery, or workflow errors.
 pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> {
-    prepare_inner(root, None)
+    prepare_inner(root, None, None)
+}
+
+/// Reuse one configuration admitted before a bounded execution's preparation.
+/// The same validation and policy checks also apply to typed caller input.
+pub(crate) fn prepare_with_config(
+    root: &Path,
+    config: VelnorConfig,
+) -> Result<GenerationPreparation, OrchestratorError> {
+    config
+        .validate(crate::config::CONFIG_REL)
+        .map_err(crate::config::config_error)?;
+    crate::config::check_policy_mode(&config)?;
+    prepare_inner(root, None, Some(config))
 }
 
 pub(crate) fn prepare_with_phase_timings(
     root: &Path,
     phases: &mut PlanPhaseTimings,
 ) -> Result<GenerationPreparation, OrchestratorError> {
-    prepare_inner(root, Some(phases))
+    prepare_inner(root, Some(phases), None)
 }
 
 fn prepare_inner(
     root: &Path,
     phases: Option<&mut PlanPhaseTimings>,
+    admitted_config: Option<VelnorConfig>,
 ) -> Result<GenerationPreparation, OrchestratorError> {
     let canonical = root
         .canonicalize()
@@ -77,7 +91,10 @@ fn prepare_inner(
             problem: format!("not_a_directory:{}", canonical.display()),
         });
     }
-    let config = load_config(&canonical)?;
+    let config = match admitted_config {
+        Some(config) => config,
+        None => load_config(&canonical)?,
+    };
     let catalog = crate::tool_catalog_resolve::resolve_tool_catalog(&canonical, &config)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
     check_velnor_identity(&canonical, &config)?;

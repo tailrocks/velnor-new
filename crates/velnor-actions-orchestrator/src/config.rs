@@ -74,7 +74,7 @@ pub(crate) fn config_error(error: velnor_actions_contract::ContractError) -> Orc
 }
 
 /// Reject candidate validation outside the Velnor-repository policy.
-fn check_policy_mode(config: &VelnorConfig) -> Result<(), OrchestratorError> {
+pub(crate) fn check_policy_mode(config: &VelnorConfig) -> Result<(), OrchestratorError> {
     if config.workflow.policy == WorkflowPolicy::ConsumerV1
         && config.workflow.generator_validation == GeneratorValidation::Candidate
     {

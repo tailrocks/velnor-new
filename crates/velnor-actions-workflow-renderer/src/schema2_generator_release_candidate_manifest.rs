@@ -1,11 +1,19 @@
 //! Same-run candidate manifest produced before native qualification.
 
 use crate::yaml::Yaml;
+use velnor_actions_contract::JobTimeout;
 
 use super::super::features::{base, finish};
 use super::ProductReleasePins;
 use super::{assets, manifest, workflow_steps};
 use velnor_actions_contract::ReleaseTarget;
+
+const NEEDS: [&str; 4] = [
+    "verify-release-source",
+    "build-linux",
+    "build-macos",
+    "build-macos-intel",
+];
 
 /// Build and upload the canonical manifest consumed by qualification and attestation.
 pub(super) fn job(
@@ -59,18 +67,16 @@ pub(super) fn job(
             &[&candidate_path],
         ),
     ]);
-    let needs = [
-        "verify-release-source",
-        "build-linux",
-        "build-macos",
-        "build-macos-intel",
-    ];
     let mut fields = workflow_steps::with_permissions(
-        base("Create candidate release manifest", hosted, 20),
+        base(
+            "Create candidate release manifest",
+            hosted,
+            JobTimeout::DEFAULT,
+        ),
         workflow_steps::perm(&[("actions", "write"), ("contents", "read")]),
     );
     fields.retain(|(key, _)| key != "name");
-    fields = workflow_steps::with_needs(fields, &needs);
+    fields = workflow_steps::with_needs(fields, &NEEDS);
     fields.push((
         "outputs".to_owned(),
         Yaml::Map(vec![

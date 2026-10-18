@@ -1,5 +1,6 @@
 //! Release candidate builds, target assets, and qualification.
 
+use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::ReleaseTarget;
 
 use super::super::features::{base, finish};
@@ -355,7 +356,11 @@ pub(super) fn source_gate_job(
         )?,
     ];
     let mut fields = with_permissions(
-        base("Verify generator release source", hosted, 20),
+        base(
+            "Verify generator release source",
+            hosted,
+            JobTimeout::DEFAULT,
+        ),
         workflow_steps::perm(&[("actions", "read"), ("contents", "read")]),
     );
     fields.retain(|(key, _)| key != "name");

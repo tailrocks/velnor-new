@@ -4,6 +4,7 @@ use super::{
     ConsumerPreviewSpec, MiseSetup, RenderError, Step, Yaml, acquire, base, finish, run_step, steps,
 };
 use crate::commands::join_argv_for_run;
+use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::{
     canonical_json_bytes,
     config::{CheckExecutor, HomebrewTapConfig},
@@ -49,7 +50,7 @@ fn prepare(
     let mut fields = base(
         "Prepare a literal-only tap update without write credentials",
         Yaml::str(runner),
-        tap.policy.updater.timeout_minutes.into(),
+        JobTimeout::try_from(tap.policy.updater.timeout_minutes).map_err(RenderError::Contract)?,
     );
     fields.extend([
         ("needs".to_owned(), steps::needs(&["preview-eligibility", "preview-publisher", "preview-recovery"])),
@@ -86,7 +87,7 @@ fn writer(
             "Merge only the validated and fully reviewed PR head",
             "preview-tap-writer",
             "merge-homebrew-tap-pr-v1",
-            55,
+            JobTimeout::DEFAULT,
         )
     } else {
         (
@@ -94,7 +95,7 @@ fn writer(
             "Independently validate and create a signed-off tap PR",
             "preview-tap-prepare",
             "write-homebrew-tap-pr-v1",
-            15,
+            JobTimeout::DEFAULT,
         )
     };
     let mut fields = base(name, Yaml::str("ubuntu-26.04"), timeout);

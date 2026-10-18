@@ -52,12 +52,13 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
             "check_runtime.rs",
             "owned_tool_preview.rs",
             "prepare.rs",
+            "preview_producer_entry.rs",
             "qualification_resolver.rs",
             "routing.rs",
             "tap_prepare.rs",
             "tap_prepare_execute.rs",
         ],
-        "preparation, execution, routing, owned preview, qualification admission, and captured tap preparation load configuration at their boundaries"
+        "preparation, execution, preview budget admission, routing, owned preview, qualification admission, and captured tap preparation load configuration at their boundaries"
     );
     Ok(())
 }
@@ -105,6 +106,62 @@ fn preparation_and_runtime_share_named_check_identity() -> TestResult {
     assert!(
         group.contains("named_checks::plan::derive_lanes("),
         "named obligations share runtime derivation"
+    );
+    Ok(())
+}
+
+#[test]
+fn preview_budget_admission_passes_one_validated_config_to_shared_preparation() -> TestResult {
+    let mut callers = Vec::new();
+    for path in product_src_files()? {
+        let name = path.file_name().unwrap_or_default().to_string_lossy();
+        if name.ends_with("_tests.rs") {
+            continue;
+        }
+        for (_, code) in code_of(&path)? {
+            if invokes(&code, "prepare_with_config") {
+                callers.push(name.to_string());
+            }
+        }
+    }
+    assert_eq!(callers, ["preview_producer_entry.rs"]);
+    let entry = std::fs::read_to_string(orch_src().join("preview_producer_entry.rs"))?;
+    assert_eq!(
+        entry
+            .matches("crate::config::load_config(&workspace)?")
+            .count(),
+        1
+    );
+    assert!(entry.contains("prepare_with_config(workspace, config)?"));
+    let compact = entry.split_whitespace().collect::<String>();
+    assert!(
+        compact.contains(
+            "execute_preview_producer_until(&workspace,&temp_root,deadline,proof,config,)"
+        )
+    );
+    assert!(!entry.contains("let mut config"));
+    let prepare = std::fs::read_to_string(orch_src().join("prepare.rs"))?;
+    assert!(prepare.contains("prepare_inner(root, None, None)"));
+    assert!(prepare.contains("prepare_inner(root, Some(phases), None)"));
+    assert!(prepare.contains("prepare_inner(root, None, Some(config))"));
+    let supplied = prepare
+        .split("pub(crate) fn prepare_with_config(")
+        .nth(1)
+        .expect("supplied config boundary")
+        .split("pub(crate) fn prepare_with_phase_timings(")
+        .next()
+        .expect("shared preparation boundary");
+    assert!(supplied.contains(".validate(crate::config::CONFIG_REL)"));
+    assert!(supplied.contains("crate::config::check_policy_mode(&config)?"));
+    let shared = prepare
+        .split("fn prepare_inner(")
+        .nth(1)
+        .expect("shared pipeline");
+    assert!(
+        shared
+            .find("match admitted_config")
+            .expect("config convergence")
+            < shared.find("resolve_tool_catalog").expect("catalog")
     );
     Ok(())
 }

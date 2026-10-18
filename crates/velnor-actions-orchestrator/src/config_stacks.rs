@@ -148,7 +148,7 @@ mod tests {
     fn workflow_task_union_parses_variants_and_defaults_empty() {
         let load = load_config;
         let root = rooted(
-            "schema = 1\n[[workflow.tasks]]\nkind = \"build\"\nid = \"native-desktop\"\nmise_task = \"desktop-ci\"\nsource = { mise_config = \"native/mise.toml\", working_directory = \"native\" }\ntools = [\"mr-boxington\", \"rust\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 120\ncargo_build_jobs = 2\nnextest_test_threads = 2\n[[workflow.tasks]]\nkind = \"verification\"\nid = \"native-swift-format\"\nmise_task = \"desktop-format-check\"\nsource = { mise_config = \"native/mise.toml\", working_directory = \"native\" }\nrunner = \"macos-arm64\"\ntimeout_minutes = 10\n",
+            "schema = 1\n[[workflow.tasks]]\nkind = \"build\"\nid = \"native-desktop\"\nmise_task = \"desktop-ci\"\nsource = { mise_config = \"native/mise.toml\", working_directory = \"native\" }\ntools = [\"mr-boxington\", \"rust\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 5\ncargo_build_jobs = 2\nnextest_test_threads = 2\n[[workflow.tasks]]\nkind = \"verification\"\nid = \"native-swift-format\"\nmise_task = \"desktop-format-check\"\nsource = { mise_config = \"native/mise.toml\", working_directory = \"native\" }\nrunner = \"macos-arm64\"\ntimeout_minutes = 5\n",
         );
         let config = load(root.path()).expect("workflow task variants");
         let Some(WorkflowTask::Build(build)) = config.workflow.tasks.first() else {
@@ -179,7 +179,7 @@ mod tests {
         );
 
         let legacy = rooted(
-            "schema = 1\n[[workflow.build_tasks]]\nid = \"native-desktop\"\nmise_task = \"desktop-ci\"\ntools = [\"mr-boxington\", \"rust\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 120\ncargo_build_jobs = 2\nnextest_test_threads = 2\n",
+            "schema = 1\n[[workflow.build_tasks]]\nid = \"native-desktop\"\nmise_task = \"desktop-ci\"\ntools = [\"mr-boxington\", \"rust\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 5\ncargo_build_jobs = 2\nnextest_test_threads = 2\n",
         );
         assert!(
             load(legacy.path()).is_err(),
@@ -317,6 +317,6 @@ expected_scenarios = ["ffi"]
         );
         let config = load(root.path()).expect("explicit checks");
         assert_eq!(config.checks[0].directory, ".");
-        assert_eq!(config.checks[0].timeout_minutes, 30);
+        assert_eq!(config.checks[0].timeout_minutes, 5);
     }
 }

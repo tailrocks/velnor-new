@@ -20,7 +20,7 @@ fn check() -> MiseCheck {
         tools: vec!["bun".into()],
         system_tools: Vec::new(),
         evidence: None,
-        timeout_minutes: 30,
+        timeout_minutes: 5,
     }
 }
 

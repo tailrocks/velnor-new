@@ -81,7 +81,7 @@ pub(crate) fn policy() -> HomebrewTapConfig {
                 "scripts/update.sh".to_owned(),
             ],
             tools: vec!["jq".to_owned()],
-            timeout_minutes: 30,
+            timeout_minutes: 5,
         },
         environment: TapUpdateEnvironment::TapUpdate,
         app_id_variable: "TAP_APP_ID".to_owned(),

@@ -9,9 +9,10 @@ pub const DEFAULT_SUITE_PARTITIONS: u16 = 1;
 /// Maximum partition count for a declared Rust suite.
 pub const MAX_SUITE_PARTITIONS: u16 = 64;
 /// Default per-job timeout in minutes for a declared Rust suite.
-pub const DEFAULT_SUITE_TIMEOUT_MINUTES: u16 = 30;
+pub const DEFAULT_SUITE_TIMEOUT_MINUTES: u16 =
+    crate::workflow::timeout::JobTimeout::DEFAULT.minutes();
 /// Maximum per-job timeout in minutes for a declared Rust suite.
-pub const MAX_SUITE_TIMEOUT_MINUTES: u16 = 360;
+pub const MAX_SUITE_TIMEOUT_MINUTES: u16 = crate::workflow::timeout::JobTimeout::MAX_MINUTES;
 /// Maximum `NEXTEST_TEST_THREADS` value for a declared Rust suite.
 pub const MAX_SUITE_TEST_THREADS: u8 = 64;
 /// Default artifact retention period in days for a declared Rust suite.
@@ -222,7 +223,7 @@ pub struct RustSuiteConfig {
     /// Binary preparation mode (`inline` or `archive`).
     #[serde(default, skip_serializing_if = "RustSuiteBuildMode::is_default")]
     pub build: RustSuiteBuildMode,
-    /// Per-job timeout in minutes (`1..=360`, default `30`).
+    /// Per-job timeout in minutes (`1..=5`, default `5`).
     #[serde(default = "default_suite_timeout_minutes")]
     pub timeout_minutes: u16,
     /// Optional `NEXTEST_TEST_THREADS` override (`1..=64`).
@@ -380,3 +381,7 @@ impl WorkflowDispatchConfig {
         self.inputs.is_empty()
     }
 }
+
+#[cfg(test)]
+#[path = "rust_suites_timeout_tests.rs"]
+mod timeout_tests;

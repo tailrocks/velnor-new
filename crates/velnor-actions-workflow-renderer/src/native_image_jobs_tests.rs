@@ -17,7 +17,7 @@ fn policy() -> NativeImageTaskPolicy {
             id: "architect-arm64-image".to_owned(),
             platform: NativeImagePlatform::LinuxArm64,
             script: "maintained-image-build/arm64-image-validation.sh".to_owned(),
-            timeout_minutes: 60,
+            timeout_minutes: 5,
             cache: NativeImageCachePolicy::TaskOwnedBuilder,
         },
         runner_label: "ubuntu-26.04-arm".to_owned(),
@@ -41,7 +41,7 @@ fn native_image_job_is_hosted_least_privilege_and_source_bound() {
     let job = build_native_image_job(&policy, CHECKOUT).expect("native image job");
     assert_eq!(policy.job_id(), "task-architect-arm64-image");
     assert_eq!(job.runs_on, "ubuntu-26.04-arm");
-    assert_eq!(job.timeout_minutes.minutes(), 60);
+    assert_eq!(job.timeout_minutes.minutes(), 5);
     assert_eq!(job.needs.len(), 0);
     assert!(job.condition.is_none());
     assert!(job.environment.is_none());

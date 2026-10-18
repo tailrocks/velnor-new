@@ -46,7 +46,7 @@ fn assert_freshness_shape(yaml: &str) {
         "bounded probe:\n{yaml}"
     );
     assert!(
-        yaml.contains("timeout-minutes: 10"),
+        yaml.contains("timeout-minutes: 5"),
         "explicit timeout:\n{yaml}"
     );
     assert!(!yaml.contains("write"), "read-only:\n{yaml}");

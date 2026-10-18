@@ -118,7 +118,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # source = { mise_config = "native/mise.toml", working_directory = "native" }
 # tools = ["mr-boxington", "rust"]    # Selected closure comes from root mise.toml/mise.lock.
 # runner = "macos-26-arm64"
-# timeout_minutes = 120                 # Bounded 1..=180.
+# timeout_minutes = 5                 # Bounded 1..=5.
 # cargo_build_jobs = 2                  # Bounded 1..=2; MBX/Rust are selected, while task code owns compiler selection.
 # nextest_test_threads = 2              # Bounded 1..=2.
 # [[workflow.tasks]]
@@ -127,7 +127,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # mise_task = "desktop-format-check"
 # source = { mise_config = "native/mise.toml", working_directory = "native" }
 # runner = "macos-arm64"               # Or "linux-x64".
-# timeout_minutes = 10                  # Bounded 1..=360.
+# timeout_minutes = 5                  # Bounded 1..=5.
 
 # Optional resource limits for generated jobs.
 # [resources]

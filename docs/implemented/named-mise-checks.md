@@ -46,7 +46,7 @@ system_tools = [
   { kind = "swift", version = "6.4", build = "swiftlang-6.4.0.34.1 clang-2100.3.34.1" },
   { kind = "xcode", version = "27.1", build = "27A9275", sdk_version = "27.0", developer_dir = "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer" },
 ]
-timeout_minutes = 30
+timeout_minutes = 5
 [checks.runner]
 label = "xcode-27"
 platform = "macos_arm64"
@@ -114,7 +114,7 @@ path = "evidence/orbstack-container.json"
 expected_scenarios = ["production-build", "production-smoke"]
 ```
 
-`directory` defaults to `.`; timeout defaults to 30 minutes and accepts 1–360.
+`directory` defaults to `.`; timeout defaults to five minutes and accepts 1–5.
 Inputs must be nonempty and unique; tool IDs must be unique. Select an explicitly
 declared qualified Rust tool ID when a task needs Rust for FFI fixtures or
 helpers. Non-Rust qualified tools requiring Cargo source installation, exposing

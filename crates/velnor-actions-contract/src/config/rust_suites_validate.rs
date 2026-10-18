@@ -10,9 +10,8 @@ use crate::workflow::ScheduleTrigger;
 
 use super::rust_suites::{
     DEFAULT_SUITE_WORKFLOW_SLUG, GENERATOR_OWNED_WORKFLOW_FILES, MAX_SUITE_PARTITIONS,
-    MAX_SUITE_TEST_THREADS, MAX_SUITE_TIMEOUT_MINUTES, RESERVED_SUITE_IDS,
-    RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteConfig, RustSuiteTrigger, WorkflowDispatchConfig,
-    WorkflowDispatchInputType,
+    MAX_SUITE_TEST_THREADS, RESERVED_SUITE_IDS, RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteConfig,
+    RustSuiteTrigger, WorkflowDispatchConfig, WorkflowDispatchInputType,
 };
 use super::workflow::RUNNER_LABEL_CATALOG;
 use rules::{
@@ -255,7 +254,7 @@ fn validate_suite_scalars(
             format!("bad_suite_partitions:{}", suite.partitions),
         ));
     }
-    if !(1..=MAX_SUITE_TIMEOUT_MINUTES).contains(&suite.timeout_minutes) {
+    if !crate::workflow::timeout::JobTimeout::is_valid_minutes(u32::from(suite.timeout_minutes)) {
         return Err(cfg_err(
             file,
             format!("{prefix}.timeout_minutes"),

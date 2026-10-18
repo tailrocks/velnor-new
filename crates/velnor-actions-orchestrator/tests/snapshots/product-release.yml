@@ -10,7 +10,7 @@ jobs:
   release-eligibility:
     name: Check release source eligibility
     runs-on: ubuntu-26.04
-    timeout-minutes: 70
+    timeout-minutes: 5
     permissions:
       actions: read
       contents: read
@@ -56,7 +56,7 @@ jobs:
   prepare-images:
     name: Prepare runner images release
     runs-on: ubuntu-26.04
-    timeout-minutes: 30
+    timeout-minutes: 5
     needs:
       - release-eligibility
     permissions:
@@ -108,7 +108,7 @@ jobs:
   prepare-binary:
     name: Prepare velnor-host binary release
     runs-on: ubuntu-26.04
-    timeout-minutes: 30
+    timeout-minutes: 5
     needs:
       - release-eligibility
     permissions:
@@ -160,7 +160,7 @@ jobs:
   prepare-generator:
     name: Prepare velnor-actions generator release
     runs-on: ubuntu-26.04
-    timeout-minutes: 30
+    timeout-minutes: 5
     needs:
       - release-eligibility
     permissions:

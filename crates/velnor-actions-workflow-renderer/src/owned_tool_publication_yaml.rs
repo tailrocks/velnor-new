@@ -1,6 +1,7 @@
 //! Mechanical rendering of closed owned-source qualification event categories.
 
 use crate::{Yaml, steps};
+use velnor_actions_contract::JobTimeout;
 
 use super::{OwnedPublicationSpec, REVIEWED_INFRASTRUCTURE_BRANCH, SourceQualificationTrigger};
 
@@ -56,7 +57,10 @@ fn build_job(spec: &OwnedPublicationSpec, include: Vec<Yaml>) -> Yaml {
         ),
         ("if", Yaml::str(job_guard(spec.trigger))),
         ("runs-on", Yaml::str("${{ matrix.runner }}")),
-        ("timeout-minutes", Yaml::Int(90)),
+        (
+            "timeout-minutes",
+            Yaml::Int(i64::from(JobTimeout::DEFAULT.minutes())),
+        ),
         ("permissions", map([("contents", Yaml::str("read"))])),
         (
             "strategy",

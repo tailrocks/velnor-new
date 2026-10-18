@@ -47,7 +47,7 @@ jobs:
   build-binary:
     name: Build velnor-host
     runs-on: macos-15
-    timeout-minutes: 120
+    timeout-minutes: 5
     permissions:
       actions: write
       contents: read
@@ -88,7 +88,7 @@ jobs:
   attest-binary:
     name: Attest velnor-host
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 5
     permissions:
       actions: read
       artifact-metadata: write
@@ -112,7 +112,7 @@ jobs:
   publish-binary:
     name: Publish velnor-host
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 5
     permissions:
       actions: read
       contents: write

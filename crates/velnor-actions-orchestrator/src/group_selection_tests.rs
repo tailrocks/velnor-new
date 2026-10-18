@@ -14,7 +14,7 @@ fn unchanged_named_check_executes_without_fabricating_a_source_change() {
     let check: MiseCheck = serde_json::from_value(serde_json::json!({
         "id": "verify", "task": "verify", "directory": ".",
         "runner": { "label": "ubuntu-24.04", "platform": "linux_x64", "executor": "hosted" },
-        "inputs": ["input.txt"], "tools": [], "system_tools": [], "timeout_minutes": 10
+        "inputs": ["input.txt"], "tools": [], "system_tools": [], "timeout_minutes": 5
     }))
     .expect("check");
     let catalog = ToolCatalog::pinned();

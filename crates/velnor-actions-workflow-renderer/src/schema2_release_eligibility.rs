@@ -2,6 +2,7 @@
 
 use crate::RenderError;
 use crate::yaml::Yaml;
+use velnor_actions_contract::JobTimeout;
 
 use super::features::{CHECKOUT_USES, base, finish};
 use super::generator_release;
@@ -59,7 +60,11 @@ pub const JOB_ID: &str = "release-eligibility";
 ///
 /// Returns an error when a pinned tool command cannot be rendered.
 pub fn job(runs_on: Yaml, pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
-    let mut fields = base("Check release source eligibility", runs_on, 70);
+    let mut fields = base(
+        "Check release source eligibility",
+        runs_on,
+        JobTimeout::DEFAULT,
+    );
     fields.push((
         "permissions".to_owned(),
         Yaml::Map(vec![

@@ -15,6 +15,7 @@
 //! [`FRESHNESS_WORKFLOW_PATH`]: velnor_actions_contract::FRESHNESS_WORKFLOW_PATH
 
 use std::collections::BTreeMap;
+use velnor_actions_contract::JobTimeout;
 
 use velnor_actions_contract::{FRESHNESS_WORKFLOW_PATH, ScheduleTrigger, Step, StepRole};
 
@@ -38,7 +39,7 @@ pub const FRESHNESS_PROBE_FLAG: &str = "--check-upstream";
 /// Freshness concurrency group (scheduled runs serialize, never cancel).
 pub const FRESHNESS_CONCURRENCY_GROUP: &str = "freshness";
 /// Freshness job timeout: every row may hit its 10 s probe cap.
-pub const FRESHNESS_TIMEOUT_MINUTES: i64 = 10;
+pub const FRESHNESS_TIMEOUT_MINUTES: u16 = JobTimeout::DEFAULT.minutes();
 
 /// Validated freshness-workflow inputs.
 #[derive(Debug, Clone)]
@@ -187,7 +188,7 @@ fn freshness_document(
         ("runs-on".to_owned(), Yaml::str(spec.runs_on.clone())),
         (
             "timeout-minutes".to_owned(),
-            Yaml::Int(FRESHNESS_TIMEOUT_MINUTES),
+            Yaml::Int(i64::from(FRESHNESS_TIMEOUT_MINUTES)),
         ),
         ("permissions".to_owned(), read_only_permissions()),
         (

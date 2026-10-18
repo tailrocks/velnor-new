@@ -28,7 +28,7 @@ runner = "xcode-27-arm64"
 inputs = ["Cargo.lock", "Cargo.toml", "mise.toml", "scripts/release-preview.sh"]
 tools = ["rust", "cargo-zigbuild", "jq", "tar", "zig"]
 system_tools = [{ kind = "xcode", version = "27.1", build = "27A9275", sdk_version = "27.0", developer_dir = "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer" }]
-timeout_minutes = 120
+timeout_minutes = 5
 build_jobs = 2
 output_directory = "dist/preview"
 manifest = "dist/preview/package-output.json"
@@ -60,7 +60,7 @@ enabled = true
 source = "rust.binary_release.preview"
 repository = "jackin-project/homebrew-tap"
 formula = "Formula/jackin-preview.rb"
-updater = { task = "package:update-preview", source = { mise_config = "mise.toml", working_directory = "." }, runner = { label = "ubuntu-26.04", platform = "linux_x64", executor = "hosted" }, inputs = ["mise.toml", "Formula/jackin-preview.rb", "scripts/package-update.sh"], tools = ["jq", "python"], timeout_minutes = 30 }
+updater = { task = "package:update-preview", source = { mise_config = "mise.toml", working_directory = "." }, runner = { label = "ubuntu-26.04", platform = "linux_x64", executor = "hosted" }, inputs = ["mise.toml", "Formula/jackin-preview.rb", "scripts/package-update.sh"], tools = ["jq", "python"], timeout_minutes = 5 }
 environment = "tap-update"
 app_id_variable = "HOMEBREW_TAP_APP_ID"
 app_private_key_secret = "HOMEBREW_TAP_APP_PRIVATE_KEY"

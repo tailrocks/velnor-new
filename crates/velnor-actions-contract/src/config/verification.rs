@@ -84,7 +84,8 @@ impl VerificationTask {
                 "bad_verification_source_or_working_directory",
             ));
         }
-        if !(1..=360).contains(&self.timeout_minutes) {
+        if !crate::workflow::timeout::JobTimeout::is_valid_minutes(u32::from(self.timeout_minutes))
+        {
             return Err(ContractError::config(
                 file,
                 "workflow.tasks.timeout_minutes",
@@ -132,14 +133,14 @@ mod tests {
 
     #[test]
     fn timeout_is_bounded_and_runner_targets_are_platform_specific() {
-        for timeout in [1, 360] {
+        for timeout in [1, 2, 3, 4, 5] {
             assert!(
                 task("audit", "audit", timeout)
                     .validate("config.toml")
                     .is_ok()
             );
         }
-        for timeout in [0, 361, u16::MAX] {
+        for timeout in [0, 6, 360, u16::MAX] {
             assert!(
                 task("audit", "audit", timeout)
                     .validate("config.toml")
@@ -185,7 +186,7 @@ mod tests {
         assert_eq!(valid.mise_lock_path(), "native/mise.lock");
         assert_eq!(valid.rust_toolchain_path(), "native/rust-toolchain.toml");
         assert_eq!(valid.config_ceiling_directory(), ".");
-        let mut valid_task = task("native-format", "format", 10);
+        let mut valid_task = task("native-format", "format", 5);
         valid_task.source = valid;
         assert!(valid_task.validate("config.toml").is_ok());
 
@@ -202,7 +203,7 @@ mod tests {
             ("native/mise.toml", "native/"),
             ("native/mise.toml", "native/$HOME"),
         ] {
-            let mut invalid = task("native-format", "format", 10);
+            let mut invalid = task("native-format", "format", 5);
             invalid.source = MiseTaskSource {
                 mise_config: mise_config.to_owned(),
                 working_directory: working_directory.to_owned(),

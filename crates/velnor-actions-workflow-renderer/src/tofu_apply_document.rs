@@ -75,7 +75,7 @@ fn apply_job(spec: &TofuApplySpec, steps: Vec<Yaml>) -> Yaml {
         ),
         (
             "timeout-minutes".to_owned(),
-            Yaml::Int(TOFU_APPLY_TIMEOUT_MINUTES),
+            Yaml::Int(i64::from(TOFU_APPLY_TIMEOUT_MINUTES)),
         ),
         (
             "env".to_owned(),

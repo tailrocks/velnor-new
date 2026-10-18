@@ -51,7 +51,7 @@ fn native_build_variant_is_shared_source_bounded_and_required_in_every_mode() ->
 
 fn assert_native_job_prefix(mode: &str, native: &str) {
     assert!(native.contains("runs-on: macos-26"), "{mode}: {native}");
-    assert!(native.contains("timeout-minutes: 120"), "{mode}: {native}");
+    assert!(native.contains("timeout-minutes: 5"), "{mode}: {native}");
     assert!(
         native.contains("CARGO_BUILD_JOBS: \"2\""),
         "{mode}: {native}"
@@ -365,7 +365,7 @@ xcodegen = [{ version = "2.46.0", backend = "aqua:yonaskolb/XcodeGen", specifier
 }
 
 pub(crate) fn config_with_build(mode: &str) -> String {
-    let build = "[[workflow.tasks]]\nid = \"native-desktop\"\nkind = \"build\"\nmise_task = \"desktop-ci\"\nsource = { mise_config = \"native/mise.toml\", working_directory = \"native\" }\ntools = [\"aqua:nextest-rs/nextest/cargo-nextest\", \"github:boltffi/boltffi\", \"mr-boxington\", \"rust\", \"swiftlint\", \"xcodegen\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 120\ncargo_build_jobs = 2\nnextest_test_threads = 2\n";
+    let build = "[[workflow.tasks]]\nid = \"native-desktop\"\nkind = \"build\"\nmise_task = \"desktop-ci\"\nsource = { mise_config = \"native/mise.toml\", working_directory = \"native\" }\ntools = [\"aqua:nextest-rs/nextest/cargo-nextest\", \"github:boltffi/boltffi\", \"mr-boxington\", \"rust\", \"swiftlint\", \"xcodegen\"]\nrunner = \"macos-26-arm64\"\ntimeout_minutes = 5\ncargo_build_jobs = 2\nnextest_test_threads = 2\n";
     config(mode).replace(
         "[[workflow.tasks]]\nid = \"native-format\"",
         &format!("{build}[[workflow.tasks]]\nid = \"native-format\""),

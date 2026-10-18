@@ -77,7 +77,8 @@ impl NativeImageTask {
                 format!("bad_native_image_script:{}", self.script),
             ));
         }
-        if !(1..=60).contains(&self.timeout_minutes) {
+        if !crate::workflow::timeout::JobTimeout::is_valid_minutes(u32::from(self.timeout_minutes))
+        {
             return Err(ContractError::config(
                 file,
                 "workflow.tasks.timeout_minutes",
@@ -166,7 +167,7 @@ mod tests {
 
     #[test]
     fn declaration_rejects_bad_shared_id_and_unbounded_timeout() {
-        for timeout in [1, 60] {
+        for timeout in [1, 2, 3, 4, 5] {
             assert!(
                 task(
                     "architect-arm64-image",
@@ -179,13 +180,13 @@ mod tests {
         }
         for id in ["", "Upper", "bad/id", "required"] {
             assert!(
-                task(id, "maintained-image-build/arm64-image-validation.sh", 30)
+                task(id, "maintained-image-build/arm64-image-validation.sh", 5)
                     .validate("config.toml")
                     .is_err(),
                 "{id:?}"
             );
         }
-        for timeout in [0, 61, u16::MAX] {
+        for timeout in [0, 6, 60, u16::MAX] {
             assert!(
                 task(
                     "architect-arm64-image",
@@ -204,7 +205,7 @@ mod tests {
         let task = task(
             "architect-arm64-image",
             "maintained-image-build/arm64-image-validation.sh",
-            60,
+            5,
         );
         let value = serde_json::to_value(task).expect("native image task serializes");
         let table = value.as_object().expect("task is a map");
@@ -231,7 +232,7 @@ mod tests {
             "id": "architect-arm64-image",
             "platform": "linux-arm64",
             "script": "maintained-image-build/arm64-image-validation.sh",
-            "timeout_minutes": 60,
+            "timeout_minutes": 5,
             "cache": "task-owned-builder"
         });
         let mut unknown_cache = valid.clone();

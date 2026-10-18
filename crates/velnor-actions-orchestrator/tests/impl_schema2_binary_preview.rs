@@ -59,7 +59,7 @@ source = { mise_config = "mise.toml", working_directory = "." }
 runner = { label = "ubuntu-26.04", platform = "linux_x64", executor = "hosted" }
 inputs = ["mise.toml", "Formula/demo-preview.rb", "scripts/package-update.sh"]
 tools = ["jq", "python"]
-timeout_minutes = 30
+timeout_minutes = 5
 [distribution.homebrew_tap.review_completion]
 check_name = "Review completion"
 app_id_variable = "REVIEW_COMPLETION_APP_ID"

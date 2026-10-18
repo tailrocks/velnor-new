@@ -4,6 +4,7 @@
 //! backend credentials, provider tokens, or OIDC permission. Its closed
 //! inputs render only one protected default-branch apply path.
 
+use velnor_actions_contract::JobTimeout;
 use velnor_actions_contract::{TOFU_APPLY_WORKFLOW_PATH, TofuApplyConfig};
 
 use crate::{
@@ -18,7 +19,7 @@ pub const TOFU_APPLY_CONCURRENCY_GROUP: &str = "velnor-tofu-apply-${{ github.rep
 /// Job ID for the one privileged apply job.
 pub const TOFU_APPLY_JOB_ID: &str = "tofu-apply";
 /// Workflow timeout bounds provider and backend operations.
-pub const TOFU_APPLY_TIMEOUT_MINUTES: i64 = 60;
+pub const TOFU_APPLY_TIMEOUT_MINUTES: u16 = JobTimeout::DEFAULT.minutes();
 /// Stable step ID consumed by the `OpenTofu` credential env maps.
 pub const AWS_CREDENTIALS_STEP_ID: &str = "aws-credentials";
 /// Locally mirrored immutable AWS credentials action pin; actionlint owns its inventory.

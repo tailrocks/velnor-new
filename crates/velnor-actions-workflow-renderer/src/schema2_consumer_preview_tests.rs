@@ -45,7 +45,7 @@ fn fixture() -> ConsumerPreviewSpec {
             }],
         },
         producer_runner: VerificationRunner::Macos26Arm64,
-        producer_timeout_minutes: 120,
+        producer_timeout_minutes: 5,
         linux_acquire: acquire.clone(),
         producer_acquire: acquire,
         producer_setup: setup_fixture(),
@@ -211,7 +211,7 @@ fn with_tap() -> ConsumerPreviewSpec {
                     "Formula/scanner-preview.rb".to_owned(),
                 ],
                 tools: vec!["python".to_owned()],
-                timeout_minutes: 30,
+                timeout_minutes: 5,
             },
             environment: TapUpdateEnvironment::TapUpdate,
             app_id_variable: "TAP_APP_ID".to_owned(),
@@ -299,4 +299,13 @@ fn tap_updater_rejects_self_hosted_execution_without_native_provisioning() {
     runner.executor = velnor_actions_contract::config::CheckExecutor::EphemeralSelfHosted;
     runner.label = "tap-updater".to_owned();
     assert!(render_consumer_preview(&spec).is_err());
+}
+
+#[test]
+fn preview_rejects_unbounded_producer_limits_before_rendering() {
+    for minutes in [0, 6, 30, 120, 360, u16::MAX] {
+        let mut spec = fixture();
+        spec.producer_timeout_minutes = minutes;
+        assert!(render_consumer_preview(&spec).is_err(), "{minutes}");
+    }
 }

@@ -47,7 +47,7 @@ jobs:
   build-images:
     name: Build runner images
     runs-on: ubuntu-26.04
-    timeout-minutes: 60
+    timeout-minutes: 5
     permissions:
       actions: write
       contents: read
@@ -102,7 +102,7 @@ jobs:
   attest-images:
     name: Attest runner images
     runs-on: ubuntu-26.04
-    timeout-minutes: 20
+    timeout-minutes: 5
     permissions:
       actions: read
       artifact-metadata: write
@@ -126,7 +126,7 @@ jobs:
   publish-images:
     name: Publish runner images
     runs-on: ubuntu-26.04
-    timeout-minutes: 30
+    timeout-minutes: 5
     permissions:
       actions: read
       contents: write

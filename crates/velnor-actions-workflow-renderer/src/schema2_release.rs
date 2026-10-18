@@ -11,6 +11,7 @@ use crate::commands::join_argv_for_run;
 use crate::runs_on::runs_on_yaml;
 use crate::steps::{ATTEST_BUILD_PROVENANCE_USES, DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 use crate::yaml::Yaml;
+use velnor_actions_contract::JobTimeout;
 
 use super::features::{CHECKOUT_USES, base, finish, identified_publish_step, run_step};
 use super::{Schema2WorkflowRequest, generator_release, product_release_family};
@@ -96,7 +97,7 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
                 "build-images",
                 "Build runner images",
                 hosted.clone(),
-                60,
+                JobTimeout::DEFAULT,
                 build_steps,
                 "Upload image assets",
                 &files,
@@ -149,7 +150,7 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
                 "build-binary",
                 "Build velnor-host",
                 macos.clone(),
-                120,
+                JobTimeout::DEFAULT,
                 vec![
                     generator_release::mise_setup_step(pins, ReleaseTarget::MacosArm64)?,
                     run_step("Install pinned Rust", &install),
@@ -188,7 +189,7 @@ fn build_job(
     id: &str,
     name: &str,
     runs_on: Yaml,
-    timeout: i64,
+    timeout: JobTimeout,
     mut steps: Vec<Yaml>,
     upload_name: &str,
     files: &[&str],
@@ -214,7 +215,10 @@ fn attest_job(
     finish(
         id,
         with_needs(
-            with_permissions(base(name, runs_on, 20), attest_permissions()),
+            with_permissions(
+                base(name, runs_on, JobTimeout::DEFAULT),
+                attest_permissions(),
+            ),
             needs,
         ),
         vec![download_step(artifact), attest_step(&subject_list(files))],
@@ -235,7 +239,10 @@ fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
     finish(
         spec.id,
         with_needs(
-            with_permissions(base(spec.name, runs_on, 30), publish_permissions()),
+            with_permissions(
+                base(spec.name, runs_on, JobTimeout::DEFAULT),
+                publish_permissions(),
+            ),
             spec.needs,
         ),
         vec![

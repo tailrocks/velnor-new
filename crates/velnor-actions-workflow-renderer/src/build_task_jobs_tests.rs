@@ -62,7 +62,7 @@ fn policy() -> BuildTaskPolicy {
                 "xcodegen".to_owned(),
             ],
             runner: BuildTaskRunner::Macos26Arm64,
-            timeout_minutes: 120,
+            timeout_minutes: 5,
             cargo_build_jobs: 2,
             nextest_test_threads: 2,
         },
@@ -194,7 +194,7 @@ fn native_job_bootstraps_only_locked_selected_tools_and_guards_current_source() 
     let job = build_build_task_job(&policy, CHECKOUT).expect("native task job");
     assert_eq!(policy.job_id(), "task-native-desktop");
     assert_eq!(job.runs_on, "macos-26");
-    assert_eq!(job.timeout_minutes.minutes(), 120);
+    assert_eq!(job.timeout_minutes.minutes(), 5);
     assert_eq!(job.needs, [] as [String; 0]);
     assert!(job.condition.is_none());
     assert!(job.environment.is_none());

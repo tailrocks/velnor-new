@@ -21,7 +21,7 @@ fn policy(id: &str, runner: VerificationRunner) -> VerificationTaskPolicy {
             mise_task: format!("lint-{id}"),
             source: MiseTaskSource::default(),
             runner,
-            timeout_minutes: 10,
+            timeout_minutes: 5,
         },
         runner_label: runner.runs_on().to_owned(),
         scale_set_token: Some("scale-set:velnor+ubuntu-26.04-scale-set".to_owned()),
@@ -44,7 +44,7 @@ fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
     assert_eq!(job.runs_on, "ubuntu-26.04");
     assert_eq!(job.needs.len(), 0);
     assert!(job.condition.is_none());
-    assert_eq!(job.timeout_minutes.minutes(), 10);
+    assert_eq!(job.timeout_minutes.minutes(), 5);
     let permissions = job.permissions.expect("job permissions are explicit");
     assert_eq!(permissions.contents, PermissionLevel::Read);
     assert_eq!(permissions.actions, PermissionLevel::None);

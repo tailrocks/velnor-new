@@ -241,3 +241,42 @@ the protected branch or merged through a pull request. Strict status checks only
 require the PR branch to be current before merging. Therefore a workflow whose
 contract promises PR-only promotion must independently require the server-side
 pull-request rule; required checks and a client-side PR workflow are insufficient.
+
+## Five-minute job budgets and cancellation (2026-10-18)
+
+Compatibility was checked against original `actions/runner` commit
+[`9abfe11d2abd9de09d3a8d933d7ed701ea0518a3`](https://github.com/actions/runner/commit/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3).
+The runner's [executable-job schema](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Sdk/DTPipelines/workflow-v1.0.json#L55-L75)
+accepts `timeout-minutes` on a job with `runs-on`. GitHub's
+[job-timeout contract](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idtimeout-minutes)
+says expiration automatically cancels that job; its default is 360 minutes.
+Velnor must explicitly emit a timeout between one and five minutes on every
+executable job, including CI, qualification, native image, signing, publication,
+recovery, and reusable-workflow callees. GitHub provides no workflow-wide timeout
+keyword: queued time, environment approval, and successive jobs are separate
+from this per-job execution budget.
+
+A [reusable-workflow caller](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#supported-keywords-for-jobs-that-call-a-reusable-workflow)
+allows a restricted set of job keys that excludes `timeout-minutes`. Emit the
+limit on every concrete job inside the called workflow; adding it to a `uses`
+caller is invalid. The runner schema above describes executable jobs, not the
+GitHub service's reusable-call expansion; it does not establish caller syntax.
+
+Cancellation is not an instantaneous physical process cutoff. The listener
+[receives the server's cancellation message](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Listener/JobDispatcher.cs#L140-L154)
+and [starts a separate worker cancellation window](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Listener/JobDispatcher.cs#L1269-L1286).
+The worker [re-evaluates the running step's condition](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Worker/StepsRunner.cs#L145-L185)
+before canceling its token. The process invoker allows
+[7.5 seconds for SIGINT and 2.5 seconds for SIGTERM](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Sdk/ProcessInvoker.cs#L32-L33),
+then [kills the process tree if those signals did not finish the process](https://github.com/actions/runner/blob/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3/src/Runner.Sdk/ProcessInvoker.cs#L443-L465).
+The [official cancellation contract](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-cancellation)
+also permits a five-minute cancellation grace before server-forced termination.
+These mechanisms cannot substantiate a claim that all processes disappear
+exactly 300 seconds after job start.
+
+Native producer execution therefore needs its own monotonic deadline shared
+across preparation, acquisition, probes, task execution, and output admission,
+with process-group termination and bounded reaping reserved within that budget.
+Starting a fresh timeout for each phase would permit cumulative overruns.
+Expiration must prevent a success proof or publication handoff; GitHub's outer
+job limit additionally bounds checkout, tool installation, and source fetch.
