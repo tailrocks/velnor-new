@@ -145,7 +145,7 @@ fn validator_commands() -> Vec<ValidatorCommand> {
     let mise = ["mise", "--no-config", "--no-env", "--no-hooks"];
     let deny = "cargo-deny@0.20.2";
     let machete = "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2";
-    let zizmor = "zizmor@1.30.1";
+    let zizmor = "zizmor@1.31.1";
     vec![
         validator_command(
             ValidatorKind::CargoDeny,
@@ -273,10 +273,10 @@ fn zizmor_support_unsets_empty_tokens_after_pinned_install() -> Result<(), Rende
             "--no-env".to_owned(),
             "--no-hooks".to_owned(),
             "install".to_owned(),
-            "zizmor@1.30.1".to_owned(),
+            "zizmor@1.31.1".to_owned(),
         ],
         argv: with_credential_unset(mise_argv(
-            "zizmor@1.30.1",
+            "zizmor@1.31.1",
             "zizmor",
             &[
                 "--no-online-audits",
@@ -306,7 +306,7 @@ fn zizmor_support_unsets_empty_tokens_after_pinned_install() -> Result<(), Rende
         .collect::<Vec<_>>()
         .join("\n");
     let install = zizmor_job
-        .find("run: mise --no-config --no-env --no-hooks install zizmor@1.30.1")
+        .find("run: mise --no-config --no-env --no-hooks install zizmor@1.31.1")
         .ok_or_else(|| RenderError::InvalidWorkflow("missing_zizmor_install".to_owned()))?;
     let execute = zizmor_job
         .find("env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN")
@@ -316,7 +316,7 @@ fn zizmor_support_unsets_empty_tokens_after_pinned_install() -> Result<(), Rende
         zizmor_job[execute..].contains("-u GH_TOKEN"),
         "GH_TOKEN must be unset"
     );
-    assert!(zizmor_job[execute..].contains("exec zizmor@1.30.1 -- zizmor"));
+    assert!(zizmor_job[execute..].contains("exec zizmor@1.31.1 -- zizmor"));
     assert!(
         !zizmor_job.contains("GH_TOKEN: \"\""),
         "bootstrap must not inherit empty auth values"
@@ -346,7 +346,7 @@ fn zizmor_preparation_keeps_job_env_and_exec_unsets_it() -> Result<(), RenderErr
     assert!(
         preparation
             .0
-            .contains("run: mise --no-config --no-env --no-hooks install zizmor@1.30.1")
+            .contains("run: mise --no-config --no-env --no-hooks install zizmor@1.31.1")
     );
     assert!(!preparation.0.contains("env -u GH_TOKEN"));
     assert!(

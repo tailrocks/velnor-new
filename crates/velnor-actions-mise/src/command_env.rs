@@ -222,6 +222,10 @@ pub enum EnvPolicy {
     /// Read-only local discovery probes: inherits minus every
     /// credential key, plus the isolation overlay.
     Discovery,
+    /// Explicit GitHub token: cleared ambient environment plus fixed isolation overlay.
+    GitHubToken,
+    /// GitHub Actions OIDC only: cleared environment plus proxy passthrough and fixed overlay.
+    ReleaseSigner,
     /// Repository task execution: cleared env plus proxy passthrough,
     /// the isolation overlay, and declared inputs only.
     RepoTask,
@@ -244,6 +248,8 @@ impl EnvPolicy {
             Self::Baseline => &CREDENTIAL_ALLOWLIST_BASELINE,
             Self::Verify
             | Self::Discovery
+            | Self::GitHubToken
+            | Self::ReleaseSigner
             | Self::RepoTask
             | Self::QualifiedCheck
             | Self::QualifiedProbe
@@ -258,6 +264,8 @@ impl EnvPolicy {
         !matches!(
             self,
             Self::RepoTask
+                | Self::GitHubToken
+                | Self::ReleaseSigner
                 | Self::QualifiedCheck
                 | Self::QualifiedProbe
                 | Self::QualifiedAcquisition
@@ -269,7 +277,10 @@ impl EnvPolicy {
     pub const fn allows_proxy_passthrough(&self) -> bool {
         matches!(
             self,
-            Self::RepoTask | Self::QualifiedCheck | Self::QualifiedAcquisition
+            Self::RepoTask
+                | Self::ReleaseSigner
+                | Self::QualifiedCheck
+                | Self::QualifiedAcquisition
         )
     }
 

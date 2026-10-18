@@ -32,6 +32,14 @@ Each dependency audit uses its workspace manifest and deny policy.
 It runs freshness, repository policy, generated-tree, and fixture checks.
 Set `CARGO_TARGET_DIR` to keep build output outside the repository.
 
+Use an absolute `CARGO_TARGET_DIR` outside the repository for all verification commands.
+Keep an existing MBX target symlink unchanged.
+Direct Cargo commands do not hold an MBX cache lease.
+Automatic cache removal can remove their active test binaries.
+Set `VELNOR_ACTIONS_BIN` to `$CARGO_TARGET_DIR/debug/velnor-actions` after the CLI build.
+Use that path for the freshness script.
+Keep every necessary test and gate when you limit parallel work.
+
 Run the repository structure checks after the local verification script:
 
 ```bash

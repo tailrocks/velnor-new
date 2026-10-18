@@ -98,6 +98,30 @@ impl GitRequest {
         Self::allowed("merge-base", args)
     }
 
+    /// Count commits reachable from one full lowercase source object ID.
+    ///
+    /// Unlike [`GitRequest::new`], this constructs only `rev-list --count
+    /// <validated-full-sha>`; callers cannot supply revision expressions or
+    /// additional flags through this typed request.
+    /// # Errors
+    /// Rejects any value other than a full canonical SHA-1 object ID.
+    pub fn rev_list_count(source_sha: &str) -> Result<Self, MiseError> {
+        if source_sha.len() != 40
+            || !source_sha
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+        {
+            return Err(MiseError::InvalidStepInput {
+                field: "git_rev_list_source_sha".to_owned(),
+                value: "requires_full_lowercase_sha1".to_owned(),
+            });
+        }
+        Ok(Self {
+            verb: "rev-list".to_owned(),
+            args: vec![OsString::from("--count"), OsString::from(source_sha)],
+        })
+    }
+
     /// Allowlisted verb such as `rev-parse`.
     #[must_use]
     pub fn verb(&self) -> &str {

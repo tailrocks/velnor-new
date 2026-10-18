@@ -1,8 +1,11 @@
 //! Pinned action refs, override schema, and input validation cases.
 use std::collections::BTreeMap;
 use velnor_actions_actionlint::{
-    ALINT_ACTION_SHA, ALINT_ACTION_VERSION, ALLOWED_ACTIONS, ActionInputSchema, ActionPinOverride,
-    ActionlintError, ApprovedPinCatalog, PinnedActionRef, validate_action_inputs,
+    ALINT_ACTION_SHA, ALINT_ACTION_VERSION, ALLOWED_ACTIONS, ATTEST_BUILD_PROVENANCE_ACTION_SHA,
+    ATTEST_BUILD_PROVENANCE_ACTION_VERSION, ATTEST_BUILD_PROVENANCE_USES, ActionInputSchema,
+    ActionPinOverride, ActionlintError, ApprovedPinCatalog, CREATE_GITHUB_APP_TOKEN_ACTION_SHA,
+    CREATE_GITHUB_APP_TOKEN_ACTION_VERSION, CREATE_GITHUB_APP_TOKEN_USES, PinnedActionRef,
+    validate_action_inputs,
 };
 
 /// Verified checkout pin from the version policy (test fixture).
@@ -19,12 +22,36 @@ fn checkout_schema() -> ActionInputSchema {
 }
 
 #[test]
-fn allowlist_has_nine_entries() {
-    assert_eq!(ALLOWED_ACTIONS.len(), 9);
+fn allowlist_has_only_the_pinned_actions() {
+    assert_eq!(ALLOWED_ACTIONS.len(), 11);
     assert!(ALLOWED_ACTIONS.contains(&"actions/cache/restore"));
     assert!(ALLOWED_ACTIONS.contains(&"asamarts/alint"));
     assert!(!ALLOWED_ACTIONS.contains(&"Swatinem/rust-cache"));
     assert!(ALLOWED_ACTIONS.contains(&"aws-actions/configure-aws-credentials"));
+    assert!(ALLOWED_ACTIONS.contains(&"actions/attest-build-provenance"));
+    assert!(ALLOWED_ACTIONS.contains(&"actions/create-github-app-token"));
+}
+
+#[test]
+fn native_release_actions_are_pinned_to_their_qualified_release_commits() {
+    assert_eq!(ATTEST_BUILD_PROVENANCE_ACTION_VERSION, "v4.2.2");
+    assert_eq!(
+        ATTEST_BUILD_PROVENANCE_ACTION_SHA,
+        "4d101475d8b20a2381f78447822ac1eab6504dd8"
+    );
+    assert_eq!(
+        ATTEST_BUILD_PROVENANCE_USES,
+        format!("actions/attest-build-provenance@{ATTEST_BUILD_PROVENANCE_ACTION_SHA}")
+    );
+    assert_eq!(CREATE_GITHUB_APP_TOKEN_ACTION_VERSION, "v3.3.0");
+    assert_eq!(
+        CREATE_GITHUB_APP_TOKEN_ACTION_SHA,
+        "64ab729a6294000f5aa4a4bc0b73d1f32bc45510"
+    );
+    assert_eq!(
+        CREATE_GITHUB_APP_TOKEN_USES,
+        format!("actions/create-github-app-token@{CREATE_GITHUB_APP_TOKEN_ACTION_SHA}")
+    );
 }
 
 #[test]
@@ -88,7 +115,7 @@ fn alint_tag_refs_rejected() {
             format!("asamarts/alint@{ALINT_ACTION_VERSION}"),
             ALINT_ACTION_VERSION,
         ),
-        ("asamarts/alint@v0.18.1".to_owned(), "v0.18.1"),
+        ("asamarts/alint@v0.18.4".to_owned(), "v0.18.4"),
     ] {
         assert!(
             matches!(

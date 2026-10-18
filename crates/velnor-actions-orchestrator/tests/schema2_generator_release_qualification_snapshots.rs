@@ -239,5 +239,74 @@ fn assert_dogfood_cargo_warmup(
         fetch < generate,
         "dogfood cargo fetch must precede the candidate generate"
     );
+    assert!(
+        qualification_helpers.contains("git -C \"$ROOT\" write-tree")
+            && qualification_helpers.contains("git -C \"$ROOT\" diff --quiet --")
+            && !window_contains_head_archive(qualification_helpers),
+        "dogfood must archive the clean indexed candidate tree"
+    );
+    Ok(())
+}
+
+fn window_contains_head_archive(helpers: &str) -> bool {
+    helpers.contains("git -C \"$ROOT\" archive --format=tar HEAD")
+}
+
+#[test]
+fn dogfood_candidate_tree_uses_staged_source_and_rejects_unstaged_edits()
+-> Result<(), Box<dyn std::error::Error>> {
+    use crate::impl_common::git_fixture;
+    use std::process::Command;
+
+    let repository = tempfile::tempdir()?;
+    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../scripts/generator-release/qualification-goldens.sh");
+    let run_git = |args: &[&str]| -> Result<(), Box<dyn std::error::Error>> {
+        let output = git_fixture::command(repository.path())?
+            .args(args)
+            .env("GIT_AUTHOR_NAME", "test")
+            .env("GIT_AUTHOR_EMAIL", "test@example.invalid")
+            .env("GIT_COMMITTER_NAME", "test")
+            .env("GIT_COMMITTER_EMAIL", "test@example.invalid")
+            .output()?;
+        if !output.status.success() {
+            return Err(format!("git {args:?} failed").into());
+        }
+        Ok(())
+    };
+    run_git(&["init", "-q"])?;
+    std::fs::write(repository.path().join("policy.toml"), "head\n")?;
+    run_git(&["add", "policy.toml"])?;
+    run_git(&["commit", "-qm", "baseline"])?;
+    std::fs::write(repository.path().join("policy.toml"), "staged candidate\n")?;
+    run_git(&["add", "policy.toml"])?;
+
+    let capture_tree = || {
+        Command::new("bash")
+            .env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .arg("-c")
+            .arg("source \"$1\"; ROOT=\"$2\"; candidate_tree_oid")
+            .arg("dogfood-tree-test")
+            .arg(&script)
+            .arg(repository.path())
+            .output()
+    };
+    let captured = capture_tree()?;
+    assert!(captured.status.success());
+    let tree = String::from_utf8(captured.stdout)?.trim().to_owned();
+    assert_eq!(tree.len(), 40);
+    let staged = git_fixture::command(repository.path())?
+        .args(["show", &format!("{tree}:policy.toml")])
+        .output()?;
+    assert!(staged.status.success());
+    assert_eq!(staged.stdout, b"staged candidate\n");
+
+    std::fs::write(repository.path().join("policy.toml"), "unstaged attack\n")?;
+    let rejected = capture_tree()?;
+    assert!(!rejected.status.success());
+    assert!(String::from_utf8(rejected.stderr)?.contains("unstaged tracked changes"));
     Ok(())
 }

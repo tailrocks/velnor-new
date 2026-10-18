@@ -4,6 +4,12 @@
 
 use std::collections::BTreeMap;
 
+/// Native build-provenance action ref; freshness checks compare the approved catalog.
+pub const ATTEST_BUILD_PROVENANCE_USES: &str =
+    "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
+/// Native scoped App-token action ref; freshness checks compare the approved catalog.
+pub const CREATE_GITHUB_APP_TOKEN_USES: &str =
+    "actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
 use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, commands, marker};
@@ -73,9 +79,6 @@ pub const UPLOAD_ARTIFACT_USES: &str =
     "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
 /// Pinned `actions/checkout` ref (v7.0.1, qualified 2026-09-28).
 pub const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
-/// Pinned build-provenance attestation action (v4.2.2).
-pub const ATTEST_BUILD_PROVENANCE_USES: &str =
-    "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 /// Retention for every rendered `upload-artifact` step, in days.
 ///
 /// Run-scoped evidence reproducible by rerun; bounded well under the

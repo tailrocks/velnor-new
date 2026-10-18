@@ -28,9 +28,6 @@ use velnor_actions_workflow_renderer::setup::{
     MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
 };
 
-#[path = "pins_consumer_binary_release.rs"]
-mod consumer_binary_release;
-pub(super) use consumer_binary_release::resolve_mise_setup_for_consumer_binary_release;
 #[path = "pins_mise_pin_qualification.rs"]
 mod mise_pin_qualification;
 pub(super) use mise_pin_qualification::resolve as resolve_mise_pin_qualification;

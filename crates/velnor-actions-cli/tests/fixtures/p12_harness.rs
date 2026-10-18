@@ -77,6 +77,39 @@ fn date_iso(days: i64) -> String {
     format!("{year:04}-{month:02}-{day:02}")
 }
 
+/// Install a strict `mise` executable for script fallback tests. It checks the
+/// exact policy-selected tool pins and command, then runs Cargo directly so
+/// ambient user command wrappers cannot replace the test's toolchain.
+pub(crate) fn use_fixture_mise(
+    command: &mut Command,
+    fixture: &Fixture,
+) -> Result<(), Box<dyn Error>> {
+    let bin = fixture.dir.join("fixture-bin");
+    std::fs::create_dir_all(&bin)?;
+    let mise = bin.join("mise");
+    write(
+        &fixture.dir,
+        "fixture-bin/mise",
+        "#!/bin/sh\nset -eu\n[ \"$#\" -eq 12 ] || exit 90\n[ \"$1\" = exec ] || exit 91\n[ \"$2\" = rust@1.98.1 ] || exit 92\n[ \"$3\" = mr-boxington@1.19.0 ] || exit 93\n[ \"$4\" = -- ] || exit 94\nshift 4\n[ \"$*\" = 'cargo run --quiet --locked -p velnor-actions-cli --bin velnor-actions' ] || exit 95\n[ \"$1\" = cargo ] || exit 96\nshift\nexec \"$VELNOR_TEST_CARGO\" \"$@\"\n",
+    )?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut permissions = std::fs::metadata(&mise)?.permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&mise, permissions)?;
+    }
+    let mut paths = vec![bin];
+    if let Some(path) = std::env::var_os("PATH") {
+        paths.extend(std::env::split_paths(&path));
+    }
+    command
+        .env("PATH", std::env::join_paths(paths)?)
+        .env("VELNOR_TEST_CARGO", env!("CARGO"))
+        .env("RUSTUP_TOOLCHAIN", "1.98.1");
+    Ok(())
+}
+
 /// Write `body` to `dir/rel`, creating parent directories.
 pub(crate) fn write(dir: &Path, rel: &str, body: &str) -> Result<(), Box<dyn Error>> {
     let path = dir.join(rel);
@@ -121,7 +154,8 @@ fn relative_root_is_resolved_before_the_script_changes_directory() -> Result<(),
     let caller_dir = fixture.dir.parent().ok_or("fixture parent missing")?;
     let relative_root = fixture.dir.file_name().ok_or("fixture name missing")?;
     let script = crate::impl_repo_policy::repo_root().join("scripts/check-freshness.sh");
-    let output = Command::new("bash")
+    let mut command = Command::new("bash");
+    command
         .arg(script)
         .arg("--root")
         .arg(relative_root)
@@ -130,8 +164,9 @@ fn relative_root_is_resolved_before_the_script_changes_directory() -> Result<(),
             crate::impl_cli_tmp::nested_target::nested_cargo_target_dir()?,
         )
         .env("CDPATH", caller_dir)
-        .current_dir(caller_dir)
-        .output()?;
+        .current_dir(caller_dir);
+    use_fixture_mise(&mut command, &fixture)?;
+    let output = command.output()?;
     let run = Run {
         code: output.status.code().unwrap_or(-1),
         stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
@@ -152,13 +187,15 @@ fn script_builds_cli_in_shared_nested_target() -> Result<(), Box<dyn Error>> {
         std::fs::remove_file(&binary)?;
     }
     let script = crate::impl_repo_policy::repo_root().join("scripts/check-freshness.sh");
-    let output = Command::new("bash")
+    let mut command = Command::new("bash");
+    command
         .arg(script)
         .arg("--root")
         .arg(&fixture.dir)
         .env("CARGO_TARGET_DIR", &nested_target)
-        .env_remove("VELNOR_ACTIONS_BIN")
-        .output()?;
+        .env_remove("VELNOR_ACTIONS_BIN");
+    use_fixture_mise(&mut command, &fixture)?;
+    let output = command.output()?;
     let run = Run {
         code: output.status.code().unwrap_or(-1),
         stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
@@ -240,6 +277,10 @@ pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
             include_str!("p12_render.txt"),
         ),
         (
+            "crates/velnor-actions-workflow-renderer/src/steps.rs",
+            include_str!("p12_steps.txt"),
+        ),
+        (
             ".velnor/version-policy.toml",
             include_str!("p12_policy.toml"),
         ),
@@ -305,18 +346,21 @@ const PROBE_DATA: &[&str] = &[
     "https://api.github.com/repos/cli/cli/releases/latest\tgh.json\t{\"tag_name\": \"v2.101.0\"}",
     "https://api.github.com/repos/rhysd/actionlint/releases/latest\tactionlint.json\t{\"tag_name\": \"v1.7.12\"}",
     "https://api.github.com/repos/koalaman/shellcheck/releases/latest\tshellcheck.json\t{\"tag_name\": \"v0.11.0\"}",
-    "https://api.github.com/repos/zizmorcore/zizmor/releases/latest\tzizmor.json\t{\"tag_name\": \"v1.30.1\"}",
+    "https://api.github.com/repos/zizmorcore/zizmor/releases/latest\tzizmor.json\t{\"tag_name\": \"v1.31.1\"}",
     "https://crates.io/api/v1/crates/cargo-nextest\tnextest.json\t{\"crate\": {\"max_version\": \"0.9.148\"}}",
     "https://crates.io/api/v1/crates/release-plz\trelease-plz.json\t{\"crate\": {\"max_version\": \"0.3.172\"}}",
     "https://api.github.com/repos/opentofu/opentofu/releases/latest\topentofu.json\t{\"tag_name\": \"v1.13.1\"}",
-    "https://api.github.com/repos/jdx/mise-action/releases/latest\tmise-action.json\t{\"tag_name\": \"v5.1.2\"}",
+    "https://api.github.com/repos/jdx/mise-action/releases/latest\tmise-action.json\t{\"tag_name\": \"v5.2.0\"}",
     "https://api.github.com/repos/actions/checkout/releases/latest\tcheckout.json\t{\"tag_name\": \"v7.0.1\"}",
     "https://api.github.com/repos/actions/download-artifact/releases/latest\tdownload.json\t{\"tag_name\": \"v8.0.1\"}",
     "https://api.github.com/repos/actions/upload-artifact/releases/latest\tupload.json\t{\"tag_name\": \"v7.0.1\"}",
     "https://api.github.com/repos/actions/cache/releases/latest\tcache.json\t{\"tag_name\": \"v6.1.0\"}",
     "https://api.github.com/repos/jdx/mr-boxington-action/releases\tmbx-action.json\t[{\"tag_name\": \"v1.5.0\"}]",
-    "https://api.github.com/repos/asamarts/alint/releases/latest\talint.json\t{\"tag_name\": \"v0.18.1\"}",
+    "https://api.github.com/repos/asamarts/alint/releases/latest\talint.json\t{\"tag_name\": \"v0.18.4\"}",
     "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest\taws-credentials.json\t{\"tag_name\": \"v6.3.0\"}",
+    "https://api.github.com/repos/sigstore/cosign/releases/latest\tcosign.json\t{\"tag_name\": \"v3.1.3\"}",
+    "https://api.github.com/repos/actions/attest-build-provenance/releases/latest\tattest-build-provenance.json\t{\"tag_name\": \"v4.2.2\"}",
+    "https://api.github.com/repos/actions/create-github-app-token/releases/latest\tcreate-github-app-token.json\t{\"tag_name\": \"v3.3.0\"}",
 ];
 
 /// (inventory source URL, canned file, canned body) for every probe row.

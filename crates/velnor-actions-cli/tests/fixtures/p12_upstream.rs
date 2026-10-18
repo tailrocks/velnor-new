@@ -42,6 +42,11 @@ fn probe_tool_rows() -> Vec<ProbeRow> {
             "[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.19.0\"}]",
         ),
         (
+            "https://api.github.com/repos/sigstore/cosign/releases/latest",
+            "cosign.json",
+            "{\"tag_name\": \"v3.1.3\"}",
+        ),
+        (
             "https://api.github.com/repos/cli/cli/releases/latest",
             "gh.json",
             "{\"tag_name\": \"v2.101.0\"}",
@@ -59,7 +64,7 @@ fn probe_tool_rows() -> Vec<ProbeRow> {
         (
             "https://api.github.com/repos/zizmorcore/zizmor/releases/latest",
             "zizmor.json",
-            "{\"tag_name\": \"v1.30.1\"}",
+            "{\"tag_name\": \"v1.31.1\"}",
         ),
         (
             "https://crates.io/api/v1/crates/cargo-nextest",
@@ -85,7 +90,7 @@ fn probe_action_rows() -> Vec<ProbeRow> {
         (
             "https://api.github.com/repos/jdx/mise-action/releases/latest",
             "mise-action.json",
-            "{\"tag_name\": \"v5.1.2\"}",
+            "{\"tag_name\": \"v5.2.0\"}",
         ),
         (
             "https://api.github.com/repos/actions/checkout/releases/latest",
@@ -115,12 +120,22 @@ fn probe_action_rows() -> Vec<ProbeRow> {
         (
             "https://api.github.com/repos/asamarts/alint/releases/latest",
             "alint.json",
-            "{\"tag_name\": \"v0.18.1\"}",
+            "{\"tag_name\": \"v0.18.4\"}",
         ),
         (
             "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest",
             "aws-credentials.json",
             "{\"tag_name\": \"v6.3.0\"}",
+        ),
+        (
+            "https://api.github.com/repos/actions/attest-build-provenance/releases/latest",
+            "attest-build-provenance.json",
+            "{\"tag_name\": \"v4.2.2\"}",
+        ),
+        (
+            "https://api.github.com/repos/actions/create-github-app-token/releases/latest",
+            "create-github-app-token.json",
+            "{\"tag_name\": \"v3.3.0\"}",
         ),
     ]
 }
@@ -205,7 +220,7 @@ fn probe_rows_carry_source_and_check_time() -> Result<(), Box<dyn Error>> {
         .iter()
         .filter(|line| line.contains("\"check\":\"upstream-probe\""))
         .collect();
-    assert_eq!(probe.len(), 20, "19 rows + runner note:\n{}", run.stdout);
+    assert_eq!(probe.len(), 23, "22 rows + runner note:\n{}", run.stdout);
     for line in probe {
         if line.contains("\"subject\":\"runner\"") {
             assert!(

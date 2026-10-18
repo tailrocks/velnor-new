@@ -35,7 +35,7 @@ fn both_mode_generate_passes_actionlint_and_zizmor() -> TestResult {
         vec![
             "actionlint@1.7.12".to_owned(),
             "shellcheck@0.11.0".to_owned(),
-            "zizmor@1.30.1".to_owned(),
+            "zizmor@1.31.1".to_owned(),
         ]
     );
     let ci = fs::read_to_string(preview.path().join(".github/workflows/ci.yml"))?;

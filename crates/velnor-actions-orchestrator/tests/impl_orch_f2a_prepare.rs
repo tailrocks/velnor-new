@@ -31,9 +31,10 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
     );
     // Preparation discovers repository evidence, execution reloads the
     // source-bound definition, routing reloads before schema migration,
-    // the owned-tool preview reloads at its CLI-gated boundary, and
-    // qualification admission reloads for the repo-resolved catalog.
-    assert_eq!(config_calls.len(), 5, "{config_calls:?}");
+    // the owned-tool preview reloads at its CLI-gated boundary, qualification
+    // admission reloads for the repo-resolved catalog, and tap preparation
+    // reloads the captured tap's own config before using its updater task.
+    assert_eq!(config_calls.len(), 7, "{config_calls:?}");
     assert!(
         config_calls
             .iter()
@@ -71,6 +72,8 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
                 || call.starts_with("routing.rs")
                 || call.starts_with("owned_tool_preview.rs")
                 || call.starts_with("qualification_resolver.rs")
+                || call.starts_with("tap_prepare.rs")
+                || call.starts_with("tap_prepare_execute.rs")
         }),
         "{config_calls:?}"
     );

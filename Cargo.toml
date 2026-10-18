@@ -15,6 +15,8 @@ exclude = ["crates/velnor-runner"]
 resolver = "3"
 
 [workspace.dependencies]
+base64 = { version = "=0.23.1" }
+sha2 = { version = "=0.11.1" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154" }
 thiserror = { version = "=2.0.21" }
@@ -22,7 +24,7 @@ thiserror = { version = "=2.0.21" }
 [workspace.package]
 edition = "2024"
 rust-version = "1.98"
-version = "0.1.12"
+version = "0.1.13"
 license = "MIT OR Apache-2.0"
 
 [workspace.lints.rust]

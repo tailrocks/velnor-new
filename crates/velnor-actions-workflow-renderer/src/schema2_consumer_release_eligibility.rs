@@ -2,6 +2,7 @@
 
 use crate::RenderError;
 use crate::commands::join_argv_for_run;
+use velnor_actions_contract::package_release::PackageReleaseChannel;
 
 const CI_WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
 const CI_WORKFLOW_API_ID: &str = "ci.yml";
@@ -34,7 +35,6 @@ const REQUIRED_JOB_JQ: &str = r#"
   | if ($required | length) != 1 then error("expected one Required job")
     else $required[0]
       | if .run_id == $run_id
-          and .run_attempt == $run_attempt
           and .head_sha == $source_sha
           and .head_branch == $default_branch
         then .
@@ -50,8 +50,8 @@ pub(super) struct ReleaseEligibilityContext {
     pub repository: String,
     /// Expected live default branch, resolved from `origin/HEAD`.
     pub default_branch: String,
-    /// Generated binary release workflow path.
-    pub workflow_path: String,
+    /// Native channel owns its exact generated workflow path and trigger policy.
+    pub channel: PackageReleaseChannel,
 }
 
 /// Render the shared source and Required-CI gate for one consumer repository.
@@ -66,7 +66,6 @@ pub(super) fn consumer_script(
 ) -> Result<String, RenderError> {
     if !valid_repository(&context.repository)
         || !velnor_actions_contract::is_valid_branch_name(&context.default_branch)
-        || context.workflow_path != ".github/workflows/binary-release.yml"
     {
         return Err(RenderError::InvalidWorkflow(
             "binary_release_eligibility_context_invalid".to_owned(),
@@ -80,7 +79,14 @@ pub(super) fn consumer_script(
         .replace("@GH_FUNCTION@", &gh_function)
         .replace("@REPOSITORY@", &context.repository)
         .replace("@DEFAULT_BRANCH@", &context.default_branch)
-        .replace("@WORKFLOW_PATH@", &context.workflow_path)
+        .replace("@WORKFLOW_PATH@", context.channel.workflow_path())
+        .replace(
+            "@ELIGIBLE_EVENTS@",
+            match context.channel {
+                PackageReleaseChannel::Stable => "workflow_dispatch",
+                PackageReleaseChannel::Preview => "push|workflow_dispatch",
+            },
+        )
         .replace("@CI_WORKFLOW_PATH@", CI_WORKFLOW_PATH)
         .replace("@CI_WORKFLOW_API_ID@", CI_WORKFLOW_API_ID)
         .replace("@LATEST_RUN_JQ@", LATEST_RUN_JQ)
@@ -134,7 +140,7 @@ is_sha() {
 [[ "${GITHUB_REF-}" == "refs/heads/$default_branch" ]] || fail 'source ref is not the default branch'
 [[ "${GITHUB_WORKFLOW_REF-}" == "$repository/@WORKFLOW_PATH@@refs/heads/$default_branch" ]] || fail 'unexpected workflow authority path or ref'
 case "${GITHUB_EVENT_NAME-}" in
-  workflow_dispatch) ;;
+  @ELIGIBLE_EVENTS@) ;;
   *) fail 'event is not eligible' ;;
 esac
 is_sha "$source_sha" || fail 'source SHA is malformed'
@@ -197,7 +203,6 @@ assert_required_job() {
     || fail 'Required job lookup failed'
   required="$(printf '%s\n' "$jobs" | jq -c \
     --argjson run_id "$run_id" \
-    --argjson run_attempt "$run_attempt" \
     --arg source_sha "$source_sha" \
     --arg default_branch "$default_branch" \
     --arg required_job "Required" \

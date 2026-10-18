@@ -42,11 +42,11 @@ mod versions;
 pub use versions::{check_freshness_requirements, validate_exact_version};
 use versions::{invalid_version, tool_source};
 
-/// Adopted Mise runner release (tag `v2026.10.8`); hosted version/digest qualification
-/// passed on Linux x64 and macOS x64 in run 38321521320 for source SHA
-/// `438bd90d2ef64515373f413b501b7ae01189a8e7`.
-/// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-10-12.
-pub const MISE_VERSION: &str = "2026.10.8";
+/// Adopted Mise runner release (tag `v2026.10.13`); local official-asset
+/// digest and version qualification passed 2026-10-17. Hosted qualification
+/// is required before release.
+/// Source: `https://api.github.com/repos/jdx/mise/releases/tags/v2026.10.13`; checked 2026-10-17.
+pub const MISE_VERSION: &str = "2026.10.13";
 /// Qualified Rust stable toolchain; 1.99.0 is held pending policy review.
 /// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-10-08.
 pub const RUST_VERSION: &str = "1.98.1";
@@ -62,9 +62,10 @@ pub const ACTIONLINT_VERSION: &str = "1.7.12";
 /// Qualified shellcheck release (tag `v0.11.0`).
 /// Source: `https://api.github.com/repos/koalaman/shellcheck/releases/latest`; checked 2026-09-28.
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
-/// Qualified zizmor tool release (`zizmorcore/zizmor` tag `v1.30.1`, stable, published 2026-09-09).
-/// Source: `https://api.github.com/repos/zizmorcore/zizmor/releases/latest`; checked 2026-09-28.
-pub const ZIZMOR_VERSION: &str = "1.30.1";
+/// Qualified zizmor tool release (`zizmorcore/zizmor` tag `v1.31.1`, stable).
+/// Its official macOS ARM64 binary passed version and repository audit checks
+/// 2026-10-17. Source: `https://api.github.com/repos/zizmorcore/zizmor/releases/tags/v1.31.1`.
+pub const ZIZMOR_VERSION: &str = "1.31.1";
 /// Qualified cargo-nextest release (`nextest-rs/nextest` tag
 /// `cargo-nextest-0.9.148`, published 2026-10-07).
 /// Source: `https://crates.io/api/v1/crates/cargo-nextest`; checked 2026-10-08.
@@ -92,6 +93,12 @@ pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
 /// Selected release-plz coordinator release (tag `release-plz-v0.3.172`).
 /// Source: `https://crates.io/api/v1/crates/release-plz`; published 2026-10-12, checked 2026-10-12.
 pub const RELEASE_PLZ_VERSION: &str = "0.3.172";
+/// Fixed Cosign signer helper (release tag `v3.1.3`), not installed by Mise.
+/// Source release assets and GitHub API SHA-256 digest were verified 2026-10-18.
+pub const COSIGN_VERSION: &str = "3.1.3";
+/// Official Linux `x86_64` Cosign asset digest from the v3.1.3 release API.
+pub const COSIGN_LINUX_AMD64_SHA256: &str =
+    "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71";
 
 // Nextest needs its backend-qualified aqua-registry path: no `nextest`
 // shorthand exists, `github:` tags carry a `cargo-nextest-` prefix, and

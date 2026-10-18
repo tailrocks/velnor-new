@@ -138,7 +138,7 @@ mod tests {
         );
 
         let unknown = ToolsConfig {
-            overrides: BTreeMap::from([("mise".to_owned(), "2026.10.8".to_owned())]),
+            overrides: BTreeMap::from([("mise".to_owned(), "2026.10.13".to_owned())]),
         };
         assert!(
             matches!(unknown.validate("config.toml"), Err(ref err) if err.to_string().contains("unknown_tool_override:mise"))

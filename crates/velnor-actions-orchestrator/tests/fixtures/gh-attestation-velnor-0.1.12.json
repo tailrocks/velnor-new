@@ -1,0 +1,99 @@
+[
+  {
+    "verificationResult": {
+      "mediaType": "application/vnd.dev.sigstore.verificationresult+json;version=0.1",
+      "signature": {
+        "certificate": {
+          "buildConfigDigest": "f1b044a606b6bc469f9718644f5c0ed88bf965b6",
+          "buildConfigURI": "https://github.com/tailrocks/velnor-new/.github/workflows/product-release.yml@refs/heads/main",
+          "buildSignerDigest": "f1b044a606b6bc469f9718644f5c0ed88bf965b6",
+          "buildSignerURI": "https://github.com/tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/heads/main",
+          "buildTrigger": "workflow_dispatch",
+          "certificateIssuer": "CN=sigstore-intermediate,O=sigstore.dev",
+          "githubWorkflowName": "Velnor product releases",
+          "githubWorkflowRef": "refs/heads/main",
+          "githubWorkflowRepository": "tailrocks/velnor-new",
+          "githubWorkflowSHA": "f1b044a606b6bc469f9718644f5c0ed88bf965b6",
+          "githubWorkflowTrigger": "workflow_dispatch",
+          "issuer": "https://token.actions.githubusercontent.com",
+          "runInvocationURI": "https://github.com/tailrocks/velnor-new/actions/runs/38996259545/attempts/1",
+          "runnerEnvironment": "github-hosted",
+          "sourceRepositoryDigest": "f1b044a606b6bc469f9718644f5c0ed88bf965b6",
+          "sourceRepositoryIdentifier": "1390620900",
+          "sourceRepositoryOwnerIdentifier": "78806509",
+          "sourceRepositoryOwnerURI": "https://github.com/tailrocks",
+          "sourceRepositoryRef": "refs/heads/main",
+          "sourceRepositoryURI": "https://github.com/tailrocks/velnor-new",
+          "sourceRepositoryVisibilityAtSigning": "public",
+          "subjectAlternativeName": "https://github.com/tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/heads/main"
+        }
+      },
+      "statement": {
+        "_type": "https://in-toto.io/Statement/v1",
+        "predicate": {
+          "buildDefinition": {
+            "buildType": "https://actions.github.io/buildtypes/workflow/v1",
+            "externalParameters": {
+              "workflow": {
+                "path": ".github/workflows/product-release.yml",
+                "ref": "refs/heads/main",
+                "repository": "https://github.com/tailrocks/velnor-new"
+              }
+            },
+            "internalParameters": {
+              "github": {
+                "event_name": "workflow_dispatch",
+                "repository_id": "1390620900",
+                "repository_owner_id": "78806509",
+                "runner_environment": "github-hosted"
+              }
+            },
+            "resolvedDependencies": [
+              {
+                "digest": {
+                  "gitCommit": "f1b044a606b6bc469f9718644f5c0ed88bf965b6"
+                },
+                "uri": "git+https://github.com/tailrocks/velnor-new@refs/heads/main"
+              }
+            ]
+          },
+          "runDetails": {
+            "builder": {
+              "id": "https://github.com/tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/heads/main"
+            },
+            "metadata": {
+              "invocationId": "https://github.com/tailrocks/velnor-new/actions/runs/38996259545/attempts/1"
+            }
+          }
+        },
+        "predicateType": "https://slsa.dev/provenance/v1",
+        "subject": [
+          {
+            "digest": {
+              "sha256": "e945a9122ed051cbe918ef3208f7fa6ec2203a5228be4437a680c33a67fc1cbb"
+            },
+            "name": "release-manifest.json"
+          }
+        ]
+      },
+      "verifiedIdentity": {
+        "issuer": {
+          "issuer": "",
+          "regexp": ".*"
+        },
+        "runnerEnvironment": "github-hosted",
+        "subjectAlternativeName": {
+          "regexp": "^https://github\\.com/tailrocks/velnor-new/\\.github/workflows/product-release-generator\\.yml@refs/heads/main$",
+          "subjectAlternativeName": ""
+        }
+      },
+      "verifiedTimestamps": [
+        {
+          "timestamp": "2026-10-17T09:58:48+07:00",
+          "type": "Tlog",
+          "uri": "https://rekor.sigstore.dev"
+        }
+      ]
+    }
+  }
+]

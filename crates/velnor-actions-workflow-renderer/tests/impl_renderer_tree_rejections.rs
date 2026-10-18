@@ -18,7 +18,7 @@ fn renderer_rejects_unpinned_actions_inside_ir() -> Result<(), RenderError> {
     let ctx = fixture_ctx();
     for (name, uses) in [
         ("Fetch", "actions/checkout@main"),
-        ("Run Alint", "asamarts/alint@v0.18.1"),
+        ("Run Alint", "asamarts/alint@v0.18.4"),
     ] {
         let mut ir = fixture_ir()?;
         ir.jobs.insert(
@@ -59,11 +59,11 @@ fn velnor_policy_emits_full_sha_alint_pin() -> Result<(), RenderError> {
     )?;
     assert_eq!(
         ALINT_USES,
-        "asamarts/alint@f558d76d076710312c54723d18e44d8cd95b3977"
+        "asamarts/alint@18e1a66db7444fed817c5d8c75292c7709fff32e"
     );
     assert!(text.contains("  alint:"), "alint job missing:\n{text}");
     assert!(
-        text.contains("uses: asamarts/alint@f558d76d076710312c54723d18e44d8cd95b3977"),
+        text.contains("uses: asamarts/alint@18e1a66db7444fed817c5d8c75292c7709fff32e"),
         "full-SHA pin missing:\n{text}"
     );
     assert!(
@@ -130,7 +130,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
             role: None,
             condition: None,
             kind: StepKind::Action {
-                uses: "asamarts/alint@v0.18.1".to_owned(),
+                uses: "asamarts/alint@v0.18.4".to_owned(),
                 with: BTreeMap::new(),
                 env: BTreeMap::new(),
             },

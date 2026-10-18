@@ -16,7 +16,7 @@ pub(crate) mod file_read;
 #[path = "check_metadata.rs"]
 mod metadata;
 pub use discovery::discover_checks_until;
-pub use discovery::{DiscoveredCheck, discover_checks};
+pub use discovery::{DiscoveredCheck, discover_checks, discover_preview_producer};
 pub use execution::QualifiedCheck;
 pub use metadata::CheckEntryMetadata;
 

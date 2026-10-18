@@ -9,7 +9,7 @@ use super::{ToolsCacheInputs, ToolsCachePayload};
 
 fn pinned_mise() -> MiseSetup {
     MiseSetup {
-        uses: "jdx/mise-action@08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8".to_owned(),
+        uses: "jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7".to_owned(),
         version: "2026.10.4".to_owned(),
         sha256: "a".repeat(64),
     }

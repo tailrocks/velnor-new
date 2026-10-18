@@ -33,7 +33,7 @@ pub use action_pins_impl::action_pins;
 mod validator_tools;
 
 /// Pinned Alint binary release tag for the step's `version:` input.
-pub const ALINT_BINARY_VERSION: &str = "v0.18.1";
+pub const ALINT_BINARY_VERSION: &str = "v0.18.4";
 
 #[path = "render_context.rs"]
 mod context;

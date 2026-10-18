@@ -12,6 +12,8 @@ mod git;
 mod output;
 #[path = "qualified_acquisition.rs"]
 mod qualified_acquisition;
+#[path = "command_release_signer.rs"]
+mod release_signer;
 #[path = "command_tofu.rs"]
 mod tofu;
 pub use check::resolve_program as resolve_check_program;
@@ -178,6 +180,23 @@ impl IsolatedCommand {
         Ok(self)
     }
 
+    pub(crate) fn with_github_token(mut self, token: &str) -> Result<Self, MiseError> {
+        if token.is_empty()
+            || !token
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+        {
+            return Err(MiseError::InvalidStepInput {
+                field: "GH_TOKEN".to_owned(),
+                value: "credential_rejected".to_owned(),
+            });
+        }
+        self.extra_env
+            .push((OsString::from("GH_TOKEN"), OsString::from(token)));
+        self.policy = EnvPolicy::GitHubToken;
+        Ok(self)
+    }
+
     /// Reassign the typed env policy (crate-internal constructors only).
     ///
     /// The only caller is the pinned-exec constructor, which selects
@@ -338,3 +357,7 @@ pub(crate) fn mise_install_argv_tail(specs: &[String]) -> Vec<OsString> {
     args.extend(specs.iter().map(OsString::from));
     args
 }
+
+#[cfg(test)]
+#[path = "command_release_signer_tests.rs"]
+mod release_signer_tests;

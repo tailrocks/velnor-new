@@ -11,6 +11,7 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
     VelnorConfig {
         checks: Vec::new(),
         qualified_tools: Vec::new(),
+        distribution: velnor_actions_contract::config::DistributionConfig::default(),
         schema: 1,
         workflow: WorkflowConfig {
             name: "CI".to_owned(),
