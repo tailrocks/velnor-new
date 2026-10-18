@@ -185,7 +185,7 @@ fn omission_ledger_explains_every_skip() {
     assert_eq!(ledger[0].task_id, "a-task");
     assert_eq!(ledger[1].task_id, "c-task");
     let everything = BTreeSet::from(all.clone());
-    assert!(omission_ledger(&all, &everything).is_empty());
+    assert_eq!(omission_ledger(&all, &everything), []);
 }
 
 #[test]
@@ -268,7 +268,7 @@ fn dedupe_stage_reports_conflicts() {
     assert_eq!(dupes, ["b"]);
     let (unique, dupes) = dedupe_sorted(&["a".to_owned(), "b".to_owned()]);
     assert_eq!(unique, ["a", "b"]);
-    assert!(dupes.is_empty());
+    assert_eq!(dupes, [] as [String; 0]);
 }
 
 #[test]

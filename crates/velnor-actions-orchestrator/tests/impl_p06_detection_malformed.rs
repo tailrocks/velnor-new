@@ -78,6 +78,6 @@ fn valid_section_wrapper_selects_mbx() -> TestResult {
             .command_or_setting
             .contains("wrappers.cargo.command")
     );
-    assert!(workspace.findings.is_empty());
+    assert_eq!(workspace.findings, []);
     Ok(())
 }

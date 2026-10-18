@@ -125,7 +125,7 @@ pub(crate) fn entries_for(plan: &Plan) -> serde_json::Value {
 #[test]
 fn wrong_base_manifest_schedules_everything() -> TestResult {
     let (_repo, seed) = plan_for_source_change()?;
-    assert!(!seed.task_ids.is_empty());
+    assert_ne!(seed.task_ids, [] as [String; 0]);
     let base = seed.base.clone().expect("base");
     let wrong = "b".repeat(40);
     assert_ne!(wrong, base);
