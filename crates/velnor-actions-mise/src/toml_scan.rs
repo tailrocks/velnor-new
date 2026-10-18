@@ -40,6 +40,8 @@ pub(crate) struct TomlAssignment {
 pub(crate) struct TomlDoc {
     /// Section-header paths with their one-based header lines.
     pub(crate) sections: Vec<(Vec<String>, u32)>,
+    /// Array-table paths with their one-based header lines.
+    pub(crate) array_sections: Vec<(Vec<String>, u32)>,
     /// Flattened assignments in file order.
     pub(crate) assignments: Vec<TomlAssignment>,
 }

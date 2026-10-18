@@ -6,6 +6,9 @@ use velnor_actions_mise::{
     ToolCatalog, is_mbx_command, parse_cargo_wrapper, parse_nextest_config,
 };
 
+#[path = "impl_mise_tool_tables.rs"]
+mod tool_tables;
+
 /// This repository's own `mise.toml` wrapper line (inline-table spelling).
 const REPO_WRAPPER_LINE: &str =
     "wrappers = { cargo = { command = \"mbx\", env = { MBX_CARGO_SHIM_MODE = \"1\" } } }";

@@ -15,6 +15,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use crate::catalog::{PinnedTool, validate_exact_version};
+use crate::toml_scan::{TomlValue, parse_toml};
 use crate::wrappers::parse_cargo_wrapper;
 
 /// Tool-file name owned by the Mise adapter.
@@ -286,81 +287,69 @@ pub fn lock_tool_versions(content: &str) -> BTreeMap<String, String> {
     }
 }
 
-/// Parse `[tools]` name-selector pairs; unknown sections ignored.
+/// Read tool choices from the structural TOML document.
+///
+/// Mise permits scalar versions and tool tables. Tool-table metadata does
+/// not set a version. Malformed input or unsupported choices return an error.
 fn parse_tools(content: &str) -> Result<MiseSpec, String> {
+    let doc = parse_toml(content)
+        .map_err(|failed| format!("line {}: {}", failed.line, failed.problem))?;
+    if let Some((path, line)) = doc
+        .array_sections
+        .iter()
+        .find(|(path, _)| path.first().map(String::as_str) == Some("tools"))
+    {
+        return Err(line_problem(
+            *line,
+            &format!("tool_array_table:{}", path.join(".")),
+        ));
+    }
     let mut tools = BTreeMap::new();
-    let mut in_tools = false;
-    for (index, line) in content.lines().enumerate() {
-        let code = strip_comment(line).trim();
-        if code.is_empty() {
+    for assignment in &doc.assignments {
+        if assignment.path.first().map(String::as_str) != Some("tools") {
             continue;
         }
-        if let Some(section) = parse_section(code) {
-            in_tools = section == "tools";
+        let Some(tool) = assignment.path.get(1) else {
             continue;
+        };
+        match assignment.path.as_slice() {
+            [_, _] => {
+                let TomlValue::Str(version) = &assignment.value else {
+                    return Err(line_problem(assignment.line, "tool_selector_not_string"));
+                };
+                tools.insert(tool.clone(), version.clone());
+            }
+            [_, _, field, rest @ ..] if field == "version" => {
+                if !rest.is_empty() {
+                    return Err(line_problem(assignment.line, "tool_version_not_scalar"));
+                }
+                let TomlValue::Str(version) = &assignment.value else {
+                    return Err(line_problem(assignment.line, "tool_version_not_string"));
+                };
+                if tools.insert(tool.clone(), version.clone()).is_some() {
+                    return Err(line_problem(assignment.line, "duplicate_tool_version"));
+                }
+            }
+            [_, _, field, rest @ ..] if matches!(field.as_str(), "path" | "prefix" | "ref") => {
+                if !rest.is_empty() {
+                    return Err(line_problem(assignment.line, "tool_selector_not_scalar"));
+                }
+                return Err(line_problem(
+                    assignment.line,
+                    &format!("unsupported_tool_selector:{tool}:{field}"),
+                ));
+            }
+            // Other tool-table fields hold metadata, not tool choices.
+            [_, _, ..] => {}
+            _ => {
+                return Err(line_problem(assignment.line, "invalid_tool_path"));
+            }
         }
-        if code.starts_with('[') {
-            return Err(line_problem(index, "unterminated_section"));
-        }
-        if !in_tools {
-            continue;
-        }
-        let (key, value) = split_setting(code, index)?;
-        tools.insert(key.to_owned(), parse_string(value, index)?);
     }
     Ok(MiseSpec { tools })
 }
 
-/// Section name of a `[section]` header, if well-formed.
-fn parse_section(code: &str) -> Option<&str> {
-    let section = code.strip_prefix('[')?.strip_suffix(']')?;
-    Some(section.trim())
-}
-
-/// Split one `key = value` setting inside `[tools]`.
-fn split_setting(code: &str, index: usize) -> Result<(&str, &str), String> {
-    let (key, value) = code
-        .split_once('=')
-        .ok_or_else(|| line_problem(index, "expected_key_equals_value"))?;
-    let key = key.trim();
-    if key.is_empty() || value.trim().is_empty() {
-        return Err(line_problem(index, "expected_key_equals_value"));
-    }
-    Ok((key, value.trim()))
-}
-
-/// Parse one quoted TOML basic or literal string.
-fn parse_string(value: &str, index: usize) -> Result<String, String> {
-    let quote = value.chars().next().unwrap_or('\0');
-    if (quote != '"' && quote != '\'') || value.len() < 2 || !value.ends_with(quote) {
-        return Err(line_problem(index, "unterminated_string"));
-    }
-    Ok(value[1..value.len() - 1].to_owned())
-}
-
-/// Strip a trailing `#` comment outside quotes.
-///
-/// One comment rule for every `mise.toml` reader, so a `#`-hidden
-/// key cannot dodge one.
-pub(crate) fn strip_comment(line: &str) -> &str {
-    let mut quoted = false;
-    let mut current = '"';
-    for (index, char) in line.char_indices() {
-        if quoted {
-            if char == current {
-                quoted = false;
-            }
-        } else if char == '"' || char == '\'' {
-            quoted = true;
-            current = char;
-        } else if char == '#' {
-            return line[..index].trim_end();
-        }
-    }
-    line
-}
-
-/// `line N: problem` detail with one-based line numbers.
-fn line_problem(index: usize, problem: &str) -> String {
-    format!("line {}: {problem}", index.saturating_add(1))
+/// Render a source line and stable parser problem.
+fn line_problem(line: u32, problem: &str) -> String {
+    format!("line {line}: {problem}")
 }
