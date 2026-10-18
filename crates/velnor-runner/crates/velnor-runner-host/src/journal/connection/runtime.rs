@@ -31,6 +31,7 @@ pub(crate) struct EngineContext {
 
 impl ConnectionJournal {
     /// Bind the verified Scale Set ID, selector name, and ownership.
+    #[cfg(test)]
     pub(crate) async fn bind_scale_set(
         &self,
         id: i64,
@@ -182,6 +183,7 @@ impl ConnectionJournal {
     }
 }
 
+#[cfg(test)]
 async fn same_scale_set(
     connection: &turso::Connection,
     connection_id: &str,
@@ -232,6 +234,7 @@ async fn same_engine_context(
         && stored_platform.as_deref() == Some(platform))
 }
 
+#[cfg(test)]
 fn ownership_text(ownership: SetOwnership) -> &'static str {
     match ownership {
         SetOwnership::Created => "created",

@@ -2,7 +2,7 @@
 
 use crate::error::HostError;
 
-use super::{connection, image_import, remote};
+use super::{connection, image_import, remote, scale_set_create};
 
 pub(super) async fn from_version_zero(conn: &turso::Connection) -> Result<(), HostError> {
     crate::journal_schema::bootstrap(conn).await?;
@@ -72,6 +72,14 @@ pub(super) async fn from_version_three(conn: &turso::Connection) -> Result<(), H
 pub(super) async fn from_version_four(conn: &turso::Connection) -> Result<(), HostError> {
     image_import::bootstrap(conn).await?;
     conn.execute("PRAGMA user_version = 5", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    from_version_five(conn).await
+}
+
+pub(super) async fn from_version_five(conn: &turso::Connection) -> Result<(), HostError> {
+    scale_set_create::bootstrap(conn).await?;
+    conn.execute("PRAGMA user_version = 6", ())
         .await
         .map_err(|_| HostError::Journal)?;
     Ok(())

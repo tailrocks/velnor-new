@@ -15,6 +15,7 @@ mod image_import;
 mod launch;
 mod read;
 mod resource_probe;
+mod scale_set_create;
 mod schema;
 mod sql;
 mod transaction;
@@ -40,6 +41,11 @@ pub(crate) use connection::{
 pub(crate) use image_import::{
     ImageImportClaim, ImageImportId, ImageImportIdentity, ImageImportInspection, ImageImportRecord,
     ImageImportRequest, ImageImportState,
+};
+pub(crate) use scale_set_create::{
+    CreatedScaleSetResponse, ExistingScaleSetObservation, ScaleSetCreateClaim, ScaleSetCreateId,
+    ScaleSetCreateNoEffect, ScaleSetCreateReceipt, ScaleSetCreateRecord, ScaleSetCreateRequest,
+    ScaleSetCreateState,
 };
 use sql::{intent_row, one_row, same_ids, token_rejected};
 

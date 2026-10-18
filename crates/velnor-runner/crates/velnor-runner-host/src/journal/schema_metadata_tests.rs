@@ -286,7 +286,7 @@ async fn integer_primary_key_completion_tables_accept_fresh_and_v3_schemas() -> 
             .await
             .map_err(|error| error.to_string())?,
     );
-    assert_remote_primary_key_metadata(&path, 5).await?;
+    assert_remote_primary_key_metadata(&path, 6).await?;
 
     // Version 3 already used INTEGER PRIMARY KEY. SQLite reports its implicit
     // rowid non-null guarantee as notnull=0, so migration must preserve it.
@@ -303,7 +303,7 @@ async fn integer_primary_key_completion_tables_accept_fresh_and_v3_schemas() -> 
             .await
             .map_err(|error| error.to_string())?,
     );
-    assert_remote_primary_key_metadata(&path, 5).await
+    assert_remote_primary_key_metadata(&path, 6).await
 }
 
 async fn assert_remote_primary_key_metadata(

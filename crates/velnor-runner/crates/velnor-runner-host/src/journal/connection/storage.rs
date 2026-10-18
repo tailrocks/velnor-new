@@ -204,7 +204,15 @@ pub(super) async fn has_unresolved_work(connection: &turso::Connection) -> Resul
         "SELECT COUNT(*) FROM image_imports WHERE state IN ('prepared', 'requested', 'uncertain')",
     )
     .await?;
-    Ok(image_imports != 0)
+    if image_imports != 0 {
+        return Ok(true);
+    }
+    let scale_set_creates = scalar_count(
+        connection,
+        "SELECT COUNT(*) FROM connection_scale_set_intents WHERE state IN ('prepared', 'requested', 'uncertain')",
+    )
+    .await?;
+    Ok(scale_set_creates != 0)
 }
 
 pub(super) async fn has_connection_work(
@@ -213,7 +221,7 @@ pub(super) async fn has_connection_work(
 ) -> Result<bool, HostError> {
     let mut rows = connection
         .query(
-            "SELECT EXISTS (SELECT 1 FROM capacity_reservations WHERE connection_id = ?1 AND state != 'released') OR EXISTS (SELECT 1 FROM connection_intents WHERE connection_id = ?1 AND cleanup_proven = 0) OR EXISTS (SELECT 1 FROM connection_completion_inbox WHERE connection_id = ?1)",
+            "SELECT EXISTS (SELECT 1 FROM capacity_reservations WHERE connection_id = ?1 AND state != 'released') OR EXISTS (SELECT 1 FROM connection_intents WHERE connection_id = ?1 AND cleanup_proven = 0) OR EXISTS (SELECT 1 FROM connection_completion_inbox WHERE connection_id = ?1) OR EXISTS (SELECT 1 FROM connection_scale_set_intents WHERE connection_id = ?1 AND state IN ('prepared', 'requested', 'uncertain'))",
             [connection_id],
         )
         .await

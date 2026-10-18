@@ -252,7 +252,7 @@ impl ConnectionJournal {
         .await
     }
 
-    pub(super) async fn validate_scope(
+    pub(in crate::journal) async fn validate_scope(
         &self,
         connection: &turso::Connection,
     ) -> Result<(), HostError> {
@@ -260,6 +260,14 @@ impl ConnectionJournal {
             return Err(HostError::Journal);
         }
         Ok(())
+    }
+
+    pub(in crate::journal) const fn journal_ref(&self) -> &Journal {
+        &self.journal
+    }
+
+    pub(in crate::journal) fn binding_digest(&self) -> &str {
+        &self.binding_digest
     }
 
     async fn validate_scope_record(
