@@ -500,6 +500,7 @@ fn qualification_plan(
         head: SOURCE.to_owned(),
         event: WorkflowEvent::Qualification,
         qualification: Some(QualificationDispatch {
+            mode: velnor_actions_contract::QualificationDispatchMode::Controlled,
             campaign: "cache-runtime-tests".to_owned(),
             phase,
             repository: REPOSITORY.to_owned(),

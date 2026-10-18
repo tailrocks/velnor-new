@@ -3,7 +3,7 @@ use super::*;
 use crate::workflow::{
     EntryCacheIds, ExecuteTaskIds, MatrixEntry, ObligationDecision, PlanBaseline, PlanGenerator,
     PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlannedPlatform, QualificationDispatch,
-    QualificationPhase, QualificationRunRef, WorkflowEvent,
+    QualificationDispatchMode, QualificationPhase, QualificationRunRef, WorkflowEvent,
 };
 use crate::{
     RunnerSelection, Trust,
@@ -181,6 +181,7 @@ fn test_toolchain_inputs() -> ToolchainInputs {
 
 fn qualification_context(run_id: u64, source_sha: String) -> QualificationDispatch {
     QualificationDispatch {
+        mode: QualificationDispatchMode::Controlled,
         campaign: "identity-test".to_owned(),
         phase: QualificationPhase::UsefulDelta,
         repository: "tailrocks/velnor".to_owned(),

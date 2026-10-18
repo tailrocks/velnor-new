@@ -1,7 +1,8 @@
 //! Runner-observed event resolution shared by plan and merge.
 
 use velnor_actions_contract::{
-    QualificationDispatch, QualificationPhase, QualificationRunRef, WorkflowEvent,
+    QualificationDispatch, QualificationDispatchMode, QualificationPhase, QualificationRunRef,
+    WorkflowEvent,
 };
 
 use crate::OrchestratorError;
@@ -98,6 +99,7 @@ pub(crate) fn qualification_dispatch_for_parts(
         .and_then(|value| value.parse::<u32>().ok())
         .ok_or_else(|| internal("invalid_qualification_run_attempt"))?;
     let context = QualificationDispatch {
+        mode: QualificationDispatchMode::Controlled,
         campaign,
         phase,
         repository,

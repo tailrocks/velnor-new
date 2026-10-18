@@ -8,6 +8,10 @@ use crate::workflow::jobs::CI_WORKFLOW_PATH;
 use crate::workflow::plan::{ObligationDecision, Plan, WorkflowEvent};
 use crate::workflow::qualification_phase::QualificationPhase;
 
+#[path = "qualification_dispatch/repeat.rs"]
+mod repeat;
+pub use repeat::{QualificationDispatchMode, verification_repeat_campaign};
+
 /// Validate that a serialized plan carries qualification context only when its
 /// source, run, trust, baseline, and selected work still satisfy the dispatch
 /// contract.
@@ -66,6 +70,12 @@ pub(super) fn validate_plan_qualification(plan: &Plan) -> Result<(), ContractErr
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualificationDispatch {
+    /// Whether the run follows the caller-selected flow or authenticated repeat flow.
+    #[serde(
+        default,
+        skip_serializing_if = "QualificationDispatchMode::is_controlled"
+    )]
+    pub mode: QualificationDispatchMode,
     /// Isolated experiment namespace, supplied by the dispatcher.
     pub campaign: String,
     /// Cold, warm, or cache-disabled control phase.
@@ -184,7 +194,10 @@ impl QualificationDispatch {
                 "not_configured_verification_ref",
             ));
         }
-        if branch == default_branch && !self.ref_protected {
+        if branch == default_branch
+            && !self.ref_protected
+            && self.mode != QualificationDispatchMode::VerificationOnly
+        {
             return Err(ContractError::identity(
                 "qualification.ref_protected",
                 "default_ref_unprotected",
@@ -228,7 +241,8 @@ impl QualificationDispatch {
         }
         validate_ref_binding(self)?;
         validate_run_identity(self)?;
-        validate_predecessor(self)
+        validate_predecessor(self)?;
+        repeat::validate(self)
     }
 }
 

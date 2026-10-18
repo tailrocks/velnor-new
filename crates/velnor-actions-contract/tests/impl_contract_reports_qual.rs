@@ -2,8 +2,9 @@
 use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
 use velnor_actions_contract::{
     ContractError, ObligationDecision, Plan, PlanBaseline, PlanGenerator, PlanMatrix,
-    PlanObligation, PlanPackage, PlanRunner, QualificationDispatch, QualificationPhase,
-    RunnerSelection, Trust, WorkflowEvent, digest_b3, plan_id_for_run, run_key_for_ci,
+    PlanObligation, PlanPackage, PlanRunner, QualificationDispatch, QualificationDispatchMode,
+    QualificationPhase, RunnerSelection, Trust, WorkflowEvent, digest_b3, plan_id_for_run,
+    run_key_for_ci,
 };
 
 #[test]
@@ -45,6 +46,7 @@ fn sample_qualification_plan() -> Result<Plan, ContractError> {
         head: head.clone(),
         event: WorkflowEvent::Qualification,
         qualification: Some(QualificationDispatch {
+            mode: QualificationDispatchMode::Controlled,
             campaign: "campaign-2030".to_owned(),
             phase: QualificationPhase::Third,
             repository: "owner/project".to_owned(),

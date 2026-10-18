@@ -63,6 +63,7 @@ fn cold_qualification_response() -> String {
         head: SOURCE.to_owned(),
         event: WorkflowEvent::Qualification,
         qualification: Some(QualificationDispatch {
+            mode: velnor_actions_contract::QualificationDispatchMode::Controlled,
             campaign: "artifact-test".to_owned(),
             phase: QualificationPhase::Cold,
             repository: "owner/project".to_owned(),

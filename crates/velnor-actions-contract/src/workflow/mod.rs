@@ -98,7 +98,10 @@ pub use qualification_cache_lineage::{
     QualificationRuntimePlatform, QualificationRuntimeScaleSet,
     QualificationRuntimeToolObservation, QualificationSourceDelta,
 };
-pub use qualification_dispatch::{QualificationDispatch, QualificationRunRef};
+pub use qualification_dispatch::{
+    QualificationDispatch, QualificationDispatchMode, QualificationRunRef,
+    verification_repeat_campaign,
+};
 pub use qualification_phase::{
     QUALIFICATION_CACHE_ENABLED_OUTPUT, QUALIFICATION_CACHE_WRITE_OUTPUT,
     QUALIFICATION_CAMPAIGN_OUTPUT, QUALIFICATION_PHASE_OUTPUT, QualificationPhase,

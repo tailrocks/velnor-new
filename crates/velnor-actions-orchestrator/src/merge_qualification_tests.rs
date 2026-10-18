@@ -11,6 +11,7 @@ const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 
 fn context() -> QualificationDispatch {
     QualificationDispatch {
+        mode: velnor_actions_contract::QualificationDispatchMode::Controlled,
         campaign: "campaign-a".to_owned(),
         phase: QualificationPhase::Cold,
         repository: "owner/project".to_owned(),

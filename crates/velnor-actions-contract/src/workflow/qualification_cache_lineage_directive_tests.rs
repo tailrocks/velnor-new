@@ -8,10 +8,10 @@ use crate::ids::{plan_id_for_run, run_key_for_ci};
 use crate::workflow::{
     EntryCacheIds, ExecuteTaskIds, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
     PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlannedPlatform,
-    QualificationDispatch, QualificationPhase, QualificationRuntimeAbiObservation,
-    QualificationRuntimeIdentity, QualificationRuntimeIdentityRequirements,
-    QualificationRuntimeImageDigests, QualificationRuntimeImageIdentity,
-    QualificationRuntimePlatform, QualificationRuntimeScaleSet,
+    QualificationDispatch, QualificationDispatchMode, QualificationPhase,
+    QualificationRuntimeAbiObservation, QualificationRuntimeIdentity,
+    QualificationRuntimeIdentityRequirements, QualificationRuntimeImageDigests,
+    QualificationRuntimeImageIdentity, QualificationRuntimePlatform, QualificationRuntimeScaleSet,
     QualificationRuntimeToolObservation, WorkflowEvent,
 };
 use crate::{RunnerSelection, Trust, digest_b3};
@@ -199,6 +199,7 @@ fn qualification_context(
     predecessor: Option<crate::workflow::QualificationRunRef>,
 ) -> QualificationDispatch {
     QualificationDispatch {
+        mode: QualificationDispatchMode::Controlled,
         campaign: "directive-boundary".to_owned(),
         phase,
         repository: "tailrocks/velnor-new".to_owned(),
