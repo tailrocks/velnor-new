@@ -1,6 +1,7 @@
 //! Per-user `LaunchAgent` install. The daemon stays in the foreground.
 
-use std::io::Write;
+use std::io::{Read, Write};
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -10,6 +11,7 @@ use velnor_runner_host::launch_agent_plist;
 use crate::args::ServiceAction;
 
 const LABEL: &str = "com.tailrocks.velnor.host";
+static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
 
 pub(crate) fn service(action: ServiceAction, state: &Path) -> ExitCode {
     match action {
@@ -117,16 +119,14 @@ fn regular_file_or_absent(path: &Path) -> bool {
 }
 
 fn atomic_write(path: &Path, contents: &[u8]) -> std::io::Result<()> {
-    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+    if existing_matches(path, contents)? {
+        return Ok(());
+    }
     let parent = path
         .parent()
         .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
-    let name = path
-        .file_name()
-        .ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))?
-        .to_string_lossy();
-    let sequence = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
-    let temporary = parent.join(format!(".{name}.tmp-{}-{sequence}", std::process::id()));
+    let staging = PrivateDirectory::create(parent, "velnor-plist-stage")?;
+    let temporary = staging.path().join("payload");
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
@@ -137,15 +137,144 @@ fn atomic_write(path: &Path, contents: &[u8]) -> std::io::Result<()> {
     let mut file = options.open(&temporary)?;
     if let Err(error) = file.write_all(contents).and_then(|()| file.sync_all()) {
         drop(file);
-        drop(std::fs::remove_file(&temporary));
         return Err(error);
     }
     drop(file);
-    if let Err(error) = std::fs::rename(&temporary, path) {
-        drop(std::fs::remove_file(&temporary));
-        return Err(error);
-    }
+    publish_staged(&temporary, path, contents)?;
+    staging.cleanup()?;
     std::fs::File::open(parent)?.sync_all()
+}
+
+fn publish_staged(temporary: &Path, path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    match std::fs::hard_link(temporary, path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            if existing_matches(path, contents)? {
+                Ok(())
+            } else {
+                Err(error)
+            }
+        }
+        Err(error) => Err(error),
+    }
+}
+
+struct PrivateDirectory {
+    path: PathBuf,
+    device: u64,
+    inode: u64,
+}
+
+impl PrivateDirectory {
+    fn create(parent: &Path, label: &str) -> std::io::Result<Self> {
+        for _ in 0..16 {
+            let sequence = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+            let path = parent.join(format!(".{label}-{}-{sequence}", std::process::id()));
+            let mut builder = std::fs::DirBuilder::new();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::DirBuilderExt;
+                builder.mode(0o700);
+            }
+            match builder.create(&path) {
+                Ok(()) => {
+                    let metadata = std::fs::symlink_metadata(&path)?;
+                    if !metadata.is_dir()
+                        || metadata.file_type().is_symlink()
+                        || metadata.uid() != rustix::process::geteuid().as_raw()
+                        || metadata.mode() & 0o7777 != 0o700
+                    {
+                        drop(std::fs::remove_dir(&path));
+                        return Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
+                    }
+                    return Ok(Self {
+                        path,
+                        device: metadata.dev(),
+                        inode: metadata.ino(),
+                    });
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Err(std::io::Error::from(std::io::ErrorKind::AlreadyExists))
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+
+    fn cleanup(&self) -> std::io::Result<()> {
+        let metadata = match std::fs::symlink_metadata(&self.path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(error) => return Err(error),
+        };
+        if !metadata.is_dir()
+            || metadata.file_type().is_symlink()
+            || metadata.uid() != rustix::process::geteuid().as_raw()
+            || metadata.mode() & 0o7777 != 0o700
+            || metadata.dev() != self.device
+            || metadata.ino() != self.inode
+        {
+            return Ok(());
+        }
+        std::fs::remove_dir_all(&self.path)
+    }
+}
+
+impl Drop for PrivateDirectory {
+    fn drop(&mut self) {
+        drop(self.cleanup());
+    }
+}
+
+fn existing_matches(path: &Path, contents: &[u8]) -> std::io::Result<bool> {
+    let path_metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    if !path_metadata.is_file() || path_metadata.file_type().is_symlink() {
+        return Err(std::io::Error::from(std::io::ErrorKind::InvalidInput));
+    }
+    let flags = rustix::fs::OFlags::RDONLY
+        | rustix::fs::OFlags::NOFOLLOW
+        | rustix::fs::OFlags::NONBLOCK
+        | rustix::fs::OFlags::CLOEXEC;
+    let descriptor = rustix::fs::open(path, flags, rustix::fs::Mode::empty())
+        .map_err(|_| std::io::Error::from(std::io::ErrorKind::PermissionDenied))?;
+    let mut file = std::fs::File::from(descriptor);
+    let metadata = file.metadata()?;
+    if !safe_plist_metadata(&metadata) || !same_file(&path_metadata, &metadata) {
+        return Ok(false);
+    }
+    let expected_size = u64::try_from(contents.len())
+        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidData))?;
+    if metadata.len() != expected_size {
+        return Ok(false);
+    }
+    let mut existing = Vec::with_capacity(contents.len());
+    Read::by_ref(&mut file)
+        .take(expected_size.saturating_add(1))
+        .read_to_end(&mut existing)?;
+    let current_path = std::fs::symlink_metadata(path)?;
+    let current_file = file.metadata()?;
+    Ok(existing == contents
+        && current_path.is_file()
+        && !current_path.file_type().is_symlink()
+        && safe_plist_metadata(&current_file)
+        && same_file(&current_path, &current_file))
+}
+
+fn safe_plist_metadata(metadata: &std::fs::Metadata) -> bool {
+    metadata.is_file()
+        && metadata.uid() == rustix::process::geteuid().as_raw()
+        && metadata.mode() & 0o7777 == 0o600
+}
+
+fn same_file(left: &std::fs::Metadata, right: &std::fs::Metadata) -> bool {
+    left.dev() == right.dev() && left.ino() == right.ino()
 }
 
 fn render_plist(binary: &Path, state: &Path, logs: &Path) -> Option<String> {
@@ -160,13 +289,13 @@ fn render_plist(binary: &Path, state: &Path, logs: &Path) -> Option<String> {
 }
 
 fn plist_matches(path: &Path, binary: &Path, state: &Path, logs: &Path) -> bool {
-    if !regular_file_or_absent(path) || !path.is_file() {
+    if !regular_file_or_absent(path) {
         return false;
     }
     let Some(expected) = render_plist(binary, state, logs) else {
         return false;
     };
-    std::fs::read_to_string(path).is_ok_and(|actual| actual == expected)
+    existing_matches(path, expected.as_bytes()).unwrap_or(false)
 }
 
 fn with_state(plist: &str, state: &Path) -> Option<String> {
@@ -251,11 +380,12 @@ fn xml_text(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::fs::MetadataExt;
     use std::path::Path;
 
     use super::{
-        bootout_argv, bootstrap_argv, plist_matches, uninstall_after_stop, with_logs, with_state,
-        write_plist,
+        PrivateDirectory, bootout_argv, bootstrap_argv, plist_matches, publish_staged, same_file,
+        uninstall_after_stop, with_logs, with_state, write_plist,
     };
     use std::process::ExitCode;
 
@@ -317,9 +447,15 @@ mod tests {
         Ok(())
     }
 
+    fn test_scratch(label: &str) -> Result<super::PrivateDirectory, String> {
+        super::PrivateDirectory::create(&std::env::temp_dir(), label)
+            .map_err(|error| error.to_string())
+    }
+
     #[test]
     fn service_start_requires_the_installed_state_argument() -> Result<(), String> {
-        let root = std::env::temp_dir().join(format!("velnor-service-{}", std::process::id()));
+        let scratch = test_scratch("velnor-service-start-test")?;
+        let root = scratch.path();
         let state = root.join("state");
         let logs = root.join("logs");
         let other_state = root.join("other-state");
@@ -331,30 +467,26 @@ mod tests {
             || !plist_matches(&plist_path, binary, &state, &logs)
             || plist_matches(&plist_path, binary, &other_state, &logs)
         {
-            let _cleanup_result = std::fs::remove_dir_all(&root);
             return Err("service did not bind start to the installed state".to_owned());
         }
         let text = std::fs::read_to_string(&plist_path).map_err(|error| error.to_string())?;
         if !text.contains("<string>/opt/velnor-host</string>\n<string>--state</string><string>")
             || !text.contains("<string>daemon</string>\n<string>run</string>")
         {
-            let _cleanup_result = std::fs::remove_dir_all(&root);
             return Err("LaunchAgent arguments are not exact".to_owned());
         }
-        std::fs::remove_dir_all(root).map_err(|error| error.to_string())?;
         Ok(())
     }
 
     #[cfg(unix)]
     #[test]
     fn plist_install_does_not_follow_a_symlink() -> Result<(), String> {
-        let root = std::env::temp_dir().join(format!("velnor-service-link-{}", std::process::id()));
+        let scratch = test_scratch("velnor-service-link-test")?;
+        let root = scratch.path();
         let state = root.join("state");
         let logs = root.join("logs");
         let target = root.join("target.plist");
         let path = root.join("agent.plist");
-        let _remove_previous_state = std::fs::remove_dir_all(&root);
-        std::fs::create_dir_all(&root).map_err(|error| error.to_string())?;
         std::fs::write(&target, b"keep this target").map_err(|error| error.to_string())?;
         std::os::unix::fs::symlink(&target, &path).map_err(|error| error.to_string())?;
         let written = write_plist(Path::new("/opt/velnor-host"), &state, &path, &logs);
@@ -363,7 +495,6 @@ mod tests {
             .map_err(|error| error.to_string())?
             .file_type()
             .is_symlink();
-        std::fs::remove_dir_all(&root).map_err(|error| error.to_string())?;
         if written || target_text != b"keep this target" || !path_is_link {
             return Err("plist install followed a symlink".to_owned());
         }
@@ -371,16 +502,94 @@ mod tests {
     }
 
     #[test]
+    fn plist_install_preserves_a_different_existing_file() -> Result<(), String> {
+        let scratch = test_scratch("velnor-service-conflict-test")?;
+        let root = scratch.path();
+        let state = root.join("state");
+        let logs = root.join("logs");
+        let path = root.join("agent.plist");
+        let original = b"another LaunchAgent owns this path";
+        std::fs::write(&path, original).map_err(|error| error.to_string())?;
+
+        let written = write_plist(Path::new("/opt/velnor-host"), &state, &path, &logs);
+        let after = std::fs::read(&path).map_err(|error| error.to_string())?;
+        if written || after != original {
+            return Err("install replaced a different LaunchAgent file".to_owned());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn plist_install_is_idempotent_for_its_exact_private_file() -> Result<(), String> {
+        let scratch = test_scratch("velnor-service-idempotent-test")?;
+        let root = scratch.path();
+        let state = root.join("state");
+        let logs = root.join("logs");
+        let path = root.join("agent.plist");
+        let binary = Path::new("/opt/velnor-host");
+        if !write_plist(binary, &state, &path, &logs) {
+            return Err("first install failed".to_owned());
+        }
+        let before = std::fs::metadata(&path).map_err(|error| error.to_string())?;
+        let installed = write_plist(binary, &state, &path, &logs);
+        let after = std::fs::metadata(&path).map_err(|error| error.to_string())?;
+        if !installed || !same_file(&before, &after) || after.mode() & 0o777 != 0o600 {
+            return Err("exact owned plist was not preserved idempotently".to_owned());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn plist_install_rejects_matching_content_with_unsafe_permissions() -> Result<(), String> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let scratch = test_scratch("velnor-service-mode-test")?;
+        let root = scratch.path();
+        let state = root.join("state");
+        let logs = root.join("logs");
+        let path = root.join("agent.plist");
+        let binary = Path::new("/opt/velnor-host");
+        if !write_plist(binary, &state, &path, &logs) {
+            return Err("first install failed".to_owned());
+        }
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644))
+            .map_err(|error| error.to_string())?;
+        let unchanged = std::fs::read(&path).map_err(|error| error.to_string())?;
+        let installed = write_plist(binary, &state, &path, &logs);
+        let after = std::fs::read(&path).map_err(|error| error.to_string())?;
+        if installed || after != unchanged {
+            return Err("install accepted or changed a plist with unsafe permissions".to_owned());
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn racing_foreign_file_wins_without_being_unlinked() -> Result<(), String> {
+        let scratch = test_scratch("velnor-service-race-test")?;
+        let stage =
+            PrivateDirectory::create(scratch.path(), "stage").map_err(|error| error.to_string())?;
+        let staged = stage.path().join("payload");
+        let destination = scratch.path().join("agent.plist");
+        let expected = b"Velnor's plist";
+        let foreign = b"foreign process won the publication race";
+        std::fs::write(&staged, expected).map_err(|error| error.to_string())?;
+        std::fs::write(&destination, foreign).map_err(|error| error.to_string())?;
+
+        let result = publish_staged(&staged, &destination, expected);
+        let after = std::fs::read(&destination).map_err(|error| error.to_string())?;
+        if result.is_ok() || after != foreign {
+            return Err("a racing file was replaced or removed".to_owned());
+        }
+        Ok(())
+    }
+
+    #[test]
     fn uninstall_keeps_the_plist_when_launchctl_stop_fails() -> Result<(), String> {
-        let path = std::env::temp_dir().join(format!(
-            "velnor-uninstall-{}-{}.plist",
-            std::process::id(),
-            std::thread::current().name().unwrap_or("test")
-        ));
+        let scratch = test_scratch("velnor-uninstall-test")?;
+        let path = scratch.path().join("agent.plist");
         std::fs::write(&path, b"owned plist").map_err(|error| error.to_string())?;
         let result = uninstall_after_stop(ExitCode::from(1), &path);
         let exists = path.is_file();
-        std::fs::remove_file(&path).map_err(|error| error.to_string())?;
         if result != ExitCode::from(1) || !exists {
             return Err("uninstall hid a failed stop".to_owned());
         }
