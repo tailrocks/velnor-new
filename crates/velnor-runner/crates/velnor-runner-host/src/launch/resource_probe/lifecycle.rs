@@ -53,7 +53,7 @@ pub(super) async fn collect<P: ImageProvider>(
         .await?;
     }
     let Some(candidate) = provider
-        .verified_candidate(docker, &engine_id, &before)
+        .verified_candidate(docker, journal, &engine_id, &before)
         .await?
     else {
         return Ok(None);

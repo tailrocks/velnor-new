@@ -4,6 +4,9 @@ use std::sync::Arc;
 use bollard::Docker;
 use bollard::models::{ContainerConfig, ImageConfig, ImageInspect, OciDescriptor, SystemInfo};
 
+use crate::journal::{ImageImportState, Journal};
+use crate::launch_harness::Scratch;
+
 use super::release::PreparedRelease;
 use super::{
     ProviderFailure, ReleaseImageProvider, build_pin_status, candidate, daemon_architecture,
@@ -15,7 +18,7 @@ fn prepared_release(source_revision: &str) -> PreparedRelease {
     PreparedRelease {
         archive: Vec::new(),
         source_revision: source_revision.to_owned(),
-        index_digest: format!("sha256:{}", "b".repeat(64)),
+        index_digest: "b".repeat(64),
         manifest_digest: format!("sha256:{}", "c".repeat(64)),
         manifest_size: 480,
         config_digest: format!("sha256:{}", "a".repeat(64)),
@@ -57,6 +60,7 @@ fn provider_requires_a_valid_compiled_source_pin() {
 async fn verifier_failure_stops_the_production_provider_path_before_docker() -> Result<(), String> {
     let provider = ReleaseImageProvider::with_source_revision("pat", &"a".repeat(40))
         .map_err(|error| error.code().to_owned())?;
+    let (_scratch, journal) = test_journal("provider-verifier-failure").await?;
     let docker = Docker::connect_with_defaults().map_err(|error| error.to_string())?;
     let info = SystemInfo {
         id: Some("selected-engine".to_owned()),
@@ -68,6 +72,7 @@ async fn verifier_failure_stops_the_production_provider_path_before_docker() -> 
     let result = provider
         .verified_candidate_with_release(
             &docker,
+            &journal,
             "selected-engine",
             &info,
             std::future::ready(Err(ProviderFailure::Attestation)),
@@ -81,6 +86,7 @@ async fn verifier_failure_stops_the_production_provider_path_before_docker() -> 
 async fn release_delay_and_engine_change_block_image_inspection_and_import() -> Result<(), String> {
     let provider = ReleaseImageProvider::with_source_revision("pat", &"a".repeat(40))
         .map_err(|error| error.code().to_owned())?;
+    let (_scratch, journal) = test_journal("provider-engine-change").await?;
     let selected = SystemInfo {
         id: Some("selected-engine".to_owned()),
         os_type: Some("linux".to_owned()),
@@ -96,7 +102,13 @@ async fn release_delay_and_engine_change_block_image_inspection_and_import() -> 
     };
 
     let result = provider
-        .verified_candidate_with_release(&docker.docker, "selected-engine", &selected, release)
+        .verified_candidate_with_release(
+            &docker.docker,
+            &journal,
+            "selected-engine",
+            &selected,
+            release,
+        )
         .await;
     let requests = docker.finish().await?;
 
@@ -110,6 +122,7 @@ async fn release_delay_and_engine_change_block_image_inspection_and_import() -> 
 async fn architecture_change_during_release_preparation_blocks_image_load() -> Result<(), String> {
     let provider = ReleaseImageProvider::with_source_revision("pat", &"a".repeat(40))
         .map_err(|error| error.code().to_owned())?;
+    let (_scratch, journal) = test_journal("provider-architecture-change").await?;
     let selected = SystemInfo {
         id: Some("selected-engine".to_owned()),
         os_type: Some("linux".to_owned()),
@@ -125,13 +138,80 @@ async fn architecture_change_during_release_preparation_blocks_image_load() -> R
     };
 
     let result = provider
-        .verified_candidate_with_release(&docker.docker, "selected-engine", &selected, release)
+        .verified_candidate_with_release(
+            &docker.docker,
+            &journal,
+            "selected-engine",
+            &selected,
+            release,
+        )
         .await;
     let requests = docker.finish().await?;
 
     assert!(matches!(result, Err(ProviderFailure::ImageIdentity)));
     assert_eq!(requests.len(), 1);
     assert!(requests[0].starts_with("GET ") && requests[0].contains("/info"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn unresolved_import_rows_do_not_inspect_or_repeat_the_load() -> Result<(), String> {
+    for (label, uncertain) in [("requested", false), ("uncertain", true)] {
+        let (_scratch, journal) = test_journal(&format!("provider-import-{label}")).await?;
+        journal
+            .bind_engine("selected-engine")
+            .await
+            .map_err(|error| error.to_string())?;
+        let provider = ReleaseImageProvider::with_source_revision("pat", &"a".repeat(40))
+            .map_err(|error| error.code().to_owned())?;
+        let release = prepared_release(&"a".repeat(40));
+        let info = SystemInfo {
+            id: Some("selected-engine".to_owned()),
+            os_type: Some("linux".to_owned()),
+            architecture: Some("aarch64".to_owned()),
+            docker_root_dir: Some("/var/lib/docker".to_owned()),
+            ..Default::default()
+        };
+        let selected =
+            selected_daemon(&info, "selected-engine").map_err(|error| error.code().to_owned())?;
+        let request = super::image_import_request(&selected, &release)
+            .map_err(|error| error.code().to_owned())?;
+        let record = journal
+            .prepare_image_import(request.clone())
+            .await
+            .map_err(|error| error.to_string())?;
+        let claim = journal
+            .claim_image_import_effect(record.id, &request)
+            .await
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "expected prepared image import claim".to_owned())?;
+        if uncertain {
+            journal
+                .mark_image_import_uncertain(claim)
+                .await
+                .map_err(|error| error.to_string())?;
+        }
+
+        let docker = DockerStub::open(Vec::new())?;
+        let result = provider
+            .inspect_or_load(&docker.docker, &journal, &selected, &release)
+            .await;
+        let requests = docker.finish_observed().await?;
+        assert!(matches!(result, Err(ProviderFailure::ImageLoad)));
+        assert_eq!(requests, Vec::<String>::new());
+        let replay = journal
+            .prepare_image_import(request)
+            .await
+            .map_err(|error| error.to_string())?;
+        assert_eq!(
+            replay.state,
+            if uncertain {
+                ImageImportState::Uncertain
+            } else {
+                ImageImportState::Requested
+            }
+        );
+    }
     Ok(())
 }
 
@@ -318,4 +398,12 @@ fn mismatched_store_identity_descriptor_and_index_digest_fail_closed() {
 fn provider_does_not_accept_unknown_daemon_platform() {
     let unknown = SystemInfo::default();
     assert!(!super::daemon_platform_matches(&unknown));
+}
+
+async fn test_journal(label: &str) -> Result<(Scratch, Journal), String> {
+    let scratch = Scratch::new(label).map_err(|error| error.to_string())?;
+    let journal = Journal::open(&scratch.file())
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok((scratch, journal))
 }

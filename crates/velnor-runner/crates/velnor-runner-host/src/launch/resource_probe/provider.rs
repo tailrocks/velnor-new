@@ -12,6 +12,9 @@ use sha2::{Digest, Sha256};
 use tokio::sync::{Mutex, OnceCell};
 
 use crate::error::HostError;
+use crate::journal::{
+    ImageImportIdentity, ImageImportInspection, ImageImportRequest, ImageImportState, Journal,
+};
 
 use super::projection::DockerRoot;
 
@@ -49,6 +52,7 @@ pub(super) trait ImageProvider {
     async fn verified_candidate(
         &self,
         docker: &Docker,
+        journal: &Journal,
         engine_id: &str,
         info: &SystemInfo,
     ) -> Result<Option<VerifiedCandidate>, HostError>;
@@ -103,6 +107,7 @@ impl<'a> ReleaseImageProvider<'a> {
     async fn candidate_from_release<F>(
         &self,
         docker: &Docker,
+        journal: &Journal,
         selected: &SelectedDaemon,
         release: F,
     ) -> Result<VerifiedCandidate, ProviderFailure>
@@ -111,13 +116,16 @@ impl<'a> ReleaseImageProvider<'a> {
     {
         let release = release.await?;
         verify_selected_daemon(docker, selected).await?;
-        let image = self.inspect_or_load(docker, selected, &release).await?;
+        let image = self
+            .inspect_or_load(docker, journal, selected, &release)
+            .await?;
         candidate(&selected.engine_id, &selected.architecture, image, &release)
     }
 
     async fn verified_candidate_with_release<F>(
         &self,
         docker: &Docker,
+        journal: &Journal,
         engine_id: &str,
         info: &SystemInfo,
         release: F,
@@ -131,7 +139,7 @@ impl<'a> ReleaseImageProvider<'a> {
         let selected = selected_daemon(info, engine_id)?;
         let candidate = tokio::time::timeout(
             PREPARE_TIMEOUT,
-            self.candidate_from_release(docker, &selected, release),
+            self.candidate_from_release(docker, journal, &selected, release),
         )
         .await
         .map_err(|_| ProviderFailure::Timeout)??;
@@ -141,19 +149,99 @@ impl<'a> ReleaseImageProvider<'a> {
     async fn inspect_or_load(
         &self,
         docker: &Docker,
+        journal: &Journal,
         selected: &SelectedDaemon,
         release: &release::PreparedRelease,
     ) -> Result<ImageInspect, ProviderFailure> {
+        let request = image_import_request(selected, release)?;
+        let record = journal
+            .prepare_image_import(request.clone())
+            .await
+            .map_err(|_| ProviderFailure::ImageImportJournal)?;
+
+        match record.state {
+            ImageImportState::Prepared | ImageImportState::Completed => {}
+            ImageImportState::Requested | ImageImportState::Uncertain => {
+                // The prior /images/load effect may still be in flight. Inspection
+                // alone cannot prove its response stream drained or fence its owner.
+                return Err(ProviderFailure::ImageLoad);
+            }
+            ImageImportState::Aborted => return Err(ProviderFailure::ImageImportJournal),
+        }
+
         for reference in [
             release.config_digest.as_str(),
             release.manifest_digest.as_str(),
         ] {
             if let Some(image) = inspect_image(docker, reference).await? {
                 verify_daemon_image(&image, release)?;
+                if record.state == ImageImportState::Prepared {
+                    let inspection =
+                        verified_import_inspection(docker, selected, release, &request, &image)
+                            .await?;
+                    journal
+                        .complete_preloaded_image_import(record.id, &request, &inspection)
+                        .await
+                        .map_err(|_| ProviderFailure::ImageImportJournal)?;
+                } else if record.image_id.as_deref() != image.id.as_deref() {
+                    return Err(ProviderFailure::ImageIdentity);
+                } else {
+                    verify_selected_daemon(docker, selected).await?;
+                }
                 return Ok(image);
             }
         }
 
+        if record.state != ImageImportState::Prepared {
+            return Err(ProviderFailure::ImageLoad);
+        }
+
+        verify_selected_daemon(docker, selected).await?;
+        let claim = journal
+            .claim_image_import_effect(record.id, &request)
+            .await
+            .map_err(|_| ProviderFailure::ImageImportJournal)?;
+        let Some(claim) = claim else {
+            return Err(ProviderFailure::ImageLoad);
+        };
+
+        let result = self.load_and_inspect(docker, selected, release).await;
+        let image = match result {
+            Ok(image) => image,
+            Err(error) => {
+                journal
+                    .mark_image_import_uncertain(claim)
+                    .await
+                    .map_err(|_| ProviderFailure::ImageImportJournal)?;
+                return Err(error);
+            }
+        };
+        let inspection =
+            match verified_import_inspection(docker, selected, release, &request, &image).await {
+                Ok(inspection) => inspection,
+                Err(error) => {
+                    journal
+                        .mark_image_import_uncertain(claim)
+                        .await
+                        .map_err(|_| ProviderFailure::ImageImportJournal)?;
+                    return Err(error);
+                }
+            };
+        journal
+            .complete_claimed_image_import(claim, &inspection)
+            .await
+            .map_err(|_| ProviderFailure::ImageImportJournal)?;
+        Ok(image)
+    }
+
+    async fn load_and_inspect(
+        &self,
+        docker: &Docker,
+        selected: &SelectedDaemon,
+        release: &release::PreparedRelease,
+    ) -> Result<ImageInspect, ProviderFailure> {
+        // The durable Requested row was committed before this selected-engine check.
+        // Any mismatch after the claim remains unresolved and blocks another import.
         verify_selected_daemon(docker, selected).await?;
         let response = docker.import_image(
             bollard::query_parameters::ImportImageOptionsBuilder::default().build(),
@@ -178,15 +266,42 @@ impl<'a> ReleaseImageProvider<'a> {
     }
 }
 
+async fn verified_import_inspection(
+    docker: &Docker,
+    selected: &SelectedDaemon,
+    release: &release::PreparedRelease,
+    request: &ImageImportRequest,
+    image: &ImageInspect,
+) -> Result<ImageImportInspection, ProviderFailure> {
+    verify_daemon_image(image, release)?;
+    let observed = selected_daemon_info(docker, selected).await?;
+    let image_id = image.id.as_deref().ok_or(ProviderFailure::ImageIdentity)?;
+    ImageImportInspection::verified(
+        request,
+        &observed.engine_id,
+        &observed.docker_root_digest,
+        &observed.architecture,
+        image_id,
+    )
+    .map_err(|_| ProviderFailure::ImageIdentity)
+}
+
 impl ImageProvider for ReleaseImageProvider<'_> {
     async fn verified_candidate(
         &self,
         docker: &Docker,
+        journal: &Journal,
         engine_id: &str,
         info: &SystemInfo,
     ) -> Result<Option<VerifiedCandidate>, HostError> {
         let result = self
-            .verified_candidate_with_release(docker, engine_id, info, self.verified_release())
+            .verified_candidate_with_release(
+                docker,
+                journal,
+                engine_id,
+                info,
+                self.verified_release(),
+            )
             .await;
         match result {
             Ok(Some(candidate)) => Ok(Some(candidate)),
@@ -211,6 +326,7 @@ impl ImageProvider for UnavailableImageProvider {
     async fn verified_candidate(
         &self,
         _docker: &Docker,
+        _journal: &Journal,
         _engine_id: &str,
         _info: &SystemInfo,
     ) -> Result<Option<VerifiedCandidate>, HostError> {
@@ -245,10 +361,35 @@ fn selected_daemon(info: &SystemInfo, engine_id: &str) -> Result<SelectedDaemon,
     })
 }
 
+fn image_import_request(
+    selected: &SelectedDaemon,
+    release: &release::PreparedRelease,
+) -> Result<ImageImportRequest, ProviderFailure> {
+    ImageImportRequest::new(ImageImportIdentity {
+        engine_id: selected.engine_id.clone(),
+        docker_root_digest: selected.docker_root_digest.clone(),
+        daemon_architecture: selected.architecture.clone(),
+        source_sha: release.source_revision.clone(),
+        archive_sha256: hex(&Sha256::digest(&release.archive)),
+        index_digest: release.index_digest.clone(),
+        platform: PLATFORM.to_owned(),
+        manifest_digest: release.manifest_digest.clone(),
+        config_digest: release.config_digest.clone(),
+    })
+    .map_err(|_| ProviderFailure::ImageImportJournal)
+}
+
 async fn verify_selected_daemon(
     docker: &Docker,
     selected: &SelectedDaemon,
 ) -> Result<(), ProviderFailure> {
+    selected_daemon_info(docker, selected).await.map(|_| ())
+}
+
+async fn selected_daemon_info(
+    docker: &Docker,
+    selected: &SelectedDaemon,
+) -> Result<SelectedDaemon, ProviderFailure> {
     let info = tokio::time::timeout(Duration::from_secs(20), docker.info())
         .await
         .map_err(|_| ProviderFailure::DaemonIdentity)?
@@ -258,7 +399,7 @@ async fn verify_selected_daemon(
         && current.docker_root_digest == selected.docker_root_digest
         && current.architecture == selected.architecture
     {
-        Ok(())
+        Ok(current)
     } else {
         Err(ProviderFailure::ImageIdentity)
     }
@@ -453,6 +594,7 @@ pub(super) enum ProviderFailure {
     Manifest,
     Archive,
     ImageLoad,
+    ImageImportJournal,
     ImageInspect,
     ImageIdentity,
     ImageConfig,
@@ -480,6 +622,7 @@ impl ProviderFailure {
             Self::Manifest => "resource_probe_manifest_mismatch",
             Self::Archive => "resource_probe_archive_mismatch",
             Self::ImageLoad => "selected_daemon_image_load_failed",
+            Self::ImageImportJournal => "selected_daemon_image_import_journal_failed",
             Self::ImageInspect => "selected_daemon_image_inspect_failed",
             Self::ImageIdentity => "selected_daemon_image_identity_mismatch",
             Self::ImageConfig => "selected_daemon_image_config_mismatch",

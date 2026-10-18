@@ -15,6 +15,7 @@ impl ImageProvider for FixtureProvider {
     async fn verified_candidate(
         &self,
         _docker: &bollard::Docker,
+        _journal: &Journal,
         _engine_id: &str,
         _info: &SystemInfo,
     ) -> Result<Option<VerifiedCandidate>, HostError> {
