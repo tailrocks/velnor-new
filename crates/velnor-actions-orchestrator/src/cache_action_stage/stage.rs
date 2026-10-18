@@ -315,7 +315,7 @@ fn same_version(left: &rustix::fs::Stat, right: &rustix::fs::Stat) -> bool {
         && left.st_ctime_nsec == right.st_ctime_nsec
 }
 
-fn open_parent(path: &Path) -> Result<(OwnedFd, CString), StageError> {
+pub(super) fn open_parent(path: &Path) -> Result<(OwnedFd, CString), StageError> {
     let parent = path.parent().ok_or("cache_stage_path_invalid")?;
     let name = path
         .file_name()

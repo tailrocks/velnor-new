@@ -3,7 +3,7 @@ use super::compression::{ArchiveCompression, MAX_ARCHIVE_BYTES, decode_archive, 
 use super::context::StageContext;
 use super::receipt::StageReceiptClaim;
 use super::stage::{StageReader, create_stage, open_stage, rewrite_stage};
-use rustix::fs::{AtFlags, Mode, OFlags, open, openat, statat};
+use rustix::fs::{AtFlags, Mode, OFlags, openat, statat};
 use std::ffi::{CString, OsStr, OsString};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -316,6 +316,14 @@ fn resolve_under(runner_temp: &Path, input: &OsStr) -> Result<PathBuf, StageErro
             .join(path)
     };
     let root = lexical_absolute(runner_temp)?;
+    if path.components().any(|component| {
+        matches!(
+            component,
+            Component::ParentDir | Component::CurDir | Component::Prefix(_)
+        )
+    }) {
+        return Err("cache_tar_path_invalid");
+    }
     let path = lexical_absolute(&path)?;
     let parent = path.parent().ok_or("cache_tar_path_invalid")?;
     let parent = std::fs::canonicalize(parent).map_err(|_| "cache_tar_path_invalid")?;
@@ -347,42 +355,7 @@ fn lexical_absolute(path: &Path) -> Result<PathBuf, StageError> {
 }
 
 fn open_parent(path: &Path) -> Result<(OwnedFd, CString), StageError> {
-    let parent_path = path.parent().ok_or("cache_tar_path_invalid")?;
-    let name = CString::new(
-        path.file_name()
-            .ok_or("cache_tar_path_invalid")?
-            .to_str()
-            .ok_or("cache_tar_path_invalid")?,
-    )
-    .map_err(|_| "cache_tar_path_invalid")?;
-    let mut fd = open(
-        "/",
-        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
-        Mode::empty(),
-    )
-    .map_err(|_| "cache_tar_path_invalid")?;
-    for component in parent_path.components() {
-        match component {
-            Component::RootDir => {}
-            Component::Normal(value) => {
-                let component = CString::new(value.to_str().ok_or("cache_tar_path_invalid")?)
-                    .map_err(|_| "cache_tar_path_invalid")?;
-                fd = openat(
-                    &fd,
-                    component.as_c_str(),
-                    OFlags::RDONLY
-                        | OFlags::DIRECTORY
-                        | OFlags::NOFOLLOW
-                        | OFlags::NONBLOCK
-                        | OFlags::CLOEXEC,
-                    Mode::empty(),
-                )
-                .map_err(|_| "cache_tar_path_invalid")?;
-            }
-            _ => return Err("cache_tar_path_invalid"),
-        }
-    }
-    Ok((fd, name))
+    super::stage::open_parent(path).map_err(|_| "cache_tar_path_invalid")
 }
 
 fn scan_archive(decoded: &mut File, expected: &str) -> Result<File, StageError> {
@@ -811,11 +784,14 @@ fn io_copy_bounded<R: Read, W: Write>(
 #[cfg(test)]
 mod tests {
     use super::{
-        BLOCK, Operation, parse_args, put_field, put_octal, scan_archive, write_single_member,
+        BLOCK, Operation, create_archive, open_archive, parse_args, put_field, put_octal,
+        scan_archive, write_single_member,
     };
     use crate::cache_action_stage::{StageContext, create_stage, open_stage};
     use std::ffi::OsString;
     use std::io::{Seek, SeekFrom, Write};
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::Path;
 
     fn member(path: &str, kind: u8, body: &[u8]) -> Vec<u8> {
         let mut header = [0_u8; BLOCK];
@@ -847,6 +823,127 @@ mod tests {
         file.write_all(&archive).expect("write archive");
         file.seek(SeekFrom::Start(0)).expect("rewind archive");
         file
+    }
+
+    fn archive_path(runner_temp: &Path) -> std::path::PathBuf {
+        runner_temp.join("cache.tar")
+    }
+
+    #[test]
+    fn archive_parent_accepts_a_sticky_shared_temporary_ancestor() {
+        let root = tempfile::tempdir().expect("temporary root");
+        let shared = root.path().join("shared-temp");
+        std::fs::create_dir(&shared).expect("create shared temp");
+        std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o1777))
+            .expect("protect shared temp with sticky bit");
+        let runner_temp_path = shared.join("runner-temp");
+        std::fs::create_dir(&runner_temp_path).expect("create private runner temp");
+        std::fs::set_permissions(&runner_temp_path, std::fs::Permissions::from_mode(0o700))
+            .expect("protect runner temp");
+        let runner_temp = std::fs::canonicalize(runner_temp_path).expect("canonical runner temp");
+        let archive = archive_path(&runner_temp);
+        let resolved = super::resolve_under(&runner_temp, archive.as_os_str())
+            .expect("resolve archive under runner temp");
+        super::super::stage::open_parent(&resolved).expect("open protected archive parent");
+
+        let (file, _parent, _name) = create_archive(&runner_temp, archive.as_os_str())
+            .expect("create archive under sticky shared ancestor");
+        drop(file);
+        assert_eq!(
+            std::fs::metadata(&archive)
+                .expect("read created archive metadata")
+                .permissions()
+                .mode()
+                & 0o7777,
+            0o600
+        );
+        open_archive(&runner_temp, archive_path(&runner_temp).as_os_str())
+            .expect("open archive under sticky shared ancestor");
+    }
+
+    #[test]
+    fn archive_path_alias_resolves_under_the_trusted_root_before_descriptor_checks() {
+        let root = tempfile::tempdir().expect("temporary root");
+        let runner_temp_path = root.path().join("runner-temp");
+        std::fs::create_dir(&runner_temp_path).expect("create runner temp");
+        std::fs::set_permissions(&runner_temp_path, std::fs::Permissions::from_mode(0o700))
+            .expect("protect runner temp");
+        let runner_temp = std::fs::canonicalize(runner_temp_path).expect("canonical runner temp");
+        let alias = root.path().join("runner-temp-alias");
+        std::os::unix::fs::symlink(&runner_temp, &alias).expect("create runner temp alias");
+        let archive = alias.join("cache.tar");
+
+        let (file, _parent, _name) = create_archive(&runner_temp, archive.as_os_str())
+            .expect("resolve SDK path alias under the trusted root");
+        drop(file);
+        assert!(runner_temp.join("cache.tar").is_file());
+    }
+
+    #[test]
+    fn archive_parent_rejects_writable_nonsticky_ancestor_before_creation() {
+        let root = tempfile::tempdir().expect("temporary root");
+        let shared = root.path().join("shared-temp");
+        std::fs::create_dir(&shared).expect("create shared temp");
+        std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o777))
+            .expect("make ancestor unsafe");
+        let runner_temp_path = shared.join("runner-temp");
+        std::fs::create_dir(&runner_temp_path).expect("create private runner temp");
+        std::fs::set_permissions(&runner_temp_path, std::fs::Permissions::from_mode(0o700))
+            .expect("protect runner temp");
+        let runner_temp = std::fs::canonicalize(runner_temp_path).expect("canonical runner temp");
+        let archive = archive_path(&runner_temp);
+
+        assert!(create_archive(&runner_temp, archive.as_os_str()).is_err());
+        assert!(open_archive(&runner_temp, archive.as_os_str()).is_err());
+        assert!(!archive.exists());
+    }
+
+    #[test]
+    fn archive_parent_rejects_unsafe_final_permissions() {
+        let root = tempfile::tempdir().expect("temporary root");
+        let runner_temp_path = root.path().join("runner-temp");
+        std::fs::create_dir(&runner_temp_path).expect("create runner temp");
+        std::fs::set_permissions(&runner_temp_path, std::fs::Permissions::from_mode(0o777))
+            .expect("make final parent unsafe");
+        let runner_temp = std::fs::canonicalize(runner_temp_path).expect("canonical runner temp");
+        let archive = archive_path(&runner_temp);
+
+        assert!(create_archive(&runner_temp, archive.as_os_str()).is_err());
+        assert!(!archive.exists());
+    }
+
+    #[test]
+    fn archive_parent_rejects_symlink_replacement() {
+        let root = tempfile::tempdir().expect("temporary root");
+        let runner_temp_path = root.path().join("runner-temp");
+        std::fs::create_dir(&runner_temp_path).expect("create runner temp");
+        std::fs::set_permissions(&runner_temp_path, std::fs::Permissions::from_mode(0o700))
+            .expect("protect runner temp");
+        let runner_temp = std::fs::canonicalize(runner_temp_path).expect("canonical runner temp");
+        let moved = root.path().join("runner-temp-moved");
+        let archive = archive_path(&runner_temp);
+        std::fs::rename(&runner_temp, &moved).expect("move runner temp");
+        std::os::unix::fs::symlink(&moved, &runner_temp).expect("replace with symlink");
+
+        assert!(create_archive(&runner_temp, archive.as_os_str()).is_err());
+        assert!(open_archive(&runner_temp, archive.as_os_str()).is_err());
+        assert!(!moved.join("cache.tar").exists());
+    }
+
+    #[test]
+    fn archive_create_preserves_an_existing_foreign_file() {
+        let root = tempfile::tempdir().expect("temporary root");
+        let runner_temp_path = root.path().join("runner-temp");
+        std::fs::create_dir(&runner_temp_path).expect("create runner temp");
+        let runner_temp = std::fs::canonicalize(runner_temp_path).expect("canonical runner temp");
+        let archive = archive_path(&runner_temp);
+        std::fs::write(&archive, b"foreign archive").expect("write foreign archive");
+
+        assert!(create_archive(&runner_temp, archive.as_os_str()).is_err());
+        assert_eq!(
+            std::fs::read(archive).expect("read preserved file"),
+            b"foreign archive"
+        );
     }
 
     fn pax_path(path: &str) -> Vec<u8> {
