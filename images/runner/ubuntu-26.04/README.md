@@ -3,12 +3,17 @@
 Platform: `linux/amd64`. ARM64 is not the baseline.
 
 ```sh
-docker build --platform linux/amd64 -t velnor-runner:ubuntu-26.04-2.337.0 images/runner/ubuntu-26.04
+docker build --platform linux/amd64 -t velnor-runner:ubuntu-26.04-2.338.0 images/runner/ubuntu-26.04
 ```
 
-Official `actions/runner` `2.337.0` linux-x64, SHA256
-`70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613`.
-Unmodified. No `/proc` spoof, no fake `os-release`. `/usr/bin/tar` is
+The base is pinned to the Ubuntu 26.04 `linux/amd64` manifest digest in
+`.velnor/runner.lock`. Official `actions/runner` `2.338.0` linux-x64 comes
+from source commit `197ca027b90de199464dee3bb9ff198a1db60967`; its archive
+SHA256 is
+`af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32`.
+The official archive is extracted as published; Runner.Listener and its
+embedded Node 24 runtime are not patched. No `/proc` spoof, no fake
+`os-release`. `/usr/bin/tar` is
 `tar-shim.sh` runs BusyBox tar. Unimplemented semantic GNU flags fail
 closed. A newline in a member name fails closed. Without `-P`, a symlink
 target outside the extract root fails closed. With `-P`, relative symlink
@@ -21,8 +26,17 @@ Ubuntu 26.04 GNU tar calls `openat2`, and qemu-user fails
 that with `ENOSYS`, so GNU tar stays at `/usr/bin/tar.gnu` and is not the
 `tar` on `PATH`. `zstd` is installed so cache archives match hosted runners.
 `git-lfs` is installed before the tar divert so `git lfs` is on `PATH`.
-Node.js `24.17.0` linux-x64 is on `PATH`
-for job steps. That is not the runner's private action runtime.
+Node.js `26.12.0` linux-x64 is on `PATH` for job steps. That is not the
+runner's private action runtime; actions use the embedded Node 24 supplied
+with the unmodified official Runner archive. Docker Engine `29.9.1`, Buildx
+`0.38.0`, and Compose `5.6.0` are pinned with their source records and
+checksums in `.velnor/runner.lock`.
+
+The public stable release selected here is Runner `2.338.0`. On 2026-10-18,
+the three recorded repository-scoped downloads still selected `2.337.0`.
+That is progressive-distribution evidence, not evidence that `2.338.0` is
+rejected. Scale-set registration and a live job with this release are still
+required before qualification.
 
 The image is not privileged and has no Docker socket, host home, Keychain,
 SSH agent, or controller config. UID `1000` (`runner`), group `docker` GID `999`.

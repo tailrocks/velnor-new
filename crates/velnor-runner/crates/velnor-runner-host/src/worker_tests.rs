@@ -25,7 +25,7 @@ fn runner_create_opens_stdin_and_is_not_privileged() -> Result<(), HostError> {
     assert!(spec.open_stdin);
     assert!(!spec.privileged);
     assert_eq!(spec.platform, "linux/amd64");
-    assert_eq!(spec.image, "velnor-runner:ubuntu-26.04-2.337.0");
+    assert_eq!(spec.image, "velnor-runner:ubuntu-26.04-2.338.0");
     assert_eq!(spec.mounts.len(), 4);
     assert_eq!(spec.mounts[0].source, "volume:worker_a");
     assert_eq!(spec.mounts[0].target, "/run");
@@ -83,7 +83,7 @@ fn dind_is_privileged_and_shares_the_runner_volumes() -> Result<(), HostError> {
     assert!(!spec.open_stdin);
     assert_eq!(spec.env, Vec::<String>::new());
     assert_eq!(spec.cmd, Vec::<String>::new());
-    assert_eq!(spec.image, "velnor-dind:29.8.2");
+    assert_eq!(spec.image, "velnor-dind:29.9.1");
     assert_eq!(spec.platform, "linux/amd64");
     let runner = runner_plan("worker_a")?;
     assert_eq!(&spec.mounts[..runner.mounts.len()], &runner.mounts[..]);

@@ -3,8 +3,15 @@
 Platform: `linux/amd64`. ARM64 is not the baseline. One `dockerd` per worker.
 
 ```sh
-docker build --platform linux/amd64 -t velnor-dind:29.8.2 images/dind
+docker build --platform linux/amd64 -t velnor-dind:29.9.1 images/dind
 ```
+
+The base is pinned to the Ubuntu 26.04 `linux/amd64` manifest digest in
+`.velnor/runner.lock`. Docker Engine `29.9.1` is downloaded from the official
+static Linux x86_64 distribution at
+`https://download.docker.com/linux/static/stable/x86_64/docker-29.9.1.tgz`;
+its measured SHA256 and verified `moby/moby` tag `docker-v29.9.1` at source
+commit `b26fb77d3e7b01f9d21b89539c1ab428f5ca431f` are recorded in the lock.
 
 Listens only on `unix:///var/run/docker.sock` inside the worker namespace
 (`/var/run` is `/run` on Ubuntu). Data root is `/var/lib/docker`. Group
