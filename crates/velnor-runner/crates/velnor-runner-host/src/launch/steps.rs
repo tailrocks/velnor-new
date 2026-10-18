@@ -9,7 +9,7 @@ use velnor_runner_github::{
 
 use crate::Offer;
 use crate::error::HostError;
-use crate::journal::{ConnectionJournal, Journal, Outcome};
+use crate::journal::{AssignmentKey, ConnectionJournal, Journal, Outcome};
 use crate::listen::map_listen;
 use crate::offer;
 use crate::scale_set::EnsureError;
@@ -17,12 +17,15 @@ use crate::worker::Started;
 
 mod mint;
 mod scale;
+mod scoped;
 pub(crate) mod source;
 
 use super::mint_origin::MintOrigin;
 use super::{Drive, Lane};
 
 pub(super) use scale::{scale_id, scale_unacked};
+
+pub(super) use scoped::launch_scoped;
 
 /// What one poll allows before acquire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -270,18 +273,15 @@ async fn authorize_offer(
         token,
     )
     .map_err(source_blocked)?;
-    require_closed_world(true)?;
+    let identity = scoped
+        .assignment_identity(AssignmentKey::AssignedRequest { request_id })
+        .await
+        .map_err(|_| source_blocked(source::SourceBlock::ClosedWorldUnproven))?;
+    scoped
+        .record_source_authorization(&identity, &receipt)
+        .await
+        .map_err(|_| source_blocked(source::SourceBlock::ClosedWorldUnproven))?;
     Ok(Some(receipt))
-}
-
-fn require_closed_world(scoped: bool) -> Result<(), EnsureError> {
-    // Scoped source receipts and acquired-backlog reconciliation are not yet
-    // wired. A generic JIT can receive any acquired job from this Scale Set.
-    if scoped {
-        Err(source_blocked(source::SourceBlock::ClosedWorldUnproven))
-    } else {
-        Ok(())
-    }
 }
 
 fn source_blocked(block: source::SourceBlock) -> EnsureError {
@@ -364,7 +364,7 @@ pub(super) fn authorize_population_message(
 
 #[cfg(test)]
 mod source_gate_tests {
-    use super::{authorize_population_message, require_closed_world};
+    use super::authorize_population_message;
     use crate::scale_set::EnsureError;
     use velnor_runner_github::ParsedBatch;
 
@@ -388,16 +388,6 @@ mod source_gate_tests {
             authorize_population_message(true, None, "secret", &batch),
             Err(EnsureError::SourceBlocked {
                 reason: "source_metadata_missing"
-            })
-        );
-    }
-
-    #[test]
-    fn scoped_offer_without_closed_world_receipt_cannot_authorize_a_start() {
-        assert_eq!(
-            require_closed_world(true),
-            Err(EnsureError::SourceBlocked {
-                reason: "closed_world_unproven"
             })
         );
     }

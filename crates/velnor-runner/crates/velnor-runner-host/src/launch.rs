@@ -164,28 +164,41 @@ where
     let Some((engine_id, root_digest)) = resource_probe::engine_binding(docker).await.ok() else {
         return Ok(None);
     };
-    if !resource_probe::consume_permit(permit, &engine_id, &root_digest) {
+    if permit.engine_id() != engine_id
+        || permit.docker_root_digest() != root_digest
+        || engine_id != selected_engine.engine_id()
+        || root_digest != selected_engine.docker_root_digest()
+    {
         return Ok(None);
     }
     ctx.docker_engine_id = Some(engine_id);
-    drive_offer(lane, &ctx, ready.polled, journal, |volume, jit, bind| {
-        let volume = volume.to_owned();
-        let payload = jit.to_vec();
-        async move {
-            bind::start_bound(
-                docker,
-                &volume,
-                &payload,
-                resource_budget,
-                connection,
-                images,
-                selected_engine,
-                guest_image,
-                &bind,
-            )
-            .await
-        }
-    })
+    steps::launch_scoped(
+        lane,
+        &ctx,
+        ready.polled,
+        permit,
+        docker,
+        selected_engine,
+        images,
+        |volume, jit, bind| {
+            let volume = volume.to_owned();
+            let payload = jit.to_vec();
+            async move {
+                bind::start_bound(
+                    docker,
+                    &volume,
+                    &payload,
+                    resource_budget,
+                    connection,
+                    images,
+                    selected_engine,
+                    guest_image,
+                    &bind,
+                )
+                .await
+            }
+        },
+    )
     .await
 }
 

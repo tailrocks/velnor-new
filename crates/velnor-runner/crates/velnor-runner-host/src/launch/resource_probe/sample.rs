@@ -117,6 +117,24 @@ impl StartPermit {
         &self.observation.sample_generation_id
     }
 
+    /// Preserve this sample's identity and freshness for effects after admission.
+    #[must_use]
+    pub(crate) fn observation_witness(&self) -> StartObservationWitness {
+        StartObservationWitness {
+            engine_id: self.observation.engine_id.clone(),
+            docker_root_digest: self.observation.docker_root_digest.clone(),
+            sample_generation_id: self.observation.sample_generation_id.clone(),
+            observed_at: self.observation.observed_at,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn stale_observation_witness(&self) -> StartObservationWitness {
+        let mut witness = self.observation_witness();
+        witness.observed_at -= MAX_OBSERVATION_AGE + Duration::from_millis(1);
+        witness
+    }
+
     pub(crate) const fn charge(&self) -> (u64, u64) {
         (self.cpu_millicores, self.memory_bytes)
     }
@@ -164,6 +182,84 @@ impl StartPermit {
             cpu_millicores: 2_000,
             memory_bytes: 8 * 1024 * 1024 * 1024,
         }
+    }
+}
+
+/// Freshness evidence for an already charged reservation; it cannot reserve capacity.
+pub(crate) struct StartObservationWitness {
+    engine_id: String,
+    docker_root_digest: String,
+    sample_generation_id: String,
+    observed_at: Instant,
+}
+
+impl StartObservationWitness {
+    /// Whether the original sample remains fresh for this exact engine and Docker root.
+    #[must_use]
+    pub(crate) fn is_fresh_for(
+        &self,
+        engine_id: &str,
+        docker_root_digest: &str,
+        sample_generation_id: &str,
+    ) -> bool {
+        self.engine_id == engine_id
+            && self.docker_root_digest == docker_root_digest
+            && self.sample_generation_id == sample_generation_id
+            && self.observed_at.elapsed() <= MAX_OBSERVATION_AGE
+    }
+
+    #[cfg(test)]
+    fn is_fresh_at(
+        &self,
+        engine_id: &str,
+        root_digest: &str,
+        generation_id: &str,
+        now: Instant,
+    ) -> bool {
+        self.engine_id == engine_id
+            && self.docker_root_digest == root_digest
+            && self.sample_generation_id == generation_id
+            && now
+                .checked_duration_since(self.observed_at)
+                .is_some_and(|age| age <= MAX_OBSERVATION_AGE)
+    }
+}
+
+#[cfg(test)]
+mod witness_tests {
+    use std::time::{Duration, Instant};
+
+    use super::StartPermit;
+
+    #[test]
+    fn observation_witness_is_bound_to_one_sample_and_selected_engine() -> Result<(), String> {
+        let permit = StartPermit::test_fixture_with_generation(&"a".repeat(32));
+        let root = permit.docker_root_digest().to_owned();
+        let witness = permit.observation_witness();
+        assert!(witness.is_fresh_for("test-engine", &root, &"a".repeat(32)));
+        assert!(!witness.is_fresh_for("other-engine", &root, &"a".repeat(32)));
+        assert!(!witness.is_fresh_for("test-engine", &"b".repeat(64), &"a".repeat(32)));
+        assert!(!witness.is_fresh_for("test-engine", &root, &"c".repeat(32)));
+        Ok(())
+    }
+
+    #[test]
+    fn observation_witness_expires_without_authorizing_a_new_reservation() -> Result<(), String> {
+        let permit = StartPermit::test_fixture_with_generation(&"d".repeat(32));
+        let root = permit.docker_root_digest().to_owned();
+        let witness = permit.observation_witness();
+        let stale = witness
+            .observed_at
+            .checked_add(Duration::from_millis(30_001))
+            .ok_or_else(|| "could not construct expiry instant".to_owned())?;
+        assert!(!witness.is_fresh_at("test-engine", &root, &"d".repeat(32), stale));
+        assert!(!witness.is_fresh_at(
+            "test-engine",
+            &root,
+            &"d".repeat(32),
+            Instant::now() - Duration::from_millis(30_001)
+        ));
+        Ok(())
     }
 }
 

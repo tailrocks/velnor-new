@@ -8,7 +8,7 @@ use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
 use self::provider::ReleaseImageProvider;
-pub(crate) use self::sample::StartPermit;
+pub(crate) use self::sample::{StartObservationWitness, StartPermit};
 
 mod execute;
 mod inspect;
