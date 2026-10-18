@@ -35,6 +35,10 @@ pub(super) struct ProbeRecord {
     pub(super) docker_root_device_major: u32,
     /// Mount device minor number.
     pub(super) docker_root_device_minor: u32,
+    /// Device major number from `statx` on the retained Docker-root descriptor.
+    pub(super) docker_root_statx_device_major: u32,
+    /// Device minor number from `statx` on the retained Docker-root descriptor.
+    pub(super) docker_root_statx_device_minor: u32,
     /// Filesystem type magic from `fstatfs`.
     pub(super) docker_root_fs_type_magic: u64,
     /// Filesystem type name from mount information.
@@ -100,6 +104,7 @@ impl ProbeRecord {
             && self.docker_root_mount_target == DOCKER_ROOT_TARGET
             && self.docker_root_mount_id > 0
             && !self.docker_root_fs_type_name.is_empty()
+            && self.filesystem_identity_valid()
             && valid_boot_id(&self.guest_boot_id)
             && self.docker_root_total_bytes > 0
             && self.docker_root_free_bytes <= self.docker_root_total_bytes
@@ -116,6 +121,19 @@ impl ProbeRecord {
         self.memory_available_bytes <= memory_total_bytes
     }
 
+    fn filesystem_identity_valid(&self) -> bool {
+        let btrfs = self.docker_root_fs_type_magic == BTRFS_MAGIC;
+        let type_matches_magic = match self.docker_root_fs_type_name.as_str() {
+            "btrfs" => btrfs,
+            "tmpfs" => self.docker_root_fs_type_magic == TMPFS_MAGIC,
+            _ => !matches!(self.docker_root_fs_type_magic, BTRFS_MAGIC | TMPFS_MAGIC),
+        };
+        type_matches_magic
+            && (btrfs
+                || (self.docker_root_device_major == self.docker_root_statx_device_major
+                    && self.docker_root_device_minor == self.docker_root_statx_device_minor))
+    }
+
     fn inode_values_valid(&self) -> bool {
         if self.docker_root_inode_available > self.docker_root_inode_free
             || self.docker_root_inode_free > self.docker_root_inode_total
@@ -123,7 +141,9 @@ impl ProbeRecord {
             return false;
         }
         match self.docker_root_inode_policy {
-            InodePolicy::Finite => self.docker_root_inode_total > 0,
+            InodePolicy::Finite => {
+                self.docker_root_fs_type_magic != BTRFS_MAGIC && self.docker_root_inode_total > 0
+            }
             InodePolicy::DynamicBtrfs => {
                 self.docker_root_fs_type_magic == BTRFS_MAGIC
                     && self.docker_root_fs_type_name == "btrfs"
@@ -190,8 +210,10 @@ pub(super) fn fixture_record() -> ProbeRecord {
         schema_version: SCHEMA_VERSION,
         docker_root_mount_target: DOCKER_ROOT_TARGET.to_owned(),
         docker_root_mount_id: 5,
-        docker_root_device_major: 8,
-        docker_root_device_minor: 1,
+        docker_root_device_major: 0,
+        docker_root_device_minor: 38,
+        docker_root_statx_device_major: 0,
+        docker_root_statx_device_minor: 41,
         docker_root_fs_type_magic: 0x9123_683e,
         docker_root_fs_type_name: "btrfs".to_owned(),
         docker_root_filesystem_id: 17,
