@@ -312,8 +312,14 @@ printf 'commit_count=%s\n' "$count" >> "$GITHUB_OUTPUT"
 
 pub(super) fn recovery_inputs() -> Yaml {
     let inputs = [
-        ("original_run_id", "Original push workflow run ID"),
-        ("original_run_attempt", "Original signer run attempt"),
+        (
+            "original_run_id",
+            "Original preview production workflow run ID",
+        ),
+        (
+            "original_run_attempt",
+            "Original preview production workflow run attempt",
+        ),
     ]
     .into_iter()
     .map(|(key, description)| {

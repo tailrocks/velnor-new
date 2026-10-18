@@ -193,6 +193,10 @@ fn manual_recovery_has_no_build_or_signing_authority() {
     let yaml = &rendered.bytes;
     assert!(yaml.contains("original_run_id:"));
     assert!(yaml.contains("original_run_attempt:"));
+    assert!(yaml.contains("description: Original preview production workflow run ID"));
+    assert!(yaml.contains("description: Original preview production workflow run attempt"));
+    assert!(!yaml.contains("Original push workflow run ID"));
+    assert!(!yaml.contains("Original signer run attempt"));
     for (name, next) in [
         ("preview-producer", "preview-signer"),
         ("preview-signer", "preview-publisher"),
