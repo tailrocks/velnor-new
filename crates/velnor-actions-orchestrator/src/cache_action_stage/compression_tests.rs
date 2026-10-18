@@ -1,4 +1,4 @@
-use super::{ArchiveCompression, decode_archive};
+use super::{ArchiveCompression, CacheActionCompression, decode_archive};
 use flate2::Compression;
 use flate2::write::GzEncoder;
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -33,4 +33,24 @@ fn gzip_decoder_returns_the_complete_decompressed_stream() {
         .read_to_end(&mut bytes)
         .expect("read decompressed data");
     assert_eq!(bytes, b"valid tar bytes");
+}
+
+#[test]
+fn archive_arguments_keep_distinct_sdk_compression_identities() {
+    assert_eq!(
+        CacheActionCompression::try_from(ArchiveCompression::Gzip),
+        Ok(CacheActionCompression::Gzip)
+    );
+    assert_eq!(
+        CacheActionCompression::try_from(ArchiveCompression::Zstd),
+        Ok(CacheActionCompression::ZstdWithoutLong)
+    );
+    assert_eq!(
+        CacheActionCompression::try_from(ArchiveCompression::ZstdLong),
+        Ok(CacheActionCompression::Zstd)
+    );
+    assert_eq!(
+        CacheActionCompression::try_from(ArchiveCompression::None),
+        Err("cache_tar_compression_missing")
+    );
 }

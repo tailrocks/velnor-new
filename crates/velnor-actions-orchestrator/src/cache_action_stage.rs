@@ -10,6 +10,7 @@ mod tar;
 #[cfg(test)]
 mod tests;
 
+pub use compression::CacheActionCompression;
 pub use context::StageContext;
 pub use launcher::{CACHE_TAR_LAUNCHER_INSTALL_OP, install_cache_tar_launchers};
 pub use receipt::StageReceiptClaim;

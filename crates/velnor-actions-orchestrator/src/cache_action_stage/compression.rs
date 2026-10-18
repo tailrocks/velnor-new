@@ -23,6 +23,46 @@ pub(crate) enum ArchiveCompression {
     ZstdLong,
 }
 
+/// Cache SDK compression identity observed in the actual tar argument vector.
+///
+/// The names follow `@actions/cache` 6.1.0's `CompressionMethod` values. The
+/// long-range zstd method remains distinct because it produces a different
+/// cache version from zstd without long-range mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheActionCompression {
+    /// SDK compression identity `gzip`.
+    Gzip,
+    /// SDK compression identity `zstd-without-long`.
+    ZstdWithoutLong,
+    /// SDK compression identity `zstd` (long-range mode).
+    Zstd,
+}
+
+impl CacheActionCompression {
+    /// Gives the exact pinned SDK method string used for cache versioning.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Gzip => "gzip",
+            Self::ZstdWithoutLong => "zstd-without-long",
+            Self::Zstd => "zstd",
+        }
+    }
+}
+
+impl TryFrom<ArchiveCompression> for CacheActionCompression {
+    type Error = StageError;
+
+    fn try_from(value: ArchiveCompression) -> Result<Self, Self::Error> {
+        match value {
+            ArchiveCompression::Gzip => Ok(Self::Gzip),
+            ArchiveCompression::Zstd => Ok(Self::ZstdWithoutLong),
+            ArchiveCompression::ZstdLong => Ok(Self::Zstd),
+            ArchiveCompression::None => Err("cache_tar_compression_missing"),
+        }
+    }
+}
+
 pub(crate) fn decode_archive(
     archive: File,
     compression: ArchiveCompression,

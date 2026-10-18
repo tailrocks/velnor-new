@@ -4,10 +4,11 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::cache_action_stage::{
-    StageAccess, StageContext, StageReceiptClaim, run_cache_tar,
+    StageAccess, StageContext, StageReceiptClaim, TarOutcome, run_cache_tar,
 };
 
-const OUTPUT_KEY: &str = "cache-stage-claim";
+const CLAIM_OUTPUT_KEY: &str = "cache-stage-claim";
+const COMPRESSION_OUTPUT_KEY: &str = "cache-stage-compression";
 pub(crate) const OP: &str = "cache-action-stage-tar-v1";
 
 /// Runs one pinned SDK tar operation through the trusted stage adapter.
@@ -21,13 +22,12 @@ pub(crate) fn run(args: &[OsString]) -> ExitCode {
     }
     let outcome = run_with_env(args);
     match outcome {
-        Ok(Some(claim)) => append_claim(&claim),
-        Ok(None) => ExitCode::SUCCESS,
+        Ok(outcome) => append_outcome(&outcome),
         Err(problem) => fail(problem),
     }
 }
 
-fn run_with_env(args: &[OsString]) -> Result<Option<String>, &'static str> {
+fn run_with_env(args: &[OsString]) -> Result<TarOutcome, &'static str> {
     let runner_temp = required_path("RUNNER_TEMP")?;
     let workspace = required_path("GITHUB_WORKSPACE")?;
     let namespace = required_value("VELNOR_CACHE_STAGE_NAMESPACE")?;
@@ -40,6 +40,14 @@ fn run_with_env(args: &[OsString]) -> Result<Option<String>, &'static str> {
                 return Err("cache_stage_context_invalid");
             }
             StageContext::normal(&runner_temp, &workspace, &key)?
+        }
+        "normal-tofu-providers-payload-v3" => {
+            if env::var_os("VELNOR_CACHE_STAGE_CAMPAIGN").is_some()
+                || env::var_os("VELNOR_CACHE_STAGE_LAYER").is_some()
+            {
+                return Err("cache_stage_context_invalid");
+            }
+            StageContext::normal_tofu_providers(&runner_temp, &workspace, &key)?
         }
         "qualification-v3" => {
             let campaign = required_value("VELNOR_CACHE_STAGE_CAMPAIGN")?;
@@ -61,30 +69,50 @@ fn run_with_env(args: &[OsString]) -> Result<Option<String>, &'static str> {
         _ => return Err("cache_stage_access_invalid"),
     };
     let zstd_path = optional_path("VELNOR_CACHE_ZSTD_PATH")?;
-    let outcome = run_cache_tar(&context, args, access, zstd_path.as_deref())?;
-    Ok(outcome.receipt.map(|receipt| receipt.encode()))
+    run_cache_tar(&context, args, access, zstd_path.as_deref())
 }
 
-fn append_claim(claim: &str) -> ExitCode {
-    if claim.len() > 128
-        || claim
-            .bytes()
-            .any(|byte| matches!(byte, b'\n' | b'\r' | b'='))
-    {
-        return fail("cache_stage_claim_invalid");
-    }
+fn append_outcome(outcome: &TarOutcome) -> ExitCode {
+    let body = match outcome_body(outcome) {
+        Ok(Some(body)) => body,
+        Ok(None) => return ExitCode::SUCCESS,
+        Err(problem) => return fail(problem),
+    };
     let Some(path) = env::var_os("GITHUB_OUTPUT").filter(|value| !value.is_empty()) else {
         return fail("missing_github_output");
     };
-    let mut body = String::with_capacity(OUTPUT_KEY.len() + claim.len() + 2);
-    body.push_str(OUTPUT_KEY);
-    body.push('=');
-    body.push_str(claim);
-    body.push('\n');
     match super::cache_bind::append_owned_output(&path, body.as_bytes()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(_) => fail("append_github_output_failed"),
     }
+}
+
+fn outcome_body(outcome: &TarOutcome) -> Result<Option<String>, &'static str> {
+    if outcome.receipt.is_none() && outcome.compression.is_none() {
+        return Ok(None);
+    }
+    let mut body = String::new();
+    if let Some(receipt) = &outcome.receipt {
+        let claim = receipt.encode();
+        if claim.len() > 128
+            || claim
+                .bytes()
+                .any(|byte| matches!(byte, b'\n' | b'\r' | b'='))
+        {
+            return Err("cache_stage_claim_invalid");
+        }
+        body.push_str(CLAIM_OUTPUT_KEY);
+        body.push('=');
+        body.push_str(&claim);
+        body.push('\n');
+    }
+    if let Some(compression) = outcome.compression {
+        body.push_str(COMPRESSION_OUTPUT_KEY);
+        body.push('=');
+        body.push_str(compression.as_str());
+        body.push('\n');
+    }
+    Ok(Some(body))
 }
 
 fn required_path(name: &str) -> Result<PathBuf, &'static str> {
@@ -137,4 +165,40 @@ fn optional_value(name: &str) -> Result<Option<String>, &'static str> {
 fn fail(problem: &str) -> ExitCode {
     eprintln!("velnor-actions: cache tar failed: {problem}");
     ExitCode::from(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::outcome_body;
+    use velnor_actions_orchestrator::cache_action_stage::{CacheActionCompression, TarOutcome};
+
+    #[test]
+    fn cache_action_compression_outputs_preserve_all_sdk_version_methods() {
+        let gzip = TarOutcome {
+            receipt: None,
+            compression: Some(CacheActionCompression::Gzip),
+        };
+        let zstd_without_long = TarOutcome {
+            receipt: None,
+            compression: Some(CacheActionCompression::ZstdWithoutLong),
+        };
+        let zstd = TarOutcome {
+            receipt: None,
+            compression: Some(CacheActionCompression::Zstd),
+        };
+        assert_eq!(
+            outcome_body(&gzip),
+            Ok(Some("cache-stage-compression=gzip\n".to_owned()))
+        );
+        assert_eq!(
+            outcome_body(&zstd_without_long),
+            Ok(Some(
+                "cache-stage-compression=zstd-without-long\n".to_owned()
+            ))
+        );
+        assert_eq!(
+            outcome_body(&zstd),
+            Ok(Some("cache-stage-compression=zstd\n".to_owned()))
+        );
+    }
 }
