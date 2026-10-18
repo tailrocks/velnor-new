@@ -14,6 +14,9 @@ use super::super::identity::SelectedDaemon;
 use super::super::release::PreparedWorkerArtifact;
 use super::{ProviderFailure, import_worker_artifact};
 
+#[cfg(unix)]
+mod http_stream;
+
 const SOURCE_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const DOCKER_ROOT: &str = "/var/lib/docker";
 

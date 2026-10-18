@@ -29,6 +29,25 @@ pub(super) async fn import_worker_artifact(
     source_sha: &str,
     artifact: &PreparedWorkerArtifact,
 ) -> Result<VerifiedWorkerImageIdentityProof, ProviderFailure> {
+    import_worker_artifact_with_timeout(
+        docker,
+        journal,
+        selected,
+        source_sha,
+        artifact,
+        IMPORT_TIMEOUT,
+    )
+    .await
+}
+
+async fn import_worker_artifact_with_timeout(
+    docker: &Docker,
+    journal: &Journal,
+    selected: &SelectedDaemon,
+    source_sha: &str,
+    artifact: &PreparedWorkerArtifact,
+    import_timeout: Duration,
+) -> Result<VerifiedWorkerImageIdentityProof, ProviderFailure> {
     let request = import_request(selected, source_sha, artifact)?;
     let record = journal
         .prepare_image_import(request.clone())
@@ -84,7 +103,7 @@ pub(super) async fn import_worker_artifact(
         .map_err(|_| ProviderFailure::ImageImportJournal)?
         .ok_or(ProviderFailure::ImageLoad)?;
 
-    match import_claimed(docker, selected, &request, artifact, stream).await {
+    match import_claimed(docker, selected, &request, artifact, stream, import_timeout).await {
         Ok(verified) => {
             let image_id = verified.image_id.clone();
             journal
@@ -152,6 +171,7 @@ async fn import_claimed(
     request: &ImageImportRequest,
     artifact: &PreparedWorkerArtifact,
     stream: worker_stream::VerifiedArchiveStream,
+    import_timeout: Duration,
 ) -> Result<VerifiedImportInspection, ProviderFailure> {
     verify_selected_daemon(docker, selected).await?;
     if inspect_image(docker, &artifact.load.repo_tag)
@@ -169,7 +189,7 @@ async fn import_claimed(
         None,
     );
     tokio::time::timeout(
-        IMPORT_TIMEOUT,
+        import_timeout,
         consume_import_response(response, fully_read),
     )
     .await
