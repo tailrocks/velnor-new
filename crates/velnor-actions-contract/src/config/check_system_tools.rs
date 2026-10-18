@@ -50,6 +50,19 @@ fn safe_build(value: &str) -> bool {
             .is_some_and(|byte| byte.is_ascii_alphanumeric())
 }
 
+impl CheckSystemTool {
+    /// Validate an ordered native-tool pin set against its host platform.
+    /// # Errors
+    pub(crate) fn validate_set(
+        tools: &[Self],
+        platform: CheckPlatform,
+        file: &str,
+        key: &str,
+    ) -> Result<(), ContractError> {
+        validate_system_tools(tools, platform, file, key)
+    }
+}
+
 pub(super) fn validate_system_tools(
     tools: &[CheckSystemTool],
     platform: CheckPlatform,

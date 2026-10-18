@@ -278,7 +278,7 @@ fn unknown_override_key_rejected_with_key_path() -> TestResult {
     );
     // Policy-owned alint overrides reject like unknown keys (§2, GitHub Action defaults).
     let repo = make_repo(
-        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[actions.overrides]\n\"asamarts/alint\" = { version = \"v0.18.1\", sha = \"f558d76d076710312c54723d18e44d8cd95b3977\" }\n",
+        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[actions.overrides]\n\"asamarts/alint\" = { version = \"v0.18.4\", sha = \"18e1a66db7444fed817c5d8c75292c7709fff32e\" }\n",
     )?;
     let m = err_of(prepare(repo.path()), "alint override rejected")?.to_string();
     assert!(m.contains("actions.overrides.asamarts/alint"));

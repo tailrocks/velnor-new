@@ -4,9 +4,9 @@
 //! source-build path. It is separate from runtime distribution qualification:
 //! an asset here does not establish Velnor-owned behavior or installation.
 //!
-//! Mise evidence was captured 2026-10-13 from release `v2026.10.8`; the
-//! official source commit is `b671d356aaf33b87e48e7469a77abb40c3553c68` with
-//! tree `ababca8f764247f1fc0c3bbccf66eaf16b56d27f`. MBX evidence was captured
+//! Mise evidence was captured 2026-10-13 from release `v2026.10.13`; the
+//! official source commit is `580a418ed8ce379669a1a98e9aa405aa6a860996` with
+//! tree `bc9af7a05b0e29cab8d2f3ecba106db8aba65e05`. MBX evidence was captured
 //! from release `v1.21.1`; its source commit is
 //! `a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313` with tree
 //! `1158c764f3893bacbd3a2f3e51990a9de1cb3712`. Downloaded archive bytes and
@@ -164,23 +164,23 @@ pub const fn official(
 const fn mise(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
     let (asset_url, archive_sha256, binary_sha256, asset_format, binary_member) = match host {
         SourceBuildBootstrapHost::LinuxAmd64 => (
-            "https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-linux-x64",
-            "c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428",
-            "c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428",
+            "https://github.com/jdx/mise/releases/download/v2026.10.13/mise-v2026.10.13-linux-x64",
+            "94c45523c7b6760b7da704f16051171ca32e8447a849a02266a439a4455e9a12",
+            "94c45523c7b6760b7da704f16051171ca32e8447a849a02266a439a4455e9a12",
             SourceBuildBootstrapFormat::Binary,
             "",
         ),
         SourceBuildBootstrapHost::LinuxArm64 => (
-            "https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-linux-arm64.tar.gz",
-            "88aea77e41c2a3c45a9cbd64df9516ba887017442846213b3de178acbd3c9a46",
-            "6ee0bd8173f1347514f4974d55fb1fae13aa7f6de0a55338adbefa0667cad7e5",
+            "https://github.com/jdx/mise/releases/download/v2026.10.13/mise-v2026.10.13-linux-arm64.tar.gz",
+            "ec1630fd441434a1b8c8c0074a53e3e8cc955ad313e9f354c44775eb19103a57",
+            "983fabf36625566f216400b907b33b4daca99adb5bc3d3cdab123b5e791575b2",
             SourceBuildBootstrapFormat::TarGzip,
             "mise/bin/mise",
         ),
         SourceBuildBootstrapHost::MacosArm64 => (
-            "https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-macos-arm64.tar.gz",
-            "8228699f316dc17931beb86f7a1aac70e4685535430441492ff4e857c72535ad",
-            "dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73",
+            "https://github.com/jdx/mise/releases/download/v2026.10.13/mise-v2026.10.13-macos-arm64.tar.gz",
+            "b91f1b30bd9e7e6899899f0ff5ac5625a90c86daa652524f7b8922db3287ff60",
+            "92fd6898dc213808d1c81f0bead9668dbea036e5946c94c0e82554603205a3aa",
             SourceBuildBootstrapFormat::TarGzip,
             "mise/bin/mise",
         ),
@@ -188,18 +188,18 @@ const fn mise(host: SourceBuildBootstrapHost) -> SourceBuildBootstrapAsset {
     SourceBuildBootstrapAsset {
         tool: SourceBuildBootstrapTool::Mise,
         host,
-        selector: "github:jdx/mise@2026.10.8",
+        selector: "github:jdx/mise@2026.10.13",
         asset_url,
         archive_sha256,
         binary_sha256,
         asset_format,
         binary_member,
         source_repository: "https://github.com/jdx/mise",
-        source_commit: "b671d356aaf33b87e48e7469a77abb40c3553c68",
-        source_tree: "ababca8f764247f1fc0c3bbccf66eaf16b56d27f",
+        source_commit: "580a418ed8ce379669a1a98e9aa405aa6a860996",
+        source_tree: "bc9af7a05b0e29cab8d2f3ecba106db8aba65e05",
         owner: "jdx/mise",
-        version: "2026.10.8",
-        abi: "mise-cli-v2026.10.8",
+        version: "2026.10.13",
+        abi: "mise-cli-v2026.10.13",
     }
 }
 

@@ -5,6 +5,7 @@ mod api;
 mod attach;
 mod baseline_artifact_listing;
 mod baseline_publish;
+mod binary_preview_emit;
 mod binary_release_emit;
 mod build_task_tools;
 mod build_tasks;
@@ -57,12 +58,17 @@ mod obligation_order;
 mod origin;
 mod owned_tool_preview;
 mod owned_tool_publication;
+mod package_publication;
+mod package_release_artifacts;
+mod package_release_publish;
+mod package_release_signer;
 mod pins;
 mod plan;
 mod plan_output_limits;
 mod plan_stacks;
 mod prepare;
 mod preseed_manifest;
+mod preview_producer;
 mod product_release_pins;
 mod provenance;
 mod publish_job;
@@ -89,6 +95,9 @@ mod select_edges;
 mod select_tofu;
 mod source_cache;
 mod source_prep;
+mod tap_merge;
+mod tap_prepare;
+mod tap_source_freshness;
 mod task_execution;
 pub(crate) mod task_report;
 mod task_report_aggregate;
@@ -113,6 +122,9 @@ mod workflow_task_jobs;
 #[cfg(all(feature = "test-render-capture", test))]
 #[path = "test_render_capture_harness.rs"]
 mod test_render_capture_harness;
+
+#[cfg(test)]
+pub(crate) mod tap_test_support;
 
 pub use api::*;
 

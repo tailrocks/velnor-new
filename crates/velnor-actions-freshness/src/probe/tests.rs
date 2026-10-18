@@ -1,7 +1,8 @@
 use super::sniff_latest;
 use super::transport::range::fetch_http_prefix_with_agent;
 use super::transport::{
-    MAX_REDIRECTS, decode_body, fetch_http_with_agent, fetch_text, resolve_redirect,
+    MAX_REDIRECTS, decode_body, fetch_http_with_agent, fetch_text,
+    initialize_upstream_agent_for_test, resolve_redirect,
 };
 use crate::context::FETCH_CAP;
 use flate2::Compression;
@@ -216,10 +217,20 @@ fn redirect_fetch(
 }
 
 fn fetch_once(response: MockResponse) -> Result<String, String> {
+    initialize_upstream_agent_for_test()?;
     let server = start_server(vec![response]).map_err(|error| error.to_string())?;
     let result = fetch_text(&server.url);
-    assert_eq!(server.finish(), 1);
+    assert_eq!(server.finish(), 1, "fetch result: {result:?}");
     result
+}
+
+#[test]
+fn production_agent_trust_initializes_successfully() {
+    let result = initialize_upstream_agent_for_test();
+    assert!(
+        result.is_ok(),
+        "production trust-agent initialization: {result:?}"
+    );
 }
 
 fn assert_body(response: MockResponse, expected: &str) {

@@ -67,7 +67,7 @@ fn lock_text() -> String {
         .map(|target| binary_record(target))
         .collect::<String>();
     format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.8\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.13\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "e".repeat(40),
         "b".repeat(64)
     )
@@ -254,7 +254,7 @@ fn velnor_policy_blessed_sha_validates_green() -> TestResult {
         vec![
             "actionlint@1.7.12".to_owned(),
             "shellcheck@0.11.0".to_owned(),
-            "zizmor@1.30.1".to_owned(),
+            "zizmor@1.31.1".to_owned(),
         ]
     );
     let blessed = format!("uses: {ALINT_ACTION}@{ALINT_ACTION_SHA}");

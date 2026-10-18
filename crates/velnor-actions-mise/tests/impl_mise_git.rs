@@ -213,6 +213,50 @@ fn git_argv_runs_git_directly() {
 }
 
 #[test]
+fn rev_list_count_is_a_narrow_validated_request_outside_the_generic_allowlist() {
+    let sha = "a".repeat(40);
+    let request = GitRequest::rev_list_count(&sha).expect("full SHA");
+    assert_eq!(request.verb(), "rev-list");
+    assert_eq!(
+        request.args(),
+        &[OsString::from("--count"), OsString::from(&sha)]
+    );
+    assert!(!is_allowed_git_verb("rev-list"));
+    assert!(matches!(
+        GitRequest::new("rev-list", vec!["--all".into()]),
+        Err(MiseError::GitVerbRejected { .. })
+    ));
+    for invalid in [
+        String::new(),
+        "a".repeat(39),
+        "A".repeat(40),
+        "../HEAD".to_owned(),
+    ] {
+        assert!(GitRequest::rev_list_count(&invalid).is_err(), "{invalid}");
+    }
+}
+
+#[test]
+fn rev_list_count_runs_against_only_the_full_source_sha() -> Result<(), String> {
+    let (root, _, _) = git_fixture()?;
+    let head = GitRequest::rev_parse(vec![OsString::from("HEAD")])
+        .run_in(&root)
+        .map_err(|error| error.to_string())?
+        .stdout_text("git")
+        .map_err(|error| error.to_string())?
+        .trim()
+        .to_owned();
+    let count = GitRequest::rev_list_count(&head)
+        .map_err(|error| error.to_string())?
+        .run_in(&root)
+        .map_err(|error| error.to_string())?
+        .stdout_text("git")
+        .map_err(|error| error.to_string())?;
+    assert_eq!(count.trim(), "1");
+    Ok(())
+}
+
+#[test]
 fn git_command_in_records_cwd() {
     let request = GitRequest::diff(vec![OsString::from("--name-only")]);
     let cwd = std::env::temp_dir();

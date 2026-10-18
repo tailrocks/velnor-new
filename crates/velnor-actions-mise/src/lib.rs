@@ -5,6 +5,9 @@
 //! metadata parsing, Rust graph rules, `rust-toolchain.toml`, or GitHub YAML.
 
 #[cfg(test)]
+#[path = "requests_app_token_tests.rs"]
+mod requests_app_token_tests;
+#[cfg(test)]
 #[path = "../../test_support/temp_dir.rs"]
 mod test_temp_dir;
 
@@ -22,10 +25,12 @@ pub mod error;
 pub mod gate6;
 pub mod gh;
 pub mod git;
+pub mod git_tap_capture;
 pub mod nextest;
 pub mod nextest_config;
 pub mod nextest_plan;
 pub mod nextest_shapes;
+pub mod package_release_tools;
 pub mod preflight;
 pub mod requests;
 pub mod requests_presence;
@@ -58,7 +63,10 @@ pub use catalog::{
     validate_exact_version,
 };
 pub use check_deadline::CheckDeadline;
-pub use checks::{DiscoveredCheck, QualifiedCheck, discover_checks, discover_checks_until};
+pub use checks::{
+    DiscoveredCheck, QualifiedCheck, discover_checks, discover_checks_until,
+    discover_preview_producer,
+};
 pub use command::{
     ALLOWED_MISE_SUBCOMMANDS, CREDENTIAL_ENV_KEYS, ENDPOINT_ENV_KEYS, ISOLATION_ENV,
     IsolatedCommand, MISE_CARGO_HOME_ENV, MISE_GLOBAL_FLAGS, MISE_RUSTUP_HOME_ENV,
@@ -71,6 +79,7 @@ pub use error::MiseError;
 pub use gate6::{Gate6Fixture, qualified_task_run_argv, render_gated_task_toml};
 pub use gh::BaselineLookup;
 pub use git::{ALLOWED_GIT_VERBS, GitRequest, is_allowed_git_verb};
+pub use git_tap_capture::{CapturedTapMain, TapTreeEntry, capture_tap_main, read_tap_tree};
 pub use nextest::{ARCHIVE_FILE, NEXTEST_EXTRACT_BASE, NextestDriver, NextestPartition};
 pub use nextest_config::{
     CI_PROFILE_NAME, DEFAULT_PROFILE_NAME, NEXTEST_CONFIG_REL, NextestConfig, NextestDiagnostic,
@@ -81,6 +90,10 @@ pub use nextest_plan::{
     count_inventory_tests, requires_archive_transfer,
 };
 pub use nextest_shapes::{NextestArchive, NextestList, NextestRun};
+pub use package_release_tools::{
+    COSIGN_COMMAND_OUTPUT_LIMIT, COSIGN_COMMAND_TIMEOUT, COSIGN_LINUX_AMD64_SHA256,
+    COSIGN_MAX_BYTES, COSIGN_VERSION, CosignCertificateIdentity, PinnedCosign,
+};
 pub use preflight::{RouteDriver, RouteSelection, select_route};
 pub use requests::{MetadataDiscovery, MetadataQualification, MiseInstall, PinnedToolExec};
 pub use requests_presence::ToolPresence;

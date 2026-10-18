@@ -159,7 +159,7 @@ fn pinned_exec_accepts_all_catalog_tools() -> Result<(), String> {
         "gh@2.102.0",
         "actionlint@1.7.12",
         "shellcheck@0.11.0",
-        "zizmor@1.30.1",
+        "zizmor@1.31.1",
         "aqua:nextest-rs/nextest/cargo-nextest@0.9.148",
         "opentofu@1.13.1",
     ] {

@@ -19,12 +19,19 @@ pub mod finding;
 pub mod formats;
 pub mod freshness;
 pub mod graph;
+pub mod homebrew_formula;
+pub mod homebrew_merge_gate;
+pub mod homebrew_review_completion;
 pub mod ids;
 pub mod manifest;
 pub(crate) mod manifest_checks;
 pub mod marker;
+pub mod package_release;
+pub mod package_release_plan;
 pub mod policy;
+pub mod preview_identity;
 pub mod propose;
+pub mod publication_retry;
 pub mod secrets;
 pub mod strict_json;
 pub mod targets;
@@ -101,6 +108,9 @@ pub use graph::{
     CachePolicy, EdgeKind, ResourceClass, ResourceDemand, TaskEdge, TaskGraph, TaskNode,
     validate_plan_edges,
 };
+pub use homebrew_formula::{
+    HomebrewFormulaCandidate, VerifiedPreviewRelease, validate_homebrew_formula_candidate,
+};
 pub use ids::{
     artifact_id_for_baseline, artifact_id_for_crate_job, artifact_id_for_final,
     artifact_id_for_matrix, artifact_id_for_plan, is_valid_branch_name,
@@ -115,6 +125,10 @@ pub use manifest::{
     MiseBootstrap, ReleaseManifest, TargetRecord, require_release_version,
 };
 pub use marker::{MARKER_PREFIX, OLD_MARKER_PREFIX, is_generated_marker_line};
+pub use package_release_plan::{
+    PACKAGE_RELEASE_PLAN_SCHEMA_V1, PackageReleasePlan, PackageReleasePlanProduct,
+    parse_package_release_plan,
+};
 pub use policy::{
     FreshnessEntry, FreshnessStatus, GithubRunnerImages, NightlyRecord, PolicyException,
     RunnerInventory, VersionPolicy, days_between,

@@ -247,6 +247,11 @@ fn upstream_agent() -> Result<&'static ureq::Agent, String> {
         .map_err(Clone::clone)
 }
 
+#[cfg(test)]
+pub(super) fn initialize_upstream_agent_for_test() -> Result<(), String> {
+    upstream_agent().map(|_| ())
+}
+
 fn build_upstream_agent() -> Result<ureq::Agent, String> {
     let trust = rustls_native_certs::load_native_certs();
     if !trust.errors.is_empty() {

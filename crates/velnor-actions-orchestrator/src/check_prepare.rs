@@ -20,12 +20,12 @@ static NEXT_HOME: AtomicU64 = AtomicU64::new(0);
 
 /// Own cleanup while the immutable typed command handle lives.
 #[derive(Debug)]
-pub(super) struct OwnedCheck {
+pub(crate) struct OwnedCheck {
     qualified: QualifiedCheck,
     home: PathBuf,
     pub(super) container: Option<container::OwnedContainer>,
-    pub(super) system_tools: Vec<SystemToolProof>,
-    pub(super) qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+    pub(crate) system_tools: Vec<SystemToolProof>,
+    pub(crate) qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
 }
 struct PreparedParts {
     qualified: QualifiedCheck,
@@ -48,7 +48,7 @@ impl Drop for OwnedCheck {
 }
 
 /// Materialize one source-bound projection and credential-free tool home.
-pub(super) fn prepare_check(
+pub(crate) fn prepare_check(
     root: &Path,
     temp: &Path,
     check: &DiscoveredCheck,

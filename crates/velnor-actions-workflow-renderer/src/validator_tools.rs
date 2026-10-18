@@ -77,7 +77,7 @@ mod tests {
                 "--no-env",
                 "--no-hooks",
                 "exec",
-                "zizmor@1.30.1",
+                "zizmor@1.31.1",
                 "--",
                 "zizmor",
             ]
@@ -108,7 +108,7 @@ mod tests {
                 "--no-env",
                 "--no-hooks",
                 "install",
-                "zizmor@1.30.1",
+                "zizmor@1.31.1",
             ]))
             .is_ok()
         );
@@ -121,14 +121,14 @@ mod tests {
             "mise",
             "--no-config",
             "exec",
-            "zizmor@1.30.1",
+            "zizmor@1.31.1",
             "--",
             "zizmor",
             "&&",
             "mise",
             "--no-config",
             "install",
-            "zizmor@1.30.1",
+            "zizmor@1.31.1",
         ]
         .into_iter()
         .map(str::to_owned)
@@ -138,12 +138,12 @@ mod tests {
             "mise",
             "--no-config",
             "install",
-            "zizmor@1.30.1",
+            "zizmor@1.31.1",
             "&&",
             "mise",
             "--no-config",
             "exec",
-            "zizmor@1.30.1",
+            "zizmor@1.31.1",
             "--",
             "zizmor",
         ]
@@ -159,19 +159,19 @@ mod tests {
         command.prepare_argv = [
             "mise",
             "exec",
-            "zizmor@1.30.1",
+            "zizmor@1.31.1",
             "--",
             "zizmor",
             "&&",
             "mise",
             "install",
-            "zizmor@1.30.1",
+            "zizmor@1.31.1",
         ]
         .into_iter()
         .map(str::to_owned)
         .collect();
         assert!(validate_validator_tool_closure(&command).is_err());
-        command.prepare_argv = ["mise", "install", "zizmor@1.30.1"]
+        command.prepare_argv = ["mise", "install", "zizmor@1.31.1"]
             .into_iter()
             .map(str::to_owned)
             .collect();

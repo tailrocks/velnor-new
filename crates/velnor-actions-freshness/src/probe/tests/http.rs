@@ -159,6 +159,7 @@ fn redirect_sequence_uses_one_overall_deadline() -> Result<(), Box<dyn Error>> {
 fn unsupported_and_broken_content_encodings_fail_closed() -> Result<(), Box<dyn Error>> {
     assert!(decode_body("br", b"body").is_err());
     assert!(decode_body("gzip", b"\x1f\x8b\x08").is_err());
+    initialize_upstream_agent_for_test()?;
     let server = start_server(vec![MockResponse {
         encoding: "br",
         body: vec![1, 2, 3],

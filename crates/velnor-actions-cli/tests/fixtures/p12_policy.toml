@@ -11,10 +11,11 @@ mr-boxington = "1.19.0"
 gh = "2.101.0"
 actionlint = "1.7.12"
 shellcheck = "0.11.0"
-zizmor = "1.30.1"
+zizmor = "1.31.1"
 nextest = "0.9.148"
 opentofu = "1.13.1"
 release-plz = "0.3.172"
+cosign = "3.1.3"
 
 [github_runner_images.linux_x64]
 default = "ubuntu-26.04"
@@ -22,8 +23,8 @@ supported = ["ubuntu-26.04", "ubuntu-24.04", "ubuntu-22.04"]
 
 [[actions]]
 name = "jdx/mise-action"
-version = "v5.1.2"
-sha = "08ae2a091c038e1e05ec6f5115dc5c69d5a2a6b8"
+version = "v5.2.0"
+sha = "9b200bcecbfd6303e69a4a261b2e09e3757440a7"
 reviewed = "2026-10-08"
 
 [[actions]]
@@ -31,6 +32,18 @@ name = "actions/checkout"
 version = "v7.0.1"
 sha = "3d3c42e5aac5ba805825da76410c181273ba90b1"
 reviewed = "2026-09-28"
+
+[[actions]]
+name = "actions/attest-build-provenance"
+version = "v4.2.2"
+sha = "4d101475d8b20a2381f78447822ac1eab6504dd8"
+reviewed = "2026-10-18"
+
+[[actions]]
+name = "actions/create-github-app-token"
+version = "v3.3.0"
+sha = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510"
+reviewed = "2026-10-18"
 
 [[actions]]
 name = "actions/download-artifact"
@@ -64,8 +77,8 @@ reviewed = "2026-09-28"
 
 [[actions]]
 name = "asamarts/alint"
-version = "v0.18.1"
-sha = "f558d76d076710312c54723d18e44d8cd95b3977"
+version = "v0.18.4"
+sha = "18e1a66db7444fed817c5d8c75292c7709fff32e"
 reviewed = "2026-10-07"
 
 [[actions]]

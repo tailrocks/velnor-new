@@ -13,7 +13,7 @@ fn config(tool: Option<&str>) -> VelnorConfig {
     })).expect("config fixture")
 }
 
-fn declaration(id: &str) -> QualifiedTool {
+pub(super) fn declaration(id: &str) -> QualifiedTool {
     let (version, backend, options, url, executable, expected) = if id == "rust" {
         (
             "1.97.1",

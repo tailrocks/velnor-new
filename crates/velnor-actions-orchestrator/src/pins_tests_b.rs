@@ -46,27 +46,27 @@ fn mise_setup_defaults_to_compiled_pins() {
 }
 
 #[test]
-fn consumer_binary_mise_setup_uses_latest_verified_platforms_only() {
+fn release_mise_setup_uses_shared_verified_platforms() {
     let config = config_with(BTreeMap::new());
     for (target, digest) in [
         (
             ReleaseTarget::LinuxX86_64,
-            "c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428",
+            "94c45523c7b6760b7da704f16051171ca32e8447a849a02266a439a4455e9a12",
         ),
         (
             ReleaseTarget::MacosArm64,
-            "dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73",
+            "92fd6898dc213808d1c81f0bead9668dbea036e5946c94c0e82554603205a3aa",
         ),
     ] {
-        let setup = resolve_mise_setup_for_consumer_binary_release(&config, target)
+        let setup = resolve_mise_setup_for_release_target(&config, target)
             .expect("supported consumer runner");
-        assert_eq!(setup.version, "2026.10.8");
+        assert_eq!(setup.version, "2026.10.13");
         assert_eq!(setup.sha256, digest);
     }
-    assert!(
-        resolve_mise_setup_for_consumer_binary_release(&config, ReleaseTarget::MacosX86_64)
-            .is_err()
-    );
+    let intel = resolve_mise_setup_for_release_target(&config, ReleaseTarget::MacosX86_64)
+        .expect("shared Intel release runner");
+    assert_eq!(intel.version, velnor_actions_mise::MISE_VERSION);
+    assert_eq!(intel.sha256, MISE_BINARY_SHA256_MACOS_X64);
 }
 
 #[test]

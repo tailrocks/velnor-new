@@ -54,7 +54,7 @@ fn repeated_generate_is_fixed_point() -> TestResult {
         vec![
             "actionlint@1.7.12".to_owned(),
             "shellcheck@0.11.0".to_owned(),
-            "zizmor@1.30.1".to_owned(),
+            "zizmor@1.31.1".to_owned(),
         ],
         "validators recorded: {:?}",
         report.validated_by

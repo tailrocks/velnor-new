@@ -20,6 +20,7 @@ const TOOLS: &str = "crates/velnor-actions-actionlint/src/tools.rs";
 const CAPABILITIES: &str = "crates/velnor-actions-actionlint/src/capabilities.rs";
 const CONFIG: &str = "crates/velnor-actions-actionlint/src/config.rs";
 const RENDERER: &str = "crates/velnor-actions-workflow-renderer/src/render.rs";
+const RENDERER_STEPS: &str = "crates/velnor-actions-workflow-renderer/src/steps.rs";
 
 pub(crate) const EXPECTED_TOOLS: &[(&str, &str)] = &[
     ("mise", "MISE_VERSION"),
@@ -32,6 +33,7 @@ pub(crate) const EXPECTED_TOOLS: &[(&str, &str)] = &[
     ("nextest", "NEXTEST_VERSION"),
     ("opentofu", "OPENTOFU_VERSION"),
     ("release-plz", "RELEASE_PLZ_VERSION"),
+    ("cosign", "COSIGN_VERSION"),
 ];
 
 pub(crate) const EXPECTED_ACTIONS: &[(&str, &str)] = &[
@@ -46,6 +48,14 @@ pub(crate) const EXPECTED_ACTIONS: &[(&str, &str)] = &[
     (
         "aws-actions/configure-aws-credentials",
         "AWS_CREDENTIALS_ACTION",
+    ),
+    (
+        "actions/attest-build-provenance",
+        "ATTEST_BUILD_PROVENANCE_ACTION",
+    ),
+    (
+        "actions/create-github-app-token",
+        "CREATE_GITHUB_APP_TOKEN_ACTION",
     ),
 ];
 /// Load the reviewed JSON inventory, recording shape errors as gate rows.

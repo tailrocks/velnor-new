@@ -42,6 +42,7 @@ pub const GENERATOR_OWNED_WORKFLOW_FILES: &[&str] = &[
     "ci.yml",
     "freshness.yml",
     "release.yml",
+    "binary-preview.yml",
     "binary-release.yml",
     "tofu-apply.yml",
     "qualification.yml",

@@ -8,10 +8,12 @@ mod binary_release;
 mod build_task;
 mod check_receipt_budget;
 mod discovery;
+mod distribution;
 mod execution;
 mod host_container;
 mod image_task;
 mod mise;
+mod preview_policy;
 mod qualified_tools;
 mod release;
 mod resources;
@@ -27,9 +29,16 @@ mod verification;
 mod workflow;
 mod workflow_task;
 
+pub(crate) use binary_release::validate_static_release_inventory;
+
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
 pub use agents::{AgentsConfig, ClaudeMdMode};
-pub use binary_release::{CONSUMER_BINARY_TARGET, RustBinaryReleaseConfig};
+pub use binary_release::{
+    CONSUMER_BINARY_TARGET, RustBinaryPreviewArchive, RustBinaryPreviewCompanion,
+    RustBinaryPreviewConfig, RustBinaryPreviewEvidence, RustBinaryPreviewEvidenceProfile,
+    RustBinaryPreviewProducer, RustBinaryPreviewProduct, RustBinaryPreviewVersioning,
+    RustBinaryReleaseConfig,
+};
 pub use build_task::{BuildTask, BuildTaskRunner, is_valid_build_tool_key};
 pub use check_receipt_budget::{
     MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
@@ -41,6 +50,10 @@ pub use check_receipt_budget::{
     MAX_CHECK_SYSTEM_VERSION_BYTES, check_execution_receipt_upper_bound,
 };
 pub use discovery::DiscoveryConfig;
+pub use distribution::{
+    DistributionConfig, ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapSource,
+    ReviewAppIdentity, TapMergePolicy, TapUpdateEnvironment, TapUpdaterBinding,
+};
 pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
     ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
@@ -135,6 +148,9 @@ pub struct VelnorConfig {
     /// Explicit check-scoped tool qualification registry.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub qualified_tools: Vec<QualifiedTool>,
+    /// Optional downstream package promotion policy.
+    #[serde(default, skip_serializing_if = "DistributionConfig::is_empty")]
+    pub distribution: DistributionConfig,
 }
 
 impl VelnorConfig {
@@ -171,11 +187,9 @@ impl VelnorConfig {
             }
         }
         if self.workflow.policy != WorkflowPolicy::ConsumerV1
-            && self
-                .stacks
-                .rust
-                .as_ref()
-                .is_some_and(|rust| rust.binary_release.enabled)
+            && self.stacks.rust.as_ref().is_some_and(|rust| {
+                rust.binary_release.enabled || rust.binary_release.preview.enabled
+            })
         {
             return Err(ContractError::config(
                 file,
@@ -199,6 +213,9 @@ impl VelnorConfig {
                 ));
             }
         }
+        self.distribution.validate(file)?;
+        self.check_distribution_source(file)?;
+        self.check_preview_tools(file)?;
         self.discovery.validate(file)?;
         self.actions.validate(file)?;
         validate_qualified_tools(&self.qualified_tools, file)?;
@@ -308,3 +325,6 @@ impl VelnorConfig {
 #[cfg(test)]
 #[path = "check_tool_reference_tests.rs"]
 mod check_tool_reference_tests;
+
+#[cfg(test)]
+mod preview_policy_tests;

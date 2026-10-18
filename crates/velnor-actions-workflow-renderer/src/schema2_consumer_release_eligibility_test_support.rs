@@ -19,7 +19,7 @@ pub(super) fn context() -> ReleaseEligibilityContext {
     ReleaseEligibilityContext {
         repository: REPOSITORY.to_owned(),
         default_branch: DEFAULT_BRANCH.to_owned(),
-        workflow_path: ".github/workflows/binary-release.yml".to_owned(),
+        channel: velnor_actions_contract::package_release::PackageReleaseChannel::Stable,
     }
 }
 
@@ -77,7 +77,6 @@ impl Scenario {
                 vec![r#"{"id":301,"name":"Build"}"#.to_owned()],
                 vec![required_job(
                     42,
-                    3,
                     SOURCE_TOKEN,
                     DEFAULT_BRANCH,
                     "completed",
@@ -323,14 +322,13 @@ pub(super) fn pages(pages: &[Vec<String>]) -> String {
 
 pub(super) fn required_job(
     run_id: u64,
-    attempt: u64,
     sha: &str,
     branch: &str,
     status: &str,
     conclusion: &str,
 ) -> String {
     format!(
-        r#"{{"id":300,"run_id":{run_id},"run_attempt":{attempt},"head_sha":"{sha}","head_branch":"{branch}","name":"Required","status":"{status}","conclusion":"{conclusion}"}}"#
+        r#"{{"id":300,"run_id":{run_id},"head_sha":"{sha}","head_branch":"{branch}","name":"Required","status":"{status}","conclusion":"{conclusion}"}}"#
     )
 }
 
@@ -343,51 +341,6 @@ pub(super) fn job_pages(pages: &[Vec<String>]) -> String {
     format!("[{encoded}]")
 }
 
-pub(super) fn execute(scenario: &Scenario) -> Result<Execution, Box<dyn Error>> {
-    let (fixture, git_sha) = create_fixture(scenario)?;
-    let path = std::env::var("PATH")?;
-    let source_sha = scenario.source_sha.as_deref().unwrap_or(&git_sha);
-    let authority_sha = scenario.authority_sha.as_deref().unwrap_or(source_sha);
-    let command_output = Command::new("bash")
-        .args(["-euo", "pipefail", "-c"])
-        .arg(consumer_script(
-            &context(),
-            &["/usr/bin/env".to_owned(), "gh".to_owned()],
-            false,
-        )?)
-        .current_dir(&fixture.repository)
-        .env("PATH", format!("{}:{path}", fixture.bin.display()))
-        .env("VELNOR_TEST_FIXTURES", &fixture.directory)
-        .env("VELNOR_TEST_CALLS", &fixture.calls)
-        .env("VELNOR_TEST_REPOSITORY", REPOSITORY)
-        .env("VELNOR_RELEASE_CI_POLL_LIMIT", "2")
-        .env("VELNOR_RELEASE_CI_POLL_SECONDS", "0")
-        .env("GITHUB_REPOSITORY", &scenario.repository)
-        .env("GITHUB_REF", &scenario.ref_name)
-        .env("GITHUB_EVENT_NAME", &scenario.event)
-        .env("GITHUB_WORKFLOW_REF", &scenario.workflow_ref)
-        .env("GITHUB_SHA", source_sha)
-        .env("GITHUB_WORKFLOW_SHA", authority_sha)
-        .env("GITHUB_OUTPUT", &fixture.output)
-        .env("GH_TOKEN", "consumer-test-token")
-        .output()?;
-    Ok(Execution {
-        success: command_output.status.success(),
-        stderr: String::from_utf8(command_output.stderr)?,
-        output: fs::read_to_string(&fixture.output)?,
-        calls: fs::read_to_string(&fixture.calls)?,
-    })
-}
-
-pub(super) fn assert_rejected(result: &Execution) {
-    assert!(
-        !result.success,
-        "unexpected success; output: {}",
-        result.output
-    );
-    assert!(
-        result.output.is_empty(),
-        "rejected gate wrote outputs: {}",
-        result.output
-    );
-}
+#[path = "schema2_consumer_release_eligibility_execution_test_support.rs"]
+mod execution;
+pub(super) use execution::{assert_rejected, execute, execute_preview};

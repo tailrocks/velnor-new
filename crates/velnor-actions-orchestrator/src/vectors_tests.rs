@@ -80,8 +80,8 @@ fn machete_validator_is_pinned_and_installed_before_execution() {
         ))
     );
     assert_eq!(
-        validator_install_pin("zizmor@1.30.1"),
-        Some(("zizmor", "1.30.1", "zizmor"))
+        validator_install_pin("zizmor@1.31.1"),
+        Some(("zizmor", "1.31.1", "zizmor"))
     );
 }
 
@@ -229,7 +229,7 @@ fn zizmor_vector_is_pinned_and_offline() {
         argv.join(" "),
         "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL \
              -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST \
-             -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec zizmor@1.30.1 -- zizmor \
+             -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec zizmor@1.31.1 -- zizmor \
              --no-online-audits --config .zizmor.yml .github/workflows"
     );
 }

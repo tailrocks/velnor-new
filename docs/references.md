@@ -35,6 +35,9 @@ when tool pins or protocol integrations are updated.
 - [GitHub Actions artifacts REST API](https://docs.github.com/en/rest/actions/artifacts)
 - [GitHub Actions dependency-cache trust and scope](https://docs.github.com/en/actions/concepts/workflows-and-actions/dependency-caching)
 - [GitHub Actions workflow commands and job outputs](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions)
+- [GitHub REST API: create annotated Git tag objects](https://docs.github.com/en/rest/git/tags#create-a-tag-object)
+- [GitHub REST API: create Git references](https://docs.github.com/en/rest/git/refs#create-a-reference)
+- [GitHub REST API: releases and release assets](https://docs.github.com/en/rest/releases/releases)
 - [Mr. Boxington](https://mr-boxington.jdx.dev/)
 - [Nextest running tests](https://nexte.st/docs/running/)
 - [Nextest partitioning](https://nexte.st/docs/ci-features/partitioning/)
@@ -60,6 +63,14 @@ when tool pins or protocol integrations are updated.
 - [actionlint native parallel-step syntax support issue](https://github.com/rhysd/actionlint/issues/693)
 - [actionlint native parallel-step syntax pull request](https://github.com/rhysd/actionlint/pull/694)
 - [zizmor](https://woodruffw.github.io/zizmor/)
+- [Sigstore Cosign blob signing](https://docs.sigstore.dev/cosign/signing/signing_with_blobs/)
+- [Sigstore Cosign blob verification](https://docs.sigstore.dev/cosign/verifying/verify/)
+- [Sigstore Cosign installation and binary verification](https://docs.sigstore.dev/cosign/system_config/installation/)
+- [Cosign v3.1.3 release](https://github.com/sigstore/cosign/releases/tag/v3.1.3) — upstream pin; includes the fix for GHSA-fx35-mq7g-6g98.
+- [Cosign v3.1.3 Linux binary checksums](https://github.com/sigstore/cosign/releases/download/v3.1.3/cosign_checksums.txt)
+- [Cosign GHSA-fx35-mq7g-6g98](https://github.com/sigstore/cosign/security/advisories/GHSA-fx35-mq7g-6g98)
+- [GitHub Actions build provenance attestations](https://github.com/actions/attest-build-provenance)
+- [GitHub Actions attestation action subject inputs](https://github.com/actions/attest/blob/main/action.yml)
 
 ## GitHub Actions and Scale Set runner
 
@@ -67,7 +78,7 @@ when tool pins or protocol integrations are updated.
 - [Mise global `--no-config`, `--no-env`, and `--no-hooks` flags](https://mise.jdx.dev/cli/)
 - [Mise file tasks and default task directories](https://mise.jdx.dev/tasks/file-tasks.html)
 - [Mise task configuration and included file-task directories](https://mise.jdx.dev/tasks/task-configuration.html)
-- [Alint GitHub Action v0.18.1](https://github.com/asamarts/alint/releases/tag/v0.18.1)
+- [Alint GitHub Action v0.18.4](https://github.com/asamarts/alint/releases/tag/v0.18.4)
 - [Mise lockfile behavior](https://mise.jdx.dev/dev-tools/mise-lock.html)
 - [Mise Rust toolchain and component behavior](https://mise.jdx.dev/lang/rust.html)
 - [Mr. Boxington getting started and direct `mbx` commands](https://mr-boxington.jdx.dev/getting-started)
@@ -104,3 +115,9 @@ when tool pins or protocol integrations are updated.
 - [actions/download-artifact releases](https://github.com/actions/download-artifact/releases)
 - [ShellCheck releases](https://github.com/koalaman/shellcheck/releases)
 - [GitHub Scale Set client](https://github.com/actions/scaleset)
+- [GitHub CLI `gh attestation verify` v2.102.0](https://github.com/cli/cli/tree/v2.102.0/pkg/cmd/attestation/verify) — pinned JSON output and certificate-claim verification implementation.
+- [Sigstore Go certificate extensions v1.3.0](https://github.com/sigstore/sigstore-go/tree/v1.3.0/pkg/fulcio/certificate) — JSON names for GitHub source identity and run invocation certificate claims.
+- [GitHub artifact-attestation verification manual](https://cli.github.com/manual/gh_attestation_verify) — exact repository/workflow/ref/digest and issuer verification flags; JSON verification-result fields.
+- [GitHub `gh attestation verify` bundle and repository lookup options](https://cli.github.com/manual/gh_attestation_verify) — remote repository verification and local `--bundle` behavior.
+- [GitHub Actions `actions/attest` v4.2.2 README](https://github.com/actions/attest/tree/v4.2.2) — generated bundle path and `github-token` behavior; publisher uses a distinct source-read token, never the tap writer App token.
+- [GitHub `actions/attest` v4.2.2 subject handling](https://github.com/actions/attest/tree/v4.2.2/src) — path-derived subject basenames and digest construction.

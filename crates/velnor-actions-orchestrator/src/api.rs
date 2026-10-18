@@ -43,6 +43,7 @@ pub use super::plan::{plan_text, plan_text_checked};
 pub use super::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode};
 pub use super::prepare::{GenerationPreparation, prepare};
 pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
+pub use super::preview_producer::{EXECUTE_PREVIEW_PRODUCER_OP, execute_preview_producer};
 pub use super::provenance::{EvidenceProvenance, ProfileProvenance};
 pub use super::qualification_resolver::{
     QUALIFICATION_ADMISSION_FILENAME, QUALIFICATION_RESOLVER_OP, read_qualification_admission,
@@ -52,6 +53,12 @@ pub use super::qualify::qualify_argv_staged;
 pub use super::retrieve_reports::{FETCH_OP, retrieve_reports};
 pub use super::root::resolve_root;
 pub use super::routing::{migrate_config, parse_dispatch_mode};
+pub use super::tap_merge::{MERGE_HOMEBREW_TAP_PR_OP, merge_homebrew_tap_from_env};
+pub use super::tap_prepare::{
+    HomebrewTapPreparationProof, PREPARE_HOMEBREW_TAP_OP, TapPreparationDisposition,
+    TapPromotionOutcome, TapPromotionReceipt, WRITE_HOMEBREW_TAP_PR_OP,
+    prepare_homebrew_tap_from_env, write_homebrew_tap_pr_from_env,
+};
 pub use super::task_execution::{
     GENERATOR_VERSION_ENV, RUNTIME_RUNNER_TEMP_ENV, TASK_EXECUTION_DIGEST_ENV,
     TASK_EXECUTION_RESOLVER_OP, resolve_task_execution,
@@ -72,3 +79,12 @@ pub use velnor_actions_contract::workflow::{
     QUALIFICATION_CAMPAIGN_OUTPUT, QUALIFICATION_PHASE_OUTPUT,
 };
 pub use velnor_actions_contract::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
+
+pub use super::package_publication::{
+    PackagePublicationBackend, PackagePublicationOutcome, publish_package_release,
+};
+pub use super::package_release_publish::{
+    PUBLISH_PACKAGE_RELEASE_OP, RECOVER_PACKAGE_RELEASE_OP, publish_package_release_from_env,
+    recover_package_release_from_env,
+};
+pub use super::package_release_signer::{SIGN_PACKAGE_RELEASE_OP, sign_package_release_from_env};

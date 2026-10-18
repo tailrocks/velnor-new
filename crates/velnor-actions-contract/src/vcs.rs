@@ -165,3 +165,51 @@ mod tests {
         }
     }
 }
+
+/// Check the closed URL-segment grammar for a GitHub `owner/repository` identity.
+///
+/// Registered casing is preserved for exact OIDC identity matching. Dots and
+/// underscores are valid repository-name characters. Actual existence and numeric
+/// repository identity must still be authenticated through GitHub before use.
+#[must_use]
+pub fn is_safe_github_repository(value: &str) -> bool {
+    let Some((owner, repository)) = value.split_once('/') else {
+        return false;
+    };
+    [owner, repository].into_iter().all(|part| {
+        !part.is_empty()
+            && part.len() <= 100
+            && !matches!(part, "." | "..")
+            && part
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    })
+}
+
+#[cfg(test)]
+mod github_repository_tests {
+    use super::is_safe_github_repository;
+    #[test]
+    fn preserves_registered_case_and_safe_repository_characters() {
+        for value in [
+            "jackin-project/homebrew-tap",
+            "Example/Some.Tool_v2",
+            "Example/.github",
+        ] {
+            assert!(is_safe_github_repository(value), "{value}");
+        }
+        for value in [
+            "",
+            "../repo",
+            "owner/..",
+            "owner/",
+            "/repo",
+            "owner/repo/extra",
+            "owner/repo?admin=true",
+            "owner/%2e%2e",
+            "owner/repo\\name",
+        ] {
+            assert!(!is_safe_github_repository(value), "{value}");
+        }
+    }
+}
