@@ -293,7 +293,7 @@ mod duplicate_tests {
 
             check_local_pins(&mut context);
 
-            assert!(context.tools.is_empty());
+            assert_eq!(context.tools, [] as [serde_json::Value; 0]);
             assert!(context.action_pinned.is_empty());
             assert_eq!(
                 context
@@ -335,7 +335,7 @@ mod duplicate_tests {
         });
 
         check_local_pins(&mut context);
-        assert!(context.tools.is_empty());
+        assert_eq!(context.tools, [] as [serde_json::Value; 0]);
         assert!(context.action_pinned.is_empty());
 
         crate::probe::check_upstream_probe(&mut context);
@@ -348,6 +348,6 @@ mod duplicate_tests {
             .filter(|row| row.get("check").and_then(Value::as_str) == Some("upstream-probe"))
             .filter(|row| row.get("subject").and_then(Value::as_str) != Some("runner"))
             .collect::<Vec<_>>();
-        assert!(probe_rows.is_empty());
+        assert_eq!(probe_rows, [] as [serde_json::Value; 0]);
     }
 }
