@@ -13,6 +13,10 @@ use rustix::fs::{FileType, Stat, renameat};
 use std::ffi::CString;
 use std::path::{Path, PathBuf};
 
+#[path = "transfer_install_rollback.rs"]
+mod rollback;
+use rollback::rollback_prepared;
+
 #[derive(Debug)]
 struct PreparedRoot {
     parent: rustix::fd::OwnedFd,
@@ -222,42 +226,6 @@ fn commit_prepared(prepared: &mut [PreparedRoot]) -> Result<(), &'static str> {
             if !same_object(&temporary.stat, &current) {
                 return Err("qualification_cache_import_destination_changed");
             }
-        }
-    }
-    Ok(())
-}
-
-fn rollback_prepared(prepared: &mut [PreparedRoot]) -> Result<(), &'static str> {
-    for item in prepared.iter_mut().rev() {
-        if item.replacement_installed {
-            let current = stat_optional(&item.parent, item.destination_name.as_c_str())?
-                .ok_or("qualification_cache_import_rollback_failed")?;
-            if item
-                .temporary
-                .as_ref()
-                .is_none_or(|expected| !same_object(&expected.stat, &current))
-            {
-                return Err("qualification_cache_import_rollback_failed");
-            }
-            let temporary = item
-                .temporary
-                .as_ref()
-                .ok_or("qualification_cache_import_rollback_failed")?;
-            remove_owned_at(&item.parent, item.destination_name.as_c_str(), temporary)?;
-            item.replacement_installed = false;
-        }
-        if item.backup_moved {
-            if stat_optional(&item.parent, item.destination_name.as_c_str())?.is_some() {
-                return Err("qualification_cache_import_rollback_failed");
-            }
-            renameat(
-                &item.parent,
-                item.backup_name.as_c_str(),
-                &item.parent,
-                item.destination_name.as_c_str(),
-            )
-            .map_err(|_| "qualification_cache_import_rollback_failed")?;
-            item.backup_moved = false;
         }
     }
     Ok(())
