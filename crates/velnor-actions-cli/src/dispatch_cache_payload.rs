@@ -1,15 +1,19 @@
 use std::fs;
 use std::io::Read;
+use std::os::fd::AsFd;
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
-use rustix::fs::{AtFlags, Dir, FileType, Mode, OFlags, Stat, open, openat, statat};
+use rustix::fs::{AtFlags, FileType, Mode, OFlags, Stat, open, openat, statat};
 
 const DOMAIN: &[u8] = b"velnor-qualification-cache-useful-state-v1\0";
 const MAX_ENTRIES: usize = 250_000;
 const MAX_TOTAL_BYTES: u64 = 16 * 1024 * 1024 * 1024;
 const MAX_PATH_BYTES: usize = 4_096;
 const MAX_DEPTH: usize = 128;
+
+#[path = "dispatch_cache_payload_scan.rs"]
+mod scan;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Entry {
@@ -39,14 +43,21 @@ pub(crate) fn digest_stage(root: &Path) -> Result<Option<String>, &'static str> 
         Mode::empty(),
     )
     .map_err(|_| "qualification_cache_payload_root_invalid")?;
-    let root_stat =
-        rustix::fs::fstat(&root_fd).map_err(|_| "qualification_cache_payload_open_failed")?;
+    let root_stat = rustix::fs::fstat(root_fd.as_fd())
+        .map_err(|_| "qualification_cache_payload_open_failed")?;
     validate_directory(&root_stat)?;
     if !same_identity(&metadata, &root_stat) {
         return Err("qualification_cache_payload_root_invalid");
     }
+    digest_open_directory(&root_fd)
+}
+
+fn digest_open_directory(root_fd: &rustix::fd::OwnedFd) -> Result<Option<String>, &'static str> {
+    let root_stat =
+        rustix::fs::fstat(root_fd).map_err(|_| "qualification_cache_payload_open_failed")?;
+    validate_directory(&root_stat)?;
     let mut tree = Tree::default();
-    collect(root_fd, "", 0, &mut tree)?;
+    scan::collect(root_fd, "", 0, &mut tree)?;
     if tree.entries.is_empty() {
         return Ok(None);
     }
@@ -95,102 +106,6 @@ pub(crate) fn digest_stage(root: &Path) -> Result<Option<String>, &'static str> 
         }
     }
     Ok(Some(format!("b3-{}", digest.finalize().to_hex())))
-}
-
-fn collect(
-    directory_fd: rustix::fd::OwnedFd,
-    relative: &str,
-    depth: usize,
-    tree: &mut Tree,
-) -> Result<(), &'static str> {
-    if depth > MAX_DEPTH {
-        return Err("qualification_cache_payload_limit");
-    }
-    let start_stat =
-        rustix::fs::fstat(&directory_fd).map_err(|_| "qualification_cache_payload_read_failed")?;
-    validate_directory(&start_stat)?;
-    let directory =
-        Dir::read_from(&directory_fd).map_err(|_| "qualification_cache_payload_read_failed")?;
-    let mut children = Vec::new();
-    for entry in directory {
-        children.push(
-            entry
-                .map_err(|_| "qualification_cache_payload_read_failed")?
-                .file_name()
-                .to_owned(),
-        );
-    }
-    children.sort_by(|left, right| left.as_bytes().cmp(right.as_bytes()));
-    for name in children {
-        let name_text = name
-            .to_str()
-            .map_err(|_| "qualification_cache_payload_path_invalid")?;
-        if name_text == "." || name_text == ".." {
-            continue;
-        }
-        if name_text.is_empty()
-            || name_text
-                .bytes()
-                .any(|byte| byte < 0x20 || byte == 0x7f || byte == b'/')
-        {
-            return Err("qualification_cache_payload_path_invalid");
-        }
-        let relative = if relative.is_empty() {
-            name_text.to_owned()
-        } else {
-            format!("{relative}/{name_text}")
-        };
-        if relative.len() > MAX_PATH_BYTES || tree.entries.len() >= MAX_ENTRIES {
-            return Err("qualification_cache_payload_limit");
-        }
-        let stat = statat(&directory_fd, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)
-            .map_err(|_| "qualification_cache_payload_read_failed")?;
-        validate_entry_owner_mode(&stat)?;
-        match FileType::from_raw_mode(stat.st_mode) {
-            FileType::Directory => {
-                let child_fd = openat(
-                    &directory_fd,
-                    name.as_c_str(),
-                    OFlags::RDONLY
-                        | OFlags::DIRECTORY
-                        | OFlags::NOFOLLOW
-                        | OFlags::NONBLOCK
-                        | OFlags::CLOEXEC,
-                    Mode::empty(),
-                )
-                .map_err(|_| "qualification_cache_payload_open_failed")?;
-                let opened = rustix::fs::fstat(&child_fd)
-                    .map_err(|_| "qualification_cache_payload_open_failed")?;
-                if !same_version(&stat, &opened) {
-                    return Err("qualification_cache_payload_file_changed");
-                }
-                tree.entries.push(Entry {
-                    path: relative.clone(),
-                    kind: b'd',
-                    mode: u32::from(stat.st_mode & 0o777),
-                    size: 0,
-                    content_digest: [0; 32],
-                    file_identity: None,
-                });
-                collect(child_fd, &relative, depth + 1, tree)?;
-            }
-            FileType::Symlink => {
-                let entry = hash_symlink(&directory_fd, &name, relative, &stat, tree)?;
-                tree.entries.push(entry);
-            }
-            FileType::RegularFile => {
-                let entry = hash_file(&directory_fd, &name, relative, &stat, tree)?;
-                tree.entries.push(entry);
-            }
-            _ => return Err("qualification_cache_payload_entry_unsupported"),
-        }
-    }
-    let end_stat =
-        rustix::fs::fstat(&directory_fd).map_err(|_| "qualification_cache_payload_read_failed")?;
-    if !same_version(&start_stat, &end_stat) {
-        return Err("qualification_cache_payload_file_changed");
-    }
-    Ok(())
 }
 
 fn validate_directory(stat: &Stat) -> Result<(), &'static str> {
@@ -245,7 +160,7 @@ fn hash_file(
         .ok_or("qualification_cache_payload_limit")?;
     let mut file = fs::File::from(fd);
     let mut file_digest = blake3::Hasher::new();
-    let mut buffer = [0; 64 * 1024];
+    let mut buffer = vec![0; 64 * 1024].into_boxed_slice();
     let mut read_bytes = 0_u64;
     loop {
         let count = file
@@ -393,6 +308,6 @@ fn update_bytes(hasher: &mut blake3::Hasher, bytes: &[u8]) {
     hasher.update(bytes);
 }
 
-#[cfg(test)]
-#[path = "dispatch_cache_payload_tests.rs"]
-mod tests;
+#[path = "dispatch_cache_payload_copy.rs"]
+mod copy;
+pub(crate) use copy::copy_tree_to_new_dir;

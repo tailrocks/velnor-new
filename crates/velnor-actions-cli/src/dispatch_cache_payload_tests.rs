@@ -1,4 +1,4 @@
-use super::digest_stage;
+use super::super::digest_stage;
 use std::fs::{self, OpenOptions};
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::os::unix::net::UnixListener;
@@ -130,7 +130,7 @@ fn tree_digest_rejects_oversized_files_before_reading_them() {
         .create_new(true)
         .open(path)
         .expect("file");
-    file.set_len(super::MAX_TOTAL_BYTES + 1)
+    file.set_len(super::super::MAX_TOTAL_BYTES + 1)
         .expect("sparse oversized file");
     assert_eq!(
         digest_stage(stage.path()),
