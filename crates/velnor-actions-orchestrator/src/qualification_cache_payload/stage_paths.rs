@@ -15,42 +15,13 @@ pub fn qualification_cache_stage_path(
     key: &str,
 ) -> Result<PathBuf, &'static str> {
     let runner_temp = clean_path_text(runner_temp, "cache_binding_stage_path_invalid")?;
-    if [campaign, layer, key]
-        .iter()
-        .any(|value| value.chars().any(|ch| matches!(ch, '\n' | '\r')))
-    {
-        return Err("cache_binding_output_invalid");
-    }
-    let valid_campaign = !campaign.is_empty()
-        && campaign.len() <= 64
-        && campaign
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
-    let valid_layer = matches!(
+    crate::cache_action_stage::StageContext::qualification_action_path(
+        Path::new(runner_temp),
+        campaign,
         layer,
-        "mbx_objects" | "cargo_sources" | "mise_tools" | "tofu_providers" | "task_result"
-    );
-    let valid_key = !key.is_empty()
-        && key.len() <= velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES
-        && key.bytes().all(|byte| {
-            byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"-_".contains(&byte)
-        })
-        && key.starts_with(&format!(
-            "velnor-qcache-v{}-{campaign}-{layer}-",
-            velnor_actions_contract::workflow::QUALIFICATION_CACHE_FORMAT_VERSION
-        ));
-    if !valid_campaign || !valid_layer || !valid_key {
-        return Err("cache_binding_stage_path_invalid");
-    }
-    let key_digest = blake3::hash(key.as_bytes()).to_hex();
-    let path = format!(
-        "{runner_temp}/velnor/qualification-cache-v{}/{campaign}/{layer}/{key_digest}/payload",
-        velnor_actions_contract::workflow::QUALIFICATION_CACHE_FORMAT_VERSION
-    );
-    if path.len() > 4_096 {
-        return Err("cache_binding_stage_path_invalid");
-    }
-    Ok(PathBuf::from(path))
+        key,
+    )
+    .map_err(|_| "cache_binding_stage_path_invalid")
 }
 
 /// Derive the isolated stage path for one normal tools cache key.
@@ -102,3 +73,7 @@ fn clean_path_text<'a>(path: &'a Path, error: &'static str) -> Result<&'a str, &
     }
     Ok(text)
 }
+
+#[cfg(test)]
+#[path = "tests/stage_paths_tests.rs"]
+mod tests;

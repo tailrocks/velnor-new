@@ -99,7 +99,7 @@ fn normal_cache_stage_writes_the_v3_key_path_to_the_owned_output() -> Result<(),
         .strip_prefix("stage_path=")
         .and_then(|value| value.strip_suffix('\n'))
         .ok_or("stage path output missing")?;
-    let expected_parent = temp.join("velnor/normal-cache-v3/mise_tools");
+    let expected_parent = temp.join("velnor/cache-staging");
     let relative = Path::new(stage_path)
         .strip_prefix(&expected_parent)
         .map_err(|_| "stage path has a different root")?;
@@ -114,7 +114,11 @@ fn normal_cache_stage_writes_the_v3_key_path_to_the_owned_output() -> Result<(),
     );
     assert!(components.next().is_none());
     assert_eq!(digest.len(), 64);
-    assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    assert!(
+        digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    );
     cleanup(&temp);
     Ok(())
 }
