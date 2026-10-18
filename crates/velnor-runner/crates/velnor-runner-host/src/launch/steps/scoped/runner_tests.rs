@@ -20,6 +20,8 @@ use support::{
 
 #[path = "runner_tests/docker_pair.rs"]
 mod docker_pair;
+#[path = "runner_tests/stale_auth.rs"]
+mod stale_auth;
 #[path = "runner_tests/support.rs"]
 mod support;
 
