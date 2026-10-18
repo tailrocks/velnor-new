@@ -1,5 +1,7 @@
 # Group streamed members that can share a staged BusyBox extraction.
 
+declare -a mem_confined_path=()
+
 record_directory_metadata() {
   local root="$1"
   shift
@@ -8,9 +10,14 @@ record_directory_metadata() {
   batch="$(mktemp "${TMPDIR:-/tmp}/velnor-dir-batch.XXXXXX")"
   for index in "$@"; do
     [ "${mem_type[$index]}" = 5 ] || continue
-    actual="$root/${mem_strip[$index]}"
+    if [ -n "${cache_root:-}" ]; then
+      actual="$root/${mem_confined_path[$index]}"
+      intended="$actual"
+    else
+      actual="$root/${mem_strip[$index]}"
+      member_intended "${mem_name[$index]}" intended
+    fi
     [ -d "$actual" ] && [ ! -L "$actual" ] || continue
-    member_intended "${mem_name[$index]}" intended
     printf -v mode '%o' "$(( (0${mem_mode[$index]}) & ~(0${mask}) ))"
     printf '%s\0%s\0%s\0' "$actual" "$intended" "$mode" >>"$batch"
   done
@@ -76,15 +83,21 @@ extract_direct_fifo() {
 # The Perl producer streams selected records through one FIFO per group.
 run_plan() {
   local plan="$1"
-  local -n kinds=$2
-  local -n bases=$3
+  local confined=0
+  if [ -n "$cache_root" ]; then
+    confined=1
+  else
+    local -n kinds=$2
+    local -n bases=$3
+  fi
   local map="$4"
-  local seq=0 line fifo
+  local seq=0 line fifo emit_mode=--emit
   local -a indices=()
+  [ -z "$cache_root" ] || emit_mode=--emit-confined
   seq_dir="$(mktemp -d "${TMPDIR:-/tmp}/velnor-tar-seq.XXXXXX")"
   (
     set -o pipefail
-    stream_archive | perl "$member_pl" --emit "$plan" "$seq_dir" "$map"
+    stream_archive | perl "$member_pl" "$emit_mode" "$plan" "$seq_dir" "$map"
   ) &
   prod_pid=$!
   while IFS= read -r line || [ -n "$line" ]; do
@@ -92,7 +105,9 @@ run_plan() {
     fifo="$seq_dir/$seq.fifo"
     mkfifo "$fifo"
     read -r -a indices <<<"$line"
-    if [ "${kinds[$seq]}" = root ]; then
+    if [ "$confined" -eq 1 ]; then
+      extract_root_fifo "$fifo" "${indices[@]}"
+    elif [ "${kinds[$seq]}" = root ]; then
       extract_root_fifo "$fifo" "${indices[@]}"
     elif [ "${kinds[$seq]}" = direct ]; then
       extract_direct_fifo "$fifo" "${bases[$seq]}" "${indices[@]}"

@@ -129,8 +129,12 @@ case_restrictive_parent_metadata() {
     f ../external/parent/child/payload preserved \
     d "$existing" 0500 1234567880 \
     f ../external/existing/payload existing || return 1
-  chmod 0755 "$work" "$rundir"
+  chmod 0755 "$work" "$rundir" "$root" "$root/dest" \
+    "$root/dest/workspace" "$root/dest/workspace/repo" \
+    "$root/dest/workspace/external" \
+    "$root/dest/workspace/external/existing" "$root/stage"
   chown -R nobody:nogroup "$root"
+  runuser -u nobody -- chmod 0750 "$root/dest/workspace/external/existing" || return 1
   runuser -u nobody -- env TMPDIR="$root/stage" \
     bash "$shim" -xf "$root/arc.tar" -P \
       -C "$root/dest/workspace/repo" || {
@@ -138,34 +142,41 @@ case_restrictive_parent_metadata() {
         return 1
       }
   path="$root/dest/workspace/external/parent"
-  mode="$(stat -c %a "$path")"
-  mtime="$(stat -c %Y "$path")"
+  mode="$(runuser -u nobody -- stat -c %a "$path")"
+  mtime="$(runuser -u nobody -- stat -c %Y "$path")"
   [ "$mode" = 500 ] && [ "$mtime" = 1234567890 ] || {
     printf 'parent metadata mismatch path=%s mode=%s mtime=%s\n' "$path" "$mode" "$mtime" >&2
     return 1
   }
-  grep -qx preserved "$path/child/payload" || {
+  runuser -u nobody -- grep -qx preserved "$path/child/payload" || {
     printf 'parent child payload missing path=%s\n' "$path" >&2
     return 1
   }
   path="$root/dest/workspace/external/parent/child"
-  mode="$(stat -c %a "$path")"
-  mtime="$(stat -c %Y "$path")"
+  mode="$(runuser -u nobody -- stat -c %a "$path")"
+  mtime="$(runuser -u nobody -- stat -c %Y "$path")"
   [ "$mode" = 300 ] && [ "$mtime" = 1234567891 ] || {
     printf 'child directory metadata mismatch path=%s mode=%s mtime=%s\n' "$path" "$mode" "$mtime" >&2
     return 1
   }
   path="$root/dest/workspace/external/existing"
-  mode="$(stat -c %a "$path")"
-  mtime="$(stat -c %Y "$path")"
+  mode="$(runuser -u nobody -- stat -c %a "$path")"
+  mtime="$(runuser -u nobody -- stat -c %Y "$path")"
   [ "$mode" = 500 ] && [ "$mtime" = 1234567880 ] || {
     printf 'existing directory metadata mismatch path=%s mode=%s mtime=%s\n' "$path" "$mode" "$mtime" >&2
     return 1
   }
-  grep -qx existing "$path/payload" || {
+  runuser -u nobody -- grep -qx existing "$path/payload" || {
     printf 'existing directory payload missing path=%s\n' "$path" >&2
     return 1
   }
+  runuser -u nobody -- chmod 0700 \
+    "$root/dest/workspace/external/parent" \
+    "$root/dest/workspace/external/parent/child" \
+    "$root/dest/workspace/external/existing" || return 1
+  chmod 1777 "$work" || return 1
+  runuser -u nobody -- rm -rf -- "$root" || return 1
+  chmod 0755 "$work" || return 1
 }
 
 case_rewritten_long_paths() {

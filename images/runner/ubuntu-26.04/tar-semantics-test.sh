@@ -32,9 +32,25 @@ pass=0
 fail=0
 
 run_case() {
-  local name="$1"
+  local name="$1" stdout_file stderr_file
   shift
-  if "$@"; then
+  if [ "${VELNOR_TEST_DIAGNOSTICS:-0}" = 1 ]; then
+    stdout_file="$work/$name.stdout"
+    stderr_file="$work/$name.stderr"
+    if "$@" >"$stdout_file" 2>"$stderr_file"; then
+      pass=$((pass + 1))
+      printf 'PASS %s\n' "$name"
+      cat -- "$stdout_file"
+      cat -- "$stderr_file" >&2
+      return 0
+    fi
+    fail=$((fail + 1))
+    printf 'FAIL %s\n' "$name"
+    printf 'Output from %s:\n' "$name"
+    cat -- "$stdout_file"
+    printf 'Error output from %s:\n' "$name"
+    cat -- "$stderr_file"
+  elif "$@"; then
     pass=$((pass + 1))
     printf 'PASS %s\n' "$name"
   else
@@ -43,8 +59,18 @@ run_case() {
   fi
 }
 
+clear_directory_contents() {
+  local dir="$1" entry
+  mkdir -p -- "$dir" || return 1
+  for entry in "$dir"/* "$dir"/.[!.]* "$dir"/..?*; do
+    [ -e "$entry" ] || [ -L "$entry" ] || continue
+    rm -rf -- "$entry" || return 1
+  done
+}
+
 work="$(mktemp -d /tmp/tar-sem.XXXXXX)"
-trap 'rm -rf -- "$work" "$rundir"' EXIT
+cache_test_root="/home/runner/_work/_temp/velnor/tg-${PPID}"
+trap 'rm -rf -- "$work" "$rundir" "$cache_test_root"' EXIT
 
 write_ustar() {
   perl - "$@" <<'END_PERL'
@@ -91,6 +117,10 @@ while (@ARGV) {
         my $name = shift @ARGV;
         my $target = shift @ARGV;
         header($name, "2", 0, $target);
+    } elsif ($kind eq "h") {
+        my $name = shift @ARGV;
+        my $target = shift @ARGV;
+        header($name, "1", 0, $target);
     } elsif ($kind eq "d") {
         my $name = shift @ARGV;
         my $mode = oct(shift @ARGV);
@@ -110,6 +140,61 @@ while (@ARGV) {
         header($name, "x", length($record), "");
         print $record or die $!;
         my $pad = (512 - (length($record) % 512)) % 512;
+        print "\0" x $pad if $pad;
+    } elsif ($kind eq "l") {
+        my $name = shift @ARGV;
+        my $link = shift @ARGV;
+        my $body = " linkpath=$link\n";
+        my $length = length($body) + 1;
+        my $record;
+        while (1) {
+            $record = "$length$body";
+            last if length($record) == $length;
+            $length = length($record);
+        }
+        header($name, "x", length($record), "");
+        print $record or die $!;
+        my $pad = (512 - (length($record) % 512)) % 512;
+        print "\0" x $pad if $pad;
+    } elsif ($kind eq "p") {
+        my $name = shift @ARGV;
+        my $key = shift @ARGV;
+        my $value = shift @ARGV;
+        my $body = " $key=$value\n";
+        my $length = length($body) + 1;
+        my $record;
+        while (1) {
+            $record = "$length$body";
+            last if length($record) == $length;
+            $length = length($record);
+        }
+        header($name, "x", length($record), "");
+        print $record or die $!;
+        my $pad = (512 - (length($record) % 512)) % 512;
+        print "\0" x $pad if $pad;
+    } elsif ($kind eq "r") {
+        my $name = shift @ARGV;
+        my $path = shift @ARGV;
+        open my $src, "<:raw", $path or die "$path: $!";
+        my $size = -s $src;
+        header($name, "0", $size, "");
+        my $buf;
+        while (1) {
+            my $got = read $src, $buf, 65536;
+            die "$path: $!" if !defined $got;
+            last if $got == 0;
+            print $buf or die $!;
+        }
+        close $src or die "$path: $!";
+        my $pad = (512 - ($size % 512)) % 512;
+        print "\0" x $pad if $pad;
+    } elsif ($kind eq "L" || $kind eq "K") {
+        my $name = shift @ARGV;
+        my $value = shift @ARGV;
+        my $body = "$value\0";
+        header($name, $kind, length($body), "");
+        print $body or die $!;
+        my $pad = (512 - (length($body) % 512)) % 512;
         print "\0" x $pad if $pad;
     } else {
         die "bad record $kind\n";
@@ -336,8 +421,8 @@ case_partial_archive() {
 case_cargo_work_symlink() {
   local repo err status=0
   repo=/home/runner/work/repo/repo
-  rm -rf -- /home/runner/work
-  mkdir -p "$repo"
+  clear_directory_contents /home/runner/work || return 1
+  mkdir -p "$repo" || return 1
   write_ustar "$work/rls.tar" s ../../_temp/velnor/cargo/bin/rls rustup || return 1
   bash "$shim" -xf "$work/rls.tar" -P -C "$repo" || return 1
   [ -L /home/runner/work/_temp/velnor/cargo/bin/rls ] || return 1
@@ -360,8 +445,8 @@ case_cargo_bulk_parents() {
   local repo i
   local -a args=()
   repo=/home/runner/work/repo/repo
-  rm -rf -- /home/runner/work
-  mkdir -p "$repo"
+  clear_directory_contents /home/runner/work || return 1
+  mkdir -p "$repo" || return 1
   args=("$work/bulk.tar")
   for ((i = 1; i <= 40; i++)); do
     args+=(f "../../_temp/velnor/cargo/reg/$i" "body-$i")
@@ -391,6 +476,337 @@ case_disk_full() {
     [ "$bytes" -lt 2097152 ] || return 1
   fi
 }
+
+confined_cache_root() {
+  printf '%s/%s/payload' "$cache_test_root" "$1"
+}
+
+confined_archive_prefix() {
+  local cache
+  cache="$(confined_cache_root "$1")"
+  printf '../../../%s' "${cache#/home/runner/}"
+}
+
+run_confined_restore() {
+  local cache="$1"
+  local archive="$2"
+  local output="$3"
+  shift 3
+  VELNOR_TAR_CONFINED_ROOT="$cache" bash "$shim" "$@" -xf "$archive" -P \
+    -C /home/runner/work/repo/repo >"$output" 2>&1
+}
+
+case_confined_scope() {
+  local case_root="$cache_test_root/scope"
+  local cache prefix outside err status=0
+  cache="$(confined_cache_root scope)"
+  prefix="$(confined_archive_prefix scope)"
+  outside="${prefix%/payload}/receipt"
+  rm -rf -- "$case_root"
+  mkdir -p /home/runner/work/repo/repo "$case_root"
+  write_ustar "$work/confined-scope.tar" \
+    f "$prefix/inside.txt" SAFE \
+    f "$outside" EVIL || return 1
+  err="$case_root/err"
+  run_confined_restore "$cache" "$work/confined-scope.tar" "$err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'outside the payload root' "$err" || return 1
+  [ ! -e "$cache/inside.txt" ] || return 1
+  [ ! -e "$case_root/receipt" ] || return 1
+}
+
+case_confined_directory_scope() {
+  local case_root="$cache_test_root/directory"
+  local cache prefix outside err status=0
+  cache="$(confined_cache_root directory)"
+  prefix="$(confined_archive_prefix directory)"
+  outside="${prefix%/payload}/sibling/"
+  rm -rf -- "$case_root"
+  mkdir -p /home/runner/work/repo/repo "$case_root"
+  write_ustar "$work/confined-directory.tar" \
+    f "$prefix/inside.txt" SAFE \
+    d "$outside" 0755 0 || return 1
+  err="$case_root/err"
+  run_confined_restore "$cache" "$work/confined-directory.tar" "$err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'outside the payload root' "$err" || return 1
+  [ ! -e "$cache/inside.txt" ] || return 1
+  [ ! -e "$case_root/sibling" ] || return 1
+}
+
+case_confined_archive_traversal() {
+  local case_root="$cache_test_root/traversal"
+  local cache prefix err status=0
+  cache="$(confined_cache_root traversal)"
+  prefix="$(confined_archive_prefix traversal)"
+  rm -rf -- "$case_root"
+  mkdir -p /home/runner/work/repo/repo "$case_root"
+  write_ustar "$work/confined-traversal.tar" \
+    f "$prefix/inside.txt" SAFE \
+    f ../../../../../../etc/velnor-cache-guard EVIL || return 1
+  err="$case_root/err"
+  run_confined_restore "$cache" "$work/confined-traversal.tar" "$err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'outside the payload root' "$err" || return 1
+  [ ! -e "$cache/inside.txt" ] || return 1
+  [ ! -e /etc/velnor-cache-guard ] || return 1
+}
+
+case_confined_pax_path() {
+  local case_root="$cache_test_root/pax-path"
+  local cache prefix outside err status=0
+  cache="$(confined_cache_root pax-path)"
+  prefix="$(confined_archive_prefix pax-path)"
+  outside="${prefix%/payload}/receipt"
+  rm -rf -- "$case_root"
+  mkdir -p /home/runner/work/repo/repo "$case_root"
+  write_ustar "$work/confined-pax-path.tar" \
+    f "$prefix/inside.txt" SAFE \
+    x PaxHeaders/path "$outside" \
+    f "$prefix/effective-path.txt" EVIL || return 1
+  err="$case_root/err"
+  run_confined_restore "$cache" "$work/confined-pax-path.tar" "$err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'outside the payload root' "$err" || return 1
+  [ ! -e "$cache/inside.txt" ] || return 1
+  [ ! -e "$case_root/receipt" ] || return 1
+}
+
+case_confined_pax_size() {
+  local case_root="$cache_test_root/pax-size"
+  local cache prefix err status=0
+  cache="$(confined_cache_root pax-size)"
+  prefix="$(confined_archive_prefix pax-size)"
+  rm -rf -- "$case_root"
+  mkdir -p /home/runner/work/repo/repo "$case_root"
+  write_ustar "$work/pax-size-outer.tar" \
+    f "$prefix/earlier.txt" SAFE \
+    p PaxHeaders/size size 0 \
+    f "$prefix/next.bin" EVIL || return 1
+
+  err="$case_root/confined.err"
+  run_confined_restore "$cache" "$work/pax-size-outer.tar" "$err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'A cache archive cannot use this PAX key: size.' "$err" || return 1
+  [ ! -e "$cache" ] || return 1
+  [ ! -e "$cache/earlier.txt" ] || return 1
+  [ ! -e "$cache/next.bin" ] || return 1
+}
+
+case_confined_gnu_sparse() {
+  local case_root="$cache_test_root/gnu-sparse"
+  local cache prefix err status=0
+  cache="$(confined_cache_root gnu-sparse)"
+  prefix="$(confined_archive_prefix gnu-sparse)"
+  rm -rf -- "$case_root"
+  mkdir -p /home/runner/work/repo/repo "$case_root"
+  write_ustar "$work/confined-gnu-sparse.tar" \
+    p PaxHeaders/sparse GNU.sparse.realsize 1 \
+    f "$prefix/inside.txt" SAFE || return 1
+  err="$case_root/err"
+  run_confined_restore "$cache" "$work/confined-gnu-sparse.tar" "$err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'A cache archive cannot use this PAX key: GNU.sparse.realsize.' "$err" || return 1
+  [ ! -e "$cache" ] || return 1
+}
+
+case_confined_gnu_path() {
+  local case_root="$cache_test_root/gnu-path"
+  local cache prefix outside err status=0
+  cache="$(confined_cache_root gnu-path)"
+  prefix="$(confined_archive_prefix gnu-path)"
+  outside="${prefix%/payload}/receipt"
+  rm -rf -- "$case_root"
+  mkdir -p /home/runner/work/repo/repo "$case_root"
+  write_ustar "$work/confined-gnu-path.tar" \
+    f "$prefix/inside.txt" SAFE \
+    L GNU.longname "$outside" \
+    f "$prefix/effective-path.txt" EVIL || return 1
+  err="$case_root/err"
+  run_confined_restore "$cache" "$work/confined-gnu-path.tar" "$err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'outside the payload root' "$err" || return 1
+  [ ! -e "$cache/inside.txt" ] || return 1
+  [ ! -e "$case_root/receipt" ] || return 1
+}
+
+case_confined_symlink_targets() {
+  local case_root="$cache_test_root/symlinks"
+  local cache prefix err status=0
+  cache="$(confined_cache_root symlinks)"
+  prefix="$(confined_archive_prefix symlinks)"
+  rm -rf -- "$case_root"
+  mkdir -p /home/runner/work/repo/repo "$case_root"
+  write_ustar "$work/confined-relative-link.tar" \
+    d "$prefix/" 0755 0 \
+    d "$prefix/bin/" 0755 0 \
+    d "$prefix/versions/" 0755 0 \
+    f "$prefix/versions/v1" TOOL \
+    s "$prefix/bin/current" ../versions/v1 || return 1
+  run_confined_restore "$cache" "$work/confined-relative-link.tar" "$case_root/ok.err" || return 1
+  [ "$(readlink "$cache/bin/current")" = ../versions/v1 ] || return 1
+  [ "$(cat "$cache/bin/current")" = TOOL ] || return 1
+  rm -rf -- "$case_root" "$cache"
+  mkdir -p "$case_root"
+  write_ustar "$work/confined-escaping-link.tar" \
+    f "$prefix/inside.txt" SAFE \
+    s "$prefix/link" ../../../../../../etc/passwd || return 1
+  err="$case_root/escape.err"
+  status=0
+  run_confined_restore "$cache" "$work/confined-escaping-link.tar" "$err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'leaves the payload root' "$err" || return 1
+  [ ! -e "$cache/inside.txt" ] || return 1
+  rm -rf -- "$cache"
+  write_ustar "$work/confined-absolute-link.tar" \
+    f "$prefix/inside.txt" SAFE \
+    s "$prefix/link" /etc/passwd || return 1
+  err="$case_root/absolute.err"
+  status=0
+  run_confined_restore "$cache" "$work/confined-absolute-link.tar" "$err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'absolute target' "$err" || return 1
+  [ ! -e "$cache/inside.txt" ] || return 1
+}
+
+case_confined_link_overrides() {
+  local case_root="$cache_test_root/link-overrides"
+  local cache prefix err status=0 escape='../../../../../../etc/passwd'
+  cache="$(confined_cache_root link-overrides)"
+  prefix="$(confined_archive_prefix link-overrides)"
+  rm -rf -- "$case_root"
+  mkdir -p /home/runner/work/repo/repo "$case_root"
+  write_ustar "$work/confined-pax-link.tar" \
+    f "$prefix/inside.txt" SAFE \
+    l PaxHeaders/link "$escape" \
+    s "$prefix/link" safe-target || return 1
+  err="$case_root/pax.err"
+  run_confined_restore "$cache" "$work/confined-pax-link.tar" "$err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'leaves the payload root' "$err" || return 1
+  [ ! -e "$cache/inside.txt" ] || return 1
+  write_ustar "$work/confined-gnu-link.tar" \
+    f "$prefix/inside.txt" SAFE \
+    K GNU.longlink "$escape" \
+    s "$prefix/link" safe-target || return 1
+  err="$case_root/gnu.err"
+  status=0
+  run_confined_restore "$cache" "$work/confined-gnu-link.tar" "$err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'leaves the payload root' "$err" || return 1
+  [ ! -e "$cache/inside.txt" ] || return 1
+}
+
+case_confined_existing_symlink_parent() {
+  local case_root="$cache_test_root/existing-link"
+  local cache prefix outside err status=0
+  cache="$(confined_cache_root existing-link)"
+  prefix="$(confined_archive_prefix existing-link)"
+  outside="$case_root/outside"
+  rm -rf -- "$case_root"
+  mkdir -p /home/runner/work/repo/repo "$cache/bin" "$outside"
+  rmdir "$cache/bin"
+  ln -s "$outside" "$cache/bin"
+  write_ustar "$work/confined-existing-link.tar" \
+    f "$prefix/bin/tool" EVIL || return 1
+  err="$case_root/err"
+  run_confined_restore "$cache" "$work/confined-existing-link.tar" "$err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'existing symlink' "$err" || return 1
+  [ ! -e "$outside/tool" ] || return 1
+}
+
+case_confined_hardlink_target() {
+  local case_root="$cache_test_root/hardlink-target"
+  local cache prefix outside err status=0
+  cache="$(confined_cache_root hardlink-target)"
+  prefix="$(confined_archive_prefix hardlink-target)"
+  outside="${prefix%/payload}/receipt"
+  rm -rf -- "$case_root"
+  mkdir -p /home/runner/work/repo/repo "$case_root"
+  write_ustar "$work/confined-hardlink-target.tar" \
+    f "$prefix/inside.txt" SAFE \
+    h "$prefix/alias.txt" "$outside" || return 1
+  err="$case_root/err"
+  run_confined_restore "$cache" "$work/confined-hardlink-target.tar" "$err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'hard link target is outside the payload root' "$err" || return 1
+  [ ! -e "$cache/inside.txt" ] || return 1
+  [ ! -e "$case_root/receipt" ] || return 1
+}
+
+case_confined_internal_hardlink() {
+  local case_root="$cache_test_root/internal-hardlink"
+  local cache prefix
+  cache="$(confined_cache_root internal-hardlink)"
+  prefix="$(confined_archive_prefix internal-hardlink)"
+  rm -rf -- "$case_root"
+  mkdir -p /home/runner/work/repo/repo "$case_root"
+  write_ustar "$work/confined-internal-hardlink.tar" \
+    f "$prefix/bin/tool" TOOL \
+    h "$prefix/bin/current" "$prefix/bin/tool" || return 1
+  run_confined_restore "$cache" "$work/confined-internal-hardlink.tar" "$case_root/ok.err" || return 1
+  [ "$(cat "$cache/bin/current")" = TOOL ] || return 1
+  [ "$cache/bin/tool" -ef "$cache/bin/current" ]
+}
+
+case_confined_source_replacement() {
+  local case_root="$cache_test_root/replacement"
+  local cache prefix source evil program count err status=0
+  cache="$(confined_cache_root replacement)"
+  prefix="$(confined_archive_prefix replacement)"
+  rm -rf -- "$case_root"
+  mkdir -p /home/runner/work/repo/repo "$case_root"
+  source="$case_root/source.tar"
+  evil="$case_root/replacement.tar"
+  program="$case_root/replace-archive.sh"
+  count="$case_root/count"
+  write_ustar "$source" f "$prefix/safe.txt" SAFE || return 1
+  write_ustar "$evil" f "$prefix/safe.txt" EVIL || return 1
+  cat >"$program" <<'BASH'
+#!/bin/bash
+set -euo pipefail
+source_archive="$1"
+replacement_archive="$2"
+counter_file="$3"
+count=0
+[ ! -f "$counter_file" ] || count="$(cat "$counter_file")"
+count=$((count + 1))
+printf '%s\n' "$count" >"$counter_file"
+if [ "$count" -eq 3 ]; then
+  cat -- "$replacement_archive" >"$source_archive"
+fi
+cat
+BASH
+  chmod 0755 "$program"
+  err="$case_root/err"
+  run_confined_restore "$cache" "$source" "$err" --use-compress-program \
+    "bash $program $source $evil $count" || status=$?
+  [ "$status" -eq 0 ] || return 1
+  [ "$(cat "$cache/safe.txt")" = SAFE ] || return 1
+  [ "$(cat "$count")" = 3 ] || return 1
+  cmp -s "$source" "$evil" || return 1
+}
+
+if [ "${VELNOR_ONLY_CONFINED:-0}" = 1 ]; then
+  run_case record-failure-removes-batch case_record_failure_removes_batch
+  run_case confined-member-scope case_confined_scope
+  run_case confined-directory-scope case_confined_directory_scope
+  run_case confined-archive-traversal case_confined_archive_traversal
+  run_case confined-pax-path case_confined_pax_path
+  run_case confined-pax-size-rejected-before-extract case_confined_pax_size
+  run_case confined-gnu-sparse-rejected case_confined_gnu_sparse
+  run_case confined-gnu-path case_confined_gnu_path
+  run_case confined-symlink-targets case_confined_symlink_targets
+  run_case confined-link-overrides case_confined_link_overrides
+  run_case confined-existing-symlink-parent case_confined_existing_symlink_parent
+  run_case confined-hardlink-target case_confined_hardlink_target
+  run_case confined-internal-hardlink case_confined_internal_hardlink
+  run_case confined-source-replacement case_confined_source_replacement
+  printf 'RESULT pass=%s fail=%s\n' "$pass" "$fail"
+  [ "$fail" -eq 0 ]
+  exit
+fi
 
 if [ "${VELNOR_ONLY_GROUPED:-0}" = 1 ]; then
   run_case grouped-external-restore case_grouped_external_restore
@@ -429,6 +845,19 @@ run_case corrupt-header case_corrupt_header
 run_case list-drains-tail case_list_drains_tail
 run_case partial-archive case_partial_archive
 run_case disk-full case_disk_full
+run_case confined-member-scope case_confined_scope
+run_case confined-directory-scope case_confined_directory_scope
+run_case confined-archive-traversal case_confined_archive_traversal
+run_case confined-pax-path case_confined_pax_path
+run_case confined-pax-size-rejected-before-extract case_confined_pax_size
+run_case confined-gnu-sparse-rejected case_confined_gnu_sparse
+run_case confined-gnu-path case_confined_gnu_path
+run_case confined-symlink-targets case_confined_symlink_targets
+run_case confined-link-overrides case_confined_link_overrides
+run_case confined-existing-symlink-parent case_confined_existing_symlink_parent
+run_case confined-hardlink-target case_confined_hardlink_target
+run_case confined-internal-hardlink case_confined_internal_hardlink
+run_case confined-source-replacement case_confined_source_replacement
 
 printf 'RESULT pass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

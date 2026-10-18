@@ -158,12 +158,13 @@ stream_archive() {
 
 list_members() {
   local out="$1"
-  local raw index type link name mode
+  local raw index type link name mode list_mode=--list
+  [ -z "$cache_root" ] || list_mode=--list-confined
   # qemu-user returns ENOSYS for GNU tar openat2/statx. The perl walker
   # reads headers only and prints the stored name. BusyBox tar -t rewrites
   # "../", so it is not the list source.
   raw="$(mktemp "${TMPDIR:-/tmp}/velnor-tar-list.XXXXXX")"
-  if ! stream_archive | perl "${_velnor_tar_here}/tar-member.pl" --list >"$raw"; then
+  if ! stream_archive | perl "${_velnor_tar_here}/tar-member.pl" "$list_mode" >"$raw"; then
     rm -f -- "$raw"
     return 1
   fi

@@ -8,6 +8,8 @@ stage_dir=""
 seq_dir=""
 plan_file=""
 map_file=""
+snapshot_dir=""
+cache_root=""
 prod_pid=""
 bb_pid=""
 dest_root=""
@@ -60,6 +62,10 @@ cleanup_extract() {
   if [ -n "${map_file}" ]; then
     rm -f -- "$map_file"
     map_file=""
+  fi
+  if [ -n "${snapshot_dir}" ]; then
+    rm -rf -- "$snapshot_dir"
+    snapshot_dir=""
   fi
   return "$exit_status"
 }
@@ -114,10 +120,221 @@ member_tool() {
   [ -f "$member_pl" ] || die "absolute names need $member_pl"
 }
 
+prepare_confined_root() {
+  local requested="${VELNOR_TAR_CONFINED_ROOT:-}"
+  local base="/home/runner/_work/_temp/velnor"
+  [ -n "$requested" ] || return 1
+  [[ "$requested" == /* ]] || die "The cache root must be an absolute path."
+  norm_path "$requested" cache_root
+  [ "$cache_root" = "$requested" ] || die "The cache root path must use its normalized form."
+  path_under "$base" "$cache_root" && [ "$cache_root" != "$base" ] || \
+    die "The cache root is outside the Velnor cache area."
+  check_no_symlink_components "$cache_root" "cache root"
+  if [ -e "$cache_root" ] && [ ! -d "$cache_root" ]; then
+    die "The cache root is not a directory."
+  fi
+  return 0
+}
+
+snapshot_confined_archive() {
+  local source="$archive"
+  snapshot_dir="$(mktemp -d "${TMPDIR:-/tmp}/velnor-tar-input.XXXXXX")" || \
+    die "The program cannot make a private archive directory."
+  archive="$snapshot_dir/archive"
+  if [ -z "$source" ] || [ "$source" = "-" ]; then
+    cat >"$archive" || die "The program cannot copy the cache archive."
+  else
+    cat -- "$source" >"$archive" || die "The program cannot copy the cache archive."
+  fi
+  chmod 0400 "$archive" || die "The program cannot protect the cache archive."
+}
+
+check_no_symlink_components() {
+  local path="$1"
+  local label="$2"
+  local prefix="/"
+  local rest="${path#/}"
+  local part
+  while [ -n "$rest" ]; do
+    part="${rest%%/*}"
+    if [ "$rest" = "$part" ]; then
+      rest=""
+    else
+      rest="${rest#*/}"
+    fi
+    prefix="${prefix%/}/$part"
+    [ ! -L "$prefix" ] || die "The $label path includes a symlink: $prefix."
+  done
+}
+
+cache_member_path() {
+  local name="$1"
+  local path_var="$2"
+  local relative_var="$3"
+  local resolved_path resolved_relative
+  member_intended "$name" resolved_path
+  path_under "$cache_root" "$resolved_path" || \
+    die "A cache member is outside the payload root: $name."
+  if [ "$resolved_path" = "$cache_root" ]; then
+    resolved_relative=""
+  else
+    resolved_relative="${resolved_path#"$cache_root"/}"
+  fi
+  printf -v "$path_var" '%s' "$resolved_path"
+  printf -v "$relative_var" '%s' "$resolved_relative"
+}
+
+cache_symlink_target() {
+  local member_path="$1"
+  local target="$2"
+  local path_var="$3"
+  local relative_var="$4"
+  local parent="${member_path%/*}"
+  local rest="$target"
+  local -a stack=()
+  local part joined="" resolved_path
+  [[ "$target" != /* ]] || die "A cache symlink has an absolute target: $member_path."
+  if [ "$parent" != "$member_path" ]; then
+    while [ -n "$parent" ]; do
+      part="${parent%%/*}"
+      if [ "$parent" = "$part" ]; then
+        parent=""
+      else
+        parent="${parent#*/}"
+      fi
+      [ -n "$part" ] && stack+=("$part")
+    done
+  fi
+  while [ -n "$rest" ]; do
+    part="${rest%%/*}"
+    if [ "$rest" = "$part" ]; then
+      rest=""
+    else
+      rest="${rest#*/}"
+    fi
+    case "$part" in
+      "" | .) ;;
+      ..)
+        [ "${#stack[@]}" -gt 0 ] || \
+          die "The target of this cache symlink leaves the payload root: $member_path."
+        stack=("${stack[@]:0:$((${#stack[@]} - 1))}")
+        ;;
+      *) stack+=("$part") ;;
+    esac
+  done
+  if [ "${#stack[@]}" -gt 0 ]; then
+    local IFS=/
+    joined="${stack[*]}"
+  fi
+  if [ -n "$joined" ]; then
+    resolved_path="$cache_root/$joined"
+  else
+    resolved_path="$cache_root"
+  fi
+  printf -v "$path_var" '%s' "$resolved_path"
+  printf -v "$relative_var" '%s' "$joined"
+}
+
+validate_confined_members() {
+  local -A archive_symlinks=()
+  local -A archive_non_directories=()
+  local -A prior_types=()
+  local i name type path relative target target_relative parent rest part prefix
+  local member_path
+  mem_confined_path=()
+  mem_confined_link=()
+  for i in "${!mem_name[@]}"; do
+    [ "${mem_wanted[$i]}" -eq 1 ] || continue
+    name="${mem_name[$i]}"
+    type="${mem_type[$i]}"
+    case "$type" in
+      0 | 1 | 2 | 5) ;;
+      *) die "This program does not support this cache archive file type: $name." ;;
+    esac
+    cache_member_path "$name" member_path relative
+    mem_confined_path[i]="$relative"
+    if [ "$member_path" = "$cache_root" ] && [ "$type" != 5 ]; then
+      die "The cache root entry must be a directory: $name."
+    fi
+    case "$type" in
+      1)
+        target="${mem_link[$i]}"
+        [ -n "$target" ] || die "This cache hard link has no target: $name."
+        if [[ "$target" == /* ]]; then
+          norm_path "$target" path
+        else
+          member_intended "$target" path
+        fi
+        path_under "$cache_root" "$path" || \
+          die "The cache hard link target is outside the payload root: $name."
+        [ "$path" != "$cache_root" ] || \
+          die "A hard link cannot target the payload root: $name."
+        target_relative="${path#"$cache_root"/}"
+        mem_confined_link[i]="$target_relative"
+        archive_non_directories["$member_path"]=1
+        ;;
+      2)
+        target="${mem_link[$i]}"
+        [ -n "$target" ] || die "This cache symlink has no target: $name."
+        cache_symlink_target "$relative" "$target" path target_relative
+        mem_confined_link[i]="$target_relative"
+        archive_symlinks["$member_path"]=1
+        ;;
+      0)
+        archive_non_directories["$member_path"]=1
+        ;;
+    esac
+  done
+  for i in "${!mem_name[@]}"; do
+    [ "${mem_wanted[$i]}" -eq 1 ] || continue
+    name="${mem_name[$i]}"
+    type="${mem_type[$i]}"
+    relative="${mem_confined_path[$i]}"
+    [ -n "$relative" ] || continue
+    parent="${relative%/*}"
+    [ "$parent" != "$relative" ] || parent=""
+    prefix="$cache_root"
+    rest="$parent"
+    while [ -n "$rest" ]; do
+      part="${rest%%/*}"
+      if [ "$rest" = "$part" ]; then
+        rest=""
+      else
+        rest="${rest#*/}"
+      fi
+      prefix="$prefix/$part"
+      [ -z "${archive_symlinks[$prefix]:-}" ] || \
+        die "A cache member uses an archive symlink as a parent: $name."
+      [ -z "${archive_non_directories[$prefix]:-}" ] || \
+        die "A cache member uses a file as a parent: $name."
+      [ ! -L "$prefix" ] || \
+        die "A cache member uses an existing symlink as a parent: $name."
+    done
+    member_path="$cache_root/$relative"
+    [ ! -L "$member_path" ] || \
+      die "A cache member cannot replace an existing symlink: $name."
+    if [ "$type" = 1 ]; then
+      target="$cache_root/${mem_confined_link[$i]}"
+      [ -n "${prior_types[$target]:-}" ] || \
+        die "A cache hard link target must be earlier in the archive: $name."
+      case "${prior_types[$target]}" in
+        0 | 1) ;;
+        *) die "A cache hard link target must be a regular file: $name." ;;
+      esac
+      check_no_symlink_components "$target" "cache hardlink target"
+    elif [ "$type" = 2 ]; then
+      target="$cache_root/${mem_confined_link[$i]}"
+      check_no_symlink_components "$target" "cache symlink target"
+    fi
+    prior_types["$member_path"]="$type"
+  done
+}
+
 read_perl_members() {
-  local list index type link name mode
+  local list index type link name mode list_mode=--list
+  [ -z "$cache_root" ] || list_mode=--list-confined
   list="$(mktemp "${TMPDIR:-/tmp}/velnor-tar-list.XXXXXX")"
-  if ! stream_archive | perl "$member_pl" --list >"$list"; then
+  if ! stream_archive | perl "$member_pl" "$list_mode" >"$list"; then
     rm -f -- "$list"
     die "member list failed"
   fi
@@ -193,7 +410,9 @@ load_members() {
     done
   fi
   mark_isolated
-  reject_symlink_traversal
+  if [ -z "${cache_root:-}" ]; then
+    reject_symlink_traversal
+  fi
 }
 
 mark_isolated() {
@@ -303,6 +522,35 @@ install_member() {
 }
 
 . "$_velnor_tar_here/tar-extract-plan.sh"
+
+extract_confined_archive() {
+  local i
+  local -a indices=()
+  if [ ! -d "$cache_root" ]; then
+    (umask 077 && mkdir -p -- "$cache_root") || die "The program cannot make the cache root."
+  fi
+  chmod 0700 "$cache_root" || die "The program cannot protect the cache root."
+  check_no_symlink_components "$cache_root" "cache root"
+  [ -d "$cache_root" ] || die "The cache root is not a directory."
+  dest_root="$cache_root"
+  plan_file="$(mktemp "${TMPDIR:-/tmp}/velnor-tar-plan.XXXXXX")"
+  map_file="$(mktemp "${TMPDIR:-/tmp}/velnor-tar-map.XXXXXX")"
+  for i in "${!mem_name[@]}"; do
+    [ "${mem_wanted[$i]}" -eq 1 ] || continue
+    [ -n "${mem_confined_path[$i]}" ] || continue
+    indices+=("$i")
+    printf '%s\t%s' "$i" "${mem_confined_path[$i]}" >>"$map_file"
+    if [ "${mem_type[$i]}" = 1 ]; then
+      printf '\t%s' "${mem_confined_link[$i]}" >>"$map_file"
+    fi
+    printf '\n' >>"$map_file"
+  done
+  [ "${#indices[@]}" -gt 0 ] || return 0
+  printf '%s\n' "${indices[*]}" >"$plan_file"
+  run_plan "$plan_file" "" "" "$map_file"
+  restore_directory_metadata || die "The program cannot restore directory metadata."
+  dir_metadata_restored=1
+}
 
 extract_fast() {
   if [ -n "$files_from" ]; then
@@ -500,6 +748,14 @@ extract_absolute() {
 
 extract_archive() {
   trap cleanup_extract EXIT
+  if prepare_confined_root; then
+    snapshot_confined_archive
+    member_tool
+    load_members
+    validate_confined_members
+    extract_confined_archive
+    return 0
+  fi
   if [ "$absolute" -ne 1 ]; then
     reject_untrusted
     member_tool

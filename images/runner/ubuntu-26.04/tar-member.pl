@@ -73,19 +73,37 @@ sub header_name {
 }
 
 sub parse_pax {
-    my ($body) = @_;
+    my ($body, $confined) = @_;
     my %kv;
     my $i = 0;
     my $n = length $body;
     while ($i < $n) {
         my $sp = index $body, " ", $i;
+        die "velnor-tar-member: The PAX record is invalid.\n" if $confined && $sp < 0;
         last if $sp < 0;
         my $digits = substr $body, $i, $sp - $i;
+        die "velnor-tar-member: The PAX record length is invalid.\n"
+            if $confined && $digits !~ /^\d+$/;
         last if $digits !~ /^\d+$/;
         my $len = int $digits;
+        die "velnor-tar-member: The PAX record length is invalid.\n"
+            if $confined && ($len <= 0 || $i + $len > $n);
         last if $len <= 0 || $i + $len > $n;
         my $rec = substr $body, $i, $len;
         $i += $len;
+        if ($confined) {
+            # Confined cache archives use each tar header's size field.
+            # Do not use GNU sparse fields in a confined cache archive.
+            die "velnor-tar-member: The PAX record is invalid.\n"
+                if $rec !~ /^(\d+) ([^=\0]+)=([^\0]*)\n\z/s || int($1) != $len;
+            my ($key, $value) = ($2, $3);
+            die "velnor-tar-member: A cache archive cannot use this PAX key: $key.\n"
+                if $key eq "size"
+                || $key =~ /\AGNU\.sparse(?:\.|\z)/
+                || $key =~ /\ASCHILY\.(?:path|linkpath|filetype)\z/;
+            $kv{$key} = $value;
+            next;
+        }
         next if $rec !~ /^(\d+) ([^=]+)=(.*)\n\z/s;
         $kv{$2} = $3;
     }
@@ -168,14 +186,14 @@ sub meta_type {
 }
 
 sub apply_meta {
-    my ($type, $body, $state) = @_;
+    my ($type, $body, $state, $confined) = @_;
     if ($type eq "g") {
-        my %kv = parse_pax($body);
+        my %kv = parse_pax($body, $confined);
         $state->{global}{$_} = $kv{$_} for keys %kv;
         return;
     }
     if ($type eq "x" || $type eq "X") {
-        my %kv = parse_pax($body);
+        my %kv = parse_pax($body, $confined);
         $state->{local}{$_} = $kv{$_} for keys %kv;
         return;
     }
@@ -189,13 +207,15 @@ sub apply_meta {
 }
 
 sub resolve_member {
-    my ($state, $ustar, $link) = @_;
+    my ($state, $ustar, $link, $confined) = @_;
     my $name = pick_name($ustar, $state->{gnu_name}, $state->{local}, $state->{global});
     my $target = $link;
     $target = $state->{gnu_link} if defined $state->{gnu_link};
     $target = $state->{global}{linkpath}
         if exists $state->{global}{linkpath} && !defined $state->{gnu_link};
     $target = $state->{local}{linkpath} if exists $state->{local}{linkpath};
+    die "velnor-tar-member: A cache member name or target contains a NUL byte.\n"
+        if $confined && ($name =~ /\0/ || $target =~ /\0/);
     die "velnor-tar-member: member name contains a newline\n" if $name =~ /\n/ || $target =~ /\n/;
     die "velnor-tar-member: member name contains a tab\n"     if $name =~ /\t/ || $target =~ /\t/;
     return ($name, $target);
@@ -228,7 +248,7 @@ sub open_fifo {
 # $cb returns ($out, $after). $out receives the body, or undef discards it.
 # $after runs after the body so a group fifo can be closed.
 sub walk {
-    my ($cb) = @_;
+    my ($cb, $confined) = @_;
     my $state = { global => {}, local => {} };
     my @globals;
     my $prelude    = "";
@@ -246,7 +266,7 @@ sub walk {
         if (meta_type($type)) {
             my ($body, $padded) = read_padded(\*STDIN, $size);
             my $raw = $hdr . $padded;
-            apply_meta($type, $body, $state);
+            apply_meta($type, $body, $state, $confined);
             if ($type eq "g" && !$in_prelude) {
                 push @globals, $raw;
             } else {
@@ -256,7 +276,7 @@ sub walk {
             next;
         }
         my ($name, $link) = resolve_member(
-            $state, header_name($hdr), cstr(substr $hdr, 157, 100),
+            $state, header_name($hdr), cstr(substr $hdr, 157, 100), $confined,
         );
         my ($out, $after) = $cb->(
             $index, $type, $name, $link, $hdr, $size, $prelude, \@globals, $state,
@@ -276,6 +296,7 @@ sub walk {
 }
 
 sub cmd_list {
+    my ($confined) = @_;
     walk(
         sub {
             my ($index, $type, $name, $link, $header) = @_;
@@ -284,7 +305,7 @@ sub cmd_list {
                 or die "velnor-tar-member: write: $!\n";
             return;
         }
-    );
+    , $confined);
 }
 
 sub read_groups {
@@ -320,7 +341,7 @@ sub wait_done {
 }
 
 sub cmd_emit {
-    my ($plan, $dir, $map_file) = @_;
+    my ($plan, $dir, $map_file, $confined) = @_;
     my @groups = read_groups($plan);
     my %rewrite = defined($map_file) ? read_rewrite_map($map_file) : ();
     my %seq_of;
@@ -359,9 +380,17 @@ sub cmd_emit {
                 print $out $prelude or die "velnor-tar-member: write: $!\n";
             }
             if (exists $rewrite{$index}) {
-                my ($pax, $rewritten_hdr) = rewrite_member(
-                    $rewrite{$index}, $index, $hdr, $state,
-                );
+                my ($rewrite_path, $rewrite_link) = @{ $rewrite{$index} };
+                my ($pax, $rewritten_hdr);
+                if (defined $rewrite_link) {
+                    ($pax, $rewritten_hdr) = rewrite_member_with_link(
+                        $rewrite_path, $rewrite_link, $index, $hdr, $state,
+                    );
+                } else {
+                    ($pax, $rewritten_hdr) = rewrite_member(
+                        $rewrite_path, $index, $hdr, $state,
+                    );
+                }
                 print $out $pax or die "velnor-tar-member: write: $!\n" if $pax ne "";
                 $hdr = $rewritten_hdr;
                 $rewritten{$index} = 1;
@@ -378,7 +407,7 @@ sub cmd_emit {
             }
             return ($out, $after);
         }
-    );
+    , $confined);
     die "velnor-tar-member: index out of range\n" if $finished != @groups;
     die "velnor-tar-member: rewrite index missing\n"
         if grep { !exists $rewritten{$_} } keys %rewrite;
@@ -388,13 +417,22 @@ sub cmd_emit {
 my $cmd = shift @ARGV // die "velnor-tar-member: missing command\n";
 if ($cmd eq "--list") {
     die "velnor-tar-member: unsupported extra args\n" if @ARGV;
-    cmd_list();
+    cmd_list(0);
+} elsif ($cmd eq "--list-confined") {
+    die "velnor-tar-member: unsupported extra args\n" if @ARGV;
+    cmd_list(1);
 } elsif ($cmd eq "--emit") {
     my $plan = shift @ARGV // die "velnor-tar-member: missing plan\n";
     my $dir  = shift @ARGV // die "velnor-tar-member: missing fifo dir\n";
     my $map_file = shift @ARGV;
     die "velnor-tar-member: unsupported extra args\n" if @ARGV;
-    cmd_emit($plan, $dir, $map_file);
+    cmd_emit($plan, $dir, $map_file, 0);
+} elsif ($cmd eq "--emit-confined") {
+    my $plan = shift @ARGV // die "velnor-tar-member: missing plan\n";
+    my $dir  = shift @ARGV // die "velnor-tar-member: missing fifo dir\n";
+    my $map_file = shift @ARGV;
+    die "velnor-tar-member: unsupported extra args\n" if @ARGV;
+    cmd_emit($plan, $dir, $map_file, 1);
 } else {
     die "velnor-tar-member: unsupported $cmd\n";
 }
