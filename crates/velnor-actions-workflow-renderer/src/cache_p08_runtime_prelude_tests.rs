@@ -32,6 +32,27 @@ fn payload_with_source(
     })
 }
 
+fn verified_acquire_step() -> Result<velnor_actions_contract::Step, RenderError> {
+    let helper = format!("{}0.1.0", crate::steps::STAGED_BINARY_PREFIX);
+    crate::steps::acquire_velnor_step(
+        vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            format!(
+                "curl -fsSL \"$VELNOR_ASSET_URL\" -o {helper} && echo \"$VELNOR_ASSET_SHA256  {helper}\" | sha256sum -c - && chmod +x {helper}"
+            ),
+        ],
+        &BTreeMap::from([
+            (
+                crate::steps::ASSET_URL_ENV.to_owned(),
+                "https://example.invalid/velnor".to_owned(),
+            ),
+            (crate::steps::ASSET_SHA_ENV.to_owned(), "a".repeat(64)),
+            (crate::steps::RELEASE_COMMIT_ENV.to_owned(), "b".repeat(40)),
+        ]),
+    )
+}
+
 #[test]
 fn scale_set_prelude_threads_the_validated_image_source_pin() -> Result<(), RenderError> {
     let source_sha = "a".repeat(40);
@@ -147,7 +168,7 @@ fn fixed_composite_forwards_identity_and_runs_seed_before_outer_restore() -> Res
         );
         assert!(
             file.bytes
-                .contains("mise-tools-v2-${{steps.v2.outputs.identity}}")
+                .contains("mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}")
         );
     }
     Ok(())
@@ -229,6 +250,89 @@ fn normal_tools_cache_requires_a_successful_non_qualification_plan() -> Result<(
 }
 
 #[test]
+fn tools_cache_conditions_follow_the_job_plan_dependency() -> Result<(), RenderError> {
+    for (needs, expected_identity, expected_restore) in [
+        (
+            Vec::new(),
+            cache_p08::TOOLS_CACHE_PLAN_RUN_CONDITION,
+            cache_p08::TOOLS_CACHE_PLAN_RESTORE_CONDITION,
+        ),
+        (
+            vec!["plan".to_owned()],
+            cache_p08::TOOLS_CACHE_NORMAL_RUN_CONDITION,
+            cache_p08::TOOLS_CACHE_RESTORE_CONDITION,
+        ),
+        (
+            vec!["suite-build-capture".to_owned()],
+            cache_p08::TOOLS_CACHE_PLAN_RUN_CONDITION,
+            cache_p08::TOOLS_CACHE_PLAN_RESTORE_CONDITION,
+        ),
+    ] {
+        let checkout = crate::steps::checkout_step(
+            "actions/checkout@0000000000000000000000000000000000000000",
+        )?;
+        let install = crate::steps::shell_step(
+            "Install actionlint",
+            vec![
+                "mise".to_owned(),
+                "--no-config".to_owned(),
+                "--no-env".to_owned(),
+                "--no-hooks".to_owned(),
+                "install".to_owned(),
+                "actionlint@1.7.12".to_owned(),
+            ],
+            BTreeMap::new(),
+        )?;
+        let mut job = Job {
+            display_name: "Suite check".to_owned(),
+            runs_on: "ubuntu-26.04".to_owned(),
+            check_runner: None,
+            timeout_minutes: JobTimeout::CRATE,
+            needs,
+            condition: None,
+            permissions: None,
+            environment: None,
+            steps: vec![checkout, verified_acquire_step()?, install],
+            cache_mode: None,
+        };
+        assert_eq!(
+            cache_p08::infer_job_tools(&job),
+            ["actionlint@1.7.12".to_owned()]
+        );
+
+        cache_p08::ensure_tools_cache_v2_with_source(
+            "suite-check",
+            &mut job,
+            &crate::setup::MiseSetup {
+                uses: "jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7".to_owned(),
+                version: "2026.10.13".to_owned(),
+                sha256: "a".repeat(64),
+            },
+            true,
+            "x86_64-unknown-linux-gnu",
+            None,
+            "actions/checkout@0000000000000000000000000000000000000000",
+        )?;
+
+        let identity = job
+            .steps
+            .iter()
+            .find(|step| step.role == Some(StepRole::ToolsCacheIdentity))
+            .ok_or_else(|| RenderError::InvalidWorkflow("tools_identity_missing".to_owned()))?;
+        let restore = job
+            .steps
+            .iter()
+            .find(|step| step.role == Some(StepRole::ToolsCacheRestore))
+            .ok_or_else(|| RenderError::InvalidWorkflow("tools_restore_missing".to_owned()))?;
+
+        assert_eq!(identity.condition.as_deref(), Some(expected_identity));
+        assert_eq!(restore.condition.as_deref(), Some(expected_restore));
+        cache_p08::elect_cache_writers(&mut BTreeMap::from([("suite-check".to_owned(), job)]))?;
+    }
+    Ok(())
+}
+
+#[test]
 fn generated_files_exist_only_for_real_v2_consumers() -> Result<(), RenderError> {
     let payload = payload("ubuntu-26.04")?;
     let prelude = payload.runtime_prelude_step()?;
@@ -264,3 +368,6 @@ fn generated_files_exist_only_for_real_v2_consumers() -> Result<(), RenderError>
     assert_eq!(no_cache_files, [] as [crate::RenderedFile; 0]);
     Ok(())
 }
+
+#[path = "cache_p08_helper_policy_tests.rs"]
+mod helper_policy_tests;

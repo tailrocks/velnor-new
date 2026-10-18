@@ -38,6 +38,14 @@ pub(crate) fn owned_preparation(
                 &prep.runner_label,
                 env!("CARGO_PKG_VERSION"),
             )?;
+            let staged = format!(
+                "{}{}",
+                velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX,
+                env!("CARGO_PKG_VERSION")
+            );
+            owned.workflow.context.verified_cache_helpers =
+                locked_cache_helpers(&owned.workflow.ir.jobs, &lock, &prep.runner_label, &staged)?;
+            owned.workflow.context.require_verified_cache_helper = true;
         } else {
             attach_preseed(
                 &mut owned.workflow,
@@ -48,6 +56,36 @@ pub(crate) fn owned_preparation(
         }
     }
     Ok(owned)
+}
+
+fn locked_cache_helpers(
+    jobs: &BTreeMap<String, Job>,
+    lock: &velnor_actions_contract::GeneratorLock,
+    default_label: &str,
+    staged: &str,
+) -> Result<BTreeMap<String, Vec<velnor_actions_contract::Step>>, OrchestratorError> {
+    let mut helpers = BTreeMap::from([(
+        default_label.to_owned(),
+        vec![crate::pins::lock_acquire_step(lock, default_label, staged)?],
+    )]);
+    for (id, job) in jobs {
+        let helper = if let Some(runner) = &job.check_runner {
+            Some(crate::pins::lock_acquire_for_runner(lock, runner, staged)?)
+        } else if velnor_actions_contract::is_crate_job_id(id) {
+            Some(crate::pins::lock_acquire_step(lock, default_label, staged)?)
+        } else if id.starts_with("suite-") {
+            let label = crate::rust_suites_emit::helper_release_label(&job.runs_on);
+            Some(crate::pins::lock_acquire_step(lock, &label, staged)?)
+        } else {
+            None
+        };
+        if let Some(helper) = helper {
+            helpers
+                .entry(job.runs_on.clone())
+                .or_insert_with(|| vec![helper]);
+        }
+    }
+    Ok(helpers)
 }
 
 /// Finalized jobs `generate` writes: attached IR plus merged support,

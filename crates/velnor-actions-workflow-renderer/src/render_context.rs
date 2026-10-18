@@ -65,6 +65,17 @@ pub struct RenderContext {
     pub scale_set_image_source_sha: Option<String>,
     /// Digest-verified staged binary under runner temp.
     pub staged_binary: String,
+    /// Digest-verified helper acquisition steps keyed by the job's configured runner label.
+    ///
+    /// These steps come from a release manifest, a repository lock, or a
+    /// checked pre-seed artifact. Cache actions are inserted only after one
+    /// of these helper steps is present.
+    pub verified_cache_helpers: BTreeMap<String, Vec<velnor_actions_contract::Step>>,
+    /// Whether every cache-using job must have a verified helper step.
+    /// Consumer workflows set this because the release manifest is required.
+    /// Source/bootstrap workflows may leave it false while no helper has
+    /// been proved, which keeps the job and setup but omits cache actions.
+    pub require_verified_cache_helper: bool,
     /// Internal request directory under runner temp.
     pub request_dir: String,
     /// Pinned `actions/checkout` ref for rendered support jobs.

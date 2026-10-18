@@ -3,8 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    DEFAULT_SUITE_WORKFLOW_SLUG, Job, PermissionLevel, RunsOn, RustSuiteConfig, StepKind,
-    WorkflowDispatchConfig,
+    DEFAULT_SUITE_WORKFLOW_SLUG, Job, PermissionLevel, RunsOn, RustSuiteConfig, Step, StepKind,
+    StepRole, WorkflowDispatchConfig,
 };
 
 use super::{RustSuitesRenderSpec, build_suite_jobs_for_entry};
@@ -23,6 +23,7 @@ pub(super) fn render_workflow_for_slug(
     entries: &[&RustSuiteConfig],
     spec: &RustSuitesRenderSpec,
     routing: &WorkflowRoutingPolicy,
+    helper_steps: &BTreeMap<String, Step>,
 ) -> Result<String, RenderError> {
     let mut jobs = BTreeMap::new();
     let mut allow_failure_jobs = BTreeSet::new();
@@ -36,7 +37,7 @@ pub(super) fn render_workflow_for_slug(
             jobs.insert(job_id, job);
         }
     }
-    finalize_suite_workflow_jobs(&mut jobs, spec)?;
+    finalize_suite_workflow_jobs(&mut jobs, spec, helper_steps)?;
     let suite_matrices = matrix::suites::suite_matrices_of(&jobs)?;
     let scrubbed = if suite_matrices.is_empty() {
         jobs
@@ -105,7 +106,9 @@ pub(super) fn render_workflow_for_slug(
 fn finalize_suite_workflow_jobs(
     jobs: &mut BTreeMap<String, Job>,
     spec: &RustSuitesRenderSpec,
+    helper_steps: &BTreeMap<String, Step>,
 ) -> Result<(), RenderError> {
+    let mut used_helpers = BTreeSet::new();
     let default_target = crate::runs_on::target_for_runner(&spec.default_runs_on);
     for (id, job) in jobs.iter_mut() {
         let target = crate::runs_on::target_for_runner(&job.runs_on).ok_or_else(|| {
@@ -116,19 +119,76 @@ fn finalize_suite_workflow_jobs(
         } else {
             spec.mise.for_target(target)?
         };
-        crate::cache_p08::ensure_tools_cache_v2(
-            id,
-            job,
-            &setup,
-            true,
-            target,
-            &spec.checkout_uses,
-        )?;
+        if let Some(helper) = helper_steps.get(&job.runs_on) {
+            insert_helper_after_checkout(id, job, helper)?;
+            used_helpers.insert(job.runs_on.clone());
+            crate::cache_p08::ensure_tools_cache_v2(
+                id,
+                job,
+                &setup,
+                true,
+                target,
+                &spec.checkout_uses,
+            )?;
+        } else {
+            insert_setup_after_checkout(id, job, &setup)?;
+        }
         crate::cache_p08::check_no_legacy_rust_cache(id, job)?;
         crate::cache_p08::check_mbx_before_fetch(id, job)?;
     }
+    if helper_steps
+        .keys()
+        .any(|label| !used_helpers.contains(label))
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "suite_helper_without_matching_runner".to_owned(),
+        ));
+    }
     crate::cache_p08::elect_cache_writers_with_policy(jobs, spec.pull_request_cache_policy)?;
+    crate::cache_tar_setup::insert_launcher_steps(jobs)?;
     crate::cache_steps::append_workspace_cleanups(jobs)
+}
+
+fn insert_helper_after_checkout(
+    job_id: &str,
+    job: &mut Job,
+    helper: &Step,
+) -> Result<(), RenderError> {
+    if helper.role != Some(StepRole::AcquireVelnor) {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "suite_helper_role_mismatch:{job_id}"
+        )));
+    }
+    let Some(checkout_at) = job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::Checkout))
+    else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "suite_checkout_missing:{job_id}"
+        )));
+    };
+    job.steps.insert(checkout_at + 1, helper.clone());
+    crate::closure::check_internal_staged(job_id, job, false)
+}
+
+fn insert_setup_after_checkout(
+    job_id: &str,
+    job: &mut Job,
+    setup: &crate::MiseSetup,
+) -> Result<(), RenderError> {
+    let step = crate::cache_p08::setup_step(setup)?;
+    let Some(checkout_at) = job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(StepRole::Checkout))
+    else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "suite_checkout_missing:{job_id}"
+        )));
+    };
+    job.steps.insert(checkout_at + 1, step);
+    Ok(())
 }
 
 fn workflow_display_name(slug: &str) -> String {

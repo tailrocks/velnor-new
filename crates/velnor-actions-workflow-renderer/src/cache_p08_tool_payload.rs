@@ -158,7 +158,7 @@ impl ToolsCachePayload {
                 "bad_tools_cache_runtime_identity".to_owned(),
             ));
         }
-        Ok(format!("mise-tools-v2-{fingerprint}"))
+        Ok(format!("mise-tools-v2-payload-v3-{fingerprint}"))
     }
 
     /// Read-only restore over the payload's key expression and exact paths.

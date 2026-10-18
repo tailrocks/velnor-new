@@ -192,6 +192,8 @@ fn emit_ctx() -> RenderContext {
         runs_on: EMIT_LABEL.to_owned(),
         scale_set_selector: None,
         scale_set_image_source_sha: None,
+        verified_cache_helpers: std::collections::BTreeMap::new(),
+        require_verified_cache_helper: false,
         staged_binary: format!("{STAGED_BINARY_PREFIX}{EMIT_VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: pin("actions/checkout"),

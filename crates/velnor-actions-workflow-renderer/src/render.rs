@@ -32,6 +32,10 @@ pub use action_pins_impl::action_pins;
 #[path = "validator_tools.rs"]
 mod validator_tools;
 
+#[cfg(test)]
+#[path = "render_cache_helper_tests.rs"]
+mod cache_helper_tests;
+
 /// Pinned Alint binary release tag for the step's `version:` input.
 pub const ALINT_BINARY_VERSION: &str = "v0.18.4";
 
@@ -141,6 +145,8 @@ pub fn finalize_jobs(
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }
+        insert_verified_cache_helper(id, job, ctx)?;
+        closure::check_internal_staged(id, job, ctx.preseed)?;
         let always = id == PLAN_JOB_ID || id == TASK_JOB_ID || job.check_runner.is_some();
         let target = job
             .check_runner
@@ -157,19 +163,21 @@ pub fn finalize_jobs(
             mise.clone()
         };
         if !bootstrap_plan {
-            cache_p08::ensure_tools_cache_v2_with_source(
+            cache_p08::ensure_tools_cache_v2_with_helper_policy(
                 id,
                 job,
                 &setup,
                 always,
-                target,
-                ctx.scale_set_image_source_sha.as_deref(),
-                &ctx.checkout_uses,
+                cache_p08::ToolsCacheRenderOptions {
+                    target,
+                    scale_set_image_source_sha: ctx.scale_set_image_source_sha.as_deref(),
+                    checkout_uses: &ctx.checkout_uses,
+                    require_verified_helper: ctx.require_verified_cache_helper,
+                },
             )?;
         }
         cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
-        closure::check_internal_staged(id, job, ctx.preseed)?;
     }
     // Both cache families are validated globally before either gets a save.
     cache_p08::elect_cache_writers_with_policy(&mut jobs, ctx.pull_request_cache_policy)?;
@@ -184,6 +192,71 @@ pub fn finalize_jobs(
     crate::cache_tar_setup::insert_launcher_steps(&mut jobs)?;
     validate_final_jobs(ir, &mut jobs)?;
     Ok(jobs)
+}
+
+/// Add runner-specific verified helper steps before cache use when the
+/// orchestrator supplied them for this exact runner label.
+fn insert_verified_cache_helper(
+    job_id: &str,
+    job: &mut Job,
+    ctx: &RenderContext,
+) -> Result<(), RenderError> {
+    let actual = job
+        .steps
+        .iter()
+        .filter(|step| is_verified_cache_helper_step(step))
+        .cloned()
+        .collect::<Vec<_>>();
+    let Some(helper_steps) = ctx.verified_cache_helpers.get(&job.runs_on) else {
+        if ctx.require_verified_cache_helper && !actual.is_empty() {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "cache_helper_unmapped:{job_id}"
+            )));
+        }
+        return Ok(());
+    };
+    if helper_steps.is_empty()
+        || helper_steps
+            .iter()
+            .any(|step| !is_verified_cache_helper_step(step))
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "cache_helper_map_malformed:{job_id}"
+        )));
+    }
+    if !actual.is_empty() {
+        if actual.as_slice() != helper_steps.as_slice() {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "cache_helper_map_mismatch:{job_id}"
+            )));
+        }
+        return Ok(());
+    }
+    let Some(checkout_at) = job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(velnor_actions_contract::StepRole::Checkout))
+    else {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "cache_helper_checkout_missing:{job_id}"
+        )));
+    };
+    for (offset, step) in helper_steps.iter().cloned().enumerate() {
+        job.steps.insert(checkout_at + 1 + offset, step);
+    }
+    Ok(())
+}
+
+fn is_verified_cache_helper_step(step: &velnor_actions_contract::Step) -> bool {
+    matches!(
+        step.role,
+        Some(
+            velnor_actions_contract::StepRole::AcquireVelnor
+                | velnor_actions_contract::StepRole::PreseedDownload
+                | velnor_actions_contract::StepRole::PreseedVerifyManifest
+                | velnor_actions_contract::StepRole::PreseedStage
+        )
+    )
 }
 
 /// Validate every finalized job after policy merging and internal expansion.

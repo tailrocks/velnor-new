@@ -74,6 +74,10 @@ pub(crate) fn attach_lock_acquire(
         } else if is_crate_job_id(id) {
             let step = lock_acquire_step(lock, label, &staged)?;
             job.steps.insert(1, step);
+        } else if id.starts_with("suite-") {
+            let label = crate::rust_suites_emit::helper_release_label(&job.runs_on);
+            let step = lock_acquire_step(lock, &label, &staged)?;
+            job.steps.insert(1.min(job.steps.len()), step);
         }
     }
     Ok(())
@@ -108,15 +112,7 @@ pub(crate) fn attach_preseed(
         .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("unsupported_target_for_runner:{label}"),
         })?;
-    for (id, job) in &workflow.ir.jobs {
-        if let Some(runner) = &job.check_runner
-            && runner.platform.target() != target
-        {
-            return Err(OrchestratorError::Contract {
-                problem: format!("mixed_platform_preseed_requires_release_lock:{id}"),
-            });
-        }
-    }
+    validate_preseed_consumer_targets(&workflow.ir, target)?;
     let build = candidate_build_argv(catalog)?;
     let probe = mbx_probe_argv(catalog)?;
     let staged = format!("{STAGED_BINARY_PREFIX}{version}");
@@ -154,13 +150,55 @@ pub(crate) fn attach_preseed(
             .splice(0..0, preseed_consumers(target, &staged)?);
     }
     for (id, job) in &mut workflow.ir.jobs {
-        if is_crate_job_id(id) || job.check_runner.is_some() {
+        if is_crate_job_id(id) || job.check_runner.is_some() || id.starts_with("suite-") {
             let at = 1.min(job.steps.len());
             job.steps
                 .splice(at..at, preseed_consumers(target, &staged)?);
         }
     }
+    let helper_steps = preseed_consumers(target, &staged)?;
+    workflow
+        .context
+        .verified_cache_helpers
+        .insert(label.to_owned(), helper_steps.clone());
+    for (id, job) in &workflow.ir.jobs {
+        if is_crate_job_id(id) || job.check_runner.is_some() || id.starts_with("suite-") {
+            workflow
+                .context
+                .verified_cache_helpers
+                .entry(job.runs_on.clone())
+                .or_insert_with(|| helper_steps.clone());
+        }
+    }
+    workflow.context.require_verified_cache_helper = true;
     workflow.context.preseed = true;
+    Ok(())
+}
+
+fn validate_preseed_consumer_targets(
+    ir: &WorkflowIr,
+    target: &str,
+) -> Result<(), OrchestratorError> {
+    for (id, job) in &ir.jobs {
+        let preseed_consumer = is_crate_job_id(id)
+            || job.check_runner.is_some()
+            || id.starts_with("suite-")
+            || id == FINAL_JOB_ID
+            || id == PUBLISH_JOB_ID;
+        let consumer_target = if let Some(runner) = &job.check_runner {
+            Some(runner.platform.target())
+        } else if preseed_consumer {
+            let release_label = crate::rust_suites_emit::helper_release_label(&job.runs_on);
+            ReleaseTarget::for_runner_label(&release_label).map(ReleaseTarget::triple)
+        } else {
+            None
+        };
+        if preseed_consumer && consumer_target != Some(target) {
+            return Err(OrchestratorError::Contract {
+                problem: format!("mixed_platform_preseed_requires_release_lock:{id}"),
+            });
+        }
+    }
     Ok(())
 }
 

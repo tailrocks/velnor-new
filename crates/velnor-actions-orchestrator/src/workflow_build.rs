@@ -226,7 +226,10 @@ fn build_workflow_jobs(
         input.discovery,
         &prepared.catalog,
     )?;
-    for (id, job) in suite_jobs {
+    for (id, mut job) in suite_jobs {
+        if !job.needs.iter().any(|dependency| dependency == PLAN_JOB_ID) {
+            job.needs.push(PLAN_JOB_ID.to_owned());
+        }
         jobs.insert(id, job);
     }
     required_ids.extend(suite_required_ids);

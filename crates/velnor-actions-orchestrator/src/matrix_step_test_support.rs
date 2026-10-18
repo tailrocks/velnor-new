@@ -128,6 +128,8 @@ pub(super) fn renderer_context(
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
         scale_set_image_source_sha: None,
+        verified_cache_helpers: std::collections::BTreeMap::new(),
+        require_verified_cache_helper: false,
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses,
         validator_commands: Vec::new(),

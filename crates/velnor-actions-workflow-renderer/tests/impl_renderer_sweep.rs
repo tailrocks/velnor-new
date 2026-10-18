@@ -43,6 +43,7 @@ fn every_emitted_step_has_name() -> Result<(), RenderError> {
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
             scrubbed_shell_step(
                 "Run actionlint",
                 mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
@@ -77,7 +78,22 @@ fn every_emitted_step_has_name() -> Result<(), RenderError> {
         }
     }
     assert!(text.matches("- name:").count() >= 20, "sweep:\n{text}");
+    let candidate_steps = step_names(&text, "candidate");
+    assert_candidate_cache_is_cold(&candidate_steps);
     Ok(())
+}
+
+fn assert_candidate_cache_is_cold(candidate_steps: &[String]) {
+    assert!(
+        !candidate_steps.iter().any(|name| name == "V2 identity"),
+        "candidate has no separately staged helper for cache access: {candidate_steps:?}"
+    );
+    assert!(
+        !candidate_steps
+            .iter()
+            .any(|name| name == "Restore Mise tools"),
+        "candidate must not restore tool payload before its trusted helper exists"
+    );
 }
 
 #[test]

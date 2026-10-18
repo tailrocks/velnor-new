@@ -205,6 +205,7 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
         Vec::new(),
         vec![
             checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
             scrubbed_shell_step(
                 "Run actionlint",
                 mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
@@ -223,14 +224,24 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
     assert_eq!(names.iter().filter(|s| *s == TOOLS_RESTORE_NAME).count(), 1);
     assert_eq!(names.iter().filter(|s| *s == TOOLS_SAVE_NAME).count(), 1);
     assert_eq!(
-        names.iter().position(|s| s == "Setup Mise"),
-        Some(3),
-        "checkout, combined runtime identity and seed, restore, then setup: {names:?}"
+        names.iter().position(|s| s == "Acquire Velnor"),
+        Some(1),
+        "verified helper precedes cache access: {names:?}"
+    );
+    assert_eq!(
+        names.iter().position(|s| s == "Install cache tar adapters"),
+        Some(2),
+        "trusted tar adapters follow helper verification: {names:?}"
     );
     assert_eq!(
         names.iter().position(|s| s == TOOLS_RESTORE_NAME),
-        Some(2),
-        "archive restore follows seed admission: {names:?}"
+        Some(4),
+        "archive restore follows runtime identity: {names:?}"
+    );
+    assert_eq!(
+        names.iter().position(|s| s == "Setup Mise"),
+        Some(5),
+        "archive restore precedes Mise setup: {names:?}"
     );
     assert!(!text.contains("name: Restore Velnor tool seed"), "{text}");
     for need in [

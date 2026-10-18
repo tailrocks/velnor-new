@@ -9,7 +9,7 @@ mod jobs;
 
 use velnor_actions_contract::{
     DEFAULT_SUITE_WORKFLOW_SLUG, Job, JobTimeout, PullRequestCachePolicy, RunsOn,
-    RustSuiteBuildMode, RustSuiteConfig, WorkflowDispatchConfig, validate_rust_suites,
+    RustSuiteBuildMode, RustSuiteConfig, Step, WorkflowDispatchConfig, validate_rust_suites,
     validate_suites_with_dispatch,
 };
 
@@ -83,6 +83,18 @@ pub fn build_ci_suite_jobs(
 ///
 /// Returns [`RenderError`] when `spec` or any suite configuration is invalid.
 pub fn render_suites_workflow(spec: &RustSuitesRenderSpec) -> Result<Option<String>, RenderError> {
+    render_suites_workflow_with_helpers(spec, &BTreeMap::new())
+}
+
+/// Render the default suite document with verified helper acquisition steps.
+///
+/// Map keys are exact runner labels. A job without a matching helper keeps
+/// its pinned Mise setup and omits cache actions that require the helper.
+/// # Errors
+pub fn render_suites_workflow_with_helpers(
+    spec: &RustSuitesRenderSpec,
+    helper_steps: &BTreeMap<String, Step>,
+) -> Result<Option<String>, RenderError> {
     validate_spec(spec)?;
     let entries: Vec<&RustSuiteConfig> = spec
         .suites
@@ -100,6 +112,7 @@ pub fn render_suites_workflow(spec: &RustSuitesRenderSpec) -> Result<Option<Stri
         &entries,
         spec,
         &WorkflowRoutingPolicy::Preserve,
+        helper_steps,
     )
     .map(Some)
 }
@@ -125,6 +138,19 @@ pub fn render_suites_workflows_with_routing(
     spec: &RustSuitesRenderSpec,
     routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, RenderError> {
+    render_suites_workflows_with_routing_and_helpers(spec, routing, &BTreeMap::new())
+}
+
+/// Render standalone suite workflows with verified helper steps by runner label.
+///
+/// Jobs without a helper retain their pinned Mise setup but omit cache actions
+/// that require the staged helper.
+/// # Errors
+pub fn render_suites_workflows_with_routing_and_helpers(
+    spec: &RustSuitesRenderSpec,
+    routing: &WorkflowRoutingPolicy,
+    helper_steps: &BTreeMap<String, Step>,
+) -> Result<Vec<RenderedFile>, RenderError> {
     validate_spec(spec)?;
     let mut grouped: BTreeMap<&str, Vec<&RustSuiteConfig>> = BTreeMap::new();
     for suite in &spec.suites {
@@ -137,7 +163,7 @@ pub fn render_suites_workflows_with_routing(
     }
     let mut files = Vec::with_capacity(grouped.len());
     for (slug, entries) in grouped {
-        let yaml = document::render_workflow_for_slug(slug, &entries, spec, routing)?;
+        let yaml = document::render_workflow_for_slug(slug, &entries, spec, routing, helper_steps)?;
         files.push(RenderedFile {
             path: format!(".github/workflows/{slug}.yml"),
             bytes: yaml,

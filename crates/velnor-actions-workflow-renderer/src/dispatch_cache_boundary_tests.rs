@@ -199,6 +199,8 @@ fn dispatch_render_context(staged: String) -> RenderContext {
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
         scale_set_image_source_sha: None,
+        verified_cache_helpers: std::collections::BTreeMap::new(),
+        require_verified_cache_helper: false,
         staged_binary: staged,
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: format!("actions/checkout@{}", "c".repeat(40)),
@@ -273,6 +275,22 @@ fn assert_seed_and_mise_steps(plan: &Job) -> Result<(), crate::RenderError> {
         .iter()
         .find(|step| step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity))
         .expect("V2 tools-cache identity prelude");
+    let acquired = plan
+        .steps
+        .iter()
+        .position(|step| step.role == Some(velnor_actions_contract::StepRole::AcquireVelnor))
+        .expect("verified helper acquisition");
+    let prelude_at = plan
+        .steps
+        .iter()
+        .position(|step| step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity))
+        .expect("identity prelude index");
+    let restore_at = plan
+        .steps
+        .iter()
+        .position(|step| step.role == Some(velnor_actions_contract::StepRole::ToolsCacheRestore))
+        .expect("tools-cache restore index");
+    assert!(acquired < prelude_at && prelude_at < restore_at);
     assert_eq!(
         prelude.condition.as_deref(),
         Some(crate::cache_p08::TOOLS_CACHE_PLAN_RUN_CONDITION)

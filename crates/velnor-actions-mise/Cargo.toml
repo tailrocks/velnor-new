@@ -21,4 +21,5 @@ name = "velnor_mise"
 path = "tests/velnor_mise.rs"
 
 [dev-dependencies]
+syn = { version = "=3.0.9", default-features = false, features = ["full", "parsing", "visit"] }
 velnor-actions-tofu = { version = "=0.1.16", path = "../velnor-actions-tofu" }

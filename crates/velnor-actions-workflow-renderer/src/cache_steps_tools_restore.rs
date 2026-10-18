@@ -50,9 +50,9 @@ expected_key="${TOOLS_EXPECTED_KEY-}";
 matched_key="${TOOLS_MATCHED_KEY-}";
 seed_admitted="${TOOLS_SEED_ADMITTED-}";
 keep=false;
-if [ "$cache_hit" = true ] && [[ "$expected_key" =~ ^mise-tools-v2-[0-9a-f]{64}$ ]] && [ "$matched_key" = "$expected_key" ]; then
+if [ "$cache_hit" = true ] && [[ "$expected_key" =~ ^mise-tools-v2-payload-v3-[0-9a-f]{64}$ ]] && [ "$matched_key" = "$expected_key" ]; then
 keep=true;
-elif [ -z "$cache_hit" ] && [[ "$expected_key" =~ ^mise-tools-v2-[0-9a-f]{64}$ ]] && [ -z "$matched_key" ] && [ "$seed_admitted" = true ]; then
+elif [ -z "$cache_hit" ] && [[ "$expected_key" =~ ^mise-tools-v2-payload-v3-[0-9a-f]{64}$ ]] && [ -z "$matched_key" ] && [ "$seed_admitted" = true ]; then
 keep=true;
 fi;
 if [ "$keep" = true ]; then

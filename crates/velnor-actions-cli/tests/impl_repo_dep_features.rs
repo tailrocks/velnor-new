@@ -108,6 +108,9 @@ fn allowed_feature(dir: &str, key: &str, feature: &str) -> bool {
         || (dir == "crates/velnor-actions-cli"
             && key == "syn"
             && matches!(feature, "full" | "visit"))
+        || (dir == "crates/velnor-actions-mise"
+            && key == "syn"
+            && matches!(feature, "full" | "parsing" | "visit"))
         // F2A scanner tests (dev-deps): syn parse + span lines.
         || (dir == "crates/velnor-actions-orchestrator"
             && ((key == "syn" && matches!(feature, "full" | "parsing" | "printing" | "visit"))

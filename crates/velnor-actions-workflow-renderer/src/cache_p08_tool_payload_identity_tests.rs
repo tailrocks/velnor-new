@@ -224,6 +224,6 @@ fn payload_key_is_namespaced_to_static_payload_and_runtime_identity() {
     assert!(
         base.key_for_runtime_identity(&runtime)
             .expect("key")
-            .starts_with("mise-tools-v2-")
+            .starts_with("mise-tools-v2-payload-v3-")
     );
 }
