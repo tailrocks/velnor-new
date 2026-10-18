@@ -133,10 +133,9 @@ impl HeaderLedger {
             return Err(HeaderLedgerError::UnsettledPoll);
         }
         Self::ensure_delete_not_started(record)?;
-        if record.zero_header_settled {
-            return Err(HeaderLedgerError::ZeroHeaderSettled);
-        }
-        Self::begin_attempt(record, allocation, 0, PollPurpose::ZeroHeader)
+        let attempt = Self::begin_attempt(record, allocation, 0, PollPurpose::ZeroHeader)?;
+        record.zero_header_settled = false;
+        Ok(attempt)
     }
 
     /// Record that one owned poll request returned. No outcome releases charge.

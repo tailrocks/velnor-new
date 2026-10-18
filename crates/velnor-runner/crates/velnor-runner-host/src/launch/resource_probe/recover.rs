@@ -29,6 +29,9 @@ pub(super) async fn active(
     if row.engine_id != engine_id || row.docker_root_digest != root.digest() {
         return Err(HostError::Identity);
     }
+    deadline
+        .within(journal.begin_probe_recovery(&row.operation_id))
+        .await??;
     let projection = persisted_projection(&row, root)?;
     if let Err(error) = cleanup(docker, journal, &row, &projection, deadline).await {
         if matches!(
@@ -89,10 +92,7 @@ async fn bind_created_by_name(
         return quarantine(journal, row, deadline).await;
     }
     let Some(response) = inspect::by_reference(docker, &projection.name, deadline).await? else {
-        deadline
-            .within(journal.confirm_probe_absent(&row.operation_id, row.phase))
-            .await??;
-        return Ok(());
+        return Err(HostError::Ownership);
     };
     let id = response.id.as_deref().ok_or(HostError::Ownership)?;
     if !inspect::matches(projection, &response, id) || !inspect::created(&response) {
@@ -116,9 +116,7 @@ async fn cleanup_recorded(
 ) -> Result<(), HostError> {
     let id = row.container_id.as_deref().ok_or(HostError::Ownership)?;
     let Some(response) = inspect_pair(docker, projection, id, deadline).await? else {
-        deadline
-            .within(journal.confirm_probe_absent(&row.operation_id, row.phase))
-            .await??;
+        retire_exact_absence(docker, journal, row, projection, id, row.phase, deadline).await?;
         return Ok(());
     };
     let phase = if inspect::running(&response) {
@@ -158,9 +156,16 @@ async fn stop_owned(
     let _stopped = ops::stop(docker, id, deadline).await;
     verify_bound_engine(docker, row, projection, deadline).await?;
     let Some(response) = inspect_pair(docker, projection, id, deadline).await? else {
-        deadline
-            .within(journal.confirm_probe_absent(&row.operation_id, ProbePhase::StopRequested))
-            .await??;
+        retire_exact_absence(
+            docker,
+            journal,
+            row,
+            projection,
+            id,
+            ProbePhase::StopRequested,
+            deadline,
+        )
+        .await?;
         return Ok(None);
     };
     if inspect::running(&response) || !inspect::created_or_exited(&response) {
@@ -206,10 +211,50 @@ async fn remove_owned(
     {
         return Err(HostError::Cleanup);
     }
-    verify_bound_engine(docker, row, projection, deadline).await?;
-    deadline
-        .within(journal.confirm_probe_absent(&row.operation_id, removal_phase))
+    retire_exact_absence(
+        docker,
+        journal,
+        row,
+        projection,
+        id,
+        removal_phase,
+        deadline,
+    )
+    .await
+}
+
+async fn retire_exact_absence(
+    docker: &Docker,
+    journal: &Journal,
+    row: &ProbeRow,
+    projection: &ProbeProjection,
+    id: &str,
+    phase: ProbePhase,
+    deadline: &Deadline,
+) -> Result<(), HostError> {
+    if phase != ProbePhase::RemoveRequested {
+        deadline
+            .within(journal.transition_probe(&row.operation_id, phase, ProbePhase::RemoveRequested))
+            .await??;
+    }
+    let current = deadline
+        .within(journal.active_probe())
+        .await??
+        .filter(|active| active.operation_id == row.operation_id)
+        .ok_or(HostError::Journal)?;
+    if current.phase != ProbePhase::RemoveRequested {
+        return Err(HostError::Journal);
+    }
+    verify_bound_engine(docker, &current, projection, deadline).await?;
+    if inspect_pair(docker, projection, id, deadline)
         .await?
+        .is_some()
+    {
+        return Err(HostError::Cleanup);
+    }
+    verify_bound_engine(docker, &current, projection, deadline).await?;
+    let proof = super::VerifiedProbeCleanup::after_verified_removal(&current, projection, id)?;
+    deadline.within(journal.retire_probe(proof)).await?
 }
 
 async fn verify_bound_engine(

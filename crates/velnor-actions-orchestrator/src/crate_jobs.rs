@@ -154,7 +154,7 @@ pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, 
             .get(&key)
             .ok_or_else(|| internal("crate_job_id_missing"))?
             .clone();
-        let (job, driver, use_opentofu) = build_job_for_members(input, &job_id, tasks)?;
+        let (job, driver, use_opentofu) = build_job_for_members(input, &job_id, tasks, false)?;
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
             tofu_ids.push(job_id.clone());
@@ -188,7 +188,7 @@ pub(crate) fn build_qualification_crate_jobs(
         let job_id =
             qualification_job_id_for_member(task).map_err(crate::internal::internal_contract)?;
         let (job, driver, use_opentofu) =
-            build_job_for_members(input, &job_id, std::slice::from_ref(&task))?;
+            build_job_for_members(input, &job_id, std::slice::from_ref(&task), true)?;
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
             tofu_ids.push(job_id.clone());
@@ -208,6 +208,7 @@ fn build_job_for_members(
     input: CrateJobInputs<'_>,
     job_id: &str,
     tasks: &[&ProposedTask],
+    qualification: bool,
 ) -> Result<(Job, RenderDriver, bool), OrchestratorError> {
     let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
     let manifest = first.identity.unit_path.clone();
@@ -250,6 +251,7 @@ fn build_job_for_members(
         input.max_parallel_jobs,
         input.helper_version,
         input.cache_policy,
+        qualification,
     )?;
     Ok((job, driver, use_opentofu))
 }
@@ -361,6 +363,7 @@ fn render_job(
     max_parallel_jobs: u32,
     helper_version: &str,
     cache_policy: velnor_actions_contract::PullRequestCachePolicy,
+    qualification: bool,
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire.cloned());
@@ -415,20 +418,16 @@ fn render_job(
         TaskCacheMode::Off,
         "",
     )?);
-    for (index, obligation) in model.obligations.iter().enumerate() {
-        let downstream: Vec<String> = model.obligations[index + 1..]
-            .iter()
-            .map(|later| later.task_id.clone())
-            .collect();
-        // The first obligation declares the root job's concurrency cap;
-        // the renderer turns the marker into `strategy.max-parallel`.
-        let cap = (index == 0 && use_opentofu).then_some(max_parallel_jobs);
-        steps.push(crate::matrix_step::obligation_step(
-            obligation,
+    steps.extend(render_obligation_steps(
+        model,
+        catalog,
+        use_opentofu,
+        max_parallel_jobs,
+        helper_version,
+    )?);
+    if qualification {
+        steps.push(crate::qualification_source_evidence::source_evidence_step(
             catalog,
-            &downstream,
-            cap,
-            helper_version,
         )?);
     }
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
@@ -444,6 +443,36 @@ fn render_job(
         steps,
         cache_mode: None,
     })
+}
+
+fn render_obligation_steps(
+    model: &CrateJob,
+    catalog: &ToolCatalog,
+    use_opentofu: bool,
+    max_parallel_jobs: u32,
+    helper_version: &str,
+) -> Result<Vec<Step>, OrchestratorError> {
+    model
+        .obligations
+        .iter()
+        .enumerate()
+        .map(|(index, obligation)| {
+            let downstream = model.obligations[index + 1..]
+                .iter()
+                .map(|later| later.task_id.clone())
+                .collect::<Vec<_>>();
+            // The first obligation declares the root job's concurrency cap;
+            // the renderer turns the marker into `strategy.max-parallel`.
+            let cap = (index == 0 && use_opentofu).then_some(max_parallel_jobs);
+            crate::matrix_step::obligation_step(
+                obligation,
+                catalog,
+                &downstream,
+                cap,
+                helper_version,
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]

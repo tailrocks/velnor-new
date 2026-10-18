@@ -92,6 +92,11 @@ fn qualification_crate_jobs_keep_one_matrix_entry_each() {
 
     assert_eq!(normal.jobs.len(), 1);
     assert_eq!(normal.jobs[0].0, "rust-demo");
+    assert!(
+        normal.jobs[0].1.steps.iter().all(
+            |step| step.name != crate::qualification_source_evidence::SOURCE_EVIDENCE_STEP_NAME
+        )
+    );
     assert_eq!(qualification.jobs.len(), 2);
     let mut expected_ids: Vec<String> = proposals
         .iter()
@@ -107,19 +112,39 @@ fn qualification_crate_jobs_keep_one_matrix_entry_each() {
         expected_ids
     );
     for (job_id, job) in &qualification.jobs {
-        let model_step_count = job
-            .steps
-            .iter()
-            .filter(|step| {
-                matches!(
-                    &step.kind,
-                    velnor_actions_contract::StepKind::TaskExecution { .. }
-                )
-            })
-            .count();
-        assert_eq!(model_step_count, 1, "{job_id}");
-        assert!(job.needs.contains(&PLAN_JOB_ID.to_owned()));
+        assert_qualification_job_has_source_evidence(job_id, job);
     }
+}
+
+fn assert_qualification_job_has_source_evidence(job_id: &str, job: &velnor_actions_contract::Job) {
+    let model_step_count = job
+        .steps
+        .iter()
+        .filter(|step| {
+            matches!(
+                &step.kind,
+                velnor_actions_contract::StepKind::TaskExecution { .. }
+            )
+        })
+        .count();
+    assert_eq!(model_step_count, 1, "{job_id}");
+    assert!(job.needs.contains(&PLAN_JOB_ID.to_owned()));
+    let steps = names(job);
+    let evidence = steps
+        .iter()
+        .position(|name| *name == crate::qualification_source_evidence::SOURCE_EVIDENCE_STEP_NAME)
+        .expect("qualification source evidence step");
+    assert_eq!(
+        evidence + 2,
+        steps.len(),
+        "evidence precedes report upload: {steps:?}"
+    );
+    assert!(matches!(
+        &job.steps[evidence].kind,
+        velnor_actions_contract::StepKind::Shell { env, .. }
+            if env.get(velnor_actions_workflow_renderer::steps::INTERNAL_OP_ENV)
+                .is_some_and(|op| op == crate::qualification_source_evidence::SOURCE_EVIDENCE_OP)
+    ));
 }
 
 #[test]

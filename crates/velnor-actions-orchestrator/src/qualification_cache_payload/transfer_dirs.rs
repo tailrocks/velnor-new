@@ -103,7 +103,7 @@ pub(super) fn path_exists_no_follow(path: &Path) -> Result<bool, &'static str> {
 pub(super) fn validate_owned_directory(fd: &rustix::fd::OwnedFd) -> Result<(), &'static str> {
     let stat = rustix::fs::fstat(fd).map_err(|_| "qualification_cache_directory_stat_failed")?;
     if FileType::from_raw_mode(stat.st_mode) != FileType::Directory
-        || stat.st_uid != rustix::process::geteuid().as_raw()
+        || stat.st_uid != crate::process_owner::effective_uid()
         || stat.st_mode & 0o7000 != 0
     {
         return Err("qualification_cache_directory_owner_or_mode_invalid");
@@ -113,7 +113,7 @@ pub(super) fn validate_owned_directory(fd: &rustix::fd::OwnedFd) -> Result<(), &
 
 pub(super) fn validate_file_stat(stat: &Stat) -> Result<(), &'static str> {
     if FileType::from_raw_mode(stat.st_mode) != FileType::RegularFile
-        || stat.st_uid != rustix::process::geteuid().as_raw()
+        || stat.st_uid != crate::process_owner::effective_uid()
         || stat.st_nlink != 1
         || stat.st_mode & 0o7000 != 0
     {

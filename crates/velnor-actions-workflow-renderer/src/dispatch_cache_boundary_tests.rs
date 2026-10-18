@@ -273,6 +273,18 @@ fn assert_seed_and_mise_steps(plan: &Job) -> Result<(), crate::RenderError> {
         .iter()
         .find(|step| step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity))
         .expect("V2 tools-cache identity prelude");
+    assert_eq!(
+        prelude.condition.as_deref(),
+        Some(crate::cache_p08::TOOLS_CACHE_PLAN_RUN_CONDITION)
+    );
+    assert!(
+        !prelude
+            .condition
+            .as_deref()
+            .unwrap_or_default()
+            .contains("needs.plan"),
+        "the plan job does not depend on its own output"
+    );
     let StepKind::Action { with, .. } = &prelude.kind else {
         return Err(crate::RenderError::InvalidWorkflow(
             "tools_cache_prelude_not_action".to_owned(),
@@ -287,6 +299,15 @@ fn assert_seed_and_mise_steps(plan: &Job) -> Result<(), crate::RenderError> {
             && digest.bytes().all(|byte| byte.is_ascii_hexdigit()
                 && (byte.is_ascii_digit() || byte.is_ascii_lowercase())),
         "prelude binds the exact static runtime digest"
+    );
+    let restore = plan
+        .steps
+        .iter()
+        .find(|step| step.role == Some(velnor_actions_contract::StepRole::ToolsCacheRestore))
+        .expect("V2 tools-cache restore");
+    assert_eq!(
+        restore.condition.as_deref(),
+        Some(crate::cache_p08::TOOLS_CACHE_PLAN_RESTORE_CONDITION)
     );
     assert!(
         plan.steps

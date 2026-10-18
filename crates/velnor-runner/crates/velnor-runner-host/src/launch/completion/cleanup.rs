@@ -21,8 +21,10 @@ use bollard::Docker;
 use super::Resources;
 use crate::error::HostError;
 use crate::https::HttpsTransport;
-use crate::journal::{CleanupClaim, CompletedLaunch, Journal};
+use crate::journal::{CleanupClaim, CompletedLaunch};
 use crate::listen::Secret;
+
+use super::journal_ref::CompletionJournal;
 
 const CLAIM_LEASE_SECONDS: i64 = 90;
 #[cfg(test)]
@@ -48,7 +50,7 @@ const SCAN_INTERVAL: Duration = Duration::from_secs(30);
 type HostResult<T> = Result<T, HostError>;
 
 pub(super) struct Context<'a> {
-    pub(super) journal: &'a Journal,
+    pub(super) journal: &'a CompletionJournal,
     pub(super) docker: &'a Docker,
     pub(super) transport: &'a mut HttpsTransport,
     pub(super) admin: &'a Secret,
@@ -319,7 +321,7 @@ async fn reconcile_claimed(
 /// Renew before one HTTP request. A request closure must contain exactly one
 /// Docker Engine or curl exchange; serial requests have separate renewals.
 pub(super) async fn run_effect<T, F, Fut>(
-    journal: &Journal,
+    journal: &CompletionJournal,
     budget: &mut EffectBudget<'_>,
     intent_id: i64,
     claim: CleanupClaim,

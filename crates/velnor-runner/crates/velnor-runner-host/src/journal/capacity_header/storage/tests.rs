@@ -387,7 +387,7 @@ async fn bootstrap_rejects_noncanonical_table_and_snapshot_size_is_bounded() -> 
     let connection = journal.connection().await?;
     connection
         .execute(
-            "CREATE TABLE capacity_header_meta (singleton INTEGER PRIMARY KEY, schema_version INTEGER, snapshot_json TEXT, snapshot_digest TEXT, unexpected TEXT)",
+            "ALTER TABLE capacity_header_meta ADD COLUMN unexpected TEXT",
             (),
         )
         .await?;

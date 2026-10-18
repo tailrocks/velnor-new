@@ -228,7 +228,7 @@ fn validate_private_file(
 fn current_owner() -> OwnerId {
     #[cfg(unix)]
     {
-        rustix::process::geteuid().as_raw()
+        crate::process_owner::effective_uid()
     }
     #[cfg(not(unix))]
     {

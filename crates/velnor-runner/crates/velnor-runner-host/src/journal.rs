@@ -7,10 +7,12 @@ use std::path::Path;
 use crate::error::HostError;
 use file_identity::JournalFile;
 
+pub(crate) mod capacity_header;
 #[path = "journal_completion.rs"]
 mod completion;
 mod connection;
 mod file_identity;
+pub(crate) mod header_authority;
 mod image_import;
 mod launch;
 mod read;
@@ -18,6 +20,7 @@ pub(in crate::journal) mod request_lifecycle;
 mod resource_probe;
 mod scale_set_create;
 mod schema;
+mod session_refresh;
 mod source_authorization;
 mod sql;
 mod transaction;
@@ -31,14 +34,18 @@ mod connection_tests;
 mod migration_tests;
 #[cfg(test)]
 mod schema_metadata_tests;
+pub(crate) use capacity_header::{HeaderAllocation, HeaderDeleteAttempt, HeaderPollAttempt};
 pub(crate) use completion::{
     CleanupClaim, CompletedLaunch, CompletionIdentity, CompletionInboxEntry,
     MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
 };
 pub(crate) use connection::{
-    AssignmentIdentity, AssignmentKey, CapacityLimits, ConnectionCompletionInboxEntry,
-    ConnectionJournal, ConnectionScaleSet, EngineContext, ReservationRequest, ReservationResult,
-    ReservationSnapshot, ReservationState, SourceAuthorizationBinding,
+    AssignmentIdentity, AssignmentKey, BoundConnectionSession, CapacityLimits,
+    ConnectionCompletionInboxEntry, ConnectionJournal, ConnectionScaleSet, EngineContext,
+    OperationalCapacityLimits, PhysicalRunnerJitState, PhysicalRunnerOwnership,
+    PhysicalRunnerReservation, ReservationRequest, ReservationResult, ReservationSnapshot,
+    ReservationState, SessionCreateClaim, SessionCreateRecord, SessionCreateState,
+    SessionRefreshClaim, SessionRefreshRecord, SessionRefreshState, SourceAuthorizationBinding,
 };
 pub(crate) use image_import::{
     ImageImportClaim, ImageImportDescriptor, ImageImportId, ImageImportIdentity,
@@ -54,7 +61,7 @@ pub(crate) use source_authorization::{AssignedAcquireResult, SourceAuthorization
 use sql::{intent_row, one_row, same_ids, token_rejected};
 
 pub(crate) use request_lifecycle::{PhysicalRunnerStartClaim, RequestAcquireState, RunnerJitClaim};
-pub(crate) use resource_probe::{ProbePhase, ProbeRow, ProbeSeed};
+pub(crate) use resource_probe::{ProbeLeaseState, ProbePhase, ProbeRow, ProbeSeed};
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

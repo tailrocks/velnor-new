@@ -82,6 +82,11 @@ fn check_job(
     steps.extend(acquire);
     steps.push(crate::matrix_step::download_plan_step()?);
     steps.push(execute_check_step(discovered, job_id, catalog)?);
+    if qualification {
+        steps.push(crate::qualification_source_evidence::source_evidence_step(
+            catalog,
+        )?);
+    }
     let mut upload = crate::matrix_step::crate_upload_step(job_id)?;
     upload.condition = Some("always()".to_owned());
     steps.push(upload);

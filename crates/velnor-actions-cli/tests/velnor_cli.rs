@@ -7,6 +7,10 @@ mod impl_cli;
 mod impl_cli_args;
 #[path = "impl_cli_cache_normal_transfer.rs"]
 mod impl_cli_cache_normal_transfer;
+#[path = "impl_cli_cache_tar_launcher.rs"]
+mod impl_cli_cache_tar_launcher;
+#[path = "impl_cli_cache_tar_routing.rs"]
+mod impl_cli_cache_tar_routing;
 #[path = "impl_cli_gate.rs"]
 mod impl_cli_gate;
 #[path = "impl_cli_gate_cache_bind.rs"]
@@ -83,3 +87,6 @@ mod impl_repo_strictness;
 mod impl_repo_suppressions;
 #[path = "impl_repo_test_registration.rs"]
 mod impl_repo_test_registration;
+
+#[path = "impl_cli_gate_source_evidence.rs"]
+mod impl_cli_gate_source_evidence;

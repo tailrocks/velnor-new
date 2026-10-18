@@ -3,7 +3,7 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use super::{EngineLineageGuard, canonical_journal_path, engine_key};
+use super::{DaemonLock, EngineLineageGuard, canonical_journal_path, engine_key};
 use crate::error::HostError;
 
 struct Scratch(PathBuf);
@@ -31,6 +31,40 @@ fn instance() -> String {
 fn verify(guard: &EngineLineageGuard, path: &Path, revision: u64) -> Result<(), HostError> {
     let path = canonical_journal_path(path)?;
     guard.verify_lineage(&path, &instance(), revision)
+}
+
+#[cfg(unix)]
+#[test]
+fn daemon_lock_proves_the_exact_requested_path() -> Result<(), Box<dyn Error>> {
+    let scratch = Scratch::new()?;
+    let daemon_path = scratch.file("daemon.lock");
+    let other_path = scratch.file("admission.lock");
+    let daemon_lock = DaemonLock::try_acquire(&daemon_path)?;
+    let other_lock = DaemonLock::try_acquire(&other_path)?;
+
+    assert!(daemon_lock.matches_path(&fs::canonicalize(&daemon_path)?));
+    assert!(!other_lock.matches_path(&fs::canonicalize(&daemon_path)?));
+    assert!(!daemon_lock.matches_path(&other_path));
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn replaced_daemon_lock_path_no_longer_matches_held_descriptor() -> Result<(), Box<dyn Error>> {
+    let scratch = Scratch::new()?;
+    let daemon_path = scratch.file("daemon.lock");
+    let old_path = scratch.file("daemon.lock.old");
+    let lock = DaemonLock::try_acquire(&daemon_path)?;
+    let canonical_path = fs::canonicalize(&daemon_path)?;
+    assert!(lock.matches_path(&canonical_path));
+
+    fs::rename(&daemon_path, &old_path)?;
+    fs::write(&daemon_path, b"replacement")?;
+
+    assert!(lock.is_held());
+    assert!(!lock.matches_path(&canonical_path));
+    assert!(!lock.matches_path(&daemon_path));
+    Ok(())
 }
 
 #[test]

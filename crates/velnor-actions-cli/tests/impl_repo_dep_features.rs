@@ -3,6 +3,7 @@
 use std::error::Error;
 
 use crate::impl_repo_deps::archive_deps::reviewed_archive_dependency;
+use crate::impl_repo_deps::workflow_yaml_deps::reviewed_workflow_yaml_dependency;
 use crate::impl_repo_policy::{MEMBERS, dep_key, dep_lines, dep_referenced, manifest};
 
 #[test]
@@ -57,11 +58,15 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                 continue;
             }
             let archive_decoder = reviewed_archive_dependency(dir, key, line);
+            let workflow_yaml = reviewed_workflow_yaml_dependency(dir, key, line);
             assert!(
-                allowed.contains(&key) || archive_decoder,
+                allowed.contains(&key) || archive_decoder || workflow_yaml,
                 "{dir} uses {key}"
             );
-            if let Some(index) = line.find("features").filter(|_| !archive_decoder) {
+            if let Some(index) = line
+                .find("features")
+                .filter(|_| !archive_decoder && !workflow_yaml)
+            {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {
                     assert!(

@@ -1,9 +1,10 @@
 use super::projection::{DockerRoot, ProbeProjection, VerifiedProbeImage, expected_image_config};
 use super::record::ProbeRecord;
 use crate::Journal;
-use crate::journal::{ProbePhase, ProbeSeed};
+use crate::journal::{CapacityLimits, OperationalCapacityLimits, ProbePhase, ProbeSeed};
 use crate::launch_harness::Scratch;
 
+mod cleanup_proof;
 mod docker_lifecycle;
 mod projection_digest;
 mod sample_permit;
@@ -186,6 +187,7 @@ async fn journaled_probe_phases_are_exact_and_prepared_abort_is_effect_free() ->
         .bind_engine("probe-engine")
         .await
         .map_err(|error| error.to_string())?;
+    configure_probe_capacity(&journal).await?;
     let seed = probe_seed(&journal).await?;
     journal
         .prepare_probe(seed)
@@ -238,6 +240,7 @@ async fn probe_transition_requires_intents_and_exact_container_id() -> Result<()
         .bind_engine("probe-engine")
         .await
         .map_err(|error| error.to_string())?;
+    configure_probe_capacity(&journal).await?;
     journal
         .prepare_probe(probe_seed(&journal).await?)
         .await
@@ -287,6 +290,23 @@ async fn probe_transition_requires_intents_and_exact_container_id() -> Result<()
             .is_err()
     );
     Ok(())
+}
+
+pub(super) async fn configure_probe_capacity(journal: &Journal) -> Result<(), String> {
+    journal
+        .configure_capacity_with_operational_limits(
+            CapacityLimits {
+                jobs: 1,
+                cpu_millicores: 2_000,
+                memory_bytes: 8_589_934_592,
+            },
+            OperationalCapacityLimits {
+                cpu_millicores: 1_000,
+                memory_bytes: 268_435_456,
+            },
+        )
+        .await
+        .map_err(|error| error.to_string())
 }
 
 async fn probe_seed(journal: &Journal) -> Result<ProbeSeed, String> {

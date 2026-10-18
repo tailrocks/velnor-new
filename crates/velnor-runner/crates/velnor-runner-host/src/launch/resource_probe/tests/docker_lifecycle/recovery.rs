@@ -56,6 +56,9 @@ async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Resul
         http(404, "{}"),
         http(404, "{}"),
         http(200, info),
+        http(404, "{}"),
+        http(404, "{}"),
+        http(200, info),
     ];
     let recovery = DockerStub::open(retry)?;
     let result = Box::pin(lifecycle::collect(
@@ -68,7 +71,7 @@ async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Resul
     let sample = result.map_err(|error| format!("{error}; requests: {recovery_requests:?}"))?;
     assert!(sample.is_none());
     assert_recovered_container_cleanup(&recovery_requests)?;
-    assert_eq!(recovery_requests.len(), 12);
+    assert_eq!(recovery_requests.len(), 15);
     assert!(
         recovery_requests
             .iter()
@@ -123,6 +126,7 @@ async fn held_journal_transition_timeout_sends_no_docker_request() -> Result<(),
         requests.is_empty(),
         "expired journal transition sent {requests:?}"
     );
+    drop(_held);
     let retained = journal
         .active_probe()
         .await
@@ -133,7 +137,7 @@ async fn held_journal_transition_timeout_sends_no_docker_request() -> Result<(),
 }
 
 #[tokio::test]
-async fn failed_quarantine_commit_is_propagated_without_lifecycle_retry() -> Result<(), String> {
+async fn recovery_claim_timeout_sends_no_docker_request() -> Result<(), String> {
     let (_scratch, journal, projection) = prepared().await?;
     journal
         .transition_probe(
@@ -177,8 +181,7 @@ async fn failed_quarantine_commit_is_propagated_without_lifecycle_retry() -> Res
     drop(held);
     assert!(matches!(result, Err(HostError::DockerTimeout)));
     let requests = docker.finish_observed().await?;
-    assert_eq!(requests.len(), 3);
-    assert!(requests.iter().all(|request| !request.starts_with("POST ")));
+    assert!(requests.is_empty(), "unclaimed recovery sent {requests:?}");
     let retained = journal
         .active_probe()
         .await

@@ -1,5 +1,13 @@
 //! Public orchestrator API re-exports.
 
+#[doc(hidden)]
+pub use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
+#[doc(hidden)]
+pub use velnor_actions_contract::workflow::{
+    BoundQualificationCacheKeys, QualificationCacheBackendObservation,
+    QualificationCacheRestoreExpectation,
+};
+
 pub use super::baseline_publish::{PUBLISH_OP, PublishOutputs, baseline_publish};
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use super::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
@@ -44,6 +52,8 @@ pub use super::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMo
 pub use super::prepare::{GenerationPreparation, prepare};
 pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use super::preview_producer::{EXECUTE_PREVIEW_PRODUCER_OP, execute_preview_producer};
+#[doc(hidden)]
+pub use super::process_owner::effective_uid;
 pub use super::provenance::{EvidenceProvenance, ProfileProvenance};
 pub use super::qualification_cache_backend::{
     observe_qualification_cache_backend, validate_qualification_cache_backend_observation,
@@ -64,6 +74,9 @@ pub use super::qualification_cache_runtime::{
 pub use super::qualification_resolver::{
     QUALIFICATION_ADMISSION_FILENAME, QUALIFICATION_RESOLVER_OP, read_qualification_admission,
     resolve_qualification_admission,
+};
+pub use super::qualification_source_evidence::{
+    SOURCE_EVIDENCE_OP, write_qualification_source_evidence,
 };
 pub use super::qualify::qualify_argv_staged;
 pub use super::retrieve_reports::{FETCH_OP, retrieve_reports};

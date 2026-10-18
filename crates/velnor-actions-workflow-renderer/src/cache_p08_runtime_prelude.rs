@@ -49,7 +49,7 @@ pub(super) fn step(payload: &super::ToolsCachePayload) -> Result<Step, RenderErr
         name: cache_p08::TOOLS_CACHE_IDENTITY_NAME.to_owned(),
         id: Some(StepId::ToolsCacheIdentity),
         role: Some(StepRole::ToolsCacheIdentity),
-        condition: None,
+        condition: Some(cache_p08::TOOLS_CACHE_NORMAL_RUN_CONDITION.to_owned()),
         kind: StepKind::Action {
             uses: uses.to_owned(),
             with,
@@ -69,6 +69,13 @@ pub(super) fn validate_action_call(
     let source_sha =
         with.get(super::runtime_identity::TOOLS_CACHE_SCALE_SET_IMAGE_SOURCE_SHA_INPUT);
     if step.role != Some(StepRole::ToolsCacheIdentity)
+        || !matches!(
+            step.condition.as_deref(),
+            Some(
+                cache_p08::TOOLS_CACHE_NORMAL_RUN_CONDITION
+                    | cache_p08::TOOLS_CACHE_PLAN_RUN_CONDITION
+            )
+        )
         || Some(uses) != action_uses(runs_on)
         || !env.is_empty()
         || with.len() != if is_scale_set { 2 } else { 1 }
@@ -173,7 +180,7 @@ fn seed_step() -> Yaml {
         ("id".to_owned(), Yaml::str("seed")),
         (
             "if".to_owned(),
-            Yaml::str(cache_p08::TOOLS_CACHE_RESTORE_CONDITION),
+            Yaml::str(cache_p08::TOOLS_CACHE_IDENTITY_CONDITION),
         ),
         (
             "uses".to_owned(),

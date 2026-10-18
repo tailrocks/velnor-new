@@ -85,6 +85,14 @@ pub(super) async fn bootstrap(connection: &Connection) -> Result<(), HostError> 
     Ok(())
 }
 
+pub(super) async fn upgrade_probe_lease(connection: &Connection) -> Result<(), HostError> {
+    resource_probe::upgrade_lease(connection).await
+}
+
+pub(super) async fn validate_probe_lease(connection: &Connection) -> Result<(), HostError> {
+    resource_probe::validate_lease(connection).await
+}
+
 async fn quarantine_legacy_lifecycle(connection: &Connection) -> Result<(), HostError> {
     drop_revision_triggers(connection).await?;
     let changed = connection
@@ -131,6 +139,9 @@ async fn drop_revision_triggers(connection: &Connection) -> Result<(), HostError
         "resource_probe_revision_insert",
         "resource_probe_revision_update",
         "resource_probe_revision_delete",
+        "host_operation_leases_revision_insert",
+        "host_operation_leases_revision_update",
+        "host_operation_leases_revision_delete",
         "connection_scopes_revision_insert",
         "connection_scopes_revision_update",
         "connection_scopes_revision_delete",
@@ -181,6 +192,9 @@ pub(super) async fn install_revision_triggers(connection: &Connection) -> Result
         "CREATE TRIGGER IF NOT EXISTS resource_probe_revision_insert AFTER INSERT ON resource_probe_operations BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER IF NOT EXISTS resource_probe_revision_update AFTER UPDATE ON resource_probe_operations BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER IF NOT EXISTS resource_probe_revision_delete AFTER DELETE ON resource_probe_operations BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
+        "CREATE TRIGGER IF NOT EXISTS host_operation_leases_revision_insert AFTER INSERT ON host_operation_leases BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
+        "CREATE TRIGGER IF NOT EXISTS host_operation_leases_revision_update AFTER UPDATE ON host_operation_leases BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
+        "CREATE TRIGGER IF NOT EXISTS host_operation_leases_revision_delete AFTER DELETE ON host_operation_leases BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER IF NOT EXISTS capacity_reservation_samples_revision_insert AFTER INSERT ON capacity_reservation_samples BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER IF NOT EXISTS capacity_reservation_samples_revision_update AFTER UPDATE ON capacity_reservation_samples BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER IF NOT EXISTS capacity_reservation_samples_revision_delete AFTER DELETE ON capacity_reservation_samples BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",

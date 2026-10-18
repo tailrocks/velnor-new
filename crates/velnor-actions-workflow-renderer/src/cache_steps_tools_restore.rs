@@ -23,7 +23,13 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
         || with.len() != 2
         || seed_admitted.map(String::as_str) != Some(super::TOOLS_SEED_ADMITTED_EXPRESSION)
         || !crate::cache_p08::is_v2_cache_key_expression(key)
-        || step.condition.as_deref() != Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
+        || !matches!(
+            step.condition.as_deref(),
+            Some(
+                crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION
+                    | crate::cache_p08::TOOLS_CACHE_PLAN_RESTORE_CONDITION
+            )
+        )
     {
         return Err(RenderError::InvalidWorkflow(
             "tools_cache_restore_shape".to_owned(),

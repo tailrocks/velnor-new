@@ -129,6 +129,35 @@ impl Journal {
         journal_schema::revision(&conn).await
     }
 
+    /// Check the exact engine guard and journal revision captured at startup.
+    pub(crate) async fn validate_startup_attachment(
+        &self,
+        canonical_path: &Path,
+        instance_id: &str,
+        engine_id: &str,
+        revision: u64,
+        guard: &EngineLineageGuard,
+    ) -> Result<(), HostError> {
+        if self.path() != canonical_path {
+            return Err(HostError::Journal);
+        }
+        let state = process_state(self.path())?;
+        let attached = state
+            .lineage_guard
+            .lock()
+            .map_err(|_| HostError::Lock)?
+            .as_ref()
+            .is_some_and(|current| current.same_guard(guard));
+        if !attached
+            || self.instance_id().await? != instance_id
+            || self.engine_id().await? != engine_id
+            || self.revision().await? != revision
+        {
+            return Err(HostError::Journal);
+        }
+        guard.verify_lineage(canonical_path, instance_id, revision)
+    }
+
     /// Read one launch identity after the engine is bound.
     ///
     /// # Errors

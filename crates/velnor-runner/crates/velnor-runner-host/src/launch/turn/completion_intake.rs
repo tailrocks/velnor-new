@@ -3,16 +3,17 @@
 use std::future::Future;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use velnor_runner_github::{InnerKind, Poll, parse_inner_messages};
+use velnor_runner_github::{InnerJob, InnerKind, Poll, RunnerReference, parse_inner_messages};
 
 use crate::error::HostError;
-use crate::journal::Journal;
+use crate::journal::{AssignmentKey, ConnectionCompletionInboxEntry, ConnectionJournal, Journal};
 use crate::scale_set::EnsureError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct IntakeDecision {
     pub(super) completion_only: bool,
     pub(super) wake_cleanup: bool,
+    pub(super) session_delete_candidate: bool,
 }
 
 pub(super) async fn intake_poll(
@@ -25,6 +26,7 @@ pub(super) async fn intake_poll(
     Ok(IntakeDecision {
         completion_only: completion_only(polled),
         wake_cleanup: retried || has_completion(polled),
+        session_delete_candidate: session_delete_candidate(polled),
     })
 }
 
@@ -43,6 +45,248 @@ where
         acknowledge().await?;
     }
     Ok(decision)
+}
+
+/// Persist scoped Started/Completed events against their exact source receipts.
+pub(super) async fn intake_and_ack_if_only_scoped<F, Fut>(
+    journal: &ConnectionJournal,
+    set_id: i64,
+    polled: &Poll,
+    acknowledge: F,
+) -> Result<IntakeDecision, EnsureError>
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = Result<(), EnsureError>>,
+{
+    let retried = retry_scoped(journal).await?;
+    record_scoped_events(journal, set_id, polled).await?;
+    let lifecycle_only = scoped_lifecycle_only(polled);
+    if lifecycle_only {
+        acknowledge().await?;
+    }
+    Ok(IntakeDecision {
+        // Started and Completed messages cannot start another worker. Their
+        // exact event or a durable quarantine row is committed before ACK.
+        completion_only: lifecycle_only,
+        wake_cleanup: retried || has_completion(polled),
+        session_delete_candidate: session_delete_candidate(polled),
+    })
+}
+
+/// Only an empty response or an acknowledged lifecycle-only response permits a delete attempt.
+/// The journal still checks for outstanding durable work before it claims DELETE.
+pub(super) fn session_delete_candidate(polled: &Poll) -> bool {
+    matches!(polled, Poll::Empty) || scoped_lifecycle_only(polled)
+}
+
+fn scoped_lifecycle_only(polled: &Poll) -> bool {
+    match polled {
+        // An undecodable body has no proven message-kind set. Keep it on the
+        // queue even though `record_scoped_events` also stores it durably.
+        Poll::Quarantined(_) => false,
+        Poll::Batch(batch) => lifecycle_jobs_only(batch.message_id, &batch.jobs),
+        Poll::Empty => false,
+    }
+}
+
+fn lifecycle_jobs_only(message_id: i64, jobs: &[InnerJob]) -> bool {
+    message_id >= 0
+        && !jobs.is_empty()
+        && jobs
+            .iter()
+            .all(|job| matches!(job.kind, InnerKind::Started | InnerKind::Completed))
+}
+
+async fn record_scoped_events(
+    journal: &ConnectionJournal,
+    set_id: i64,
+    polled: &Poll,
+) -> Result<(), EnsureError> {
+    let (message_id, raw_body, jobs) = match polled {
+        Poll::Batch(batch) => (
+            batch.message_id,
+            batch.raw_body.as_str(),
+            batch.jobs.as_slice(),
+        ),
+        Poll::Quarantined(batch) => {
+            validate_inbox_message(batch.message_id, &batch.raw_body)?;
+            journal
+                .store_completion_inbox(batch.message_id, &batch.raw_body)
+                .await
+                .map_err(map_completion_journal)?;
+            return Ok(());
+        }
+        Poll::Empty => return Ok(()),
+    };
+    if jobs.len() > velnor_runner_github::MAX_POLL_MESSAGES {
+        return Err(completion_error());
+    }
+    if !jobs.iter().any(is_scoped_event) {
+        return Ok(());
+    }
+    validate_inbox_message(message_id, raw_body)?;
+    let mut matched = true;
+    for job in jobs.iter().filter(|job| is_scoped_event(job)) {
+        if record_scoped_event(journal, set_id, message_id, job)
+            .await
+            .is_err()
+        {
+            matched = false;
+        }
+    }
+    if matched && lifecycle_jobs_only(message_id, jobs) {
+        journal
+            .resolve_completion_inbox(&scoped_entry(journal, set_id, message_id, raw_body))
+            .await
+            .map_err(map_completion_journal)
+    } else {
+        journal
+            .store_completion_inbox(message_id, raw_body)
+            .await
+            .map_err(map_completion_journal)
+    }
+}
+
+async fn record_scoped_event(
+    journal: &ConnectionJournal,
+    set_id: i64,
+    message_id: i64,
+    job: &InnerJob,
+) -> Result<(), HostError> {
+    let request_id = job
+        .request_id
+        .filter(|id| *id > 0)
+        .ok_or(HostError::Identity)?;
+    let identity = journal
+        .assignment_identity(AssignmentKey::AssignedRequest { request_id })
+        .await?;
+    let runner = event_runner(job, set_id)?;
+    match job.kind {
+        InnerKind::Started => {
+            let runner = runner.as_ref().ok_or(HostError::Identity)?;
+            journal
+                .record_job_started(
+                    &identity,
+                    message_id,
+                    &job.source,
+                    runner,
+                    job.job_id.as_deref(),
+                )
+                .await?;
+        }
+        InnerKind::Completed => {
+            journal
+                .record_job_completed(
+                    &identity,
+                    message_id,
+                    &job.source,
+                    job.result.as_deref(),
+                    runner.as_ref(),
+                    job.job_id.as_deref(),
+                )
+                .await?;
+        }
+        InnerKind::Available | InnerKind::Assigned | InnerKind::Unsupported(_) => {
+            return Err(HostError::Identity);
+        }
+    }
+    Ok(())
+}
+
+fn event_runner(job: &InnerJob, set_id: i64) -> Result<Option<RunnerReference>, HostError> {
+    match (job.runner_id, job.runner_name.as_deref()) {
+        (None, None) => Ok(None),
+        (Some(id), Some(name)) => Ok(Some(RunnerReference {
+            id,
+            name: name.to_owned(),
+            runner_scale_set_id: set_id,
+        })),
+        _ => Err(HostError::Identity),
+    }
+}
+
+fn is_scoped_event(job: &InnerJob) -> bool {
+    matches!(job.kind, InnerKind::Started | InnerKind::Completed)
+}
+
+async fn retry_scoped(journal: &ConnectionJournal) -> Result<bool, EnsureError> {
+    let now = unix_seconds().ok_or_else(completion_error)?;
+    let due = journal
+        .pending_completion_inbox(now, crate::journal::MAX_COMPLETION_INBOX_SCAN)
+        .await
+        .map_err(map_completion_journal)?;
+    let mut resolved_any = false;
+    for entry in due {
+        if retry_scoped_one(journal, &entry, now).await? {
+            resolved_any = true;
+        }
+    }
+    Ok(resolved_any)
+}
+
+async fn retry_scoped_one(
+    journal: &ConnectionJournal,
+    entry: &ConnectionCompletionInboxEntry,
+    now: i64,
+) -> Result<bool, EnsureError> {
+    let Ok(jobs) = parse_inner_messages(&entry.raw_body) else {
+        journal
+            .defer_completion_inbox(entry, now)
+            .await
+            .map_err(map_completion_journal)?;
+        return Ok(false);
+    };
+    if jobs.len() > velnor_runner_github::MAX_POLL_MESSAGES {
+        journal
+            .defer_completion_inbox(entry, now)
+            .await
+            .map_err(map_completion_journal)?;
+        return Ok(false);
+    }
+    if !lifecycle_jobs_only(entry.message_id, &jobs) {
+        journal
+            .defer_completion_inbox(entry, now)
+            .await
+            .map_err(map_completion_journal)?;
+        return Ok(false);
+    }
+    let mut matched = jobs.iter().any(is_scoped_event);
+    for job in jobs.iter().filter(|job| is_scoped_event(job)) {
+        if record_scoped_event(journal, entry.scale_set_id, entry.message_id, job)
+            .await
+            .is_err()
+        {
+            matched = false;
+        }
+    }
+    if matched {
+        journal
+            .resolve_completion_inbox(entry)
+            .await
+            .map_err(map_completion_journal)?;
+        Ok(true)
+    } else {
+        journal
+            .defer_completion_inbox(entry, now)
+            .await
+            .map_err(map_completion_journal)?;
+        Ok(false)
+    }
+}
+
+fn scoped_entry(
+    journal: &ConnectionJournal,
+    set_id: i64,
+    message_id: i64,
+    raw_body: &str,
+) -> ConnectionCompletionInboxEntry {
+    ConnectionCompletionInboxEntry {
+        connection_id: journal.connection_id().clone(),
+        scale_set_id: set_id,
+        message_id,
+        raw_body: raw_body.to_owned(),
+        attempts: 0,
+    }
 }
 
 pub(super) async fn record_completed(

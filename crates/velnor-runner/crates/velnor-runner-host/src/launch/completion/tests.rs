@@ -21,6 +21,7 @@ use super::{
 use crate::error::HostError;
 use crate::https::HttpsTransport;
 use crate::journal::Journal;
+use crate::launch::completion::journal_ref::CompletionJournal;
 use crate::listen::Secret;
 
 const TEST_REQUEST_ID: i64 = 61;
@@ -41,7 +42,7 @@ async fn slow_request_keeps_its_lease_after_the_original_claim_expires() -> Resu
     let generation = claim.generation;
     let attempt = claim.attempt;
     let stopping = AtomicBool::new(false);
-    let first_effect = first;
+    let first_effect = CompletionJournal::root(first);
     let effect = tokio::spawn(async move {
         let mut budget = EffectBudget::new(&stopping);
         let outcome: Result<(), Failure> = run_effect(
@@ -188,6 +189,7 @@ async fn shutdown_request_leaves_due_rows_unclaimed() -> Result<(), HostError> {
 async fn request_failure_signal_survives_a_successful_retry_schedule() -> Result<(), HostError> {
     let scratch = Scratch::new("request-failure")?;
     let journal = Journal::open(scratch.file()).await?;
+    let completion_journal = CompletionJournal::root(journal.clone());
     let id = completed_launch(&journal, TEST_REQUEST_ID).await?;
     let claim = journal
         .claim_completion_cleanup(id, CLAIM_LEASE_SECONDS)
@@ -196,7 +198,7 @@ async fn request_failure_signal_survives_a_successful_retry_schedule() -> Result
     let stopping = AtomicBool::new(false);
     let mut budget = EffectBudget::new(&stopping);
     let failure = match run_effect(
-        &journal,
+        &completion_journal,
         &mut budget,
         id,
         claim,
@@ -276,6 +278,7 @@ async fn completed_launch(journal: &Journal, request_id: i64) -> Result<i64, Hos
 
 struct Harness {
     journal: Journal,
+    completion_journal: CompletionJournal,
     docker: Docker,
     transport: HttpsTransport,
     admin: Secret,
@@ -294,8 +297,11 @@ impl Harness {
         let socket_text = socket.path().to_str().ok_or(HostError::Path)?;
         let docker = Docker::connect_with_unix(socket_text, 120, bollard::API_DEFAULT_VERSION)
             .map_err(|_| HostError::Docker)?;
+        let journal = Journal::open(path).await?;
+        let completion_journal = CompletionJournal::root(journal.clone());
         Ok(Self {
-            journal: Journal::open(path).await?,
+            journal,
+            completion_journal,
             docker,
             transport: HttpsTransport::new("https://github.com")?,
             admin: Secret::new("test token"),
@@ -305,7 +311,7 @@ impl Harness {
 
     fn context(&mut self) -> Context<'_> {
         Context {
-            journal: &self.journal,
+            journal: &self.completion_journal,
             docker: &self.docker,
             transport: &mut self.transport,
             admin: &self.admin,

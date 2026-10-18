@@ -105,12 +105,16 @@ async fn validate_capacity_policy_table(conn: &turso::Connection) -> Result<(), 
             ConnectionColumn::new("max_jobs", "INTEGER", true, None, 0),
             ConnectionColumn::new("max_cpu_millicores", "INTEGER", true, None, 0),
             ConnectionColumn::new("max_memory_bytes", "INTEGER", true, None, 0),
+            ConnectionColumn::new("operational_cpu_millicores", "INTEGER", true, Some("0"), 0),
+            ConnectionColumn::new("operational_memory_bytes", "INTEGER", true, Some("0"), 0),
         ],
         &[
             "check (singleton = 1",
             "check (max_jobs > 0",
             "check (max_cpu_millicores > 0",
             "check (max_memory_bytes > 0",
+            "check (operational_cpu_millicores >= 0",
+            "check (operational_memory_bytes >= 0",
         ],
     )
     .await

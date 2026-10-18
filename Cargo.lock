@@ -997,9 +997,8 @@ dependencies = [
  "serde_json",
  "sha2",
  "syn",
- "tempfile",
+ "toml",
  "unicode-general-category",
- "velnor-actions-contract",
  "velnor-actions-freshness",
  "velnor-actions-orchestrator",
 ]

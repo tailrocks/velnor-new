@@ -17,6 +17,9 @@ use std::process::ExitCode;
 
 /// Run the private gate on bare invocations, else the public Clap tree.
 fn main() -> ExitCode {
+    if let Some(outcome) = dispatch::try_cache_tar_entrypoint() {
+        return outcome;
+    }
     if std::env::args_os().len() <= 1
         && let Some(outcome) = dispatch::try_internal()
     {

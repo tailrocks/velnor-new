@@ -12,6 +12,9 @@ use velnor_actions_contract::{RunsOn, run_key_for_ci};
 use crate::OrchestratorError;
 use crate::internal::internal;
 
+#[path = "qualification_cache_runtime_closure.rs"]
+pub(crate) mod closure;
+
 #[path = "qualification_cache_runtime_files.rs"]
 mod files;
 use self::files::{

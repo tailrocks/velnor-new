@@ -47,19 +47,7 @@ pub(crate) fn check_single_label(
 ) -> Result<(), RenderError> {
     for (id, job) in &ir.jobs {
         if let Some(runner) = &job.check_runner {
-            let scale_set = velnor_actions_contract::RunsOn::parse(&job.runs_on)
-                .is_ok_and(|selector| selector.is_scale_set());
-            let valid_placement = if scale_set {
-                runner.platform == velnor_actions_contract::CheckPlatform::LinuxX64
-                    && runner.executor == velnor_actions_contract::CheckExecutor::Hosted
-                    && job.condition.as_deref()
-                        == Some(
-                            velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION,
-                        )
-            } else {
-                runner.label == job.runs_on
-            };
-            if !id.starts_with("check-") || !valid_placement {
+            if !check_runner_is_valid(id, job, runner) {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "check_runner_mismatch:{id}"
                 )));
@@ -83,3 +71,42 @@ pub(crate) fn check_single_label(
     }
     Ok(())
 }
+
+fn check_runner_is_valid(
+    id: &str,
+    job: &velnor_actions_contract::Job,
+    runner: &velnor_actions_contract::CheckRunner,
+) -> bool {
+    let qualification =
+        id.starts_with(velnor_actions_contract::workflow::QUALIFICATION_CHECK_JOB_PREFIX);
+    if !qualification && !id.starts_with("check-") {
+        return false;
+    }
+    let scale_set = velnor_actions_contract::RunsOn::parse(&job.runs_on)
+        .is_ok_and(|selector| selector.is_scale_set());
+    if !scale_set {
+        return runner.label == job.runs_on;
+    }
+
+    runner.platform == velnor_actions_contract::CheckPlatform::LinuxX64
+        && runner.executor == velnor_actions_contract::CheckExecutor::Hosted
+        && scale_set_check_admission(job.condition.as_deref(), qualification)
+}
+
+fn scale_set_check_admission(condition: Option<&str>, qualification: bool) -> bool {
+    if qualification {
+        return condition
+            == Some(velnor_actions_contract::config::QUALIFICATION_CHECK_ADMISSION_CONDITION);
+    }
+    matches!(
+        condition,
+        Some(
+            velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+                | velnor_actions_contract::config::NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION
+        )
+    )
+}
+
+#[cfg(test)]
+#[path = "workflow_policy_tests.rs"]
+mod tests;

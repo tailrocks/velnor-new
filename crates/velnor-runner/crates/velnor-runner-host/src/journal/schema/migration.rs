@@ -3,7 +3,8 @@
 use crate::error::HostError;
 
 use super::{
-    connection, image_import, remote, request_ledger, scale_set_create, source_authorization,
+    connection, image_import, remote, request_ledger, scale_set_create, session, session_refresh,
+    source_authorization,
 };
 
 pub(super) async fn from_version_zero(conn: &turso::Connection) -> Result<(), HostError> {
@@ -116,7 +117,7 @@ pub(super) async fn from_version_nine(conn: &turso::Connection) -> Result<(), Ho
     conn.execute("PRAGMA user_version = 11", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    Ok(())
+    from_version_eleven(conn).await
 }
 
 pub(super) async fn from_version_ten(conn: &turso::Connection) -> Result<(), HostError> {
@@ -124,7 +125,38 @@ pub(super) async fn from_version_ten(conn: &turso::Connection) -> Result<(), Hos
     conn.execute("PRAGMA user_version = 11", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    Ok(())
+    from_version_eleven(conn).await
+}
+
+pub(super) async fn from_version_eleven(conn: &turso::Connection) -> Result<(), HostError> {
+    connection::upgrade_capacity_policy(conn).await?;
+    crate::journal_schema::upgrade_probe_lease(conn).await?;
+    crate::journal_schema::install_revision_triggers(conn).await?;
+    connection::validate_connection_schema(conn).await?;
+    crate::journal_schema::validate_probe_lease(conn).await?;
+    conn.execute("PRAGMA user_version = 12", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    from_version_twelve(conn).await
+}
+
+pub(super) async fn from_version_twelve(conn: &turso::Connection) -> Result<(), HostError> {
+    crate::journal::capacity_header::bootstrap_schema_connection(conn).await?;
+    session::bootstrap(conn).await?;
+    conn.execute("PRAGMA user_version = 13", ())
+        .await
+        .map(|_| ())
+        .map_err(|_| HostError::Journal)?;
+    from_version_thirteen(conn).await
+}
+
+pub(super) async fn from_version_thirteen(conn: &turso::Connection) -> Result<(), HostError> {
+    session_refresh::bootstrap(conn).await?;
+    conn.execute("PRAGMA user_version = 14", ())
+        .await
+        .map(|_| ())
+        .map_err(|_| HostError::Journal)?;
+    super::validate_persisted_schema(conn).await
 }
 
 pub(super) async fn ensure_completion_objects(conn: &turso::Connection) -> Result<(), HostError> {

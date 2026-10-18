@@ -212,7 +212,23 @@ pub(super) async fn has_unresolved_work(connection: &turso::Connection) -> Resul
         "SELECT COUNT(*) FROM connection_scale_set_intents WHERE state IN ('prepared', 'requested', 'uncertain')",
     )
     .await?;
-    Ok(scale_set_creates != 0)
+    if scale_set_creates != 0 {
+        return Ok(true);
+    }
+    let session_creates = scalar_count(
+        connection,
+        "SELECT COUNT(*) FROM connection_session_creates WHERE state IN ('prepared', 'requested', 'uncertain', 'bound')",
+    )
+    .await?;
+    if session_creates != 0 || crate::journal::capacity_header::has_any_charged(connection).await? {
+        return Ok(true);
+    }
+    let operation_leases = scalar_count(
+        connection,
+        "SELECT COUNT(*) FROM host_operation_leases WHERE state != 'released'",
+    )
+    .await?;
+    Ok(operation_leases != 0)
 }
 
 pub(super) async fn has_connection_work(
@@ -221,7 +237,7 @@ pub(super) async fn has_connection_work(
 ) -> Result<bool, HostError> {
     let mut rows = connection
         .query(
-            "SELECT EXISTS (SELECT 1 FROM capacity_reservations WHERE connection_id = ?1 AND state != 'released') OR EXISTS (SELECT 1 FROM connection_intents WHERE connection_id = ?1 AND cleanup_proven = 0) OR EXISTS (SELECT 1 FROM connection_completion_inbox WHERE connection_id = ?1) OR EXISTS (SELECT 1 FROM connection_scale_set_intents WHERE connection_id = ?1 AND state IN ('prepared', 'requested', 'uncertain'))",
+            "SELECT EXISTS (SELECT 1 FROM capacity_reservations WHERE connection_id = ?1 AND state != 'released') OR EXISTS (SELECT 1 FROM connection_intents WHERE connection_id = ?1 AND cleanup_proven = 0) OR EXISTS (SELECT 1 FROM connection_completion_inbox WHERE connection_id = ?1) OR EXISTS (SELECT 1 FROM connection_scale_set_intents WHERE connection_id = ?1 AND state IN ('prepared', 'requested', 'uncertain')) OR EXISTS (SELECT 1 FROM connection_session_creates WHERE connection_id = ?1 AND state IN ('prepared', 'requested', 'uncertain', 'bound'))",
             [connection_id],
         )
         .await
@@ -233,7 +249,9 @@ pub(super) async fn has_connection_work(
         .ok_or(HostError::Journal)?
         .get::<i64>(0)
         .map_err(|_| HostError::Journal)?;
-    Ok(result != 0)
+    Ok(result != 0
+        || crate::journal::capacity_header::has_charged_connection(connection, connection_id)
+            .await?)
 }
 
 pub(super) fn digest(value: &[u8]) -> String {

@@ -22,6 +22,8 @@ const ANCHOR_DIR: &str = "runner-lineage";
 #[derive(Debug)]
 pub struct DaemonLock {
     file: File,
+    device: u64,
+    inode: u64,
 }
 
 impl DaemonLock {
@@ -33,13 +35,61 @@ impl DaemonLock {
     pub fn try_acquire(path: &Path) -> Result<Self, HostError> {
         let file = open_lock(path)?;
         file.try_lock().map_err(|_| HostError::Lock)?;
-        Ok(Self { file })
+        let metadata = file.metadata().map_err(|_| HostError::Lock)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            Ok(Self {
+                file,
+                device: metadata.dev(),
+                inode: metadata.ino(),
+            })
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = metadata;
+            Err(HostError::Lock)
+        }
     }
 
     /// The lock is held while the advisory file is still open.
     #[must_use]
     pub fn is_held(&self) -> bool {
         self.file.metadata().is_ok()
+    }
+
+    /// Check that the retained advisory lock still protects this exact path.
+    #[must_use]
+    pub(crate) fn matches_path(&self, path: &Path) -> bool {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+
+            let Ok(canonical) = fs::canonicalize(path) else {
+                return false;
+            };
+            if canonical != path {
+                return false;
+            }
+            let Ok(path_metadata) = fs::symlink_metadata(path) else {
+                return false;
+            };
+            if path_metadata.file_type().is_symlink() || !path_metadata.is_file() {
+                return false;
+            }
+            let Ok(descriptor_metadata) = self.file.metadata() else {
+                return false;
+            };
+            path_metadata.dev() == self.device
+                && path_metadata.ino() == self.inode
+                && descriptor_metadata.dev() == self.device
+                && descriptor_metadata.ino() == self.inode
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = path;
+            false
+        }
     }
 }
 
@@ -177,6 +227,14 @@ impl EngineLineageGuard {
         }
         *state = Some(recovered);
         Ok(())
+    }
+
+    pub(crate) fn engine_id(&self) -> &str {
+        &self.inner.engine_id
+    }
+
+    pub(crate) fn same_guard(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
     }
 
     /// Advance the external anchor after the matching database commit.

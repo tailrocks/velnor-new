@@ -16,7 +16,6 @@ const SCHEMA_VERSION: i64 = 2;
 const PREVIOUS_SCHEMA_VERSION: i64 = 1;
 const MAX_SNAPSHOT_BYTES: usize = 1_048_576;
 const CREATE_TABLE: &str = "CREATE TABLE IF NOT EXISTS capacity_header_meta (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), schema_version INTEGER NOT NULL CHECK (schema_version > 0), snapshot_json TEXT NOT NULL CHECK (length(CAST(snapshot_json AS BLOB)) <= 1048576), snapshot_digest TEXT NOT NULL CHECK (length(snapshot_digest) = 64 AND snapshot_digest NOT GLOB '*[^0-9a-f]*'))";
-const EXPECTED_TABLE: &str = "CREATE TABLE capacity_header_meta (singleton INTEGER PRIMARY KEY CHECK (singleton = 1), schema_version INTEGER NOT NULL CHECK (schema_version > 0), snapshot_json TEXT NOT NULL CHECK (length(CAST(snapshot_json AS BLOB)) <= 1048576), snapshot_digest TEXT NOT NULL CHECK (length(snapshot_digest) = 64 AND snapshot_digest NOT GLOB '*[^0-9a-f]*'))";
 
 /// Recover the snapshot at process startup using the journal's write transaction.
 ///
@@ -105,7 +104,16 @@ pub(in crate::journal) async fn bootstrap_connection(
 pub(in crate::journal) async fn validate_connection(
     connection: &turso::Connection,
 ) -> Result<(), HostError> {
-    let _ledger = load(connection).await?;
+    validate_table(connection).await?;
+    let snapshot = read_snapshot(connection).await?;
+    let mut rows = connection
+        .query("SELECT 1 FROM host_capacity_policy WHERE singleton = 1", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let policy_exists = rows.next().await.map_err(|_| HostError::Journal)?.is_some();
+    if snapshot.is_some() || policy_exists {
+        let _ledger = load(connection).await?;
+    }
     Ok(())
 }
 
@@ -125,6 +133,39 @@ pub(in crate::journal) async fn load(
             .map_err(|_| HostError::Journal)?;
     }
     Ok(ledger)
+}
+
+/// Check whether the ledger keeps any generation for one repository connection charged.
+pub(in crate::journal) async fn has_charged_connection(
+    connection: &turso::Connection,
+    connection_id: &str,
+) -> Result<bool, HostError> {
+    let mut rows = connection
+        .query("SELECT 1 FROM capacity_header_meta WHERE singleton = 1", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    if rows.next().await.map_err(|_| HostError::Journal)?.is_none() {
+        return Ok(false);
+    }
+    Ok(load(connection)
+        .await?
+        .charged_allocations()
+        .iter()
+        .any(|allocation| allocation.connection_id().as_str() == connection_id))
+}
+
+/// Check whether any session header generation remains charged.
+pub(in crate::journal) async fn has_any_charged(
+    connection: &turso::Connection,
+) -> Result<bool, HostError> {
+    let mut rows = connection
+        .query("SELECT 1 FROM capacity_header_meta WHERE singleton = 1", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    if rows.next().await.map_err(|_| HostError::Journal)?.is_none() {
+        return Ok(false);
+    }
+    Ok(!load(connection).await?.charged_allocations().is_empty())
 }
 
 /// Save one validated ledger snapshot inside the caller's transaction.
@@ -170,7 +211,7 @@ async fn validate_table(connection: &turso::Connection) -> Result<(), HostError>
     };
     let sql: String = row.get(0).map_err(|_| HostError::Journal)?;
     if rows.next().await.map_err(|_| HostError::Journal)?.is_some()
-        || normalize_sql(&sql) != normalize_sql(EXPECTED_TABLE)
+        || normalize_sql(&sql) != normalize_sql(CREATE_TABLE)
     {
         return Err(HostError::Journal);
     }
@@ -383,16 +424,15 @@ fn check_snapshot_size(bytes: &[u8]) -> Result<(), HostError> {
 }
 
 fn normalize_sql(sql: &str) -> String {
-    let compact = sql
+    let mut compact = sql
         .chars()
         .filter(|character| !character.is_ascii_whitespace())
         .flat_map(char::to_lowercase)
         .collect::<String>();
+    if let Some(remainder) = compact.strip_prefix("createtableifnotexists") {
+        compact = format!("createtable{remainder}");
+    }
     compact
-        .strip_prefix("createtableifnotexists")
-        .map_or(compact.clone(), |remainder| {
-            format!("createtable{remainder}")
-        })
 }
 
 fn snapshot_digest(bytes: &[u8]) -> String {
