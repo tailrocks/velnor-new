@@ -182,7 +182,7 @@ fn replace_placeholder_after_create(item: &PreparedRoot) {
         &item.parent,
         c"retained-placeholder",
     )
-    .expect("retain exclusively created placeholder");
+    .expect("keep the placeholder created by this test");
     rustix::fs::mkdirat(
         &item.parent,
         item.destination_name.as_c_str(),

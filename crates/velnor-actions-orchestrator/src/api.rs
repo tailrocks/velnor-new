@@ -49,6 +49,8 @@ pub use super::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMo
 pub use super::prepare::{GenerationPreparation, prepare};
 pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use super::preview_producer::{EXECUTE_PREVIEW_PRODUCER_OP, execute_preview_producer};
+#[doc(hidden)]
+pub use super::process_owner::effective_uid;
 pub use super::provenance::{EvidenceProvenance, ProfileProvenance};
 pub use super::qualification_cache_backend::{
     observe_qualification_cache_backend, validate_qualification_cache_backend_observation,

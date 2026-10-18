@@ -229,11 +229,11 @@ fn rollback_does_not_adopt_replacement_after_exclusive_placeholder_creation() {
         Err("qualification_cache_import_rollback_failed")
     );
     assert_eq!(
-        fs::read(base.join("live/foreign-marker")).expect("foreign marker preserved"),
+        fs::read(base.join("live/foreign-marker")).expect("foreign marker contents stay unchanged"),
         b"foreign"
     );
     assert_eq!(
-        fs::read(backup_path.join("state")).expect("original backup preserved"),
+        fs::read(backup_path.join("state")).expect("original backup stays unchanged"),
         b"original"
     );
     assert!(base.join("retained-placeholder").is_file());

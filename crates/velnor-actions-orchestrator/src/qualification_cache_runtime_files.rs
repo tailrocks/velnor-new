@@ -322,7 +322,7 @@ pub(super) fn read_owned_runner_file(
     let stat =
         rustix::fs::fstat(&fd).map_err(|_| internal("qualification_cache_file_unreadable"))?;
     if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::RegularFile
-        || stat.st_uid != rustix::process::geteuid().as_raw()
+        || stat.st_uid != crate::process_owner::effective_uid()
     {
         return Err(internal("qualification_cache_file_untrusted"));
     }
@@ -339,7 +339,7 @@ pub(super) fn read_owned_runner_file(
 
 #[cfg(unix)]
 fn owned_by_current_user(metadata: &fs::Metadata) -> bool {
-    metadata.uid() == rustix::process::geteuid().as_raw()
+    metadata.uid() == crate::process_owner::effective_uid()
 }
 
 #[cfg(not(unix))]

@@ -244,7 +244,7 @@ fn cleanup_prepared(prepared: &[PreparedRoot]) -> Result<(), &'static str> {
 }
 
 fn validate_destination_root(stat: &Stat, id: CacheRootId) -> Result<(), &'static str> {
-    if stat.st_uid != rustix::process::geteuid().as_raw()
+    if stat.st_uid != crate::process_owner::effective_uid()
         || stat.st_mode & 0o7000 != 0
         || FileType::from_raw_mode(stat.st_mode)
             != if is_file_root(id) {

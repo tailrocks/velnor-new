@@ -69,6 +69,7 @@ mod plan_stacks;
 mod prepare;
 mod preseed_manifest;
 mod preview_producer;
+mod process_owner;
 mod product_release_pins;
 mod provenance;
 mod publish_job;

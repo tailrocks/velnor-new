@@ -7,7 +7,8 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    QUALIFICATION_CACHE_BIND_OP, QualificationCacheBindingRequest, bind_qualification_cache_runtime,
+    QUALIFICATION_CACHE_BIND_OP, QualificationCacheBindingRequest,
+    bind_qualification_cache_runtime, effective_uid,
 };
 
 #[path = "dispatch_cache_normal_stage.rs"]
@@ -131,7 +132,7 @@ pub(crate) fn append_owned_output(path: &std::ffi::OsStr, body: &[u8]) -> std::i
     .map_err(std::io::Error::from)?;
     let stat = rustix::fs::fstat(&fd).map_err(std::io::Error::from)?;
     if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::RegularFile
-        || stat.st_uid != rustix::process::geteuid().as_raw()
+        || stat.st_uid != effective_uid()
     {
         return Err(std::io::Error::from(std::io::ErrorKind::PermissionDenied));
     }
