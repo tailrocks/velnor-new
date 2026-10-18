@@ -9,6 +9,9 @@ use velnor_actions_contract::workflow::{
 };
 
 const MAX_CACHE_TRANSFER_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+const CACHE_ACTION_TAR_OVERHEAD_BYTES: u64 = 32 * 1024;
+const CACHE_ACTION_COMPRESS_HEADROOM_BYTES: u64 = 1024 * 1024;
+const CACHE_ACTION_COMPRESS_HEADROOM_DENOMINATOR: u64 = 16;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Backend agreement for one normal `ToFu` restore, before payload checks.
@@ -295,8 +298,8 @@ fn validate_cache_hit(
             &cache.version,
         )?
         || cache.size_bytes == 0
-        || cache.size_bytes != stage_claim.length()
-        || stage_claim.length() > MAX_CACHE_TRANSFER_BYTES
+        || cache.size_bytes > max_cache_archive_bytes(request.operation_limit_bytes)?
+        || stage_claim.length() > request.operation_limit_bytes
     {
         return Err("normal_tofu_cache_backend_entry_mismatch");
     }
@@ -313,4 +316,22 @@ fn validate_cache_hit(
         compression: Some(compression),
         stage_claim: Some(stage_claim),
     })
+}
+
+/// Gives a conservative one-file archive ceiling for a bounded raw transfer.
+///
+/// The pinned `@actions/cache` 6.1.0 `lib/cache.js` records the size of the
+/// compressed archive after `createTar` and sends that value as
+/// `FinalizeCacheEntryUpload.sizeBytes` (lines 452–495). It therefore differs
+/// from the raw stage file length. The policy reserves 1/16 compression
+/// expansion and 1 MiB framing headroom after the bounded one-file TAR.
+pub(super) fn max_cache_archive_bytes(raw_limit: u64) -> Result<u64, &'static str> {
+    if raw_limit == 0 || raw_limit > MAX_CACHE_TRANSFER_BYTES {
+        return Err("normal_tofu_cache_archive_limit_invalid");
+    }
+    raw_limit
+        .checked_add(CACHE_ACTION_TAR_OVERHEAD_BYTES)
+        .and_then(|tar| tar.checked_add(tar / CACHE_ACTION_COMPRESS_HEADROOM_DENOMINATOR))
+        .and_then(|compressed| compressed.checked_add(CACHE_ACTION_COMPRESS_HEADROOM_BYTES))
+        .ok_or("normal_tofu_cache_archive_limit_invalid")
 }

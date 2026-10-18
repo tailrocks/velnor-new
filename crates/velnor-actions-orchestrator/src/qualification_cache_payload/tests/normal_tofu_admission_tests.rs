@@ -157,6 +157,7 @@ fn warm_restore_binds_action_key_compression_version_and_download_size() {
         matched_key: Some(fixture.cache_key.clone()),
     };
     let claim = Fixture::claim(1_024);
+    let compressed_archive_size = 1_537;
     let admitted = validate_restore_observation(
         &fixture.request(),
         &action,
@@ -164,13 +165,15 @@ fn warm_restore_binds_action_key_compression_version_and_download_size() {
         Some(compression),
         fixture.run.clone(),
         fixture.runtime(),
-        QualificationCacheBackendObservation::Found(fixture.backend_entry(version.clone(), 1_024)),
+        QualificationCacheBackendObservation::Found(
+            fixture.backend_entry(version.clone(), compressed_archive_size),
+        ),
     )
     .expect("backend-bound hit");
     let record = admitted.cache_entry().expect("exact backend record");
     assert_eq!(record.id, 303);
     assert_eq!(record.version, version);
-    assert_eq!(record.size_bytes, 1_024);
+    assert_eq!(record.size_bytes, compressed_archive_size);
     assert_eq!(
         admitted.stage_claim().expect("checked claim").length(),
         1_024
@@ -197,11 +200,109 @@ fn warm_restore_binds_action_key_compression_version_and_download_size() {
             fixture.run.clone(),
             fixture.runtime(),
             QualificationCacheBackendObservation::Found(
-                fixture.backend_entry("d".repeat(64), 1_023),
+                fixture.backend_entry("d".repeat(64), compressed_archive_size),
             ),
         ),
         Err("normal_tofu_cache_backend_entry_mismatch")
     );
+}
+
+#[test]
+fn backend_archive_size_has_its_own_bounded_identity() {
+    let fixture = Fixture::new();
+    let context = crate::cache_action_stage::StageContext::normal_tofu_providers(
+        &fixture.runner_temp,
+        &fixture.workspace,
+        &fixture.cache_key,
+    )
+    .expect("stage context");
+    let compression = CacheActionCompression::Gzip;
+    let version = super::super::super::cache_action_version::version_for_action_compression(
+        context.action_path(),
+        compression,
+    )
+    .expect("cache version");
+    let action = CacheActionObservation {
+        hit: true,
+        matched_key: Some(fixture.cache_key.clone()),
+    };
+    let raw_length = 1_024;
+    let compressed_length = raw_length + 317;
+    assert_ne!(compressed_length, raw_length);
+    let accepted = validate_restore_observation(
+        &fixture.request(),
+        &action,
+        Some(&Fixture::claim(raw_length)),
+        Some(compression),
+        fixture.run.clone(),
+        fixture.runtime(),
+        QualificationCacheBackendObservation::Found(
+            fixture.backend_entry(version.clone(), compressed_length),
+        ),
+    );
+    assert!(accepted.is_ok());
+
+    let limit = super::backend::max_cache_archive_bytes(fixture.request().operation_limit_bytes)
+        .expect("bounded archive ceiling");
+    assert_eq!(
+        validate_restore_observation(
+            &fixture.request(),
+            &action,
+            Some(&Fixture::claim(raw_length)),
+            Some(compression),
+            fixture.run.clone(),
+            fixture.runtime(),
+            QualificationCacheBackendObservation::Found(
+                fixture.backend_entry(version.clone(), limit + 1),
+            ),
+        ),
+        Err("normal_tofu_cache_backend_entry_mismatch")
+    );
+
+    let mut smaller_request = fixture.request();
+    smaller_request.operation_limit_bytes = 1_024;
+    assert_eq!(
+        validate_restore_observation(
+            &smaller_request,
+            &action,
+            Some(&Fixture::claim(raw_length + 1)),
+            Some(compression),
+            fixture.run.clone(),
+            fixture.runtime(),
+            QualificationCacheBackendObservation::Found(
+                fixture.backend_entry(version, compressed_length),
+            ),
+        ),
+        Err("normal_tofu_cache_backend_entry_mismatch")
+    );
+}
+
+#[test]
+fn forged_stage_claim_does_not_open_the_retained_stage_file()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::io::Write;
+
+    let root = tempfile::tempdir()?;
+    let runner_temp = root.path().join("runner-temp");
+    let workspace = root.path().join("workspace");
+    std::fs::create_dir(&runner_temp)?;
+    std::fs::create_dir(&workspace)?;
+    let cache_key =
+        super::super::cache_key("x86_64-unknown-linux-gnu", "1.13.1", "", &"a".repeat(64))?;
+    let context = crate::cache_action_stage::StageContext::normal_tofu_providers(
+        &runner_temp,
+        &workspace,
+        &cache_key,
+    )?;
+    let mut writer = crate::cache_action_stage::create_stage(&context)?;
+    writer.write_all(b"checked transport")?;
+    let claim = writer.finish()?;
+    let encoded = claim.encode();
+    let (prefix, _) = encoded.rsplit_once('.').expect("claim digest");
+    let forged = format!("{prefix}.{}", "f".repeat(64));
+    let forged = crate::cache_action_stage::StageReceiptClaim::parse(&forged)?;
+    assert!(crate::cache_action_stage::open_stage(&context, &forged).is_err());
+    Ok(())
 }
 
 #[test]
