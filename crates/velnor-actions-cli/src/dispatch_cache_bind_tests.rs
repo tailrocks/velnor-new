@@ -47,6 +47,18 @@ fn reads_exact_runner_and_workflow_identity() {
     assert_eq!(inputs.matrix_key, "matrix-key");
     assert_eq!(inputs.layer, "cargo_sources");
     assert_eq!(inputs.runner_temp, PathBuf::from("/runner/temp"));
+    assert_eq!(inputs.image_os.as_deref(), Some("ubuntu26"));
+    assert_eq!(inputs.image_version.as_deref(), Some("20261018.1"));
+}
+
+#[test]
+fn hosted_image_fields_are_optional_inputs() {
+    let mut values = bind_environment();
+    values.remove("ImageOS");
+    values.remove("ImageVersion");
+    let inputs = read(&values).expect("scale set binding inputs");
+    assert_eq!(inputs.image_os, None);
+    assert_eq!(inputs.image_version, None);
 }
 
 #[test]
@@ -122,7 +134,16 @@ fn output_body_uses_fixed_single_line_names() {
         matrix_key: "matrix-key".to_owned(),
         layer: "cargo_sources".to_owned(),
         restore_key: Some("velnor-qcache-v1-campaign-1-cargo_sources-k1".to_owned()),
-        expected_cache: None,
+        expected_cache: Some(
+            velnor_actions_contract::workflow::QualificationCacheBackendEntry {
+                id: 91,
+                key: "velnor-qcache-v1-campaign-1-cargo_sources-k1".to_owned(),
+                git_ref: "refs/heads/main".to_owned(),
+                version: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                    .to_owned(),
+                size_bytes: 17,
+            },
+        ),
         save_key: Some("velnor-qcache-v1-campaign-1-cargo_sources-k1".to_owned()),
         save_if_state_changes: false,
         expected_prior_state_digest: None,
@@ -138,9 +159,55 @@ fn output_body_uses_fixed_single_line_names() {
         body.lines()
             .any(|line| line == "save_key=velnor-qcache-v1-campaign-1-cargo_sources-k1")
     );
+    assert!(body.lines().any(|line| {
+        line == "restore_stage_path=/home/runner/_work/_temp/velnor/qualification-cache/campaign-1/cargo_sources/velnor-qcache-v1-campaign-1-cargo_sources-k1/payload"
+    }));
+    assert!(body.lines().any(|line| {
+        line == "save_stage_path=/home/runner/_work/_temp/velnor/qualification-cache/campaign-1/cargo_sources/velnor-qcache-v1-campaign-1-cargo_sources-k1/payload"
+    }));
     assert!(
         body.lines()
             .any(|line| line == "runtime_identity_digest=b3-identity")
+    );
+    assert!(body.lines().any(|line| {
+        line == "expected_cache_version=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }));
+}
+
+#[test]
+fn stable_stage_path_is_exact_key_scoped_and_run_independent() {
+    let k1 = "velnor-qcache-v1-campaign-1-mise_tools-identity-runtime-k1";
+    let k2 = "velnor-qcache-v1-campaign-1-mise_tools-identity-runtime-k2";
+    let cold_save = stage_path("campaign-1", "mise_tools", k1).expect("K1 save path");
+    let warm_restore = stage_path("campaign-1", "mise_tools", k1).expect("K1 restore path");
+    let warm_save = stage_path("campaign-1", "mise_tools", k2).expect("K2 save path");
+
+    assert_eq!(cold_save, warm_restore);
+    assert_ne!(cold_save, warm_save);
+    assert!(!cold_save.contains("run-700"));
+}
+
+#[test]
+fn stable_stage_path_rejects_untyped_components_and_traversal() {
+    assert_eq!(
+        stage_path(
+            "campaign-1",
+            "unknown",
+            "velnor-qcache-v1-campaign-1-unknown-k1"
+        ),
+        Err("cache_binding_stage_path_invalid")
+    );
+    assert_eq!(
+        stage_path("campaign-1", "mise_tools", "../payload"),
+        Err("cache_binding_stage_path_invalid")
+    );
+    assert_eq!(
+        stage_path(
+            "campaign/other",
+            "mise_tools",
+            "velnor-qcache-v1-campaign/other-mise_tools-k1"
+        ),
+        Err("cache_binding_stage_path_invalid")
     );
 }
 

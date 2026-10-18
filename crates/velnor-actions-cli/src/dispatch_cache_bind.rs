@@ -14,14 +14,15 @@ use velnor_actions_orchestrator::{
 pub(crate) const OP: &str = QUALIFICATION_CACHE_BIND_OP;
 
 const MAX_RUNTIME_IDENTITY_BYTES: usize = 65_536;
-const GITHUB_OUTPUT_ENV: &str = "GITHUB_OUTPUT";
+pub(crate) const GITHUB_OUTPUT_ENV: &str = "GITHUB_OUTPUT";
 const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 const MATRIX_KEY_ENV: &str = "VELNOR_QUALIFICATION_CACHE_MATRIX_KEY";
 const LAYER_ENV: &str = "VELNOR_QUALIFICATION_CACHE_LAYER";
 const RUNTIME_IDENTITY_ENV: &str = "VELNOR_QUALIFICATION_RUNTIME_IDENTITY";
+const QUALIFICATION_CACHE_STAGE_ROOT: &str = "/home/runner/_work/_temp/velnor/qualification-cache";
 
 #[derive(Debug)]
-struct BindInputs {
+pub(crate) struct BindInputs {
     runner_temp: PathBuf,
     run_id: u64,
     run_attempt: u32,
@@ -34,15 +35,15 @@ struct BindInputs {
     source_sha: String,
     runner_os: String,
     runner_arch: String,
-    image_os: String,
-    image_version: String,
+    image_os: Option<String>,
+    image_version: Option<String>,
     matrix_key: String,
     layer: String,
     runtime_identity_json: String,
 }
 
 impl BindInputs {
-    fn request(&self) -> QualificationCacheBindingRequest<'_> {
+    pub(crate) fn request(&self) -> QualificationCacheBindingRequest<'_> {
         QualificationCacheBindingRequest {
             runner_temp: &self.runner_temp,
             run_id: self.run_id,
@@ -56,8 +57,8 @@ impl BindInputs {
             source_sha: &self.source_sha,
             runner_os: &self.runner_os,
             runner_arch: &self.runner_arch,
-            image_os: &self.image_os,
-            image_version: &self.image_version,
+            image_os: self.image_os.as_deref(),
+            image_version: self.image_version.as_deref(),
             matrix_key: &self.matrix_key,
             layer: &self.layer,
             runtime_identity_json: &self.runtime_identity_json,
@@ -88,7 +89,7 @@ pub(crate) fn run() -> ExitCode {
     }
 }
 
-fn append_owned_output(path: &std::ffi::OsStr, body: &[u8]) -> std::io::Result<()> {
+pub(crate) fn append_owned_output(path: &std::ffi::OsStr, body: &[u8]) -> std::io::Result<()> {
     let path = PathBuf::from(path);
     let text = path.to_str().ok_or_else(invalid_output_path)?;
     if text.len() > 4_096
@@ -127,7 +128,7 @@ fn invalid_output_path() -> std::io::Error {
     std::io::Error::from(std::io::ErrorKind::InvalidInput)
 }
 
-fn read_inputs<E>(mut get: E) -> Result<BindInputs, String>
+pub(crate) fn read_inputs<E>(mut get: E) -> Result<BindInputs, String>
 where
     E: FnMut(&str) -> Result<String, env::VarError>,
 {
@@ -163,12 +164,19 @@ where
         source_sha: required(&mut get, "GITHUB_SHA")?,
         runner_os: required(&mut get, "RUNNER_OS")?,
         runner_arch: required(&mut get, "RUNNER_ARCH")?,
-        image_os: required(&mut get, "ImageOS")?,
-        image_version: required(&mut get, "ImageVersion")?,
+        image_os: optional(&mut get, "ImageOS"),
+        image_version: optional(&mut get, "ImageVersion"),
         matrix_key: required(&mut get, MATRIX_KEY_ENV)?,
         layer: required(&mut get, LAYER_ENV)?,
         runtime_identity_json,
     })
+}
+
+fn optional<E>(get: &mut E, name: &str) -> Option<String>
+where
+    E: FnMut(&str) -> Result<String, env::VarError>,
+{
+    get(name).ok().filter(|value| !value.is_empty())
 }
 
 fn required<E>(get: &mut E, name: &str) -> Result<String, String>
@@ -213,6 +221,18 @@ fn output_body(
     outputs: &velnor_actions_orchestrator::QualificationCacheBindingOutputs,
 ) -> Result<String, &'static str> {
     let cache = outputs.expected_cache.as_ref();
+    let restore_stage_path = outputs
+        .restore_key
+        .as_deref()
+        .map(|key| stage_path(&outputs.campaign, &outputs.layer, key))
+        .transpose()?
+        .unwrap_or_default();
+    let save_stage_path = outputs
+        .save_key
+        .as_deref()
+        .map(|key| stage_path(&outputs.campaign, &outputs.layer, key))
+        .transpose()?
+        .unwrap_or_default();
     let fields = [
         ("active", bool_text(outputs.active).to_owned()),
         ("campaign", outputs.campaign.clone()),
@@ -225,6 +245,7 @@ fn output_body(
             "restore_key",
             outputs.restore_key.clone().unwrap_or_default(),
         ),
+        ("restore_stage_path", restore_stage_path),
         (
             "expected_cache_id",
             cache.map_or_else(String::new, |entry| entry.id.to_string()),
@@ -238,10 +259,15 @@ fn output_body(
             cache.map_or_else(String::new, |entry| entry.git_ref.clone()),
         ),
         (
+            "expected_cache_version",
+            cache.map_or_else(String::new, |entry| entry.version.clone()),
+        ),
+        (
             "expected_cache_size",
             cache.map_or_else(String::new, |entry| entry.size_bytes.to_string()),
         ),
         ("save_key", outputs.save_key.clone().unwrap_or_default()),
+        ("save_stage_path", save_stage_path),
         (
             "save_if_state_changes",
             bool_text(outputs.save_if_state_changes).to_owned(),
@@ -269,6 +295,41 @@ fn output_body(
         body.push('\n');
     }
     Ok(body)
+}
+
+/// Stable absolute staging path for an exact, typed campaign/layer/cache key.
+/// The path deliberately excludes the workflow run/attempt so a cold save and
+/// warm restore of the same key use the same action-cache archive version.
+fn stage_path(campaign: &str, layer: &str, key: &str) -> Result<String, &'static str> {
+    if [campaign, layer, key]
+        .iter()
+        .any(|value| value.chars().any(|ch| matches!(ch, '\n' | '\r')))
+    {
+        return Err("cache_binding_output_invalid");
+    }
+    let valid_campaign = !campaign.is_empty()
+        && campaign.len() <= 64
+        && campaign
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
+    let valid_layer = matches!(
+        layer,
+        "mbx_objects" | "cargo_sources" | "mise_tools" | "tofu_providers" | "task_result"
+    );
+    let valid_key = !key.is_empty()
+        && key.len() <= velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES
+        && key.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || b"-_".contains(&byte)
+        })
+        && key.starts_with(&format!("velnor-qcache-v1-{campaign}-{layer}-"));
+    if !valid_campaign || !valid_layer || !valid_key {
+        return Err("cache_binding_stage_path_invalid");
+    }
+    let path = format!("{QUALIFICATION_CACHE_STAGE_ROOT}/{campaign}/{layer}/{key}/payload");
+    if path.len() > 4_096 {
+        return Err("cache_binding_stage_path_invalid");
+    }
+    Ok(path)
 }
 
 fn bool_text(value: bool) -> &'static str {
