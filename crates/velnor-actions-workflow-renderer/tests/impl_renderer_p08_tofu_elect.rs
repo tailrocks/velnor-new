@@ -109,7 +109,7 @@ fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError
         Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
         "lowest id wins with the key bound to its composite output"
     );
-    assert!(provider_saves(&jobs["tofu-b"]).is_empty());
+    assert_eq!(provider_saves(&jobs["tofu-b"]).len(), 0);
     assert_eq!(
         provider_saved_key(&jobs["tofu-c"]),
         Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
@@ -175,7 +175,7 @@ fn provider_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError
     ]);
     elect_cache_writers(&mut jobs)?;
     elect_cache_writers(&mut jobs)?;
-    assert!(jobs["bare"].steps.is_empty(), "keyless job untouched");
+    assert_eq!(jobs["bare"].steps.len(), 0, "keyless job untouched");
     assert_eq!(
         provider_saves(&jobs["tofu-a"]).len(),
         1,

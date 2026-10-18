@@ -5,7 +5,6 @@ mod mirror;
 mod pins;
 
 use std::fs;
-
 use std::path::Path;
 
 use serde_json::Value;
@@ -57,6 +56,7 @@ pub(crate) const EXPECTED_ACTIONS: &[(&str, &str)] = &[
         "actions/create-github-app-token",
         "CREATE_GITHUB_APP_TOKEN_ACTION",
     ),
+    ("actions/github-script", "GITHUB_SCRIPT_ACTION"),
 ];
 /// Load the reviewed JSON inventory, recording shape errors as gate rows.
 pub(crate) fn load_inventory(ctx: &mut FreshnessContext) -> bool {

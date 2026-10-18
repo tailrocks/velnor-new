@@ -100,10 +100,10 @@ case "$command_name" in
     cat "$tool_state/pinned-mise-version"
     ;;
   install)
-    [[ "${1:-}" == rust@1.98.1 ]]
+    [[ "${1:-}" == rust@1.99.1 ]]
     ;;
   exec)
-    [[ "${1:-}" == rust@1.98.1 ]] || exit 2
+    [[ "${1:-}" == rust@1.99.1 ]] || exit 2
     shift
     [[ "${1:-}" == -- ]] || exit 2
     shift
@@ -112,12 +112,12 @@ case "$command_name" in
     case "$tool" in
       rustc)
         if [[ "${1:-}" == --version ]]; then
-          printf 'rustc 1.98.1 (0123456789abcdef 2026-01-01)\n'
+          printf 'rustc 1.99.1 (0123456789abcdef 2026-01-01)\n'
         elif [[ "${1:-}" == -vV ]]; then
-          printf 'rustc 1.98.1 (0123456789abcdef 2026-01-01)\n'
+          printf 'rustc 1.99.1 (0123456789abcdef 2026-01-01)\n'
           printf 'binary: rustc\ncommit-hash: 0123456789abcdef\n'
           printf 'commit-date: 2026-01-01\nhost: x86_64-unknown-linux-gnu\n'
-          printf 'release: 1.98.1\nLLVM version: 21.1.8\n'
+          printf 'release: 1.99.1\nLLVM version: 21.1.8\n'
         else
           exit 2
         fi
@@ -125,7 +125,7 @@ case "$command_name" in
       cargo)
         case "${1:-}" in
           --version)
-            printf 'cargo 1.98.1 (abcdef0123456789 2026-01-01)\n'
+            printf 'cargo 1.99.1 (abcdef0123456789 2026-01-01)\n'
             ;;
           tree)
             manifest=''

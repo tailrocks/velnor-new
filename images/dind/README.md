@@ -3,8 +3,15 @@
 Platform: `linux/amd64`. ARM64 is not the baseline. One `dockerd` per worker.
 
 ```sh
-docker build --platform linux/amd64 -t velnor-dind:29.8.2 images/dind
+docker build --platform linux/amd64 -t velnor-dind:29.9.1 images/dind
 ```
+
+Docker Engine `29.9.1` is the latest [Moby release](https://github.com/moby/moby/releases/tag/v29.9.1),
+downloaded from the [official static archive](https://download.docker.com/linux/static/stable/x86_64/docker-29.9.1.tgz).
+SHA256 `c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57`
+was measured from that official HTTPS artifact because Docker does not publish
+a checksum sidecar for it. The archive was 86,364,663 bytes, with Last-Modified
+`2026-10-16 09:29:12 GMT` and ETag `b17406f2778a6fa5fb95a7be40c32549`.
 
 Listens only on `unix:///var/run/docker.sock` inside the worker namespace
 (`/var/run` is `/run` on Ubuntu). Data root is `/var/lib/docker`. Group

@@ -189,7 +189,7 @@ fn cache_free_render_does_not_emit_runtime_identity_script() -> Result<(), Rende
         &fixture_ctx(),
         &mise(),
     )?;
-    assert!(rendered.shared.is_empty(), "{:?}", rendered.shared);
+    assert_eq!(rendered.shared.len(), 0, "{:?}", rendered.shared);
     assert!(!rendered.yaml.contains("velnor-tools-cache-identity"));
     assert!(
         !rendered

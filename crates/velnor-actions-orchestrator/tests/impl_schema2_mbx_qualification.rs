@@ -4,36 +4,37 @@ use std::fs;
 use std::process::Command;
 
 use tempfile::TempDir;
-use velnor_actions_actionlint::actions::{
-    MR_BOXINGTON_ACTION_CANDIDATE_SHA, MR_BOXINGTON_ACTION_SHA,
-};
+use velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_SHA;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
 use crate::impl_common::{TestResult, make_repo};
 
-const CACHE_GENERATION: &str = "velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-47ce49b32025d93a7a2f4570815afaa2b7092240";
+const CACHE_GENERATION: &str = "velnor-qualification-mbx-1.24.1-share-out-dir-disabled-v1-gc-auto-off-final-clean-v1-action-47ce49b32025d93a7a2f4570815afaa2b7092240";
 
 fn assert_candidate_ref(writer: &str) {
     assert!(
         writer.contains(&format!(
-            "uses: jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_CANDIDATE_SHA}"
+            "uses: jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}"
         )),
         "the experiment must invoke its exact immutable candidate"
     );
     assert!(
-        !writer.contains(&format!(
-            "uses: jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}"
-        )),
-        "qualification must not silently substitute the production pin"
+        writer
+            .matches(&format!(
+                "uses: jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}"
+            ))
+            .count()
+            == 1,
+        "qualification must use the exact currently reviewed immutable action"
     );
 }
 
 fn assert_candidate_owner(job: &str) {
     for fragment in [
-        "version: 1.21.1",
-        "toolchain: 1.98.1",
+        "version: 1.24.1",
+        "toolchain: 1.99.1",
         "isolate-objects-cache: \"true\"",
-        "RUSTUP_TOOLCHAIN: 1.98.1",
+        "RUSTUP_TOOLCHAIN: 1.99.1",
         "MBX_SHARE_OUT_DIR: \"0\"",
         "CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo",
     ] {
@@ -77,8 +78,8 @@ fn assert_writer(writer: &str) {
         writer.contains(&format!("{CACHE_GENERATION}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}")),
         "{writer}"
     );
-    assert!(writer.contains("version: 1.21.1"), "{writer}");
-    assert!(writer.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{writer}");
+    assert!(writer.contains("version: 1.24.1"), "{writer}");
+    assert!(writer.contains("RUSTUP_TOOLCHAIN: 1.99.1"), "{writer}");
     assert!(
         writer
             .contains("CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo"),
@@ -128,7 +129,7 @@ fn assert_reader(reader: &str) {
         reader.contains(".savings.cached_compilations > 0"),
         "{reader}"
     );
-    assert!(reader.contains("version: 1.21.1"), "{reader}");
+    assert!(reader.contains("version: 1.24.1"), "{reader}");
     assert!(
         reader.contains("df -B1 -P \\\"$RUNNER_TEMP\\\""),
         "{reader}"
@@ -156,7 +157,7 @@ fn assert_reader(reader: &str) {
         ),
         "{reader}"
     );
-    assert!(reader.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{reader}");
+    assert!(reader.contains("RUSTUP_TOOLCHAIN: 1.99.1"), "{reader}");
     assert!(
         reader
             .contains("CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo"),

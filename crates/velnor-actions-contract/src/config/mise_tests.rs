@@ -124,6 +124,8 @@ fn native_only_check_requires_no_mise_installed_tools() {
         kind: CheckSystemToolKind::Swift,
         version: "6.2.1".to_owned(),
         build: "swiftlang-6.2.1.1.1".to_owned(),
+        sdk_version: None,
+        developer_dir: None,
     }];
     assert!(native.validate("config.toml", "checks[0]").is_ok());
     native.system_tools[0].build = "$(untrusted)".to_owned();

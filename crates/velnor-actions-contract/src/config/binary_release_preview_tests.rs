@@ -177,6 +177,10 @@ fn system_tool(kind: CheckSystemToolKind, version: &str, build: &str) -> CheckSy
         kind,
         version: version.to_owned(),
         build: build.to_owned(),
+        sdk_version: (kind == CheckSystemToolKind::Xcode).then(|| "27.0".to_owned()),
+        developer_dir: (kind == CheckSystemToolKind::Xcode).then(|| {
+            "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer".to_owned()
+        }),
     }
 }
 

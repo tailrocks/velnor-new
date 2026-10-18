@@ -2,10 +2,10 @@
 # One dockerd per worker. Listens only on unix:///var/run/docker.sock.
 # Do not COPY or mount a host socket. No TCP listener. No prune.
 # This image does not set privileged. The controller supplies runtime privileges.
-FROM ubuntu:26.04
+FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a
 
-ARG DOCKER_VERSION=29.8.2
-ARG DOCKER_SHA256=995d1ef289677f74fd58d8d2c35727b6a4ee389c69db8638a3e42d0487aa5b0f
+ARG DOCKER_VERSION=29.9.1
+ARG DOCKER_SHA256=c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
@@ -34,7 +34,9 @@ RUN apt-get update \
         /usr/local/bin/docker-init \
         /usr/local/bin/docker-proxy \
         /usr/local/bin/dockerd \
-        /usr/local/bin/runc
+        /usr/local/bin/runc \
+    && docker --version | grep -F "Docker version ${DOCKER_VERSION}," \
+    && dockerd --version | grep -F "Docker version ${DOCKER_VERSION},"
 
 # containerd's overlay snapshotter returns EINVAL when this amd64 dockerd
 # runs under emulation. vfs does not mount overlay. linux/amd64 stays the baseline.

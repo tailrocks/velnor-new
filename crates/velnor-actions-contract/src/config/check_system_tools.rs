@@ -13,6 +13,10 @@ pub struct CheckSystemTool {
     pub version: String,
     /// Exact installed build identifier.
     pub build: String,
+    /// Exact macOS SDK version for Xcode; absent for Swift.
+    pub sdk_version: Option<String>,
+    /// Canonical Xcode developer directory override; absent uses host selection.
+    pub developer_dir: Option<String>,
 }
 
 /// Native macOS tools available through fixed system executable paths.
@@ -80,8 +84,39 @@ pub(super) fn validate_system_tools(
         if !safe_version(&tool.version) || !safe_build(&tool.build) {
             return Err(bad("invalid_system_tool_pin"));
         }
+        match tool.kind {
+            CheckSystemToolKind::Swift
+                if tool.sdk_version.is_some() || tool.developer_dir.is_some() =>
+            {
+                return Err(bad("swift_cannot_select_xcode_directory_or_sdk"));
+            }
+            CheckSystemToolKind::Xcode => {
+                if tool.sdk_version.as_deref().is_none_or(|v| !safe_version(v)) {
+                    return Err(bad("xcode_requires_exact_sdk_version"));
+                }
+                if let Some(directory) = tool.developer_dir.as_deref()
+                    && !safe_developer_dir(directory)
+                {
+                    return Err(bad("invalid_xcode_developer_directory"));
+                }
+            }
+            CheckSystemToolKind::Swift => {}
+        }
     }
     Ok(())
+}
+
+fn safe_developer_dir(value: &str) -> bool {
+    value.len() <= super::super::MAX_CHECK_CONTAINER_PATH_BYTES
+        && value.starts_with("/Applications/")
+        && value.ends_with(".app/Contents/Developer")
+        && value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-' | b' ')
+        })
+        && value
+            .split('/')
+            .skip(1)
+            .all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
 #[cfg(test)]
@@ -93,6 +128,8 @@ mod tests {
             kind: CheckSystemToolKind::Swift,
             version: "6.2.1".to_owned(),
             build: "swiftlang-6.2.1.1.1".to_owned(),
+            sdk_version: None,
+            developer_dir: None,
         }
     }
 
@@ -127,11 +164,72 @@ mod tests {
                 "{bad}"
             );
         }
-        let mut xcode = swift();
-        xcode.kind = CheckSystemToolKind::Xcode;
+    }
+
+    #[test]
+    fn xcode_pin_requires_safe_path_and_exact_sdk() {
+        let xcode = xcode();
         assert!(
             validate_system_tools(
-                &[xcode.clone(), swift()],
+                std::slice::from_ref(&xcode),
+                CheckPlatform::MacosArm64,
+                "config",
+                "checks[0]"
+            )
+            .is_ok()
+        );
+        for directory in [
+            "/Applications/../tmp/Xcode.app/Contents/Developer",
+            "/tmp/Xcode.app/Contents/Developer",
+            "/Applications/Xcode.app/Contents/Developer/../SharedFrameworks",
+            "/Applications/Xcode.app/Contents/Developer;touch",
+        ] {
+            let mut invalid = xcode.clone();
+            invalid.developer_dir = Some(directory.to_owned());
+            assert!(
+                validate_system_tools(&[invalid], CheckPlatform::MacosArm64, "config", "checks[0]")
+                    .is_err()
+            );
+        }
+        let mut missing_sdk = xcode.clone();
+        missing_sdk.sdk_version = None;
+        assert!(
+            validate_system_tools(
+                &[missing_sdk],
+                CheckPlatform::MacosArm64,
+                "config",
+                "checks[0]"
+            )
+            .is_err()
+        );
+        let mut swift_override = swift();
+        swift_override.developer_dir = xcode.developer_dir.clone();
+        assert!(
+            validate_system_tools(
+                &[swift_override],
+                CheckPlatform::MacosArm64,
+                "config",
+                "checks[0]"
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn tool_selection_kinds_are_sorted_and_unique() {
+        let xcode = xcode();
+        assert!(
+            validate_system_tools(
+                &[swift(), swift()],
+                CheckPlatform::MacosArm64,
+                "config",
+                "checks[0]"
+            )
+            .is_err()
+        );
+        assert!(
+            validate_system_tools(
+                &[xcode.clone(), xcode.clone()],
                 CheckPlatform::MacosArm64,
                 "config",
                 "checks[0]"
@@ -147,6 +245,18 @@ mod tests {
             )
             .is_ok()
         );
+    }
+
+    fn xcode() -> CheckSystemTool {
+        CheckSystemTool {
+            kind: CheckSystemToolKind::Xcode,
+            version: "27.1".to_owned(),
+            build: "27A9275".to_owned(),
+            sdk_version: Some("27.0".to_owned()),
+            developer_dir: Some(
+                "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer".to_owned(),
+            ),
+        }
     }
     #[test]
     fn complete_swift_compiler_tuple_is_pinned_without_shell_syntax() {

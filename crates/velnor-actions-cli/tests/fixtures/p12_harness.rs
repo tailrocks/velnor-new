@@ -90,7 +90,7 @@ pub(crate) fn use_fixture_mise(
     write(
         &fixture.dir,
         "fixture-bin/mise",
-        "#!/bin/sh\nset -eu\n[ \"$#\" -eq 12 ] || exit 90\n[ \"$1\" = exec ] || exit 91\n[ \"$2\" = rust@1.98.1 ] || exit 92\n[ \"$3\" = mr-boxington@1.19.0 ] || exit 93\n[ \"$4\" = -- ] || exit 94\nshift 4\n[ \"$*\" = 'cargo run --quiet --locked -p velnor-actions-cli --bin velnor-actions' ] || exit 95\n[ \"$1\" = cargo ] || exit 96\nshift\nexec \"$VELNOR_TEST_CARGO\" \"$@\"\n",
+        "#!/bin/sh\nset -eu\n[ \"$#\" -eq 12 ] || exit 90\n[ \"$1\" = exec ] || exit 91\n[ \"$2\" = rust@1.99.1 ] || exit 92\n[ \"$3\" = mr-boxington@1.24.1 ] || exit 93\n[ \"$4\" = -- ] || exit 94\nshift 4\n[ \"$*\" = 'cargo run --quiet --locked -p velnor-actions-cli --bin velnor-actions' ] || exit 95\n[ \"$1\" = cargo ] || exit 96\nshift\nexec \"$VELNOR_TEST_CARGO\" \"$@\"\n",
     )?;
     #[cfg(unix)]
     {
@@ -106,7 +106,7 @@ pub(crate) fn use_fixture_mise(
     command
         .env("PATH", std::env::join_paths(paths)?)
         .env("VELNOR_TEST_CARGO", env!("CARGO"))
-        .env("RUSTUP_TOOLCHAIN", "1.98.1");
+        .env("RUSTUP_TOOLCHAIN", "1.99.1");
     Ok(())
 }
 
@@ -340,10 +340,10 @@ pub(crate) fn cleanup(fixture: &Fixture) {
 }
 
 const PROBE_DATA: &[&str] = &[
-    "https://api.github.com/repos/jdx/mise/releases/latest\tmise.json\t{\"tag_name\": \"v2026.10.4\"}",
-    "https://static.rust-lang.org/dist/channel-rust-stable.toml\trust.toml\t[pkg.rust]\nversion = \"1.98.1 (48a229cea 2026-09-01)\"\n",
-    "https://api.github.com/repos/jdx/mr-boxington/releases/latest\tmbx.json\t[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.19.0\"}]",
-    "https://api.github.com/repos/cli/cli/releases/latest\tgh.json\t{\"tag_name\": \"v2.101.0\"}",
+    "https://api.github.com/repos/jdx/mise/releases/latest\tmise.json\t{\"tag_name\": \"v2026.10.13\"}",
+    "https://static.rust-lang.org/dist/channel-rust-stable.toml\trust.toml\t[pkg.rust]\nversion = \"1.99.1 (48a229cea 2026-09-01)\"\n",
+    "https://api.github.com/repos/jdx/mr-boxington/releases/latest\tmbx.json\t[{\"tag_name\": \"v1.20.0-beta\", \"prerelease\": true}, {\"tag_name\": \"v1.24.1\"}]",
+    "https://api.github.com/repos/cli/cli/releases/latest\tgh.json\t{\"tag_name\": \"v2.102.0\"}",
     "https://api.github.com/repos/rhysd/actionlint/releases/latest\tactionlint.json\t{\"tag_name\": \"v1.7.12\"}",
     "https://api.github.com/repos/koalaman/shellcheck/releases/latest\tshellcheck.json\t{\"tag_name\": \"v0.11.0\"}",
     "https://api.github.com/repos/zizmorcore/zizmor/releases/latest\tzizmor.json\t{\"tag_name\": \"v1.31.1\"}",
@@ -361,6 +361,7 @@ const PROBE_DATA: &[&str] = &[
     "https://api.github.com/repos/sigstore/cosign/releases/latest\tcosign.json\t{\"tag_name\": \"v3.1.3\"}",
     "https://api.github.com/repos/actions/attest-build-provenance/releases/latest\tattest-build-provenance.json\t{\"tag_name\": \"v4.2.2\"}",
     "https://api.github.com/repos/actions/create-github-app-token/releases/latest\tcreate-github-app-token.json\t{\"tag_name\": \"v3.3.0\"}",
+    "https://api.github.com/repos/actions/github-script/releases/latest\tgithub-script.json\t{\"tag_name\": \"v9.0.0\"}",
 ];
 
 /// (inventory source URL, canned file, canned body) for every probe row.

@@ -211,7 +211,7 @@ fn assert_dogfood_cargo_warmup(
 ) -> Result<(), Box<dyn std::error::Error>> {
     assert!(
         qualification_helpers.contains(
-            "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked"
+            "mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked"
         ),
         "{qualification_helpers}"
     );

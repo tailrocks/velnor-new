@@ -62,7 +62,7 @@ fn tools_cache_writer_election_prefers_plan_then_lowest_id() -> Result<(), Rende
         restore_key(&jobs["plan"]),
         "plan wins shared"
     );
-    assert!(tools_saves(&jobs["rust-b"]).is_empty(), "sharer saves none");
+    assert_eq!(tools_saves(&jobs["rust-b"]).len(), 0, "sharer saves none");
     assert_eq!(
         saved_key(&jobs["rust-c"]),
         restore_key(&jobs["rust-c"]),
@@ -79,7 +79,7 @@ fn tools_cache_writer_election_prefers_plan_then_lowest_id() -> Result<(), Rende
         restore_key(&jobs["rust-a"]),
         "lowest id wins without plan"
     );
-    assert!(tools_saves(&jobs["rust-b"]).is_empty());
+    assert_eq!(tools_saves(&jobs["rust-b"]).len(), 0);
     Ok(())
 }
 
@@ -169,7 +169,7 @@ fn tools_cache_writer_skips_keyless_and_reruns() -> Result<(), RenderError> {
     ]);
     elect_cache_writers(&mut jobs)?;
     elect_cache_writers(&mut jobs)?;
-    assert!(jobs["bare"].steps.is_empty(), "keyless job untouched");
+    assert_eq!(jobs["bare"].steps.len(), 0, "keyless job untouched");
     assert_eq!(
         tools_saves(&jobs["rust-a"]).len(),
         1,
@@ -262,7 +262,7 @@ fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError
         Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
         "lowest id wins the shared key"
     );
-    assert!(provider_saves(&jobs["tofu-b"]).is_empty());
+    assert_eq!(provider_saves(&jobs["tofu-b"]).len(), 0);
     assert_eq!(
         provider_saved_key(&jobs["tofu-c"]),
         Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
@@ -316,7 +316,7 @@ fn provider_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError
     ]);
     elect_cache_writers(&mut jobs)?;
     elect_cache_writers(&mut jobs)?;
-    assert!(jobs["bare"].steps.is_empty(), "keyless job untouched");
+    assert_eq!(jobs["bare"].steps.len(), 0, "keyless job untouched");
     assert_eq!(
         provider_saves(&jobs["tofu-a"]).len(),
         1,
@@ -347,7 +347,7 @@ fn combined_election_rejects_provider_conflict_before_appending_tools_save()
     for (id, steps) in original_steps {
         assert_eq!(jobs[&id].steps, steps, "failed election mutated {id}");
     }
-    assert!(tools_saves(&jobs["plan"]).is_empty());
+    assert_eq!(tools_saves(&jobs["plan"]).len(), 0);
     Ok(())
 }
 

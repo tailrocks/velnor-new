@@ -16,7 +16,7 @@ const NEGATIVE: &str = "inputs.mode == 'negative'";
 
 /// Pinned `actions/checkout` used by qualification jobs.
 pub(super) const CHECKOUT_USES: &str = crate::steps::CHECKOUT_USES;
-const UPLOAD_USES: &str = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+const UPLOAD_USES: &str = crate::steps::UPLOAD_ARTIFACT_USES;
 const REDIS_OPTIONS: &str =
     "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12";
 /// Host-style steps reach a published service port on localhost.
@@ -199,7 +199,12 @@ pub(super) fn redis_service() -> Yaml {
     Yaml::Map(vec![(
         "redis".to_owned(),
         Yaml::Map(vec![
-            ("image".to_owned(), Yaml::str("redis:7-alpine")),
+            (
+                "image".to_owned(),
+                Yaml::str(
+                    "redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23",
+                ),
+            ),
             ("options".to_owned(), Yaml::str(REDIS_OPTIONS)),
             (
                 "ports".to_owned(),

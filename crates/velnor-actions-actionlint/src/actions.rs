@@ -1,4 +1,4 @@
-//! Pinned action refs against the 11-entry allowlist.
+//! Pinned action refs against the 12-entry allowlist.
 //!
 //! Every ref pins `repo[/path]@sha` plus a `# vX.Y.Z` comment; no
 //! mutable-tag exceptions exist.
@@ -6,7 +6,7 @@
 use crate::ActionlintError;
 
 /// Exhaustive allowlist of `owner/repo[/path]` action keys.
-pub const ALLOWED_ACTIONS: [&str; 11] = [
+pub const ALLOWED_ACTIONS: [&str; 12] = [
     "jdx/mise-action",
     "actions/checkout",
     "actions/download-artifact",
@@ -18,7 +18,18 @@ pub const ALLOWED_ACTIONS: [&str; 11] = [
     "aws-actions/configure-aws-credentials",
     "actions/attest-build-provenance",
     "actions/create-github-app-token",
+    "actions/github-script",
 ];
+
+/// Action key for the pinned JavaScript script runner.
+pub const GITHUB_SCRIPT_ACTION: &str = "actions/github-script";
+/// Current reviewed `actions/github-script` release.
+pub const GITHUB_SCRIPT_ACTION_VERSION: &str = "v9.0.0";
+/// Immutable commit resolved from the v9.0.0 release tag.
+pub const GITHUB_SCRIPT_ACTION_SHA: &str = "3a2844b7e9c422d3c10d287c895573f7108da1b3";
+/// Full immutable action ref used by generated qualification fixtures.
+pub const GITHUB_SCRIPT_ACTION_USES: &str =
+    "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3";
 
 /// Action that creates a narrowly scoped GitHub App installation token.
 pub const CREATE_GITHUB_APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
@@ -45,6 +56,8 @@ pub const ALINT_ACTION: &str = "asamarts/alint";
 
 /// Action key for the no-credentials checkout every job embeds.
 pub const CHECKOUT_ACTION: &str = "actions/checkout";
+/// Qualified immutable checkout action ref.
+pub const CHECKOUT_ACTION_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 
 /// Policy-owned action used to obtain short-lived AWS credentials through OIDC.
 pub const AWS_CREDENTIALS_ACTION: &str = "aws-actions/configure-aws-credentials";
@@ -76,33 +89,31 @@ pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";
 /// Full commit SHA for [`CHECKOUT_ACTION_VERSION`] (`v7` moves with it).
 pub const CHECKOUT_ACTION_SHA: &str = "3d3c42e5aac5ba805825da76410c181273ba90b1";
 /// Qualified `actions/download-artifact` release.
-/// Source: `https://api.github.com/repos/actions/download-artifact/releases/latest`; checked 2026-09-28.
-pub const DOWNLOAD_ARTIFACT_ACTION_VERSION: &str = "v8.0.1";
+/// Source: `https://api.github.com/repos/actions/download-artifact/releases/latest`; checked 2026-10-18.
+pub const DOWNLOAD_ARTIFACT_ACTION_VERSION: &str = "v8.0.2";
 /// Full commit SHA for [`DOWNLOAD_ARTIFACT_ACTION_VERSION`] (`v8` moves with it).
-pub const DOWNLOAD_ARTIFACT_ACTION_SHA: &str = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c";
+pub const DOWNLOAD_ARTIFACT_ACTION_SHA: &str = "9000827ccba6bdab643e8b6fd33ac0654aef8333";
+/// Qualified immutable artifact download ref.
+pub const DOWNLOAD_ARTIFACT_ACTION_USES: &str =
+    "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
 /// Qualified `actions/upload-artifact` release.
-/// Source: `https://api.github.com/repos/actions/upload-artifact/releases/latest`; checked 2026-09-28.
-pub const UPLOAD_ARTIFACT_ACTION_VERSION: &str = "v7.0.1";
+/// Source: `https://api.github.com/repos/actions/upload-artifact/releases/latest`; checked 2026-10-18.
+pub const UPLOAD_ARTIFACT_ACTION_VERSION: &str = "v7.0.2";
 /// Full commit SHA for [`UPLOAD_ARTIFACT_ACTION_VERSION`] (`v7` moves with it).
-pub const UPLOAD_ARTIFACT_ACTION_SHA: &str = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
+pub const UPLOAD_ARTIFACT_ACTION_SHA: &str = "cf430e030ddbb5b0abf93d22962f4752f3646cd9";
+/// Qualified immutable artifact upload ref.
+pub const UPLOAD_ARTIFACT_ACTION_USES: &str =
+    "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
 /// Qualified `actions/cache` release (shared by `restore` and `save`).
 /// Source: `https://api.github.com/repos/actions/cache/releases/latest`; checked 2026-09-28.
 pub const CACHE_ACTION_VERSION: &str = "v6.1.0";
 /// Full commit SHA for [`CACHE_ACTION_VERSION`] (`v6` moves with it; v6 is current, no replacement).
 pub const CACHE_ACTION_SHA: &str = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
-/// Qualified `jdx/mr-boxington-action` release.
-/// Source: `https://api.github.com/repos/jdx/mr-boxington-action/releases`; checked 2026-10-03.
-pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.6.0";
+/// Qualified `jdx/mr-boxington-action` release, exercised by cache qualification.
+/// Source: `https://api.github.com/repos/jdx/mr-boxington-action/releases`; checked 2026-10-18.
+pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.7.2";
 /// Full commit SHA for [`MR_BOXINGTON_ACTION_VERSION`] (immutable release tag).
-pub const MR_BOXINGTON_ACTION_SHA: &str = "1687e54eb349cadf61fa38b5813a77875489e8e6";
-/// Latest immutable MBX action release used only by the qualification experiment.
-///
-/// This pair is not the production pin. The freshness inventory records the
-/// current release while `.velnor/version-policy.toml` retains the qualified
-/// `v1.6.0` pin until this exact source passes the required qualification.
-pub const MR_BOXINGTON_ACTION_CANDIDATE_VERSION: &str = "v1.7.2";
-/// Full commit SHA of [`MR_BOXINGTON_ACTION_CANDIDATE_VERSION`], kept as an unqualified experiment target.
-pub const MR_BOXINGTON_ACTION_CANDIDATE_SHA: &str = "47ce49b32025d93a7a2f4570815afaa2b7092240";
+pub const MR_BOXINGTON_ACTION_SHA: &str = "47ce49b32025d93a7a2f4570815afaa2b7092240";
 
 /// One pinned action reference: `repo[/path]@sha` plus version comment.
 #[derive(Debug, Clone, PartialEq, Eq)]

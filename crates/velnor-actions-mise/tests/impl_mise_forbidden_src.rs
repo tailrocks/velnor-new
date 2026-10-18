@@ -39,6 +39,7 @@ const EXPECTED_MODULES: &[&str] = &[
     "check_qualified_tools.rs",
     "check_qualified_tools_tests.rs",
     "check_system_tools.rs",
+    "check_system_tools_parse.rs",
     "check_system_tools_tests.rs",
     "check_task_validation.rs",
     "check_tool_probes.rs",

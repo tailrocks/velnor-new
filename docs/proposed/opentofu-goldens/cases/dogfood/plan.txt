@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.13
+Velnor Actions plan 0.1.14
 Repository: <repo>
 
 Detected stacks
@@ -13,7 +13,7 @@ Detected stacks
     - velnor-actions-orchestrator (crates/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu, velnor-actions-workflow-renderer]
     - velnor-actions-rust (crates/velnor-actions-rust/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-tofu (crates/velnor-actions-tofu/Cargo.toml) [lib, test; depends on velnor-actions-contract]
-    - velnor-actions-workflow-renderer (crates/velnor-actions-workflow-renderer/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-mise]
+    - velnor-actions-workflow-renderer (crates/velnor-actions-workflow-renderer/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-mise]
     - velnor-archive-guard (crates/velnor-archive-guard/Cargo.toml) [bin, lib, test]
     - velnor-resource-probe (crates/velnor-runner/crates/velnor-resource-probe/Cargo.toml) [bin, lib]
     - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib, test; depends on velnor-runner-core, velnor-runner-host]
@@ -165,11 +165,11 @@ Workflow to generate
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-    - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-    - actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+    - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
+    - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
     - asamarts/alint@18e1a66db7444fed817c5d8c75292c7709fff32e
     - jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
-    - jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+    - jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240
   Ineligible: stack/rust/crates/velnor-actions-cli/doctest/default has no test targets; no test command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
@@ -181,8 +181,8 @@ Required-check migration
   3. In branch protection, require Required and remove Velnor / Required; never remove the old check before the new one exists. [EXTERNAL: repository admin]
 
 Recommendations
-  mise.lock not found; Velnor will not create or refresh it
+  mise.lock is read-only input; Velnor never modifies it
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml not found; Velnor will not create it
   shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
-  tool_install_unverified:9 installs skip verification (no mise.lock): actionlint@1.7.12, cargo-deny@0.20.2, cargo-machete@0.9.2, gh@2.102.0, nextest@0.9.148, opentofu@1.13.1, rust@1.98.1, shellcheck@0.11.0, zizmor@1.31.1; install on the CI platform and commit the resulting lock
+  tool_install_unverified:8 installs skip verification: actionlint@1.7.12(no_entry), cargo-deny@0.20.2(no_entry), cargo-machete@0.9.2(no_entry), gh@2.102.0(no_entry), opentofu@1.13.1(no_entry), rust@1.99.1(no_checksums), shellcheck@0.11.0(no_entry), zizmor@1.31.1(no_entry); install on the CI platform and commit the lock to verify them

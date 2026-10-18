@@ -22,8 +22,8 @@ fn install_argv_is_byte_exact() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "install",
-            "rust@1.98.1",
-            "mr-boxington@1.21.1",
+            "rust@1.99.1",
+            "mr-boxington@1.24.1",
         ])
     );
     Ok(())
@@ -39,8 +39,8 @@ fn install_carries_specs_only() -> Result<(), String> {
         "install takes specs, never a payload separator: {argv:?}"
     );
     for spec in [
-        "rust@1.98.1",
-        "mr-boxington@1.21.1",
+        "rust@1.99.1",
+        "mr-boxington@1.24.1",
         "gh@2.102.0",
         "actionlint@1.7.12",
         "shellcheck@0.11.0",
@@ -100,7 +100,7 @@ fn install_specs_come_only_from_catalog() -> Result<(), String> {
     assert!(argv.iter().any(|arg| arg == "rust@1.97.0"));
     assert!(argv.iter().any(|arg| arg == "mr-boxington@1.18.0"));
     assert!(
-        !argv.iter().any(|arg| arg == "rust@1.98.1"),
+        !argv.iter().any(|arg| arg == "rust@1.99.1"),
         "no pinned fallback may leak in: {argv:?}"
     );
     Ok(())
@@ -142,6 +142,6 @@ fn mbx_install_carries_exact_mbx_spec() -> Result<(), String> {
     let request = MiseInstall::new(vec![PinnedTool::Rust, PinnedTool::MrBoxington])
         .map_err(|err| err.to_string())?;
     let argv = request.argv(&pinned());
-    assert!(argv.iter().any(|arg| arg == "mr-boxington@1.21.1"));
+    assert!(argv.iter().any(|arg| arg == "mr-boxington@1.24.1"));
     Ok(())
 }

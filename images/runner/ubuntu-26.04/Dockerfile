@@ -2,18 +2,18 @@
 # JIT is not a build ARG, ENV, label, or layer.
 # disableUpdate is a scale-set registration invariant, not an image setting.
 # Do not set RUNNER_ALLOW_RUNASROOT. The runner user is not root.
-FROM ubuntu:26.04
+FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a
 
-ARG RUNNER_VERSION=2.337.0
-ARG RUNNER_SHA256=70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613
-ARG DOCKER_VERSION=29.8.2
-ARG DOCKER_SHA256=995d1ef289677f74fd58d8d2c35727b6a4ee389c69db8638a3e42d0487aa5b0f
+ARG RUNNER_VERSION=2.338.0
+ARG RUNNER_SHA256=af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32
+ARG DOCKER_VERSION=29.9.1
+ARG DOCKER_SHA256=c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57
 ARG COMPOSE_VERSION=5.6.0
 ARG COMPOSE_SHA256=40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a
-ARG BUILDX_VERSION=0.37.2
-ARG BUILDX_SHA256=982ca20490b45ed1ec8d99795974d3d874a358f75938c9c237305010e6b7e548
-ARG NODE_VERSION=24.17.0
-ARG NODE_SHA256=e0472427aa791ad80bdc426ff7cc73cdd28ed0f616d1ff9689a23a7f47f1265f
+ARG BUILDX_VERSION=0.38.0
+ARG BUILDX_SHA256=4fe4cc38adf48169132749b6ca22a990928db0118e3407584ee553723115d287
+ARG NODE_VERSION=26.12.0
+ARG NODE_SHA256=d9f88af72ad34f7ddf8e67289829f1698f54b6254f7d4f54b7453117ff1a3d2c
 ARG DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
@@ -71,7 +71,10 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz \
     && echo "${BUILDX_SHA256}  /usr/local/lib/docker/cli-plugins/docker-buildx" | sha256sum -c - \
     && chmod 0755 /usr/local/bin/docker \
         /usr/local/lib/docker/cli-plugins/docker-compose \
-        /usr/local/lib/docker/cli-plugins/docker-buildx
+        /usr/local/lib/docker/cli-plugins/docker-buildx \
+    && docker --version | grep -F "Docker version ${DOCKER_VERSION}," \
+    && docker compose version | grep -F "v${COMPOSE_VERSION}" \
+    && docker buildx version | grep -F "v${BUILDX_VERSION}"
 
 COPY entrypoint.sh /usr/local/bin/velnor-runner-entrypoint
 COPY wait-docker-sock.sh /usr/local/bin/wait-docker-sock
@@ -179,7 +182,8 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docke
     && test "$(cat /tmp/p-home/runner/.cache/mbx/marker)" = mbx-ok \
     && rm -rf /tmp/tar-src /tmp/tar-out /tmp/tar-old /tmp/tar-probe.tgz /tmp/tar-manifest /tmp/cache.tgz /tmp/cache.tzst /tmp/tar-cache-out /tmp/tar-zstd-out /tmp/p-home /tmp/p-manifest /tmp/p-abs.tar /tmp/p.tzst /tmp/abs-marker /tmp/abs.tar /tmp/abs-out /tmp/cfz.tgz /tmp/cfz-out /tmp/m.proto /tmp/m.pb /tmp/argv-src /tmp/argv-manifest /tmp/argv-count /tmp/argv.tar /tmp/argv-out /tmp/argv-one /tmp/argv-one-out
 
-# Job steps call `node` on PATH. Action JavaScript uses the runner's own runtime.
+# Job steps call `node` on PATH. The runner's private action runtime is separate
+# and is Node 24 in actions/runner 2.338.0.
 # /usr/bin/tar is the job shim after the divert. Listing that trusted vendor
 # archive goes through GNU tar and does not finish under qemu-user. BusyBox
 # unpacks it. Job archives still enter the shim.
@@ -188,7 +192,7 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/node.tar.gz 
     && echo "${NODE_SHA256}  /tmp/node.tar.gz" | sha256sum -c - \
     && busybox tar -xzf /tmp/node.tar.gz --strip-components=1 -C /usr/local \
     && rm -f /tmp/node.tar.gz \
-    && node --version \
+    && test "$(node --version)" = "v${NODE_VERSION}" \
     && test "$(node -e 'console.log("js-action-ok")')" = js-action-ok
 
 USER runner

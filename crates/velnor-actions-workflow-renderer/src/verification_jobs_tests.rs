@@ -42,7 +42,7 @@ fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
     let linux = policy("construct-assets", VerificationRunner::LinuxX64);
     let job = build_verification_task_job(&linux, CHECKOUT).expect("fixed task job");
     assert_eq!(job.runs_on, "ubuntu-26.04");
-    assert!(job.needs.is_empty());
+    assert_eq!(job.needs.len(), 0);
     assert!(job.condition.is_none());
     assert_eq!(job.timeout_minutes.minutes(), 10);
     let permissions = job.permissions.expect("job permissions are explicit");
@@ -57,13 +57,13 @@ fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
             with.get("persist-credentials").map(String::as_str),
             Some("false")
         );
-        assert!(env.is_empty());
+        assert_eq!(env.len(), 0);
     } else {
         panic!("checkout must be a pinned action");
     }
     let mise = &job.steps[1];
     if let velnor_actions_contract::StepKind::Action { with, env, .. } = &mise.kind {
-        assert!(env.is_empty());
+        assert_eq!(env.len(), 0);
         assert_eq!(with.get("install").map(String::as_str), Some("false"));
         assert_eq!(with.get("env").map(String::as_str), Some("false"));
         assert_eq!(with.get("cache").map(String::as_str), Some("false"));

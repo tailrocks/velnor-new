@@ -34,7 +34,7 @@ fn scratch() -> Result<Scratch, Box<dyn Error>> {
 
 #[test]
 fn manifest_bundle_uses_the_created_and_attested_file() {
-    let create = manifest_script("1.98.1", "1.21.1");
+    let create = manifest_script("1.99.1", "1.24.1");
     let fetch = manifest_attestation_bundle_script();
     assert!(create.contains("create-release-manifest.sh"));
     assert!(
@@ -183,13 +183,13 @@ esac
         );
         assert_eq!(
             calls.lines().next(),
-            Some("api --include repos/tailrocks/velnor-new/git/ref/tags/v0.1.13")
+            Some("api --include repos/tailrocks/velnor-new/git/ref/tags/v0.1.14")
         );
         assert_eq!(calls.lines().count(), if accepted { 2 } else { 1 });
         if accepted {
             assert_eq!(
                 calls.lines().nth(1),
-                Some("api --include repos/tailrocks/velnor-new/releases/tags/v0.1.13")
+                Some("api --include repos/tailrocks/velnor-new/releases/tags/v0.1.14")
             );
         }
     }

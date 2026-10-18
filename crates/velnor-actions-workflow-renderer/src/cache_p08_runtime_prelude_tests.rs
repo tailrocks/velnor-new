@@ -55,7 +55,7 @@ fn fixed_composite_forwards_identity_and_runs_seed_before_outer_restore() -> Res
         };
         assert_eq!(uses, wrapper);
         assert_eq!(with.get("d"), Some(&payload.static_digest().to_owned()));
-        assert!(env.is_empty());
+        assert_eq!(env.len(), 0);
         validate_step_sequence(std::slice::from_ref(&step), "tools-prelude-test")
             .map_err(RenderError::Contract)?;
         assert!(
@@ -169,6 +169,6 @@ fn generated_files_exist_only_for_real_v2_consumers() -> Result<(), RenderError>
         &BTreeMap::new(),
         "0.1.0",
     )?;
-    assert!(no_cache_files.is_empty());
+    assert_eq!(no_cache_files.len(), 0);
     Ok(())
 }

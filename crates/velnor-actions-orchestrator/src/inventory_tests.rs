@@ -171,7 +171,7 @@ fn metadata_subprocess_counts() -> Result<(), String> {
     Ok(())
 }
 
-/// Repo toolchain pin (never 1.98.1) reaches the inventory spawn path:
+/// Repo toolchain pin reaches the inventory spawn path:
 /// the passed resolved catalog governs command construction, not the
 /// compile-time pins.
 #[test]
@@ -208,7 +208,7 @@ fn resolved_catalog_reaches_spawn_construction() -> Result<(), String> {
         .collect::<Vec<_>>()
         .join(" ");
     assert!(
-        pinned_text.contains("exec rust@1.98.1 -- cargo metadata"),
+        pinned_text.contains("exec rust@1.99.1 -- cargo metadata"),
         "compile-time pin stays distinct: {pinned_text}"
     );
     Ok(())
@@ -216,7 +216,7 @@ fn resolved_catalog_reaches_spawn_construction() -> Result<(), String> {
 
 /// Missing repo pin fails closed before any payload spawn: the structured
 /// error names the tool spec and the versions actually installed. Before
-/// this catalog was threaded, the pinned 1.98.1 spec was spawned instead
+/// this catalog was threaded, the pinned 1.99.1 spec was spawned instead
 /// and mise's `WARN missing:` path silently ran the payload anyway.
 #[test]
 fn missing_repo_pin_fails_closed_before_spawn() -> Result<(), String> {

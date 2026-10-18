@@ -36,6 +36,9 @@ pub enum BuildTaskRunner {
     /// GitHub-hosted Apple ARM64 macOS 26 runner.
     #[serde(rename = "macos-26-arm64")]
     Macos26Arm64,
+    /// GitHub-hosted Xcode 27 Apple ARM64 runner.
+    #[serde(rename = "xcode-27-arm64")]
+    Xcode27Arm64,
 }
 
 impl BuildTaskRunner {
@@ -44,6 +47,7 @@ impl BuildTaskRunner {
     pub const fn runs_on(self) -> &'static str {
         match self {
             Self::Macos26Arm64 => "macos-26",
+            Self::Xcode27Arm64 => "xcode-27",
         }
     }
 
@@ -51,7 +55,7 @@ impl BuildTaskRunner {
     #[must_use]
     pub const fn mise_target(self) -> &'static str {
         match self {
-            Self::Macos26Arm64 => "aarch64-apple-darwin",
+            Self::Macos26Arm64 | Self::Xcode27Arm64 => "aarch64-apple-darwin",
         }
     }
 }
@@ -188,6 +192,11 @@ mod tests {
         assert!(task.validate("config.toml").is_ok());
         assert_eq!(task.runner.runs_on(), "macos-26");
         assert_eq!(task.runner.mise_target(), "aarch64-apple-darwin");
+        assert_eq!(BuildTaskRunner::Xcode27Arm64.runs_on(), "xcode-27");
+        assert_eq!(
+            BuildTaskRunner::Xcode27Arm64.mise_target(),
+            "aarch64-apple-darwin"
+        );
 
         let mut invalid = task.clone();
         invalid.timeout_minutes = 181;

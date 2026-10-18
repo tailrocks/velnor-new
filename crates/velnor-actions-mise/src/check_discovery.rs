@@ -86,6 +86,7 @@ pub fn discover_preview_producer(
         VerificationRunner::LinuxX64 => ("ubuntu-26.04", CheckPlatform::LinuxX64),
         VerificationRunner::MacosArm64 => ("macos-15", CheckPlatform::MacosArm64),
         VerificationRunner::Macos26Arm64 => ("macos-26", CheckPlatform::MacosArm64),
+        VerificationRunner::Xcode27Arm64 => ("xcode-27", CheckPlatform::MacosArm64),
     };
     let check = MiseCheck {
         id: "preview-producer".to_owned(),
@@ -258,8 +259,12 @@ fn check_identity(
     flags.push(format!("qualified_tools:{qualification_digest}"));
     for pin in &check.system_tools {
         flags.push(format!(
-            "system_tool:{:?}:{}:{}",
-            pin.kind, pin.version, pin.build
+            "system_tool:{:?}:{}:{}:{}:{}",
+            pin.kind,
+            pin.version,
+            pin.build,
+            pin.sdk_version.as_deref().unwrap_or("-"),
+            pin.developer_dir.as_deref().unwrap_or("-")
         ));
     }
     flags.push(format!("runner:{}", check.runner.label));

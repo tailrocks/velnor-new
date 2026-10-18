@@ -4,8 +4,9 @@ use velnor_actions_actionlint::{
     ALINT_ACTION_SHA, ALINT_ACTION_VERSION, ALLOWED_ACTIONS, ATTEST_BUILD_PROVENANCE_ACTION_SHA,
     ATTEST_BUILD_PROVENANCE_ACTION_VERSION, ATTEST_BUILD_PROVENANCE_USES, ActionInputSchema,
     ActionPinOverride, ActionlintError, ApprovedPinCatalog, CREATE_GITHUB_APP_TOKEN_ACTION_SHA,
-    CREATE_GITHUB_APP_TOKEN_ACTION_VERSION, CREATE_GITHUB_APP_TOKEN_USES, PinnedActionRef,
-    validate_action_inputs,
+    CREATE_GITHUB_APP_TOKEN_ACTION_VERSION, CREATE_GITHUB_APP_TOKEN_USES, GITHUB_SCRIPT_ACTION,
+    GITHUB_SCRIPT_ACTION_SHA, GITHUB_SCRIPT_ACTION_USES, GITHUB_SCRIPT_ACTION_VERSION,
+    PinnedActionRef, validate_action_inputs,
 };
 
 /// Verified checkout pin from the version policy (test fixture).
@@ -23,13 +24,27 @@ fn checkout_schema() -> ActionInputSchema {
 
 #[test]
 fn allowlist_has_only_the_pinned_actions() {
-    assert_eq!(ALLOWED_ACTIONS.len(), 11);
+    assert_eq!(ALLOWED_ACTIONS.len(), 12);
     assert!(ALLOWED_ACTIONS.contains(&"actions/cache/restore"));
     assert!(ALLOWED_ACTIONS.contains(&"asamarts/alint"));
     assert!(!ALLOWED_ACTIONS.contains(&"Swatinem/rust-cache"));
     assert!(ALLOWED_ACTIONS.contains(&"aws-actions/configure-aws-credentials"));
     assert!(ALLOWED_ACTIONS.contains(&"actions/attest-build-provenance"));
     assert!(ALLOWED_ACTIONS.contains(&"actions/create-github-app-token"));
+    assert!(ALLOWED_ACTIONS.contains(&GITHUB_SCRIPT_ACTION));
+}
+
+#[test]
+fn github_script_action_pin_is_the_exact_reviewed_release() {
+    assert_eq!(GITHUB_SCRIPT_ACTION_VERSION, "v9.0.0");
+    assert_eq!(
+        GITHUB_SCRIPT_ACTION_SHA,
+        "3a2844b7e9c422d3c10d287c895573f7108da1b3"
+    );
+    assert_eq!(
+        GITHUB_SCRIPT_ACTION_USES,
+        format!("{GITHUB_SCRIPT_ACTION}@{GITHUB_SCRIPT_ACTION_SHA}")
+    );
 }
 
 #[test]
@@ -260,20 +275,9 @@ fn retired_rust_cache_action_is_not_allowlisted() {
 }
 
 #[test]
-fn mbx_experiment_target_is_current_unqualified_release() {
-    use velnor_actions_actionlint::actions::{
-        MR_BOXINGTON_ACTION_CANDIDATE_SHA, MR_BOXINGTON_ACTION_CANDIDATE_VERSION,
-        MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION,
-    };
+fn mbx_action_pin_matches_the_current_qualified_inventory_row() {
+    use velnor_actions_actionlint::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION};
 
-    assert_ne!(
-        (
-            MR_BOXINGTON_ACTION_CANDIDATE_VERSION,
-            MR_BOXINGTON_ACTION_CANDIDATE_SHA
-        ),
-        (MR_BOXINGTON_ACTION_VERSION, MR_BOXINGTON_ACTION_SHA),
-        "the experiment target must stay separate from the production pin"
-    );
     let inventory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../.velnor/freshness-inventory.json");
     let inventory = std::fs::read_to_string(inventory).expect("freshness inventory readable");
@@ -286,15 +290,11 @@ fn mbx_experiment_target_is_current_unqualified_release() {
         .map(|(row, _)| row)
         .expect("MBX action inventory row terminates");
     assert!(
-        action.contains(&format!(
-            "\"latest\": \"{MR_BOXINGTON_ACTION_CANDIDATE_VERSION}\""
-        )),
-        "candidate version must match the current inventory row: {action}"
+        action.contains(&format!("\"latest\": \"{MR_BOXINGTON_ACTION_VERSION}\"")),
+        "qualified version must match the current inventory row: {action}"
     );
     assert!(
-        action.contains(&format!(
-            "\"latest_sha\": \"{MR_BOXINGTON_ACTION_CANDIDATE_SHA}\""
-        )),
-        "candidate SHA must match the current inventory row: {action}"
+        action.contains(&format!("\"latest_sha\": \"{MR_BOXINGTON_ACTION_SHA}\"")),
+        "qualified SHA must match the current inventory row: {action}"
     );
 }

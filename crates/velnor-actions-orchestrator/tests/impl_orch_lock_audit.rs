@@ -10,7 +10,7 @@ use crate::impl_common::{TestResult, config_with_branch, make_repo, plan_for};
 
 /// Consumer fixture install set: plan + crate + required Prepare tools.
 const PINS: [(&str, &str); 5] = [
-    ("rust", "1.98.1"),
+    ("rust", "1.99.1"),
     ("actionlint", "1.7.12"),
     ("shellcheck", "0.11.0"),
     ("zizmor", "1.31.1"),
@@ -71,7 +71,7 @@ fn preview_generate(repo: &TempDir) -> Result<String, Box<dyn std::error::Error>
 fn missing_lock_advises_and_generates() -> TestResult {
     let repo = repo_with_lock(None)?;
     let prep = prepare(repo.path())?;
-    assert!(prep.lock_audit_blocking.is_empty());
+    assert_eq!(prep.lock_audit_blocking, [] as [std::string::String; 0]);
     let summary = prep
         .discovery
         .recommendations
@@ -80,7 +80,7 @@ fn missing_lock_advises_and_generates() -> TestResult {
         .ok_or("missing-lock summary")?;
     assert!(summary.contains("no mise.lock"), "{summary}");
     for tool in [
-        "rust@1.98.1",
+        "rust@1.99.1",
         "actionlint@1.7.12",
         "shellcheck@0.11.0",
         "zizmor@1.31.1",
@@ -97,14 +97,14 @@ fn missing_lock_advises_and_generates() -> TestResult {
 fn full_lock_leaves_only_rust_unverifiable() -> TestResult {
     let repo = repo_with_lock(Some(&full_lock()))?;
     let prep = prepare(repo.path())?;
-    assert!(prep.lock_audit_blocking.is_empty());
+    assert_eq!(prep.lock_audit_blocking, [] as [std::string::String; 0]);
     let summary = prep
         .discovery
         .recommendations
         .iter()
         .find(|line| line.contains("tool_install_unverified"))
         .ok_or("rust-only summary")?;
-    assert!(summary.contains("rust@1.98.1(no_checksums)"), "{summary}");
+    assert!(summary.contains("rust@1.99.1(no_checksums)"), "{summary}");
     for covered in ["actionlint", "shellcheck", "zizmor", "gh@"] {
         assert!(!summary.contains(covered), "{summary}");
     }
@@ -236,10 +236,10 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
 
 #[test]
 fn drifted_lock_advises_without_blocking() -> TestResult {
-    let drifted = full_lock().replace("version = \"1.98.1\"", "version = \"1.97.0\"");
+    let drifted = full_lock().replace("version = \"1.99.1\"", "version = \"1.97.0\"");
     let repo = repo_with_lock(Some(&drifted))?;
     let prep = prepare(repo.path())?;
-    assert!(prep.lock_audit_blocking.is_empty());
+    assert_eq!(prep.lock_audit_blocking, [] as [std::string::String; 0]);
     let summary = prep
         .discovery
         .recommendations

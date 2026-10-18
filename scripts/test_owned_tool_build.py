@@ -28,6 +28,7 @@ def module(name, filename):
 
 builder = module("owned_builder", "build-owned-tool.py")
 bootstrap = module("owned_bootstrap", "bootstrap-owned-tool-builder.py")
+stager = module("owned_source_stager", "stage-owned-tool-source.py")
 NATIVE_BINARY = b"\xcf\xfa\xed\xfe\x0c\x00\x00\x01\x00\x00\x00\x00\x02" + b"\0" * 19
 
 
@@ -58,6 +59,14 @@ def fixture(tool="mise"):
 
 
 class SourceTests(unittest.TestCase):
+    def test_mise_source_base_matches_stager_and_rejects_superseded_base(self):
+        self.assertEqual(source.BASES["mise"], stager.UPSTREAM["mise"])
+        candidate = fixture()
+        source.descriptor(json.dumps(candidate), "f" * 40)
+        candidate["upstream_base_commit"] = "6be3cbdc639a66c03651479428e4c5f60b00485f"
+        with self.assertRaisesRegex(ValueError, "unapproved upstream base"):
+            source.descriptor(json.dumps(candidate), "f" * 40)
+
     def test_all_official_bootstrap_rows_have_complete_native_authority(self):
         self.assertGreaterEqual(source.MAX_BOOTSTRAP_DOWNLOAD, 161_267_824)
         self.assertGreaterEqual(source.MAX_BOOTSTRAP_EXECUTABLE_BYTES, 140_066_264)
@@ -268,7 +277,7 @@ class BuildTests(unittest.TestCase):
 
     def mocked_candidate(self, tool, banner=None, target="aarch64-apple-darwin"):
         spec, calls = fixture(tool), []
-        compiler = "rustc 1.99.0\nhost: aarch64-apple-darwin\nrelease: 1.99.0"
+        compiler = "rustc 1.99.1\nhost: aarch64-apple-darwin\nrelease: 1.99.1"
         def admit(_spec, path, _env):
             path.mkdir()
             (path / "LICENSE").write_bytes(b"license")
@@ -320,8 +329,14 @@ class BuildTests(unittest.TestCase):
                 self.mocked_candidate("mise", banner)
         with self.assertRaises(ValueError):
             builder.compiler_identity("release: 1.98.0\nhost: aarch64-apple-darwin")
+        self.assertEqual(
+            builder.compiler_identity("release: 1.99.1\nhost: aarch64-apple-darwin"),
+            "aarch64-apple-darwin",
+        )
         with self.assertRaises(ValueError):
-            builder.compiler_identity("release: 1.99.0\nhost: x86_64-apple-darwin")
+            builder.compiler_identity("release: 1.99.0\nhost: aarch64-apple-darwin")
+        with self.assertRaises(ValueError):
+            builder.compiler_identity("release: 1.99.1\nhost: x86_64-apple-darwin")
         with self.assertRaises(ValueError):
             self.mocked_candidate("mise", target="x86_64-unknown-linux-gnu")
 

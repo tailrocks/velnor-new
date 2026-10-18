@@ -46,7 +46,8 @@ pub(super) fn source_hash_check(
     let (hash_bin, hash_args) = match policy.task.runner {
         velnor_actions_contract::VerificationRunner::LinuxX64 => ("/usr/bin/sha256sum", ""),
         velnor_actions_contract::VerificationRunner::MacosArm64
-        | velnor_actions_contract::VerificationRunner::Macos26Arm64 => {
+        | velnor_actions_contract::VerificationRunner::Macos26Arm64
+        | velnor_actions_contract::VerificationRunner::Xcode27Arm64 => {
             ("/usr/bin/shasum", "-a 256")
         }
     };
@@ -123,7 +124,8 @@ pub(super) fn platform(
     match runner {
         velnor_actions_contract::VerificationRunner::LinuxX64 => ("linux", "linux-x64"),
         velnor_actions_contract::VerificationRunner::MacosArm64
-        | velnor_actions_contract::VerificationRunner::Macos26Arm64 => ("macos", "macos-arm64"),
+        | velnor_actions_contract::VerificationRunner::Macos26Arm64
+        | velnor_actions_contract::VerificationRunner::Xcode27Arm64 => ("macos", "macos-arm64"),
     }
 }
 

@@ -1,8 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { GenericContainer } from "testcontainers";
+import { GenericContainer, Wait } from "testcontainers";
 
-const redis = await new GenericContainer("redis:7-alpine")
+const redis = await new GenericContainer(
+  "redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23",
+)
   .withExposedPorts(6379)
+  // v12 prefers image healthchecks; this qualification explicitly tests port readiness.
+  .withWaitStrategy(Wait.forListeningPorts())
   .start();
 
 let ryuk = false;

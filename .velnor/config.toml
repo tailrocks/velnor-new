@@ -152,25 +152,25 @@ probe = { kind = "cargo_nextest_version", expected = "cargo-nextest 0.9.148 (cd1
 [[qualified_tools]]
 id = "rust"
 backend = { kind = "core", tool = "rust" }
-version = "1.98.1"
+version = "1.99.1"
 options = { kind = "rust", components = [], targets = [] }
 depends_on = []
 [[qualified_tools.platforms]]
 platform = "linux_x64"
 artifacts = [
-  { url = "https://static.rust-lang.org/dist/2026-09-03/cargo-1.98.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "ea1de9f9e23107d97ee2b41a72c552f34064a593da503789218387aee59f3ba4" },
-  { url = "https://static.rust-lang.org/dist/2026-09-03/rust-std-1.98.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "fa3ff450172a16c026944030230c5069947af93c728d9179971d44e5e0cfb561" },
-  { url = "https://static.rust-lang.org/dist/2026-09-03/rustc-1.98.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "e974f036b28565f37c0f3bd92ddefa809bee16c04f9dcf07b9ed96e05aaaf7c4" },
+  { url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "53f3521949404d595efb06a55c12c5658d4ed1c75566f33d3d514eaebe70bd8a" },
+  { url = "https://static.rust-lang.org/dist/2026-10-15/rust-std-1.99.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "109b074225bf5b9ea3820890876bfdf4ed161adbfaf94b2b4b5984c85ee5d958" },
+  { url = "https://static.rust-lang.org/dist/2026-10-15/rustc-1.99.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "2ff05ff9c08a90861e7f6e4065b40a8b87463b4576186fd613871c3e37f2091f" },
 ]
 dependency_artifacts = []
-install_tree_sha256 = "53f388a3b565f1717c2e6f55c8748c905f9141c20dc8757cca152c1ff5bb744a"
+install_tree_sha256 = "baa8089f830b6c49980b5c2274a0863d963d2eae8ef7f8ece56b90dfae8a8625"
 [[qualified_tools.platforms.executables]]
 name = "cargo"
 path = "bin/cargo"
-sha256 = "da77c8b33849312255ccde3179198ada4c8deb370488d050286146b1d1b27e14"
-probe = { kind = "version", expected = "cargo 1.98.1 (797e8a9bc 2026-08-05)" }
+sha256 = "a670e02cfa39ac2e53f77a2d911ca1fc9e2c479b0603ec956625be1daf24e3af"
+probe = { kind = "version", expected = "cargo 1.99.1 (5f94df478 2026-08-27)" }
 [[qualified_tools.platforms.executables]]
 name = "rustc"
 path = "bin/rustc"
-sha256 = "859254978c0a0402c32f949f6de0d99aee73be8d15f45aac00ae1448aac51e74"
-probe = { kind = "rustc_verbose", expected = "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8" }
+sha256 = "b53b780f77f952062f8ca8a3b70aef2390b1e45ad91939be94afdc9543026853"
+probe = { kind = "rustc_verbose", expected = "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1" }

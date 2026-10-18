@@ -44,7 +44,7 @@ inputs = ["Package.swift", "scripts/test-swift-ffi.sh"]
 tools = []
 system_tools = [
   { kind = "swift", version = "6.4", build = "swiftlang-6.4.0.34.1 clang-2100.3.34.1" },
-  { kind = "xcode", version = "27.0", build = "27A266a" },
+  { kind = "xcode", version = "27.1", build = "27A9275", sdk_version = "27.0", developer_dir = "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer" },
 ]
 timeout_minutes = 30
 [checks.runner]
@@ -230,13 +230,18 @@ copy with `run --force --task-cache off --skip-tools`.
 The child environment is cleared, apart from the existing proxy passthrough
 contract and explicit overlays. HOME, XDG, Mise, Cargo, Rustup, PATH, and Docker
 context state use isolated homes; parent credentials and user/global config
-are not inherited. Native verification captures `/usr/bin/xcode-select -p`
-once, canonicalizes the selected developer directory, and freezes it as
-`DEVELOPER_DIR` for subsequent `/usr/bin/xcrun`, `/usr/bin/xcodebuild`, and task
-execution. Swift observation binds its discovered executable, complete compiler
-build tuple, and native target; Xcode binds its version and build. Proofs record
-the declared pins, observed identities, developer directory, and probe-output
-digests. Mismatched pins, host architecture, or developer selection fail closed.
+are not inherited. Native verification captures `/usr/bin/xcode-select -p` once,
+canonicalizes the selected developer directory, and freezes it as
+`DEVELOPER_DIR` for subsequent probes and task execution. An Xcode pin may set a
+canonical `developer_dir` override; that directory is used for probes and the
+task without changing `xcode-select`. Xcode pins require an exact `sdk_version`;
+Swift pins cannot set either Xcode-only field. Swift observation binds its
+discovered executable, compiler build tuple, and native target; Xcode binds its
+version, build, and macOS SDK. Proofs record the declared pins, observed
+identities, developer directory, and probe-output digests. Mismatched pins,
+host architecture, or developer selection fail closed. The `xcode-27` runner
+defaults to Xcode 27.0, so an explicit path is needed to qualify its installed
+Xcode 27.1 app.
 Task code receives `VELNOR_CHECK_ID`, `VELNOR_CHECK_HEAD`,
 and `VELNOR_CHECK_PLATFORM` for evidence production. Repository task bodies
 still execute arbitrary repository code: this is an environment boundary,

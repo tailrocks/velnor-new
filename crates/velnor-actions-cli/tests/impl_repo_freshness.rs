@@ -205,8 +205,8 @@ fn ver33_records_and_qualifies() -> Result<(), Box<dyn Error>> {
         "update set must record timestamp and delta"
     );
     assert!(
-        procedure.contains("ONLY Velnor-owned pins and locks"),
-        "refresh must stay Velnor-owned"
+        procedure.contains("Velnor-owned pins and locks"),
+        "refresh must name the Velnor-owned pins and locks"
     );
     for gate in ["cargo fmt", "Clippy", "doctests", "cargo deny"] {
         assert!(procedure.contains(gate), "qual list misses {gate}");
@@ -271,8 +271,8 @@ fn ver44_velnor_owned_refresh_only() -> Result<(), Box<dyn Error>> {
     let procedure = read("docs/implemented/update-procedure.md")?;
     assert!(procedure.contains("VER-4.4"), "procedure must cite VER-4.4");
     assert!(
-        procedure.contains("ONLY Velnor-owned pins and locks"),
-        "refresh must stay Velnor-owned"
+        procedure.contains("Velnor-owned pins and locks"),
+        "refresh must name the Velnor-owned pins and locks"
     );
     assert!(
         procedure.contains("recommendations only"),

@@ -149,7 +149,7 @@ fn sha256_file(path: &Path) -> Result<String, Box<dyn Error>> {
 
 fn provenance_fixture(digest: &str, source_sha: &str) -> String {
     format!(
-        r#"{{"schema":1,"version":"{VERSION}","repository":"tailrocks/velnor-new","commit":"{source_sha}","target":"{}","asset":"{}","sha256":"{digest}","toolchain":{{"rust":"1.98.1","mr-boxington":"1.21.1"}}}}"#,
+        r#"{{"schema":1,"version":"{VERSION}","repository":"tailrocks/velnor-new","commit":"{source_sha}","target":"{}","asset":"{}","sha256":"{digest}","toolchain":{{"rust":"1.99.1","mr-boxington":"1.24.1"}}}}"#,
         LINUX.target.triple(),
         LINUX.binary
     )
@@ -158,7 +158,7 @@ fn provenance_fixture(digest: &str, source_sha: &str) -> String {
 fn release_validation_command(directory_name: &str) -> String {
     format!(
         "{}\n{}",
-        verify_provenance_in_directory(LINUX, directory_name, "1.98.1", "1.21.1"),
+        verify_provenance_in_directory(LINUX, directory_name, "1.99.1", "1.24.1"),
         qualification_script(LINUX.binary, directory_name)
     )
 }

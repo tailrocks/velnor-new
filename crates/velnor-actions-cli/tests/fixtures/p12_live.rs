@@ -137,14 +137,14 @@ fn every_fail_row_is_nonzero() -> Result<(), Box<dyn Error>> {
         (
             "t-mirror",
             POLICY,
-            Some(("rust = \"1.98.1\"", "rust = \"1.99.0\"")),
+            Some(("rust = \"1.99.1\"", "rust = \"1.99.0\"")),
             "policy-mirror",
         ),
         (
             "t-pin",
             CATALOG,
             Some((
-                "GH_VERSION: &str = \"2.101.0\"",
+                "GH_VERSION: &str = \"2.102.0\"",
                 "GH_VERSION: &str = \"9.9.9\"",
             )),
             "local-pin",
@@ -226,8 +226,8 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "[validation-tools]",
         "cargo-mutants = \"27.1.0\"",
         "mise = \"2026.10.13\"",
-        "rust = \"1.98.1\"",
-        "mr-boxington = \"1.21.1\"",
+        "rust = \"1.99.1\"",
+        "mr-boxington = \"1.24.1\"",
         "gh = \"2.102.0\"",
         "actionlint = \"1.7.12\"",
         "shellcheck = \"0.11.0\"",
@@ -241,7 +241,7 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         .lines()
         .filter(|line| line.trim() == "[[actions]]")
         .count();
-    assert_eq!(tables, 11, "eleven action mirrors");
+    assert_eq!(tables, 12, "twelve action mirrors");
     let mutants = crate::impl_repo_policy::read(".cargo/mutants.toml")?;
     assert!(
         mutants.contains("# pinned: cargo-mutants = \"27.1.0\""),

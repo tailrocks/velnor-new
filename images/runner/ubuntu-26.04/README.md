@@ -3,11 +3,28 @@
 Platform: `linux/amd64`. ARM64 is not the baseline.
 
 ```sh
-docker build --platform linux/amd64 -t velnor-runner:ubuntu-26.04-2.337.0 images/runner/ubuntu-26.04
+docker build --platform linux/amd64 -t velnor-runner:ubuntu-26.04-2.338.0 images/runner/ubuntu-26.04
 ```
 
-Official `actions/runner` `2.337.0` linux-x64, SHA256
-`70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613`.
+Official [actions/runner `2.338.0` release](https://github.com/actions/runner/releases/tag/v2.338.0)
+linux-x64, SHA256
+`af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32`.
+The runner release is progressively deployed by GitHub; the image uses the
+published runner binary and checksum from the official release. The runner's
+private action runtime is Node 24 in this version.
+Docker Engine `29.9.1` is the latest [Moby release](https://github.com/moby/moby/releases/tag/v29.9.1),
+downloaded from the [official static archive](https://download.docker.com/linux/static/stable/x86_64/docker-29.9.1.tgz).
+SHA256 `c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57`
+was measured from that official HTTPS artifact because Docker does not publish
+a checksum sidecar for it. The archive was 86,364,663 bytes, with Last-Modified
+`2026-10-16 09:29:12 GMT` and ETag `b17406f2778a6fa5fb95a7be40c32549`.
+[Docker Compose `5.6.0`](https://github.com/docker/compose/releases/tag/v5.6.0) SHA256
+`40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a` and
+[Buildx `0.38.0`](https://github.com/docker/buildx/releases/tag/v0.38.0) SHA256
+`4fe4cc38adf48169132749b6ca22a990928db0118e3407584ee553723115d287`
+match the official GitHub release asset digest metadata. [Node.js `26.12.0`](https://nodejs.org/en/blog/release/v26.12.0)
+is the current stable line; its Linux x64 archive digest matches the official
+[SHASUMS256.txt](https://nodejs.org/dist/v26.12.0/SHASUMS256.txt).
 Unmodified. No `/proc` spoof, no fake `os-release`. `/usr/bin/tar` is
 `tar-shim.sh` runs BusyBox tar. Unimplemented semantic GNU flags fail
 closed. A newline in a member name fails closed. Without `-P`, a symlink
@@ -21,8 +38,9 @@ Ubuntu 26.04 GNU tar calls `openat2`, and qemu-user fails
 that with `ENOSYS`, so GNU tar stays at `/usr/bin/tar.gnu` and is not the
 `tar` on `PATH`. `zstd` is installed so cache archives match hosted runners.
 `git-lfs` is installed before the tar divert so `git lfs` is on `PATH`.
-Node.js `24.17.0` linux-x64 is on `PATH`
-for job steps. That is not the runner's private action runtime.
+Node.js `26.12.0` linux-x64 is on `PATH` for job steps. Its SHA256 is verified
+against the official Node.js `SHASUMS256.txt`. That is not the runner's private
+action runtime.
 
 The image is not privileged and has no Docker socket, host home, Keychain,
 SSH agent, or controller config. UID `1000` (`runner`), group `docker` GID `999`.

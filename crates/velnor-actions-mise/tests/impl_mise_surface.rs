@@ -26,7 +26,7 @@ fn homes() -> Result<ToolHomes, String> {
 /// Every mise-owned argv shape, including the program token.
 fn all_mise_vectors() -> Result<Vec<Vec<OsString>>, String> {
     let catalog = pinned();
-    let specs = vec!["rust@1.98.1".to_owned()];
+    let specs = vec!["rust@1.99.1".to_owned()];
     let payload = vec![OsString::from("cargo"), OsString::from("--version")];
     let mut vectors = vec![
         IsolatedCommand::mise_exec(&specs, &payload)
@@ -116,7 +116,7 @@ fn nextest_vectors(catalog: &ToolCatalog) -> Result<Vec<Vec<OsString>>, String> 
 #[test]
 fn all_mise_vectors_invoke_mise_program() -> Result<(), String> {
     let vectors = all_mise_vectors()?;
-    assert!(!vectors.is_empty());
+    assert_ne!(vectors.len(), 0);
     for argv in &vectors {
         assert_eq!(argv[0], OsString::from("mise"), "mise-only: {argv:?}");
         let subcommand = argv
@@ -177,7 +177,7 @@ fn catalog_pins_ignore_project_selectors() -> Result<(), String> {
     assert_eq!(first.argv(&pinned()), second.argv(&pinned()));
     assert_eq!(
         catalog.tool_spec(PinnedTool::MrBoxington),
-        "mr-boxington@1.21.1",
+        "mr-boxington@1.24.1",
         "the action-owned MBX pin remains exact in the catalog"
     );
     assert!(
@@ -191,15 +191,15 @@ fn catalog_pins_ignore_project_selectors() -> Result<(), String> {
 }
 
 #[test]
-fn mise_lock_neither_present_nor_tracked() -> Result<(), String> {
+fn mise_lock_is_present_and_tracked() -> Result<(), String> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)
         .map(std::path::Path::to_path_buf)
         .ok_or_else(|| "crate is not two levels below the workspace root".to_owned())?;
     assert!(
-        !root.join("mise.lock").exists(),
-        "Velnor must not create mise.lock"
+        root.join("mise.lock").is_file(),
+        "qualified Mise lock is missing"
     );
     let tracked = git_fixture::command(&root)
         .map_err(|err| err.to_string())?
@@ -207,7 +207,7 @@ fn mise_lock_neither_present_nor_tracked() -> Result<(), String> {
         .current_dir(&root)
         .output();
     if let Ok(output) = tracked {
-        assert!(output.stdout.is_empty(), "mise.lock stays untracked");
+        assert_eq!(output.stdout, b"mise.lock\n", "mise.lock must be tracked");
     }
     Ok(())
 }

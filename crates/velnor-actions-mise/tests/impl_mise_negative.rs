@@ -196,8 +196,8 @@ fn candidate_build_vector_pins_implemented_trio_form() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
-            "mr-boxington@1.21.1",
+            "rust@1.99.1",
+            "mr-boxington@1.24.1",
             "--",
             "mbx",
             "build",
@@ -275,7 +275,7 @@ fn toolchain_probe_mechanism_routes_through_pins() -> Result<(), String> {
         assert_eq!(argv[0], OsString::from("mise"));
         assert_eq!(argv[4], OsString::from("exec"));
         assert!(
-            argv.iter().any(|arg| arg == "rust@1.98.1"),
+            argv.iter().any(|arg| arg == "rust@1.99.1"),
             "probe must use the exact pin: {argv:?}"
         );
     }

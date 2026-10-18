@@ -9,6 +9,7 @@ use super::features::{
     run_step,
 };
 use crate::yaml::Yaml;
+use velnor_actions_actionlint::GITHUB_SCRIPT_ACTION_USES;
 
 #[path = "schema2_empty_cache.rs"]
 mod empty_cache;
@@ -17,7 +18,7 @@ mod more;
 #[path = "schema2_class_steps.rs"]
 mod steps;
 
-const GITHUB_SCRIPT: &str = "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3";
+const GITHUB_SCRIPT: &str = GITHUB_SCRIPT_ACTION_USES;
 const CACHE_USES: &str = "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const COMPOSITE_ACTION: &str = "./qualification/actions/composite";
 const DOCKER_ACTION: &str = "./qualification/actions/docker";
@@ -312,7 +313,9 @@ impl Lane<'_> {
 
 fn container_extras() -> Extras {
     Extras {
-        container: Some(Yaml::str("alpine:3.22")),
+        container: Some(Yaml::str(
+            "alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395",
+        )),
         services: Some(redis_service()),
         ..Extras::default()
     }

@@ -24,3 +24,8 @@ pub const CREATE_GITHUB_APP_TOKEN_ACTION_VERSION: &str = "v3.3.0";
 pub const CREATE_GITHUB_APP_TOKEN_ACTION_SHA: &str = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
 pub const CREATE_GITHUB_APP_TOKEN_USES: &str =
     "actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
+pub const GITHUB_SCRIPT_ACTION: &str = "actions/github-script";
+pub const GITHUB_SCRIPT_ACTION_VERSION: &str = "v9.0.0";
+pub const GITHUB_SCRIPT_ACTION_SHA: &str = "3a2844b7e9c422d3c10d287c895573f7108da1b3";
+pub const GITHUB_SCRIPT_ACTION_USES: &str =
+    "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3";

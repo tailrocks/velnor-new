@@ -29,7 +29,7 @@ async fn two_offers_are_not_acquired() -> Result<(), String> {
     );
     assert_eq!(script.calls, Vec::<&str>::new());
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows, Vec::new());
+    assert_eq!(rows.first(), None);
     Ok(())
 }
 
@@ -132,7 +132,7 @@ async fn jit_uncertainty_does_not_repeat_acquire_or_jit() -> Result<(), String> 
         .await,
         Err(EnsureError::Uncertain)
     );
-    assert!(replay.calls.is_empty());
+    assert_eq!(replay.calls.first(), None);
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Uncertain);
