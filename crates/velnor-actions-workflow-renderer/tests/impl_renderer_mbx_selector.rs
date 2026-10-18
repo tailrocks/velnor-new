@@ -9,7 +9,7 @@ use velnor_actions_workflow_renderer::{
 use super::impl_renderer_fixtures::*;
 
 /// Pinned native MBX action ref used to build gating-fixture action steps.
-const MBX_ACTION_USES: &str = "jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6";
+const MBX_ACTION_USES: &str = "jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240";
 
 fn selector_error(run: Vec<String>, driver: Option<CompileDriver>) -> Result<(), RenderError> {
     let step = shell_step("External tool selection", run, BTreeMap::new())?;

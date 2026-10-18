@@ -47,12 +47,12 @@ use versions::{invalid_version, tool_source};
 /// is required before release.
 /// Source: `https://api.github.com/repos/jdx/mise/releases/tags/v2026.10.13`; checked 2026-10-17.
 pub const MISE_VERSION: &str = "2026.10.13";
-/// Qualified Rust stable toolchain; 1.99.0 is held pending policy review.
-/// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-10-08.
-pub const RUST_VERSION: &str = "1.98.1";
-/// Qualified `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.21.1`).
-/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-03.
-pub const MR_BOXINGTON_VERSION: &str = "1.21.1";
+/// Selected Rust stable toolchain (2026-10-15 official stable manifest).
+/// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-10-18.
+pub const RUST_VERSION: &str = "1.99.1";
+/// Selected `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.24.1`).
+/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-18.
+pub const MR_BOXINGTON_VERSION: &str = "1.24.1";
 /// Qualified GitHub CLI (tag `v2.102.0`).
 /// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-09-30.
 pub const GH_VERSION: &str = "2.102.0";

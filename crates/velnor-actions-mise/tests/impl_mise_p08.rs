@@ -22,7 +22,7 @@ fn c1_inventory_lists_every_runtime_path_with_one_owner() {
         "tofu-provider-cache",
     ] {
         assert!(paths::is_known_id(id), "missing {id}");
-        assert!(!paths::owner_for(id).expect("owner").is_empty());
+        assert_ne!(paths::owner_for(id).expect("owner"), "");
     }
     assert_eq!(inv.len(), 11, "exact inventory size");
     assert_eq!(

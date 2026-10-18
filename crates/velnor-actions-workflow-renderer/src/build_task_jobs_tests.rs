@@ -6,10 +6,9 @@ use velnor_actions_contract::{
 
 use crate::MiseSetup;
 use crate::verification_jobs::build_task_jobs::{
-    BUILD_TASK_DEVELOPER_DIR, BuildTaskArtifact, BuildTaskPolicy, BuildTaskTool,
-    CARGO_BINSTALL_ONLY_ENV, INSTALL_BUILD_TASK_BOOTSTRAP_NAME, RUN_BUILD_TASK_NAME,
-    VERIFY_BUILD_TASK_MACOS_NAME, VERIFY_BUILD_TASK_MBX_NAME, build_build_task_job,
-    validate_build_task_jobs,
+    BuildTaskArtifact, BuildTaskPolicy, BuildTaskTool, CARGO_BINSTALL_ONLY_ENV,
+    INSTALL_BUILD_TASK_BOOTSTRAP_NAME, RUN_BUILD_TASK_NAME, VERIFY_BUILD_TASK_MACOS_NAME,
+    VERIFY_BUILD_TASK_MBX_NAME, build_build_task_job, validate_build_task_jobs,
 };
 use crate::verification_jobs::build_task_mise::{
     install_selected_tools_script, run_build_task_script, selected_mise_files, source_guard_script,
@@ -215,15 +214,8 @@ fn native_job_bootstraps_only_locked_selected_tools_and_guards_current_source() 
         Some("false")
     );
     assert!(!with.contains_key("repository") && !with.contains_key("ref"));
-    assert_eq!(job.steps[1].name, VERIFY_BUILD_TASK_MACOS_NAME);
-    let (xcode, env) = shell_parts(&job, 1).expect("Xcode shell step");
-    assert!(xcode.join(" ").contains("Xcode 26.6"));
-    assert!(xcode.join(" ").contains("17F113"));
-    assert!(xcode.join(" ").contains("26.5"));
-    assert_eq!(
-        env.get("DEVELOPER_DIR").map(String::as_str),
-        Some(BUILD_TASK_DEVELOPER_DIR)
-    );
+    let capability = policy.task.runner.xcode_capability();
+    assert_xcode_probe(&job, capability);
     assert!(matches!(&job.steps[2].kind, StepKind::Action { .. }));
 
     assert_eq!(job.steps[3].name, INSTALL_BUILD_TASK_BOOTSTRAP_NAME);
@@ -258,8 +250,22 @@ fn native_job_bootstraps_only_locked_selected_tools_and_guards_current_source() 
     assert!(guard.contains("'rustc 1.99.0 ('*"));
     assert!(!guard.contains("cargo --version"));
 
+    assert_task_execution(&job, capability.developer_dir);
+}
+
+fn assert_xcode_probe(job: &Job, capability: velnor_actions_contract::BuildTaskXcodeCapability) {
+    assert_eq!(job.steps[1].name, VERIFY_BUILD_TASK_MACOS_NAME);
+    let (xcode, env) = shell_parts(job, 1).expect("Xcode shell step");
+    let probe = xcode.join(" ");
+    assert!(probe.contains(&format!("Xcode {}", capability.version)));
+    assert!(probe.contains(capability.build));
+    assert!(probe.contains(capability.sdk_version));
+    assert_developer_dir(env, capability.developer_dir);
+}
+
+fn assert_task_execution(job: &Job, developer_dir: &str) {
     assert_eq!(job.steps[5].name, RUN_BUILD_TASK_NAME);
-    let (run, env) = shell_parts(&job, 5).expect("task shell step");
+    let (run, env) = shell_parts(job, 5).expect("task shell step");
     let run = run.join(" ");
     assert!(run.contains("mise --no-env --locked --no-hooks run --skip-tools desktop-ci"));
     assert!(run.contains("export MISE_NO_ENV=1"));
@@ -268,10 +274,58 @@ fn native_job_bootstraps_only_locked_selected_tools_and_guards_current_source() 
         env.get("NEXTEST_TEST_THREADS").map(String::as_str),
         Some("2")
     );
-    assert_eq!(
-        env.get("DEVELOPER_DIR").map(String::as_str),
-        Some(BUILD_TASK_DEVELOPER_DIR)
-    );
+    assert_developer_dir(env, developer_dir);
+}
+
+#[test]
+fn each_runner_renders_its_own_exact_xcode_capability_everywhere() {
+    for (runner, label, version, build, sdk, developer_dir) in [
+        (
+            BuildTaskRunner::Macos26Arm64,
+            "macos-26",
+            "26.6",
+            "17F113",
+            "26.5",
+            "/Applications/Xcode_26.6.app/Contents/Developer",
+        ),
+        (
+            BuildTaskRunner::Xcode27Arm64,
+            "xcode-27",
+            "27.1",
+            "27A9275",
+            "27.0",
+            "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer",
+        ),
+    ] {
+        let mut native = policy();
+        native.task.runner = runner;
+        native.runner_label = label.to_owned();
+        let capability = runner.xcode_capability();
+        assert_eq!(capability.version, version);
+        assert_eq!(capability.build, build);
+        assert_eq!(capability.sdk_version, sdk);
+        assert_eq!(capability.developer_dir, developer_dir);
+
+        let job = build_build_task_job(&native, CHECKOUT).expect("native task job");
+        assert_eq!(job.runs_on, label);
+        let (probe, probe_env) = shell_parts(&job, 1).expect("Xcode probe");
+        let probe = probe.join(" ");
+        assert!(probe.contains(&format!("Xcode {version}")), "{probe}");
+        assert!(probe.contains(&format!("Build version {build}")), "{probe}");
+        assert!(probe.contains(sdk), "{probe}");
+        if runner == BuildTaskRunner::Xcode27Arm64 {
+            assert!(!probe.contains("26."), "{probe}");
+        }
+        assert_developer_dir(probe_env, developer_dir);
+        for index in [3, 4, 5] {
+            let (_, env) = shell_parts(&job, index).expect("Xcode environment");
+            assert_developer_dir(env, developer_dir);
+        }
+    }
+}
+
+fn assert_developer_dir(env: &BTreeMap<String, String>, expected: &str) {
+    assert_eq!(env.get("DEVELOPER_DIR").map(String::as_str), Some(expected));
 }
 
 #[path = "build_task_jobs_source_tests.rs"]

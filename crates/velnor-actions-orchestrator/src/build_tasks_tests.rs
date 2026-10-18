@@ -11,8 +11,8 @@ const ROOT_CONFIG: &str = r#"
 min_version = "2026.10.7"
 
 [tools]
-mr-boxington = "1.21.1"
-rust = { version = "1.98.1", mr_boxington = true }
+mr-boxington = "1.24.1"
+rust = { version = "1.99.1", mr_boxington = true }
 
 [settings]
 lockfile = true
@@ -22,7 +22,7 @@ idiomatic_version_file_enable_tools = ["rust"]
 binstall = true
 
 [tasks.native-ci]
-run = "mbx +1.98.1 xtask desktop ci"
+run = "mbx +1.99.1 xtask desktop ci"
 "#;
 
 fn project(source: &str) -> NativeMiseConfig {
@@ -64,7 +64,7 @@ fn root_swiftlint_lock() -> NativeMiseLock {
 #[test]
 fn current_root_mise_shape_accepts_pinned_mbx_rust_without_wrappers() {
     let config = project(ROOT_CONFIG);
-    validate_config_shape(&config, "1.98.1").expect("current pinned source");
+    validate_config_shape(&config, "1.99.1").expect("current pinned source");
     assert!(!config.root_keys.iter().any(|key| key == "wrappers"));
     assert_eq!(config.tools["rust"].mr_boxington, Some(true));
 }
@@ -72,19 +72,19 @@ fn current_root_mise_shape_accepts_pinned_mbx_rust_without_wrappers() {
 #[test]
 fn legacy_wrapper_and_selected_tool_drift_fail_closed() {
     let legacy = format!("{ROOT_CONFIG}\n[wrappers.cargo]\ncommand = \"mbx\"\n");
-    assert!(validate_config_shape(&project(&legacy), "1.98.1").is_err());
+    assert!(validate_config_shape(&project(&legacy), "1.99.1").is_err());
 
-    let wrong_mbx = ROOT_CONFIG.replace("1.21.1", "1.20.0");
-    assert!(validate_config_shape(&project(&wrong_mbx), "1.98.1").is_err());
+    let wrong_mbx = ROOT_CONFIG.replace("1.24.1", "1.20.0");
+    assert!(validate_config_shape(&project(&wrong_mbx), "1.99.1").is_err());
 
-    let wrong_rust = ROOT_CONFIG.replace("1.98.1", "1.98.0");
+    let wrong_rust = ROOT_CONFIG.replace("1.99.1", "1.98.0");
     assert!(validate_config_shape(&project(&wrong_rust), "1.98.0").is_err());
 
     let missing_route = ROOT_CONFIG.replace(", mr_boxington = true", "");
-    assert!(validate_config_shape(&project(&missing_route), "1.98.1").is_err());
+    assert!(validate_config_shape(&project(&missing_route), "1.99.1").is_err());
 
     let malformed_route = ROOT_CONFIG.replace("mr_boxington = true", "mr_boxington = \"true\"");
-    assert!(validate_config_shape(&project(&malformed_route), "1.98.1").is_err());
+    assert!(validate_config_shape(&project(&malformed_route), "1.99.1").is_err());
 }
 
 #[test]
@@ -156,7 +156,7 @@ tools = { swiftlint = "0.65.1" }
         false,
         &root_config,
         &root_lock,
-        "1.98.1",
+        "1.99.1",
         &BTreeMap::new(),
     )
     .expect("task-local selector has the exact root-selected locked row");
@@ -173,7 +173,7 @@ tools = { swiftlint = "0.65.1" }
             false,
             &root_config,
             &root_lock,
-            "1.98.1",
+            "1.99.1",
             &BTreeMap::new(),
         )
         .is_err()
@@ -189,7 +189,7 @@ tools = { swiftlint = "0.65.1" }
             false,
             &wrong_version_config,
             &root_lock,
-            "1.98.1",
+            "1.99.1",
             &BTreeMap::new(),
         )
         .is_err()

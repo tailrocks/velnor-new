@@ -25,8 +25,8 @@ review; the row must name a verification rule that actually runs.
 
 - Counts for §5 line limits are physical lines including comments and
   blanks; only the classes above are outside the handwritten budget.
-- `mise.lock` is intentionally absent: it is repo-owned and Velnor MUST NOT
-  create or refresh it (RQ-2.12). If maintainers adopt it, add a row here.
+- `mise.lock` is repo-owned and tracked after the authorized toolchain
+  migration; Velnor only reads it and MUST NOT create or refresh it (RQ-2.12).
 - `.velnor/generator.lock` / `.velnor/runner.lock` do not exist yet (pre-seed
   / deferred V2). Their rows are pre-declared in
   [update-procedure.md](update-procedure.md) and move here on creation.

@@ -1,7 +1,7 @@
 //! Bounded readonly probe identity admission; output is data, never shell code.
 use crate::config::{
-    CheckPlatform, MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, QualifiedTool,
-    QualifiedToolExecutable, QualifiedToolProbe,
+    CheckPlatform, MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, QualifiedToolExecutableRecipe,
+    QualifiedToolProbe,
 };
 use crate::errors::ContractError;
 
@@ -15,10 +15,10 @@ fn exact_version_token(output: &str, version: &str) -> bool {
     })
 }
 
-pub(super) fn validate_probe(
-    tool: &QualifiedTool,
+pub(super) fn validate_recipe_probe(
+    version: &str,
     platform: CheckPlatform,
-    executable: &QualifiedToolExecutable,
+    executable: &QualifiedToolExecutableRecipe,
     file: &str,
     key: &str,
 ) -> Result<(), ContractError> {
@@ -42,7 +42,7 @@ pub(super) fn validate_probe(
         || !expected
             .bytes()
             .all(|byte| byte.is_ascii_graphic() || byte == b' ' || (multiline && byte == b'\n'))
-        || !exact_version_token(expected, &tool.version)
+        || !exact_version_token(expected, version)
     {
         return Err(bad());
     }
@@ -58,7 +58,7 @@ pub(super) fn validate_probe(
                 .filter(|line| line.starts_with("host: "))
                 .count()
                 != 1
-            || !lines.contains(&format!("release: {}", tool.version).as_str())
+            || !lines.contains(&format!("release: {version}").as_str())
             || !lines.contains(&format!("host: {}", platform.target()).as_str())
             || !lines.iter().any(|line| {
                 line.strip_prefix("commit-hash: ").is_some_and(|value| {

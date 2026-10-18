@@ -47,7 +47,7 @@ pub enum DeleteDecision {
 }
 
 pub(crate) const RUNNER_PLATFORM: &str = "linux/amd64";
-pub(crate) const RUNNER_IMAGE: &str = "velnor-runner:ubuntu-26.04-2.337.0";
+pub(crate) const RUNNER_IMAGE: &str = "velnor-runner:ubuntu-26.04-2.338.0";
 const ENTRYPOINT: &str = "/usr/local/bin/velnor-runner-entrypoint";
 const SOCKET_TARGET: &str = "/run";
 

@@ -41,7 +41,7 @@ Local equality is never presented as an upstream freshness proof.
 
 - `local-pin` / `policy-mirror`: compiled-in constants equal the
   reviewed inventory pins, and `.velnor/version-policy.toml` mirrors the
-  same pins (tools, runner default + supported labels, all nine action
+  same pins (tools, runner default + supported labels, all twelve action
   records). The expected tool/action sets are asserted; a missing row
   and an unmapped extra row both fail.
 - `lock-staleness`: effective identity. Every declared dependency in
@@ -62,11 +62,17 @@ Local equality is never presented as an upstream freshness proof.
    compatible updates as a coherent set. Incompatible updates are reported
    with a required migration — never silently omitted (VER-1.5).
 2. The change records freshness timestamp + version delta, and refreshes
-   ONLY Velnor-owned pins and locks: `Cargo.lock`,
-   `.velnor/version-policy.toml`, `.velnor/generator.lock` (once seeded),
-   `.velnor/runner.lock`. It MUST NOT edit `mise.toml`,
-   `mise.lock`, or `rust-toolchain.toml` (VER-3.4, VER-4.4); those get
-   maintainer recommendations only.
+   Velnor-owned pins and locks: `Cargo.lock`, `.velnor/version-policy.toml`,
+   `.velnor/generator.lock` (once seeded), and `.velnor/runner.lock`.
+   Ordinary freshness updates MUST NOT edit `mise.toml`, `mise.lock`, or
+   `rust-toolchain.toml` (VER-3.4, VER-4.4); those get maintainer
+   recommendations only. A separately authorized toolchain migration may
+   edit those files when the request explicitly includes project toolchains.
+   Such a migration remains one qualified update set: regenerate Mise lock
+   data with the selected Mise release, record exact upstream evidence, and
+   run all affected platform and workflow gates before merge. This exception
+   does not permit an ordinary pin refresh to change developer-selected tools
+   or bypass qualification.
 3. Run the full qualification: `cargo fmt --all -- --check`, policy checks,
    Clippy per selected package (`--locked`), tests, doctests, `cargo deny`,
    workflow validation, cache/selection fixtures, platform qualification.
@@ -199,7 +205,7 @@ crate counts (`cargo nextest run --locked -p velnor-actions-cli -E
 'test(p12_property)'`). Unit-level strategies over validators, task-ID
 segments, and the final merge entrypoint migrate to `proptest` once the
 requested pin lands: proptest `1.11.0` (exact `=1.11.0`, `rust-version`
-1.85, inside MSRV 1.98; needs a manifest owner to add the dev-dependency
+1.85, inside MSRV 1.99; needs a manifest owner to add the dev-dependency
 plus lockfile entry).
 
 Fuzzing is infeasible in this wave, with evidence: a fuzz target needs a

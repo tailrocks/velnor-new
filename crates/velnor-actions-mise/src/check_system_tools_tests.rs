@@ -14,6 +14,8 @@ fn maximum_valid_swift_observation_fits_the_declared_receipt_bound() {
         kind: CheckSystemToolKind::Swift,
         version: version.clone(),
         build: build.clone(),
+        sdk_version: None,
+        developer_dir: None,
     };
     let path = format!("/{}", "\u{1}".repeat(1023));
     let digest = velnor_actions_contract::digest_b3(b"system-proof");
@@ -21,6 +23,9 @@ fn maximum_valid_swift_observation_fits_the_declared_receipt_bound() {
         declared: pin.clone(),
         observed_version: version.clone(),
         observed_build: build,
+        observed_sdk_version: None,
+        sdk_stdout_digest: None,
+        sdk_stderr_digest: None,
         observed_target: Some(format!("arm64-apple-macosx{version}")),
         executable: path.clone(),
         launcher: "/usr/bin/xcrun".into(),

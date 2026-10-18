@@ -385,13 +385,8 @@ fn adapter_metadata_forwards_adapter_value() -> TestResult {
             assert!(meta.contains_key(key), "{key} in {}", entry.id);
         }
         assert_eq!(meta.len(), 11, "adapter shape only");
-        assert!(
-            !meta["compile_driver"]
-                .as_str()
-                .unwrap_or_default()
-                .is_empty()
-        );
-        assert!(!meta["test_runner"].as_str().unwrap_or_default().is_empty());
+        assert_ne!(meta["compile_driver"].as_str().unwrap_or_default(), "");
+        assert_ne!(meta["test_runner"].as_str().unwrap_or_default(), "");
         assert!(meta["evidence_ids"].is_array());
     }
     Ok(())

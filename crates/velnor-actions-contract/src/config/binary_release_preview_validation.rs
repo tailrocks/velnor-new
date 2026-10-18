@@ -59,9 +59,9 @@ impl RustBinaryPreviewProducer {
             &self.system_tools,
             match self.runner {
                 super::VerificationRunner::LinuxX64 => CheckPlatform::LinuxX64,
-                super::VerificationRunner::MacosArm64 | super::VerificationRunner::Macos26Arm64 => {
-                    CheckPlatform::MacosArm64
-                }
+                super::VerificationRunner::MacosArm64
+                | super::VerificationRunner::Macos26Arm64
+                | super::VerificationRunner::Xcode27Arm64 => CheckPlatform::MacosArm64,
             },
             file,
             key,

@@ -46,7 +46,7 @@ fn local_pin_mismatch_fails() -> Result<(), Box<dyn Error>> {
     harness::mutate(
         &fixture.dir,
         CATALOG,
-        "RUST_VERSION: &str = \"1.98.1\"",
+        "RUST_VERSION: &str = \"1.99.1\"",
         "RUST_VERSION: &str = \"1.99.0\"",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
@@ -61,7 +61,7 @@ fn policy_mirror_drift_fails() -> Result<(), Box<dyn Error>> {
     harness::mutate(
         &fixture.dir,
         POLICY,
-        "rust = \"1.98.1\"",
+        "rust = \"1.99.1\"",
         "rust = \"1.99.0\"",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
@@ -151,8 +151,8 @@ fn stale_recorded_latest_fails() -> Result<(), Box<dyn Error>> {
     harness::mutate(
         &fixture.dir,
         INVENTORY,
-        "\"name\":\"gh\",\"pinned\":\"2.101.0\"",
-        "\"name\":\"gh\",\"pinned\":\"2.101.0\",\"latest\":\"v9.9.9\"",
+        "\"name\":\"gh\",\"pinned\":\"2.102.0\"",
+        "\"name\":\"gh\",\"pinned\":\"2.102.0\",\"latest\":\"v9.9.9\"",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_fail(&run, "stale pin");
@@ -217,7 +217,7 @@ fn held_status_needs_a_covering_hold() -> Result<(), Box<dyn Error>> {
         &fixture.dir,
         INVENTORY,
         "\"held_version\":\"9.9.9\"",
-        "\"held_version\":\"2.101.0\"",
+        "\"held_version\":\"2.102.0\"",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);

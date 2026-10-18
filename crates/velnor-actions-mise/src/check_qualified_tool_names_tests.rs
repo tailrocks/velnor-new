@@ -70,8 +70,22 @@ fn resolve_named_for_check(
 fn system_tool(kind: CheckSystemToolKind) -> CheckSystemTool {
     CheckSystemTool {
         kind,
-        version: "6.2.1".to_owned(),
-        build: "swiftlang-6.2.1.1.1".to_owned(),
+        version: if kind == CheckSystemToolKind::Xcode {
+            "27.1"
+        } else {
+            "6.2.1"
+        }
+        .to_owned(),
+        build: if kind == CheckSystemToolKind::Xcode {
+            "27A9275"
+        } else {
+            "swiftlang-6.2.1.1.1 clang-1700.0.13.3"
+        }
+        .to_owned(),
+        sdk_version: (kind == CheckSystemToolKind::Xcode).then(|| "27.0".to_owned()),
+        developer_dir: (kind == CheckSystemToolKind::Xcode).then(|| {
+            "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer".to_owned()
+        }),
     }
 }
 

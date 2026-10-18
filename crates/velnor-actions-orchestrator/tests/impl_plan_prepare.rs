@@ -96,7 +96,7 @@ fn check_install_env(body: &str, yaml: &str) -> Result<(), String> {
             return Err(format!("install step env misses {key}:\n{body}"));
         }
     }
-    if !yaml.contains("RUSTUP_TOOLCHAIN: 1.98.1") {
+    if !yaml.contains("RUSTUP_TOOLCHAIN: 1.99.1") {
         return Err(format!("job env misses RUSTUP_TOOLCHAIN:\n{yaml}"));
     }
     for key in ["MISE_NO_CONFIG:", "MISE_NO_ENV:", "MISE_NO_HOOKS:"] {

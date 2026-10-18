@@ -4,12 +4,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use velnor_actions_contract::config::{
-    CheckPlatform, QualifiedTool, QualifiedToolBackend, QualifiedToolOptions,
+    CheckPlatform, QualifiedToolBackend, QualifiedToolOptions, QualifiedToolRecipe,
 };
 use velnor_actions_mise::CheckDeadline;
 
 pub(crate) fn normalize_rust_payload(
-    tool: &QualifiedTool,
+    tool: &QualifiedToolRecipe,
     platform: CheckPlatform,
     roots: &[PathBuf],
     prefix: &Path,
@@ -55,7 +55,7 @@ pub(crate) fn normalize_rust_payload(
 }
 
 fn selected_components(
-    tool: &QualifiedTool,
+    tool: &QualifiedToolRecipe,
     platform: CheckPlatform,
     deadline: CheckDeadline,
 ) -> Result<BTreeSet<String>, OrchestratorError> {

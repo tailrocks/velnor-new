@@ -25,7 +25,7 @@ fn candidate_build_argv_is_byte_exact() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            "rust@1.99.1",
             "--",
             "mbx",
             "build",
@@ -74,7 +74,7 @@ fn candidate_build_specs_come_only_from_catalog() -> Result<(), String> {
         "native action owns MBX; candidate Mise selectors exclude it: {argv:?}"
     );
     assert!(
-        !argv.iter().any(|arg| arg == "mr-boxington@1.21.1"),
+        !argv.iter().any(|arg| arg == "mr-boxington@1.24.1"),
         "no pinned fallback may leak in: {argv:?}"
     );
     Ok(())

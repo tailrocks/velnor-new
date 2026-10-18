@@ -42,7 +42,9 @@ impl ReleaseTarget {
     pub fn for_runner_label(label: &str) -> Option<Self> {
         match label {
             "ubuntu-22.04" | "ubuntu-24.04" | "ubuntu-26.04" => Some(Self::LinuxX86_64),
-            "macos-14" | "macos-15" | "macos-15-arm64" | "macos-26" => Some(Self::MacosArm64),
+            "macos-14" | "macos-15" | "macos-15-arm64" | "macos-26" | "xcode-27" => {
+                Some(Self::MacosArm64)
+            }
             "macos-15-intel" | "macos-26-intel" => Some(Self::MacosX86_64),
             _ => None,
         }

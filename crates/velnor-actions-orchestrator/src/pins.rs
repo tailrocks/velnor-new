@@ -74,9 +74,9 @@ pub(crate) fn resolve_verification_mise_setup(
 ) -> Result<MiseSetup, OrchestratorError> {
     let sha256 = match runner {
         VerificationRunner::LinuxX64 => MISE_BINARY_SHA256_LINUX_X64,
-        VerificationRunner::MacosArm64 | VerificationRunner::Macos26Arm64 => {
-            MISE_BINARY_SHA256_MACOS_ARM64
-        }
+        VerificationRunner::MacosArm64
+        | VerificationRunner::Macos26Arm64
+        | VerificationRunner::Xcode27Arm64 => MISE_BINARY_SHA256_MACOS_ARM64,
     };
     Ok(MiseSetup {
         uses: mise_action_uses(config)?,
@@ -91,7 +91,9 @@ pub(crate) fn resolve_build_task_mise_setup(
     runner: BuildTaskRunner,
 ) -> Result<MiseSetup, OrchestratorError> {
     let sha256 = match runner {
-        BuildTaskRunner::Macos26Arm64 => MISE_BINARY_SHA256_MACOS_ARM64,
+        BuildTaskRunner::Macos26Arm64 | BuildTaskRunner::Xcode27Arm64 => {
+            MISE_BINARY_SHA256_MACOS_ARM64
+        }
     };
     Ok(MiseSetup {
         uses: mise_action_uses(config)?,

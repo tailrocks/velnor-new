@@ -11,7 +11,7 @@ fn base_plan() -> ContainerPlan {
         name: "worker-runner".to_owned(),
         privileged: false,
         platform: "linux/amd64".to_owned(),
-        image: "velnor-runner:ubuntu-26.04-2.337.0".to_owned(),
+        image: "velnor-runner:ubuntu-26.04-2.338.0".to_owned(),
         env: Vec::new(),
         cmd: vec!["/usr/local/bin/velnor-runner-entrypoint".to_owned()],
         labels: Vec::new(),
@@ -41,7 +41,7 @@ fn runner_plan_is_not_privileged() -> Result<(), HostError> {
     let plan = runner_plan("worker_a")?;
     assert!(!plan.privileged);
     assert_eq!(plan.platform, "linux/amd64");
-    assert_eq!(plan.image, "velnor-runner:ubuntu-26.04-2.337.0");
+    assert_eq!(plan.image, "velnor-runner:ubuntu-26.04-2.338.0");
     assert_eq!(plan.mounts.len(), 2);
     assert_eq!(plan.mounts[0].source, "volume:worker_a");
     assert_eq!(plan.mounts[0].target, "/run");

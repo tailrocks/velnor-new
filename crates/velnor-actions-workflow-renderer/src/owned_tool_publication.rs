@@ -123,7 +123,7 @@ impl OwnedPublicationSpec {
                 (bootstrap.target.as_str(), bootstrap.runner.as_str()),
                 ("x86_64-unknown-linux-gnu", "ubuntu-26.04")
                     | ("aarch64-unknown-linux-gnu", "ubuntu-24.04-arm")
-                    | ("aarch64-apple-darwin", "macos-26")
+                    | ("aarch64-apple-darwin", "macos-26" | "xcode-27")
             );
             if !supported
                 || bootstrap.assets_json.len() > 65536

@@ -11,8 +11,8 @@ fn cargo_proof_pins_exact_toolchain_without_wrapper() -> Result<(), String> {
     let selection = select_route(&pinned(), RouteDriver::Cargo, "cargo-1", "gen-7")
         .map_err(|err| err.to_string())?;
     assert_eq!(selection.driver(), RouteDriver::Cargo);
-    assert_eq!(selection.identity_specs(), &["rust@1.98.1".to_owned()]);
-    assert_eq!(selection.probe_specs(), &["rust@1.98.1".to_owned()]);
+    assert_eq!(selection.identity_specs(), &["rust@1.99.1".to_owned()]);
+    assert_eq!(selection.probe_specs(), &["rust@1.99.1".to_owned()]);
     let invocation = selection.invocation(&pinned());
     assert_eq!(
         invocation,
@@ -22,7 +22,7 @@ fn cargo_proof_pins_exact_toolchain_without_wrapper() -> Result<(), String> {
             "--no-env",
             "--no-hooks",
             "exec",
-            "rust@1.98.1",
+            "rust@1.99.1",
             "--",
             "cargo",
             "--version",
@@ -50,11 +50,11 @@ fn mbx_route_separates_action_identity_from_mise_probe() -> Result<(), String> {
     assert_eq!(selection.driver(), RouteDriver::Mbx);
     assert_eq!(
         selection.identity_specs(),
-        &["rust@1.98.1".to_owned(), "mr-boxington@1.21.1".to_owned()]
+        &["rust@1.99.1".to_owned(), "mr-boxington@1.24.1".to_owned()]
     );
-    assert_eq!(selection.probe_specs(), &["rust@1.98.1".to_owned()]);
+    assert_eq!(selection.probe_specs(), &["rust@1.99.1".to_owned()]);
     let invocation = selection.invocation(&pinned());
-    assert!(!invocation.iter().any(|arg| arg == "mr-boxington@1.21.1"));
+    assert!(!invocation.iter().any(|arg| arg == "mr-boxington@1.24.1"));
     assert_eq!(
         invocation.last(),
         Some(&OsString::from("--version")),

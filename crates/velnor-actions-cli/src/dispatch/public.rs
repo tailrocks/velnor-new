@@ -23,6 +23,11 @@ pub(crate) fn run_public() -> ExitCode {
             output_dir, mode, ..
         } => crate::dispatch_generate::run_generate(output_dir, mode),
         Command::Config { command } => crate::dispatch_config::run_config(&command),
+        Command::QualifyTools {
+            request,
+            work_dir,
+            output,
+        } => crate::dispatch_qualify_tools::run(&request, &work_dir, &output),
         Command::VerifyReleaseManifest {
             manifest,
             expected_source_commit,

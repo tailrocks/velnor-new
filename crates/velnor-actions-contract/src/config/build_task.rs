@@ -36,14 +36,50 @@ pub enum BuildTaskRunner {
     /// GitHub-hosted Apple ARM64 macOS 26 runner.
     #[serde(rename = "macos-26-arm64")]
     Macos26Arm64,
+    /// GitHub-hosted Xcode 27 Apple ARM64 runner.
+    #[serde(rename = "xcode-27-arm64")]
+    Xcode27Arm64,
+}
+
+/// Exact Xcode installation advertised by one native build runner label.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BuildTaskXcodeCapability {
+    /// Xcode marketing version reported by `xcodebuild -version`.
+    pub version: &'static str,
+    /// Exact Xcode build identifier reported by `xcodebuild -version`.
+    pub build: &'static str,
+    /// macOS SDK version reported by `xcrun --sdk macosx --show-sdk-version`.
+    pub sdk_version: &'static str,
+    /// Canonical developer directory for this runner's selected Xcode.
+    pub developer_dir: &'static str,
 }
 
 impl BuildTaskRunner {
+    /// Exact Xcode capability selected by this runner label.
+    #[must_use]
+    pub const fn xcode_capability(self) -> BuildTaskXcodeCapability {
+        match self {
+            Self::Macos26Arm64 => BuildTaskXcodeCapability {
+                version: "26.6",
+                build: "17F113",
+                sdk_version: "26.5",
+                developer_dir: "/Applications/Xcode_26.6.app/Contents/Developer",
+            },
+            Self::Xcode27Arm64 => BuildTaskXcodeCapability {
+                version: "27.1",
+                build: "27A9275",
+                sdk_version: "27.0",
+                developer_dir: "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer",
+            },
+        }
+    }
+
     /// Exact GitHub-hosted runner label.
     #[must_use]
     pub const fn runs_on(self) -> &'static str {
         match self {
             Self::Macos26Arm64 => "macos-26",
+            Self::Xcode27Arm64 => "xcode-27",
         }
     }
 
@@ -51,7 +87,7 @@ impl BuildTaskRunner {
     #[must_use]
     pub const fn mise_target(self) -> &'static str {
         match self {
-            Self::Macos26Arm64 => "aarch64-apple-darwin",
+            Self::Macos26Arm64 | Self::Xcode27Arm64 => "aarch64-apple-darwin",
         }
     }
 }
@@ -188,6 +224,11 @@ mod tests {
         assert!(task.validate("config.toml").is_ok());
         assert_eq!(task.runner.runs_on(), "macos-26");
         assert_eq!(task.runner.mise_target(), "aarch64-apple-darwin");
+        assert_eq!(BuildTaskRunner::Xcode27Arm64.runs_on(), "xcode-27");
+        assert_eq!(
+            BuildTaskRunner::Xcode27Arm64.mise_target(),
+            "aarch64-apple-darwin"
+        );
 
         let mut invalid = task.clone();
         invalid.timeout_minutes = 181;

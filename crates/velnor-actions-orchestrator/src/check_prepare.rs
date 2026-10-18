@@ -10,7 +10,7 @@ use velnor_actions_mise::checks::SystemToolProof;
 use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, QualifiedCheck};
 
 #[path = "check_tool_acquire.rs"]
-mod acquisition;
+pub(crate) mod acquisition;
 #[path = "check_binary.rs"]
 mod binary;
 #[path = "check_container.rs"]

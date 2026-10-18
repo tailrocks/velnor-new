@@ -5,10 +5,10 @@ check_interval_hours = 24
 max_exception_days = 14
 
 [tools]
-mise = "2026.10.4"
-rust = "1.98.1"
-mr-boxington = "1.19.0"
-gh = "2.101.0"
+mise = "2026.10.13"
+rust = "1.99.1"
+mr-boxington = "1.24.1"
+gh = "2.102.0"
 actionlint = "1.7.12"
 shellcheck = "0.11.0"
 zizmor = "1.31.1"
@@ -43,6 +43,12 @@ reviewed = "2026-10-18"
 name = "actions/create-github-app-token"
 version = "v3.3.0"
 sha = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510"
+reviewed = "2026-10-18"
+
+[[actions]]
+name = "actions/github-script"
+version = "v9.0.0"
+sha = "3a2844b7e9c422d3c10d287c895573f7108da1b3"
 reviewed = "2026-10-18"
 
 [[actions]]

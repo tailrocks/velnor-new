@@ -259,8 +259,8 @@ fn unpaired_jobs_stay_inline() {
         lane_job("actionlint", HOSTED_RUNS, vec![echo_step(0, "one")]),
     );
     let shared = share_lanes(&jobs, &ctx()).expect("share");
-    assert!(shared.calls.is_empty());
-    assert!(shared.files.is_empty());
+    assert_eq!(shared.calls.len(), 0);
+    assert_eq!(shared.files.len(), 0);
     let kept = shared.jobs.get("actionlint").expect("actionlint");
     assert_eq!(kept.steps.len(), 1);
 }
@@ -300,7 +300,7 @@ fn elected_save_stays_on_the_winner_job() {
     );
     assert_eq!(hosted.steps.len(), 1);
     assert_eq!(hosted.steps.first().expect("save").name, "Save Mise tools");
-    assert!(local.steps.is_empty());
+    assert_eq!(local.steps.len(), 0);
     let action = shared
         .files
         .iter()

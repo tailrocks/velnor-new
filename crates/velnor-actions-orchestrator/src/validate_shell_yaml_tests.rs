@@ -35,7 +35,7 @@ fn step_job_and_workflow_shell_precedence_is_order_independent() -> Result<(), S
 #[test]
 fn container_default_is_posix_and_services_do_not_change_runner_shell() -> Result<(), String> {
     let runs = bodies(
-        "jobs:\n  scale-container:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: container probe\n        run: test -n \"$HOME\"\n    container: alpine:3.22\n  hosted-container:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: container probe\n        run: test -n \"$HOME\"\n    container:\n      image: private.invalid/unknown:tag\n  hosted-service:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: service probe\n        run: test -n \"$HOME\"\n    services:\n      alpine:\n        image: alpine:3.22\n",
+        "jobs:\n  scale-container:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: container probe\n        run: test -n \"$HOME\"\n    container: alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395\n  hosted-container:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: container probe\n        run: test -n \"$HOME\"\n    container:\n      image: private.invalid/unknown:tag\n  hosted-service:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: service probe\n        run: test -n \"$HOME\"\n    services:\n      alpine:\n        image: alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395\n",
     )?;
     assert_eq!(
         runs,
@@ -51,7 +51,7 @@ fn container_default_is_posix_and_services_do_not_change_runner_shell() -> Resul
 #[test]
 fn job_and_workflow_defaults_override_container_shell() -> Result<(), String> {
     let runs = bodies(
-        "defaults:\n  run:\n    shell: bash\njobs:\n  job-override:\n    runs-on: [self-hosted, runner]\n    defaults:\n      run:\n        shell: sh -e {0}\n    steps:\n      - name: job default\n        run: test -n \"$HOME\"\n    container: alpine:3.22\n  workflow-override:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: workflow default\n        run: test -n \"$HOME\"\n    container: alpine:3.22\n",
+        "defaults:\n  run:\n    shell: bash\njobs:\n  job-override:\n    runs-on: [self-hosted, runner]\n    defaults:\n      run:\n        shell: sh -e {0}\n    steps:\n      - name: job default\n        run: test -n \"$HOME\"\n    container: alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395\n  workflow-override:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: workflow default\n        run: test -n \"$HOME\"\n    container: alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395\n",
     )?;
     assert_eq!(
         runs,
@@ -68,7 +68,7 @@ fn only_step_run_keys_are_linted() -> Result<(), String> {
     let runs = bodies(
         "defaults:\n  run:\n    shell: bash\njobs:\n  probe:\n    runs-on: ubuntu-26.04\n    steps:\n      - name: action\n        uses: example/action@0000000000000000000000000000000000000000\n        with:\n          run: action-input\n        env:\n          run: environment-value\n",
     )?;
-    assert!(runs.is_empty());
+    assert_eq!(runs.len(), 0);
     Ok(())
 }
 
@@ -105,7 +105,7 @@ fn nested_run_values_are_not_confused_with_steps() -> Result<(), String> {
     let runs = bodies(
         "jobs:\n  probe:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: action\n        uses: example/action@0000000000000000000000000000000000000000\n        with:\n          run: action-input\n        env:\n          run: environment-value\n",
     )?;
-    assert!(runs.is_empty());
+    assert_eq!(runs.len(), 0);
     Ok(())
 }
 

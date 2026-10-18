@@ -52,14 +52,14 @@ fn matching_comment_cannot_hide_compiled_pin_drift() -> Result<(), Box<dyn Error
     let fixture = harness::passing("p12-pinparser-comment-shadow")?;
     let source = read_catalog(&fixture)?;
     let drifted = source.replace(
-        "RUST_VERSION: &str = \"1.98.1\"",
+        "RUST_VERSION: &str = \"1.99.1\"",
         "RUST_VERSION: &str = \"9.9.9\"",
     );
     assert_ne!(source, drifted, "fixture pin anchor must be unique");
-    let shadowed = format!("// pub const RUST_VERSION: &str = \"1.98.1\";\n{drifted}");
+    let shadowed = format!("// pub const RUST_VERSION: &str = \"1.99.1\";\n{drifted}");
     harness::write(&fixture.dir, CATALOG, &shadowed)?;
     let run = harness::run_script(&fixture.dir, &[])?;
-    harness::assert_fail(&run, "code='9.9.9' inventory='1.98.1'");
+    harness::assert_fail(&run, "code='9.9.9' inventory='1.99.1'");
     harness::cleanup(&fixture);
     Ok(())
 }
@@ -70,14 +70,14 @@ fn decoded_rust_string_escapes_match_compiled_values() -> Result<(), Box<dyn Err
     harness::mutate(
         &fixture.dir,
         CATALOG,
-        "MISE_VERSION: &str = \"2026.10.4\"",
-        "MISE_VERSION: &str = \"2026\\x2e10.4\"",
+        "MISE_VERSION: &str = \"2026.10.13\"",
+        "MISE_VERSION: &str = \"2026\\x2e10.13\"",
     )?;
     harness::mutate(
         &fixture.dir,
         CATALOG,
-        "RUST_VERSION: &str = \"1.98.1\"",
-        "RUST_VERSION: &str = \"\\u{31}.98.1\"",
+        "RUST_VERSION: &str = \"1.99.1\"",
+        "RUST_VERSION: &str = \"\\u{31}.99.1\"",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);
@@ -92,7 +92,7 @@ fn duplicate_conditional_and_expression_pins_fail_closed() -> Result<(), Box<dyn
     harness::write(
         &duplicate.dir,
         CATALOG,
-        &format!("{source}\npub const MISE_VERSION: &str = \"2026.10.4\";\n"),
+        &format!("{source}\npub const MISE_VERSION: &str = \"2026.10.13\";\n"),
     )?;
     let run = harness::run_script(&duplicate.dir, &[])?;
     harness::assert_fail(&run, "duplicate const MISE_VERSION");
@@ -124,7 +124,7 @@ fn duplicate_conditional_and_expression_pins_fail_closed() -> Result<(), Box<dyn
     harness::mutate(
         &expression.dir,
         CATALOG,
-        "MISE_VERSION: &str = \"2026.10.4\"",
+        "MISE_VERSION: &str = \"2026.10.13\"",
         "MISE_VERSION: &str = concat!(\"2026\", \".9.16\")",
     )?;
     let run = harness::run_script(&expression.dir, &[])?;
@@ -139,8 +139,8 @@ fn raw_string_literal_matches_compiled_value() -> Result<(), Box<dyn Error>> {
     harness::mutate(
         &fixture.dir,
         CATALOG,
-        "MISE_VERSION: &str = \"2026.10.4\"",
-        "MISE_VERSION: &str = r###\"2026.10.4\"###",
+        "MISE_VERSION: &str = \"2026.10.13\"",
+        "MISE_VERSION: &str = r###\"2026.10.13\"###",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);
@@ -154,7 +154,7 @@ fn invalid_rust_string_escape_fails_closed() -> Result<(), Box<dyn Error>> {
     harness::mutate(
         &fixture.dir,
         CATALOG,
-        "MISE_VERSION: &str = \"2026.10.4\"",
+        "MISE_VERSION: &str = \"2026.10.13\"",
         "MISE_VERSION: &str = \"2026\\xFF.9.16\"",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;

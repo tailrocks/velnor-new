@@ -5,6 +5,7 @@
 
 use std::fs;
 
+use velnor_actions_mise::catalog::RUST_VERSION;
 use velnor_actions_orchestrator::{GenerateOptions, GenerationPreparation, generate, prepare};
 
 use crate::impl_common::{TestResult, config_with_branch, err_of, make_repo, plan_for, snapshot};
@@ -278,11 +279,12 @@ fn profile_conflict_fails_closed() -> TestResult {
 fn tool_files_untouched() -> TestResult {
     let repo = make_repo(&declared_config("mbx", "cargo_nextest"))?;
     let root = repo.path();
+    let toolchain_file = format!("[toolchain]\nchannel = \"{RUST_VERSION}\"\n");
     let witnesses = [
         ("mise.toml", "[tools]\n"),
         (".mise.toml", "[tools]\n"),
         ("mise.lock", "{}\n"),
-        ("rust-toolchain.toml", "[toolchain]\nchannel = \"1.98.1\"\n"),
+        ("rust-toolchain.toml", toolchain_file.as_str()),
     ];
     for (rel, body) in witnesses {
         fs::write(root.join(rel), body)?;
@@ -307,7 +309,7 @@ fn declared_keys_are_typed_and_closed() -> TestResult {
     ] {
         let repo = make_repo(config)?;
         let err = err_of(prepare(repo.path()).map(|_| ()), "bad key rejected")?;
-        assert!(!err.to_string().is_empty());
+        assert_ne!(err.to_string(), "");
     }
     let repo = make_repo(&declared_config("cargo", "cargo_test"))?;
     let prep = prepare(repo.path())?;

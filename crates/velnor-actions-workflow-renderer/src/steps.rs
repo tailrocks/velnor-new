@@ -3,6 +3,9 @@
 //! Templates fix names, env keys, and payload shapes; argv arrives validated.
 
 use std::collections::BTreeMap;
+use velnor_actions_actionlint::{
+    CHECKOUT_ACTION_USES, DOWNLOAD_ARTIFACT_ACTION_USES, UPLOAD_ARTIFACT_ACTION_USES,
+};
 
 /// Native build-provenance action ref; freshness checks compare the approved catalog.
 pub const ATTEST_BUILD_PROVENANCE_USES: &str =
@@ -74,20 +77,18 @@ pub const ASSET_URL_ENV: &str = "VELNOR_ASSET_URL";
 pub const RELEASE_COMMIT_ENV: &str = "VELNOR_RELEASE_COMMIT";
 /// Substrings that must never appear in rendered YAML.
 pub const FORBIDDEN_TOKENS: &[&str] = &["__internal", "velnor-actions __", "velnor-actions run"];
-/// Pinned `actions/upload-artifact` ref (v7.0.1, qualified 2026-09-28).
-pub const UPLOAD_ARTIFACT_USES: &str =
-    "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a";
-/// Pinned `actions/checkout` ref (v7.0.1, qualified 2026-09-28).
-pub const CHECKOUT_USES: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+/// Pinned `actions/upload-artifact` ref from the shared action catalog (v7.0.2).
+pub const UPLOAD_ARTIFACT_USES: &str = UPLOAD_ARTIFACT_ACTION_USES;
+/// Pinned `actions/checkout` ref from the shared action catalog (v7.0.1).
+pub const CHECKOUT_USES: &str = CHECKOUT_ACTION_USES;
 /// Retention for every rendered `upload-artifact` step, in days.
 ///
 /// Run-scoped evidence reproducible by rerun; bounded well under the
 /// 90-day platform default to cap stored bytes. Every constructor
 /// below emits this value as `retention-days`; no site retypes it.
 pub const ARTIFACT_RETENTION_DAYS: u32 = 30;
-/// Pinned `actions/download-artifact` ref (v8.0.1, qualified 2026-09-28).
-pub const DOWNLOAD_ARTIFACT_USES: &str =
-    "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c";
+/// Pinned `actions/download-artifact` ref from the shared action catalog (v8.0.2).
+pub const DOWNLOAD_ARTIFACT_USES: &str = DOWNLOAD_ARTIFACT_ACTION_USES;
 /// Candidate manifest filename inside the uploaded artifact.
 pub const CANDIDATE_MANIFEST_FILE: &str = "candidate-manifest.json";
 /// Directory holding the built candidate binary plus its manifest.

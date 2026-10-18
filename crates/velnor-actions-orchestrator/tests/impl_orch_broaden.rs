@@ -7,6 +7,7 @@ use crate::impl_orch_plansel::{
 };
 use serde_json::Value as Json;
 use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
+use velnor_actions_mise::catalog::RUST_VERSION;
 use velnor_actions_orchestrator::plan_internal;
 
 #[test]
@@ -47,6 +48,7 @@ fn generator_and_workflow_changes_broaden() -> TestResult {
 
 #[test]
 fn toolfile_edits_leave_universe_unproven() -> TestResult {
+    let rust_toolchain = format!("[toolchain]\nchannel = \"{RUST_VERSION}\"\n");
     let (plan, warnings) = plan_change(
         &["alpha", "beta"],
         &[],
@@ -54,7 +56,7 @@ fn toolfile_edits_leave_universe_unproven() -> TestResult {
         &[],
         &[
             ("mise.toml", "[tools]\n"),
-            ("rust-toolchain.toml", "[toolchain]\nchannel = \"1.98.1\"\n"),
+            ("rust-toolchain.toml", rust_toolchain.as_str()),
         ],
     )?;
     assert!(

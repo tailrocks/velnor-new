@@ -39,7 +39,9 @@ pub use binary_release::{
     RustBinaryPreviewProducer, RustBinaryPreviewProduct, RustBinaryPreviewVersioning,
     RustBinaryReleaseConfig,
 };
-pub use build_task::{BuildTask, BuildTaskRunner, is_valid_build_tool_key};
+pub use build_task::{
+    BuildTask, BuildTaskRunner, BuildTaskXcodeCapability, is_valid_build_tool_key,
+};
 pub use check_receipt_budget::{
     MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
     MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
@@ -65,11 +67,13 @@ pub use host_container::{
 pub use image_task::{NativeImageCachePolicy, NativeImagePlatform, NativeImageTask};
 pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
-    MiseCheck, is_valid_mise_task_name,
+    MiseCheck, is_valid_check_system_build, is_valid_check_system_version, is_valid_mise_task_name,
 };
 pub use qualified_tools::{
-    QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend,
-    QualifiedToolExecutable, QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe,
+    QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolArtifactRecipe,
+    QualifiedToolBackend, QualifiedToolExecutable, QualifiedToolExecutableRecipe,
+    QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe, QualifiedToolRecipe,
+    QualifiedToolRecipePlatform, validate_qualified_tool_recipe, validate_qualified_tool_recipes,
     validate_qualified_tools,
 };
 pub use release::{BootstrapRelease, ReleaseAuthentication, RustReleaseConfig};

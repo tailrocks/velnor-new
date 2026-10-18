@@ -83,6 +83,9 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
 
 fn allowed_feature(dir: &str, key: &str, feature: &str) -> bool {
     feature == "derive"
+        || (dir == "crates/velnor-actions-orchestrator"
+            && key == "zip"
+            && feature == "deflate-flate2")
         || (key == "rustix" && feature == "fs")
         || (key == "rustix"
             && feature == "process"

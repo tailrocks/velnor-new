@@ -303,7 +303,7 @@ fn tofu_dispatch_resolves_closure() {
         &mut velnor_actions_tofu::FileCache::new(),
     )
     .expect("tofu converts");
-    assert!(closure.unknown_inputs().is_empty());
+    assert_eq!(closure.unknown_inputs(), [] as [&str; 0]);
     assert!(matches!(
         closure.inputs.get("source_tree"),
         Some(Provenance::Known { .. })

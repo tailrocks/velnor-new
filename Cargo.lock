@@ -912,14 +912,14 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-actionlint"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "velnor-actions-contract",
 ]
 
 [[package]]
 name = "velnor-actions-cli"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "clap",
  "proc-macro2",
@@ -933,7 +933,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-contract"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "blake3",
  "serde",
@@ -943,7 +943,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-freshness"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "flate2",
  "rustix",
@@ -957,7 +957,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-mise"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "rustix",
  "serde",
@@ -969,7 +969,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "base64",
  "flate2",
@@ -995,7 +995,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-rust"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "serde",
  "serde_json",
@@ -1005,7 +1005,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-tofu"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "hcl-rs",
  "serde",
@@ -1015,15 +1015,16 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-renderer"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
+ "velnor-actions-actionlint",
  "velnor-actions-contract",
  "velnor-actions-mise",
 ]
 
 [[package]]
 name = "velnor-archive-guard"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "flate2",
  "sha2",
@@ -1140,9 +1141,9 @@ checksum = "e13c156562582aa81c60cb29407084cdb54c4164760106ab78e6c5b0858cf64e"
 
 [[package]]
 name = "zip"
-version = "9.0.3"
+version = "9.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2d98561b612a84ae525331a7a094429ef8a5772514ed507ff6db5f54badc971"
+checksum = "6e04976da629d3b04204ba8105b396a193af8ad2583b2c79bfb3ab8af580a11e"
 dependencies = [
  "crc32fast",
  "flate2",

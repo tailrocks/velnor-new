@@ -115,6 +115,12 @@ pub fn parse_mise_lockfile(text: &str) -> Result<MiseLockfile, String> {
                     }
                     platform = Some(name);
                 }
+                Header::ToolOptions(key) => {
+                    if tool.as_ref() != Some(&key) || !lock.tools.contains_key(&key) {
+                        return Err(line_problem(index, "options_without_tool"));
+                    }
+                    platform = None;
+                }
                 Header::Other => {
                     tool = None;
                     platform = None;
@@ -166,6 +172,8 @@ enum Header {
     Tool(String),
     /// `[tools.<key>."platforms.<platform>"]` checksums.
     Platform(String, String),
+    /// `[tools.<key>.options]` metadata scoped to the current tool entry.
+    ToolOptions(String),
     /// Anything else (ignored for forward compatibility).
     Other,
 }
@@ -198,6 +206,9 @@ fn parse_header(code: &str, index: usize) -> Result<Option<Header>, String> {
     let Some(rest) = inner.strip_prefix("tools.") else {
         return Ok(Some(Header::Other));
     };
+    if let Some(key) = rest.strip_suffix(".options") {
+        return Ok(Some(Header::ToolOptions(unquote(key.trim(), index)?)));
+    }
     let Some((key, platform)) = rest.rsplit_once(r#"."platforms."#) else {
         return Ok(Some(Header::Other));
     };

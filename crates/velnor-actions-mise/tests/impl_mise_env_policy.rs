@@ -55,7 +55,7 @@ fn hostile_tofu_parent() -> Vec<(OsString, OsString)> {
 }
 
 fn bootstrap() -> Result<IsolatedCommand, String> {
-    IsolatedCommand::mise_install(&["rust@1.98.1".to_owned()]).map_err(|err| err.to_string())
+    IsolatedCommand::mise_install(&["rust@1.99.1".to_owned()]).map_err(|err| err.to_string())
 }
 
 fn baseline() -> Result<IsolatedCommand, String> {
@@ -71,7 +71,7 @@ fn baseline() -> Result<IsolatedCommand, String> {
 
 fn verify() -> Result<IsolatedCommand, String> {
     IsolatedCommand::mise_exec(
-        &["rust@1.98.1".to_owned()],
+        &["rust@1.99.1".to_owned()],
         &[OsString::from("cargo"), OsString::from("--version")],
     )
     .map_err(|err| err.to_string())
@@ -213,9 +213,9 @@ fn credential_allowlists_are_exact() {
         ["MISE_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"]
     );
     assert_eq!(CREDENTIAL_ALLOWLIST_BASELINE, ["GITHUB_TOKEN", "GH_TOKEN"]);
-    assert!(EnvPolicy::Verify.allowed_credentials().is_empty());
-    assert!(EnvPolicy::Discovery.allowed_credentials().is_empty());
-    assert!(EnvPolicy::RepoTask.allowed_credentials().is_empty());
+    assert_eq!(EnvPolicy::Verify.allowed_credentials().len(), 0);
+    assert_eq!(EnvPolicy::Discovery.allowed_credentials().len(), 0);
+    assert_eq!(EnvPolicy::RepoTask.allowed_credentials().len(), 0);
     assert!(EnvPolicy::Bootstrap.inherits_parent());
     assert!(EnvPolicy::Baseline.inherits_parent());
     assert!(!EnvPolicy::RepoTask.inherits_parent());

@@ -4,6 +4,39 @@ Status: source integration contract. This document does not establish full
 gate completion, live qualification of an example, or publication of a new
 release. It defines the explicit tool boundary for named Mise checks.
 
+## Offline qualification authoring
+
+`velnor-actions qualify-tools --request /ABS/request.json --work-dir
+/ABS/new-stage --output /ABS/new-candidate.json` prepares candidate declarations
+from archives already downloaded by the operator. The CLI does not fetch
+archives, resolve dependencies, compile source, or change Velnor configuration.
+It validates the request, verifies every supplied archive against its declared
+SHA-256, extracts and normalizes only the declared payload, measures the
+installed tree and executable bytes, and runs only the fixed declared native
+probes. Those upstream executables are untrusted code and run with the command's
+host privileges; the cleared, owned environment is not an OS sandbox.
+
+The closed request has `schema_version = 1`, one supported `platform`, bounded
+`timeout_seconds`, and a dependency-first `tools` list (1 through 32). Each
+entry contains a hash-free `recipe` and an ordered `archives` list of absolute
+local `path`, exact recipe `url`, and independently measured lowercase
+`sha256`. Archive URLs and order must exactly match the recipe's primary then
+dependency archives. Only the explicitly supported Rust, Zig, Python, and
+prebuilt `rust-cross/cargo-zigbuild` families are admitted; source builds and
+dependency compilation are rejected. Unknown fields, symlinks, special files,
+ambiguous payload roots, malformed archive metadata, and tool output that does
+not match the declared probes fail closed.
+
+The output is a versioned authoring candidate containing the request digest,
+dependency execution order, measured complete `qualified_tools`, observed
+probe records, and archive byte/digest observations. It is an input for human
+review and later configuration generation, not a CI receipt, signature, trust
+record, or authorization. Runtime still validates the complete registry and
+all mandatory measurements independently. In particular, hash-free
+`QualifiedToolRecipe` admission shares metadata, provenance, path, layout,
+probe, platform, and DAG validation with runtime types without inventing
+placeholder hashes or an authoring-only relaxed validator.
+
 ## Selection and declaration
 
 Schema 1 accepts a root `qualified_tools` array. A named check's `tools` array
@@ -69,7 +102,8 @@ platform = "linux_x64"
 executor = "hosted"
 ```
 
-`QualifiedToolBackend` supports `core` with `tool = "rust" | "node" | "bun"`,
+`QualifiedToolBackend` supports `core` with `tool = "rust" | "node" | "bun" |
+"zig" | "python"`,
 `aqua` with explicit `package = "owner/project[/tool]"`, and `cargo` with an
 explicit `crate_name`. These identities choose closed source admission and
 layout recipes; they do not invoke ambient backend plugins or registry
@@ -79,7 +113,7 @@ not schema fields.
 
 `QualifiedToolOptions` supports:
 
-- `kind = "default"` for Node, Bun, or Aqua.
+- `kind = "default"` for Node, Bun, Zig, Python, or Aqua.
 - `kind = "rust"`, with sorted `components` and `targets`, for Rust.
 - `kind = "cargo"`, with `default_features`, sorted `features`, and a tagged
   `installation`, for a Cargo package.
@@ -93,6 +127,26 @@ only its declared, verified release payload; it does not invoke an installer
 or require a synthetic installer prerequisite. Missing binary qualification
 cannot fall back to a source build. `cargo-binstall` is an ordinary explicit
 qualified tool only when the native task itself needs that command.
+
+Core Zig qualification accepts only the exact official
+`https://ziglang.org/download/{version}/zig-{platform}-{version}.tar.xz`
+asset for Linux x64, macOS ARM64, or macOS x64. The declared executable is the
+regular file `zig` at the payload root and uses the fixed `zig version` probe.
+Core Python qualification accepts only the exact
+`astral-sh/python-build-standalone` dated release asset
+`cpython-{version}%2B{date}-{platform-triple}-install_only_stripped.tar.gz`.
+The release date is a valid calendar date repeated in the filename. The
+platform triples are `x86_64-unknown-linux-gnu`, `aarch64-apple-darwin`, and
+`x86_64-apple-darwin`; the exposed command name is `python`, backed by the
+regular file `bin/python3.{minor}`. Its fixed `--version` output binds the
+exact version.
+Only the canonical uppercase `%2B` separator is accepted; URL decoding,
+mirrors, arbitrary percent escapes, and backend installer fallback are not
+allowed. Both sources still require measured archive, full installed-tree,
+and executable SHA-256 values before runtime use. The hash-free
+`QualifiedToolRecipe` type shares this same metadata, URL, layout, DAG, and
+probe validation with complete runtime declarations; it omits measurements
+rather than introducing placeholders or a relaxed authoring mode.
 
 ## Frozen acquisition and ownership
 

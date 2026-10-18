@@ -37,11 +37,14 @@ fn admits_complete_owned_source_and_rejects_nonportable_license_aliases() {
 
 #[test]
 fn source_approval_rejects_dispatch_injection_and_partial_transport() {
-    let mutations: [fn(&mut ApprovedOwnedSource); 7] = [
+    let mutations: [fn(&mut ApprovedOwnedSource); 8] = [
         |value: &mut ApprovedOwnedSource| value.archive_sha256 = "0".repeat(64),
         |value: &mut ApprovedOwnedSource| value.tool = "sh".to_owned(),
         |value: &mut ApprovedOwnedSource| value.version = "${{ inputs.version }}".to_owned(),
         |value: &mut ApprovedOwnedSource| value.source_commit = value.upstream_base_commit.clone(),
+        |value: &mut ApprovedOwnedSource| {
+            value.upstream_base_commit = "6be3cbdc639a66c03651479428e4c5f60b00485f".to_owned();
+        },
         |value: &mut ApprovedOwnedSource| value.patch_url.push_str("?redirect=1"),
         |value: &mut ApprovedOwnedSource| {
             value.archive_url = value

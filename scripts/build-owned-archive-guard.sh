@@ -5,7 +5,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 repository="$(cd -- "$script_dir/.." && pwd -P)"
 script_path="$script_dir/$(basename -- "${BASH_SOURCE[0]}")"
 if [[ -z "${HOME:-}" || "$HOME" != /* ]]; then
-  printf 'archive guard build: an absolute HOME is required to provision Rust 1.98.1\n' >&2
+  printf 'archive guard build: an absolute HOME is required to provision Rust 1.99.1\n' >&2
   exit 1
 fi
 home_root="$(cd -- "$HOME" && pwd -P)"
@@ -41,7 +41,7 @@ cleanup() {
 [[ "$script_path" == "$repository/scripts/build-owned-archive-guard.sh" ]] \
   || fail 'builder script is not the checkout-owned entrypoint'
 if ! mise_bin="$(command -v mise)" || [[ "$mise_bin" != /* ]]; then
-  fail 'mise is required to provision Rust 1.98.1'
+  fail 'mise is required to provision Rust 1.99.1'
 fi
 PATH=/usr/bin:/bin:/usr/sbin:/sbin
 export PATH
@@ -289,7 +289,7 @@ run_mise() {
 
 validate_local_cargo_closure() {
   local package package_path tree_output tree_status
-  tree_output="$(run_mise exec rust@1.98.1 -- cargo tree --locked \
+  tree_output="$(run_mise exec rust@1.99.1 -- cargo tree --locked \
     --manifest-path "$repository/Cargo.toml" -p velnor-archive-guard \
     --edges normal,build --prefix none --format '{p}')"
   tree_status=$?
@@ -348,11 +348,11 @@ mise_version="$(run_mise version)"
 actual_mise_version="${mise_version%% *}"
 [[ "$actual_mise_version" == "$expected_mise_version" ]] \
   || fail "Mise $actual_mise_version does not match pinned $expected_mise_version"
-run_mise install rust@1.98.1
-rustc_version="$(run_mise exec rust@1.98.1 -- rustc --version)"
-cargo_version="$(run_mise exec rust@1.98.1 -- cargo --version)"
-[[ "$rustc_version" == 'rustc 1.98.1 '* ]] || fail "unexpected compiler: $rustc_version"
-[[ "$cargo_version" == 'cargo 1.98.1 '* ]] || fail "unexpected Cargo: $cargo_version"
+run_mise install rust@1.99.1
+rustc_version="$(run_mise exec rust@1.99.1 -- rustc --version)"
+cargo_version="$(run_mise exec rust@1.99.1 -- cargo --version)"
+[[ "$rustc_version" == 'rustc 1.99.1 '* ]] || fail "unexpected compiler: $rustc_version"
+[[ "$cargo_version" == 'cargo 1.99.1 '* ]] || fail "unexpected Cargo: $cargo_version"
 source_fingerprint="$(archive_guard_source_fingerprint)"
 target_identity="$(archive_guard_target_identity)"
 guard_target="$guard_target_root/$source_fingerprint-$target_identity"
@@ -366,7 +366,7 @@ for profile in "$guard_target/debug" "$guard_target/release"; do
   fi
 done
 validate_local_cargo_closure
-run_mise exec rust@1.98.1 -- cargo build --release --locked \
+run_mise exec rust@1.99.1 -- cargo build --release --locked \
   --manifest-path "$repository/Cargo.toml" \
   -p velnor-archive-guard --bin velnor-archive-guard
 guard_cargo_output="$guard_target/release/velnor-archive-guard"
