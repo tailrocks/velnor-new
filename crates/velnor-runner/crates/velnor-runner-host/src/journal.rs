@@ -11,6 +11,7 @@ use file_identity::JournalFile;
 mod completion;
 mod connection;
 mod file_identity;
+mod image_import;
 mod launch;
 mod read;
 mod resource_probe;
@@ -32,6 +33,10 @@ pub(crate) use connection::{
     AssignmentIdentity, AssignmentKey, CapacityLimits, ConnectionCompletionInboxEntry,
     ConnectionJournal, ConnectionScaleSet, EngineContext, ReservationRequest, ReservationResult,
     ReservationSnapshot, ReservationState,
+};
+pub(crate) use image_import::{
+    ImageImportId, ImageImportIdentity, ImageImportInspection, ImageImportRecord,
+    ImageImportRequest, ImageImportState,
 };
 use sql::{intent_row, one_row, same_ids, token_rejected};
 

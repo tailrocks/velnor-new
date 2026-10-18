@@ -5,10 +5,11 @@ use std::collections::HashMap;
 use crate::error::HostError;
 
 mod connection;
+mod image_import;
 mod migration;
 mod remote;
 
-const JOURNAL_VERSION: i64 = 4;
+const JOURNAL_VERSION: i64 = 5;
 const CURRENT_COLUMNS: [ColumnShape; 23] = [
     ColumnShape::new("id", "INTEGER", false, None),
     ColumnShape::new("kind", "TEXT", true, None),
@@ -86,16 +87,19 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
         1 => migration::from_version_one(conn).await,
         2 => migration::from_version_two(conn).await,
         3 => migration::from_version_three(conn).await,
+        4 => migration::from_version_four(conn).await,
         JOURNAL_VERSION => {
             connection::validate_connection_schema(conn).await?;
             validate_current_schema(conn).await?;
             remote::validate(conn).await?;
+            image_import::validate(conn).await?;
             migration::ensure_completion_objects(conn).await?;
             crate::journal_schema::bootstrap(conn).await?;
             crate::journal_schema::install_revision_triggers(conn).await?;
             validate_current_schema(conn).await?;
             connection::validate_connection_schema(conn).await?;
-            remote::validate(conn).await
+            remote::validate(conn).await?;
+            image_import::validate(conn).await
         }
         _ => Err(HostError::Journal),
     }

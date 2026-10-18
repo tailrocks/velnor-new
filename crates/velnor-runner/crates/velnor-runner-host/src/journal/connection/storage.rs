@@ -5,7 +5,7 @@ use std::ops::AsyncFnOnce;
 
 use crate::error::HostError;
 
-pub(super) async fn in_transaction<T>(
+pub(in crate::journal) async fn in_transaction<T>(
     journal: &crate::journal::Journal,
     operation: impl AsyncFnOnce(&turso::Connection) -> Result<T, HostError>,
 ) -> Result<T, HostError> {
@@ -72,7 +72,7 @@ pub(super) async fn in_transaction<T>(
     }
 }
 
-pub(super) async fn read_transaction<T>(
+pub(in crate::journal) async fn read_transaction<T>(
     journal: &crate::journal::Journal,
     operation: impl AsyncFnOnce(&turso::Connection) -> Result<T, HostError>,
 ) -> Result<T, HostError> {
@@ -196,7 +196,15 @@ pub(super) async fn has_unresolved_work(connection: &turso::Connection) -> Resul
         "SELECT COUNT(*) FROM connection_completion_inbox",
     )
     .await?;
-    Ok(scoped_inbox != 0)
+    if scoped_inbox != 0 {
+        return Ok(true);
+    }
+    let image_imports = scalar_count(
+        connection,
+        "SELECT COUNT(*) FROM image_imports WHERE state IN ('prepared', 'requested', 'uncertain')",
+    )
+    .await?;
+    Ok(image_imports != 0)
 }
 
 pub(super) async fn has_connection_work(

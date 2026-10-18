@@ -7,7 +7,7 @@ mod launch;
 mod reservation;
 mod runtime;
 mod scope;
-mod storage;
+pub(super) mod storage;
 
 pub(crate) use completion::ConnectionCompletionInboxEntry;
 pub(crate) use identity::{AssignmentIdentity, AssignmentKey};
