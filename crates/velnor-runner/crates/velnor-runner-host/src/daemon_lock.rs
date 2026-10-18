@@ -95,6 +95,11 @@ impl EngineLineageGuard {
         Ok(guard)
     }
 
+    #[cfg(test)]
+    pub(crate) fn acquire_at_for_tests(engine_id: &str, root: &Path) -> Result<Self, HostError> {
+        Self::acquire_at(engine_id, root)
+    }
+
     fn acquire_at(engine_id: &str, root: &Path) -> Result<Self, HostError> {
         if !engine_id_valid(engine_id) {
             return Err(HostError::Docker);

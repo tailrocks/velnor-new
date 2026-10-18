@@ -67,7 +67,7 @@ async fn assess_with<F>(
     has_credential: F,
 ) -> Readiness
 where
-    F: FnOnce(&KeychainReference) -> bool,
+    F: FnMut(&KeychainReference) -> bool,
 {
     match std::fs::symlink_metadata(state) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -86,8 +86,23 @@ where
         ConfigFact::Valid(config) => *config,
         ConfigFact::Invalid => return Readiness::Degraded,
     };
-    if !has_credential(&config.github.credential_ref) {
+    let mut has_credential = has_credential;
+    let mut missing_credential = false;
+    for connection in config.connections() {
+        if !has_credential(&connection.credential_ref) {
+            eprintln!(
+                "readiness=waiting_for_credentials connection_id={}",
+                connection.connection_id
+            );
+            missing_credential = true;
+        }
+    }
+    if missing_credential {
         return Readiness::WaitingForCredentials;
+    }
+    if let Err(reason) = crate::launch::build_pin_status() {
+        eprintln!("readiness=degraded reason=source_pin detail={reason}");
+        return Readiness::Degraded;
     }
     if !engine_up(&config.docker.endpoint, deadline).await {
         return Readiness::WaitingForEngine;
