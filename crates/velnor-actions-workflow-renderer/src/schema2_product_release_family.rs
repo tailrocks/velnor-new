@@ -176,6 +176,14 @@ pub(super) fn publish_script(
     }
     let gh_function = super::generator_release::gh_function(pins)?;
     Ok(PUBLISH_TEMPLATE
+        .replace(
+            "@CONFIRMATION_GH_FUNCTION@",
+            &super::generator_release::gh_confirmation_function(pins)?,
+        )
+        .replace(
+            "@RELEASE_BUDGET_SECONDS@",
+            &(u32::from(velnor_actions_contract::JobTimeout::PUBLISH.minutes()) * 60).to_string(),
+        )
         .replace("@GH_FUNCTION@", &gh_function)
         .replace(
             "@ELIGIBILITY_SCRIPT@",

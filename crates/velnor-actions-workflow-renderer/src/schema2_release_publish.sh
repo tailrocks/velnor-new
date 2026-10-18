@@ -1,5 +1,7 @@
 set -euo pipefail
 
+readonly release_confirmation_deadline=$((SECONDS + @RELEASE_BUDGET_SECONDS@))
+
 @ELIGIBILITY_SCRIPT@
 
 readonly release_repository='@REPOSITORY@'
@@ -32,6 +34,7 @@ family_fail() {
 [[ -n "$GH_TOKEN" ]] || family_fail 'GitHub token is missing'
 
 @GH_FUNCTION@
+@CONFIRMATION_GH_FUNCTION@
 family_gh() { gh "$@"; }
 
 check_eligibility_identity() {
@@ -138,5 +141,12 @@ jq -e \
      and (.digest | type == "string" and test("^sha256:[0-9a-f]{64}$")))' \
   <<<"$published" >/dev/null || family_fail 'published release is not the exact immutable family release'
 assert_tag_target
-family_gh release verify "$release_tag" --repo "$release_repository" >/dev/null
+while (( SECONDS < release_confirmation_deadline )); do
+  if gh_until "$release_confirmation_deadline" release verify "$release_tag" --repo "$release_repository" >/dev/null; then
+    break
+  fi
+  (( SECONDS < release_confirmation_deadline )) || family_fail 'release attestation confirmation deadline exceeded'
+  sleep 1
+done
+(( SECONDS < release_confirmation_deadline )) || family_fail 'release attestation confirmation deadline exceeded'
 @ASSET_VERIFY_COMMANDS@

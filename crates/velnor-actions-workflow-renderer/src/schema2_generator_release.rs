@@ -116,6 +116,10 @@ pub(super) fn gh_function(pins: &ProductReleasePins) -> Result<String, RenderErr
     workflow_steps::gh_function(&pins.gh_argv)
 }
 
+pub(super) fn gh_confirmation_function(pins: &ProductReleasePins) -> Result<String, RenderError> {
+    workflow_steps::gh_confirmation_function(&pins.gh_argv)
+}
+
 pub(super) fn mise_install_step(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {
     workflow_steps::mise_install_step(name, argv)
 }

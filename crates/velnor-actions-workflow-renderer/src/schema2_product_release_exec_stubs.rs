@@ -138,6 +138,14 @@ case "$command/$subcommand" in
     ;;
   release/verify)
     [ "$VELNOR_TEST_FAIL" != release-verify ] || exit 80
+    if [ "$VELNOR_TEST_MODE" = verify-delayed ]; then
+      reads=0
+      [ ! -f "$VELNOR_TEST_ROOT/verify-reads" ] || reads=$(cat "$VELNOR_TEST_ROOT/verify-reads")
+      reads=$((reads + 1))
+      printf '%s\n' "$reads" > "$VELNOR_TEST_ROOT/verify-reads"
+      [ "$reads" -ge 3 ] || exit 80
+    fi
+    [ "$VELNOR_TEST_MODE" != verify-permanent ] || exit 80
     ;;
   release/verify-asset)
     [ "$VELNOR_TEST_FAIL" != asset-verify ] || exit 81
