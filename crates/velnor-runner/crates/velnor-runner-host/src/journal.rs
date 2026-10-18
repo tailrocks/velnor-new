@@ -37,8 +37,9 @@ pub(crate) use completion::{
 };
 pub(crate) use connection::{
     AssignmentIdentity, AssignmentKey, CapacityLimits, ConnectionCompletionInboxEntry,
-    ConnectionJournal, ConnectionScaleSet, EngineContext, ReservationRequest, ReservationResult,
-    ReservationSnapshot, ReservationState, SourceAuthorizationBinding,
+    ConnectionJournal, ConnectionScaleSet, EngineContext, OperationalCapacityLimits,
+    ReservationRequest, ReservationResult, ReservationSnapshot, ReservationState,
+    SourceAuthorizationBinding,
 };
 pub(crate) use image_import::{
     ImageImportClaim, ImageImportDescriptor, ImageImportId, ImageImportIdentity,
@@ -54,7 +55,7 @@ pub(crate) use source_authorization::{AssignedAcquireResult, SourceAuthorization
 use sql::{intent_row, one_row, same_ids, token_rejected};
 
 pub(crate) use request_lifecycle::{PhysicalRunnerStartClaim, RequestAcquireState, RunnerJitClaim};
-pub(crate) use resource_probe::{ProbePhase, ProbeRow, ProbeSeed};
+pub(crate) use resource_probe::{ProbeLeaseState, ProbePhase, ProbeRow, ProbeSeed};
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

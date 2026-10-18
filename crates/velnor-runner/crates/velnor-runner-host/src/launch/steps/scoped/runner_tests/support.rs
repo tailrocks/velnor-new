@@ -11,7 +11,7 @@ use crate::config::{
 };
 use crate::journal::{
     AssignmentKey, CapacityLimits, ConnectionJournal, CreatedScaleSetResponse, Journal,
-    ScaleSetCreateRequest,
+    OperationalCapacityLimits, ScaleSetCreateRequest,
 };
 use crate::launch::steps::source::test_receipt;
 use crate::launch::{
@@ -43,11 +43,17 @@ impl Fixture {
             .await
             .map_err(|error| error.to_string())?;
         journal
-            .configure_capacity(CapacityLimits {
-                jobs: 1,
-                cpu_millicores: 2_000,
-                memory_bytes: 8_589_934_592,
-            })
+            .configure_capacity_with_operational_limits(
+                CapacityLimits {
+                    jobs: 1,
+                    cpu_millicores: 2_000,
+                    memory_bytes: 8_589_934_592,
+                },
+                OperationalCapacityLimits {
+                    cpu_millicores: 1_000,
+                    memory_bytes: 268_435_456,
+                },
+            )
             .await
             .map_err(|error| error.to_string())?;
         let binding = binding()?;

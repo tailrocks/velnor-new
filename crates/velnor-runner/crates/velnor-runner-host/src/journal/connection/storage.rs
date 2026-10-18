@@ -212,7 +212,15 @@ pub(super) async fn has_unresolved_work(connection: &turso::Connection) -> Resul
         "SELECT COUNT(*) FROM connection_scale_set_intents WHERE state IN ('prepared', 'requested', 'uncertain')",
     )
     .await?;
-    Ok(scale_set_creates != 0)
+    if scale_set_creates != 0 {
+        return Ok(true);
+    }
+    let operation_leases = scalar_count(
+        connection,
+        "SELECT COUNT(*) FROM host_operation_leases WHERE state != 'released'",
+    )
+    .await?;
+    Ok(operation_leases != 0)
 }
 
 pub(super) async fn has_connection_work(

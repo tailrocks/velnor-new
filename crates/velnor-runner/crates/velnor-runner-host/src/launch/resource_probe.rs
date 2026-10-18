@@ -2,7 +2,7 @@
 
 use bollard::{Docker, models::SystemInfo};
 
-use crate::journal::Journal;
+use crate::journal::{Journal, ProbePhase, ProbeRow};
 use crate::launch::{SelectedEngineContext, VerifiedWorkerImages};
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
@@ -25,6 +25,90 @@ mod recover;
 mod sample;
 
 pub(crate) use release_secret::ReleaseReadSecret;
+
+/// Proof that one bound probe is absent from its exact selected daemon.
+///
+/// Only the probe recovery path can construct this after checking both the
+/// operation name and immutable container ID on the same engine and root.
+pub(crate) struct VerifiedProbeCleanup {
+    operation_id: String,
+    engine_id: String,
+    docker_root_digest: String,
+    phase: ProbePhase,
+    operation_name: String,
+    container_id: Option<String>,
+}
+
+impl VerifiedProbeCleanup {
+    // Private; only recovery code in this module tree can mint this capability.
+    fn after_verified_removal(
+        row: &ProbeRow,
+        projection: &projection::ProbeProjection,
+        container_id: &str,
+    ) -> Result<Self, crate::error::HostError> {
+        if row.phase != ProbePhase::RemoveRequested
+            || row.container_id.as_deref() != Some(container_id)
+            || row.operation_id != projection.operation_id
+            || row.engine_id != projection.engine_id
+            || row.docker_root_digest != projection.root.digest()
+            || row.operation_name != projection.name
+            || row.projection_digest != projection.projection_digest
+        {
+            return Err(crate::error::HostError::Ownership);
+        }
+        Ok(Self {
+            operation_id: row.operation_id.clone(),
+            engine_id: row.engine_id.clone(),
+            docker_root_digest: row.docker_root_digest.clone(),
+            phase: row.phase,
+            operation_name: row.operation_name.clone(),
+            container_id: row.container_id.clone(),
+        })
+    }
+
+    pub(crate) fn operation_id(&self) -> &str {
+        &self.operation_id
+    }
+
+    pub(crate) fn engine_id(&self) -> &str {
+        &self.engine_id
+    }
+
+    pub(crate) fn docker_root_digest(&self) -> &str {
+        &self.docker_root_digest
+    }
+
+    pub(crate) const fn phase(&self) -> ProbePhase {
+        self.phase
+    }
+
+    pub(crate) fn operation_name(&self) -> &str {
+        &self.operation_name
+    }
+
+    pub(crate) fn container_id(&self) -> Option<&str> {
+        self.container_id.as_deref()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_only(
+        operation_id: String,
+        engine_id: String,
+        docker_root_digest: String,
+        phase: ProbePhase,
+        operation_name: String,
+        container_id: Option<String>,
+    ) -> Self {
+        Self {
+            operation_id,
+            engine_id,
+            docker_root_digest,
+            phase,
+            operation_name,
+            container_id,
+        }
+    }
+}
 
 /// Report only whether this binary has a valid trusted release source pin.
 /// This does not claim that GitHub, the release, or any Docker image is ready.

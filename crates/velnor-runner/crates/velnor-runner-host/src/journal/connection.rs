@@ -12,7 +12,8 @@ pub(super) mod storage;
 pub(crate) use completion::ConnectionCompletionInboxEntry;
 pub(crate) use identity::{AssignmentIdentity, AssignmentKey};
 pub(crate) use reservation::{
-    CapacityLimits, ReservationRequest, ReservationResult, ReservationSnapshot, ReservationState,
+    CapacityLimits, OperationalCapacityLimits, ReservationRequest, ReservationResult,
+    ReservationSnapshot, ReservationState,
 };
 pub(crate) use runtime::{ConnectionScaleSet, EngineContext, SourceAuthorizationBinding};
 

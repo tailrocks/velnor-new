@@ -207,6 +207,7 @@ async fn prepared() -> Result<(Scratch, Journal, ProbeProjection), String> {
         .bind_engine(ENGINE_ID)
         .await
         .map_err(|error| error.to_string())?;
+    super::configure_probe_capacity(&journal).await?;
     let instance_id = journal
         .instance_id()
         .await

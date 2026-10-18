@@ -37,6 +37,7 @@ async fn engine_change_before_create_blocks_mutation_and_keeps_row_recoverable()
         .bind_engine(ENGINE_ID)
         .await
         .map_err(|error| error.to_string())?;
+    super::super::configure_probe_capacity(&journal).await?;
     let info_a = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
     let info_b = r#"{"ID":"other-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
     let docker = DockerStub::open(vec![
@@ -76,6 +77,7 @@ async fn root_change_before_create_blocks_mutation_then_recovers_original_bindin
         .bind_engine(ENGINE_ID)
         .await
         .map_err(|error| error.to_string())?;
+    super::super::configure_probe_capacity(&journal).await?;
     let original = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
     let replacement = r#"{"ID":"probe-engine","DockerRootDir":"/var/lib/docker-next","OSType":"linux","Architecture":"x86_64","NCPU":8,"MemTotal":17179869184}"#;
     let changed = DockerStub::open(vec![

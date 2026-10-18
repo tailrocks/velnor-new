@@ -63,6 +63,7 @@ pub(crate) mod verified_images;
 pub(crate) use capacity::{install_job_capacity, job_capacity};
 pub(crate) use gate::{gate_line, reconcile_gate};
 pub(crate) use pressure::advertise as advertise_capacity;
+pub(crate) use resource_probe::VerifiedProbeCleanup;
 pub(crate) use verified_images::{VerifiedImageIdentity, VerifiedWorkerImages};
 
 #[cfg(test)]

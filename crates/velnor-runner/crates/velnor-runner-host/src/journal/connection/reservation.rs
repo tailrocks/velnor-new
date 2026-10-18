@@ -7,5 +7,5 @@ mod read;
 mod storage;
 
 pub(crate) use admission::{ReservationRequest, ReservationResult};
-pub(crate) use limits::CapacityLimits;
+pub(crate) use limits::{CapacityLimits, OperationalCapacityLimits};
 pub(crate) use read::{ReservationSnapshot, ReservationState};

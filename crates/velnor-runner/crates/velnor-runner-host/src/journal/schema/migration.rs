@@ -116,12 +116,24 @@ pub(super) async fn from_version_nine(conn: &turso::Connection) -> Result<(), Ho
     conn.execute("PRAGMA user_version = 11", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    Ok(())
+    from_version_eleven(conn).await
 }
 
 pub(super) async fn from_version_ten(conn: &turso::Connection) -> Result<(), HostError> {
     request_ledger::upgrade_cleaned_runner_state(conn).await?;
     conn.execute("PRAGMA user_version = 11", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    from_version_eleven(conn).await
+}
+
+pub(super) async fn from_version_eleven(conn: &turso::Connection) -> Result<(), HostError> {
+    connection::upgrade_capacity_policy(conn).await?;
+    crate::journal_schema::upgrade_probe_lease(conn).await?;
+    crate::journal_schema::install_revision_triggers(conn).await?;
+    connection::validate_connection_schema(conn).await?;
+    crate::journal_schema::validate_probe_lease(conn).await?;
+    conn.execute("PRAGMA user_version = 12", ())
         .await
         .map_err(|_| HostError::Journal)?;
     Ok(())
