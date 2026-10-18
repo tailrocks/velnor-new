@@ -1,6 +1,11 @@
 //! Public orchestrator API re-exports.
 
 pub use super::baseline_publish::{PUBLISH_OP, PublishOutputs, baseline_publish};
+pub use super::check_evidence::gate::tools::{MeasuredToolExecutable, UntrustedToolMeasurement};
+pub use super::check_runtime::preparation::acquisition::measurement::{
+    MeasurementArchiveInput, MeasurementExecutableDeclaration, ToolMeasurementDeclaration,
+    ToolMeasurementRequest, measure_tool_candidate,
+};
 pub use super::check_runtime::{EXECUTE_CHECK_OP, execute_check};
 pub use super::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 pub use super::cover_compat::baseline_artifact_numeric_id;

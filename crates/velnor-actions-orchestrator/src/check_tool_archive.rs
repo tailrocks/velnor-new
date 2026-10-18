@@ -26,7 +26,7 @@ mod tar_preflight;
 mod zip_checks;
 use archive_deadline::{DeadlineIo, archive_error, check_deadline, gzip_reader, xz_reader};
 
-const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
+pub(super) const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_ENTRIES: usize = 100_000;
 const MAX_PATH_BYTES: usize = 4096;
 const MAX_PATH_COMPONENTS: usize = 256;

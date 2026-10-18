@@ -16,6 +16,8 @@ use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, QualifiedCheck};
 mod archive;
 #[path = "check_tool_layout.rs"]
 mod layout;
+#[path = "check_tool_measure.rs"]
+pub(crate) mod measurement;
 #[path = "check_tool_tree.rs"]
 mod tree;
 
@@ -81,8 +83,7 @@ pub(super) fn acquire(
             )?;
             check_deadline(deadline)?;
         }
-        tree::freeze_tree(&prefix, deadline)?;
-        let actual_tree = tree::tree_sha256(&prefix, deadline)?;
+        let actual_tree = freeze_and_hash_tree(&prefix, deadline)?;
         if actual_tree != qualified.install_tree_sha256 {
             return Err(internal("qualified_tool_install_tree_sha256"));
         }
@@ -133,30 +134,49 @@ fn fetch_extract(
             deadline,
         )?;
         let downloaded = tool_home.join("downloads").join(&artifact.sha256);
-        let bytes = read_with_deadline(&downloaded, 1024 * 1024 * 1024, deadline)
-            .map_err(|error| staged_read_error(error, "qualified_tool_artifact_unreadable"))?;
-        if sha256_with_deadline(&bytes, deadline)? != artifact.sha256 {
-            return Err(internal("qualified_tool_artifact_sha256"));
-        }
         let name = format!(
             "{}-{index}",
             if dependency { "dependency" } else { "primary" }
         );
         let verified = tool_home.join("verified").join(&name);
-        crate::exclusive_write::write_exclusive_until(
-            &verified,
-            &bytes,
-            "qualified_tool_archive",
-            || check_deadline(deadline),
-        )?;
         let root = tool_home.join("unpacked").join(name);
-        archive::extract_archive(&verified, &root, &artifact.url, expanded, deadline)?;
+        verify_and_extract(&downloaded, &verified, &root, artifact, expanded, deadline)?;
         std::fs::remove_file(&downloaded)
             .map_err(|_| internal("qualified_tool_archive_cleanup"))?;
-        std::fs::remove_file(&verified).map_err(|_| internal("qualified_tool_archive_cleanup"))?;
         roots.push(root);
     }
     Ok(roots)
+}
+
+fn verify_and_extract(
+    source: &Path,
+    verified: &Path,
+    destination: &Path,
+    artifact: &velnor_actions_contract::config::QualifiedToolArtifact,
+    expanded: &mut archive::ArchiveBudget,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    let bytes = read_with_deadline(source, archive::MAX_ARCHIVE_BYTES, deadline)
+        .map_err(|error| staged_read_error(error, "qualified_tool_artifact_unreadable"))?;
+    if sha256_with_deadline(&bytes, deadline)? != artifact.sha256 {
+        return Err(internal("qualified_tool_artifact_sha256"));
+    }
+    crate::exclusive_write::write_exclusive_until(
+        verified,
+        &bytes,
+        "qualified_tool_archive",
+        || check_deadline(deadline),
+    )?;
+    archive::extract_archive(verified, destination, &artifact.url, expanded, deadline)?;
+    std::fs::remove_file(verified).map_err(|_| internal("qualified_tool_archive_cleanup"))
+}
+
+fn freeze_and_hash_tree(
+    prefix: &Path,
+    deadline: CheckDeadline,
+) -> Result<String, OrchestratorError> {
+    tree::freeze_tree(prefix, deadline)?;
+    tree::tree_sha256(prefix, deadline)
 }
 
 fn compiler_prefix(tool: &QualifiedTool, tools: &[QualifiedTool], home: &Path) -> Option<PathBuf> {
