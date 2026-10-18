@@ -24,18 +24,27 @@ fn normal_tofu_context_uses_its_own_stable_namespace() {
     let canonical_runner_temp = std::fs::canonicalize(&runner_temp).expect("canonical runner temp");
 
     assert_eq!(first.action_path(), second.action_path());
-    assert_eq!(
-        first.action_path().parent(),
-        Some(canonical_runner_temp.as_path())
+    let relative = first
+        .action_path()
+        .strip_prefix(&canonical_runner_temp)
+        .expect("stage is beneath runner temp");
+    let components: Vec<_> = relative.components().collect();
+    assert_eq!(components.len(), 4);
+    assert_eq!(components[0].as_os_str(), "velnor");
+    assert_eq!(components[1].as_os_str(), "cache-staging");
+    let digest = components[2].as_os_str().to_str().expect("ASCII digest");
+    assert!(
+        digest.len() == 64
+            && digest
+                .bytes()
+                .all(|byte| { byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte) })
     );
+    assert_eq!(components[3].as_os_str(), "payload");
     assert!(
         first
             .action_path()
             .file_name()
-            .and_then(std::ffi::OsStr::to_str)
-            .is_some_and(
-                |name| name.starts_with("velnor-cache-transport-v1-") && name.ends_with(".payload")
-            )
+            .is_some_and(|name| name == "payload")
     );
     let mise = StageContext::normal(
         &runner_temp,

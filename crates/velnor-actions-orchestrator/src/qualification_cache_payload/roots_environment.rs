@@ -51,7 +51,7 @@ where
         }
         QualificationCacheLayer::TofuProviders => {
             let path = required_env_path(&mut get, "TF_PLUGIN_CACHE_DIR")?;
-            validate_descendant(&path, &velnor_temp.join("tofu-cache"))?;
+            validate_descendant(&path, &velnor_temp.join("cache/tofu"))?;
             if !valid_tofu_root_name(&path) {
                 return Err("qualification_cache_root_environment_invalid");
             }

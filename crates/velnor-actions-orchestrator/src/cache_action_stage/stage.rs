@@ -1,23 +1,24 @@
 use super::StageError;
 use super::context::StageContext;
 use super::receipt::StageReceiptClaim;
-use rustix::fs::{AtFlags, Mode, OFlags, open, openat, statat};
+use super::stage_parent::{
+    StageParent, open_directory_path, open_stage_parent, validate_parent, verify_payload_entry,
+};
+use rustix::fs::{AtFlags, Mode, OFlags, openat, statat, unlinkat};
 use std::ffi::CString;
 use std::fmt;
 use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::os::fd::{AsFd, OwnedFd};
-use std::path::{Component, Path};
+use std::path::Path;
 
 const MAX_STAGE_BYTES: u64 = 20 * 1024 * 1024 * 1024;
 const STAGE_MODE: Mode = Mode::from_bits_retain(0o600);
-const ROOT_UID: u32 = 0;
 
 /// Holds the verified stage file and its parent directory descriptors.
 pub struct StageReader {
     file: File,
-    parent: OwnedFd,
-    name: CString,
+    parent: StageParent,
     claim: StageReceiptClaim,
 }
 
@@ -40,7 +41,7 @@ impl StageReader {
             .file
             .stream_position()
             .map_err(|_| "cache_stage_read_failed")?;
-        verify_file(&mut self.file, &self.parent, &self.name, &self.claim)?;
+        verify_file(&mut self.file, &self.parent, &self.claim)?;
         self.file
             .seek(SeekFrom::Start(position))
             .map_err(|_| "cache_stage_read_failed")?;
@@ -63,8 +64,8 @@ impl Seek for StageReader {
 /// Holds the exclusively created or explicitly claimed stage file.
 pub struct StageWriter {
     file: File,
-    parent: OwnedFd,
-    name: CString,
+    parent: StageParent,
+    cleanup_on_drop: bool,
 }
 
 impl fmt::Debug for StageWriter {
@@ -86,13 +87,54 @@ impl StageWriter {
         self.file
             .sync_all()
             .map_err(|_| "cache_stage_write_failed")?;
-        let claim = claim_for_file(&mut self.file, &self.parent, &self.name)?;
+        let claim = claim_for_file(&mut self.file, &self.parent)?;
+        self.cleanup_on_drop = false;
         Ok(claim)
+    }
+}
+
+impl Drop for StageWriter {
+    fn drop(&mut self) {
+        if !self.cleanup_on_drop {
+            return;
+        }
+        let Ok(file_stat) = rustix::fs::fstat(self.file.as_fd()) else {
+            return;
+        };
+        if validate_stat(&file_stat).is_err() || self.parent.revalidate().is_err() {
+            return;
+        }
+        let Ok(parent) = self.parent.file_directory() else {
+            return;
+        };
+        let Ok(path_stat) = statat(
+            parent,
+            self.parent.payload_name().as_c_str(),
+            AtFlags::SYMLINK_NOFOLLOW,
+        ) else {
+            return;
+        };
+        if path_stat.st_dev != file_stat.st_dev
+            || path_stat.st_ino != file_stat.st_ino
+            || path_stat.st_mode != file_stat.st_mode
+            || path_stat.st_uid != file_stat.st_uid
+            || path_stat.st_nlink != file_stat.st_nlink
+        {
+            return;
+        }
+        match unlinkat(
+            parent,
+            self.parent.payload_name().as_c_str(),
+            AtFlags::empty(),
+        ) {
+            Ok(()) | Err(_) => {}
+        }
     }
 }
 
 impl Write for StageWriter {
     fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        self.parent.revalidate().map_err(io::Error::other)?;
         let position = self.file.stream_position()?;
         let end = position
             .checked_add(u64::try_from(buffer.len()).unwrap_or(u64::MAX))
@@ -100,7 +142,9 @@ impl Write for StageWriter {
         if end > MAX_STAGE_BYTES {
             return Err(io::Error::other("cache stage size limit exceeded"));
         }
-        self.file.write(buffer)
+        let written = self.file.write(buffer)?;
+        self.parent.revalidate().map_err(io::Error::other)?;
+        Ok(written)
     }
 
     fn flush(&mut self) -> io::Result<()> {
@@ -120,10 +164,11 @@ impl Seek for StageWriter {
 ///
 /// Returns an error when the path already exists or cannot be safely opened.
 pub fn create_stage(context: &StageContext) -> Result<StageWriter, StageError> {
-    let (parent, name) = open_parent(context.action_path())?;
+    let parent = open_stage_parent(context, true)?;
+    parent.revalidate()?;
     let descriptor = openat(
-        &parent,
-        name.as_c_str(),
+        parent.file_directory()?,
+        parent.payload_name().as_c_str(),
         OFlags::RDWR
             | OFlags::CREATE
             | OFlags::EXCL
@@ -133,16 +178,23 @@ pub fn create_stage(context: &StageContext) -> Result<StageWriter, StageError> {
         STAGE_MODE,
     )
     .map_err(|_| "cache_stage_create_failed")?;
-    let mut file = File::from(descriptor);
-    rustix::fs::fchmod(file.as_fd(), STAGE_MODE).map_err(|_| "cache_stage_create_failed")?;
-    let stat = rustix::fs::fstat(file.as_fd()).map_err(|_| "cache_stage_stat_failed")?;
+    let file = File::from(descriptor);
+    let mut writer = StageWriter {
+        file,
+        parent,
+        cleanup_on_drop: true,
+    };
+    rustix::fs::fchmod(writer.file.as_fd(), STAGE_MODE).map_err(|_| "cache_stage_create_failed")?;
+    let stat = rustix::fs::fstat(writer.file.as_fd()).map_err(|_| "cache_stage_stat_failed")?;
     validate_stat(&stat)?;
-    if stat.st_size != 0 || !path_matches(&parent, &name, &stat)? {
+    if stat.st_size != 0 || !path_matches(&writer.parent, &stat)? {
         return Err("cache_stage_changed");
     }
-    file.seek(SeekFrom::Start(0))
+    writer
+        .file
+        .seek(SeekFrom::Start(0))
         .map_err(|_| "cache_stage_create_failed")?;
-    Ok(StageWriter { file, parent, name })
+    Ok(writer)
 }
 
 /// Opens and verifies a stage file against its untrusted claim.
@@ -154,22 +206,21 @@ pub fn open_stage(
     context: &StageContext,
     claim: &StageReceiptClaim,
 ) -> Result<StageReader, StageError> {
-    let (parent, name) = open_parent(context.action_path())?;
+    let parent = open_stage_parent(context, false)?;
     let descriptor = openat(
-        &parent,
-        name.as_c_str(),
+        parent.file_directory()?,
+        parent.payload_name().as_c_str(),
         OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
         Mode::empty(),
     )
     .map_err(|_| "cache_stage_open_failed")?;
     let mut file = File::from(descriptor);
-    verify_file(&mut file, &parent, &name, claim)?;
+    verify_file(&mut file, &parent, claim)?;
     file.seek(SeekFrom::Start(0))
         .map_err(|_| "cache_stage_read_failed")?;
     Ok(StageReader {
         file,
         parent,
-        name,
         claim: claim.clone(),
     })
 }
@@ -183,26 +234,36 @@ pub fn rewrite_stage(
     context: &StageContext,
     claim: &StageReceiptClaim,
 ) -> Result<StageWriter, StageError> {
-    let (parent, name) = open_parent(context.action_path())?;
+    let parent = open_stage_parent(context, false)?;
     let descriptor = openat(
-        &parent,
-        name.as_c_str(),
+        parent.file_directory()?,
+        parent.payload_name().as_c_str(),
         OFlags::RDWR | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
         Mode::empty(),
     )
     .map_err(|_| "cache_stage_open_failed")?;
     let mut file = File::from(descriptor);
-    verify_file(&mut file, &parent, &name, claim)?;
-    file.set_len(0).map_err(|_| "cache_stage_write_failed")?;
-    file.seek(SeekFrom::Start(0))
+    verify_file(&mut file, &parent, claim)?;
+    let mut writer = StageWriter {
+        file,
+        parent,
+        cleanup_on_drop: true,
+    };
+    writer.parent.revalidate()?;
+    writer
+        .file
+        .set_len(0)
         .map_err(|_| "cache_stage_write_failed")?;
-    Ok(StageWriter { file, parent, name })
+    writer
+        .file
+        .seek(SeekFrom::Start(0))
+        .map_err(|_| "cache_stage_write_failed")?;
+    Ok(writer)
 }
 
 fn verify_file(
     file: &mut File,
-    parent: &OwnedFd,
-    name: &CString,
+    parent: &StageParent,
     claim: &StageReceiptClaim,
 ) -> Result<(), StageError> {
     let stat = rustix::fs::fstat(file.as_fd()).map_err(|_| "cache_stage_stat_failed")?;
@@ -210,7 +271,7 @@ fn verify_file(
     if u64::try_from(stat.st_dev).ok() != Some(claim.device())
         || stat.st_ino != claim.inode()
         || u64::try_from(stat.st_size).ok() != Some(claim.length())
-        || !path_matches(parent, name, &stat)?
+        || !path_matches(parent, &stat)?
     {
         return Err("cache_stage_claim_mismatch");
     }
@@ -219,27 +280,23 @@ fn verify_file(
         return Err("cache_stage_claim_mismatch");
     }
     let after = rustix::fs::fstat(file.as_fd()).map_err(|_| "cache_stage_stat_failed")?;
-    if !same_version(&stat, &after) || !path_matches(parent, name, &after)? {
+    if !same_version(&stat, &after) || !path_matches(parent, &after)? {
         return Err("cache_stage_changed");
     }
     Ok(())
 }
 
-fn claim_for_file(
-    file: &mut File,
-    parent: &OwnedFd,
-    name: &CString,
-) -> Result<StageReceiptClaim, StageError> {
+fn claim_for_file(file: &mut File, parent: &StageParent) -> Result<StageReceiptClaim, StageError> {
     let before = rustix::fs::fstat(file.as_fd()).map_err(|_| "cache_stage_stat_failed")?;
     validate_stat(&before)?;
     if u64::try_from(before.st_size).unwrap_or(u64::MAX) > MAX_STAGE_BYTES
-        || !path_matches(parent, name, &before)?
+        || !path_matches(parent, &before)?
     {
         return Err("cache_stage_changed");
     }
     let digest = digest_file(file)?;
     let after = rustix::fs::fstat(file.as_fd()).map_err(|_| "cache_stage_stat_failed")?;
-    if !same_version(&before, &after) || !path_matches(parent, name, &after)? {
+    if !same_version(&before, &after) || !path_matches(parent, &after)? {
         return Err("cache_stage_changed");
     }
     Ok(StageReceiptClaim::new(
@@ -292,14 +349,8 @@ fn validate_stat(stat: &rustix::fs::Stat) -> Result<(), StageError> {
     Ok(())
 }
 
-fn path_matches(
-    parent: &OwnedFd,
-    name: &CString,
-    file: &rustix::fs::Stat,
-) -> Result<bool, StageError> {
-    let path = statat(parent, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)
-        .map_err(|_| "cache_stage_path_stat_failed")?;
-    Ok(path.st_dev == file.st_dev && path.st_ino == file.st_ino && path.st_mode == file.st_mode)
+fn path_matches(parent: &StageParent, file: &rustix::fs::Stat) -> Result<bool, StageError> {
+    verify_payload_entry(parent, file)
 }
 
 fn same_version(left: &rustix::fs::Stat, right: &rustix::fs::Stat) -> bool {
@@ -326,69 +377,4 @@ pub(super) fn open_parent(path: &Path) -> Result<(OwnedFd, CString), StageError>
     let parent_fd = open_directory_path(parent)?;
     validate_parent(&parent_fd)?;
     Ok((parent_fd, name))
-}
-
-fn open_directory_path(path: &Path) -> Result<OwnedFd, StageError> {
-    if !path.is_absolute() {
-        return Err("cache_stage_path_invalid");
-    }
-    let mut fd = open(
-        "/",
-        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
-        Mode::empty(),
-    )
-    .map_err(|_| "cache_stage_parent_open_failed")?;
-    validate_ancestor(&fd)?;
-    for component in path.components() {
-        match component {
-            Component::RootDir => {}
-            Component::Normal(value) => {
-                let name = CString::new(value.to_str().ok_or("cache_stage_path_invalid")?)
-                    .map_err(|_| "cache_stage_path_invalid")?;
-                fd = openat(
-                    &fd,
-                    name.as_c_str(),
-                    OFlags::RDONLY
-                        | OFlags::DIRECTORY
-                        | OFlags::NOFOLLOW
-                        | OFlags::NONBLOCK
-                        | OFlags::CLOEXEC,
-                    Mode::empty(),
-                )
-                .map_err(|_| "cache_stage_parent_open_failed")?;
-                validate_ancestor(&fd)?;
-            }
-            Component::CurDir | Component::ParentDir | Component::Prefix(_) => {
-                return Err("cache_stage_path_invalid");
-            }
-        }
-    }
-    Ok(fd)
-}
-
-fn validate_ancestor(fd: &OwnedFd) -> Result<(), StageError> {
-    let stat = rustix::fs::fstat(fd.as_fd()).map_err(|_| "cache_stage_parent_stat_failed")?;
-    let owner = stat.st_uid;
-    let current_uid = crate::process_owner::effective_uid();
-    let mode = stat.st_mode & 0o7777;
-    let writable_by_others = mode & 0o0022 != 0;
-    let protected_by_sticky_bit = mode & 0o1000 != 0;
-    if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::Directory
-        || (owner != ROOT_UID && owner != current_uid)
-        || (writable_by_others && !protected_by_sticky_bit)
-    {
-        return Err("cache_stage_ancestor_owner_or_mode_invalid");
-    }
-    Ok(())
-}
-
-fn validate_parent(fd: &OwnedFd) -> Result<(), StageError> {
-    let stat = rustix::fs::fstat(fd.as_fd()).map_err(|_| "cache_stage_parent_stat_failed")?;
-    if rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::Directory
-        || stat.st_uid != crate::process_owner::effective_uid()
-        || stat.st_mode & 0o7022 != 0
-    {
-        return Err("cache_stage_parent_owner_or_mode_invalid");
-    }
-    Ok(())
 }

@@ -1,4 +1,5 @@
 use super::StageError;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path, PathBuf};
 
 const STAGE_DOMAIN: &[u8] = b"velnor-cache-action-stage-v1\0";
@@ -10,6 +11,8 @@ pub struct StageContext {
     workspace: PathBuf,
     action_path: PathBuf,
     member_path: String,
+    runner_temp_device: u64,
+    runner_temp_inode: u64,
 }
 
 impl StageContext {
@@ -84,6 +87,13 @@ impl StageContext {
     ) -> Result<Self, StageError> {
         let runner_temp = clean_absolute(runner_temp)?;
         let workspace = clean_absolute(workspace)?;
+        let root_metadata =
+            std::fs::metadata(&runner_temp).map_err(|_| "cache_stage_path_invalid")?;
+        if !root_metadata.is_dir() {
+            return Err("cache_stage_path_invalid");
+        }
+        let runner_temp_device = root_metadata.dev();
+        let runner_temp_inode = root_metadata.ino();
         let mut fields = Vec::with_capacity(scope.len() + 2);
         fields.push(namespace);
         fields.extend_from_slice(scope);
@@ -96,14 +106,20 @@ impl StageContext {
             hash.update(field.as_bytes());
         }
         let digest = hash.finalize();
-        let leaf = format!("velnor-cache-transport-v1-{}.payload", digest.to_hex());
-        let action_path = runner_temp.join(leaf);
+        let stage_digest = digest.to_hex().to_string();
+        let action_path = runner_temp
+            .join("velnor")
+            .join("cache-staging")
+            .join(&stage_digest)
+            .join("payload");
         let member_path = relative_path(&workspace, &action_path)?;
         Ok(Self {
             runner_temp,
             workspace,
             action_path,
             member_path,
+            runner_temp_device,
+            runner_temp_inode,
         })
     }
 
@@ -123,6 +139,31 @@ impl StageContext {
 
     pub(crate) fn member_path(&self) -> &str {
         &self.member_path
+    }
+
+    pub(super) const fn runner_temp_identity(&self) -> (u64, u64) {
+        (self.runner_temp_device, self.runner_temp_inode)
+    }
+
+    pub(super) fn stage_directory_components(&self) -> Result<[String; 3], StageError> {
+        let digest = self
+            .action_path
+            .parent()
+            .and_then(Path::file_name)
+            .and_then(std::ffi::OsStr::to_str)
+            .ok_or("cache_stage_path_invalid")?;
+        if digest.len() != 64
+            || !digest
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            return Err("cache_stage_path_invalid");
+        }
+        Ok([
+            "velnor".to_owned(),
+            "cache-staging".to_owned(),
+            digest.to_owned(),
+        ])
     }
 }
 

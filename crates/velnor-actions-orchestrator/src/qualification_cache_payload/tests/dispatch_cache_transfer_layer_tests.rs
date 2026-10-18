@@ -113,7 +113,7 @@ fn root_path(runner_temp: &Path, id: CacheRootId) -> PathBuf {
         CacheRootId::CargoGitDb => runner_temp.join("velnor/cargo/git/db"),
         CacheRootId::CargoRegistryCache => runner_temp.join("velnor/cargo/registry/cache"),
         CacheRootId::CargoRegistryIndex => runner_temp.join("velnor/cargo/registry/index"),
-        CacheRootId::TofuPlugins => runner_temp.join("velnor/tofu-cache/plugins"),
+        CacheRootId::TofuPlugins => runner_temp.join("velnor/cache/tofu/plugins"),
         _ => panic!("unsupported test root {}", root_name(id)),
     }
 }

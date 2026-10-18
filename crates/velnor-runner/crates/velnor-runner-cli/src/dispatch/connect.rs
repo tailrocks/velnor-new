@@ -1,11 +1,12 @@
 use std::io::Read;
 use std::path::Path;
 use std::process::ExitCode;
+use std::time::Instant;
 
 use velnor_runner_host::{
     ConnectPlan, ConnectionId, HostConfig, HostError, KeychainReference, PullRequestRule,
     RepositoryConnection, ScaleSetSelector, SourcePolicy, WorkflowEvent, connect_plan,
-    import_secret, reactivate_connection_if_drained,
+    import_secret,
 };
 
 use super::connect_config::sample_config;
@@ -125,13 +126,13 @@ where
     R: Read,
     F: FnOnce(&str, &str, &[u8]) -> Result<(), HostError>,
 {
-    connect_with_store_and_reactivate(
-        input,
-        service,
-        request,
-        store,
-        reactivate_connection_if_drained,
-    )
+    connect_with_store_and_reactivate(input, service, request, store, |state, binding| {
+        crate::readiness_probe::reactivate_connection_until(
+            state,
+            binding,
+            Instant::now() + super::DRAIN_WAIT_BUDGET,
+        )
+    })
 }
 
 pub(super) fn connect_with_store_and_reactivate<R, F, G>(

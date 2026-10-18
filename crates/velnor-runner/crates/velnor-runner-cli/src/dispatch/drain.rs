@@ -2,7 +2,9 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::time::Duration;
 
-use velnor_runner_host::{HostError, wait_for_drain};
+use std::time::Instant;
+
+use velnor_runner_host::HostError;
 
 use super::DRAIN_WAIT_BUDGET;
 use super::connection_state::admission_lock;
@@ -35,7 +37,9 @@ pub(super) fn remove_marker(state: &Path, name: &str) -> Result<bool, StateWrite
 }
 
 pub(super) fn drain(state: &Path, wait: bool) -> ExitCode {
-    drain_with(state, wait, wait_for_drain)
+    drain_with(state, wait, |state, timeout| {
+        crate::readiness_probe::wait_for_drain_until(state, Instant::now() + timeout)
+    })
 }
 
 pub(super) fn drain_with<F>(state: &Path, wait: bool, wait_for_drain: F) -> ExitCode
