@@ -16,6 +16,8 @@ use super::super::errors::invalid;
 use super::super::lineage::{find_layer_receipt, layer_applies};
 use super::super::types::{
     AdmissionNode, QualificationCacheLaneReceipt, QualificationCacheLayerReceipt,
+    QualificationCacheProducerContext, QualificationCacheProducerEvidence,
+    QualificationCacheReceipt,
 };
 use transitions::{
     phase_restore, save_slot, validate_disabled_layer, validate_restore, validate_save,
@@ -27,25 +29,26 @@ mod transitions;
 
 pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_lanes(
     plan: &Plan,
-    node: &AdmissionNode,
+    producer: &QualificationCacheProducerContext,
+    evidence: LaneEvidence<'_>,
     previous: Option<&AdmissionNode>,
 ) -> Result<(), ContractError> {
-    if node.receipt.lanes.len() != plan.matrix.include.len()
-        || node.receipt.lanes.len() > MAX_QUALIFICATION_CACHE_LANES
+    if evidence.lanes.len() != plan.matrix.include.len()
+        || evidence.lanes.len() > MAX_QUALIFICATION_CACHE_LANES
     {
         return Err(invalid("lane_set_mismatch"));
     }
-    let lanes = lane_index(&node.receipt.lanes)?;
+    let lanes = lane_index(evidence.lanes)?;
     for entry in &plan.matrix.include {
         let lane = lanes
             .get(entry.matrix_key.as_str())
             .ok_or_else(|| invalid("lane_set_mismatch"))?;
-        validate_lane(plan, entry, lane, node, previous)?;
+        validate_lane(plan, entry, lane, producer, evidence, previous)?;
     }
-    if node.receipt.phase == QualificationPhase::UsefulDelta {
-        validate_useful_delta_progress(node, previous)?;
-    } else if node.receipt.phase == QualificationPhase::Third {
-        validate_third_observations(node, previous)?;
+    if evidence.phase == QualificationPhase::UsefulDelta {
+        validate_useful_delta_progress(evidence.lanes, previous)?;
+    } else if evidence.phase == QualificationPhase::Third {
+        validate_third_observations(evidence.lanes, previous)?;
     }
     Ok(())
 }
@@ -54,7 +57,8 @@ fn validate_lane(
     plan: &Plan,
     entry: &crate::workflow::MatrixEntry,
     lane: &QualificationCacheLaneReceipt,
-    node: &AdmissionNode,
+    producer: &QualificationCacheProducerContext,
+    evidence: LaneEvidence<'_>,
     previous: Option<&AdmissionNode>,
 ) -> Result<(), ContractError> {
     if lane.matrix_key != entry.matrix_key
@@ -90,9 +94,17 @@ fn validate_lane(
         if layer.layer != expected {
             return Err(invalid("layers_not_closed_and_sorted"));
         }
-        validate_layer(plan, entry, layer, requirements.as_ref(), node, previous)?;
+        validate_layer(
+            plan,
+            entry,
+            layer,
+            requirements.as_ref(),
+            producer,
+            evidence,
+            previous,
+        )?;
     }
-    if node.receipt.phase == QualificationPhase::Third {
+    if evidence.phase == QualificationPhase::Third {
         let prior = previous
             .and_then(|previous| {
                 previous
@@ -116,10 +128,11 @@ fn validate_layer(
     entry: &crate::workflow::MatrixEntry,
     layer: &QualificationCacheLayerReceipt,
     requirements: Option<&super::super::super::runtime::QualificationRuntimeIdentityRequirements>,
-    node: &AdmissionNode,
+    producer: &QualificationCacheProducerContext,
+    evidence: LaneEvidence<'_>,
     previous: Option<&AdmissionNode>,
 ) -> Result<(), ContractError> {
-    let phase = node.receipt.phase;
+    let phase = evidence.phase;
     let applicable = layer_applies(entry, layer.layer);
     let identity = identity_commitment(plan, entry, layer.layer)?;
     let expected_active = applicable
@@ -146,7 +159,7 @@ fn validate_layer(
     let (restore_slot, expected_archive) =
         phase_restore(phase, previous, &entry.matrix_key, layer.layer)?;
     let restore_key = key_for_slot(
-        &node.receipt.campaign,
+        evidence.campaign,
         layer.layer,
         &identity,
         &runtime_digest,
@@ -163,7 +176,7 @@ fn validate_layer(
     let save_key = save_slot
         .map(|slot| {
             key_for_slot(
-                &node.receipt.campaign,
+                evidence.campaign,
                 layer.layer,
                 &identity,
                 &runtime_digest,
@@ -180,9 +193,37 @@ fn validate_layer(
         save_key.as_deref(),
         state_digest,
         previous_state,
-        &node.metadata,
-        &node.receipt,
+        producer,
     )
+}
+
+#[derive(Clone, Copy)]
+pub(in crate::workflow::qualification_cache_lineage::receipt) struct LaneEvidence<'a> {
+    campaign: &'a str,
+    phase: QualificationPhase,
+    lanes: &'a [QualificationCacheLaneReceipt],
+}
+
+impl<'a> LaneEvidence<'a> {
+    pub(in crate::workflow::qualification_cache_lineage::receipt) fn producer(
+        evidence: &'a QualificationCacheProducerEvidence,
+    ) -> Self {
+        Self {
+            campaign: &evidence.campaign,
+            phase: evidence.phase,
+            lanes: &evidence.lanes,
+        }
+    }
+
+    pub(in crate::workflow::qualification_cache_lineage::receipt) fn receipt(
+        receipt: &'a QualificationCacheReceipt,
+    ) -> Self {
+        Self {
+            campaign: &receipt.campaign,
+            phase: receipt.phase,
+            lanes: &receipt.lanes,
+        }
+    }
 }
 
 fn lane_index(

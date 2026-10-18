@@ -35,7 +35,9 @@ fn useful_delta_needs_change_and_persistence_in_the_same_lane() {
             lane("saved", "closure-2", "useful-2", "state-2b", true),
         ],
     );
-    assert!(validate_useful_delta_progress(&separated_evidence, Some(&previous)).is_err());
+    assert!(
+        validate_useful_delta_progress(&separated_evidence.receipt.lanes, Some(&previous)).is_err()
+    );
     let same_lane = node(
         QualificationPhase::UsefulDelta,
         vec![
@@ -43,7 +45,7 @@ fn useful_delta_needs_change_and_persistence_in_the_same_lane() {
             lane("saved", "closure-2", "useful-2", "state-2", false),
         ],
     );
-    assert!(validate_useful_delta_progress(&same_lane, Some(&previous)).is_ok());
+    assert!(validate_useful_delta_progress(&same_lane.receipt.lanes, Some(&previous)).is_ok());
 }
 
 fn lane(

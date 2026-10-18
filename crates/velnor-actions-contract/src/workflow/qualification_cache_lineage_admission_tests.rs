@@ -122,13 +122,13 @@ fn completed_receipt_uses_the_unprotected_verification_branch_identity() -> Test
 
     let mut wrong_mode = node.document.clone();
     wrong_mode.producer.mode = QualificationDispatchMode::Controlled;
-    assert!(wrong_mode.to_bounded_json(&plan, &metadata, None).is_err());
+    assert!(wrong_mode.to_bounded_json(&plan, None).is_err());
 
     let mut wrong_ref = metadata.clone();
     wrong_ref.git_ref = "refs/heads/main".to_owned();
     assert!(
         node.document
-            .to_bounded_json(&plan, &wrong_ref, None)
+            .validate_for_plan(&plan, &wrong_ref, None)
             .is_err()
     );
 
@@ -136,9 +136,30 @@ fn completed_receipt_uses_the_unprotected_verification_branch_identity() -> Test
     wrong_protection.ref_protected = true;
     assert!(
         node.document
-            .to_bounded_json(&plan, &wrong_protection, None)
+            .validate_for_plan(&plan, &wrong_protection, None)
             .is_err()
     );
+    Ok(())
+}
+
+#[test]
+fn producer_document_serializes_pending_only_with_exact_verified_lanes() -> TestResult {
+    let plan = qualification_plan(QualificationPhase::Cold, 742, SOURCE_A, None)?;
+    let node = completed_node(&plan, None, None)?;
+    let bytes = node.document.to_bounded_json(&plan, None)?;
+    let value: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert!(value.get("evidence").is_some());
+    assert!(value.get("receipt").is_none());
+    assert!(value.get("metadata").is_none());
+    assert!(value.get("conclusion").is_none());
+
+    let mut missing_lane = node.document.clone();
+    missing_lane.evidence.lanes.clear();
+    assert!(missing_lane.to_bounded_json(&plan, None).is_err());
+
+    let mut wrong_lane = node.document.clone();
+    wrong_lane.evidence.lanes[0].matrix_key = "unplanned-lane".to_owned();
+    assert!(wrong_lane.to_bounded_json(&plan, None).is_err());
     Ok(())
 }
 
@@ -226,15 +247,9 @@ fn legacy_receipt_versions_and_artifact_identity_are_rejected() -> TestResult {
         serde_json::json!("velnor-qualification-cache-receipt-v2-a1");
     assert!(rejects_admission(&old_artifact, &plan, None));
 
-    let metadata: crate::workflow::QualificationCacheRunMetadata =
-        serde_json::from_value(node.value["metadata"].clone())?;
     let mut old_document = node.document.clone();
     old_document.schema = 2;
-    assert!(
-        old_document
-            .to_bounded_json(&plan, &metadata, None)
-            .is_err()
-    );
+    assert!(old_document.to_bounded_json(&plan, None).is_err());
     Ok(())
 }
 

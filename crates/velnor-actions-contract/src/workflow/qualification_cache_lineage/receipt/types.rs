@@ -181,7 +181,7 @@ pub struct QualificationCacheReceipt {
     pub schema: u32,
     /// Derived plan identity for this exact run and attempt.
     pub plan_id: String,
-    /// Completed producer run and attempt.
+    /// Producer run and attempt identifiers.
     pub run: QualificationRunRef,
     /// Isolated experiment namespace.
     pub campaign: String,
@@ -266,7 +266,7 @@ pub struct QualificationCacheArtifact {
     pub workflow_head_sha: String,
 }
 
-/// Runner-owned context captured by the completed producer workflow.
+/// Runner-owned context captured during the producer workflow.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualificationCacheProducerContext {
@@ -290,16 +290,42 @@ pub struct QualificationCacheProducerContext {
     pub run: QualificationRunRef,
 }
 
-/// One immutable receipt artifact file uploaded by the post-job collector.
+/// Task and cache observations collected during the producer run.
+///
+/// This record carries no workflow-run conclusion. After the run ends, the
+/// resolver adds the completed-run result returned by GitHub.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QualificationCacheProducerEvidence {
+    /// Derived plan identity for this exact run and attempt.
+    pub plan_id: String,
+    /// Isolated experiment namespace.
+    pub campaign: String,
+    /// Phase whose actual execution this record describes.
+    pub phase: QualificationPhase,
+    /// Source revision checked out by this run.
+    pub source_sha: String,
+    /// Static configuration and complete obligation-set commitment.
+    pub configuration_digest: String,
+    /// Verified source delta, present only for `UsefulDelta` records.
+    #[serde(default)]
+    pub source_delta: Option<QualificationSourceDelta>,
+    /// Immediate predecessor run and immutable receipt digest, when required.
+    pub predecessor: Option<QualificationCacheReceiptLink>,
+    /// Task and cache observations for each matrix lane.
+    pub lanes: Vec<QualificationCacheLaneReceipt>,
+}
+
+/// One immutable producer artifact file uploaded before run completion.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualificationCacheReceiptArtifactDocument {
-    /// Artifact document schema version.
+    /// Producer artifact schema version.
     pub schema: u32,
-    /// Runner context attested by the workflow itself.
+    /// Immutable runner context captured by the workflow.
     pub producer: QualificationCacheProducerContext,
-    /// Completed job, action and backend observations.
-    pub receipt: QualificationCacheReceipt,
+    /// Task and cache observations collected during this run.
+    pub evidence: QualificationCacheProducerEvidence,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

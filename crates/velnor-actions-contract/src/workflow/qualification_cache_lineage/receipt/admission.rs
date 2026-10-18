@@ -16,7 +16,7 @@ use super::types::{
     QualificationCacheLayerReceipt, QualificationCacheReceipt, QualificationSourceDelta,
 };
 use super::validation::{
-    validate_lanes, validate_metadata, validate_node_metadata, validate_receipt_shape,
+    LaneEvidence, validate_lanes, validate_metadata, validate_node_metadata, validate_receipt_shape,
 };
 
 /// Validated, bounded predecessor receipt and its complete lineage.
@@ -175,7 +175,12 @@ impl QualificationCacheAdmission {
             return Err(invalid("phase_campaign_or_configuration_mismatch"));
         }
         validate_node_metadata(plan, node)?;
-        validate_lanes(plan, node, node.previous.as_deref())?;
+        validate_lanes(
+            plan,
+            &node.producer,
+            LaneEvidence::receipt(&node.receipt),
+            node.previous.as_deref(),
+        )?;
         match (expected_phase.predecessor(), node.previous.as_deref()) {
             (None, None) => Ok(()),
             (Some(previous_phase), Some(previous)) => {

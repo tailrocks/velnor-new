@@ -61,13 +61,13 @@ pub(in crate::qualification_resolver) fn resolve_chain(
     verify_expected_artifact(&artifact, expected_artifact)?;
     verify_artifact_run(&artifact, &metadata)?;
     let document = download_document(client, &artifact)?;
-    validate_document(&document, run)?;
-    let previous = load_predecessor(client, &document.receipt, depth)?;
+    let receipt = validate_document(&document, run, &metadata)?;
+    let previous = load_predecessor(client, &receipt, depth)?;
     Ok(FetchedNode {
         metadata,
         artifact,
         producer: document.producer,
-        receipt: document.receipt,
+        receipt,
         previous,
     })
 }
@@ -202,11 +202,14 @@ fn download_document(
 fn validate_document(
     document: &QualificationCacheReceiptArtifactDocument,
     run: QualificationRunRef,
-) -> Result<(), OrchestratorError> {
-    if document.schema != 3 || document.producer.run != run || document.receipt.run != run {
-        return Err(internal("qualification_receipt_run_mismatch"));
+    metadata: &QualificationCacheRunMetadata,
+) -> Result<QualificationCacheReceipt, OrchestratorError> {
+    if document.schema != 3 || document.producer.run != run {
+        return Err(internal("qualification_producer_run_mismatch"));
     }
-    Ok(())
+    document
+        .completed_receipt(metadata)
+        .map_err(|_| internal("qualification_completed_run_mismatch"))
 }
 
 fn load_predecessor(

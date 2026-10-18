@@ -9,9 +9,24 @@ use super::super::super::MAX_QUALIFICATION_CACHE_LANES;
 use super::super::errors::{check_text, invalid};
 use super::super::source_delta::validate_source_delta;
 use super::super::types::{
-    AdmissionNode, MAX_QUALIFICATION_RECEIPT_BYTES, QualificationCacheReceipt,
+    AdmissionNode, MAX_QUALIFICATION_RECEIPT_BYTES, QualificationCacheLaneReceipt,
+    QualificationCacheProducerContext, QualificationCacheProducerEvidence,
+    QualificationCacheReceipt, QualificationCacheReceiptLink, QualificationSourceDelta,
     qualification_cache_receipt_artifact_name,
 };
+
+struct ReceiptShape<'a> {
+    schema: u32,
+    plan_id: &'a str,
+    campaign: &'a str,
+    phase: QualificationPhase,
+    source_sha: &'a str,
+    configuration_digest: &'a str,
+    source_delta: Option<&'a QualificationSourceDelta>,
+    predecessor: Option<&'a QualificationCacheReceiptLink>,
+    lanes: &'a [QualificationCacheLaneReceipt],
+    run: crate::workflow::QualificationRunRef,
+}
 
 pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_node_metadata(
     plan: &Plan,
@@ -129,32 +144,64 @@ pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_metada
 pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_receipt_shape(
     receipt: &QualificationCacheReceipt,
 ) -> Result<(), ContractError> {
-    if receipt.schema != 2
-        || receipt.lanes.len() > MAX_QUALIFICATION_CACHE_LANES
-        || receipt.lanes.is_empty()
+    validate_receipt_parts(&ReceiptShape {
+        schema: receipt.schema,
+        plan_id: &receipt.plan_id,
+        campaign: &receipt.campaign,
+        phase: receipt.phase,
+        source_sha: &receipt.source_sha,
+        configuration_digest: &receipt.configuration_digest,
+        source_delta: receipt.source_delta.as_ref(),
+        predecessor: receipt.predecessor.as_ref(),
+        lanes: &receipt.lanes,
+        run: receipt.run,
+    })
+}
+
+pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_producer_evidence_shape(
+    evidence: &QualificationCacheProducerEvidence,
+    producer: &QualificationCacheProducerContext,
+) -> Result<(), ContractError> {
+    validate_receipt_parts(&ReceiptShape {
+        schema: 2,
+        plan_id: &evidence.plan_id,
+        campaign: &evidence.campaign,
+        phase: evidence.phase,
+        source_sha: &evidence.source_sha,
+        configuration_digest: &evidence.configuration_digest,
+        source_delta: evidence.source_delta.as_ref(),
+        predecessor: evidence.predecessor.as_ref(),
+        lanes: &evidence.lanes,
+        run: producer.run,
+    })
+}
+
+fn validate_receipt_parts(parts: &ReceiptShape<'_>) -> Result<(), ContractError> {
+    if parts.schema != 2
+        || parts.lanes.len() > MAX_QUALIFICATION_CACHE_LANES
+        || parts.lanes.is_empty()
     {
         return Err(invalid("receipt_schema_or_lane_count"));
     }
-    receipt.run.validate()?;
-    crate::ids::validate_plan_id(&receipt.plan_id)?;
-    let run_key =
-        crate::ids::run_key_for_ci(receipt.run.run_id, u64::from(receipt.run.run_attempt));
-    if crate::ids::plan_id_for_run(&run_key)? != receipt.plan_id {
+    parts.run.validate()?;
+    crate::ids::validate_plan_id(parts.plan_id)?;
+    let run_key = crate::ids::run_key_for_ci(parts.run.run_id, u64::from(parts.run.run_attempt));
+    if crate::ids::plan_id_for_run(&run_key)? != parts.plan_id {
         return Err(invalid("receipt_plan_id_run_mismatch"));
     }
-    validate_digest(&receipt.configuration_digest)?;
-    check_text(&receipt.campaign)?;
-    validate_source_sha(&receipt.source_sha)?;
-    if let Some(link) = &receipt.predecessor {
+    validate_digest(parts.configuration_digest)?;
+    check_text(parts.campaign)?;
+    validate_source_sha(parts.source_sha)?;
+    if let Some(link) = parts.predecessor {
         link.run.validate()?;
         validate_digest(&link.receipt_digest)?;
         if link.artifact_id == 0 || !valid_sha256(&link.artifact_digest) {
             return Err(invalid("receipt_artifact_link_invalid"));
         }
     }
-    match (receipt.phase, receipt.source_delta.as_ref()) {
+    match (parts.phase, parts.source_delta) {
         (QualificationPhase::UsefulDelta, Some(delta)) => {
-            validate_source_delta(delta, &delta.base_source_sha, &receipt.source_sha)?;
+            validate_source_delta(delta, &delta.base_source_sha, parts.source_sha)?;
         }
         (QualificationPhase::UsefulDelta, None) => {
             return Err(invalid("missing_useful_source_delta"));
@@ -162,7 +209,7 @@ pub(in crate::workflow::qualification_cache_lineage::receipt) fn validate_receip
         (_, Some(_)) => return Err(invalid("unexpected_source_delta")),
         (_, None) => {}
     }
-    for pair in receipt.lanes.windows(2) {
+    for pair in parts.lanes.windows(2) {
         if pair[0].matrix_key >= pair[1].matrix_key {
             return Err(invalid("lanes_not_sorted_unique"));
         }

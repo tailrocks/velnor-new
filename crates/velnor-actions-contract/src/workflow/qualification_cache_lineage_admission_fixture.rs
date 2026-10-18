@@ -5,7 +5,7 @@ use crate::canonical::{canonical_json_bytes, digest_b3};
 use crate::workflow::{
     QualificationCacheArtifact, QualificationCacheBackendEntry,
     QualificationCacheBackendObservation, QualificationCacheLaneReceipt, QualificationCacheLayer,
-    QualificationCacheLayerReceipt, QualificationCacheReceipt,
+    QualificationCacheLayerReceipt, QualificationCacheProducerEvidence, QualificationCacheReceipt,
     QualificationCacheReceiptArtifactDocument, QualificationCacheReceiptLink,
     QualificationCacheRestore, QualificationCacheRestoreResult, QualificationCacheSave,
     QualificationCacheSaveActionResult, QualificationPhase, QualificationRunRef,
@@ -60,15 +60,24 @@ pub(super) fn completed_node(
     let document = QualificationCacheReceiptArtifactDocument {
         schema: 3,
         producer,
-        receipt: receipt.clone(),
+        evidence: QualificationCacheProducerEvidence {
+            plan_id: receipt.plan_id.clone(),
+            campaign: receipt.campaign.clone(),
+            phase: receipt.phase,
+            source_sha: receipt.source_sha.clone(),
+            configuration_digest: receipt.configuration_digest.clone(),
+            source_delta: receipt.source_delta.clone(),
+            predecessor: receipt.predecessor.clone(),
+            lanes: receipt.lanes.clone(),
+        },
     };
-    let bytes = document.to_bounded_json(plan, &metadata, previous_admission.as_ref())?;
+    let bytes = document.to_bounded_json(plan, previous_admission.as_ref())?;
     let artifact = artifact_metadata(plan, bytes.len())?;
     let value = serde_json::json!({
         "metadata": metadata,
         "artifact": artifact.clone(),
         "producer": document.producer.clone(),
-        "receipt": document.receipt.clone(),
+        "receipt": receipt.clone(),
         "previous": previous.map(|node| node.value.clone()),
     });
     Ok(BuiltNode {

@@ -8,9 +8,9 @@ use super::super::super::errors::invalid;
 use super::super::super::lineage::{find_latest_saved_entry, find_saved_entry};
 use super::super::super::types::{
     AdmissionNode, QualificationCacheBackendEntry, QualificationCacheBackendObservation,
-    QualificationCacheLayerReceipt, QualificationCacheReceipt, QualificationCacheRestore,
-    QualificationCacheRestoreResult, QualificationCacheRunMetadata, QualificationCacheSave,
-    QualificationCacheSaveActionResult,
+    QualificationCacheLaneReceipt, QualificationCacheLayerReceipt,
+    QualificationCacheProducerContext, QualificationCacheRestore, QualificationCacheRestoreResult,
+    QualificationCacheSave, QualificationCacheSaveActionResult,
 };
 
 pub(super) fn validate_disabled_layer(
@@ -106,8 +106,7 @@ pub(super) fn validate_save(
     expected_key: Option<&str>,
     current_state: &str,
     previous_state: Option<&str>,
-    metadata: &QualificationCacheRunMetadata,
-    receipt: &QualificationCacheReceipt,
+    producer: &QualificationCacheProducerContext,
 ) -> Result<(), ContractError> {
     let Some(key) = expected_key else {
         return if save.action == QualificationCacheSaveActionResult::Disabled
@@ -142,10 +141,9 @@ pub(super) fn validate_save(
     if save.before != QualificationCacheBackendObservation::Absent
         || after.id == 0
         || after.key != key
-        || after.git_ref != metadata.git_ref
+        || after.git_ref != producer.git_ref
         || !valid_cache_version(&after.version)
         || after.size_bytes == 0
-        || receipt.run.run_id != metadata.run.run_id
     {
         return Err(invalid("archive_creation_not_proven"));
     }
@@ -160,11 +158,11 @@ fn valid_cache_version(value: &str) -> bool {
 }
 
 pub(super) fn validate_useful_delta_progress(
-    node: &AdmissionNode,
+    lanes: &[QualificationCacheLaneReceipt],
     previous: Option<&AdmissionNode>,
 ) -> Result<(), ContractError> {
     let previous = previous.ok_or_else(|| invalid("useful_delta_missing_third_receipt"))?;
-    let persisted = node.receipt.lanes.iter().any(|current| {
+    let persisted = lanes.iter().any(|current| {
         previous
             .receipt
             .lanes
@@ -203,11 +201,11 @@ fn lane_delta_persisted(
 }
 
 pub(super) fn validate_third_observations(
-    node: &AdmissionNode,
+    lanes: &[QualificationCacheLaneReceipt],
     previous: Option<&AdmissionNode>,
 ) -> Result<(), ContractError> {
     let previous = previous.ok_or_else(|| invalid("third_missing_warm_receipt"))?;
-    for current in &node.receipt.lanes {
+    for current in lanes {
         let prior = previous
             .receipt
             .lanes
