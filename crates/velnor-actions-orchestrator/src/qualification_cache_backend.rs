@@ -108,6 +108,8 @@ fn cache_api_request(
         .map_err(|_| crate::internal::internal("qualification_cache_census_filter"))?;
     let args = vec![
         OsString::from("api"),
+        OsString::from("--method"),
+        OsString::from("GET"),
         OsString::from(format!("repos/{repository}/actions/caches")),
         OsString::from("--paginate"),
         OsString::from("--slurp"),
@@ -336,6 +338,8 @@ mod request_tests {
             args,
             [
                 "api",
+                "--method",
+                "GET",
                 "repos/example/repository/actions/caches",
                 "--paginate",
                 "--slurp",
