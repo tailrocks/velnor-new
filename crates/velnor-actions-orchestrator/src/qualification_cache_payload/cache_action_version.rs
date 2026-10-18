@@ -1,5 +1,6 @@
 //! Version input used by pinned `actions/cache` on Unix runners.
 
+use crate::cache_action_stage::CacheActionCompression;
 use sha2::{Digest, Sha256};
 use std::path::{Component, Path};
 
@@ -30,6 +31,25 @@ pub(super) fn version_for_action_path(
     let path = clean_unix_path(action_path)?;
     let preimage = format!("{path}|{}|{VERSION_SALT}", compression.as_str());
     Ok(lower_hex(&Sha256::digest(preimage.as_bytes())))
+}
+
+/// Give the pinned cache version for the exact method observed by the tar adapter.
+pub(super) fn version_for_action_compression(
+    action_path: &Path,
+    compression: CacheActionCompression,
+) -> Result<String, &'static str> {
+    let path = clean_unix_path(action_path)?;
+    let preimage = format!("{path}|{}|{VERSION_SALT}", compression.as_str());
+    Ok(lower_hex(&Sha256::digest(preimage.as_bytes())))
+}
+
+/// Check one backend version against the exact method observed for this restore.
+pub(super) fn version_agrees_with_action_compression(
+    action_path: &Path,
+    compression: CacheActionCompression,
+    version: &str,
+) -> Result<bool, &'static str> {
+    Ok(version_for_action_compression(action_path, compression)? == version)
 }
 
 fn lower_hex(bytes: &[u8]) -> String {
@@ -75,7 +95,11 @@ fn clean_unix_path(path: &Path) -> Result<&str, &'static str> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CompressionMethod, version_for_action_path};
+    use super::{
+        CompressionMethod, version_agrees_with_action_compression, version_for_action_compression,
+        version_for_action_path,
+    };
+    use crate::cache_action_stage::CacheActionCompression;
     use std::path::Path;
 
     const STAGE: &str =
@@ -107,6 +131,36 @@ mod tests {
                 .expect("checked zstd version");
         assert_ne!(gzip, changed_path);
         assert_ne!(gzip, changed_compression);
+    }
+
+    #[test]
+    fn exact_observed_sdk_method_selects_one_pinned_cache_version() {
+        let path = Path::new(STAGE);
+        let gzip = version_for_action_compression(path, CacheActionCompression::Gzip)
+            .expect("gzip version");
+        let zstd_without_long =
+            version_for_action_compression(path, CacheActionCompression::ZstdWithoutLong)
+                .expect("zstd without long version");
+        let zstd = version_for_action_compression(path, CacheActionCompression::Zstd)
+            .expect("long-range zstd version");
+        assert_eq!(
+            gzip,
+            "d861d3196eba70bc05d9b3674f5e08d79b3791bfe105859713b70db3fc65b589"
+        );
+        assert_eq!(
+            zstd_without_long,
+            "dd928ceb89dc405d95cab9889df73867015c4d6bdc1243d0bd3e560a6871c137"
+        );
+        assert_ne!(gzip, zstd);
+        assert_ne!(zstd_without_long, zstd);
+        assert!(
+            version_agrees_with_action_compression(path, CacheActionCompression::Zstd, &zstd)
+                .expect("compare observed version")
+        );
+        assert!(
+            !version_agrees_with_action_compression(path, CacheActionCompression::Gzip, &zstd)
+                .expect("reject mismatched compression")
+        );
     }
 
     #[test]
