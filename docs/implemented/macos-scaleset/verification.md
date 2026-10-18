@@ -15,23 +15,12 @@ not a pass.
 | G7 | BLOCKED_EXTERNAL | Filename dispatches 404'd and were not retried. Workflows `373713267` and `373713266` are registered. Image runs `37101248625` (no `GH_TOKEN`) and `37101622880` (`gh` not in a git repo) built and attested, then publish failed. macOS `37101248540` failed (`-p velnor-host`). `37101412470` and `37101625217` were cancelled. Later image `37102027384` and macOS `37102029367` concluded `success` and published GitHub release assets from `19a43f5` (runner tar sha256 `b234cad0d2668376054660bca37922bc7cdf8ef34820bf18f5a59a7e5aadc04b`, dind tar sha256 `bd351b3c24fde1a3ef0c5a402964218c82e72e2b173f34ac49b756feea80496f`, `velnor-host` sha256 `c9eb774d5c3e040d54e1765e28c82f1c97e93d85ab9c53bbf4aa5eec99a452f6`). No GHCR push. Generator `v0.1.0` unchanged. ChainArgos not updated. Main `28b83bdd` (squash of PR 14) has image-release and macos-binary-release and no workflow that publishes a new `velnor-actions` tag. Tag `v0.1.0` was not moved. From that main, `gh workflow run image-release.yml --ref main` created run [37110093259](https://github.com/tailrocks/velnor-new/actions/runs/37110093259) and `gh workflow run macos-binary-release.yml --ref main` created run [37110095182](https://github.com/tailrocks/velnor-new/actions/runs/37110095182). Those runs are not a consumer pin. ChainArgos main is still `570132119c488150d8adcea2d9334fc3654567d4` with schema 1 and asset pin `aa7e44d6579e9c586106d120ed3658fcf1c9b041027ad9f03473e8efacd3b5d5`. Later snapshot in `recovery-evidence.md` (2026-10-04): `generator-47815c83` and consumer `baa78037` exist, run `37164041817` was not terminal, and this gate stays `BLOCKED_EXTERNAL`. That run later completed `failure`. Cold `37174439776` and warm `37174494720` were `mode=both` echoes on the retagged image and are not this gate. Live tag later moved to `sha256:1dd3f906`. Features `37175314160` succeeded and is not this gate. The later class-mode cold/warm pair is not this gate either. ChainArgos main in the identity table is `0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0`. This gate stays BLOCKED_EXTERNAL. |
 | G8 | NOT_RUN | No promotion. Required checks stay. |
 
-Both workspaces, when they exist, must pass:
-
-```bash
-cargo fmt --all -- --check
-cargo clippy --locked --workspace --all-targets -- -D warnings
-cargo nextest run --locked --workspace
-cargo test --locked --workspace --doc
-cargo deny check
-alint validate-config
-alint check --fail-on-warning
-bash scripts/check-freshness.sh
-cargo fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check
-cargo clippy --manifest-path crates/velnor-runner/Cargo.toml --locked --workspace --all-targets -- -D warnings
-cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --workspace
-cargo test --manifest-path crates/velnor-runner/Cargo.toml --locked --workspace --doc
-cargo deny --manifest-path crates/velnor-runner/Cargo.toml check
-```
-
-Pinned cargo-deny 0.20 rejects `--locked`. The command is `cargo deny check`.
+Run checks for both workspaces when both exist.
+Run `bash scripts/verify-local.sh` from the repository root.
+The script uses pinned Mise tools without project configuration.
+Nextest runs ordinary unit and integration tests.
+MBX `test --doc` runs doctests as a separate stage.
+Nextest does not run doctests.
+Run `alint validate-config` and `alint check --fail-on-warning` separately.
+Pinned cargo-deny 0.20.2 audits root and nested runner workspaces.
 Root workspace success without the nested manifest is a fail.

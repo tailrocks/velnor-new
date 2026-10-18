@@ -1,38 +1,39 @@
 #!/usr/bin/env bash
 # Local verification entrypoint: the offline subset of CI in one command.
 #
-# Stages (every stage always runs; all failures are reported):
+# The script stops after toolchain errors. It reports later stage errors.
 #   toolchain       resolve the exact CI toolchain from
 #                   .velnor/version-policy.toml, report local mise.toml
-#                   tool versions for context, and install policy specs; `mise
-#                   install` the specs, and record the effective versions
-#   fmt               pinned `cargo fmt --all --check`
-#   repo-policy       `scripts/check-freshness.sh` (pins, policy mirror,
-#                     upstream evidence, deny policy; the live advisory scan
-#                     runs in CI, not here)
+#                   tool versions for context, install policy specs, and
+#                   record effective tool paths and versions
+#   root-deny       pinned cargo-deny audit of the root workspace
+#   fmt             pinned `cargo fmt --all --check`
+#   repo-policy       pinned Rust freshness operation (pins, policy mirror,
+#                     upstream evidence, and deny policy)
 #   generated-selector focused regression tests for Cargo artifact selection
 #   generated-tree    build the CLI, select the exact executable Cargo reports,
 #                     `generate --output-dir` to a temp dir, and `diff -r` the
 #                     committed `.github` tree against that generated tree.
-#   clippy-<crate>    per-crate pinned `cargo clippy --all-targets -- -D warnings`
-#   test-<crate>      per-crate pinned `cargo test` (unit plus integration plus doc)
-#   doctest-<crate>   per-crate pinned `cargo test --doc` for crates with library
-#                     targets (mirrors the CI Doctests step; binary-only
+#   clippy-<crate>    per-crate pinned MBX strict Clippy check
+#   test-<crate>      per-crate pinned Nextest unit and integration tests
+#   doctest-<crate>   per-crate pinned MBX doctests for library targets
+#                     (mirrors the CI Doctests step; binary-only
 #                     crates have no doctests and are reported skipped)
-#   doc-<crate>       per-crate pinned `cargo doc --no-deps` (mirrors the CI
+#   doc-<crate>       per-crate pinned MBX documentation build (mirrors the CI
 #                     Documentation step: rustdoc warnings fail the build)
 #   fixtures          fixture-consuming integration tests by name (currently
 #                     the f2-evasion fixture suite), proving the checked-in
 #                     `tests/fixtures` tree is exercised and green
-#   integration       whole-workspace pass: pinned nextest `ci` profile when
-#                     available, else pinned `cargo test`
+#   integration       whole-workspace pass with the pinned Nextest `ci` profile
 #
-# Every cargo/nextest invocation runs under `mise exec` with explicit
-# `tool@exact` specs from .velnor/version-policy.toml; mise.toml holds
+# Rust commands run under `mise --no-config exec` with exact tool specs.
+# The script uses the selected Rust toolchain's `bin` directory first.
+# Specs come from .velnor/version-policy.toml; mise.toml holds
 # local developer selections and may differ without changing the CI pins.
-# Bare ambient cargo never runs here, and
-# the repo mise wrapper routes cargo through the pinned MBX shim. Every
-# cargo invocation also passes `--locked`; the lockfile is policy. The
+# The script does not use project wrappers or ambient Rust tool versions.
+# It uses MBX for builds, tests, docs, and strict Clippy checks.
+# Nextest runs ordinary suites. MBX `test --doc` runs doctests separately.
+# Build commands use `--locked`.
 # script honors `CARGO_TARGET_DIR` from the environment. Exit status is 0
 # only when every stage passes; the failing stage names print at the end.
 #
@@ -150,6 +151,7 @@ _PIN_PARTS=($SPECS)
 RUST_PIN="${_PIN_PARTS[0]#*@}"
 MBX_PIN="${_PIN_PARTS[1]#*@}"
 NEXTEST_PIN="${_PIN_PARTS[2]#*@}"
+CARGO_DENY_PIN="0.20.2"
 POLICY_MISE="$(toml_tool_pin .velnor/version-policy.toml mise 2>"$MISE_PIN_LOG")"
 LOCAL_MISE="$(mise --version 2>/dev/null | awk "{print \$1}")"
 echo "mise: local $LOCAL_MISE, policy $POLICY_MISE"
@@ -158,19 +160,76 @@ if [ "$LOCAL_MISE" != "$POLICY_MISE" ]; then
 fi
 # shellcheck disable=SC2206
 SPEC_ARR=($SPECS)
-if ! mise install "${SPEC_ARR[@]}" >>"$TOOLCHAIN_LOG" 2>&1; then
+if ! mise --no-config install "${SPEC_ARR[@]}" >>"$TOOLCHAIN_LOG" 2>&1; then
   fail "toolchain (mise install failed; log: $TOOLCHAIN_LOG)"
   echo "verify-local: FAIL:$FAILURES"
   exit 1
 fi
-MISE_EXEC=(mise exec "${SPEC_ARR[@]}" --)
+if ! mise --no-config install "cargo-deny@$CARGO_DENY_PIN" >>"$TOOLCHAIN_LOG" 2>&1; then
+  fail "toolchain (cargo-deny $CARGO_DENY_PIN install failed; log: $TOOLCHAIN_LOG)"
+  echo "verify-local: FAIL:$FAILURES"
+  exit 1
+fi
+MISE_EXEC=(mise --no-config exec "${SPEC_ARR[@]}" --)
+RUSTC_TOOL_PATH="$("${MISE_EXEC[@]}" rustup which --toolchain "$RUST_PIN" rustc 2>>"$TOOLCHAIN_LOG")"
+CARGO_TOOL_PATH="$("${MISE_EXEC[@]}" rustup which --toolchain "$RUST_PIN" cargo 2>>"$TOOLCHAIN_LOG")"
+CLIPPY_TOOL_PATH="$("${MISE_EXEC[@]}" rustup which --toolchain "$RUST_PIN" cargo-clippy 2>>"$TOOLCHAIN_LOG")"
+CARGO_FMT_TOOL_PATH="$("${MISE_EXEC[@]}" rustup which --toolchain "$RUST_PIN" cargo-fmt 2>>"$TOOLCHAIN_LOG")"
+RUSTFMT_TOOL_PATH="$("${MISE_EXEC[@]}" rustup which --toolchain "$RUST_PIN" rustfmt 2>>"$TOOLCHAIN_LOG")"
+CARGO_DENY_BIN="$(mise --no-config which cargo-deny --tool "cargo-deny@$CARGO_DENY_PIN" 2>>"$TOOLCHAIN_LOG")"
+if [ -z "$RUSTC_TOOL_PATH" ] || [ -z "$CARGO_TOOL_PATH" ] ||
+   [ -z "$CLIPPY_TOOL_PATH" ] || [ -z "$CARGO_FMT_TOOL_PATH" ] ||
+   [ -z "$RUSTFMT_TOOL_PATH" ]; then
+  fail "toolchain (pinned Rust component missing; log: $TOOLCHAIN_LOG)"
+  echo "verify-local: FAIL:$FAILURES"
+  exit 1
+fi
+RUST_TOOLCHAIN_BIN="$(dirname "$RUSTC_TOOL_PATH")"
+# These expansions intentionally happen in the child shell after the checked
+# toolchain path is added, not while the parent builds the command array.
+# shellcheck disable=SC2016
+RUST_EXEC=("${MISE_EXEC[@]}" env "RUST_TOOLCHAIN_BIN=$RUST_TOOLCHAIN_BIN" sh -c \
+  'PATH="$RUST_TOOLCHAIN_BIN:$PATH" exec "$@"' verify-local-rust)
+
+effective_path() {
+  local executable="$1"
+  # Keep $1 for the child shell, where it is the requested executable name.
+  # shellcheck disable=SC2016
+  "${RUST_EXEC[@]}" sh -c 'command -v "$1"' verify-local-path "$executable"
+}
+
+RUSTC_EFFECTIVE_PATH="$(effective_path rustc)"
+CARGO_EFFECTIVE_PATH="$(effective_path cargo)"
+CLIPPY_EFFECTIVE_PATH="$(effective_path cargo-clippy)"
+CARGO_FMT_EFFECTIVE_PATH="$(effective_path cargo-fmt)"
+RUSTFMT_EFFECTIVE_PATH="$(effective_path rustfmt)"
+RUSTC_VER="$("${RUST_EXEC[@]}" rustc --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
+CARGO_VER="$("${RUST_EXEC[@]}" cargo --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
+CLIPPY_VER="$("${RUST_EXEC[@]}" cargo clippy --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
+RUSTFMT_VER="$("${RUST_EXEC[@]}" cargo fmt --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
+RUSTFMT_BIN_VER="$("${RUST_EXEC[@]}" rustfmt --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
+CLIPPY_BIN_VER=""
+CARGO_FMT_BIN_VER=""
+CARGO_DENY_VER=""
+if [ -x "$CLIPPY_TOOL_PATH" ]; then
+  CLIPPY_BIN_VER="$("$CLIPPY_TOOL_PATH" --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
+fi
+if [ -x "$CARGO_FMT_TOOL_PATH" ]; then
+  CARGO_FMT_BIN_VER="$("$CARGO_FMT_TOOL_PATH" --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
+fi
+if [ -x "$CARGO_DENY_BIN" ]; then
+  CARGO_DENY_VER="$("$CARGO_DENY_BIN" --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
+fi
+
 repo_policy() {
   local action="$1"
   env \
     VELNOR_INTERNAL_OP=repo-policy-v1 \
     VELNOR_REPO_POLICY_ACTION="$action" \
     VELNOR_REPO_POLICY_ROOT="$ROOT" \
-    "${MISE_EXEC[@]}" cargo run --quiet --locked -p velnor-actions-cli \
+    VELNOR_REPO_POLICY_CHECK_UPSTREAM=0 \
+    VELNOR_REPO_POLICY_WITH_ADVISORIES=0 \
+    "${RUST_EXEC[@]}" mbx run --quiet --locked -p velnor-actions-cli \
       --bin velnor-actions
 }
 POLICY_SPECS="$(repo_policy toolchain-specs 2>"$TOOLCHAIN_POLICY_LOG")"
@@ -180,58 +239,84 @@ if [ "$POLICY_SPECS" != "$SPECS" ]; then
   exit 1
 fi
 POLICY_MISE="$(repo_policy mise-version 2>"$MISE_POLICY_LOG")"
-# The effective binaries must BE the pins: a symlink-rust or an ambient
-# cargo-nextest next to cargo can otherwise shadow the pinned tools.
-CARGO_VER="$("${MISE_EXEC[@]}" cargo --version 2>>"$TOOLCHAIN_LOG" | awk "{print \$2}")"
-MBX_VER="$("${MISE_EXEC[@]}" mbx --version 2>>"$TOOLCHAIN_LOG" | awk "{print \$2}")"
-echo "effective: cargo $CARGO_VER, mbx $MBX_VER"
-if [ "$CARGO_VER" != "$RUST_PIN" ] || [ "$MBX_VER" != "$MBX_PIN" ]; then
-  fail "toolchain (effective cargo $CARGO_VER / mbx $MBX_VER != pins $RUST_PIN / $MBX_PIN; log: $TOOLCHAIN_LOG)"
+# Check effective tool paths and versions before verification stages run.
+MBX_VER="$("${RUST_EXEC[@]}" mbx --version 2>>"$TOOLCHAIN_LOG" | awk '{print $2}')"
+echo "effective: rustc $RUSTC_VER [$RUSTC_EFFECTIVE_PATH], cargo $CARGO_VER [$CARGO_EFFECTIVE_PATH]"
+echo "effective: clippy $CLIPPY_VER [$CLIPPY_EFFECTIVE_PATH], cargo-fmt $RUSTFMT_VER [$CARGO_FMT_EFFECTIVE_PATH]"
+echo "effective: rustfmt $RUSTFMT_BIN_VER [$RUSTFMT_EFFECTIVE_PATH], mbx $MBX_VER"
+echo "effective: cargo-deny $CARGO_DENY_VER [$CARGO_DENY_BIN]"
+if [ "$RUSTC_VER" != "$RUST_PIN" ] || [ "$CARGO_VER" != "$RUST_PIN" ] ||
+   [ "$MBX_VER" != "$MBX_PIN" ] ||
+   [ "$RUSTC_EFFECTIVE_PATH" != "$RUSTC_TOOL_PATH" ] ||
+   [ "$CARGO_EFFECTIVE_PATH" != "$CARGO_TOOL_PATH" ] ||
+   [ "$CLIPPY_EFFECTIVE_PATH" != "$CLIPPY_TOOL_PATH" ] ||
+   [ "$CARGO_FMT_EFFECTIVE_PATH" != "$CARGO_FMT_TOOL_PATH" ] ||
+   [ "$RUSTFMT_EFFECTIVE_PATH" != "$RUSTFMT_TOOL_PATH" ] ||
+   [ "$CLIPPY_VER" != "$CLIPPY_BIN_VER" ] ||
+   [ "$RUSTFMT_VER" != "$CARGO_FMT_BIN_VER" ] ||
+   [ "$CARGO_FMT_BIN_VER" != "$RUSTFMT_BIN_VER" ] ||
+   [ "$CARGO_DENY_VER" != "$CARGO_DENY_PIN" ]; then
+  fail "toolchain (effective Rust tools do not match the selected toolchain; log: $TOOLCHAIN_LOG)"
   echo "verify-local: FAIL:$FAILURES"
   exit 1
 fi
-# Nextest resolves two ways, and neither is stable: the bare
-# `cargo-nextest` intermittently shadows to an ambient 0.9.143 in
-# `~/.cargo/bin` instead of the mise aqua path. Prefer whichever
-# reports the exact pin; the choice is echoed, never assumed.
+# Resolve the pinned Nextest executable with mise.
+# Put its directory first inside Mise's environment for `mbx nextest`.
 NEXTEST_RUN=()
-NEXTEST_BIN="$(mise which cargo-nextest --tool "aqua:nextest-rs/nextest/cargo-nextest@$NEXTEST_PIN" 2>/dev/null || true)"
-NEXTEST_BIN_VER="$("${MISE_EXEC[@]}" "${NEXTEST_BIN:-cargo-nextest}" --version 2>/dev/null | awk 'NR==1{print $2}')"
-BARE_VER="$("${MISE_EXEC[@]}" cargo-nextest --version 2>/dev/null | awk 'NR==1{print $2}')"
-SUB_VER="$("${MISE_EXEC[@]}" cargo nextest --version 2>/dev/null | awk 'NR==1{print $2}')"
+nextest_route_is_pinned() {
+  local bin="$1" binary_version="$2" route_version="$3" expected_version="$4"
+  [ -n "$bin" ] && [ -x "$bin" ] &&
+    [ "$binary_version" = "$expected_version" ] &&
+    [ "$route_version" = "$expected_version" ]
+}
+
+NEXTEST_BIN="$(mise --no-config which cargo-nextest --tool "aqua:nextest-rs/nextest/cargo-nextest@$NEXTEST_PIN" 2>/dev/null || true)"
+NEXTEST_BIN_VER=""
+if [ -n "$NEXTEST_BIN" ]; then
+  NEXTEST_BIN_VER="$("$NEXTEST_BIN" --version 2>/dev/null | awk 'NR==1{print $2}')"
+fi
 if [ -n "$NEXTEST_BIN" ] && [ "$NEXTEST_BIN_VER" = "$NEXTEST_PIN" ]; then
-  NEXTEST_RUN=("${MISE_EXEC[@]}" "$NEXTEST_BIN" nextest)
-  echo "effective: nextest $NEXTEST_BIN_VER via mise which cargo-nextest"
-elif [ "$BARE_VER" = "$NEXTEST_PIN" ]; then
-  NEXTEST_RUN=("${MISE_EXEC[@]}" cargo-nextest nextest)
-  echo "effective: nextest $BARE_VER via bare cargo-nextest"
-elif [ "$SUB_VER" = "$NEXTEST_PIN" ]; then
-  NEXTEST_RUN=("${MISE_EXEC[@]}" cargo nextest)
-  echo "effective: nextest $SUB_VER via cargo nextest"
+  NEXTEST_DIR="$(dirname "$NEXTEST_BIN")"
+  # Resolve the pinned binary in the child shell using its explicit directory.
+  # shellcheck disable=SC2016
+  NEXTEST_RUN=("${RUST_EXEC[@]}" env "NEXTEST_DIR=$NEXTEST_DIR" sh -c \
+    'PATH="$NEXTEST_DIR:$PATH" exec mbx nextest "$@"' verify-local-nextest)
+  NEXTEST_RUN_VER="$("${NEXTEST_RUN[@]}" --version 2>/dev/null | awk 'NR==1{print $2}')"
+  echo "effective: nextest $NEXTEST_RUN_VER via pinned mise path and MBX"
 else
-  echo "effective: no pinned nextest (bare $BARE_VER, subcommand $SUB_VER, pin $NEXTEST_PIN); nextest is required"
-  fail "toolchain (pinned nextest missing)"
+  echo "effective: no pinned Nextest binary at $NEXTEST_BIN (pin $NEXTEST_PIN)"
+fi
+if ! nextest_route_is_pinned "$NEXTEST_BIN" "$NEXTEST_BIN_VER" "${NEXTEST_RUN_VER:-}" "$NEXTEST_PIN"; then
+  fail "toolchain (pinned Nextest executable or MBX route unavailable; expected $NEXTEST_PIN)"
+  echo "verify-local: FAIL:$FAILURES"
+  exit 1
 fi
 pass "toolchain"
 
 # --- fmt -----------------------------------------------------------------
-stage fmt "${MISE_EXEC[@]}" cargo fmt --all --check
+stage fmt "${RUST_EXEC[@]}" cargo fmt --all --check
+
+# Audit both dependency graphs with pinned cargo-deny 0.20.2.
+# The root and nested workspaces use separate lockfiles and policies.
+stage root-deny "${RUST_EXEC[@]}" "$CARGO_DENY_BIN" --locked \
+  --manifest-path "$ROOT/Cargo.toml" --config "$ROOT/deny.toml" check
 
 # Nested runner workspace. Root `cargo --workspace` excludes it
-# (`exclude = ["crates/velnor-runner"]`). cargo-deny 0.20.2 matches
-# `CARGO_DENY_VERSION`; pass its own lockfile and scoped policy explicitly.
+# (`exclude = ["crates/velnor-runner"]`). Pass its lockfile and scoped policy explicitly.
 RUNNER_MANIFEST="crates/velnor-runner/Cargo.toml"
 if [ -f "$RUNNER_MANIFEST" ]; then
-  stage runner-fmt "${MISE_EXEC[@]}" cargo fmt --manifest-path "$RUNNER_MANIFEST" --all -- --check
-  stage runner-clippy "${MISE_EXEC[@]}" cargo clippy --manifest-path "$RUNNER_MANIFEST" --locked --workspace --all-targets -- -D warnings
+  stage runner-fmt "${RUST_EXEC[@]}" cargo fmt --manifest-path "$RUNNER_MANIFEST" --all -- --check
+  stage runner-clippy "${RUST_EXEC[@]}" mbx clippy --manifest-path "$RUNNER_MANIFEST" --locked --workspace --all-targets -- -D warnings
   stage runner-nextest "${NEXTEST_RUN[@]}" run --manifest-path "$RUNNER_MANIFEST" --locked --workspace
-  stage runner-doctest "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace --doc
-  # Invoke the pinned binary. A cargo shim can reject the deny subcommand.
-  stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo-deny --locked --manifest-path "$RUNNER_MANIFEST" --config "crates/velnor-runner/deny.toml" check
+  stage runner-doctest "${RUST_EXEC[@]}" mbx test --manifest-path "$RUNNER_MANIFEST" --locked --workspace --doc
+  stage runner-deny "${RUST_EXEC[@]}" "$CARGO_DENY_BIN" --locked \
+    --manifest-path "$ROOT/$RUNNER_MANIFEST" --config "$ROOT/crates/velnor-runner/deny.toml" check
+else
+  fail "runner-workspace (manifest missing: $RUNNER_MANIFEST)"
 fi
 
 # --- repo policy -----------------------------------------------------------
-stage repo-policy "${MISE_EXEC[@]}" bash scripts/check-freshness.sh
+stage repo-policy repo_policy freshness
 
 # --- generated-tree freshness ----------------------------------------------
 GEN_DIR=""
@@ -247,7 +332,7 @@ else
     fail "generated-selector (log: $GENERATED_SELECTOR_LOG)"
   fi
   echo "--- verify-local: generated-tree"
-  if "${MISE_EXEC[@]}" cargo build --locked --message-format=json-render-diagnostics \
+  if "${RUST_EXEC[@]}" mbx build --locked --message-format=json-render-diagnostics \
     -p velnor-actions-cli --bin velnor-actions \
     >"$GENERATED_ARTIFACTS" \
     2>"$GENERATED_BUILD_LOG"; then
@@ -282,7 +367,7 @@ if [ -z "$MEMBERS" ]; then
 else
   for member in $MEMBERS; do
     safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
-    stage "clippy-$safe" "${MISE_EXEC[@]}" cargo clippy --locked -p "$member" --all-targets -- -D warnings
+    stage "clippy-$safe" "${RUST_EXEC[@]}" mbx clippy --locked -p "$member" --all-targets -- -D warnings
   done
   for member in $MEMBERS; do
     safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
@@ -297,7 +382,7 @@ else
       safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
       case " $LIB_MEMBERS " in
         *" $member "*)
-          stage "doctest-$safe" "${MISE_EXEC[@]}" cargo test --locked -p "$member" --doc
+          stage "doctest-$safe" "${RUST_EXEC[@]}" mbx test --locked -p "$member" --doc
           ;;
         *)
           echo "skip: doctest-$safe (no library targets)"
@@ -307,7 +392,7 @@ else
   fi
   for member in $MEMBERS; do
     safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
-    stage "doc-$safe" "${MISE_EXEC[@]}" cargo doc --locked --offline -p "$member" --no-deps
+    stage "doc-$safe" "${RUST_EXEC[@]}" mbx doc --locked --offline -p "$member" --no-deps
   done
 fi
 

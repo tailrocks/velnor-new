@@ -137,7 +137,7 @@ the Cargo-profile task job.
 8. `Unit and integration tests`: run the detected test runner for this
    workspace. Nextest is selected only with explicit project usage; otherwise
    invoke `cargo test`. V1 uses one command per package/configuration.
-9. `Doctests`: run `cargo test --doc` through the selected compile driver.
+9. `Doctests`: run the selected compile driver's doctest command.
 11. `Documentation`: build package docs with rustdoc warnings denied.
 12. `Save eligible caches`: save only permitted immutable snapshots.
 13. `Report timings and reuse`: write the final machine-readable report.
@@ -148,6 +148,9 @@ obligations. Test build and test execution steps MUST NOT run for a package whos
 the [parallelism and affected-work contract](parallelism-and-selection-contract.md) for native
 background/wait groups, resource bounds, exact baseline coverage, and complete test partitioning.
 Formatting runs once in `plan` unless the package has an explicit formatting configuration.
+
+Nextest does not run doctests. The MBX profile uses `mbx test --doc` as the
+doctest harness. The Cargo profile uses its command in the table below.
 
 All compile and test commands run through exact Velnor-pinned Mise tools with
 project config, env files, and hooks disabled. The Rust adapter records one
