@@ -9,8 +9,10 @@ use super::runs_on::{
 };
 use super::workflow::RUNNER_LABEL_CATALOG;
 use crate::errors::ContractError;
+mod validation;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use validation::{is_source_sha, missing};
 
 /// Profile id migration writes for GitHub-hosted runs.
 pub const HOSTED_PROFILE_ID: &str = "hosted";
@@ -390,17 +392,6 @@ impl ExecutionProfile {
     }
 }
 
-fn is_source_sha(value: &str) -> bool {
-    value.len() == 40
-        && value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
 #[cfg(test)]
 #[path = "execution_tests.rs"]
 mod tests;
-
-fn missing(key: &str) -> ContractError {
-    ContractError::config("config.toml", key, "missing")
-}
