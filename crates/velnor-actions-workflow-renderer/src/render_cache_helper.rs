@@ -33,7 +33,7 @@ pub(super) fn insert_verified_cache_helper(
         )));
     }
     if !actual.is_empty() {
-        if actual.as_slice() != helper_steps.as_slice() {
+        if !same_cache_helper_steps(actual.as_slice(), helper_steps.as_slice()) {
             return Err(RenderError::InvalidWorkflow(format!(
                 "cache_helper_map_mismatch:{job_id}"
             )));
@@ -58,6 +58,20 @@ pub(super) fn insert_verified_cache_helper(
         job.steps.insert(checkout_at + 1 + offset, step);
     }
     Ok(())
+}
+
+fn same_cache_helper_steps(
+    actual: &[velnor_actions_contract::Step],
+    expected: &[velnor_actions_contract::Step],
+) -> bool {
+    actual.len() == expected.len()
+        && actual.iter().zip(expected).all(|(actual, expected)| {
+            let mut actual = actual.clone();
+            let mut expected = expected.clone();
+            actual.name.clear();
+            expected.name.clear();
+            actual == expected
+        })
 }
 
 fn is_verified_cache_helper_step(step: &velnor_actions_contract::Step) -> bool {

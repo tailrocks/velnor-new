@@ -117,6 +117,20 @@ fn rejects_a_different_acquire_step_even_when_its_role_is_present() {
 }
 
 #[test]
+fn accepts_a_matching_acquire_with_a_different_display_name() {
+    let expected = helper(&"a".repeat(64));
+    let context = context(Some(expected.clone()), true);
+    let mut displayed = expected.clone();
+    displayed.name = "Acquire Velnor from the trusted manifest".to_owned();
+    let mut job = job(vec![checkout(), displayed.clone()]);
+
+    insert_verified_cache_helper("consumer", &mut job, &context)
+        .expect("display names do not define helper behavior");
+
+    assert_eq!(job.steps, [checkout(), displayed]);
+}
+
+#[test]
 fn required_context_rejects_an_existing_helper_without_a_runner_map() {
     let mut job = job(vec![checkout(), helper(&"a".repeat(64))]);
 
