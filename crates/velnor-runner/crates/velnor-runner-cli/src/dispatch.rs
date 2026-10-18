@@ -1,8 +1,9 @@
 //! Parse and print. The host owns mutation.
 
 use std::io::Read;
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::ExitCode;
+use std::process::{Command as ProcessCommand, ExitCode};
 
 use clap::Parser;
 use velnor_runner_host::{
@@ -110,8 +111,13 @@ fn observe(state: &Path) -> Readiness {
 
 fn logs(follow: bool) -> ExitCode {
     let path = crate::service::log_dir().join("host.log");
-    if follow && !path.is_file() {
-        eprintln!("log missing");
+    if follow {
+        if !path.is_file() {
+            eprintln!("log missing");
+            return ExitCode::from(1);
+        }
+        let error = ProcessCommand::new("tail").arg("-F").arg(path).exec();
+        eprintln!("failed to follow log: {error}");
         return ExitCode::from(1);
     }
     println!("{}", path.display());

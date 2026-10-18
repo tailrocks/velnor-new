@@ -66,7 +66,7 @@ pub enum Command {
     },
     /// Print the log path.
     Logs {
-        /// Follow is refused when the log is absent.
+        /// Follow log output.
         #[arg(long)]
         follow: bool,
     },
