@@ -15,6 +15,21 @@ use velnor_actions_orchestrator::decisions::{
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_orch_plansel::merge_status;
 
+/// Complete merge validator inventory for each job emitted by the plan.
+fn successful_job_inventory(
+    plan: &velnor_actions_contract::Plan,
+) -> (Vec<String>, Vec<serde_json::Value>) {
+    let mut ids = vec!["plan".to_owned()];
+    ids.extend(plan.matrix.include.iter().map(|entry| entry.job_id.clone()));
+    ids.sort();
+    ids.dedup();
+    let jobs = ids
+        .iter()
+        .map(|job_id| serde_json::json!({"job_id": job_id, "conclusion": "success"}))
+        .collect();
+    (ids, jobs)
+}
+
 /// Baseline inputs: eligible for reuse or coverage.
 fn open_inputs() -> ObligationInputs {
     ObligationInputs {
@@ -276,7 +291,12 @@ fn sequential_reference_merges_clean() -> TestResult {
     use velnor_actions_orchestrator::schedule::sequential_reference;
     let (_repo, plan) = plan_for_source_change()?;
     let reports = passing_reports(&plan)?;
-    let extra = serde_json::json!({"reference_task_ids": sequential_reference(&plan.task_ids)});
+    let (required_job_ids, required_jobs) = successful_job_inventory(&plan);
+    let extra = serde_json::json!({
+        "reference_task_ids": sequential_reference(&plan.task_ids),
+        "required_job_ids": required_job_ids,
+        "required_jobs": required_jobs,
+    });
     assert_eq!(
         merge_status(&plan, &reports, &[], &extra)?,
         FinalStatus::Passed
@@ -293,8 +313,13 @@ fn not_selected_tasks_fold_to_blocked() -> TestResult {
     first.executed = 0;
     first.not_selected = 1;
     first.validate()?;
+    let (required_job_ids, required_jobs) = successful_job_inventory(&plan);
+    let extra = serde_json::json!({
+        "required_job_ids": required_job_ids,
+        "required_jobs": required_jobs,
+    });
     assert_eq!(
-        merge_status(&plan, &reports, &[], &serde_json::json!({}))?,
+        merge_status(&plan, &reports, &[], &extra)?,
         FinalStatus::Blocked
     );
     Ok(())

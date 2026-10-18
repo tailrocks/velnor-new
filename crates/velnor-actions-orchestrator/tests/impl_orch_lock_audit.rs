@@ -10,7 +10,7 @@ use crate::impl_common::{TestResult, config_with_branch, make_repo, plan_for};
 
 /// Consumer fixture install set: plan + crate + required Prepare tools.
 const PINS: [(&str, &str); 5] = [
-    ("rust", "1.98.1"),
+    ("rust", velnor_actions_mise::RUST_VERSION),
     ("actionlint", "1.7.12"),
     ("shellcheck", "0.11.0"),
     ("zizmor", "1.31.1"),
@@ -80,7 +80,7 @@ fn missing_lock_advises_and_generates() -> TestResult {
         .ok_or("missing-lock summary")?;
     assert!(summary.contains("no mise.lock"), "{summary}");
     for tool in [
-        "rust@1.98.1",
+        &format!("rust@{}", velnor_actions_mise::RUST_VERSION),
         "actionlint@1.7.12",
         "shellcheck@0.11.0",
         "zizmor@1.31.1",
@@ -104,7 +104,13 @@ fn full_lock_leaves_only_rust_unverifiable() -> TestResult {
         .iter()
         .find(|line| line.contains("tool_install_unverified"))
         .ok_or("rust-only summary")?;
-    assert!(summary.contains("rust@1.98.1(no_checksums)"), "{summary}");
+    assert!(
+        summary.contains(&format!(
+            "rust@{}(no_checksums)",
+            velnor_actions_mise::RUST_VERSION
+        )),
+        "{summary}"
+    );
     for covered in ["actionlint", "shellcheck", "zizmor", "gh@"] {
         assert!(!summary.contains(covered), "{summary}");
     }
