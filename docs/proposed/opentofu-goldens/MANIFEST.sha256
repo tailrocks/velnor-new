@@ -121,12 +121,12 @@ e05d7e7b3c14aaa3bcc4b6ed89747405c21f46683527818bdc238c98c331591d  ./dogfood/prev
 734d8b6c521e6f83659148066440d3cdfb5b6f21432ce9fe74bcbbb78dab8487  ./dogfood/preview/.github/velnor/task-execution-manifest-v1.json
 828da1ce39fa53549a9a77242ded20af0e7fdc0e8e035aac7367e95007eff2b4  ./dogfood/preview/.github/workflows/ci.yml
 c85eb358536b9aa91fb715b6743f320cc853a393bb53824e4eeaca5c124c3bf4  ./dogfood/preview/.github/workflows/freshness.yml
-7c70fa3102958220267a5393462eeb94ae352d109be08719419b768e7126e134  ./dogfood/preview/.github/workflows/product-release-binary.yml
+8e8c3100e4febbbad5b739995c7bf069967810379051694e7f6da6070d5c1fd8  ./dogfood/preview/.github/workflows/product-release-binary.yml
 9a598d77a3130d17ab48c44e5f858dc77d2f966316f74f8d835817574ea5b1f6  ./dogfood/preview/.github/workflows/product-release-generator.yml
-7b8d1e4a079214962158678a27eba48b0f5a0399c739d2e034ded12a93499d96  ./dogfood/preview/.github/workflows/product-release-images.yml
+b8ed901a2b65f051553211ba9f2a4587bdcb40d0c5a03e00ff157903d17c9484  ./dogfood/preview/.github/workflows/product-release-images.yml
 ac0854af843769ad7103c10a4fd5adf1d5d36d8cb28d2a94c917f41cc40c94ae  ./dogfood/preview/.github/workflows/product-release.yml
 0180f7d7c44d84cda03e893da4dae4205b605df68553e94f6107f1eb0f706307  ./dogfood/preview/.github/workflows/qualification.yml
-ce28d6e849fc726ada3be66aa177204d42200e224461b6040ecbb41cb3ece2ff  ./dogfood/tree.sha256
+361c26516d550322795246d9b9cf9169b2d091b2371ace75cfc86a699a5c6e9a  ./dogfood/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/generate.exit
 c83441390123e74310f47f7cae62c277ab09f764642906ec4b7111a8da5b4444  ./empty-suite/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt

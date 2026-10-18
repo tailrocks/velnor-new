@@ -1,4 +1,4 @@
-use super::{Yaml, gh_function, gh_function_with_timeout};
+use super::{Yaml, gh_confirmation_function, gh_function, gh_function_with_timeout};
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -122,6 +122,54 @@ fn bounded_gh_function_terminates_a_hung_request() -> Result<(), Box<dyn Error>>
         started.elapsed() >= std::time::Duration::from_secs(1),
         "hung request returned before its one-second budget"
     );
+    Ok(())
+}
+
+#[test]
+fn confirmation_deadline_is_inherited_and_clamps_inflight_cleanup() -> Result<(), Box<dyn Error>> {
+    let scratch = Scratch::new()?;
+    let mock_bin = scratch.0.join("mock-bin");
+    fs::create_dir(&mock_bin)?;
+    write_executable(
+        &mock_bin.join("mise"),
+        "#!/bin/sh\ntrap '' TERM\nexec sleep 30\n",
+    )?;
+    let function = gh_confirmation_function(&pinned_gh_argv())?;
+    let script = format!(
+        "{function}\ndeadline=$((SECONDS + 7)); sleep 1\nparent_seconds=$SECONDS\n(( parent_seconds >= 1 )) || exit 99\n( test \"$SECONDS\" -ge \"$parent_seconds\" ) || exit 99\ngh_until \"$deadline\" release verify fixture"
+    );
+    let started = std::time::Instant::now();
+    let output = Command::new("bash")
+        .args(["-e", "-c", &script])
+        .env("PATH", path_with(&mock_bin)?)
+        .output()?;
+    assert_eq!(output.status.code(), Some(124));
+    assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    assert!(started.elapsed() >= std::time::Duration::from_secs(6));
+    Ok(())
+}
+
+#[test]
+fn expired_confirmation_deadline_never_invokes_gh() -> Result<(), Box<dyn Error>> {
+    let scratch = Scratch::new()?;
+    let mock_bin = scratch.0.join("mock-bin");
+    fs::create_dir(&mock_bin)?;
+    let marker = scratch.0.join("invoked");
+    write_executable(
+        &mock_bin.join("mise"),
+        &format!("#!/bin/sh\ntouch '{}'\n", marker.display()),
+    )?;
+    let function = gh_confirmation_function(&pinned_gh_argv())?;
+    let output = Command::new("bash")
+        .args([
+            "-e",
+            "-c",
+            &format!("{function}\ngh_until \"$SECONDS\" release verify fixture"),
+        ])
+        .env("PATH", path_with(&mock_bin)?)
+        .output()?;
+    assert_eq!(output.status.code(), Some(124));
+    assert!(!marker.exists());
     Ok(())
 }
 

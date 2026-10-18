@@ -92,6 +92,81 @@ fn publisher_creates_exact_tag_after_eligibility_then_publishes_verified_assets(
     assert!(result.calls.contains("--source-ref refs/heads/main"));
     assert!(result.calls.contains("--signer-digest"));
     assert!(result.calls.contains("--source-digest"));
+    assert_eq!(result.calls.matches("gh release verify ").count(), 1);
+    assert_single_publication(&result.calls);
+    Ok(())
+}
+
+fn assert_single_publication(calls: &str) {
+    for command in [
+        " -X POST ",
+        "release create ",
+        "release upload ",
+        "release edit ",
+    ] {
+        assert_eq!(calls.matches(command).count(), 1, "{calls}");
+    }
+}
+
+#[test]
+fn delayed_release_attestation_retries_only_confirmation() -> Result<(), Box<dyn Error>> {
+    let fixture = Fixture::new(Family::Binary, "verify-delayed")?;
+    fixture.create_build_assets()?;
+    let result = fixture.run(
+        family::publish_script(Family::Binary, &test_pins())?,
+        Some("build"),
+    )?;
+    assert!(result.success, "{}", result.stderr);
+    assert_single_publication(&result.calls);
+    assert_eq!(result.calls.matches("gh release verify ").count(), 3);
+    assert_eq!(result.calls.matches("gh release verify-asset ").count(), 2);
+    assert_order(&result.calls, "release edit", "release verify ")?;
+    assert_order(&result.calls, "release verify ", "release verify-asset ")?;
+    Ok(())
+}
+
+#[test]
+fn exhausted_confirmation_fails_without_republishing_or_accepting_assets()
+-> Result<(), Box<dyn Error>> {
+    let fixture = Fixture::new(Family::Binary, "verify-permanent")?;
+    fixture.create_build_assets()?;
+    let script = family::publish_script(Family::Binary, &test_pins())?;
+    let confirmation = "while (( SECONDS < release_confirmation_deadline )); do";
+    assert_eq!(script.matches(confirmation).count(), 1);
+    // Consume the owner budget in the fixture, without a production override.
+    let script = script.replacen(
+        confirmation,
+        &format!("SECONDS=$((release_confirmation_deadline - 7))\n{confirmation}"),
+        1,
+    );
+    let result = fixture.run(script, Some("build"))?;
+    assert!(!result.success);
+    assert!(result.stderr.contains("confirmation deadline exceeded"));
+    assert_single_publication(&result.calls);
+    assert!(result.calls.contains("gh release verify "));
+    assert!(!result.calls.contains("gh release verify-asset "));
+    assert!(!result.output.contains("action=complete"));
+    Ok(())
+}
+
+#[test]
+fn confirmation_expires_before_the_full_job_allowance() -> Result<(), Box<dyn Error>> {
+    for family_kind in [Family::Binary, Family::Images] {
+        let fixture = Fixture::new(family_kind, "absent")?;
+        fixture.create_build_assets()?;
+        let script = family::publish_script(family_kind, &test_pins())?;
+        let confirmation = "while (( SECONDS < release_confirmation_deadline )); do";
+        assert_eq!(script.matches(confirmation).count(), 1);
+        // Prior publisher work has consumed two minutes. Verification would
+        // otherwise succeed immediately, but must not consume the job reserve.
+        let script = script.replacen(confirmation, &format!("SECONDS=121\n{confirmation}"), 1);
+        let result = fixture.run(script, Some("build"))?;
+        assert!(!result.success);
+        assert!(result.stderr.contains("confirmation deadline exceeded"));
+        assert_single_publication(&result.calls);
+        assert!(!result.calls.contains("gh release verify "));
+        assert!(!result.calls.contains("gh release verify-asset "));
+    }
     Ok(())
 }
 

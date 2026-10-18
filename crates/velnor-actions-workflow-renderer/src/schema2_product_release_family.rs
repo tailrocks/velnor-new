@@ -10,6 +10,9 @@ use super::release_eligibility as eligibility;
 
 const PREPARE_TEMPLATE: &str = include_str!("schema2_release_prepare.sh");
 const PUBLISH_TEMPLATE: &str = include_str!("schema2_release_publish.sh");
+// Limit release confirmation to 120 seconds.
+// Keep the five-minute job limit for all other work.
+const RELEASE_CONFIRMATION_BUDGET_SECONDS: u16 = 120;
 
 /// Stable ID for the legacy family publisher before typed composition.
 pub(super) const PUBLISH_STEP_ID: &str = "publish-family-release";
@@ -176,6 +179,14 @@ pub(super) fn publish_script(
     }
     let gh_function = super::generator_release::gh_function(pins)?;
     Ok(PUBLISH_TEMPLATE
+        .replace(
+            "@CONFIRMATION_GH_FUNCTION@",
+            &super::generator_release::gh_confirmation_function(pins)?,
+        )
+        .replace(
+            "@RELEASE_BUDGET_SECONDS@",
+            &RELEASE_CONFIRMATION_BUDGET_SECONDS.to_string(),
+        )
         .replace("@GH_FUNCTION@", &gh_function)
         .replace(
             "@ELIGIBILITY_SCRIPT@",

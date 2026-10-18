@@ -113,8 +113,8 @@ e05d7e7b3c14aaa3bcc4b6ed89747405c21f46683527818bdc238c98c331591d  ./.github/acti
 734d8b6c521e6f83659148066440d3cdfb5b6f21432ce9fe74bcbbb78dab8487  ./.github/velnor/task-execution-manifest-v1.json
 828da1ce39fa53549a9a77242ded20af0e7fdc0e8e035aac7367e95007eff2b4  ./.github/workflows/ci.yml
 c85eb358536b9aa91fb715b6743f320cc853a393bb53824e4eeaca5c124c3bf4  ./.github/workflows/freshness.yml
-7c70fa3102958220267a5393462eeb94ae352d109be08719419b768e7126e134  ./.github/workflows/product-release-binary.yml
+8e8c3100e4febbbad5b739995c7bf069967810379051694e7f6da6070d5c1fd8  ./.github/workflows/product-release-binary.yml
 9a598d77a3130d17ab48c44e5f858dc77d2f966316f74f8d835817574ea5b1f6  ./.github/workflows/product-release-generator.yml
-7b8d1e4a079214962158678a27eba48b0f5a0399c739d2e034ded12a93499d96  ./.github/workflows/product-release-images.yml
+b8ed901a2b65f051553211ba9f2a4587bdcb40d0c5a03e00ff157903d17c9484  ./.github/workflows/product-release-images.yml
 ac0854af843769ad7103c10a4fd5adf1d5d36d8cb28d2a94c917f41cc40c94ae  ./.github/workflows/product-release.yml
 0180f7d7c44d84cda03e893da4dae4205b605df68553e94f6107f1eb0f706307  ./.github/workflows/qualification.yml

@@ -48,6 +48,35 @@ pub(super) fn gh_function(argv: &[String]) -> Result<String, RenderError> {
     gh_function_with_timeout(argv, GH_COMMAND_TIMEOUT_SECONDS)
 }
 
+pub(super) fn gh_confirmation_function(argv: &[String]) -> Result<String, RenderError> {
+    let executable = join_argv_for_run(argv)?;
+    Ok(r#"gh_until() {
+  local _velnor_deadline="$1"
+  shift
+  (
+    _velnor_remaining=$((_velnor_deadline - SECONDS))
+    (( _velnor_remaining > 0 )) || exit 124
+    _velnor_timeout=@TIMEOUT@
+    _velnor_kill_after=@KILL_AFTER@
+    if (( _velnor_remaining < _velnor_timeout + _velnor_kill_after )); then
+      _velnor_kill_after=$(( _velnor_remaining < _velnor_kill_after ? _velnor_remaining : _velnor_kill_after ))
+      _velnor_timeout=$((_velnor_remaining - _velnor_kill_after))
+    fi
+    @EXECUTABLE@ "$@" & _velnor_gh_pid=$!
+    ( sleep "$_velnor_timeout"; kill -TERM "$_velnor_gh_pid" 2>/dev/null; sleep "$_velnor_kill_after"; kill -KILL "$_velnor_gh_pid" 2>/dev/null ) </dev/null >/dev/null 2>&1 & _velnor_gh_watch=$!
+    _velnor_gh_status=0
+    wait "$_velnor_gh_pid" || _velnor_gh_status=$?
+    kill -KILL "$_velnor_gh_watch" 2>/dev/null || true
+    wait "$_velnor_gh_watch" 2>/dev/null || true
+    (( SECONDS < _velnor_deadline )) || exit 124
+    exit "$_velnor_gh_status"
+  ) </dev/null
+}"#
+        .replace("@EXECUTABLE@", &executable)
+        .replace("@TIMEOUT@", &GH_COMMAND_TIMEOUT_SECONDS.to_string())
+        .replace("@KILL_AFTER@", &GH_COMMAND_KILL_AFTER_SECONDS.to_string()))
+}
+
 fn gh_function_with_timeout(argv: &[String], timeout_seconds: u16) -> Result<String, RenderError> {
     let executable = join_argv_for_run(argv)?;
     let kill_after_seconds = GH_COMMAND_KILL_AFTER_SECONDS;
