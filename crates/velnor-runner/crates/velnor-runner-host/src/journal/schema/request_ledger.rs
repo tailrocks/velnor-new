@@ -45,7 +45,7 @@ pub(super) async fn upgrade_cleaned_runner_state(
         .await
         .map_err(|_| HostError::Journal)?;
     conn.execute(
-        "INSERT INTO connection_runner_jits_v11 (intent_id, connection_id, scale_set_id, witness_request_id, requested_name, state, runner_id, runner_name, started_request_id, completed_request_id) SELECT intent_id, connection_id, scale_set_id, witness_request_id, requested_name, state, runner_id, runner_name, started_request_id, completed_request_id FROM connection_runner_jits",
+        "INSERT INTO connection_runner_jits_v11 (intent_id, connection_id, scale_set_id, witness_request_id, requested_name, state, runner_id, runner_name, started_request_id, completed_request_id) SELECT j.intent_id, j.connection_id, j.scale_set_id, j.witness_request_id, j.requested_name, CASE WHEN j.state = 'ready' AND j.runner_id IS NOT NULL AND j.runner_name IS NOT NULL AND EXISTS (SELECT 1 FROM connection_intents AS i WHERE i.id = j.intent_id AND i.connection_id = j.connection_id AND i.cleanup_proven = 1) AND EXISTS (SELECT 1 FROM capacity_reservations AS r WHERE r.intent_id = j.intent_id AND r.connection_id = j.connection_id AND r.state = 'released' AND r.remote_cleanup_proven = 1 AND r.local_cleanup_proven = 1) THEN 'cleaned' ELSE j.state END, j.runner_id, j.runner_name, j.started_request_id, j.completed_request_id FROM connection_runner_jits AS j",
         (),
     )
     .await

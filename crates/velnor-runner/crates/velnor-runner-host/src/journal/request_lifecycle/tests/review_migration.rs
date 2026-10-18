@@ -40,6 +40,50 @@ async fn version_ten_migration_preserves_ready_runner_and_capacity_charge() -> R
 }
 
 #[tokio::test]
+async fn version_ten_ready_runner_with_both_cleanup_proofs_allows_replacement_jit()
+-> Result<(), HostError> {
+    let fixture = ready().await?;
+    let reservation = fixture
+        .scope
+        .reservation(&fixture.physical)
+        .await?
+        .ok_or(HostError::Journal)?;
+    fixture
+        .scope
+        .record_remote_cleanup(reservation.reservation_id)
+        .await?;
+    fixture
+        .scope
+        .record_local_cleanup(reservation.reservation_id)
+        .await?;
+    let path = fixture.scratch.file();
+    let intent = fixture.intent;
+    let physical = fixture.physical.clone();
+    let binding = fixture.binding.clone();
+    drop(fixture.scope);
+    drop(fixture.journal);
+
+    restore_legacy_ready_state(&path, intent).await?;
+    make_version_ten_jit_schema(&path).await?;
+
+    let journal = Journal::open(&path).await?;
+    let scope = journal.connection_scope(&binding).await?;
+    assert_eq!(
+        scope.reservation(&physical).await?.map(|row| row.state),
+        Some(ReservationState::Released)
+    );
+    let (_replacement, replacement_intent) = physical_intent(&scope, 'f').await?;
+    assert!(
+        scope
+            .claim_runner_jit(replacement_intent, &runner_name('f'))
+            .await?
+            .is_some(),
+        "a known runner with exact released cleanup proof kept its acquired request blocked"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn version_ten_cleaned_runner_migrates_and_allows_new_jit() -> Result<(), HostError> {
     let fixture = ready().await?;
     fixture
@@ -186,4 +230,25 @@ async fn make_version_ten_jit_schema(path: &Path) -> Result<(), HostError> {
         .await
         .map_err(|_| HostError::Journal)?;
     Ok(())
+}
+
+async fn restore_legacy_ready_state(path: &Path, intent_id: i64) -> Result<(), HostError> {
+    let path = path.to_str().ok_or(HostError::Journal)?;
+    let database = turso::Builder::new_local(path)
+        .build()
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let connection = database.connect().map_err(|_| HostError::Journal)?;
+    let changed = connection
+        .execute(
+            "UPDATE connection_runner_jits SET state = 'ready' WHERE intent_id = ?1 AND state = 'cleaned' AND runner_id IS NOT NULL AND runner_name IS NOT NULL AND completed_request_id IS NULL",
+            [intent_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    if changed == 1 {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
 }
