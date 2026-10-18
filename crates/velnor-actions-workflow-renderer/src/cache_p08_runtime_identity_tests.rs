@@ -77,6 +77,7 @@ fn payload_with_specs(runs_on: &str, tool_specs: &[String]) -> ToolsCachePayload
         tool_specs,
         rustup_toolchain: Some("1.98.1"),
         rustup_components: &[],
+        scale_set_image_source_sha: None,
     })
     .expect("typed payload")
 }
@@ -312,6 +313,25 @@ fn generated_identity_actions_bind_each_supported_hosted_lane() -> Result<(), Bo
         )));
         assert_eq!(super::action_uses(lane), Some(uses));
     }
+    Ok(())
+}
+
+#[test]
+fn scale_set_identity_action_requires_and_forwards_its_image_source_pin()
+-> Result<(), Box<dyn Error>> {
+    let lane = "scale-set:velnor+ubuntu-26.04-scale-set";
+    let input = super::TOOLS_CACHE_SCALE_SET_IMAGE_SOURCE_SHA_INPUT;
+    let file = super::action_file(lane, env!("CARGO_PKG_VERSION"))?;
+    assert_eq!(file.path, ".github/actions/scale-set/action.yml");
+    assert!(file.bytes.contains(&format!("  {input}:\n")));
+    assert!(file.bytes.contains(&format!(
+        "VELNOR_CACHE_SCALE_SET_IMAGE_SOURCE_SHA: ${{{{ inputs.{input} }}}}"
+    )));
+    assert_eq!(
+        super::action_uses(lane),
+        Some("./.github/actions/scale-set")
+    );
+    assert!(super::is_supported_lane(lane, "x86_64-unknown-linux-gnu"));
     Ok(())
 }
 

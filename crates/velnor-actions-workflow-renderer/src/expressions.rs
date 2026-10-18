@@ -137,6 +137,7 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
         let composite_input = composite
             && inner.strip_prefix("inputs.").is_some_and(|name| {
                 name == crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT
+                    || name == "scale-set-image-source-sha"
                     || is_task_execution_input(name)
             });
         let workflow_input = !composite && is_workflow_input(inner);

@@ -25,6 +25,7 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         report_helper_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
         scale_set_selector: None,
+        scale_set_image_source_sha: None,
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: checkout_pin(),

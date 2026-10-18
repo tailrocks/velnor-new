@@ -101,6 +101,7 @@ const SCRIPT: &str = concat!(
 );
 
 pub(super) const SCRIPT_PATH: &str = ".github/scripts/velnor-tools-cache-identity.sh";
+pub(super) const TOOLS_CACHE_SCALE_SET_IMAGE_SOURCE_SHA_INPUT: &str = "scale-set-image-source-sha";
 const SCRIPT_FILE_NAME: &str = "velnor-tools-cache-identity.sh";
 pub(super) fn is_supported_lane(runs_on: &str, target: &str) -> bool {
     let (image, arch) = lane_identity(runs_on, target);
@@ -148,9 +149,9 @@ pub(super) fn action_file(runs_on: &str, version: &str) -> Result<RenderedFile, 
         ("name".to_owned(), Yaml::str("Velnor Mise cache identity")),
         (
             "description".to_owned(),
-            Yaml::str("Qualify the hosted image and cache roots before V2 restore."),
+            Yaml::str("Qualify the runner image and cache roots before V2 restore."),
         ),
-        ("inputs".to_owned(), input_entries()),
+        ("inputs".to_owned(), input_entries(runs_on)?),
         ("outputs".to_owned(), outputs),
         (
             "runs".to_owned(),
@@ -168,17 +169,24 @@ pub(super) fn action_file(runs_on: &str, version: &str) -> Result<RenderedFile, 
     })
 }
 
-fn input_entries() -> Yaml {
+fn input_entries(runs_on: &str) -> Result<Yaml, RenderError> {
     let required_input = |description: &str| {
         Yaml::Map(vec![
             ("description".to_owned(), Yaml::str(description)),
             ("required".to_owned(), Yaml::Bool(true)),
         ])
     };
-    Yaml::Map(vec![(
+    let mut inputs = vec![(
         cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT.to_owned(),
         required_input("Static V2 identity of the tool pins and owned paths."),
-    )])
+    )];
+    if is_scale_set_lane(runs_on)? {
+        inputs.push((
+            TOOLS_CACHE_SCALE_SET_IMAGE_SOURCE_SHA_INPUT.to_owned(),
+            required_input("Validated immutable runner-image source SHA."),
+        ));
+    }
+    Ok(Yaml::Map(inputs))
 }
 
 fn output_entries() -> Yaml {
@@ -215,7 +223,7 @@ fn output_entries() -> Yaml {
 fn inner_step(runs_on: &str) -> Result<Step, RenderError> {
     let cargo = "${{ runner.temp }}/velnor/cargo";
     let rustup = "${{ runner.temp }}/velnor/rustup";
-    let env = BTreeMap::from([
+    let mut env = BTreeMap::from([
         ("CARGO_HOME".to_owned(), cargo.to_owned()),
         ("MISE_CARGO_HOME".to_owned(), cargo.to_owned()),
         ("MISE_RUSTUP_HOME".to_owned(), rustup.to_owned()),
@@ -230,6 +238,12 @@ fn inner_step(runs_on: &str) -> Result<Step, RenderError> {
             ),
         ),
     ]);
+    if is_scale_set_lane(runs_on)? {
+        env.insert(
+            "VELNOR_CACHE_SCALE_SET_IMAGE_SOURCE_SHA".to_owned(),
+            format!("${{{{ inputs.{TOOLS_CACHE_SCALE_SET_IMAGE_SOURCE_SHA_INPUT} }}}}"),
+        );
+    }
     let run = vec![
         "bash".to_owned(),
         "-c".to_owned(),
@@ -239,6 +253,9 @@ fn inner_step(runs_on: &str) -> Result<Step, RenderError> {
 }
 
 pub(super) fn action_uses(runs_on: &str) -> Option<&'static str> {
+    if RunsOn::parse(runs_on).ok()?.is_scale_set() {
+        return Some("./.github/actions/scale-set");
+    }
     match hosted_image(runs_on)? {
         "ubuntu22" => Some("./.github/actions/u22"),
         "ubuntu24" => Some("./.github/actions/u24"),
@@ -267,7 +284,16 @@ fn lane_identity(runs_on: &str, target: &str) -> (&'static str, &'static str) {
     if !matches!(target, "x86_64-unknown-linux-gnu") {
         return ("", "");
     }
+    if RunsOn::parse(runs_on).is_ok_and(|runs_on| runs_on.is_scale_set()) {
+        return ("scale-set", "X64");
+    }
     (hosted_image(runs_on).unwrap_or(""), "X64")
+}
+
+fn is_scale_set_lane(runs_on: &str) -> Result<bool, RenderError> {
+    RunsOn::parse(runs_on)
+        .map(|runs_on| runs_on.is_scale_set())
+        .map_err(|error| RenderError::BadCommand(format!("bad_tools_cache_lane:{error}")))
 }
 
 #[cfg(test)]
