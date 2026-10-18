@@ -17,12 +17,13 @@ use crate::journal::{
 };
 use crate::launch::{
     CompletionWorker, ReleaseReadSecret, SelectedEngineContext, SessionDeleteOutcome,
-    SessionRefreshStartupAuthority, delete_removed_connection_session, open_connection_session,
-    poll_scoped_connection_once,
+    SessionRefreshStartupAuthority, VerifiedWorkerImages, delete_removed_connection_session,
+    open_connection_session, poll_scoped_connection_once, prepare_worker_images,
 };
 use crate::launch_blocking::ListenFault;
 use crate::listen::Link;
 use crate::scale_set::{ConnectionSetup, ensure_connection_scale_set};
+use crate::worker::guest_image::{GuestImageFile, write_guest_image};
 
 const CONFIG_RELOAD_PAUSE: Duration = Duration::from_secs(2);
 
@@ -63,7 +64,7 @@ async fn run_controller(
     mut current: HostConfig,
     state: &Path,
     daemon_lock: &DaemonLock,
-    mut _release_read_secret: ReleaseReadSecret,
+    release_read_secret: ReleaseReadSecret,
 ) -> Result<(), ListenFault> {
     let state_root = std::fs::canonicalize(state).map_err(|_| HostError::Path)?;
     if !state_root.is_dir() {
@@ -122,8 +123,18 @@ async fn run_controller(
     journal
         .recover_interrupted_session_refreshes(startup_authority)
         .await?;
-    let mut connection_sessions =
-        prepare_active_connections(&journal, &current, &selected_engine, &docker).await?;
+    let worker_images =
+        prepare_worker_images(&docker, &journal, &selected_engine, &release_read_secret).await?;
+    drop(release_read_secret);
+    let mut connection_sessions = prepare_active_connections(
+        state,
+        &journal,
+        &current,
+        &selected_engine,
+        &worker_images,
+        &docker,
+    )
+    .await?;
     let (_server, control_state) = ControlServer::start(state, journal.clone(), &current)?;
     let mut pending_retirements = Vec::new();
     discover_retirements(state, &current, &mut pending_retirements);
@@ -148,6 +159,7 @@ async fn run_controller(
             journal: &journal,
             control_state: &control_state,
             selected_engine: &selected_engine,
+            worker_images: &worker_images,
             docker: &docker,
             connection_sessions: &mut connection_sessions,
         };
@@ -155,11 +167,10 @@ async fn run_controller(
             && next != current
         {
             match ReleaseReadSecret::load(&next) {
-                Ok(next_secret) => {
+                Ok(_next_secret) => {
                     match apply_config_transition(&current, &next, &mut effects).await {
                         Ok(removed) => {
                             current = next;
-                            _release_read_secret = next_secret;
                             pending_retirements.extend(removed);
                         }
                         Err(error) => {
@@ -175,8 +186,13 @@ async fn run_controller(
             eprintln!("host controller connection retirement held: {error}");
         }
         drop(effects);
-        if let Err(error) =
-            poll_active_connections(&current, &pending_retirements, &mut connection_sessions).await
+        if let Err(error) = poll_active_connections(
+            &current,
+            &pending_retirements,
+            &mut connection_sessions,
+            &worker_images,
+        )
+        .await
         {
             eprintln!("host controller zero-header polling held: {error}");
         }
@@ -187,6 +203,7 @@ async fn poll_active_connections(
     config: &HostConfig,
     pending_retirements: &[RepositoryConnection],
     connections: &mut Vec<PreparedConnection>,
+    worker_images: &VerifiedWorkerImages,
 ) -> Result<(), HostError> {
     let mut index = 0;
     while index < connections.len() {
@@ -197,6 +214,19 @@ async fn poll_active_connections(
                 .iter()
                 .any(|binding| prepared.is_for(binding))
         {
+            index += 1;
+            continue;
+        }
+        if prepared
+            .guest_image
+            .runner_bind(&prepared.binding, worker_images)
+            .is_err()
+        {
+            eprintln!(
+                "host controller guest image metadata held connection={}",
+                prepared.binding.connection_id
+            );
+            prepared.credentials.take();
             index += 1;
             continue;
         }
@@ -368,14 +398,27 @@ async fn configure_shared_capacity(
 }
 
 async fn prepare_active_connections(
+    state: &Path,
     journal: &Journal,
     config: &HostConfig,
     selected_engine: &SelectedEngineContext,
+    worker_images: &VerifiedWorkerImages,
     docker: &Docker,
 ) -> Result<Vec<PreparedConnection>, ListenFault> {
     let mut prepared = Vec::with_capacity(config.connections().len());
     for binding in config.connections() {
-        prepared.push(prepare_connection(journal, binding, config, selected_engine, docker).await?);
+        prepared.push(
+            prepare_connection(
+                state,
+                journal,
+                binding,
+                config,
+                selected_engine,
+                worker_images,
+                docker,
+            )
+            .await?,
+        );
     }
     Ok(prepared)
 }
@@ -409,6 +452,7 @@ struct PreparedConnection {
     scope: ConnectionJournal,
     set_id: i64,
     session_intent: i64,
+    guest_image: GuestImageFile,
     completion: Option<CompletionWorker>,
     credentials: Option<SessionCredentials>,
 }
@@ -425,10 +469,12 @@ impl PreparedConnection {
 }
 
 async fn prepare_connection(
+    state: &Path,
     journal: &Journal,
     binding: &RepositoryConnection,
     config: &HostConfig,
     selected_engine: &SelectedEngineContext,
+    worker_images: &VerifiedWorkerImages,
     docker: &Docker,
 ) -> Result<PreparedConnection, ListenFault> {
     bind_connection(journal, binding, config, selected_engine).await?;
@@ -452,6 +498,8 @@ async fn prepare_connection(
     {
         return Err(HostError::Ownership.into());
     }
+    let guest_image = write_guest_image(state, binding, worker_images)?;
+    guest_image.runner_bind(binding, worker_images)?;
     let completion = CompletionWorker::start_scoped(
         scoped.clone(),
         docker.clone(),
@@ -465,6 +513,7 @@ async fn prepare_connection(
         scope: scoped,
         set_id: set.id,
         session_intent,
+        guest_image,
         completion: Some(completion),
         credentials: Some(SessionCredentials { link, session }),
     })
@@ -545,6 +594,7 @@ struct JournalEffects<'a> {
     journal: &'a Journal,
     control_state: &'a ControlState,
     selected_engine: &'a SelectedEngineContext,
+    worker_images: &'a VerifiedWorkerImages,
     docker: &'a Docker,
     connection_sessions: &'a mut Vec<PreparedConnection>,
 }
@@ -567,10 +617,12 @@ impl TransitionEffects for JournalEffects<'_> {
             return bind_connection(self.journal, binding, config, self.selected_engine).await;
         }
         let prepared = prepare_connection(
+            self.state,
             self.journal,
             binding,
             config,
             self.selected_engine,
+            self.worker_images,
             self.docker,
         )
         .await
