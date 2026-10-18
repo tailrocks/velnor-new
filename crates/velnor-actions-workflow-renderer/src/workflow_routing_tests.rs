@@ -89,6 +89,117 @@ fn matrix_runner_values_are_resolved_and_darwin_is_explicit() {
 }
 
 #[test]
+fn matrix_runner_axis_remains_in_scope_when_include_is_present() {
+    let runner_job = Yaml::Map(vec![
+        ("runs-on".to_owned(), Yaml::str("${{ matrix.runner }}")),
+        (
+            "strategy".to_owned(),
+            Yaml::Map(vec![(
+                "matrix".to_owned(),
+                Yaml::Map(vec![
+                    (
+                        "runner".to_owned(),
+                        Yaml::Seq(vec![Yaml::str("ubuntu-26.04"), Yaml::str("macos-26")]),
+                    ),
+                    (
+                        "include".to_owned(),
+                        Yaml::Seq(vec![Yaml::Map(vec![(
+                            "runner".to_owned(),
+                            Yaml::str("ubuntu-26.04"),
+                        )])]),
+                    ),
+                ]),
+            )]),
+        ),
+    ]);
+    let error = route_workflow_yaml(
+        "owned-tools.yml",
+        workflow(vec![("build", runner_job)]),
+        &scale_set(),
+    )
+    .expect_err("matrix axis must be checked alongside included values");
+    assert_eq!(
+        error,
+        RenderError::InvalidWorkflow(
+            "unsupported_darwin_workload:owned-tools.yml:build:macos-26".to_owned()
+        )
+    );
+}
+
+#[test]
+fn unresolved_matrix_include_runner_fails_closed() {
+    let runner_job = Yaml::Map(vec![
+        ("runs-on".to_owned(), Yaml::str("${{ matrix.runner }}")),
+        (
+            "strategy".to_owned(),
+            Yaml::Map(vec![(
+                "matrix".to_owned(),
+                Yaml::Map(vec![(
+                    "include".to_owned(),
+                    Yaml::Seq(vec![
+                        Yaml::Map(vec![("runner".to_owned(), Yaml::str("ubuntu-26.04"))]),
+                        Yaml::Map(vec![(
+                            "target".to_owned(),
+                            Yaml::str("x86_64-unknown-linux-gnu"),
+                        )]),
+                    ]),
+                )]),
+            )]),
+        ),
+    ]);
+    let error = route_workflow_yaml(
+        "owned-tools.yml",
+        workflow(vec![("build", runner_job)]),
+        &scale_set(),
+    )
+    .expect_err("every include-only row must resolve the runner expression");
+    assert_eq!(
+        error,
+        RenderError::InvalidWorkflow(
+            "matrix_runner_value_missing:owned-tools.yml:build:runner".to_owned()
+        )
+    );
+}
+
+#[test]
+fn matrix_runner_exclusions_fail_closed() {
+    let runner_job = Yaml::Map(vec![
+        ("runs-on".to_owned(), Yaml::str("${{ matrix.runner }}")),
+        (
+            "strategy".to_owned(),
+            Yaml::Map(vec![(
+                "matrix".to_owned(),
+                Yaml::Map(vec![
+                    (
+                        "runner".to_owned(),
+                        Yaml::Seq(vec![Yaml::str("ubuntu-26.04")]),
+                    ),
+                    (
+                        "exclude".to_owned(),
+                        Yaml::Seq(vec![Yaml::Map(vec![(
+                            "runner".to_owned(),
+                            Yaml::str("ubuntu-26.04"),
+                        )])]),
+                    ),
+                ]),
+            )]),
+        ),
+    ]);
+    let error = route_workflow_yaml(
+        "owned-tools.yml",
+        workflow(vec![("build", runner_job)]),
+        &scale_set(),
+    )
+    .expect_err("excluded matrix choices require expansion before routing");
+    assert_eq!(
+        error,
+        RenderError::InvalidWorkflow(
+            "matrix_runner_exclusions_unsupported:owned-tools.yml:build:runner".to_owned()
+        )
+    );
+}
+
+#[test]
 fn external_reusable_jobs_fail_closed() {
     let workflow = workflow(vec![(
         "delegate",

@@ -190,24 +190,38 @@ fn matrix_runner_labels(
             ))
         })?;
     let mut labels = Vec::new();
-    if let Some((_, Yaml::Seq(include))) = matrix.iter().find(|(name, _)| name == "include") {
+    let runner_axis = matrix
+        .iter()
+        .find(|(name, _)| name == key)
+        .map(|(_, value)| value);
+    if matrix.iter().any(|(name, _)| name == "exclude") {
+        return Err(invalid(format!(
+            "matrix_runner_exclusions_unsupported:{path}:{job_id}:{key}"
+        )));
+    }
+    if let Some(axis) = runner_axis {
+        labels.extend(matrix_axis_values(axis, path, job_id, key)?);
+    }
+    if let Some((_, include)) = matrix.iter().find(|(name, _)| name == "include") {
+        let Yaml::Seq(include) = include else {
+            return Err(invalid(format!(
+                "matrix_runner_include_invalid:{path}:{job_id}:{key}"
+            )));
+        };
         for row in include {
-            let value = match row {
-                Yaml::Map(entries) => entries
-                    .iter()
-                    .find(|(name, _)| name == key)
-                    .map(|(_, value)| value),
-                _ => None,
+            let Yaml::Map(entries) = row else {
+                return Err(invalid(format!(
+                    "matrix_runner_include_invalid:{path}:{job_id}:{key}"
+                )));
             };
-            if let Some(value) = value {
-                labels.extend(matrix_values(value, path, job_id, key)?);
+            if let Some((_, value)) = entries.iter().find(|(name, _)| name == key) {
+                labels.push(matrix_include_runner(value, path, job_id, key)?);
+            } else if runner_axis.is_none() {
+                return Err(invalid(format!(
+                    "matrix_runner_value_missing:{path}:{job_id}:{key}"
+                )));
             }
         }
-    }
-    if labels.is_empty()
-        && let Some((_, value)) = matrix.iter().find(|(name, _)| name == key)
-    {
-        labels.extend(matrix_values(value, path, job_id, key)?);
     }
     if labels.is_empty() {
         return Err(invalid(format!(
@@ -217,7 +231,7 @@ fn matrix_runner_labels(
     Ok(labels)
 }
 
-fn matrix_values(
+fn matrix_axis_values(
     value: &Yaml,
     path: &str,
     job_id: &str,
@@ -226,7 +240,6 @@ fn matrix_values(
     let values: Vec<&Yaml> = match value {
         Yaml::Seq(values) => values.iter().collect(),
         Yaml::Flow(values) => return Ok(values.clone()),
-        scalar @ (Yaml::Str(_) | Yaml::Quoted(_)) => vec![scalar],
         _ => {
             return Err(invalid(format!(
                 "matrix_runner_value_invalid:{path}:{job_id}:{key}"
@@ -242,6 +255,20 @@ fn matrix_values(
             ))),
         })
         .collect()
+}
+
+fn matrix_include_runner(
+    value: &Yaml,
+    path: &str,
+    job_id: &str,
+    key: &str,
+) -> Result<String, RenderError> {
+    match value {
+        Yaml::Str(value) | Yaml::Quoted(value) => Ok(value.clone()),
+        _ => Err(invalid(format!(
+            "matrix_runner_value_invalid:{path}:{job_id}:{key}"
+        ))),
+    }
 }
 
 fn parsed_hosted_label(value: &str, path: &str, job_id: &str) -> Result<String, RenderError> {
