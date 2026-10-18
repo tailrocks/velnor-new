@@ -36,6 +36,7 @@ where
             super::source::SourceBlock::ClosedWorldUnproven,
         ));
     }
+    validate_scope_binding(connection, scoped, ctx.set_id).await?;
     let Some((batch, request_id)) = assignment(polled)? else {
         return Ok(None);
     };
@@ -48,16 +49,7 @@ where
     lane.on_admin()?;
 
     let physical = runner::reserve(scoped, permit).await?;
-    match acquire::run(
-        lane,
-        ctx.set_id,
-        &ctx.queue_token,
-        scoped,
-        &request,
-        request_id,
-    )
-    .await?
-    {
+    match acquire::run(lane, &ctx.queue_token, scoped, &request).await? {
         acquire::AcquireDisposition::Acquired => {}
         acquire::AcquireDisposition::NoEffect => {
             acquire::release_unstarted(scoped, physical.reservation_id).await?;
@@ -74,7 +66,6 @@ where
     }
     let started = runner::start(
         lane,
-        ctx.set_id,
         &ctx.admin_token,
         scoped,
         &physical,
@@ -107,5 +98,24 @@ fn scoped_context(
         _ => Err(source_blocked(
             super::source::SourceBlock::ClosedWorldUnproven,
         )),
+    }
+}
+
+async fn validate_scope_binding(
+    connection: &crate::config::RepositoryConnection,
+    scoped: &ConnectionJournal,
+    set_id: i64,
+) -> Result<(), EnsureError> {
+    let binding = scoped
+        .source_authorization_binding()
+        .await
+        .map_err(super::map_journal)?;
+    if binding.connection_id() == &connection.connection_id
+        && binding.connection_id() == scoped.connection_id()
+        && binding.scale_set_id() == set_id
+    {
+        Ok(())
+    } else {
+        Err(EnsureError::Uncertain)
     }
 }

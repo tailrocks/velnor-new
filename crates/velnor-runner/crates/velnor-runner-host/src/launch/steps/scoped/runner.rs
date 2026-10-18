@@ -14,6 +14,7 @@ use crate::worker::Started;
 pub(super) struct PhysicalIntent {
     pub(super) reservation_id: i64,
     intent_id: i64,
+    assignment: crate::journal::AssignmentIdentity,
     runner_name: String,
     sample_generation_id: String,
     observation: StartObservationWitness,
@@ -73,6 +74,7 @@ pub(super) async fn reserve(
     Ok(PhysicalIntent {
         reservation_id,
         intent_id,
+        assignment: identity,
         runner_name,
         sample_generation_id,
         observation,
@@ -81,7 +83,6 @@ pub(super) async fn reserve(
 
 pub(super) async fn start<T, S, F>(
     lane: &mut T,
-    set_id: i64,
     admin_token: &str,
     scoped: &ConnectionJournal,
     physical: &PhysicalIntent,
@@ -95,6 +96,16 @@ where
     S: FnOnce(&str, &[u8], crate::launch::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
+    let binding = scoped
+        .source_authorization_binding()
+        .await
+        .map_err(super::super::map_journal)?;
+    if physical.assignment.connection_id() != scoped.connection_id()
+        || physical.assignment.connection_id() != binding.connection_id()
+        || physical.assignment.scale_set_id() != binding.scale_set_id()
+    {
+        return Err(EnsureError::Uncertain);
+    }
     let body = jit_request(&physical.runner_name).map_err(|_| EnsureError::Malformed)?;
     let claim = scoped
         .claim_runner_jit(physical.intent_id, &physical.runner_name)
@@ -117,7 +128,7 @@ where
             .map_err(super::super::map_journal)?;
         return Err(EnsureError::Uncertain);
     }
-    let result = match jit(lane, set_id, admin_token, &body) {
+    let result = match jit(lane, physical.assignment.scale_set_id(), admin_token, &body) {
         Ok(result) => result,
         Err(error) => {
             scoped
@@ -127,7 +138,11 @@ where
             return Err(crate::listen::map_listen(error));
         }
     };
-    if !runner_matches(&result.runner, set_id, &physical.runner_name) {
+    if !runner_matches(
+        &result.runner,
+        physical.assignment.scale_set_id(),
+        &physical.runner_name,
+    ) {
         scoped
             .mark_runner_jit_uncertain(claim)
             .await

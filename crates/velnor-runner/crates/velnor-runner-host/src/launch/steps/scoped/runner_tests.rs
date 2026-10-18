@@ -1,7 +1,9 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use crate::config::ConnectionId;
 use crate::journal::{AssignedAcquireResult, RequestAcquireState};
+use crate::journal::{AssignmentIdentity, AssignmentKey};
 use crate::launch::inspect_tests::DockerStub;
 use crate::launch::resource_probe::StartPermit;
 use crate::worker::Started;
@@ -10,6 +12,7 @@ use velnor_runner_github::Method;
 
 use super::super::acquire::{self, AcquireDisposition};
 use super::super::runner;
+use super::super::validate_scope_binding;
 use support::{
     FakeLane, Fixture, REQUEST_ID, SET_ID, assert_runner_name, docker_identity_stub, exchange,
     selected_engine, test_images,
@@ -17,6 +20,77 @@ use support::{
 
 #[path = "runner_tests/support.rs"]
 mod support;
+
+#[tokio::test]
+async fn acquire_rejects_connection_scale_set_and_request_identity_mismatches_before_http()
+-> Result<(), String> {
+    let fixture = Fixture::open("scoped-identity-mismatch").await?;
+    let mut lane = FakeLane::new([
+        Ok(exchange(200, r#"{"count":1,"value":[41]}"#)),
+        Ok(exchange(200, r#"{"count":1,"value":[41]}"#)),
+        Ok(exchange(200, r#"{"count":1,"value":[41]}"#)),
+    ]);
+
+    let other_connection =
+        ConnectionId::parse("other-connection").map_err(|error| error.to_string())?;
+    let wrong_connection = AssignmentIdentity::new(
+        &other_connection,
+        SET_ID,
+        AssignmentKey::AssignedRequest {
+            request_id: REQUEST_ID,
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    assert!(
+        acquire::run(&mut lane, "queue-token", &fixture.scope, &wrong_connection,)
+            .await
+            .is_err()
+    );
+
+    let connection_id = ConnectionId::parse("scoped-adapter").map_err(|error| error.to_string())?;
+    let wrong_set = AssignmentIdentity::new(
+        &connection_id,
+        SET_ID + 1,
+        AssignmentKey::AssignedRequest {
+            request_id: REQUEST_ID,
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    assert!(
+        acquire::run(&mut lane, "queue-token", &fixture.scope, &wrong_set,)
+            .await
+            .is_err()
+    );
+
+    let wrong_request = AssignmentIdentity::new(
+        &connection_id,
+        SET_ID,
+        AssignmentKey::AssignedRequest {
+            request_id: REQUEST_ID + 1,
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    assert!(
+        acquire::run(&mut lane, "queue-token", &fixture.scope, &wrong_request,)
+            .await
+            .is_err()
+    );
+    assert!(lane.methods.is_empty());
+
+    assert!(
+        validate_scope_binding(&fixture.binding, &fixture.scope, SET_ID + 1)
+            .await
+            .is_err()
+    );
+    let mut wrong_connection_binding = fixture.binding.clone();
+    wrong_connection_binding.connection_id = other_connection;
+    assert!(
+        validate_scope_binding(&wrong_connection_binding, &fixture.scope, SET_ID)
+            .await
+            .is_err()
+    );
+    Ok(())
+}
 
 #[tokio::test]
 async fn exact_acquire_jit_and_bounded_docker_preflight_use_one_physical_nonce()
@@ -45,16 +119,9 @@ async fn exact_acquire_jit_and_bounded_docker_preflight_use_one_physical_nonce()
         )),
     ]);
     assert_eq!(
-        acquire::run(
-            &mut lane,
-            SET_ID,
-            "queue-token",
-            &fixture.scope,
-            &fixture.request,
-            REQUEST_ID,
-        )
-        .await
-        .map_err(|error| error.to_string())?,
+        acquire::run(&mut lane, "queue-token", &fixture.scope, &fixture.request,)
+            .await
+            .map_err(|error| error.to_string())?,
         AcquireDisposition::Acquired
     );
     assert_eq!(
@@ -73,7 +140,6 @@ async fn exact_acquire_jit_and_bounded_docker_preflight_use_one_physical_nonce()
     let callback_calls = Arc::clone(&calls);
     let started = runner::start(
         &mut lane,
-        SET_ID,
         "admin-token",
         &fixture.scope,
         &physical,
@@ -138,16 +204,9 @@ async fn expiry_after_acquire_keeps_charge_and_sends_no_jit_or_docker_request() 
 
     let mut lane = FakeLane::new([Ok(exchange(200, r#"{"count":1,"value":[41]}"#))]);
     assert_eq!(
-        acquire::run(
-            &mut lane,
-            SET_ID,
-            "queue-token",
-            &fixture.scope,
-            &fixture.request,
-            REQUEST_ID,
-        )
-        .await
-        .map_err(|error| error.to_string())?,
+        acquire::run(&mut lane, "queue-token", &fixture.scope, &fixture.request,)
+            .await
+            .map_err(|error| error.to_string())?,
         AcquireDisposition::Acquired
     );
 
@@ -158,7 +217,6 @@ async fn expiry_after_acquire_keeps_charge_and_sends_no_jit_or_docker_request() 
     let callback_calls = Arc::clone(&calls);
     let result = runner::start(
         &mut lane,
-        SET_ID,
         "admin-token",
         &fixture.scope,
         &physical,
@@ -207,16 +265,9 @@ async fn exact_no_effect_releases_only_the_unstarted_physical_charge() -> Result
         .map_err(|error| error.to_string())?;
     let mut lane = FakeLane::new([Ok(exchange(200, r#"{"count":0,"value":[]}"#))]);
     assert_eq!(
-        acquire::run(
-            &mut lane,
-            SET_ID,
-            "queue-token",
-            &fixture.scope,
-            &fixture.request,
-            REQUEST_ID,
-        )
-        .await
-        .map_err(|error| error.to_string())?,
+        acquire::run(&mut lane, "queue-token", &fixture.scope, &fixture.request,)
+            .await
+            .map_err(|error| error.to_string())?,
         AcquireDisposition::NoEffect
     );
     acquire::release_unstarted(&fixture.scope, physical.reservation_id)
@@ -243,16 +294,9 @@ async fn uncertain_acquire_keeps_charge_and_blocks_jit_replay() -> Result<(), St
         .map_err(|error| error.to_string())?;
     let mut lane = FakeLane::new([Err(velnor_runner_github::TransportFail::Timeout)]);
     assert!(
-        acquire::run(
-            &mut lane,
-            SET_ID,
-            "queue-token",
-            &fixture.scope,
-            &fixture.request,
-            REQUEST_ID,
-        )
-        .await
-        .is_err()
+        acquire::run(&mut lane, "queue-token", &fixture.scope, &fixture.request,)
+            .await
+            .is_err()
     );
     assert_eq!(lane.methods, [velnor_runner_github::Method::Post]);
     assert_eq!(fixture.journal.occupied_reservation_count().await, Ok(1));

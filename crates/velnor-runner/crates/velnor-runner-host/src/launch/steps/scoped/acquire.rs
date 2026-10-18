@@ -34,15 +34,24 @@ pub(super) async fn require_authorized(
 
 pub(super) async fn run<T>(
     lane: &mut T,
-    set_id: i64,
     queue_token: &str,
     scoped: &ConnectionJournal,
     identity: &AssignmentIdentity,
-    request_id: i64,
 ) -> Result<AcquireDisposition, EnsureError>
 where
     T: Transport + ?Sized,
 {
+    let request_id = identity.request_id().ok_or(EnsureError::Uncertain)?;
+    let binding = scoped
+        .source_authorization_binding()
+        .await
+        .map_err(super::super::map_journal)?;
+    if identity.connection_id() != scoped.connection_id()
+        || identity.connection_id() != binding.connection_id()
+        || identity.scale_set_id() != binding.scale_set_id()
+    {
+        return Err(EnsureError::Uncertain);
+    }
     require_authorized(scoped, identity).await?;
     if !scoped
         .claim_request_acquire(identity)
@@ -52,9 +61,15 @@ where
         return Err(EnsureError::Uncertain);
     }
     let gate = RefreshGate::new();
-    let result = acquire(lane, set_id, &[request_id], &[], queue_token, &gate, || {
-        Ok::<(), WireError>(())
-    });
+    let result = acquire(
+        lane,
+        identity.scale_set_id(),
+        &[request_id],
+        &[],
+        queue_token,
+        &gate,
+        || Ok::<(), WireError>(()),
+    );
     let (durable, disposition) = classify(&result, request_id);
     scoped
         .record_request_acquire(identity, durable)

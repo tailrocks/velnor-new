@@ -29,6 +29,7 @@ pub(super) struct Fixture {
     pub(super) journal: Journal,
     pub(super) scope: ConnectionJournal,
     pub(super) request: crate::journal::AssignmentIdentity,
+    pub(super) binding: RepositoryConnection,
 }
 
 impl Fixture {
@@ -106,6 +107,7 @@ impl Fixture {
             journal,
             scope,
             request,
+            binding,
         })
     }
 }
