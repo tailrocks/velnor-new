@@ -1,3 +1,6 @@
+use super::files::{
+    GUEST_IMAGE_PROJECTION_SCHEMA, GuestImageDigests, GuestImageProjection, MAX_PLAN_JSON_BYTES,
+};
 use super::*;
 
 use std::fs;
@@ -11,7 +14,7 @@ use velnor_actions_contract::workflow::{
     QualificationRuntimeAbiObservation, QualificationRuntimeIdentityRequirements,
     QualificationRuntimeImageDigests, QualificationRuntimeImageIdentity,
     QualificationRuntimePlatform, QualificationRuntimeScaleSet,
-    QualificationRuntimeToolObservation,
+    QualificationRuntimeToolObservation, Trust, WorkflowEvent,
 };
 use velnor_actions_contract::{
     RunnerSelection, ScaleSetSelector,

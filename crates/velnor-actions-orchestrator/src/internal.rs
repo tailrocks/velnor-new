@@ -9,6 +9,8 @@ pub(crate) mod phase_timing;
 pub(crate) mod plan_obligation;
 #[path = "plan_response.rs"]
 mod plan_response;
+#[path = "internal_qualification.rs"]
+mod qualification;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -16,7 +18,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
     ContractError, NamedCheckLane, Plan, PlanBaseline, PlanMatrix, PlanRunner, ProposedTask,
-    RunnerSelection, RunsOn, WorkflowEvent, canonical_json_bytes, plan_id_for_run,
+    RunnerSelection, WorkflowEvent, plan_id_for_run,
 };
 use velnor_actions_mise::ToolCatalog;
 
@@ -31,6 +33,7 @@ use crate::internal_plan::{default_generator_with_phase_timings, plan_packages};
 use crate::internal_request::{PlanRequest, checked_plan_request};
 
 pub use self::plan_response::validate_plan_response;
+use self::plan_response::{check_matrix_budget, plan_response};
 use crate::merge::BaselineManifest;
 use crate::prepare::{prepare, prepare_with_phase_timings};
 use crate::select::{classify_changed, select_universe};
@@ -107,71 +110,14 @@ fn plan_internal_inner(
     } else {
         prepare(&root)?
     };
-    validate_qualification_request(
+    let scale_set_image_source_sha = qualification::bind_image_source(&mut request, &prep)?;
+    let (mut plan, changed) = build_event_plan(&mut request, &prep, timings.as_deref_mut())?;
+    qualification::validate_scale_set_image_source(
         &request,
-        &prep.default_branch,
-        prep.config.workflow.verification_branch.as_deref(),
+        &prep,
+        &plan,
+        scale_set_image_source_sha.as_deref(),
     )?;
-    let scale_set_image_source_sha = prep
-        .config
-        .execution
-        .as_ref()
-        .and_then(|execution| execution.scale_set_image_source_sha())
-        .map(str::to_owned);
-    if let Some(context) = request.qualification.as_mut() {
-        context.scale_set_image_source_sha = scale_set_image_source_sha.clone();
-        context.validate_shape().map_err(internal_contract)?;
-    }
-    let named_check_lanes = named_lanes::resolve(&prep, request.named_check_lanes.take())?;
-    let catalog = &prep.catalog;
-    let mut warnings = Vec::new();
-    warnings.extend(crate::evidence::workspace_drift_warnings(
-        &prep.root,
-        &prep.discovery.workspaces,
-        &prep.runner_label,
-    ));
-    let universe = select_universe(&prep.discovery, &mut warnings)?;
-    let changed = classify_changed(
-        &prep.root,
-        request.event,
-        request.base.as_deref(),
-        &request.head,
-        &prep.discovery,
-        &mut warnings,
-    );
-    let mut plan = build_plan(
-        &request,
-        &prep.discovery,
-        &prep.root,
-        &universe,
-        changed.as_ref(),
-        &prep.runner_label,
-        prep.runner_selection,
-        catalog,
-        &named_check_lanes,
-        warnings,
-        timings.as_deref_mut(),
-    )?;
-    let has_scale_set_lane = plan.matrix.include.iter().any(|entry| {
-        RunsOn::parse(&entry.planned_platform.runs_on).is_ok_and(|runs_on| runs_on.is_scale_set())
-    });
-    if request.event == WorkflowEvent::Qualification
-        && has_scale_set_lane
-        && scale_set_image_source_sha.is_none()
-    {
-        let profile = prep
-            .config
-            .execution
-            .as_ref()
-            .map_or("scale_set", |execution| {
-                execution.scale_set_profile.as_str()
-            });
-        return Err(OrchestratorError::config(
-            crate::config::CONFIG_REL,
-            format!("execution.profiles.{profile}.image_source_sha"),
-            "required_for_scale_set_qualification",
-        ));
-    }
     let manifest = request.baseline_manifest.and_then(|value| {
         serde_json::from_value::<BaselineManifest>(value)
             .inspect_err(|_| {
@@ -190,7 +136,7 @@ fn plan_internal_inner(
                 branch: &prep.default_branch,
                 root: &prep.root,
                 workflow: velnor_actions_workflow_renderer::render::WORKFLOW_PATH,
-                catalog,
+                catalog: &prep.catalog,
                 repository: request.repository.as_deref(),
             },
             manifest,
@@ -206,57 +152,42 @@ fn plan_internal_inner(
     })
 }
 
-/// Bind qualification provenance to the prepared repository and checkout.
-fn validate_qualification_request(
-    request: &PlanRequest,
-    default_branch: &str,
-    verification_branch: Option<&str>,
-) -> Result<(), OrchestratorError> {
-    match (request.event, request.qualification.as_ref()) {
-        (WorkflowEvent::Qualification, Some(context)) => {
-            let repository = request
-                .repository
-                .as_deref()
-                .ok_or_else(|| internal("missing_qualification_repository"))?;
-            context
-                .validate_for_config(
-                    default_branch,
-                    verification_branch,
-                    repository,
-                    &request.head,
-                )
-                .map_err(internal_contract)
-        }
-        (WorkflowEvent::Qualification, None) => Err(internal("missing_qualification_context")),
-        (_, Some(_)) => Err(internal("qualification_context_on_wrong_event")),
-        (_, None) => Ok(()),
-    }
-}
-
-/// Assemble the `plan-v1` response, staging trusted bytes when covered.
-///
-/// The manifest rides along only behind covered obligations: a
-/// rejected manifest must never reach the plan artifact.
-fn plan_response(plan: Plan, manifest: Option<BaselineManifest>) -> PlanResponse {
-    let covered = crate::covered_tasks::plan_has_covered(&plan);
-    PlanResponse {
-        schema: SCHEMA,
-        matrix: plan.matrix.clone(),
-        plan,
-        baseline_manifest: covered.then_some(manifest).flatten(),
-    }
-}
-
-/// Reject a matrix whose canonical bytes exceed the budget.
-fn check_matrix_budget(matrix: &PlanMatrix) -> Result<(), OrchestratorError> {
-    let bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
-    if bytes.len() > MATRIX_BUDGET_BYTES {
-        return Err(internal(&format!(
-            "matrix_budget_exceeded:{}:broaden selection or reduce matrix entries",
-            bytes.len()
-        )));
-    }
-    Ok(())
+fn build_event_plan(
+    request: &mut PlanRequest,
+    prep: &crate::prepare::GenerationPreparation,
+    timings: Option<&mut phase_timing::PlanPhaseTimings>,
+) -> Result<(Plan, Option<BTreeSet<String>>), OrchestratorError> {
+    let named_check_lanes = named_lanes::resolve(prep, request.named_check_lanes.take())?;
+    let catalog = &prep.catalog;
+    let mut warnings = Vec::new();
+    warnings.extend(crate::evidence::workspace_drift_warnings(
+        &prep.root,
+        &prep.discovery.workspaces,
+        &prep.runner_label,
+    ));
+    let universe = select_universe(&prep.discovery, &mut warnings)?;
+    let changed = classify_changed(
+        &prep.root,
+        request.event,
+        request.base.as_deref(),
+        &request.head,
+        &prep.discovery,
+        &mut warnings,
+    );
+    let plan = build_plan(
+        request,
+        &prep.discovery,
+        &prep.root,
+        &universe,
+        changed.as_ref(),
+        &prep.runner_label,
+        prep.runner_selection,
+        catalog,
+        &named_check_lanes,
+        warnings,
+        timings,
+    )?;
+    Ok((plan, changed))
 }
 
 /// Reject any schema other than 1.

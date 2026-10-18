@@ -127,13 +127,7 @@ fn gate_request() -> Option<InternalRequest> {
         op,
         InternalOp::BindQualificationCache | InternalOp::ObserveQualificationCacheBackend
     ) {
-        if !["GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"]
-            .iter()
-            .all(|name| env::var(name).is_ok_and(|value| !value.is_empty()))
-        {
-            return None;
-        }
-        return runner_velnor_dir().map(|path| InternalRequest { op, path });
+        return cache_runner_request(op);
     }
     if op == InternalOp::ResolveTaskExecution {
         if !env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
@@ -189,6 +183,17 @@ fn gate_request() -> Option<InternalRequest> {
         | InternalOp::ResolveTaskExecution => {}
     }
     Some(InternalRequest { op, path })
+}
+
+/// Require both GitHub run coordinates before entering cache operations.
+fn cache_runner_request(op: InternalOp) -> Option<InternalRequest> {
+    if !["GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"]
+        .iter()
+        .all(|name| env::var(name).is_ok_and(|value| !value.is_empty()))
+    {
+        return None;
+    }
+    runner_velnor_dir().map(|path| InternalRequest { op, path })
 }
 
 /// Runner-temp velnor directory for file-less private operations.
