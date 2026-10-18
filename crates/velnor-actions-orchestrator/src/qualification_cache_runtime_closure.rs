@@ -20,7 +20,7 @@ use crate::vectors::task_argv;
 #[path = "qualification_cache_runtime_closure_tests.rs"]
 mod tests;
 
-/// Source and plan inputs used to check one lane after its command ends.
+/// Source and plan inputs for a check of one lane after its command ends.
 pub(crate) struct PostTaskClosureContext<'a> {
     /// Repository checkout.
     pub(crate) root: &'a Path,
@@ -38,8 +38,9 @@ pub(crate) struct PostTaskClosureContext<'a> {
 
 /// Digests from source and task data available after execution.
 ///
-/// These fields contain current values, not digests copied from the plan.
-/// Callers compare these values with the planned values separately.
+/// These fields contain values made after task execution.
+/// Callers compare these values with the plan values.
+/// They give an error if the values do not agree.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct ObservedLaneClosure {
     /// Matrix lane selected from the plan.

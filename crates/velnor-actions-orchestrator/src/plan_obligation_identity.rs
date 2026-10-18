@@ -13,19 +13,19 @@ use crate::internal_plan::identities::{ExtensionBundle, extension_bundle_with_sn
 use crate::internal_plan::snapshot::{ExecutionSnapshot, canonical_digest};
 use crate::internal_plan::{IdentityInputs, nextest_config_for, task_identity_digest};
 
-/// Extension bundle with input digests tied to one task.
+/// Extension bundle with input digests for one task.
 pub(crate) struct TaskIdentityDerivation {
-    /// Bundle with lock and Nextest digests tied to the current source file state.
+    /// Bundle with lockfile and Nextest digests for source files in this checkout.
     pub(crate) bundle: ExtensionBundle,
     /// Whether the stack extension permits reuse.
     pub(crate) reuse_eligible: bool,
-    /// Digest over the complete input closure in its required JSON form.
+    /// Digest over the complete input closure in the JSON format given by the contract.
     pub(crate) closure_digest: String,
     /// Input digest with the closure digest bound into the envelope.
     pub(crate) input_digest: String,
 }
 
-/// Inputs shared by plan creation and post-task task identity construction.
+/// Inputs used to make task identities before and after a task.
 pub(crate) struct TaskIdentityDerivationInputs<'a> {
     /// Repository checkout.
     pub(crate) root: &'a Path,
@@ -45,11 +45,10 @@ pub(crate) struct TaskIdentityDerivationInputs<'a> {
     pub(crate) snapshot: &'a ExecutionSnapshot,
 }
 
-/// Make the extension and input closure for one current source task.
+/// Make the extension and input closure for one task from this source tree.
 ///
-/// Rust tasks use the Rust adapter's cached closure resolver. `ToFu` tasks use
-/// the `ToFu` adapter's checkout-bound lockfile resolver. Both use the same
-/// identity envelope as the plan.
+/// Rust and `ToFu` adapters read the source and lockfile inputs.
+/// Both use the same identity format as the plan.
 /// # Errors
 pub(crate) fn derive_task_identity(
     inputs: &TaskIdentityDerivationInputs<'_>,

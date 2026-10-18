@@ -33,14 +33,13 @@ pub(crate) const SOURCE_EVIDENCE_STEP_NAME: &str = "Record Qualification source 
 
 /// Write current source, closure, and report facts for one lane.
 ///
-/// The document is incomplete until cache steps provide separate action and
-/// backend evidence. This operation does not say that the workflow run
-/// finished successfully.
+/// The document is incomplete until cache steps give action evidence and backend evidence.
+/// This operation does not say that the workflow run finished successfully.
 ///
 /// # Errors
 ///
-/// Give an error when the current dispatch, plan, source tree, report files,
-/// or source evidence file path does not pass the required checks.
+/// If the necessary checks of the dispatch, plan, source tree, or report files give unsatisfactory results, give an error.
+/// If the necessary checks of the source evidence file path give unsatisfactory results, give an error.
 pub fn write_qualification_source_evidence() -> Result<(), OrchestratorError> {
     let runner_temp = required_path("RUNNER_TEMP")?;
     let run_key = crate::internal_request::resolve_run_key(None)?;
@@ -95,7 +94,7 @@ pub fn write_qualification_source_evidence() -> Result<(), OrchestratorError> {
 ///
 /// # Errors
 ///
-/// Give a render error when the helper environment cannot include each required value.
+/// Give a render error when the helper environment cannot include each necessary value.
 pub(crate) fn source_evidence_step(
     catalog: &velnor_actions_mise::ToolCatalog,
 ) -> Result<velnor_actions_contract::Step, OrchestratorError> {

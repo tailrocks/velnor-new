@@ -16,7 +16,7 @@ use super::types::{QualificationMatrixReportObservation, QualificationSourceRepo
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 
-/// Report details tied to one lane in the source evidence file.
+/// Report details for one lane in the source evidence file.
 #[derive(Debug)]
 pub(super) struct SuccessfulLaneReports {
     /// Report outcome read from the task file.
@@ -29,9 +29,9 @@ pub(super) struct SuccessfulLaneReports {
 ///
 /// # Errors
 ///
-/// Give an error when a report is absent, does not use the required JSON
-/// format, does not show success, or does not agree with the plan entry and
-/// its one-task aggregate.
+/// If a report is absent or does not use the JSON format given by the contract, give an error.
+/// If the report does not show success, give an error.
+/// If the report does not agree with the plan entry or its one-task aggregate, give an error.
 pub(super) fn read_successful_lane_reports(
     runner_temp: &Path,
     plan: &Plan,
