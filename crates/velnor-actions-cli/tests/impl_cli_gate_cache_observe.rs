@@ -56,7 +56,7 @@ fn cache_observation_requires_runner_temp_and_both_run_coordinates() -> Result<(
         &temp,
     )?;
     assert_eq!(code(&internal), 1);
-    assert!(internal.stdout.is_empty());
+    assert_eq!(internal.stdout, [] as [u8; 0]);
     let stderr = String::from_utf8_lossy(&internal.stderr);
     assert!(stderr.contains("missing_github_event_name"), "{stderr}");
     assert!(!stderr.contains("observe-qualification-cache-backend-v1"));

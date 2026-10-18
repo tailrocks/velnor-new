@@ -39,7 +39,7 @@ fn cache_binding_requires_runner_temp_and_both_run_coordinates() -> Result<(), B
         &tmp,
     )?;
     assert_eq!(code(&internal), 1);
-    assert!(internal.stdout.is_empty());
+    assert_eq!(internal.stdout, [] as [u8; 0]);
     let stderr = String::from_utf8_lossy(&internal.stderr);
     assert!(
         stderr.contains("cache binding failed: missing_github_event_name"),

@@ -47,7 +47,7 @@ fn cache_transfer_requires_runner_temp_and_both_run_coordinates() -> Result<(), 
             &temp,
         )?;
         assert_eq!(code(&entered), 1);
-        assert!(entered.stdout.is_empty());
+        assert_eq!(entered.stdout, [] as [u8; 0]);
         let stderr = String::from_utf8_lossy(&entered.stderr);
         assert!(
             stderr.contains("qualification_cache_binding_inputs_invalid"),

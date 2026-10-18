@@ -231,7 +231,7 @@ fn unreadable_request_exits_one_without_response() -> Result<(), Box<dyn Error>>
         &tmp,
     )?;
     assert_eq!(code(&output), 1);
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, [] as [u8; 0]);
     assert!(!dir.join("plan-v1-response.json").exists());
     std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o600))?;
     cleanup(&tmp);
