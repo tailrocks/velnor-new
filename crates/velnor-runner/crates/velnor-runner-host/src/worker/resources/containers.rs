@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use bollard::models::HostConfigCgroupnsModeEnum;
+use bollard::models::{HostConfigCgroupnsModeEnum, MountType};
 
 use super::super::mounts::{label_map, mount_source};
 use super::super::{CreateProjection, identity_labels_match, launch_identity_labels_match};
@@ -50,11 +50,36 @@ fn topology_matches(
         || host.privileged != Some(spec.privileged)
         || host.cgroupns_mode != Some(HostConfigCgroupnsModeEnum::PRIVATE)
         || !resource_limits_match(spec, host)
+        || !home_no_copy_matches(spec, host)
         || !network_matches(spec.network_mode.as_deref(), host.network_mode.as_deref())
     {
         return Ok(false);
     }
     Ok(expected_mounts(spec)? == observed_mounts(found)?)
+}
+
+fn home_no_copy_matches(spec: &CreateProjection, host: &bollard::models::HostConfig) -> bool {
+    let homes: Vec<_> = spec
+        .mounts
+        .iter()
+        .filter(|mount| mount.target == "/home/runner")
+        .collect();
+    if homes.len() != 1 {
+        return false;
+    }
+    let Some(mounts) = host.mounts.as_ref() else {
+        return false;
+    };
+    let expected = homes[0];
+    mounts.iter().any(|mount| {
+        mount.target.as_deref() == Some(expected.target.as_str())
+            && mount.source.as_deref() == expected.source.strip_prefix("volume:")
+            && mount.typ == Some(MountType::VOLUME)
+            && mount
+                .volume_options
+                .as_ref()
+                .is_some_and(|options| options.no_copy == Some(true))
+    })
 }
 
 fn execution_matches(spec: &CreateProjection, config: &bollard::models::ContainerConfig) -> bool {

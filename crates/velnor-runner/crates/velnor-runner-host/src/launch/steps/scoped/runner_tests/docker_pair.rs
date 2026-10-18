@@ -32,7 +32,7 @@ async fn scoped_start_uses_bollard_to_create_and_start_the_verified_pair() -> Re
         .collect();
     assert_eq!(creates.len(), 2);
     verify_container_projections(&creates, &result.images, &result.state_root)?;
-    assert_eq!(count_route(&result.requests, "/volumes/create"), 3);
+    assert_eq!(count_route(&result.requests, "/volumes/create"), 4);
     assert_eq!(count_route(&result.requests, "/start"), 2);
     assert_mutations_follow_fresh_checks(&result.requests)?;
     assert_eq!(result.occupied_reservations, 1);

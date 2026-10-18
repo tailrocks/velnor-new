@@ -42,7 +42,7 @@ async fn done_post_delete_non_404_keeps_cleanup_unproven() -> Result<(), String>
             step: "docker"
         })
     );
-    assert_eq!(requests.len(), 18);
+    assert_eq!(requests.len(), 21);
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Done);
@@ -73,7 +73,7 @@ fn pair_cleanup_responses() -> Vec<Response> {
     for (index, (name, role)) in volume_names().into_iter().enumerate() {
         responses.push(http(200, &volume_json(name, WORKER, role)));
         responses.push(http(204, ""));
-        let status = if index == 2 { 500 } else { 404 };
+        let status = if index == 3 { 500 } else { 404 };
         responses.push(http(status, r#"{"message":"not absent"}"#));
     }
     responses

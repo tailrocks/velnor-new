@@ -8,7 +8,10 @@ use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
 use velnor_runner_core::runner_work_path;
 
-use super::{bollard_create, dind_create_for_identity, runner_create_for_identity};
+use super::{
+    bollard_create, dind_create_for_identity, runner_create, runner_create_for_identity,
+    test_resource_budget,
+};
 
 const INSTANCE_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const INTENT_ID: i64 = 7;
@@ -85,6 +88,25 @@ fn runner_and_dind_project_distinct_owned_names_and_labels() -> Result<(), HostE
 }
 
 #[test]
+fn runner_create_rejects_empty_or_mismatched_plan_mounts() -> Result<(), HostError> {
+    let identity = identity()?;
+    let mut empty = crate::docker_spec::runner_plan(identity.private_volume())?;
+    empty.mounts.clear();
+    assert_eq!(
+        runner_create(&empty, test_resource_budget()?).map(|_| ()),
+        Err(HostError::ForbiddenMount)
+    );
+
+    let mut mismatched = crate::docker_spec::runner_plan(identity.private_volume())?;
+    mismatched.mounts[0].target = "/tmp".to_owned();
+    assert_eq!(
+        runner_create(&mismatched, test_resource_budget()?).map(|_| ()),
+        Err(HostError::ForbiddenMount)
+    );
+    Ok(())
+}
+
+#[test]
 fn dind_disables_work_volume_copy_and_runner_keeps_default_copy() -> Result<(), HostError> {
     let identity = identity()?;
     let target = runner_work_path();
@@ -113,19 +135,24 @@ fn dind_disables_work_volume_copy_and_runner_keeps_default_copy() -> Result<(), 
     assert_eq!(dind_work["Source"], runner_work["Source"]);
     assert_eq!(dind_work["VolumeOptions"]["NoCopy"].as_bool(), Some(true));
 
-    for mount in runner_mounts {
-        let no_copy = mount
-            .get("VolumeOptions")
-            .and_then(|options| options.get("NoCopy"))
-            .and_then(serde_json::Value::as_bool);
-        assert_ne!(no_copy, Some(true));
-    }
+    let runner_home = runner_mounts
+        .iter()
+        .find(|mount| mount["Target"].as_str() == Some("/home/runner"))
+        .ok_or(HostError::Docker)?;
+    assert_eq!(runner_home["VolumeOptions"]["NoCopy"].as_bool(), Some(true));
+    let runner_work = runner_mounts
+        .iter()
+        .find(|mount| mount["Target"].as_str() == Some(target.as_str()))
+        .ok_or(HostError::Docker)?;
+    assert!(runner_work.get("VolumeOptions").is_none());
     for mount in dind_mounts {
         let no_copy = mount
             .get("VolumeOptions")
             .and_then(|options| options.get("NoCopy"))
             .and_then(serde_json::Value::as_bool);
-        if mount["Target"].as_str() == Some(target.as_str()) {
+        if mount["Target"].as_str() == Some(target.as_str())
+            || mount["Target"].as_str() == Some("/home/runner")
+        {
             assert_eq!(no_copy, Some(true));
         } else {
             assert_ne!(no_copy, Some(true));

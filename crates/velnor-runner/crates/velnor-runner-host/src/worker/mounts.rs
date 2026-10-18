@@ -117,11 +117,12 @@ fn docker_mounts(
 
 fn docker_mount(mount: &Mount, no_copy_work: bool) -> Result<DockerMount, HostError> {
     let (typ, source) = mount_source(&mount.source)?;
-    let volume_options =
-        (no_copy_work && mount.target == runner_work_path()).then_some(MountVolumeOptions {
-            no_copy: Some(true),
-            ..Default::default()
-        });
+    let no_copy =
+        mount.target == "/home/runner" || no_copy_work && mount.target == runner_work_path();
+    let volume_options = no_copy.then_some(MountVolumeOptions {
+        no_copy: Some(true),
+        ..Default::default()
+    });
     Ok(DockerMount {
         target: Some(mount.target.clone()),
         source: Some(source),
@@ -169,7 +170,7 @@ mod tests {
     use bollard::models::MountType;
 
     use crate::docker_spec::runner_plan;
-    use crate::worker::{BindMount, runner_create, test_resource_budget};
+    use crate::worker::{BindMount, dind_create, runner_create, test_resource_budget};
 
     use super::*;
 
@@ -221,6 +222,40 @@ mod tests {
         mount.target = "/home/runner/.ssh".to_owned();
         spec.bind_mounts.push(mount);
         assert_eq!(host_config(&spec), Err(HostError::ForbiddenMount));
+        Ok(())
+    }
+
+    #[test]
+    fn home_volume_is_separate_from_work_and_uses_no_copy() -> Result<(), HostError> {
+        for spec in [runner()?, dind_create("worker_a", test_resource_budget()?)?] {
+            let host = host_config(&spec)?;
+            let mounts = host.mounts.as_ref().ok_or(HostError::Docker)?;
+            let home_index = mounts
+                .iter()
+                .position(|mount| mount.target.as_deref() == Some("/home/runner"))
+                .ok_or(HostError::Docker)?;
+            let work_index = mounts
+                .iter()
+                .position(|mount| mount.target.as_deref() == Some(runner_work_path().as_str()))
+                .ok_or(HostError::Docker)?;
+            assert!(home_index < work_index);
+            let home = &mounts[home_index];
+            let work = &mounts[work_index];
+            assert_eq!(home.source.as_deref(), Some("worker_a-home"));
+            assert_eq!(work.source.as_deref(), Some("worker_a-work"));
+            assert_eq!(
+                home.volume_options
+                    .as_ref()
+                    .and_then(|options| options.no_copy),
+                Some(true)
+            );
+            assert_eq!(
+                work.volume_options
+                    .as_ref()
+                    .and_then(|options| options.no_copy),
+                spec.privileged.then_some(true)
+            );
+        }
         Ok(())
     }
 }

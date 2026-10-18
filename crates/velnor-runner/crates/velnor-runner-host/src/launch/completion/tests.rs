@@ -23,6 +23,7 @@ use crate::https::HttpsTransport;
 use crate::journal::Journal;
 use crate::launch::completion::journal_ref::CompletionJournal;
 use crate::listen::Secret;
+use crate::worker::WorkerVolumeRole;
 
 const TEST_REQUEST_ID: i64 = 61;
 const SLOW_REQUEST_DURATION: Duration = Duration::from_millis(2_300);
@@ -108,13 +109,17 @@ fn effect_window_and_budget_cover_the_complete_cleanup_chain() {
         u64::try_from(EFFECT_WINDOW_SECONDS)
             .is_ok_and(|window| window >= docker_seconds + EFFECT_MARGIN_SECONDS)
     );
-    assert_eq!(MAX_CLEANUP_EFFECTS, 24);
-    assert_eq!(MAX_EXTERNAL_CHAIN_SECONDS, 390);
+    assert_eq!(
+        MAX_CLEANUP_EFFECTS,
+        3 + 2 * 6 + WorkerVolumeRole::ALL.len() as u64 * 3
+    );
+    assert_eq!(MAX_CLEANUP_EFFECTS, 27);
+    assert_eq!(MAX_EXTERNAL_CHAIN_SECONDS, 420);
     assert_eq!(
         u64::try_from(EFFECT_WINDOW_SECONDS)
             .ok()
             .map(|window| MAX_CLEANUP_EFFECTS * window),
-        Some(2_160)
+        Some(2_430)
     );
     assert_eq!(cleanup_retry_delay_seconds(1), EFFECT_WINDOW_SECONDS + 5);
     assert_eq!(cleanup_retry_delay_seconds(5), EFFECT_WINDOW_SECONDS + 80);

@@ -52,6 +52,8 @@ impl VerifiedWorkerVolume {
 pub(crate) enum WorkerVolumeRole {
     /// Runner socket directory mounted at `/run`.
     Socket,
+    /// The Runner container mounts the Runner home volume at `/home/runner`.
+    Home,
     /// Actions runner workspace mounted at `_work`.
     Work,
     /// Private Docker-in-Docker data mounted at `/var/lib/docker`.
@@ -59,11 +61,12 @@ pub(crate) enum WorkerVolumeRole {
 }
 
 impl WorkerVolumeRole {
-    const ALL: [Self; 3] = [Self::Socket, Self::Work, Self::DindData];
+    pub(crate) const ALL: [Self; 4] = [Self::Socket, Self::Home, Self::Work, Self::DindData];
 
     fn label(self) -> &'static str {
         match self {
             Self::Socket => "socket",
+            Self::Home => "home",
             Self::Work => "work",
             Self::DindData => "dind-data",
         }
@@ -72,6 +75,7 @@ impl WorkerVolumeRole {
     fn suffix(self) -> &'static str {
         match self {
             Self::Socket => "",
+            Self::Home => "-home",
             Self::Work => "-work",
             Self::DindData => "-docker",
         }
@@ -109,10 +113,11 @@ where
     Fut: Future<Output = Result<(), HostError>>,
 {
     let volumes = volumes(worker)?;
-    if mounts.len() != volumes.len()
-        || mounts.iter().zip(&volumes).any(|(mount, volume)| {
-            mount.source != format!("volume:{}", volume.name) || target(volume.role) != mount.target
-        })
+    let expected = mounts_for_dind(worker)?;
+    if volumes.iter().any(|volume| {
+        target(volume.role, ContainerKind::Runner).is_none()
+            && target(volume.role, ContainerKind::Dind).is_none()
+    }) || mounts != expected
     {
         return Err(HostError::ForbiddenMount);
     }
@@ -203,15 +208,14 @@ async fn inspect_volume(docker: &Docker, name: &str) -> Result<Option<Volume>, H
     }
 }
 
-fn volumes(worker: &str) -> Result<[WorkerVolume; 3], HostError> {
+fn volumes(worker: &str) -> Result<Vec<WorkerVolume>, HostError> {
     if !valid_worker(worker) {
         return Err(HostError::ForbiddenMount);
     }
-    Ok([
-        worker_volume(worker, WorkerVolumeRole::Socket),
-        worker_volume(worker, WorkerVolumeRole::Work),
-        worker_volume(worker, WorkerVolumeRole::DindData),
-    ])
+    Ok(WorkerVolumeRole::ALL
+        .into_iter()
+        .map(|role| worker_volume(worker, role))
+        .collect())
 }
 
 fn valid_worker(worker: &str) -> bool {
@@ -229,6 +233,46 @@ fn worker_volume(worker: &str, role: WorkerVolumeRole) -> WorkerVolume {
     }
 }
 
+#[derive(Clone, Copy)]
+enum ContainerKind {
+    Runner,
+    Dind,
+}
+
+pub(crate) fn mounts_for_runner(worker: &str) -> Result<Vec<PlannedMount>, HostError> {
+    mounts_for(worker, ContainerKind::Runner, false)
+}
+
+pub(crate) fn mounts_for_runner_plan(worker: &str) -> Result<Vec<PlannedMount>, HostError> {
+    mounts_for(worker, ContainerKind::Runner, true)
+}
+
+pub(crate) fn mounts_for_dind(worker: &str) -> Result<Vec<PlannedMount>, HostError> {
+    mounts_for(worker, ContainerKind::Dind, false)
+}
+
+fn mounts_for(
+    worker: &str,
+    container: ContainerKind,
+    runner_plan: bool,
+) -> Result<Vec<PlannedMount>, HostError> {
+    if !valid_worker(worker) {
+        return Err(HostError::ForbiddenMount);
+    }
+    Ok(WorkerVolumeRole::ALL
+        .into_iter()
+        .filter_map(|role| {
+            if runner_plan && role == WorkerVolumeRole::Home {
+                return None;
+            }
+            target(role, container).map(|target| PlannedMount {
+                source: format!("volume:{}", worker_volume(worker, role).name),
+                target,
+            })
+        })
+        .collect())
+}
+
 fn labels(worker: &str, role: &str) -> HashMap<String, String> {
     HashMap::from([
         ("velnor.role".to_owned(), role.to_owned()),
@@ -236,11 +280,13 @@ fn labels(worker: &str, role: &str) -> HashMap<String, String> {
     ])
 }
 
-fn target(role: WorkerVolumeRole) -> String {
-    match role {
-        WorkerVolumeRole::Socket => "/run".to_owned(),
-        WorkerVolumeRole::Work => runner_work_path(),
-        WorkerVolumeRole::DindData => "/var/lib/docker".to_owned(),
+fn target(role: WorkerVolumeRole, container: ContainerKind) -> Option<String> {
+    match (role, container) {
+        (WorkerVolumeRole::Socket, _) => Some("/run".to_owned()),
+        (WorkerVolumeRole::Home, _) => Some("/home/runner".to_owned()),
+        (WorkerVolumeRole::Work, _) => Some(runner_work_path()),
+        (WorkerVolumeRole::DindData, ContainerKind::Dind) => Some("/var/lib/docker".to_owned()),
+        (WorkerVolumeRole::DindData, ContainerKind::Runner) => None,
     }
 }
 

@@ -88,6 +88,15 @@ pub fn runner_create(
     if plan.cmd.iter().any(|item| cmd_names_jit(item)) {
         return Err(HostError::ForbiddenMount);
     }
+    let private_volume = plan
+        .name
+        .strip_suffix("-runner")
+        .ok_or(HostError::ForbiddenMount)?;
+    let planned_mounts = volumes::mounts_for_runner(private_volume)?;
+    let plan_mounts = volumes::mounts_for_runner_plan(private_volume)?;
+    if plan.mounts != plan_mounts {
+        return Err(HostError::ForbiddenMount);
+    }
     Ok(CreateProjection {
         name: plan.name.clone(),
         image: plan.image.clone(),
@@ -98,7 +107,7 @@ pub fn runner_create(
         user: None,
         working_dir: None,
         labels: plan.labels.clone(),
-        mounts: runner_mounts(&plan.mounts)?,
+        mounts: runner_mounts(&planned_mounts)?,
         bind_mounts: Vec::new(),
         privileged: false,
         open_stdin: true,
@@ -130,7 +139,7 @@ pub(crate) fn runner_create_verified(
 ///
 /// Published service ports and Testcontainers use the runner's localhost.
 /// `dind_id` must identify one Docker container.
-/// The function sets network mode to the DinD container.
+/// The function sets the network mode to the Docker-in-Docker container.
 ///
 /// # Errors
 ///
@@ -150,14 +159,15 @@ fn dind_container_id(id: &str) -> bool {
     id.len() == 64 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-/// Make a privileged DinD container request.
+/// Make a privileged Docker-in-Docker container request.
 /// Do not set this privilege on the runner plan.
 ///
 /// The runner plan's socket volume is at `/run`.
+/// The shared Home volume is at `/home/runner`.
 /// The shared work volume is at `/home/runner/_work`.
 /// A DinD-only Docker volume is at `/var/lib/docker`.
 /// The runner container does not mount the Docker data volume.
-/// The DinD container does not mount the action archive volume.
+/// The Docker-in-Docker container does not mount the action archive volume.
 /// The Docker data volume uses storage outside the container layer.
 ///
 /// # Errors
@@ -168,7 +178,7 @@ pub fn dind_create(
     resource_budget: ResourceBudget,
 ) -> Result<CreateProjection, HostError> {
     let runner = runner_plan(private_volume)?;
-    let mounts = dind_mounts_for(private_volume, runner.mounts);
+    let mounts = volumes::mounts_for_dind(private_volume)?;
     let mut labels = vec![
         "velnor.role=dind".to_owned(),
         format!("velnor.volume={private_volume}"),
@@ -194,7 +204,7 @@ pub fn dind_create(
     })
 }
 
-/// Make a privileged DinD request only after the release and selected-engine checks for both images give success.
+/// Make a privileged Docker-in-Docker request only after release and selected engine checks for both images pass.
 pub(crate) fn dind_create_verified(
     private_volume: &str,
     resource_budget: ResourceBudget,
@@ -208,16 +218,7 @@ pub(crate) fn dind_create_verified(
 }
 
 pub(crate) fn dind_mounts(private_volume: &str) -> Result<Vec<Mount>, HostError> {
-    let runner = runner_plan(private_volume)?;
-    Ok(dind_mounts_for(private_volume, runner.mounts))
-}
-
-fn dind_mounts_for(private_volume: &str, mut mounts: Vec<Mount>) -> Vec<Mount> {
-    mounts.push(Mount {
-        source: format!("volume:{private_volume}-docker"),
-        target: "/var/lib/docker".to_owned(),
-    });
-    mounts
+    volumes::mounts_for_dind(private_volume)
 }
 
 /// Stable `DinD` container name used by cleanup and recovery.

@@ -36,7 +36,7 @@ async fn uncertain_volume_inspect_prevents_all_create_requests() -> Result<(), S
 
 #[tokio::test]
 async fn failed_freshness_check_stops_the_next_volume_create() -> Result<(), String> {
-    for failed_check in 0..3 {
+    for failed_check in 0..4 {
         let names = volume_names();
         let mut responses: Vec<_> = names
             .iter()
@@ -67,7 +67,7 @@ async fn failed_freshness_check_stops_the_next_volume_create() -> Result<(), Str
 
         assert_eq!(result, Err(HostError::Ownership));
         assert_eq!(checks, failed_check + 1);
-        assert_eq!(requests.len(), 3 + failed_check);
+        assert_eq!(requests.len(), 4 + failed_check);
         assert_eq!(
             requests
                 .iter()

@@ -35,7 +35,7 @@ const EFFECT_WINDOW_SECONDS: i64 = 90;
 const RUNNER_REQUESTS: u64 = 3;
 const CONTAINER_COUNT: u64 = 2;
 const CONTAINER_REQUESTS: u64 = 6;
-const VOLUME_COUNT: u64 = 3;
+const VOLUME_COUNT: u64 = crate::worker::WorkerVolumeRole::ALL.len() as u64;
 const VOLUME_REQUESTS: u64 = 3;
 const MAX_CLEANUP_EFFECTS: u64 =
     RUNNER_REQUESTS + CONTAINER_COUNT * CONTAINER_REQUESTS + VOLUME_COUNT * VOLUME_REQUESTS;
@@ -56,9 +56,8 @@ pub(super) struct Context<'a> {
     pub(super) admin: &'a Secret,
 }
 
-/// One bounded reconciliation chain: three GitHub calls, twelve container
-/// calls, and nine volume calls at most. Each HTTP call renews the durable
-/// lease independently; no serial chain shares a single effect window.
+/// One bounded reconciliation chain uses three GitHub calls, twelve container calls, and three calls per volume role.
+/// Each call renews its durable lease independently.
 pub(super) struct EffectBudget<'a> {
     remaining: u64,
     stopping: &'a AtomicBool,

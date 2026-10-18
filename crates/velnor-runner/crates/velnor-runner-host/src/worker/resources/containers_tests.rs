@@ -4,7 +4,8 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use bollard::models::{
-    ContainerConfig, ContainerInspectResponse, HostConfig, HostConfigCgroupnsModeEnum, MountPoint,
+    ContainerConfig, ContainerInspectResponse, HostConfig, HostConfigCgroupnsModeEnum, Mount,
+    MountPoint, MountType, MountVolumeOptions,
 };
 
 use crate::error::HostError;
@@ -51,6 +52,7 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
         budget.runner()
     };
     let mut mounts = Vec::with_capacity(spec.mounts.len() + spec.bind_mounts.len());
+    let mut host_mounts = Vec::with_capacity(spec.mounts.len());
     let mut env = vec![UBUNTU_PATH.to_owned()];
     env.extend(spec.env.iter().cloned());
     for mount in &spec.mounts {
@@ -63,6 +65,18 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
             name: Some(name.to_owned()),
             destination: Some(mount.target.clone()),
             rw: Some(true),
+            ..Default::default()
+        });
+        host_mounts.push(Mount {
+            target: Some(mount.target.clone()),
+            source: Some(name.to_owned()),
+            typ: Some(MountType::VOLUME),
+            volume_options: (mount.target == "/home/runner"
+                || spec.privileged && mount.target == "/home/runner/_work")
+                .then_some(MountVolumeOptions {
+                    no_copy: Some(true),
+                    ..Default::default()
+                }),
             ..Default::default()
         });
     }
@@ -97,11 +111,35 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
             nano_cpus: Some(limits.nano_cpus),
             memory: Some(limits.memory_bytes),
             memory_swap: Some(limits.memory_bytes),
+            mounts: Some(host_mounts),
             ..Default::default()
         }),
         mounts: Some(mounts),
         ..Default::default()
     })
+}
+
+#[test]
+fn topology_rejects_home_copy_up_or_missing_host_mount() -> Result<(), HostError> {
+    let spec = runner_create_for_identity(&identity()?, None)?;
+    let mut inspected = inspect_projection(&spec)?;
+    let host = inspected.host_config.as_mut().ok_or(HostError::Ownership)?;
+    let mounts = host.mounts.as_mut().ok_or(HostError::Ownership)?;
+    let home = mounts
+        .iter_mut()
+        .find(|mount| mount.target.as_deref() == Some("/home/runner"))
+        .ok_or(HostError::Ownership)?;
+    home.volume_options = None;
+    assert!(!topology_matches(&spec, &inspected)?);
+
+    let mut inspected = inspect_projection(&spec)?;
+    inspected
+        .host_config
+        .as_mut()
+        .ok_or(HostError::Ownership)?
+        .mounts = None;
+    assert!(!topology_matches(&spec, &inspected)?);
+    Ok(())
 }
 
 #[test]

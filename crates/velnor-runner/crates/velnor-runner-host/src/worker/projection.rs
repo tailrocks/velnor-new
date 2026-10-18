@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 #[cfg(test)]
-use crate::docker_spec::{Mount, runner_plan};
+use crate::docker_spec::runner_plan;
 #[cfg(test)]
 use crate::error::HostError;
 #[cfg(test)]
@@ -28,11 +28,7 @@ pub(crate) fn dind_create_for_identity(
 ) -> Result<CreateProjection, HostError> {
     let resource_budget = super::resource_budget::test_resource_budget()?;
     let runner = runner_plan(identity.private_volume())?;
-    let mut mounts = runner.mounts;
-    mounts.push(Mount {
-        source: format!("volume:{}-docker", identity.private_volume()),
-        target: "/var/lib/docker".to_owned(),
-    });
+    let mounts = super::volumes::mounts_for_dind(identity.private_volume())?;
     Ok(CreateProjection {
         name: container_name(identity, "dind"),
         image: test_runtime_id('a'),

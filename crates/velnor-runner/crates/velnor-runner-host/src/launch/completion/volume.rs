@@ -20,11 +20,7 @@ pub(super) async fn cleanup(
         .worker_volume
         .as_deref()
         .ok_or_else(|| Failure::not_proven("worker identity"))?;
-    for role in [
-        WorkerVolumeRole::Socket,
-        WorkerVolumeRole::Work,
-        WorkerVolumeRole::DindData,
-    ] {
+    for role in WorkerVolumeRole::ALL {
         let verification = verify(context, launch.intent.id, claim, budget, worker, role).await?;
         match verification {
             WorkerVolumeVerification::Absent => {}

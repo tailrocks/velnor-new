@@ -47,13 +47,13 @@ async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
     let requests = owned.finish().await?;
 
     assert_eq!(removed, Ok(true));
-    assert_eq!(requests.len(), 9);
+    assert_eq!(requests.len(), 12);
     assert_eq!(
         requests
             .iter()
             .filter(|line| line.starts_with("DELETE "))
             .count(),
-        3
+        4
     );
     Ok(())
 }
@@ -172,9 +172,10 @@ async fn container_identity_requires_id_and_exact_labels() -> Result<(), String>
     Ok(())
 }
 
-fn volume_names() -> [(&'static str, &'static str); 3] {
+fn volume_names() -> [(&'static str, &'static str); 4] {
     [
         ("wtransport", "socket"),
+        ("wtransport-home", "home"),
         ("wtransport-work", "work"),
         ("wtransport-docker", "dind-data"),
     ]

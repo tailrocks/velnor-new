@@ -8,6 +8,7 @@ use bollard::Docker;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
+use super::super::volume;
 use super::cleanup;
 use crate::error::HostError;
 use crate::https::HttpsTransport;
@@ -122,6 +123,48 @@ async fn retry_rejects_a_different_container_at_the_durable_name() -> Result<(),
     Ok(())
 }
 
+#[tokio::test]
+async fn home_volume_delete_failure_keeps_capacity_until_cleanup_proof() -> Result<(), HostError> {
+    let scratch = Scratch::open("home-volume-hold")?;
+    let journal = Journal::open(&scratch.path).await?;
+    let launch = completed_launch(&journal).await?;
+    let completion_journal = CompletionJournal::root(journal.clone());
+    let claim = journal
+        .claim_completion_cleanup(launch.intent.id, 90)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let stub = DockerStub::open(vec![
+        response(404, r#"{"message":"missing"}"#),
+        response(200, &volume_json("wcompletion-home", WORKER, "home")),
+        response(500, r#"{"message":"busy"}"#),
+    ])?;
+    let mut transport = HttpsTransport::new("https://github.com")?;
+    let admin = Secret::new("test token");
+    let context = Context {
+        journal: &completion_journal,
+        docker: &stub.docker,
+        transport: &mut transport,
+        admin: &admin,
+    };
+    let stopping = AtomicBool::new(false);
+    let mut budget = EffectBudget::new(&stopping);
+
+    let result = volume::cleanup(&context, &launch, claim, &mut budget).await;
+    assert_eq!(
+        result,
+        Err(Failure::request("volume delete", HostError::Docker))
+    );
+    let requests = stub.finish().await?;
+    assert_eq!(requests.len(), 3);
+    assert!(requests[1].contains("wcompletion-home"));
+    assert!(requests[2].starts_with("DELETE "));
+    let rows = journal.rows().await?;
+    assert_eq!(rows.len(), 1);
+    assert!(!rows[0].cleanup_proven);
+    assert_eq!(journal.capacity_rows(1).await?.len(), 1);
+    Ok(())
+}
+
 async fn run_cleanup(
     context: &Context<'_>,
     launch: &CompletedLaunch,
@@ -164,6 +207,18 @@ fn container_json(id: &str, role: &str) -> String {
                 "velnor.role": role,
             }
         }
+    })
+    .to_string()
+}
+
+fn volume_json(name: &str, worker: &str, role: &str) -> String {
+    serde_json::json!({
+        "Name": name,
+        "Driver": "local",
+        "Mountpoint": format!("/var/lib/docker/volumes/{name}/_data"),
+        "Labels": {"velnor.worker": worker, "velnor.role": role},
+        "Options": {},
+        "Scope": "local"
     })
     .to_string()
 }
