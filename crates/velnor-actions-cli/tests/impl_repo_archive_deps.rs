@@ -10,7 +10,7 @@ pub(crate) fn reviewed_archive_dependency(dir: &str, key: &str, line: &str) -> b
     }
     let (version, features) = match key {
         "flate2" => ("=1.1.10", Some("[\"rust_backend\"]")),
-        "lzma-rust2" => ("=0.22.0", Some("[\"std\",\"xz\"]")),
+        "lzma-rust2" => ("=0.23.0", Some("[\"std\",\"xz\"]")),
         "tar" => ("=0.4.46", None),
         "zip" => ("=9.0.3", Some("[\"deflate-flate2\"]")),
         _ => return false,
@@ -66,4 +66,26 @@ fn archive_dependency_policy_rejects_wrong_owner_pin_defaults_and_extra_features
         assert!(!reviewed_archive_dependency(owner, "zip", &altered));
     }
     assert!(!reviewed_archive_dependency(owner, "tokio", line));
+}
+
+#[test]
+fn lzma_dependency_policy_accepts_only_the_qualified_release() {
+    let owner = "crates/velnor-actions-orchestrator";
+    let line = "lzma-rust2 = { version = \"=0.23.0\", default-features = false, features = [\"std\", \"xz\"] }";
+    assert!(reviewed_archive_dependency(owner, "lzma-rust2", line));
+    assert!(!reviewed_archive_dependency(
+        owner,
+        "lzma-rust2",
+        &line.replace("=0.23.0", "=0.22.0")
+    ));
+    assert!(!reviewed_archive_dependency(
+        owner,
+        "lzma-rust2",
+        &line.replace("default-features = false", "default-features = true")
+    ));
+    assert!(!reviewed_archive_dependency(
+        owner,
+        "lzma-rust2",
+        &line.replace("\"xz\"]", "\"xz\", \"encoder\"]")
+    ));
 }

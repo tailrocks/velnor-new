@@ -27,6 +27,9 @@ pub(crate) mod guards;
 #[path = "generate_preserve.rs"]
 mod preserve;
 
+#[path = "generate_runner_labels.rs"]
+mod runner_labels;
+
 /// Stage and publish fresh preview output transactionally.
 #[path = "generate_preview.rs"]
 mod preview;
@@ -176,11 +179,11 @@ fn render_all(
     let mut render_context = prep.workflow.context.clone();
     render_context.scale_set_selector = scale_set_selector_for_dispatch(&prep.config, dispatch)?;
     let mut actionlint_input = prep.workflow.actionlint.clone();
-    actionlint_input.extra_runner_labels = render_context
-        .scale_set_selector
-        .as_ref()
-        .map(|selector| selector.labels().to_vec())
-        .unwrap_or_default();
+    actionlint_input.extra_runner_labels = runner_labels::collect(
+        &prep.config,
+        &ir,
+        render_context.scale_set_selector.as_ref(),
+    );
     let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
         &ir,
         prep.config.workflow.policy,

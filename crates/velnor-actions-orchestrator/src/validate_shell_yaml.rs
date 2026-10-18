@@ -355,7 +355,13 @@ fn collect_runs(
 fn hosted_runner_default(runs_on: Option<&str>) -> Option<ShellDialect> {
     let label = runs_on?;
     let is_known_linux = velnor_actions_contract::config::is_hosted_catalog(label);
-    let is_known_macos = label == "macos-15";
+    let is_known_macos = matches!(
+        velnor_actions_contract::ReleaseTarget::for_runner_label(label),
+        Some(
+            velnor_actions_contract::ReleaseTarget::MacosArm64
+                | velnor_actions_contract::ReleaseTarget::MacosX86_64
+        )
+    );
     if (is_known_linux && label.starts_with("ubuntu-")) || is_known_macos {
         // GitHub-hosted Ubuntu and macOS runners default `run` steps to Bash.
         Some(ShellDialect::Bash)
@@ -388,3 +394,7 @@ fn content_is_step_item(key: &str, value: &str) -> bool {
 #[cfg(test)]
 #[path = "validate_shell_yaml_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "validate_shell_yaml_runner_tests.rs"]
+mod runner_tests;
