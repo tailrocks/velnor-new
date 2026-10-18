@@ -53,73 +53,80 @@ fn jit_work_folder_resolves_to_both_worker_mounts() -> Result<(), String> {
     Ok(())
 }
 
-#[test]
-fn pinned_runner_and_image_components_match_the_source_lock() {
-    fn lock_str<'a>(lock: &'a toml::Value, key: &str) -> &'a str {
-        lock.get(key)
-            .and_then(toml::Value::as_str)
-            .unwrap_or_else(|| panic!("runner.lock is missing string field {key}"))
-    }
+fn lock_str<'a>(lock: &'a toml::Value, key: &str) -> &'a str {
+    lock.get(key)
+        .and_then(toml::Value::as_str)
+        .unwrap_or_else(|| panic!("runner.lock is missing string field {key}"))
+}
 
-    fn docker_arg<'a>(dockerfile: &'a str, name: &str) -> Option<&'a str> {
-        let prefix = format!("ARG {name}=");
-        dockerfile
-            .lines()
-            .find_map(|line| line.strip_prefix(prefix.as_str()))
-    }
+fn docker_arg<'a>(dockerfile: &'a str, name: &str) -> Option<&'a str> {
+    let prefix = format!("ARG {name}=");
+    dockerfile
+        .lines()
+        .find_map(|line| line.strip_prefix(prefix.as_str()))
+}
 
-    let lock: toml::Value = toml::from_str(RUNNER_LOCK).expect("runner.lock parses as TOML");
-    assert_eq!(lock_str(&lock, "platform"), "linux/amd64");
-    assert_eq!(lock_str(&lock, "runner_platform"), "linux/amd64");
-    assert_eq!(lock_str(&lock, "runner_release_channel"), "stable");
+fn assert_runner_release_lock(lock: &toml::Value) {
+    assert_eq!(lock_str(lock, "platform"), "linux/amd64");
+    assert_eq!(lock_str(lock, "runner_platform"), "linux/amd64");
+    assert_eq!(lock_str(lock, "runner_release_channel"), "stable");
+    assert_eq!(lock_str(lock, "runner_release_observed_date"), "2026-10-18");
+    assert_eq!(lock_str(lock, "runner_version"), "2.338.0");
     assert_eq!(
-        lock_str(&lock, "runner_release_observed_date"),
-        "2026-10-18"
-    );
-    assert_eq!(lock_str(&lock, "runner_version"), "2.338.0");
-    assert_eq!(
-        lock_str(&lock, "runner_source_commit"),
+        lock_str(lock, "runner_source_commit"),
         "197ca027b90de199464dee3bb9ff198a1db60967"
     );
     assert_eq!(
-        lock_str(&lock, "runner_sha256"),
+        lock_str(lock, "runner_sha256"),
         "af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32"
     );
-    assert_eq!(lock_str(&lock, "docker_version"), "29.9.1");
+    assert_eq!(lock_str(lock, "runner_scope_download_version"), "2.337.0");
+    assert_ne!(
+        lock_str(lock, "runner_scope_download_version"),
+        lock_str(lock, "runner_version")
+    );
+}
+
+fn assert_runtime_component_lock(lock: &toml::Value) {
+    assert_eq!(lock_str(lock, "docker_version"), "29.9.1");
     assert_eq!(
-        lock_str(&lock, "docker_sha256"),
+        lock_str(lock, "docker_sha256"),
         "c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57"
     );
-    assert_eq!(lock_str(&lock, "buildx_version"), "0.38.0");
+    assert_eq!(lock_str(lock, "buildx_version"), "0.38.0");
     assert_eq!(
-        lock_str(&lock, "buildx_sha256"),
+        lock_str(lock, "buildx_sha256"),
         "4fe4cc38adf48169132749b6ca22a990928db0118e3407584ee553723115d287"
     );
-    assert_eq!(lock_str(&lock, "compose_version"), "5.6.0");
+    assert_eq!(lock_str(lock, "compose_version"), "5.6.0");
     assert_eq!(
-        lock_str(&lock, "compose_sha256"),
+        lock_str(lock, "compose_sha256"),
         "40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a"
     );
-    assert_eq!(lock_str(&lock, "node_version"), "26.12.0");
-    assert_eq!(lock_str(&lock, "node_release_channel"), "Current");
+    assert_eq!(lock_str(lock, "node_version"), "26.12.0");
+    assert_eq!(lock_str(lock, "node_release_channel"), "Current");
     assert_eq!(
-        lock_str(&lock, "node_sha256"),
+        lock_str(lock, "node_sha256"),
         "d9f88af72ad34f7ddf8e67289829f1698f54b6254f7d4f54b7453117ff1a3d2c"
     );
-    assert_eq!(lock_str(&lock, "turso"), "=0.8.3");
+    assert_eq!(lock_str(lock, "turso"), "=0.8.3");
+}
 
+fn assert_pinned_base_image(lock: &toml::Value) {
     let base = format!(
         "FROM {}@{}",
-        lock_str(&lock, "base_image"),
-        lock_str(&lock, "base_image_digest")
+        lock_str(lock, "base_image"),
+        lock_str(lock, "base_image_digest")
     );
     assert!(RUNNER_DOCKERFILE.lines().any(|line| line == base.as_str()));
     assert!(DIND_DOCKERFILE.lines().any(|line| line == base.as_str()));
     assert_eq!(
-        lock_str(&lock, "base_image_index_digest"),
+        lock_str(lock, "base_image_index_digest"),
         "sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944"
     );
+}
 
+fn assert_dockerfile_component_args(lock: &toml::Value) {
     for (dockerfile, arg, field) in [
         (&RUNNER_DOCKERFILE, "RUNNER_VERSION", "runner_version"),
         (&RUNNER_DOCKERFILE, "RUNNER_SHA256", "runner_sha256"),
@@ -136,24 +143,21 @@ fn pinned_runner_and_image_components_match_the_source_lock() {
     ] {
         assert_eq!(
             docker_arg(dockerfile, arg),
-            Some(lock_str(&lock, field)),
+            Some(lock_str(lock, field)),
             "{arg}"
         );
     }
+}
 
+fn assert_runner_artifact_matches_lock(lock: &toml::Value) {
     let runner_tag = format!(
         "velnor-runner:ubuntu-26.04-{}",
-        lock_str(&lock, "runner_version")
+        lock_str(lock, "runner_version")
     );
     assert_eq!(RUNNER_IMAGE, runner_tag);
     assert!(RUNNER_README.contains(runner_tag.as_str()));
-    assert!(RUNNER_README.contains(lock_str(&lock, "runner_source_commit")));
+    assert!(RUNNER_README.contains(lock_str(lock, "runner_source_commit")));
     assert!(RUNNER_README.contains("not evidence that `2.338.0` is\nrejected"));
-    assert_eq!(lock_str(&lock, "runner_scope_download_version"), "2.337.0");
-    assert_ne!(
-        lock_str(&lock, "runner_scope_download_version"),
-        lock_str(&lock, "runner_version")
-    );
     assert!(RUNNER_DOCKERFILE.contains("actions-runner-linux-x64-${RUNNER_VERSION}.tar.gz"));
     let checksum_check = RUNNER_DOCKERFILE
         .find("sha256sum -c -")
@@ -164,10 +168,31 @@ fn pinned_runner_and_image_components_match_the_source_lock() {
     assert!(checksum_check < runner_extract);
     assert!(RUNNER_DOCKERFILE.contains("Does not patch Runner.Listener"));
     assert!(!RUNNER_DOCKERFILE.contains("externals/node24"));
+}
 
-    let dind_tag = format!("velnor-dind:{}", lock_str(&lock, "docker_version"));
+fn assert_dind_artifact_matches_lock(lock: &toml::Value) -> Result<(), String> {
+    let dind_tag = format!("velnor-dind:{}", lock_str(lock, "docker_version"));
     assert!(DIND_README.contains(dind_tag.as_str()));
-    assert!(DIND_README.contains(lock_str(&lock, "docker_source_commit")));
+    assert!(DIND_README.contains(lock_str(lock, "docker_source_commit")));
+
+    let resource_budget =
+        crate::worker::test_resource_budget().map_err(|error| error.to_string())?;
+    let runtime_plan =
+        dind_create("runner-contract", resource_budget).map_err(|error| error.to_string())?;
+    assert_eq!(runtime_plan.image, dind_tag);
+    Ok(())
+}
+
+#[test]
+fn pinned_runner_and_image_components_match_the_source_lock() -> Result<(), String> {
+    let lock: toml::Value = toml::from_str(RUNNER_LOCK).map_err(|error| error.to_string())?;
+    assert_runner_release_lock(&lock);
+    assert_runtime_component_lock(&lock);
+    assert_pinned_base_image(&lock);
+    assert_dockerfile_component_args(&lock);
+    assert_runner_artifact_matches_lock(&lock);
+    assert_dind_artifact_matches_lock(&lock)?;
+    Ok(())
 }
 
 #[test]
