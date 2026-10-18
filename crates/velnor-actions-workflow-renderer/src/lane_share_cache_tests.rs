@@ -65,7 +65,7 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
     let mut jobs = paired(&[setup_step, echo_step(0, "same tool work")]);
     let hosted_id = "rust-0__hosted";
     let local_id = "rust-0__local";
-    let hosted_prelude = tools_cache_prelude(HOSTED_RUNS).expect("hosted V2 prelude");
+    let hosted_prelude = tools_cache_prelude(HOSTED_RUNS, false).expect("hosted V2 prelude");
     jobs.get_mut(hosted_id)
         .expect("hosted lane")
         .steps
@@ -124,9 +124,9 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
 
 #[test]
 fn paired_nonempty_tools_preludes_compare_seed_admission_as_an_exact_expression() {
-    let hosted = tools_cache_prelude(HOSTED_RUNS).expect("hosted prelude");
+    let hosted = tools_cache_prelude(HOSTED_RUNS, false).expect("hosted prelude");
     let local_runs_on = "ubuntu-24.04";
-    let local = tools_cache_prelude(local_runs_on).expect("second hosted prelude");
+    let local = tools_cache_prelude(local_runs_on, false).expect("second hosted prelude");
     assert_eq!(hosted.len(), 2);
     assert_eq!(local.len(), 2);
     assert!(super::super::runtime::same_tools_cache_prelude_shape(
@@ -134,6 +134,8 @@ fn paired_nonempty_tools_preludes_compare_seed_admission_as_an_exact_expression(
         &local,
         HOSTED_RUNS,
         local_runs_on,
+        false,
+        false,
     ));
 
     let mut wrong_local = local;
@@ -149,11 +151,14 @@ fn paired_nonempty_tools_preludes_compare_seed_admission_as_an_exact_expression(
         &wrong_local,
         HOSTED_RUNS,
         local_runs_on,
+        false,
+        false,
     ));
 }
 
 fn tools_cache_prelude(
     runs_on: &str,
+    needs_plan: bool,
 ) -> Result<Vec<velnor_actions_contract::Step>, crate::RenderError> {
     let setup = crate::setup::MiseSetup {
         uses: "jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7".to_owned(),
@@ -170,10 +175,13 @@ fn tools_cache_prelude(
         rustup_components: &[],
         scale_set_image_source_sha: None,
     })?;
-    Ok(vec![
-        payload.runtime_prelude_step()?,
-        payload.restore_step()?,
-    ])
+    let mut identity = payload.runtime_prelude_step()?;
+    identity.condition =
+        Some(crate::cache_p08::tools_cache_identity_condition(needs_plan).to_owned());
+    let mut restore = payload.restore_step()?;
+    restore.condition =
+        Some(crate::cache_p08::tools_cache_restore_condition(needs_plan).to_owned());
+    Ok(vec![identity, restore])
 }
 
 fn assert_emitted_restore_is_hosted_only(

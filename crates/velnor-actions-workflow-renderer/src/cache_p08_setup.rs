@@ -1,7 +1,7 @@
 //! Insert the typed V2 tools-cache prelude into rendered jobs.
 
 use velnor_actions_contract::workflow::step_identity::is_configured_checkout;
-use velnor_actions_contract::{Job, RunsOn, Step, StepKind};
+use velnor_actions_contract::{Job, RunsOn, Step, StepKind, StepRole};
 
 use crate::{MiseSetup, RenderError, cache_p08, cache_p08::ToolsCacheInputs};
 
@@ -12,9 +12,7 @@ pub(crate) fn ensure_tools_cache_v2(
     job: &mut Job,
     setup: &MiseSetup,
     always: bool,
-    target: &str,
-    scale_set_image_source_sha: Option<&str>,
-    checkout_uses: &str,
+    options: cache_p08::ToolsCacheRenderOptions<'_>,
 ) -> Result<(), RenderError> {
     setup.validate()?;
     let setup_indices = job
@@ -41,11 +39,11 @@ pub(crate) fn ensure_tools_cache_v2(
                 "setup_mise_malformed:{job_id}"
             )));
         }
-        index
+        move_setup_after_helper(job, index, options.checkout_uses)
     } else {
-        let at = insert_at(job, checkout_uses).min(job.steps.len());
+        let at = insert_at(job, options.checkout_uses).min(job.steps.len());
         job.steps.insert(at, expected_setup);
-        at
+        move_setup_after_helper(job, at, options.checkout_uses)
     };
     if let Some(first_mise) = first_mise_index(job)
         && setup_index > first_mise
@@ -55,16 +53,17 @@ pub(crate) fn ensure_tools_cache_v2(
         )));
     }
     reject_v2_steps(job_id, job)?;
-    if !checkout_precedes_setup(job, setup_index, checkout_uses) {
+    if !checkout_precedes_setup(job, setup_index, options.checkout_uses) {
         return Ok(());
     }
     insert_tools_prelude(
         job_id,
         job,
         setup,
-        target,
-        scale_set_image_source_sha,
+        options.target,
+        options.scale_set_image_source_sha,
         setup_index,
+        options.require_verified_helper,
     )
 }
 
@@ -75,9 +74,18 @@ fn insert_tools_prelude(
     target: &str,
     scale_set_image_source_sha: Option<&str>,
     setup_index: usize,
+    require_verified_helper: bool,
 ) -> Result<(), RenderError> {
     let specs = cache_p08::infer_job_tools(job);
     if specs.is_empty() {
+        return Ok(());
+    }
+    if !job.steps.iter().any(is_helper_stage) {
+        if require_verified_helper {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "tools_cache_helper_missing:{job_id}"
+            )));
+        }
         return Ok(());
     }
     let rust_version = specs.iter().find_map(|spec| spec.strip_prefix("rust@"));
@@ -116,12 +124,22 @@ fn insert_tools_prelude(
     if !payload.runtime_identity_supported() {
         return Ok(());
     }
+    let needs_plan = job
+        .needs
+        .iter()
+        .any(|dependency| dependency == crate::render::PLAN_JOB_ID);
     let mut prelude = payload.runtime_prelude_step()?;
-    prelude.condition = Some(cache_p08::tools_cache_identity_condition(job_id).to_owned());
+    prelude.condition = Some(cache_p08::tools_cache_identity_condition(needs_plan).to_owned());
     let mut restore = payload.restore_step()?;
-    restore.condition = Some(cache_p08::tools_cache_restore_condition(job_id).to_owned());
-    job.steps
-        .splice(setup_index..setup_index, [prelude, restore]);
+    restore.condition = Some(cache_p08::tools_cache_restore_condition(needs_plan).to_owned());
+    let helper_at = job.steps.iter().rposition(is_helper_stage);
+    let prelude_at = helper_at.map_or(setup_index, |index| index.saturating_add(1));
+    if first_mise_index(job).is_some_and(|index| prelude_at > index) {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "tools_cache_helper_after_tool_use:{job_id}"
+        )));
+    }
+    job.steps.splice(prelude_at..prelude_at, [prelude, restore]);
     Ok(())
 }
 
@@ -182,6 +200,13 @@ fn has_v2_cache_authority(step: &Step, job: &Job) -> bool {
         && with.get("path").map(String::as_str) == Some(tools_paths.as_str())
 }
 
+fn is_helper_stage(step: &Step) -> bool {
+    matches!(
+        step.role,
+        Some(StepRole::AcquireVelnor | StepRole::PreseedStage)
+    )
+}
+
 fn step_uses_mise(step: &Step) -> bool {
     let StepKind::Shell { run, .. } = &step.kind else {
         return false;
@@ -205,6 +230,30 @@ fn insert_at(job: &Job, checkout_uses: &str) -> usize {
         .iter()
         .position(|step| is_typed_checkout(step, checkout_uses))
         .map_or(0, |index| index + 1)
+}
+
+fn move_setup_after_helper(job: &mut Job, setup_index: usize, checkout_uses: &str) -> usize {
+    let Some(checkout_index) = job
+        .steps
+        .iter()
+        .position(|step| is_typed_checkout(step, checkout_uses))
+    else {
+        return setup_index;
+    };
+    let after_checkout = checkout_index + 1;
+    let helper_index = job
+        .steps
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(index, step)| *index >= after_checkout && is_helper_stage(step))
+        .map(|(index, _)| index);
+    let Some(helper_index) = helper_index.filter(|index| setup_index < *index) else {
+        return setup_index;
+    };
+    let setup = job.steps.remove(setup_index);
+    job.steps.insert(helper_index, setup);
+    helper_index
 }
 
 /// Parse the exact pinned components step that populated this tool payload.

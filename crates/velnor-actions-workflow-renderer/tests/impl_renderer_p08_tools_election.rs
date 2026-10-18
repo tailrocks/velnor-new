@@ -22,6 +22,14 @@ fn keyed_job() -> Result<Job, RenderError> {
         rustup_components: &[],
         scale_set_image_source_sha: None,
     })?;
+    let mut prelude = payload.runtime_prelude_step()?;
+    prelude.condition = Some(
+        velnor_actions_workflow_renderer::cache_p08::TOOLS_CACHE_PLAN_RUN_CONDITION.to_owned(),
+    );
+    let mut restore = payload.restore_step()?;
+    restore.condition = Some(
+        velnor_actions_workflow_renderer::cache_p08::TOOLS_CACHE_PLAN_RESTORE_CONDITION.to_owned(),
+    );
     Ok(Job {
         display_name: "Keyed".to_owned(),
         runs_on: LABEL.to_owned(),
@@ -31,7 +39,7 @@ fn keyed_job() -> Result<Job, RenderError> {
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![payload.runtime_prelude_step()?, payload.restore_step()?],
+        steps: vec![prelude, restore],
         cache_mode: None,
     })
 }

@@ -14,7 +14,12 @@ const UBUNTU26_ACTION: &str = "./.github/actions/velnor-tools-prelude-u26";
 const IDENTITY_STEP: &str = "V2 identity";
 const RESTORE_STEP: &str = "Restore Mise tools";
 
-fn render_cache_fixture() -> Result<RenderedWorkflow, RenderError> {
+fn render_cache_fixture(with_plan_dependency: bool) -> Result<RenderedWorkflow, RenderError> {
+    let tool_needs = if with_plan_dependency {
+        vec!["plan".to_owned()]
+    } else {
+        Vec::new()
+    };
     let tool_step = || {
         scrubbed_shell_step(
             "Run actionlint",
@@ -24,14 +29,22 @@ fn render_cache_fixture() -> Result<RenderedWorkflow, RenderError> {
     let hosted = job(
         "rust-0__hosted",
         "Rust hosted",
-        Vec::new(),
-        vec![checkout_step(&checkout_pin())?, tool_step()?],
+        tool_needs.clone(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
+            tool_step()?,
+        ],
     );
     let mut local = job(
         "rust-0__local",
         "Rust local",
-        Vec::new(),
-        vec![checkout_step(&checkout_pin())?, tool_step()?],
+        tool_needs.clone(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
+            tool_step()?,
+        ],
     );
     local.1.runs_on = ScaleSetSelector::try_new(
         SCALE_SET_NAME,
@@ -42,10 +55,27 @@ fn render_cache_fixture() -> Result<RenderedWorkflow, RenderError> {
     let unpaired = job(
         "unpaired",
         "Unpaired",
-        Vec::new(),
-        vec![checkout_step(&checkout_pin())?, tool_step()?],
+        tool_needs,
+        vec![
+            checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
+            tool_step()?,
+        ],
     );
-    let ir = fixture_ir(vec![hosted, local, unpaired]);
+    let mut jobs = vec![hosted, local, unpaired];
+    if with_plan_dependency {
+        jobs.push(job(
+            "plan",
+            "Plan",
+            Vec::new(),
+            vec![
+                checkout_step(&checkout_pin())?,
+                acquire_fixture()?,
+                velnor_actions_workflow_renderer::plan_step(),
+            ],
+        ));
+    }
+    let ir = fixture_ir(jobs);
     velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
         &ir,
         WorkflowPolicy::ConsumerV1,
@@ -57,11 +87,19 @@ fn render_cache_fixture() -> Result<RenderedWorkflow, RenderError> {
 
 fn assert_job_order(yaml: &str, id: &str) {
     let names = step_names(yaml, id);
-    let checkout = names.iter().position(|name| name == "Checkout");
-    let identity = names.iter().position(|name| name == IDENTITY_STEP);
-    let restore = names.iter().position(|name| name == RESTORE_STEP);
+    let checkout_at = names.iter().position(|name| name == "Checkout");
+    let helper_at = names.iter().position(|name| name == "Acquire Velnor");
+    let launcher_at = names
+        .iter()
+        .position(|name| name == "Install cache tar adapters");
+    let identity_at = names.iter().position(|name| name == IDENTITY_STEP);
+    let restore_at = names.iter().position(|name| name == RESTORE_STEP);
     assert!(
-        matches!((checkout, identity, restore), (Some(a), Some(b), Some(c)) if a < b && b < c),
+        matches!(
+            (checkout_at, helper_at, launcher_at, identity_at, restore_at),
+            (Some(checkout), Some(helper), Some(launcher), Some(identity), Some(restore))
+                if checkout < helper && helper < launcher && launcher < identity && identity < restore
+        ),
         "cache prelude order for {id}: {names:?}"
     );
 }
@@ -156,7 +194,7 @@ fn assert_seed_admission_wiring(prelude: &str, restore: &str, workflow: &str) {
 #[test]
 fn shared_runtime_identity_script_covers_hosted_and_unpaired_jobs_once() -> Result<(), RenderError>
 {
-    let rendered = render_cache_fixture()?;
+    let rendered = render_cache_fixture(false)?;
     assert_one_marked_script(&rendered)?;
     for id in ["rust-0__hosted", "unpaired"] {
         assert_job_order(&rendered.yaml, id);
@@ -167,6 +205,22 @@ fn shared_runtime_identity_script_covers_hosted_and_unpaired_jobs_once() -> Resu
             .iter()
             .any(|name| name == IDENTITY_STEP || name == RESTORE_STEP)
     );
+    Ok(())
+}
+
+#[test]
+fn plan_dependent_lane_cache_guards_match_direct_needs() -> Result<(), RenderError> {
+    let rendered = render_cache_fixture(true)?;
+    let gate = "needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''";
+    assert!(rendered.yaml.contains(gate), "{gate}: {}", rendered.yaml);
+    assert!(
+        !rendered
+            .yaml
+            .contains("github.event_name != 'workflow_dispatch'"),
+        "direct-plan jobs must read plan outputs, not the event fallback"
+    );
+    assert_job_order(&rendered.yaml, "rust-0__hosted");
+    assert_job_order(&rendered.yaml, "unpaired");
     Ok(())
 }
 

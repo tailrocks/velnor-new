@@ -13,6 +13,8 @@ fn fixture_ctx(commands: Vec<ValidatorCommand>) -> RenderContext {
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
         scale_set_image_source_sha: None,
+        verified_cache_helpers: std::collections::BTreeMap::new(),
+        require_verified_cache_helper: false,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
         checkout_uses: "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1".to_owned(),

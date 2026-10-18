@@ -175,6 +175,30 @@ fn preseed_templates_carry_trust_mark_and_exact_artifact() -> Result<(), RenderE
 }
 
 #[test]
+fn preseed_stage_exports_the_measured_helper_digest() -> Result<(), RenderError> {
+    let step = preseed_stage_step(PreseedStageSource::LocalBuild, STAGED)?;
+
+    assert_eq!(step.id, Some(velnor_actions_contract::StepId::PreseedStage));
+    assert_eq!(
+        step.role,
+        Some(velnor_actions_contract::StepRole::PreseedStage)
+    );
+    let velnor_actions_contract::StepKind::Shell { run, .. } = step.kind else {
+        return Err(RenderError::InvalidWorkflow(
+            "preseed_stage_not_shell".to_owned(),
+        ));
+    };
+    let script = run
+        .get(2)
+        .map(String::as_str)
+        .ok_or_else(|| RenderError::InvalidWorkflow("preseed_stage_script_missing".to_owned()))?;
+    assert!(script.contains("sha256sum $RUNNER_TEMP/velnor/bin/velnor-actions-"));
+    assert!(script.contains("helper-sha256=%s\\n"));
+
+    Ok(())
+}
+
+#[test]
 fn preseed_manifest_step_runs_fresh_binary_with_op() -> Result<(), RenderError> {
     let step = preseed_manifest_step(&build_argv(), TARGET)?;
     let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind else {

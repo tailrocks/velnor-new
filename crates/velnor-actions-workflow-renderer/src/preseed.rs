@@ -349,7 +349,7 @@ pub fn preseed_stage_step(source: PreseedStageSource, staged: &str) -> Result<St
     validate_staged_path(staged)?;
     let dir = staged.rsplit_once('/').map_or(staged, |(head, _)| head);
     let script = format!(
-        "mkdir -p {dir} && cp {} {staged} && chmod +x {staged} && digest=$(sha256sum {staged}) && digest=${{digest%% *}} && test \"${{#digest}}\" = 64 && case \"$digest\" in *[!0-9a-f]*) exit 1 ;; esac && printf 'helper-sha256=%s\\n' \"$digest\" >> \"$GITHUB_OUTPUT\"",
+        "mkdir -p {dir} && cp {} {staged} && chmod +x {staged} && sha256sum {staged} | awk 'NF == 2 && length($1) == 64 && $1 !~ /[^0-9a-f]/ {{ printf \"helper-sha256=%s\\n\", $1; valid=1 }} END {{ if (!valid) exit 1 }}' >> \"$GITHUB_OUTPUT\"",
         source.path()
     );
     let mut step = steps::shell_step(

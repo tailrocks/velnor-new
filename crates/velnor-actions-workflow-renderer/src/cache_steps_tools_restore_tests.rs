@@ -113,7 +113,7 @@ fn assert_case(
 
 #[test]
 fn preserves_exact_hits_and_validated_seed_on_pure_cache_miss() {
-    let expected_key = format!("mise-tools-v2-{}", "a".repeat(64));
+    let expected_key = format!("mise-tools-v2-payload-v3-{}", "a".repeat(64));
     assert_case(
         "exact-hit",
         Some("true"),
@@ -134,8 +134,9 @@ fn preserves_exact_hits_and_validated_seed_on_pure_cache_miss() {
 
 #[test]
 fn removes_untrusted_partial_and_malformed_restore_state() {
-    let expected_key = format!("mise-tools-v2-{}", "a".repeat(64));
-    let other_v2_key = format!("mise-tools-v2-{}", "b".repeat(64));
+    let expected_key = format!("mise-tools-v2-payload-v3-{}", "a".repeat(64));
+    let other_v2_key = format!("mise-tools-v2-payload-v3-{}", "b".repeat(64));
+    let previous_payload_key = format!("mise-tools-v2-{}", "a".repeat(64));
     assert_case(
         "miss-without-admitted-seed",
         None,
@@ -157,6 +158,14 @@ fn removes_untrusted_partial_and_malformed_restore_state() {
         Some("false"),
         Some(&expected_key),
         Some(&other_v2_key),
+        Some("false"),
+        false,
+    );
+    assert_case(
+        "previous-payload-generation",
+        Some("true"),
+        Some(&previous_payload_key),
+        Some(&previous_payload_key),
         Some("false"),
         false,
     );
@@ -207,7 +216,7 @@ fn valid_seed_without_file_payload_falls_through_to_miss_cleanup() {
     let root = scratch("empty-seed-to-miss");
     let (home, runner_temp) = populate_cache_paths(&root);
     let seed = root.join("seed");
-    let key = format!("mise-tools-v2-{}", "a".repeat(64));
+    let key = format!("mise-tools-v2-payload-v3-{}", "a".repeat(64));
     fs::create_dir_all(seed.join("mise/tree")).expect("empty mise tree");
     fs::create_dir_all(seed.join("rustup/tree")).expect("empty rustup tree");
     fs::write(seed.join("PROVENANCE"), "velnor-host-seed-v1\n").expect("provenance");
@@ -254,7 +263,7 @@ fn one_tree_seed_admission_preserves_only_the_imported_payload_on_miss() {
     let home = root.join("home");
     let runner_temp = root.join("runner-temp");
     let seed = root.join("seed");
-    let key = format!("mise-tools-v2-{}", "b".repeat(64));
+    let key = format!("mise-tools-v2-payload-v3-{}", "b".repeat(64));
     let mise_marker = seed.join("mise/tree/installs/marker");
     fs::create_dir_all(mise_marker.parent().expect("Mise tree parent")).expect("Mise seed tree");
     fs::write(&mise_marker, "mise-seed-bytes").expect("Mise seed payload");

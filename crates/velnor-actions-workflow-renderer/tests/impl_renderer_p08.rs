@@ -325,8 +325,8 @@ fn strict_render_elects_single_writer_per_shared_key()
                 Vec::new(),
                 vec![
                     velnor_actions_workflow_renderer::checkout_step(&checkout_pin())?,
-                    prepare()?,
                     acquire_fixture()?,
+                    prepare()?,
                     plan_step(),
                 ],
             ),
@@ -334,7 +334,11 @@ fn strict_render_elects_single_writer_per_shared_key()
                 "rust-demo",
                 "Rust / demo",
                 vec!["plan".to_owned()],
-                vec![prepare()?],
+                vec![
+                    velnor_actions_workflow_renderer::checkout_step(&checkout_pin())?,
+                    acquire_fixture()?,
+                    prepare()?,
+                ],
             ),
         ]),
         &fixture_ctx(),

@@ -8,6 +8,7 @@ fn typed_prelude_call_stays_one_step_and_conditional_checkout_stays_cold() {
     let setup = setup_config();
     let mut rendered_job = job(vec![
         crate::steps::checkout_step(CHECKOUT).expect("checkout"),
+        super::verified_helper_step(),
         mise_shell(),
     ]);
     crate::cache_p08::ensure_tools_cache_v2(
@@ -47,6 +48,7 @@ fn typed_prelude_call_stays_one_step_and_conditional_checkout_stays_cold() {
             step.condition = Some("always()".to_owned());
             step
         },
+        super::verified_helper_step(),
         mise_shell(),
     ]);
     crate::cache_p08::ensure_tools_cache_v2(

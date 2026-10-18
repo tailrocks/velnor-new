@@ -350,6 +350,10 @@ fn tools_restore_identity(id: &str, job: &Job) -> Result<Option<(String, String)
         .map(str::to_owned)
         .map_err(|_| RenderError::InvalidWorkflow(format!("tools_cache_restore_shape:{id}")))?;
     let identity = identities[0];
+    let needs_plan = job
+        .needs
+        .iter()
+        .any(|dependency| dependency == crate::render::PLAN_JOB_ID);
     let StepKind::Action {
         uses,
         with: identity_with,
@@ -362,8 +366,9 @@ fn tools_restore_identity(id: &str, job: &Job) -> Result<Option<(String, String)
     };
     if identity.id != Some(velnor_actions_contract::StepId::ToolsCacheIdentity)
         || identity.condition.as_deref()
-            != Some(crate::cache_p08::tools_cache_identity_condition(id))
-        || step.condition.as_deref() != Some(crate::cache_p08::tools_cache_restore_condition(id))
+            != Some(crate::cache_p08::tools_cache_identity_condition(needs_plan))
+        || step.condition.as_deref()
+            != Some(crate::cache_p08::tools_cache_restore_condition(needs_plan))
     {
         return Err(RenderError::InvalidWorkflow(format!(
             "tools_cache_identity_shape:{id}"

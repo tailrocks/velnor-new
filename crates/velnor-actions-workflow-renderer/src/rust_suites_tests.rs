@@ -9,7 +9,7 @@ use velnor_actions_contract::{
 
 use super::{
     RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflow, render_suites_workflows,
-    render_suites_workflows_with_routing,
+    render_suites_workflows_with_routing_and_helpers,
 };
 use crate::{
     CHECK_GENERATED_NAME, CompileDriver, MiseSetup, download_suite_archive_step,
@@ -17,6 +17,10 @@ use crate::{
     tree::render_tree_with_claude_mode, upload_suite_archive_step, upload_suite_artifact_step,
     validate_env, workflow_routing::WorkflowRoutingPolicy,
 };
+
+#[path = "rust_suites_cache_helper_tests.rs"]
+mod cache_helper_tests;
+use self::cache_helper_tests::verified_acquire_step;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -339,7 +343,12 @@ fn multi_workflow_grouping_and_non_matrix_tools_cache_writer_election() -> TestR
             },
         )]),
     });
-    let files = render_suites_workflows(&spec)?;
+    let helper_steps = BTreeMap::from([("ubuntu-24.04".to_owned(), verified_acquire_step())]);
+    let files = render_suites_workflows_with_routing_and_helpers(
+        &spec,
+        &WorkflowRoutingPolicy::Preserve,
+        &helper_steps,
+    )?;
     assert_eq!(files.len(), 2);
     assert_eq!(files[0].path, ".github/workflows/nightly.yml");
     assert_eq!(files[1].path, ".github/workflows/suites.yml");
@@ -361,25 +370,5 @@ fn multi_workflow_grouping_and_non_matrix_tools_cache_writer_election() -> TestR
         .ok_or("missing suite-stress section")?;
     assert!(build_section.contains("name: Save Mise tools\n"));
     assert!(!run_section.contains("name: Save Mise tools\n"));
-    Ok(())
-}
-
-#[test]
-fn scale_set_routes_standalone_scheduled_linux_suites() -> TestResult {
-    let mut suite = minimal_suite("nightly", vec![RustSuiteTrigger::Schedule]);
-    suite.schedule = vec!["0 4 * * *".to_owned()];
-    let spec = sample_spec(vec![suite]);
-    let policy = WorkflowRoutingPolicy::ScaleSet(
-        crate::schema2::Schema2WorkflowRequest::canonical_scale_set()?,
-    );
-    let files = render_suites_workflows_with_routing(&spec, &policy)?;
-    assert_eq!(files.len(), 1);
-    assert_eq!(files[0].path, ".github/workflows/suites.yml");
-    assert!(
-        files[0]
-            .bytes
-            .contains("runs-on: [velnor, ubuntu-26.04-scale-set]")
-    );
-    assert!(!files[0].bytes.contains("runs-on: ubuntu-24.04"));
     Ok(())
 }

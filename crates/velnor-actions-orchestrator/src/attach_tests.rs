@@ -228,6 +228,8 @@ fn preseed_attach_plan(catalog: &ToolCatalog) -> WorkflowPlan {
             runs_on: "ubuntu-26.04".to_owned(),
             scale_set_selector: None,
             scale_set_image_source_sha: None,
+            verified_cache_helpers: std::collections::BTreeMap::new(),
+            require_verified_cache_helper: false,
             staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),
             request_dir: REQUEST_DIR.to_owned(),
             checkout_uses: CHECKOUT_USES.to_owned(),
@@ -285,6 +287,22 @@ fn preseed_attach_builds_once_and_sets_mode() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn preseed_rejects_suite_with_a_different_helper_target() {
+    let catalog = ToolCatalog::pinned();
+    let mut plan = preseed_attach_plan(&catalog);
+    let mut suite = legacy_task_job();
+    suite.runs_on = "macos-26".to_owned();
+    plan.ir.jobs.insert("suite-macos".to_owned(), suite);
+
+    let result = attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &catalog);
+    assert!(matches!(
+        result,
+        Err(OrchestratorError::Contract { problem })
+            if problem == "mixed_platform_preseed_requires_release_lock:suite-macos"
+    ));
 }
 
 /// Download, verify, then stage exactly once; never rebuild.
@@ -352,6 +370,8 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
             runs_on: "ubuntu-26.04".to_owned(),
             scale_set_selector: None,
             scale_set_image_source_sha: None,
+            verified_cache_helpers: std::collections::BTreeMap::new(),
+            require_verified_cache_helper: false,
             staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),
             request_dir: REQUEST_DIR.to_owned(),
             checkout_uses: CHECKOUT_USES.to_owned(),

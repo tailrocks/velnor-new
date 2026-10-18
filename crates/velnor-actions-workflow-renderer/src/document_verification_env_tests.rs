@@ -104,6 +104,8 @@ fn render_context(policy: &VerificationTaskPolicy) -> RenderContext {
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
         scale_set_image_source_sha: None,
+        verified_cache_helpers: std::collections::BTreeMap::new(),
+        require_verified_cache_helper: false,
         staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
         request_dir: "${{ runner.temp }}/velnor/r1-a1".to_owned(),
         checkout_uses: "actions/checkout@0123456789abcdef0123456789abcdef01234567".to_owned(),

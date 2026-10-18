@@ -54,6 +54,8 @@ fn ctx() -> RenderContext {
         runs_on: "ubuntu-26.04".to_owned(),
         scale_set_selector: None,
         scale_set_image_source_sha: None,
+        verified_cache_helpers: std::collections::BTreeMap::new(),
+        require_verified_cache_helper: false,
         staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{GENERATOR_VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),

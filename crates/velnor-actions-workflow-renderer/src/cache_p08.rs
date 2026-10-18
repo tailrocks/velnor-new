@@ -30,36 +30,46 @@ pub const TOOLS_CACHE_IDENTITY_NAME: &str = "V2 identity";
 /// Step output owner used by both V2 restore and save expressions.
 pub const TOOLS_CACHE_IDENTITY_STEP_ID: &str = "v2";
 /// Canonical key expression; the output hashes both static tools and runtime identity.
-pub(crate) const TOOLS_CACHE_KEY_EXPRESSION: &str = "mise-tools-v2-${{steps.v2.outputs.identity}}";
+pub(crate) const TOOLS_CACHE_KEY_EXPRESSION: &str =
+    "mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}";
 /// Composite-action input carrying the V2 static tools digest.
 pub(crate) const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str =
     velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
-/// Cache restore is unavailable unless runtime roots/image were qualified.
+/// Restore gate for jobs with a direct dependency on the plan job.
 pub const TOOLS_CACHE_NORMAL_RUN_CONDITION: &str =
     "needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''";
-/// The plan job cannot read its own outputs, so it denies dispatch cache access directly.
+/// Jobs without a direct plan dependency cannot inspect plan outputs.
 pub const TOOLS_CACHE_PLAN_RUN_CONDITION: &str = "github.event_name != 'workflow_dispatch'";
 /// A tool seed may run only after its runtime identity action succeeds.
 pub const TOOLS_CACHE_IDENTITY_CONDITION: &str = "steps.v2.outputs.enabled == 'true'";
 /// Restore only in a normal planned run with a qualified runtime identity.
 pub const TOOLS_CACHE_RESTORE_CONDITION: &str = "needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'";
-/// The plan job uses an event guard because it cannot depend on its own result.
+/// Jobs without a direct plan dependency use the event guard and their local identity.
 pub const TOOLS_CACHE_PLAN_RESTORE_CONDITION: &str =
     "github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'";
 
-pub(crate) fn tools_cache_identity_condition(job_id: &str) -> &'static str {
-    if job_id == crate::render::PLAN_JOB_ID {
-        TOOLS_CACHE_PLAN_RUN_CONDITION
-    } else {
+/// Configuration needed when the setup pipeline decides whether cache actions can run.
+#[derive(Clone, Copy)]
+pub(crate) struct ToolsCacheRenderOptions<'a> {
+    pub target: &'a str,
+    pub scale_set_image_source_sha: Option<&'a str>,
+    pub checkout_uses: &'a str,
+    pub require_verified_helper: bool,
+}
+
+pub(crate) fn tools_cache_identity_condition(needs_plan: bool) -> &'static str {
+    if needs_plan {
         TOOLS_CACHE_NORMAL_RUN_CONDITION
+    } else {
+        TOOLS_CACHE_PLAN_RUN_CONDITION
     }
 }
 
-pub(crate) fn tools_cache_restore_condition(job_id: &str) -> &'static str {
-    if job_id == crate::render::PLAN_JOB_ID {
-        TOOLS_CACHE_PLAN_RESTORE_CONDITION
-    } else {
+pub(crate) fn tools_cache_restore_condition(needs_plan: bool) -> &'static str {
+    if needs_plan {
         TOOLS_CACHE_RESTORE_CONDITION
+    } else {
+        TOOLS_CACHE_PLAN_RESTORE_CONDITION
     }
 }
 /// Cache writes require an eligible producer under `policy` and qualified identity.
@@ -93,15 +103,33 @@ pub(crate) fn ensure_tools_cache_v2_with_source(
     scale_set_image_source_sha: Option<&str>,
     checkout_uses: &str,
 ) -> Result<(), RenderError> {
-    setup_pipeline::ensure_tools_cache_v2(
+    ensure_tools_cache_v2_with_helper_policy(
         job_id,
         job,
         setup,
         always,
-        target,
-        scale_set_image_source_sha,
-        checkout_uses,
+        ToolsCacheRenderOptions {
+            target,
+            scale_set_image_source_sha,
+            checkout_uses,
+            require_verified_helper: true,
+        },
     )
+}
+
+/// Insert the typed tools-cache prelude under the caller's helper requirement.
+///
+/// Jobs without a verified helper may keep setup while skipping cache actions
+/// only in source/bootstrap contexts that explicitly allow the omission.
+/// # Errors
+pub(crate) fn ensure_tools_cache_v2_with_helper_policy(
+    job_id: &str,
+    job: &mut Job,
+    setup: &MiseSetup,
+    always: bool,
+    options: ToolsCacheRenderOptions<'_>,
+) -> Result<(), RenderError> {
+    setup_pipeline::ensure_tools_cache_v2(job_id, job, setup, always, options)
 }
 
 /// Reject the retired broad `rust-cache` archive in generated jobs.

@@ -2,10 +2,77 @@
 
 use velnor_actions_contract::{RunsOn, Step, StepKind, StepRole};
 
+/// Peel the leading verified-helper and cache-tar steps before lane sharing.
+pub(super) fn peel_cache_helper_prefix(steps: &[Step]) -> Option<(Vec<Step>, &[Step])> {
+    let end = steps
+        .iter()
+        .take_while(|step| {
+            matches!(
+                step.role,
+                Some(StepRole::AcquireVelnor | StepRole::CacheTarLaunchers)
+            )
+        })
+        .count();
+    let prefix = &steps[..end];
+    let acquire = prefix
+        .iter()
+        .filter(|step| step.role == Some(StepRole::AcquireVelnor))
+        .count();
+    let launcher = prefix
+        .iter()
+        .position(|step| step.role == Some(StepRole::CacheTarLaunchers));
+    if acquire > 1 || launcher.is_some_and(|index| acquire != 1 || index == 0) {
+        return None;
+    }
+    Some((prefix.to_vec(), &steps[end..]))
+}
+
+/// Allow a hosted-only launcher when the Scale Set lane has no cache access.
+pub(super) fn same_cache_helper_prefix_shape(
+    hosted: &[Step],
+    local: &[Step],
+    hosted_runs_on: &str,
+    local_runs_on: &str,
+    hosted_has_cache_prelude: bool,
+    local_has_cache_prelude: bool,
+) -> bool {
+    let hosted_stages = hosted
+        .iter()
+        .filter(|step| step.role == Some(StepRole::AcquireVelnor))
+        .cloned()
+        .collect::<Vec<_>>();
+    let local_stages = local
+        .iter()
+        .filter(|step| step.role == Some(StepRole::AcquireVelnor))
+        .cloned()
+        .collect::<Vec<_>>();
+    if hosted_stages != local_stages {
+        return false;
+    }
+    let hosted_launchers = hosted
+        .iter()
+        .filter(|step| step.role == Some(StepRole::CacheTarLaunchers))
+        .collect::<Vec<_>>();
+    let local_launchers = local
+        .iter()
+        .filter(|step| step.role == Some(StepRole::CacheTarLaunchers))
+        .collect::<Vec<_>>();
+    if hosted_launchers == local_launchers {
+        return true;
+    }
+    hosted_launchers.len() == 1
+        && local_launchers.is_empty()
+        && !local_has_cache_prelude
+        && hosted_has_cache_prelude
+        && matches!(RunsOn::parse(hosted_runs_on), Ok(RunsOn::Hosted(_)))
+        && matches!(RunsOn::parse(local_runs_on), Ok(RunsOn::ScaleSet(_)))
+}
+
 /// Peel typed runtime identity, seed, and restore steps before lane sharing.
 pub(super) fn peel_tools_cache_prelude(
     steps: &[Step],
     runs_on: &str,
+    needs_plan: bool,
 ) -> Option<(Vec<Step>, Vec<Step>)> {
     let mut prelude = Vec::new();
     let mut common = Vec::new();
@@ -16,7 +83,7 @@ pub(super) fn peel_tools_cache_prelude(
             common.push(step.clone());
         }
     }
-    if !valid_tools_cache_prelude(&prelude, runs_on) {
+    if !valid_tools_cache_prelude(&prelude, runs_on, needs_plan) {
         return None;
     }
     let setup = steps
@@ -40,17 +107,20 @@ fn is_tools_prelude_step(role: Option<StepRole>) -> bool {
     )
 }
 
-fn valid_tools_cache_prelude(steps: &[Step], runs_on: &str) -> bool {
+fn valid_tools_cache_prelude(steps: &[Step], runs_on: &str, needs_plan: bool) -> bool {
     match steps {
         [] => true,
-        [identity, restore] => valid_identity(identity, runs_on) && valid_restore(restore),
+        [identity, restore] => {
+            valid_identity(identity, runs_on, needs_plan) && valid_restore(restore, needs_plan)
+        }
         _ => false,
     }
 }
 
-fn valid_identity(step: &Step, runs_on: &str) -> bool {
+fn valid_identity(step: &Step, runs_on: &str, needs_plan: bool) -> bool {
     step.role == Some(StepRole::ToolsCacheIdentity)
-        && step.condition.as_deref() == Some(crate::cache_p08::TOOLS_CACHE_NORMAL_RUN_CONDITION)
+        && step.condition.as_deref()
+            == Some(crate::cache_p08::tools_cache_identity_condition(needs_plan))
         && matches!(
             &step.kind,
             StepKind::Action { uses, with, env }
@@ -65,9 +135,10 @@ fn valid_identity(step: &Step, runs_on: &str) -> bool {
         )
 }
 
-fn valid_restore(step: &Step) -> bool {
+fn valid_restore(step: &Step, needs_plan: bool) -> bool {
     step.role == Some(StepRole::ToolsCacheRestore)
-        && step.condition.as_deref() == Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
+        && step.condition.as_deref()
+            == Some(crate::cache_p08::tools_cache_restore_condition(needs_plan))
         && matches!(
             &step.kind,
             StepKind::Action { uses, with, env }
@@ -86,9 +157,11 @@ pub(super) fn same_tools_cache_prelude_shape(
     local: &[Step],
     hosted_runs_on: &str,
     local_runs_on: &str,
+    hosted_needs_plan: bool,
+    local_needs_plan: bool,
 ) -> bool {
-    if !valid_tools_cache_prelude(hosted, hosted_runs_on)
-        || !valid_tools_cache_prelude(local, local_runs_on)
+    if !valid_tools_cache_prelude(hosted, hosted_runs_on, hosted_needs_plan)
+        || !valid_tools_cache_prelude(local, local_runs_on, local_needs_plan)
     {
         return false;
     }
@@ -99,7 +172,7 @@ pub(super) fn same_tools_cache_prelude_shape(
     {
         return true;
     }
-    if hosted.len() != local.len() {
+    if hosted_needs_plan != local_needs_plan || hosted.len() != local.len() {
         return false;
     }
     hosted

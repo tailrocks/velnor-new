@@ -1,5 +1,7 @@
 //! Renderer context construction from discovered repository evidence.
 
+use std::collections::{BTreeMap, btree_map::Entry};
+
 use velnor_actions_contract::{
     ExecutionMode, GeneratorValidation, ScaleSetSelector, ValidatorKind, VelnorConfig,
     WorkflowPolicy,
@@ -51,6 +53,7 @@ pub(super) fn render_context(
         .as_ref()
         .and_then(|execution| execution.scale_set_image_source_sha())
         .map(str::to_owned);
+    let (verified_cache_helpers, require_verified_cache_helper) = verified_cache_helpers(&input)?;
     Ok(RenderContext {
         generator_version: input.generator_version.to_owned(),
         report_helper_version: input.report_helper_version.to_owned(),
@@ -58,6 +61,8 @@ pub(super) fn render_context(
         scale_set_selector,
         scale_set_image_source_sha,
         staged_binary: format!("{STAGED_BINARY_PREFIX}{}", input.report_helper_version),
+        verified_cache_helpers,
+        require_verified_cache_helper,
         request_dir: REQUEST_DIR.to_owned(),
         checkout_uses: CHECKOUT_USES.to_owned(),
         validator_commands,
@@ -72,6 +77,49 @@ pub(super) fn render_context(
             input.plan_needs_rust,
         )?,
     })
+}
+
+fn verified_cache_helpers(
+    input: &RenderContextInputs<'_>,
+) -> Result<(BTreeMap<String, Vec<velnor_actions_contract::Step>>, bool), OrchestratorError> {
+    if input.config.workflow.policy != WorkflowPolicy::ConsumerV1 {
+        return Ok((BTreeMap::new(), false));
+    }
+    let mut helpers = BTreeMap::new();
+    helpers.insert(
+        input.label.to_owned(),
+        vec![crate::pins::consumer_acquire_step(
+            input.label,
+            input.report_helper_version,
+            input.discovery,
+        )?],
+    );
+    for discovered in &input.discovery.mise_checks {
+        let label = discovered.check.runner.label.clone();
+        if let Entry::Vacant(entry) = helpers.entry(label) {
+            entry.insert(vec![crate::pins::consumer_acquire_for_runner(
+                &discovered.check.runner,
+                input.report_helper_version,
+                input.discovery.consumer_manifest_json.as_deref(),
+            )?]);
+        }
+    }
+    if let Some(rust) = &input.config.stacks.rust {
+        for suite in &rust.suites {
+            let label = suite.runner_label.as_deref().unwrap_or(input.label);
+            if !helpers.contains_key(label) {
+                helpers.insert(
+                    label.to_owned(),
+                    vec![crate::pins::consumer_acquire_step(
+                        &crate::rust_suites_emit::helper_release_label(label),
+                        input.report_helper_version,
+                        input.discovery,
+                    )?],
+                );
+            }
+        }
+    }
+    Ok((helpers, true))
 }
 
 fn validator_commands(
