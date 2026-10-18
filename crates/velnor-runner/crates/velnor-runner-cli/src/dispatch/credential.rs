@@ -38,17 +38,16 @@ where
     std::str::from_utf8(&secret).map_err(|_| ConnectError::Secret(HostError::Keychain))?;
     let _config_lock = config_lock(state).map_err(|_| ConnectError::Lock)?;
     let mut config = read_host(state)?.ok_or(ConnectError::Config)?;
-    let (reference, update) = match config.release_read_credential_ref() {
-        Some(reference) => (reference.clone(), None),
-        None => {
-            let reference = KeychainReference::parse(DEFAULT_RELEASE_READ_REFERENCE)
-                .map_err(|_| ConnectError::Config)?;
-            config
-                .set_release_read_credential_ref(reference.clone())
-                .map_err(|_| ConnectError::Config)?;
-            let text = config.to_toml().map_err(|_| ConnectError::Config)?;
-            (reference, Some(text))
-        }
+    let (reference, update) = if let Some(reference) = config.release_read_credential_ref() {
+        (reference.clone(), None)
+    } else {
+        let reference = KeychainReference::parse(DEFAULT_RELEASE_READ_REFERENCE)
+            .map_err(|_| ConnectError::Config)?;
+        config
+            .set_release_read_credential_ref(reference.clone())
+            .map_err(|_| ConnectError::Config)?;
+        let text = config.to_toml().map_err(|_| ConnectError::Config)?;
+        (reference, Some(text))
     };
 
     store(reference.service(), reference.account(), &secret).map_err(ConnectError::Secret)?;

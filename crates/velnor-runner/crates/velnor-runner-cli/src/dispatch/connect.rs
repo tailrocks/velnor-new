@@ -60,8 +60,9 @@ impl std::fmt::Display for ConnectError {
             Self::Config => formatter.write_str("invalid config"),
             Self::Lock => formatter.write_str("config is locked"),
             Self::Rejected => formatter.write_str("rejected connection"),
-            Self::Secret(error) => std::fmt::Display::fmt(error, formatter),
-            Self::Lifecycle(error) => std::fmt::Display::fmt(error, formatter),
+            Self::Secret(error) | Self::Lifecycle(error) => {
+                std::fmt::Display::fmt(error, formatter)
+            }
             Self::Write => formatter.write_str("write failed"),
             Self::WriteUncertain => formatter.write_str("write state uncertain"),
         }
@@ -284,9 +285,9 @@ fn persist_reconnected(
     let snapshot_path = connection_binding_snapshot(state, &connection.connection_id);
     let proof_path = connection_reactivation_proof(state, &connection.connection_id);
     let drain_proof_path = connection_drain_proof(state, &connection.connection_id);
-    let _ = remove_marker_path(&snapshot_path);
-    let _ = remove_marker_path(&proof_path);
-    let _ = remove_marker_path(&drain_proof_path);
+    let _snapshot_cleanup = remove_marker_path(&snapshot_path);
+    let _proof_cleanup = remove_marker_path(&proof_path);
+    let _drain_proof_cleanup = remove_marker_path(&drain_proof_path);
     Ok(())
 }
 
@@ -314,8 +315,8 @@ pub(super) fn connection_from(
     };
     let source_policy = SourcePolicy::try_new(
         mode,
-        request.branches.to_vec(),
-        request.tag_prefixes.to_vec(),
+        request.branches.clone(),
+        request.tag_prefixes.clone(),
         events,
         pull_request_rules,
     )

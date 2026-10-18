@@ -137,12 +137,12 @@ fn atomic_write(path: &Path, contents: &[u8]) -> std::io::Result<()> {
     let mut file = options.open(&temporary)?;
     if let Err(error) = file.write_all(contents).and_then(|()| file.sync_all()) {
         drop(file);
-        let _ = std::fs::remove_file(&temporary);
+        drop(std::fs::remove_file(&temporary));
         return Err(error);
     }
     drop(file);
     if let Err(error) = std::fs::rename(&temporary, path) {
-        let _ = std::fs::remove_file(&temporary);
+        drop(std::fs::remove_file(&temporary));
         return Err(error);
     }
     std::fs::File::open(parent)?.sync_all()
@@ -230,7 +230,10 @@ fn with_logs(plist: &str, log_dir: &Path) -> Option<String> {
 }
 
 fn xml_forbidden(ch: char) -> bool {
-    !matches!(u32::from(ch), 0x20..=0xD7FF | 0xE000..=0xFFFD | 0x10000..=0x10FFFF)
+    !matches!(
+        u32::from(ch),
+        0x20..=0xD7FF | 0xE000..=0xFFFD | 0x0001_0000..=0x0010_FFFF
+    )
 }
 
 fn xml_text(text: &str) -> String {
@@ -328,14 +331,14 @@ mod tests {
             || !plist_matches(&plist_path, binary, &state, &logs)
             || plist_matches(&plist_path, binary, &other_state, &logs)
         {
-            let _ = std::fs::remove_dir_all(&root);
+            let _cleanup_result = std::fs::remove_dir_all(&root);
             return Err("service did not bind start to the installed state".to_owned());
         }
         let text = std::fs::read_to_string(&plist_path).map_err(|error| error.to_string())?;
         if !text.contains("<string>/opt/velnor-host</string>\n<string>--state</string><string>")
             || !text.contains("<string>daemon</string>\n<string>run</string>")
         {
-            let _ = std::fs::remove_dir_all(&root);
+            let _cleanup_result = std::fs::remove_dir_all(&root);
             return Err("LaunchAgent arguments are not exact".to_owned());
         }
         std::fs::remove_dir_all(root).map_err(|error| error.to_string())?;
@@ -350,7 +353,7 @@ mod tests {
         let logs = root.join("logs");
         let target = root.join("target.plist");
         let path = root.join("agent.plist");
-        let _ = std::fs::remove_dir_all(&root);
+        let _remove_previous_state = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).map_err(|error| error.to_string())?;
         std::fs::write(&target, b"keep this target").map_err(|error| error.to_string())?;
         std::os::unix::fs::symlink(&target, &path).map_err(|error| error.to_string())?;

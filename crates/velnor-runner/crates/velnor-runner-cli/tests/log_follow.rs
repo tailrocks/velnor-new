@@ -11,14 +11,14 @@ use std::time::Duration;
 
 fn signal_process(pid: u32, signal: &str) {
     let process = pid.to_string();
-    let _ = Command::new("/bin/kill")
+    let _signal_result = Command::new("/bin/kill")
         .args([signal, process.as_str()])
         .status();
 }
 
 fn signal_group(pid: u32, signal: &str) {
     let group = format!("-{pid}");
-    let _ = Command::new("/bin/kill")
+    let _signal_result = Command::new("/bin/kill")
         .args([signal, group.as_str()])
         .status();
 }

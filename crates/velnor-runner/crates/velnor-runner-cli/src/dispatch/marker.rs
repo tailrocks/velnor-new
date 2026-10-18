@@ -43,9 +43,8 @@ impl MarkerToken {
 pub(super) fn marker_token(path: &Path) -> Result<Option<MarkerToken>, StateWriteError> {
     match std::fs::symlink_metadata(path) {
         Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {}
-        Ok(_) => return Err(StateWriteError::Failed),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(_) => return Err(StateWriteError::Failed),
+        Ok(_) | Err(_) => return Err(StateWriteError::Failed),
     }
     let mut bytes = Vec::with_capacity(33);
     std::fs::File::open(path)
@@ -75,9 +74,8 @@ pub(super) fn remove_marker_if_matches(
 pub(super) fn remove_marker_path(path: &Path) -> Result<bool, StateWriteError> {
     match std::fs::symlink_metadata(path) {
         Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {}
-        Ok(_) => return Err(StateWriteError::Failed),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(_) => return Err(StateWriteError::Failed),
+        Ok(_) | Err(_) => return Err(StateWriteError::Failed),
     }
     std::fs::remove_file(path).map_err(|_| StateWriteError::Failed)?;
     let parent = path.parent().ok_or(StateWriteError::Failed)?;
@@ -93,9 +91,8 @@ pub(super) fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), StateWriteEr
     prepare_parent_directory(parent)?;
     match std::fs::symlink_metadata(path) {
         Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {}
-        Ok(_) => return Err(StateWriteError::Failed),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(_) => return Err(StateWriteError::Failed),
+        Ok(_) | Err(_) => return Err(StateWriteError::Failed),
     }
     let name = path
         .file_name()
@@ -115,12 +112,12 @@ pub(super) fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), StateWriteEr
         .map_err(|_| StateWriteError::Failed)?;
     if file.write_all(bytes).is_err() || file.sync_all().is_err() {
         drop(file);
-        let _ = std::fs::remove_file(&temporary);
+        drop(std::fs::remove_file(&temporary));
         return Err(StateWriteError::Failed);
     }
     drop(file);
     if std::fs::rename(&temporary, path).is_err() {
-        let _ = std::fs::remove_file(&temporary);
+        drop(std::fs::remove_file(&temporary));
         return Err(StateWriteError::Failed);
     }
     std::fs::File::open(parent)

@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 
 /// macOS scale-set controller.
 #[derive(Debug, Parser)]
@@ -21,71 +21,8 @@ pub struct Cli {
 pub enum Command {
     /// Bind one repository and scale set. The token is read from stdin and is not a flag.
     Connect {
-        /// Stable ID for this connection.
-        #[arg(long)]
-        connection_id: String,
-        /// `owner/name`.
-        #[arg(long)]
-        repo: String,
-        /// Immutable GitHub repository ID.
-        #[arg(long)]
-        repository_id: i64,
-        /// Scale Set name.
-        #[arg(long)]
-        scale_set: String,
-        /// Exact registered label. Repeat for every label.
-        #[arg(long = "scale-set-label", required = true)]
-        scale_set_labels: Vec<String>,
-        /// Source authorization policy: `repository` or `branch-restricted`.
-        #[arg(
-            long = "source-policy-mode",
-            required = true,
-            value_parser = ["repository", "branch-restricted"]
-        )]
-        source_policy_mode: String,
-        /// Allowed event. Repeat for every event.
-        #[arg(
-            long = "event",
-            required = true,
-            value_parser = ["pull_request", "push", "merge_group", "schedule", "workflow_dispatch", "release"]
-        )]
-        events: Vec<String>,
-        /// Allowed branch ref. Repeat for every branch.
-        #[arg(long = "branch")]
-        branches: Vec<String>,
-        /// Allowed tag prefix. Repeat for every prefix.
-        #[arg(long = "tag-prefix")]
-        tag_prefixes: Vec<String>,
-        /// Pull request rule: NUMBER:BASE_REPOSITORY_ID:BASE_BRANCH:HEAD_REPOSITORY_ID:HEAD_BRANCH. Use `*` for any number.
-        #[arg(long = "pull-request-rule")]
-        pull_request_rules: Vec<String>,
-        /// Container platform.
-        #[arg(long)]
-        platform: String,
-        /// Total permits. Defaults to 1.
-        #[arg(long)]
-        max_jobs: Option<u32>,
-        /// Runner CPU allocation in millicores.
-        #[arg(long)]
-        runner_cpu_millicores: u64,
-        /// Runner memory limit in bytes.
-        #[arg(long)]
-        runner_memory_bytes: u64,
-        /// Private `DinD` CPU allocation in millicores.
-        #[arg(long)]
-        dind_cpu_millicores: u64,
-        /// Private `DinD` memory limit in bytes.
-        #[arg(long)]
-        dind_memory_bytes: u64,
-        /// Host memory reserved for operational overhead in bytes.
-        #[arg(long)]
-        operational_memory_reserve_bytes: u64,
-        /// Docker context name.
-        #[arg(long)]
-        docker_context: Option<String>,
-        /// Unix socket endpoint.
-        #[arg(long)]
-        endpoint: Option<String>,
+        #[command(flatten)]
+        args: Box<ConnectArgs>,
     },
     /// Print readiness.
     Status {
@@ -157,6 +94,76 @@ pub enum Command {
     },
 }
 
+/// Arguments for one repository and Scale Set binding.
+#[derive(Debug, Args)]
+pub struct ConnectArgs {
+    /// Stable ID for this connection.
+    #[arg(long)]
+    pub connection_id: String,
+    /// `owner/name`.
+    #[arg(long)]
+    pub repo: String,
+    /// Immutable GitHub repository ID.
+    #[arg(long)]
+    pub repository_id: i64,
+    /// Scale Set name.
+    #[arg(long)]
+    pub scale_set: String,
+    /// Exact registered label. Repeat for every label.
+    #[arg(long = "scale-set-label", required = true)]
+    pub scale_set_labels: Vec<String>,
+    /// Source authorization policy: `repository` or `branch-restricted`.
+    #[arg(
+        long = "source-policy-mode",
+        required = true,
+        value_parser = ["repository", "branch-restricted"]
+    )]
+    pub source_policy_mode: String,
+    /// Allowed event. Repeat for every event.
+    #[arg(
+        long = "event",
+        required = true,
+        value_parser = ["pull_request", "push", "merge_group", "schedule", "workflow_dispatch", "release"]
+    )]
+    pub events: Vec<String>,
+    /// Allowed branch ref. Repeat for every branch.
+    #[arg(long = "branch")]
+    pub branches: Vec<String>,
+    /// Allowed tag prefix. Repeat for every prefix.
+    #[arg(long = "tag-prefix")]
+    pub tag_prefixes: Vec<String>,
+    /// Pull request rule: `NUMBER:BASE_REPOSITORY_ID:BASE_BRANCH:HEAD_REPOSITORY_ID:HEAD_BRANCH`. Use `*` for any number.
+    #[arg(long = "pull-request-rule")]
+    pub pull_request_rules: Vec<String>,
+    /// Container platform.
+    #[arg(long)]
+    pub platform: String,
+    /// Total permits. Defaults to 1.
+    #[arg(long)]
+    pub max_jobs: Option<u32>,
+    /// Runner CPU allocation in millicores.
+    #[arg(long)]
+    pub runner_cpu_millicores: u64,
+    /// Runner memory limit in bytes.
+    #[arg(long)]
+    pub runner_memory_bytes: u64,
+    /// Private `DinD` CPU allocation in millicores.
+    #[arg(long)]
+    pub dind_cpu_millicores: u64,
+    /// Private `DinD` memory limit in bytes.
+    #[arg(long)]
+    pub dind_memory_bytes: u64,
+    /// Host memory reserved for operational overhead in bytes.
+    #[arg(long)]
+    pub operational_memory_reserve_bytes: u64,
+    /// Docker context name.
+    #[arg(long)]
+    pub docker_context: Option<String>,
+    /// Unix socket endpoint.
+    #[arg(long)]
+    pub endpoint: Option<String>,
+}
+
 /// Host credential actions.
 #[derive(Debug, Clone, Copy, Subcommand)]
 pub enum CredentialAction {
@@ -191,6 +198,63 @@ mod tests {
     use clap::Parser;
 
     use super::{Cli, Command, ServiceAction};
+
+    #[test]
+    fn connect_keeps_the_flat_option_interface() -> Result<(), String> {
+        let cli = Cli::try_parse_from([
+            "velnor-host",
+            "connect",
+            "--connection-id",
+            "example",
+            "--repo",
+            "owner/repo",
+            "--repository-id",
+            "123",
+            "--scale-set",
+            "example-set",
+            "--scale-set-label",
+            "velnor",
+            "--scale-set-label",
+            "example-set",
+            "--source-policy-mode",
+            "repository",
+            "--event",
+            "push",
+            "--platform",
+            "linux/amd64",
+            "--runner-cpu-millicores",
+            "1000",
+            "--runner-memory-bytes",
+            "2048",
+            "--dind-cpu-millicores",
+            "2000",
+            "--dind-memory-bytes",
+            "4096",
+            "--operational-memory-reserve-bytes",
+            "1024",
+        ])
+        .map_err(|error| error.to_string())?;
+        let Command::Connect { args } = cli.command else {
+            return Err("connect command did not parse".to_owned());
+        };
+        if args.connection_id != "example"
+            || args.repo != "owner/repo"
+            || args.repository_id != 123
+            || args.scale_set != "example-set"
+            || args.scale_set_labels != ["velnor", "example-set"]
+            || args.source_policy_mode != "repository"
+            || args.events != ["push"]
+            || args.platform != "linux/amd64"
+            || args.runner_cpu_millicores != 1000
+            || args.runner_memory_bytes != 2048
+            || args.dind_cpu_millicores != 2000
+            || args.dind_memory_bytes != 4096
+            || args.operational_memory_reserve_bytes != 1024
+        {
+            return Err("connect options changed during parsing".to_owned());
+        }
+        Ok(())
+    }
 
     #[test]
     fn state_is_global_before_or_after_the_service_command() -> Result<(), String> {

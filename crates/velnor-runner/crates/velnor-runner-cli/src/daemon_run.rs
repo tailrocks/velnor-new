@@ -12,6 +12,7 @@ const MAX_CONFIG_BYTES: u64 = 1_048_576;
 
 /// Missing file waits. Valid TOML listens. Rejected TOML is an error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(test)]
 pub(crate) enum DaemonIntent {
     /// `host.toml` is absent.
     Wait,
@@ -23,6 +24,7 @@ pub(crate) enum DaemonIntent {
 
 /// Classify `host.toml` text. `None` means the file is missing.
 #[must_use]
+#[cfg(test)]
 pub(crate) fn daemon_intent(toml_text: Option<&str>) -> DaemonIntent {
     match toml_text {
         None => DaemonIntent::Wait,
@@ -59,13 +61,10 @@ fn serve(state: &Path, lock: &DaemonLock) -> ExitCode {
                 continue;
             }
         };
-        let config = match HostConfig::parse(&text) {
-            Ok(config) => config,
-            Err(_) => {
-                eprintln!("invalid config");
-                pause();
-                continue;
-            }
+        let Ok(config) = HostConfig::parse(&text) else {
+            eprintln!("invalid config");
+            pause();
+            continue;
         };
         return drive(state, &config);
     }
@@ -153,7 +152,7 @@ mod tests {
     #[test]
     fn daemon_reads_only_regular_bounded_config_files() -> Result<(), String> {
         let dir = std::env::temp_dir().join(format!("velnor-config-file-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        let _remove_previous_state = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
         let path = dir.join("host.toml");
         if read_config_file(&path)

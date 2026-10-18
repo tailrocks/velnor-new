@@ -21,9 +21,8 @@ pub(super) fn read_host(state: &Path) -> Result<Option<HostConfig>, ConnectError
         {
             metadata
         }
-        Ok(_) => return Err(ConnectError::Config),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(_) => return Err(ConnectError::Config),
+        Ok(_) | Err(_) => return Err(ConnectError::Config),
     };
     let raw = std::fs::read_to_string(&path).map_err(|_| ConnectError::Config)?;
     let Ok(length) = u64::try_from(raw.len()) else {
@@ -188,9 +187,8 @@ fn has_binding_proof(
         {
             metadata
         }
-        Ok(_) => return Err(ConnectError::Rejected),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(_) => return Err(ConnectError::Rejected),
+        Ok(_) | Err(_) => return Err(ConnectError::Rejected),
     };
     let bytes = std::fs::read(path).map_err(|_| ConnectError::Rejected)?;
     let Ok(length) = u64::try_from(bytes.len()) else {
@@ -249,9 +247,8 @@ pub(super) fn read_connection_snapshot(
         {
             metadata
         }
-        Ok(_) => return Err(ConnectError::Rejected),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(_) => return Err(ConnectError::Rejected),
+        Ok(_) | Err(_) => return Err(ConnectError::Rejected),
     };
     let bytes = std::fs::read(&path).map_err(|_| ConnectError::Rejected)?;
     let Ok(length) = u64::try_from(bytes.len()) else {
