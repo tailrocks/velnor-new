@@ -8,8 +8,8 @@ root="/home/runner"
 work="${root}/_work"
 listener="${root}/bin/Runner.Listener"
 entrypoint_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
-# Linux MAX_ARG_STRLEN is 131072 bytes on this linux/amd64 image. An env entry
-# includes its name, '=', and NUL, so reserve those bytes from the JIT value.
+# Use the conservative 4-KiB-page Linux MAX_ARG_STRLEN of 131072 bytes. An env
+# entry includes its name, '=', and NUL, so reserve those bytes from the JIT.
 jit_env_name='ACTIONS_RUNNER_INPUT_JITCONFIG'
 max=$((131072 - ${#jit_env_name} - 2))
 

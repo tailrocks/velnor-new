@@ -9,6 +9,10 @@ mkdir -p "$fixture/bin" "$fixture/root/bin" "$fixture/tmp" "$fixture/input"
 linux_max_arg_strlen=131072
 jit_env_name='ACTIONS_RUNNER_INPUT_JITCONFIG'
 max_payload_bytes=$((linux_max_arg_strlen - ${#jit_env_name} - 2))
+linux_page_size=""
+if [[ "$(uname -s)" == Linux ]]; then
+  linux_page_size="$(getconf PAGESIZE 2>/dev/null || true)"
+fi
 
 # Redirect image-only paths in a private copy; the tested entrypoint is otherwise unchanged.
 sed \
@@ -173,8 +177,10 @@ PATH="$fixture/bin:$PATH" \
   || fail "ambient Docker JIT environment was not rejected"
 assert_clean_outputs "$fixture/input/canary"
 
-if [[ "$(uname -s)" == Linux ]]; then
-  printf 'jit input fixture: PASS (stdin, fd3, 131072-byte Linux env-entry boundary, rejection, argv, output, persistence)\n'
+if [[ "$linux_page_size" == 4096 ]]; then
+  printf 'jit input fixture: PASS (stdin, fd3, 131072-byte Linux execve env-entry boundary, rejection, argv, output, persistence)\n'
+elif [[ -n "$linux_page_size" ]]; then
+  printf 'jit input fixture: PASS (stdin, fd3, 131072-byte env-entry math; Linux page size %s, 4-KiB execve boundary not exercised, rejection, argv, output, persistence)\n' "$linux_page_size"
 else
   printf 'jit input fixture: PASS (stdin, fd3, 131072-byte env-entry math; Linux execve boundary not exercised, rejection, argv, output, persistence)\n'
 fi

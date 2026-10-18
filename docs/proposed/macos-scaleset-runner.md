@@ -190,10 +190,11 @@ work, temp, actions, tools, and the socket. After a durable provision intent,
 the controller delivers raw JIT on a short-lived stdin or inherited-fd-3
 channel. The entrypoint passes it to the official `Runner.Listener` only in a
 short-lived `ACTIONS_RUNNER_INPUT_JITCONFIG` assignment on `exec`; JIT is not
-an argument. The entrypoint caps raw JIT at 131040 bytes because Linux's
-131072-byte per-string exec limit includes the environment key, `=`, and
-terminating NUL. Raw JIT is absent from Docker `Config.Env`, `Cmd`, labels,
-image layers, host argv, journal, TOML, launchd plist, and evidence archives.
+an argument. The entrypoint caps raw JIT at 131040 bytes to fit the
+conservative 131072-byte per-string exec limit for 4-KiB-page Linux, including
+the environment key, `=`, and terminating NUL. Raw JIT is absent from Docker
+`Config.Env`, `Cmd`, labels, image layers, host argv, journal, TOML, launchd
+plist, and evidence archives.
 Controller API credentials never enter the runner.
 
 JIT `workFolder` is `_work`, relative to the official runner root at
