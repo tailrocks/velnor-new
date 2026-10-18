@@ -18,7 +18,9 @@ use super::{Ready, Rest, ack_ready, drive_ready};
 
 mod completion_intake;
 mod pump;
-use completion_intake::{completion_error, intake_and_ack_if_only, intake_and_ack_if_only_scoped};
+use completion_intake::{
+    IntakeDecision, completion_error, intake_and_ack_if_only, intake_and_ack_if_only_scoped,
+};
 use pump::until_idle;
 #[cfg(all(test, unix))]
 use pump::{PollHost, pump};
@@ -27,6 +29,12 @@ use pump::{PollHost, pump};
 ///
 /// This path never acquires an Available job or starts a worker. Positive
 /// capacity requires the separate fresh-permit admission path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ScopedPollOutcome {
+    pub(crate) wake_cleanup: bool,
+    pub(crate) session_delete_candidate: bool,
+}
+
 pub(crate) async fn poll_scoped_connection_once(
     link: &mut Link,
     set_id: i64,
@@ -34,14 +42,12 @@ pub(crate) async fn poll_scoped_connection_once(
     scoped: &ConnectionJournal,
     session_intent_id: i64,
     allocation: &HeaderAllocation,
-) -> Result<bool, EnsureError> {
-    if allocation.target() != 0
-        || !allocation.matches_session(scoped.connection_id(), set_id, &session.session_id)
-    {
+) -> Result<ScopedPollOutcome, EnsureError> {
+    if !allocation.matches_session(scoped.connection_id(), set_id, &session.session_id) {
         return Err(EnsureError::AdmissionClosed);
     }
     let attempt = scoped
-        .begin_session_poll(session_intent_id, allocation)
+        .begin_zero_header_poll(session_intent_id, allocation)
         .await
         .map_err(|_| completion_error())?;
     let (saved, path) = match point_at_queue(link, &session.message_queue_url) {
@@ -70,7 +76,7 @@ pub(crate) async fn poll_scoped_connection_once(
     let intake = intake_and_ack_if_only_scoped(scoped, set_id, &polled, || async {
         ack_ready(link, session, path, queue, &polled)
     });
-    let handled = async { intake.await.map(|intake| intake.wake_cleanup) };
+    let handled = async { intake.await };
     finish_scoped_poll_response(
         scoped,
         session_intent_id,
@@ -91,12 +97,12 @@ async fn finish_scoped_poll_response<F>(
     allocation: &HeaderAllocation,
     attempt: HeaderPollAttempt,
     handled: F,
-) -> Result<bool, EnsureError>
+) -> Result<ScopedPollOutcome, EnsureError>
 where
-    F: Future<Output = Result<bool, EnsureError>>,
+    F: Future<Output = Result<IntakeDecision, EnsureError>>,
 {
-    let wake_cleanup = match handled.await {
-        Ok(wake_cleanup) => wake_cleanup,
+    let decision = match handled.await {
+        Ok(decision) => decision,
         Err(error) => {
             scoped
                 .mark_session_poll_uncertain(session_intent_id, attempt)
@@ -112,7 +118,10 @@ where
         .settle_session_poll(session_intent_id, completed)
         .await
         .map_err(|_| completion_error())?;
-    Ok(wake_cleanup)
+    Ok(ScopedPollOutcome {
+        wake_cleanup: decision.wake_cleanup,
+        session_delete_candidate: decision.session_delete_candidate,
+    })
 }
 
 /// Poll until admission stops and no owned launch container is running.

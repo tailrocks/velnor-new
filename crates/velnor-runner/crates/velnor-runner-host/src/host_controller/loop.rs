@@ -16,8 +16,8 @@ use crate::journal::{
     CapacityLimits, ConnectionJournal, EngineContext, Journal, OperationalCapacityLimits,
 };
 use crate::launch::{
-    CompletionWorker, ReleaseReadSecret, SelectedEngineContext, open_connection_session,
-    poll_scoped_connection_once,
+    CompletionWorker, ReleaseReadSecret, SelectedEngineContext, SessionDeleteOutcome,
+    delete_removed_connection_session, open_connection_session, poll_scoped_connection_once,
 };
 use crate::launch_blocking::ListenFault;
 use crate::listen::Link;
@@ -85,8 +85,8 @@ async fn run_controller(
     let mut pending_retirements = Vec::new();
     discover_retirements(state, &current, &mut pending_retirements);
 
-    // STE: Work polling stays closed until the journal exposes a durable
-    // host-wide header-allocation and acknowledgment ledger.
+    // Zero-header polling handles lifecycle messages only. Positive work
+    // admission remains closed until every durable admission proof is wired.
     loop {
         tokio::time::sleep(CONFIG_RELOAD_PAUSE).await;
         let config_path = state.join("host.toml");
@@ -129,7 +129,9 @@ async fn run_controller(
             eprintln!("host controller connection retirement held: {error}");
         }
         drop(effects);
-        if let Err(error) = poll_active_connections(&current, &mut connection_sessions).await {
+        if let Err(error) =
+            poll_active_connections(&current, &pending_retirements, &mut connection_sessions).await
+        {
             eprintln!("host controller zero-header polling held: {error}");
         }
     }
@@ -137,27 +139,64 @@ async fn run_controller(
 
 async fn poll_active_connections(
     config: &HostConfig,
-    connections: &mut [PreparedConnection],
+    pending_retirements: &[RepositoryConnection],
+    connections: &mut Vec<PreparedConnection>,
 ) -> Result<(), HostError> {
-    for prepared in connections {
-        if config.connection(&prepared.binding.connection_id).is_none() {
+    let mut index = 0;
+    while index < connections.len() {
+        let prepared = &mut connections[index];
+        let is_removed = config.connection(&prepared.binding.connection_id).is_none();
+        if is_removed
+            && !pending_retirements
+                .iter()
+                .any(|binding| prepared.is_for(binding))
+        {
+            index += 1;
             continue;
         }
         let Some(credentials) = prepared.credentials.as_mut() else {
+            index += 1;
             continue;
         };
-        let allocation = prepared
+        let allocation = match prepared
             .scope
             .session_header_allocation(prepared.session_intent)
-            .await?;
-        if allocation.target() != 0 {
-            eprintln!(
-                "host controller polling held connection={} reason=positive-header",
-                prepared.binding.connection_id
-            );
-            continue;
-        }
-        match poll_scoped_connection_once(
+            .await
+        {
+            Ok(allocation) => allocation,
+            Err(error) => {
+                eprintln!(
+                    "host controller polling held connection={} reason={error}",
+                    prepared.binding.connection_id
+                );
+                prepared.credentials.take();
+                index += 1;
+                continue;
+            }
+        };
+        // A removed binding must pass the read-only drain check before its
+        // final zero poll. The delete claim repeats this check atomically.
+        let drained_before_poll = if is_removed {
+            match prepared
+                .scope
+                .session_work_drained(prepared.session_intent)
+                .await
+            {
+                Ok(drained) => drained,
+                Err(error) => {
+                    eprintln!(
+                        "host controller drain check held connection={} reason={error}",
+                        prepared.binding.connection_id
+                    );
+                    prepared.credentials.take();
+                    index += 1;
+                    continue;
+                }
+            }
+        } else {
+            false
+        };
+        let outcome = poll_scoped_connection_once(
             &mut credentials.link,
             prepared.set_id,
             &credentials.session,
@@ -165,14 +204,70 @@ async fn poll_active_connections(
             prepared.session_intent,
             &allocation,
         )
-        .await
+        .await;
+        let outcome = match outcome {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                eprintln!(
+                    "host controller poll held connection={} reason={error}",
+                    prepared.binding.connection_id
+                );
+                prepared.credentials.take();
+                index += 1;
+                continue;
+            }
+        };
+        if outcome.wake_cleanup
+            && let Some(completion) = prepared.completion.as_ref()
         {
-            Ok(true) => prepared.completion.notify(),
-            Ok(false) => {}
-            Err(error) => eprintln!(
-                "host controller poll held connection={} reason={error}",
-                prepared.binding.connection_id
-            ),
+            completion.notify();
+        }
+
+        let should_delete = is_removed && drained_before_poll && outcome.session_delete_candidate;
+        let mut remove_prepared = false;
+        if should_delete {
+            match delete_removed_connection_session(
+                &mut credentials.link,
+                &credentials.session,
+                &prepared.scope,
+                prepared.session_intent,
+                &allocation,
+            )
+            .await
+            {
+                SessionDeleteOutcome::NotReady => {}
+                SessionDeleteOutcome::Deleted => {
+                    prepared.credentials.take();
+                    if let Some(completion) = prepared.completion.take()
+                        && let Err(error) = completion.shutdown().await
+                    {
+                        eprintln!(
+                            "host controller completion shutdown held connection={} reason={error}",
+                            prepared.binding.connection_id
+                        );
+                    }
+                    remove_prepared = true;
+                }
+                SessionDeleteOutcome::Held => {
+                    // The DELETE may have completed without a durable 204
+                    // acknowledgement. Keep its allocation and stop all use
+                    // of this session credential.
+                    prepared.credentials.take();
+                    if let Some(completion) = prepared.completion.take()
+                        && let Err(error) = completion.shutdown().await
+                    {
+                        eprintln!(
+                            "host controller completion shutdown held connection={} reason={error}",
+                            prepared.binding.connection_id
+                        );
+                    }
+                }
+            }
+        }
+        if remove_prepared {
+            connections.remove(index);
+        } else {
+            index += 1;
         }
     }
     Ok(())
@@ -268,7 +363,7 @@ struct PreparedConnection {
     scope: ConnectionJournal,
     set_id: i64,
     session_intent: i64,
-    completion: CompletionWorker,
+    completion: Option<CompletionWorker>,
     credentials: Option<SessionCredentials>,
 }
 
@@ -324,7 +419,7 @@ async fn prepare_connection(
         scope: scoped,
         set_id: set.id,
         session_intent,
-        completion,
+        completion: Some(completion),
         credentials: Some(SessionCredentials { link, session }),
     })
 }

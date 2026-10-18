@@ -45,8 +45,12 @@ pub(crate) use resource_probe::StartObservationWitness;
 pub(crate) use resource_probe::StartPermit;
 pub(crate) use resource_probe::VerifiedProbeCleanup;
 pub(crate) use resource_probe::build_pin_status;
-pub(crate) use session::{CompletedHeaderPoll, DeletedSession204, open_connection_session};
+pub(crate) use session::{
+    CompletedHeaderPoll, DeletedSession204, SessionDeleteOutcome,
+    delete_removed_connection_session, open_connection_session,
+};
 pub(crate) use slot::HOLDS_ROWS_SQL;
+pub(crate) use turn::ScopedPollOutcome;
 mod mint_origin;
 mod pressure;
 mod session;
@@ -76,7 +80,7 @@ pub(crate) async fn poll_scoped_connection_once(
     scoped: &ConnectionJournal,
     session_intent_id: i64,
     allocation: &HeaderAllocation,
-) -> Result<bool, EnsureError> {
+) -> Result<ScopedPollOutcome, EnsureError> {
     turn::poll_scoped_connection_once(link, set_id, session, scoped, session_intent_id, allocation)
         .await
 }

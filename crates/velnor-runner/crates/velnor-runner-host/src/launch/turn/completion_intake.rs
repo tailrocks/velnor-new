@@ -3,9 +3,7 @@
 use std::future::Future;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use velnor_runner_github::{
-    InnerJob, InnerKind, Poll, RunnerReference, SourceMetadata, parse_inner_messages,
-};
+use velnor_runner_github::{InnerJob, InnerKind, Poll, RunnerReference, parse_inner_messages};
 
 use crate::error::HostError;
 use crate::journal::{AssignmentKey, ConnectionCompletionInboxEntry, ConnectionJournal, Journal};
@@ -15,6 +13,7 @@ use crate::scale_set::EnsureError;
 pub(super) struct IntakeDecision {
     pub(super) completion_only: bool,
     pub(super) wake_cleanup: bool,
+    pub(super) session_delete_candidate: bool,
 }
 
 pub(super) async fn intake_poll(
@@ -27,6 +26,7 @@ pub(super) async fn intake_poll(
     Ok(IntakeDecision {
         completion_only: completion_only(polled),
         wake_cleanup: retried || has_completion(polled),
+        session_delete_candidate: session_delete_candidate(polled),
     })
 }
 
@@ -60,14 +60,41 @@ where
 {
     let retried = retry_scoped(journal).await?;
     record_scoped_events(journal, set_id, polled).await?;
-    let completion_only = completion_only(polled);
-    if completion_only {
+    let lifecycle_only = scoped_lifecycle_only(polled);
+    if lifecycle_only {
         acknowledge().await?;
     }
     Ok(IntakeDecision {
-        completion_only,
+        // Started and Completed messages cannot start another worker. Their
+        // exact event or a durable quarantine row is committed before ACK.
+        completion_only: lifecycle_only,
         wake_cleanup: retried || has_completion(polled),
+        session_delete_candidate: session_delete_candidate(polled),
     })
+}
+
+/// Only an empty response or an acknowledged lifecycle-only response permits a delete attempt.
+/// The journal still checks for outstanding durable work before it claims DELETE.
+pub(super) fn session_delete_candidate(polled: &Poll) -> bool {
+    matches!(polled, Poll::Empty) || scoped_lifecycle_only(polled)
+}
+
+fn scoped_lifecycle_only(polled: &Poll) -> bool {
+    match polled {
+        // An undecodable body has no proven message-kind set. Keep it on the
+        // queue even though `record_scoped_events` also stores it durably.
+        Poll::Quarantined(_) => false,
+        Poll::Batch(batch) => lifecycle_jobs_only(batch.message_id, &batch.jobs),
+        Poll::Empty => false,
+    }
+}
+
+fn lifecycle_jobs_only(message_id: i64, jobs: &[InnerJob]) -> bool {
+    message_id >= 0
+        && !jobs.is_empty()
+        && jobs
+            .iter()
+            .all(|job| matches!(job.kind, InnerKind::Started | InnerKind::Completed))
 }
 
 async fn record_scoped_events(
@@ -107,7 +134,7 @@ async fn record_scoped_events(
             matched = false;
         }
     }
-    if matched {
+    if matched && lifecycle_jobs_only(message_id, jobs) {
         journal
             .resolve_completion_inbox(&scoped_entry(journal, set_id, message_id, raw_body))
             .await
@@ -210,6 +237,13 @@ async fn retry_scoped_one(
         return Ok(false);
     };
     if jobs.len() > velnor_runner_github::MAX_POLL_MESSAGES {
+        journal
+            .defer_completion_inbox(entry, now)
+            .await
+            .map_err(map_completion_journal)?;
+        return Ok(false);
+    }
+    if !lifecycle_jobs_only(entry.message_id, &jobs) {
         journal
             .defer_completion_inbox(entry, now)
             .await
