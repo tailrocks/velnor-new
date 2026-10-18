@@ -286,19 +286,24 @@ async fn integer_primary_key_completion_tables_accept_fresh_and_v3_schemas() -> 
             .await
             .map_err(|error| error.to_string())?,
     );
-    assert_remote_primary_key_metadata(&path, 7).await?;
+    assert_remote_primary_key_metadata(&path, 10).await?;
 
-    // Version 3 already used INTEGER PRIMARY KEY. SQLite reports its implicit
-    // rowid non-null guarantee as notnull=0, so migration must preserve it.
+    // Version 3 already used INTEGER PRIMARY KEY. Remove tables introduced by
+    // later migrations so the version-three path validates its own schema.
+    // SQLite reports the rowid alias as notnull=0, so migration must preserve it.
     let (db, connection) = database(&path).await?;
-    connection
-        .execute("DROP TABLE connection_scale_set_intents", ())
-        .await
-        .map_err(|error| error.to_string())?;
-    connection
-        .execute("DROP TABLE image_imports", ())
-        .await
-        .map_err(|error| error.to_string())?;
+    for table in [
+        "connection_runner_jits",
+        "connection_request_authorizations",
+        "connection_source_authorizations",
+        "connection_scale_set_intents",
+        "image_imports",
+    ] {
+        connection
+            .execute(&format!("DROP TABLE {table}"), ())
+            .await
+            .map_err(|error| error.to_string())?;
+    }
     connection
         .execute("PRAGMA user_version = 3", ())
         .await
@@ -311,7 +316,7 @@ async fn integer_primary_key_completion_tables_accept_fresh_and_v3_schemas() -> 
             .await
             .map_err(|error| error.to_string())?,
     );
-    assert_remote_primary_key_metadata(&path, 7).await
+    assert_remote_primary_key_metadata(&path, 10).await
 }
 
 async fn assert_remote_primary_key_metadata(

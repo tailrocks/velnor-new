@@ -207,11 +207,24 @@ async fn version_one_rows_stay_unbound_and_block_new_connections() -> Result<(),
         .await
         .map_err(|_| HostError::Journal)?;
     let sql_connection = database.connect().map_err(|_| HostError::Journal)?;
+    // Reconstruct the schema that existed at version one. Later-version
+    // tables must be absent; otherwise CREATE TABLE IF NOT EXISTS can leave
+    // newer DDL in place for a migration that validates the old shape.
     for table in [
+        "connection_runner_jits",
+        "connection_request_authorizations",
+        "connection_source_authorizations",
+        "connection_scale_set_intents",
+        "connection_completion_cleanup",
+        "connection_completion_inbox",
+        "connection_launch_recovery",
+        "capacity_reservation_samples",
+        "connection_runtime_bindings",
         "capacity_reservations",
         "host_capacity_policy",
         "connection_intents",
         "connection_scopes",
+        "image_imports",
     ] {
         sql_connection
             .execute(&format!("DROP TABLE {table}"), ())
