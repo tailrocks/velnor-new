@@ -13,7 +13,7 @@ pub struct StageContext {
 }
 
 impl StageContext {
-    /// Creates a context for one exact normal-tools key.
+    /// This method makes a context for the selected normal-tools cache key.
     ///
     /// # Errors
     ///
@@ -33,7 +33,7 @@ impl StageContext {
         Self::new(runner_temp, workspace, "normal-tools-v3", &[], key)
     }
 
-    /// Creates a context for one exact normal `OpenTofu` provider key.
+    /// This method makes a context for the selected normal `OpenTofu` provider key.
     ///
     /// # Errors
     ///
@@ -53,7 +53,7 @@ impl StageContext {
         )
     }
 
-    /// Creates a context for one exact qualification key.
+    /// This method makes a context for the selected qualification cache key.
     ///
     /// # Errors
     ///
@@ -107,7 +107,7 @@ impl StageContext {
         })
     }
 
-    /// Gives the exact action input path for this cache context.
+    /// This method gives the action input path recorded in this cache context.
     #[must_use]
     pub fn action_path(&self) -> &Path {
         &self.action_path

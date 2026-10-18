@@ -319,8 +319,9 @@ async fn independent_authorized_runnerless_cancel_keeps_physical_charge_after_re
     let permit = crate::launch::StartPermit::test_fixture();
     let generation = permit.sample_generation_id().to_owned();
     let digest = permit.docker_root_digest().to_owned();
+    let storage = crate::journal::fixture_admission(&permit)?;
     let result = scope
-        .try_reserve(
+        .try_reserve_with_storage(
             crate::journal::ReservationRequest {
                 assignment: &assignment,
                 engine_id: "test-engine",
@@ -330,6 +331,7 @@ async fn independent_authorized_runnerless_cancel_keeps_physical_charge_after_re
                 sample_generation_id: &generation,
             },
             permit,
+            storage,
         )
         .await?;
     assert!(matches!(

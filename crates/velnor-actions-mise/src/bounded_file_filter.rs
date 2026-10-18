@@ -24,7 +24,8 @@ pub enum ZstdFilterMode {
 /// The deadline applies to child execution. File operations can continue after this deadline.
 ///
 /// # Errors
-/// Returns an error code when a file, filter, stream, limit, or deadline fails.
+/// The function gives an error if the file, program, or stream checks give unsatisfactory results.
+/// It also gives an error if a byte count is above its limit or the execution deadline is expired.
 pub fn run_zstd_file_filter(
     program: &Path,
     mode: ZstdFilterMode,

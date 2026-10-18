@@ -41,7 +41,8 @@ pub enum StageAccess<'a> {
 /// Gives the verified stage observation produced by an extract operation.
 #[derive(Debug)]
 pub struct TarOutcome {
-    /// Holds a new compact claim after extraction, else `None`.
+    /// For an extraction operation, this field contains a new compact claim.
+    /// For other operations, this field contains `None`.
     pub receipt: Option<StageReceiptClaim>,
 }
 
@@ -49,7 +50,7 @@ pub struct TarOutcome {
 ///
 /// # Errors
 ///
-/// Returns an error when argv, workspace, archive or stage custody fails validation.
+/// The function gives an error if the argument-vector, workspace, archive, or stage-file checks give unsatisfactory results.
 pub fn run_cache_tar(
     context: &StageContext,
     args: &[OsString],

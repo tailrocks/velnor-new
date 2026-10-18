@@ -46,7 +46,13 @@ pub(crate) use connection::{
     PhysicalRunnerReservation, ReservationRequest, ReservationResult, ReservationSnapshot,
     ReservationState, SessionCreateClaim, SessionCreateRecord, SessionCreateState,
     SessionRefreshClaim, SessionRefreshRecord, SessionRefreshState, SourceAuthorizationBinding,
+    StorageAdmission, StorageAdmissionSample, StorageCacheProjection, StorageFilesystemKind,
+    StorageInodePolicy, StorageMedium, StorageMemoryObservation, StoragePoolLimit,
+    StoragePoolObservation, StorageProfile, StorageReservationPlan, StorageRole, StorageRoleCharge,
+    StorageRoleLimit, StorageSampleIdentity,
 };
+#[cfg(test)]
+pub(crate) use connection::{fixture_admission, fixture_profile};
 pub(crate) use image_import::{
     ImageImportClaim, ImageImportDescriptor, ImageImportId, ImageImportIdentity,
     ImageImportInspection, ImageImportObservation, ImageImportRecord, ImageImportRequest,

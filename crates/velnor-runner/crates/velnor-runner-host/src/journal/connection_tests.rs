@@ -13,7 +13,8 @@ use crate::connect::SetOwnership;
 use crate::error::HostError;
 use crate::journal::{
     AssignmentIdentity, AssignmentKey, CapacityLimits, ConnectionJournal, IntentState, Journal,
-    Outcome, ReservationRequest, ReservationResult, ReservationState,
+    Outcome, ReservationRequest, ReservationResult, ReservationState, fixture_admission,
+    fixture_profile,
 };
 use crate::launch::StartPermit;
 
@@ -80,6 +81,7 @@ async fn scoped(
     repository_id: i64,
     repository: &str,
 ) -> Result<ConnectionJournal, HostError> {
+    journal.configure_storage_profile(fixture_profile()).await?;
     journal.bind_engine("test-engine").await?;
     let scope = journal
         .connection_scope(&connection(id, repository_id, repository))
@@ -145,7 +147,9 @@ fn docker_root_digest() -> &'static str {
 }
 
 fn permit() -> StartPermit {
-    StartPermit::test_fixture()
+    static NEXT_SAMPLE: AtomicU64 = AtomicU64::new(1);
+    let generation = format!("{:032x}", NEXT_SAMPLE.fetch_add(1, Ordering::Relaxed));
+    StartPermit::test_fixture_with_generation(&generation)
 }
 
 fn permit_with_generation(generation: &str) -> StartPermit {
@@ -158,8 +162,9 @@ async fn reserve(
 ) -> Result<ReservationResult, HostError> {
     let permit = permit();
     let generation = permit.sample_generation_id().to_owned();
+    let storage = fixture_admission(&permit)?;
     scope
-        .try_reserve(request(assignment, &generation), permit)
+        .try_reserve_with_storage(request(assignment, &generation), permit, storage)
         .await
 }
 

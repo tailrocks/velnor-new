@@ -17,12 +17,12 @@ pub const CACHE_TAR_LAUNCHER_INSTALL_OP: &str = "install-cache-tar-aliases-v1";
 /// Installs `tar` and `gtar` hard links beside the digest-verified staged CLI.
 ///
 /// The function derives the executable path from `runner_temp` and `version`.
-/// It also requires the current process to be running that exact file.
+/// The current process must run the file at that path.
 ///
 /// # Errors
 ///
-/// Gives an error if the running helper, its digest, permissions, or either
-/// alias path fails validation. Existing aliases are never replaced.
+/// If the helper, digest, permissions, or alias-path checks give unsatisfactory
+/// results, the function gives an error. Existing aliases are never replaced.
 pub fn install_cache_tar_launchers(
     runner_temp: &Path,
     version: &str,
