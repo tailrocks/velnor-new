@@ -1,7 +1,7 @@
 //! Insert the typed V2 tools-cache prelude into rendered jobs.
 
 use velnor_actions_contract::workflow::step_identity::is_configured_checkout;
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, RunsOn, Step, StepKind};
 
 use crate::{MiseSetup, RenderError, cache_p08, cache_p08::ToolsCacheInputs};
 
@@ -13,6 +13,7 @@ pub(crate) fn ensure_tools_cache_v2(
     setup: &MiseSetup,
     always: bool,
     target: &str,
+    scale_set_image_source_sha: Option<&str>,
     checkout_uses: &str,
 ) -> Result<(), RenderError> {
     setup.validate()?;
@@ -57,7 +58,14 @@ pub(crate) fn ensure_tools_cache_v2(
     if !checkout_precedes_setup(job, setup_index, checkout_uses) {
         return Ok(());
     }
-    insert_tools_prelude(job_id, job, setup, target, setup_index)
+    insert_tools_prelude(
+        job_id,
+        job,
+        setup,
+        target,
+        scale_set_image_source_sha,
+        setup_index,
+    )
 }
 
 fn insert_tools_prelude(
@@ -65,6 +73,7 @@ fn insert_tools_prelude(
     job: &mut Job,
     setup: &MiseSetup,
     target: &str,
+    scale_set_image_source_sha: Option<&str>,
     setup_index: usize,
 ) -> Result<(), RenderError> {
     let specs = cache_p08::infer_job_tools(job);
@@ -99,6 +108,10 @@ fn insert_tools_prelude(
         tool_specs: &specs,
         rustup_toolchain: rust_version,
         rustup_components: &components,
+        scale_set_image_source_sha: RunsOn::parse(&job.runs_on)
+            .is_ok_and(|runs_on| runs_on.is_scale_set())
+            .then_some(scale_set_image_source_sha)
+            .flatten(),
     })?;
     if !payload.runtime_identity_supported() {
         return Ok(());
