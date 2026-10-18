@@ -61,7 +61,7 @@ async fn version_four_migration_validates_connection_and_remote_tables() {
 }
 
 #[tokio::test]
-async fn version_seven_migration_installs_source_authorization_schema() {
+async fn version_seven_migration_installs_current_source_authorization_schema() {
     let scratch = Scratch::new();
     let path = scratch.file();
     drop(Journal::open(&path).await.expect("initial schema"));
@@ -87,10 +87,51 @@ async fn version_seven_migration_installs_source_authorization_schema() {
         .await
         .expect("reopen SQLite");
     let connection = database.connect().expect("connect SQLite");
-    assert_eq!(read_version(&connection).await, 8);
+    assert_eq!(read_version(&connection).await, 9);
     assert_eq!(
         table_count(&connection, "connection_source_authorizations").await,
         1
+    );
+}
+
+#[tokio::test]
+async fn version_eight_migration_rejects_a_broken_source_index_atomically() {
+    let scratch = Scratch::new();
+    let path = scratch.file();
+    drop(Journal::open(&path).await.expect("initial schema"));
+    let database = turso::Builder::new_local(path.to_str().expect("UTF-8 temp path"))
+        .build()
+        .await
+        .expect("open SQLite");
+    let connection = database.connect().expect("connect SQLite");
+    connection
+        .execute(
+            "ALTER TABLE connection_source_authorizations DROP COLUMN receipt_binding_digest",
+            (),
+        )
+        .await
+        .expect("restore version-eight table shape");
+    connection
+        .execute("DROP INDEX connection_source_authorization_intent", ())
+        .await
+        .expect("drop source index");
+    connection
+        .execute("PRAGMA user_version = 8", ())
+        .await
+        .expect("mark version eight");
+    drop(connection);
+    drop(database);
+
+    assert!(Journal::open(&path).await.is_err());
+    let database = turso::Builder::new_local(path.to_str().expect("UTF-8 temp path"))
+        .build()
+        .await
+        .expect("reopen SQLite");
+    let connection = database.connect().expect("connect SQLite");
+    assert_eq!(read_version(&connection).await, 8);
+    assert_eq!(
+        table_count(&connection, "connection_source_authorization_intent").await,
+        0
     );
 }
 

@@ -37,7 +37,7 @@ pub(crate) use completion::{
 pub(crate) use connection::{
     AssignmentIdentity, AssignmentKey, CapacityLimits, ConnectionCompletionInboxEntry,
     ConnectionJournal, ConnectionScaleSet, EngineContext, ReservationRequest, ReservationResult,
-    ReservationSnapshot, ReservationState,
+    ReservationSnapshot, ReservationState, SourceAuthorizationBinding,
 };
 pub(crate) use image_import::{
     ImageImportClaim, ImageImportDescriptor, ImageImportId, ImageImportIdentity,

@@ -20,17 +20,39 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
     )
     .await
     .map_err(|_| HostError::Journal)?;
-    validate(conn).await
+    validate_v8(conn).await
 }
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_columns(conn).await?;
-    validate_table_sql(conn).await?;
+    validate_columns(conn, true).await?;
+    validate_table_sql(conn, true).await?;
     validate_indexes(conn).await?;
-    validate_rows(conn).await
+    validate_rows(conn, true).await
 }
 
-async fn validate_columns(conn: &turso::Connection) -> Result<(), HostError> {
+pub(super) async fn upgrade_v8(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_v8(conn).await?;
+    conn.execute(
+        "ALTER TABLE connection_source_authorizations ADD COLUMN receipt_binding_digest TEXT CHECK (receipt_binding_digest IS NULL OR (length(receipt_binding_digest) = 64 AND receipt_binding_digest NOT GLOB '*[^0-9a-f]*'))",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+async fn validate_v8(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_columns(conn, false).await?;
+    validate_table_sql(conn, false).await?;
+    validate_indexes(conn).await?;
+    validate_rows(conn, false).await?;
+    Ok(())
+}
+
+async fn validate_columns(
+    conn: &turso::Connection,
+    include_receipt_binding: bool,
+) -> Result<(), HostError> {
     let columns = read_table_columns(conn, TABLE).await?;
     let expected = [
         ("connection_id", "TEXT", true, 1),
@@ -44,7 +66,8 @@ async fn validate_columns(conn: &turso::Connection) -> Result<(), HostError> {
         ("source_digest", "TEXT", true, 0),
         ("source_json", "TEXT", true, 0),
     ];
-    if columns.len() != expected.len() {
+    let optional_columns = if include_receipt_binding { 1 } else { 0 };
+    if columns.len() != expected.len() + optional_columns {
         return Err(HostError::Journal);
     }
     for (name, kind, not_null, primary_key) in expected {
@@ -59,10 +82,25 @@ async fn validate_columns(conn: &turso::Connection) -> Result<(), HostError> {
             return Err(HostError::Journal);
         }
     }
+    if include_receipt_binding {
+        let Some(column) = columns.get("receipt_binding_digest") else {
+            return Err(HostError::Journal);
+        };
+        if !column.declared_type.eq_ignore_ascii_case("TEXT")
+            || column.not_null
+            || column.primary_key_position != 0
+            || column.default_value.is_some()
+        {
+            return Err(HostError::Journal);
+        }
+    }
     Ok(())
 }
 
-async fn validate_table_sql(conn: &turso::Connection) -> Result<(), HostError> {
+async fn validate_table_sql(
+    conn: &turso::Connection,
+    include_receipt_binding: bool,
+) -> Result<(), HostError> {
     let mut rows = conn
         .query(
             "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = ?1",
@@ -95,6 +133,13 @@ async fn validate_table_sql(conn: &turso::Connection) -> Result<(), HostError> {
         if !sql.contains(required) {
             return Err(HostError::Journal);
         }
+    }
+    if include_receipt_binding
+        && !sql.contains(
+            "check(receipt_binding_digestisnullor(length(receipt_binding_digest)=64andreceipt_binding_digestnotglob'*[^0-9a-f]*'))",
+        )
+    {
+        return Err(HostError::Journal);
     }
     Ok(())
 }
@@ -136,10 +181,18 @@ async fn index_columns(conn: &turso::Connection, index: &str) -> Result<Vec<Stri
     Ok(columns)
 }
 
-async fn validate_rows(conn: &turso::Connection) -> Result<(), HostError> {
+async fn validate_rows(
+    conn: &turso::Connection,
+    include_receipt_binding: bool,
+) -> Result<(), HostError> {
+    let receipt_binding = if include_receipt_binding {
+        "c.receipt_binding_digest"
+    } else {
+        "NULL"
+    };
     let mut rows = conn
         .query(
-            "SELECT c.connection_id, c.scale_set_id, c.request_id, c.intent_id, c.message_id, c.policy_mode, c.authority_model, c.binding_digest, c.source_digest, c.source_json, (SELECT COUNT(*) FROM connection_intents AS i WHERE i.id = c.intent_id AND i.connection_id = c.connection_id AND i.scale_set_id = c.scale_set_id AND i.runner_request_id = c.request_id AND i.kind = 'launch'), (SELECT identity FROM connection_scopes AS s WHERE s.connection_id = c.connection_id) FROM connection_source_authorizations AS c",
+            &format!("SELECT c.connection_id, c.scale_set_id, c.request_id, c.intent_id, c.message_id, c.policy_mode, c.authority_model, c.binding_digest, {receipt_binding}, c.source_digest, c.source_json, (SELECT COUNT(*) FROM connection_intents AS i WHERE i.id = c.intent_id AND i.connection_id = c.connection_id AND i.scale_set_id = c.scale_set_id AND i.runner_request_id = c.request_id AND i.kind = 'launch'), (SELECT identity FROM connection_scopes AS s WHERE s.connection_id = c.connection_id) FROM connection_source_authorizations AS c"),
             (),
         )
         .await
@@ -153,10 +206,11 @@ async fn validate_rows(conn: &turso::Connection) -> Result<(), HostError> {
         let policy_mode: String = row.get(5).map_err(|_| HostError::Journal)?;
         let authority_model: String = row.get(6).map_err(|_| HostError::Journal)?;
         let binding_digest: String = row.get(7).map_err(|_| HostError::Journal)?;
-        let source_digest: String = row.get(8).map_err(|_| HostError::Journal)?;
-        let source_json: String = row.get(9).map_err(|_| HostError::Journal)?;
-        let matching_intent: i64 = row.get(10).map_err(|_| HostError::Journal)?;
-        let identity: String = row.get(11).map_err(|_| HostError::Journal)?;
+        let receipt_binding_digest: Option<String> = row.get(8).map_err(|_| HostError::Journal)?;
+        let source_digest: String = row.get(9).map_err(|_| HostError::Journal)?;
+        let source_json: String = row.get(10).map_err(|_| HostError::Journal)?;
+        let matching_intent: i64 = row.get(11).map_err(|_| HostError::Journal)?;
+        let identity: String = row.get(12).map_err(|_| HostError::Journal)?;
         let identity_value: serde_json::Value =
             serde_json::from_str(&identity).map_err(|_| HostError::Journal)?;
         let repository_id = identity_value
@@ -173,6 +227,9 @@ async fn validate_rows(conn: &turso::Connection) -> Result<(), HostError> {
             || authority_model != "created_empty_exclusive_admin_session_v1"
             || !valid_digest(&binding_digest)
             || digest(identity.as_bytes()) != binding_digest
+            || receipt_binding_digest
+                .as_deref()
+                .is_some_and(|value| !valid_digest(value) || value != binding_digest)
             || !valid_digest(&source_digest)
             || source_json.is_empty()
             || source_json.len() > 32768

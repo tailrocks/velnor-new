@@ -98,6 +98,14 @@ pub(super) async fn from_version_seven(conn: &turso::Connection) -> Result<(), H
     conn.execute("PRAGMA user_version = 8", ())
         .await
         .map_err(|_| HostError::Journal)?;
+    from_version_eight(conn).await
+}
+
+pub(super) async fn from_version_eight(conn: &turso::Connection) -> Result<(), HostError> {
+    source_authorization::upgrade_v8(conn).await?;
+    conn.execute("PRAGMA user_version = 9", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
     Ok(())
 }
 

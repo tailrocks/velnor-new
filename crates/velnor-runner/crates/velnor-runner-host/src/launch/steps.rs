@@ -9,7 +9,7 @@ use velnor_runner_github::{
 
 use crate::Offer;
 use crate::error::HostError;
-use crate::journal::{Journal, Outcome};
+use crate::journal::{ConnectionJournal, Journal, Outcome};
 use crate::listen::map_listen;
 use crate::offer;
 use crate::scale_set::EnsureError;
@@ -156,11 +156,12 @@ where
     if !ctx.source_authorized {
         let _authorized = authorize_offer(
             ctx.connection.as_ref(),
-            ctx.scoped_journal.is_some(),
+            ctx.scoped_journal.as_ref(),
             &ctx.pat,
             batch,
             request_id,
-        )?;
+        )
+        .await?;
     }
     lane.on_admin()?;
     let subject = format!("m{}r{request_id}", batch.message_id);
@@ -229,18 +230,18 @@ where
     }
 }
 
-fn authorize_offer(
+async fn authorize_offer(
     connection: Option<&crate::config::RepositoryConnection>,
-    scoped: bool,
+    scoped: Option<&ConnectionJournal>,
     token: &str,
     batch: &velnor_runner_github::ParsedBatch,
     request_id: i64,
 ) -> Result<Option<source::AuthorizedSourceReceipt>, EnsureError> {
     let Some(connection) = connection else {
-        return if scoped {
+        return if scoped.is_some() {
             Err(source_blocked(source::SourceBlock::Missing))
         } else {
-            Ok(None)
+            Err(source_blocked(source::SourceBlock::ClosedWorldUnproven))
         };
     };
     let source = batch
@@ -252,15 +253,30 @@ fn authorize_offer(
         })
         .map(|job| &job.source)
         .ok_or_else(|| source_blocked(source::SourceBlock::Missing))?;
-    let receipt = source::authorize_job(connection, source, request_id, batch.message_id, token)
-        .map_err(source_blocked)?;
-    require_closed_world(scoped)?;
+    if source.complete().is_none() {
+        return Err(source_blocked(source::SourceBlock::Missing));
+    }
+    let scoped = scoped.ok_or_else(|| source_blocked(source::SourceBlock::ClosedWorldUnproven))?;
+    let binding = scoped
+        .source_authorization_binding()
+        .await
+        .map_err(|_| source_blocked(source::SourceBlock::ClosedWorldUnproven))?;
+    let receipt = source::authorize_job(
+        connection,
+        &binding,
+        source,
+        request_id,
+        batch.message_id,
+        token,
+    )
+    .map_err(source_blocked)?;
+    require_closed_world(true)?;
     Ok(Some(receipt))
 }
 
 fn require_closed_world(scoped: bool) -> Result<(), EnsureError> {
     // Scoped source receipts and acquired-backlog reconciliation are not yet
-    // wired. A generic JIT may receive any acquired job from this Scale Set.
+    // wired. A generic JIT can receive any acquired job from this Scale Set.
     if scoped {
         Err(source_blocked(source::SourceBlock::ClosedWorldUnproven))
     } else {
@@ -275,60 +291,56 @@ fn source_blocked(block: source::SourceBlock) -> EnsureError {
     }
 }
 
-/// Check source policy before a guest probe, acquire call, or JIT request.
-pub(super) fn authorize_poll(ctx: &mut Drive, polled: &Poll) -> Result<(), EnsureError> {
+/// Do a check of source policy before a guest probe, acquire call, or JIT request.
+pub(super) async fn authorize_poll(ctx: &mut Drive, polled: &Poll) -> Result<(), EnsureError> {
     if ctx.source_authorized {
         return Ok(());
     }
     authorize_source_poll(
         ctx.connection.as_ref(),
-        ctx.scoped_journal.is_some(),
+        ctx.scoped_journal.as_ref(),
         &ctx.pat,
         polled,
-    )?;
+    )
+    .await?;
     ctx.source_authorized = true;
     Ok(())
 }
 
-pub(super) fn authorize_poll_rest(
+pub(super) async fn authorize_poll_rest(
     rest: &super::Rest<'_>,
     polled: &Poll,
 ) -> Result<(), EnsureError> {
     if rest.source_authorized {
         return Ok(());
     }
-    authorize_source_poll(
-        rest.connection,
-        rest.scoped_journal.is_some(),
-        rest.pat,
-        polled,
-    )
+    authorize_source_poll(rest.connection, rest.scoped_journal, rest.pat, polled).await
 }
 
-fn authorize_source_poll(
+async fn authorize_source_poll(
     connection: Option<&crate::config::RepositoryConnection>,
-    scoped: bool,
+    scoped: Option<&ConnectionJournal>,
     token: &str,
     polled: &Poll,
 ) -> Result<(), EnsureError> {
     if connection.is_none() {
-        if scoped {
+        if scoped.is_some() {
             return Err(source_blocked(source::SourceBlock::Missing));
         }
-        return Ok(());
+        return Err(source_blocked(source::SourceBlock::ClosedWorldUnproven));
     }
     match idle(polled) {
         Idle::Launch => {
             let Some((batch, request_id)) = assignment(polled)? else {
                 return Err(source_blocked(source::SourceBlock::Missing));
             };
-            let _authorized = authorize_offer(connection, scoped, token, batch, request_id)?;
+            let _authorized = authorize_offer(connection, scoped, token, batch, request_id).await?;
         }
         Idle::Scale => {
             let Poll::Batch(batch) = polled else {
                 return Err(source_blocked(source::SourceBlock::Missing));
             };
-            authorize_population_message(scoped, connection, token, batch)?;
+            authorize_population_message(scoped.is_some(), connection, token, batch)?;
         }
         Idle::Empty | Idle::Ack | Idle::Blocked => {}
     }
@@ -338,31 +350,16 @@ fn authorize_source_poll(
 pub(super) fn authorize_population_message(
     scoped: bool,
     connection: Option<&crate::config::RepositoryConnection>,
-    token: &str,
-    batch: &velnor_runner_github::ParsedBatch,
+    _token: &str,
+    _batch: &velnor_runner_github::ParsedBatch,
 ) -> Result<(), EnsureError> {
     if scoped {
         return Err(source_blocked(source::SourceBlock::Missing));
     }
-    let Some(connection) = connection else {
-        return Err(source_blocked(source::SourceBlock::Missing));
-    };
-    let mut assigned = batch.jobs.iter().filter(|job| {
-        matches!(job.kind, velnor_runner_github::InnerKind::Assigned)
-            && job.request_id.is_some_and(|request_id| request_id > 0)
-    });
-    let Some(job) = assigned.next() else {
-        return Err(source_blocked(source::SourceBlock::Missing));
-    };
-    if assigned.next().is_some() {
+    if connection.is_none() {
         return Err(source_blocked(source::SourceBlock::Missing));
     }
-    let request_id = job
-        .request_id
-        .ok_or_else(|| source_blocked(source::SourceBlock::Missing))?;
-    source::authorize_job(connection, &job.source, request_id, batch.message_id, token)
-        .map(|_| ())
-        .map_err(source_blocked)
+    Err(source_blocked(source::SourceBlock::ClosedWorldUnproven))
 }
 
 #[cfg(test)]

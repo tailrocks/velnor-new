@@ -19,7 +19,14 @@ async fn acquire_needs_receipt_and_uncertain_result_survives_restart() -> Result
     let scope = created_scope(&journal, &binding, 501).await?;
     let (assignment, intent_id) = reserve_assigned(&scope, 44).await?;
     assert!(!scope.claim_assigned_acquire(intent_id).await?);
-    let receipt = test_receipt(44, 88, source(101, 901), SourcePolicyMode::Repository);
+    let receipt = scoped_receipt(
+        &scope,
+        44,
+        88,
+        source(101, 901),
+        SourcePolicyMode::Repository,
+    )
+    .await?;
     scope
         .record_source_authorization(&assignment, &receipt)
         .await?;
@@ -64,7 +71,14 @@ async fn only_receipted_closed_acquire_can_claim_jit() -> Result<(), HostError> 
     let binding = binding("essential", 101, "donbeave/essential-mac")?;
     let scope = created_scope(&journal, &binding, 501).await?;
     let (assignment, intent_id) = reserve_assigned(&scope, 55).await?;
-    let receipt = test_receipt(55, 99, source(101, 902), SourcePolicyMode::Repository);
+    let receipt = scoped_receipt(
+        &scope,
+        55,
+        99,
+        source(101, 902),
+        SourcePolicyMode::Repository,
+    )
+    .await?;
     scope
         .record_source_authorization(&assignment, &receipt)
         .await?;
@@ -92,7 +106,14 @@ async fn unattempted_assignment_without_receipt_blocks_closed_world_jit() -> Res
     let scope = created_scope(&journal, &binding, 501).await?;
     let (_, unreceipted_id) = reserve_assigned(&scope, 72).await?;
     let (assignment, ready_id) = reserve_assigned(&scope, 73).await?;
-    let receipt = test_receipt(73, 106, source(101, 909), SourcePolicyMode::Repository);
+    let receipt = scoped_receipt(
+        &scope,
+        73,
+        106,
+        source(101, 909),
+        SourcePolicyMode::Repository,
+    )
+    .await?;
     scope
         .record_source_authorization(&assignment, &receipt)
         .await?;
@@ -120,7 +141,14 @@ async fn empty_acquire_reply_is_uncertain_not_a_no_effect() -> Result<(), HostEr
     let binding = binding("essential", 101, "donbeave/essential-mac")?;
     let scope = created_scope(&journal, &binding, 501).await?;
     let (assignment, intent_id) = reserve_assigned(&scope, 67).await?;
-    let receipt = test_receipt(67, 101, source(101, 904), SourcePolicyMode::Repository);
+    let receipt = scoped_receipt(
+        &scope,
+        67,
+        101,
+        source(101, 904),
+        SourcePolicyMode::Repository,
+    )
+    .await?;
     scope
         .record_source_authorization(&assignment, &receipt)
         .await?;
@@ -148,7 +176,14 @@ async fn unresolved_acquire_for_another_request_blocks_jit() -> Result<(), HostE
     let binding = binding("essential", 101, "donbeave/essential-mac")?;
     let scope = created_scope(&journal, &binding, 501).await?;
     let (uncertain_assignment, uncertain_id) = reserve_assigned(&scope, 70).await?;
-    let uncertain_receipt = test_receipt(70, 104, source(101, 907), SourcePolicyMode::Repository);
+    let uncertain_receipt = scoped_receipt(
+        &scope,
+        70,
+        104,
+        source(101, 907),
+        SourcePolicyMode::Repository,
+    )
+    .await?;
     scope
         .record_source_authorization(&uncertain_assignment, &uncertain_receipt)
         .await?;
@@ -158,7 +193,14 @@ async fn unresolved_acquire_for_another_request_blocks_jit() -> Result<(), HostE
         .await?;
 
     let (ready_assignment, ready_id) = reserve_assigned(&scope, 71).await?;
-    let ready_receipt = test_receipt(71, 105, source(101, 908), SourcePolicyMode::Repository);
+    let ready_receipt = scoped_receipt(
+        &scope,
+        71,
+        105,
+        source(101, 908),
+        SourcePolicyMode::Repository,
+    )
+    .await?;
     scope
         .record_source_authorization(&ready_assignment, &ready_receipt)
         .await?;
@@ -184,7 +226,14 @@ async fn active_unscoped_legacy_intent_blocks_scoped_jit() -> Result<(), HostErr
     let binding = binding("essential", 101, "donbeave/essential-mac")?;
     let scope = created_scope(&journal, &binding, 501).await?;
     let (assignment, intent_id) = reserve_assigned(&scope, 68).await?;
-    let receipt = test_receipt(68, 102, source(101, 905), SourcePolicyMode::Repository);
+    let receipt = scoped_receipt(
+        &scope,
+        68,
+        102,
+        source(101, 905),
+        SourcePolicyMode::Repository,
+    )
+    .await?;
     scope
         .record_source_authorization(&assignment, &receipt)
         .await?;
@@ -211,7 +260,14 @@ async fn one_remote_set_id_cannot_be_scoped_to_two_connections() -> Result<(), H
     let first_binding = binding("essential", 101, "donbeave/essential-mac")?;
     let first = created_scope(&journal, &first_binding, 501).await?;
     let (assignment, intent_id) = reserve_assigned(&first, 69).await?;
-    let receipt = test_receipt(69, 103, source(101, 906), SourcePolicyMode::Repository);
+    let receipt = scoped_receipt(
+        &first,
+        69,
+        103,
+        source(101, 906),
+        SourcePolicyMode::Repository,
+    )
+    .await?;
     first
         .record_source_authorization(&assignment, &receipt)
         .await?;
@@ -246,7 +302,14 @@ async fn unassigned_live_row_blocks_closed_world_jit() -> Result<(), HostError> 
     let binding = binding("essential", 101, "donbeave/essential-mac")?;
     let scope = created_scope(&journal, &binding, 501).await?;
     let (assignment, intent_id) = reserve_assigned(&scope, 66).await?;
-    let receipt = test_receipt(66, 100, source(101, 903), SourcePolicyMode::Repository);
+    let receipt = scoped_receipt(
+        &scope,
+        66,
+        100,
+        source(101, 903),
+        SourcePolicyMode::Repository,
+    )
+    .await?;
     scope
         .record_source_authorization(&assignment, &receipt)
         .await?;

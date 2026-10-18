@@ -1,6 +1,7 @@
 //! Source receipt and closed-world acquire regressions.
 
 mod admission;
+mod binding;
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -17,7 +18,7 @@ use crate::journal::{
     ReservationResult, SourceAuthorizationResult,
 };
 use crate::launch::StartPermit;
-use crate::launch::steps::source::test_receipt;
+use crate::launch::steps::source::{AuthorizedSourceReceipt, test_receipt};
 use velnor_runner_github::workflow_run::{
     VerifiedJobWorkflowRef, VerifiedWorkflowSource, WorkflowRefKind,
 };
@@ -50,13 +51,10 @@ fn binding(
     repository_id: i64,
     repository: &str,
 ) -> Result<RepositoryConnection, HostError> {
-    let labels = vec!["velnor".to_owned(), "integration".to_owned()];
-    RepositoryConnection::try_new(
-        ConnectionId::parse(id)?,
+    binding_with_policy(
+        id,
         repository_id,
-        repository.to_owned(),
-        KeychainReference::parse(&format!("keychain:velnor/{id}"))?,
-        ScaleSetSelector::try_new("integration", &labels)?,
+        repository,
         SourcePolicy::try_new(
             SourcePolicyMode::Repository,
             Vec::new(),
@@ -65,6 +63,34 @@ fn binding(
             Vec::new(),
         )?,
     )
+}
+
+fn binding_with_policy(
+    id: &str,
+    repository_id: i64,
+    repository: &str,
+    policy: SourcePolicy,
+) -> Result<RepositoryConnection, HostError> {
+    let labels = vec!["velnor".to_owned(), "integration".to_owned()];
+    RepositoryConnection::try_new(
+        ConnectionId::parse(id)?,
+        repository_id,
+        repository.to_owned(),
+        KeychainReference::parse(&format!("keychain:velnor/{id}"))?,
+        ScaleSetSelector::try_new("integration", &labels)?,
+        policy,
+    )
+}
+
+async fn scoped_receipt(
+    scope: &ConnectionJournal,
+    request_id: i64,
+    message_id: i64,
+    source: VerifiedWorkflowSource,
+    mode: SourcePolicyMode,
+) -> Result<AuthorizedSourceReceipt, HostError> {
+    let binding = scope.source_authorization_binding().await?;
+    Ok(test_receipt(&binding, request_id, message_id, source, mode))
 }
 
 async fn created_scope(
@@ -171,8 +197,22 @@ async fn exact_receipts_are_scoped_replayed_and_durable() -> Result<(), HostErro
     let second = created_scope(&journal, &second_binding, 502).await?;
     let (first_assignment, _) = reserve_assigned(&first, 33).await?;
     let (second_assignment, _) = reserve_assigned(&second, 33).await?;
-    let first_receipt = test_receipt(33, 77, source(101, 900), SourcePolicyMode::Repository);
-    let second_receipt = test_receipt(33, 77, source(202, 900), SourcePolicyMode::Repository);
+    let first_receipt = scoped_receipt(
+        &first,
+        33,
+        77,
+        source(101, 900),
+        SourcePolicyMode::Repository,
+    )
+    .await?;
+    let second_receipt = scoped_receipt(
+        &second,
+        33,
+        77,
+        source(202, 900),
+        SourcePolicyMode::Repository,
+    )
+    .await?;
 
     assert_eq!(
         first
@@ -192,7 +232,14 @@ async fn exact_receipts_are_scoped_replayed_and_durable() -> Result<(), HostErro
             .await?,
         SourceAuthorizationResult::Replayed
     );
-    let changed_receipt = test_receipt(33, 78, source(101, 900), SourcePolicyMode::Repository);
+    let changed_receipt = scoped_receipt(
+        &first,
+        33,
+        78,
+        source(101, 900),
+        SourcePolicyMode::Repository,
+    )
+    .await?;
     assert_eq!(
         first
             .record_source_authorization(&first_assignment, &changed_receipt)

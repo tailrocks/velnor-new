@@ -11,7 +11,7 @@ mod remote;
 mod scale_set_create;
 mod source_authorization;
 
-const JOURNAL_VERSION: i64 = 8;
+const JOURNAL_VERSION: i64 = 9;
 const CURRENT_COLUMNS: [ColumnShape; 23] = [
     ColumnShape::new("id", "INTEGER", false, None),
     ColumnShape::new("kind", "TEXT", true, None),
@@ -100,6 +100,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
             5 => migration::from_version_five(conn).await?,
             6 => migration::from_version_six(conn).await?,
             7 => migration::from_version_seven(conn).await?,
+            8 => migration::from_version_eight(conn).await?,
             _ => return Err(HostError::Journal),
         }
     }

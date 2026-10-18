@@ -6,14 +6,21 @@ use velnor_runner_github::workflow_run::{
     get_pull_request, get_workflow_run, verify_pull_request, verify_workflow_source,
 };
 
-use crate::config::{RepositoryConnection, SourcePolicy, SourcePolicyMode, WorkflowEvent};
+use crate::config::{
+    ConnectionId, RepositoryConnection, SourcePolicy, SourcePolicyMode, WorkflowEvent,
+};
 use crate::https::HttpsTransport;
+use crate::journal::SourceAuthorizationBinding;
+use sha2::{Digest, Sha256};
 
 const GITHUB_API: &str = "https://api.github.com";
 
-/// Nonsecret source facts matched to an authenticated workflow run and policy.
+/// Nonsecret source facts approved by an authenticated workflow run and policy.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AuthorizedSourceReceipt {
+    connection_id: ConnectionId,
+    scale_set_id: i64,
+    binding_digest: String,
     request_id: i64,
     message_id: i64,
     source: VerifiedWorkflowSource,
@@ -21,19 +28,37 @@ pub(crate) struct AuthorizedSourceReceipt {
 }
 
 impl AuthorizedSourceReceipt {
+    /// Immutable connection that owns this authorization.
+    #[must_use]
+    pub(crate) fn connection_id(&self) -> &ConnectionId {
+        &self.connection_id
+    }
+
+    /// Verified Scale Set that owns this authorization.
+    #[must_use]
+    pub(crate) const fn scale_set_id(&self) -> i64 {
+        self.scale_set_id
+    }
+
+    /// Canonical connection and policy digest that was authorized.
+    #[must_use]
+    pub(crate) fn binding_digest(&self) -> &str {
+        &self.binding_digest
+    }
+
     /// Stable Scale Set request identity that the policy approved.
     #[must_use]
     pub(crate) const fn request_id(&self) -> i64 {
         self.request_id
     }
 
-    /// Queue message that carried this offer. This is audit data only.
+    /// Queue message that contained this offer. This is audit data only.
     #[must_use]
     pub(crate) const fn message_id(&self) -> i64 {
         self.message_id
     }
 
-    /// Source values checked against the authenticated GitHub run record.
+    /// Source values compared with the authenticated GitHub run record.
     #[must_use]
     pub(crate) const fn source(&self) -> &VerifiedWorkflowSource {
         &self.source
@@ -48,12 +73,16 @@ impl AuthorizedSourceReceipt {
 
 #[cfg(test)]
 pub(crate) fn test_receipt(
+    binding: &SourceAuthorizationBinding,
     request_id: i64,
     message_id: i64,
     source: VerifiedWorkflowSource,
     policy_mode: SourcePolicyMode,
 ) -> AuthorizedSourceReceipt {
     AuthorizedSourceReceipt {
+        connection_id: binding.connection_id().clone(),
+        scale_set_id: binding.scale_set_id(),
+        binding_digest: binding.binding_digest().to_owned(),
         request_id,
         message_id,
         source,
@@ -68,22 +97,22 @@ pub(super) enum SourceBlock {
     Missing,
     /// The authenticated GitHub lookup failed.
     ApiUnavailable,
-    /// The job source did not match the authenticated repository record.
+    /// The job source was different from the authenticated repository record.
     SourceMismatch,
     /// The event is outside the configured policy.
     EventDenied,
     /// The ref is outside the configured policy.
     RefDenied,
-    /// The pull request does not match one configured rule.
+    /// No configured rule accepts this pull request.
     PullRequestDenied,
     /// The API cannot prove the tested pull request merge commit.
     TestedMergeProofUnavailable,
-    /// The whole set of jobs that a generic JIT runner may receive is not proven.
+    /// The full set of jobs that a generic JIT runner can receive is unproven.
     ClosedWorldUnproven,
 }
 
 impl SourceBlock {
-    /// Return a stable status value without source data.
+    /// Give a stable status value without source data.
     pub(super) const fn code(self) -> &'static str {
         match self {
             Self::Missing => "source_metadata_missing",
@@ -98,14 +127,16 @@ impl SourceBlock {
     }
 }
 
-/// Verify message source fields and apply the connection policy.
+/// Compare message source fields with the GitHub API record and use connection policy.
 pub(super) fn authorize_job(
     connection: &RepositoryConnection,
+    binding: &SourceAuthorizationBinding,
     source: &SourceMetadata,
     request_id: i64,
     message_id: i64,
     token: &str,
 ) -> Result<AuthorizedSourceReceipt, SourceBlock> {
+    verify_binding(connection, binding)?;
     if request_id <= 0 || message_id < 0 {
         return Err(SourceBlock::Missing);
     }
@@ -138,11 +169,41 @@ pub(super) fn authorize_job(
         return Err(SourceBlock::TestedMergeProofUnavailable);
     }
     Ok(AuthorizedSourceReceipt {
+        connection_id: binding.connection_id().clone(),
+        scale_set_id: binding.scale_set_id(),
+        binding_digest: binding.binding_digest().to_owned(),
         request_id,
         message_id,
         source: verified,
         policy_mode: connection.source_policy.mode,
     })
+}
+
+fn verify_binding(
+    connection: &RepositoryConnection,
+    binding: &SourceAuthorizationBinding,
+) -> Result<(), SourceBlock> {
+    if binding.connection_id() != &connection.connection_id {
+        return Err(SourceBlock::SourceMismatch);
+    }
+    let identity = connection
+        .canonical_identity_bytes()
+        .map_err(|_| SourceBlock::SourceMismatch)?;
+    let digest = lower_hex(&Sha256::digest(identity));
+    if binding.scale_set_id() <= 0 || binding.binding_digest() != digest {
+        return Err(SourceBlock::SourceMismatch);
+    }
+    Ok(())
+}
+
+fn lower_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    output
 }
 
 fn verify_pull(

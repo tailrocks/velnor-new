@@ -23,6 +23,7 @@ pub(super) struct SourceRow {
     pub(super) policy_mode: String,
     pub(super) authority_model: String,
     pub(super) binding_digest: String,
+    pub(super) receipt_binding_digest: Option<String>,
     pub(super) source_digest: String,
     pub(super) source_json: String,
 }
@@ -187,7 +188,7 @@ pub(super) async fn source_row(
 ) -> Result<Option<SourceRow>, HostError> {
     let mut rows = connection
         .query(
-            "SELECT intent_id, message_id, policy_mode, authority_model, binding_digest, source_digest, source_json FROM connection_source_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3",
+            "SELECT intent_id, message_id, policy_mode, authority_model, binding_digest, receipt_binding_digest, source_digest, source_json FROM connection_source_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3",
             (connection_id, scale_set_id, request_id),
         )
         .await
@@ -201,8 +202,9 @@ pub(super) async fn source_row(
         policy_mode: row.get(2).map_err(|_| HostError::Journal)?,
         authority_model: row.get(3).map_err(|_| HostError::Journal)?,
         binding_digest: row.get(4).map_err(|_| HostError::Journal)?,
-        source_digest: row.get(5).map_err(|_| HostError::Journal)?,
-        source_json: row.get(6).map_err(|_| HostError::Journal)?,
+        receipt_binding_digest: row.get(5).map_err(|_| HostError::Journal)?,
+        source_digest: row.get(6).map_err(|_| HostError::Journal)?,
+        source_json: row.get(7).map_err(|_| HostError::Journal)?,
     }))
 }
 

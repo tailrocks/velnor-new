@@ -1,5 +1,6 @@
 //! Immutable per-connection Scale Set and Docker context bindings.
 
+use crate::config::ConnectionId;
 use crate::connect::SetOwnership;
 use crate::error::HostError;
 use crate::journal::sql::token_rejected;
@@ -18,6 +19,34 @@ pub(crate) struct ConnectionScaleSet {
     pub(crate) ownership: SetOwnership,
 }
 
+/// Exact connection identity used by one source authorization receipt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SourceAuthorizationBinding {
+    connection_id: ConnectionId,
+    scale_set_id: i64,
+    binding_digest: String,
+}
+
+impl SourceAuthorizationBinding {
+    /// Give the immutable connection identifier.
+    #[must_use]
+    pub(crate) fn connection_id(&self) -> &ConnectionId {
+        &self.connection_id
+    }
+
+    /// Give the bound Scale Set identifier.
+    #[must_use]
+    pub(crate) const fn scale_set_id(&self) -> i64 {
+        self.scale_set_id
+    }
+
+    /// Give the canonical connection and policy digest.
+    #[must_use]
+    pub(crate) fn binding_digest(&self) -> &str {
+        &self.binding_digest
+    }
+}
+
 /// Selected local Docker context stored for one repository connection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct EngineContext {
@@ -30,6 +59,42 @@ pub(crate) struct EngineContext {
 }
 
 impl ConnectionJournal {
+    /// Give the exact scope values for one source authorization receipt.
+    pub(crate) async fn source_authorization_binding(
+        &self,
+    ) -> Result<SourceAuthorizationBinding, HostError> {
+        read_transaction(&self.journal, async |connection| {
+            self.validate_scope(connection).await?;
+            let mut rows = connection
+                .query(
+                    "SELECT scale_set_id, scale_set_name, set_ownership FROM connection_runtime_bindings WHERE connection_id = ?1",
+                    [self.connection_id.as_str()],
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            let row = rows
+                .next()
+                .await
+                .map_err(|_| HostError::Journal)?
+                .ok_or(HostError::Journal)?;
+            let scale_set_id: Option<i64> = row.get(0).map_err(|_| HostError::Journal)?;
+            let scale_set_name: Option<String> = row.get(1).map_err(|_| HostError::Journal)?;
+            let ownership: Option<String> = row.get(2).map_err(|_| HostError::Journal)?;
+            match (scale_set_id, scale_set_name, ownership) {
+                (Some(id), Some(name), Some(ownership)) if id > 0 && !name.is_empty() => {
+                    parse_ownership(&ownership)?;
+                    Ok(SourceAuthorizationBinding {
+                        connection_id: self.connection_id.clone(),
+                        scale_set_id: id,
+                        binding_digest: self.binding_digest.clone(),
+                    })
+                }
+                _ => Err(HostError::Journal),
+            }
+        })
+        .await
+    }
+
     /// Bind the verified Scale Set ID, selector name, and ownership.
     #[cfg(test)]
     pub(crate) async fn bind_scale_set(

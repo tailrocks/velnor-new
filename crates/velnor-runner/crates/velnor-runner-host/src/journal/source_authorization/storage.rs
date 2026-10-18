@@ -28,6 +28,9 @@ pub(super) async fn record(
     if identity.connection_id() != scope.connection_id()
         || receipt.request_id() != request_id
         || receipt.message_id() < 0
+        || receipt.connection_id() != scope.connection_id()
+        || receipt.scale_set_id() != identity.scale_set_id()
+        || receipt.binding_digest() != scope.binding_digest()
     {
         return Err(HostError::Identity);
     }
@@ -65,7 +68,7 @@ pub(super) async fn record(
         }
         connection
             .execute(
-                "INSERT INTO connection_source_authorizations (connection_id, scale_set_id, request_id, intent_id, message_id, policy_mode, authority_model, binding_digest, source_digest, source_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                "INSERT INTO connection_source_authorizations (connection_id, scale_set_id, request_id, intent_id, message_id, policy_mode, authority_model, binding_digest, receipt_binding_digest, source_digest, source_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
                 (
                     connection_id.as_str(),
                     identity.scale_set_id(),
@@ -75,6 +78,7 @@ pub(super) async fn record(
                     policy_mode,
                     AUTHORITY_MODEL,
                     binding_digest.as_str(),
+                    receipt.binding_digest(),
                     source_digest.as_str(),
                     source_json.as_str(),
                 ),
@@ -105,6 +109,7 @@ pub(super) async fn matches_intent(
     if record.intent_id != intent_id
         || record.authority_model != AUTHORITY_MODEL
         || record.binding_digest != binding_digest
+        || record.receipt_binding_digest.as_deref() != Some(binding_digest)
         || !valid_digest(&record.binding_digest)
         || !valid_digest(&record.source_digest)
     {
@@ -270,6 +275,7 @@ fn compare_replay(
         || existing.policy_mode != policy_mode
         || existing.authority_model != AUTHORITY_MODEL
         || existing.binding_digest != binding_digest
+        || existing.receipt_binding_digest.as_deref() != Some(binding_digest)
         || existing.source_digest != source_digest
         || existing.source_json != source_json
     {

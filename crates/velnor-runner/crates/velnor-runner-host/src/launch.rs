@@ -147,7 +147,7 @@ where
         ready.admin_token.to_owned(),
         rest,
     );
-    steps::authorize_poll(&mut ctx, ready.polled)?;
+    steps::authorize_poll(&mut ctx, ready.polled).await?;
     let except = steps::mint_subject(ready.polled);
     if slot::busy_except(journal, docker, capacity, except.as_deref()).await? {
         return Ok(None);

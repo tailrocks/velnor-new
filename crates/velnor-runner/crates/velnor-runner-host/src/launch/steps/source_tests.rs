@@ -2,7 +2,12 @@ use velnor_runner_github::workflow_run::{
     VerifiedJobWorkflowRef, VerifiedWorkflowSource, WorkflowRefKind,
 };
 
-use crate::config::{PullRequestRule, SourcePolicy, SourcePolicyMode, WorkflowEvent};
+use crate::config::{
+    ConnectionId, HostConfig, PullRequestRule, SourcePolicy, SourcePolicyMode, WorkflowEvent,
+};
+use crate::config_test_support::{basic_connection, host_config};
+use crate::connect::SetOwnership;
+use crate::launch_harness;
 
 use super::{SourceBlock, authorize_policy};
 
@@ -145,6 +150,75 @@ fn repository_mode_allows_only_listed_events_after_source_verification() -> Resu
     assert_eq!(
         authorize_policy(&policy, &denied),
         Err(SourceBlock::EventDenied)
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn authorization_binding_rejects_changed_policy_before_source_lookup() -> Result<(), String> {
+    let encoded = host_config(
+        &[basic_connection(
+            "source-binding",
+            77,
+            "chainargos/java-monorepo",
+            "source-binding",
+            "integration",
+        )],
+        1,
+    );
+    let config = HostConfig::parse(&encoded).map_err(|error| error.to_string())?;
+    let original = config
+        .connections()
+        .first()
+        .ok_or_else(|| "connection fixture missing".to_owned())?;
+    let mut changed = original.clone();
+    changed.source_policy = SourcePolicy::try_new(
+        SourcePolicyMode::Repository,
+        Vec::new(),
+        Vec::new(),
+        vec![WorkflowEvent::Push],
+        Vec::new(),
+    )
+    .map_err(|error| error.to_string())?;
+
+    let (_scratch, journal) = launch_harness::open("source-binding").await?;
+    let scope = journal
+        .connection_scope(original)
+        .await
+        .map_err(|error| error.to_string())?;
+    scope
+        .bind_scale_set(501, original.scale_set.name(), SetOwnership::Created)
+        .await
+        .map_err(|error| error.to_string())?;
+    let binding = scope
+        .source_authorization_binding()
+        .await
+        .map_err(|error| error.to_string())?;
+
+    assert_eq!(
+        super::authorize_job(
+            &changed,
+            &binding,
+            &velnor_runner_github::SourceMetadata::default(),
+            44,
+            7,
+            "test-token",
+        ),
+        Err(SourceBlock::SourceMismatch)
+    );
+    let mut different_connection = original.clone();
+    different_connection.connection_id =
+        ConnectionId::parse("different-source-binding").map_err(|error| error.to_string())?;
+    assert_eq!(
+        super::authorize_job(
+            &different_connection,
+            &binding,
+            &velnor_runner_github::SourceMetadata::default(),
+            44,
+            7,
+            "test-token",
+        ),
+        Err(SourceBlock::SourceMismatch)
     );
     Ok(())
 }

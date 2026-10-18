@@ -174,7 +174,7 @@ impl Turn<'_> {
         let polled = polled?;
         trace::batch(&polled);
         if self.rest.permits_start() {
-            super::steps::authorize_poll_rest(&self.rest, &polled)?;
+            super::steps::authorize_poll_rest(&self.rest, &polled).await?;
             self.rest.source_authorized = true;
             self.fit_pressure().await?;
         }

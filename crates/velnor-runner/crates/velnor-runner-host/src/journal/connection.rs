@@ -14,7 +14,7 @@ pub(crate) use identity::{AssignmentIdentity, AssignmentKey};
 pub(crate) use reservation::{
     CapacityLimits, ReservationRequest, ReservationResult, ReservationSnapshot, ReservationState,
 };
-pub(crate) use runtime::{ConnectionScaleSet, EngineContext};
+pub(crate) use runtime::{ConnectionScaleSet, EngineContext, SourceAuthorizationBinding};
 
 use crate::config::ConnectionId;
 use crate::journal::Journal;
