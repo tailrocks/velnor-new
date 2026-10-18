@@ -3,6 +3,7 @@
 
 use super::roots::CacheRootId;
 pub(crate) use super::{CacheExportProof, CacheRestoreProof, CacheRestoreStatus};
+use std::io::{Read, Seek};
 
 #[path = "transfer_cleanup.rs"]
 pub(super) mod cleanup;
@@ -12,12 +13,35 @@ pub(super) mod dirs;
 pub(super) mod engine;
 #[path = "transfer_files.rs"]
 pub(super) mod files;
+pub(super) use files::open_copy_source;
 #[path = "transfer_install.rs"]
 pub(super) mod install;
 #[path = "payload.rs"]
 pub(super) mod payload;
 #[path = "transfer_stage.rs"]
 pub(super) mod stage;
+pub(super) use dirs::same_version;
+#[path = "transfer_transport_envelope.rs"]
+pub(super) mod transport_envelope;
+#[path = "transfer_transport_tar_write.rs"]
+pub(super) mod transport_tar_write;
+pub(crate) use engine::{snapshot_roots, useful_state_digest};
+pub(crate) use transport_tar_write::write_payload as write_transport_payload;
+
+pub(crate) fn validate_transport_envelope<R: Read + Seek>(
+    reader: &mut R,
+    operation_limit: u64,
+) -> Result<(), &'static str> {
+    let range = transport_envelope::read_envelope(reader, operation_limit)?;
+    if range
+        .offset
+        .checked_add(range.length)
+        .is_none_or(|end| end > operation_limit)
+    {
+        return Err("qualification_cache_transport_length_invalid");
+    }
+    Ok(())
+}
 
 const MANIFEST_FILENAME: &str = "manifest.json";
 const ROOTS_DIRECTORY: &str = "roots";
@@ -36,7 +60,7 @@ pub(super) struct CreatedPayload {
 }
 
 #[cfg(test)]
-pub(crate) use engine::{export_payload, import_payload, snapshot_root, useful_state_digest};
+pub(crate) use engine::{export_payload, import_payload, snapshot_root};
 
 pub(super) fn root_name(id: CacheRootId) -> &'static str {
     match id {

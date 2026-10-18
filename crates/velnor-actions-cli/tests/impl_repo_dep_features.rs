@@ -54,7 +54,7 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         assert!(!body.contains("tokio"), "{dir} must not use tokio");
         for line in dep_lines(&body) {
             let key = dep_key(line);
-            if key.starts_with("velnor-actions") {
+            if key.starts_with("velnor-actions") || key == "velnor-archive-guard" {
                 continue;
             }
             let archive_decoder = reviewed_archive_dependency(dir, key, line);

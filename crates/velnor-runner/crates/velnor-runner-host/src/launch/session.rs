@@ -646,6 +646,9 @@ mod tests {
         refresh_bound_connection_session_with,
     };
 
+    #[path = "poll_refresh_tests.rs"]
+    mod poll_refresh_tests;
+
     struct Scratch(PathBuf);
 
     impl Scratch {

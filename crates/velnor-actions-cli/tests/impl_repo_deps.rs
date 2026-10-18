@@ -30,6 +30,7 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-rust",
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
+            "velnor-archive-guard",
         ],
         "crates/velnor-actions-cli" => {
             vec!["velnor-actions-freshness", "velnor-actions-orchestrator"]
@@ -49,7 +50,9 @@ fn dependency_edges_match_ownership_table() -> Result<(), Box<dyn Error>> {
             .map(|deps| {
                 deps.pairs
                     .iter()
-                    .filter(|pair| pair.0.starts_with("velnor-actions"))
+                    .filter(|pair| {
+                        pair.0.starts_with("velnor-actions") || pair.0 == "velnor-archive-guard"
+                    })
                     .map(|pair| pair.0.clone())
                     .collect()
             })

@@ -71,13 +71,14 @@ pub(crate) use capacity::{install_job_capacity, job_capacity};
 pub(crate) use completion::CompletionWorker;
 pub(crate) use gate::{gate_line, reconcile_gate};
 pub(crate) use pressure::advertise as advertise_capacity;
+pub(crate) use resource_probe::prepare_worker_images;
 pub(crate) use verified_images::{VerifiedImageIdentity, VerifiedWorkerImages};
 
 /// Run one scoped queue poll with the supplied durable zero-header allocation.
 pub(crate) async fn poll_scoped_connection_once(
     link: &mut Link,
     set_id: i64,
-    session: &QueueSession,
+    session: &mut QueueSession,
     scoped: &ConnectionJournal,
     session_intent_id: i64,
     allocation: &HeaderAllocation,

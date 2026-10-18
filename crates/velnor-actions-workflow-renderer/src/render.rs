@@ -133,6 +133,10 @@ pub fn finalize_jobs(
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     for (id, job) in &mut jobs {
+        let bootstrap_plan = ctx.preseed && id == PLAN_JOB_ID;
+        if bootstrap_plan {
+            crate::cache_tar_setup::strip_preseed_bootstrap_cache(job);
+        }
         if ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id)) {
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
@@ -152,15 +156,17 @@ pub fn finalize_jobs(
         } else {
             mise.clone()
         };
-        cache_p08::ensure_tools_cache_v2_with_source(
-            id,
-            job,
-            &setup,
-            always,
-            target,
-            ctx.scale_set_image_source_sha.as_deref(),
-            &ctx.checkout_uses,
-        )?;
+        if !bootstrap_plan {
+            cache_p08::ensure_tools_cache_v2_with_source(
+                id,
+                job,
+                &setup,
+                always,
+                target,
+                ctx.scale_set_image_source_sha.as_deref(),
+                &ctx.checkout_uses,
+            )?;
+        }
         cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
@@ -175,6 +181,7 @@ pub fn finalize_jobs(
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
     crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
+    crate::cache_tar_setup::insert_launcher_steps(&mut jobs)?;
     validate_final_jobs(ir, &mut jobs)?;
     Ok(jobs)
 }

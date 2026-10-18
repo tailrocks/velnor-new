@@ -4,7 +4,7 @@
 //! Cold and warm jobs use the same checked cache key.
 
 use crate::qualification_cache_runtime::QualificationCacheBindingOutputs;
-use serde_json::{Map, Value, json};
+use serde_json::json;
 use velnor_actions_contract::{canonical_json_str, strict_json::parse_strict_json_with_limit};
 
 use super::roots::{CacheRootId, CacheRootSet};
@@ -13,7 +13,12 @@ mod normal_key;
 #[path = "manifest_roots.rs"]
 mod root;
 use normal_key::valid_normal_tools_key;
-use root::{parse_root, root_id_text, root_kind, valid_root_mode, validate_payload_roots};
+use root::{root_id_text, root_kind, valid_root_mode, validate_payload_roots};
+#[path = "manifest_normal_tofu.rs"]
+mod normal_tofu;
+#[path = "manifest_parse.rs"]
+mod parse;
+pub(crate) use parse::{schema, validate_digest};
 
 const NAMESPACE: &str = "qualification";
 const NORMAL_NAMESPACE: &str = "normal_tools";
@@ -44,6 +49,12 @@ pub(crate) enum PayloadScope {
         layer: String,
     },
     NormalTools,
+    NormalTofuProviders {
+        target: String,
+        tofu_version: String,
+        root: String,
+        lockfile_sha256: String,
+    },
 }
 
 impl PayloadManifest {
@@ -98,7 +109,7 @@ impl PayloadManifest {
         if canonical != text {
             return Err("qualification_cache_manifest_noncanonical");
         }
-        let manifest = parse_value(&value)?;
+        let manifest = parse::parse_value(&value)?;
         let runtime_identity_digest = binding
             .runtime_identity_digest
             .as_deref()
@@ -136,7 +147,7 @@ impl PayloadManifest {
         roots: &CacheRootSet,
         cache_key: &str,
     ) -> Result<Self, &'static str> {
-        let manifest = parse_canonical(text)?;
+        let manifest = parse::parse_canonical(text)?;
         let runtime_identity_digest = binding
             .runtime_identity_digest
             .as_deref()
@@ -189,7 +200,7 @@ impl PayloadManifest {
         runtime_identity_digest: &str,
         roots: &CacheRootSet,
     ) -> Result<Self, &'static str> {
-        let manifest = parse_canonical(text)?;
+        let manifest = parse::parse_canonical(text)?;
         validate_digest(runtime_identity_digest)?;
         if roots.layer.as_str() != "mise_tools"
             || !valid_normal_tools_key(cache_key)
@@ -260,6 +271,7 @@ impl PayloadManifest {
                 "schema": schema(),
                 "state_digest": self.state_digest,
             }),
+            PayloadScope::NormalTofuProviders { .. } => normal_tofu::to_json(self, &roots),
         };
         let text =
             canonical_json_str(&value).map_err(|_| "qualification_cache_manifest_invalid")?;
@@ -268,128 +280,6 @@ impl PayloadManifest {
         }
         Ok(text)
     }
-}
-
-fn parse_canonical(text: &str) -> Result<PayloadManifest, &'static str> {
-    if text.len() > MAX_MANIFEST_BYTES || text.chars().any(|value| matches!(value, '\n' | '\r')) {
-        return Err("qualification_cache_manifest_invalid");
-    }
-    let value = parse_strict_json_with_limit(text, MAX_MANIFEST_BYTES)
-        .map_err(|_| "qualification_cache_manifest_invalid")?;
-    let canonical =
-        canonical_json_str(&value).map_err(|_| "qualification_cache_manifest_invalid")?;
-    if canonical != text {
-        return Err("qualification_cache_manifest_noncanonical");
-    }
-    parse_value(&value)
-}
-
-fn parse_value(value: &Value) -> Result<PayloadManifest, &'static str> {
-    let object = value
-        .as_object()
-        .ok_or("qualification_cache_manifest_invalid")?;
-    if string_field(object, "schema")? != schema() {
-        return Err("qualification_cache_manifest_schema_invalid");
-    }
-    let namespace = string_field(object, "namespace")?;
-    let scope = match namespace {
-        NAMESPACE
-            if has_exact_keys(
-                object,
-                &[
-                    "cache_key",
-                    "campaign",
-                    "layer",
-                    "matrix_key",
-                    "namespace",
-                    "roots",
-                    "runtime_identity_digest",
-                    "schema",
-                    "state_digest",
-                ],
-            ) =>
-        {
-            PayloadScope::Qualification {
-                campaign: string_field(object, "campaign")?.to_owned(),
-                matrix_key: string_field(object, "matrix_key")?.to_owned(),
-                layer: string_field(object, "layer")?.to_owned(),
-            }
-        }
-        NORMAL_NAMESPACE
-            if has_exact_keys(
-                object,
-                &[
-                    "cache_key",
-                    "layer",
-                    "namespace",
-                    "roots",
-                    "runtime_identity_digest",
-                    "schema",
-                    "state_digest",
-                ],
-            ) && string_field(object, "layer")? == "mise_tools" =>
-        {
-            PayloadScope::NormalTools
-        }
-        _ => return Err("qualification_cache_manifest_invalid"),
-    };
-    let state_digest = string_field(object, "state_digest")?.to_owned();
-    validate_digest(&state_digest)?;
-    let roots_value = object
-        .get("roots")
-        .and_then(Value::as_array)
-        .filter(|roots| !roots.is_empty() && roots.len() <= 8)
-        .ok_or("qualification_cache_manifest_invalid")?;
-    let mut roots = Vec::with_capacity(roots_value.len());
-    for root in roots_value {
-        roots.push(parse_root(root)?);
-    }
-    if roots
-        .windows(2)
-        .any(|pair| root_id_text(pair[0].id) >= root_id_text(pair[1].id))
-    {
-        return Err("qualification_cache_manifest_roots_order_invalid");
-    }
-    Ok(PayloadManifest {
-        scope,
-        cache_key: string_field(object, "cache_key")?.to_owned(),
-        runtime_identity_digest: string_field(object, "runtime_identity_digest")?.to_owned(),
-        state_digest,
-        roots,
-    })
-}
-
-fn schema() -> String {
-    format!(
-        "velnor.cache-payload/v{}",
-        velnor_actions_contract::workflow::QUALIFICATION_CACHE_FORMAT_VERSION
-    )
-}
-
-fn validate_digest(value: &str) -> Result<(), &'static str> {
-    let Some(hex) = value.strip_prefix("b3-") else {
-        return Err("qualification_cache_manifest_digest_invalid");
-    };
-    if hex.len() != 64
-        || !hex
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-    {
-        return Err("qualification_cache_manifest_digest_invalid");
-    }
-    Ok(())
-}
-
-fn has_exact_keys(object: &Map<String, Value>, keys: &[&str]) -> bool {
-    object.len() == keys.len() && keys.iter().all(|key| object.contains_key(*key))
-}
-
-fn string_field<'a>(object: &'a Map<String, Value>, key: &str) -> Result<&'a str, &'static str> {
-    object
-        .get(key)
-        .and_then(Value::as_str)
-        .filter(|value| !value.is_empty())
-        .ok_or("qualification_cache_manifest_invalid")
 }
 
 #[cfg(test)]

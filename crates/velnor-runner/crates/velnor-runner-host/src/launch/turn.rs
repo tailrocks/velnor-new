@@ -5,7 +5,7 @@ use std::future::Future;
 use velnor_runner_github::{Poll, QueueSession};
 
 use crate::journal::{ConnectionJournal, HeaderAllocation, HeaderPollAttempt, Journal};
-use crate::listen::{Link, point_at_queue, poll_path, restore_base};
+use crate::listen::{Link, PollPathResult, point_at_queue, poll_path, restore_base};
 use crate::scale_set::EnsureError;
 use crate::worker::Started;
 
@@ -38,7 +38,7 @@ pub(crate) struct ScopedPollOutcome {
 pub(crate) async fn poll_scoped_connection_once(
     link: &mut Link,
     set_id: i64,
-    session: &QueueSession,
+    session: &mut QueueSession,
     scoped: &ConnectionJournal,
     session_intent_id: i64,
     allocation: &HeaderAllocation,
@@ -50,29 +50,17 @@ pub(crate) async fn poll_scoped_connection_once(
         .begin_zero_header_poll(session_intent_id, allocation)
         .await
         .map_err(|_| completion_error())?;
-    let (saved, path) = match point_at_queue(link, &session.message_queue_url) {
-        Ok(value) => value,
-        Err(error) => {
-            scoped
-                .mark_session_poll_uncertain(session_intent_id, attempt)
-                .await
-                .map_err(|_| completion_error())?;
-            return Err(error);
-        }
-    };
-    let queue = saved.as_ref().map(|_| link.base().to_owned());
-    let polled = poll_path(link, session, &path, 0, 0);
-    let restored = restore_base(link, saved);
-    let polled = match (polled, restored) {
-        (Ok(polled), Ok(())) => polled,
-        (Err(error), _) | (_, Err(error)) => {
-            scoped
-                .mark_session_poll_uncertain(session_intent_id, attempt)
-                .await
-                .map_err(|_| completion_error())?;
-            return Err(error);
-        }
-    };
+    let (polled, path, queue) =
+        match poll_scoped_queue(link, session, scoped, session_intent_id, set_id, 0, 0).await {
+            Ok(value) => value,
+            Err(error) => {
+                scoped
+                    .mark_session_poll_uncertain(session_intent_id, attempt)
+                    .await
+                    .map_err(|_| completion_error())?;
+                return Err(error);
+            }
+        };
     let intake = intake_and_ack_if_only_scoped(scoped, set_id, &polled, || async {
         ack_ready(link, session, path, queue, &polled)
     });
@@ -87,6 +75,46 @@ pub(crate) async fn poll_scoped_connection_once(
         handled,
     )
     .await
+}
+
+async fn poll_scoped_queue(
+    link: &mut Link,
+    session: &mut QueueSession,
+    scoped: &ConnectionJournal,
+    session_intent_id: i64,
+    set_id: i64,
+    total_capacity: u32,
+    cursor: i64,
+) -> Result<(Poll, String, Option<String>), EnsureError> {
+    let (saved, path) = point_at_queue(link, &session.message_queue_url)?;
+    let queue = saved.as_ref().map(|_| link.base().to_owned());
+    let response = poll_path(link, session, &path, total_capacity, cursor);
+    restore_base(link, saved)?;
+    match response? {
+        PollPathResult::Response(polled) => Ok((polled, path, queue)),
+        PollPathResult::RefreshRequired => {
+            let refreshed = super::session::refresh_bound_connection_session(
+                link,
+                scoped,
+                session_intent_id,
+                set_id,
+                &session.session_id,
+            )
+            .await?;
+            *session = refreshed;
+
+            let (saved, path) = point_at_queue(link, &session.message_queue_url)?;
+            let queue = saved.as_ref().map(|_| link.base().to_owned());
+            let response = poll_path(link, session, &path, total_capacity, cursor);
+            restore_base(link, saved)?;
+            match response? {
+                PollPathResult::Response(polled) => Ok((polled, path, queue)),
+                // A refreshed bearer that still receives 401 is a terminal
+                // refusal for this header attempt. Never replay the same GET.
+                PollPathResult::RefreshRequired => Err(EnsureError::Uncertain),
+            }
+        }
+    }
 }
 
 async fn finish_scoped_poll_response<F>(
@@ -282,7 +310,12 @@ impl Turn<'_> {
         self.cursor = super::steady::poll_cursor(self.cursor, self.steady_retry, now);
         let polled = poll_path(self.link, self.session, &path, self.capacity, self.cursor);
         restore_base(self.link, saved)?;
-        let polled = polled?;
+        let polled = match polled? {
+            PollPathResult::Response(polled) => polled,
+            // The legacy positive turn has no mutable, durable session scope.
+            // Leave this path closed rather than replaying a stale queue GET.
+            PollPathResult::RefreshRequired => return Err(EnsureError::AdmissionClosed),
+        };
         trace::batch(&polled);
         let link = &mut *self.link;
         let session = self.session;

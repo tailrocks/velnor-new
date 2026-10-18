@@ -86,22 +86,21 @@ fn run_export_inner() -> Result<String, &'static str> {
 
 fn export_output_body(result: &QualificationCachePayloadExport) -> Result<String, &'static str> {
     let proof = &result.proof;
-    let save_requested = proof.save_key.is_some();
+    let save_requested = proof.save_key().is_some();
     let fields = [
         ("snapshot_admitted", "true".to_owned()),
-        ("state_digest", proof.state_digest.clone()),
+        ("state_digest", proof.state_digest().to_owned()),
         ("save_requested", bool_text(save_requested).to_owned()),
-        ("save_key", proof.save_key.clone().unwrap_or_default()),
+        ("save_key", proof.save_key().unwrap_or_default().to_owned()),
         (
             "save_stage_path",
             proof
-                .save_stage_path
-                .as_ref()
+                .save_stage_path()
                 .map_or_else(String::new, |path| path.display().to_string()),
         ),
         (
             "manifest_digest",
-            proof.manifest_digest.clone().unwrap_or_default(),
+            proof.manifest_digest().unwrap_or_default().to_owned(),
         ),
         (
             "export_result",
@@ -153,7 +152,7 @@ fn import_output_body(
         }
     };
     let proof = &result.proof;
-    let restore_result = match proof.status {
+    let restore_result = match proof.status() {
         CacheRestoreStatus::Disabled => "disabled",
         CacheRestoreStatus::Miss => "miss",
         CacheRestoreStatus::Hit => "hit",
@@ -195,21 +194,20 @@ fn import_output_body(
         ),
         (
             "state_digest",
-            proof.state_digest.clone().unwrap_or_default(),
+            proof.state_digest().unwrap_or_default().to_owned(),
         ),
         (
             "restore_stage_path",
             proof
-                .stage_path
-                .as_ref()
+                .stage_path()
                 .map_or_else(String::new, |path| path.display().to_string()),
         ),
     ];
     let mut fields = fields;
-    if proof.status != CacheRestoreStatus::Disabled {
+    if proof.status() != CacheRestoreStatus::Disabled {
         fields.push(("backend_admitted", "true".to_owned()));
     }
-    if proof.status == CacheRestoreStatus::Hit {
+    if proof.status() == CacheRestoreStatus::Hit {
         fields.push(("payload_admitted", "true".to_owned()));
         fields.push(("restore_admitted", "true".to_owned()));
     }

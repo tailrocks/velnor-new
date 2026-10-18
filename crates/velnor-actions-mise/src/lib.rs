@@ -11,6 +11,7 @@ mod requests_app_token_tests;
 #[path = "../../test_support/temp_dir.rs"]
 mod test_temp_dir;
 
+pub mod bounded_file_filter;
 pub mod build;
 pub mod cache;
 pub mod cache_sources;
@@ -48,6 +49,7 @@ pub mod toolfiles;
 pub mod verify;
 pub mod wrappers;
 
+pub use bounded_file_filter::{FileFilterError, ZstdFilterMode, run_zstd_file_filter};
 pub use build::{CANDIDATE_BUILD_BIN, CANDIDATE_BUILD_PACKAGE, CandidateBuild};
 pub use cache::{
     CACHE_DIR_ENV, CachedTaskDescriptor, TASK_ARTIFACTS_DIR_NAME, TASK_ARTIFACTS_VERSION,

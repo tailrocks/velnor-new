@@ -1,5 +1,4 @@
-use super::{PIPE_POLL_INTERVAL, StageError};
-use std::fs::File;
+use super::FileFilterError;
 use std::io::{ErrorKind, Read, Write};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -7,30 +6,11 @@ use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-enum FilterProgress {
-    Input(Result<(), StageError>),
-    Output(Result<(), StageError>),
-}
+const PIPE_POLL_INTERVAL: Duration = Duration::from_millis(2);
 
-/// The deadline limits the child and pipes. Regular-file I/O can delay return.
-pub(super) fn run_filter(
-    command: &mut Command,
-    input: File,
-    output: &mut File,
-    input_limit: u64,
-    output_limit: u64,
-    timeout: Duration,
-) -> Result<(), StageError> {
-    let input_metadata = input
-        .metadata()
-        .map_err(|_| "cache_tar_archive_read_failed")?;
-    let output_metadata = output
-        .metadata()
-        .map_err(|_| "cache_tar_archive_write_failed")?;
-    if !input_metadata.is_file() || !output_metadata.is_file() {
-        return Err("cache_tar_archive_invalid");
-    }
-    run_filter_io(command, input, output, input_limit, output_limit, timeout)
+enum FilterProgress {
+    Input(Result<(), FileFilterError>),
+    Output(Result<(), FileFilterError>),
 }
 
 pub(super) fn run_filter_io<R, W>(
@@ -40,7 +20,7 @@ pub(super) fn run_filter_io<R, W>(
     input_limit: u64,
     output_limit: u64,
     timeout: Duration,
-) -> Result<(), StageError>
+) -> Result<(), FileFilterError>
 where
     R: Read + Send,
     W: Write + Send,
@@ -102,7 +82,7 @@ struct FilterJob<'a, R, W> {
     cancelled: Arc<AtomicBool>,
 }
 
-fn transfer_and_wait<R, W>(job: FilterJob<'_, R, W>) -> Result<(), StageError>
+fn transfer_and_wait<R, W>(job: FilterJob<'_, R, W>) -> Result<(), FileFilterError>
 where
     R: Read + Send,
     W: Write + Send,
@@ -208,7 +188,7 @@ fn copy_into_child<R: Read, W: Write>(
     child_input: &mut W,
     limit: u64,
     cancelled: &AtomicBool,
-) -> Result<(), StageError> {
+) -> Result<(), FileFilterError> {
     let mut total = 0_u64;
     let mut buffer = vec![0_u8; 64 * 1024];
     loop {
@@ -234,7 +214,7 @@ fn copy_from_child<W: Write>(
     output: &mut W,
     limit: u64,
     cancelled: &AtomicBool,
-) -> Result<(), StageError> {
+) -> Result<(), FileFilterError> {
     let mut total = 0_u64;
     let mut buffer = vec![0_u8; 64 * 1024];
     loop {
@@ -265,7 +245,7 @@ fn write_nonblocking<W: Write>(
     writer: &mut W,
     mut bytes: &[u8],
     cancelled: &AtomicBool,
-) -> Result<(), StageError> {
+) -> Result<(), FileFilterError> {
     while !bytes.is_empty() {
         if cancelled.load(Ordering::Acquire) {
             return Err("cache_tar_compression_failed");
@@ -311,7 +291,7 @@ fn terminate_and_reap(child: &mut Child, group: u32) {
 }
 
 #[cfg(test)]
-pub(in crate::cache_action_stage::compression) mod group_signal_test_hook {
+pub(super) mod group_signal_test_hook {
     use std::cell::Cell;
 
     thread_local! {
@@ -319,20 +299,20 @@ pub(in crate::cache_action_stage::compression) mod group_signal_test_hook {
         static LEADER_ALREADY_REAPED: Cell<bool> = const { Cell::new(false) };
     }
 
-    pub(in crate::cache_action_stage::compression) fn enable() {
+    pub(crate) fn enable() {
         ENABLED.with(|enabled| enabled.set(true));
         LEADER_ALREADY_REAPED.with(|observed| observed.set(false));
     }
 
-    pub(in crate::cache_action_stage::compression) fn disable() {
+    pub(crate) fn disable() {
         ENABLED.with(|enabled| enabled.set(false));
     }
 
-    pub(in crate::cache_action_stage::compression) fn leader_was_already_reaped() -> bool {
+    pub(crate) fn leader_was_already_reaped() -> bool {
         LEADER_ALREADY_REAPED.with(Cell::get)
     }
 
-    pub(in crate::cache_action_stage::compression) fn observe_and_suppress(group: u32) -> bool {
+    pub(super) fn observe_and_suppress(group: u32) -> bool {
         use rustix::process::{Pid, WaitOptions, waitpid};
 
         if !ENABLED.with(Cell::get) {

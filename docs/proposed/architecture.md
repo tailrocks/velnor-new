@@ -29,6 +29,7 @@ velnor-actions-orchestrator -> velnor-actions-tofu
 velnor-actions-orchestrator -> velnor-actions-mise
 velnor-actions-orchestrator -> velnor-actions-actionlint
 velnor-actions-orchestrator -> velnor-actions-workflow-renderer
+velnor-actions-orchestrator -> velnor-archive-guard (cache-payload framing only)
 velnor-actions-rust -> velnor-actions-contract
 velnor-actions-tofu -> velnor-actions-contract
 velnor-actions-mise -> velnor-actions-contract
@@ -48,9 +49,10 @@ and runs as a separate GitHub Actions job.
 The workspace also contains `velnor-actions-freshness` and
 `velnor-archive-guard` as repository-only maintenance members. Both are
 outside the eight-product V1 graph and do not enter V1 Rust task derivation.
-The orchestrator does not link either helper as a library. Only the CLI's
-private maintenance gate consumes
-freshness at runtime; repository scripts provision the archive guard. Under
+The orchestrator links the archive guard only for bounded framing validation
+of cache-payload raw tar bytes; the guard does not validate cache paths,
+manifests, links, or imports. Only the CLI's private maintenance gate consumes
+freshness at runtime; repository scripts provision the archive guard binary. Under
 `VelnorRepositoryV1`, the existing named-Mise-check contract emits one
 independent `maintenance-helpers` Required check for both packages' Rust test
 suites. That repository-quality check stays outside the product crate matrix;
@@ -97,6 +99,13 @@ probes behind the private gate; their results MUST NOT enter V1 planning. The
 orchestrator supplies product requests and schedules calls; it never builds
 shell commands. The renderer receives validated command references and generic
 workflow IR; it never emits Mise syntax.
+
+Mise also owns a private bounded file filter for archive compression. The
+filter accepts open regular files, fixed zstd arguments, byte limits, and a
+child deadline. It uses the shared isolated command factory. It writes only
+through the caller's existing output file descriptor. It creates no paths and
+does not change path metadata. Before it starts the child, it reads the
+program's symbolic-link metadata. It rejects a symbolic link.
 
 All Velnor product Rust package roots MUST live under `crates/`. The root
 manifest MUST be a virtual workspace with explicit members.

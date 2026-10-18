@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 
 use super::{
-    NORMAL_TOOLS_CACHE_EXPORT_OPERATION, NORMAL_TOOLS_CACHE_IMPORT_OPERATION,
-    NORMAL_TOOLS_CACHE_STAGE_OPERATION, StepId, StepRole, TOOLS_CACHE_RESTORE_USES,
+    CACHE_TAR_LAUNCHER_SHA256_INPUT, CACHE_TAR_LAUNCHER_USES, NORMAL_TOOLS_CACHE_EXPORT_OPERATION,
+    NORMAL_TOOLS_CACHE_IMPORT_OPERATION, NORMAL_TOOLS_CACHE_STAGE_OPERATION,
+    PRESEED_HELPER_SHA256_OUTPUT_EXPR, StepId, StepRole, TOOLS_CACHE_RESTORE_USES,
     validate_step_sequence,
 };
 use crate::workflow::{Step, StepKind};
@@ -113,4 +114,84 @@ fn normal_cache_operations_reject_wrong_operation_and_missing_id() {
 
     assert!(validate_step_sequence(&[wrong_operation], "normal-tools-cache").is_err());
     assert!(validate_step_sequence(&[missing_id], "normal-tools-cache").is_err());
+}
+
+#[test]
+fn cache_tar_launcher_output_has_one_typed_owner() {
+    let step = Step {
+        name: "Install cache tar adapters".to_owned(),
+        id: Some(StepId::CacheTarLaunchers),
+        role: Some(StepRole::CacheTarLaunchers),
+        condition: None,
+        kind: StepKind::Action {
+            uses: CACHE_TAR_LAUNCHER_USES.to_owned(),
+            with: BTreeMap::from([(CACHE_TAR_LAUNCHER_SHA256_INPUT.to_owned(), "a".repeat(64))]),
+            env: BTreeMap::new(),
+        },
+    };
+
+    assert_eq!(StepId::CacheTarLaunchers.as_str(), "cache-tar-launchers");
+    assert!(validate_step_sequence(std::slice::from_ref(&step), "cache-tar").is_ok());
+
+    let preseed_digest = Step {
+        kind: StepKind::Action {
+            uses: CACHE_TAR_LAUNCHER_USES.to_owned(),
+            with: BTreeMap::from([(
+                CACHE_TAR_LAUNCHER_SHA256_INPUT.to_owned(),
+                PRESEED_HELPER_SHA256_OUTPUT_EXPR.to_owned(),
+            )]),
+            env: BTreeMap::new(),
+        },
+        ..step.clone()
+    };
+    assert!(validate_step_sequence(&[preseed_digest], "cache-tar").is_ok());
+
+    let wrong_action = Step {
+        kind: StepKind::Action {
+            uses: "./.github/actions/other".to_owned(),
+            with: BTreeMap::from([(CACHE_TAR_LAUNCHER_SHA256_INPUT.to_owned(), "a".repeat(64))]),
+            env: BTreeMap::new(),
+        },
+        ..step.clone()
+    };
+    let missing_id = Step {
+        id: None,
+        ..step.clone()
+    };
+    assert!(validate_step_sequence(&[wrong_action], "cache-tar").is_err());
+    assert!(validate_step_sequence(&[missing_id], "cache-tar").is_err());
+
+    let malformed_digest = Step {
+        kind: StepKind::Action {
+            uses: CACHE_TAR_LAUNCHER_USES.to_owned(),
+            with: BTreeMap::from([(
+                CACHE_TAR_LAUNCHER_SHA256_INPUT.to_owned(),
+                "not-a-digest".to_owned(),
+            )]),
+            env: BTreeMap::new(),
+        },
+        ..step
+    };
+    assert!(validate_step_sequence(&[malformed_digest], "cache-tar").is_err());
+}
+
+#[test]
+fn preseed_stage_digest_uses_the_fixed_step_output() {
+    let step = Step {
+        name: "Stage helper".to_owned(),
+        id: Some(StepId::PreseedStage),
+        role: Some(StepRole::PreseedStage),
+        condition: None,
+        kind: StepKind::Shell {
+            run: vec!["true".to_owned()],
+            env: BTreeMap::new(),
+        },
+    };
+
+    assert_eq!(StepId::PreseedStage.as_str(), "preseed-stage");
+    assert_eq!(
+        PRESEED_HELPER_SHA256_OUTPUT_EXPR,
+        "${{ steps.preseed-stage.outputs.helper-sha256 }}"
+    );
+    assert!(validate_step_sequence(&[step], "preseed").is_ok());
 }

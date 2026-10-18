@@ -1063,6 +1063,7 @@ dependencies = [
  "velnor-actions-rust",
  "velnor-actions-tofu",
  "velnor-actions-workflow-renderer",
+ "velnor-archive-guard",
  "zip",
 ]
 

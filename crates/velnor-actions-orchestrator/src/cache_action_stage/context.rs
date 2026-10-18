@@ -33,6 +33,26 @@ impl StageContext {
         Self::new(runner_temp, workspace, "normal-tools-v3", &[], key)
     }
 
+    /// Creates a context for one exact normal `OpenTofu` provider key.
+    ///
+    /// # Errors
+    ///
+    /// Gives an error when the key shape, runner path, or workspace is invalid.
+    pub fn normal_tofu_providers(
+        runner_temp: &Path,
+        workspace: &Path,
+        key: &str,
+    ) -> Result<Self, StageError> {
+        crate::qualification_cache_payload::validate_normal_tofu_cache_key_shape(key)?;
+        Self::new(
+            runner_temp,
+            workspace,
+            "normal-tofu-providers-payload-v3",
+            &[],
+            key,
+        )
+    }
+
     /// Creates a context for one exact qualification key.
     ///
     /// # Errors
@@ -189,3 +209,7 @@ fn relative_path(base: &Path, target: &Path) -> Result<String, StageError> {
     }
     Ok(text)
 }
+
+#[cfg(test)]
+#[path = "context_tofu_tests.rs"]
+mod tofu_tests;

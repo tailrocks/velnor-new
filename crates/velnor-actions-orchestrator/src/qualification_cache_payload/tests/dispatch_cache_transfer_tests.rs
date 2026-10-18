@@ -13,7 +13,6 @@ use support::{
 };
 
 const CACHE_KEY: &str = "velnor-qcache-v3-campaign-1-mise_tools-runtime-k1";
-const CACHE_VERSION: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 #[path = "dispatch_cache_transfer_layer_tests.rs"]
 mod layer_tests;
@@ -44,7 +43,7 @@ fn cold_export_and_warm_import_restore_exact_file_and_directory_roots() {
     fs::create_dir_all(warm_stage.parent().expect("stage parent")).expect("stage parents");
     payload::copy_tree_to_new_dir(stage, &warm_stage).expect("simulate cache restore");
 
-    let expected = cache_entry();
+    let expected = cache_entry(&warm_temp);
     let warm_binding = binding(Some(expected.clone()), Some(exported.state_digest.clone()));
     let imported = import_payload(
         &warm_binding,
@@ -85,7 +84,10 @@ fn cold_export_and_warm_import_restore_exact_file_and_directory_roots() {
 #[test]
 fn backend_mismatch_and_changed_payload_never_modify_live_roots() {
     let (_temp, stage, roots, runner_temp, exported) = exported_fixture("backend-mismatch");
-    let binding = binding(Some(cache_entry()), Some(exported.state_digest.clone()));
+    let binding = binding(
+        Some(cache_entry(&runner_temp)),
+        Some(exported.state_digest.clone()),
+    );
     let before = fs::read(&roots.roots[1].path).expect("old file root");
     assert_eq!(
         import_payload(
@@ -115,7 +117,7 @@ fn backend_mismatch_and_changed_payload_never_modify_live_roots() {
             &runner_temp,
             true,
             Some(CACHE_KEY),
-            &QualificationCacheBackendObservation::Found(cache_entry()),
+            &QualificationCacheBackendObservation::Found(cache_entry(&runner_temp)),
         )
         .is_err()
     );
@@ -128,7 +130,10 @@ fn backend_mismatch_and_changed_payload_never_modify_live_roots() {
 #[test]
 fn archive_layout_and_exact_restore_predecessor_are_required() {
     let (_temp, stage, roots, runner_temp, exported) = exported_fixture("layout-check");
-    let binding = binding(Some(cache_entry()), Some(exported.state_digest.clone()));
+    let binding = binding(
+        Some(cache_entry(&runner_temp)),
+        Some(exported.state_digest.clone()),
+    );
     fs::write(stage.join("unchecked.bin"), b"extra archive entry").expect("add unknown entry");
     assert_eq!(
         import_payload(
@@ -137,7 +142,7 @@ fn archive_layout_and_exact_restore_predecessor_are_required() {
             &runner_temp,
             true,
             Some(CACHE_KEY),
-            &QualificationCacheBackendObservation::Found(cache_entry()),
+            &QualificationCacheBackendObservation::Found(cache_entry(&runner_temp)),
         ),
         Err("qualification_cache_payload_layout_invalid")
     );
@@ -151,7 +156,7 @@ fn archive_layout_and_exact_restore_predecessor_are_required() {
 fn predecessor_digest_and_full_backend_identity_must_match_before_import() {
     let (_temp, stage, roots, runner_temp, exported) = exported_fixture("identity-check");
     let wrong_predecessor = format!("b3-{}", "d".repeat(64));
-    let binding = binding(Some(cache_entry()), Some(wrong_predecessor));
+    let binding = binding(Some(cache_entry(&runner_temp)), Some(wrong_predecessor));
     let before = fs::read(&roots.roots[1].path).expect("old file root");
     assert_eq!(
         import_payload(
@@ -160,7 +165,7 @@ fn predecessor_digest_and_full_backend_identity_must_match_before_import() {
             &runner_temp,
             true,
             Some(CACHE_KEY),
-            &QualificationCacheBackendObservation::Found(cache_entry()),
+            &QualificationCacheBackendObservation::Found(cache_entry(&runner_temp)),
         ),
         Err("qualification_cache_manifest_binding_mismatch")
     );
@@ -173,11 +178,37 @@ fn predecessor_digest_and_full_backend_identity_must_match_before_import() {
 }
 
 #[test]
+fn backend_version_must_match_the_exact_action_path_before_import() {
+    let (_temp, stage, roots, runner_temp, exported) = exported_fixture("action-version");
+    let mut entry = cache_entry(&runner_temp);
+    entry.version = "e".repeat(64);
+    let binding = binding(Some(entry.clone()), Some(exported.state_digest));
+    let before = fs::read(&roots.roots[1].path).expect("old file root");
+
+    assert_eq!(
+        import_payload(
+            &binding,
+            &roots,
+            &runner_temp,
+            true,
+            Some(CACHE_KEY),
+            &QualificationCacheBackendObservation::Found(entry),
+        ),
+        Err("qualification_cache_restore_version_mismatch")
+    );
+    assert_eq!(
+        fs::read(&roots.roots[1].path).expect("old file root after rejected version"),
+        before
+    );
+    assert!(stage.join("manifest.json").is_file());
+}
+
+#[test]
 fn wrong_backend_object_fields_or_action_hit_never_import() {
     let (_temp, _stage, roots, runner_temp, exported) = exported_fixture("backend-fields");
-    let binding = binding(Some(cache_entry()), Some(exported.state_digest));
+    let binding = binding(Some(cache_entry(&runner_temp)), Some(exported.state_digest));
     let before = fs::read(&roots.roots[1].path).expect("old file root");
-    let expected = cache_entry();
+    let expected = cache_entry(&runner_temp);
     let mismatches = vec![
         QualificationCacheBackendEntry {
             id: 72,

@@ -74,7 +74,6 @@ pub(crate) fn import_normal_payload(
             return Err("normal_cache_restore_action_mismatch");
         }
         if path_exists_no_follow(&stage_path)? {
-            remove_untrusted_stage(&stage_path, runner_temp)?;
             return Err("normal_cache_restore_unexpected_stage_on_miss");
         }
         return Ok(CacheRestoreProof {

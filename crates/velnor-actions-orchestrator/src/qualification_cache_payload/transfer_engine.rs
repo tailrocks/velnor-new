@@ -125,6 +125,18 @@ pub(crate) fn import_payload(
     if !action_hit || action_matched_key != Some(restore_key) {
         return Err("qualification_cache_restore_action_mismatch");
     }
+    if let QualificationCacheBackendObservation::Found(entry) = observed {
+        let matches_action_version =
+            super::super::cache_action_version::version_agrees_with_action_path(
+                &stage_path,
+                &entry.version,
+            )?;
+        if !matches_action_version {
+            return Err("qualification_cache_restore_version_mismatch");
+        }
+    } else {
+        return Err("qualification_cache_restore_backend_mismatch");
+    }
     let manifest = verify_staged_payload(&stage_path, binding, roots, restore_key, true)?;
     let state_digest = manifest.state_digest.clone();
     install_roots(
@@ -231,7 +243,7 @@ pub(super) fn bound_keys(
     })
 }
 
-pub(super) fn snapshot_roots(roots: &CacheRootSet) -> Result<Vec<PayloadRoot>, &'static str> {
+pub(crate) fn snapshot_roots(roots: &CacheRootSet) -> Result<Vec<PayloadRoot>, &'static str> {
     roots
         .roots
         .iter()

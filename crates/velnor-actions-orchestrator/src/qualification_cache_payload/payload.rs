@@ -15,7 +15,7 @@ const MAX_DEPTH: usize = 128;
 #[path = "payload_scan.rs"]
 mod scan;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone)]
 struct Entry {
     path: String,
     kind: u8,
@@ -23,6 +23,8 @@ struct Entry {
     size: u64,
     content_digest: [u8; 32],
     file_identity: Option<(u64, u64)>,
+    link_target: Option<String>,
+    stat: Stat,
 }
 
 #[derive(Default)]
@@ -69,47 +71,17 @@ fn digest_open_directory(root_fd: &rustix::fd::OwnedFd) -> Result<Option<String>
     {
         return Err("qualification_cache_payload_hardlink_escape");
     }
-    tree.entries
-        .sort_by(|left, right| left.path.cmp(&right.path));
-    let mut digest = blake3::Hasher::new();
-    digest.update(DOMAIN);
-    digest.update(&payload_format_version().to_be_bytes());
-    digest.update(&(u32::from(root_stat.st_mode) & 0o777).to_be_bytes());
-    let mut first_paths = std::collections::BTreeMap::new();
-    for entry in &tree.entries {
-        if let Some(identity) = entry.file_identity {
-            first_paths
-                .entry(identity)
-                .or_insert_with(|| entry.path.clone());
-        }
-    }
-    for entry in tree.entries {
-        update_bytes(&mut digest, entry.path.as_bytes());
-        digest.update(&[entry.kind]);
-        digest.update(&entry.mode.to_be_bytes());
-        digest.update(&entry.size.to_be_bytes());
-        digest.update(&entry.content_digest);
-        if let Some(identity) = entry.file_identity {
-            let count = tree
-                .file_links
-                .get(&identity)
-                .map(|(_, count)| *count)
-                .ok_or("qualification_cache_payload_file_changed")?;
-            if count > 1 {
-                let first = first_paths
-                    .get(&identity)
-                    .ok_or("qualification_cache_payload_file_changed")?;
-                digest.update(b"h");
-                update_bytes(&mut digest, first.as_bytes());
-            } else {
-                digest.update(b"f");
-            }
-        } else {
-            digest.update(&[0]);
-        }
-    }
-    Ok(Some(format!("b3-{}", digest.finalize().to_hex())))
+    Ok(Some(
+        inventory::inventory_from_tree(root_stat, tree)?.digest,
+    ))
 }
+
+#[path = "payload_inventory.rs"]
+mod inventory;
+pub(crate) use inventory::{
+    ArchiveEntry, ArchiveEntryKind, inventory_directory, open_inventory_file,
+    validate_inventory_directory, validate_inventory_symlink,
+};
 
 fn payload_format_version() -> u8 {
     velnor_actions_contract::workflow::QUALIFICATION_CACHE_FORMAT_VERSION
@@ -207,6 +179,8 @@ fn hash_file(
         size,
         content_digest: *file_digest.finalize().as_bytes(),
         file_identity: Some(identity),
+        link_target: None,
+        stat: *metadata,
     })
 }
 
@@ -248,6 +222,8 @@ fn hash_symlink(
         size,
         content_digest: *blake3::hash(target.as_bytes()).as_bytes(),
         file_identity: None,
+        link_target: Some(target),
+        stat: *metadata,
     })
 }
 
@@ -263,7 +239,7 @@ fn same_identity(metadata: &fs::Metadata, stat: &Stat) -> bool {
         && metadata.ino() == stat.st_ino
 }
 
-fn same_version(left: &Stat, right: &Stat) -> bool {
+pub(crate) fn same_version(left: &Stat, right: &Stat) -> bool {
     left.st_dev == right.st_dev
         && left.st_ino == right.st_ino
         && left.st_mode == right.st_mode
@@ -276,7 +252,7 @@ fn same_version(left: &Stat, right: &Stat) -> bool {
         && left.st_ctime_nsec == right.st_ctime_nsec
 }
 
-fn validate_internal_link(relative: &str, target: &str) -> Result<(), &'static str> {
+pub(crate) fn validate_internal_link(relative: &str, target: &str) -> Result<(), &'static str> {
     if target.is_empty()
         || target.len() > MAX_PATH_BYTES
         || target.starts_with('/')
