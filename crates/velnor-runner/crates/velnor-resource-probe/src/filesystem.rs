@@ -3,19 +3,19 @@ use rustix::fs::{
     AtFlags, FileType, Mode, OFlags, StatxFlags, fstat, fstatfs, fstatvfs, open, statx,
 };
 
-#[cfg(any(target_os = "linux", test))]
+#[cfg(target_os = "linux")]
 use crate::capacity::docker_root_capacity;
 use crate::mountinfo::MountEntry;
-#[cfg(any(target_os = "linux", test))]
+#[cfg(target_os = "linux")]
 use crate::mountinfo::docker_root_mount;
 use crate::{ProbeError, units::digits};
 
-#[cfg(any(target_os = "linux", test))]
+#[cfg(target_os = "linux")]
 pub(crate) const DOCKER_ROOT: &str = "/velnor/docker-root";
 pub(crate) const BTRFS_SUPER_MAGIC: u64 = 0x9123_683e;
 const TMPFS_MAGIC: u64 = 0x0102_1994;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 /// States whether inode counts can bound storage admission.
 pub enum InodePolicy {
@@ -31,10 +31,12 @@ pub enum InodePolicy {
 pub(crate) struct FilesystemObservation {
     pub(crate) mount: MountEntry,
     pub(crate) mount_target: &'static str,
+    pub(crate) statx_mount_id: u64,
     pub(crate) statx_device_major: u32,
     pub(crate) statx_device_minor: u32,
     pub(crate) fs_type_magic: u64,
     pub(crate) filesystem_id: u64,
+    pub(crate) block_size: u64,
     pub(crate) total_bytes: u64,
     pub(crate) free_bytes: u64,
     pub(crate) available_bytes: u64,
@@ -91,10 +93,12 @@ pub(crate) fn observe_docker_root(mountinfo: &[u8]) -> Result<FilesystemObservat
     Ok(FilesystemObservation {
         mount,
         mount_target: DOCKER_ROOT,
+        statx_mount_id: mount_stat.stx_mnt_id,
         statx_device_major: device_major,
         statx_device_minor: device_minor,
         fs_type_magic,
         filesystem_id: vfs.f_fsid,
+        block_size: vfs.f_frsize,
         total_bytes,
         free_bytes,
         available_bytes,
@@ -217,8 +221,10 @@ mod tests {
             mount_id: 238,
             device_major: 0,
             device_minor: 38,
+            root: "/store".to_owned(),
             filesystem_type: "btrfs".to_owned(),
             read_only: true,
+            executable: true,
         };
         // This matches the selected Docker-root observation: mountinfo 0:38, statx 0:41.
         assert!(validate_mount_identity(&mount, 238, 0, 41, BTRFS_SUPER_MAGIC).is_ok());

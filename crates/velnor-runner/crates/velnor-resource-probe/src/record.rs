@@ -1,6 +1,19 @@
 use serde::Serialize;
 
-/// Version-2 bounded output record. `None` serializes as the required JSON `null` value.
+/// One cgroup ancestor's effective CPU set and quota.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CpuAncestorLimit {
+    /// Exact path, ordered from cgroup-v2 root toward the probe leaf's parent.
+    pub path: String,
+    /// CPU count in this cgroup's effective cpuset.
+    pub cpuset_cpus_count: u32,
+    /// Ancestor CPU quota in microseconds, or `None` when unlimited.
+    pub cpu_quota_micros: Option<u64>,
+    /// Ancestor quota period in microseconds.
+    pub cpu_period_micros: u64,
+}
+
+/// Version-3 bounded output record. `None` serializes as the required JSON `null` value.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProbeRecord {
     /// Protocol schema version.
@@ -59,6 +72,14 @@ pub struct ProbeRecord {
     pub probe_cgroup_cpu_quota_micros: Option<u64>,
     /// CPU quota period in microseconds.
     pub probe_cgroup_cpu_period_micros: u64,
+    /// Probe cgroup's effective CPU set count; its own quota is operational overhead.
+    pub probe_cgroup_cpuset_cpus_count: u32,
+    /// CPU limits above the probe leaf, in root-to-parent order.
+    pub cpu_ancestor_limits: Vec<CpuAncestorLimit>,
+    /// Host-visible PID from `/proc/self/status` `NSpid`.
+    pub probe_host_pid: u32,
+    /// PID from the probe's current PID namespace.
+    pub probe_namespace_pid: u32,
     /// Maximum process count for the probe's cgroup, or null for `max`.
     pub probe_cgroup_pids_max: Option<u64>,
 }

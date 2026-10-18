@@ -11,10 +11,11 @@ mod pressure;
 mod record;
 mod sample;
 mod units;
+pub mod worker_binding;
 
 pub use error::ProbeError;
 pub use filesystem::InodePolicy;
-pub use record::{MAX_OUTPUT_BYTES, ProbeRecord};
+pub use record::{CpuAncestorLimit, MAX_OUTPUT_BYTES, ProbeRecord};
 pub use sample::sample;
 
 #[cfg(test)]

@@ -1,5 +1,12 @@
 use crate::{ProbeError, filesystem::parse_u64, units::digits};
 
+mod cpu;
+
+pub(crate) use cpu::{
+    CpuHierarchy, NamespacePids, namespace_pids, observe_hierarchy, parse_cpuset,
+    verify_process_membership,
+};
+
 const CGROUP_PATH_LIMIT: usize = 256;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

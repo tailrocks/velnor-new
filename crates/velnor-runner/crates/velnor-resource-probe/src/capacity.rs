@@ -1,3 +1,4 @@
+#[cfg(any(target_os = "linux", test))]
 use crate::ProbeError;
 
 /// Convert `statvfs` block counts to bytes and reject impossible capacity data.

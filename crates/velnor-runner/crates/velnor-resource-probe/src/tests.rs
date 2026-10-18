@@ -4,7 +4,7 @@ use crate::capacity::docker_root_capacity;
 use crate::load::one_minute_milli;
 use crate::memory::available_bytes;
 use crate::pressure::memory_some_avg10;
-use crate::record::{MAX_OUTPUT_BYTES, ProbeRecord};
+use crate::record::{CpuAncestorLimit, MAX_OUTPUT_BYTES, ProbeRecord};
 use crate::units::{decimal_milli_ceil, percent_basis_points};
 
 #[test]
@@ -90,7 +90,7 @@ fn psi_is_optional_but_valid_some_line_is_strict() {
 #[test]
 fn record_json_has_stable_required_keys_and_nullable_psi() -> Result<(), Box<dyn Error>> {
     let record = ProbeRecord {
-        schema_version: 2,
+        schema_version: 3,
         docker_root_mount_target: "/velnor/docker-root".into(),
         docker_root_mount_id: 1,
         docker_root_device_major: 0,
@@ -118,6 +118,15 @@ fn record_json_has_stable_required_keys_and_nullable_psi() -> Result<(), Box<dyn
         probe_cgroup_swap_current_bytes: 0,
         probe_cgroup_cpu_quota_micros: None,
         probe_cgroup_cpu_period_micros: 100_000,
+        probe_cgroup_cpuset_cpus_count: 8,
+        cpu_ancestor_limits: vec![CpuAncestorLimit {
+            path: "/".into(),
+            cpuset_cpus_count: 8,
+            cpu_quota_micros: None,
+            cpu_period_micros: 100_000,
+        }],
+        probe_host_pid: 1234,
+        probe_namespace_pid: 1234,
         probe_cgroup_pids_max: None,
     };
     let bytes = serde_json::to_vec(&record)?;
@@ -125,8 +134,8 @@ fn record_json_has_stable_required_keys_and_nullable_psi() -> Result<(), Box<dyn
     let object = value
         .as_object()
         .ok_or("the probe record is not an object")?;
-    assert_eq!(object.len(), 29);
-    assert_eq!(value["schema_version"], 2);
+    assert_eq!(object.len(), 33);
+    assert_eq!(value["schema_version"], 3);
     assert_eq!(value["docker_root_device_major"], 0);
     assert_eq!(value["docker_root_device_minor"], 38);
     assert_eq!(value["docker_root_statx_device_major"], 0);
@@ -137,6 +146,8 @@ fn record_json_has_stable_required_keys_and_nullable_psi() -> Result<(), Box<dyn
         serde_json::Value::Null
     );
     assert!(value.get("probe_cgroup_path").is_some());
+    assert_eq!(value["probe_host_pid"], 1234);
+    assert_eq!(value["cpu_ancestor_limits"][0]["path"], "/");
     assert!(bytes.len() < MAX_OUTPUT_BYTES);
     Ok(())
 }

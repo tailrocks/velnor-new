@@ -1,11 +1,12 @@
-use std::{fs::File, io::Read, path::PathBuf};
+use std::{fs::File, io::Read, path::PathBuf, process};
 
 use crate::{
     ProbeError, ProbeRecord,
-    cgroup::ProbeCgroup,
+    cgroup::{ProbeCgroup, namespace_pids, observe_hierarchy, verify_process_membership},
     filesystem::{filesystem_name, observe_docker_root, parse_boot_id},
     load,
     memory::available_bytes,
+    mountinfo::cgroup2_root,
     pressure::memory_some_avg10,
 };
 
@@ -14,6 +15,7 @@ const LOADAVG_PATH: &str = "/proc/loadavg";
 const PRESSURE_PATH: &str = "/proc/pressure/memory";
 const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
 const CGROUP_PATH: &str = "/proc/self/cgroup";
+const STATUS_PATH: &str = "/proc/self/status";
 const BOOT_ID_PATH: &str = "/proc/sys/kernel/random/boot_id";
 const CGROUP_ROOT: &str = "/sys/fs/cgroup";
 const MEMINFO_LIMIT: usize = 16 * 1024;
@@ -29,6 +31,7 @@ const SMALL_LIMIT: usize = 4096;
 /// Returns an error when a required fact is missing, malformed, or too large.
 pub fn sample() -> Result<ProbeRecord, ProbeError> {
     let mountinfo = read_bounded(MOUNTINFO_PATH, MOUNTINFO_LIMIT, "mountinfo")?;
+    let cgroup_mount = cgroup2_root(&mountinfo)?;
     let filesystem = observe_docker_root(&mountinfo)?;
     let docker_root_fs_type_name = filesystem_name(&filesystem.mount, filesystem.fs_type_magic)?;
     let guest_boot_id = parse_boot_id(&read_bounded(BOOT_ID_PATH, 128, "boot_id")?)?;
@@ -39,19 +42,12 @@ pub fn sample() -> Result<ProbeRecord, ProbeError> {
     let memory_psi_some_avg10_bps = read_bounded(PRESSURE_PATH, PRESSURE_LIMIT, "psi")
         .ok()
         .and_then(|bytes| memory_some_avg10(&bytes));
-    let cgroup_path = probe_cgroup_path(&read_bounded(CGROUP_PATH, SMALL_LIMIT, "proc_cgroup")?)?;
-    let cgroup_dir = cgroup_directory(&cgroup_path)?;
-    let cgroup = ProbeCgroup::parse(
-        &cgroup_path,
-        &read_cgroup_file(&cgroup_dir, "memory.max")?,
-        &read_cgroup_file(&cgroup_dir, "memory.current")?,
-        &read_cgroup_file(&cgroup_dir, "memory.swap.max")?,
-        &read_cgroup_file(&cgroup_dir, "memory.swap.current")?,
-        &read_cgroup_file(&cgroup_dir, "cpu.max")?,
-        &read_cgroup_file(&cgroup_dir, "pids.max")?,
-    )?;
+    let process_cgroup = observe_process_cgroup(&cgroup_mount)?;
+    let cgroup = process_cgroup.facts;
+    let cpu_hierarchy = process_cgroup.cpu;
+    let pid_pair = process_cgroup.pids;
     Ok(ProbeRecord {
-        schema_version: 2,
+        schema_version: 3,
         docker_root_mount_target: filesystem.mount_target.to_owned(),
         docker_root_mount_id: filesystem.mount.mount_id,
         docker_root_device_major: filesystem.mount.device_major,
@@ -79,8 +75,59 @@ pub fn sample() -> Result<ProbeRecord, ProbeError> {
         probe_cgroup_swap_current_bytes: cgroup.swap_current_bytes,
         probe_cgroup_cpu_quota_micros: cgroup.cpu_quota_micros,
         probe_cgroup_cpu_period_micros: cgroup.cpu_period_micros,
+        probe_cgroup_cpuset_cpus_count: cpu_hierarchy.leaf_cpuset_cpus_count,
+        cpu_ancestor_limits: cpu_hierarchy.ancestors,
+        probe_host_pid: pid_pair.host_pid,
+        probe_namespace_pid: pid_pair.namespace_pid,
         probe_cgroup_pids_max: cgroup.pids_max,
     })
+}
+
+struct ProcessCgroupObservation {
+    facts: ProbeCgroup,
+    cpu: crate::cgroup::CpuHierarchy,
+    pids: crate::cgroup::NamespacePids,
+}
+
+fn observe_process_cgroup(
+    cgroup_mount: &crate::mountinfo::MountEntry,
+) -> Result<ProcessCgroupObservation, ProbeError> {
+    let cgroup_source = read_bounded(CGROUP_PATH, SMALL_LIMIT, "proc_cgroup")?;
+    let cgroup_path = probe_cgroup_path(&cgroup_source)?;
+    let process_status = read_bounded(STATUS_PATH, SMALL_LIMIT, "proc_status")?;
+    let process_id = process::id();
+    let pids = namespace_pids(&process_status, process_id)?;
+    verify_process_membership(&cgroup_path, pids.namespace_pid)?;
+    let cpu = observe_hierarchy(&cgroup_path)?;
+    let cgroup_dir = cgroup_directory(&cgroup_path)?;
+    let facts = ProbeCgroup::parse(
+        &cgroup_path,
+        &read_cgroup_file(&cgroup_dir, "memory.max")?,
+        &read_cgroup_file(&cgroup_dir, "memory.current")?,
+        &read_cgroup_file(&cgroup_dir, "memory.swap.max")?,
+        &read_cgroup_file(&cgroup_dir, "memory.swap.current")?,
+        &read_cgroup_file(&cgroup_dir, "cpu.max")?,
+        &read_cgroup_file(&cgroup_dir, "pids.max")?,
+    )?;
+    if cpu.leaf_quota_micros != facts.cpu_quota_micros
+        || cpu.leaf_period_micros != facts.cpu_period_micros
+    {
+        return Err(ProbeError::Invalid("cgroup_cpu_changed"));
+    }
+    let path_after = probe_cgroup_path(&read_bounded(CGROUP_PATH, SMALL_LIMIT, "proc_cgroup")?)?;
+    let mount_after = cgroup2_root(&read_bounded(MOUNTINFO_PATH, MOUNTINFO_LIMIT, "mountinfo")?)?;
+    let status_after = read_bounded(STATUS_PATH, SMALL_LIMIT, "proc_status")?;
+    let pids_after = namespace_pids(&status_after, process_id)?;
+    verify_process_membership(&cgroup_path, pids.namespace_pid)?;
+    let cpu_after = observe_hierarchy(&path_after)?;
+    if path_after != cgroup_path
+        || &mount_after != cgroup_mount
+        || pids_after != pids
+        || cpu_after != cpu
+    {
+        return Err(ProbeError::Invalid("cgroup_observation_changed"));
+    }
+    Ok(ProcessCgroupObservation { facts, cpu, pids })
 }
 
 fn probe_cgroup_path(input: &[u8]) -> Result<String, ProbeError> {
