@@ -8,8 +8,8 @@ Use one global installation on Git 2.54 or later.
 The configuration uses hk 2.7.0.
 The Rust steps use the nearest Cargo manifest for each changed file.
 The formatter uses `--all` for each selected Cargo manifest.
-This option includes the packages in a virtual workspace.
-The excluded runner workspace uses its own Cargo manifest.
+The formatter includes the packages that the root Cargo manifest lists.
+`crates/velnor-runner` uses its own Cargo manifest.
 The steps exclude test fixtures and generated golden files.
 The commit stops if a tool changes a file.
 The changed content stays outside the Git index.
