@@ -96,7 +96,7 @@ pub enum SourceMismatch {
     WorkflowSha,
 }
 
-/// Pull request values that are different from the workflow run or API record.
+/// Pull request values that are different from the workflow run values or API record values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum PullRequestMismatch {
     /// The event, number, or expected repository is invalid.

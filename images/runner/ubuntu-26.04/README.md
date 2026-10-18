@@ -55,7 +55,7 @@ Controller must:
   short-lived `ACTIONS_RUNNER_INPUT_JITCONFIG` environment value on the
   `Runner.Listener run` exec. The listener's argument vector contains only
   `run`. The maximum raw JIT size is 131040 bytes.
-  The calculation uses the conservative 131072-byte Linux limit for one exec string on a system with 4-KiB pages.
+  The calculation uses the 131072-byte Linux limit for one exec string on a system with 4-KiB pages.
   This limit includes the environment key, `=`, and the final NUL. The official runner may
   make its own one-job runner configuration and credential files under
   `/home/runner`; those files are removed with this job's runner container.

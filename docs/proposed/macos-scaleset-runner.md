@@ -191,7 +191,7 @@ the controller delivers raw JIT on a short-lived stdin or inherited-fd-3
 channel. The entrypoint passes it to the official `Runner.Listener` only in a
 short-lived `ACTIONS_RUNNER_INPUT_JITCONFIG` assignment on `exec`; JIT is not
 an argument. The maximum raw JIT size is 131040 bytes.
-The calculation uses the conservative 131072-byte Linux limit for one exec string on a system with 4-KiB pages.
+The calculation uses the 131072-byte Linux limit for one exec string on a system with 4-KiB pages.
 This limit includes the environment key, `=`, and the final NUL. Raw JIT is absent from Docker
 `Config.Env`, `Cmd`, labels, image layers, host argv, journal, TOML, launchd
 plist, and evidence archives.
