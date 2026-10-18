@@ -164,6 +164,6 @@ fn conflict_or_mutable_publication_blocks_reconciliation() {
             immutable,
         };
         assert!(publish_package_release(&mut backend).is_err());
-        assert!(backend.mutations.is_empty());
+        assert_eq!(backend.mutations, [] as [String; 0]);
     }
 }

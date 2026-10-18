@@ -64,16 +64,14 @@ fn syntax_gate_allows_matrix_and_rejects_native() {
 #[test]
 fn task_cache_steps_need_fixture_and_live_mode() {
     assert!(maybe_task_cache_steps(None, TaskCacheMode::ReadWrite, "k").is_ok());
-    assert!(
-        maybe_task_cache_steps(None, TaskCacheMode::ReadWrite, "k")
-            .expect("v")
-            .is_empty()
+    assert_eq!(
+        maybe_task_cache_steps(None, TaskCacheMode::ReadWrite, "k").expect("v"),
+        [] as [velnor_actions_contract::Step; 0]
     );
     let fixture = Gate6Fixture::new("gate6/w1").expect("fixture");
-    assert!(
-        maybe_task_cache_steps(Some(&fixture), TaskCacheMode::Off, "k")
-            .expect("off")
-            .is_empty()
+    assert_eq!(
+        maybe_task_cache_steps(Some(&fixture), TaskCacheMode::Off, "k").expect("off"),
+        [] as [velnor_actions_contract::Step; 0]
     );
     let steps = maybe_task_cache_steps(Some(&fixture), TaskCacheMode::ReadOnly, "velnor-v1-task-k")
         .expect("gated steps");
@@ -166,7 +164,7 @@ fn crate_tools_follow_selection_with_validators() {
                 "triple follows the rust role: {env:?}"
             );
         }
-        assert!(declared_config_variables().is_empty());
+        assert_eq!(declared_config_variables(), [] as [String; 0]);
     }
 }
 
