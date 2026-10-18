@@ -158,7 +158,10 @@ fn obligation_action(
         yaml::Yaml::Map(vec![
             (
                 "description".to_owned(),
-                yaml::Yaml::str("Comma-wrapped task ids the plan already covered".to_owned()),
+                yaml::Yaml::str(
+                    "Task IDs already in the plan, with one comma before and after each ID."
+                        .to_owned(),
+                ),
             ),
             ("required".to_owned(), yaml::Yaml::Bool(true)),
         ]),

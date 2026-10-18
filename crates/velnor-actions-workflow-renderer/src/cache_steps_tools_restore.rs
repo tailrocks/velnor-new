@@ -166,7 +166,9 @@ fn action_body() -> Result<Yaml, RenderError> {
                     Yaml::Map(vec![
                         (
                             "description".to_owned(),
-                            Yaml::str("Whether the exact tools cache key was restored."),
+                            Yaml::str(
+                                "Shows whether the restore action found the tools cache key.",
+                            ),
                         ),
                         (
                             "value".to_owned(),
@@ -179,7 +181,7 @@ fn action_body() -> Result<Yaml, RenderError> {
                     Yaml::Map(vec![
                         (
                             "description".to_owned(),
-                            Yaml::str("The exact tools cache key matched by the restore."),
+                            Yaml::str("The tools cache key that the restore action found."),
                         ),
                         (
                             "value".to_owned(),

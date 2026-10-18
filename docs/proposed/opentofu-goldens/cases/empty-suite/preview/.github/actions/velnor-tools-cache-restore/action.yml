@@ -11,10 +11,10 @@ inputs:
     default: "false"
 outputs:
   cache-hit:
-    description: Whether the exact tools cache key was restored.
+    description: Shows whether the restore action found the tools cache key.
     value: ${{ steps.restore.outputs.cache-hit }}
   cache-matched-key:
-    description: The exact tools cache key matched by the restore.
+    description: The tools cache key that the restore action found.
     value: ${{ steps.restore.outputs.cache-matched-key }}
 runs:
   using: composite

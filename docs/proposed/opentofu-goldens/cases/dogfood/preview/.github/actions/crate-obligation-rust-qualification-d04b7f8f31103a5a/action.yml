@@ -3,7 +3,7 @@ name: rust-qualification-d04b7f8f31103a5a
 description: Shared steps for rust-qualification-d04b7f8f31103a5a
 inputs:
   covered_tasks:
-    description: Comma-wrapped task ids the plan already covered
+    description: Task IDs already in the plan, with one comma before and after each ID.
     required: true
 runs:
   using: composite

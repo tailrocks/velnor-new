@@ -45,7 +45,7 @@ pub(crate) fn action_file(
                 Yaml::Map(vec![
                     (
                         "description".to_owned(),
-                        Yaml::str("SHA-256 digest of the staged helper."),
+                        Yaml::str("SHA-256 hash for the helper file used by this action."),
                     ),
                     ("required".to_owned(), Yaml::Bool(true)),
                 ]),
@@ -58,7 +58,9 @@ pub(crate) fn action_file(
                 Yaml::Map(vec![
                     (
                         "description".to_owned(),
-                        Yaml::str("PATH with cache aliases followed by the inherited PATH."),
+                        Yaml::str(
+                            "The `PATH` value with cache aliases first, followed by the inherited value.",
+                        ),
                     ),
                     (
                         "value".to_owned(),

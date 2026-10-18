@@ -151,7 +151,7 @@ fn scan_step_mapping_item(
     scan: &mut WorkflowScan,
     content: &str,
 ) -> Result<bool, OrchestratorError> {
-    // Finish the prior mapping so its anchor is available before the next item.
+    // Finish the previous mapping so its anchor is available before the next item.
     scan.finish_current_step()?;
     if let Some(name) = step_mapping_anchor(content)? {
         let Some(job) = scan.current_job.as_mut() else {

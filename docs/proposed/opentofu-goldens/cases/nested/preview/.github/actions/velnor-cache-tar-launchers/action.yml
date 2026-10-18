@@ -3,11 +3,11 @@ name: Velnor cache tar adapters
 description: Install the tar entrypoints used by cache action steps.
 inputs:
   helper-sha256:
-    description: SHA-256 digest of the staged helper.
+    description: SHA-256 hash for the helper file used by this action.
     required: true
 outputs:
   path:
-    description: PATH with cache aliases followed by the inherited PATH.
+    description: The `PATH` value with cache aliases first, followed by the inherited value.
     value: ${{ steps.install.outputs.path }}
 runs:
   using: composite
