@@ -67,6 +67,10 @@ fn ir_for(job: Job) -> WorkflowIr {
     }
 }
 
+fn pinned_rust_spec() -> String {
+    format!("rust@{}", velnor_actions_mise::catalog::RUST_VERSION)
+}
+
 #[test]
 fn foreign_spec_and_malformed_argv_block() {
     let dir = tempfile::tempdir().expect("tempdir");
@@ -106,7 +110,7 @@ fn unknown_label_skips_loudly_without_blocking() {
         "--no-env".to_owned(),
         "--no-hooks".to_owned(),
         "install".to_owned(),
-        "rust@1.98.1".to_owned(),
+        pinned_rust_spec(),
     ]));
     let outcome = audit_prepare_installs(dir.path(), &ir, "self-hosted-1", &[]);
     assert_eq!(outcome.blocking, [] as [String; 0]);
@@ -247,15 +251,16 @@ fn deny_drift_blocks() {
     assert!(outcome.recommendation.is_none());
     // A catalog spec inside a validator command resolves through
     // nothing: commands audit validator pins only, never catalog tools.
-    let commands = vec![deny_command(
-        "{ mise --no-env --no-hooks install rust@1.98.1 && unset FOO } && payload",
-    )];
+    let commands = vec![deny_command(&format!(
+        "{{ mise --no-env --no-hooks install {} && unset FOO }} && payload",
+        pinned_rust_spec()
+    ))];
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &commands);
     assert!(
         outcome
             .blocking
             .iter()
-            .any(|line| line.contains("unauditable_install_spec:rust@1.98.1")),
+            .any(|line| line.contains(&format!("unauditable_install_spec:{}", pinned_rust_spec()))),
         "misplaced catalog spec must block: {:?}",
         outcome.blocking
     );
@@ -267,7 +272,10 @@ fn deny_drift_blocks() {
         argv: vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "cargo install foo && mise --no-env exec rust@1.98.1 -- cargo build".to_owned(),
+            format!(
+                "cargo install foo && mise --no-env exec {} -- cargo build",
+                pinned_rust_spec()
+            ),
         ],
         prepare_argv: Vec::new(),
     }];
@@ -357,7 +365,7 @@ fn oversized_tool_file_blocks() {
         "--no-env".to_owned(),
         "--no-hooks".to_owned(),
         "install".to_owned(),
-        "rust@1.98.1".to_owned(),
+        pinned_rust_spec(),
     ]));
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &[]);
     assert!(
