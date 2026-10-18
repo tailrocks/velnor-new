@@ -10,7 +10,7 @@ Detected stacks
     - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [lib, test]
     - velnor-actions-freshness (crates/velnor-actions-freshness/Cargo.toml) [lib, test]
     - velnor-actions-mise (crates/velnor-actions-mise/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-tofu]
-    - velnor-actions-orchestrator (crates/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu, velnor-actions-workflow-renderer]
+    - velnor-actions-orchestrator (crates/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu, velnor-actions-workflow-renderer, velnor-archive-guard]
     - velnor-actions-rust (crates/velnor-actions-rust/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-tofu (crates/velnor-actions-tofu/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-workflow-renderer (crates/velnor-actions-workflow-renderer/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-mise]
@@ -19,7 +19,7 @@ Detected stacks
     - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib, test; depends on velnor-runner-core, velnor-runner-host]
     - velnor-runner-core (crates/velnor-runner/crates/velnor-runner-core/Cargo.toml) [lib, test]
     - velnor-runner-github (crates/velnor-runner/crates/velnor-runner-github/Cargo.toml) [lib, test; depends on velnor-runner-core]
-    - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [example, lib; depends on velnor-runner-core, velnor-runner-github]
+    - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [lib; depends on velnor-runner-core, velnor-runner-github]
   Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]
@@ -40,31 +40,186 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (7 steps)
-    - alint (2 steps)
-    - cargo-deny (6 steps)
-    - cargo-machete (7 steps)
+    - actionlint (11 steps)
+    - alint (5 steps)
+    - cargo-deny (10 steps)
+    - cargo-machete (11 steps)
     - check-maintenance-helpers (8 steps)
-    - plan (24 steps)
+    - plan (19 steps)
     - publish-baseline (7 steps)
+    - qualification-check-maintenance-helpers (9 steps)
     - required (10 steps)
+    - rust-qualification-04e4f77fa51d288c (21 steps)
+    - rust-qualification-0738ac8105e5e469 (20 steps)
+    - rust-qualification-0745c4f5cd520152 (20 steps)
+    - rust-qualification-0a7a564168b37c36 (20 steps)
+    - rust-qualification-11d2a2f5394bdff6 (20 steps)
+    - rust-qualification-1490dead3dc125c0 (21 steps)
+    - rust-qualification-163ef16efec7c4ef (20 steps)
+    - rust-qualification-167c225e22fadf7f (22 steps)
+    - rust-qualification-1e785f3f6e8a0aec (21 steps)
+    - rust-qualification-25773bb32466089a (20 steps)
+    - rust-qualification-25ea841b74e98709 (20 steps)
+    - rust-qualification-28f60b0d77d49fc1 (20 steps)
+    - rust-qualification-2e184614bdff13d7 (20 steps)
+    - rust-qualification-2e688720f071f25c (20 steps)
+    - rust-qualification-37421428dfc6d0bc (20 steps)
+    - rust-qualification-43550b2728a6bb47 (20 steps)
+    - rust-qualification-509e0d93a1b120dd (20 steps)
+    - rust-qualification-53482d622c7ec440 (21 steps)
+    - rust-qualification-5469534559a12d36 (20 steps)
+    - rust-qualification-5bfa1ac4c56189d6 (20 steps)
+    - rust-qualification-648d9a1631425363 (20 steps)
+    - rust-qualification-67ee20a34e48b6e3 (21 steps)
+    - rust-qualification-6aff2f670ddaa697 (20 steps)
+    - rust-qualification-708e095ab9f500b4 (20 steps)
+    - rust-qualification-73af7643baa6c3d3 (20 steps)
+    - rust-qualification-7453ab9ff0d4f64d (21 steps)
+    - rust-qualification-7569343f915bb22f (21 steps)
+    - rust-qualification-77462f2d8169613d (20 steps)
+    - rust-qualification-78b6ede3e488982b (20 steps)
+    - rust-qualification-79bd9be4270b8945 (20 steps)
+    - rust-qualification-7b460e04b25ef8f4 (20 steps)
+    - rust-qualification-81305c234c22a275 (20 steps)
+    - rust-qualification-81f6e0cba54c2186 (20 steps)
+    - rust-qualification-8265037fd459347e (20 steps)
+    - rust-qualification-8759f3cfd795025d (21 steps)
+    - rust-qualification-8887de4a4a14f095 (20 steps)
+    - rust-qualification-8a54150842ee7bf6 (20 steps)
+    - rust-qualification-8fb51f44c0f08321 (20 steps)
+    - rust-qualification-904a957ae01ca7bb (20 steps)
+    - rust-qualification-9109428e72a8fcba (20 steps)
+    - rust-qualification-9279d117d6f68a52 (20 steps)
+    - rust-qualification-93a4593c9a3c3085 (21 steps)
+    - rust-qualification-93aa743354796b58 (20 steps)
+    - rust-qualification-98b1e6d8c684a9d6 (20 steps)
+    - rust-qualification-a5dbb5f0a62733b2 (20 steps)
+    - rust-qualification-af2807043d348ff9 (20 steps)
+    - rust-qualification-b717b98bc29a9439 (20 steps)
+    - rust-qualification-b9195ee6ee4dd6e3 (20 steps)
+    - rust-qualification-b95f6d48f7fe11d7 (20 steps)
+    - rust-qualification-bbe589a41e95aa9d (20 steps)
+    - rust-qualification-bc2fa3aa4b165882 (20 steps)
+    - rust-qualification-bcbc84ca75945c65 (20 steps)
+    - rust-qualification-bd50ead8abc290b2 (20 steps)
+    - rust-qualification-bd60c8a0929d1a4f (20 steps)
+    - rust-qualification-c25a6078a8f7d5eb (20 steps)
+    - rust-qualification-c5523b46fce19a70 (20 steps)
+    - rust-qualification-c76a13c0b8b3eb12 (20 steps)
+    - rust-qualification-c8b6d171011e01a9 (20 steps)
+    - rust-qualification-cb59aaefe5dfc948 (20 steps)
+    - rust-qualification-d04b7f8f31103a5a (20 steps)
+    - rust-qualification-d242a293677bbbe9 (20 steps)
+    - rust-qualification-d39383082418218e (20 steps)
+    - rust-qualification-d527b3c2db3ecd48 (20 steps)
+    - rust-qualification-db6a670047663c4c (20 steps)
+    - rust-qualification-dc52cf6a2a0c1601 (20 steps)
+    - rust-qualification-de621063b566a463 (21 steps)
+    - rust-qualification-e1b463721251430d (20 steps)
+    - rust-qualification-e4d25084222c0611 (20 steps)
+    - rust-qualification-e4f4c72dff4c3345 (20 steps)
+    - rust-qualification-e960c40109276ee0 (20 steps)
+    - rust-qualification-eb38cb9f8a3753dd (20 steps)
+    - rust-qualification-ec68c018d2ac9504 (20 steps)
+    - rust-qualification-ecdec2e058a7da89 (20 steps)
+    - rust-qualification-ef7925bd89944999 (20 steps)
+    - rust-qualification-f31fcb1a405715c5 (21 steps)
+    - rust-qualification-f42e2f75a3efef36 (20 steps)
+    - rust-qualification-fb610837e234df52 (21 steps)
     - rust-velnor-actions-actionlint (24 steps)
     - rust-velnor-actions-cli (24 steps)
-    - rust-velnor-actions-contract (23 steps)
+    - rust-velnor-actions-contract (24 steps)
     - rust-velnor-actions-mise (24 steps)
-    - rust-velnor-actions-orchestrator (24 steps)
-    - rust-velnor-actions-rust (23 steps)
-    - rust-velnor-actions-tofu (23 steps)
-    - rust-velnor-actions-workflow-renderer (23 steps)
-    - rust-velnor-resource-probe (23 steps)
-    - rust-velnor-runner-cli (23 steps)
-    - rust-velnor-runner-core (23 steps)
-    - rust-velnor-runner-github (23 steps)
-    - rust-velnor-runner-host (23 steps)
-    - zizmor (7 steps)
-    - 13 Rust crate jobs
+    - rust-velnor-actions-orchestrator (25 steps)
+    - rust-velnor-actions-rust (24 steps)
+    - rust-velnor-actions-tofu (24 steps)
+    - rust-velnor-actions-workflow-renderer (24 steps)
+    - rust-velnor-resource-probe (24 steps)
+    - rust-velnor-runner-cli (24 steps)
+    - rust-velnor-runner-core (24 steps)
+    - rust-velnor-runner-github (24 steps)
+    - rust-velnor-runner-host (24 steps)
+    - zizmor (11 steps)
+    - 90 Rust crate jobs
       Each: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
+        - rust-qualification-04e4f77fa51d288c
+        - rust-qualification-0738ac8105e5e469
+        - rust-qualification-0745c4f5cd520152
+        - rust-qualification-0a7a564168b37c36
+        - rust-qualification-11d2a2f5394bdff6
+        - rust-qualification-1490dead3dc125c0
+        - rust-qualification-163ef16efec7c4ef
+        - rust-qualification-167c225e22fadf7f
+        - rust-qualification-1e785f3f6e8a0aec
+        - rust-qualification-25773bb32466089a
+        - rust-qualification-25ea841b74e98709
+        - rust-qualification-28f60b0d77d49fc1
+        - rust-qualification-2e184614bdff13d7
+        - rust-qualification-2e688720f071f25c
+        - rust-qualification-37421428dfc6d0bc
+        - rust-qualification-43550b2728a6bb47
+        - rust-qualification-509e0d93a1b120dd
+        - rust-qualification-53482d622c7ec440
+        - rust-qualification-5469534559a12d36
+        - rust-qualification-5bfa1ac4c56189d6
+        - rust-qualification-648d9a1631425363
+        - rust-qualification-67ee20a34e48b6e3
+        - rust-qualification-6aff2f670ddaa697
+        - rust-qualification-708e095ab9f500b4
+        - rust-qualification-73af7643baa6c3d3
+        - rust-qualification-7453ab9ff0d4f64d
+        - rust-qualification-7569343f915bb22f
+        - rust-qualification-77462f2d8169613d
+        - rust-qualification-78b6ede3e488982b
+        - rust-qualification-79bd9be4270b8945
+        - rust-qualification-7b460e04b25ef8f4
+        - rust-qualification-81305c234c22a275
+        - rust-qualification-81f6e0cba54c2186
+        - rust-qualification-8265037fd459347e
+        - rust-qualification-8759f3cfd795025d
+        - rust-qualification-8887de4a4a14f095
+        - rust-qualification-8a54150842ee7bf6
+        - rust-qualification-8fb51f44c0f08321
+        - rust-qualification-904a957ae01ca7bb
+        - rust-qualification-9109428e72a8fcba
+        - rust-qualification-9279d117d6f68a52
+        - rust-qualification-93a4593c9a3c3085
+        - rust-qualification-93aa743354796b58
+        - rust-qualification-98b1e6d8c684a9d6
+        - rust-qualification-a5dbb5f0a62733b2
+        - rust-qualification-af2807043d348ff9
+        - rust-qualification-b717b98bc29a9439
+        - rust-qualification-b9195ee6ee4dd6e3
+        - rust-qualification-b95f6d48f7fe11d7
+        - rust-qualification-bbe589a41e95aa9d
+        - rust-qualification-bc2fa3aa4b165882
+        - rust-qualification-bcbc84ca75945c65
+        - rust-qualification-bd50ead8abc290b2
+        - rust-qualification-bd60c8a0929d1a4f
+        - rust-qualification-c25a6078a8f7d5eb
+        - rust-qualification-c5523b46fce19a70
+        - rust-qualification-c76a13c0b8b3eb12
+        - rust-qualification-c8b6d171011e01a9
+        - rust-qualification-cb59aaefe5dfc948
+        - rust-qualification-d04b7f8f31103a5a
+        - rust-qualification-d242a293677bbbe9
+        - rust-qualification-d39383082418218e
+        - rust-qualification-d527b3c2db3ecd48
+        - rust-qualification-db6a670047663c4c
+        - rust-qualification-dc52cf6a2a0c1601
+        - rust-qualification-de621063b566a463
+        - rust-qualification-e1b463721251430d
+        - rust-qualification-e4d25084222c0611
+        - rust-qualification-e4f4c72dff4c3345
+        - rust-qualification-e960c40109276ee0
+        - rust-qualification-eb38cb9f8a3753dd
+        - rust-qualification-ec68c018d2ac9504
+        - rust-qualification-ecdec2e058a7da89
+        - rust-qualification-ef7925bd89944999
+        - rust-qualification-f31fcb1a405715c5
+        - rust-qualification-f42e2f75a3efef36
+        - rust-qualification-fb610837e234df52
         - rust-velnor-actions-actionlint
         - rust-velnor-actions-cli
         - rust-velnor-actions-contract
@@ -156,7 +311,7 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
-  Parallel: 13 independent crate jobs; no matrix fan-out
+  Parallel: 90 independent crate jobs; no matrix fan-out
   Critical path: stack/rust/crates/velnor-actions-actionlint/clippy/default -> stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (3 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects

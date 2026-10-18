@@ -40,22 +40,37 @@ jobs:
     name: Actionlint
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      VELNOR_ASSET_SHA256: 1dac5d2bdbef17030598c98c5a557e2b3bfa41f7e09b8b55bebb4e176b3cc028
+      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.16/velnor-actions-0.1.16-x86_64-unknown-linux-gnu
+      VELNOR_RELEASE_COMMIT: a5242ea86856e723c829059d716a76b898229070
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Acquire Velnor
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.16\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
+      - name: Install cache tar adapters
+        id: cache-tar-launchers
+        uses: ./.github/actions/velnor-cache-tar-launchers # zizmor: ignore[self-repository]
+        with:
+          helper-sha256: 1dac5d2bdbef17030598c98c5a557e2b3bfa41f7e09b8b55bebb4e176b3cc028
       - name: V2 identity
         id: v2
+        if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: daf0c91f8027d9dc4facd529fa3b4ccb477be7014fa35df71a2b7692f18bc176
+          d: 592ddc97406c2d78199c901c20706834e0bdc9098c96090353f825d95deee6a9
       - name: Restore Mise tools
-        if: steps.v2.outputs.enabled == 'true'
+        id: tools-cache-restore
+        if: github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
-          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
+        env:
+          PATH: ${{ steps.cache-tar-launchers.outputs.path }}
       - name: Setup Mise
         uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
         with:
@@ -73,8 +88,10 @@ jobs:
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+        env:
+          PATH: ${{ steps.cache-tar-launchers.outputs.path }}
   plan:
     name: Plan
     runs-on: ubuntu-26.04
@@ -97,17 +114,28 @@ jobs:
         with:
           fetch-depth: "0"
           persist-credentials: "false"
+      - name: Acquire Velnor
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.16\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
+      - name: Install cache tar adapters
+        id: cache-tar-launchers
+        uses: ./.github/actions/velnor-cache-tar-launchers # zizmor: ignore[self-repository]
+        with:
+          helper-sha256: 1dac5d2bdbef17030598c98c5a557e2b3bfa41f7e09b8b55bebb4e176b3cc028
       - name: V2 identity
         id: v2
+        if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 4d3f0da8be25e3d23ba1e05322fd298e7cde5ae83ea3a26fa500b7d6c7c05811
+          d: 781e564e76c47f6dc41c7467617754839cd892624112d2b66ab54eb4c9149dbe
       - name: Restore Mise tools
-        if: steps.v2.outputs.enabled == 'true'
+        id: tools-cache-restore
+        if: github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
-          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
+        env:
+          PATH: ${{ steps.cache-tar-launchers.outputs.path }}
       - name: Setup Mise
         uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
         with:
@@ -122,8 +150,6 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks install rust@1.99.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1
-      - name: Acquire Velnor
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.16\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
@@ -154,8 +180,10 @@ jobs:
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+        env:
+          PATH: ${{ steps.cache-tar-launchers.outputs.path }}
   publish-baseline:
     name: Publish baseline
     runs-on: ubuntu-26.04
@@ -278,17 +306,28 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Acquire Velnor
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.16\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
+      - name: Install cache tar adapters
+        id: cache-tar-launchers
+        uses: ./.github/actions/velnor-cache-tar-launchers # zizmor: ignore[self-repository]
+        with:
+          helper-sha256: 1dac5d2bdbef17030598c98c5a557e2b3bfa41f7e09b8b55bebb4e176b3cc028
       - name: V2 identity
         id: v2
+        if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 8a36f7823315a259b5bddac23a46ef37512575ebafee76c9927cbf95218f3137
+          d: 6fdad4614c3e36eee35285c2f963fa8164b49f7c739c14cdc63b1642ac4e86af
       - name: Restore Mise tools
-        if: steps.v2.outputs.enabled == 'true'
+        id: tools-cache-restore
+        if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == '' && steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
-          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
           seed-admitted: ${{ steps.v2.outputs.seed_admitted }}
+        env:
+          PATH: ${{ steps.cache-tar-launchers.outputs.path }}
       - name: Setup Mise
         uses: jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7
         with:
@@ -298,8 +337,6 @@ jobs:
           install: "false"
           sha256: 94c45523c7b6760b7da704f16051171ca32e8447a849a02266a439a4455e9a12
           version: 2026.10.13
-      - name: Acquire Velnor
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.16\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
       - name: Download plan
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -349,5 +386,7 @@ jobs:
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-tools-v2-${{steps.v2.outputs.identity}}
+          key: mise-tools-v2-payload-v3-${{steps.v2.outputs.identity}}
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+        env:
+          PATH: ${{ steps.cache-tar-launchers.outputs.path }}
