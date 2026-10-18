@@ -42,7 +42,7 @@ impl StageContext {
         derive_action_path(&runner_temp, "normal-tools-v3", &[], key)
     }
 
-    /// Derive the qualification action path without needing a workspace path.
+    /// Give the qualification action path without needing a workspace path.
     ///
     /// # Errors
     ///
