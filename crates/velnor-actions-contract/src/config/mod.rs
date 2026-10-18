@@ -64,8 +64,8 @@ pub use resources::{
     ResourcesConfig, ShardTimingEvidence, TestShardingConfig, validate_shard_changes_need_evidence,
 };
 pub use runs_on::{
-    LINUX_AMD64, RunsOn, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL, is_hosted_catalog,
-    is_legacy_hosted_label,
+    LINUX_AMD64, RunnerPlatform, RunsOn, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL,
+    is_hosted_catalog, is_legacy_hosted_label, runner_platform,
 };
 pub use rust_suites::{
     DEFAULT_SUITE_PARTITIONS, DEFAULT_SUITE_RETENTION_DAYS, DEFAULT_SUITE_TIMEOUT_MINUTES,

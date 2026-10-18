@@ -8,7 +8,10 @@
 
 use velnor_actions_contract::{FRESHNESS_CRON_WEEKLY, ScheduleTrigger, WorkflowPolicy};
 use velnor_actions_mise::catalog::RUST_VERSION;
-use velnor_actions_workflow_renderer::freshness::{FreshnessSpec, render_freshness_workflow};
+use velnor_actions_workflow_renderer::WorkflowRoutingPolicy;
+use velnor_actions_workflow_renderer::freshness::{
+    FreshnessSpec, render_freshness_workflow_with_routing,
+};
 use velnor_actions_workflow_renderer::render::RenderedFile;
 
 use crate::OrchestratorError;
@@ -30,6 +33,7 @@ pub(crate) fn freshness_enabled(prep: &GenerationPreparation) -> bool {
 /// Returns render errors for invalid spec scalars or unsupported runners.
 pub(crate) fn freshness_files(
     prep: &GenerationPreparation,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     if !freshness_enabled(prep) {
         return Ok(Vec::new());
@@ -45,5 +49,7 @@ pub(crate) fn freshness_files(
         rust_version: RUST_VERSION.to_owned(),
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
     };
-    Ok(vec![render_freshness_workflow(&spec)?])
+    Ok(vec![render_freshness_workflow_with_routing(
+        &spec, routing,
+    )?])
 }

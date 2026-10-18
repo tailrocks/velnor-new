@@ -11,8 +11,9 @@ use velnor_actions_mise::{
 };
 use velnor_actions_rust::PackageRecord;
 use velnor_actions_workflow_renderer::RenderedFile;
+use velnor_actions_workflow_renderer::WorkflowRoutingPolicy;
 use velnor_actions_workflow_renderer::schema2::{
-    ConsumerBinaryReleaseSpec, render_consumer_binary_release,
+    ConsumerBinaryReleaseSpec, render_consumer_binary_release_with_routing,
 };
 
 use crate::OrchestratorError;
@@ -23,7 +24,10 @@ use crate::release_identity::origin_repository;
 use crate::utf8::strings_of;
 
 /// Render the generated binary workflow or no file when the option is off.
-pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, OrchestratorError> {
+pub(crate) fn files(
+    prep: &GenerationPreparation,
+    routing: &WorkflowRoutingPolicy,
+) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let Some(config) = enabled_config(prep)? else {
         return Ok(Vec::new());
     };
@@ -53,7 +57,9 @@ pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, O
         build_argv: build_argv(config, catalog)?,
         gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], catalog)?,
     };
-    Ok(vec![render_consumer_binary_release(&spec)?])
+    Ok(vec![render_consumer_binary_release_with_routing(
+        &spec, routing,
+    )?])
 }
 
 fn require_tracked_lockfile(

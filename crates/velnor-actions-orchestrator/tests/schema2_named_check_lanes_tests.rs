@@ -14,13 +14,17 @@ fn check_config(id: &str, task: &str, label: &str, platform: &str) -> String {
     )
 }
 
-fn config(mode: &str, overrides: &str) -> String {
+fn config(mode: &str, overrides: &str, include_macos: bool) -> String {
+    let mac_check = if include_macos {
+        check_config("mac", "check:mac", "macos-15", "macos_arm64")
+    } else {
+        String::new()
+    };
     format!(
-        "{}\nmode = \"{mode}\"\n{}\n{overrides}\n{}{}",
+        "{}\nmode = \"{mode}\"\n{}\n{overrides}\n{}{mac_check}",
         execution_head(),
         profiles(),
-        check_config("linux", "check:linux", "ubuntu-26.04", "linux_x64"),
-        check_config("mac", "check:mac", "macos-15", "macos_arm64")
+        check_config("linux", "check:linux", "ubuntu-26.04", "linux_x64")
     )
 }
 
@@ -41,11 +45,6 @@ fn generated_hosted_scale_set_and_both_modes_bind_all_named_check_proofs() -> Te
     for (mode, linux_ids, linux_runner) in [
         ("hosted", ["check-linux", ""], "runs-on: ubuntu-26.04"),
         (
-            "scale-set",
-            ["check-linux", ""],
-            "runs-on: [velnor, ubuntu-26.04-scale-set]",
-        ),
-        (
             "both",
             ["check-linux__hosted", "check-linux__local"],
             "runs-on: ubuntu-26.04",
@@ -56,13 +55,40 @@ fn generated_hosted_scale_set_and_both_modes_bind_all_named_check_proofs() -> Te
     Ok(())
 }
 
+#[test]
+fn scale_set_mode_routes_linux_named_check_and_keeps_it_required() -> TestResult {
+    let repo = fixture(&config("scale-set", "", false))?;
+    let root = repo.path();
+    let prep = prepare(root)?;
+    let tree = render_staged_tree(&prep)?;
+    let ci = required_file(&tree, ".github/workflows/ci.yml")?;
+    let required = job_body(ci, "required")?;
+    let plan = job_body(ci, "plan")?;
+    let linux = job_body(ci, "check-linux")?;
+    assert!(
+        linux.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
+        "{linux}"
+    );
+    assert!(required.contains("check-linux"), "{required}");
+    assert!(
+        required.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
+        "{required}"
+    );
+    assert!(
+        plan.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
+        "{plan}"
+    );
+    assert!(!ci.contains("check-mac"), "{ci}");
+    assert_plan_lanes(root, "scale-set", false)
+}
+
 fn assert_mode(mode: &str, linux_ids: &[&str], linux_runner: &str) -> TestResult {
-    let repo = fixture(&config(mode, ""))?;
+    let repo = fixture(&config(mode, "", true))?;
     let root = repo.path();
     let prep = prepare(root)?;
     let tree = render_staged_tree(&prep)?;
     assert_workflow(&tree, mode, linux_ids, linux_runner)?;
-    assert_plan_lanes(root, mode)
+    assert_plan_lanes(root, mode, true)
 }
 
 fn assert_workflow(
@@ -112,7 +138,7 @@ fn assert_workflow(
     Ok(())
 }
 
-fn assert_plan_lanes(root: &std::path::Path, mode: &str) -> TestResult {
+fn assert_plan_lanes(root: &std::path::Path, mode: &str, include_macos: bool) -> TestResult {
     let request = json!({
         "schema": 1,
         "run_key": "local",
@@ -149,8 +175,12 @@ fn assert_plan_lanes(root: &std::path::Path, mode: &str) -> TestResult {
         assert!(linux[0].get("lane_variant").is_none());
         assert_eq!(linux[0]["job_id"], "check-linux");
     }
-    assert_eq!(mac.len(), 1, "macOS remains one required lane in {mode}");
-    assert_eq!(mac[0]["job_id"], "check-mac");
+    if include_macos {
+        assert_eq!(mac.len(), 1, "macOS remains one required lane in {mode}");
+        assert_eq!(mac[0]["job_id"], "check-mac");
+    } else {
+        assert!(mac.is_empty(), "no macOS task was declared in {mode}");
+    }
     let linux_task = linux[0]["task_id"]
         .as_str()
         .ok_or("named check task id missing")?;
@@ -178,12 +208,12 @@ fn assert_plan_lanes(root: &std::path::Path, mode: &str) -> TestResult {
 fn macos_check_scale_set_override_is_rejected_explicitly() -> TestResult {
     let overrides =
         "[execution.overrides.\"check-mac\"]\nprofile = \"local\"\nrole = \"verification\"\n";
-    let repo = fixture(&config("both", overrides))?;
+    let repo = fixture(&config("hosted", overrides, true).replace("mode = \"hosted\"\n", ""))?;
     let err =
         render_staged_tree(&prepare(repo.path())?).expect_err("macOS cannot use Linux scale set");
     assert!(
         err.to_string()
-            .contains("verification_runner_incompatible_with_scale_set"),
+            .contains("unsupported_darwin_workload:check-mac:macos-15"),
         "{err}"
     );
     Ok(())

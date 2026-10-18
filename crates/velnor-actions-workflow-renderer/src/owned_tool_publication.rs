@@ -5,6 +5,7 @@
 
 use std::collections::BTreeSet;
 
+use crate::workflow_routing::{WorkflowRoutingPolicy, route_workflow_yaml};
 use crate::{RenderError, RenderedFile, marker, steps};
 
 #[path = "owned_tool_publication_yaml.rs"]
@@ -146,8 +147,24 @@ impl OwnedPublicationSpec {
 pub fn render_owned_publication_files(
     spec: &OwnedPublicationSpec,
 ) -> Result<Vec<RenderedFile>, RenderError> {
+    render_owned_publication_files_with_routing(spec, &WorkflowRoutingPolicy::Preserve)
+}
+
+/// Render source candidate workflows under the generator's effective placement policy.
+///
+/// # Errors
+///
+/// Invalid source bindings, unsupported runners, and workflow rendering errors fail.
+pub fn render_owned_publication_files_with_routing(
+    spec: &OwnedPublicationSpec,
+    routing: &WorkflowRoutingPolicy,
+) -> Result<Vec<RenderedFile>, RenderError> {
     spec.validate()?;
-    let yaml = document::document(spec);
+    let yaml = route_workflow_yaml(
+        ".github/workflows/owned-tools.yml",
+        document::document(spec),
+        routing,
+    )?;
     Ok(vec![RenderedFile {
         path: ".github/workflows/owned-tools.yml".to_owned(),
         bytes: crate::render::fallback::render_checked_workflow(

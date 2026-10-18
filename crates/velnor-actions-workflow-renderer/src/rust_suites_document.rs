@@ -14,6 +14,7 @@ use crate::{
     matrix,
     render::fallback::render_checked_workflow,
     steps,
+    workflow_routing::{WorkflowRoutingPolicy, route_workflow_yaml},
     yaml::Yaml,
 };
 
@@ -21,6 +22,7 @@ pub(super) fn render_workflow_for_slug(
     slug: &str,
     entries: &[&RustSuiteConfig],
     spec: &RustSuitesRenderSpec,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<String, RenderError> {
     let mut jobs = BTreeMap::new();
     let mut allow_failure_jobs = BTreeSet::new();
@@ -94,6 +96,7 @@ pub(super) fn render_workflow_for_slug(
     let mut document = Yaml::Map(top);
     matrix::suites::attach_suite_matrices(&mut document, &suite_matrices)?;
     let path = format!(".github/workflows/{slug}.yml");
+    let document = route_workflow_yaml(&path, document, routing)?;
     let text = render_checked_workflow(&path, &document, &spec.generator_version)?;
     steps::scan_for_private_subcommands(&text)?;
     Ok(text)

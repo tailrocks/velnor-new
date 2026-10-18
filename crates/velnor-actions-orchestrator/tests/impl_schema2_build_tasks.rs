@@ -11,27 +11,28 @@ use crate::impl_schema2_routing::{job_body, required_file};
 use crate::impl_schema2_verification_tasks::config;
 
 #[test]
-fn native_build_variant_rejects_scale_set_profile_override() -> TestResult {
+fn scale_set_profile_override_rejects_a_darwin_build() -> TestResult {
+    let hosted_default = config_with_build("hosted").replace("mode = \"hosted\"\n", "");
     let body = format!(
-        "{}\n[execution.overrides.\"task-native-desktop\"]\nprofile = \"local\"\nrole = \"verification\"",
-        config_with_build("hosted")
+        "{hosted_default}\n[execution.overrides.\"task-native-desktop\"]\nprofile = \"local\"\nrole = \"verification\""
     );
     let repo = make_repo(&body)?;
     write_native_source_fixture(repo.path())?;
     let preparation = prepare(repo.path())?;
-    let error = render_staged_tree(&preparation).expect_err("native build task is hosted-only");
+    let error = render_staged_tree(&preparation)
+        .expect_err("Scale Set override must reject the Darwin workload");
     assert!(
         error
             .to_string()
-            .contains("workflow_task_hosted_only_scale_set_override"),
+            .contains("unsupported_darwin_workload:task-native-desktop:macos-26"),
         "{error}"
     );
     Ok(())
 }
 
 #[test]
-fn native_build_variant_is_shared_source_bounded_and_required_in_every_mode() -> TestResult {
-    for mode in ["hosted", "scale-set", "both"] {
+fn native_build_variant_stays_hosted_or_fails_closed_in_scale_set_mode() -> TestResult {
+    for mode in ["hosted", "both"] {
         let body = config_with_build(mode);
         let repo = make_repo(&body)?;
         write_native_source_fixture(repo.path())?;
@@ -46,6 +47,20 @@ fn native_build_variant_is_shared_source_bounded_and_required_in_every_mode() ->
         assert_native_job_selected_tools(mode, native);
         assert_required_job_includes_native(mode, workflow, required);
     }
+
+    let body = config_with_build("scale-set");
+    let repo = make_repo(&body)?;
+    write_native_source_fixture(repo.path())?;
+    let preparation = prepare(repo.path())?;
+    assert_selected_mise_projection(&preparation)?;
+    let error =
+        render_staged_tree(&preparation).expect_err("Scale Set mode must reject the Darwin job");
+    assert!(
+        error
+            .to_string()
+            .contains("unsupported_darwin_workload:task-native-desktop:macos-26"),
+        "{error}"
+    );
     Ok(())
 }
 

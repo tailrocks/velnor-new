@@ -2,8 +2,9 @@
 
 use super::{
     OwnedBuildBootstrap, OwnedPublicationSpec, SourceBuildBinding, SourceQualificationTrigger,
-    render_owned_publication_files,
+    render_owned_publication_files, render_owned_publication_files_with_routing,
 };
+use crate::workflow_routing::WorkflowRoutingPolicy;
 
 fn source() -> SourceBuildBinding {
     SourceBuildBinding {
@@ -91,4 +92,17 @@ fn reviewed_push_is_exact_read_only_infrastructure_category() {
     assert!(text.contains("github.workflow_ref == format("));
     assert!(!text.contains("contents: write") && !text.contains("id-token"));
     assert!(!text.contains("attestations") && !text.contains("publish-owned-tool-artifacts"));
+}
+
+#[test]
+fn scale_set_rejects_the_mixed_native_bootstrap_matrix_as_darwin() {
+    let policy = WorkflowRoutingPolicy::ScaleSet(
+        crate::schema2::Schema2WorkflowRequest::canonical_scale_set().expect("selector"),
+    );
+    let error = render_owned_publication_files_with_routing(&spec(), &policy)
+        .expect_err("native macOS bootstrap must not run on a Linux Scale Set");
+    assert_eq!(
+        error.to_string(),
+        "invalid workflow: unsupported_darwin_workload:.github/workflows/owned-tools.yml:build:macos-26"
+    );
 }

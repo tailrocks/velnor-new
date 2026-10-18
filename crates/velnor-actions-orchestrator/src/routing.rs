@@ -8,7 +8,8 @@ use std::path::Path;
 use velnor_actions_contract::config::LATEST_RUNNER_LABEL;
 use velnor_actions_contract::{ExecutionConfig, ExecutionMode, RoutingWorkflow, VelnorConfig};
 use velnor_actions_workflow_renderer::{
-    MbxQualificationPins, RenderedFile, Schema2WorkflowRequest, render_schema2_workflows,
+    MbxQualificationPins, RenderedFile, Schema2WorkflowRequest, WorkflowRoutingPolicy,
+    render_schema2_workflows,
 };
 
 use crate::OrchestratorError;
@@ -56,6 +57,7 @@ pub fn parse_dispatch_mode(text: &str) -> Result<ExecutionMode, OrchestratorErro
 pub(crate) fn extra_files(
     config: &VelnorConfig,
     version: &str,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     if config.schema != VelnorConfig::SCHEMA_V2 {
         return Ok(Vec::new());
@@ -66,10 +68,41 @@ pub(crate) fn extra_files(
     if execution.workflows.is_empty() {
         return Ok(Vec::new());
     }
-    let request = workflow_request(config, execution, version)?;
+    let request = workflow_request(config, execution, version, routing)?;
     render_schema2_workflows(&request).map_err(|err| OrchestratorError::Render {
         problem: err.to_string(),
     })
+}
+
+/// Resolve the one policy applied to every standalone generated workflow.
+pub(crate) fn workflow_routing_policy(
+    config: &VelnorConfig,
+    dispatch: Option<ExecutionMode>,
+) -> Result<WorkflowRoutingPolicy, OrchestratorError> {
+    let Some(execution) = &config.execution else {
+        if dispatch == Some(ExecutionMode::ScaleSet) {
+            return Err(OrchestratorError::config(
+                CONFIG_REL,
+                "execution",
+                "scale_set_dispatch_requires_execution_profile",
+            ));
+        }
+        return Ok(WorkflowRoutingPolicy::Preserve);
+    };
+    let mode = dispatch.or(execution.mode).unwrap_or_else(|| {
+        if execution.default_profile == execution.scale_set_profile {
+            ExecutionMode::ScaleSet
+        } else {
+            ExecutionMode::Hosted
+        }
+    });
+    match mode {
+        ExecutionMode::Hosted | ExecutionMode::Both => Ok(WorkflowRoutingPolicy::Preserve),
+        ExecutionMode::ScaleSet => execution
+            .scale_selector()
+            .map(WorkflowRoutingPolicy::ScaleSet)
+            .map_err(config_error),
+    }
 }
 
 fn proposed_text(root: &Path) -> Result<String, OrchestratorError> {
@@ -114,6 +147,7 @@ fn workflow_request(
     config: &VelnorConfig,
     execution: &ExecutionConfig,
     version: &str,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<Schema2WorkflowRequest, OrchestratorError> {
     let hosted = execution
         .profiles
@@ -166,6 +200,7 @@ fn workflow_request(
         version: version.to_owned(),
         hosted_label: hosted,
         scale_set,
+        routing: routing.clone(),
         workflows: execution.workflows.clone(),
         mbx_qualification,
         mise_pin_qualification,

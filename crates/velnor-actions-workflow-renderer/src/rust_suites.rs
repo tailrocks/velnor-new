@@ -11,6 +11,7 @@ use velnor_actions_contract::{
     WorkflowDispatchConfig, validate_rust_suites, validate_suites_with_dispatch,
 };
 
+use crate::workflow_routing::WorkflowRoutingPolicy;
 use crate::{CompileDriver, MiseSetup, RenderError, RenderedFile, steps};
 
 #[path = "rust_suites_document.rs"]
@@ -95,7 +96,13 @@ pub fn render_suites_workflow(spec: &RustSuitesRenderSpec) -> Result<Option<Stri
     if entries.is_empty() {
         return Ok(None);
     }
-    document::render_workflow_for_slug(DEFAULT_SUITE_WORKFLOW_SLUG, &entries, spec).map(Some)
+    document::render_workflow_for_slug(
+        DEFAULT_SUITE_WORKFLOW_SLUG,
+        &entries,
+        spec,
+        &WorkflowRoutingPolicy::Preserve,
+    )
+    .map(Some)
 }
 
 /// Render all standalone `.github/workflows/<slug>.yml` suite workflow files,
@@ -106,6 +113,18 @@ pub fn render_suites_workflow(spec: &RustSuitesRenderSpec) -> Result<Option<Stri
 /// Returns [`RenderError`] when `spec` or any suite configuration is invalid.
 pub fn render_suites_workflows(
     spec: &RustSuitesRenderSpec,
+) -> Result<Vec<RenderedFile>, RenderError> {
+    render_suites_workflows_with_routing(spec, &WorkflowRoutingPolicy::Preserve)
+}
+
+/// Render standalone suite workflows under the generator's effective placement policy.
+///
+/// # Errors
+///
+/// Invalid suite configuration, unsupported runners, and workflow rendering errors fail.
+pub fn render_suites_workflows_with_routing(
+    spec: &RustSuitesRenderSpec,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, RenderError> {
     validate_spec(spec)?;
     let mut grouped: BTreeMap<&str, Vec<&RustSuiteConfig>> = BTreeMap::new();
@@ -119,7 +138,7 @@ pub fn render_suites_workflows(
     }
     let mut files = Vec::with_capacity(grouped.len());
     for (slug, entries) in grouped {
-        let yaml = document::render_workflow_for_slug(slug, &entries, spec)?;
+        let yaml = document::render_workflow_for_slug(slug, &entries, spec, routing)?;
         files.push(RenderedFile {
             path: format!(".github/workflows/{slug}.yml"),
             bytes: yaml,

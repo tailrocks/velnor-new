@@ -4,9 +4,10 @@ use std::io::Write;
 use std::process::Command;
 use std::process::Stdio;
 
-use velnor_actions_contract::RoutingWorkflow;
+use velnor_actions_contract::{ExecutionMode, RoutingWorkflow};
 
-use crate::schema2::Schema2WorkflowRequest;
+use crate::schema2::{Schema2WorkflowRequest, render_schema2_workflows};
+use crate::workflow_routing::WorkflowRoutingPolicy;
 use crate::yaml::render_yaml;
 
 use super::super::product_release_family as family;
@@ -17,16 +18,70 @@ mod exec_tests;
 use super::super::product_release_test_pins::test_pins;
 
 fn product(families: &[RoutingWorkflow]) -> Result<ProductRelease, Box<dyn Error>> {
-    let request = Schema2WorkflowRequest {
+    let request = request(families, ExecutionMode::Hosted)?;
+    render(&request)?.ok_or_else(|| "release workflow was not rendered".into())
+}
+
+fn request(
+    families: &[RoutingWorkflow],
+    mode: ExecutionMode,
+) -> Result<Schema2WorkflowRequest, crate::RenderError> {
+    let scale_set = Schema2WorkflowRequest::canonical_scale_set()?;
+    Ok(Schema2WorkflowRequest {
         version: "2.0.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
+        scale_set: scale_set.clone(),
+        routing: WorkflowRoutingPolicy::from_mode(mode, scale_set),
         workflows: BTreeSet::from_iter(families.iter().copied()),
         mbx_qualification: None,
         mise_pin_qualification: None,
         product_release: Some(test_pins()),
-    };
-    render(&request)?.ok_or_else(|| "release workflow was not rendered".into())
+    })
+}
+
+#[test]
+fn scale_set_mode_routes_image_release_controls_and_writers() -> Result<(), Box<dyn Error>> {
+    let request = request(&[RoutingWorkflow::ImageRelease], ExecutionMode::ScaleSet)?;
+    let files = render_schema2_workflows(&request)?;
+    let rendered = files
+        .iter()
+        .map(|file| file.bytes.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
+    let scale_runs_on = "runs-on: [velnor, ubuntu-26.04-scale-set]";
+    assert!(rendered.contains(scale_runs_on), "{rendered}");
+    assert!(!rendered.contains("runs-on: ubuntu-26.04"), "{rendered}");
+    Ok(())
+}
+
+#[test]
+fn scale_set_mode_rejects_macos_binary_release() -> Result<(), Box<dyn Error>> {
+    let request = request(
+        &[RoutingWorkflow::MacosBinaryRelease],
+        ExecutionMode::ScaleSet,
+    )?;
+    let error =
+        render_schema2_workflows(&request).expect_err("macOS jobs cannot use the Linux Scale Set");
+    assert!(
+        error.to_string().contains("unsupported_darwin_workload:"),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn scale_set_mode_rejects_generator_release_with_macos_jobs() -> Result<(), Box<dyn Error>> {
+    let request = request(
+        &[RoutingWorkflow::GeneratorRelease],
+        ExecutionMode::ScaleSet,
+    )?;
+    let error = render_schema2_workflows(&request)
+        .expect_err("Scale Set mode must reject macOS release jobs");
+    assert!(
+        error.to_string().contains("unsupported_darwin_workload:"),
+        "{error}"
+    );
+    Ok(())
 }
 
 fn all_text(product: &ProductRelease) -> String {
@@ -48,10 +103,12 @@ fn all_text(product: &ProductRelease) -> String {
 
 #[test]
 fn empty_release_request_emits_no_workflow() -> Result<(), Box<dyn Error>> {
+    let scale_set = Schema2WorkflowRequest::canonical_scale_set()?;
     let request = Schema2WorkflowRequest {
         version: "2.0.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
+        scale_set: scale_set.clone(),
+        routing: WorkflowRoutingPolicy::from_mode(ExecutionMode::Hosted, scale_set),
         workflows: BTreeSet::new(),
         mbx_qualification: None,
         mise_pin_qualification: None,

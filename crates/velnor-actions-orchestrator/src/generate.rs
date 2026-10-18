@@ -10,12 +10,14 @@ use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
 use velnor_actions_workflow_renderer::render::RenderedTree;
 use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
 use velnor_actions_workflow_renderer::tree::render_tree_with_claude_mode;
+use velnor_actions_workflow_renderer::validate_generated_workflow_calls;
 
 use crate::OrchestratorError;
 use crate::finalized::owned_preparation;
 use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
+use crate::routing::workflow_routing_policy;
 use crate::validate::validate_staged;
 use crate::workflow::scale_set_selector_for_dispatch;
 
@@ -168,6 +170,7 @@ fn render_all(
 ) -> Result<RenderedTree, OrchestratorError> {
     let version = env!("CARGO_PKG_VERSION");
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
+    let routing = workflow_routing_policy(&prep.config, dispatch)?;
     let ir = expand_workflow(&prep.workflow.ir, &prep.config, dispatch).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
@@ -191,13 +194,21 @@ fn render_all(
     let workflow = rendered.yaml;
     let actionlint = render_actionlint_yaml(&actionlint_input)?;
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
-    let mut extra = crate::release_emit::release_files(prep, &mise)?;
-    extra.extend(crate::binary_release_emit::files(prep)?);
-    extra.extend(crate::freshness_emit::freshness_files(prep)?);
-    extra.extend(crate::owned_tool_publication::files(prep)?);
-    extra.extend(crate::tofu_apply_emit::tofu_apply_files(prep)?);
-    extra.extend(crate::routing::extra_files(&prep.config, version)?);
-    extra.extend(crate::rust_suites_emit::suite_workflow_files(prep)?);
+    let mut extra = crate::release_emit::release_files(prep, &mise, &routing)?;
+    extra.extend(crate::binary_release_emit::files(prep, &routing)?);
+    extra.extend(crate::freshness_emit::freshness_files(prep, &routing)?);
+    extra.extend(crate::owned_tool_publication::files_with_routing(
+        prep, &routing,
+    )?);
+    extra.extend(crate::tofu_apply_emit::tofu_apply_files(prep, &routing)?);
+    extra.extend(crate::routing::extra_files(
+        &prep.config,
+        version,
+        &routing,
+    )?);
+    extra.extend(crate::rust_suites_emit::suite_workflow_files(
+        prep, &routing,
+    )?);
     extra.extend(rendered.shared);
     let tree = render_tree_with_claude_mode(
         &workflow,
@@ -206,6 +217,7 @@ fn render_all(
         version,
         prep.config.agents.claude_md,
     )?;
+    validate_generated_workflow_calls(&tree.files, &routing)?;
     Ok(tree)
 }
 

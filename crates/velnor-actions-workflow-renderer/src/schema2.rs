@@ -11,6 +11,7 @@ use crate::RenderError;
 use crate::render::RenderedFile;
 use crate::runs_on::runs_on_yaml;
 use crate::setup::MiseSetup;
+use crate::workflow_routing::{WorkflowRoutingPolicy, route_workflow_yaml};
 use crate::yaml::Yaml;
 
 #[cfg(test)]
@@ -69,6 +70,18 @@ pub fn render_consumer_binary_release(
     consumer_binary_release::render_consumer_binary_release(spec)
 }
 
+/// Render the consumer binary release workflow under the effective placement policy.
+///
+/// # Errors
+///
+/// Invalid release inputs, unsupported runners, and workflow rendering errors fail.
+pub fn render_consumer_binary_release_with_routing(
+    spec: &consumer_binary_release::ConsumerBinaryReleaseSpec,
+    routing: &WorkflowRoutingPolicy,
+) -> Result<RenderedFile, RenderError> {
+    consumer_binary_release::render_consumer_binary_release_with_routing(spec, routing)
+}
+
 pub use consumer_binary_release::ConsumerBinaryReleaseSpec;
 
 #[cfg(test)]
@@ -92,6 +105,8 @@ pub struct Schema2WorkflowRequest {
     pub hosted_label: String,
     /// Validated scale-set selector.
     pub scale_set: ScaleSetSelector,
+    /// One validated placement policy shared by every generated workflow.
+    pub routing: WorkflowRoutingPolicy,
     /// Workflows to emit. Empty emits nothing.
     pub workflows: BTreeSet<RoutingWorkflow>,
     /// Pinned tool inputs, required only when qualification is emitted.
@@ -154,16 +169,17 @@ pub fn render_schema2_workflows(
         files.push(file(
             QUALIFICATION_WORKFLOW,
             &request.version,
-            &qualification(request)?,
+            &route_workflow(request, QUALIFICATION_WORKFLOW, qualification(request)?)?,
         )?);
     }
     if let Some(generated) = product_release::render(request)? {
         files.push(file(
             PRODUCT_RELEASE_WORKFLOW,
             &request.version,
-            &generated.workflow,
+            &route_workflow(request, PRODUCT_RELEASE_WORKFLOW, generated.workflow)?,
         )?);
         for (path, workflow) in generated.family_workflows {
+            let workflow = route_workflow(request, &path, workflow)?;
             files.push(file(&path, &request.version, &workflow)?);
         }
         for (path, action) in generated.actions {
@@ -174,10 +190,18 @@ pub fn render_schema2_workflows(
         files.push(file(
             MONITORING_WORKFLOW,
             &request.version,
-            &monitoring(request)?,
+            &route_workflow(request, MONITORING_WORKFLOW, monitoring(request)?)?,
         )?);
     }
     Ok(files)
+}
+
+fn route_workflow(
+    request: &Schema2WorkflowRequest,
+    path: &str,
+    workflow: Yaml,
+) -> Result<Yaml, RenderError> {
+    route_workflow_yaml(path, workflow, &request.routing)
 }
 
 fn file(path: &str, version: &str, body: &Yaml) -> Result<RenderedFile, RenderError> {

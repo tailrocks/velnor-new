@@ -7,8 +7,11 @@
 use velnor_actions_contract::{TOFU_APPLY_WORKFLOW_PATH, TofuApplyConfig};
 
 use crate::{
-    MiseSetup, RenderError, guard, marker, render::RenderedFile, steps,
+    MiseSetup, RenderError, guard, marker,
+    render::RenderedFile,
+    steps,
     tofu_apply_document::tofu_apply_document,
+    workflow_routing::{WorkflowRoutingPolicy, route_workflow_yaml},
 };
 
 /// Generated workflow display name.
@@ -87,8 +90,24 @@ impl TofuApplySpec {
 ///
 /// Returns [`RenderError`] for invalid typed inputs or workflow size.
 pub fn render_tofu_apply_workflow(spec: &TofuApplySpec) -> Result<RenderedFile, RenderError> {
+    render_tofu_apply_workflow_with_routing(spec, &WorkflowRoutingPolicy::Preserve)
+}
+
+/// Render the apply workflow with the generator's effective placement policy.
+///
+/// # Errors
+///
+/// Invalid apply inputs, unsupported runners, and workflow rendering errors fail.
+pub fn render_tofu_apply_workflow_with_routing(
+    spec: &TofuApplySpec,
+    routing: &WorkflowRoutingPolicy,
+) -> Result<RenderedFile, RenderError> {
     spec.validate()?;
-    let document = tofu_apply_document(spec)?;
+    let document = route_workflow_yaml(
+        TOFU_APPLY_WORKFLOW_PATH,
+        tofu_apply_document(spec)?,
+        routing,
+    )?;
     let text = crate::render::fallback::render_checked_workflow(
         TOFU_APPLY_WORKFLOW_PATH,
         &document,

@@ -34,7 +34,7 @@ pub enum LaneClass {
     Verification,
 }
 
-/// Where one verification workload is emitted.
+/// Where one logical job is emitted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Placement {
     HostedOnly,
@@ -315,7 +315,9 @@ fn emit_job(
         Placement::ScaleSetOnly => {
             let token = execution.scale_selector()?.token();
             let mut next = retarget(job, Some(&token), id, id, class, EmitLane::Single, map);
-            next.display_name = scale_name(&job.display_name);
+            if class == LaneClass::Verification {
+                next.display_name = scale_name(&job.display_name);
+            }
             insert_job(jobs, id.to_owned(), next)?;
         }
         Placement::Both => {

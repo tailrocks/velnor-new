@@ -22,6 +22,7 @@ use crate::{
     MiseSetup, RenderError, guard, marker, mise_setup_step,
     render::RenderedFile,
     steps::{self, action_step, shell_step},
+    workflow_routing::{WorkflowRoutingPolicy, route_workflow_yaml},
     yaml::Yaml,
 };
 
@@ -106,6 +107,18 @@ fn valid_rust_version(value: &str) -> bool {
 ///
 /// Returns [`RenderError`] for invalid spec scalars or steps.
 pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, RenderError> {
+    render_freshness_workflow_with_routing(spec, &WorkflowRoutingPolicy::Preserve)
+}
+
+/// Render the freshness workflow with the generator's effective placement policy.
+///
+/// # Errors
+///
+/// Invalid freshness inputs, unsupported runners, and workflow rendering errors fail.
+pub fn render_freshness_workflow_with_routing(
+    spec: &FreshnessSpec,
+    routing: &WorkflowRoutingPolicy,
+) -> Result<RenderedFile, RenderError> {
     spec.validate()?;
     let mut checkout = action_step(
         "Checkout",
@@ -145,7 +158,11 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
         ],
         BTreeMap::new(),
     )?;
-    let document = freshness_document(spec, &checkout, &setup_mise, &install_rust, &probe)?;
+    let document = route_workflow_yaml(
+        FRESHNESS_WORKFLOW_PATH,
+        freshness_document(spec, &checkout, &setup_mise, &install_rust, &probe)?,
+        routing,
+    )?;
     let text = crate::render::fallback::render_checked_workflow(
         FRESHNESS_WORKFLOW_PATH,
         &document,

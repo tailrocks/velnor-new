@@ -1,19 +1,22 @@
 use std::collections::BTreeSet;
 
-use velnor_actions_contract::{RoutingWorkflow, SCALE_SET_NAME, VELNOR_LABEL};
+use velnor_actions_contract::{ExecutionMode, RoutingWorkflow, SCALE_SET_NAME, VELNOR_LABEL};
 
 use super::{
     MbxQualificationPins, MisePinQualificationPins, Schema2WorkflowRequest, monitoring,
     qualification, render_schema2_workflows,
 };
 use crate::setup::MiseSetup;
+use crate::workflow_routing::WorkflowRoutingPolicy;
 use crate::yaml::Yaml;
 
 fn request() -> Schema2WorkflowRequest {
+    let scale_set = Schema2WorkflowRequest::canonical_scale_set().expect("valid scale set");
     Schema2WorkflowRequest {
         version: "2.0.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: Schema2WorkflowRequest::canonical_scale_set().expect("valid scale set"),
+        scale_set: scale_set.clone(),
+        routing: WorkflowRoutingPolicy::from_mode(ExecutionMode::Both, scale_set),
         workflows: BTreeSet::from([RoutingWorkflow::Qualification]),
         mbx_qualification: Some(MbxQualificationPins {
             mise_setup: MiseSetup {
@@ -43,6 +46,41 @@ fn request() -> Schema2WorkflowRequest {
         }),
         product_release: None,
     }
+}
+
+#[test]
+fn scale_set_mode_rejects_qualification_with_a_darwin_job() {
+    let mut request = request();
+    request.routing =
+        WorkflowRoutingPolicy::from_mode(ExecutionMode::ScaleSet, request.scale_set.clone());
+    let error = render_schema2_workflows(&request).expect_err("Darwin workload must fail closed");
+    assert!(
+        error
+            .to_string()
+            .contains("unsupported_darwin_workload:.github/workflows/qualification.yml:mise-pin-macos-x64:macos-15-intel"),
+        "{error}"
+    );
+}
+
+#[test]
+fn scale_set_mode_routes_monitoring_controls_to_the_scale_set() {
+    let mut request = request();
+    request.routing =
+        WorkflowRoutingPolicy::from_mode(ExecutionMode::ScaleSet, request.scale_set.clone());
+    request.workflows = BTreeSet::from([RoutingWorkflow::Monitoring]);
+    let files = render_schema2_workflows(&request).expect("monitoring renders");
+    let monitoring = files
+        .iter()
+        .find(|file| file.path == super::MONITORING_WORKFLOW)
+        .expect("monitoring file exists");
+    let yaml = monitoring.bytes.as_str();
+    assert!(yaml.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"));
+    assert!(!yaml.contains("runs-on: ubuntu-26.04"));
+    assert_eq!(
+        yaml.matches("runs-on: [velnor, ubuntu-26.04-scale-set]")
+            .count(),
+        2
+    );
 }
 
 fn assert_lane_shells(document: &Yaml, minimum_per_lane: usize) {

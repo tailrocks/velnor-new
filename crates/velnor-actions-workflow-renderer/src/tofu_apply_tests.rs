@@ -1,8 +1,9 @@
 use super::{
     AWS_CREDENTIALS_STEP_ID, PLAN_REVIEW_JQ, TOFU_APPLY_CONCURRENCY_GROUP, TofuApplySpec,
-    render_tofu_apply_workflow,
+    render_tofu_apply_workflow, render_tofu_apply_workflow_with_routing,
 };
 use crate::MiseSetup;
+use crate::workflow_routing::WorkflowRoutingPolicy;
 use velnor_actions_contract::{
     GitHubTokenSecret, S3BackendConfig, TofuApplyConfig, Utf8RepoRelDir,
 };
@@ -82,6 +83,19 @@ fn output_matches_generator_golden_snapshot() {
         include_str!("../tests/goldens/tofu-apply.yml"),
         "byte-exact generated workflow golden"
     );
+}
+
+#[test]
+fn scale_set_routes_the_protected_linux_apply_job() {
+    let policy = WorkflowRoutingPolicy::ScaleSet(
+        crate::schema2::Schema2WorkflowRequest::canonical_scale_set().expect("selector"),
+    );
+    let file = render_tofu_apply_workflow_with_routing(&spec(), &policy).expect("render");
+    assert!(
+        file.bytes
+            .contains("runs-on: [velnor, ubuntu-26.04-scale-set]")
+    );
+    assert!(file.bytes.contains("id-token: write"));
 }
 
 #[test]

@@ -9,9 +9,9 @@ use velnor_actions_contract::{Job, RustSuiteConfig, VelnorConfig};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_rust::CompileDriver as RustCompileDriver;
 use velnor_actions_workflow_renderer::rust_suites::{
-    RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflows,
+    RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflows_with_routing,
 };
-use velnor_actions_workflow_renderer::{CompileDriver, RenderedFile};
+use velnor_actions_workflow_renderer::{CompileDriver, RenderedFile, WorkflowRoutingPolicy};
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
@@ -140,6 +140,7 @@ pub(crate) fn build_ci_jobs(
 /// Render standalone `.github/workflows/<slug>.yml` suite workflow files.
 pub(crate) fn suite_workflow_files(
     prep: &GenerationPreparation,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     validate_suites_against_repo(&prep.root, &prep.config, &prep.discovery)?;
     let catalog = &prep.catalog;
@@ -147,7 +148,7 @@ pub(crate) fn suite_workflow_files(
     else {
         return Ok(Vec::new());
     };
-    Ok(render_suites_workflows(&spec)?)
+    Ok(render_suites_workflows_with_routing(&spec, routing)?)
 }
 
 fn build_render_spec(

@@ -118,6 +118,26 @@ fn dispatch_mode_overrides_configured_mode() -> TestResult {
 }
 
 #[test]
+fn scale_set_dispatch_routes_image_release_and_resolves_its_local_family() -> TestResult {
+    let config = format!(
+        "{}\nmode = \"hosted\"\nworkflows = [\"image_release\"]\n{}",
+        execution_head(),
+        profiles()
+    );
+    let repo = make_repo(&config)?;
+    let prep = prepare(repo.path())?;
+    let tree = render_staged_tree_with(&prep, Some(ExecutionMode::ScaleSet))?;
+    let rendered = join_files(&tree);
+    assert!(
+        rendered.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
+        "{rendered}"
+    );
+    assert!(!rendered.contains("runs-on: ubuntu-26.04"), "{rendered}");
+    required_file(&tree, ".github/workflows/product-release-images.yml")?;
+    Ok(())
+}
+
+#[test]
 fn schema2_workflows_match_expected_bytes() -> TestResult {
     let repo = make_repo(&workflow_config())?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;

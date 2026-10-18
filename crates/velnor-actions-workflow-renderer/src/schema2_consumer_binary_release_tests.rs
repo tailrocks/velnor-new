@@ -1,5 +1,6 @@
 use super::{ConsumerBinaryReleaseSpec, render_consumer_binary_release};
 use crate::setup::MiseSetup;
+use crate::workflow_routing::WorkflowRoutingPolicy;
 
 fn install_argv(tools: &[&str]) -> Vec<String> {
     let mut command = vec![
@@ -160,6 +161,21 @@ fn renders_four_isolated_jobs_bound_to_exact_package_and_source() {
     assert!(yaml.contains("isImmutable == true"));
     assert!(yaml.contains("gh release create"));
     assert!(yaml.contains("--verify-tag --draft --latest=false"));
+}
+
+#[test]
+fn scale_set_rejects_the_native_macos_binary_build_job() {
+    let policy = WorkflowRoutingPolicy::ScaleSet(
+        crate::schema2::Schema2WorkflowRequest::canonical_scale_set().expect("selector"),
+    );
+    let error = super::render_consumer_binary_release_with_routing(&spec(), &policy)
+        .expect_err("macOS binary build cannot run on a Linux Scale Set");
+    assert!(
+        error.to_string().contains(
+            "unsupported_darwin_workload:.github/workflows/binary-release.yml:build-binary:macos-15"
+        ),
+        "{error}"
+    );
 }
 
 #[test]

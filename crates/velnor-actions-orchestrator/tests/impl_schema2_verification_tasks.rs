@@ -11,7 +11,7 @@ const SCALE_RUNS: &str = "runs-on: [velnor, ubuntu-26.04-scale-set, verification
 
 #[test]
 fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
-    for mode in ["hosted", "scale-set", "both"] {
+    for mode in ["hosted", "both"] {
         let repo = make_repo(&config(mode))?;
         write_verification_task_config(repo.path())?;
         let tree = render_staged_tree(&prepare(repo.path())?)?;
@@ -70,13 +70,6 @@ fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
                 assert!(!workflow.contains("  task-linux-lint__hosted:"));
                 assert!(!workflow.contains("  task-linux-lint__local:"));
             }
-            "scale-set" => {
-                let linux = job_body(workflow, "task-linux-lint")?;
-                assert!(linux.contains(SCALE_RUNS), "{linux}");
-                assert!(required.contains("- task-linux-lint"), "{required}");
-                assert!(!workflow.contains("  task-linux-lint__hosted:"));
-                assert!(!workflow.contains("  task-linux-lint__local:"));
-            }
             "both" => {
                 let hosted = job_body(workflow, "task-linux-lint__hosted")?;
                 let scale = job_body(workflow, "task-linux-lint__local")?;
@@ -93,10 +86,25 @@ fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
 }
 
 #[test]
-fn macos_task_cannot_select_the_linux_scale_set_profile() -> TestResult {
+fn scale_set_mode_rejects_a_darwin_verification_task() -> TestResult {
+    let repo = make_repo(&config("scale-set"))?;
+    write_verification_task_config(repo.path())?;
+    let prep = prepare(repo.path())?;
+    let error = render_staged_tree(&prep).expect_err("Scale Set mode cannot run the macOS task");
+    assert!(
+        error
+            .to_string()
+            .contains("unsupported_darwin_workload:task-native-format:macos-15"),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn macos_task_scale_set_override_is_rejected_explicitly() -> TestResult {
     let config = format!(
         "{}\n[execution.overrides.\"task-native-format\"]\nprofile = \"local\"\nrole = \"verification\"",
-        config("hosted")
+        config("hosted").replace("mode = \"hosted\"\n", "")
     );
     let repo = make_repo(&config)?;
     write_verification_task_config(repo.path())?;
@@ -105,7 +113,7 @@ fn macos_task_cannot_select_the_linux_scale_set_profile() -> TestResult {
     assert!(
         error
             .to_string()
-            .contains("verification_runner_incompatible_with_scale_set"),
+            .contains("unsupported_darwin_workload:task-native-format:macos-15"),
         "{error}"
     );
     Ok(())

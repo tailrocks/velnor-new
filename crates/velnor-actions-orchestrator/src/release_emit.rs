@@ -27,8 +27,10 @@ use velnor_actions_workflow_renderer::release_spec::{
     BootstrapPlan, DispatchInput, ReleaseTriggers, lock::stable_lock_group, publish_gate_condition,
     validate_source_sha,
 };
-use velnor_actions_workflow_renderer::release_tree::{ReleaseRenderContext, render_release_files};
-use velnor_actions_workflow_renderer::{MiseSetup, render::RenderedFile};
+use velnor_actions_workflow_renderer::release_tree::{
+    ReleaseRenderContext, render_release_files_with_routing,
+};
+use velnor_actions_workflow_renderer::{MiseSetup, WorkflowRoutingPolicy, render::RenderedFile};
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
@@ -53,6 +55,7 @@ const RELEASE_WORKFLOW_NAME: &str = "Velnor Release";
 pub(crate) fn release_files(
     prep: &GenerationPreparation,
     mise: &MiseSetup,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     let Some(release) = enabled_release(prep)? else {
         return Ok(Vec::new());
@@ -121,7 +124,10 @@ pub(crate) fn release_files(
     };
     let config = plz_config(release, &selection);
     let bootstrap_config = BootstrapReleasePlzConfig::new(config.clone())?;
-    Ok(render_release_files(&spec, &ctx, &config, &bootstrap_config)?.as_sorted_vec())
+    Ok(
+        render_release_files_with_routing(&spec, &ctx, &config, &bootstrap_config, routing)?
+            .as_sorted_vec(),
+    )
 }
 
 /// Borrow the active release section, enforcing the consumer-only policy.

@@ -8,6 +8,7 @@ use crate::steps::{
     ATTEST_BUILD_PROVENANCE_USES, CHECKOUT_USES, DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES,
     validate_uses,
 };
+use crate::workflow_routing::{WorkflowRoutingPolicy, route_workflow_yaml};
 use crate::yaml::{Yaml, render_yaml};
 
 use super::MiseSetup;
@@ -67,6 +68,13 @@ pub(super) const BINARY_RELEASE_WORKFLOW: &str = ".github/workflows/binary-relea
 pub(super) fn render_consumer_binary_release(
     spec: &ConsumerBinaryReleaseSpec,
 ) -> Result<RenderedFile, RenderError> {
+    render_consumer_binary_release_with_routing(spec, &WorkflowRoutingPolicy::Preserve)
+}
+
+pub(super) fn render_consumer_binary_release_with_routing(
+    spec: &ConsumerBinaryReleaseSpec,
+    routing: &WorkflowRoutingPolicy,
+) -> Result<RenderedFile, RenderError> {
     validate_spec(spec)?;
     let metadata_command = join_argv_for_run(&spec.metadata_argv)?;
     let identity = scripts::identity(&metadata_command);
@@ -82,14 +90,18 @@ pub(super) fn render_consumer_binary_release(
     let publisher_eligibility =
         consumer_release_eligibility::consumer_script(&eligibility_context, &spec.gh_argv, true)?;
     let asset = format!("{}-{CONSUMER_BINARY_TARGET}", spec.bin);
-    let workflow = document(
-        spec,
-        &identity,
-        &eligibility,
-        &publisher_eligibility,
-        &target_add,
-        &build,
-        &asset,
+    let workflow = route_workflow_yaml(
+        BINARY_RELEASE_WORKFLOW,
+        document(
+            spec,
+            &identity,
+            &eligibility,
+            &publisher_eligibility,
+            &target_add,
+            &build,
+            &asset,
+        )?,
+        routing,
     )?;
     let bytes = with_marker(&spec.generator_version, &render_yaml(&workflow))?;
     Ok(RenderedFile {

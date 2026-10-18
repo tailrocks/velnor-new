@@ -46,10 +46,11 @@ pub use crate::render::{
 };
 pub use crate::rust_suites::{
     RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflow, render_suites_workflows,
+    render_suites_workflows_with_routing,
 };
 pub use crate::schema2::{
     MbxQualificationPins, MisePinQualificationPins, ProductReleasePins, Schema2WorkflowRequest,
-    render_schema2_workflows,
+    render_consumer_binary_release_with_routing, render_schema2_workflows,
 };
 pub use crate::setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use crate::steps::{
@@ -69,11 +70,13 @@ pub use crate::tofu_apply::{
     AWS_CREDENTIALS_STEP_ID, AWS_CREDENTIALS_USES, AWS_CREDENTIALS_VERSION,
     TOFU_APPLY_CONCURRENCY_GROUP, TOFU_APPLY_JOB_ID, TOFU_APPLY_TIMEOUT_MINUTES,
     TOFU_APPLY_WORKFLOW_NAME, TofuApplySpec, render_tofu_apply_workflow,
+    render_tofu_apply_workflow_with_routing,
 };
 pub use crate::tree::{render_tree, render_tree_with_claude_mode, render_tree_with_extra};
 pub use crate::verification_jobs::{
     INSTALL_VERIFICATION_TOOLS_NAME, RUN_VERIFICATION_TASK_NAME, VerificationTaskPolicy,
     build_verification_task_job,
 };
+pub use crate::workflow_routing::{WorkflowRoutingPolicy, validate_generated_workflow_calls};
 pub use crate::workflow_size::MAX_WORKFLOW_BYTES;
 pub use crate::yaml::{Yaml, quote_scalar, render_yaml};

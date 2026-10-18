@@ -1,13 +1,16 @@
 //! Consumer binary release generation from repository inputs.
 
 use std::fs;
-use velnor_actions_orchestrator::{GenerateOptions, generate, prepare, render_staged_tree};
+use velnor_actions_orchestrator::{
+    ExecutionMode, GenerateOptions, generate, prepare, render_staged_tree, render_staged_tree_with,
+};
 
 use crate::impl_common::{TestResult, anchor_repo, git, make_repo};
 
 const CONSUMER: &str =
     "schema = 1\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n";
 const ENABLED: &str = "schema = 1\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n[stacks.rust.binary_release]\nenabled = true\npackage = \"demo\"\nbin = \"demo\"\n";
+const SCALE_SET_ENABLED: &str = "schema = 2\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n[stacks.rust.binary_release]\nenabled = true\npackage = \"demo\"\nbin = \"demo\"\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\n";
 
 fn binary_repo(config: &str) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
     let repo = make_repo(config)?;
@@ -62,6 +65,21 @@ fn binary_release_is_default_off_and_generated_through_render_tree() -> TestResu
     assert_eq!(
         fs::read_to_string(preview.path().join(".github/workflows/binary-release.yml"))?,
         workflow
+    );
+    Ok(())
+}
+
+#[test]
+fn scale_set_dispatch_rejects_the_binary_workflows_macos_job() -> TestResult {
+    let repo = binary_repo(SCALE_SET_ENABLED)?;
+    let prep = prepare(repo.path())?;
+    let error = render_staged_tree_with(&prep, Some(ExecutionMode::ScaleSet))
+        .expect_err("the Apple Silicon build cannot use the Linux Scale Set");
+    assert!(
+        error.to_string().contains(
+            "unsupported_darwin_workload:.github/workflows/binary-release.yml:build-binary:macos-15"
+        ),
+        "{error}"
     );
     Ok(())
 }

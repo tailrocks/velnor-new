@@ -1,9 +1,10 @@
 use crate::schema2::Schema2WorkflowRequest;
 use crate::setup::MiseSetup;
+use crate::workflow_routing::WorkflowRoutingPolicy;
 use crate::yaml::Yaml;
 use std::collections::BTreeSet;
 use std::error::Error;
-use velnor_actions_contract::ReleaseTarget;
+use velnor_actions_contract::{ExecutionMode, ReleaseTarget};
 
 #[test]
 fn each_archive_consumer_has_target_pinned_mise_before_extraction() -> Result<(), Box<dyn Error>> {
@@ -11,10 +12,12 @@ fn each_archive_consumer_has_target_pinned_mise_before_extraction() -> Result<()
     pins.linux_x86_64_setup = mise_setup('a', "2026.10.4", 'b');
     pins.macos_arm64_setup = mise_setup('c', "2026.9.19", 'd');
     pins.macos_x86_64_setup = mise_setup('e', "2026.9.20", 'f');
+    let scale_set = Schema2WorkflowRequest::canonical_scale_set()?;
     let request = Schema2WorkflowRequest {
         version: env!("CARGO_PKG_VERSION").to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
+        scale_set: scale_set.clone(),
+        routing: WorkflowRoutingPolicy::from_mode(ExecutionMode::Hosted, scale_set),
         workflows: BTreeSet::new(),
         mbx_qualification: None,
         mise_pin_qualification: None,

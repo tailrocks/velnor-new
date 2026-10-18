@@ -17,7 +17,7 @@ pub const HOSTED_PROFILE_ID: &str = "hosted";
 /// Profile id migration writes for the scale set.
 pub const SCALE_SET_PROFILE_ID: &str = "local";
 
-/// How eligible verification workloads are placed.
+/// How Linux/amd64 jobs are placed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ExecutionMode {

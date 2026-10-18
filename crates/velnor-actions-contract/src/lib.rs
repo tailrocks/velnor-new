@@ -60,7 +60,7 @@ pub use config::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend,
     QualifiedToolExecutable, QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe,
     RESERVED_SUITE_IDS, RESERVED_SUITE_WORKFLOW_SLUGS, ResourcesConfig, RootProblem,
-    RoutingWorkflow, RunnerSelection, RunsOn, RustConfiguration, RustStackConfig,
+    RoutingWorkflow, RunnerPlatform, RunnerSelection, RunsOn, RustConfiguration, RustStackConfig,
     RustSuiteArtifact, RustSuiteArtifactWhen, RustSuiteBuildMode, RustSuiteConfig,
     RustSuiteTrigger, S3BackendConfig, SCALE_SET_NAME, SCALE_SET_PROFILE_ID, ScaleSetSelector,
     ShardTimingEvidence, StacksConfig, TestShardingConfig, TofuApplyConfig, TofuStackConfig,
@@ -69,8 +69,9 @@ pub use config::{
     WorkflowDispatchConfig, WorkflowDispatchInputConfig, WorkflowDispatchInputType, WorkflowPolicy,
     WorkflowTask, check_execution_receipt_upper_bound, is_exact_semver, is_valid_build_tool_key,
     is_valid_feature_name, is_valid_mise_task_name, is_valid_rust_target,
-    is_valid_workflow_task_id, validate_preserve_workflows, validate_qualified_tools,
-    validate_rust_suites, validate_shard_changes_need_evidence, validate_suites_with_dispatch,
+    is_valid_workflow_task_id, runner_platform, validate_preserve_workflows,
+    validate_qualified_tools, validate_rust_suites, validate_shard_changes_need_evidence,
+    validate_suites_with_dispatch,
 };
 pub use discover::{
     BUILTIN_EXCLUSIONS, DETECTION_SCHEMA, DetectError, DetectedProject, DetectionStatus,

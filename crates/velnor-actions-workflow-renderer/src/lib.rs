@@ -76,6 +76,7 @@ pub mod toolchain_env;
 pub mod tree;
 pub mod verification_jobs;
 mod workflow_policy;
+pub mod workflow_routing;
 mod workflow_size;
 pub mod yaml;
 
