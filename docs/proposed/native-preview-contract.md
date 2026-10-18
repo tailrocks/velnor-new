@@ -24,7 +24,7 @@ environment = "preview-publish"
 [stacks.rust.binary_release.preview.producer]
 task = "release:preview-package"
 source = { mise_config = "mise.toml", working_directory = "." }
-runner = "macos-26-arm64"
+runner = "xcode-27-arm64"
 inputs = ["Cargo.lock", "Cargo.toml", "mise.toml", "scripts/release-preview.sh"]
 tools = ["rust", "cargo-zigbuild", "jq", "tar", "zig"]
 system_tools = [{ kind = "xcode", version = "27.1", build = "27A9275", sdk_version = "27.0", developer_dir = "/Applications/Xcode_27.1_Release_Candidate.app/Contents/Developer" }]

@@ -9,6 +9,10 @@ use velnor_actions_orchestrator::{
     finalized_jobs, generate, plan_text_checked, prepare, render_staged_tree,
 };
 
+#[path = "impl_orch_gen_support.rs"]
+mod support;
+use support::tool_contents;
+
 use crate::impl_common::{
     TestResult, config_with_branch, err_of, git, make_repo, plan_for, snapshot,
     without_ambient_identity,
@@ -17,14 +21,6 @@ use crate::impl_common::{
 /// Config that ignores the only registered stack.
 const IGNORED_RUST: &str =
     "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n";
-
-/// Tool files plus fixed contents for preservation cases.
-const TOOL_CONTENTS: [(&str, &str); 4] = [
-    ("mise.toml", "[tools]\n"),
-    (".mise.toml", "[tools]\n"),
-    ("mise.lock", "{}\n"),
-    ("rust-toolchain.toml", "[toolchain]\nchannel = \"1.98.1\"\n"),
-];
 
 /// Preview-generate `prep` into `dir`.
 fn preview_into(
@@ -175,7 +171,8 @@ fn orch_gen_preview_and_in_place_tree_hygiene() -> TestResult {
 fn orch_gen_in_place_preserves_config_and_tool_files() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
-    for (rel, body) in TOOL_CONTENTS {
+    let tool_contents = tool_contents();
+    for (rel, body) in &tool_contents {
         fs::write(root.join(rel), body)?;
     }
     let config_before = fs::read(root.join(".velnor/config.toml"))?;
@@ -186,7 +183,7 @@ fn orch_gen_in_place_preserves_config_and_tool_files() -> TestResult {
         fs::read(root.join(".velnor/config.toml"))?,
         "config unchanged"
     );
-    for (rel, body) in TOOL_CONTENTS {
+    for (rel, body) in &tool_contents {
         assert_eq!(
             fs::read(root.join(rel))?,
             body.as_bytes(),

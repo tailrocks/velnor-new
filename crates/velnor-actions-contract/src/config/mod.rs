@@ -67,7 +67,7 @@ pub use host_container::{
 pub use image_task::{NativeImageCachePolicy, NativeImagePlatform, NativeImageTask};
 pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
-    MiseCheck, is_valid_mise_task_name,
+    MiseCheck, is_valid_check_system_build, is_valid_check_system_version, is_valid_mise_task_name,
 };
 pub use qualified_tools::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend,

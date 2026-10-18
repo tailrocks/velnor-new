@@ -89,27 +89,11 @@ pub(super) fn valid_proof_target(
 }
 
 pub(super) fn valid_version(value: &str) -> bool {
-    value.len() <= velnor_actions_contract::MAX_CHECK_SYSTEM_VERSION_BYTES
-        && value.split('.').count() >= 2
-        && value.split('.').all(|part| {
-            !part.is_empty()
-                && part.bytes().all(|b| b.is_ascii_digit())
-                && (part.len() == 1 || !part.starts_with('0'))
-        })
+    velnor_actions_contract::config::is_valid_check_system_version(value)
 }
 
 pub(super) fn valid_build(kind: CheckSystemToolKind, value: &str) -> bool {
-    match kind {
-        CheckSystemToolKind::Xcode => {
-            !value.is_empty()
-                && value.bytes().all(|b| b.is_ascii_alphanumeric())
-                && value.bytes().next().is_some_and(|b| b.is_ascii_digit())
-                && value.bytes().any(|b| b.is_ascii_alphabetic())
-        }
-        CheckSystemToolKind::Swift => value.split_once(" clang-").is_some_and(|(swift, clang)| {
-            swift.strip_prefix("swiftlang-").is_some_and(valid_version) && valid_version(clang)
-        }),
-    }
+    velnor_actions_contract::config::is_valid_check_system_build(kind, value)
 }
 
 pub(super) fn absolute_identity(value: &str) -> bool {

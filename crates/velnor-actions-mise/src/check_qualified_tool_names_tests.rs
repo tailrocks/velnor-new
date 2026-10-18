@@ -79,7 +79,7 @@ fn system_tool(kind: CheckSystemToolKind) -> CheckSystemTool {
         build: if kind == CheckSystemToolKind::Xcode {
             "27A9275"
         } else {
-            "swiftlang-6.2.1.1.1"
+            "swiftlang-6.2.1.1.1 clang-1700.0.13.3"
         }
         .to_owned(),
         sdk_version: (kind == CheckSystemToolKind::Xcode).then(|| "27.0".to_owned()),

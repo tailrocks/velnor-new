@@ -29,29 +29,41 @@ pub enum CheckSystemToolKind {
     Xcode,
 }
 
-fn safe_version(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= super::super::MAX_CHECK_SYSTEM_VERSION_BYTES
+/// Validate a canonical dotted numeric system-tool version shared with runtime probes.
+#[must_use]
+pub fn is_valid_check_system_version(value: &str) -> bool {
+    value.len() <= super::super::MAX_CHECK_SYSTEM_VERSION_BYTES
+        && value.split('.').count() >= 2
         && value.split('.').all(|component| {
-            !component.is_empty() && component.bytes().all(|byte| byte.is_ascii_digit())
+            !component.is_empty()
+                && component.bytes().all(|byte| byte.is_ascii_digit())
+                && (component.len() == 1 || !component.starts_with('0'))
         })
 }
 
-fn safe_build(value: &str) -> bool {
-    !value.is_empty()
-        && value.len() <= 256
-        && !value.contains("  ")
-        && value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_' | b'+' | b' ')
-        })
-        && value
-            .bytes()
-            .next()
-            .is_some_and(|byte| byte.is_ascii_alphanumeric())
-        && value
-            .bytes()
-            .last()
-            .is_some_and(|byte| byte.is_ascii_alphanumeric())
+/// Validate a kind-specific complete build identity shared with runtime probes.
+#[must_use]
+pub fn is_valid_check_system_build(kind: CheckSystemToolKind, value: &str) -> bool {
+    if value.len() > 256 {
+        return false;
+    }
+    match kind {
+        CheckSystemToolKind::Xcode => {
+            !value.is_empty()
+                && value.bytes().all(|byte| byte.is_ascii_alphanumeric())
+                && value
+                    .bytes()
+                    .next()
+                    .is_some_and(|byte| byte.is_ascii_digit())
+                && value.bytes().any(|byte| byte.is_ascii_alphabetic())
+        }
+        CheckSystemToolKind::Swift => value.split_once(" clang-").is_some_and(|(swift, clang)| {
+            swift
+                .strip_prefix("swiftlang-")
+                .is_some_and(is_valid_check_system_version)
+                && is_valid_check_system_version(clang)
+        }),
+    }
 }
 
 impl CheckSystemTool {
@@ -81,7 +93,9 @@ pub(super) fn validate_system_tools(
         return Err(bad("system_tools_must_be_sorted_unique"));
     }
     for tool in tools {
-        if !safe_version(&tool.version) || !safe_build(&tool.build) {
+        if !is_valid_check_system_version(&tool.version)
+            || !is_valid_check_system_build(tool.kind, &tool.build)
+        {
             return Err(bad("invalid_system_tool_pin"));
         }
         match tool.kind {
@@ -91,7 +105,11 @@ pub(super) fn validate_system_tools(
                 return Err(bad("swift_cannot_select_xcode_directory_or_sdk"));
             }
             CheckSystemToolKind::Xcode => {
-                if tool.sdk_version.as_deref().is_none_or(|v| !safe_version(v)) {
+                if tool
+                    .sdk_version
+                    .as_deref()
+                    .is_none_or(|version| !is_valid_check_system_version(version))
+                {
                     return Err(bad("xcode_requires_exact_sdk_version"));
                 }
                 if let Some(directory) = tool.developer_dir.as_deref()
@@ -127,7 +145,7 @@ mod tests {
         CheckSystemTool {
             kind: CheckSystemToolKind::Swift,
             version: "6.2.1".to_owned(),
-            build: "swiftlang-6.2.1.1.1".to_owned(),
+            build: "swiftlang-6.2.1.1.1 clang-1700.0.13.3".to_owned(),
             sdk_version: None,
             developer_dir: None,
         }
@@ -163,6 +181,34 @@ mod tests {
                     .is_err(),
                 "{bad}"
             );
+        }
+    }
+
+    #[test]
+    fn schema_version_and_build_grammar_matches_runtime_identity_parser() {
+        for version in ["27.0", "27.1", "6.4.0.34.1"] {
+            assert!(is_valid_check_system_version(version), "{version}");
+        }
+        for version in ["27", "027.0", "27.00", "27.x", "27.0 "] {
+            assert!(!is_valid_check_system_version(version), "{version}");
+        }
+
+        for (kind, build) in [
+            (
+                CheckSystemToolKind::Swift,
+                "swiftlang-6.4.0.34.1 clang-2100.3.34.1",
+            ),
+            (CheckSystemToolKind::Xcode, "27A9275"),
+        ] {
+            assert!(is_valid_check_system_build(kind, build), "{build}");
+        }
+        for (kind, build) in [
+            (CheckSystemToolKind::Swift, "swiftlang-6.2.1.1.1"),
+            (CheckSystemToolKind::Swift, "swiftlang-6.4 clang-2100.3 bad"),
+            (CheckSystemToolKind::Xcode, "27.1 RC"),
+            (CheckSystemToolKind::Xcode, "27A-9275"),
+        ] {
+            assert!(!is_valid_check_system_build(kind, build), "{build}");
         }
     }
 
@@ -213,6 +259,49 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn xcode_version_sdk_and_build_match_runtime_grammar() {
+        for (field, values) in [
+            ("version", ["27.0", "27.1", "27", "027.0", "27.00"]),
+            ("sdk", ["27.0", "27.1", "27", "027.0", "27.00"]),
+        ] {
+            for value in values {
+                let mut candidate = xcode();
+                if field == "version" {
+                    candidate.version = value.to_owned();
+                } else {
+                    candidate.sdk_version = Some(value.to_owned());
+                }
+                assert_eq!(
+                    validate_system_tools(
+                        &[candidate],
+                        CheckPlatform::MacosArm64,
+                        "config",
+                        "checks[0]"
+                    )
+                    .is_ok(),
+                    is_valid_check_system_version(value),
+                    "Xcode {field} {value}"
+                );
+            }
+        }
+        for build in ["27A9275", "27.0", "27A-9275", "27.1 RC"] {
+            let mut candidate = xcode();
+            candidate.build = build.to_owned();
+            assert_eq!(
+                validate_system_tools(
+                    &[candidate],
+                    CheckPlatform::MacosArm64,
+                    "config",
+                    "checks[0]"
+                )
+                .is_ok(),
+                is_valid_check_system_build(CheckSystemToolKind::Xcode, build),
+                "Xcode build {build}"
+            );
+        }
     }
 
     #[test]
@@ -296,9 +385,12 @@ mod tests {
                 "{build:?}"
             );
         }
-        assert!(!safe_build(&"a".repeat(257)));
+        assert!(!is_valid_check_system_build(
+            CheckSystemToolKind::Swift,
+            &"a".repeat(257)
+        ));
         for version in ["", ".6", "6.", "6..4", "swift-6.4", "6 4", "6;4"] {
-            assert!(!safe_version(version), "{version:?}");
+            assert!(!is_valid_check_system_version(version), "{version:?}");
         }
     }
 }

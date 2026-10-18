@@ -1,5 +1,8 @@
 use velnor_actions_contract::canonical::digest_b3;
-use velnor_actions_contract::config::{CheckPlatform, CheckSystemTool, CheckSystemToolKind};
+use velnor_actions_contract::config::{
+    CheckPlatform, CheckSystemTool, CheckSystemToolKind, is_valid_check_system_build,
+    is_valid_check_system_version,
+};
 use velnor_actions_mise::checks::{
     SystemToolProof, parse_system_tool_version, validate_system_tool_proofs,
     verify_check_system_tools,
@@ -80,6 +83,39 @@ fn malformed_negative_nonapple_nonutf8_and_diagnostic_output_fail_closed() {
         parse_system_tool_version(CheckSystemToolKind::Swift, SWIFT.as_bytes(), b"warning")
             .is_err()
     );
+}
+
+#[test]
+fn runtime_parser_and_shared_schema_agree_on_version_and_build_grammar() {
+    for version in ["27.0", "27.1", "27", "027.0", "27.00"] {
+        let output = format!("Xcode {version}\nBuild version 27A9275\n");
+        assert_eq!(
+            parse_system_tool_version(CheckSystemToolKind::Xcode, output.as_bytes(), b"").is_ok(),
+            is_valid_check_system_version(version),
+            "Xcode version {version}"
+        );
+    }
+    for build in ["27A9275", "27.0", "27A-9275", "27.1 RC"] {
+        let output = format!("Xcode 27.1\nBuild version {build}\n");
+        assert_eq!(
+            parse_system_tool_version(CheckSystemToolKind::Xcode, output.as_bytes(), b"").is_ok(),
+            is_valid_check_system_build(CheckSystemToolKind::Xcode, build),
+            "Xcode build {build}"
+        );
+    }
+    for build in [
+        "swiftlang-6.4.0.34.1 clang-2100.3.34.1",
+        "swiftlang-6.2.1.1.1",
+        "swiftlang-6.4 clang-2100.3 bad",
+    ] {
+        let output =
+            format!("Apple Swift version 6.4 ({build})\nTarget: arm64-apple-macosx27.0.0\n");
+        assert_eq!(
+            parse_system_tool_version(CheckSystemToolKind::Swift, output.as_bytes(), b"").is_ok(),
+            is_valid_check_system_build(CheckSystemToolKind::Swift, build),
+            "Swift build {build}"
+        );
+    }
 }
 
 fn pin() -> CheckSystemTool {

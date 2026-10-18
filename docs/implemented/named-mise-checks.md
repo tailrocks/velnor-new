@@ -48,7 +48,7 @@ system_tools = [
 ]
 timeout_minutes = 30
 [checks.runner]
-label = "macos-15"
+label = "xcode-27"
 platform = "macos_arm64"
 executor = "hosted"
 [checks.evidence]
