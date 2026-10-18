@@ -70,7 +70,7 @@ pub struct VerifiedPullRequest {
     pub merge_commit_sha: Option<String>,
 }
 
-/// Workflow source values that are different from the GitHub API.
+/// Workflow source values that are different from the GitHub API values.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum SourceMismatch {
     /// A required source value is absent or empty.

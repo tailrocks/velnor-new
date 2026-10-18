@@ -3,10 +3,9 @@
 //! Full end-to-end execution is prohibitive inside the suite: the
 //! `integration` stage re-runs this whole workspace suite (recursing
 //! into this very test), and `toolchain` needs `mise` plus network
-//! installs. Instead these tests pin the entrypoint's exact step list
-//! and fail-closed shape, syntax-check the script by executing
-//! `bash -n`, and do a check of the CLI freshness wrapper with a
-//! separate fixture. A stage add, remove, or rename fails
+//! installs. These tests keep the entrypoint's exact step list and closed failure behavior.
+//! They use `bash -n` to examine script syntax.
+//! They do a check of the CLI freshness wrapper with a separate fixture. A stage add, remove, or rename fails
 //! the inventory test until the expectation moves with it.
 
 use std::error::Error;

@@ -205,9 +205,9 @@ before the first empty-volume mount; DinD starts first and Docker initializes
 the volume from its image path. The entrypoint stages raw JIT in a
 container-local mode-`0600` `/tmp` file and removes it before starting the
 listener. It does not persist raw JIT in the named work volume. The official
-runner treats `jitconfig` as a secret input and removes the environment key
-from its managed environment while parsing it; it may then make its
-own one-job configuration and credential files under `/home/runner`. Those
+runner treats `jitconfig` as a secret input.
+It removes the environment key from its managed environment while parsing it.
+It may then make its own one-job configuration and credential files under `/home/runner`. Those
 files are within that runner container's JIT credential lifetime and should
 be removed when the container is destroyed. The JIT is not confidential from
 the job it starts: same-UID job processes may examine the listener's initial
