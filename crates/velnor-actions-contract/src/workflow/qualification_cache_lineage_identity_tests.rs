@@ -13,7 +13,7 @@ use crate::{
 };
 
 #[test]
-fn qualification_cache_keys_use_the_v2_namespace() {
+fn qualification_cache_keys_use_the_current_format_namespace() {
     let key = key_for_slot(
         "identity-test",
         QualificationCacheLayer::CargoSources,
@@ -23,8 +23,12 @@ fn qualification_cache_keys_use_the_v2_namespace() {
     )
     .expect("cache key");
 
-    assert!(key.starts_with("velnor-qcache-v2-"));
-    assert!(!key.starts_with("velnor-qcache-v1-"));
+    let prefix = format!(
+        "velnor-qcache-v{}-",
+        crate::workflow::QUALIFICATION_CACHE_FORMAT_VERSION
+    );
+    assert!(key.starts_with(&prefix));
+    assert!(!key.starts_with("velnor-qcache-v2-"));
 }
 
 #[test]

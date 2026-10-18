@@ -1,4 +1,8 @@
 //! Stack-neutral workflow IR, matrix, plan, and report types.
+
+/// Version marker for the qualification cache key and payload format.
+pub const QUALIFICATION_CACHE_FORMAT_VERSION: u8 = 3;
+
 pub mod artifacts;
 pub mod baseline;
 pub mod cache_ids;
