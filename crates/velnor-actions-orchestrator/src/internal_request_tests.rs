@@ -16,7 +16,7 @@ fn publishes_qualification_directives_beside_the_validated_plan() {
     let response = cold_qualification_response();
     let outputs = plan_outputs_with_admission(&response, PlanOutputMode::Static, None)
         .expect("cold plan outputs");
-    assert!(!outputs.qualification_cache_directives.is_empty());
+    assert!(outputs.qualification_cache_directives.starts_with('{'));
 
     let artifacts = tempfile::tempdir().expect("artifact root");
     let run_dir =
