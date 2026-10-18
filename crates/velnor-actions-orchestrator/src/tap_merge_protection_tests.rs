@@ -1,3 +1,6 @@
+#[path = "tap_merge_protection_resolution_tests.rs"]
+mod resolution;
+
 use super::rulesets::ruleset_detail_route;
 use super::*;
 
@@ -111,19 +114,14 @@ fn branch_api_requires_app_bound_checks_and_dco() {
         "required_status_checks": {"strict": true, "checks": [{"context": "CI", "app_id": null}]}
     });
     assert!(parse_classic_protection(&missing_app, 17, "tap-bot[bot]").is_err());
-    assert!(
-        parse_classic_protection(
-            &serde_json::json!({
-                "enforce_admins": {"enabled": false},
-                "required_pull_request_reviews": {"bypass_pull_request_allowances": {
-                    "users": [], "teams": [], "apps": []
-                }}
-            }),
-            17,
-            "tap-bot[bot]"
-        )
-        .is_err()
-    );
+    let admins_not_enforced = parse_classic_protection(
+        &serde_json::json!({"enforce_admins":{"enabled":false}}),
+        17,
+        "tap-bot[bot]",
+    )
+    .expect("well-formed admin setting");
+    assert!(!admins_not_enforced.admins_enforced);
+    assert!(parse_classic_protection(&serde_json::json!({}), 17, "tap-bot[bot]").is_err());
     let bypasses_writer = serde_json::json!({
         "enforce_admins": {"enabled": true},
         "required_pull_request_reviews": {"bypass_pull_request_allowances": {
@@ -133,6 +131,21 @@ fn branch_api_requires_app_bound_checks_and_dco() {
     let classic =
         parse_classic_protection(&bypasses_writer, 17, "tap-bot[bot]").expect("read bypasses");
     assert!(classic.writer_bypass);
+
+    let mut no_review = serde_json::json!({"enforce_admins":{"enabled":true}});
+    assert!(
+        !parse_classic_protection(&no_review, 17, "tap-bot[bot]")
+            .expect("absent review settings mean no classic bypass")
+            .writer_bypass
+    );
+    no_review["required_pull_request_reviews"] = Value::Null;
+    assert!(
+        !parse_classic_protection(&no_review, 17, "tap-bot[bot]")
+            .expect("null review settings mean no classic bypass")
+            .writer_bypass
+    );
+    no_review["required_pull_request_reviews"] = serde_json::json!({});
+    assert!(parse_classic_protection(&no_review, 17, "tap-bot[bot]").is_err());
 }
 
 #[test]

@@ -63,7 +63,7 @@ fn effective_rules_reject_missing_pull_request_checks_force_push_or_deletion_gua
     zero_approvals[0]["parameters"]["required_approving_review_count"] = json!(0);
     assert!(validate_effective_main_rules(&zero_approvals).is_ok());
     let mut missing_approval_count = valid_rules();
-    missing_approval_count[0]["parameters"] = json!({"required_review_thread_resolution":true});
+    missing_approval_count[0]["parameters"] = json!({});
     assert!(validate_effective_main_rules(&missing_approval_count).is_err());
     let mut unresolved_threads = valid_rules();
     unresolved_threads[0]["parameters"]["required_review_thread_resolution"] = json!(false);
@@ -72,7 +72,7 @@ fn effective_rules_reject_missing_pull_request_checks_force_push_or_deletion_gua
 }
 
 #[test]
-fn classic_branch_protection_is_validated_and_can_complete_partial_rulesets() {
+fn classic_branch_protection_is_validated() {
     let classic = json!({
         "required_pull_request_reviews":{"required_approving_review_count":0},
         "required_conversation_resolution":{"enabled":true},
@@ -81,20 +81,109 @@ fn classic_branch_protection_is_validated_and_can_complete_partial_rulesets() {
         "allow_deletions":{"enabled":false}
     });
     assert!(super::validate_main_protection_sources(&json!([]), Some(&classic)).is_ok());
+}
 
+#[test]
+fn classic_and_ruleset_controls_combine_across_sources() {
     let partial_ruleset = json!([
+        {"type":"pull_request","parameters":{"required_approving_review_count":1,"required_review_thread_resolution":false}},
         {"type":"non_fast_forward"},
         {"type":"deletion"}
     ]);
     let partial_classic = json!({
-        "required_pull_request_reviews":{"required_approving_review_count":0},
+        "required_pull_request_reviews":null,
         "required_conversation_resolution":{"enabled":true},
-        "required_status_checks":{"contexts":["CI"]}
+        "required_status_checks":{"contexts":["CI"]},
+        "allow_force_pushes":null,
+        "allow_deletions":null
     });
     assert!(
         super::validate_main_protection_sources(&partial_ruleset, Some(&partial_classic)).is_ok()
     );
+}
 
+#[test]
+fn classic_and_ruleset_can_supply_thread_resolution_from_either_source() {
+    let split_thread_rule = json!([
+        {"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"CI"}]}}
+    ]);
+    let classic_with_thread = json!({
+        "required_pull_request_reviews":{"required_approving_review_count":1},
+        "required_conversation_resolution":{"enabled":true},
+        "required_status_checks":null,
+        "allow_force_pushes":{"enabled":false},
+        "allow_deletions":{"enabled":false}
+    });
+    let ruleset_with_pull_request = json!([
+        {"type":"pull_request","parameters":{"required_approving_review_count":1,"required_review_thread_resolution":true}},
+        {"type":"non_fast_forward"},
+        {"type":"deletion"}
+    ]);
+    assert!(
+        super::validate_main_protection_sources(
+            &ruleset_with_pull_request,
+            Some(&json!({
+                "required_pull_request_reviews":null,
+                "required_conversation_resolution":null,
+                "required_status_checks":{"contexts":["CI"]},
+                "allow_force_pushes":null,
+                "allow_deletions":null
+            }))
+        )
+        .is_ok()
+    );
+    let ruleset_missing_thread = json!([
+        {"type":"pull_request","parameters":{"required_approving_review_count":1,"required_review_thread_resolution":false}},
+        {"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"CI"}]}},
+        {"type":"non_fast_forward"},
+        {"type":"deletion"}
+    ]);
+    assert!(
+        super::validate_main_protection_sources(
+            &ruleset_missing_thread,
+            Some(&json!({"required_conversation_resolution":{"enabled":true}}))
+        )
+        .is_ok()
+    );
+    assert!(
+        super::validate_main_protection_sources(&split_thread_rule, Some(&classic_with_thread))
+            .is_ok()
+    );
+}
+
+#[test]
+fn malformed_present_protection_fields_fail_even_when_other_source_is_complete() {
+    let classic = json!({
+        "required_pull_request_reviews":{"required_approving_review_count":0},
+        "required_conversation_resolution":{"enabled":true},
+        "required_status_checks":{"contexts":["CI"]},
+        "allow_force_pushes":{"enabled":false},
+        "allow_deletions":{"enabled":false}
+    });
+    let complete_rules = valid_rules();
+    let malformed_classic = json!({"allow_deletions":{"enabled":"false"}});
+    assert!(
+        super::validate_main_protection_sources(&complete_rules, Some(&malformed_classic)).is_err()
+    );
+    let malformed_status = json!({"required_status_checks":{"contexts":[null]}});
+    assert!(
+        super::validate_main_protection_sources(&complete_rules, Some(&malformed_status)).is_err()
+    );
+    let malformed_rules = json!([
+        {"type":"pull_request","parameters":{"required_approving_review_count":1}},
+        {"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"CI"}]}},
+        {"type":"non_fast_forward"},
+        {"type":"deletion"}
+    ]);
+    assert!(super::validate_main_protection_sources(&malformed_rules, Some(&classic)).is_err());
+    assert!(
+        super::validate_main_protection_sources(
+            &json!([]),
+            Some(&json!({"required_pull_request_reviews":{}}))
+        )
+        .is_err()
+    );
+    assert!(super::validate_main_protection_sources(&json!([]), None).is_err());
     let allows_force_push = json!({
         "required_pull_request_reviews":{"required_approving_review_count":0},
         "required_conversation_resolution":{"enabled":true},
@@ -109,22 +198,49 @@ fn classic_branch_protection_is_validated_and_can_complete_partial_rulesets() {
 fn stable_environment_preserves_human_reviewer_and_protected_branch_requirements() {
     let stable = json!({
         "name":"consumer-binary-release",
-        "protection_rules":[{"type":"required_reviewers","reviewers":[{"type":"User","reviewer":{"login":"release-reviewer"}}],"prevent_self_review":true}],
+        "protection_rules":[{"type":"required_reviewers","reviewers":[{"type":"User","reviewer":{"id":17,"login":"release-reviewer"}}],"prevent_self_review":true}],
         "deployment_branch_policy":{"protected_branches":true,"custom_branch_policies":false}
     });
     assert!(super::validate_stable_environment_settings(&stable, "main").is_ok());
+
+    assert!(super::validate_stable_environment_settings(&stable, "release/1.2").is_ok());
+    let mut additional_rules = stable.clone();
+    additional_rules["protection_rules"] = json!([
+        {"type":"required_reviewers","reviewers":[{"type":"User","reviewer":{"id":17,"login":"release-reviewer"}}],"prevent_self_review":true},
+        {"type":"wait_timer","wait_timer":15},
+        {"type":"custom","app_id":42}
+    ]);
+    assert!(super::validate_stable_environment_settings(&additional_rules, "release/1.2").is_ok());
 
     let mut missing_reviewers = stable.clone();
     missing_reviewers["protection_rules"][0]["reviewers"] = json!([]);
     assert!(super::validate_stable_environment_settings(&missing_reviewers, "main").is_err());
 
+    for invalid_entry in [
+        json!(null),
+        json!({}),
+        json!({"type":"Bot","reviewer":{"id":17}}),
+        json!({"type":"User","reviewer":{}}),
+        json!({"type":"Team","reviewer":{"id":0}}),
+    ] {
+        let mut invalid = stable.clone();
+        invalid["protection_rules"][0]["reviewers"] = json!([invalid_entry]);
+        assert!(super::validate_stable_environment_settings(&invalid, "main").is_err());
+    }
+
+    let mut team_reviewer = stable.clone();
+    team_reviewer["protection_rules"][0]["reviewers"] =
+        json!([{"type":"Team","reviewer":{"id":29,"name":"release-team"}}]);
+    assert!(super::validate_stable_environment_settings(&team_reviewer, "main").is_ok());
+
     let mut self_review = stable.clone();
     self_review["protection_rules"][0]["prevent_self_review"] = json!(false);
     assert!(super::validate_stable_environment_settings(&self_review, "main").is_err());
 
-    let mut unprotected = stable;
+    let mut unprotected = stable.clone();
     unprotected["deployment_branch_policy"]["protected_branches"] = json!(false);
     assert!(super::validate_stable_environment_settings(&unprotected, "main").is_err());
+    assert!(super::validate_stable_environment_settings(&stable, "bad..branch").is_err());
 }
 
 fn env_settings(name: &str) -> serde_json::Value {
@@ -177,4 +293,5 @@ fn environment_branch_policy_must_be_the_only_exact_main_pattern() {
     ] {
         assert!(validate_environment_branch_policy(&bad, "main").is_err());
     }
+    assert!(validate_environment_branch_policy(&only_main, "release/1.2").is_err());
 }

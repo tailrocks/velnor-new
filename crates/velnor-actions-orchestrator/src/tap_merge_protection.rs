@@ -31,6 +31,7 @@ struct ClassicProtection {
     checks: Vec<(String, u64)>,
     strict: bool,
     writer_bypass: bool,
+    admins_enforced: bool,
 }
 
 #[derive(Debug, Default)]
@@ -38,6 +39,7 @@ struct RulesetProtection {
     checks: Vec<(String, u64)>,
     writer_bypass: bool,
     strict: bool,
+    pull_request: bool,
 }
 
 pub(super) fn resolve_protection(
@@ -50,6 +52,7 @@ pub(super) fn resolve_protection(
     let branch_protection: Option<Value> = api.get_optional(&format!(
         "repos/{repository}/branches/{encoded_branch}/protection"
     ))?;
+    let classic_present = branch_protection.is_some();
     let legacy = branch_protection
         .as_ref()
         .map(|value| {
@@ -57,20 +60,39 @@ pub(super) fn resolve_protection(
         })
         .transpose()?
         .unwrap_or_default();
-    let mut checks = legacy.checks;
+    let mut checks = legacy.checks.clone();
     let mut writer_bypass = legacy.writer_bypass;
+    let mut ruleset_checks = Vec::new();
     let effective_rules = effective_branch_rules(api, repository, &encoded_branch)?;
     let rulesets = load_effective_rulesets(api, &effective_rules, repository)?;
     let mut ruleset_strict = false;
+    let mut ruleset_pull_request = false;
     for ruleset in &rulesets {
         let parsed = parse_ruleset(
             ruleset,
             authority.writer_app_id,
             authority.writer_bot_user_id,
         )?;
+        ruleset_checks.extend(parsed.checks.iter().cloned());
+        ruleset_pull_request |= parsed.pull_request;
         checks.extend(parsed.checks);
         writer_bypass |= parsed.writer_bypass;
         ruleset_strict |= parsed.strict;
+    }
+    let admin_rule_coverage = ruleset_strict
+        && ruleset_pull_request
+        && !writer_bypass
+        && ruleset_checks.iter().any(|(name, _)| name == "DCO")
+        && ruleset_checks.contains(&(
+            authority.completion_check_name.to_owned(),
+            authority.completion_app_id,
+        ))
+        && legacy
+            .checks
+            .iter()
+            .all(|check| ruleset_checks.contains(check));
+    if classic_present && !legacy.admins_enforced && !admin_rule_coverage {
+        return Err(internal("tap_merge_admin_protection_unproven"));
     }
     checks.sort();
     checks.dedup();
@@ -160,56 +182,22 @@ fn parse_classic_protection(
     writer_app_id: u64,
     writer_bot_login: &str,
 ) -> Result<ClassicProtection, OrchestratorError> {
-    if value
+    let admins_enforced = value
         .pointer("/enforce_admins/enabled")
         .and_then(Value::as_bool)
-        != Some(true)
-    {
-        return Err(internal("tap_merge_admin_protection_disabled"));
-    }
-    let review = value
-        .get("required_pull_request_reviews")
-        .filter(|review| !review.is_null())
-        .ok_or_else(|| internal("tap_merge_classic_review_protection_missing"))?;
-    let allowances = review
-        .get("bypass_pull_request_allowances")
-        .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
-    let mut writer_bypass = false;
-    let apps = allowances["apps"]
-        .as_array()
-        .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
-    for app in apps {
-        let app_id = app["id"]
-            .as_u64()
-            .filter(|id| *id > 0)
-            .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
-        writer_bypass |= app_id == writer_app_id;
-    }
-    let users = allowances["users"]
-        .as_array()
-        .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
-    for user in users {
-        let login = user["login"]
-            .as_str()
-            .filter(|login| !login.is_empty())
-            .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
-        writer_bypass |= login.eq_ignore_ascii_case(writer_bot_login);
-    }
-    let teams = allowances["teams"]
-        .as_array()
-        .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
-    // Team membership is not exposed to this credential boundary. Any configured
-    // team allowance is therefore ambiguous with respect to the writer bot.
-    writer_bypass |= !teams.is_empty();
+        .ok_or_else(|| internal("tap_merge_admin_protection_unreadable"))?;
+    let writer_bypass = classic_writer_bypass(value, writer_app_id, writer_bot_login)?;
     let Some(status_checks) = value.get("required_status_checks") else {
         return Ok(ClassicProtection {
             writer_bypass,
+            admins_enforced,
             ..ClassicProtection::default()
         });
     };
     if status_checks.is_null() {
         return Ok(ClassicProtection {
             writer_bypass,
+            admins_enforced,
             ..ClassicProtection::default()
         });
     }
@@ -232,11 +220,55 @@ fn parse_classic_protection(
             Ok::<_, OrchestratorError>((name.to_owned(), app))
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let strict = strict && !checks.is_empty();
     Ok(ClassicProtection {
         checks,
         strict,
         writer_bypass,
+        admins_enforced,
     })
+}
+
+fn classic_writer_bypass(
+    value: &Value,
+    writer_app_id: u64,
+    writer_bot_login: &str,
+) -> Result<bool, OrchestratorError> {
+    let Some(review) = value
+        .get("required_pull_request_reviews")
+        .filter(|review| !review.is_null())
+    else {
+        return Ok(false);
+    };
+    let allowances = review
+        .get("bypass_pull_request_allowances")
+        .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
+    let apps = allowances["apps"]
+        .as_array()
+        .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
+    let users = allowances["users"]
+        .as_array()
+        .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
+    let teams = allowances["teams"]
+        .as_array()
+        .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
+    let app_bypass = apps.iter().try_fold(false, |found, app| {
+        let id = app["id"]
+            .as_u64()
+            .filter(|id| *id > 0)
+            .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
+        Ok::<_, OrchestratorError>(found || id == writer_app_id)
+    })?;
+    let user_bypass = users.iter().try_fold(false, |found, user| {
+        let login = user["login"]
+            .as_str()
+            .filter(|login| !login.is_empty())
+            .ok_or_else(|| internal("tap_merge_classic_bypass_unreadable"))?;
+        Ok::<_, OrchestratorError>(found || login.eq_ignore_ascii_case(writer_bot_login))
+    })?;
+    // Team membership is not visible at this credential boundary, so any
+    // configured team allowance is ambiguous with respect to the writer bot.
+    Ok(app_bypass || user_bypass || !teams.is_empty())
 }
 
 fn encode_segment(value: &str) -> String {

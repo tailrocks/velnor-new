@@ -320,6 +320,14 @@ App bypass. Otherwise tap main could advance between the final read and the merg
 request, allowing an older formula to merge after a newer preview. Native merge
 admission fails if this server protection is absent or bypassable. Re-reading the
 base immediately before merge is necessary but does not replace that protection.
+If classic protection exempts administrators, native admission requires active
+effective rulesets to supply PR protection, strict checks, DCO and completion
+bindings, and every required classic check binding, with no writer bypass.
+Strictness evidence requires a nonempty validated check list from that same
+source; an empty strict rule cannot qualify checks supplied only by a loose
+source. Absent classic protection does not invent an administrator exemption. This keeps
+complementary protection sources usable without treating an exempt classic check
+as server-enforced authority.
 Required-check contexts must also bind an explicit numeric integration/App ID in
 repository protection. An unbound context cannot establish trusted CI merely by
 matching a display name, so native merge admission rejects it. Duplicate matching

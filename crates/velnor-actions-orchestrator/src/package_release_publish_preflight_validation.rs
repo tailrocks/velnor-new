@@ -4,86 +4,29 @@ use serde_json::Value;
 use std::collections::BTreeSet;
 
 use super::STABLE_ENVIRONMENT;
+use velnor_actions_contract::is_valid_branch_name;
 
+#[cfg(test)]
 pub(super) fn validate_effective_main_rules(value: &Value) -> Result<(), ()> {
-    let rules = value.as_array().ok_or(())?;
-    let mut pull_request = false;
-    let mut status_checks = false;
-    let mut no_force_push = false;
-    let mut no_deletion = false;
-
-    for rule in rules {
-        let Some(kind) = rule.get("type").and_then(Value::as_str) else {
-            return Err(());
-        };
-        match kind {
-            "pull_request" => {
-                let params = rule.get("parameters").ok_or(())?;
-                let approvals = params
-                    .get("required_approving_review_count")
-                    .and_then(Value::as_u64)
-                    .ok_or(())?;
-                let thread_resolution = params
-                    .get("required_review_thread_resolution")
-                    .and_then(Value::as_bool)
-                    .ok_or(())?;
-                if approvals > 100 || !thread_resolution {
-                    return Err(());
-                }
-                pull_request = true;
-            }
-            "required_status_checks" => {
-                let checks = rule
-                    .get("parameters")
-                    .and_then(|params| params.get("required_status_checks"))
-                    .and_then(Value::as_array)
-                    .ok_or(())?;
-                if checks.is_empty()
-                    || checks.iter().any(|check| {
-                        check
-                            .get("context")
-                            .and_then(Value::as_str)
-                            .is_none_or(str::is_empty)
-                    })
-                {
-                    return Err(());
-                }
-                status_checks = true;
-            }
-            "non_fast_forward" => no_force_push = true,
-            "deletion" => no_deletion = true,
-            _ => {}
-        }
-    }
-
-    if pull_request && status_checks && no_force_push && no_deletion {
-        Ok(())
-    } else {
-        Err(())
-    }
+    MainProtectionFacts::from_rules(value)?.complete()
 }
 
 pub(super) fn validate_main_protection_sources(
     rules: &Value,
     classic: Option<&Value>,
 ) -> Result<(), ()> {
-    let rules_result = validate_effective_main_rules(rules);
-    if rules_result.is_ok() {
-        return Ok(());
-    }
-    let classic = classic.ok_or(())?;
-    let facts = MainProtectionFacts::from_classic(classic)?;
     let rules_facts = MainProtectionFacts::from_rules(rules)?;
-    if facts.merge(rules_facts).is_complete() {
-        Ok(())
-    } else {
-        Err(())
-    }
+    let classic_facts = classic
+        .map(MainProtectionFacts::from_classic)
+        .transpose()?
+        .unwrap_or_default();
+    rules_facts.merge(classic_facts).complete()
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum ProtectionControl {
     PullRequest,
+    ThreadResolution,
     StatusChecks,
     NoForcePush,
     NoDeletion,
@@ -103,38 +46,11 @@ impl MainProtectionFacts {
                 return Err(());
             };
             match kind {
-                "pull_request" => {
-                    let params = rule.get("parameters").ok_or(())?;
-                    let approvals = params
-                        .get("required_approving_review_count")
-                        .and_then(Value::as_u64)
-                        .ok_or(())?;
-                    let threads = params
-                        .get("required_review_thread_resolution")
-                        .and_then(Value::as_bool)
-                        .ok_or(())?;
-                    if approvals > 100 || !threads {
-                        return Err(());
-                    }
-                    facts.controls.insert(ProtectionControl::PullRequest);
-                }
+                "pull_request" => facts.controls.extend(ruleset_pull_request_controls(rule)?),
                 "required_status_checks" => {
-                    let checks = rule
-                        .get("parameters")
-                        .and_then(|params| params.get("required_status_checks"))
-                        .and_then(Value::as_array)
-                        .ok_or(())?;
-                    if checks.is_empty()
-                        || checks.iter().any(|check| {
-                            check
-                                .get("context")
-                                .and_then(Value::as_str)
-                                .is_none_or(str::is_empty)
-                        })
-                    {
-                        return Err(());
+                    if ruleset_status_checks_present(rule)? {
+                        facts.controls.insert(ProtectionControl::StatusChecks);
                     }
-                    facts.controls.insert(ProtectionControl::StatusChecks);
                 }
                 "non_fast_forward" => {
                     facts.controls.insert(ProtectionControl::NoForcePush);
@@ -149,38 +65,23 @@ impl MainProtectionFacts {
     }
 
     fn from_classic(classic: &Value) -> Result<Self, ()> {
-        let approvals = classic
-            .get("required_pull_request_reviews")
-            .and_then(|reviews| reviews.get("required_approving_review_count"))
-            .and_then(Value::as_u64)
-            .ok_or(())?;
-        let threads = classic
-            .get("required_conversation_resolution")
-            .and_then(|resolution| resolution.get("enabled"))
-            .and_then(Value::as_bool)
-            .ok_or(())?;
-        let status_checks = classic_status_checks_present(classic)?;
-        let no_force_push = classic
-            .get("allow_force_pushes")
-            .and_then(|setting| setting.get("enabled"))
-            .and_then(Value::as_bool)
-            == Some(false);
-        let no_deletion = classic
-            .get("allow_deletions")
-            .and_then(|setting| setting.get("enabled"))
-            .and_then(Value::as_bool)
-            == Some(false);
-        Ok(Self {
-            controls: [
-                (approvals <= 100 && threads).then_some(ProtectionControl::PullRequest),
-                status_checks.then_some(ProtectionControl::StatusChecks),
-                no_force_push.then_some(ProtectionControl::NoForcePush),
-                no_deletion.then_some(ProtectionControl::NoDeletion),
-            ]
-            .into_iter()
-            .flatten()
-            .collect(),
-        })
+        let mut facts = Self::default();
+        if classic_approvals(classic)?.is_some() {
+            facts.controls.insert(ProtectionControl::PullRequest);
+        }
+        if classic_thread_resolution(classic)? {
+            facts.controls.insert(ProtectionControl::ThreadResolution);
+        }
+        if classic_status_checks_present(classic)? {
+            facts.controls.insert(ProtectionControl::StatusChecks);
+        }
+        if classic_prohibits(classic, "allow_force_pushes")? {
+            facts.controls.insert(ProtectionControl::NoForcePush);
+        }
+        if classic_prohibits(classic, "allow_deletions")? {
+            facts.controls.insert(ProtectionControl::NoDeletion);
+        }
+        Ok(facts)
     }
 
     fn merge(mut self, other: Self) -> Self {
@@ -189,26 +90,127 @@ impl MainProtectionFacts {
     }
 
     fn is_complete(&self) -> bool {
-        self.controls.len() == 4
+        self.controls.len() == 5
+    }
+
+    fn complete(&self) -> Result<(), ()> {
+        if self.is_complete() { Ok(()) } else { Err(()) }
     }
 }
 
+fn ruleset_pull_request_controls(rule: &Value) -> Result<Vec<ProtectionControl>, ()> {
+    let params = rule
+        .get("parameters")
+        .and_then(Value::as_object)
+        .ok_or(())?;
+    let approvals = params
+        .get("required_approving_review_count")
+        .and_then(Value::as_u64)
+        .ok_or(())?;
+    let mut controls = Vec::new();
+    if approvals <= 100 {
+        controls.push(ProtectionControl::PullRequest);
+    } else {
+        return Err(());
+    }
+    if params
+        .get("required_review_thread_resolution")
+        .and_then(Value::as_bool)
+        .ok_or(())?
+    {
+        controls.push(ProtectionControl::ThreadResolution);
+    }
+    Ok(controls)
+}
+
+fn ruleset_status_checks_present(rule: &Value) -> Result<bool, ()> {
+    let params = rule
+        .get("parameters")
+        .and_then(Value::as_object)
+        .ok_or(())?;
+    let checks = params
+        .get("required_status_checks")
+        .and_then(Value::as_array)
+        .ok_or(())?;
+    if checks.iter().any(|check| {
+        check
+            .get("context")
+            .and_then(Value::as_str)
+            .is_none_or(str::is_empty)
+    }) {
+        return Err(());
+    }
+    Ok(!checks.is_empty())
+}
+
+fn classic_approvals(classic: &Value) -> Result<Option<u64>, ()> {
+    classic.as_object().ok_or(())?;
+    let Some(value) = classic.get("required_pull_request_reviews") else {
+        return Ok(None);
+    };
+    if value.is_null() {
+        return Ok(None);
+    }
+    let reviews = value.as_object().ok_or(())?;
+    let count = Some(
+        reviews
+            .get("required_approving_review_count")
+            .and_then(Value::as_u64)
+            .ok_or(())?,
+    );
+    if count.is_some_and(|value| value > 100) {
+        return Err(());
+    }
+    Ok(count)
+}
+
+fn classic_thread_resolution(classic: &Value) -> Result<bool, ()> {
+    classic.as_object().ok_or(())?;
+    let Some(value) = classic.get("required_conversation_resolution") else {
+        return Ok(false);
+    };
+    if value.is_null() {
+        return Ok(false);
+    }
+    let enabled = value.get("enabled").ok_or(())?.as_bool().ok_or(())?;
+    Ok(enabled)
+}
+
+fn classic_prohibits(classic: &Value, key: &str) -> Result<bool, ()> {
+    classic.as_object().ok_or(())?;
+    let Some(value) = classic.get(key) else {
+        return Ok(false);
+    };
+    if value.is_null() {
+        return Ok(false);
+    }
+    let enabled = value.get("enabled").ok_or(())?.as_bool().ok_or(())?;
+    Ok(!enabled)
+}
+
 fn classic_status_checks_present(classic: &Value) -> Result<bool, ()> {
+    classic.as_object().ok_or(())?;
     let Some(checks) = classic.get("required_status_checks") else {
         return Ok(false);
     };
+    if checks.is_null() {
+        return Ok(false);
+    }
     let contexts = checks.get("contexts").and_then(Value::as_array).ok_or(())?;
-    Ok(!contexts.is_empty()
-        && contexts
-            .iter()
-            .all(|context| context.as_str().is_some_and(|name| !name.is_empty())))
+    if contexts
+        .iter()
+        .any(|context| context.as_str().is_none_or(str::is_empty))
+    {
+        return Err(());
+    }
+    Ok(!contexts.is_empty())
 }
 
 pub(super) fn validate_stable_environment_settings(
     settings: &Value,
     branch: &str,
 ) -> Result<(), ()> {
-    if branch != "main"
+    if !is_valid_branch_name(branch)
         || settings.get("name").and_then(Value::as_str) != Some(STABLE_ENVIRONMENT)
         || settings
             .get("deployment_branch_policy")
@@ -227,20 +229,37 @@ pub(super) fn validate_stable_environment_settings(
         .get("protection_rules")
         .and_then(Value::as_array)
         .ok_or(())?;
-    if reviewers.len() != 1 {
-        return Err(());
+    let mut required_human_review = false;
+    for rule in reviewers {
+        let kind = rule.get("type").and_then(Value::as_str).ok_or(())?;
+        if kind == "required_reviewers" {
+            let entries = rule.get("reviewers").and_then(Value::as_array).ok_or(())?;
+            if rule.get("prevent_self_review").and_then(Value::as_bool) != Some(true)
+                || entries.is_empty()
+                || entries
+                    .iter()
+                    .any(|entry| !valid_environment_reviewer(entry))
+            {
+                return Err(());
+            }
+            required_human_review = true;
+        }
     }
-    let rule = &reviewers[0];
-    if rule.get("type").and_then(Value::as_str) != Some("required_reviewers")
-        || rule.get("prevent_self_review").and_then(Value::as_bool) != Some(true)
-        || rule
-            .get("reviewers")
-            .and_then(Value::as_array)
-            .is_none_or(Vec::is_empty)
-    {
+    if !required_human_review {
         return Err(());
     }
     Ok(())
+}
+
+fn valid_environment_reviewer(value: &Value) -> bool {
+    matches!(
+        value.get("type").and_then(Value::as_str),
+        Some("User" | "Team")
+    ) && value
+        .get("reviewer")
+        .and_then(|reviewer| reviewer.get("id"))
+        .and_then(Value::as_u64)
+        .is_some_and(|id| id > 0)
 }
 
 pub(super) fn validate_environment_settings(

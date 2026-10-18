@@ -1,9 +1,5 @@
-use super::{
-    ASSETS, LINUX, MACOS_ARM64, MACOS_X86_64, ProductAsset, VERSION, build_steps,
-    qualification_script, verify_provenance_in_directory,
-};
+use super::{ASSETS, LINUX, MACOS_ARM64, MACOS_X86_64, ProductAsset, VERSION, build_steps};
 
-use crate::schema2::git_fixture;
 use crate::yaml::Yaml;
 
 use std::error::Error;
@@ -223,56 +219,5 @@ fn write_executable(path: &Path, contents: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-#[test]
-fn wrong_checksum_filename_stops_before_candidate_execution() -> Result<(), Box<dyn Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()?;
-    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let directory_name = format!("target/release-sidecar-test-{}-{nonce}", std::process::id());
-    let directory = root.join(&directory_name);
-    fs::create_dir_all(&directory)?;
-    let scratch = Scratch(directory.clone());
-    let executed = scratch.0.join("candidate-executed");
-    let candidate = directory.join(LINUX.binary);
-    fs::write(
-        &candidate,
-        format!(
-            "#!/bin/sh\nprintf '%s\\n' executed >> \"$CANDIDATE_EXECUTED\"\nprintf '%s\\n' 'velnor-actions {VERSION}'\n"
-        ),
-    )?;
-    let mut permissions = fs::metadata(&candidate)?.permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(&candidate, permissions)?;
-    fs::write(
-        directory.join(LINUX.sidecar),
-        format!("{}  unrelated-binary\n", "a".repeat(64)),
-    )?;
-    let sha = git_fixture::command(&root)?
-        .args(["rev-parse", "HEAD"])
-        .output()?;
-    if !sha.status.success() {
-        return Err("cannot read candidate source SHA".into());
-    }
-    let source_sha = String::from_utf8(sha.stdout)?.trim().to_owned();
-    let command = format!(
-        "{}\n{}",
-        verify_provenance_in_directory(LINUX, &directory_name, "1.98.1", "1.21.1"),
-        qualification_script(LINUX.binary, &directory_name)
-    );
-    let status = Command::new("bash")
-        .arg("-c")
-        .arg(command)
-        .current_dir(&root)
-        .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")
-        .env("GITHUB_SHA", source_sha)
-        .env("GITHUB_WORKSPACE", &root)
-        .env("CANDIDATE_EXECUTED", &executed)
-        .status()?;
-    assert!(!status.success(), "accepted a sidecar for another filename");
-    assert!(
-        !executed.exists(),
-        "candidate ran before its sidecar passed validation"
-    );
-    Ok(())
-}
+#[path = "schema2_generator_release_assets_sidecar_tests.rs"]
+mod sidecar_tests;

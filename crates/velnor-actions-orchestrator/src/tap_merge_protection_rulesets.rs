@@ -145,40 +145,66 @@ pub(super) fn parse_ruleset(
     }
     let mut checks = Vec::new();
     let mut strict_checks = false;
+    let mut pull_request = false;
     let rules = ruleset["rules"]
         .as_array()
         .ok_or_else(|| internal("tap_merge_ruleset_rules_unreadable"))?;
     for rule in rules {
-        if rule["type"].as_str() != Some("required_status_checks") {
-            continue;
-        }
-        if rule
-            .pointer("/parameters/strict_required_status_checks_policy")
-            .and_then(Value::as_bool)
-            != Some(true)
-        {
-            return Err(internal("tap_merge_ruleset_not_strict"));
-        }
-        strict_checks = true;
-        let contexts = rule
-            .pointer("/parameters/required_status_checks")
-            .and_then(Value::as_array)
-            .ok_or_else(|| internal("tap_merge_ruleset_checks_unreadable"))?;
-        for check in contexts {
-            let name = check["context"]
-                .as_str()
-                .filter(|name| !name.is_empty())
-                .ok_or_else(|| internal("tap_merge_ruleset_context_invalid"))?;
-            let app_id = check["integration_id"]
-                .as_u64()
-                .filter(|id| *id > 0)
-                .ok_or_else(|| internal("tap_merge_ruleset_app_unbound"))?;
-            checks.push((name.to_owned(), app_id));
+        match rule["type"].as_str() {
+            Some("pull_request") => pull_request |= valid_pull_request_rule(rule)?,
+            Some("required_status_checks") => {
+                strict_checks |= parse_required_status_checks(rule, &mut checks)?;
+            }
+            _ => {}
         }
     }
     Ok(RulesetProtection {
         checks,
         writer_bypass,
         strict: strict_checks,
+        pull_request,
     })
+}
+
+fn valid_pull_request_rule(rule: &Value) -> Result<bool, OrchestratorError> {
+    let params = rule
+        .get("parameters")
+        .and_then(Value::as_object)
+        .ok_or_else(|| internal("tap_merge_ruleset_pull_request_unreadable"))?;
+    let approvals = params
+        .get("required_approving_review_count")
+        .and_then(Value::as_u64)
+        .filter(|count| *count <= 100)
+        .ok_or_else(|| internal("tap_merge_ruleset_pull_request_unreadable"))?;
+    let threads = params
+        .get("required_review_thread_resolution")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| internal("tap_merge_ruleset_pull_request_unreadable"))?;
+    Ok(approvals <= 100 && threads)
+}
+
+fn parse_required_status_checks(
+    rule: &Value,
+    checks: &mut Vec<(String, u64)>,
+) -> Result<bool, OrchestratorError> {
+    let strict = rule
+        .pointer("/parameters/strict_required_status_checks_policy")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| internal("tap_merge_ruleset_strictness_unreadable"))?;
+    let contexts = rule
+        .pointer("/parameters/required_status_checks")
+        .and_then(Value::as_array)
+        .ok_or_else(|| internal("tap_merge_ruleset_checks_unreadable"))?;
+    for check in contexts {
+        let name = check["context"]
+            .as_str()
+            .filter(|name| !name.is_empty())
+            .ok_or_else(|| internal("tap_merge_ruleset_context_invalid"))?;
+        let app_id = check["integration_id"]
+            .as_u64()
+            .filter(|id| *id > 0)
+            .ok_or_else(|| internal("tap_merge_ruleset_app_unbound"))?;
+        checks.push((name.to_owned(), app_id));
+    }
+    Ok(strict && !contexts.is_empty())
 }

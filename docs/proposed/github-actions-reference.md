@@ -210,3 +210,16 @@ The exact-head feedback query includes numeric actor identity for both `User` an
 2026-10-18 confirmed `Bot.databaseId`; selecting only the `User` fragment would
 make a bot's opinionated review unidentifiable and block otherwise valid review
 history. A scripted protocol test exercises a bot's outstanding change request.
+
+GitHub documents that applicable rulesets layer with classic branch protections;
+rules are aggregated and the most restrictive duplicated rule applies. A strict
+status-check source therefore continues to require an up-to-date branch when
+another source has loose checks. Native protection resolution must union required
+checks and retain strictness from any authenticated effective source, rather than
+rejecting an otherwise valid loose contributor. Classic PR-review protection is
+nullable; disabled review protection contributes no nested PR-bypass allowances.
+Missing controls must not prevent complementary authenticated sources from being
+combined; malformed present controls must not become positive protection evidence.
+Sources: [ruleset layering](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets),
+[strict and loose status checks](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets),
+and [classic branch protection API](https://docs.github.com/en/rest/branches/branch-protection).

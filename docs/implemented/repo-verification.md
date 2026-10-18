@@ -12,7 +12,15 @@ All changes must pass the full repository verification suite from the repo root 
 
 ## The Verification Suite
 
-Run all six checks sequentially from the workspace root:
+Run all six checks sequentially from the workspace root.
+
+If the workspace `target` is a symlink into an MBX-managed cache, direct Cargo
+commands do not hold an MBX cache lease. Use a separately owned absolute
+`CARGO_TARGET_DIR` for the entire verification run so automatic cache collection
+cannot remove active test binaries. After Nextest builds the CLI, set
+`VELNOR_ACTIONS_BIN="$CARGO_TARGET_DIR/debug/velnor-actions"` for the freshness
+script. Preserve the managed symlink and global cache settings. Bounded build/test
+parallelism is permitted; it must not omit any required test or gate.
 
 ```bash
 cargo fmt --all -- --check
