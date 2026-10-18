@@ -17,6 +17,11 @@ const MAX_OPERATION_BYTES: u64 = 4 * 1024 * 1024 * 1024;
 #[path = "normal_tofu_export.rs"]
 mod export;
 pub use export::{NormalTofuProvidersCacheExport, export_normal_tofu_providers_cache_payload};
+#[path = "normal_tofu_admission.rs"]
+mod admission;
+pub use admission::{
+    NormalTofuProvidersCacheBackendEvidence, observe_normal_tofu_providers_cache_backend,
+};
 
 /// Inputs for one normal `OpenTofu` provider-cache payload operation.
 #[derive(Debug, Clone, Copy)]
@@ -125,7 +130,7 @@ pub(super) fn validate_request(
     })
 }
 
-pub(super) fn cache_key(
+pub(in crate::qualification_cache_payload) fn cache_key(
     target: &str,
     tofu_version: &str,
     root: &str,

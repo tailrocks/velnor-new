@@ -24,8 +24,9 @@ pub use normal_tools::{
 mod normal_tofu;
 pub(crate) use normal_tofu::validate_cache_key_shape as validate_normal_tofu_cache_key_shape;
 pub use normal_tofu::{
-    NormalTofuProvidersCacheExport, NormalTofuProvidersCachePayloadRequest,
-    export_normal_tofu_providers_cache_payload, validate_normal_tofu_providers_cache_request,
+    NormalTofuProvidersCacheBackendEvidence, NormalTofuProvidersCacheExport,
+    NormalTofuProvidersCachePayloadRequest, export_normal_tofu_providers_cache_payload,
+    observe_normal_tofu_providers_cache_backend, validate_normal_tofu_providers_cache_request,
 };
 #[path = "qualification_cache_payload/roots.rs"]
 mod roots;

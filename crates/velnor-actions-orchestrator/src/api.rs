@@ -60,13 +60,14 @@ pub use super::qualification_cache_backend::{
 };
 pub use super::qualification_cache_payload::{
     CacheActionObservation, CacheExportProof, CacheRestoreProof, CacheRestoreStatus,
-    NormalTofuProvidersCacheExport, NormalTofuProvidersCachePayloadRequest,
-    NormalToolsCachePayloadRequest, QualificationCachePayloadContext,
-    QualificationCachePayloadExport, QualificationCachePayloadImport,
-    QualificationCacheRootEnvironment, export_normal_tofu_providers_cache_payload,
-    export_normal_tools_cache_payload, export_qualification_cache_payload,
-    import_normal_tools_cache_payload, import_qualification_cache_payload,
-    normal_tools_cache_stage_path, qualification_cache_stage_path,
+    NormalTofuProvidersCacheBackendEvidence, NormalTofuProvidersCacheExport,
+    NormalTofuProvidersCachePayloadRequest, NormalToolsCachePayloadRequest,
+    QualificationCachePayloadContext, QualificationCachePayloadExport,
+    QualificationCachePayloadImport, QualificationCacheRootEnvironment,
+    export_normal_tofu_providers_cache_payload, export_normal_tools_cache_payload,
+    export_qualification_cache_payload, import_normal_tools_cache_payload,
+    import_qualification_cache_payload, normal_tools_cache_stage_path,
+    observe_normal_tofu_providers_cache_backend, qualification_cache_stage_path,
     validate_normal_tofu_providers_cache_request, validate_qualification_cache_root_observation,
 };
 pub use super::qualification_cache_runtime::{
