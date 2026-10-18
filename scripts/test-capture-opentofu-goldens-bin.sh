@@ -41,6 +41,11 @@ MARKER="$WORK/cargo-invoked"
 MISE_TRACE="$WORK/mise-release-fetches"
 ORIGINAL_PATH="$PATH"
 REAL_MISE_BIN="$(command -v mise)"
+if [[ "$REAL_MISE_BIN" != /* || ! -f "$REAL_MISE_BIN" || ! -x "$REAL_MISE_BIN" ]]; then
+  echo "FAIL: could not resolve the real executable Mise binary for the test stub" >&2
+  exit 2
+fi
+export VELNOR_TEST_REAL_MISE_BIN="$REAL_MISE_BIN"
 RUST_POLICY="$(awk -v key=rust -f "$ROOT/scripts/toml-tool-pin.awk" \
   "$ROOT/.velnor/version-policy.toml")"
 RUST_INSTALL_PATH="$(MISE_AUTO_INSTALL=false MISE_EXEC_AUTO_INSTALL=false \
