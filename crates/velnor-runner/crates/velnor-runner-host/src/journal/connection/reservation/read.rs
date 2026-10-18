@@ -97,7 +97,7 @@ impl ConnectionJournal {
     }
 }
 
-fn parse_state(value: &str) -> Result<ReservationState, HostError> {
+pub(super) fn parse_state(value: &str) -> Result<ReservationState, HostError> {
     match value {
         "reserved" => Ok(ReservationState::Reserved),
         "uncertain" => Ok(ReservationState::Uncertain),

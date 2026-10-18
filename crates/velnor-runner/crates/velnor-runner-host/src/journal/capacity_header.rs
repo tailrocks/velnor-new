@@ -19,8 +19,8 @@ pub(crate) use model::{
     HeaderPollAttempt, PollOutcome,
 };
 pub(super) use storage::{
-    bootstrap, bootstrap_schema_connection, load, transition, validate,
-    validate_capacity_policy_connection,
+    bootstrap, bootstrap_schema_connection, has_any_charged, has_charged_connection, load, save,
+    transition, validate, validate_capacity_policy_connection, validate_connection,
 };
 
 #[cfg(test)]

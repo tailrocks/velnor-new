@@ -1,16 +1,27 @@
 //! Keep one journal, engine, host budget, and live config view.
 
 use std::path::Path;
+use std::str;
 use std::time::Duration;
+
+use bollard::Docker;
+use velnor_runner_github::QueueSession;
 
 use crate::config::{HostConfig, RepositoryConnection};
 use crate::controller_ipc::{ControlServer, ControlState};
 use crate::daemon_lock::{EngineLineageGuard, canonical_journal_path};
 use crate::docker_client::{connect_unix, docker_deadline};
 use crate::error::HostError;
-use crate::journal::{CapacityLimits, EngineContext, Journal};
-use crate::launch::{ReleaseReadSecret, SelectedEngineContext};
+use crate::journal::{
+    CapacityLimits, ConnectionJournal, EngineContext, Journal, OperationalCapacityLimits,
+};
+use crate::launch::{
+    CompletionWorker, ReleaseReadSecret, SelectedEngineContext, open_connection_session,
+    poll_scoped_connection_once,
+};
 use crate::launch_blocking::ListenFault;
+use crate::listen::Link;
+use crate::scale_set::{ConnectionSetup, ensure_connection_scale_set};
 
 const CONFIG_RELOAD_PAUSE: Duration = Duration::from_secs(2);
 
@@ -66,7 +77,10 @@ async fn run_controller(
         crate::launch::gate_line(&legacy_reconcile)
     );
     configure_shared_capacity(&journal, &current).await?;
-    bind_active_connections(&journal, &current, &selected_engine).await?;
+    journal.bootstrap_header_authority().await?;
+    journal.validate_header_authority().await?;
+    let mut connection_sessions =
+        prepare_active_connections(&journal, &current, &selected_engine, &docker).await?;
     let (_server, control_state) = ControlServer::start(state, journal.clone(), &current)?;
     let mut pending_retirements = Vec::new();
     discover_retirements(state, &current, &mut pending_retirements);
@@ -88,6 +102,8 @@ async fn run_controller(
             journal: &journal,
             control_state: &control_state,
             selected_engine: &selected_engine,
+            docker: &docker,
+            connection_sessions: &mut connection_sessions,
         };
         if let Some(next) = next
             && next != current
@@ -112,7 +128,54 @@ async fn run_controller(
         if let Err(error) = retire_pending(&mut pending_retirements, &mut effects).await {
             eprintln!("host controller connection retirement held: {error}");
         }
+        drop(effects);
+        if let Err(error) = poll_active_connections(&current, &mut connection_sessions).await {
+            eprintln!("host controller zero-header polling held: {error}");
+        }
     }
+}
+
+async fn poll_active_connections(
+    config: &HostConfig,
+    connections: &mut [PreparedConnection],
+) -> Result<(), HostError> {
+    for prepared in connections {
+        if config.connection(&prepared.binding.connection_id).is_none() {
+            continue;
+        }
+        let Some(credentials) = prepared.credentials.as_mut() else {
+            continue;
+        };
+        let allocation = prepared
+            .scope
+            .session_header_allocation(prepared.session_intent)
+            .await?;
+        if allocation.target() != 0 {
+            eprintln!(
+                "host controller polling held connection={} reason=positive-header",
+                prepared.binding.connection_id
+            );
+            continue;
+        }
+        match poll_scoped_connection_once(
+            &mut credentials.link,
+            prepared.set_id,
+            &credentials.session,
+            &prepared.scope,
+            prepared.session_intent,
+            &allocation,
+        )
+        .await
+        {
+            Ok(true) => prepared.completion.notify(),
+            Ok(false) => {}
+            Err(error) => eprintln!(
+                "host controller poll held connection={} reason={error}",
+                prepared.binding.connection_id
+            ),
+        }
+    }
+    Ok(())
 }
 
 fn discover_retirements(
@@ -147,24 +210,33 @@ async fn configure_shared_capacity(
         .memory_bytes
         .checked_mul(u64::from(jobs))
         .ok_or(HostError::Config)?;
+    let reserve = budget.admission_reserve();
     journal
-        .configure_capacity(CapacityLimits {
-            jobs,
-            cpu_millicores,
-            memory_bytes,
-        })
+        .configure_capacity_with_operational_limits(
+            CapacityLimits {
+                jobs,
+                cpu_millicores,
+                memory_bytes,
+            },
+            OperationalCapacityLimits {
+                cpu_millicores: reserve.cpu_millicores,
+                memory_bytes: reserve.memory_bytes,
+            },
+        )
         .await
 }
 
-async fn bind_active_connections(
+async fn prepare_active_connections(
     journal: &Journal,
     config: &HostConfig,
     selected_engine: &SelectedEngineContext,
-) -> Result<(), HostError> {
+    docker: &Docker,
+) -> Result<Vec<PreparedConnection>, ListenFault> {
+    let mut prepared = Vec::with_capacity(config.connections().len());
     for binding in config.connections() {
-        bind_connection(journal, binding, config, selected_engine).await?;
+        prepared.push(prepare_connection(journal, binding, config, selected_engine, docker).await?);
     }
-    Ok(())
+    Ok(prepared)
 }
 
 async fn bind_connection(
@@ -189,6 +261,82 @@ async fn bind_connection(
             &config.docker.platform,
         )
         .await
+}
+
+struct PreparedConnection {
+    binding: RepositoryConnection,
+    scope: ConnectionJournal,
+    set_id: i64,
+    session_intent: i64,
+    completion: CompletionWorker,
+    credentials: Option<SessionCredentials>,
+}
+
+struct SessionCredentials {
+    link: Link,
+    session: QueueSession,
+}
+
+impl PreparedConnection {
+    fn is_for(&self, binding: &RepositoryConnection) -> bool {
+        self.binding == *binding
+    }
+}
+
+async fn prepare_connection(
+    journal: &Journal,
+    binding: &RepositoryConnection,
+    config: &HostConfig,
+    selected_engine: &SelectedEngineContext,
+    docker: &Docker,
+) -> Result<PreparedConnection, ListenFault> {
+    bind_connection(journal, binding, config, selected_engine).await?;
+    let credential = crate::keychain::load_secret(
+        binding.credential_ref.service(),
+        binding.credential_ref.account(),
+    )?;
+    let pat = connection_pat(&credential)?;
+    let ConnectionSetup {
+        set,
+        mut link,
+        scoped,
+    } = ensure_connection_scale_set(pat, binding, journal).await?;
+    drop(credential);
+    let stored = scoped.scale_set().await?.ok_or(HostError::Ownership)?;
+    let source_binding = scoped.source_authorization_binding().await?;
+    if stored.id != set.id
+        || stored.name != set.name
+        || stored.ownership != set.ownership
+        || source_binding.scale_set_id() != set.id
+    {
+        return Err(HostError::Ownership.into());
+    }
+    let completion = CompletionWorker::start_scoped(
+        scoped.clone(),
+        docker.clone(),
+        link.base(),
+        link.token().to_owned(),
+    )?;
+    let (session, session_intent, _header_allocation) =
+        open_connection_session(&mut link, set.id, &scoped).await?;
+    Ok(PreparedConnection {
+        binding: binding.clone(),
+        scope: scoped,
+        set_id: set.id,
+        session_intent,
+        completion,
+        credentials: Some(SessionCredentials { link, session }),
+    })
+}
+
+fn connection_pat(credential: &[u8]) -> Result<&str, HostError> {
+    if credential.is_empty()
+        || credential.len() > 4096
+        || credential.iter().any(|byte| !byte.is_ascii_graphic())
+    {
+        return Err(HostError::Keychain);
+    }
+    str::from_utf8(credential).map_err(|_| HostError::Keychain)
 }
 
 pub(super) trait TransitionEffects {
@@ -256,6 +404,8 @@ struct JournalEffects<'a> {
     journal: &'a Journal,
     control_state: &'a ControlState,
     selected_engine: &'a SelectedEngineContext,
+    docker: &'a Docker,
+    connection_sessions: &'a mut Vec<PreparedConnection>,
 }
 
 impl TransitionEffects for JournalEffects<'_> {
@@ -268,22 +418,24 @@ impl TransitionEffects for JournalEffects<'_> {
         binding: &RepositoryConnection,
         config: &HostConfig,
     ) -> Result<(), HostError> {
-        let scoped = self.journal.connection_scope(binding).await?;
-        let selected = EngineContext {
-            engine_id: self.selected_engine.engine_id().to_owned(),
-            endpoint: config.docker.endpoint.clone(),
-            platform: config.docker.platform.clone(),
-        };
-        if !self.selected_engine.matches_selection(&selected) {
-            return Err(HostError::Ownership);
+        if self
+            .connection_sessions
+            .iter()
+            .any(|prepared| prepared.is_for(binding))
+        {
+            return bind_connection(self.journal, binding, config, self.selected_engine).await;
         }
-        scoped
-            .bind_engine_context(
-                self.selected_engine.engine_id(),
-                &config.docker.endpoint,
-                &config.docker.platform,
-            )
-            .await
+        let prepared = prepare_connection(
+            self.journal,
+            binding,
+            config,
+            self.selected_engine,
+            self.docker,
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+        self.connection_sessions.push(prepared);
+        Ok(())
     }
 
     fn publish_config(&mut self, config: &HostConfig) -> Result<(), HostError> {

@@ -3,7 +3,8 @@
 use crate::error::HostError;
 
 use super::{
-    connection, image_import, remote, request_ledger, scale_set_create, source_authorization,
+    connection, image_import, remote, request_ledger, scale_set_create, session,
+    source_authorization,
 };
 
 pub(super) async fn from_version_zero(conn: &turso::Connection) -> Result<(), HostError> {
@@ -136,7 +137,16 @@ pub(super) async fn from_version_eleven(conn: &turso::Connection) -> Result<(), 
     conn.execute("PRAGMA user_version = 12", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    Ok(())
+    from_version_twelve(conn).await
+}
+
+pub(super) async fn from_version_twelve(conn: &turso::Connection) -> Result<(), HostError> {
+    crate::journal::capacity_header::bootstrap_schema_connection(conn).await?;
+    session::bootstrap(conn).await?;
+    conn.execute("PRAGMA user_version = 13", ())
+        .await
+        .map(|_| ())
+        .map_err(|_| HostError::Journal)
 }
 
 pub(super) async fn ensure_completion_objects(conn: &turso::Connection) -> Result<(), HostError> {

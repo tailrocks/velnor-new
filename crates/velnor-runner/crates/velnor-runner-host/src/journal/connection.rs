@@ -7,15 +7,20 @@ mod launch;
 mod reservation;
 mod runtime;
 mod scope;
+mod session;
 pub(super) mod storage;
 
 pub(crate) use completion::ConnectionCompletionInboxEntry;
 pub(crate) use identity::{AssignmentIdentity, AssignmentKey};
 pub(crate) use reservation::{
-    CapacityLimits, OperationalCapacityLimits, ReservationRequest, ReservationResult,
-    ReservationSnapshot, ReservationState,
+    CapacityLimits, OperationalCapacityLimits, PhysicalRunnerJitState, PhysicalRunnerOwnership,
+    PhysicalRunnerReservation, ReservationRequest, ReservationResult, ReservationSnapshot,
+    ReservationState,
 };
 pub(crate) use runtime::{ConnectionScaleSet, EngineContext, SourceAuthorizationBinding};
+pub(crate) use session::{
+    BoundConnectionSession, SessionCreateClaim, SessionCreateRecord, SessionCreateState,
+};
 
 use crate::config::ConnectionId;
 use crate::journal::Journal;

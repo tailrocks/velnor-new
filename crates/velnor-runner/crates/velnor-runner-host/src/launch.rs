@@ -10,7 +10,7 @@ use velnor_runner_github::{
 };
 
 use crate::error::HostError;
-use crate::journal::Journal;
+use crate::journal::{ConnectionJournal, HeaderAllocation, Journal};
 use crate::listen::Link;
 use crate::scale_set::EnsureError;
 use crate::worker::Started;
@@ -43,7 +43,9 @@ pub(crate) use inspect::classify_inspect;
 pub(crate) use resource_probe::ReleaseReadSecret;
 pub(crate) use resource_probe::StartObservationWitness;
 pub(crate) use resource_probe::StartPermit;
+pub(crate) use resource_probe::VerifiedProbeCleanup;
 pub(crate) use resource_probe::build_pin_status;
+pub(crate) use session::{CompletedHeaderPoll, DeletedSession204, open_connection_session};
 pub(crate) use slot::HOLDS_ROWS_SQL;
 mod mint_origin;
 mod pressure;
@@ -61,10 +63,23 @@ mod turn;
 pub(crate) mod verified_images;
 
 pub(crate) use capacity::{install_job_capacity, job_capacity};
+pub(crate) use completion::CompletionWorker;
 pub(crate) use gate::{gate_line, reconcile_gate};
 pub(crate) use pressure::advertise as advertise_capacity;
-pub(crate) use resource_probe::VerifiedProbeCleanup;
 pub(crate) use verified_images::{VerifiedImageIdentity, VerifiedWorkerImages};
+
+/// Run one scoped queue poll with the supplied durable zero-header allocation.
+pub(crate) async fn poll_scoped_connection_once(
+    link: &mut Link,
+    set_id: i64,
+    session: &QueueSession,
+    scoped: &ConnectionJournal,
+    session_intent_id: i64,
+    allocation: &HeaderAllocation,
+) -> Result<bool, EnsureError> {
+    turn::poll_scoped_connection_once(link, set_id, session, scoped, session_intent_id, allocation)
+        .await
+}
 
 #[cfg(test)]
 pub(crate) use capacity::{

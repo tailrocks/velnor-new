@@ -1,6 +1,7 @@
 //! Bounded background reconciliation for journaled runner completion.
 
 mod cleanup;
+mod journal_ref;
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -16,7 +17,7 @@ use zeroize::Zeroize;
 use crate::docker_client::DOCKER_OPERATION_TIMEOUT;
 use crate::error::HostError;
 use crate::https::HttpsTransport;
-use crate::journal::Journal;
+use crate::journal::{ConnectionJournal, Journal};
 use crate::listen::Secret;
 
 const CLEANUP_DOCKER_REQUEST_TIMEOUT: Duration = DOCKER_OPERATION_TIMEOUT;
@@ -26,7 +27,7 @@ const CLEANUP_DOCKER_REQUEST_TIMEOUT: Duration = DOCKER_OPERATION_TIMEOUT;
 mod worker_tests;
 
 pub(super) struct Resources {
-    pub(super) journal: Journal,
+    pub(super) journal: journal_ref::CompletionJournal,
     pub(super) docker: Docker,
     pub(super) transport: HttpsTransport,
     pub(super) admin: Secret,
@@ -66,6 +67,35 @@ impl CompletionWorker {
     /// Start the bounded completer on its own thread and runtime.
     pub(crate) fn start(
         journal: Journal,
+        docker: Docker,
+        admin_base: &str,
+        admin_token: String,
+    ) -> Result<Self, HostError> {
+        Self::start_with_journal(
+            journal_ref::CompletionJournal::root(journal),
+            docker,
+            admin_base,
+            admin_token,
+        )
+    }
+
+    /// Start cleanup for one repository connection's completion rows.
+    pub(crate) fn start_scoped(
+        journal: ConnectionJournal,
+        docker: Docker,
+        admin_base: &str,
+        admin_token: String,
+    ) -> Result<Self, HostError> {
+        Self::start_with_journal(
+            journal_ref::CompletionJournal::scoped(journal),
+            docker,
+            admin_base,
+            admin_token,
+        )
+    }
+
+    fn start_with_journal(
+        journal: journal_ref::CompletionJournal,
         docker: Docker,
         admin_base: &str,
         admin_token: String,

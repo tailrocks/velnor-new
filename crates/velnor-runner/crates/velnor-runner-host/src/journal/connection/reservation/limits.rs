@@ -2,6 +2,7 @@
 
 use crate::error::HostError;
 use crate::journal::Journal;
+use crate::journal::header_authority::validate_header_capacity_policy;
 
 use super::super::storage::{has_unresolved_work, in_transaction, read_transaction, scalar_count};
 
@@ -36,7 +37,8 @@ impl Journal {
     pub(crate) async fn configure_capacity(&self, limits: CapacityLimits) -> Result<(), HostError> {
         in_transaction(self, async |connection| {
             let operational = read_operational_limits(connection).await?;
-            set_policy(connection, limits, operational).await
+            set_policy(connection, limits, operational).await?;
+            validate_header_capacity_policy(connection).await
         })
         .await
     }
@@ -48,7 +50,8 @@ impl Journal {
         operational: OperationalCapacityLimits,
     ) -> Result<(), HostError> {
         in_transaction(self, async |connection| {
-            set_policy(connection, limits, operational).await
+            set_policy(connection, limits, operational).await?;
+            validate_header_capacity_policy(connection).await
         })
         .await
     }

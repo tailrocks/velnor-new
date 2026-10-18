@@ -6,7 +6,7 @@ use crate::config::ConnectionId;
 use crate::error::HostError;
 use crate::journal::Journal;
 use crate::journal::connection::CapacityLimits;
-use crate::launch::session::{CompletedHeaderPoll, DeletedSession204};
+use crate::launch::{CompletedHeaderPoll, DeletedSession204};
 
 static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(0);
 type TestResult = Result<(), Box<dyn Error>>;

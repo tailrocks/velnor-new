@@ -1,8 +1,10 @@
 //! One session loop. A running owned worker keeps the session up.
 
+use std::future::Future;
+
 use velnor_runner_github::{Poll, QueueSession};
 
-use crate::journal::Journal;
+use crate::journal::{ConnectionJournal, HeaderAllocation, HeaderPollAttempt, Journal};
 use crate::listen::{Link, point_at_queue, poll_path, restore_base};
 use crate::scale_set::EnsureError;
 use crate::worker::Started;
@@ -16,10 +18,102 @@ use super::{Ready, Rest, ack_ready, drive_ready};
 
 mod completion_intake;
 mod pump;
-use completion_intake::{completion_error, intake_and_ack_if_only};
+use completion_intake::{completion_error, intake_and_ack_if_only, intake_and_ack_if_only_scoped};
 use pump::until_idle;
 #[cfg(all(test, unix))]
 use pump::{PollHost, pump};
+
+/// Poll one scoped session at a zero header and persist lifecycle events before ACK.
+///
+/// This path never acquires an Available job or starts a worker. Positive
+/// capacity requires the separate fresh-permit admission path.
+pub(crate) async fn poll_scoped_connection_once(
+    link: &mut Link,
+    set_id: i64,
+    session: &QueueSession,
+    scoped: &ConnectionJournal,
+    session_intent_id: i64,
+    allocation: &HeaderAllocation,
+) -> Result<bool, EnsureError> {
+    if allocation.target() != 0
+        || !allocation.matches_session(scoped.connection_id(), set_id, &session.session_id)
+    {
+        return Err(EnsureError::AdmissionClosed);
+    }
+    let attempt = scoped
+        .begin_session_poll(session_intent_id, allocation)
+        .await
+        .map_err(|_| completion_error())?;
+    let (saved, path) = match point_at_queue(link, &session.message_queue_url) {
+        Ok(value) => value,
+        Err(error) => {
+            scoped
+                .mark_session_poll_uncertain(session_intent_id, attempt)
+                .await
+                .map_err(|_| completion_error())?;
+            return Err(error);
+        }
+    };
+    let queue = saved.as_ref().map(|_| link.base().to_owned());
+    let polled = poll_path(link, session, &path, 0, 0);
+    let restored = restore_base(link, saved);
+    let polled = match (polled, restored) {
+        (Ok(polled), Ok(())) => polled,
+        (Err(error), _) | (_, Err(error)) => {
+            scoped
+                .mark_session_poll_uncertain(session_intent_id, attempt)
+                .await
+                .map_err(|_| completion_error())?;
+            return Err(error);
+        }
+    };
+    let intake = intake_and_ack_if_only_scoped(scoped, set_id, &polled, || async {
+        ack_ready(link, session, path, queue, &polled)
+    });
+    let handled = async { intake.await.map(|intake| intake.wake_cleanup) };
+    finish_scoped_poll_response(
+        scoped,
+        session_intent_id,
+        set_id,
+        &session.session_id,
+        allocation,
+        attempt,
+        handled,
+    )
+    .await
+}
+
+async fn finish_scoped_poll_response<F>(
+    scoped: &ConnectionJournal,
+    session_intent_id: i64,
+    set_id: i64,
+    session_id: &str,
+    allocation: &HeaderAllocation,
+    attempt: HeaderPollAttempt,
+    handled: F,
+) -> Result<bool, EnsureError>
+where
+    F: Future<Output = Result<bool, EnsureError>>,
+{
+    let wake_cleanup = match handled.await {
+        Ok(wake_cleanup) => wake_cleanup,
+        Err(error) => {
+            scoped
+                .mark_session_poll_uncertain(session_intent_id, attempt)
+                .await
+                .map_err(|_| completion_error())?;
+            return Err(error);
+        }
+    };
+    let completed = super::session::CompletedHeaderPoll::after_response(
+        attempt, allocation, scoped, set_id, session_id,
+    )?;
+    scoped
+        .settle_session_poll(session_intent_id, completed)
+        .await
+        .map_err(|_| completion_error())?;
+    Ok(wake_cleanup)
+}
 
 /// Poll until admission stops and no owned launch container is running.
 ///
@@ -49,12 +143,20 @@ pub(super) async fn poll_and_drive(
             step: "resource budget",
         });
     }
-    let completion = CompletionWorker::start(
-        journal.clone(),
-        docker.clone(),
-        link.base(),
-        admin_token.to_owned(),
-    )
+    let completion = match rest.scoped_journal {
+        Some(scoped) => CompletionWorker::start_scoped(
+            scoped.clone(),
+            docker.clone(),
+            link.base(),
+            admin_token.to_owned(),
+        ),
+        None => CompletionWorker::start(
+            journal.clone(),
+            docker.clone(),
+            link.base(),
+            admin_token.to_owned(),
+        ),
+    }
     .map_err(|_| completion_error())?;
     let target = capacity::admit_target(capacity);
     let mut turn = Turn {
@@ -173,11 +275,6 @@ impl Turn<'_> {
         restore_base(self.link, saved)?;
         let polled = polled?;
         trace::batch(&polled);
-        if self.rest.permits_start() {
-            super::steps::authorize_poll_rest(&self.rest, &polled).await?;
-            self.rest.source_authorized = true;
-            self.fit_pressure().await?;
-        }
         let link = &mut *self.link;
         let session = self.session;
         let set_id = self.set_id;
@@ -185,12 +282,27 @@ impl Turn<'_> {
         let ack_path = path.clone();
         let ack_queue = queue.clone();
         let ack_polled = &polled;
-        let intake = intake_and_ack_if_only(journal, set_id, &polled, || async move {
-            ack_ready(link, session, ack_path, ack_queue, ack_polled)
-        })
-        .await?;
+        let intake = if let Some(scoped) = self.rest.scoped_journal {
+            intake_and_ack_if_only_scoped(scoped, set_id, &polled, || async move {
+                ack_ready(link, session, ack_path, ack_queue, ack_polled)
+            })
+            .await?
+        } else {
+            intake_and_ack_if_only(journal, set_id, &polled, || async move {
+                ack_ready(link, session, ack_path, ack_queue, ack_polled)
+            })
+            .await?
+        };
         if intake.wake_cleanup {
             self.completion.notify();
+        }
+        // Record lifecycle events before source authorization can reject an
+        // offered job in the same batch. Mixed batches stay unacknowledged,
+        // while their exact Started/Completed events remain durable.
+        if self.rest.permits_start() {
+            super::steps::authorize_poll_rest(&self.rest, &polled).await?;
+            self.rest.source_authorized = true;
+            self.fit_pressure().await?;
         }
         if intake.completion_only || !self.rest.permits_start() {
             return Ok(false);
@@ -391,3 +503,7 @@ mod completion_intake_tests;
 #[cfg(test)]
 #[path = "turn/completion_quarantine_tests.rs"]
 mod completion_quarantine_tests;
+
+#[cfg(test)]
+#[path = "turn/scoped_poll_tests.rs"]
+mod scoped_poll_tests;

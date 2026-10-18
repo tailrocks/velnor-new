@@ -3,9 +3,11 @@
 use velnor_runner_github::{
     AdminConnection, AdminConnectionCall, Poll, QueueSession, RefreshGate, RegistrationScope,
     RegistrationTokenCall, SessionError, WireError, admin_connection, poll, registration_token,
+    workflow_run::VerifiedRepositoryScope,
 };
 use zeroize::Zeroize;
 
+use crate::config::RepositoryConnection;
 use crate::error::HostError;
 use crate::https::HttpsTransport;
 use crate::scale_set::EnsureError;
@@ -56,6 +58,37 @@ pub(crate) struct Link {
     transport: HttpsTransport,
     admin: AdminConnection,
     base: String,
+}
+
+/// Continue with the exact admin connection used to register a Scale Set.
+///
+/// The caller must have authenticated the repository scope before obtaining
+/// `admin`; this function does not create or broaden credentials.
+pub(crate) fn link_from_admin(
+    mut transport: HttpsTransport,
+    admin: AdminConnection,
+    binding: &RepositoryConnection,
+    verified_scope: &VerifiedRepositoryScope,
+) -> Result<Link, EnsureError> {
+    let (owner, name) = binding
+        .repository
+        .split_once('/')
+        .ok_or(EnsureError::Rejected)?;
+    if owner.is_empty()
+        || name.is_empty()
+        || verified_scope.id() != binding.repository_id
+        || verified_scope.owner() != owner
+        || verified_scope.name() != name
+    {
+        return Err(EnsureError::Rejected);
+    }
+    let base = admin.expose_url().to_owned();
+    transport.set_base(&base).map_err(map_host)?;
+    Ok(Link {
+        transport,
+        admin,
+        base,
+    })
 }
 
 impl Link {

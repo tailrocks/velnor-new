@@ -7,10 +7,12 @@ use std::path::Path;
 use crate::error::HostError;
 use file_identity::JournalFile;
 
+pub(crate) mod capacity_header;
 #[path = "journal_completion.rs"]
 mod completion;
 mod connection;
 mod file_identity;
+pub(crate) mod header_authority;
 mod image_import;
 mod launch;
 mod read;
@@ -31,14 +33,17 @@ mod connection_tests;
 mod migration_tests;
 #[cfg(test)]
 mod schema_metadata_tests;
+pub(crate) use capacity_header::{HeaderAllocation, HeaderDeleteAttempt, HeaderPollAttempt};
 pub(crate) use completion::{
     CleanupClaim, CompletedLaunch, CompletionIdentity, CompletionInboxEntry,
     MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
 };
 pub(crate) use connection::{
-    AssignmentIdentity, AssignmentKey, CapacityLimits, ConnectionCompletionInboxEntry,
-    ConnectionJournal, ConnectionScaleSet, EngineContext, OperationalCapacityLimits,
-    ReservationRequest, ReservationResult, ReservationSnapshot, ReservationState,
+    AssignmentIdentity, AssignmentKey, BoundConnectionSession, CapacityLimits,
+    ConnectionCompletionInboxEntry, ConnectionJournal, ConnectionScaleSet, EngineContext,
+    OperationalCapacityLimits, PhysicalRunnerJitState, PhysicalRunnerOwnership,
+    PhysicalRunnerReservation, ReservationRequest, ReservationResult, ReservationSnapshot,
+    ReservationState, SessionCreateClaim, SessionCreateRecord, SessionCreateState,
     SourceAuthorizationBinding,
 };
 pub(crate) use image_import::{

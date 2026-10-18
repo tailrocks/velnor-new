@@ -15,6 +15,7 @@ use crate::journal::{CleanupClaim, CompletedLaunch, Journal};
 use crate::launch::completion::cleanup::{
     Context, EffectBudget, Failure, cleanup_retry_delay_seconds, completion_now,
 };
+use crate::launch::completion::journal_ref::CompletionJournal;
 use crate::listen::Secret;
 
 const WORKER: &str = "wcompletion";
@@ -28,6 +29,7 @@ async fn retry_accepts_runner_absent_by_recorded_id_and_name_after_dind_failure(
     let scratch = Scratch::open("retry-absent")?;
     let journal = Journal::open(&scratch.path).await?;
     let launch = completed_launch(&journal).await?;
+    let completion_journal = CompletionJournal::root(journal.clone());
     let claim = journal
         .claim_completion_cleanup(launch.intent.id, 2)
         .await?
@@ -52,7 +54,7 @@ async fn retry_accepts_runner_absent_by_recorded_id_and_name_after_dind_failure(
     let mut transport = HttpsTransport::new("https://github.com")?;
     let admin = Secret::new("test token");
     let context = Context {
-        journal: &journal,
+        journal: &completion_journal,
         docker: &stub.docker,
         transport: &mut transport,
         admin: &admin,
@@ -95,6 +97,7 @@ async fn retry_rejects_a_different_container_at_the_durable_name() -> Result<(),
     let scratch = Scratch::open("replacement")?;
     let journal = Journal::open(&scratch.path).await?;
     let launch = completed_launch(&journal).await?;
+    let completion_journal = CompletionJournal::root(journal.clone());
     let claim = journal
         .claim_completion_cleanup(launch.intent.id, 90)
         .await?
@@ -106,7 +109,7 @@ async fn retry_rejects_a_different_container_at_the_durable_name() -> Result<(),
     let mut transport = HttpsTransport::new("https://github.com")?;
     let admin = Secret::new("test token");
     let context = Context {
-        journal: &journal,
+        journal: &completion_journal,
         docker: &stub.docker,
         transport: &mut transport,
         admin: &admin,

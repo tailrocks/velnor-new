@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use tokio::sync::oneshot;
 
+use super::super::super::journal_ref::CompletionJournal;
 use super::{Harness, Scratch, TEST_REQUEST_ID, completed_launch, completion_now};
 use crate::error::HostError;
 use crate::journal::Journal;
@@ -155,7 +156,7 @@ impl InFlightWorker {
         let joined = Arc::new(AtomicBool::new(false));
         let second_effects = Arc::new(AtomicUsize::new(0));
         let thread = spawn_in_flight_thread(InFlightThread {
-            journal: worker_journal,
+            journal: CompletionJournal::root(worker_journal),
             id,
             claim,
             stopping: Arc::clone(&stopping),
@@ -186,7 +187,7 @@ impl InFlightWorker {
 }
 
 struct InFlightThread {
-    journal: Journal,
+    journal: CompletionJournal,
     id: i64,
     claim: crate::journal::CleanupClaim,
     stopping: Arc<AtomicBool>,
@@ -221,7 +222,7 @@ fn spawn_in_flight_thread(task: InFlightThread) -> thread::JoinHandle<()> {
             .map_err(|_| HostError::Journal)
             .map(|runtime| {
                 runtime.block_on(run_in_flight_effects(InFlightEffects {
-                    journal: &journal,
+                    journal,
                     id,
                     claim,
                     generation,
@@ -243,7 +244,7 @@ fn spawn_in_flight_thread(task: InFlightThread) -> thread::JoinHandle<()> {
 }
 
 struct InFlightEffects<'a> {
-    journal: &'a Journal,
+    journal: CompletionJournal,
     id: i64,
     claim: crate::journal::CleanupClaim,
     generation: i64,
@@ -266,7 +267,7 @@ async fn run_in_flight_effects(task: InFlightEffects<'_>) -> Result<bool, HostEr
     } = task;
     let mut budget = EffectBudget::new(stopping);
     run_effect(
-        journal,
+        &journal,
         &mut budget,
         id,
         claim,
@@ -280,7 +281,7 @@ async fn run_in_flight_effects(task: InFlightEffects<'_>) -> Result<bool, HostEr
     .await
     .map_err(|failure| failure.error)?;
     let second = run_effect(
-        journal,
+        &journal,
         &mut budget,
         id,
         claim,

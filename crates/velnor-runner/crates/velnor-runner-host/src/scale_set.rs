@@ -15,9 +15,10 @@ use crate::connect::SetOwnership;
 use crate::error::HostError;
 use crate::https::HttpsTransport;
 use crate::journal::{
-    ConnectionJournal, CreatedScaleSetResponse, ExistingScaleSetObservation,
+    ConnectionJournal, CreatedScaleSetResponse, ExistingScaleSetObservation, Journal,
     ScaleSetCreateNoEffect, ScaleSetCreateRequest, ScaleSetCreateState,
 };
+use crate::listen::{Link, link_from_admin};
 
 const GITHUB_API: &str = "https://api.github.com";
 
@@ -36,6 +37,18 @@ pub struct EnsuredSet {
     pub disable_update: bool,
     /// Label names in service order.
     pub labels: Vec<String>,
+}
+
+/// Exact Scale Set and the admin connection used to verify or create it.
+///
+/// The link stays scoped to this one configured repository connection.
+pub(crate) struct ConnectionSetup {
+    /// Verified Scale Set identity and ownership.
+    pub(crate) set: EnsuredSet,
+    /// Admin link minted for the same verified repository scope.
+    pub(crate) link: Link,
+    /// Journal view validated from the exact configured binding.
+    pub(crate) scoped: ConnectionJournal,
 }
 
 /// Failure that does not include a credential or a response body.
@@ -106,8 +119,9 @@ pub enum EnsureError {
 pub(crate) async fn ensure_connection_scale_set(
     pat: &str,
     binding: &RepositoryConnection,
-    scoped: &ConnectionJournal,
-) -> Result<EnsuredSet, EnsureError> {
+    journal: &Journal,
+) -> Result<ConnectionSetup, EnsureError> {
+    let scoped = journal.connection_scope(binding).await.map_err(map_host)?;
     let (owner, repo) = repository_parts(&binding.repository)?;
     if pat.is_empty() || !selector_valid(&binding.scale_set) {
         return Err(EnsureError::Rejected);
@@ -143,7 +157,7 @@ pub(crate) async fn ensure_connection_scale_set(
     )
     .map_err(|error| map_session(error, &transport))?;
 
-    match (
+    let set = match (
         lookup_action(record.state(), matches!(&found, ScaleSetFound::Found(_))),
         found,
     ) {
@@ -154,7 +168,7 @@ pub(crate) async fn ensure_connection_scale_set(
                 .adopt_scale_set(&request, observation)
                 .await
                 .map_err(map_host)?;
-            ensured_from_record(&adopted)
+            ensured_from_record(&adopted)?
         }
         (ScaleSetLookupAction::Create, ScaleSetFound::NotFound) => {
             create_connection_scale_set(
@@ -162,11 +176,11 @@ pub(crate) async fn ensure_connection_scale_set(
                 &scope,
                 &mut transport,
                 admin.expose_token(),
-                scoped,
+                &scoped,
                 &request,
                 &record,
             )
-            .await
+            .await?
         }
         (ScaleSetLookupAction::Verify, ScaleSetFound::Found(view)) => {
             revalidate_repository_scope(pat, &scope)?;
@@ -175,10 +189,12 @@ pub(crate) async fn ensure_connection_scale_set(
                 .adopt_scale_set(&request, observation)
                 .await
                 .map_err(map_host)?;
-            ensured_from_record(&current)
+            ensured_from_record(&current)?
         }
-        (_, _) => Err(EnsureError::Uncertain),
-    }
+        (_, _) => return Err(EnsureError::Uncertain),
+    };
+    let link = link_from_admin(transport.inner, admin, binding, &scope)?;
+    Ok(ConnectionSetup { set, link, scoped })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -8,7 +8,7 @@ use crate::journal::capacity_header::{
     transition, validate, validate_capacity_policy_connection,
 };
 use crate::journal::connection::storage::read_transaction;
-use crate::launch::session::{CompletedHeaderPoll, DeletedSession204};
+use crate::launch::{CompletedHeaderPoll, DeletedSession204};
 
 impl Journal {
     /// Recover saved header intent after this process owns the engine guard.
