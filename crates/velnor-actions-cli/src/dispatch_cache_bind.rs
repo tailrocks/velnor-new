@@ -12,6 +12,8 @@ use velnor_actions_orchestrator::{
 
 #[path = "dispatch_cache_manifest.rs"]
 pub(crate) mod manifest;
+#[path = "dispatch_cache_normal_stage.rs"]
+pub(crate) mod normal_stage;
 #[path = "dispatch_cache_roots.rs"]
 pub(crate) mod roots;
 #[path = "dispatch_cache_transfer.rs"]

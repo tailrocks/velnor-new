@@ -95,6 +95,8 @@ enum InternalOp {
     ImportQualificationCachePayload,
     /// Export one qualification cache payload to isolated staging.
     ExportQualificationCachePayload,
+    /// Get the isolated staging path for the normal tools cache.
+    NormalToolsCacheStagePath,
     /// Data-only task execution record resolution for a generated wrapper.
     ResolveTaskExecution,
     /// Isolated, credentialed signing of a plan-bound package release.
@@ -153,6 +155,7 @@ fn internal_op() -> Option<InternalOp> {
         Ok(tag) if tag == cache_bind::transfer::EXPORT_OP => {
             InternalOp::ExportQualificationCachePayload
         }
+        Ok(tag) if tag == cache_bind::normal_stage::OP => InternalOp::NormalToolsCacheStagePath,
         Ok(tag) if tag == TASK_EXECUTION_RESOLVER_OP => InternalOp::ResolveTaskExecution,
         Ok(tag) if tag == SIGN_PACKAGE_RELEASE_OP => InternalOp::PackageSigner,
         Ok(tag) if tag == PUBLISH_PACKAGE_RELEASE_OP => InternalOp::PackagePublisher,
@@ -177,6 +180,7 @@ fn gate_request() -> Option<InternalRequest> {
             | InternalOp::ObserveQualificationCacheBackend
             | InternalOp::ImportQualificationCachePayload
             | InternalOp::ExportQualificationCachePayload
+            | InternalOp::NormalToolsCacheStagePath
     ) {
         return cache_runner_request(op);
     }
@@ -253,6 +257,7 @@ fn gate_request_file(op: InternalOp) -> Option<InternalRequest> {
         | InternalOp::ObserveQualificationCacheBackend
         | InternalOp::ImportQualificationCachePayload
         | InternalOp::ExportQualificationCachePayload
+        | InternalOp::NormalToolsCacheStagePath
         | InternalOp::ResolveTaskExecution => {}
     }
     Some(InternalRequest { op, path })
@@ -260,13 +265,21 @@ fn gate_request_file(op: InternalOp) -> Option<InternalRequest> {
 
 /// Require both GitHub run coordinates before entering cache operations.
 fn cache_runner_request(op: InternalOp) -> Option<InternalRequest> {
-    if !["GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT"]
-        .iter()
-        .all(|name| env::var(name).is_ok_and(|value| !value.is_empty()))
-    {
+    if !valid_run_coordinates() {
         return None;
     }
     runner_velnor_dir().map(|path| InternalRequest { op, path })
+}
+
+fn valid_run_coordinates() -> bool {
+    let run_id = env::var("GITHUB_RUN_ID").ok();
+    let run_attempt = env::var("GITHUB_RUN_ATTEMPT").ok();
+    matches!(
+        (run_id, run_attempt),
+        (Some(run_id), Some(run_attempt))
+            if run_id.parse::<u64>().is_ok_and(|value| value > 0 && value.to_string() == run_id)
+                && run_attempt.parse::<u32>().is_ok_and(|value| value > 0 && value.to_string() == run_attempt)
+    )
 }
 
 /// Runner-temp velnor directory for file-less private operations.
@@ -316,6 +329,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::ObserveQualificationCacheBackend => cache_observe::run(),
         InternalOp::ImportQualificationCachePayload => cache_bind::transfer::run_import(),
         InternalOp::ExportQualificationCachePayload => cache_bind::transfer::run_export(),
+        InternalOp::NormalToolsCacheStagePath => cache_bind::normal_stage::run(),
         InternalOp::ResolveTaskExecution => match resolve_task_execution() {
             Ok(frame) => match std::io::stdout().lock().write_all(&frame) {
                 Ok(()) => ExitCode::SUCCESS,
