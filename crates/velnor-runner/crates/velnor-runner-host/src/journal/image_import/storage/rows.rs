@@ -92,7 +92,7 @@ fn parse_record(
         .transpose()?;
     match (state, image_id.as_deref(), receipt.as_ref()) {
         (ImageImportState::Completed, Some(id), Some(evidence)) if id == evidence.image_id() => {
-            evidence.validate_for(request)?
+            evidence.validate_for(request)?;
         }
         (ImageImportState::Completed, _, _) => return Err(HostError::Journal),
         (_, None, None) => {}

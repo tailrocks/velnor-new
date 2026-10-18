@@ -64,7 +64,7 @@ pub(crate) async fn poll_scoped_connection_once(
     let intake = intake_and_ack_if_only_scoped(scoped, set_id, &polled, || async {
         ack_ready(link, session, path, queue, &polled)
     });
-    let handled = async { intake.await };
+    let handled = intake;
     finish_scoped_poll_response(
         scoped,
         session_intent_id,

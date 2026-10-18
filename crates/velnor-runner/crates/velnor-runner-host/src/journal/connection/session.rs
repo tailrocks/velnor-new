@@ -5,10 +5,10 @@ mod header;
 mod model;
 mod refresh;
 
-pub(crate) use model::{
-    BoundConnectionSession, SessionCreateClaim, SessionCreateRecord, SessionCreateState,
-};
-pub(crate) use refresh::{SessionRefreshClaim, SessionRefreshRecord, SessionRefreshState};
+pub(crate) use model::SessionCreateState;
+pub(crate) use refresh::SessionRefreshClaim;
+#[cfg(test)]
+pub(crate) use refresh::SessionRefreshState;
 
 #[cfg(test)]
 #[path = "session/tests.rs"]

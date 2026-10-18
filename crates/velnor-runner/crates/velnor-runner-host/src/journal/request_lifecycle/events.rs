@@ -55,7 +55,7 @@ struct CompletedRecord<'a> {
 }
 
 impl ConnectionJournal {
-    /// Correlate an actual JobStarted request with its exact JIT-created runner.
+    /// Correlate an actual `JobStarted` request with its exact JIT-created runner.
     pub(crate) async fn record_job_started(
         &self,
         identity: &AssignmentIdentity,
@@ -381,8 +381,9 @@ async fn record_completed_authorization(
     pair: Option<(i64, i64, &str)>,
 ) -> Result<(), HostError> {
     let (runner_id, runner_name, intent_id) = pair
-        .map(|(intent, id, name)| (Some(id), Some(name), Some(intent)))
-        .unwrap_or((None, None, None));
+        .map_or((None, None, None), |(intent, id, name)| {
+            (Some(id), Some(name), Some(intent))
+        });
     let changed = connection.execute(
         "UPDATE connection_request_authorizations SET completed_message_id = ?1, completed_event_digest = ?2, completed_job_id = ?3, completed_result = ?4, completed_runner_id = ?5, completed_runner_name = ?6, completed_intent_id = ?7 WHERE connection_id = ?8 AND scale_set_id = ?9 AND request_id = ?10 AND completed_event_digest IS NULL AND (started_event_digest IS NULL OR ?5 IS NULL OR (started_runner_id = ?5 AND started_runner_name = ?6))",
         (record.message_id, record.event_digest.as_str(), record.job_id, record.result, runner_id, runner_name, intent_id, record.connection_id.as_str(), set_id, record.request_id),

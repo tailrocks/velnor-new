@@ -8,9 +8,9 @@ use super::ConnectionJournal;
 /// Assignment kind used by reservations and their launch intent.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AssignmentKey {
-    /// One acquired GitHub request. Replays use the stable RequestId.
+    /// One acquired GitHub request. Replays use the stable `RequestId`.
     AssignedRequest { request_id: i64 },
-    /// One message that reports assigned population without a RequestId.
+    /// One message that reports assigned population without a `RequestId`.
     PopulationMessage { message_id: i64 },
     /// One Scale Set session identity.
     Session { name: String },

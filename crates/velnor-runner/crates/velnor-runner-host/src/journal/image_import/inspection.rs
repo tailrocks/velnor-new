@@ -106,7 +106,7 @@ fn validate_containerd(
     let expected_annotations = BTreeMap::from([
         (
             "io.containerd.image.name".to_owned(),
-            format!("docker.io/library/{}:{}", name, tag),
+            format!("docker.io/library/{name}:{tag}"),
         ),
         (
             "org.opencontainers.image.ref.name".to_owned(),

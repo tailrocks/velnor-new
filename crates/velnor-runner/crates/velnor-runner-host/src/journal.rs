@@ -40,34 +40,39 @@ pub(crate) use completion::{
     MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
 };
 pub(crate) use connection::{
-    AssignmentIdentity, AssignmentKey, BoundConnectionSession, CapacityLimits,
-    ConnectionCompletionInboxEntry, ConnectionJournal, ConnectionScaleSet, EngineContext,
-    OperationalCapacityLimits, PhysicalRunnerJitState, PhysicalRunnerOwnership,
-    PhysicalRunnerReservation, ReservationRequest, ReservationResult, ReservationSnapshot,
-    ReservationState, SessionCreateClaim, SessionCreateRecord, SessionCreateState,
-    SessionRefreshClaim, SessionRefreshRecord, SessionRefreshState, SourceAuthorizationBinding,
-    StorageAdmission, StorageAdmissionSample, StorageCacheProjection, StorageFilesystemKind,
-    StorageInodePolicy, StorageMedium, StorageMemoryObservation, StoragePoolLimit,
-    StoragePoolObservation, StorageProfile, StorageReservationPlan, StorageRole, StorageRoleCharge,
-    StorageRoleLimit, StorageSampleIdentity,
+    AssignmentIdentity, AssignmentKey, CapacityLimits, ConnectionCompletionInboxEntry,
+    ConnectionJournal, EngineContext, OperationalCapacityLimits, ReservationRequest,
+    ReservationResult, SessionCreateState, SessionRefreshClaim, SourceAuthorizationBinding,
+    StorageAdmission,
+};
+#[cfg(test)]
+pub(crate) use connection::{
+    ReservationState, SessionRefreshState, StorageAdmissionSample, StorageCacheProjection,
+    StorageMedium, StoragePoolLimit, StoragePoolObservation, StorageProfile,
+    StorageReservationPlan, StorageRole, StorageRoleCharge, StorageRoleLimit,
+    StorageSampleIdentity,
 };
 #[cfg(test)]
 pub(crate) use connection::{fixture_admission, fixture_profile};
 pub(crate) use image_import::{
-    ImageImportClaim, ImageImportDescriptor, ImageImportId, ImageImportIdentity,
-    ImageImportInspection, ImageImportObservation, ImageImportRecord, ImageImportRequest,
-    ImageImportState,
+    ImageImportDescriptor, ImageImportIdentity, ImageImportInspection, ImageImportObservation,
+    ImageImportRequest, ImageImportState,
 };
 pub(crate) use scale_set_create::{
-    CreatedScaleSetResponse, ExistingScaleSetObservation, ScaleSetCreateClaim, ScaleSetCreateId,
-    ScaleSetCreateNoEffect, ScaleSetCreateReceipt, ScaleSetCreateRecord, ScaleSetCreateRequest,
-    ScaleSetCreateState,
+    CreatedScaleSetResponse, ExistingScaleSetObservation, ScaleSetCreateNoEffect,
+    ScaleSetCreateRecord, ScaleSetCreateRequest, ScaleSetCreateState,
 };
-pub(crate) use source_authorization::{AssignedAcquireResult, SourceAuthorizationResult};
+pub(crate) use source_authorization::AssignedAcquireResult;
+#[cfg(test)]
+pub(crate) use source_authorization::SourceAuthorizationResult;
 use sql::{intent_row, one_row, same_ids, token_rejected};
 
-pub(crate) use request_lifecycle::{PhysicalRunnerStartClaim, RequestAcquireState, RunnerJitClaim};
-pub(crate) use resource_probe::{ProbeLeaseState, ProbePhase, ProbeRow, ProbeSeed};
+#[cfg(test)]
+pub(crate) use request_lifecycle::PhysicalRunnerStartClaim;
+pub(crate) use request_lifecycle::RequestAcquireState;
+#[cfg(test)]
+pub(crate) use resource_probe::ProbeLeaseState;
+pub(crate) use resource_probe::{ProbePhase, ProbeRow, ProbeSeed};
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

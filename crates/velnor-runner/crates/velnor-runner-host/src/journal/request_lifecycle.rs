@@ -13,14 +13,14 @@ use crate::config::ConnectionId;
 use crate::error::HostError;
 use crate::journal::connection::AssignmentIdentity;
 
-/// State of one authorized request's AcquireJobs operation.
+/// State of one authorized request's `AcquireJobs` operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RequestAcquireState {
-    /// The source receipt is durable; AcquireJobs has not been claimed.
+    /// The source receipt is durable; `AcquireJobs` has not been claimed.
     Authorized,
-    /// The one-shot AcquireJobs call may be in flight or interrupted.
+    /// The one-shot `AcquireJobs` call may be in flight or interrupted.
     Requested,
-    /// The exact request ID was returned by AcquireJobs.
+    /// The exact request ID was returned by `AcquireJobs`.
     Acquired,
     /// The service returned a definitive no-effect result.
     NoEffect,

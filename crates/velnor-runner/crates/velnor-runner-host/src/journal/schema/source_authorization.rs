@@ -66,7 +66,7 @@ async fn validate_columns(
         ("source_digest", "TEXT", true, 0),
         ("source_json", "TEXT", true, 0),
     ];
-    let optional_columns = if include_receipt_binding { 1 } else { 0 };
+    let optional_columns = usize::from(include_receipt_binding);
     if columns.len() != expected.len() + optional_columns {
         return Err(HostError::Journal);
     }

@@ -209,15 +209,15 @@ where
         &physical.observation,
         &physical.sample_generation_id,
     );
-    let started = match start(&volume, jit_config.as_bytes(), bind, admission).await {
-        Ok(started) => started,
-        Err(_) => {
-            scoped
-                .mark_physical_runner_start_uncertain(claim)
-                .await
-                .map_err(super::super::map_journal)?;
-            return Err(EnsureError::Uncertain);
-        }
+    let started = if let Ok(started) = start(&volume, jit_config.as_bytes(), bind, admission).await
+    {
+        started
+    } else {
+        scoped
+            .mark_physical_runner_start_uncertain(claim)
+            .await
+            .map_err(super::super::map_journal)?;
+        return Err(EnsureError::Uncertain);
     };
     scoped
         .record_physical_worker_ready(claim, &started.runner_id, &started.dind_id)

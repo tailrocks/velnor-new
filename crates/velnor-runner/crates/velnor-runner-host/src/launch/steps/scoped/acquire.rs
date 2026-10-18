@@ -1,4 +1,4 @@
-//! Durable request authorization and AcquireJobs effect.
+//! Durable request authorization and `AcquireJobs` effect.
 
 use std::cell::Cell;
 

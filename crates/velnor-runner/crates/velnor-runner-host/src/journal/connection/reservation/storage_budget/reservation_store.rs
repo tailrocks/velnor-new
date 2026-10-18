@@ -665,13 +665,12 @@ fn pool_aggregate_fits(
     {
         return Ok(false);
     }
-    if limit.inode_policy() == StorageInodePolicy::Finite {
-        if inodes
+    if limit.inode_policy() == StorageInodePolicy::Finite
+        && inodes
             .checked_add(limit.reserve_inodes())
             .is_none_or(|sum| sum > observation.available_inodes())
-        {
-            return Ok(false);
-        }
+    {
+        return Ok(false);
     }
     Ok(true)
 }

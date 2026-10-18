@@ -27,7 +27,9 @@ mod stale_auth_tests;
 use super::mint_origin::MintOrigin;
 use super::{Drive, Lane};
 
-pub(super) use scale::{scale_id, scale_unacked};
+pub(super) use scale::scale_id;
+#[cfg(test)]
+pub(super) use scale::scale_unacked;
 
 pub(super) use scoped::launch_scoped;
 

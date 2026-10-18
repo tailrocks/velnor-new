@@ -33,7 +33,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Bind immutable runner and private DinD container IDs.
+    /// Bind immutable runner and private `DinD` container IDs.
     pub(crate) async fn bind_worker(
         &self,
         id: i64,
@@ -107,7 +107,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Bind the runner and DinD resource IDs as one immutable pair.
+    /// Bind the runner and `DinD` resource IDs as one immutable pair.
     pub(crate) async fn bind_pair(
         &self,
         id: i64,

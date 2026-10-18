@@ -27,7 +27,7 @@ pub(crate) enum SourceAuthorizationResult {
     Replayed,
 }
 
-/// Exact outcome of one claimed AcquireJobs effect.
+/// Exact outcome of one claimed `AcquireJobs` effect.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AssignedAcquireResult {
     /// IDs from the authoritative successful response.

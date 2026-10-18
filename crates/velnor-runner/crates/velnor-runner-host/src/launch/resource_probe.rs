@@ -125,7 +125,7 @@ pub(crate) async fn verify_worker_images_for_engine(
     provider::verify_worker_images_for_engine(docker, expected, images).await
 }
 
-/// Prepare the attested Runner and DinD images on the selected daemon.
+/// Prepare the attested Runner and `DinD` images on the selected daemon.
 pub(crate) async fn prepare_worker_images(
     docker: &Docker,
     journal: &Journal,

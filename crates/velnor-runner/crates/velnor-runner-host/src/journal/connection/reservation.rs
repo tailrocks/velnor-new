@@ -21,14 +21,13 @@ mod storage_budget_samples_tests;
 mod storage_cache_projection_tests;
 
 pub(crate) use admission::{ReservationRequest, ReservationResult};
-pub(crate) use enumerate::{
-    PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation,
-};
 pub(crate) use limits::{CapacityLimits, OperationalCapacityLimits};
-pub(crate) use read::{ReservationSnapshot, ReservationState};
+#[cfg(test)]
+pub(crate) use read::ReservationState;
+pub(crate) use storage_budget::StorageAdmission;
+#[cfg(test)]
 pub(crate) use storage_budget::{
-    StorageAdmission, StorageAdmissionSample, StorageCacheProjection, StorageFilesystemKind,
-    StorageInodePolicy, StorageMedium, StorageMemoryObservation, StoragePoolLimit,
+    StorageAdmissionSample, StorageCacheProjection, StorageMedium, StoragePoolLimit,
     StoragePoolObservation, StorageProfile, StorageReservationPlan, StorageRole, StorageRoleCharge,
     StorageRoleLimit, StorageSampleIdentity,
 };

@@ -9,13 +9,18 @@ mod reservation_store;
 mod role;
 mod sample;
 
+#[cfg(test)]
 pub(crate) use observations::{
     StorageMemoryObservation, StoragePoolObservation, StorageSampleIdentity,
 };
-pub(crate) use plan::StorageCacheProjection;
-pub(crate) use plan::{StorageReservationPlan, StorageRoleCharge};
-pub(crate) use profile::{StoragePoolLimit, StorageProfile, StorageRoleLimit};
+#[cfg(test)]
+pub(crate) use plan::{StorageCacheProjection, StorageReservationPlan, StorageRoleCharge};
+pub(crate) use profile::StorageProfile;
+#[cfg(test)]
+pub(crate) use profile::{StoragePoolLimit, StorageRoleLimit};
+#[cfg(test)]
 pub(crate) use role::{StorageFilesystemKind, StorageInodePolicy, StorageMedium, StorageRole};
+
 pub(crate) use sample::{StorageAdmission, StorageAdmissionSample};
 
 pub(super) async fn validate_schema(

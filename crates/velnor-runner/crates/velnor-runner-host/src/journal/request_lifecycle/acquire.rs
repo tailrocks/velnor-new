@@ -1,4 +1,4 @@
-//! One-shot AcquireJobs state transitions and request lookup.
+//! One-shot `AcquireJobs` state transitions and request lookup.
 
 use serde::Serialize;
 
@@ -26,7 +26,7 @@ enum AcquireResponse<'a> {
 }
 
 impl ConnectionJournal {
-    /// Record the one-shot AcquireJobs intent before the HTTP request.
+    /// Record the one-shot `AcquireJobs` intent before the HTTP request.
     pub(crate) async fn claim_request_acquire(
         &self,
         identity: &AssignmentIdentity,
@@ -64,7 +64,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Record the exact AcquireJobs outcome; non-exact IDs remain uncertain.
+    /// Record the exact `AcquireJobs` outcome; non-exact IDs remain uncertain.
     pub(crate) async fn record_request_acquire(
         &self,
         identity: &AssignmentIdentity,
@@ -111,7 +111,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Read the durable AcquireJobs state for one scoped request.
+    /// Read the durable `AcquireJobs` state for one scoped request.
     pub(crate) async fn request_acquire_state(
         &self,
         identity: &AssignmentIdentity,
