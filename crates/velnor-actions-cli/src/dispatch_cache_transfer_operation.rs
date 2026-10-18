@@ -2,13 +2,13 @@ use std::env;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use velnor_actions_contract::workflow::QualificationCacheBackendObservation;
 use velnor_actions_orchestrator::{
-    CacheActionObservation, CacheRestoreStatus, QualificationCacheBindingRequest,
-    QualificationCachePayloadContext, QualificationCachePayloadExport,
-    QualificationCachePayloadImport, QualificationCacheRootEnvironment,
-    bind_qualification_cache_runtime, export_qualification_cache_payload,
-    import_qualification_cache_payload, validate_qualification_cache_root_observation,
+    CacheActionObservation, CacheRestoreStatus, QualificationCacheBackendObservation,
+    QualificationCacheBindingRequest, QualificationCachePayloadContext,
+    QualificationCachePayloadExport, QualificationCachePayloadImport,
+    QualificationCacheRootEnvironment, bind_qualification_cache_runtime,
+    export_qualification_cache_payload, import_qualification_cache_payload,
+    validate_qualification_cache_root_observation,
 };
 
 const ROOTS_ENV: &str = "VELNOR_QUALIFICATION_CACHE_ROOTS";

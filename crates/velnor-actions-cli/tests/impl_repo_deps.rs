@@ -10,6 +10,8 @@ use std::error::Error;
 pub(crate) mod archive_deps;
 #[path = "impl_repo_size_limits.rs"]
 mod size_limits;
+#[path = "impl_repo_workflow_yaml_deps.rs"]
+pub(crate) mod workflow_yaml_deps;
 
 use crate::impl_cli_tmp::git_fixture;
 
@@ -30,11 +32,7 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-workflow-renderer",
         ],
         "crates/velnor-actions-cli" => {
-            vec![
-                "velnor-actions-contract",
-                "velnor-actions-freshness",
-                "velnor-actions-orchestrator",
-            ]
+            vec!["velnor-actions-freshness", "velnor-actions-orchestrator"]
         }
         _ => vec!["velnor-actions-contract"],
     }

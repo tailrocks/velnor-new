@@ -4,13 +4,11 @@ use std::env;
 use std::path::{Component, Path, PathBuf};
 use std::process::ExitCode;
 
-use velnor_actions_contract::workflow::{
-    BoundQualificationCacheKeys, QualificationCacheBackendObservation,
-    QualificationCacheRestoreExpectation,
-};
 use velnor_actions_orchestrator::{
-    QualificationCacheBindingOutputs, bind_qualification_cache_runtime,
-    observe_qualification_cache_backend, validate_qualification_cache_backend_observation,
+    BoundQualificationCacheKeys, MAX_CACHE_KEY_BYTES, QualificationCacheBackendObservation,
+    QualificationCacheBindingOutputs, QualificationCacheRestoreExpectation,
+    bind_qualification_cache_runtime, observe_qualification_cache_backend,
+    validate_qualification_cache_backend_observation,
 };
 
 use super::cache_bind;
@@ -21,7 +19,7 @@ pub(crate) const OP: &str = "observe-qualification-cache-backend-v1";
 const WORKSPACE_ENV: &str = "GITHUB_WORKSPACE";
 const ACTION_HIT_ENV: &str = "VELNOR_QUALIFICATION_CACHE_HIT";
 const ACTION_MATCHED_KEY_ENV: &str = "VELNOR_QUALIFICATION_CACHE_MATCHED_KEY";
-const MAX_ACTION_KEY_BYTES: usize = velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
+const MAX_ACTION_KEY_BYTES: usize = MAX_CACHE_KEY_BYTES;
 const MAX_WORKSPACE_PATH_BYTES: usize = 4_096;
 
 /// Bind the current layer, observe the actual restore, and write only admitted

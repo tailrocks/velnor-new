@@ -1,5 +1,13 @@
 //! Public orchestrator API re-exports.
 
+#[doc(hidden)]
+pub use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
+#[doc(hidden)]
+pub use velnor_actions_contract::workflow::{
+    BoundQualificationCacheKeys, QualificationCacheBackendObservation,
+    QualificationCacheRestoreExpectation,
+};
+
 pub use super::baseline_publish::{PUBLISH_OP, PublishOutputs, baseline_publish};
 pub use super::check_evidence::gate::tools::{MeasuredToolExecutable, UntrustedToolMeasurement};
 pub use super::check_runtime::preparation::acquisition::measurement::{
