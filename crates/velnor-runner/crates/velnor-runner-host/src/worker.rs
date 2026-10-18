@@ -72,8 +72,9 @@ fn push_nibble(name: &mut String, nibble: u8) -> Result<(), HostError> {
     Ok(())
 }
 
-/// Make a Docker create request from an audited runner plan.
-/// Stdin carries JIT. The plan does not.
+/// Make a Docker create request only after `audit_plan` gives success.
+/// The caller writes the JIT configuration to stdin.
+/// The plan does not contain it.
 ///
 /// # Errors
 ///
@@ -106,8 +107,9 @@ pub fn runner_create(
     })
 }
 
-/// Make a runner Docker create request only from immutable images that pass
+/// Make a runner Docker create request only from images that pass
 /// the release and selected-engine checks.
+/// Use the image IDs in the selected engine.
 /// Use the guest metadata file for the same connection and image bundle.
 pub(crate) fn runner_create_verified(
     plan: &ContainerPlan,
@@ -127,12 +129,12 @@ pub(crate) fn runner_create_verified(
 /// Join `spec` to the private `DinD` network namespace.
 ///
 /// Published service ports and Testcontainers use the runner's localhost.
-/// The value of `dind_id` must be one Docker container ID.
-/// The function rejects `host` and other modes.
+/// `dind_id` must identify one Docker container.
+/// The function sets network mode to the DinD container.
 ///
 /// # Errors
 ///
-/// Gives [`HostError::ForbiddenMount`] when `dind_id` does not contain 64 hexadecimal digits.
+/// Gives [`HostError::ForbiddenMount`] when `dind_id` is not a 64-character string of hexadecimal digits.
 pub(crate) fn join_dind_net(
     mut spec: CreateProjection,
     dind_id: &str,
@@ -148,18 +150,19 @@ fn dind_container_id(id: &str) -> bool {
     id.len() == 64 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-/// Private `DinD` create. Privilege is not a flag on the runner plan.
+/// Make a privileged DinD container request.
+/// Do not set this privilege on the runner plan.
 ///
 /// The runner plan's socket volume is at `/run`.
 /// The shared work volume is at `/home/runner/_work`.
 /// A DinD-only Docker volume is at `/var/lib/docker`.
 /// The runner container does not mount the Docker data volume.
 /// The DinD container does not mount the action archive volume.
-/// The VFS storage driver on the container layer makes later Testcontainers starts slower.
+/// The Docker data volume uses storage outside the container layer.
 ///
 /// # Errors
 ///
-/// Gives [`HostError::ForbiddenMount`] when `private_volume` is not one private name.
+/// Gives [`HostError::ForbiddenMount`] when `private_volume` does not name one valid private volume.
 pub fn dind_create(
     private_volume: &str,
     resource_budget: ResourceBudget,
@@ -191,8 +194,7 @@ pub fn dind_create(
     })
 }
 
-/// Make a privileged DinD create request only from the immutable image bundle
-/// that passes release and selected-engine checks.
+/// Make a privileged DinD request only after the release and selected-engine checks for both images give success.
 pub(crate) fn dind_create_verified(
     private_volume: &str,
     resource_budget: ResourceBudget,
