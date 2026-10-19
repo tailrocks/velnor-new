@@ -379,6 +379,7 @@ capture_release_dogfood() {
   fi
   stage_candidate_manifest "$repo" dogfood
   (
+    export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
     cd "$repo" \
       && git -c init.defaultBranch=main init -q \
       && git remote add origin https://github.com/tailrocks/velnor-new.git \

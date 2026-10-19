@@ -201,6 +201,7 @@ fn provider_saves(job: &Job) -> Vec<&Step> {
 /// One provider-restore job over an explicit key + path.
 fn provider_job(key: &str, path: &str) -> Job {
     let restore = Step {
+        parallel: false,
         name: "Restore Tofu providers".to_owned(),
         id: Some(StepId::TofuProviders),
         role: Some(StepRole::TofuProvidersRestore),

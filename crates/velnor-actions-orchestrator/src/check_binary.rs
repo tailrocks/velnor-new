@@ -8,7 +8,7 @@ use velnor_actions_workflow_renderer::setup::{
     MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
 };
 
-/// Raw executable byte counts measured for checksum-qualified Mise 2026.10.14.
+/// Raw executable byte counts measured for checksum-qualified Mise 2026.10.15.
 /// Each bound travels with the SHA selected for that same native platform.
 struct MiseBinaryPin {
     sha256: &'static str,
@@ -126,7 +126,7 @@ mod tests {
         let marker = temp.path().join("wrapper-ran");
         let source = temp.path().join("mise");
         let script = format!(
-            "#!/bin/sh\nprintf invoked > '{}'\nprintf '2026.10.14\\n'\n",
+            "#!/bin/sh\nprintf invoked > '{}'\nprintf '2026.10.15\\n'\n",
             marker.display()
         );
         std::fs::write(&source, script).expect("wrapper");

@@ -200,7 +200,7 @@ fn c8_crate_jobs_install_validators_for_test_spawns() -> TestResult {
                 .steps
                 .iter()
                 .find(|step| step.name == "Prepare pinned tools")
-                .ok_or("phase prepare missing")?;
+                .ok_or("crate prepare missing")?;
             let StepKind::Shell { run, .. } = &step.kind else {
                 return Err("prepare must be a shell".into());
             };

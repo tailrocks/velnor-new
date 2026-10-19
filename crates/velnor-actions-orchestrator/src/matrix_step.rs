@@ -71,6 +71,9 @@ fn obligation_stack(task_id: &str) -> Option<Stack> {
 ///
 /// Tofu kinds thread through the tofu env mapping (the T03
 /// automation pair); everything else keeps the rust mapping.
+/// Cargo's target-directory override, set only for concurrent check lanes.
+const CARGO_TARGET_DIR_ENV: &str = "CARGO_TARGET_DIR";
+
 fn payload_env_for_obligation(task_id: &str, kind: &str) -> Vec<(OsString, OsString)> {
     match obligation_stack(task_id) {
         Some(Stack::Tofu) => velnor_actions_tofu::payload_env_for_kind(kind),
@@ -194,8 +197,10 @@ pub(crate) fn obligation_identity_env(
 /// carry the adapter `payload_env_for_kind` pairs (`RUSTDOCFLAGS=-D
 /// warnings`) and tofu obligations the automation pair, matching the
 /// plan identity envelope. Tofu obligations run triple-less; every
-/// other stack keeps the owned-homes triple. The step skips via `if:`
-/// when the plan covered this obligation; unknown coverage executes.
+/// other stack keeps the owned-homes triple. A concurrent Rust check
+/// also carries `CARGO_TARGET_DIR` for its workspace-relative target
+/// lane. The step skips via `if:` when the plan covered this
+/// obligation; unknown coverage executes.
 ///
 /// # Errors
 ///
@@ -206,6 +211,7 @@ pub(crate) fn obligation_step(
     catalog: &ToolCatalog,
     matrix_cap: Option<u32>,
     helper_version: &str,
+    target_lane: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
     // Unknown segments keep the previous single-stack behavior: the
     // grammar validation below fails them as malformed task IDs.
@@ -221,9 +227,16 @@ pub(crate) fn obligation_step(
             value.to_string_lossy().into_owned(),
         );
     }
+    if let Some(lane) = target_lane {
+        if !needs_rust {
+            return Err(crate::internal::internal("tofu_target_lane"));
+        }
+        payload_env.insert(CARGO_TARGET_DIR_ENV.to_owned(), format!("target/{lane}"));
+    }
     let mut step = if needs_rust {
         let env = task_step_env(catalog, &payload_env, true)?;
         Step {
+            parallel: false,
             name: obligation.step_name.clone(),
             id: None,
             role: None,

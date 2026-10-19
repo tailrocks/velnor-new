@@ -205,26 +205,21 @@ fn doc_env_denies_warnings() {
 }
 
 #[test]
-fn doc_gated_by_doctest_and_clippy() -> Result<(), ContractError> {
+fn checks_are_independent_without_quality_gates() -> Result<(), ContractError> {
     let package = package();
     let groups = groups_for(&package)?;
-    let clippy = groups
-        .iter()
-        .find(|g| g.kind == TaskKind::Clippy)
-        .expect("clippy");
-    let doctest = groups
-        .iter()
-        .find(|g| g.kind == TaskKind::Doctest)
-        .expect("doctest");
+    for group in &groups {
+        assert!(
+            group.gated_by.is_empty(),
+            "{} has no quality gate",
+            group.task_id
+        );
+    }
     let doc = groups
         .iter()
         .find(|g| g.kind == TaskKind::Doc)
         .expect("doc");
-    assert_eq!(
-        doc.gated_by,
-        vec![clippy.task_id.clone(), doctest.task_id.clone()]
-    );
-    assert_eq!(doctest.gated_by, vec![clippy.task_id.clone()]);
+    assert!(doc.depends_on.is_empty(), "docs need no doctest result");
     Ok(())
 }
 

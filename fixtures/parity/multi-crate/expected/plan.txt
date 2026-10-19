@@ -44,7 +44,7 @@ Workflow to generate
         - stack/rust/crates/tool/nextest/default/shard-1-of-2
         - stack/rust/crates/tool/nextest/default/shard-2-of-2
   Parallel: 2 execution jobs; dependencies preserved; no matrix fan-out
-  Critical path: stack/rust/crates/app/clippy/default -> stack/rust/crates/app/build/default -> stack/rust/crates/app/nextest/default/shard-1-of-2 (3 tasks)
+  Critical path: stack/rust/crates/app/build/default -> stack/rust/crates/app/nextest/default/shard-1-of-2 (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
   Actionlint: 1.7.12 pinned

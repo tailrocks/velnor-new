@@ -67,9 +67,9 @@ pub use profile::{
     detect_profile,
 };
 pub use propose::{
-    KIND_DISPLAY_WORDS, ToolNeeds, is_clippy_kind, is_nextest_kind, is_workspace_fmt_task,
-    payload_env_for_kind, propose_task, resource_class_for_kind, step_base_name, task_kind_rank,
-    tool_needs,
+    KIND_DISPLAY_WORDS, ToolNeeds, concurrent_target_lane, is_clippy_kind, is_nextest_kind,
+    is_workspace_fmt_task, payload_env_for_kind, propose_task, resource_class_for_kind,
+    runs_before_parallel_checks, step_base_name, task_kind_rank, tool_needs,
 };
 pub use release_config::{
     DEFAULT_TAG_PATTERN, EmitOptions, ExistingTag, TagOutcome, TagState, VersionGroup,

@@ -99,7 +99,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # runner_label = "ubuntu-24.04" # Exact older pinned runner for compat; omit for the ubuntu-26.04 default.
 # generator_validation = "bootstrap"  # Generator validation mode.
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.
-# crate_timeout_minutes = 5            # Timeout for each crate job; range 1 through 360.
+# crate_timeout_minutes = 5            # timeout-minutes for every Rust crate job and OpenTofu root job; bounded 1..=360.
 
 # Optional verification jobs, one support job per entry, all covered by the
 # required gate. Unknown names fail generate. Enabled jobs may need

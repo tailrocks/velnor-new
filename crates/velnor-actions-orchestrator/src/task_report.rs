@@ -330,6 +330,9 @@ mod task_report_cover_tests;
 #[path = "task_report_merge_tests.rs"]
 mod task_report_merge_tests;
 #[cfg(test)]
+#[path = "task_report_parallel_tests.rs"]
+mod task_report_parallel_tests;
+#[cfg(test)]
 #[cfg(test)]
 #[path = "task_report_tests.rs"]
 mod task_report_tests;

@@ -17,6 +17,7 @@ fn role_step(role: StepRole) -> Step {
         id: None,
         role: Some(role),
         condition: None,
+        parallel: false,
         kind: StepKind::Shell {
             run: vec!["true".to_owned()],
             env: BTreeMap::new(),
@@ -99,6 +100,7 @@ fn valid_role_step(role: StepRole) -> Step {
         id: (role == StepRole::PreseedStage).then_some(StepId::PreseedStage),
         role: Some(role),
         condition: None,
+        parallel: false,
         kind,
     }
 }
@@ -170,6 +172,7 @@ fn always_consumer_fails_on_missing_plan_before_helper_download() -> Result<(), 
         id: None,
         role: None,
         condition: None,
+        parallel: false,
         kind: StepKind::Internal {
             operation: "merge-v1".to_owned(),
             env: BTreeMap::new(),

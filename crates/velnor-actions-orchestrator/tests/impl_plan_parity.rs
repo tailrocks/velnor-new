@@ -270,7 +270,7 @@ fn parity_pure_tofu() -> TestResult {
         );
         assert!(yaml.contains(&format!("\n  {id}:")), "yaml has {id}");
         assert!(
-            !plan.contains("Rust phase job"),
+            !plan.contains("Rust crate job"),
             "no rust label on a pure-tofu plan:\n{plan}"
         );
     }

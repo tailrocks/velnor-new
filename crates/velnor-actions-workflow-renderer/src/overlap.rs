@@ -1,24 +1,16 @@
 //! Overlap-then-join for independent prep (parallelism §10 fixture).
 //!
-//! V1 emits no `parallel:`/`background:` step syntax (the pinned
-//! actionlint cannot parse it), so independent preparation overlaps at
-//! the job level: two branch jobs with no ordering edge run concurrently
-//! and the consumer joins both via `needs`. This module wires the join
-//! and proves branch independence instead of trusting the caller.
+//! Independent preparation that needs separate runners overlaps at the job
+//! level: two branch jobs with no ordering edge run concurrently and the
+//! consumer joins both via `needs`. This module wires the join and proves
+//! branch independence instead of trusting the caller. Step-level
+//! concurrency inside one job uses native GitHub background steps.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::Job;
 
 use crate::RenderError;
-
-#[path = "overlap_steps.rs"]
-mod overlap_steps;
-pub use self::overlap_steps::{
-    BackgroundStep, MAX_CONCURRENT_BACKGROUND_STEPS, NativeStepItem, ParallelStepGroup, WaitStep,
-    WaitTarget, render_background_step_yaml, render_parallel_group_yaml, render_wait_step_yaml,
-    validate_native_step_sequence,
-};
 
 /// Typed overlap: two independent prep branches plus their join job.
 #[derive(Debug, Clone, PartialEq, Eq)]

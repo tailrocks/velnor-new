@@ -80,6 +80,12 @@ pub(super) fn names(job: &Job) -> Vec<&str> {
 #[path = "crate_jobs_tests/planning.rs"]
 mod planning;
 
+#[path = "crate_jobs_prelude_tests.rs"]
+mod preludes;
+
+#[path = "crate_jobs_parallel_tests.rs"]
+mod parallel_tests;
+
 #[test]
 fn shards_name_their_index() {
     assert_eq!(shard_suffix("stack/rust/root/nextest/default"), None);
@@ -183,6 +189,7 @@ fn empty_groups_build_no_jobs() {
 #[test]
 fn acquire_stages_before_report_wrappers() {
     let acquire = Step {
+        parallel: false,
         name: "Acquire Velnor".to_owned(),
         id: None,
         role: None,

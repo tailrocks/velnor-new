@@ -94,7 +94,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: adb8285eaed685b22f4a6fcf2a03cb990d5a6881a27ca17d60e41575efcad2a8
+          d: bdeac23f09522b013f150f477b687d9baf503ed775b92278f1501f2694acd1b7
       - &s6
         name: Restore Mise tools
         id: tools-cache-restore
@@ -113,12 +113,12 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 50be7185bcf75929f01cc5630276bcb43ca367f7c5b176e2580903d28c611dc4
-          version: 2026.10.14
+          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
+          version: 2026.10.15
       - name: Prepare pinned tools
         run: mise --no-config --no-env --no-hooks install actionlint@1.7.12 shellcheck@0.11.0
       - name: Run actionlint
-        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
+        run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color -ignore '^unexpected key \"background\" for step to (run shell command|execute action)\\. ' -ignore '^step must run script with \"run\" section or run action with \"uses\" section$'"
       - &s8
         name: Save Mise tools
         if: success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true'
@@ -163,7 +163,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: c31954656c6282b01e0be25cb8a396705d2c5b09e2887f68e7098fea65eaaae6
+          d: 225cbaec45059f1f274786df69249e98485d7e7a46777016622a8ae8b63cf42e
       - *s6
       - *s7
       - name: Run cargo-deny
@@ -186,7 +186,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 83b296e7b562623f6ff603dfd5dc7b9d620e6d1332721b39a80d233909cc2385
+          d: 820f21f8adb5320428fd01da985a94597abffd299b35fec4db0e9818acf21f1f
       - *s6
       - *s7
       - name: Prepare pinned tools
@@ -260,7 +260,7 @@ jobs:
         name: Verify native MBX version
         id: mbx-ready
         env: *m12
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] || { printf '\\''%s\\n'\\'' '\\''MBX_CACHE_DIR changed from its stable runner-temp path'\\'' >&2; exit 1; }; [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX store directories are missing'\\'' >&2; exit 1; }; check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path contains a symlink'\\'' >&2; exit 1; }; case \"$GITHUB_RUN_ID\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run id must be numeric'\\'' >&2; exit 1 ;; esac; case \"$GITHUB_RUN_ATTEMPT\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run attempt must be numeric'\\'' >&2; exit 1 ;; esac; probe_dir=\"$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; [ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '\\''%s\\n'\\'' '\\''verification scratch already exists'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve verification scratch'\\'' >&2; exit 1; }; cleanup() { rm -f \"$probe_dir/version\" \"$probe_dir/cache-dir\"; rmdir \"$probe_dir\"; }; trap cleanup EXIT; trap '\\''exit 1'\\'' HUP INT TERM; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$mbx_bin\" --version > \"$probe_dir/version\"; exec 3< \"$probe_dir/version\"; IFS= read -r version_line <&3 || { printf '\\''%s\\n'\\'' '\\''MBX version output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX version output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$version_line\" = '\\''mbx 1.24.1'\\'' ] || { printf '\\''%s\\n'\\'' '\\''MBX on PATH does not match the pinned action version'\\'' >&2; exit 1; }; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$mbx_bin\" cache dir > \"$probe_dir/cache-dir\"; exec 3< \"$probe_dir/cache-dir\"; IFS= read -r cache_dir <&3 || { printf '\\''%s\\n'\\'' '\\''MBX cache dir output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX cache dir output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$cache_dir\" = \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX reported an unexpected object store path'\\'' >&2; exit 1; }; python3 -c '\\''exec(\"import os, pathlib, shutil, subprocess\\nws = os.environ.get(\\\"GITHUB_WORKSPACE\\\", \\\"\\\")\\nif ws and os.path.exists(os.path.join(ws, \\\".git\\\")):\\n    dirty = {p.decode() for p in subprocess.check_output([\\\"git\\\", \\\"-C\\\", ws, \\\"diff\\\", \\\"--name-only\\\", \\\"-z\\\", \\\"HEAD\\\"]).split(b\\\"\\\\0\\\") if p}\\n    cur = {}\\n    for entry in subprocess.check_output([\\\"git\\\", \\\"-C\\\", ws, \\\"ls-files\\\", \\\"-s\\\", \\\"-z\\\"]).split(b\\\"\\\\0\\\"):\\n        if entry:\\n            meta, rel_b = entry.split(b\\\"\\\\t\\\", 1)\\n            cur[rel_b.decode()] = meta.split()[1].decode()\\n    for oids_file in pathlib.Path(ws).glob(\\\"**/target/debug/.mbx-build-script-shims/.velnor-source-oids\\\"):\\n        shims = oids_file.parent\\n        td = shims.parent.parent\\n        vdoc = shims / \\\".velnor-doc\\\"\\n        doc = td / \\\"doc\\\"\\n        if vdoc.is_dir() and not vdoc.is_symlink():\\n            shutil.rmtree(doc, ignore_errors=True)\\n            shutil.move(str(vdoc), str(doc))\\n        for line in oids_file.read_text().splitlines():\\n            if not line:\\n                continue\\n            oid, ns_s, rel = line.split(\\\"\\\\t\\\", 2)\\n            if rel not in dirty and cur.get(rel) == oid:\\n                full = os.path.join(ws, rel)\\n                if os.path.isfile(full) and not os.path.islink(full):\\n                    ns = int(ns_s)\\n                    os.utime(full, ns=(ns, ns))\\n\")'\\''; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; mbx_disk_sample after-cache-restore'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] || { printf '\\''%s\\n'\\'' '\\''MBX_CACHE_DIR changed from its stable runner-temp path'\\'' >&2; exit 1; }; [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX store directories are missing'\\'' >&2; exit 1; }; check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path contains a symlink'\\'' >&2; exit 1; }; case \"$GITHUB_RUN_ID\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run id must be numeric'\\'' >&2; exit 1 ;; esac; case \"$GITHUB_RUN_ATTEMPT\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run attempt must be numeric'\\'' >&2; exit 1 ;; esac; probe_dir=\"$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; [ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '\\''%s\\n'\\'' '\\''verification scratch already exists'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve verification scratch'\\'' >&2; exit 1; }; cleanup() { rm -f \"$probe_dir/version\" \"$probe_dir/cache-dir\"; rmdir \"$probe_dir\"; }; trap cleanup EXIT; trap '\\''exit 1'\\'' HUP INT TERM; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$mbx_bin\" --version > \"$probe_dir/version\"; exec 3< \"$probe_dir/version\"; IFS= read -r version_line <&3 || { printf '\\''%s\\n'\\'' '\\''MBX version output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX version output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$version_line\" = '\\''mbx 1.24.1'\\'' ] || { printf '\\''%s\\n'\\'' '\\''MBX on PATH does not match the pinned action version'\\'' >&2; exit 1; }; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$mbx_bin\" cache dir > \"$probe_dir/cache-dir\"; exec 3< \"$probe_dir/cache-dir\"; IFS= read -r cache_dir <&3 || { printf '\\''%s\\n'\\'' '\\''MBX cache dir output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX cache dir output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$cache_dir\" = \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX reported an unexpected object store path'\\'' >&2; exit 1; }; python3 -c '\\''exec(\"import os, pathlib, shutil, subprocess\\nws = os.environ.get(\\\"GITHUB_WORKSPACE\\\", \\\"\\\")\\nif ws and os.path.exists(os.path.join(ws, \\\".git\\\")):\\n    dirty = {p.decode() for p in subprocess.check_output([\\\"git\\\", \\\"-C\\\", ws, \\\"diff\\\", \\\"--name-only\\\", \\\"-z\\\", \\\"HEAD\\\"]).split(b\\\"\\\\0\\\") if p}\\n    cur = {}\\n    for entry in subprocess.check_output([\\\"git\\\", \\\"-C\\\", ws, \\\"ls-files\\\", \\\"-s\\\", \\\"-z\\\"]).split(b\\\"\\\\0\\\"):\\n        if entry:\\n            meta, rel_b = entry.split(b\\\"\\\\t\\\", 1)\\n            cur[rel_b.decode()] = meta.split()[1].decode()\\n    for pattern in (\\\"**/target/debug/.mbx-build-script-shims/.velnor-doc\\\", \\\"**/target/velnor-*/debug/.mbx-build-script-shims/.velnor-doc\\\"):\\n        for vdoc in sorted(pathlib.Path(ws).glob(pattern)):\\n            doc = vdoc.parent.parent.parent / \\\"doc\\\"\\n            if vdoc.is_dir() and not vdoc.is_symlink():\\n                shutil.rmtree(doc, ignore_errors=True)\\n                shutil.move(str(vdoc), str(doc))\\n    for oids_file in pathlib.Path(ws).glob(\\\"**/target/debug/.mbx-build-script-shims/.velnor-source-oids\\\"):\\n        for line in oids_file.read_text().splitlines():\\n            if not line:\\n                continue\\n            oid, ns_s, rel = line.split(\\\"\\\\t\\\", 2)\\n            if rel not in dirty and cur.get(rel) == oid:\\n                full = os.path.join(ws, rel)\\n                if os.path.isfile(full) and not os.path.islink(full):\\n                    ns = int(ns_s)\\n                    os.utime(full, ns=(ns, ns))\\n\")'\\''; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; mbx_disk_sample after-cache-restore'"
       - &s12
         name: Fetch Cargo sources
         env: *m9
@@ -332,7 +332,7 @@ jobs:
         name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
         env: *m10
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path changed before cleanup'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; target_dir=\"target\"; mbx_disk_sample before-final-clean; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; clean_status=0; if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$mbx_bin\" cache dir >/dev/null 2>&1; then clean_status=0; else clean_status=$?; fi; if [ -d \"$target_dir\" ] && [ ! -L \"$target_dir\" ]; then rm -rf \"$target_dir/velnor-cli-nested-cargo\" \"$target_dir/tmp\" \"$target_dir/debug/examples\" \"$target_dir/debug/incremental\"; python3 -c '\\''exec(\"import os, pathlib, shutil, subprocess, sys\\ntd = pathlib.Path(sys.argv[1])\\ndbg = td / \\\"debug\\\"\\nif dbg.is_dir() and not dbg.is_symlink():\\n    shims = dbg / \\\".mbx-build-script-shims\\\"\\n    os.makedirs(shims, exist_ok=True)\\n    vdoc = shims / \\\".velnor-doc\\\"\\n    shutil.rmtree(vdoc, ignore_errors=True)\\n    doc = td / \\\"doc\\\"\\n    if doc.is_dir() and not doc.is_symlink():\\n        shutil.move(str(doc), str(vdoc))\\n    ws = os.environ.get(\\\"GITHUB_WORKSPACE\\\", \\\"\\\")\\n    if ws and os.path.exists(os.path.join(ws, \\\".git\\\")):\\n        out = subprocess.check_output([\\\"git\\\", \\\"-C\\\", ws, \\\"ls-files\\\", \\\"-s\\\", \\\"-z\\\"])\\n        lines = []\\n        for entry in out.split(b\\\"\\\\0\\\"):\\n            if not entry:\\n                continue\\n            meta, rel_b = entry.split(b\\\"\\\\t\\\", 1)\\n            oid = meta.split()[1].decode()\\n            rel = rel_b.decode()\\n            full = os.path.join(ws, rel)\\n            if os.path.isfile(full) and not os.path.islink(full):\\n                lines.append(f\\\"{oid}\\\\t{os.stat(full).st_mtime_ns}\\\\t{rel}\\\\n\\\")\\n        (shims / \\\".velnor-source-oids\\\").write_text(\\\"\\\".join(lines))\\n\")'\\'' \"$target_dir\"; fi; mbx_disk_sample after-final-clean; exit \"$clean_status\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path changed before cleanup'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; target_dir=\"target\"; mbx_disk_sample before-final-clean; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; clean_status=0; if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$mbx_bin\" cache dir >/dev/null 2>&1; then clean_status=0; else clean_status=$?; fi; if [ -d \"$target_dir\" ] && [ ! -L \"$target_dir\" ]; then rm -rf \"$target_dir/velnor-cli-nested-cargo\" \"$target_dir/tmp\" \"$target_dir/debug/examples\" \"$target_dir/debug/incremental\"; python3 -c '\\''exec(\"import os, pathlib, shutil, subprocess, sys\\ntd = pathlib.Path(sys.argv[1])\\ndbg = td / \\\"debug\\\"\\nif dbg.is_dir() and not dbg.is_symlink():\\n    shims = dbg / \\\".mbx-build-script-shims\\\"\\n    os.makedirs(shims, exist_ok=True)\\n    for base in [td] + sorted(c for c in td.iterdir() if c.name.startswith(\\\"velnor-\\\") and c.is_dir() and not c.is_symlink()):\\n        bdbg = base / \\\"debug\\\"\\n        if not bdbg.is_dir() or bdbg.is_symlink():\\n            continue\\n        bshims = bdbg / \\\".mbx-build-script-shims\\\"\\n        os.makedirs(bshims, exist_ok=True)\\n        vdoc = bshims / \\\".velnor-doc\\\"\\n        shutil.rmtree(vdoc, ignore_errors=True)\\n        doc = base / \\\"doc\\\"\\n        if doc.is_dir() and not doc.is_symlink():\\n            shutil.move(str(doc), str(vdoc))\\n    ws = os.environ.get(\\\"GITHUB_WORKSPACE\\\", \\\"\\\")\\n    if ws and os.path.exists(os.path.join(ws, \\\".git\\\")):\\n        out = subprocess.check_output([\\\"git\\\", \\\"-C\\\", ws, \\\"ls-files\\\", \\\"-s\\\", \\\"-z\\\"])\\n        lines = []\\n        for entry in out.split(b\\\"\\\\0\\\"):\\n            if not entry:\\n                continue\\n            meta, rel_b = entry.split(b\\\"\\\\t\\\", 1)\\n            oid = meta.split()[1].decode()\\n            rel = rel_b.decode()\\n            full = os.path.join(ws, rel)\\n            if os.path.isfile(full) and not os.path.islink(full):\\n                lines.append(f\\\"{oid}\\\\t{os.stat(full).st_mtime_ns}\\\\t{rel}\\\\n\\\")\\n        (shims / \\\".velnor-source-oids\\\").write_text(\\\"\\\".join(lines))\\n\")'\\'' \"$target_dir\"; fi; mbx_disk_sample after-final-clean; exit \"$clean_status\"'"
   publish-baseline:
     name: Publish baseline
     runs-on: ubuntu-26.04
@@ -464,7 +464,7 @@ jobs:
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 0efb2b87dd3099eb249d128fc9a31f75ce0f2876cdfd1e5f3afb0cefd7b47d56
+          d: 1b13fad7f3f6f51b5e12d86e6fe226dcef99a92a863fa4702444bc619b683830
       - &s17
         name: Restore Mise tools
         id: tools-cache-restore
@@ -499,30 +499,37 @@ jobs:
       - *s10
       - *s11
       - *s12
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-actionlint/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-281ce7a1473b4edc28b8fd1edf44bb9132b96d3974e87f0ecdebcabd2815f137"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-actionlint/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-04abe9f1e851289703efabf8c94b315aeef4c525b24f67f71e108c7fb9459ffb"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-actionlint/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-56de1b705c2070d825323edf4443f052a5d6b1a3e6eb66edee1a9367373fd806"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-actionlint/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-281ce7a1473b4edc28b8fd1edf44bb9132b96d3974e87f0ecdebcabd2815f137"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-actionlint/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-99e57d58b99df4e07882e84c7ea53f36dc8d251bf74bc72593cdac9652895e95"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-actionlint/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-13d46daadea933a284de6d8f85b59743cb6f0553d070c02ef476d1ec238ee198"}
       - name: Doctests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-actionlint/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-df33978bd03c08da73de72a8ca6ad3104885d9d7d265c740db8a8ab59ff6f697"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-actionlint/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-02058bb0dbaa435683c5cd97342704878e8cc610ea19868a0c63ee560b41797e"}
+        with: {"digest": "b3-686c59a676ddb9f1b76c4f0313e99b90a69a7d5c1b196b95fa867d1845a51faf"}
+      - name: Wait for parallel checks
+        wait-all:
       - &s21
         name: Record Qualification source evidence
         if: needs.plan.outputs.qualification_campaign != ''
@@ -558,7 +565,7 @@ jobs:
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 8945eb3ba740049081420ca67d3c6719ad17070baf68a7c136e09cbc0fd43092
+          d: 00e3cfdab947a4374504d6242cce9ad948475476e95641cd5b8658cad9c44736
       - *s17
       - *s7
       - *s15
@@ -573,26 +580,32 @@ jobs:
       - *s11
       - *s12
       - *s13
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-cli/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-699a32841512c16cbfcc786cd06b6dad47af7dac05bb4ed11921d38e66b92706"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-cli/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a9cba367e7cb217a9fa5b955ee0c760a607e28cc891656f4bff74f3dcbcf40c4"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-cli/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-99d450c437bdefe8f6aa16be73794dc56f63a97a6375c4768da84c5310daaf70"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-cli/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-699a32841512c16cbfcc786cd06b6dad47af7dac05bb4ed11921d38e66b92706"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-cli/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-4c871f705f1592e3f5d39165fdad6909f892d8881c91f5693a534ce0e01300b0"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-cli/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d9ba4eca84038ee7c0df139fec994a3846338d57fe8e32ca1196aa618a31867b"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-cli/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-34714d00fcd104d1b389a1b2ff1ae132464b1397abf9fe3a0919a6e6665159f8"}
+        with: {"digest": "b3-51d37a6dfdbd1f7f8880ec7b5b10af13045107d1c0c175e0e920d5ca8e8127d9"}
+      - name: Wait for parallel checks
+        wait-all:
       - *s21
       - name: Upload crate reports
         if: always()
@@ -628,30 +641,37 @@ jobs:
       - *s10
       - *s11
       - *s12
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-contract/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-17820b5c798fba6b8876b989c9c126b70f5b09a191244e4e71efde9314c041ea"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-contract/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-a9978acd0bec86f847d6a1e12fe4068a84a32c724936bebd1c9994361cda9dcb"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-contract/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-4d5672dc13b46842e344c2097b4048febb5f0ee10d35840b8c47da23f1985d04"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-contract/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-17820b5c798fba6b8876b989c9c126b70f5b09a191244e4e71efde9314c041ea"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-contract/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-24de8827c2ad64063cc907bf93bea5d2e7cc397ba4783f4a53c9046276f2aca7"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-contract/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-b8051f582091cc280bfe98e1bbdfff9b63e0670d2a9fe6e4f1fe3fbb186c77a9"}
       - name: Doctests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-contract/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-6e299d64b0587a8928555ba231f133b9a7d1310805756dc8b95255e4c46b89a8"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-contract/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3c57f3815c4d0a03a115613ed77e5cd0379df71e3d7974473673f4db2794f4a2"}
+        with: {"digest": "b3-4c5fb698bde3985d5ee95e140b7a30e327ee32e2e0c75314d76ed440c26902c5"}
+      - name: Wait for parallel checks
+        wait-all:
       - *s21
       - name: Upload crate reports
         if: always()
@@ -686,30 +706,37 @@ jobs:
       - *s10
       - *s11
       - *s12
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-freshness/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-fcefa6df41f81e2c659afbf194e7458c905c62be2e067da979e0593a65545a04"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-freshness/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-f0e0230889a92d893e4c1b2739ba5d8d8509f31b68cff268d5ad82c16f6cba36"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-freshness/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-b54c71bf6d58919be2f0c062df3bf01d490abb04ac14a88e5395162798d66e32"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-freshness/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-fcefa6df41f81e2c659afbf194e7458c905c62be2e067da979e0593a65545a04"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-freshness/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-6144b4df2134e35a9cd0f3ff2a043fc4710403e0d4b7e385d2e1b52b75d4b702"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-freshness/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-2bd7079df2ad14f528c407666cea8084b1a9b46a205611754e3315eec5b1dbca"}
       - name: Doctests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-freshness/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-6fd0ed2e6b7dfba35edf3a0995d95770b22603b52a0bb699f7cfc3d1102e8a33"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-freshness/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-326d7573c2c2112b80085225ee9c0e1b18124b540cbfcd5238e38eb54d4edd2d"}
+        with: {"digest": "b3-d6b81fbda123fe09864cf2217fa8e954f37f54caede65fe2b8b91e9281776f93"}
+      - name: Wait for parallel checks
+        wait-all:
       - *s21
       - name: Upload crate reports
         if: always()
@@ -738,7 +765,7 @@ jobs:
         if: needs.plan.result == 'success' && needs.plan.outputs.qualification_campaign == ''
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 0fa86815e1de8c65c21f10529e501d0971e381cddd7d726d655bdaa6b546c3bd
+          d: e364f5b77cfc75d11e97c30d159f1bedbb67651b159187453c843b5fe319ed94
       - *s17
       - *s7
       - *s15
@@ -751,30 +778,37 @@ jobs:
       - *s10
       - *s11
       - *s12
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-mise/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-1651590369e72f80c47fc1b647e3b8109da150cac0b43400368e5428633a6b7a"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-mise/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-e557ef11129378f173d01ba45929f0f151e139aa91712afe49809258d9927fe5"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-mise/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-d2fdf8554e922fc59a1b760c0c2e3046b71a0947796512d1b91d2d69e7e72184"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-mise/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-1651590369e72f80c47fc1b647e3b8109da150cac0b43400368e5428633a6b7a"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-mise/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-b492c15da5c11e51243c2213cd7e9c0a1d756a2d88260e0a195f0dc001110106"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-mise/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-695d8e4cd5e71ece31b6d895b53c7b4049aa24f23f291e6b00cb9970315b333b"}
       - name: Doctests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-mise/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-4d25b9409d9d174c44a7e1747f4cd4f40af04d09dabb8a9084cd73a3e053fdac"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-mise/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-89309fe2680c5701773af3179a66484e99fab47da29249ae034e46ce34358573"}
+        with: {"digest": "b3-e19bd24f405fb7ab7bf21a13adc0576c6dfb3d525336b9c3178a3789952bc844"}
+      - name: Wait for parallel checks
+        wait-all:
       - *s21
       - name: Upload crate reports
         if: always()
@@ -811,30 +845,37 @@ jobs:
       - *s11
       - *s12
       - *s13
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-orchestrator/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-10f82c4da2b4bce0ec10a38c57943e3417bf0fa4844f1f7efd442abc9d4c067b"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-orchestrator/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-07b64ee8c495c20b74251cb15a00b83b2c4c72bb4a648b3465275f976220c529"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-orchestrator/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-fd01adc9e4e096faf3c89569aa306940f4cba993a98d0c145dbd60a08e5409fa"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-orchestrator/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-10f82c4da2b4bce0ec10a38c57943e3417bf0fa4844f1f7efd442abc9d4c067b"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-orchestrator/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-81462a5c08775220d7e4aac75c0b1e78882623fdff670ee7b71951d64a2b5c37"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-orchestrator/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-701b6d99fd6e3c1e22102d6d87966fa31e72d6d65f2b7076eaf9aa36e8b0679b"}
       - name: Doctests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-orchestrator/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-e6f2ff89286b23c3e20ce5dc483fa43c5992b975a29193b0c2f8c5efc7d931a7"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-orchestrator/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-dd5d34df6b369ff47618f65948627986f9cc5b0ab518cf9cee78e548d6b7d6ea"}
+        with: {"digest": "b3-d622691776ce4528bffa164750bc0557621a465709e7f1b0e60858762f8d3035"}
+      - name: Wait for parallel checks
+        wait-all:
       - *s21
       - name: Upload crate reports
         if: always()
@@ -869,30 +910,37 @@ jobs:
       - *s10
       - *s11
       - *s12
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-rust/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-ae6da22091d132f2e2091dacdde6ccdbffa64b7757078ac80553905844bd0535"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-rust/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-cda4d4fc1ca5624ceb061b6a7eb8765443a83df1fda1586c643c8bb5cb53b601"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-rust/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-20a5c43efb36e1d6a49c38c4ba6fb5944441472b6b2f356a6d8ea52afab8b924"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-rust/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-ae6da22091d132f2e2091dacdde6ccdbffa64b7757078ac80553905844bd0535"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-rust/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-2a3a0e96b091f331aa3e001ab63354d1ebb835b0732d99ba74241467e40e0dbe"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-rust/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-e053392577173ca7c012cb1e5f0d8c74effb16c2223f475900a48cb57d3b8aa2"}
       - name: Doctests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-rust/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-9854603e97330e78444aa0a9559efd010f34e9b53bbb3ecd5f7fa1334b25a0a4"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-rust/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-2e89d88e0f7f0052d7438d6840c5cbaa934223ca207dae428f814512733a1bb2"}
+        with: {"digest": "b3-0e6eb0412e436f393b9fc21865861765ba876e5cf9b4e73f5007c1d6e6a15540"}
+      - name: Wait for parallel checks
+        wait-all:
       - *s21
       - name: Upload crate reports
         if: always()
@@ -927,30 +975,37 @@ jobs:
       - *s10
       - *s11
       - *s12
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-tofu/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-5fcdf2a7421dc9bfc415f9963e7a55f709ad199cdc447b81f2e723f4c678cf1c"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-tofu/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-ed2b98ed83a47715b33e03ae1a964d256b8bd86e81107fda61e64547dc6bc4b1"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-tofu/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-378bda0b4163d5d3ba385d30ca65a02b4023d65a498fa8d857fefbc6810903dc"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-tofu/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-5fcdf2a7421dc9bfc415f9963e7a55f709ad199cdc447b81f2e723f4c678cf1c"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-tofu/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-7acb1d71bdb09aae408d13bb8af1ac19b50751f8424caca6920cf3ed210edbae"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-tofu/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-2c1ba8624285923aac083a5bd8ac2d94479416ad7f42fea1f26ce60457088e8e"}
       - name: Doctests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-tofu/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-cb55064f42297427551871b8b9c95372ec0a64f3ca79aaad15ea9d1e8b844d98"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-tofu/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-03335ff4cdec69363ceaa35bbdabd1c55cdb211b8557766aa2d2c6f907e56f72"}
+        with: {"digest": "b3-f4717830266d12cdb254a2bf1713d9afc4b823847391d9cbb90edb384293ddda"}
+      - name: Wait for parallel checks
+        wait-all:
       - *s21
       - name: Upload crate reports
         if: always()
@@ -985,30 +1040,37 @@ jobs:
       - *s10
       - *s11
       - *s12
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-workflow-renderer/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-936f90267ba2a8e7636ca97d04e93d6d95a8bb5a68e6372cdf1e1da355f36077"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-workflow-renderer/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3504e2e53e9ce7c151f2ae2e0d9f988e301a979672f8ec38a450ac02ba9aa5fd"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-workflow-renderer/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-aef332ccd06944ca14ed0e12b73eecc699b90c54c3395139dfdba1466e19364a"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-workflow-renderer/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-936f90267ba2a8e7636ca97d04e93d6d95a8bb5a68e6372cdf1e1da355f36077"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-workflow-renderer/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-208b4c4c4fceef85d3771432825f8bfb2a79a88a5c00a1eb6d9a5ba1b4f6f5b0"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-workflow-renderer/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-26ed8e96ce8c04b06c8894de56d54abb9762e7c2c246f480f27aaf3dcb10b4af"}
       - name: Doctests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-workflow-renderer/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1089f114e0718fa34c9693ac7bb56ae73214d48e90fa66a2b70f160678a6bc53"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-actions-workflow-renderer/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-ba1cb344f67844533a73722f04135c386495649d6561afc95b5467670ed6d0b5"}
+        with: {"digest": "b3-4f70a847e95914a75b3aedc0f9606e31a8aee4f061b32639a831194160d8e97a"}
+      - name: Wait for parallel checks
+        wait-all:
       - *s21
       - name: Upload crate reports
         if: always()
@@ -1043,30 +1105,37 @@ jobs:
       - *s10
       - *s11
       - *s12
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-archive-guard/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-fa1c8252e16820947b9fa1d43ce4b933f52852300f51d84a328c04338c9db226"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-archive-guard/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-395b79e0d914fdb0320d42be1921a072fbf8eb9c8d73c869c607a5790f5f96a6"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-archive-guard/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-c70a514ab6d9d948ab0af4cd28d45cc0b345a1c88a10fce4acc659e193794ec4"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-archive-guard/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-fa1c8252e16820947b9fa1d43ce4b933f52852300f51d84a328c04338c9db226"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-archive-guard/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-8966e0175288e2906c466c5740a56eb495ede27465bf4fbe3e376b7417d859e9"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-archive-guard/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-9abe5db6772df83b2b580a27e12fee17967fbb71489c4ce3b0b529b6a2359074"}
       - name: Doctests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-archive-guard/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-684118643054f90d949ae50cccc999c7c7b64ddb5970f5e87865ac1ac55b8144"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-archive-guard/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9b8fc15934a2c438554ee105bb8dbb3bb7226b3d08101721b023e7ba9b05df30"}
+        with: {"digest": "b3-9975eeab1d3b1398204c0ae6f3b9fc06ca1de254c4cee086d1295ca28ec38ec8"}
+      - name: Wait for parallel checks
+        wait-all:
       - *s21
       - name: Upload crate reports
         if: always()
@@ -1116,30 +1185,37 @@ jobs:
         env: *m12
       - *s11
       - *s13
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-resource-probe/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3607b8e90c561786aa66056c460a0c3ac4666b63f0d9603951167f74cb81a01c"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-resource-probe/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-6e98bc3c3a5cb2a07f548bfe1ba59e2e0a39bd3380525c0a9950f9880262b1b0"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-resource-probe/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-e0276f7814d44a8cd673991892557b1b57e85c37b368dfce30415ee807319e22"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-resource-probe/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-3607b8e90c561786aa66056c460a0c3ac4666b63f0d9603951167f74cb81a01c"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-resource-probe/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-16c23ccb6efcbfa854bb18fd2798fbb3d699e39bab01477a04005ba657aefdc8"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-resource-probe/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-7226805d16305e8209de71fa10f46e5de0523b2ca5a62cc60a59988c06847e56"}
       - name: Doctests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-resource-probe/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-b5870991a973e65d670c95ce63b423c0bd1ddcb20624c1c6ac4a1256ffecc6b5"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-resource-probe/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-178a8c6518492d40f11f86e16b3617e3df4dd85969e7e5dddd92dbfb6d7c5ae1"}
+        with: {"digest": "b3-b313bdefad05fd0ad0bc1a4c0c62b8881800a3d51234518c0599e862f7d63234"}
+      - name: Wait for parallel checks
+        wait-all:
       - *s21
       - name: Upload crate reports
         if: always()
@@ -1153,7 +1229,7 @@ jobs:
         name: Clean MBX workspace outputs
         if: always() && steps.mbx-ready.outcome == 'success'
         env: *m10
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path changed before cleanup'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; target_dir=\"crates/velnor-runner/target\"; mbx_disk_sample before-final-clean; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; clean_status=0; if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$mbx_bin\" cache dir >/dev/null 2>&1; then clean_status=0; else clean_status=$?; fi; if [ -d \"$target_dir\" ] && [ ! -L \"$target_dir\" ]; then rm -rf \"$target_dir/velnor-cli-nested-cargo\" \"$target_dir/tmp\" \"$target_dir/debug/examples\" \"$target_dir/debug/incremental\"; python3 -c '\\''exec(\"import os, pathlib, shutil, subprocess, sys\\ntd = pathlib.Path(sys.argv[1])\\ndbg = td / \\\"debug\\\"\\nif dbg.is_dir() and not dbg.is_symlink():\\n    shims = dbg / \\\".mbx-build-script-shims\\\"\\n    os.makedirs(shims, exist_ok=True)\\n    vdoc = shims / \\\".velnor-doc\\\"\\n    shutil.rmtree(vdoc, ignore_errors=True)\\n    doc = td / \\\"doc\\\"\\n    if doc.is_dir() and not doc.is_symlink():\\n        shutil.move(str(doc), str(vdoc))\\n    ws = os.environ.get(\\\"GITHUB_WORKSPACE\\\", \\\"\\\")\\n    if ws and os.path.exists(os.path.join(ws, \\\".git\\\")):\\n        out = subprocess.check_output([\\\"git\\\", \\\"-C\\\", ws, \\\"ls-files\\\", \\\"-s\\\", \\\"-z\\\"])\\n        lines = []\\n        for entry in out.split(b\\\"\\\\0\\\"):\\n            if not entry:\\n                continue\\n            meta, rel_b = entry.split(b\\\"\\\\t\\\", 1)\\n            oid = meta.split()[1].decode()\\n            rel = rel_b.decode()\\n            full = os.path.join(ws, rel)\\n            if os.path.isfile(full) and not os.path.islink(full):\\n                lines.append(f\\\"{oid}\\\\t{os.stat(full).st_mtime_ns}\\\\t{rel}\\\\n\\\")\\n        (shims / \\\".velnor-source-oids\\\").write_text(\\\"\\\".join(lines))\\n\")'\\'' \"$target_dir\"; fi; mbx_disk_sample after-final-clean; exit \"$clean_status\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path changed before cleanup'\\'' >&2; exit 1; }; mbx_disk_sample() { boundary=$1; case \"${RUNNER_TEMP:-}\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''MBX_DISK_SAMPLE_ERROR runner_temp_not_absolute'\\'' >&2; return 0 ;; esac; if [ -d \"$RUNNER_TEMP\" ] && [ ! -L \"$RUNNER_TEMP\" ]; then printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp blocks_kib\\n'\\'' \"$boundary\"; if df -Pk \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_blocks\\n'\\'' \"$boundary\" >&2; fi; printf '\\''MBX_DISK_SAMPLE boundary=%s volume=runner_temp inodes\\n'\\'' \"$boundary\"; if df -Pi \"$RUNNER_TEMP\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s command=df_inodes\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s runner_temp_not_real_directory\\n'\\'' \"$boundary\" >&2; return 0; fi; store_path=\"$RUNNER_TEMP/velnor/mbx\"; if [ \"${MBX_CACHE_DIR:-}\" = \"$store_path\" ] && [ -d \"$store_path\" ] && [ ! -L \"$store_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=mbx_store\\n'\\'' \"$boundary\"; if du -sk \"$store_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=mbx_store_unavailable\\n'\\'' \"$boundary\" >&2; fi; target_path=\"${target_dir:-target}\"; if [ ! -d \"$target_path\" ]; then for candidate in */target crates/*/target \"$RUNNER_TEMP/velnor/target\"; do if [ -d \"$candidate\" ]; then target_path=\"$candidate\"; break; fi; done; fi; if [ -L \"$target_path\" ]; then printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target_is_symlink\\n'\\'' \"$boundary\" >&2; elif [ -d \"$target_path\" ]; then printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target\\n'\\'' \"$boundary\"; if du -sk \"$target_path\"; then :; else printf '\\''MBX_DISK_SAMPLE_ERROR boundary=%s path=target command=du\\n'\\'' \"$boundary\" >&2; fi; else printf '\\''MBX_DISK_ALLOCATED_KIB boundary=%s root=target state=absent\\n'\\'' \"$boundary\"; fi; }; target_dir=\"crates/velnor-runner/target\"; mbx_disk_sample before-final-clean; if ! mbx_bin=$(command -v mbx); then printf '\\''%s\\n'\\'' '\\''action-owned MBX is not on PATH'\\'' >&2; exit 1; fi; case \"$mbx_bin\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be absolute'\\'' >&2; exit 1 ;; esac; if [ ! -f \"$mbx_bin\" ] || [ ! -x \"$mbx_bin\" ]; then printf '\\''%s\\n'\\'' '\\''action-owned MBX path must be an executable file'\\'' >&2; exit 1; fi; clean_status=0; if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- \"$mbx_bin\" cache dir >/dev/null 2>&1; then clean_status=0; else clean_status=$?; fi; if [ -d \"$target_dir\" ] && [ ! -L \"$target_dir\" ]; then rm -rf \"$target_dir/velnor-cli-nested-cargo\" \"$target_dir/tmp\" \"$target_dir/debug/examples\" \"$target_dir/debug/incremental\"; python3 -c '\\''exec(\"import os, pathlib, shutil, subprocess, sys\\ntd = pathlib.Path(sys.argv[1])\\ndbg = td / \\\"debug\\\"\\nif dbg.is_dir() and not dbg.is_symlink():\\n    shims = dbg / \\\".mbx-build-script-shims\\\"\\n    os.makedirs(shims, exist_ok=True)\\n    for base in [td] + sorted(c for c in td.iterdir() if c.name.startswith(\\\"velnor-\\\") and c.is_dir() and not c.is_symlink()):\\n        bdbg = base / \\\"debug\\\"\\n        if not bdbg.is_dir() or bdbg.is_symlink():\\n            continue\\n        bshims = bdbg / \\\".mbx-build-script-shims\\\"\\n        os.makedirs(bshims, exist_ok=True)\\n        vdoc = bshims / \\\".velnor-doc\\\"\\n        shutil.rmtree(vdoc, ignore_errors=True)\\n        doc = base / \\\"doc\\\"\\n        if doc.is_dir() and not doc.is_symlink():\\n            shutil.move(str(doc), str(vdoc))\\n    ws = os.environ.get(\\\"GITHUB_WORKSPACE\\\", \\\"\\\")\\n    if ws and os.path.exists(os.path.join(ws, \\\".git\\\")):\\n        out = subprocess.check_output([\\\"git\\\", \\\"-C\\\", ws, \\\"ls-files\\\", \\\"-s\\\", \\\"-z\\\"])\\n        lines = []\\n        for entry in out.split(b\\\"\\\\0\\\"):\\n            if not entry:\\n                continue\\n            meta, rel_b = entry.split(b\\\"\\\\t\\\", 1)\\n            oid = meta.split()[1].decode()\\n            rel = rel_b.decode()\\n            full = os.path.join(ws, rel)\\n            if os.path.isfile(full) and not os.path.islink(full):\\n                lines.append(f\\\"{oid}\\\\t{os.stat(full).st_mtime_ns}\\\\t{rel}\\\\n\\\")\\n        (shims / \\\".velnor-source-oids\\\").write_text(\\\"\\\".join(lines))\\n\")'\\'' \"$target_dir\"; fi; mbx_disk_sample after-final-clean; exit \"$clean_status\"'"
   rust-velnor-runner-cli:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
@@ -1178,30 +1254,37 @@ jobs:
       - *s24
       - *s11
       - *s13
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-cli/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-335ce62d2fcbde222e494170b59bbdff51a86b34f797a006711304fb74d06a03"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-cli/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-966971bb65b3beb224d611ac5108902a4da3e93327bbe9429ce5dad4bf32eaf0"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-cli/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-bbb4f9c2e3512cb09ee9be32cdf290d01a33860b3f50375952eb2b3c14fca2cc"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-cli/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-335ce62d2fcbde222e494170b59bbdff51a86b34f797a006711304fb74d06a03"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-cli/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-c7ca823ed02c3dba3b6041e7540117b677510dfd86cdb0d0811c82026fc7d144"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-cli/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-7c31f882a596964285d71cc9e0d1513dc40a43676c75c26eb3ea664bfcf4cca8"}
       - name: Doctests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-13542ce2472bab1da4a457545ede58c21a1c2bb1db85d062bdf0a3067cc4aaaa"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-4bedc6b80750e1ff58b9569bd598afd156505e7c456a8636b57ac52188cde336"}
+        with: {"digest": "b3-455d1135c770347c339c26d217564934c77562791e5c03dc7ce53a11ed183d72"}
+      - name: Wait for parallel checks
+        wait-all:
       - *s21
       - name: Upload crate reports
         if: always()
@@ -1236,30 +1319,37 @@ jobs:
       - *s24
       - *s11
       - *s13
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-core/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-371d96ca31e10dad7f096ecb503ba5f35645053f4dc2b4f978995cf2ba59d16b"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-core/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-d5c22e926f76878a5809c018343106c5fd068902ad4945ba8c49b69469e89ddb"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-core/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-aa7a3c1a3f74f13a6c6b317773494e805c2ed1d33089d0682777254ad0b721db"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-core/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-371d96ca31e10dad7f096ecb503ba5f35645053f4dc2b4f978995cf2ba59d16b"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-core/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-c841bd94386a4ed90700fe3e2ce7723f80eb55fcad05e2458ea1cb4105556cc3"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-core/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-839b03cd22c7d16400bd5c3fe6e2659899de7ef612f29999b6b94eb3a9bec4a8"}
       - name: Doctests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-core/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-958bff2086146d4d55803eb22fbecc258fcf3e01664514d9b18ffc157860281e"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-core/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-cb0a397334a4d6117d690e3c46e44d212c40a834c47154fe4bb8ada63158d2ab"}
+        with: {"digest": "b3-7803e39f49e680f056e6ab928c6ebc3e4e5f06b2b0441219d4f186f84472ac50"}
+      - name: Wait for parallel checks
+        wait-all:
       - *s21
       - name: Upload crate reports
         if: always()
@@ -1294,30 +1384,37 @@ jobs:
       - *s24
       - *s11
       - *s13
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-github/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3e0324e2765d1360b88547a385ee5deb19adca48f9bc7ce49fc52b80572d711a"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-github/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-9c3125e373fa2ef2e1965df57c8ec6018dc8f31d006fa04e761fc94ec2ac8117"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-github/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-c6b2d9e62d6254360808bb7e7516a7a0e51e36fd99e9662c7e84bcc7e9d5b2e3"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-github/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-3e0324e2765d1360b88547a385ee5deb19adca48f9bc7ce49fc52b80572d711a"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-github/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-876cd15ac30a66a66ddf62d4437720820281967c4365c8079db60ae66a24a271"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-github/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-1f7b39e32758fab46ba62beabe378cb793801de564c5cda30b16a10f7c8bada1"}
       - name: Doctests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-github/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-18825ba955dab91217eee8926fca9b2e0320880e0728e4421458adb5317a10a9"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-github/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-dca5f49aaa4bdb116408ed2c58f2a81b24e92d763b9dd1e98b73ee6145fe2424"}
+        with: {"digest": "b3-af0f038ee7ee417c8315ae416eb6e5e6267d0e976cd0eba78f9ae99447c2156b"}
+      - name: Wait for parallel checks
+        wait-all:
       - *s21
       - name: Upload crate reports
         if: always()
@@ -1352,30 +1449,37 @@ jobs:
       - *s24
       - *s11
       - *s13
-      - name: Format
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-3d460fcecc4807713ea2fd5733855435c253b7046aebe6e4d21635788dcdb930"}
-      - name: Clippy
-        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-host/clippy/default,')"
-        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-77dc039b6b3bcdddd4d65fb55f3cc62e79d6271c571ce70b081f53cb6103883c"}
       - name: Build test executables
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-host/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-edc386e305b2ec3b9798e49696bf1197aad5c5fa8a323815571b5b1a65e75c5a"}
+      - name: Format
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-3d460fcecc4807713ea2fd5733855435c253b7046aebe6e4d21635788dcdb930"}
+      - name: Clippy
+        background: true
+        if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-host/clippy/default,')"
+        uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
+        with: {"digest": "b3-a42a8e10e39ddd57fe2b9c354ae5d85d7b3059cc039f6855957e25592b49e0ef"}
       - name: Unit and integration tests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-f19854cdf98131263cf7ff6f7b019c4a4599736db2b940ac80c208e564b79531"}
       - name: Doctests
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-9c49612e1b65ad1cf7f142a86979e15f78d8d09a08e763bf703fa96adf7943ec"}
       - name: Documentation
+        background: true
         if: "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/velnor-runner/crates/velnor-runner-host/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
-        with: {"digest": "b3-fc91270d6f4f1e884439c3f58519b8c3582fca905b4c55879f1165fa0223cd5c"}
+        with: {"digest": "b3-342de940b769aaef6995fabdc0183c664b0ae3c337a3e37909b83f492a359a3b"}
+      - name: Wait for parallel checks
+        wait-all:
       - *s21
       - name: Upload crate reports
         if: always()
@@ -1403,7 +1507,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 429f57239e8d3097f1cee55e70985c5f473b7e49bb34a2c31177126e8ae1395b
+          d: 808a23879fb85eecad06302740ea696f36817f52052f4f3eefb9dc0913ae40a6
       - *s6
       - *s7
       - name: Prepare pinned tools

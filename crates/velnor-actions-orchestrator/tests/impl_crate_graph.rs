@@ -1,4 +1,4 @@
-//! Crate-job graph checks: one ordered job for each Rust package.
+//! Crate-job graph regressions: one job per crate with parallel checks.
 //!
 //! Split from `impl_wire_w1`: generated-YAML shape, per-crate drivers,
 //! obligation ordering, toolchain sharing, and cache silence.
@@ -62,43 +62,52 @@ fn window<'a>(text: &'a str, start: &str, end: &str) -> Result<&'a str, &'static
 #[test]
 fn w1_crate_jobs_group_obligations_per_crate() -> TestResult {
     let (repo, yaml) = preview_yaml(config_with_branch())?;
-    let task = window(&yaml, "  rust-demo:", "  required:")?;
+    for obsolete in ["lint", "tests", "docs"] {
+        assert!(
+            !yaml.contains(&format!("  rust-demo-{obsolete}:")),
+            "no per-phase job"
+        );
+    }
     assert!(!yaml.contains("velnor-task"), "no task job:\n{yaml}");
     assert!(!yaml.contains("strategy:"), "no matrix:\n{yaml}");
     assert!(!yaml.contains("fromJSON"), "no matrix ref:\n{yaml}");
     let prep = prepare(repo.path())?;
-    assert!(task.contains("name: Rust / demo"), "{task}");
+    let id = "rust-demo";
+    let obligations = [
+        "Format",
+        "Clippy",
+        "Unit and integration tests",
+        "Doctests",
+        "Documentation",
+    ];
+    let job = window(&yaml, &format!("  {id}:"), "  required:")?;
+    assert!(job.contains("name: Rust / demo\n"), "{job}");
     for step in [
         "Checkout",
         "Prepare pinned tools",
         "Prepare Rust components",
+    ] {
+        assert!(job.contains(&format!("- name: {step}")), "{step}: {job}");
+    }
+    for step in [
         "Format",
         "Clippy",
         "Unit and integration tests",
         "Doctests",
         "Documentation",
     ] {
-        assert!(task.contains(&format!("- name: {step}")), "{step}: {task}");
+        assert!(
+            job.contains(&format!("- name: {step}\n        background: true")),
+            "{step} runs in the parallel group: {job}"
+        );
     }
-    assert!(
-        task.find("- name: Format").ok_or("Format")?
-            < task.find("- name: Clippy").ok_or("Clippy")?
-            && task.find("- name: Clippy").ok_or("Clippy")?
-                < task
-                    .find("- name: Unit and integration tests")
-                    .ok_or("tests")?
-            && task
-                .find("- name: Unit and integration tests")
-                .ok_or("tests")?
-                < task.find("- name: Doctests").ok_or("doctests")?
-            && task.find("- name: Doctests").ok_or("doctests")?
-                < task.find("- name: Documentation").ok_or("documentation")?
-            && task.find("- name: Doctests").ok_or("doctests")?
-                < task.find("- name: Documentation").ok_or("documentation")?,
-        "the job keeps its declared task order"
-    );
-    let model = prep.workflow.ir.jobs.get("rust-demo").ok_or("Rust job")?;
-    assert_eq!(model.needs, vec!["plan"]);
+    let join = job
+        .find("- name: Wait for parallel checks\n        wait-all:")
+        .ok_or("join")?;
+    let upload = job.find("- name: Upload crate reports").ok_or("upload")?;
+    assert!(join < upload, "reports upload after the join:\n{job}");
+    let model = prep.workflow.ir.jobs.get(id).ok_or("crate IR")?;
+    assert_eq!(model.needs, ["plan"], "no cross-phase gate owners");
     let expected: Vec<_> = model
         .steps
         .iter()
@@ -106,20 +115,13 @@ fn w1_crate_jobs_group_obligations_per_crate() -> TestResult {
             matches!(&step.kind, StepKind::TaskExecution { .. }).then_some(step.name.as_str())
         })
         .collect();
-    assert_eq!(
-        expected,
-        vec![
-            "Format",
-            "Clippy",
-            "Unit and integration tests",
-            "Doctests",
-            "Documentation",
-        ]
-    );
+    assert_eq!(expected, obligations, "one job owns each obligation");
     assert!(
         prep.workflow.ir.jobs["required"]
             .needs
-            .contains(&"rust-demo".to_owned())
+            .iter()
+            .any(|need| need == id),
+        "Required owns {id}"
     );
     Ok(())
 }

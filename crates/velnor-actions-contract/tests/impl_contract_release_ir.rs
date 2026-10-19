@@ -51,6 +51,7 @@ fn ci_job() -> Job {
         cache_mode: None,
         environment: None,
         steps: vec![Step {
+            parallel: false,
             name: "run".to_owned(),
             id: None,
             role: None,

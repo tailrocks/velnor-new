@@ -18,7 +18,7 @@ check_interval_hours = 24
 max_exception_days = 14
 
 [tools]
-mise = "2026.10.14"
+mise = "2026.10.15"
 rust = "1.99.1"
 mr-boxington = "1.24.1"
 gh = "2.102.0"

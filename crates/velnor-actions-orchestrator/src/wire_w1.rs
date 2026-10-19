@@ -53,6 +53,7 @@ pub(crate) fn checkout_step() -> Result<Step, OrchestratorError> {
         }
     })?;
     Ok(Step {
+        parallel: false,
         name: "Checkout".to_owned(),
         id: None,
         role: Some(StepRole::Checkout),
@@ -87,6 +88,7 @@ pub(crate) fn checkout_step_full() -> Result<Step, OrchestratorError> {
         }
     })?;
     Ok(Step {
+        parallel: false,
         name: "Checkout".to_owned(),
         id: None,
         role: Some(StepRole::Checkout),
@@ -99,10 +101,10 @@ pub(crate) fn checkout_step_full() -> Result<Step, OrchestratorError> {
     })
 }
 
-/// Reject workflow syntax the pinned actionlint cannot parse (PAR-6.1).
+/// Reject workflow syntax the pinned actionlint cannot validate (PAR-6.1).
 ///
-/// Native step parallelism stays unqualified, so any future native-key
-/// emission fails here.
+/// Native step parallelism is qualified through the actionlint ignore
+/// bridge; any other unqualified syntax fails here.
 ///
 /// # Errors
 ///

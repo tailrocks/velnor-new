@@ -86,6 +86,7 @@ fn check_ir(runs_on: &str, runner: CheckRunner) -> WorkflowIr {
                 cache_mode: None,
                 environment: None,
                 steps: vec![Step {
+                    parallel: false,
                     name: "Run check".to_owned(),
                     id: None,
                     role: None,

@@ -39,7 +39,7 @@ Workflow to generate
         - stack/rust/nested/lib/fmt/default
         - stack/rust/nested/lib/test/default
   Parallel: 2 execution jobs; dependencies preserved; no matrix fan-out
-  Critical path: stack/rust/crates/a/clippy/default -> stack/rust/crates/a/doctest/default -> stack/rust/crates/a/doc/default (3 tasks)
+  Critical path: stack/rust/crates/a/clippy/default (1 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources
   Actionlint: 1.7.12 pinned

@@ -64,6 +64,7 @@ pub(crate) fn validate_argv_for_role(
                 with.insert("working-directory".to_owned(), dir.to_owned());
             }
             let action = Step {
+                parallel: false,
                 name: crate::cache_steps::MBX_RESTORE_NAME.to_owned(),
                 id: None,
                 role: Some(StepRole::MbxCache),
@@ -266,6 +267,7 @@ mod tests {
 
     fn cleanup() -> Step {
         let action = Step {
+            parallel: false,
             name: cache_steps::MBX_RESTORE_NAME.to_owned(),
             id: None,
             role: Some(StepRole::MbxCache),
@@ -326,11 +328,11 @@ mod tests {
             name: "generic shell".to_owned(),
             id: None,
             role: None,
-            condition: None,
             kind: StepKind::Shell {
                 run: vec!["sh".to_owned(), "-c".to_owned(), "echo $(evil)".to_owned()],
                 env: BTreeMap::new(),
             },
+            ..version_check()
         };
         assert!(crate::steps_plain::plain_step_to_yaml(&generic).is_err());
     }

@@ -14,6 +14,9 @@ Rust package jobs and OpenTofu root jobs use
 `[workflow] crate_timeout_minutes`. The default is five minutes. The Velnor
 configuration sets ten minutes for build and cleanup. Control jobs use the
 five-minute default.
+The Velnor configuration sets ten minutes for Rust package jobs. This limit
+covers build, parallel checks, report upload, and cleanup. Control jobs use the
+five-minute default.
 
 ```toml
 [workflow]

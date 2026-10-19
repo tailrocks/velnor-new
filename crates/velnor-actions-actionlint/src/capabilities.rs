@@ -1,14 +1,31 @@
 //! Pinned actionlint version and syntax-capability flags.
 //!
 //! The capability struct records exactly which workflow syntax the pinned
-//! release parses and validates. Matrix/job parallelism is supported;
-//! native `parallel:`/`background:`/`wait` step syntax stays unqualified
-//! until a Gate 7 syntax-capability update qualifies it.
+//! release parses and validates. Matrix/job parallelism is supported. The
+//! pinned release does not parse GitHub's native step concurrency keys
+//! (rhysd/actionlint#693), so Velnor emits only the `background: true` plus
+//! `wait-all` spelling and runs actionlint with the two exact
+//! [`STEP_PARALLELISM_IGNORES`]: every background member is still parsed and
+//! validated (keys, expressions, action inputs, `ShellCheck`), and only the
+//! unknown `background` key and the body-less join step are suppressed.
 
 use crate::ActionlintError;
 
 /// Pinned actionlint release (verified 2026-09-28 per version policy).
 pub const ACTIONLINT_VERSION: &str = "1.7.12";
+
+/// Exact actionlint `-ignore` message patterns bridging native step
+/// concurrency for releases that do not parse it.
+///
+/// The first matches only the unknown `background` key on a `run` or `uses`
+/// step; the member's remaining keys are still checked. The second matches
+/// the generated `wait-all` join, which by GitHub's grammar has no `run` or
+/// `uses`. Every other generated step is typed to render `run` or `uses`, and
+/// GitHub itself rejects a hand-written step without either at run time.
+pub const STEP_PARALLELISM_IGNORES: [&str; 2] = [
+    r#"^unexpected key "background" for step to (run shell command|execute action)\. "#,
+    r#"^step must run script with "run" section or run action with "uses" section$"#,
+];
 
 /// Workflow syntax a renderer proposes to emit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,6 +53,8 @@ pub struct ActionlintCapabilities {
     job_parallelism: bool,
     /// Parses native `parallel:`/`background:`/`wait` step keys.
     native_step_parallelism: bool,
+    /// Native step concurrency is emitted through [`STEP_PARALLELISM_IGNORES`].
+    step_parallelism_bridge: bool,
     /// Parses workflow-level and job-level `cache-mode` keys (2026-09-10).
     native_cache_mode: bool,
     /// Built-in hosted-label table contains `ubuntu-26.04`.
@@ -50,6 +69,7 @@ impl ActionlintCapabilities {
             matrix_strategy: true,
             job_parallelism: true,
             native_step_parallelism: false,
+            step_parallelism_bridge: true,
             native_cache_mode: false,
             recognizes_ubuntu_26_04_hosted_label: false,
         }
@@ -70,7 +90,13 @@ impl ActionlintCapabilities {
     /// Whether native step parallelism is qualified for emission.
     #[must_use]
     pub const fn native_step_parallelism_qualified(self) -> bool {
-        self.native_step_parallelism
+        self.native_step_parallelism || self.step_parallelism_bridge
+    }
+
+    /// Whether lint invocations must pass [`STEP_PARALLELISM_IGNORES`].
+    #[must_use]
+    pub const fn requires_step_parallelism_bridge(self) -> bool {
+        !self.native_step_parallelism && self.step_parallelism_bridge
     }
 
     /// Whether native `cache-mode` syntax (2026-09-10) is supported and qualified.
@@ -91,28 +117,13 @@ impl ActionlintCapabilities {
         self.recognizes_ubuntu_26_04_hosted_label
     }
 
-    /// Qualify native `parallel:`/`background:`/`wait` emission.
+    /// Record that a newer pinned release parses native step concurrency.
     ///
-    /// Gate 7 only: call after successful joins, failed children,
-    /// cancellation, output visibility, and timing are qualified.
+    /// Removes the ignore bridge. Only valid together with an
+    /// `ACTIONLINT_VERSION` bump, never alone.
     #[must_use]
-    pub const fn qualify_native_step_parallelism(mut self) -> Self {
+    pub const fn parse_native_step_parallelism(mut self) -> Self {
         self.native_step_parallelism = true;
-        self
-    }
-
-    /// Qualify native emission only when every concern is qualified.
-    ///
-    /// Gate 7 only: partial evidence leaves the capability unqualified,
-    /// so emission still fails closed on native syntax.
-    #[must_use]
-    pub const fn qualify_native_step_parallelism_if(
-        mut self,
-        concerns: NativeParallelismConcerns,
-    ) -> Self {
-        if concerns.qualified() {
-            self.native_step_parallelism = true;
-        }
         self
     }
 
@@ -175,7 +186,7 @@ impl ActionlintCapabilities {
                 }
             }
             StepSyntax::NativeParallelism => {
-                if self.native_step_parallelism {
+                if self.native_step_parallelism_qualified() {
                     Ok(())
                 } else {
                     Err(ActionlintError::UnsupportedSyntax {
@@ -193,67 +204,22 @@ impl Default for ActionlintCapabilities {
     }
 }
 
-/// Per-concern evidence qualifying native step parallelism (par §6).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "spec-mandated per-concern qualification flags"
-)]
-pub struct NativeParallelismConcerns {
-    /// Join semantics qualified.
-    pub joins: bool,
-    /// Failed-child handling qualified.
-    pub failures: bool,
-    /// Cancellation propagation qualified.
-    pub cancel: bool,
-    /// Output visibility qualified.
-    pub outputs: bool,
-    /// Timing and ordering qualified.
-    pub timing: bool,
-}
-
-impl NativeParallelismConcerns {
-    /// No concern qualified.
-    #[must_use]
-    pub const fn none() -> Self {
-        Self {
-            joins: false,
-            failures: false,
-            cancel: false,
-            outputs: false,
-            timing: false,
-        }
-    }
-
-    /// Every concern qualified.
-    #[must_use]
-    pub const fn all() -> Self {
-        Self {
-            joins: true,
-            failures: true,
-            cancel: true,
-            outputs: true,
-            timing: true,
-        }
-    }
-
-    /// Whether every concern is qualified.
-    #[must_use]
-    pub const fn qualified(&self) -> bool {
-        self.joins && self.failures && self.cancel && self.outputs && self.timing
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn pinned_actionlint_defaults_native_cache_mode_and_parallelism_to_false() {
+    fn pinned_actionlint_bridges_parallelism_and_defaults_cache_mode_to_false() {
         let caps = ActionlintCapabilities::for_pinned();
         assert!(caps.supports_matrix_strategy());
         assert!(caps.supports_job_parallelism());
-        assert!(!caps.native_step_parallelism_qualified());
+        assert!(caps.native_step_parallelism_qualified());
+        assert!(caps.requires_step_parallelism_bridge());
+        assert!(
+            !caps
+                .parse_native_step_parallelism()
+                .requires_step_parallelism_bridge()
+        );
         assert!(!caps.supports_native_cache_mode());
         assert!(!caps.native_cache_mode_qualified());
         assert_eq!(

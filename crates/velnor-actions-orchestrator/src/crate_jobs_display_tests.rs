@@ -67,6 +67,7 @@ fn id_and_display_prefixes_agree_per_partition() {
             .map(|(_, job)| job.display_name.clone())
             .expect("built job")
     };
+    assert_eq!(display("rust-demo"), "Rust / demo (Cargo.toml)");
     assert_eq!(display("tofu-stacks-a"), "OpenToFu — stacks/a");
     assert_eq!(display("tofu-stacks-b"), "OpenToFu — stacks/b");
     let rust_jobs: Vec<_> = found

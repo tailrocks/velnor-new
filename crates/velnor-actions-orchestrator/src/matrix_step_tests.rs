@@ -137,6 +137,7 @@ fn obligation_step_carries_the_report_lookup_key() {
         &ToolCatalog::pinned(),
         None,
         env!("CARGO_PKG_VERSION"),
+        None,
     )
     .expect("step");
     let velnor_actions_contract::StepKind::TaskExecution {
@@ -240,7 +241,7 @@ fn actual_nextest_producer_selector_passes_task_execution_contract() {
         run,
     };
     let checkout_uses = format!("actions/checkout@{:040x}", 0);
-    let step = obligation_step(&obligation, &catalog, None, env!("CARGO_PKG_VERSION"))
+    let step = obligation_step(&obligation, &catalog, None, env!("CARGO_PKG_VERSION"), None)
         .expect("typed task step");
     let velnor_actions_contract::StepKind::TaskExecution {
         report_helper_version,
@@ -287,7 +288,7 @@ fn actual_obligation_producer_renders_150_jobs_through_one_typed_action_shape() 
         .map(|word| word.into_string().expect("UTF-8 task argv"))
         .collect();
         refresh_task_identity(&mut task);
-        let step = obligation_step(&task, &catalog, None, env!("CARGO_PKG_VERSION"))
+        let step = obligation_step(&task, &catalog, None, env!("CARGO_PKG_VERSION"), None)
             .expect("producer step");
         ir.jobs.insert(
             format!("rust-crate-{index}"),

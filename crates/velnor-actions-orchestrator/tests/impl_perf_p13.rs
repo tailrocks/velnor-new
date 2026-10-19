@@ -216,7 +216,7 @@ fn generate_scales_to_workflow_file_limit_then_fails_closed() -> TestResult {
     Ok(())
 }
 
-/// One hundred fifty members retain every fixed phase and obligation inside 500 KB.
+/// One hundred fifty members retain one crate job and every obligation inside 500 KB.
 #[test]
 fn generate_150_crates_schedules_every_member() -> TestResult {
     let members = 150_usize;

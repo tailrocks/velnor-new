@@ -46,6 +46,7 @@ pub(super) fn step(payload: &super::ToolsCachePayload) -> Result<Step, RenderErr
         ));
     }
     Ok(Step {
+        parallel: false,
         name: cache_p08::TOOLS_CACHE_IDENTITY_NAME.to_owned(),
         id: Some(StepId::ToolsCacheIdentity),
         role: Some(StepRole::ToolsCacheIdentity),

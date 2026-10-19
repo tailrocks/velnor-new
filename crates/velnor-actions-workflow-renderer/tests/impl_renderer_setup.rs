@@ -215,6 +215,7 @@ fn strict_rejects_setup_misuse() -> Result<(), RenderError> {
         "misordered setup must fail"
     );
     let malformed = velnor_actions_contract::Step {
+        parallel: false,
         name: SETUP_MISE_NAME.to_owned(),
         id: None,
         role: None,

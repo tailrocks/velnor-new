@@ -45,3 +45,17 @@ fn repeated_external_gates_add_one_owner_dependency() {
 
     assert_eq!(needs, ["plan", "rust-core"]);
 }
+
+#[test]
+fn no_target_gate_does_not_add_a_job_dependency() {
+    let mut doctest = group("demo", TaskKind::Doctest, &[]);
+    doctest.no_targets = true;
+    let docs = group("demo", TaskKind::Doc, &[doctest.task_id.as_str()]);
+    let proposals = vec![doctest, docs.clone()];
+
+    let owners = JobOwners::new(&proposals).expect("owners");
+    let needs = external_needs(&[&docs], &owners, "rust-demo", WorkflowEvent::PullRequest)
+        .expect("valid no-target gate");
+
+    assert_eq!(needs, ["plan"]);
+}

@@ -198,6 +198,7 @@ pub fn action_step_with_env(
     }
     crate::commands::validate_env(&env)?;
     Ok(Step {
+        parallel: false,
         name: name.to_owned(),
         id: None,
         role: None,

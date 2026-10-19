@@ -308,6 +308,7 @@ fn native_check_ir() -> WorkflowIr {
                 id: None,
                 role: None,
                 condition: None,
+                parallel: false,
                 kind: StepKind::Shell {
                     run: vec!["true".to_owned()],
                     env: BTreeMap::new(),

@@ -30,6 +30,7 @@ fn context(checkout_uses: &str) -> RenderContext {
 
 fn step(name: &str, uses: &str) -> Step {
     Step {
+        parallel: false,
         name: name.to_owned(),
         id: None,
         role: None,
@@ -44,6 +45,7 @@ fn step(name: &str, uses: &str) -> Step {
 
 fn checkout_step(uses: &str) -> Step {
     Step {
+        parallel: false,
         name: "Checkout".to_owned(),
         id: None,
         role: Some(StepRole::Checkout),

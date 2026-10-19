@@ -137,10 +137,16 @@ pub(crate) fn plan_job(
 /// Always-on lint job: checkout, pinned installation, then actionlint.
 pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, OrchestratorError> {
     let program = OsString::from("actionlint");
+    let mut lint_args = vec![OsString::from("-color")];
+    lint_args.extend(
+        velnor_actions_actionlint::step_parallelism_ignore_args()
+            .into_iter()
+            .map(OsString::from),
+    );
     let exec = PinnedToolExec::new(
         vec![PinnedTool::Actionlint, PinnedTool::Shellcheck],
         &program,
-        vec![OsString::from("-color")],
+        lint_args,
     )
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),

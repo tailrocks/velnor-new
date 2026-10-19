@@ -280,10 +280,10 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - plan and formatting
-    - 15 Rust phase jobs
-      Obligations: Clippy → build tests → run tests → doctests → docs
+    - 5 Rust crate jobs
+      Obligations: build tests, then in parallel: Clippy, run tests, doctests, docs
     - final required result
-  Parallel: 15 execution jobs; dependencies preserved; no matrix fan-out
+  Parallel: 5 execution jobs; dependencies preserved; no matrix fan-out
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
 
 Recommendations

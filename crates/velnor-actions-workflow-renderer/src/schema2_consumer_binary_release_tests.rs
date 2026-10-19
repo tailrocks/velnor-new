@@ -42,8 +42,8 @@ fn exec_argv(tool: &str, program: &str, args: &[&str]) -> Vec<String> {
 fn spec() -> ConsumerBinaryReleaseSpec {
     let linux_setup = MiseSetup {
         uses: "jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7".to_owned(),
-        version: "2026.10.14".to_owned(),
-        sha256: "50be7185bcf75929f01cc5630276bcb43ca367f7c5b176e2580903d28c611dc4".to_owned(),
+        version: "2026.10.15".to_owned(),
+        sha256: "e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9".to_owned(),
     };
     ConsumerBinaryReleaseSpec {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -70,8 +70,8 @@ fn spec() -> ConsumerBinaryReleaseSpec {
         linux_setup,
         macos_setup: MiseSetup {
             uses: "jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7".to_owned(),
-            version: "2026.10.14".to_owned(),
-            sha256: "005b32b9c22ca9cb63ff9d35c74b3abe69c433e9ca655fea288ba3dcbe7e4918".to_owned(),
+            version: "2026.10.15".to_owned(),
+            sha256: "826c4833fa7437a63f6027b86bc10c8b61b1163dc793c03ecde92f68ad167890".to_owned(),
         },
         install_tools_argv: install_argv(&["rust@1.98.1", "gh@2.102.0"]),
         install_gh_argv: install_argv(&["gh@2.102.0"]),

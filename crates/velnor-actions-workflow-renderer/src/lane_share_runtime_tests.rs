@@ -10,6 +10,7 @@ fn step(name: &str, role: Option<StepRole>) -> Step {
         id: None,
         role,
         condition: None,
+        parallel: false,
         kind: StepKind::Shell {
             run: vec!["true".to_owned()],
             env: BTreeMap::new(),
@@ -24,6 +25,7 @@ fn preseed_failure_guard_stays_before_downloaded_helper_steps() {
         id: None,
         role: None,
         condition: Some("always() && needs.plan.result != 'success'".to_owned()),
+        parallel: false,
         kind: StepKind::Shell {
             run: vec![
                 "sh".to_owned(),

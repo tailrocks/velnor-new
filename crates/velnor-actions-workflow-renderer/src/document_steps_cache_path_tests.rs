@@ -10,6 +10,7 @@ fn step(role: Option<StepRole>) -> Step {
         id: None,
         role,
         condition: None,
+        parallel: false,
         kind: StepKind::Action {
             uses: "actions/cache/restore@0123456789012345678901234567890123456789".to_owned(),
             with: BTreeMap::new(),

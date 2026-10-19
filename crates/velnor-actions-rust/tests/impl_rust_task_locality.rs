@@ -41,6 +41,11 @@ fn production_task_prerequisites_stay_with_package_and_configuration()
             )
         })
         .collect();
+    assert_eq!(
+        groups.len(),
+        48,
+        "all package and configuration tasks stay planned"
+    );
     assert_eq!(owners.len(), groups.len());
     let mut edges = 0;
     for group in &groups {
@@ -52,7 +57,10 @@ fn production_task_prerequisites_stay_with_package_and_configuration()
             edges += 1;
         }
     }
-    assert_eq!(edges, 48);
+    assert_eq!(
+        edges, 8,
+        "only Nextest build dependencies remain sequential"
+    );
     Ok(())
 }
 

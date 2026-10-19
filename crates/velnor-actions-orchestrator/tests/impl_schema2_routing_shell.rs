@@ -11,7 +11,8 @@ pub(super) fn assert_scale_set_shell_and_same_steps(
     let checkout = position(hosted, "uses: actions/checkout@")?;
     let identity = position(hosted, "name: V2 identity")?;
     let restore = position(hosted, "name: Restore Mise tools")?;
-    let shared = position(hosted, "uses: ./.github/actions/rust-demo")?;
+    // Parallel crate-job bodies stay literal: composites cannot hold them.
+    let shared = position(hosted, "name: Wait for parallel checks")?;
     assert!(checkout < identity && identity < restore && restore < shared);
     assert!(
         named_step(hosted, "V2 identity")?
@@ -27,7 +28,7 @@ pub(super) fn assert_scale_set_shell_and_same_steps(
     }
     assert!(
         position(local, "uses: actions/checkout@")?
-            < position(local, "uses: ./.github/actions/rust-demo")?
+            < position(local, "name: Wait for parallel checks")?
     );
     assert!(optional_named_step(local, "V2 identity").is_none());
     assert!(optional_named_step(local, "Restore Mise tools").is_none());

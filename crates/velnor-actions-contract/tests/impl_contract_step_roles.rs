@@ -14,6 +14,7 @@ const OTHER_TOFU_PATH: &str = "${{ runner.temp }}/velnor/cache/tofu/stacks-vpc-a
 
 fn plan_step(name: &str) -> Step {
     Step {
+        parallel: false,
         name: name.to_owned(),
         id: Some(StepId::Plan),
         role: Some(StepRole::PlanProducer),
@@ -46,6 +47,7 @@ fn final_serialized_scope_rejects_duplicate_typed_ids() {
 #[test]
 fn role_kind_mismatch_fails_even_when_display_name_matches() {
     let step = Step {
+        parallel: false,
         name: "Plan".to_owned(),
         id: None,
         role: Some(StepRole::PlanProducer),
@@ -62,6 +64,7 @@ fn role_kind_mismatch_fails_even_when_display_name_matches() {
 #[test]
 fn mbx_cleanup_requires_the_successful_ready_outcome_guard() {
     let action = Step {
+        parallel: false,
         name: "Restore MBX objects".to_owned(),
         id: None,
         role: Some(StepRole::MbxCache),
@@ -78,6 +81,7 @@ fn mbx_cleanup_requires_the_successful_ready_outcome_guard() {
         },
     };
     let ready = Step {
+        parallel: false,
         name: "Verify native MBX version".to_owned(),
         id: Some(StepId::MbxReady),
         role: Some(StepRole::MbxVersionCheck),
@@ -88,6 +92,7 @@ fn mbx_cleanup_requires_the_successful_ready_outcome_guard() {
         },
     };
     let cleanup = Step {
+        parallel: false,
         name: "Clean MBX workspace outputs".to_owned(),
         id: None,
         role: Some(StepRole::MbxWorkspaceCleanup),
@@ -100,22 +105,15 @@ fn mbx_cleanup_requires_the_successful_ready_outcome_guard() {
     validate_step_sequence(&[action.clone(), ready.clone(), cleanup.clone()], "mbx-job")
         .expect("cleanup is guarded by the native ready check");
 
+    let unguarded_template = cleanup.clone();
     let mut unguarded = cleanup;
     unguarded.condition = None;
     let error = validate_step_sequence(&[action.clone(), ready.clone(), unguarded], "mbx-job")
         .expect_err("unconditional MBX cleanup must fail validation");
     assert!(error.to_string().contains("mbx_cleanup_condition_mismatch"));
 
-    let missing_ready = Step {
-        name: "Clean MBX workspace outputs".to_owned(),
-        id: None,
-        role: Some(StepRole::MbxWorkspaceCleanup),
-        condition: Some(MBX_WORKSPACE_CLEAN_CONDITION.to_owned()),
-        kind: StepKind::Shell {
-            run: vec!["mbx".to_owned(), "clean".to_owned()],
-            env: BTreeMap::new(),
-        },
-    };
+    let mut missing_ready = unguarded_template;
+    missing_ready.condition = Some(MBX_WORKSPACE_CLEAN_CONDITION.to_owned());
     let error = validate_step_sequence(&[action.clone(), missing_ready.clone()], "mbx-job")
         .expect_err("cleanup cannot point at a missing same-job ready guard");
     assert!(error.to_string().contains("mbx_cleanup_sequence_mismatch"));
@@ -127,6 +125,7 @@ fn mbx_cleanup_requires_the_successful_ready_outcome_guard() {
 
 fn tofu_restore() -> Step {
     Step {
+        parallel: false,
         name: "Restore Tofu providers".to_owned(),
         id: Some(StepId::TofuProviders),
         role: Some(StepRole::TofuProvidersRestore),
@@ -145,6 +144,7 @@ fn tofu_restore() -> Step {
 
 fn tofu_use() -> Step {
     Step {
+        parallel: false,
         name: "OpenTofu init and validate".to_owned(),
         id: None,
         role: Some(StepRole::TofuProviderUse),
@@ -161,6 +161,7 @@ fn tofu_use() -> Step {
 
 fn tofu_save() -> Step {
     Step {
+        parallel: false,
         name: "Save Tofu providers".to_owned(),
         id: None,
         role: Some(StepRole::TofuProvidersSave),
@@ -348,6 +349,7 @@ fn configured_checkout_authority_is_typed_exact_and_name_independent() {
 
     const CHECKOUT_USES: &str = "actions/checkout@0123456789abcdef0123456789abcdef01234567";
     let mut checkout = Step {
+        parallel: false,
         name: "Checkout".to_owned(),
         id: None,
         role: Some(StepRole::Checkout),

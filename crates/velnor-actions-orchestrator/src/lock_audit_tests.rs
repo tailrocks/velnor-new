@@ -23,6 +23,7 @@ fn shell_job(run: Vec<String>) -> Job {
         permissions: None,
         environment: None,
         steps: vec![Step {
+            parallel: false,
             name: PREPARE_PINNED_TOOLS_STEP.to_owned(),
             id: None,
             role: Some(StepRole::PreparePinnedTools),

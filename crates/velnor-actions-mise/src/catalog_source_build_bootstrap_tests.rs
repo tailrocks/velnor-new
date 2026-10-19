@@ -24,50 +24,50 @@ const MEASURED_ROWS: [Expected; 6] = [
     Expected {
         tool: SourceBuildBootstrapTool::Mise,
         host: SourceBuildBootstrapHost::LinuxAmd64,
-        selector: "github:jdx/mise@2026.10.14",
-        url: "https://github.com/jdx/mise/releases/download/v2026.10.14/mise-v2026.10.14-linux-x64",
-        archive: "50be7185bcf75929f01cc5630276bcb43ca367f7c5b176e2580903d28c611dc4",
-        binary: "50be7185bcf75929f01cc5630276bcb43ca367f7c5b176e2580903d28c611dc4",
+        selector: "github:jdx/mise@2026.10.15",
+        url: "https://github.com/jdx/mise/releases/download/v2026.10.15/mise-v2026.10.15-linux-x64",
+        archive: "e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9",
+        binary: "e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9",
         format: SourceBuildBootstrapFormat::Binary,
         member: "",
         repository: "https://github.com/jdx/mise",
-        commit: "d7131a7d69a2bdb2cfc84a66a5ff97329dd740e9",
-        tree: "86511d143b7a9b3af5f2f43ed6cab6e60f03c72c",
+        commit: "597c1897dfed28d1c0dea9f98fba581059e42cd3",
+        tree: "4786f2724d63cb59e06226bde8d3d58c09cb80dd",
         owner: "jdx/mise",
-        version: "2026.10.14",
-        abi: "mise-cli-v2026.10.14",
+        version: "2026.10.15",
+        abi: "mise-cli-v2026.10.15",
     },
     Expected {
         tool: SourceBuildBootstrapTool::Mise,
         host: SourceBuildBootstrapHost::LinuxArm64,
-        selector: "github:jdx/mise@2026.10.14",
-        url: "https://github.com/jdx/mise/releases/download/v2026.10.14/mise-v2026.10.14-linux-arm64.tar.gz",
-        archive: "ff76e1d99fc27bcb2b3b38d1afd0798a785088aad93cc4206f2227195d2063cd",
-        binary: "a9a8eec284d1c8e1a76685dcfa2fd609e76773fe56546eb72e4568dd1f50c1c3",
+        selector: "github:jdx/mise@2026.10.15",
+        url: "https://github.com/jdx/mise/releases/download/v2026.10.15/mise-v2026.10.15-linux-arm64.tar.gz",
+        archive: "ae36e72ea72d337ab7b367edb0f7016fa1502aa0e36ccb705acad7902c60677b",
+        binary: "3abbaac305a465ef038eb4ea07b961c037a8b639108005e43f8e2c00a8f67c11",
         format: SourceBuildBootstrapFormat::TarGzip,
         member: "mise/bin/mise",
         repository: "https://github.com/jdx/mise",
-        commit: "d7131a7d69a2bdb2cfc84a66a5ff97329dd740e9",
-        tree: "86511d143b7a9b3af5f2f43ed6cab6e60f03c72c",
+        commit: "597c1897dfed28d1c0dea9f98fba581059e42cd3",
+        tree: "4786f2724d63cb59e06226bde8d3d58c09cb80dd",
         owner: "jdx/mise",
-        version: "2026.10.14",
-        abi: "mise-cli-v2026.10.14",
+        version: "2026.10.15",
+        abi: "mise-cli-v2026.10.15",
     },
     Expected {
         tool: SourceBuildBootstrapTool::Mise,
         host: SourceBuildBootstrapHost::MacosArm64,
-        selector: "github:jdx/mise@2026.10.14",
-        url: "https://github.com/jdx/mise/releases/download/v2026.10.14/mise-v2026.10.14-macos-arm64.tar.gz",
-        archive: "eb68c824e16af90f61e70e0d785179f335b1b95466606a5e0d8b9da504bb7bb2",
-        binary: "005b32b9c22ca9cb63ff9d35c74b3abe69c433e9ca655fea288ba3dcbe7e4918",
+        selector: "github:jdx/mise@2026.10.15",
+        url: "https://github.com/jdx/mise/releases/download/v2026.10.15/mise-v2026.10.15-macos-arm64.tar.gz",
+        archive: "8a44a56f72323c777298a1d5abd88ffd21d0fca19fab1ccccd389a912374f69c",
+        binary: "826c4833fa7437a63f6027b86bc10c8b61b1163dc793c03ecde92f68ad167890",
         format: SourceBuildBootstrapFormat::TarGzip,
         member: "mise/bin/mise",
         repository: "https://github.com/jdx/mise",
-        commit: "d7131a7d69a2bdb2cfc84a66a5ff97329dd740e9",
-        tree: "86511d143b7a9b3af5f2f43ed6cab6e60f03c72c",
+        commit: "597c1897dfed28d1c0dea9f98fba581059e42cd3",
+        tree: "4786f2724d63cb59e06226bde8d3d58c09cb80dd",
         owner: "jdx/mise",
-        version: "2026.10.14",
-        abi: "mise-cli-v2026.10.14",
+        version: "2026.10.15",
+        abi: "mise-cli-v2026.10.15",
     },
     Expected {
         tool: SourceBuildBootstrapTool::Mbx,
@@ -143,14 +143,14 @@ fn every_official_row_has_two_64_character_lower_hex_hashes() {
 
 #[test]
 fn mise_linux_arm64_archive_uses_official_release_checksum() {
-    // From v2026.10.14/SHASUMS256.txt, confirmed against fetched archive bytes.
+    // From v2026.10.15/SHASUMS256.txt, confirmed against fetched archive bytes.
     assert_eq!(
         official(
             SourceBuildBootstrapTool::Mise,
             SourceBuildBootstrapHost::LinuxArm64
         )
         .archive_sha256(),
-        "ff76e1d99fc27bcb2b3b38d1afd0798a785088aad93cc4206f2227195d2063cd"
+        "ae36e72ea72d337ab7b367edb0f7016fa1502aa0e36ccb705acad7902c60677b"
     );
 }
 

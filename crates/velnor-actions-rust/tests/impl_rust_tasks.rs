@@ -107,7 +107,7 @@ fn ids_for(groups: &[velnor_actions_rust::TaskGroup], kind: TaskKind) -> Vec<&st
 }
 
 #[test]
-fn derives_groups_with_clippy_gates() {
+fn derives_independent_groups_without_gates() {
     let package = package();
     let profile = cargo_profile();
     let features = vec!["default".to_owned()];
@@ -130,22 +130,9 @@ fn derives_groups_with_clippy_gates() {
         assert_eq!(group.manifest_key, "crates/a");
         assert_eq!(group.package_id, "a-id");
     }
-    let clippy = &groups[0];
-    assert_eq!(clippy.gated_by, [] as [std::string::String; 0]);
-    assert_eq!(clippy.depends_on, [] as [std::string::String; 0]);
-    for group in groups.iter().skip(1) {
-        if group.kind == TaskKind::Doc {
-            let doctest = groups
-                .iter()
-                .find(|g| g.kind == TaskKind::Doctest)
-                .expect("doctest");
-            assert_eq!(
-                group.gated_by,
-                vec![clippy.task_id.clone(), doctest.task_id.clone()]
-            );
-        } else {
-            assert_eq!(group.gated_by, vec![clippy.task_id.clone()]);
-        }
+    for group in &groups {
+        assert_eq!(group.gated_by, [] as [std::string::String; 0]);
+        assert_eq!(group.depends_on, [] as [std::string::String; 0]);
     }
     assert_eq!(groups[1].depends_on, [] as [std::string::String; 0]);
 }
@@ -169,14 +156,13 @@ fn nextest_adds_build_with_data_edge() {
         ]
     );
     assert_eq!(ids_for(&groups, TaskKind::Test), [] as [&str; 0]);
-    let clippy = ids_for(&groups, TaskKind::Clippy);
     let build = ids_for(&groups, TaskKind::Build);
     let nextest: Vec<&velnor_actions_rust::TaskGroup> = groups
         .iter()
         .filter(|group| group.kind == TaskKind::Nextest)
         .collect();
     assert_eq!(nextest.len(), 1);
-    assert_eq!(nextest[0].gated_by, vec![clippy[0].to_owned()]);
+    assert_eq!(nextest[0].gated_by, [] as [std::string::String; 0]);
     assert_eq!(nextest[0].depends_on, vec![build[0].to_owned()]);
 }
 

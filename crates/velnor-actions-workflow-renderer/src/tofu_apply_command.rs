@@ -103,6 +103,7 @@ pub(super) fn tofu_shell_step(
         crate::toolchain_env::with_env_unset_argv(&argv)
     };
     let step = Step {
+        parallel: false,
         name: name.to_owned(),
         id: None,
         role: None,

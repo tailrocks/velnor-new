@@ -263,6 +263,7 @@ pub(crate) fn non_internal_step_to_yaml(
     runs_on: &str,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
+    crate::parallel_steps::reject_parallel(step, job_id)?;
     match &step.kind {
         StepKind::Action { uses, with, env } => {
             action_step_to_yaml(job_id, step, uses, with, env, job_env, Some(runs_on))
@@ -285,6 +286,9 @@ pub(crate) fn step_to_yaml(
     step_context: &crate::document_lanes::JobStepContext<'_>,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
+    if composite {
+        crate::parallel_steps::reject_parallel(step, job_id)?;
+    }
     match &step.kind {
         StepKind::Action { uses, with, env } => action_step_to_yaml(
             job_id,

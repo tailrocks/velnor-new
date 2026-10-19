@@ -61,7 +61,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: adb8285eaed685b22f4a6fcf2a03cb990d5a6881a27ca17d60e41575efcad2a8
+          d: bdeac23f09522b013f150f477b687d9baf503ed775b92278f1501f2694acd1b7
       - name: Restore Mise tools
         id: tools-cache-restore
         if: github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'
@@ -78,12 +78,12 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 50be7185bcf75929f01cc5630276bcb43ca367f7c5b176e2580903d28c611dc4
-          version: 2026.10.14
+          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
+          version: 2026.10.15
       - name: Prepare pinned tools
         run: mise --no-config --no-env --no-hooks install actionlint@1.7.12 shellcheck@0.11.0
       - name: Run actionlint
-        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
+        run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color -ignore '^unexpected key \"background\" for step to (run shell command|execute action)\\. ' -ignore '^step must run script with \"run\" section or run action with \"uses\" section$'"
       - name: Save Mise tools
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -126,7 +126,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 88ff2ae871fd6da2c6b6b53926ad39bcdfa62c3640dcae6067e928943a35e447
+          d: 169a95f2b3445fa80e15d0188490b92b0ba4ba8d116b626f40386645ad085cc4
       - name: Restore Mise tools
         id: tools-cache-restore
         if: github.event_name != 'workflow_dispatch' && steps.v2.outputs.enabled == 'true'
@@ -143,8 +143,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 50be7185bcf75929f01cc5630276bcb43ca367f7c5b176e2580903d28c611dc4
-          version: 2026.10.14
+          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
+          version: 2026.10.15
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -246,8 +246,8 @@ jobs:
           cache_save: "false"
           env: "false"
           install: "false"
-          sha256: 50be7185bcf75929f01cc5630276bcb43ca367f7c5b176e2580903d28c611dc4
-          version: 2026.10.14
+          sha256: e3b186d4c70627f27037be615becaf4acfb30e41fb6a1819486717dc94e4e2a9
+          version: 2026.10.15
       - name: Acquire Velnor
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.22\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
       - name: Prepare pinned tools

@@ -14,6 +14,7 @@ fn restore_step(id: Option<StepId>, role: Option<StepRole>, uses: &str) -> Step 
         id,
         role,
         condition: None,
+        parallel: false,
         kind: StepKind::Action {
             uses: uses.to_owned(),
             with: BTreeMap::new(),
@@ -79,6 +80,7 @@ fn normal_cache_operations_require_registered_ids_and_roles() {
             id: Some(id),
             role: Some(role),
             condition: None,
+            parallel: false,
             kind: StepKind::Internal {
                 operation: operation.to_owned(),
                 env: BTreeMap::new(),
@@ -96,6 +98,7 @@ fn normal_cache_operations_reject_wrong_operation_and_missing_id() {
         id: Some(StepId::NormalToolsCacheImport),
         role: Some(StepRole::NormalToolsCacheImport),
         condition: None,
+        parallel: false,
         kind: StepKind::Internal {
             operation: NORMAL_TOOLS_CACHE_EXPORT_OPERATION.to_owned(),
             env: BTreeMap::new(),
@@ -106,6 +109,7 @@ fn normal_cache_operations_reject_wrong_operation_and_missing_id() {
         id: None,
         role: Some(StepRole::NormalToolsCacheStage),
         condition: None,
+        parallel: false,
         kind: StepKind::Internal {
             operation: NORMAL_TOOLS_CACHE_STAGE_OPERATION.to_owned(),
             env: BTreeMap::new(),
@@ -123,6 +127,7 @@ fn cache_tar_launcher_output_has_one_typed_owner() {
         id: Some(StepId::CacheTarLaunchers),
         role: Some(StepRole::CacheTarLaunchers),
         condition: None,
+        parallel: false,
         kind: StepKind::Action {
             uses: CACHE_TAR_LAUNCHER_USES.to_owned(),
             with: BTreeMap::from([(CACHE_TAR_LAUNCHER_SHA256_INPUT.to_owned(), "a".repeat(64))]),
@@ -182,6 +187,7 @@ fn preseed_stage_digest_uses_the_fixed_step_output() {
         id: Some(StepId::PreseedStage),
         role: Some(StepRole::PreseedStage),
         condition: None,
+        parallel: false,
         kind: StepKind::Shell {
             run: vec!["true".to_owned()],
             env: BTreeMap::new(),

@@ -112,16 +112,10 @@ fn both_mode_splits_verification_and_keeps_release_hosted() -> TestResult {
     let shared = required_file(&tree, ".github/actions/declared-task-0/action.yml")?;
     assert!(shared.contains("shell: bash"), "{shared}");
     assert!(shared.contains("using: composite"), "{shared}");
-    let rust_action = required_file(&tree, ".github/actions/rust-demo/action.yml")?;
-    for task in [
-        "Format",
-        "Clippy",
-        "Unit and integration tests",
-        "Doctests",
-        "Documentation",
-    ] {
-        assert!(rust_action.contains(task), "{rust_action}");
-    }
+    assert!(
+        tree.get(".github/actions/rust-demo/action.yml").is_none(),
+        "parallel Rust steps stay at workflow job scope"
+    );
     assert_both_ci(ci)?;
     assert_hosted_release(release);
     Ok(())
@@ -140,16 +134,10 @@ fn dispatch_mode_overrides_configured_mode() -> TestResult {
     assert!(!hosted_ci.contains("rust-demo-tests"));
     assert!(!hosted_ci.contains("rust-demo-docs"));
     assert_both_ci(forced_ci)?;
-    let rust_action = required_file(&forced, ".github/actions/rust-demo/action.yml")?;
-    for task in [
-        "Format",
-        "Clippy",
-        "Unit and integration tests",
-        "Doctests",
-        "Documentation",
-    ] {
-        assert!(rust_action.contains(task), "{rust_action}");
-    }
+    assert!(
+        forced.get(".github/actions/rust-demo/action.yml").is_none(),
+        "parallel Rust steps stay at workflow job scope"
+    );
     Ok(())
 }
 
@@ -196,7 +184,9 @@ fn assert_both_ci(ci: &str) -> TestResult {
     let hosted = job_body(ci, "rust-demo__hosted")?;
     let local = job_body(ci, "rust-demo__local")?;
     for job in [hosted, local] {
-        assert!(job.contains("./.github/actions/rust-demo"), "{job}");
+        assert!(job.contains("./.github/actions/declared-task-0"), "{job}");
+        assert!(job.contains("Wait for parallel checks"), "{job}");
+        assert!(job.contains("wait-all:"), "{job}");
     }
     assert!(hosted.contains(HOSTED_RUNS), "{hosted}");
     assert!(local.contains(SCALE_RUNS), "{local}");

@@ -153,11 +153,11 @@
   "temporary_holds": [],
   "tools": [
     {
-      "checked_at": "2026-10-19T04:11:31Z",
-      "latest": "2026.10.14",
+      "checked_at": "2026-10-19T14:54:03Z",
+      "latest": "2026.10.15",
       "name": "mise",
-      "pinned": "2026.10.14",
-      "qualified": "2026.10.14",
+      "pinned": "2026.10.15",
+      "qualified": "2026.10.15",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
       "status": "current"
     },

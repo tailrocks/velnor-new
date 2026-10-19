@@ -55,10 +55,9 @@ fn checkout_full_provides_history_for_git_archaeology() {
 }
 
 #[test]
-fn syntax_gate_allows_matrix_and_rejects_native() {
+fn syntax_gate_allows_matrix_and_bridged_native_parallelism() {
     assert!(vet_step_syntax(StepSyntax::JobMatrix).is_ok());
-    let err = vet_step_syntax(StepSyntax::NativeParallelism).expect_err("native gated");
-    assert!(err.to_string().contains("native_parallelism"), "{err}");
+    assert!(vet_step_syntax(StepSyntax::NativeParallelism).is_ok());
 }
 
 #[test]

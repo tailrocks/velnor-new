@@ -263,7 +263,7 @@ fn intake_unconfigured_suites_are_not_sharded() -> TestResult {
 }
 
 #[test]
-fn intake_generated_workflow_uses_crate_jobs_not_native_parallel() -> TestResult {
+fn intake_generated_workflow_uses_one_crate_job_with_background_checks() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
     generate(&prep, &GenerateOptions { output_dir: None })?;
@@ -281,8 +281,8 @@ fn intake_generated_workflow_uses_crate_jobs_not_native_parallel() -> TestResult
     for line in yml.lines() {
         let stepped = line.trim_start();
         assert!(
-            !stepped.starts_with("parallel:") && !stepped.starts_with("background:"),
-            "native syntax: {line}"
+            !stepped.starts_with("parallel:") && !stepped.starts_with("- parallel:"),
+            "the actionlint-blind `parallel:` sugar is never emitted: {line}"
         );
     }
     Ok(())

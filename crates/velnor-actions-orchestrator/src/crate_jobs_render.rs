@@ -139,15 +139,25 @@ fn render_obligation_steps(
     max_parallel_jobs: u32,
     helper_version: &str,
 ) -> Result<Vec<Step>, OrchestratorError> {
-    model
-        .obligations
-        .iter()
-        .enumerate()
-        .map(|(index, obligation)| {
-            // The first obligation declares the root job's concurrency cap;
-            // the renderer turns the marker into `strategy.max-parallel`.
-            let cap = (index == 0 && use_opentofu).then_some(max_parallel_jobs);
-            crate::matrix_step::obligation_step(obligation, catalog, cap, helper_version)
-        })
-        .collect()
+    let mut steps = Vec::with_capacity(model.obligations.len());
+    for (index, obligation) in model.obligations.iter().enumerate() {
+        // The first obligation declares the root job's concurrency cap;
+        // the renderer turns the marker into `strategy.max-parallel`.
+        let cap = (index == 0 && use_opentofu).then_some(max_parallel_jobs);
+        let parallel =
+            !use_opentofu && !velnor_actions_rust::runs_before_parallel_checks(&obligation.kind);
+        let target_lane = parallel
+            .then(|| velnor_actions_rust::concurrent_target_lane(&obligation.kind))
+            .flatten();
+        let mut step = crate::matrix_step::obligation_step(
+            obligation,
+            catalog,
+            cap,
+            helper_version,
+            target_lane,
+        )?;
+        step.parallel = parallel;
+        steps.push(step);
+    }
+    Ok(steps)
 }

@@ -21,10 +21,11 @@ fn spec() -> ReviewCompletionSpec {
         generator_version: "0.1.21".to_owned(),
         setup: MiseSetup {
             uses: "jdx/mise-action@9b200bcecbfd6303e69a4a261b2e09e3757440a7".to_owned(),
-            version: "2026.10.14".to_owned(),
+            version: "2026.10.15".to_owned(),
             sha256: crate::setup::MISE_BINARY_SHA256_LINUX_X64.to_owned(),
         },
         acquire: Step {
+            parallel: false,
             name: "Acquire verified helper".to_owned(),
             id: None,
             role: None,

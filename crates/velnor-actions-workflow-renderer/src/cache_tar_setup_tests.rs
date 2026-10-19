@@ -255,6 +255,7 @@ fn step(name: &str, role: StepRole, kind: StepKind) -> Step {
         id: None,
         role: Some(role),
         condition: None,
+        parallel: false,
         kind,
     }
 }

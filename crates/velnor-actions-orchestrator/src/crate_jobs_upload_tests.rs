@@ -5,6 +5,7 @@
 
 use super::crate_jobs_tests::{discovery, group, names};
 use super::*;
+use std::collections::BTreeSet;
 use velnor_actions_rust::{CompileDriver, TaskKind};
 
 /// Both demo obligations use one selected driver and one package job.
@@ -16,11 +17,12 @@ fn two_task_jobs(driver: CompileDriver) -> (Vec<(String, Job)>, ProposedTask, Pr
     let mut test = group("demo", TaskKind::Test, &[clippy_id.as_str()]);
     test.identity.compile_driver = driver.as_str().to_owned();
     test.validate().expect("test proposal");
+    let other = group("nested", TaskKind::Clippy, &[]);
     let catalog = ToolCatalog::pinned();
     let found = build_crate_jobs(CrateJobInputs {
         label: "ubuntu-26.04",
         policy: WorkflowPolicy::ConsumerV1,
-        discovery: &discovery(vec![test.clone(), clippy.clone()]),
+        discovery: &discovery(vec![test.clone(), clippy.clone(), other]),
         catalog: &catalog,
         fetch_roots: &[],
         acquire: None,
@@ -31,7 +33,7 @@ fn two_task_jobs(driver: CompileDriver) -> (Vec<(String, Job)>, ProposedTask, Pr
     })
     .expect("crate jobs");
     let ids: Vec<_> = found.jobs.iter().map(|(id, _)| id.as_str()).collect();
-    assert_eq!(ids, ["rust-demo"]);
+    assert_eq!(ids, ["rust-demo", "rust-nested"]);
     (found.jobs, clippy, test)
 }
 
@@ -120,15 +122,20 @@ fn assert_task_environment(
     env: &BTreeMap<String, String>,
     catalog: &ToolCatalog,
 ) {
-    let payload_env = velnor_actions_rust::payload_env_for_kind(&task.task_kind)
-        .into_iter()
-        .map(|(key, value)| {
-            (
-                key.to_string_lossy().into_owned(),
-                value.to_string_lossy().into_owned(),
-            )
-        })
-        .collect();
+    let payload_env: BTreeMap<String, String> =
+        velnor_actions_rust::payload_env_for_kind(&task.task_kind)
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    key.to_string_lossy().into_owned(),
+                    value.to_string_lossy().into_owned(),
+                )
+            })
+            .collect();
+    let mut payload_env = payload_env;
+    if let Some(lane) = velnor_actions_rust::concurrent_target_lane(&task.task_kind) {
+        payload_env.insert("CARGO_TARGET_DIR".to_owned(), format!("target/{lane}"));
+    }
     let expected_env = crate::matrix_step::task_step_env(catalog, &payload_env, true)
         .expect("validated task environment");
     assert_eq!(env, &expected_env, "exact task environment");
@@ -174,7 +181,11 @@ fn assert_task_execution_matches(task: &ProposedTask, step: &Step, catalog: &Too
 fn obligations_wrap_report_capture() {
     let (jobs, clippy, test) = two_task_jobs(CompileDriver::Mbx);
     let catalog = ToolCatalog::pinned();
-    let demo = &jobs[0].1;
+    let demo = &jobs
+        .iter()
+        .find(|(id, _)| id == "rust-demo")
+        .expect("crate owner")
+        .1;
     for task in [&clippy, &test] {
         let steps = names(demo);
         assert_eq!(&steps[..2], ["Checkout", "Download plan"], "{steps:?}");
@@ -195,6 +206,7 @@ fn obligations_wrap_report_capture() {
             .expect("task execution");
         assert_task_execution_matches(task, execution, &catalog);
         assert_eq!(executions.len(), 2, "both obligations use one job");
+        assert!(execution.parallel, "{name} runs in the parallel group");
     }
 }
 
@@ -263,9 +275,5 @@ fn obligations_upload_one_artifact_per_job() {
         .iter()
         .map(|(id, job)| assert_job_upload(id, job))
         .collect();
-    assert_eq!(
-        artifacts.len(),
-        1,
-        "one package job has one report artifact"
-    );
+    assert_eq!(artifacts.len(), 2, "each crate job has one report artifact");
 }

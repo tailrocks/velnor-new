@@ -168,7 +168,7 @@ fn plan_crate_agreement() -> TestResult {
     let repo = make_repo(ignored)?;
     let plan = plan_for(&prepare(repo.path())?)?;
     assert!(plan.contains("no-work workflow"), "static plan:\n{plan}");
-    assert!(!plan.contains("Rust phase job"), "static plan:\n{plan}");
+    assert!(!plan.contains("Rust crate job"), "static plan:\n{plan}");
     assert!(plan.contains("no matrix fan-out"), "static plan:\n{plan}");
     let (_repo, _parent, text) = preview_yml(ignored)?;
     assert!(!text.contains("strategy:"), "static yaml:\n{text}");

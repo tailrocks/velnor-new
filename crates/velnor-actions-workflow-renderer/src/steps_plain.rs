@@ -14,6 +14,7 @@ use crate::{RenderError, commands, yaml::Yaml};
 /// outside the validated constructors cannot smuggle content through.
 pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
     crate::steps::scan_for_private_subcommands(&step.name)?;
+    crate::parallel_steps::reject_parallel(step, "plain")?;
     match &step.kind {
         StepKind::Action { uses, with, env } => {
             crate::steps::validate_uses(uses)?;

@@ -31,7 +31,7 @@ Workflow to generate
         - stack/rust/root/fmt/default
         - stack/rust/root/test/default
   Parallel: 1 execution job; dependencies preserved; no matrix fan-out
-  Critical path: stack/rust/root/clippy/default -> stack/rust/root/doctest/default -> stack/rust/root/doc/default (3 tasks)
+  Critical path: stack/rust/root/clippy/default (1 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools
   Actionlint: 1.7.12 pinned

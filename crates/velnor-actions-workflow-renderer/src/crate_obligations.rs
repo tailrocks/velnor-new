@@ -64,6 +64,11 @@ fn extract_job(
     job: &mut Job,
     ctx: &RenderContext,
 ) -> Result<Option<RenderedFile>, RenderError> {
+    // Composite actions cannot declare background steps; a job with a
+    // parallel group keeps its obligations literal in the workflow.
+    if job.steps.iter().any(|step| step.parallel) {
+        return Ok(None);
+    }
     let Some(start) = job.steps.iter().position(is_obligation_step) else {
         return Ok(None);
     };
@@ -195,6 +200,7 @@ mod tests {
             check_runner: None,
             steps: vec![
                 Step {
+                    parallel: false,
                     name: "Checkout".to_owned(),
                     id: None,
                     role: None,
@@ -207,6 +213,7 @@ mod tests {
                     },
                 },
                 Step {
+                    parallel: false,
                     name: "Check task".to_owned(),
                     id: None,
                     role: None,

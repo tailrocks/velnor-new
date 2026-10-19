@@ -172,7 +172,7 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
   Parallel: 15 execution jobs; dependencies preserved; no matrix fan-out
-  Critical path: stack/rust/crates/velnor-actions-actionlint/clippy/default -> stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (3 tasks)
+  Critical path: stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
   Actionlint: 1.7.12 pinned

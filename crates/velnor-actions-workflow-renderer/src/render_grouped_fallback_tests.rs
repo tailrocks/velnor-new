@@ -87,6 +87,7 @@ fn grouped_jobs() -> BTreeMap<String, Job> {
             id: Some(StepId::Plan),
             role: Some(StepRole::PlanProducer),
             condition: None,
+            parallel: false,
             kind: StepKind::Internal {
                 operation: "plan-v1".to_owned(),
                 env: BTreeMap::new(),
@@ -105,6 +106,7 @@ fn grouped_jobs() -> BTreeMap<String, Job> {
             condition: Some(format!(
                 "!contains(needs.{PLAN_JOB_ID}.outputs.{COVERED_TASKS_OUTPUT}, ',{task_id},')"
             )),
+            parallel: false,
             kind: StepKind::Shell {
                 run: vec!["printf".to_owned(), "%s".to_owned(), payload.clone()],
                 env: BTreeMap::new(),
