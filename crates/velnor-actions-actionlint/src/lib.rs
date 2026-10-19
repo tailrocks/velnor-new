@@ -46,7 +46,7 @@ pub use overrides::{
 };
 pub use tools::{
     ActionlintToolchain, SHELLCHECK_VERSION, ShellcheckToolchain, WorkflowLintTools,
-    ZizmorToolchain, step_parallelism_ignore_args,
+    ZizmorToolchain, step_parallelism_ignore_args, workflow_lint_args,
 };
 
 /// Stable identifier for the actionlint tool metadata.
