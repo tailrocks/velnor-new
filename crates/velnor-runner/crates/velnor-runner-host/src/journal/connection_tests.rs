@@ -202,49 +202,21 @@ async fn identical_remote_keys_are_isolated_by_connection() -> Result<(), HostEr
 async fn version_one_rows_stay_unbound_and_block_new_connections() -> Result<(), HostError> {
     let scratch = Scratch::new("legacy-binding")?;
     let path = scratch.file();
-    let journal = Journal::open(&path).await?;
-    let legacy_id = journal.begin("launch", "old-assignment").await?;
-    drop(journal);
-
     let text = path.to_str().ok_or(HostError::Journal)?;
     let database = turso::Builder::new_local(text)
         .build()
         .await
         .map_err(|_| HostError::Journal)?;
     let sql_connection = database.connect().map_err(|_| HostError::Journal)?;
-    // Reconstruct the schema that existed at version one. Later-version
-    // tables must be absent; otherwise CREATE TABLE IF NOT EXISTS can leave
-    // newer DDL in place for a migration that validates the old shape.
-    for table in [
-        "connection_runner_jits",
-        "connection_request_authorizations",
-        "connection_source_authorizations",
-        "connection_scale_set_intents",
-        "connection_completion_cleanup",
-        "connection_completion_inbox",
-        "connection_launch_recovery",
-        "capacity_reservation_samples",
-        "connection_runtime_bindings",
-        "capacity_reservations",
-        "host_capacity_policy",
-        "connection_intents",
-        "connection_scopes",
-        "image_imports",
-    ] {
-        sql_connection
-            .execute(&format!("DROP TABLE {table}"), ())
-            .await
-            .map_err(|_| HostError::Journal)?;
-    }
     sql_connection
-        .execute("PRAGMA user_version = 1", ())
+        .execute_batch(include_str!("fixtures/version_one.sql"))
         .await
         .map_err(|_| HostError::Journal)?;
     drop(sql_connection);
     drop(database);
 
     let migrated = Journal::open(&path).await?;
-    assert_eq!(migrated.read(legacy_id).await?, IntentState::Pending);
+    assert_eq!(migrated.read(1).await?, IntentState::Pending);
     assert_eq!(
         migrated
             .connection_scope(&connection("essential", 101, "donbeave/essential-mac",))

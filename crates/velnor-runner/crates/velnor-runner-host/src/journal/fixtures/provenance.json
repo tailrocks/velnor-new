@@ -1,0 +1,66 @@
+{
+  "format_version": 1,
+  "generator_environment": {
+    "rust_toolchain": "1.99.1",
+    "turso_version": "0.8.3"
+  },
+  "fixtures": [
+    {
+      "file": "version_one.sql",
+      "sha256": "2277976abaa068403691e5983c33b8486c6167d543787d1cbe3a3d3868fb74e3",
+      "historical_source_commit": "22c945ff5dd6ff4a6b80a36d9334db6251821dab",
+      "persisted_journal_version": 1,
+      "source_files": {
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema.rs": "d7c9552d65951ba0d3c8f795882841d8827e82a5ed28d0e661f23578bd5949b9"
+      },
+      "generation": "The historical host Journal::open created this schema and the fixture retained a pending legacy intent row."
+    },
+    {
+      "file": "version_three_intermediate.sql",
+      "sha256": "260adcb0d95eaf93bacbbe465cd233419b0b5c3543d982ca965c1697669b588f",
+      "historical_source_commit": "7905ef2ae4795a2b5b83b5b05731a41b00011349",
+      "persisted_journal_version": null,
+      "is_persisted_historical_version": false,
+      "source_files": {
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema.rs": "c66762aeb950e00ccedb5bff8e7d5823217169a20239ba98341cf0e05786543c",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/connection.rs": "04ffa264446117937e24253299886bd43633c103cf280731f9ab37da6f51bbf3",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/connection/validation.rs": "ca6656e4c5b0a7c8fd321d32c5330421ec726f68eb133dbead7ada38cf6e381c",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/migration.rs": "5de4c236a74aecd2018d1095ce08e20b95a1e0bbd6c5ee36595d37e0a8ad259a",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/remote.rs": "5a9d04162e01e298db91cf27b271f58845ab6535da0ff4ed22f569fa6737f6f1",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal_schema.rs": "471036dacc4a4e7955e455f7a7fa4a985e535cc9eeb1d9be09e3de8b43220dbb"
+      },
+      "generation": "The fixture records the output after the historical from_version_two step writes user_version 3. A temporary generator copy returned at that exact boundary before from_version_three ran. The repository never persisted a standalone version-3 schema."
+    },
+    {
+      "file": "version_four.sql",
+      "sha256": "bb8de91d0261c7240b1a1d892b87f613f34602f1fa4b07a7d6ac8b865a794aa0",
+      "historical_source_commit": "7905ef2ae4795a2b5b83b5b05731a41b00011349",
+      "persisted_journal_version": 4,
+      "source_files": {
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema.rs": "c66762aeb950e00ccedb5bff8e7d5823217169a20239ba98341cf0e05786543c",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/connection.rs": "04ffa264446117937e24253299886bd43633c103cf280731f9ab37da6f51bbf3",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/connection/validation.rs": "ca6656e4c5b0a7c8fd321d32c5330421ec726f68eb133dbead7ada38cf6e381c",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/migration.rs": "5de4c236a74aecd2018d1095ce08e20b95a1e0bbd6c5ee36595d37e0a8ad259a",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/remote.rs": "5a9d04162e01e298db91cf27b271f58845ab6535da0ff4ed22f569fa6737f6f1",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal_schema.rs": "471036dacc4a4e7955e455f7a7fa4a985e535cc9eeb1d9be09e3de8b43220dbb"
+      },
+      "generation": "A standalone harness invoked schema::bootstrap from source files whose bytes match the historical v4 source. A complete historical host-package build was blocked by unrelated cross-branch imports."
+    },
+    {
+      "file": "version_five.sql",
+      "sha256": "477c55dc192a086e719269f09c1f132156a2a6ada2eda9980e957864c59227a5",
+      "historical_source_commit": "6cb2a4271a56df5935a4ffd7b79eecc34aedbc17",
+      "persisted_journal_version": 5,
+      "source_files": {
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema.rs": "faf7c0b0643b8a44dbef65b305cb3b6da304b66d68ad8353a785353628363969",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/connection.rs": "04ffa264446117937e24253299886bd43633c103cf280731f9ab37da6f51bbf3",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/connection/validation.rs": "ca6656e4c5b0a7c8fd321d32c5330421ec726f68eb133dbead7ada38cf6e381c",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/image_import.rs": "b582e0a608affb101b209307b0f502c39a93df8eac46fda3a404af24bec94f11",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/migration.rs": "cd9f7fab7f6512aae6a3d0a86e299906ff7bfda3ca9585d54b9221671ed872c0",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal/schema/remote.rs": "5a9d04162e01e298db91cf27b271f58845ab6535da0ff4ed22f569fa6737f6f1",
+        "crates/velnor-runner/crates/velnor-runner-host/src/journal_schema.rs": "471036dacc4a4e7955e455f7a7fa4a985e535cc9eeb1d9be09e3de8b43220dbb"
+      },
+      "generation": "The historical v5 schema::bootstrap migrated the v4 fixture to version 5. The complete historical host package could not be compiled because of unrelated cross-branch API mismatches."
+    }
+  ]
+}

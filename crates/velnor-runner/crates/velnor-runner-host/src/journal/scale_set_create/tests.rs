@@ -236,16 +236,9 @@ async fn existing_set_adoption_binds_exact_fields_without_create_claim() -> Resu
 async fn version_five_migration_adds_scale_set_intent_table() -> Result<(), HostError> {
     let scratch = Scratch::new()?;
     let path = scratch.file();
-    drop(Journal::open(&path).await?);
     let (database, connection) = raw_database(&path).await?;
     connection
-        .execute("DROP TABLE connection_scale_set_intents", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    drop_post_v5_tables(&connection).await?;
-    reset_image_imports_to_version_five(&connection).await?;
-    connection
-        .execute("PRAGMA user_version = 5", ())
+        .execute_batch(include_str!("../fixtures/version_five.sql"))
         .await
         .map_err(|_| HostError::Journal)?;
     drop(connection);

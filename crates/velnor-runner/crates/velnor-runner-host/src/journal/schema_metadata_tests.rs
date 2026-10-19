@@ -277,7 +277,8 @@ async fn reopened_current_schema_keeps_distinct_insert_ids() -> Result<(), Strin
 }
 
 #[tokio::test]
-async fn integer_primary_key_completion_tables_accept_fresh_and_v3_schemas() -> Result<(), String> {
+async fn integer_primary_key_completion_tables_accept_fresh_and_v3_migration_step()
+-> Result<(), String> {
     let scratch = Scratch::new("remote-integer-primary-key")?;
     let path = scratch.file();
 
@@ -288,35 +289,18 @@ async fn integer_primary_key_completion_tables_accept_fresh_and_v3_schemas() -> 
     );
     assert_remote_primary_key_metadata(&path, JOURNAL_VERSION).await?;
 
-    // Version 3 already used INTEGER PRIMARY KEY. Remove tables introduced by
-    // later migrations so the version-three path validates its own schema.
-    // SQLite reports the rowid alias as notnull=0, so migration must preserve it.
-    let (db, connection) = database(&path).await?;
-    for table in [
-        "connection_runner_jits",
-        "connection_request_authorizations",
-        "connection_source_authorizations",
-        "connection_scale_set_intents",
-        "image_imports",
-    ] {
-        connection
-            .execute(&format!("DROP TABLE {table}"), ())
-            .await
-            .map_err(|error| error.to_string())?;
-    }
+    let intermediate = Scratch::new("version-three-migration-state")?;
+    let intermediate_path = intermediate.file();
+    let (db, connection) = database(&intermediate_path).await?;
     connection
-        .execute("PRAGMA user_version = 3", ())
+        .execute_batch(include_str!("fixtures/version_three_intermediate.sql"))
         .await
         .map_err(|error| error.to_string())?;
     drop(connection);
     drop(db);
 
-    drop(
-        Journal::open(&path)
-            .await
-            .map_err(|error| error.to_string())?,
-    );
-    assert_remote_primary_key_metadata(&path, JOURNAL_VERSION).await
+    assert_remote_primary_key_metadata(&intermediate_path, 3).await?;
+    Ok(())
 }
 
 async fn assert_remote_primary_key_metadata(

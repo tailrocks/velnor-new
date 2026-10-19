@@ -339,31 +339,14 @@ fn classic_observation(request: &ImageImportRequest) -> ImageImportObservation {
 async fn version_four_migration_creates_and_validates_import_ledger() -> Result<(), HostError> {
     let scratch = Scratch::new()?;
     let path = scratch.file();
-    drop(Journal::open(&path).await?);
-
     let text = path.to_str().ok_or(HostError::Journal)?;
     let database = turso::Builder::new_local(text)
         .build()
         .await
         .map_err(|_| HostError::Journal)?;
     let connection = database.connect().map_err(|_| HostError::Journal)?;
-    for table in [
-        "connection_runner_jits",
-        "connection_request_authorizations",
-        "connection_source_authorizations",
-        "connection_scale_set_intents",
-    ] {
-        connection
-            .execute(&format!("DROP TABLE {table}"), ())
-            .await
-            .map_err(|_| HostError::Journal)?;
-    }
     connection
-        .execute("DROP TABLE image_imports", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute("PRAGMA user_version = 4", ())
+        .execute_batch(include_str!("../fixtures/version_four.sql"))
         .await
         .map_err(|_| HostError::Journal)?;
     drop(connection);
