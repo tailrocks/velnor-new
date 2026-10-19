@@ -330,7 +330,7 @@ fn scale_set_rejects_the_native_preview_producer_with_a_specific_error() {
 
 #[test]
 fn preview_rejects_unbounded_producer_limits_before_rendering() {
-    for minutes in [0, 361, u16::MAX] {
+    for minutes in [0, 11, 30, 360, 361, u16::MAX] {
         let mut spec = fixture();
         spec.producer_timeout_minutes = minutes;
         assert!(
@@ -349,3 +349,49 @@ mod triggers;
 
 #[path = "schema2_consumer_preview_privilege_tests.rs"]
 mod privilege_tests;
+
+#[test]
+fn ten_minute_producer_jobs_leave_control_signer_publication_and_updater_at_five() {
+    let mut spec = with_tap();
+    spec.producer_timeout_minutes = 10;
+    let pairs =
+        velnor_actions_contract::preview_production::expected_preview_payload_pairs(&spec.plan)
+            .expect("full plan")
+            .len();
+    let rendered = render_consumer_preview(
+        &spec,
+        &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
+    )
+    .expect("explicit ten-minute producer");
+    assert_eq!(
+        rendered.bytes.matches("timeout-minutes: 10").count(),
+        pairs + 1,
+        "only each payload and the assembly job use the producer budget"
+    );
+    assert!(rendered.bytes.contains("timeout-minutes: 5"));
+    for minutes in [1, 5, 6, 10] {
+        spec.producer_timeout_minutes = minutes;
+        assert!(
+            render_consumer_preview(
+                &spec,
+                &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only()
+            )
+            .is_ok(),
+            "{minutes}"
+        );
+    }
+    spec.homebrew_tap
+        .as_mut()
+        .expect("tap")
+        .policy
+        .updater
+        .timeout_minutes = 6;
+    assert!(
+        render_consumer_preview(
+            &spec,
+            &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only()
+        )
+        .is_err(),
+        "producer authorization does not widen updater"
+    );
+}

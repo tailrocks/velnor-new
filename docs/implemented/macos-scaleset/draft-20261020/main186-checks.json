@@ -1,0 +1,44 @@
+{
+  "state": "IN_PROGRESS",
+  "source_head": "dd7f2735f9f28ff238a13f01164b3dc230a66d46",
+  "merge_input": "e48d577d35e4a2c7c650bbedcfbdbafc3b34ac57",
+  "cli_build": "PASS",
+  "generation_repeat": {
+    "result": "PASS",
+    "files": 32,
+    "identical": true
+  },
+  "workflow_syntax": "PASS",
+  "opentofu_goldens": "PASS",
+  "parity": {
+    "result": "PASS",
+    "passed": 4,
+    "run_id": "7d90b61e-c19c-4d6d-a11d-5aa035fe9f4b"
+  },
+  "publication_extraction": {
+    "result": "PASS",
+    "passed": 6,
+    "run_id": "7f722655-4442-4f19-9f91-5cbbddbb7696",
+    "independent_review": "PASS"
+  },
+  "feature_merge_checks": {
+    "result": "PASS",
+    "passed": 17,
+    "run_id": "d74d0da7-1c0f-485c-979e-8084c9bc3f07",
+    "prior_package_run": {
+      "result": "FAIL",
+      "passed": 3381,
+      "failed": 1,
+      "run_id": "1f9d013e-5165-48a6-9735-ac6055550b96"
+    },
+    "corrected_assertion_run": {
+      "result": "PASS",
+      "passed": 1,
+      "run_id": "7b1074f1-c8fa-4dc1-8929-cf8279a447f7"
+    },
+    "full_suite_after_test_correction": "NOT_RUN"
+  },
+  "release": "NOT_RUN",
+  "essential_installation": "NOT_RUN",
+  "chain_installation": "NOT_RUN"
+}

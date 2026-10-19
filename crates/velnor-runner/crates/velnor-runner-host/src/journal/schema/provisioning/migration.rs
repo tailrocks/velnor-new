@@ -15,6 +15,14 @@ pub(super) async fn upgrade_from_version_sixteen(
     Ok(())
 }
 
+#[cfg(test)]
+pub(in crate::journal) async fn upgrade_v16_filesystem_ids_for_test(
+    connection: &turso::Connection,
+) -> Result<(), HostError> {
+    upgrade_attachments(connection).await?;
+    upgrade_publication(connection).await
+}
+
 async fn upgrade_attachments(connection: &turso::Connection) -> Result<(), HostError> {
     let attachment_table = "capacity_reservation_bound_storage_attachments";
     let attachment_v16 = [

@@ -21,6 +21,7 @@ fn configured_timeout_reaches_one_job_for_each_rust_package() {
         timeout: velnor_actions_contract::JobTimeout::new(30).expect("valid timeout"),
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
@@ -59,6 +60,7 @@ fn configured_timeout_reaches_every_tofu_root_job() {
         timeout: velnor_actions_contract::JobTimeout::new(120).expect("valid timeout"),
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");

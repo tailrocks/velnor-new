@@ -126,6 +126,7 @@ fn drivers_follow_per_crate_selection() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
@@ -156,6 +157,7 @@ fn all_features_obligation_selects_all_features_source_probe() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
@@ -184,6 +186,7 @@ fn empty_groups_build_no_jobs() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("empty build");
@@ -214,6 +217,7 @@ fn acquire_stages_before_report_wrappers() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
@@ -263,6 +267,7 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
@@ -283,3 +288,6 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
         );
     }
 }
+
+#[path = "crate_jobs_seed_tests.rs"]
+mod seed_tests;

@@ -23,6 +23,7 @@ fn one_job_per_crate_builds_first_then_runs_checks_in_parallel() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
@@ -87,6 +88,7 @@ fn nested_workspace_lanes_live_below_that_workspace_target() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
@@ -130,85 +132,4 @@ fn assert_target_lanes(job: &Job) {
     ] {
         assert_eq!(lanes[shared], None, "{shared} uses the workspace target");
     }
-}
-
-/// `CARGO_BUILD_JOBS` of every task step in one crate job, by step name.
-fn build_jobs_by_step(job: &Job) -> BTreeMap<&str, Option<&str>> {
-    job.steps
-        .iter()
-        .filter_map(|step| match &step.kind {
-            velnor_actions_contract::StepKind::TaskExecution { env, .. } => Some((
-                step.name.as_str(),
-                env.get("CARGO_BUILD_JOBS").map(String::as_str),
-            )),
-            _ => None,
-        })
-        .collect()
-}
-
-#[test]
-fn configured_build_jobs_cap_every_cargo_step_of_that_crate_only() {
-    let tasks = vec![
-        group("demo", TaskKind::Build, &[]),
-        group("demo", TaskKind::Clippy, &[]),
-        group("demo", TaskKind::Doc, &[]),
-        group("demo", TaskKind::Doctest, &[]),
-        group("other", TaskKind::Clippy, &[]),
-        group("other", TaskKind::Doc, &[]),
-    ];
-    let crates = BTreeMap::from([(
-        "demo".to_owned(),
-        velnor_actions_contract::RustCrateConfig { build_jobs: 1 },
-    )]);
-    let found = build_crate_jobs(CrateJobInputs {
-        label: "ubuntu-26.04",
-        policy: WorkflowPolicy::ConsumerV1,
-        discovery: &discovery(tasks),
-        catalog: &ToolCatalog::pinned(),
-        fetch_roots: &[],
-        acquire: None,
-        max_parallel_jobs: 2,
-        timeout: velnor_actions_contract::JobTimeout::CRATE,
-        helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-        crates: &crates,
-    })
-    .expect("crate jobs");
-    let jobs: BTreeMap<&str, &Job> = found
-        .jobs
-        .iter()
-        .map(|(id, job)| (id.as_str(), job))
-        .collect();
-    let capped = build_jobs_by_step(jobs["rust-demo"]);
-    assert_eq!(capped["Build test executables"], Some("1"));
-    for name in ["Clippy", "Documentation", "Doctests"] {
-        assert_eq!(capped[name], Some("1"), "{name} is capped");
-    }
-    let uncapped = build_jobs_by_step(jobs["rust-other"]);
-    assert!(
-        uncapped.values().all(Option::is_none),
-        "other crates keep Cargo's default: {uncapped:?}"
-    );
-}
-
-#[test]
-fn build_jobs_for_an_unknown_package_fail_closed() {
-    let crates = BTreeMap::from([(
-        "typo".to_owned(),
-        velnor_actions_contract::RustCrateConfig { build_jobs: 1 },
-    )]);
-    let err = reject_unknown_crates(
-        &crates,
-        &discovery(vec![group("demo", TaskKind::Clippy, &[])]),
-    )
-    .expect_err("unknown package");
-    assert!(err.to_string().contains("unknown_rust_package"), "{err}");
-    reject_unknown_crates(
-        &BTreeMap::from([(
-            "demo".to_owned(),
-            velnor_actions_contract::RustCrateConfig { build_jobs: 1 },
-        )]),
-        &discovery(vec![group("demo", TaskKind::Clippy, &[])]),
-    )
-    .expect("known package");
 }

@@ -1,8 +1,8 @@
-use std::path::Path;
 use std::time::Instant;
 
 use super::helpers::{
-    create_cleaned_settlement_probe, record_owned_storage_cleanup, settlement_sample,
+    create_cleaned_settlement_probe, record_owned_network_cleanup, record_owned_storage_cleanup,
+    settlement_sample,
 };
 use super::review_counterexamples::ready;
 use crate::error::HostError;
@@ -11,9 +11,18 @@ use crate::journal::{
     StorageFilesystemKind, StorageMedium, StoragePoolObservation, StorageSampleIdentity,
 };
 
+#[path = "v16_settlement_liveness/v16_fixture.rs"]
+mod v16_fixture;
+
+// Use separate tests for the version 16 migration and current settlement behavior.
 #[tokio::test]
-async fn v16_filesystem_words_remain_provenance_while_fresh_settlement_releases_hold()
--> Result<(), HostError> {
+async fn v16_migration_preserves_two_word_filesystem_identity() -> Result<(), HostError> {
+    let scratch = super::helpers::Scratch::new()?;
+    v16_fixture::preserve_filesystem_words(&scratch.file()).await
+}
+
+#[tokio::test]
+async fn fresh_settlement_releases_hold_and_survives_restart() -> Result<(), HostError> {
     let super::review_counterexamples::Ready {
         scratch,
         journal,
@@ -24,13 +33,6 @@ async fn v16_filesystem_words_remain_provenance_while_fresh_settlement_releases_
         ..
     } = ready().await?;
     let path = scratch.file();
-    drop(scope);
-    drop(journal);
-    restore_v16_filesystem_columns(&path).await?;
-
-    let journal = Journal::open(&path).await?;
-    assert_legacy_words(&journal, provisioned.reservation_id).await?;
-    let scope = journal.connection_scope(&binding).await?;
     assert_eq!(
         scope.reservation(&physical).await?.map(|row| row.state),
         Some(ReservationState::Reserved)
@@ -47,6 +49,7 @@ async fn v16_filesystem_words_remain_provenance_while_fresh_settlement_releases_
     scope
         .record_local_cleanup(reservation.reservation_id)
         .await?;
+    record_owned_network_cleanup(&scope, reservation.reservation_id).await?;
     reject_stale_or_mismatched_samples(&scope, &provisioned, &physical).await?;
 
     let fresh = create_cleaned_settlement_probe(&scope, &provisioned, '4').await?;
@@ -61,7 +64,6 @@ async fn v16_filesystem_words_remain_provenance_while_fresh_settlement_releases_
         scope.reservation(&physical).await?.map(|row| row.state),
         Some(ReservationState::Released)
     );
-    assert_legacy_words(&journal, provisioned.reservation_id).await?;
     drop(scope);
     drop(journal);
 
@@ -74,7 +76,6 @@ async fn v16_filesystem_words_remain_provenance_while_fresh_settlement_releases_
             .map(|row| row.state),
         Some(ReservationState::Released)
     );
-    assert_legacy_words(&reopened, provisioned.reservation_id).await?;
     Ok(())
 }
 
@@ -168,96 +169,4 @@ fn settlement_sample_with_pool(
         0,
     )?;
     StorageAdmissionSample::new(identity, observed_at, vec![pool], None)
-}
-
-async fn assert_legacy_words(journal: &Journal, reservation_id: i64) -> Result<(), HostError> {
-    let connection = journal.connection().await?;
-    for table in [
-        "capacity_reservation_bound_storage_attachments",
-        "capacity_reservation_provisioning_publications",
-    ] {
-        let mut rows = connection
-            .query(
-                &format!("SELECT filesystem_id, v16_filesystem_id_0, v16_filesystem_id_1 FROM {table} WHERE reservation_id = ?1"),
-                [reservation_id],
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        let mut seen = 0_usize;
-        while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
-            assert_eq!(
-                row.get::<Option<String>>(0)
-                    .map_err(|_| HostError::Journal)?,
-                None
-            );
-            assert_eq!(row.get::<i64>(1).map_err(|_| HostError::Journal)?, 123);
-            assert_eq!(row.get::<i64>(2).map_err(|_| HostError::Journal)?, 456);
-            seen = seen.checked_add(1).ok_or(HostError::Journal)?;
-        }
-        assert!(seen > 0, "expected migrated rows in {table}");
-    }
-    Ok(())
-}
-
-async fn restore_v16_filesystem_columns(path: &Path) -> Result<(), HostError> {
-    let path_text = path.to_str().ok_or(HostError::Path)?;
-    let database = turso::Builder::new_local(path_text)
-        .build()
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let connection = database.connect().map_err(|_| HostError::Journal)?;
-    for table in [
-        "capacity_reservation_bound_storage_attachments",
-        "capacity_reservation_provisioning_publications",
-    ] {
-        replace_with_v16_columns(&connection, table).await?;
-    }
-    connection
-        .execute("PRAGMA user_version = 16", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    drop(connection);
-    drop(database);
-    Ok(())
-}
-
-async fn replace_with_v16_columns(
-    connection: &turso::Connection,
-    table: &str,
-) -> Result<(), HostError> {
-    let mut rows = connection
-        .query(&format!("PRAGMA table_info({table})"), ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let mut columns = Vec::new();
-    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
-        let name = row.get::<String>(1).map_err(|_| HostError::Journal)?;
-        match name.as_str() {
-            "filesystem_id" => {}
-            "v16_filesystem_id_0" => columns.push("123 AS filesystem_id_0".to_owned()),
-            "v16_filesystem_id_1" => columns.push("456 AS filesystem_id_1".to_owned()),
-            _ => columns.push(name),
-        }
-    }
-    drop(rows);
-    let temporary = format!("{table}_test_v16");
-    connection
-        .execute(
-            &format!(
-                "CREATE TABLE {temporary} AS SELECT {} FROM {table}",
-                columns.join(",")
-            ),
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute(&format!("DROP TABLE {table}"), ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute(&format!("ALTER TABLE {temporary} RENAME TO {table}"), ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    Ok(())
 }

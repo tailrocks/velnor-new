@@ -30,6 +30,7 @@ fn two_task_jobs(driver: CompileDriver) -> (Vec<(String, Job)>, ProposedTask, Pr
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");

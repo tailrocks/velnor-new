@@ -159,6 +159,15 @@ pub(super) fn refuse_problem(request: &str, _plan: &Plan, _run_key: &str) -> Str
         .to_string()
 }
 
+fn manifest_json(
+    request: &PublishRequest,
+    plan: &Plan,
+    reports: &[velnor_actions_contract::TaskReport],
+) -> Result<serde_json::Value, OrchestratorError> {
+    let (bytes, _) = manifest::build_manifest(request, plan, 7, 1, reports)?;
+    serde_json::from_slice(&bytes).map_err(|_| internal("test_manifest_decode"))
+}
+
 #[test]
 fn schema_two_manifest_has_fresh_proof_bound_to_successful_report() {
     let plan = fixture_plan(&"a".repeat(40), "r7-a1");
@@ -167,17 +176,16 @@ fn schema_two_manifest_has_fresh_proof_bound_to_successful_report() {
     let report = crate::task_report::terminal_task_report(&plan, entry, &task.task_digest, 0, None)
         .expect("successful report");
     let request = publish_request(&request_json(&plan.head)).expect("request");
-    let manifest = publish_manifest(&request, &plan, 7, 1, &[report]).expect("manifest");
-    self_check(&manifest).expect("self check");
+    let manifest = manifest_json(&request, &plan, &[report]).expect("manifest");
 
-    assert_eq!(manifest.schema, 2);
-    assert_eq!(manifest.tasks.len(), 1);
-    let proof = manifest.tasks[0].proof.as_ref().expect("fresh proof");
-    assert_eq!(proof.task_id(), task.task_id);
-    assert_eq!(proof.graph_digest(), task.graph_digest);
-    assert_eq!(proof.mbx_digest(), task.mbx_digest);
-    assert_eq!(proof.profile(), task.profile);
-    assert_eq!(proof.proof_run_id(), 7);
+    assert_eq!(manifest["schema"], 2);
+    assert_eq!(manifest["tasks"].as_array().expect("tasks").len(), 1);
+    let proof = &manifest["tasks"][0]["proof"];
+    assert_eq!(proof["task_id"], task.task_id);
+    assert_eq!(proof["graph_digest"], task.graph_digest);
+    assert_eq!(proof["mbx_digest"], task.mbx_digest);
+    assert_eq!(proof["profile"], task.profile);
+    assert_eq!(proof["proof_run_id"], 7);
 }
 
 #[test]
@@ -188,8 +196,8 @@ fn publisher_rejects_failed_and_missing_task_reports() {
     let failed = crate::task_report::terminal_task_report(&plan, entry, &task.task_digest, 1, None)
         .expect("failed report");
     let request = publish_request(&request_json(&plan.head)).expect("request");
-    assert!(publish_manifest(&request, &plan, 7, 1, &[failed]).is_err());
-    assert!(publish_manifest(&request, &plan, 7, 1, &[]).is_err());
+    assert!(manifest_json(&request, &plan, &[failed]).is_err());
+    assert!(manifest_json(&request, &plan, &[]).is_err());
 }
 
 #[test]
@@ -211,21 +219,17 @@ fn paired_obligation_requires_and_validates_each_matrix_lane_report() {
         })
         .collect();
     let request = publish_request(&request_json(&plan.head)).expect("request");
-    let manifest = publish_manifest(&request, &plan, 7, 1, &reports).expect("paired manifest");
-    assert_eq!(manifest.tasks.len(), 1);
+    let manifest = manifest_json(&request, &plan, &reports).expect("paired manifest");
+    assert_eq!(manifest["tasks"].as_array().expect("tasks").len(), 1);
     assert_eq!(
-        manifest.tasks[0]
-            .proof
-            .as_ref()
-            .expect("proof")
-            .platform_id(),
-        plan.matrix.include[0].planned_platform.platform_id
+        manifest["tasks"][0]["proof"]["platform_id"],
+        plan.matrix.include[0].planned_platform.platform_id,
     );
 
-    assert!(publish_manifest(&request, &plan, 7, 1, &reports[..1]).is_err());
+    assert!(manifest_json(&request, &plan, &reports[..1]).is_err());
     let mut failed_local = reports;
     failed_local[1].exit_code = 1;
-    assert!(publish_manifest(&request, &plan, 7, 1, &failed_local).is_err());
+    assert!(manifest_json(&request, &plan, &failed_local).is_err());
 }
 
 #[test]

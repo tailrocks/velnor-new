@@ -42,7 +42,7 @@ impl Lane for ConflictTransport {
 #[tokio::test]
 async fn jit_conflict_keeps_resources_charged_and_never_replays() -> Result<(), HostError> {
     use crate::journal::request_lifecycle::tests::helpers::{
-        Scratch, binding, created_scope, provision_physical_intent_with_initialization,
+        Scratch, binding, created_scope, provision_acquired_request_with_initialization,
     };
     use crate::journal::{
         AssignmentKey, Journal, ReservationRequest, ReservationResult,
@@ -62,8 +62,7 @@ async fn jit_conflict_keeps_resources_charged_and_never_replays() -> Result<(), 
         .await?;
     let repository = binding("jit-conflict-bound", 101)?;
     let scope = created_scope(&journal, &repository, SET_ID).await?;
-    crate::journal::request_lifecycle::tests::helpers::record_acquired(&scope, 70).await?;
-    let physical = provision_physical_intent_with_initialization(&scope, 'b', 'b').await?;
+    let physical = provision_acquired_request_with_initialization(&scope, 70, 'b', 'b').await?;
     let runner_name = format!("v{}", "b".repeat(32));
     let (policy_generation, policy_digest) = scope.test_active_authority_identity().await?;
     let calls = Arc::new(AtomicUsize::new(0));

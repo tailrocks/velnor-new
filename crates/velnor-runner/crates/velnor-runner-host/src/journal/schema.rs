@@ -10,6 +10,9 @@ mod execution_authorization;
 mod execution_publication;
 mod image_import;
 mod migration;
+#[cfg(test)]
+pub(in crate::journal) mod provisioning;
+#[cfg(not(test))]
 mod provisioning;
 mod remote;
 mod request_ledger;

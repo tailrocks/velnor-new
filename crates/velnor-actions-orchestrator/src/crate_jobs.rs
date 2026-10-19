@@ -25,6 +25,9 @@ use crate::internal::internal;
 mod build_jobs;
 use build_jobs::{cap_cargo_jobs, reject_unknown_crates};
 
+#[path = "crate_jobs_steps.rs"]
+mod job_steps;
+
 static NO_CRATE_CONFIGS: BTreeMap<String, RustCrateConfig> = BTreeMap::new();
 
 #[path = "crate_jobs_obligations.rs"]
@@ -114,6 +117,11 @@ pub(crate) fn workflow_job_inputs<'a>(
             .map_err(crate::internal::internal_contract)?,
         helper_version,
         cache_policy: config.workflow.pull_request_cache_policy,
+        seed_parallel_targets: config
+            .stacks
+            .rust
+            .as_ref()
+            .is_some_and(|rust| rust.seed_parallel_targets),
         crates,
     })
 }
@@ -132,6 +140,8 @@ pub(crate) struct CrateJobInputs<'a> {
     pub(crate) timeout: JobTimeout,
     pub(crate) helper_version: &'a str,
     pub(crate) cache_policy: velnor_actions_contract::PullRequestCachePolicy,
+    /// Initialize missing independent check targets from the completed build.
+    pub(crate) seed_parallel_targets: bool,
     /// Per-package Rust options keyed by Cargo package name.
     pub(crate) crates: &'a BTreeMap<String, RustCrateConfig>,
 }
@@ -315,6 +325,12 @@ fn build_job_for_members(
         qualification,
     )?;
     let mut job = job;
+    if let Some(seed) =
+        job_steps::parallel_target_seed_step(&input, &model, use_rust, use_opentofu)?
+        && let Some(index) = job.steps.iter().position(|step| step.parallel)
+    {
+        job.steps.insert(index, seed);
+    }
     if use_rust && let Some(options) = input.crates.get(&first.display_name) {
         for step in &mut job.steps {
             cap_cargo_jobs(step, options.build_jobs);

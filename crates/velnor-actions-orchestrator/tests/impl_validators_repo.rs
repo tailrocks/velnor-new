@@ -74,6 +74,8 @@ fn fixture_config_sample(sample: &str) -> Result<String, Box<dyn std::error::Err
 }
 
 /// Git fixture carrying the live sample plus the Velnor identity.
+/// Its minimal package is the real declared native-helper input owner, so
+/// copying the live config never creates a knowingly unknown package rule.
 fn make_sample_repo(sample: &str, mise: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let root = dir.path();
@@ -99,7 +101,7 @@ fn make_sample_repo(sample: &str, mise: &str) -> Result<TempDir, Box<dyn std::er
     )?;
     fs::write(
         root.join("Cargo.toml"),
-        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        "[package]\nname = \"velnor-actions-workflow-renderer\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
     )?;
     fs::create_dir_all(root.join("src"))?;
     fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
@@ -129,6 +131,28 @@ fn repo_config_sample_parses_through_prepare() -> TestResult {
         let prep = prepare(repo.path())?;
         assert_eq!(prep.config.schema, 2);
         assert_eq!(prep.config.checks, Vec::new());
+        let rust = prep
+            .config
+            .stacks
+            .rust
+            .as_ref()
+            .ok_or("sample Rust policy")?;
+        let rule = rust
+            .inputs
+            .iter()
+            .find(|rule| rule.globs == ["scripts/parallel-targets/**"])
+            .ok_or("live helper input rule disappeared during typed admission")?;
+        assert_eq!(rule.packages, ["velnor-actions-workflow-renderer"]);
+        assert!(
+            prep.discovery
+                .workspaces
+                .iter()
+                .flat_map(|workspace| &workspace.record.packages)
+                .any(|package| package.name == rule.packages[0]
+                    && package.in_workspace
+                    && !package.external),
+            "the sample fixture must contain its declared native input owner"
+        );
         let execution = prep
             .config
             .execution

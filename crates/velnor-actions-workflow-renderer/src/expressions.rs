@@ -107,16 +107,25 @@ fn is_matrix_field(inner: &str) -> bool {
 ///
 /// Action cache keys only: the file list carries quotes, commas, dots,
 /// slashes, dashes, underscores, globs, and alphanumerics, nothing else.
+/// Each quoted pattern may start with one exclusion marker.
 fn is_hash_files(inner: &str) -> bool {
     inner
         .strip_prefix("hashFiles(")
         .and_then(|rest| rest.strip_suffix(')'))
         .is_some_and(|files| {
-            !files.is_empty()
-                && files.bytes().all(|b| {
-                    b.is_ascii_alphanumeric()
-                        || matches!(b, b'\'' | b',' | b'.' | b'/' | b'-' | b'_' | b'*')
-                })
+            files.split(',').all(|argument| {
+                argument
+                    .strip_prefix('\'')
+                    .and_then(|pattern| pattern.strip_suffix('\''))
+                    .is_some_and(|pattern| {
+                        let path = pattern.strip_prefix('!').unwrap_or(pattern);
+                        !path.is_empty()
+                            && path.bytes().all(|b| {
+                                b.is_ascii_alphanumeric()
+                                    || matches!(b, b'.' | b'/' | b'-' | b'_' | b'*')
+                            })
+                    })
+            })
         })
 }
 
@@ -252,5 +261,33 @@ mod tests {
         assert!(
             check_composite_env_value("VELNOR_CACHE_TAR_SHA256", "${{ inputs.other }}").is_err()
         );
+    }
+
+    #[test]
+    fn check_with_value_accepts_quoted_hash_file_exclusions() {
+        assert!(
+            check_with_value(
+                "cache-key",
+                "prefix-${{ hashFiles('**/Cargo.toml','!target/**') }}"
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn check_with_value_rejects_nonliteral_hash_file_arguments() {
+        for arguments in [
+            "",
+            "''",
+            "'!'",
+            "'!!target/**'",
+            "!'Cargo.toml'",
+            "'Cargo.toml',",
+            "'Cargo.toml'||'other'",
+            "github.token",
+        ] {
+            let value = format!("prefix-${{{{ hashFiles({arguments}) }}}}");
+            assert!(check_with_value("cache-key", &value).is_err(), "{value}");
+        }
     }
 }
