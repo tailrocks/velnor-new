@@ -290,7 +290,8 @@ fn plan_outputs_bind_qualification_phase_and_cache_policy() -> TestResult {
     let expected_bytes = promoted
         .iter()
         .map(|(name, value)| (name.encode_utf16().count() + value.encode_utf16().count() + 2) * 2)
-        .sum::<usize>();
+        .sum::<usize>()
+        + velnor_actions_contract::workflow::cache_family::cache_output_reserve_utf16_bytes(0);
     assert_eq!(outputs.job_outputs_utf16_bytes, expected_bytes);
     Ok(())
 }
