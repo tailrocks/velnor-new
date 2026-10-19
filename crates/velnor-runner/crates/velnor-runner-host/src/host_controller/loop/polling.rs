@@ -1,6 +1,6 @@
 //! Positive polling and acquired-work retention for one connection.
 
-use std::{path::Path, time::Duration};
+use std::path::Path;
 
 use bollard::Docker;
 
@@ -12,21 +12,21 @@ use crate::{
         Drive, GuestAdmission, PositiveAdmission, ReleaseReadSecret, Rest, ScopedAdmissionInput,
         SelectedEngineContext, VerifiedWorkerImages, ZeroHeaderMode,
         acquire_authorized_scoped_offer, admit_when_ready, authorize_deferred_offer,
-        positive_poll_once, scoped_runtime::ScopedChannelOutcome,
+        positive_poll_once,
     },
 };
 
 use super::state::PreparedConnection;
+use acquired::start_acquired;
+#[path = "polling/acquired.rs"]
+mod acquired;
 #[path = "polling/outcome.rs"]
 mod outcome;
 #[path = "polling/recovery.rs"]
 mod recovery;
 
 pub(crate) use outcome::{ControllerPollOutcome, PollKind};
-use recovery::{
-    remember_acquired_recovery, report_acquired_recovery, retain_authorization_pending,
-    retain_bootstrap_pending, retain_ready_or_pending,
-};
+use recovery::{retain_authorization_pending, retain_bootstrap_pending, retain_ready_or_pending};
 
 const ASSIGNED_POPULATION_SCAN_LIMIT: u32 = 64;
 
@@ -392,80 +392,4 @@ async fn positive_poll_message(
     )
     .await
     .map_err(|_| HostError::Journal)
-}
-
-async fn start_acquired(
-    prepared: &mut PreparedConnection,
-    acquired: crate::launch::steps::AcquiredProvisioning,
-    context: &PositivePollContext<'_>,
-) -> Result<(), HostError> {
-    let request_id = acquired.request().request_id();
-    remember_acquired_recovery(prepared, request_id, &acquired);
-    let deadline = std::time::Instant::now() + Duration::from_secs(120);
-    let channel = match measure_acquired(prepared, acquired, context, deadline).await {
-        Ok(channel) => channel,
-        Err(error) => {
-            report_acquired_recovery(prepared, request_id, error);
-            return Ok(());
-        }
-    };
-    retain_scoped_channel(prepared, channel, context, deadline).await
-}
-
-async fn measure_acquired(
-    prepared: &mut PreparedConnection,
-    acquired: crate::launch::steps::AcquiredProvisioning,
-    context: &PositivePollContext<'_>,
-    deadline: std::time::Instant,
-) -> Result<ScopedChannelOutcome, HostError> {
-    let Some(credentials) = prepared.credentials.as_mut() else {
-        return Err(HostError::Keychain);
-    };
-    let admin = credentials.link.base().to_owned();
-    let admin_token = credentials.link.token().to_owned();
-    let mut lane = crate::launch::HostLane::new(&mut credentials.link, admin, None);
-    crate::launch::scoped_runtime::prepare_jit_and_measure_scoped(
-        crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired),
-        context.docker,
-        &prepared.scope,
-        context.journal,
-        context.release_read_secret,
-        context.selected_engine,
-        context.worker_images,
-        &mut lane,
-        &admin_token,
-        deadline,
-    )
-    .await
-}
-
-async fn retain_scoped_channel(
-    prepared: &mut PreparedConnection,
-    channel: ScopedChannelOutcome,
-    context: &PositivePollContext<'_>,
-    deadline: std::time::Instant,
-) -> Result<(), HostError> {
-    let request_id = channel.request_id();
-    match channel {
-        ScopedChannelOutcome::NoStart => {}
-        ScopedChannelOutcome::Ready(ready) => {
-            let runner = crate::launch::scoped_runtime::prepare_listener(
-                ready,
-                context.docker,
-                context.journal,
-                &prepared.scope,
-                context.release_read_secret,
-                context.selected_engine,
-                context.worker_images,
-                deadline,
-            )
-            .await;
-            match runner {
-                Ok(runner) => retain_ready_or_pending(prepared, runner),
-                Err(pending) => retain_authorization_pending(prepared, request_id, pending),
-            }
-        }
-        pending => retain_bootstrap_pending(prepared, request_id, pending),
-    }
-    Ok(())
 }
