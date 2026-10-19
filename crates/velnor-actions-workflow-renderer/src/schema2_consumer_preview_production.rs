@@ -34,9 +34,14 @@ fn producer(
     pair: Option<&PreviewPayloadPair>,
     dependencies: &[String],
 ) -> Result<(String, Yaml), RenderError> {
-    // The service jobs API exposes the display name, so it must equal the closed job ID.
+    // Assembly is an authenticated service jobs API witness and keeps its closed
+    // name. Payload display names describe the pair without changing machine IDs.
+    let name = pair.map_or_else(
+        || id.to_owned(),
+        |pair| format!("Build {} / {}", pair.product_id, pair.target),
+    );
     let mut fields = base(
-        id,
+        &name,
         Yaml::str(spec.producer_runner.runs_on()),
         JobTimeout::new(spec.producer_timeout_minutes).map_err(RenderError::Contract)?,
     );

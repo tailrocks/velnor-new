@@ -34,7 +34,10 @@ fn every_literal_pair_has_exact_owner_and_complete_assembly_dependencies() {
             *id,
             preview_payload_job_id(&spec.plan, pair).expect("owner")
         );
-        assert_eq!(field(job, "name"), &Yaml::str(id));
+        assert_eq!(
+            field(job, "name"),
+            &Yaml::str(format!("Build {} / {}", pair.product_id, pair.target))
+        );
         assert_eq!(field(job, "timeout-minutes"), &Yaml::Int(5));
         assert_eq!(field(job, "needs"), &needs(&["preview-eligibility"]));
         assert_eq!(
@@ -315,4 +318,47 @@ fn assert_assembly_bindings(step: &Yaml) {
     );
     assert!(env_value(step, "VELNOR_PREVIEW_PRODUCT_ID").is_none());
     assert!(env_value(step, "VELNOR_PREVIEW_TARGET").is_none());
+}
+
+#[test]
+fn jackin_payload_display_names_describe_all_six_literal_pairs() {
+    let mut spec = fixture();
+    let mut jackin = spec.plan.products[1].clone();
+    jackin.id = "jackin".to_owned();
+    jackin.package = "jackin".to_owned();
+    jackin.bins = ["jackin", "jackin-role", "jackin-usage-broker"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    let mut capsule = spec.plan.products[0].clone();
+    capsule.id = "jackin-capsule".to_owned();
+    capsule.package = "jackin-capsule".to_owned();
+    capsule.bins = vec!["jackin-capsule".to_owned()];
+    capsule.targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    spec.plan.products = vec![jackin, capsule];
+    let expected = [
+        "Build jackin / aarch64-apple-darwin",
+        "Build jackin / aarch64-unknown-linux-gnu",
+        "Build jackin / x86_64-apple-darwin",
+        "Build jackin / x86_64-unknown-linux-gnu",
+        "Build jackin-capsule / aarch64-unknown-linux-gnu",
+        "Build jackin-capsule / x86_64-unknown-linux-gnu",
+    ];
+    let jobs = production::jobs(&spec).expect("production");
+    assert_eq!(jobs.len(), 7);
+    for (index, name) in expected.iter().enumerate() {
+        let (id, job) = &jobs[index];
+        assert_eq!(id, &format!("preview-payload-{index:03}"));
+        assert_eq!(field(job, "name"), &Yaml::str(*name));
+    }
+    let rendered = render_consumer_preview(&spec).expect("preview");
+    for name in expected {
+        assert!(rendered.bytes.contains(&format!("name: {name}\n")));
+    }
+    let (_, assembly) = jobs.last().expect("assembly");
+    assert_eq!(field(assembly, "name"), &Yaml::str("preview-assemble"));
+    assert!(rendered.bytes.contains("name: preview-signer\n"));
 }
