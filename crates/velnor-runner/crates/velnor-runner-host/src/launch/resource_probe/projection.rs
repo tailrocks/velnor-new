@@ -14,6 +14,13 @@ use crate::worker::{AdmissionReserve, PROBE_CPU_MILLICORES, PROBE_MEMORY_LIMIT_B
 pub(super) mod canonical;
 #[path = "projection/container_config.rs"]
 mod container_config;
+mod validation;
+
+use validation::{
+    canonical_absolute_nonroot, digest_reference, digest_text, hex_string, image_config_matches,
+    valid_daemon_architecture,
+};
+pub(super) use validation::{expected_container_config, expected_image_config};
 
 const PROBE_TARGET: &str = "/velnor/docker-root";
 pub(super) const CGROUP_TARGET: &str = "/sys/fs/cgroup";
@@ -358,82 +365,4 @@ pub(super) fn test_projection_digest(
     config: &ContainerCreateBody,
 ) -> Result<String, HostError> {
     projection_digest(options, config)
-}
-
-fn canonical_absolute_nonroot(path: &str) -> bool {
-    path.starts_with('/')
-        && path != "/"
-        && path.len() <= 4096
-        && !path.chars().any(char::is_control)
-        && path[1..]
-            .split('/')
-            .all(|part| !part.is_empty() && part != "." && part != "..")
-}
-
-fn digest_reference(value: &str) -> bool {
-    value
-        .strip_prefix("sha256:")
-        .is_some_and(|hex| hex_string(hex, 64))
-}
-
-fn valid_daemon_architecture(value: &str) -> bool {
-    matches!(value, "x86_64" | "aarch64")
-}
-
-fn hex_string(value: &str, len: usize) -> bool {
-    value.len() == len && value.bytes().all(|byte| byte.is_ascii_hexdigit())
-}
-
-fn digest_text(value: &[u8]) -> String {
-    let digest = Sha256::digest(value);
-    let mut encoded = String::with_capacity(digest.len() * 2);
-    for byte in digest {
-        encoded.push(char::from(HEX[(byte >> 4) as usize]));
-        encoded.push(char::from(HEX[(byte & 0x0f) as usize]));
-    }
-    encoded
-}
-
-const HEX: &[u8; 16] = b"0123456789abcdef";
-
-fn image_config_matches(config: &ContainerConfig, source_revision: &str) -> bool {
-    config == &expected_image_config(source_revision)
-}
-
-pub(super) fn expected_container_config(projection: &ProbeProjection) -> Option<ContainerConfig> {
-    let mut expected =
-        serde_json::to_value(expected_image_config(projection.image.source_revision())).ok()?;
-    let requested = serde_json::to_value(&projection.config).ok()?;
-    let expected = expected.as_object_mut()?;
-    let requested = requested.as_object()?;
-    for (key, value) in requested {
-        if value.is_null() || key == "HostConfig" || key == "NetworkingConfig" {
-            continue;
-        }
-        if key == "Labels" {
-            let expected_labels = expected
-                .get_mut(key)
-                .and_then(serde_json::Value::as_object_mut)?;
-            let requested_labels = value.as_object()?;
-            for (label, label_value) in requested_labels {
-                expected_labels.insert(label.clone(), label_value.clone());
-            }
-        } else {
-            expected.insert(key.clone(), value.clone());
-        }
-    }
-    serde_json::from_value(serde_json::Value::Object(expected.clone())).ok()
-}
-
-pub(super) fn expected_image_config(source_revision: &str) -> ContainerConfig {
-    let mut labels = std::collections::HashMap::new();
-    labels.insert(SOURCE_LABEL.to_owned(), source_revision.to_owned());
-    ContainerConfig {
-        user: Some(PROBE_USER.to_owned()),
-        env: Some(vec![PATH_ENV.to_owned()]),
-        working_dir: Some(PROBE_WORKING_DIR.to_owned()),
-        entrypoint: Some(vec![PROBE_ENTRYPOINT.to_owned()]),
-        labels: Some(labels),
-        ..Default::default()
-    }
 }
