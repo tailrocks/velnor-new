@@ -16,39 +16,6 @@ pub const MAX_TASK_EXECUTION_ARGV: usize = 512;
 /// Maximum environment pairs carried by one generated task record.
 pub const MAX_TASK_EXECUTION_ENV: usize = 64;
 
-/// Plan output consumed by generated obligation skip conditions.
-pub const TASK_COVERED_OUTPUT: &str = "covered_tasks";
-
-/// Exact generated condition that stops cancelled tasks and skips covered tasks.
-///
-/// # Errors
-///
-/// Returns a contract error for a malformed task ID.
-pub fn task_execution_condition(task_id: &str) -> Result<String, ContractError> {
-    crate::ids::validate_task_id(task_id)?;
-    Ok(format!(
-        "!cancelled() && !contains(needs.plan.outputs.{TASK_COVERED_OUTPUT}, ',{task_id},')"
-    ))
-}
-
-#[cfg(test)]
-mod task_execution_condition_tests {
-    use super::task_execution_condition;
-
-    #[test]
-    fn condition_keeps_independent_tasks_running_after_failure_and_stops_on_cancel() {
-        assert_eq!(
-            task_execution_condition("stack/demo/crate/check/default").expect("valid task ID"),
-            "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/demo/crate/check/default,')"
-        );
-    }
-
-    #[test]
-    fn condition_rejects_invalid_task_ids() {
-        assert!(task_execution_condition("stack/demo/crate/check/default' || true").is_err());
-    }
-}
-
 /// One workflow step.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Step {
@@ -156,7 +123,7 @@ impl Step {
             ));
         }
         if matches!(&self.kind, StepKind::TaskExecution { .. })
-            && (self.id.is_some() || self.role.is_some() || self.condition.is_none())
+            && (self.id.is_some() || self.role.is_some() || self.condition.is_some())
         {
             return Err(ContractError::identity(
                 "step.task",
@@ -174,14 +141,6 @@ impl Step {
             return Err(ContractError::identity(
                 "step.parallel",
                 format!("parallel_step_authority:{job}"),
-            ));
-        }
-        if let StepKind::TaskExecution { task_id, .. } = &self.kind
-            && self.condition.as_deref() != Some(task_execution_condition(task_id)?.as_str())
-        {
-            return Err(ContractError::identity(
-                "step.task.condition",
-                format!("task_coverage_condition_mismatch:{job}"),
             ));
         }
         if let Some(role) = self.role {

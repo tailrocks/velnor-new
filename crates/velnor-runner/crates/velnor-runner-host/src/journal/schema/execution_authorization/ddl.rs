@@ -2,6 +2,8 @@
 
 use super::super::sql_normalization::normalize;
 mod guards;
+mod legacy_v27;
+mod upgrade_v28;
 
 #[cfg(test)]
 #[path = "../execution_authorization_ddl_tests.rs"]
@@ -84,11 +86,41 @@ const PROOF_TABLE: &str = r"CREATE TABLE IF NOT EXISTS connection_execution_proo
     FOREIGN KEY (connection_id, scale_set_id, actual_request_id)
         REFERENCES connection_request_authorizations(connection_id, scale_set_id, request_id),
     CHECK ((source_digest IS NULL AND source_json IS NULL) OR (source_digest IS NOT NULL AND source_json IS NOT NULL)),
-    CHECK ((challenge_file_inode IS NULL AND challenge_file_bytes IS NULL AND challenge_file_uid IS NULL AND challenge_file_gid IS NULL AND challenge_file_mode IS NULL AND challenge_mount_id IS NULL AND challenge_device_major IS NULL AND challenge_device_minor IS NULL AND challenge_statx_device_major IS NULL AND challenge_statx_device_minor IS NULL AND challenge_fs_type_magic IS NULL AND challenge_filesystem_id IS NULL AND challenge_filesystem_instance_digest IS NULL AND challenge_read_only IS NULL AND challenge_no_copy IS NULL AND challenge_file_path IS NULL) OR (challenge_file_inode IS NOT NULL AND challenge_file_bytes IS NOT NULL AND challenge_file_uid IS NOT NULL AND challenge_file_gid IS NOT NULL AND challenge_file_mode IS NOT NULL AND challenge_mount_id IS NOT NULL AND challenge_device_major IS NOT NULL AND challenge_device_minor IS NOT NULL AND challenge_statx_device_major IS NOT NULL AND challenge_statx_device_minor IS NOT NULL AND challenge_fs_type_magic IS NOT NULL AND challenge_filesystem_id IS NOT NULL AND challenge_filesystem_instance_digest IS NOT NULL AND challenge_read_only IS NOT NULL AND challenge_no_copy IS NOT NULL AND challenge_file_path IS NOT NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_file_bytes IS NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_file_uid IS NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_file_gid IS NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_file_mode IS NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_mount_id IS NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_device_major IS NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_device_minor IS NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_statx_device_major IS NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_statx_device_minor IS NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_fs_type_magic IS NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_filesystem_id IS NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_filesystem_instance_digest IS NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_read_only IS NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_no_copy IS NULL)),
+    CHECK ((challenge_file_inode IS NULL) = (challenge_file_path IS NULL)),
     CHECK (challenge_state != 'published' OR challenge_file_inode IS NOT NULL),
     CHECK ((run_id IS NULL AND run_attempt IS NULL) OR (run_id IS NOT NULL AND run_attempt IS NOT NULL)),
-    CHECK (proof_state != 'pending' OR (actual_request_id IS NULL AND started_event_digest IS NULL AND run_id IS NULL AND run_attempt IS NULL AND workflow_job_key IS NULL AND authority_role IS NULL AND native_job_id IS NULL AND rest_job_id IS NULL AND deny_code IS NULL)),
-    CHECK (proof_state != 'approved' OR (source_digest IS NOT NULL AND actual_request_id IS NOT NULL AND started_event_digest IS NOT NULL AND run_id IS NOT NULL AND run_attempt IS NOT NULL AND workflow_job_key IS NOT NULL AND authority_role IS NOT NULL AND native_job_id IS NOT NULL AND deny_code IS NULL)),
+    CHECK (proof_state != 'pending' OR actual_request_id IS NULL),
+    CHECK (proof_state != 'pending' OR started_event_digest IS NULL),
+    CHECK (proof_state != 'pending' OR run_id IS NULL),
+    CHECK (proof_state != 'pending' OR run_attempt IS NULL),
+    CHECK (proof_state != 'pending' OR workflow_job_key IS NULL),
+    CHECK (proof_state != 'pending' OR authority_role IS NULL),
+    CHECK (proof_state != 'pending' OR native_job_id IS NULL),
+    CHECK (proof_state != 'pending' OR rest_job_id IS NULL),
+    CHECK (proof_state != 'pending' OR deny_code IS NULL),
+    CHECK (proof_state != 'approved' OR source_digest IS NOT NULL),
+    CHECK (proof_state != 'approved' OR actual_request_id IS NOT NULL),
+    CHECK (proof_state != 'approved' OR started_event_digest IS NOT NULL),
+    CHECK (proof_state != 'approved' OR run_id IS NOT NULL),
+    CHECK (proof_state != 'approved' OR run_attempt IS NOT NULL),
+    CHECK (proof_state != 'approved' OR workflow_job_key IS NOT NULL),
+    CHECK (proof_state != 'approved' OR authority_role IS NOT NULL),
+    CHECK (proof_state != 'approved' OR native_job_id IS NOT NULL),
+    CHECK (proof_state != 'approved' OR deny_code IS NULL),
     CHECK (proof_state != 'denied' OR deny_code IS NOT NULL)
 )";
 
@@ -125,7 +157,21 @@ const DECISION_TABLE: &str = r"CREATE TABLE IF NOT EXISTS connection_execution_d
     decision_no_copy INTEGER CHECK (decision_no_copy IS NULL OR decision_no_copy = 1),
     FOREIGN KEY (connection_id, scale_set_id, actual_request_id)
         REFERENCES connection_request_authorizations(connection_id, scale_set_id, request_id),
-    CHECK ((decision_file_inode IS NULL AND decision_file_bytes IS NULL AND decision_file_uid IS NULL AND decision_file_gid IS NULL AND decision_file_mode IS NULL AND decision_mount_id IS NULL AND decision_device_major IS NULL AND decision_device_minor IS NULL AND decision_statx_device_major IS NULL AND decision_statx_device_minor IS NULL AND decision_fs_type_magic IS NULL AND decision_filesystem_id IS NULL AND decision_filesystem_instance_digest IS NULL AND decision_read_only IS NULL AND decision_no_copy IS NULL AND decision_file_path IS NULL) OR (decision_file_inode IS NOT NULL AND decision_file_bytes IS NOT NULL AND decision_file_uid IS NOT NULL AND decision_file_gid IS NOT NULL AND decision_file_mode IS NOT NULL AND decision_mount_id IS NOT NULL AND decision_device_major IS NOT NULL AND decision_device_minor IS NOT NULL AND decision_statx_device_major IS NOT NULL AND decision_statx_device_minor IS NOT NULL AND decision_fs_type_magic IS NOT NULL AND decision_filesystem_id IS NOT NULL AND decision_filesystem_instance_digest IS NOT NULL AND decision_read_only IS NOT NULL AND decision_no_copy IS NOT NULL AND decision_file_path IS NOT NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_file_bytes IS NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_file_uid IS NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_file_gid IS NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_file_mode IS NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_mount_id IS NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_device_major IS NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_device_minor IS NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_statx_device_major IS NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_statx_device_minor IS NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_fs_type_magic IS NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_filesystem_id IS NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_filesystem_instance_digest IS NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_read_only IS NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_no_copy IS NULL)),
+    CHECK ((decision_file_inode IS NULL) = (decision_file_path IS NULL)),
     CHECK (delivery_state != 'delivered' OR decision_file_inode IS NOT NULL)
 )";
 
@@ -141,12 +187,15 @@ const TABLE_OBJECTS: &[(&str, &str, &str)] = &[
 pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), HostError> {
     let proof_table_existed =
         object_exists(connection, "table", "connection_execution_proofs").await?;
+    let decision_table_existed =
+        object_exists(connection, "table", "connection_execution_decisions").await?;
     for statement in TABLES {
         connection
             .execute(statement, ())
             .await
             .map_err(|_| HostError::Journal)?;
     }
+    guards::bootstrap_decision_transition_guards(connection, decision_table_existed).await?;
     for (_, _, statement) in guards::OBJECTS {
         connection
             .execute(statement, ())
@@ -180,7 +229,37 @@ async fn object_exists(
 }
 
 pub(super) async fn validate_objects(connection: &turso::Connection) -> Result<(), HostError> {
+    validate_objects_with_tables(
+        connection,
+        PROOF_TABLE,
+        DECISION_TABLE,
+        guards::PROOF_TRANSITION_GUARDS,
+    )
+    .await
+}
+
+pub(super) async fn validate_v27_objects(connection: &turso::Connection) -> Result<(), HostError> {
+    validate_objects_with_tables(
+        connection,
+        legacy_v27::PROOF_TABLE,
+        legacy_v27::DECISION_TABLE,
+        guards::PROOF_TRANSITION_GUARDS,
+    )
+    .await
+}
+
+async fn validate_objects_with_tables(
+    connection: &turso::Connection,
+    proof_table: &str,
+    decision_table: &str,
+    proof_transition_guards: &[(&str, &str)],
+) -> Result<(), HostError> {
     for (kind, name, expected) in TABLE_OBJECTS.iter().chain(guards::OBJECTS.iter()) {
+        let expected = match *name {
+            "connection_execution_proofs" => proof_table,
+            "connection_execution_decisions" => decision_table,
+            _ => expected,
+        };
         let actual = object_sql(connection, kind, name).await?;
         if normalize(&actual) != normalize(expected) {
             return Err(HostError::Journal);
@@ -192,13 +271,23 @@ pub(super) async fn validate_objects(connection: &turso::Connection) -> Result<(
             return Err(HostError::Journal);
         }
     }
-    for (name, expected) in guards::PROOF_TRANSITION_GUARDS {
+    for (name, expected) in proof_transition_guards {
+        let actual = object_sql(connection, "trigger", name).await?;
+        if normalize(&actual) != normalize(expected) {
+            return Err(HostError::Journal);
+        }
+    }
+    for (name, expected) in guards::DECISION_TRANSITION_GUARDS {
         let actual = object_sql(connection, "trigger", name).await?;
         if normalize(&actual) != normalize(expected) {
             return Err(HostError::Journal);
         }
     }
     validate_revision_triggers(connection).await
+}
+
+pub(super) async fn upgrade_v28(connection: &turso::Connection) -> Result<(), HostError> {
+    upgrade_v28::upgrade(connection).await
 }
 
 async fn install_revision_triggers(connection: &turso::Connection) -> Result<(), HostError> {

@@ -27,7 +27,6 @@ fn fixture_with_prerequisite() -> Fixture {
         obligation.input_digest = input_digest.clone();
         obligation.closure_digest = support::digest(byte + 20);
         obligation.decision = ObligationDecision::Execute;
-        obligation.baseline_proof = None;
         plan.obligations.push(obligation);
         let entry = MatrixEntry::derive(
             "rust",
@@ -323,6 +322,16 @@ fn both_lanes_resolve_one_manifest_record_to_distinct_matrix_identities() {
     )
     .expect("Scale Set lane");
     plan.matrix.include = vec![hosted.clone(), scale_set.clone()];
+    for obligation in &mut plan.obligations {
+        obligation.job_id = "rust-demo__hosted".to_owned();
+    }
+    plan.jobs = vec!["rust-demo__hosted", "rust-demo__local"]
+        .into_iter()
+        .map(|job_id| velnor_actions_contract::PlanJob {
+            job_id: job_id.to_owned(),
+            disposition: velnor_actions_contract::JobDisposition::Run,
+        })
+        .collect();
     plan.matrix
         .include
         .sort_by(|left, right| left.id.cmp(&right.id));
@@ -349,36 +358,4 @@ fn both_lanes_resolve_one_manifest_record_to_distinct_matrix_identities() {
                 .expect("lane binds static manifest")
         );
     }
-}
-
-#[test]
-fn covered_predecessor_requires_revalidated_baseline() {
-    let commit = "a".repeat(40);
-    let manifest = crate::cover::revalidate::cover_revalidate_fixtures::manifest_for(&commit);
-    let plan =
-        crate::cover::revalidate::cover_revalidate_fixtures::plan_for(&manifest, Some(&commit));
-    let runner_temp = tempfile::tempdir().expect("runner temp");
-    let path = runner_temp
-        .path()
-        .join("velnor")
-        .join(&plan.run_key)
-        .join(crate::baseline_publish::BASELINE_FILENAME);
-    std::fs::create_dir_all(path.parent().expect("baseline parent")).expect("baseline directory");
-    std::fs::write(
-        &path,
-        canonical_json_bytes(&manifest).expect("baseline JSON"),
-    )
-    .expect("write baseline");
-    task_execution_gates::validate_covered_prerequisites(&plan, runner_temp.path())
-        .expect("verified baseline proves covered task");
-    let mut foreign = manifest;
-    foreign.final_status = "failed".to_owned();
-    std::fs::write(
-        &path,
-        canonical_json_bytes(&foreign).expect("foreign baseline JSON"),
-    )
-    .expect("replace baseline");
-    let error = task_execution_gates::validate_covered_prerequisites(&plan, runner_temp.path())
-        .expect_err("corrupt baseline cannot prove coverage");
-    support::assert_error(&error, "task_prerequisite_baseline_unverified");
 }

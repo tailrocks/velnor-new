@@ -51,7 +51,7 @@ pub const PLAN_OPERATION: &str = "plan-v1";
 pub const WRITE_PRESEED_MANIFEST_OPERATION: &str = "write-preseed-manifest-v1";
 /// Report-merge operation name.
 pub const MERGE_OPERATION: &str = "merge-v1";
-/// Baseline-publish operation: `publish-baseline-v1`.
+/// Baseline publication operation name.
 pub const PUBLISH_OPERATION: &str = "publish-baseline-v1";
 /// Matrix-report fetch operation name.
 pub const FETCH_OPERATION: &str = "fetch-reports-v1";
@@ -131,7 +131,7 @@ pub const ACQUIRE_NAME: &str = "Acquire Velnor";
 /// job timeout during a GitHub outage.
 pub const ACQUIRE_TIMEOUT_MINUTES: i64 = 6;
 /// Run-key expression (`r<run-id>-a<run-attempt>`, workflow-contract §3).
-pub const RUN_KEY_EXPR: &str = "r${{ github.run_id }}-a${{ github.run_attempt }}";
+pub const RUN_KEY_EXPR: &str = "r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}";
 /// Display name of the matrix-report upload step.
 pub const MATRIX_REPORT_UPLOAD_NAME: &str = "Upload matrix report";
 /// Display name of the per-job crate-report upload step.
@@ -267,7 +267,8 @@ pub fn candidate_manifest_script(target: &str, toolchain: &str) -> String {
 }
 
 /// Shell spelling of the run-key dir holding the downloaded plan.
-pub const RUN_DIR_SHELL: &str = "$RUNNER_TEMP/velnor/r$GITHUB_RUN_ID-a$GITHUB_RUN_ATTEMPT";
+pub const RUN_DIR_SHELL: &str =
+    "$RUNNER_TEMP/velnor/r$GITHUB_RUN_ID-a${VELNOR_RUN_KEY_ATTEMPT:-$GITHUB_RUN_ATTEMPT}";
 
 /// Head-bound candidate attestation writer: `commit` is the plan head.
 ///

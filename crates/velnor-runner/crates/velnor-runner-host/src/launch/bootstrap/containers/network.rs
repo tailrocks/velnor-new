@@ -8,6 +8,8 @@ use bollard::models::NetworkInspect;
 
 use crate::docker_client::docker_deadline_after;
 use crate::error::HostError;
+#[cfg(test)]
+use crate::journal::StorageNetworkRemovalClaim;
 use crate::journal::{EngineContext, StorageNetworkCreateClaim};
 use crate::launch::SelectedEngineContext;
 
@@ -94,6 +96,19 @@ pub(crate) struct VerifiedStorageNetworkRemoved {
 }
 
 impl VerifiedStorageNetworkRemoved {
+    #[cfg(test)]
+    pub(crate) fn test_removed(claim: &StorageNetworkRemovalClaim) -> Self {
+        Self {
+            reservation_id: claim.reservation_id(),
+            operation_id: claim.operation_id(),
+            engine_id: claim.engine_id().to_owned(),
+            docker_root_digest: claim.docker_root_digest().to_owned(),
+            network_name: claim.network_name().to_owned(),
+            network_id: claim.network_id().map(str::to_owned),
+            labels: claim.labels().clone(),
+        }
+    }
+
     pub(crate) const fn reservation_id(&self) -> i64 {
         self.reservation_id
     }

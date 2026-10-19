@@ -1,0 +1,41 @@
+{
+  "state": "IN_PROGRESS",
+  "source_head": "574b01981c5fba3130d15056d51f927013f3bf91",
+  "merge_input": "ca6a08e17f3712fcdadd7f8035a6d21fdeca4a9e",
+  "checks": {
+    "orchestrator_before_publication_repair": {
+      "result": "PASS",
+      "passed": 1961,
+      "ignored": 2,
+      "run_id": "0a607ed7-5482-440d-ac49-c3505d8edaef"
+    },
+    "publication_repair": {
+      "result": "PASS",
+      "passed": 6,
+      "run_id": "f3d64708-096c-4128-83a9-1e0ae96f2e71"
+    },
+    "settlement": {
+      "result": "PASS",
+      "passed": 4,
+      "run_id": "e530fd9f-ee3a-4ca1-845c-f851d1888711"
+    },
+    "database_guards": {
+      "result": "PASS",
+      "passed": 5,
+      "run_id": "23bf4cc6-9c16-4c01-8a4c-3af18c85abfc"
+    },
+    "parity": {
+      "result": "PASS",
+      "passed": 4,
+      "run_id": "774d1e69-1818-4738-9247-a16db0c590d7"
+    },
+    "cli_build": "PASS",
+    "generator_repeat": "PASS: Identical bytes for 32 files.",
+    "opentofu_goldens": "PASS",
+    "actionlint": "PASS"
+  },
+  "release": "NOT_RUN",
+  "essential_installation": "NOT_RUN",
+  "chain_installation": "NOT_RUN",
+  "full_final_gates": "NOT_RUN"
+}

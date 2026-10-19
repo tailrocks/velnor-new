@@ -5,8 +5,8 @@ use std::fs;
 
 use tempfile::TempDir;
 use velnor_actions_contract::workflow::{
-    ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
-    PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, QualificationCacheProducerContext,
+    ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, ObligationDecision, Plan, PlanGenerator,
+    PlanMatrix, PlanObligation, PlanRunner, QualificationCacheProducerContext,
     QualificationDispatch, QualificationDispatchMode, QualificationPhase, QualificationRunRef,
     TaskStatus, Trust, WorkflowEvent,
 };
@@ -63,7 +63,12 @@ fn entry_and_obligation() -> (MatrixEntry, PlanObligation) {
         task_digest,
         input_digest,
         closure_digest,
-        baseline_proof: None,
+        graph_digest: "b3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            .to_owned(),
+        mbx_digest: "b3-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            .to_owned(),
+        profile: "default".to_owned(),
+        job_id: JOB_ID.to_owned(),
     };
     (entry, obligation)
 }
@@ -99,7 +104,6 @@ fn fixture() -> (TempDir, Plan, MatrixEntry, PlanObligation) {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(Some("qualification_bypass")).expect("baseline"),
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -111,6 +115,10 @@ fn fixture() -> (TempDir, Plan, MatrixEntry, PlanObligation) {
             include: vec![entry.clone()],
         },
         task_ids: vec![TASK_ID.to_owned()],
+        jobs: vec![velnor_actions_contract::PlanJob {
+            job_id: JOB_ID.to_owned(),
+            disposition: velnor_actions_contract::JobDisposition::Run,
+        }],
         warnings: Vec::new(),
         edges: Vec::new(),
     };

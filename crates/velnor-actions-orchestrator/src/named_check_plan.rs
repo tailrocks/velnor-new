@@ -109,7 +109,20 @@ pub(crate) fn derive_lanes_until(
         task_digest: task_digest.clone(),
         input_digest: input_digest.clone(),
         closure_digest,
-        baseline_proof: None,
+        graph_digest: graph.clone(),
+        mbx_digest: velnor_actions_contract::digest_b3(
+            velnor_actions_contract::cachekey::mbx_cache_generation(
+                velnor_actions_mise::catalog::MR_BOXINGTON_VERSION,
+            )
+            .as_bytes(),
+        ),
+        profile: task.configuration.clone(),
+        // Paired hosted/Scale Set lanes own one obligation; the first lane
+        // names it, and both lane jobs carry matrix entries (always `run`).
+        job_id: lanes
+            .first()
+            .map(|lane| lane.job_id.clone())
+            .ok_or_else(|| internal("named_check_lane_missing"))?,
     };
     let run = velnor_actions_workflow_renderer::join_argv_for_run(&argv)
         .map_err(|e| internal(&e.to_string()))?;

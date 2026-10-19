@@ -72,7 +72,17 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
     );
     let ir = WorkflowIr {
         name: "CI".to_owned(),
-        triggers: trigger(),
+        triggers: Trigger {
+            pull_request_types: velnor_actions_workflow_renderer::render::EXPECTED_PR_TYPES
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
+            push_branches: vec!["main".to_owned()],
+            merge_group: true,
+            workflow_dispatch: None,
+            workflow_call: false,
+            schedule: None,
+        },
         permissions: Permissions::default(),
         concurrency: Concurrency {
             group: CONCURRENCY_GROUP.to_owned(),

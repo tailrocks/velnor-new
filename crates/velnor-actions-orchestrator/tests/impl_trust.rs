@@ -1,14 +1,13 @@
-//! Trust cases: rev validation, source-build identity, digests, hints.
+//! Trust cases: rev validation, source-build identity, hints, event scope.
 
 use std::path::Path;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
-use velnor_actions_orchestrator::{baseline_artifact_numeric_id, merge_internal, plan_internal};
+use velnor_actions_contract::Plan;
+use velnor_actions_orchestrator::plan_internal;
 
 use crate::impl_common::{
     TestResult, config_with_branch, fixture_manifest_json, git, git_line, make_repo,
-    passing_reports, plan_for_source_change,
 };
 
 /// Two-commit single-package repo plus base and head SHAs.
@@ -58,54 +57,21 @@ fn commit(root: &Path, message: &str) -> Result<String, Box<dyn std::error::Erro
     git_line(&["rev-parse", "HEAD"], root)
 }
 
-/// Plan as a pull request with an optional manifest; plan plus warnings.
+/// Plan as a pull request; plan plus warnings.
 fn plan_with(
     root: &Path,
     base: Option<&str>,
     head: &str,
-    manifest: Option<serde_json::Value>,
 ) -> Result<(Plan, Vec<String>), Box<dyn std::error::Error>> {
-    let mut request = serde_json::json!({
+    let request = serde_json::json!({
         "schema": 1, "run_key": "local", "base": base, "head": head,
         "event": "pull_request", "root": root.display().to_string(),
     });
-    if let Some(manifest) = manifest {
-        request["baseline_manifest"] = manifest;
-    }
     let response = plan_internal(&request.to_string())?;
     let value: serde_json::Value = serde_json::from_str(&response)?;
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
     let warnings: Vec<String> = serde_json::from_value(value["plan"]["warnings"].clone())?;
     Ok((plan, warnings))
-}
-
-/// Baseline manifest JSON binding every plan obligation exactly.
-fn manifest_for(plan: &Plan, base: &str) -> serde_json::Value {
-    let compat = velnor_actions_contract::digest_b3(b"compat");
-    let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
-    let name = format!("velnor-baseline-{base}-{compat}");
-    let tasks: Vec<serde_json::Value> = plan
-        .obligations
-        .iter()
-        .map(|ob| {
-            serde_json::json!({
-                "task_id": ob.task_id, "task_digest": ob.task_digest,
-                "input_digest": ob.input_digest, "closure_digest": ob.closure_digest,
-                "carried_from": null,
-                "proof_run_id": 7, "observed_run_id": 7,
-                "carried_from": serde_json::Value::Null,
-            })
-        })
-        .collect();
-    serde_json::json!({
-        "schema": 2, "repository_id": velnor_actions_contract::digest_b3(b"repo"),
-        "source_commit": base, "ref": "refs/heads/testmain", "event": "push",
-        "workflow_ref": format!("o/r/{workflow}@refs/heads/testmain"),
-        "run_id": 7, "run_attempt": 1, "final_status": "passed",
-        "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256,
-        "compatibility_id": compat, "artifact_id": baseline_artifact_numeric_id(&name),
-        "artifact_name": name, "tasks": tasks, "parent": serde_json::Value::Null,
-    })
 }
 
 #[test]
@@ -123,7 +89,7 @@ fn injection_revs_broaden_without_spawning_flags() -> TestResult {
         "$(touch /tmp/velnor_trust_pwn)",
         "-x",
     ] {
-        let (plan, warnings) = plan_with(root, Some(evil), &head, None)?;
+        let (plan, warnings) = plan_with(root, Some(evil), &head)?;
         assert!(
             plan.task_ids.iter().any(|id| id.contains("alpha")),
             "broadens: {:?}",
@@ -138,7 +104,7 @@ fn injection_revs_broaden_without_spawning_flags() -> TestResult {
             warnings.iter().any(|w| w.contains("bad_base")),
             "{warnings:?}"
         );
-        let err = plan_with(root, Some(&base), evil, None).expect_err("evil head rejected");
+        let err = plan_with(root, Some(&base), evil).expect_err("evil head rejected");
         assert!(err.to_string().contains("bad_head"), "got {err}");
         assert!(
             !std::path::Path::new("/tmp/velnor_trust_pwn").exists(),
@@ -158,7 +124,7 @@ fn short_sha_base_still_classifies() -> TestResult {
         "pub fn f() {}\npub fn g() {}\n",
     )?;
     let head = commit(root, "two")?;
-    let (plan, warnings) = plan_with(root, Some(&base[..7]), &head, None)?;
+    let (plan, warnings) = plan_with(root, Some(&base[..7]), &head)?;
     for member in ["alpha", "beta"] {
         let obs: Vec<_> = plan
             .obligations
@@ -168,7 +134,7 @@ fn short_sha_base_still_classifies() -> TestResult {
         let want = if member == "beta" {
             "affected_by_change"
         } else {
-            "forced_uncached"
+            "not_affected"
         };
         assert!(
             !obs.is_empty() && obs.iter().all(|ob| ob.reason == want),
@@ -200,7 +166,7 @@ fn new_package_at_head_marks_affected() -> TestResult {
         "pub fn f() {}\npub fn g() {}\n",
     )?;
     let head = commit(root, "two")?;
-    let (plan, warnings) = plan_with(root, Some(&base), &head, None)?;
+    let (plan, warnings) = plan_with(root, Some(&base), &head)?;
     for member in ["alpha", "beta", "gamma"] {
         let obs: Vec<_> = plan
             .obligations
@@ -208,7 +174,7 @@ fn new_package_at_head_marks_affected() -> TestResult {
             .filter(|ob| ob.task_id.contains(member))
             .collect();
         let want = if member == "alpha" {
-            "forced_uncached"
+            "not_affected"
         } else {
             "affected_by_change"
         };
@@ -268,7 +234,7 @@ fn release_lock_never_resolves_generator_identity() -> TestResult {
         mise_version = velnor_actions_mise::MISE_VERSION,
     );
     std::fs::write(repo.path().join(".velnor/generator.lock"), lock)?;
-    let (plan, _) = plan_with(repo.path(), Some(&base), &head, None)?;
+    let (plan, _) = plan_with(repo.path(), Some(&base), &head)?;
     // The running binary names itself: the lock pin is never adopted,
     // so a source build can never emit a release-pinned identity.
     assert_ne!(plan.generator.sha256, sha, "lock pin never adopted");
@@ -278,62 +244,47 @@ fn release_lock_never_resolves_generator_identity() -> TestResult {
         "observed exe SHA is real hex: {}",
         plan.generator.sha256
     );
-    assert_ne!(
-        plan.baseline.reason(),
-        Some("generator_unverifiable_source_build")
+    Ok(())
+}
+
+#[test]
+fn merge_group_classifies_like_pull_request() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "one"], root)?;
+    std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\npub fn g() {}\n")?;
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "two"], root)?;
+    let base = git_line(&["rev-parse", "HEAD~1"], root)?;
+    let head = git_line(&["rev-parse", "HEAD"], root)?;
+    let plan_for = |event: &str| -> Result<Plan, Box<dyn std::error::Error>> {
+        let request = serde_json::json!({
+            "schema": 1,
+            "run_key": "local",
+            "base": base,
+            "head": head,
+            "event": event,
+            "root": root.display().to_string(),
+        });
+        let response = plan_internal(&request.to_string())?;
+        let value: serde_json::Value = serde_json::from_str(&response)?;
+        Ok(serde_json::from_value(value["plan"].clone())?)
+    };
+    let pr = plan_for("pull_request")?;
+    let group = plan_for("merge_group")?;
+    assert_eq!(pr.task_ids, group.task_ids);
+    assert!(
+        !group.task_ids.is_empty(),
+        "merge group selects affected work"
     );
-    Ok(())
-}
-
-#[test]
-fn merge_flags_wrong_manifest_digest() -> TestResult {
-    // Serialization cannot fail for this struct, so the wrong-digest branch
-    // pins the enforced comparison; the error branch fails closed the same
-    // way without ever digesting an empty default.
-    let (_repo, mut plan) = plan_for_source_change()?;
-    let base = plan.base.clone().expect("base");
-    let mut manifest = manifest_for(&plan, &base);
-    // Plan validation rejects baseline artifact names (see the revert test),
-    // so both sides share a plan-kind name; merge compares equality only.
-    manifest["artifact_name"] = serde_json::json!("velnor-plan-local");
-    let first = 0;
-    plan.obligations[first].decision = ObligationDecision::CoveredByTrustedBaseline;
-    plan.obligations[first].reason = "covered_by_trusted_baseline".to_owned();
-    plan.obligations[first].baseline_proof = Some(velnor_actions_contract::BaselineProof::new(
-        &base,
-        7,
-        9,
-        "velnor-plan-local",
-        &velnor_actions_contract::digest_b3(b"forged-manifest"),
-    )?);
-    plan.validate()?;
-    let reports = passing_reports(&plan)?;
-    let request = serde_json::json!({
-        "schema": 1, "run_key": "local", "actual_event": "pull_request",
-        "plan": plan, "matrix": plan.matrix,
-        "matrix_reports": reports, "baseline_manifest": manifest,
-        "required_job_ids": ["plan"],
-        "required_jobs": [{"job_id": "plan", "conclusion": "success"}],
-    });
-    let final_report: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&request.to_string())?)?;
-    assert_eq!(final_report.status, FinalStatus::PlanningFailed);
-    Ok(())
-}
-
-#[test]
-fn coverage_warn_notes_no_publish_attempt() -> TestResult {
-    let (repo, base, head) = two_commit_repo()?;
-    let (seed, _) = plan_with(repo.path(), Some(&base), &head, None)?;
-    let (_, warnings) = plan_with(
-        repo.path(),
-        Some(&base),
-        &head,
-        Some(manifest_for(&seed, &base)),
-    )?;
-    let noted = warnings
-        .iter()
-        .any(|w| w.contains("baseline_publish:forbidden") && w.contains("no_publish_attempted"));
-    assert!(noted, "{warnings:?}");
+    assert_eq!(pr.trust, velnor_actions_contract::Trust::Pr);
+    assert_eq!(
+        group.trust,
+        velnor_actions_contract::Trust::Pr,
+        "speculative merge content stays PR-scoped"
+    );
+    let push = plan_for("push")?;
+    assert_eq!(push.trust, velnor_actions_contract::Trust::Trusted);
     Ok(())
 }

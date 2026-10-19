@@ -23,7 +23,7 @@ use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::discover_index::build_file_index;
 use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::inventory::{
-    qualify_workspaces_with_all_features, run_inventories_with_all_features,
+    qualify_workspaces, run_inventories_with_all_features,
     run_inventories_with_phase_timings_and_all_features,
 };
 use crate::recommendations::collect_recommendations;
@@ -46,7 +46,7 @@ pub struct PlannedWorkspace {
 }
 
 /// Full detection output feeding planning and rendering.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Discovery {
     /// Explicit repository-owned checks, independent of detected workspaces.
     pub mise_checks: Vec<velnor_actions_mise::DiscoveredCheck>,
@@ -85,6 +85,8 @@ pub struct Discovery {
     pub tofu_note: Option<velnor_actions_tofu::TofuNote>,
     /// Tofu selection records: head files plus edges per root.
     pub tofu_units: Vec<crate::select_tofu::TofuSelectionUnit>,
+    /// Resolved graphs and declared input rules for affected selection.
+    pub affected: crate::affected_inputs::AffectedInputs,
 }
 
 /// Run file index, detection, inventory, profiles, and task derivation.
@@ -166,7 +168,9 @@ fn discover_inner(
         }
     })?;
     let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
-    qualify_workspaces_with_all_features(root, &workspaces, all_features, catalog)?;
+    let resolves = qualify_workspaces(root, &workspaces, catalog)?;
+    let rules =
+        crate::affected_inputs::resolve_input_rules(config.stacks.rust.as_ref(), &workspaces)?;
     let (mut proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
     let mise_checks =
         velnor_actions_mise::discover_checks(root, &config.checks, &config.qualified_tools)
@@ -194,6 +198,7 @@ fn discover_inner(
         skipped_non_utf8,
         tofu_note: tofu_step.note,
         tofu_units,
+        affected: crate::affected_inputs::AffectedInputs { resolves, rules },
     })
 }
 

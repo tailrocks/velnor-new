@@ -1,24 +1,24 @@
-//! F2 decision tests: classification, ownership, paths, provenance.
+//! F2 decision tests: classification, ownership, and paths.
 
 use std::collections::BTreeSet;
+
+use serde_json::Value as Json;
+use velnor_actions_contract::Plan;
 
 use velnor_actions_contract::{
     FinalStatus, NotSelectedReason, ObligationDecision, PlannedPlatform, TaskStatus, Trust,
     WorkflowEvent, digest_b3, matrix_id_for_task_group, matrix_key_for_id,
 };
 use velnor_actions_orchestrator::decisions::{
-    CacheHit, MetadataFailure, NotSelectedInputs, ObligationInputs, baseline_expired,
-    classify_obligation, dedupe_sorted, not_selected_report, omission_ledger, plan_artifact_dir,
-    plan_json_path, selection_broadens_for_path,
+    CacheHit, MetadataFailure, NotSelectedInputs, ObligationInputs, classify_obligation,
+    dedupe_sorted, not_selected_report, omission_ledger, plan_artifact_dir, plan_json_path,
+    selection_broadens_for_path,
 };
 
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_orch_plansel::merge_status;
 
-/// Complete merge validator inventory for each job emitted by the plan.
-fn successful_job_inventory(
-    plan: &velnor_actions_contract::Plan,
-) -> (Vec<String>, Vec<serde_json::Value>) {
+fn successful_job_inventory(plan: &Plan) -> (Vec<String>, Vec<Json>) {
     let mut ids = vec!["plan".to_owned()];
     ids.extend(plan.matrix.include.iter().map(|entry| entry.job_id.clone()));
     ids.sort();
@@ -30,7 +30,7 @@ fn successful_job_inventory(
     (ids, jobs)
 }
 
-/// Baseline inputs: eligible for reuse or coverage.
+/// Open inputs: eligible for reuse.
 fn open_inputs() -> ObligationInputs {
     ObligationInputs {
         schema_known: true,
@@ -38,7 +38,6 @@ fn open_inputs() -> ObligationInputs {
         nondeterministic: false,
         inputs_controlled: false,
         cache_hit: CacheHit::Execute,
-        baseline_covered: false,
         restore_miss_reason: None,
     }
 }
@@ -103,15 +102,6 @@ fn every_obligation_classifies_with_reason() {
         )
     );
     open.cache_hit = CacheHit::Execute;
-    open.baseline_covered = true;
-    assert_eq!(
-        decide(&open),
-        (
-            ObligationDecision::CoveredByTrustedBaseline,
-            "covered_by_trusted_baseline"
-        )
-    );
-    open.baseline_covered = false;
     open.restore_miss_reason = Some("cache_corrupt");
     assert_eq!(
         decide(&open),
@@ -216,64 +206,6 @@ fn plan_artifact_paths_reject_traversal() -> TestResult {
         assert!(plan_artifact_dir(root, bad).is_err(), "{bad}");
     }
     Ok(())
-}
-
-#[test]
-fn baselines_expire_on_schedule() {
-    assert!(!baseline_expired(None, u64::MAX));
-    assert!(!baseline_expired(Some(200), 199));
-    assert!(baseline_expired(Some(200), 200));
-    assert!(baseline_expired(Some(200), 201));
-}
-
-#[test]
-fn exact_base_run_filter_pins_provenance() {
-    use velnor_actions_orchestrator::run_select::{
-        SelectedBaseRun, select_baseline_artifact, select_exact_base_run,
-    };
-    let base = "a".repeat(40);
-    let other = "b".repeat(40);
-    let runs = serde_json::json!([
-        {"databaseId": 1, "headSha": other, "headBranch": "t", "event": "push", "conclusion": "success", "attempt": 1},
-        {"databaseId": 2, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "failure", "attempt": 1},
-        {"databaseId": 3, "headSha": base, "headBranch": "t", "event": "pull_request", "conclusion": "success", "attempt": 1},
-        {"databaseId": 4, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success"},
-        {"databaseId": 5, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success", "attempt": 3},
-    ]);
-    assert_eq!(
-        select_exact_base_run(&runs.to_string(), &base, "t"),
-        Ok(SelectedBaseRun {
-            run_id: 5,
-            attempt: 3
-        })
-    );
-    assert!(select_exact_base_run(&runs.to_string(), &"c".repeat(40), "t").is_err());
-    assert!(select_exact_base_run("not json", &base, "t").is_err());
-    assert!(select_exact_base_run("[]", &base, "t").is_err());
-    let unattested = serde_json::json!([
-        {"databaseId": 6, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success"},
-        {"databaseId": 7, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success", "attempt": 0},
-    ]);
-    assert!(
-        select_exact_base_run(&unattested.to_string(), &base, "t").is_err(),
-        "runs without attempt evidence never select"
-    );
-    let listed = serde_json::json!({"total_count": 3, "artifacts": [
-        {"id": 8, "name": "other", "expired": false},
-        {"id": 9, "name": "velnor-baseline-x", "expired": true,
-         "size_in_bytes": 1, "digest": format!("sha256:{}", "b".repeat(64))},
-        {"id": 10, "name": "velnor-baseline-x", "expired": false,
-         "size_in_bytes": 1, "digest": format!("sha256:{}", "a".repeat(64))},
-    ]});
-    assert_eq!(
-        select_baseline_artifact(&listed.to_string(), "velnor-baseline-x"),
-        Ok(10)
-    );
-    assert!(select_baseline_artifact(&listed.to_string(), "missing").is_err());
-    assert!(select_baseline_artifact("not json", "velnor-baseline-x").is_err());
-    let array = serde_json::json!([{"id": 11, "name": "n", "expired": false,
-        "size_in_bytes": 1, "digest": format!("sha256:{}", "a".repeat(64))}]);
-    assert!(select_baseline_artifact(&array.to_string(), "n").is_err());
 }
 
 #[test]

@@ -26,13 +26,18 @@ fn grouped_fixture() -> (TempDir, Plan, Vec<MatrixEntry>) {
     )
     .expect("second entry");
     plan.obligations.push(PlanObligation {
+        job_id: JOB_ID.to_owned(),
         task_id: SECOND_TASK_ID.to_owned(),
         decision: ObligationDecision::Execute,
         reason: "selected".to_owned(),
         task_digest,
         input_digest,
         closure_digest,
-        baseline_proof: None,
+        graph_digest: "b3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            .to_owned(),
+        mbx_digest: "b3-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            .to_owned(),
+        profile: "default".to_owned(),
     });
     plan.matrix.include.push(second.clone());
     plan.matrix

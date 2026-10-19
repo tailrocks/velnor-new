@@ -133,6 +133,13 @@ pub(crate) async fn native_pre_challenge_fixture()
     })
 }
 
+/// Publish the challenge for schema-migration fixtures that need a durable proof row.
+pub(crate) async fn publish_native_fixture_challenge(
+    fixture: &NativePreChallengeFixture,
+) -> Result<(), crate::error::HostError> {
+    helpers::publish_test_execution_challenge(&fixture.scope, &fixture.channel).await
+}
+
 /// Build the durable state required for a native Started message.
 pub(crate) async fn native_started_intake_fixture()
 -> Result<NativeStartedIntakeFixture, crate::error::HostError> {

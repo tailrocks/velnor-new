@@ -1,8 +1,9 @@
 //! Runner-observed event resolution shared by plan and merge.
 
+use velnor_actions_contract::workflow::QUALIFICATION_WORKFLOW_PATH;
 use velnor_actions_contract::{
-    QUALIFICATION_WORKFLOW_PATH, QualificationDispatch, QualificationDispatchMode,
-    QualificationPhase, QualificationRunRef, WorkflowEvent, verification_repeat_campaign,
+    QualificationDispatch, QualificationDispatchMode, QualificationPhase, QualificationRunRef,
+    WorkflowEvent, verification_repeat_campaign,
 };
 
 use crate::OrchestratorError;

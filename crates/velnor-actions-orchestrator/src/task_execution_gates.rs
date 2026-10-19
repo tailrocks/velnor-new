@@ -1,6 +1,5 @@
 //! Runtime admission for typed task prerequisites.
 
-use std::collections::BTreeSet;
 use std::path::Path;
 
 use velnor_actions_contract::workflow::{
@@ -64,7 +63,6 @@ pub(super) fn validate_prerequisites(
         .filter(|edge| edge.to == task_id && matches!(edge.kind, EdgeKind::Gate | EdgeKind::Data))
         .map(|edge| edge.from.as_str())
         .collect();
-    let mut covered = false;
     for prerequisite in incoming {
         let obligation = plan
             .obligations
@@ -72,7 +70,9 @@ pub(super) fn validate_prerequisites(
             .find(|candidate| candidate.task_id == prerequisite)
             .ok_or_else(|| internal("task_prerequisite_without_obligation"))?;
         match obligation.decision {
-            ObligationDecision::CoveredByTrustedBaseline => covered = true,
+            ObligationDecision::NotAffected => {
+                return Err(internal("task_prerequisite_not_affected"));
+            }
             ObligationDecision::Execute => {
                 let source = prerequisite_entry(plan, prerequisite, entry.lane_variant)?;
                 validate_success_report(plan, source, prerequisite, job_id, runner_temp)?;
@@ -81,9 +81,6 @@ pub(super) fn validate_prerequisites(
                 return Err(internal("task_prerequisite_reuse_unproved"));
             }
         }
-    }
-    if covered {
-        validate_covered_prerequisites(plan, runner_temp)?;
     }
     Ok(())
 }
@@ -188,37 +185,6 @@ fn validate_success_report(
         || report.exit_code != 0
     {
         return Err(internal("task_prerequisite_report_not_successful"));
-    }
-    Ok(())
-}
-
-pub(super) fn validate_covered_prerequisites(
-    plan: &Plan,
-    runner_temp: &Path,
-) -> Result<(), OrchestratorError> {
-    let baseline_path = runner_temp
-        .join("velnor")
-        .join(&plan.run_key)
-        .join(crate::baseline_publish::BASELINE_FILENAME);
-    let run_dir = baseline_path
-        .parent()
-        .ok_or_else(|| internal("task_prerequisite_baseline_path_invalid"))?;
-    crate::check_evidence::reject_link_components(run_dir, "baseline.json")
-        .map_err(|_| internal("task_prerequisite_baseline_missing_or_invalid"))?;
-    let text = crate::retrieve_reports::read_staged_text(
-        &baseline_path,
-        crate::retrieve_reports::MAX_STAGED_REPORT_BYTES,
-    )
-    .map_err(|_| internal("task_prerequisite_baseline_missing_or_invalid"))?;
-    let value =
-        parse_strict_json(&text).map_err(|_| internal("task_prerequisite_baseline_unparsable"))?;
-    let manifest: crate::merge::BaselineManifest = serde_json::from_value(value)
-        .map_err(|_| internal("task_prerequisite_baseline_unparsable"))?;
-    let mut signals = crate::cover::Signals::default();
-    let mut misses = BTreeSet::new();
-    crate::cover::revalidate::revalidate_coverage(plan, Some(&manifest), &mut signals, &mut misses);
-    if signals.planning_failed || !misses.is_empty() {
-        return Err(internal("task_prerequisite_baseline_unverified"));
     }
     Ok(())
 }

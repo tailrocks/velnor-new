@@ -324,20 +324,52 @@ async fn settle_if_fully_cleaned(
     if !super::release_ready(connection, reservation_id).await? {
         return Ok(());
     }
+    prove_cleanup_before_release(
+        connection,
+        connection_id,
+        context.operation_id,
+        reservation_id,
+        false,
+    )
+    .await
+}
+
+pub(super) async fn prove_cleanup_before_release(
+    connection: &turso::Connection,
+    connection_id: &str,
+    operation_id: i64,
+    reservation_id: i64,
+    allow_existing_proof: bool,
+) -> Result<(), HostError> {
     let changed = connection
         .execute(
-            "UPDATE capacity_reservations SET state = 'released' WHERE id = ?1 AND connection_id = ?2 AND remote_cleanup_proven = 1 AND local_cleanup_proven = 1 AND state != 'released'",
-            (reservation_id, connection_id),
+            "UPDATE connection_intents SET cleanup_proven = 1 WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND cleanup_proven = 0",
+            (operation_id, connection_id),
         )
         .await
         .map_err(|_| HostError::Journal)?;
-    if changed != 1 {
+    if changed == 0 && allow_existing_proof {
+        let already_proven = connection
+            .query(
+                "SELECT 1 FROM connection_intents WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND cleanup_proven = 1",
+                (operation_id, connection_id),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?
+            .next()
+            .await
+            .map_err(|_| HostError::Journal)?
+            .is_some();
+        if !already_proven {
+            return Err(HostError::Journal);
+        }
+    } else if changed != 1 {
         return Err(HostError::Journal);
     }
     let changed = connection
         .execute(
-            "UPDATE connection_intents SET cleanup_proven = 1 WHERE id = ?1 AND connection_id = ?2 AND cleanup_proven = 0",
-            (context.operation_id, connection_id),
+            "UPDATE capacity_reservations SET state = 'released' WHERE id = ?1 AND connection_id = ?2 AND remote_cleanup_proven = 1 AND local_cleanup_proven = 1 AND state != 'released'",
+            (reservation_id, connection_id),
         )
         .await
         .map_err(|_| HostError::Journal)?;

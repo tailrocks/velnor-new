@@ -2,7 +2,7 @@
 //!
 //! Derivation formulas are normative; example strings are illustrative.
 //! `artifact_id` values are derived GitHub artifact names. Numeric run IDs
-//! appear only inside `run_key`/baseline proofs, never as identity inputs.
+//! appear only inside `run_key`, never as identity inputs.
 //! Task, input, and compatibility identities never include cwd, absolute
 //! paths, or `run_key`.
 

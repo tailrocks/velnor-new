@@ -2,8 +2,8 @@
 
 use super::super::helpers::{
     Scratch, binding, created_scope, event_source, finish_initialized_listener_delivery,
-    initialize_reserved_request, record_owned_storage_cleanup, runner_name,
-    settle_storage_metadata,
+    initialize_reserved_request, record_owned_network_cleanup, record_owned_storage_cleanup,
+    runner_name, settle_storage_metadata,
 };
 use super::{
     assert_runner_request_association, authorize, reject_wrong_scope_and_runner, replay_link,
@@ -19,6 +19,9 @@ use velnor_runner_github::RunnerReference;
 
 mod orphan_link;
 pub(super) use orphan_link::reject_orphaned_reservation_link;
+#[path = "fixtures/settlement.rs"]
+mod settlement;
+pub(super) use settlement::check_cleanup_and_settlement;
 
 pub(super) struct LinkedLifecycle {
     scratch: Scratch,
@@ -278,61 +281,6 @@ pub(super) async fn check_completed_replay(fixture: &LinkedLifecycle) -> Result<
     .await?;
     super::record_completed(fixture, &actual).await?;
     super::record_completed(fixture, &actual).await
-}
-
-pub(super) async fn check_cleanup_and_settlement(
-    fixture: &LinkedLifecycle,
-) -> Result<(), HostError> {
-    let scope = &fixture.scope;
-    replay_link(
-        scope,
-        fixture.witness_request_id,
-        fixture.nonce,
-        'f',
-        fixture.reservation_id,
-        fixture.intent_id,
-    )
-    .await?;
-    let actual = scope
-        .assignment_identity(AssignmentKey::AssignedRequest {
-            request_id: fixture.actual_request_id,
-        })
-        .await?;
-    assert_eq!(
-        scope
-            .record_job_completed(
-                &actual,
-                902,
-                &fixture.source,
-                Some("success"),
-                Some(&fixture.runner),
-                Some(&fixture.job_id),
-            )
-            .await?,
-        Some(fixture.intent_id)
-    );
-    assert_eq!(
-        scope
-            .reservation(&fixture.physical)
-            .await?
-            .map(|reservation| reservation.state),
-        Some(crate::journal::ReservationState::Reserved)
-    );
-    record_owned_storage_cleanup(scope, &fixture.provisioned).await?;
-    scope.record_remote_cleanup(fixture.reservation_id).await?;
-    scope.record_local_cleanup(fixture.reservation_id).await?;
-    assert_eq!(
-        settle_storage_metadata(scope, &fixture.provisioned, '7').await?,
-        MetadataSettlementResult::Settled
-    );
-    assert_eq!(
-        scope
-            .reservation(&fixture.physical)
-            .await?
-            .map(|reservation| reservation.state),
-        Some(crate::journal::ReservationState::Released)
-    );
-    Ok(())
 }
 
 pub(super) async fn check_final_replay(fixture: &LinkedLifecycle) -> Result<(), HostError> {

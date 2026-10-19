@@ -33,6 +33,7 @@ fn final_reports_validate() -> Result<(), ContractError> {
             executed: 1,
             empty_partition: 0,
             covered: 0,
+            not_affected: 0,
             failed: 0,
             cancelled: 0,
             blocked: 0,

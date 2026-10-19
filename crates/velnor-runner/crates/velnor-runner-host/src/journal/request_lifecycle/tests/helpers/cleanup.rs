@@ -31,6 +31,20 @@ pub(super) async fn record_owned_storage_cleanup(
     scope.record_storage_cleanup(proof).await
 }
 
+pub(super) async fn record_owned_network_cleanup(
+    scope: &ConnectionJournal,
+    reservation_id: i64,
+) -> Result<(), HostError> {
+    use crate::launch::bootstrap::VerifiedStorageNetworkRemoved;
+
+    let claim = scope
+        .claim_storage_network_removal(reservation_id)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let proof = VerifiedStorageNetworkRemoved::test_removed(&claim);
+    scope.record_storage_network_removed(&claim, &proof).await
+}
+
 pub(super) async fn settle_storage_metadata(
     scope: &ConnectionJournal,
     provisioned: &ProvisionedRunner,
@@ -75,7 +89,7 @@ pub(super) async fn create_cleaned_settlement_probe(
         operation_name: operation_name.clone(),
         projection_digest: "e".repeat(64),
         purpose: crate::journal::ResourceProbePurpose::Capacity,
-        request_sha256: "5d76d86293261804706a16a73e0491cf4caa859f1b876cda706e568592b85cdf".to_owned(),
+        request_sha256: crate::journal::capacity_request_sha256(),
     };
     let claim = trace_test_stage!(
         "settlement probe claim",

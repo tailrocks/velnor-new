@@ -111,7 +111,8 @@ pub(crate) fn share_lanes(
         {
             continue;
         }
-        let Some(parts) = split_pair(hosted, local, &ctx.checkout_uses) else {
+        let Some(parts) = split_pair(&hosted_id, &local_id, hosted, local, &ctx.checkout_uses)
+        else {
             return Err(RenderError::InvalidWorkflow(format!(
                 "lane_body_differs:{logical}"
             )));
@@ -208,9 +209,17 @@ fn logical_id(hosted_id: &str) -> Option<&str> {
     ok.then_some(logical)
 }
 
-fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLaneParts> {
+fn split_pair(
+    hosted_id: &str,
+    local_id: &str,
+    hosted: &Job,
+    local: &Job,
+    checkout_uses: &str,
+) -> Option<SharedLaneParts> {
     if hosted.timeout_minutes != local.timeout_minutes
-        || !crate::lane_share_sections::same_or_admitted_check_condition(hosted, local)
+        || !crate::lane_share_sections::same_or_admitted_check_condition(
+            hosted_id, local_id, hosted, local,
+        )
         || hosted.permissions != local.permissions
         || hosted.cache_mode != local.cache_mode
         || hosted.environment != local.environment

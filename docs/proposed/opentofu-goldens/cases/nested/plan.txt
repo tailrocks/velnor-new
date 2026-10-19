@@ -17,7 +17,7 @@ Workflow to generate
   Jobs:
     - actionlint (9 steps)
     - plan (15 steps)
-    - publish-baseline (5 steps)
+    - publish-baseline (6 steps)
     - required (8 steps)
     - rust-a (18 steps)
     - rust-lib (17 steps)

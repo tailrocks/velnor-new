@@ -8,12 +8,11 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use velnor_actions_contract::workflow::{
-    EntryCacheIds, ExecuteTaskIds, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
-    PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlannedPlatform,
-    QualificationDispatch, QualificationPhase, QualificationRunRef,
-    QualificationRuntimeAbiObservation, QualificationRuntimeIdentityRequirements,
-    QualificationRuntimeImageDigests, QualificationRuntimeImageIdentity,
-    QualificationRuntimePlatform, QualificationRuntimeScaleSet,
+    EntryCacheIds, ExecuteTaskIds, MatrixEntry, ObligationDecision, Plan, PlanGenerator,
+    PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlannedPlatform, QualificationDispatch,
+    QualificationPhase, QualificationRunRef, QualificationRuntimeAbiObservation,
+    QualificationRuntimeIdentityRequirements, QualificationRuntimeImageDigests,
+    QualificationRuntimeImageIdentity, QualificationRuntimePlatform, QualificationRuntimeScaleSet,
     QualificationRuntimeToolObservation, Trust, WorkflowEvent,
 };
 use velnor_actions_contract::{
@@ -204,7 +203,6 @@ fn qualification_plan(
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(Some("qualification_bypass")).expect("baseline"),
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -225,12 +223,21 @@ fn qualification_plan(
             task_digest,
             input_digest,
             closure_digest: digest_b3(b"cache runtime closure"),
-            baseline_proof: None,
+            graph_digest: "b3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                .to_owned(),
+            mbx_digest: "b3-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                .to_owned(),
+            profile: "default".to_owned(),
+            job_id: "rust-demo".to_owned(),
         }],
         matrix: PlanMatrix {
             include: vec![entry],
         },
         task_ids: vec!["stack/rust/demo/test/default".to_owned()],
+        jobs: vec![velnor_actions_contract::PlanJob {
+            job_id: "rust-demo".to_owned(),
+            disposition: velnor_actions_contract::JobDisposition::Run,
+        }],
         warnings: Vec::new(),
         edges: Vec::new(),
     }

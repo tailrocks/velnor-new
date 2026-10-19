@@ -43,6 +43,16 @@ fn task_report_uses_the_exact_physical_job_lane() {
         }
     }
     plan.matrix.include = paired;
+    for obligation in &mut plan.obligations {
+        obligation.job_id = "rust-demo__hosted".to_owned();
+    }
+    plan.jobs = vec!["rust-demo__hosted", "rust-demo__local"]
+        .into_iter()
+        .map(|job_id| velnor_actions_contract::PlanJob {
+            job_id: job_id.to_owned(),
+            disposition: velnor_actions_contract::JobDisposition::Run,
+        })
+        .collect();
     plan.validate().expect("paired plan validates");
     let temp = staged_run(&plan, "local");
     assert_eq!(

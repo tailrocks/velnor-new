@@ -1,10 +1,9 @@
 //! Contract qualification-dispatch plan cases.
 use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
 use velnor_actions_contract::{
-    ContractError, ObligationDecision, Plan, PlanBaseline, PlanGenerator, PlanMatrix,
-    PlanObligation, PlanPackage, PlanRunner, QualificationDispatch, QualificationDispatchMode,
-    QualificationPhase, RunnerSelection, Trust, WorkflowEvent, digest_b3, plan_id_for_run,
-    run_key_for_ci,
+    ContractError, ObligationDecision, Plan, PlanGenerator, PlanMatrix, PlanObligation,
+    PlanPackage, PlanRunner, QualificationDispatch, QualificationDispatchMode, QualificationPhase,
+    RunnerSelection, Trust, WorkflowEvent, digest_b3, plan_id_for_run, run_key_for_ci,
 };
 
 #[test]
@@ -69,7 +68,6 @@ fn sample_qualification_plan() -> Result<Plan, ContractError> {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(Some("qualification_bypass"))?,
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -90,7 +88,14 @@ fn sample_qualification_plan() -> Result<Plan, ContractError> {
             task_digest: digest_b3(b"task"),
             input_digest: digest_b3(b"inputs"),
             closure_digest: digest_b3(b"closure"),
-            baseline_proof: None,
+            graph_digest: digest_b3(b"graph"),
+            mbx_digest: digest_b3(b"mbx"),
+            profile: "default".to_owned(),
+            job_id: entry.job_id.clone(),
+        }],
+        jobs: vec![velnor_actions_contract::PlanJob {
+            job_id: entry.job_id.clone(),
+            disposition: velnor_actions_contract::JobDisposition::Run,
         }],
         matrix: PlanMatrix {
             include: vec![entry],

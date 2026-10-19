@@ -1,9 +1,9 @@
-//! F2 plan/merge acceptance: offline, omission, cache, broaden, baseline.
+//! F2 plan/merge acceptance: offline, omission, cache, broaden.
 
 use std::collections::BTreeSet;
 
 use serde_json::Value as Json;
-use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
+use velnor_actions_contract::{FinalStatus, Plan};
 use velnor_actions_orchestrator::{merge_internal, plan_internal};
 
 use crate::impl_common::{
@@ -11,8 +11,7 @@ use crate::impl_common::{
     passing_reports, plan_for_source_change,
 };
 use crate::impl_orch_plansel::{
-    BUMP, anchor_repo, commit, entries_for, has, make_ws, manifest_for, merge_status, plan_at,
-    plan_change, put,
+    BUMP, commit, has, make_ws, merge_status, plan_at, plan_change, put,
 };
 
 /// Complete merge validator inventory for each job emitted by the plan.
@@ -52,8 +51,8 @@ fn obligations_carry_internal_reasons() -> TestResult {
     let base = commit(repo.path(), "one")?;
     put(repo.path(), "beta/src/lib.rs", BUMP)?;
     let head = commit(repo.path(), "two")?;
-    let (full, _) = plan_at(repo.path(), None, &head, None)?;
-    let (compared, _) = plan_at(repo.path(), Some(&base), &head, None)?;
+    let (full, _) = plan_at(repo.path(), None, &head)?;
+    let (compared, _) = plan_at(repo.path(), Some(&base), &head)?;
     assert!(has(&full, "alpha") && has(&full, "beta"));
     assert_eq!(
         full.task_ids, compared.task_ids,
@@ -76,7 +75,7 @@ fn obligations_carry_internal_reasons() -> TestResult {
 fn plan_digests_combine_deterministically() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
     let base = seed.base.clone().ok_or("missing base")?;
-    let (again, _) = plan_at(repo.path(), Some(&base), &seed.head, None)?;
+    let (again, _) = plan_at(repo.path(), Some(&base), &seed.head)?;
     let digests = |plan: &Plan| {
         plan.obligations
             .iter()
@@ -200,7 +199,7 @@ fn undetected_stacks_plan_no_work() -> TestResult {
 fn plans_are_byte_deterministic() -> TestResult {
     let (repo, seed) = plan_for_source_change()?;
     let base = seed.base.clone().ok_or("missing base")?;
-    let (again, _) = plan_at(repo.path(), Some(&base), &seed.head, None)?;
+    let (again, _) = plan_at(repo.path(), Some(&base), &seed.head)?;
     assert_eq!(
         velnor_actions_contract::canonical_json_bytes(&seed)?,
         velnor_actions_contract::canonical_json_bytes(&again)?
@@ -212,7 +211,7 @@ fn plans_are_byte_deterministic() -> TestResult {
 fn missing_base_broadens_with_warning() -> TestResult {
     let repo = make_ws(&["alpha", "beta"], &[])?;
     let head = commit(repo.path(), "one")?;
-    let (plan, warnings) = plan_at(repo.path(), None, &head, None)?;
+    let (plan, warnings) = plan_at(repo.path(), None, &head)?;
     assert!(has(&plan, "alpha") && has(&plan, "beta"), "selects all");
     assert!(
         warnings.iter().any(|w| w.contains("missing_base")),
@@ -266,54 +265,6 @@ fn global_config_changes_broaden_explicitly() -> TestResult {
 }
 
 #[test]
-fn generator_mismatch_executes_with_reason() -> TestResult {
-    let (repo, seed) = plan_for_source_change()?;
-    let base = seed.base.clone().ok_or("missing base")?;
-    let mut manifest = manifest_for(&seed, &base, &entries_for(&seed));
-    manifest["generator_version"] = Json::String("9.9.9".to_owned());
-    let (plan, warnings) = plan_at(repo.path(), Some(&base), &seed.head, Some(manifest))?;
-    assert!(
-        plan.obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::Execute)
-    );
-    assert!(!plan.matrix.include.is_empty(), "executes");
-    assert!(
-        warnings.iter().any(|w| w.contains("generator_mismatch")),
-        "{warnings:?}"
-    );
-    Ok(())
-}
-
-#[test]
-fn carried_proofs_execute_without_originating_attestation() -> TestResult {
-    let (repo, seed) = plan_for_source_change()?;
-    anchor_repo(repo.path())?;
-    let head = seed.head.clone();
-    let (nodiff, _) = plan_at(repo.path(), Some(&head), &head, None)?;
-    let mut tasks = entries_for(&nodiff);
-    for task in tasks.as_array_mut().ok_or("tasks")? {
-        task["proof_run_id"] = Json::from(5);
-        // Observed by run 7, but observation is not success attestation.
-        task["observed_run_id"] = Json::from(7);
-    }
-    let (plan, warnings) = plan_at(
-        repo.path(),
-        Some(&head),
-        &head,
-        Some(manifest_for(&nodiff, &head, &tasks)),
-    )?;
-    for ob in &plan.obligations {
-        assert_eq!(ob.decision, ObligationDecision::Execute);
-    }
-    let reason = "baseline_invalid:originating_run_unverified";
-    assert_eq!(plan.baseline.reason(), Some(reason));
-    let missed = "baseline_miss:originating_run_unverified";
-    assert!(warnings.iter().any(|w| w == missed));
-    Ok(())
-}
-
-#[test]
 fn shard_budgets_reject_at_plan_time() -> TestResult {
     let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[resources]\ncompiler_process_budget = 2\ntest_process_budget = 2\n[test_sharding]\ndefault_shards = 99\n";
     let repo = make_repo(config)?;
@@ -328,35 +279,52 @@ fn shard_budgets_reject_at_plan_time() -> TestResult {
 }
 
 #[test]
-fn expired_baselines_schedule_execution() -> TestResult {
-    let (repo, seed) = plan_for_source_change()?;
-    anchor_repo(repo.path())?;
-    let base = seed.base.clone().ok_or("missing base")?;
-    let mut manifest = manifest_for(&seed, &base, &entries_for(&seed));
-    manifest["expires_at_unix"] = Json::from(1);
-    let (plan, warnings) = plan_at(repo.path(), Some(&base), &seed.head, Some(manifest))?;
-    assert!(
-        plan.obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::Execute)
-    );
-    assert!(
-        warnings.iter().any(|w| w.contains("cache_expired")),
-        "{warnings:?}"
-    );
-    let head = seed.head.clone();
-    let (nodiff, _) = plan_at(repo.path(), Some(&head), &head, None)?;
-    let mut fresh = manifest_for(&nodiff, &head, &entries_for(&nodiff));
-    fresh["expires_at_unix"] = Json::from(4_102_444_800_u64);
-    let (covered, _) = plan_at(repo.path(), Some(&head), &head, Some(fresh))?;
-    assert!(
-        covered
-            .obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline)
-    );
+fn entry_cache_ids_recorded_per_lane() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    assert!(!plan.matrix.include.is_empty());
+    let mut lanes = BTreeSet::new();
+    for entry in &plan.matrix.include {
+        entry.validate("local")?;
+        let ids = entry.cache_ids.as_ref().ok_or("cache ids recorded")?;
+        ids.validate()?;
+        assert!(lanes.insert(ids.lane_id().to_owned()), "lanes distinct");
+    }
+    let first = plan.matrix.include[0].cache_ids.as_ref().ok_or("ids")?;
+    for entry in &plan.matrix.include {
+        let ids = entry.cache_ids.as_ref().ok_or("ids")?;
+        assert_eq!(ids.toolchain_id(), first.toolchain_id());
+        assert_eq!(ids.platform_id(), first.platform_id());
+        assert_eq!(ids.cache_format_id(), first.cache_format_id());
+        assert_eq!(ids.workspace_id(), first.workspace_id());
+    }
     Ok(())
 }
 
-#[path = "impl_orch_f2d_entry_metadata.rs"]
-mod entry_metadata;
+#[test]
+fn adapter_metadata_forwards_adapter_value() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    assert!(!plan.matrix.include.is_empty());
+    for entry in &plan.matrix.include {
+        let meta = entry.adapter_metadata.as_object().ok_or("opaque object")?;
+        for key in [
+            "package_id",
+            "package_name",
+            "manifest_key",
+            "kind",
+            "configuration",
+            "target",
+            "compile_driver",
+            "test_runner",
+            "evidence_ids",
+            "task_cache_enabled",
+            "cargo_target_dir",
+        ] {
+            assert!(meta.contains_key(key), "{key} in {}", entry.id);
+        }
+        assert_eq!(meta.len(), 11, "adapter shape only");
+        assert_ne!(meta["compile_driver"].as_str().unwrap_or_default(), "");
+        assert_ne!(meta["test_runner"].as_str().unwrap_or_default(), "");
+        assert!(meta["evidence_ids"].is_array());
+    }
+    Ok(())
+}

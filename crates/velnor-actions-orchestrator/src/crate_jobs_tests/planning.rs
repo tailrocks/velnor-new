@@ -163,25 +163,9 @@ fn assert_grouped_qualification_steps(job: &Job, proposals: &[ProposedTask]) {
         2,
         "both task obligations stay in one job"
     );
-    let expected_conditions: Vec<String> = proposals
-        .iter()
-        .map(|task| {
-            format!(
-                "!cancelled() && {}",
-                crate::covered_tasks::skip_condition(&task.task_id).expect("condition")
-            )
-        })
-        .collect();
-    assert_eq!(
-        execution_steps
-            .iter()
-            .map(|step| step.condition.as_deref())
-            .collect::<Vec<_>>(),
-        expected_conditions
-            .iter()
-            .map(String::as_str)
-            .map(Some)
-            .collect::<Vec<_>>()
+    assert!(
+        execution_steps.iter().all(|step| step.condition.is_none()),
+        "affected selection is enforced once at the job level"
     );
     let evidence = job
         .steps

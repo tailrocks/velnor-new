@@ -121,12 +121,6 @@ pub(crate) fn write_plan_files(
     }
     let plan = plan_json_bytes(&response.plan).map_err(internal_contract)?;
     let matrix = matrix_json_bytes(&response.plan.matrix).map_err(internal_contract)?;
-    let baseline = response
-        .baseline_manifest
-        .as_ref()
-        .map(canonical_json_bytes)
-        .transpose()
-        .map_err(internal_contract)?;
     crate::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, dir)?;
     crate::exclusive_write::write_exclusive(&dir.join(PLAN_JSON_FILENAME), &plan, "plan_artifact")?;
     crate::exclusive_write::write_exclusive(
@@ -134,13 +128,6 @@ pub(crate) fn write_plan_files(
         &matrix,
         "plan_artifact",
     )?;
-    if let Some(bytes) = baseline {
-        crate::exclusive_write::write_exclusive(
-            &dir.join(crate::baseline_publish::BASELINE_FILENAME),
-            &bytes,
-            "plan_artifact",
-        )?;
-    }
     if let Some(directive) = cache_directive {
         crate::exclusive_write::write_exclusive(
             &dir.join(crate::qualification_cache_runtime::QUALIFICATION_CACHE_DIRECTIVE_FILENAME),

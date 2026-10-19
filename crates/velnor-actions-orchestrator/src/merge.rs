@@ -22,9 +22,8 @@ use self::merge_checks::{
     check_matrix_job_inventory, check_plan_evidence, check_plan_shape, check_trust_coherence,
     expected_task_reports, partition_task_reports, plan_digests, plan_entries, shards_failed,
 };
-pub(crate) use self::required_evidence::BaselineManifest;
 use self::required_evidence::{
-    check_required_evidence, diagnostic_without_plan, fold_jobs, reported_job_results,
+    check_required_evidence, diagnostic_without_plan, reported_job_results,
 };
 use crate::OrchestratorError;
 use crate::cover::shard::{ResourceLimits, ShardProof};
@@ -71,9 +70,6 @@ pub(crate) struct MergeRequest {
     /// Assembly failure details; every entry fails the verdict.
     #[serde(default)]
     pub(crate) assembly_errors: Vec<String>,
-    /// Trusted baseline manifest for coverage revalidation.
-    #[serde(default)]
-    baseline_manifest: Option<BaselineManifest>,
     /// Shard proofs for partitioned test entries.
     #[serde(default)]
     shard_proofs: Vec<ShardProof>,
@@ -214,7 +210,12 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
             uncovered += 1;
         }
     }
-    fold_jobs(&request.required_jobs, &mut signals);
+    crate::required_dispositions::fold_planned_jobs(
+        &plan.jobs,
+        &request.required_jobs,
+        &mut signals,
+        &mut miss_reasons,
+    );
     downloaded.sort();
     downloaded.dedup();
     let status = decide(&signals, plan);
@@ -232,7 +233,8 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
             reused: fold.reused,
             executed: fold.executed,
             empty_partition: fold.empty_partition,
-            covered: covered_count(plan),
+            covered: decision_count(plan, ObligationDecision::ReusedFromTaskCache),
+            not_affected: decision_count(plan, ObligationDecision::NotAffected),
             failed: fold.failed,
             cancelled: fold.cancelled,
             blocked: fold.blocked,
@@ -297,18 +299,12 @@ fn decide(signals: &Signals, plan: &Plan) -> FinalStatus {
     }
 }
 
-/// Obligations covered without execution.
-///
-/// The match stays exhaustive so a future decision variant fails to
-/// compile here instead of silently joining one side of the count.
-fn covered_count(plan: &Plan) -> u32 {
-    let mut covered = 0usize;
-    for obligation in &plan.obligations {
-        match obligation.decision {
-            ObligationDecision::Execute => {}
-            ObligationDecision::ReusedFromTaskCache
-            | ObligationDecision::CoveredByTrustedBaseline => covered += 1,
-        }
-    }
-    u32::try_from(covered).unwrap_or(u32::MAX)
+/// Obligations carrying one non-execute decision.
+fn decision_count(plan: &Plan, decision: ObligationDecision) -> u32 {
+    let count = plan
+        .obligations
+        .iter()
+        .filter(|obligation| obligation.decision == decision)
+        .count();
+    u32::try_from(count).unwrap_or(u32::MAX)
 }

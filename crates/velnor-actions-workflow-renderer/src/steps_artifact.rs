@@ -87,6 +87,10 @@ pub fn crate_job_report_upload_step(job_id: &str) -> Result<Step, RenderError> {
                 format!("${{{{ runner.temp }}}}/velnor/{RUN_KEY_EXPR}"),
             ),
             ("if-no-files-found".to_owned(), "error".to_owned()),
+            // The name binds the plan's attempt: a re-run of this job in a
+            // later attempt replaces the earlier report instead of failing
+            // on the existing name (hard decision 4, re-run case).
+            ("overwrite".to_owned(), "true".to_owned()),
             (
                 "retention-days".to_owned(),
                 ARTIFACT_RETENTION_DAYS.to_string(),
@@ -97,29 +101,20 @@ pub fn crate_job_report_upload_step(job_id: &str) -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// Baseline-publish upload step display name.
+/// Display name of the baseline upload step.
 pub const BASELINE_PUBLISH_UPLOAD_NAME: &str = "Upload baseline";
-/// Step ID of the baseline-publishing internal step.
+/// Step ID that provides the published artifact name.
 pub const PUBLISH_STEP_ID: &str = StepId::PublishBaseline.as_str();
-/// Step-output name carrying the derived baseline artifact name.
+/// Output name that carries the published artifact name.
 pub const ARTIFACT_NAME_OUTPUT: &str = "artifact_name";
-/// Retention for published baseline artifacts, in days.
-///
-/// Baselines are cross-run evidence consumed by later runs, so they
-/// keep the platform maximum instead of the run-scoped evidence
-/// retention; expiry only broadens later lookups to full execution.
+/// Retention period for published baseline artifacts.
 pub const BASELINE_RETENTION_DAYS: u32 = 90;
 
-/// Baseline-publish upload step over the derived artifact name.
-///
-/// Uploads the single `baseline.json` the publish step staged under
-/// the exact `velnor-baseline-<commit>-<compat>` name it derived;
-/// `if-no-files-found: error` fails closed when the op staged
-/// nothing. `if: always()` attaches at render, like every upload.
+/// Upload the baseline manifest that the publisher created.
 ///
 /// # Errors
 ///
-/// Returns [`RenderError`] for invalid action inputs.
+/// Return an error when the action inputs are invalid.
 pub fn baseline_publish_upload_step() -> Result<Step, RenderError> {
     action_step(
         BASELINE_PUBLISH_UPLOAD_NAME,
@@ -159,6 +154,7 @@ fn matrix_report_upload_raw(key: &str, name: &str) -> Result<Step, RenderError> 
                 format!("${{{{ runner.temp }}}}/velnor/{RUN_KEY_EXPR}/{key}"),
             ),
             ("if-no-files-found".to_owned(), "error".to_owned()),
+            ("overwrite".to_owned(), "true".to_owned()),
             (
                 "retention-days".to_owned(),
                 ARTIFACT_RETENTION_DAYS.to_string(),

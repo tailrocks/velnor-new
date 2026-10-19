@@ -11,9 +11,8 @@ use tempfile::TempDir;
 use velnor_actions_contract::workflow::NamedCheckLaneVariant;
 use velnor_actions_contract::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision,
-    Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform,
-    RunnerSelection, TaskReport, TaskStatus, Trust, WorkflowEvent, matrix_json_bytes,
-    plan_id_for_run,
+    Plan, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform, RunnerSelection,
+    TaskReport, TaskStatus, Trust, WorkflowEvent, matrix_json_bytes, plan_id_for_run,
 };
 
 use super::*;
@@ -91,7 +90,12 @@ pub(super) fn entry_for(
 }
 
 /// One execute obligation.
-pub(super) fn obligation_for(task_id: &str, task_digest: String, seed: u8) -> PlanObligation {
+pub(super) fn obligation_for(
+    task_id: &str,
+    task_digest: String,
+    seed: u8,
+    job_id: &str,
+) -> PlanObligation {
     PlanObligation {
         task_id: task_id.to_owned(),
         decision: ObligationDecision::Execute,
@@ -99,8 +103,34 @@ pub(super) fn obligation_for(task_id: &str, task_digest: String, seed: u8) -> Pl
         task_digest,
         input_digest: digest(seed + 10),
         closure_digest: digest(seed + 20),
-        baseline_proof: None,
+        graph_digest: "b3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            .to_owned(),
+        mbx_digest: "b3-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            .to_owned(),
+        profile: "default".to_owned(),
+        job_id: job_id.to_owned(),
     }
+}
+
+/// Run dispositions for every job named by the plan's obligations and entries.
+pub(super) fn run_jobs(plan: &Plan) -> Vec<velnor_actions_contract::PlanJob> {
+    let mut ids: std::collections::BTreeSet<&str> = plan
+        .obligations
+        .iter()
+        .map(|ob| ob.job_id.as_str())
+        .collect();
+    ids.extend(
+        plan.matrix
+            .include
+            .iter()
+            .map(|entry| entry.job_id.as_str()),
+    );
+    ids.into_iter()
+        .map(|job_id| velnor_actions_contract::PlanJob {
+            job_id: job_id.to_owned(),
+            disposition: velnor_actions_contract::JobDisposition::Run,
+        })
+        .collect()
 }
 
 /// Valid two-task fixture plan (clippy plus test).
@@ -120,7 +150,6 @@ pub(super) fn fixture_plan() -> Plan {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(None).expect("baseline"),
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -128,16 +157,19 @@ pub(super) fn fixture_plan() -> Plan {
         },
         packages: Vec::new(),
         obligations: vec![
-            obligation_for(CLIPPY, clippy_digest, 1),
-            obligation_for(TEST, test_digest, 2),
+            obligation_for(CLIPPY, clippy_digest, 1, "crate_clippy"),
+            obligation_for(TEST, test_digest, 2, "crate_test"),
         ],
         matrix: PlanMatrix {
             include: vec![clippy_entry, test_entry],
         },
         task_ids: vec![CLIPPY.to_owned(), TEST.to_owned()],
+        jobs: Vec::new(),
         warnings: Vec::new(),
         edges: Vec::new(),
     };
+    let mut plan = plan;
+    plan.jobs = run_jobs(&plan);
     plan.validate().expect("fixture validates");
     plan
 }
@@ -258,8 +290,9 @@ fn tofu_executed_report_carries_measured_timing() {
     let (tofu_entry, digest) = entry_for("tofu", TOFU_VALIDATE, "validate", 7, "tofu_validate");
     plan.matrix.include[1] = tofu_entry;
     let entry = &plan.matrix.include[1];
-    plan.obligations[1] = obligation_for(TOFU_VALIDATE, digest.clone(), 7);
+    plan.obligations[1] = obligation_for(TOFU_VALIDATE, digest.clone(), 7, "tofu_validate");
     plan.task_ids[1] = TOFU_VALIDATE.to_owned();
+    plan.jobs = run_jobs(&plan);
     plan.validate().expect("mixed plan validates");
     let temp = staged_run(&plan, "local");
     let reported =

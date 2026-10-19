@@ -1,101 +1,50 @@
-//! Publish-baseline tests: staging plus every refusal.
-//!
-//! Declared via `#[path]` from `baseline_publish.rs` under `cfg(test)`.
+//! Focused tests for fresh schema-2 baseline publication proofs.
 
 use std::collections::BTreeMap;
-use std::fs;
 
 use super::*;
 use velnor_actions_contract::{
-    ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
-    PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform, RunnerSelection, Trust,
-    artifact_id_for_baseline, plan_id_for_run,
+    ExecuteTaskIds, ExecuteTaskRef, JobDisposition, MatrixEntry, NamedCheckLaneVariant,
+    ObligationDecision, Plan, PlanGenerator, PlanJob, PlanMatrix, PlanObligation, PlanRunner,
+    PlannedPlatform, RunnerSelection, Trust, plan_id_for_run,
 };
 
-#[path = "baseline_publish_request_tests.rs"]
-mod request_tests;
-
-/// Push payload over `head` on the default branch.
-fn push_payload(head: &str) -> String {
-    serde_json::json!({
-        "ref": "refs/heads/testmain",
-        "before": "b".repeat(40),
-        "after": head,
-        "repository": {"default_branch": "testmain"},
-    })
-    .to_string()
-}
-
-/// Publish request JSON over `head` with explicit fields.
-pub(super) fn request_json(head: &str) -> String {
-    request_json_with_base(head, &"b".repeat(40))
-}
-
-/// Publish request with an explicit push-before commit.
-pub(super) fn request_json_with_base(head: &str, base: &str) -> String {
-    serde_json::json!({
-        "schema": 1,
-        "op": PUBLISH_OP,
-        "event": "push",
-        "base": base,
-        "head": head,
-        "repository": "o/r",
-        "git_ref": "refs/heads/testmain",
-        "default_branch": "testmain",
-    })
-    .to_string()
-}
-
-/// One `b3-` digest with every byte set to `byte`.
 fn digest(byte: u8) -> String {
     format!("b3-{}", format!("{byte:02x}").repeat(32))
 }
 
-/// One single-task plan entry plus its obligation digest.
-fn entry_for(task_id: &str, kind: &str, seed: u8, run_key: &str) -> (MatrixEntry, String) {
-    let task_digest = digest(seed);
-    let entry = MatrixEntry::derive(
+pub(super) fn fixture_plan(head: &str, run_key: &str) -> Plan {
+    let task_id = "stack/rust/demo/test/default";
+    let task_digest = digest(1);
+    let job_id = "rust-demo";
+    let mut entry = MatrixEntry::derive(
         "rust",
         task_id,
-        "true",
+        "cargo test",
         &task_digest,
         serde_json::json!({}),
         ExecuteTaskIds {
-            tasks: BTreeMap::from([(kind.to_owned(), ExecuteTaskRef::Single(task_id.to_owned()))]),
+            tasks: BTreeMap::from([(
+                "test".to_owned(),
+                ExecuteTaskRef::Single(task_id.to_owned()),
+            )]),
         },
-        &digest(seed + 10),
+        &digest(2),
         run_key,
-        "rust-demo",
-        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("planned platform"),
+        job_id,
+        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("platform"),
     )
-    .expect("entry derives");
-    (entry, task_digest)
-}
-
-/// One obligation with an explicit decision.
-fn obligation_for(
-    task_id: &str,
-    task_digest: String,
-    seed: u8,
-    decision: ObligationDecision,
-) -> PlanObligation {
-    PlanObligation {
-        task_id: task_id.to_owned(),
-        decision,
-        reason: "test".to_owned(),
-        task_digest,
-        input_digest: digest(seed + 10),
-        closure_digest: digest(seed + 20),
-        baseline_proof: None,
-    }
-}
-
-/// Valid push fixture plan over `head` with clippy plus test.
-pub(super) fn fixture_plan(head: &str, run_key: &str) -> Plan {
-    let clippy = "stack/rust/demo/clippy/default";
-    let test = "stack/rust/demo/test/default";
-    let (clippy_entry, clippy_digest) = entry_for(clippy, "clippy", 1, run_key);
-    let (test_entry, test_digest) = entry_for(test, "test", 2, run_key);
+    .expect("matrix entry");
+    let toolchain_inputs = velnor_actions_contract::cachekey::ToolchainInputs {
+        tools: vec!["cargo@1.99.1".to_owned()],
+        components: Vec::new(),
+        compile_driver: "cargo".to_owned(),
+        test_runner: "cargo-test".to_owned(),
+    };
+    let toolchain_id = velnor_actions_contract::cachekey::toolchain_id(&toolchain_inputs)
+        .expect("toolchain identity");
+    entry.toolchain_id = Some(toolchain_id);
+    entry.toolchain_inputs = Some(toolchain_inputs);
     let plan = Plan {
         schema: Plan::SCHEMA,
         run_key: run_key.to_owned(),
@@ -109,257 +58,215 @@ pub(super) fn fixture_plan(head: &str, run_key: &str) -> Plan {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Trusted,
-        baseline: PlanBaseline::unavailable(None).expect("baseline"),
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
             sha256: "a".repeat(64),
         },
         packages: Vec::new(),
-        obligations: vec![
-            obligation_for(clippy, clippy_digest, 1, ObligationDecision::Execute),
-            obligation_for(test, test_digest, 2, ObligationDecision::Execute),
-        ],
+        obligations: vec![PlanObligation {
+            task_id: task_id.to_owned(),
+            decision: ObligationDecision::Execute,
+            reason: "affected_by_change".to_owned(),
+            task_digest: task_digest.clone(),
+            input_digest: digest(2),
+            closure_digest: digest(3),
+            graph_digest: digest(4),
+            mbx_digest: digest(5),
+            profile: "default".to_owned(),
+            job_id: job_id.to_owned(),
+        }],
         matrix: PlanMatrix {
-            include: vec![clippy_entry, test_entry],
+            include: vec![entry],
         },
-        task_ids: vec![clippy.to_owned(), test.to_owned()],
+        task_ids: vec![task_id.to_owned()],
+        jobs: vec![PlanJob {
+            job_id: job_id.to_owned(),
+            disposition: JobDisposition::Run,
+        }],
         warnings: Vec::new(),
         edges: Vec::new(),
     };
-    plan.validate().expect("fixture validates");
+    plan.validate().expect("valid plan");
     plan
 }
 
-/// Staged run dir carrying `plan.json` for `run_key`.
-fn staged_run(plan: &Plan, run_key: &str) -> tempfile::TempDir {
-    let temp = tempfile::tempdir().expect("tempdir");
-    let dir = temp.path().join("velnor").join(run_key);
-    fs::create_dir_all(&dir).expect("run dir");
-    let plan_json = serde_json::to_string(plan).expect("plan json");
-    fs::write(dir.join("plan.json"), plan_json).expect("plan file");
-    temp
-}
-
-/// Staged manifest value for one publish run.
-fn staged_manifest(temp: &Path, run_key: &str) -> serde_json::Value {
-    let bytes = fs::read(
-        temp.join("velnor")
-            .join(run_key)
-            .join(PUBLISHED_BASELINE_DIR)
-            .join(BASELINE_FILENAME),
+fn paired_fixture_plan() -> Plan {
+    let mut plan = fixture_plan(&"a".repeat(40), "r7-a1");
+    let original = &plan.matrix.include[0];
+    let mut hosted = MatrixEntry::derive_for_lane(
+        &original.stack_id,
+        &original.task_id,
+        &original.run,
+        &original.task_digest,
+        original.adapter_metadata.clone(),
+        original.execute_task_ids.clone(),
+        &original.input_digest,
+        &plan.run_key,
+        "rust-demo__hosted",
+        Some(NamedCheckLaneVariant::Hosted),
+        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("hosted platform"),
     )
-    .expect("staged");
-    serde_json::from_slice(&bytes).expect("manifest json")
-}
-
-// Direct-proof staging plus carry lineage cases live apart for the size gate.
-#[path = "baseline_publish_lineage_tests.rs"]
-mod baseline_publish_lineage_tests;
-
-/// Refusal problem for one request/plan pair.
-///
-/// Refusals stage nothing: the run directory carries no baseline file
-/// after the refused call.
-pub(super) fn refuse_problem(request: &str, plan: &Plan, run_key: &str) -> String {
-    let temp = staged_run(plan, run_key);
-    let problem = baseline_publish_to(request, run_key, temp.path())
-        .expect_err("must refuse")
-        .to_string();
-    assert!(
-        !temp
-            .path()
-            .join("velnor")
-            .join(run_key)
-            .join(PUBLISHED_BASELINE_DIR)
-            .join(BASELINE_FILENAME)
-            .exists(),
-        "refusals stage nothing: {problem}"
-    );
-    problem
-}
-
-#[test]
-fn publish_refuses_every_unsafe_case() {
-    let head = "a".repeat(40);
-    let plan = fixture_plan(&head, "r7-a1");
-    let request = |patch: serde_json::Value| {
-        let mut base: serde_json::Value =
-            serde_json::from_str(&request_json(&head)).expect("request");
-        for (key, value) in patch.as_object().expect("patch") {
-            base[key] = value.clone();
-        }
-        base.to_string()
-    };
-    let cases = [
-        (
-            request(serde_json::json!({"event": "pull_request"})),
-            "wrong_event",
-        ),
-        (
-            request(serde_json::json!({"git_ref": "refs/heads/other"})),
-            "unprotected_ref",
-        ),
-        (
-            request(serde_json::json!({"default_branch": "other"})),
-            "unprotected_ref",
-        ),
-        (
-            request(serde_json::json!({"default_branch": serde_json::Value::Null})),
-            "unprotected_ref",
-        ),
-        (
-            request(serde_json::json!({"repository": serde_json::Value::Null})),
-            "repository_unanchored",
-        ),
-        (
-            request(serde_json::json!({"repository": "not-a-slug"})),
-            "repository_unanchored",
-        ),
-        (
-            request(serde_json::json!({"head": "b".repeat(40)})),
-            "head_mismatch",
-        ),
-        (
-            request(serde_json::json!({"base": "c".repeat(40)})),
-            "base_mismatch",
-        ),
-        (request(serde_json::json!({"op": "plan-v1"})), "op_mismatch"),
-        (
-            request(serde_json::json!({"schema": 2})),
-            "unsupported_schema",
-        ),
-        ("not json".to_owned(), "malformed_json"),
-    ];
-    for (mutated, reason) in cases {
-        let problem = refuse_problem(&mutated, &plan, "r7-a1");
-        assert!(problem.contains(reason), "{reason}: {problem}");
+    .expect("hosted entry");
+    let mut local = MatrixEntry::derive_for_lane(
+        &original.stack_id,
+        &original.task_id,
+        &original.run,
+        &original.task_digest,
+        original.adapter_metadata.clone(),
+        original.execute_task_ids.clone(),
+        &original.input_digest,
+        &plan.run_key,
+        "rust-demo__local",
+        Some(NamedCheckLaneVariant::ScaleSet),
+        PlannedPlatform::new(
+            "scale-set:velnor+ubuntu-26.04-scale-set",
+            "x86_64-unknown-linux-gnu",
+        )
+        .expect("scale-set platform"),
+    )
+    .expect("local entry");
+    for entry in [&mut hosted, &mut local] {
+        entry.toolchain_id = original.toolchain_id.clone();
+        entry.toolchain_inputs = original.toolchain_inputs.clone();
     }
-    let mut pr_plan = fixture_plan(&head, "r7-a1");
-    pr_plan.event = WorkflowEvent::PullRequest;
-    pr_plan.trust = Trust::Pr;
-    assert!(
-        refuse_problem(&request_json(&head), &pr_plan, "r7-a1").contains("plan_event_mismatch")
-    );
-    let mut zeroed = fixture_plan(&head, "r7-a1");
-    zeroed.generator.sha256 = "0".repeat(64);
-    assert!(
-        refuse_problem(&request_json(&head), &zeroed, "r7-a1").contains("generator_unverifiable")
-    );
-    let mut reused = fixture_plan(&head, "r7-a1");
-    reused.obligations[0].decision = ObligationDecision::ReusedFromTaskCache;
-    assert!(refuse_problem(&request_json(&head), &reused, "r7-a1").contains("unproven_reuse"));
-    assert!(
-        refuse_problem(&request_json(&head), &plan, "local").contains("local_run"),
-        "local runs never publish"
-    );
+    plan.matrix.include = vec![hosted, local];
+    plan.obligations[0].job_id = "rust-demo__hosted".to_owned();
+    plan.jobs = ["rust-demo__hosted", "rust-demo__local"]
+        .into_iter()
+        .map(|job_id| PlanJob {
+            job_id: job_id.to_owned(),
+            disposition: JobDisposition::Run,
+        })
+        .collect();
+    plan.validate().expect("paired plan");
+    plan
+}
+
+pub(super) fn request_json(head: &str) -> String {
+    serde_json::json!({
+        "schema": 1, "op": PUBLISH_OP, "event": "push",
+        "base": "b".repeat(40), "head": head, "repository": "o/r",
+        "git_ref": "refs/heads/testmain", "default_branch": "testmain"
+    })
+    .to_string()
+}
+
+pub(super) fn refuse_problem(request: &str, _plan: &Plan, _run_key: &str) -> String {
+    let request = publish_request(request).expect("valid request");
+    publish_gate(&request)
+        .expect_err("request must refuse")
+        .to_string()
 }
 
 #[test]
-fn publish_rejects_unknown_request_fields() {
-    let head = "a".repeat(40);
-    let plan = fixture_plan(&head, "r7-a1");
-    let mut request: serde_json::Value =
-        serde_json::from_str(&request_json(&head)).expect("request");
-    request["generator"] = serde_json::json!("forged");
-    assert!(refuse_problem(&request.to_string(), &plan, "r7-a1").contains("malformed_request"));
+fn schema_two_manifest_has_fresh_proof_bound_to_successful_report() {
+    let plan = fixture_plan(&"a".repeat(40), "r7-a1");
+    let entry = &plan.matrix.include[0];
+    let task = &plan.obligations[0];
+    let report = crate::task_report::terminal_task_report(&plan, entry, &task.task_digest, 0, None)
+        .expect("successful report");
+    let request = publish_request(&request_json(&plan.head)).expect("request");
+    let manifest = publish_manifest(&request, &plan, 7, 1, &[report]).expect("manifest");
+    self_check(&manifest).expect("self check");
+
+    assert_eq!(manifest.schema, 2);
+    assert_eq!(manifest.tasks.len(), 1);
+    let proof = manifest.tasks[0].proof.as_ref().expect("fresh proof");
+    assert_eq!(proof.task_id(), task.task_id);
+    assert_eq!(proof.graph_digest(), task.graph_digest);
+    assert_eq!(proof.mbx_digest(), task.mbx_digest);
+    assert_eq!(proof.profile(), task.profile);
+    assert_eq!(proof.proof_run_id(), 7);
 }
 
 #[test]
-fn publish_never_overwrites_staged_evidence() {
-    let head = "a".repeat(40);
-    let plan = fixture_plan(&head, "r7-a1");
-    let temp = staged_run(&plan, "r7-a1");
-    baseline_publish_to(&request_json(&head), "r7-a1", temp.path()).expect("first publish");
-    assert!(
-        baseline_publish_to(&request_json(&head), "r7-a1", temp.path()).is_err(),
-        "a second publish must fail instead of overwriting"
+fn publisher_rejects_failed_and_missing_task_reports() {
+    let plan = fixture_plan(&"a".repeat(40), "r7-a1");
+    let entry = &plan.matrix.include[0];
+    let task = &plan.obligations[0];
+    let failed = crate::task_report::terminal_task_report(&plan, entry, &task.task_digest, 1, None)
+        .expect("failed report");
+    let request = publish_request(&request_json(&plan.head)).expect("request");
+    assert!(publish_manifest(&request, &plan, 7, 1, &[failed]).is_err());
+    assert!(publish_manifest(&request, &plan, 7, 1, &[]).is_err());
+}
+
+#[test]
+fn paired_obligation_requires_and_validates_each_matrix_lane_report() {
+    let plan = paired_fixture_plan();
+    let reports: Vec<_> = plan
+        .matrix
+        .include
+        .iter()
+        .map(|entry| {
+            crate::task_report::terminal_task_report(
+                &plan,
+                entry,
+                &plan.obligations[0].task_digest,
+                0,
+                None,
+            )
+            .expect("successful lane report")
+        })
+        .collect();
+    let request = publish_request(&request_json(&plan.head)).expect("request");
+    let manifest = publish_manifest(&request, &plan, 7, 1, &reports).expect("paired manifest");
+    assert_eq!(manifest.tasks.len(), 1);
+    assert_eq!(
+        manifest.tasks[0]
+            .proof
+            .as_ref()
+            .expect("proof")
+            .platform_id(),
+        plan.matrix.include[0].planned_platform.platform_id
     );
+
+    assert!(publish_manifest(&request, &plan, 7, 1, &reports[..1]).is_err());
+    let mut failed_local = reports;
+    failed_local[1].exit_code = 1;
+    assert!(publish_manifest(&request, &plan, 7, 1, &failed_local).is_err());
 }
 
 #[test]
-fn staged_manifest_passes_consumer_validation() {
-    let head = "a".repeat(40);
-    let plan = fixture_plan(&head, "r7-a1");
-    let temp = staged_run(&plan, "r7-a1");
-    baseline_publish_to(&request_json(&head), "r7-a1", temp.path()).expect("publish");
-    let staged = staged_manifest(temp.path(), "r7-a1");
-    let manifest: BaselineManifest = serde_json::from_value(staged).expect("manifest");
-    let expected = ProvenanceExpectations {
-        base: head,
-        branch: "testmain".to_owned(),
-        workflow_path: velnor_actions_workflow_renderer::render::WORKFLOW_PATH.to_owned(),
-        generator_version: plan.generator.version.clone(),
-        generator_sha256: plan.generator.sha256.clone(),
-        repository_id: Some(digest_b3(b"github.com/o/r")),
-        repository_slug: Some("o/r".to_owned()),
-        repository_conflict: false,
-    };
-    let bytes = canonical_json_bytes(&manifest).expect("canonical");
-    validate_provenance(&manifest, &digest_b3(&bytes), &expected).expect("self-check agrees");
-}
-
-#[test]
-fn publish_request_writer_records_push_refs() {
+fn generic_request_writer_dispatches_baseline_publish_operation() {
     let head = "a".repeat(40);
     let temp = tempfile::tempdir().expect("tempdir");
-    let anchor = temp.path().join("anchor");
-    fs::create_dir_all(&anchor).expect("anchor");
-    let path = anchor.join(format!("{PUBLISH_OP}-request.json"));
-    write_publish_request(
+    let path = temp.path().join(format!("{}-request.json", PUBLISH_OP));
+    let payload = serde_json::json!({
+        "ref": "refs/heads/testmain",
+        "before": "b".repeat(40),
+        "after": head,
+        "repository": {"default_branch": "testmain"}
+    })
+    .to_string();
+    crate::internal_request::write_request_parts(
         &path,
         "push",
-        &push_payload(&head),
+        &payload,
         Some(&head),
         Some("o/r"),
-        &anchor,
+        temp.path(),
     )
-    .expect("write");
-    let written: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(&path).expect("read")).expect("json");
-    assert_eq!(written["schema"], 1);
-    assert_eq!(written["op"], PUBLISH_OP);
-    assert_eq!(written["event"], "push");
-    assert_eq!(written["base"], "b".repeat(40));
-    assert_eq!(written["head"], head);
-    assert_eq!(written["repository"], "o/r");
-    assert_eq!(written["git_ref"], "refs/heads/testmain");
-    assert_eq!(written["default_branch"], "testmain");
-    let again = write_publish_request(
-        &path,
-        "push",
-        &push_payload(&head),
-        Some(&head),
-        Some("o/r"),
-        &anchor,
-    );
-    assert!(again.is_err(), "pre-existing requests never overwrite");
-    let bad_payload = anchor.join("bad-request.json");
-    assert!(
-        write_publish_request(
-            &bad_payload,
-            "push",
-            "nope",
-            Some(&head),
-            Some("o/r"),
-            &anchor
-        )
-        .expect_err("malformed")
-        .to_string()
-        .contains("malformed_event_payload")
-    );
-    let bad_event = anchor.join("bad-event.json");
-    assert!(
-        write_publish_request(
-            &bad_event,
-            "issue_comment",
-            &push_payload(&head),
-            Some(&head),
-            Some("o/r"),
-            &anchor,
-        )
-        .expect_err("event")
-        .to_string()
-        .contains("unsupported_event")
-    );
+    .expect("publish request route");
+
+    let bytes = std::fs::read_to_string(path).expect("request bytes");
+    let request: PublishRequest = publish_request(&bytes).expect("publish envelope");
+    assert_eq!(request.op.as_deref(), Some(PUBLISH_OP));
+    assert_eq!(request.head, head);
+    assert_eq!(request.default_branch.as_deref(), Some("testmain"));
+}
+
+#[test]
+fn publish_request_rejects_wrong_schema_and_operation() {
+    let head = "a".repeat(40);
+    for (field, value) in [
+        ("schema", serde_json::json!(2)),
+        ("op", serde_json::json!("merge-v1")),
+    ] {
+        let mut request: serde_json::Value =
+            serde_json::from_str(&request_json(&head)).expect("json");
+        request[field] = value;
+        assert!(publish_request(&request.to_string()).is_err());
+    }
 }

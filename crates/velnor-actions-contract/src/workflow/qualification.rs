@@ -125,8 +125,10 @@ pub struct FinalCounts {
     pub executed: u32,
     /// Empty-partition count.
     pub empty_partition: u32,
-    /// Baseline-covered count.
+    /// Obligations satisfied without execution (reused from the task cache).
     pub covered: u32,
+    /// Obligations the change cannot affect; their crate jobs were skipped.
+    pub not_affected: u32,
     /// Failed count.
     pub failed: u32,
     /// Cancelled count.
@@ -232,6 +234,7 @@ impl FinalReport {
                 executed: 0,
                 empty_partition: 0,
                 covered: 0,
+                not_affected: 0,
                 failed: 0,
                 cancelled: 0,
                 blocked: 0,
@@ -257,7 +260,7 @@ impl FinalReport {
             validate_artifact_id(artifact_id)?;
         }
         for reason in &self.miss_reasons {
-            crate::cachekey::validate_miss_reason(reason)?;
+            crate::cachekey::validate_final_miss_reason(reason)?;
         }
         Ok(())
     }

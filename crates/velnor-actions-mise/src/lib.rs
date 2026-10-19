@@ -24,7 +24,6 @@ pub mod command;
 pub mod custom_run;
 pub mod error;
 pub mod gate6;
-pub mod gh;
 pub mod git;
 pub mod git_tap_capture;
 pub mod nextest;
@@ -79,7 +78,6 @@ pub use command::{
 };
 pub use error::MiseError;
 pub use gate6::{Gate6Fixture, qualified_task_run_argv, render_gated_task_toml};
-pub use gh::BaselineLookup;
 pub use git::{ALLOWED_GIT_VERBS, GitRequest, is_allowed_git_verb};
 pub use git_tap_capture::{CapturedTapMain, TapTreeEntry, capture_tap_main, read_tap_tree};
 pub use nextest::{ARCHIVE_FILE, NEXTEST_EXTRACT_BASE, NextestDriver, NextestPartition};

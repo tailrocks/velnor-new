@@ -1,5 +1,12 @@
 # Gate 5: trusted baseline coverage
 
+> **Removed.** Trusted-baseline coverage (the `publish-baseline` job, the
+> `covered_tasks` step gates, and `covered_by_trusted_baseline`
+> dispositions) has been deleted; every obligation now executes unless a
+> non-baseline decision applies. See hard decision 4 in
+> [`docs/hard-decisions.md`](../hard-decisions.md). The record below is
+> historical.
+
 - State: recorded-pending-merge (branch `docs/velnor-actions-spec`; becomes implemented only on merge; required checks green at `bdfffb9` — run `36569723507`, `https://github.com/tailrocks/velnor-new/actions/runs/36569723507`)
 - Proof vocabulary: policy-on-source (baseline manifest validation, exact-base lookup argv, publish-forbidden rules) + qualification-of-generator (cover/narrow legs run green in CI)
 - Specification: [implementation-plan.md](../proposed/implementation-plan.md) Gate 5 + [cache-contract.md](../proposed/cache-contract.md) + [parallelism-and-selection-contract.md](../proposed/parallelism-and-selection-contract.md)

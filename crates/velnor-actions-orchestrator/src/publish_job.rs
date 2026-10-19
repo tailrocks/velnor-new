@@ -36,7 +36,7 @@ pub(crate) fn baseline_publish_job(
     branch: &str,
     acquire: Option<Step>,
 ) -> Result<Job, OrchestratorError> {
-    let mut steps = Vec::new();
+    let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire);
     steps.push(crate::matrix_step::download_plan_step()?);
     steps.push(request_step(PUBLISH_OPERATION)?);

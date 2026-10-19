@@ -3,8 +3,7 @@
 //! Every universe member gets content identities first; the changed-work
 //! classification then assigns exactly one disposition: changed
 //! obligations execute unconditionally, while unchanged ones take the
-//! reuse outcome (execute until task-cache proof exists) and stay
-//! eligible for later baseline coverage.
+//! reuse outcome (execute until task-cache proof exists).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -95,6 +94,14 @@ pub(crate) fn member_changed(
     changed.is_none_or(|set| group_changed(task, set, keys))
 }
 
+/// Digest the pinned MBX cache generation used by publication identity.
+fn mbx_identity_digest() -> String {
+    let generation = velnor_actions_contract::cachekey::mbx_cache_generation(
+        velnor_actions_mise::catalog::MR_BOXINGTON_VERSION,
+    );
+    velnor_actions_contract::digest_b3(generation.as_bytes())
+}
+
 type PlannedIdentity = identity::TaskIdentityDerivation;
 
 #[cfg(test)]
@@ -130,8 +137,7 @@ fn planned_identity(
 /// Obligation plus matrix entry for one universe member.
 ///
 /// Identities attach first; changed members execute unconditionally
-/// while unchanged members take the reuse outcome for later baseline
-/// classification.
+/// while unchanged members take the reuse outcome.
 pub(crate) fn plan_group(
     inputs: &GroupInputs<'_>,
     reads: &mut velnor_actions_tofu::FileCache,
@@ -171,18 +177,7 @@ pub(crate) fn plan_group(
     let reuse_eligible = identity.reuse_eligible;
     let input_digest = identity.input_digest;
     let closure_digest = identity.closure_digest;
-    let reuse = if inputs.changed {
-        wire_w2::ReuseOutcome::execute("affected_by_change")
-    } else {
-        wire_w2::plan_reuse_outcome(
-            task,
-            inputs.wire.event,
-            probe_tool_availability(false, false),
-            &toolchain,
-            &input_digest,
-            reuse_eligible,
-        )?
-    };
+    let graph_digest = identity.bundle.graph_digest().to_owned();
     let gate = wire_w2::check_archive_identity_with_source(
         task,
         &toolchain,
@@ -196,11 +191,21 @@ pub(crate) fn plan_group(
     // identity with it. Unbound sources refuse the task (execute with
     // reason); changed work already executes under its own reason.
     // Malformed specs stay hard errors: the planner generated them.
-    let reuse = match gate {
-        wire_w2::ArchiveGate::SourceUnbound if !inputs.changed => {
-            wire_w2::ReuseOutcome::execute("archive_source_unbound")
-        }
-        _ => reuse,
+    let reuse = if inputs.changed {
+        wire_w2::ReuseOutcome::execute("affected_by_change")
+    } else if gate == wire_w2::ArchiveGate::SourceUnbound {
+        wire_w2::ReuseOutcome::execute("archive_source_unbound")
+    } else if Stack::from_id(&task.stack_id) == Some(Stack::Rust) {
+        crate::plan_dispositions::unaffected_rust_outcome(task)
+    } else {
+        wire_w2::plan_reuse_outcome(
+            task,
+            inputs.wire.event,
+            probe_tool_availability(false, false),
+            &toolchain,
+            &input_digest,
+            reuse_eligible,
+        )?
     };
     complete_group(
         inputs,
@@ -209,6 +214,7 @@ pub(crate) fn plan_group(
         &toolchain_inputs,
         &input_digest,
         closure_digest,
+        graph_digest,
         reuse,
     )
 }
@@ -221,6 +227,7 @@ fn complete_group(
     toolchain_inputs: &velnor_actions_contract::cachekey::ToolchainInputs,
     input_digest: &str,
     closure_digest: String,
+    graph_digest: String,
     reuse: wire_w2::ReuseOutcome,
 ) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
     let task = inputs.task;
@@ -232,6 +239,9 @@ fn complete_group(
         .recorded_input_digest
         .clone()
         .unwrap_or_else(|| input_digest.to_owned());
+    let Some(job_id) = inputs.job_owners.for_member(task, inputs.wire.event)? else {
+        return Err(internal("crate_job_id_missing"));
+    };
     let obligation = PlanObligation {
         task_id: task.task_id.clone(),
         decision: reuse.decision,
@@ -239,7 +249,10 @@ fn complete_group(
         task_digest: task_digest.clone(),
         input_digest: recorded,
         closure_digest,
-        baseline_proof: None,
+        graph_digest,
+        mbx_digest: mbx_identity_digest(),
+        profile: task.configuration.clone(),
+        job_id: job_id.clone(),
     };
     let mut metadata = adapter_metadata(task, evidence_for_group(inputs.discovery, task))
         .map_err(internal_contract)?;

@@ -41,10 +41,16 @@ pub(super) fn workflow_ir() -> WorkflowIr {
     WorkflowIr {
         name: "CI".to_owned(),
         triggers: Trigger {
-            pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
-                .into_iter()
-                .map(str::to_owned)
-                .collect(),
+            pull_request_types: [
+                "opened",
+                "edited",
+                "synchronize",
+                "reopened",
+                "ready_for_review",
+            ]
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,

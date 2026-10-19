@@ -1,0 +1,98 @@
+//! Per-job plan dispositions (hard decision 4).
+//!
+//! Every generated job that owns obligations carries exactly one
+//! disposition. A `not_affected` job is skipped as a whole job by its
+//! generated job-level gate; `Required` passes it only as skipped. The
+//! pairing with obligations and matrix entries is closed: a `not_affected`
+//! job owns at least one obligation, only `not_affected` ones, and no matrix
+//! entry; a `run` job owns no `not_affected` obligation and at least one
+//! matrix entry; every obligation and entry names a planned job, and every
+//! planned job owns an obligation or an entry (a paired named-check lane
+//! owns only entries).
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use serde::{Deserialize, Serialize};
+
+use super::plan::{ObligationDecision, Plan};
+use crate::errors::ContractError;
+use crate::graph::check_sorted_by;
+
+/// One generated job's plan disposition.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlanJob {
+    /// Generated job ID.
+    pub job_id: String,
+    /// Whether the job runs.
+    pub disposition: JobDisposition,
+}
+
+/// Whether one generated job runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum JobDisposition {
+    /// The job runs and must succeed with a report for every obligation.
+    Run,
+    /// The job is skipped; every obligation it owns is `not_affected`.
+    NotAffected,
+}
+
+/// Validate job dispositions against obligations and matrix entries.
+///
+/// # Errors
+///
+/// Returns an identity error for unsorted or duplicate jobs, an
+/// obligation naming an unplanned job, a job without obligations, or any
+/// disposition that disagrees with its obligations or matrix entries.
+pub(crate) fn validate_plan_jobs(plan: &Plan) -> Result<(), ContractError> {
+    check_sorted_by(&plan.jobs, "jobs", |job| job.job_id.as_str())?;
+    let mut jobs: BTreeMap<&str, JobDisposition> = BTreeMap::new();
+    for job in &plan.jobs {
+        if jobs.insert(job.job_id.as_str(), job.disposition).is_some() {
+            return Err(ContractError::Collision(format!("job {}", job.job_id)));
+        }
+    }
+    let mut owning = BTreeSet::new();
+    for obligation in &plan.obligations {
+        let Some(disposition) = jobs.get(obligation.job_id.as_str()) else {
+            return Err(ContractError::identity(
+                "obligations.job_id",
+                "unplanned_job",
+            ));
+        };
+        owning.insert(obligation.job_id.as_str());
+        let not_affected = obligation.decision == ObligationDecision::NotAffected;
+        if not_affected != (*disposition == JobDisposition::NotAffected) {
+            return Err(ContractError::identity(
+                "obligations.decision",
+                "disposition_mismatch",
+            ));
+        }
+    }
+    let mut entries = BTreeSet::new();
+    for entry in &plan.matrix.include {
+        match jobs.get(entry.job_id.as_str()) {
+            Some(JobDisposition::Run) => {
+                entries.insert(entry.job_id.as_str());
+            }
+            Some(JobDisposition::NotAffected) => {
+                return Err(ContractError::identity(
+                    "matrix.job_id",
+                    "not_affected_job_entry",
+                ));
+            }
+            None => return Err(ContractError::identity("matrix.job_id", "unplanned_job")),
+        }
+    }
+    for (job_id, disposition) in &jobs {
+        let owns = match disposition {
+            JobDisposition::Run => entries.contains(job_id),
+            JobDisposition::NotAffected => owning.contains(job_id),
+        };
+        if !owns {
+            return Err(ContractError::identity("jobs", "job_without_work"));
+        }
+    }
+    Ok(())
+}

@@ -57,7 +57,7 @@ impl<'a> GitHub<'a> {
             .and_then(|value| value.split_once('@').map(|(path, _)| path))
             .filter(|path| {
                 *path == velnor_actions_workflow_renderer::render::WORKFLOW_PATH
-                    || *path == velnor_actions_contract::QUALIFICATION_WORKFLOW_PATH
+                    || *path == velnor_actions_contract::workflow::QUALIFICATION_WORKFLOW_PATH
             })
             .ok_or_else(|| internal("qualification_workflow_invalid"))?
             .to_owned();
@@ -170,7 +170,7 @@ fn allows_unprotected_default(
         .and_then(|value| value.split_once('@').map(|(path, _)| path));
     Ok(context.mode == QualificationDispatchMode::VerificationOnly
         && context.git_ref == format!("refs/heads/{default_branch}")
-        && workflow_path == Some(velnor_actions_contract::QUALIFICATION_WORKFLOW_PATH))
+        && workflow_path == Some(velnor_actions_contract::workflow::QUALIFICATION_WORKFLOW_PATH))
 }
 
 fn branch_protection_matches(

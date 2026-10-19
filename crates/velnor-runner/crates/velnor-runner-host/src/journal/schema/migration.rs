@@ -245,6 +245,9 @@ pub(super) async fn from_version_twenty_two(conn: &turso::Connection) -> Result<
 
 pub(super) async fn from_version_twenty_three(conn: &turso::Connection) -> Result<(), HostError> {
     super::execution_authorization::bootstrap(conn).await?;
+    // Existing v23–v27 journals still have the original large receipt CHECKs.
+    // Rebuild them before the strict current-schema validator compares DDL.
+    super::execution_authorization::upgrade_v28(conn).await?;
     super::execution_authorization::validate(conn).await?;
     super::execution_publication::bootstrap(conn).await?;
     super::execution_publication::validate(conn).await?;
@@ -276,10 +279,19 @@ pub(super) async fn from_version_twenty_six(conn: &turso::Connection) -> Result<
     super::storage_root_backing::bootstrap(conn).await?;
     super::storage_root_backing::upgrade_v27(conn).await?;
     super::execution_publication::upgrade_v27(conn).await?;
+    super::execution_authorization::upgrade_v28(conn).await?;
     conn.execute("PRAGMA user_version = 27", ())
         .await
         .map_err(|_| HostError::Journal)?;
     super::validate_persisted_schema(conn).await
+}
+
+pub(super) async fn from_version_twenty_seven(conn: &turso::Connection) -> Result<(), HostError> {
+    super::execution_authorization::upgrade_v28(conn).await?;
+    conn.execute("PRAGMA user_version = 28", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
 }
 
 pub(super) async fn ensure_completion_objects(conn: &turso::Connection) -> Result<(), HostError> {

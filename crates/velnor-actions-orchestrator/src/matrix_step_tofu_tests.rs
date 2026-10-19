@@ -159,14 +159,7 @@ fn tofu_validate_keeps_implicit_success_gate_after_init_failure() {
         None,
     )
     .expect("ToFu validate step");
-    let expected = crate::covered_tasks::skip_condition(&task_id).expect("coverage condition");
-    assert_eq!(step.condition.as_deref(), Some(expected.as_str()));
-    assert!(
-        !expected.contains("cancelled()")
-            && !expected.contains("always()")
-            && !expected.contains("failure()"),
-        "GitHub must retain its implicit success gate: {expected}"
-    );
+    assert_eq!(step.condition, None, "Tofu tasks are not coverage-skipped");
 }
 
 #[test]

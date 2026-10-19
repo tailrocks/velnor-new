@@ -34,12 +34,13 @@ pub use crate::preseed::{
 };
 pub use crate::render::{
     ACTIONLINT_PATH, AGENTS_MD_PATH, ALINT_BINARY_VERSION, ALINT_USES, CANDIDATE_JOB_ID,
-    CLAUDE_MD_PATH, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, COVERED_TASKS_OUTPUT, CandidateSpec,
-    EXPECTED_PR_TYPES, FINAL_CONDITION, FINAL_DISPLAY_NAME, FINAL_JOB_ID, MATRIX_MAX_PARALLEL_ENV,
-    MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource, MiseSetup, PLAN_ID_OUTPUT, PLAN_JOB_ID,
-    PLAN_STEP_ID, PUBLISH_JOB_ID, RUN_KEY_OUTPUT, RenderContext, RenderedFile, RenderedSymlink,
-    RenderedTree, TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH, action_pins, finalize_jobs,
-    render_workflow_ir, render_workflow_ir_strict,
+    CLAUDE_MD_PATH, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CandidateSpec, EXPECTED_PR_TYPES,
+    FINAL_CONDITION, FINAL_DISPLAY_NAME, FINAL_JOB_ID, MATRIX_MAX_PARALLEL_ENV,
+    MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource, MiseSetup, NOT_AFFECTED_JOBS_OUTPUT,
+    PLAN_ATTEMPT_ENV, PLAN_ATTEMPT_OUTPUT, PLAN_ID_OUTPUT, PLAN_JOB_ID, PLAN_STEP_ID,
+    PUBLISH_JOB_ID, RUN_KEY_OUTPUT, RenderContext, RenderedFile, RenderedSymlink, RenderedTree,
+    TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH, action_pins, finalize_jobs, render_workflow_ir,
+    render_workflow_ir_strict,
 };
 pub use crate::rust_suites::{
     RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflow,

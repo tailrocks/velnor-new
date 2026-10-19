@@ -68,41 +68,14 @@ pub(super) async fn record(
         if !super::release_ready(connection, claim.reservation_id).await? {
             return Err(HostError::Journal);
         }
-        let changed = connection
-            .execute(
-                "UPDATE capacity_reservations SET state = 'released' WHERE id = ?1 AND connection_id = ?2 AND state != 'released' AND remote_cleanup_proven = 1 AND local_cleanup_proven = 1",
-                (claim.reservation_id, claim.connection_id.as_str()),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        if changed != 1 {
-            return Err(HostError::Journal);
-        }
-        let changed = connection
-            .execute(
-                "UPDATE connection_intents SET cleanup_proven = 1 WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND cleanup_proven = 0",
-                (claim.operation_id, claim.connection_id.as_str()),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        if changed == 0 {
-            let already_proven = connection
-                .query(
-                    "SELECT 1 FROM connection_intents WHERE id = ?1 AND connection_id = ?2 AND kind = 'launch' AND cleanup_proven = 1",
-                    (claim.operation_id, claim.connection_id.as_str()),
-                )
-                .await
-                .map_err(|_| HostError::Journal)?
-                .next()
-                .await
-                .map_err(|_| HostError::Journal)?
-                .is_some();
-            if !already_proven {
-                return Err(HostError::Journal);
-            }
-        } else if changed != 1 {
-            return Err(HostError::Journal);
-        }
+        super::cleanup::prove_cleanup_before_release(
+            connection,
+            claim.connection_id.as_str(),
+            claim.operation_id,
+            claim.reservation_id,
+            true,
+        )
+        .await?;
         Ok(MetadataSettlementResult::Settled)
     })
     .await

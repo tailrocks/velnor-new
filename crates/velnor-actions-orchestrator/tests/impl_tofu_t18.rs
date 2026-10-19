@@ -7,15 +7,13 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_contract::{Job, StepKind};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
-use velnor_actions_workflow_renderer::render::{
-    FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID, WORKFLOW_PATH,
-};
+use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, WORKFLOW_PATH};
 
 use super::impl_common::{TestResult, git, install_fixture_release_manifest};
 
 /// True for generated crate jobs (neither plan, lint, gate, nor publish).
 fn is_crate_job(id: &str) -> bool {
-    id != PLAN_JOB_ID && id != "actionlint" && id != FINAL_JOB_ID && id != PUBLISH_JOB_ID
+    id != PLAN_JOB_ID && id != "actionlint" && id != FINAL_JOB_ID && id != "publish-baseline"
 }
 
 /// YAML slice of one rendered job: from its `  <id>:` header line to
@@ -362,8 +360,8 @@ fn restore_precedes_init_precedes_validate() -> TestResult {
     Ok(())
 }
 
-/// Staged jobs carry `if: always()` so lane failures collect instead
-/// of skipping later lanes; first-in-lane jobs keep the default.
+/// Every affected job carries its plan disposition gate; staged jobs
+/// additionally carry `if: always()` so lane failures still collect.
 #[test]
 fn staged_root_jobs_carry_always_while_first_lane_stays_default() -> TestResult {
     let dir = make_pure_tofu_repo(&three_root_config(), &three_root_files())?;
@@ -371,26 +369,35 @@ fn staged_root_jobs_carry_always_while_first_lane_stays_default() -> TestResult 
     let jobs = finalized_jobs(&prep)?;
     let ids = sorted_crate_ids(&jobs);
     assert_eq!(ids.len(), 3, "one job per root: {ids:?}");
-    assert_eq!(jobs[&ids[0]].condition, None, "first lane default");
-    assert_eq!(jobs[&ids[1]].condition, None, "second lane default");
-    assert_eq!(
-        jobs[&ids[2]].condition.as_deref(),
-        Some("always()"),
-        "staged job collects lane failures"
+    assert!(
+        jobs[&ids[0]]
+            .condition
+            .as_deref()
+            .is_some_and(|condition| condition.contains("not_affected_jobs"))
+    );
+    assert!(
+        jobs[&ids[1]]
+            .condition
+            .as_deref()
+            .is_some_and(|condition| condition.contains("not_affected_jobs"))
+    );
+    let staged_condition = jobs[&ids[2]].condition.as_deref().unwrap_or_default();
+    assert!(
+        staged_condition.contains("always()") && staged_condition.contains("not_affected_jobs"),
+        "staged job collects lane failures and keeps its plan gate: {staged_condition}"
     );
     let tree = render_staged_tree(&prep)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
-    // Job-level `if:` renders at four spaces; the always-on report
-    // upload step carries its own deeper `if: always()` in every job.
+    // Job-level plan gating and staged collection both render at four spaces.
     let window = job_window(yaml, &ids[2])?;
     assert!(
-        window.contains("\n    if: always()\n"),
-        "staged job renders the condition: {window}"
+        window.contains("\n    if: (always()) && !contains(needs.plan.outputs.not_affected_jobs"),
+        "staged job renders both conditions: {window}"
     );
     for id in &ids[..2] {
         assert!(
             !job_window(yaml, id)?.contains("\n    if: always()\n"),
-            "{id} renders no job-level condition"
+            "{id} does not need staged collection"
         );
     }
     Ok(())

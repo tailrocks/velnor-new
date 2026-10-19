@@ -137,7 +137,7 @@ fn matrix_report_upload_names_derive_from_run_and_leg() -> Result<(), RenderErro
     assert!(uses.starts_with("actions/upload-artifact@"));
     assert_eq!(
         with["name"].as_str(),
-        "velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-${{ matrix.matrix_key }}",
+        "velnor-matrix-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-${{ matrix.matrix_key }}",
     );
     assert!(with["path"].contains("matrix.matrix_key"));
     assert_eq!(with["if-no-files-found"].as_str(), "error");
@@ -154,11 +154,11 @@ fn crate_upload_names_derive_from_run_and_job() -> Result<(), RenderError> {
     assert!(uses.starts_with("actions/upload-artifact@"));
     assert_eq!(
         with["name"].as_str(),
-        "velnor-crate-r${{ github.run_id }}-a${{ github.run_attempt }}-crate_foo",
+        "velnor-crate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-crate_foo",
     );
     assert_eq!(
         with["path"].as_str(),
-        "${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}",
+        "${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}",
     );
     assert_eq!(with["if-no-files-found"].as_str(), "error");
     assert!(crate_job_report_upload_step("").is_err());

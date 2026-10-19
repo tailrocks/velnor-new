@@ -6,7 +6,6 @@ use crate::OrchestratorError;
 use crate::internal::{
     MATRIX_BUDGET_BYTES, PlanResponse, SCHEMA, check_schema, internal, internal_contract,
 };
-use crate::merge::BaselineManifest;
 
 impl PlanResponse {
     /// Parse and validate the complete plan response before any consumer reads it.
@@ -42,13 +41,11 @@ pub fn validate_plan_response(response_json: &str) -> Result<(), OrchestratorErr
 ///
 /// The manifest rides along only behind covered obligations: a
 /// rejected manifest must never reach the plan artifact.
-pub(super) fn plan_response(plan: Plan, manifest: Option<BaselineManifest>) -> PlanResponse {
-    let covered = crate::covered_tasks::plan_has_covered(&plan);
+pub(super) fn plan_response(plan: Plan) -> PlanResponse {
     PlanResponse {
         schema: SCHEMA,
         matrix: plan.matrix.clone(),
         plan,
-        baseline_manifest: covered.then_some(manifest).flatten(),
     }
 }
 

@@ -27,6 +27,7 @@ pub mod release_facts;
 pub mod release_graph;
 pub mod release_select;
 pub mod release_semver;
+pub mod resolved_graph;
 pub mod scan;
 pub mod stability;
 mod task_identity;
@@ -85,6 +86,7 @@ pub use release_select::{
 pub use release_semver::{
     PreIdent, SemVersion, VersionReq, parse_req, parse_version, req_matches, version_satisfies,
 };
+pub use resolved_graph::{ResolvedGraph, ResolvedPathPackage, parse_resolved_graph};
 pub use stability::{
     CommittedProfile, committed_profile_differs, read_committed_profile_for_comparison,
 };

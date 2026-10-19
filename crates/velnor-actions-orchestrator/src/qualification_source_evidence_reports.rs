@@ -130,7 +130,7 @@ fn require_single_task_entry(
 }
 
 fn read_report(path: &Path) -> Result<Vec<u8>, OrchestratorError> {
-    let bytes = crate::retrieve_reports::read_staged_bytes(
+    let bytes = crate::retrieve_reports::staged_reads::read_staged_bytes(
         path,
         crate::retrieve_reports::MAX_STAGED_REPORT_BYTES,
     )

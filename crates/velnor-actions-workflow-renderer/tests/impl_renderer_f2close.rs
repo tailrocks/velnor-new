@@ -14,15 +14,15 @@ use super::impl_renderer_fixtures::*;
 fn candidate_artifact_name_derives_run_and_target() -> Result<(), RenderError> {
     assert_eq!(
         candidate_artifact_name("x86_64-unknown-linux-gnu")?.as_str(),
-        "velnor-candidate-r${{ github.run_id }}-a${{ github.run_attempt }}-x86-64-unknown-linux-gnu",
+        "velnor-candidate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-x86-64-unknown-linux-gnu",
     );
     assert_eq!(
         candidate_artifact_name("aarch64-apple-darwin")?.as_str(),
-        "velnor-candidate-r${{ github.run_id }}-a${{ github.run_attempt }}-aarch64-apple-darwin",
+        "velnor-candidate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-aarch64-apple-darwin",
     );
     assert!(candidate_artifact_name("").is_err());
     let resolved = candidate_artifact_name("x86_64-unknown-linux-gnu")?.replace(
-        "r${{ github.run_id }}-a${{ github.run_attempt }}",
+        "r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}",
         "r123-a1",
     );
     velnor_actions_contract::validate_artifact_id(&resolved).map_err(RenderError::Contract)?;
@@ -149,7 +149,10 @@ fn candidate_attestation_script_attests_live_plan() -> Result<(), RenderError> {
             .args(["-c", &script])
             .env("RUNNER_TEMP", &root)
             .env("GITHUB_RUN_ID", "7")
-            .env("GITHUB_RUN_ATTEMPT", "2")
+            // A re-run attempt still reads the run directory of the plan's
+            // attempt, never its own.
+            .env("GITHUB_RUN_ATTEMPT", "3")
+            .env("VELNOR_RUN_KEY_ATTEMPT", "2")
             .status()
             .expect("sh")
             .success();

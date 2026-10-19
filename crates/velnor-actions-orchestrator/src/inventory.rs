@@ -383,6 +383,9 @@ pub(crate) fn qualify_workspaces_with_all_features(
     tools.verify(root)?;
     Ok(())
 }
+#[path = "inventory_resolve.rs"]
+mod resolve;
+pub(crate) use resolve::{WorkspaceResolve, qualify_workspaces};
 
 #[cfg(test)]
 #[path = "inventory_tests.rs"]

@@ -15,3 +15,9 @@ pub(super) async fn validate(
     ddl::validate_objects(connection).await?;
     validation::validate_rows(connection).await
 }
+
+pub(super) async fn upgrade_v28(
+    connection: &turso::Connection,
+) -> Result<(), crate::error::HostError> {
+    ddl::upgrade_v28(connection).await
+}

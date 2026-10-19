@@ -22,7 +22,7 @@ fn task_job_gains_matrix_report_upload() -> Result<(), RenderError> {
     let full = if end <= start { &text[start..] } else { window };
     assert!(full.contains(MATRIX_REPORT_UPLOAD_NAME), "upload:\n{full}");
     assert!(
-        full.contains("velnor-matrix-r${{ github.run_id }}-a${{ github.run_attempt }}-${{ matrix.matrix_key }}"),
+        full.contains("velnor-matrix-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-${{ matrix.matrix_key }}"),
         "derived name:\n{full}"
     );
     let at = full.find(MATRIX_REPORT_UPLOAD_NAME).expect("upload step");

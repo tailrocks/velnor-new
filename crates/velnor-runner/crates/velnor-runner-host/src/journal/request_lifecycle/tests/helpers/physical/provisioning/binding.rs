@@ -19,7 +19,7 @@ impl ProvisioningFixture<'_> {
         let binding = test_verified_storage_resource_binding(
             self.reservation_id,
             self.intent_id,
-            super::super::TEST_ENGINE_ID.to_owned(),
+            self.engine_id.clone(),
             self.docker_root_digest.clone(),
             self.sample_generation_id.clone(),
             profile.generation_id().to_owned(),

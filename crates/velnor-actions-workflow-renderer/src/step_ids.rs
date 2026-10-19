@@ -31,18 +31,18 @@ mod tests {
         let step = Step {
             parallel: false,
             name: "presentation can vary".to_owned(),
-            id: Some(StepId::PublishBaseline),
-            role: Some(StepRole::BaselinePublisher),
+            id: Some(StepId::Plan),
+            role: Some(StepRole::PlanProducer),
             condition: None,
             kind: StepKind::Internal {
-                operation: "publish-baseline-v1".to_owned(),
+                operation: "plan-v1".to_owned(),
                 env: std::collections::BTreeMap::new(),
             },
         };
         push_step_id(&mut entries, &step);
         assert_eq!(
             entries,
-            vec![("id".to_owned(), Yaml::str("publish-baseline".to_owned()))]
+            vec![("id".to_owned(), Yaml::str("plan".to_owned()))]
         );
     }
 }

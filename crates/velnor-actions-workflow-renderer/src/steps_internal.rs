@@ -119,7 +119,7 @@ pub fn merge_step() -> Step {
     }
 }
 
-/// Fixed baseline-publish step (`publish-baseline-v1`).
+/// Create the fixed baseline-publisher step.
 #[must_use]
 pub fn publish_step() -> Step {
     Step {

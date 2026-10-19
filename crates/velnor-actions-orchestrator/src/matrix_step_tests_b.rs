@@ -2,7 +2,7 @@ use super::*;
 use crate::task_report::{EXIT_CODE_ENV, START_MS_ENV};
 
 #[test]
-fn obligation_step_skips_when_plan_covered_it() {
+fn obligation_step_runs_unconditionally() {
     let obligation = obligation();
     let step = obligation_step(
         &obligation,
@@ -12,12 +12,7 @@ fn obligation_step_skips_when_plan_covered_it() {
         None,
     )
     .expect("step");
-    assert_eq!(
-        step.condition.as_deref(),
-        Some(
-            "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/demo/clippy/default,')"
-        )
-    );
+    assert_eq!(step.condition, None);
     let mut forged = obligation.clone();
     forged.task_id = "not-a-task".to_owned();
     assert!(
@@ -31,7 +26,7 @@ fn obligation_step_skips_when_plan_covered_it() {
         .expect_err("malformed id")
         .to_string()
         .contains("malformed_task_id"),
-        "malformed IDs never reach generated expressions"
+        "malformed IDs never reach generated steps"
     );
 }
 

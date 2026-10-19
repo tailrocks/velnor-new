@@ -24,7 +24,7 @@ mod tofu;
 pub use check::resolve_program as resolve_check_program;
 
 pub use self::env::{
-    CREDENTIAL_ALLOWLIST_BASELINE, CREDENTIAL_ALLOWLIST_BOOTSTRAP, CREDENTIAL_ENV_KEYS,
+    CREDENTIAL_ALLOWLIST_BOOTSTRAP, CREDENTIAL_ALLOWLIST_GH_API, CREDENTIAL_ENV_KEYS,
     ENDPOINT_ENV_KEYS, EnvPolicy, ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV,
     NO_AUTO_INSTALL_ENV, PROXY_ENV_KEYS, RUSTUP_TOOLCHAIN_ENV, TF_CLI_CONFIG_FILE_ENV,
     TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF,
@@ -205,7 +205,7 @@ impl IsolatedCommand {
     /// Reassign the typed env policy (crate-internal constructors only).
     ///
     /// The only caller is the pinned-exec constructor, which selects
-    /// [`EnvPolicy::Baseline`] for the `gh` baseline-lookup tool; every
+    /// [`EnvPolicy::GhApi`] for the pinned `gh` tool; every
     /// other command keeps the policy its own constructor assigned.
     pub(crate) fn with_policy(mut self, policy: EnvPolicy) -> Self {
         self.policy = policy;

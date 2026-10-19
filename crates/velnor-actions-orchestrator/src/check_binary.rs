@@ -76,7 +76,7 @@ fn project_binary_until(
 
 /// Hash the same bounded bytes subsequently written into owned storage.
 fn verify_binary_bytes(bytes: &[u8], expected: &str) -> Result<(), OrchestratorError> {
-    if bytes.is_empty() || crate::cover_identity::generator::sha256_hex(bytes) != expected {
+    if bytes.is_empty() || crate::generator::sha256_hex(bytes) != expected {
         return Err(internal("mise_binary_unqualified_sha256"));
     }
     Ok(())
@@ -148,7 +148,7 @@ mod tests {
         let source = temp.path().join("source");
         let destination = temp.path().join("owned");
         let bytes = b"qualified fixture bytes";
-        let expected = crate::cover_identity::generator::sha256_hex(bytes);
+        let expected = crate::generator::sha256_hex(bytes);
         verify_binary_bytes(bytes, &expected).expect("positive identity");
         std::fs::write(&source, bytes).expect("source");
         project_binary(&source, &destination, &expected, 1024).expect("projection");
@@ -179,7 +179,7 @@ mod tests {
     fn source_symlink_and_existing_destination_refuse() {
         let temp = tempfile::TempDir::new().expect("temp");
         let bytes = b"fixture";
-        let expected = crate::cover_identity::generator::sha256_hex(bytes);
+        let expected = crate::generator::sha256_hex(bytes);
         let source = temp.path().join("source");
         std::fs::write(&source, bytes).expect("source");
         let link = temp.path().join("link");

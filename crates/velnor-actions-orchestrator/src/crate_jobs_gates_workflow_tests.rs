@@ -139,7 +139,12 @@ fn assert_unsuccessful_owners_fail(
                 })
                 .collect::<Vec<_>>();
             let mut signals = crate::cover::Signals::default();
-            crate::merge::required_evidence::fold_jobs(&results, &mut signals);
+            crate::required_dispositions::fold_planned_jobs(
+                &[],
+                &results,
+                &mut signals,
+                &mut std::collections::BTreeSet::new(),
+            );
             assert!(
                 signals.failed || signals.cancelled || signals.not_run,
                 "{owner}: {conclusion:?}"

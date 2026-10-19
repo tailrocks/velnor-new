@@ -23,8 +23,7 @@ pub const MAX_SUITE_RETENTION_DAYS: u16 = 90;
 pub const DEFAULT_SUITE_WORKFLOW_SLUG: &str = "suites";
 
 /// Reserved job/suite identifiers that a custom suite cannot claim.
-pub const RESERVED_SUITE_IDS: &[&str] =
-    &["plan", "required", "actionlint", "publish-baseline", "rust"];
+pub const RESERVED_SUITE_IDS: &[&str] = &["plan", "required", "actionlint", "rust"];
 
 /// Reserved generator-owned workflow slugs that `suite.workflow` cannot claim.
 pub const RESERVED_SUITE_WORKFLOW_SLUGS: &[&str] = &[

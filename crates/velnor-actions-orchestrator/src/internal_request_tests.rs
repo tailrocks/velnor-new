@@ -1,9 +1,7 @@
 use super::{publish_plan_files, publish_plan_files_with_outputs};
 use crate::OrchestratorError;
 use crate::plan_output_limits::{PlanOutputMode, plan_outputs_with_admission};
-use velnor_actions_contract::workflow::{
-    Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanRunner,
-};
+use velnor_actions_contract::workflow::{Plan, PlanGenerator, PlanMatrix, PlanRunner};
 use velnor_actions_contract::{
     QualificationDispatch, QualificationPhase, RunnerSelection, Trust, WorkflowEvent,
     plan_id_for_run, run_key_for_ci,
@@ -83,7 +81,6 @@ fn cold_qualification_response() -> String {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(Some("qualification_bypass")).expect("baseline"),
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -95,6 +92,7 @@ fn cold_qualification_response() -> String {
             include: Vec::new(),
         },
         task_ids: Vec::new(),
+        jobs: Vec::new(),
         warnings: Vec::new(),
         edges: Vec::new(),
     };

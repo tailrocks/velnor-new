@@ -12,7 +12,7 @@ use velnor_actions_contract::ProposedTask;
 use velnor_actions_rust::is_clippy_kind;
 
 /// Barrier-separated Clippy schedule waves.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ClippyMemoryPlan {
     /// Task IDs per wave in schedule order; barriers sit between waves.
     pub groups: Vec<Vec<String>>,

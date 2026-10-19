@@ -8,7 +8,6 @@ use velnor_actions_contract::{
 
 use super::MergeRequest;
 use crate::cover::Signals;
-use crate::cover::revalidate_coverage;
 use crate::cover::shard::{check_entry_shards, validate_budgets};
 
 /// Expected entries keyed by report ID, sorted.
@@ -36,12 +35,6 @@ pub(crate) fn check_plan_evidence(
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
 ) {
-    revalidate_coverage(
-        plan,
-        request.baseline_manifest.as_ref(),
-        signals,
-        miss_reasons,
-    );
     if request
         .limits
         .as_ref()

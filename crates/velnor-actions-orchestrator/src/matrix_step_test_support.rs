@@ -28,10 +28,16 @@ pub(super) fn obligation_workflow_ir(checkout_uses: &str, task_step: Step) -> Wo
     WorkflowIr {
         name: "CI".to_owned(),
         triggers: Trigger {
-            pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
-                .into_iter()
-                .map(ToString::to_string)
-                .collect(),
+            pull_request_types: [
+                "opened",
+                "edited",
+                "synchronize",
+                "reopened",
+                "ready_for_review",
+            ]
+            .into_iter()
+            .map(ToString::to_string)
+            .collect(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,

@@ -176,7 +176,7 @@ pub(crate) fn obligation_identity_env(
         );
         identity.insert(
             velnor_actions_workflow_renderer::MATRIX_OUTPUT_ENV.to_owned(),
-            velnor_actions_workflow_renderer::COVERED_TASKS_OUTPUT.to_owned(),
+            velnor_actions_workflow_renderer::PLAN_ID_OUTPUT.to_owned(),
         );
         identity.insert(
             velnor_actions_workflow_renderer::MATRIX_MAX_PARALLEL_ENV.to_owned(),
@@ -199,13 +199,11 @@ pub(crate) fn obligation_identity_env(
 /// plan identity envelope. Tofu obligations run triple-less; every
 /// other stack keeps the owned-homes triple. A concurrent Rust check
 /// also carries `CARGO_TARGET_DIR` for its workspace-relative target
-/// lane. The step skips via `if:` when the plan covered this
-/// obligation; unknown coverage executes.
+/// lane. Every obligation step runs unconditionally.
 ///
 /// # Errors
 ///
-/// Returns contract errors for invalid argv, joins, wrapper shapes, or
-/// task IDs unfit for the generated skip gate.
+/// Returns contract errors for invalid argv, joins, or wrapper shapes.
 pub(crate) fn obligation_step(
     obligation: &CrateObligation,
     catalog: &ToolCatalog,
@@ -233,7 +231,7 @@ pub(crate) fn obligation_step(
         }
         payload_env.insert(CARGO_TARGET_DIR_ENV.to_owned(), format!("target/{lane}"));
     }
-    let mut step = if needs_rust {
+    let step = if needs_rust {
         let env = task_step_env(catalog, &payload_env, true)?;
         Step {
             parallel: false,
@@ -276,18 +274,6 @@ pub(crate) fn obligation_step(
         tofu.role = Some(StepRole::TofuProviderUse);
         tofu
     };
-    // Skip when the plan covered this obligation: unknown coverage
-    // (absent output) executes, so the gate can only skip proven work.
-    //
-    // Task IDs reaching here validated at obligation construction, and
-    // the grammar admits no quotes or commas, so the generated
-    // expression cannot break out of its string literal.
-    step.condition = Some(if needs_rust {
-        velnor_actions_contract::task_execution_condition(&obligation.task_id)
-            .map_err(crate::internal::internal_contract)?
-    } else {
-        crate::covered_tasks::skip_condition(&obligation.task_id)?
-    });
     Ok(step)
 }
 

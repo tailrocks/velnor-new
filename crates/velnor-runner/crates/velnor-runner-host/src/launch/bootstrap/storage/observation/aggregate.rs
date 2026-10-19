@@ -26,6 +26,19 @@ mod capacity;
 #[path = "worker.rs"]
 mod worker;
 
+fn admission_witness_is_fresh(
+    observation: &crate::launch::StartObservationWitness,
+    engine_id: &str,
+    docker_root_digest: &str,
+    admission_sample_generation_id: &str,
+) -> bool {
+    observation.is_fresh_for_admission(
+        engine_id,
+        docker_root_digest,
+        admission_sample_generation_id,
+    )
+}
+
 /// Measure both started containers and build the binding from one trusted plan.
 pub(crate) async fn observe_storage_resources(
     docker: &Docker,
@@ -47,7 +60,8 @@ pub(crate) async fn observe_storage_resources(
         || receipt.engine_id() != engine.engine_id()
         || receipt.docker_root_digest() != engine.docker_root_digest()
         || !engine.matches_images(images)
-        || !acquired.observation().is_fresh_for(
+        || !admission_witness_is_fresh(
+            acquired.observation(),
             engine.engine_id(),
             engine.docker_root_digest(),
             acquired.sample_generation_id(),

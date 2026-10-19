@@ -130,7 +130,6 @@ fn warm_rerun_reuses_identical_extension() {
     let second = clippy.identity_extension(&digests(&package, &targets, Some(&known)));
     assert_eq!(json_of(&first), json_of(&second));
     assert!(first.reuse_eligible().is_ok());
-    assert!(second.coverage_eligible().is_ok());
     let other = vec!["proto/b.proto".to_owned()];
     let changed = clippy.identity_extension(&digests(&package, &targets, Some(&other)));
     assert_ne!(json_of(&first), json_of(&changed));
@@ -201,13 +200,11 @@ fn undeclared_reads_disable_reuse_and_coverage() {
     let unknown = groups[0].identity_extension(&digests(&package, &targets, None));
     assert!(unknown.undeclared_reads);
     assert!(unknown.reuse_eligible().is_err());
-    assert!(unknown.coverage_eligible().is_err());
     assert!(unknown.conservative_execution_required());
     let known = vec!["proto/a.proto".to_owned()];
     let declared = groups[0].identity_extension(&digests(&package, &targets, Some(&known)));
     assert!(!declared.undeclared_reads);
     assert!(declared.reuse_eligible().is_ok());
-    assert!(declared.coverage_eligible().is_ok());
     assert!(!declared.conservative_execution_required());
 }
 

@@ -30,6 +30,7 @@ fn generator() -> PlanGenerator {
 
 fn discovery_with_proposals(proposals: Vec<ProposedTask>) -> Discovery {
     Discovery {
+        affected: crate::affected_inputs::AffectedInputs::default(),
         mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
@@ -159,7 +160,12 @@ fn planned_adapter(
         task_digest,
         input_digest: identity.input_digest.clone(),
         closure_digest: identity.closure_digest.clone(),
-        baseline_proof: None,
+        graph_digest: "b3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            .to_owned(),
+        mbx_digest: "b3-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            .to_owned(),
+        profile: "default".to_owned(),
+        job_id: entry.job_id.clone(),
     };
     (entry, obligation)
 }

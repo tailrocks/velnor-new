@@ -65,7 +65,6 @@ fn generated_ci_bounds_every_job_per_kind() -> TestResult {
         ("required", "5"),
         ("actionlint", "5"),
         ("rust-demo", "5"),
-        ("publish-baseline", "5"),
     ] {
         assert_eq!(
             timeouts.get(id).map(Vec::as_slice),
@@ -86,7 +85,6 @@ fn configured_crate_timeout_reaches_every_crate_job_only() -> TestResult {
         ("required", "5"),
         ("actionlint", "5"),
         ("rust-demo", "45"),
-        ("publish-baseline", "5"),
     ] {
         assert_eq!(
             timeouts.get(id).map(Vec::as_slice),

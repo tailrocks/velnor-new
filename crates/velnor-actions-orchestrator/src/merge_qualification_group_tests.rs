@@ -1,17 +1,6 @@
 use super::*;
 
 #[test]
-fn plan_matrix_owners_must_remain_in_required_inventory() {
-    let all_matrix_jobs = ["plan", "rust-demo"];
-    let required = vec!["plan".to_owned(), "rust-demo".to_owned()];
-    assert!(matrix_jobs_are_required(all_matrix_jobs, &required));
-    assert!(!matrix_jobs_are_required(
-        ["plan", "rust-demo"],
-        &["plan".to_owned()],
-    ));
-}
-
-#[test]
 fn a_shared_rust_job_keeps_each_task_report_required() {
     let plan = shared_rust_plan();
     let mut request = request(Some(context()));
@@ -213,6 +202,10 @@ fn shared_rust_plan() -> Plan {
     ];
     plan.task_ids = vec![CLIPPY.to_owned(), TEST.to_owned()];
     plan.matrix.include = vec![entry];
+    plan.jobs = vec![velnor_actions_contract::PlanJob {
+        job_id: "rust-demo".to_owned(),
+        disposition: velnor_actions_contract::JobDisposition::Run,
+    }];
     plan.validate().expect("shared Rust plan");
     plan
 }
@@ -229,7 +222,12 @@ fn obligation(task_id: &str, task_digest: String, seed: u8) -> PlanObligation {
         task_digest,
         input_digest: digest(seed + 10),
         closure_digest: digest(seed + 20),
-        baseline_proof: None,
+        graph_digest: "b3-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            .to_owned(),
+        mbx_digest: "b3-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            .to_owned(),
+        profile: "default".to_owned(),
+        job_id: "rust-demo".to_owned(),
     }
 }
 

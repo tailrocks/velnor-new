@@ -7,12 +7,12 @@ use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use velnor_actions_mise::catalog::NEXTEST_VERSION;
 use velnor_actions_mise::{
-    ACTIONLINT_VERSION, BaselineLookup, CandidateBuild, GH_VERSION, IsolatedCommand,
-    MR_BOXINGTON_VERSION, MetadataDiscovery, MetadataQualification, MiseInstall, NextestArchive,
-    NextestDriver, NextestList, NextestPartition, NextestRun, OPENTOFU_VERSION, PinnedTool,
-    PinnedToolExec, PreparePinnedTools, RUST_VERSION, RouteDriver, SHELLCHECK_VERSION,
-    TaskCacheMode, TestRunner, ToolCatalog, ToolHomes, VerifyPreparedInputs, VerifySpec,
-    VerifyToolchain, ZIZMOR_VERSION, is_allowed_mise_subcommand, qualified_task_run_argv,
+    ACTIONLINT_VERSION, CandidateBuild, GH_VERSION, IsolatedCommand, MR_BOXINGTON_VERSION,
+    MetadataDiscovery, MetadataQualification, MiseInstall, NextestArchive, NextestDriver,
+    NextestList, NextestPartition, NextestRun, OPENTOFU_VERSION, PinnedTool, PinnedToolExec,
+    PreparePinnedTools, RUST_VERSION, RouteDriver, SHELLCHECK_VERSION, TaskCacheMode, TestRunner,
+    ToolCatalog, ToolHomes, VerifyPreparedInputs, VerifySpec, VerifyToolchain, ZIZMOR_VERSION,
+    is_allowed_mise_subcommand, qualified_task_run_argv,
 };
 
 fn pinned() -> ToolCatalog {
@@ -77,14 +77,6 @@ fn all_mise_vectors() -> Result<Vec<Vec<OsString>>, String> {
     )
     .map_err(|err| err.to_string())?;
     vectors.extend(verify.probes(&catalog));
-    let lookup = BaselineLookup::new(
-        "0123456789abcdef0123456789abcdef01234567",
-        "ci.yml",
-        "main",
-        "coverage-manifests",
-    )
-    .map_err(|err| err.to_string())?;
-    vectors.push(lookup.list_argv(&catalog).map_err(|err| err.to_string())?);
     let gated = qualified_task_run_argv(
         "test",
         false,

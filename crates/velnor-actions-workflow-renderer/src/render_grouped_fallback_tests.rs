@@ -6,8 +6,7 @@ use velnor_actions_contract::{
 };
 
 use super::{
-    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, COVERED_TASKS_OUTPUT, PLAN_JOB_ID, RenderContext,
-    render_merged_with_routing,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, PLAN_JOB_ID, RenderContext, render_merged_with_routing,
 };
 use crate::{RenderError, workflow_size::MAX_WORKFLOW_BYTES};
 
@@ -98,14 +97,11 @@ fn grouped_jobs() -> BTreeMap<String, Job> {
     let payload = "x".repeat(RUN_BYTES);
     let mut steps = Vec::with_capacity(OBLIGATION_COUNT);
     for index in 0..OBLIGATION_COUNT {
-        let task_id = format!("stack/rust/demo/test/config-{index:03}");
         steps.push(Step {
             name: format!("Run configuration {index:03}"),
             id: None,
             role: None,
-            condition: Some(format!(
-                "!contains(needs.{PLAN_JOB_ID}.outputs.{COVERED_TASKS_OUTPUT}, ',{task_id},')"
-            )),
+            condition: None,
             parallel: false,
             kind: StepKind::Shell {
                 run: vec!["printf".to_owned(), "%s".to_owned(), payload.clone()],
@@ -133,6 +129,7 @@ fn large_grouped_job_uses_yaml_sharing_without_obligation_actions() -> Result<()
     assert!(rendered.yaml.contains("run: &r1"));
     assert!(rendered.yaml.contains("run: *r1"));
     assert!(rendered.yaml.contains("Run configuration 339"));
+    assert!(!rendered.yaml.contains("covered_tasks"));
     assert!(
         rendered
             .shared

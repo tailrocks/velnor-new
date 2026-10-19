@@ -5,10 +5,8 @@
 //! reach `git`. Two revision contexts exist:
 //!
 //! * Strict (`validate_rev`, `validate_diff_args`, `validate_show_args`,
-//!   `validate_git_args`): full 40-char hex SHAs only, mirroring the
-//!   baseline-lookup rules (`BaselineLookup::new` in `shard.rs`,
-//!   `baseline_artifact_name` in `cover.rs`). Short SHAs, symbolic refs,
-//!   and flags all fail.
+//!   `validate_git_args`): full 40-char hex SHAs only. Short SHAs,
+//!   symbolic refs, and flags all fail.
 //! * PR-selection (`validate_diff_rev`, `validate_select_diff_args`,
 //!   `validate_select_show_args`): short (4–40 hex) SHAs accepted because
 //!   git resolves them at spawn; flags, symbolic refs, and paths stay
@@ -85,8 +83,8 @@ impl std::error::Error for GitArgError {}
 
 /// Validate one request-supplied revision: full 40-char hex SHA.
 ///
-/// Mirrors the baseline-lookup rules: short SHAs, symbolic refs (`HEAD`),
-/// URLs, and flags all fail; case follows `BaselineLookup` (any hex case).
+/// Short SHAs, symbolic refs (`HEAD`), URLs, and flags all fail; any hex
+/// case is accepted.
 ///
 /// # Errors
 ///

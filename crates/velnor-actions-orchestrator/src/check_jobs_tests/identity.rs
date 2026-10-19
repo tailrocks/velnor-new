@@ -185,12 +185,14 @@ fn fork_admission_skips_external_runner_and_required_rejects_skip() {
         EPHEMERAL_CHECK_ADMISSION_CONDITION.contains("head.repo.full_name == github.repository")
     );
     let mut signals = crate::cover::Signals::default();
-    crate::merge::required_evidence::fold_jobs(
+    crate::required_dispositions::fold_planned_jobs(
+        &[],
         &[RequiredJobResult {
             job_id: "check-native".to_owned(),
             conclusion: JobConclusion::Skipped,
         }],
         &mut signals,
+        &mut std::collections::BTreeSet::new(),
     );
     assert!(signals.not_run);
 }
@@ -199,12 +201,14 @@ fn fork_admission_skips_external_runner_and_required_rejects_skip() {
 fn required_rejects_failed_or_missing_named_check() {
     for conclusion in [JobConclusion::Missing, JobConclusion::Failure] {
         let mut signals = crate::cover::Signals::default();
-        crate::merge::required_evidence::fold_jobs(
+        crate::required_dispositions::fold_planned_jobs(
+            &[],
             &[RequiredJobResult {
                 job_id: "check-ffi".to_owned(),
                 conclusion,
             }],
             &mut signals,
+            &mut std::collections::BTreeSet::new(),
         );
         assert!(signals.failed, "{conclusion:?}");
     }

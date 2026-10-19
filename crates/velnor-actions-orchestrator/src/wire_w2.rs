@@ -86,7 +86,20 @@ impl ReuseOutcome {
     pub(crate) fn execute(reason: &str) -> Self {
         Self::execute_with(reason.to_owned(), None)
     }
+    /// The change cannot reach the task; its crate job is skipped.
+    pub(crate) fn not_affected() -> Self {
+        Self {
+            decision: ObligationDecision::NotAffected,
+            reason: NOT_AFFECTED_REASON.to_owned(),
+            task_cache_key: None,
+            task_cache_enabled: false,
+            recorded_input_digest: None,
+        }
+    }
 }
+
+/// Reason recorded on every `not_affected` obligation.
+pub(crate) const NOT_AFFECTED_REASON: &str = "not_affected";
 /// Decide reuse eligibility for one task (REUSE-1/6/7, PAR-3.4).
 /// Plan time never grants reuse: merge-time evidence required, so eligible
 /// tasks execute with `no_entry` and task-cache stays disabled. The

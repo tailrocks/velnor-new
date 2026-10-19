@@ -77,6 +77,9 @@ pub struct WorkspaceRecord {
     pub edges: Vec<crate::metadata_edges::LocalEdge>,
     /// Cross-workspace path edges skipped in sorted order.
     pub skipped_edges: Vec<crate::metadata_edges::SkippedPathEdge>,
+    /// Whether any reported package declares a non-path (registry or git)
+    /// dependency; without one the path edges are the complete graph.
+    pub has_external_dependencies: bool,
 }
 
 /// `cargo metadata` parse failure.
@@ -227,6 +230,10 @@ pub fn parse_metadata_json(
     }
     edges.sort();
     skipped.sort();
+    let has_external_dependencies = raw
+        .packages
+        .iter()
+        .any(|package| package.dependencies.iter().any(|dep| dep.path.is_none()));
     let mut member_ids = raw.workspace_members;
     member_ids.sort();
     Ok(WorkspaceRecord {
@@ -235,6 +242,7 @@ pub fn parse_metadata_json(
         packages,
         edges,
         skipped_edges: skipped,
+        has_external_dependencies,
     })
 }
 

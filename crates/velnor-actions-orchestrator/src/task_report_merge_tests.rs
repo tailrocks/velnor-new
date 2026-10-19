@@ -237,8 +237,10 @@ fn merge_lists_shared_job_artifact_once() {
     let mut plan = fixture_plan();
     let job_id = plan.matrix.include[0].job_id.clone();
     let shared = plan.matrix.include[0].artifact_id.clone();
-    plan.matrix.include[1].job_id = job_id;
+    plan.matrix.include[1].job_id.clone_from(&job_id);
+    plan.obligations[1].job_id = job_id;
     plan.matrix.include[1].artifact_id = shared.clone();
+    plan.jobs = super::task_report_tests::run_jobs(&plan);
     plan.validate().expect("shared-job plan validates");
     let temp = staged_run(&plan, "local");
     write_task_report_to("local", CLIPPY, 0, None, temp.path()).expect("clippy");

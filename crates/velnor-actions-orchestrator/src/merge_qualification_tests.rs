@@ -50,7 +50,6 @@ fn qualification_plan(context: QualificationDispatch) -> Plan {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: velnor_actions_contract::PlanBaseline::unavailable(None).expect("baseline"),
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -62,6 +61,7 @@ fn qualification_plan(context: QualificationDispatch) -> Plan {
             include: Vec::new(),
         },
         task_ids: Vec::new(),
+        jobs: Vec::new(),
         warnings: Vec::new(),
         edges: Vec::new(),
     }
@@ -82,7 +82,6 @@ fn request(actual_qualification: Option<QualificationDispatch>) -> MergeRequest 
         required_job_ids: Vec::new(),
         required_jobs: Vec::new(),
         assembly_errors: Vec::new(),
-        baseline_manifest: None,
         shard_proofs: Vec::new(),
         limits: None,
         reference_task_ids: None,

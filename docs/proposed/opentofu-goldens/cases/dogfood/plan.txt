@@ -45,7 +45,7 @@ Workflow to generate
     - cargo-deny (10 steps)
     - cargo-machete (11 steps)
     - plan (19 steps)
-    - publish-baseline (7 steps)
+    - publish-baseline (8 steps)
     - required (10 steps)
     - rust-velnor-actions-actionlint (26 steps)
     - rust-velnor-actions-cli (26 steps)

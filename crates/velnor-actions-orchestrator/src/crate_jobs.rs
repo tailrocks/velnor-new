@@ -9,12 +9,10 @@ use velnor_actions_contract::{
     CrateJob, Job, JobTimeout, ProposedTask, RustCrateConfig, Stack, Step, VelnorConfig,
     WorkflowPolicy, crate_display_name, tofu_display_name,
 };
-#[cfg(test)]
-use velnor_actions_mise::PinnedTool;
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
-#[cfg(test)]
-use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
+#[cfg(test)]
+use {velnor_actions_mise::PinnedTool, velnor_actions_workflow_renderer::render::PLAN_JOB_ID};
 
 use crate::OrchestratorError;
 use crate::crate_job_ids::{

@@ -2,8 +2,7 @@
 //!
 //! Declared via `#[path]` from `retrieve_reports.rs` (no `lib.rs`
 //! edit); `retrieve_reports` re-exports the gate so staged-report
-//! reads, merge-request assembly, and baseline entry reads share the
-//! one implementation.
+//! reads and merge-request assembly share the one implementation.
 
 use std::fs;
 use std::io::Read as _;
@@ -87,8 +86,8 @@ pub(crate) fn read_staged_bytes_until(
 
 /// Read one file with symlink rejection and a caller size bound.
 ///
-/// Shared by staged-report reads, merge-request assembly, and baseline
-/// entry reads so every event-time read enforces the same gates:
+/// Shared by staged-report reads and merge-request assembly so every
+/// event-time read enforces the same gates:
 /// symlinks and non-files reject, missing files report, and oversize
 /// files error instead of exhausting memory. Bytes decode as UTF-8;
 /// undecodable files report `unreadable`.

@@ -165,35 +165,6 @@ fn shape_malformed_task_file_diagnoses_planning_failed() -> TestResult {
     assert_corrupt(&merge_staged(&mut value, errors)?)
 }
 
-/// Shape-malformed baseline diagnoses: valid JSON, wrong shape.
-#[test]
-fn shape_malformed_baseline_diagnoses_planning_failed() -> TestResult {
-    let (_repo, plan) = plan_for_source_change()?;
-    let reports = passing_reports(&plan)?;
-    let (_dir, run) = stage_run(&plan)?;
-    for report in &reports {
-        let leg = leg_for(&run, &plan, report)?;
-        std::fs::write(
-            leg.join("matrix-report.json"),
-            serde_json::to_string(report)?,
-        )?;
-    }
-    // Valid JSON with no manifest shape: assembly validates syntax
-    // only, so it passes the value through and the merge must
-    // diagnose it instead of hard-erroring the request.
-    std::fs::write(run.join("baseline.json"), r#"{"bogus":1}"#)?;
-    let request = assemble_merge_request("local", &run)?;
-    let mut value: serde_json::Value = serde_json::from_str(&request)?;
-    let errors = value["assembly_errors"].as_array().ok_or("errors")?.clone();
-    assert!(
-        !errors.iter().any(|e| e
-            .as_str()
-            .is_some_and(|s| s.starts_with("unparsable_baseline"))),
-        "syntax-valid body passes assembly: {errors:?}"
-    );
-    assert_corrupt(&merge_staged(&mut value, errors)?)
-}
-
 /// Shape-malformed attestation diagnoses: valid JSON, wrong shape.
 #[test]
 fn shape_malformed_attestation_diagnoses_planning_failed() -> TestResult {

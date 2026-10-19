@@ -1,9 +1,11 @@
-//! Obligation universe and changed-work classification for `plan-v1`.
+//! Obligation universe and affected-work classification for `plan-v1`.
 //!
-//! The plan carries the full configured obligation universe; changed-work
-//! analysis only classifies obligations as changed (must execute) or
-//! unchanged (eligible for verified reuse/baseline coverage). Nothing is
-//! ever removed for being unaffected: without proof, everything executes.
+//! The plan carries the full configured obligation universe. On events
+//! that select affected work (pull requests), packages the change cannot
+//! reach are classified unchanged and their crate jobs become
+//! `not_affected`; any doubt (unknown files, git failures, lockfile
+//! changes, unresolved graphs, unbounded symlinks) selects everything.
+//! Full-run events (push, merge group, qualification) change everything.
 
 use std::collections::BTreeSet;
 use std::ffi::OsString;
@@ -16,15 +18,19 @@ use velnor_actions_rust::SelectionBroadening;
 use crate::decisions::{broadening_for_path, selection_broadens_for_path};
 use crate::discover::Discovery;
 use crate::git_paths::{NON_UTF8_PATH, split_nul_paths};
-use crate::select_affected::{affected_packages, has_unowned_file};
+use crate::select_affected::{Ownership, affected_packages, has_unowned_file};
 use crate::select_edges::{base_edges, head_edges};
 use crate::validators::{validate_diff_rev, validate_select_diff_args};
 
 #[path = "select_checkout.rs"]
 mod checkout;
+#[path = "select_mode.rs"]
+mod mode;
 #[path = "select_paths.rs"]
 mod paths;
 pub(crate) use checkout::{verify_checkout, verify_checkout_until};
+pub(crate) use mode::{SelectionMode, selection_mode};
+use mode::{event_token, resolved_edges, resolved_links};
 
 use paths::{head_sha, is_advisory_toolfile, tree_diff_names, untracked_files};
 
@@ -65,14 +71,9 @@ pub(crate) fn classify_changed(
     discovery: &Discovery,
     warnings: &mut Vec<String>,
 ) -> Option<BTreeSet<String>> {
-    if event == WorkflowEvent::Qualification {
-        return Some(
-            discovery
-                .proposals
-                .iter()
-                .map(|task| task.identity.unit_id.clone())
-                .collect(),
-        );
+    if selection_mode(event) == SelectionMode::Full {
+        warnings.push(format!("full_run_event:{}:all_changed", event_token(event)));
+        return None;
     }
     if discovery.skipped_non_utf8 {
         warnings.push(format!(
@@ -84,15 +85,7 @@ pub(crate) fn classify_changed(
         return classify_local(root, discovery, warnings);
     }
     let Some(base) = base else {
-        if matches!(
-            event,
-            WorkflowEvent::PullRequest
-                | WorkflowEvent::MergeGroup
-                | WorkflowEvent::Fork
-                | WorkflowEvent::Push
-        ) {
-            warnings.push("comparison_unavailable:missing_base:all_changed".to_owned());
-        }
+        warnings.push("comparison_unavailable:missing_base:all_changed".to_owned());
         return None;
     };
     let (changed, toolfiles) = change_sets(root, base, head, warnings)?;
@@ -177,13 +170,25 @@ fn affected_from_changed(
     else {
         return all_packages;
     };
-    if has_unowned_file(discovery, &rust_changed) {
+    let Some(resolved) = resolved_edges(discovery, warnings) else {
+        return all_packages;
+    };
+    let ownership = Ownership::new(discovery);
+    let Some(links) = resolved_links(root, &ownership, warnings) else {
+        return all_packages;
+    };
+    let ownership = ownership.with_links(links);
+    if has_unowned_file(&ownership, &rust_changed) {
         warnings.push("unclassified_files:all_changed".to_owned());
         return all_packages;
     }
     let head_edges = head_edges(discovery);
     let mut affected = match base_edges(root, base, head, discovery) {
-        Ok(base_edges) => affected_packages(discovery, &rust_changed, &base_edges, &head_edges),
+        Ok(base_edges) => affected_packages(
+            &ownership,
+            &rust_changed,
+            &[&base_edges, &head_edges, &resolved],
+        ),
         Err(problem) => {
             warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
             return all_packages;
@@ -236,8 +241,8 @@ fn changed_files(root: &Path, base: &str, head: &str) -> Result<BTreeSet<String>
 
 /// Committed change set minus advisory tool files, or `None` to broaden.
 ///
-/// Git failures and non-ignored untracked files broaden with a recorded
-/// warning; the flag reports whether tool files were filtered, for the
+/// Git failures, non-ignored untracked files, and modified tracked files
+/// broaden with a recorded warning; the flag reports whether tool files were filtered, for the
 /// findings-only warning when nothing else changed.
 fn change_sets(
     root: &Path,
@@ -259,6 +264,16 @@ fn change_sets(
             return None;
         }
     };
+    let mut dirty = BTreeSet::new();
+    for cached in [true, false] {
+        match tree_diff_names(root, cached) {
+            Ok(files) => dirty.extend(files),
+            Err(problem) => {
+                warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
+                return None;
+            }
+        }
+    }
     let toolfiles = changed.iter().any(|path| is_advisory_toolfile(path))
         || untracked.iter().any(|path| is_advisory_toolfile(path));
     if untracked
@@ -266,6 +281,12 @@ fn change_sets(
         .any(|path| !is_advisory_toolfile(&path))
     {
         warnings.push("untracked_files:all_changed".to_owned());
+        return None;
+    }
+    // The tree under test must be the committed head: a modified tracked
+    // file is a change the commit diff cannot see.
+    if dirty.iter().any(|path| !is_advisory_toolfile(path)) {
+        warnings.push("dirty_worktree:all_changed".to_owned());
         return None;
     }
     let changed = changed
@@ -310,6 +331,9 @@ fn local_change_set(root: &Path, warnings: &mut Vec<String>) -> Option<(BTreeSet
 #[path = "group_selection_tests.rs"]
 mod group_selection_tests;
 
+#[cfg(test)]
+#[path = "select_matrix_tests.rs"]
+mod matrix_tests;
 #[cfg(test)]
 #[path = "select_pr_range_tests.rs"]
 mod select_pr_range_tests;

@@ -20,6 +20,7 @@ mod qualified_tools;
 mod release;
 mod resources;
 mod runs_on;
+mod rust_inputs;
 mod rust_suites;
 mod rust_suites_validate;
 mod stacks;
@@ -89,6 +90,7 @@ pub use runs_on::{
     LINUX_AMD64, RunnerPlatform, RunsOn, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL,
     is_hosted_catalog, is_legacy_hosted_label, runner_platform,
 };
+pub use rust_inputs::RustInputRule;
 pub use rust_suites::{
     DEFAULT_SUITE_PARTITIONS, DEFAULT_SUITE_RETENTION_DAYS, DEFAULT_SUITE_TIMEOUT_MINUTES,
     DEFAULT_SUITE_WORKFLOW_SLUG, GENERATOR_OWNED_WORKFLOW_FILES, MAX_SUITE_PARTITIONS,

@@ -4,7 +4,7 @@
 pub const QUALIFICATION_CACHE_FORMAT_VERSION: u8 = 3;
 
 pub mod artifacts;
-pub mod baseline;
+pub mod baseline_publication;
 pub mod cache_ids;
 pub mod crate_job;
 pub mod dispatch;
@@ -17,6 +17,7 @@ pub mod named_check_lanes;
 pub mod needs;
 pub mod permissions;
 pub mod plan;
+mod plan_jobs;
 pub mod platform;
 pub mod qualification;
 pub mod qualification_cache_lineage;
@@ -37,7 +38,7 @@ pub use artifacts::{
     MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, check_matrix_agreement, matrix_json_bytes,
     plan_json_bytes,
 };
-pub use baseline::{BaselineProof, BaselineStatus, ManifestTaskProof, PlanBaseline};
+pub use baseline_publication::ManifestTaskProof;
 pub use cache_ids::EntryCacheIds;
 pub use crate_job::{CrateJob, CrateObligation};
 pub use dispatch::{DispatchInput, DispatchInputType, WorkflowDispatch};
@@ -65,9 +66,9 @@ pub use needs::{
 };
 pub use permissions::{PermissionLevel, Permissions};
 pub use plan::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, MatrixEntry, ObligationDecision, PLAN_MATRIX_OUTPUT_MODE_ENV, Plan,
-    PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, WorkflowEvent,
-    validate_matrix_run,
+    DYNAMIC_MATRIX_OUTPUT_MODE, JobDisposition, MatrixEntry, ObligationDecision,
+    PLAN_MATRIX_OUTPUT_MODE_ENV, Plan, PlanGenerator, PlanJob, PlanMatrix, PlanObligation,
+    PlanPackage, PlanRunner, WorkflowEvent, validate_matrix_run,
 };
 pub use platform::{
     PlannedPlatform, PlannedRunnerEnvironment, PlatformBinding, PlatformRunnerEnvironment,
@@ -111,10 +112,7 @@ pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
     NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
 };
-pub use step::{
-    MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, Step, StepKind, TASK_COVERED_OUTPUT,
-    task_execution_condition,
-};
+pub use step::{MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, Step, StepKind};
 pub use step_identity::{MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole};
 pub use task_execution_manifest::{
     MAX_TASK_EXECUTION_FRAME_BYTES, MAX_TASK_EXECUTION_RECORDS, TASK_EXECUTION_FRAME_MAGIC,

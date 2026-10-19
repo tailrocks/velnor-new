@@ -1,6 +1,7 @@
 //! Lock-acquisition workflow tests.
 
 use super::*;
+use crate::publish_job::baseline_publish_job;
 
 #[test]
 fn lock_acquire_inserts_digest_verified_stage() {
@@ -48,7 +49,8 @@ fn lock_acquire_inserts_digest_verified_stage() {
         ),
     ]));
     assert!(attach_lock_acquire(&mut ir, &lock, "ubuntu-26.04", "0.1.0").is_ok());
-    assert_eq!(ir.jobs["publish-baseline"].steps[0].name, "Acquire Velnor");
+    assert_eq!(ir.jobs["publish-baseline"].steps[0].name, "Checkout");
+    assert_eq!(ir.jobs["publish-baseline"].steps[1].name, "Acquire Velnor");
     let names: Vec<&str> = ir.jobs["plan"]
         .steps
         .iter()

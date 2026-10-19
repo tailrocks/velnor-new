@@ -8,7 +8,6 @@
 //! download; only duplicates within a job are waste).
 
 use velnor_actions_orchestrator::{finalized_jobs, prepare};
-use velnor_actions_workflow_renderer::render::PUBLISH_JOB_ID;
 
 use crate::impl_common::TestResult;
 use crate::impl_tofu_t24_gates::tofu_perf_fixtures_t24::tofu_repo;
@@ -17,18 +16,14 @@ use crate::impl_tofu_t24_gates::{crate_src, is_crate_job, token_hits};
 /// Hoisted constructions only: one `FileCache` per top-level phase.
 ///
 /// `discover` owns the prepare-phase instance (detection, inventory,
-/// diagnostics share it), `build_plan` owns the plan-phase instance
-/// (every task shares it), and cover owns one for its closure plus
-/// extension check. The tofu adapter itself never constructs one:
+/// diagnostics share it) and `build_plan` owns the plan-phase instance
+/// (every task shares it). The tofu adapter itself never constructs one:
 /// per-call fresh caches would share nothing.
 /// `qualification_cache_runtime_closure` uses one instance for its source check.
 #[test]
 fn file_cache_constructions_are_hoisted_per_phase() -> TestResult {
     let orch = crate_src("");
-    let mut sites: Vec<String> = token_hits(&orch, "FileCache::new()")?
-        .into_iter()
-        .filter(|hit| !hit.starts_with("cover_identity_fixtures.rs:"))
-        .collect();
+    let mut sites: Vec<String> = token_hits(&orch, "FileCache::new()")?;
     sites.sort();
     let files: Vec<&str> = sites
         .iter()
@@ -37,13 +32,11 @@ fn file_cache_constructions_are_hoisted_per_phase() -> TestResult {
     assert_eq!(
         files,
         [
-            "cover_identity.rs",
             "discover.rs",
             "internal.rs",
-            "qualification_cache_runtime_closure.rs",
+            "qualification_cache_runtime_closure.rs"
         ],
-        "one hoisted construction per phase (the cfg(test) fixtures \
-         companion is excluded): {sites:?}"
+        "one hoisted construction per phase: {sites:?}"
     );
     let tofu = crate_src("../velnor-actions-tofu");
     assert!(
@@ -84,15 +77,9 @@ fn plan_artifact_downloads_exactly_once_per_job() -> TestResult {
         }
     }
     assert_eq!(crate_jobs, 2, "two tofu stack jobs");
-    let publish = jobs.get(PUBLISH_JOB_ID).ok_or("publish job renders")?;
-    assert_eq!(
-        publish
-            .steps
-            .iter()
-            .filter(|step| step.name == "Download plan")
-            .count(),
-        1,
-        "publish carries its plan download"
+    assert!(
+        jobs.contains_key("publish-baseline"),
+        "baseline publisher remains in workflow"
     );
     Ok(())
 }

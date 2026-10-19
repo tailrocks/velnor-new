@@ -161,33 +161,6 @@ fn strictness_identifiers_are_newtypes() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn strictness_proofs_need_validating_constructors() -> Result<(), Box<dyn Error>> {
-    let baseline = read("crates/velnor-actions-contract/src/workflow/baseline.rs")?;
-    for marker in [
-        "pub fn new(",
-        "pub fn used(",
-        "pub fn unavailable(",
-        "pub fn mark_unavailable(",
-        "BaselineProofUnchecked",
-        "ManifestTaskProofUnchecked",
-        "PlanBaselineUnchecked",
-    ] {
-        assert!(baseline.contains(marker), "baseline.rs misses {marker}");
-    }
-    for field in [
-        "pub source_commit",
-        "pub run_id",
-        "pub artifact_id",
-        "pub artifact_name",
-        "pub manifest_digest",
-        "pub status",
-        "pub base_commit",
-        "pub reason",
-        "pub task_id",
-        "pub profile",
-        "pub proof_run_id",
-    ] {
-        assert!(!baseline.contains(field), "forgable field {field}");
-    }
     let cache_ids = read("crates/velnor-actions-contract/src/workflow/cache_ids.rs")?;
     assert!(
         cache_ids.contains("pub fn new("),
@@ -206,12 +179,8 @@ fn strictness_no_proof_literals_anywhere() -> Result<(), Box<dyn Error>> {
         "crates/velnor-actions-orchestrator/tests",
         "rs",
     )?);
-    for name in [
-        "BaselineProof",
-        "ManifestTaskProof",
-        "PlanBaseline",
-        "EntryCacheIds",
-    ] {
+    let name = "EntryCacheIds";
+    {
         let literal = format!("{name} {{");
         for path in &files {
             let body = std::fs::read_to_string(path)?;
@@ -348,18 +317,6 @@ fn strictness_negative_coverage_pinned() -> Result<(), Box<dyn Error>> {
         (
             "crates/velnor-actions-contract/src/workflow/cache_ids.rs",
             "cache_ids_need_five_valid_digests",
-        ),
-        (
-            "crates/velnor-actions-contract/src/ids/artifact.rs",
-            "proof_constructor_validates_every_input",
-        ),
-        (
-            "crates/velnor-actions-contract/src/ids/artifact.rs",
-            "baseline_states_are_exhaustive",
-        ),
-        (
-            "crates/velnor-actions-contract/src/ids/artifact.rs",
-            "task_proof_needs_valid_ids_and_digests",
         ),
         (
             "crates/velnor-actions-orchestrator/src/error.rs",

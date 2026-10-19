@@ -1,19 +1,17 @@
 //! Merge plan-shape cases: missing/hollow plans, agreement tokens,
 //! uncovered legs, and coverage revalidation.
 
-use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
+use velnor_actions_contract::{FinalStatus, JobDisposition, ObligationDecision, Plan};
 use velnor_actions_orchestrator::merge_internal;
 
 use crate::impl_common::{
     TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,
-    plan_for_source_change, without_ambient_ci_env,
+    plan_for_source_change,
 };
 use crate::impl_merge::{merge, merge_request, success_jobs};
-use crate::impl_orch_core::{merge as core_merge, merge_request as core_merge_request};
-use crate::impl_orch_core_cover::covered_plan;
 
-#[test]
-fn empty_diff_no_baseline_executes_all() -> TestResult {
+/// Plan an empty pull-request diff; returns the plan and its skipped jobs.
+fn empty_diff_plan() -> Result<(tempfile::TempDir, Plan, Vec<String>), Box<dyn std::error::Error>> {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     git(&["add", "."], root)?;
@@ -30,34 +28,93 @@ fn empty_diff_no_baseline_executes_all() -> TestResult {
     let response = velnor_actions_orchestrator::plan_internal(&plan_request.to_string())?;
     let value: serde_json::Value = serde_json::from_str(&response)?;
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
+    let skipped = plan
+        .jobs
+        .iter()
+        .filter(|job| job.disposition == JobDisposition::NotAffected)
+        .map(|job| job.job_id.clone())
+        .collect();
+    Ok((repo, plan, skipped))
+}
+
+#[test]
+fn empty_diff_skips_every_crate_job() -> TestResult {
+    let (_repo, plan, crate_jobs) = empty_diff_plan()?;
     assert!(!plan.obligations.is_empty(), "empty diff keeps universe");
     assert!(!plan.task_ids.is_empty(), "empty diff keeps universe");
-    assert!(!plan.matrix.include.is_empty(), "empty diff executes");
+    assert!(
+        plan.matrix.include.is_empty(),
+        "nothing executes: {:?}",
+        plan.matrix
+    );
     assert!(
         plan.obligations
             .iter()
-            .all(|ob| ob.reason == "forced_uncached"),
-        "nothing proven: {:?}",
+            .all(|ob| ob.decision == ObligationDecision::NotAffected),
+        "nothing affected: {:?}",
         plan.obligations
     );
+    assert!(!crate_jobs.is_empty(), "{:?}", plan.jobs);
+    let jobs = |conclusion: &str| {
+        let mut jobs = vec![serde_json::json!({"job_id": "plan", "conclusion": "success"})];
+        jobs.extend(
+            crate_jobs
+                .iter()
+                .map(|id| serde_json::json!({"job_id": id, "conclusion": conclusion})),
+        );
+        serde_json::Value::Array(jobs)
+    };
+    let matrix = serde_json::to_value(&plan.matrix)?;
+    let no_reports = serde_json::json!([]);
 
-    let reports = passing_reports(&plan)?;
-    let request = merge_request(
+    // Plan skip + job skipped: passes, never no-work.
+    let report = merge(&merge_request(
         &plan,
-        &serde_json::to_value(&plan.matrix)?,
-        &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &matrix,
+        &no_reports,
+        &jobs("skipped"),
+    ))?;
+    assert_eq!(
+        report.status,
+        FinalStatus::Passed,
+        "{:?}",
+        report.miss_reasons
     );
-    assert_eq!(merge(&request)?.status, FinalStatus::Passed);
+    assert_eq!(report.counts.not_affected as usize, plan.obligations.len());
 
-    // Without reports the forced-uncached legs are not-run, never no-work.
-    let request = merge_request(
+    // Plan skip + job ran: the gate disagreed with the plan.
+    let report = merge(&merge_request(
         &plan,
-        &serde_json::to_value(&plan.matrix)?,
-        &serde_json::json!([]),
-        &success_jobs(),
-    );
-    assert_eq!(merge(&request)?.status, FinalStatus::NotRun);
+        &matrix,
+        &no_reports,
+        &jobs("success"),
+    ))?;
+    assert_eq!(report.status, FinalStatus::PlanningFailed);
+    assert!(report.miss_reasons.contains(&"gate_mismatch".to_owned()));
+
+    // Plan skip + job failed or cancelled stays failed or cancelled.
+    let report = merge(&merge_request(
+        &plan,
+        &matrix,
+        &no_reports,
+        &jobs("failure"),
+    ))?;
+    assert_eq!(report.status, FinalStatus::Failed);
+    let report = merge(&merge_request(
+        &plan,
+        &matrix,
+        &no_reports,
+        &jobs("cancelled"),
+    ))?;
+    assert_eq!(report.status, FinalStatus::Cancelled);
+
+    // A failed plan fails Required whatever the crate jobs did.
+    let failed_plan = serde_json::json!([
+        {"job_id": "plan", "conclusion": "failure"},
+        {"job_id": crate_jobs[0], "conclusion": "skipped"},
+    ]);
+    let report = merge(&merge_request(&plan, &matrix, &no_reports, &failed_plan))?;
+    assert_eq!(report.status, FinalStatus::Failed);
 
     // Malformed merge requests stay hard errors, not reports.
     let err = err_of(
@@ -68,6 +125,36 @@ fn empty_diff_no_baseline_executes_all() -> TestResult {
         err,
         velnor_actions_orchestrator::OrchestratorError::Internal { .. }
     ));
+    Ok(())
+}
+
+#[test]
+fn planned_run_job_skipped_fails_required() -> TestResult {
+    let (_repo, plan) = plan_for_source_change()?;
+    let run_job = plan
+        .jobs
+        .iter()
+        .find(|job| job.disposition == JobDisposition::Run && job.job_id.starts_with("rust-"))
+        .ok_or("fixture needs a running crate job")?;
+    let reports = passing_reports(&plan)?;
+    let jobs = serde_json::json!([
+        {"job_id": "plan", "conclusion": "success"},
+        {"job_id": run_job.job_id, "conclusion": "skipped"},
+    ]);
+    let report = merge(&merge_request(
+        &plan,
+        &serde_json::to_value(&plan.matrix)?,
+        &serde_json::to_value(&reports)?,
+        &jobs,
+    ))?;
+    assert_eq!(report.status, FinalStatus::NotRun);
+    assert!(
+        report
+            .miss_reasons
+            .contains(&"planned_job_skipped".to_owned()),
+        "{:?}",
+        report.miss_reasons
+    );
     Ok(())
 }
 
@@ -118,15 +205,20 @@ fn hollow_plan_with_zero_entries_fails_closed() -> TestResult {
         plan.obligations
     );
     plan.matrix.include.clear();
-    plan.validate()?;
+    assert!(
+        plan.validate().is_err(),
+        "a run job without entries is refused"
+    );
     let matrix = serde_json::to_value(&plan.matrix)?;
     let request = merge_request(&plan, &matrix, &serde_json::json!([]), &success_jobs());
     let final_report = merge(&request)?;
     final_report.validate()?;
     assert_eq!(final_report.status, FinalStatus::PlanningFailed);
     assert!(
-        final_report.miss_reasons.contains(&"no_entry".to_owned()),
-        "hollow legs diagnosed: {:?}",
+        final_report
+            .miss_reasons
+            .contains(&"cache_corrupt".to_owned()),
+        "hollow plan diagnosed: {:?}",
         final_report.miss_reasons
     );
     Ok(())
@@ -267,27 +359,6 @@ fn task_file_gaps_fail_closed() -> TestResult {
 }
 
 #[test]
-fn covered_claim_binds_numeric_artifact_id() -> TestResult {
-    without_ambient_ci_env("covered_claim_binds_numeric_artifact_id", || {
-        let (_repo, plan) = plan_for_source_change()?;
-        let (plan_json, mut manifest) = covered_plan(&plan)?;
-        manifest["artifact_id"] = serde_json::json!(10);
-        let matrix = plan_json["matrix"].clone();
-        let mut request =
-            core_merge_request(&plan_json, &matrix, &serde_json::json!([]), &success_jobs());
-        request["baseline_manifest"] = manifest;
-        let final_report = core_merge(&request)?;
-        assert_eq!(final_report.status, FinalStatus::PlanningFailed);
-        assert!(
-            final_report
-                .miss_reasons
-                .contains(&"cache_corrupt".to_owned())
-        );
-        Ok(())
-    })
-}
-
-#[test]
 fn uncovered_leg_carries_miss_token() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let matrix = serde_json::to_value(&plan.matrix)?;
@@ -307,52 +378,4 @@ fn uncovered_leg_carries_miss_token() -> TestResult {
         final_report.miss_reasons
     );
     Ok(())
-}
-
-#[test]
-fn revalidate_failures_carry_miss_tokens() -> TestResult {
-    without_ambient_ci_env("revalidate_failures_carry_miss_tokens", || {
-        let (_repo, plan) = plan_for_source_change()?;
-
-        // Covered claims without a manifest have no proof source: source_missing.
-        let (plan_json, _manifest) = covered_plan(&plan)?;
-        let covered_matrix = plan_json["matrix"].clone();
-        let request = core_merge_request(
-            &plan_json,
-            &covered_matrix,
-            &serde_json::json!([]),
-            &success_jobs(),
-        );
-        let final_report = core_merge(&request)?;
-        assert_eq!(final_report.status, FinalStatus::PlanningFailed);
-        assert!(
-            final_report
-                .miss_reasons
-                .contains(&"source_missing".to_owned()),
-            "{:?}",
-            final_report.miss_reasons
-        );
-
-        // Covered claims bound to a tampered proof run: cache_corrupt.
-        let (mut plan_json, manifest) = covered_plan(&plan)?;
-        plan_json["obligations"][0]["baseline_proof"]["run_id"] = serde_json::json!(8);
-        let covered_matrix = plan_json["matrix"].clone();
-        let mut request = core_merge_request(
-            &plan_json,
-            &covered_matrix,
-            &serde_json::json!([]),
-            &success_jobs(),
-        );
-        request["baseline_manifest"] = manifest;
-        let final_report = core_merge(&request)?;
-        assert_eq!(final_report.status, FinalStatus::PlanningFailed);
-        assert!(
-            final_report
-                .miss_reasons
-                .contains(&"cache_corrupt".to_owned()),
-            "{:?}",
-            final_report.miss_reasons
-        );
-        Ok(())
-    })
 }

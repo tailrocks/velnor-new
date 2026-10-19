@@ -63,7 +63,7 @@ pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.out
 pub enum StepId {
     /// Planner output consumed by downstream jobs.
     Plan,
-    /// Baseline publisher output consumed by the release uploader.
+    /// Baseline publisher output consumed by the artifact uploader.
     PublishBaseline,
     /// V2 hosted tools-cache output consumed by restore and save.
     ToolsCacheIdentity,

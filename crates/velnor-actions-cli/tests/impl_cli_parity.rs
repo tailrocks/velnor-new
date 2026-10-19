@@ -15,9 +15,9 @@ const FOUNDATION_QUALIFICATION_ACTION_REF: &str =
 /// Cache-query verbs and internal-artifact names plan must never print.
 ///
 /// Planned `Cache layers:` are reported (see the field-set test); querying
-/// cache contents, naming `plan.json`/baseline artifacts, or leaking the
+/// cache contents, naming `plan.json`/matrix artifacts, or leaking the
 /// event-time protocol would contradict par §10.
-const NO_QUERY: [&str; 23] = [
+const NO_QUERY: [&str; 22] = [
     "query",
     "Query",
     "lookup",
@@ -30,7 +30,6 @@ const NO_QUERY: [&str; 23] = [
     "Restore",
     "GH_TOKEN",
     "GITHUB_TOKEN",
-    "baseline.json",
     "plan.json",
     "matrix.json",
     "task-result",
@@ -289,7 +288,7 @@ fn plan_queries_no_caches_and_exposes_no_plan_json() -> Result<(), Box<dyn Error
     assert!(!before.is_empty());
     let stdout = plan_stdout(&tmp)?;
     // PAR-10.2: inventory only — no cache query materializes files, and no
-    // internal plan.json/baseline/matrix artifact is written or named.
+    // internal plan.json/matrix artifact is written or named.
     assert_eq!(snapshot(&tmp)?, before, "plan modified the repo");
     for path in before.keys() {
         let fixture_manifest = path == Path::new(".velnor/release-manifest.json");

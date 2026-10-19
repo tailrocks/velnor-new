@@ -17,14 +17,13 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    ContractError, NamedCheckLane, Plan, PlanBaseline, PlanMatrix, PlanRunner, ProposedTask,
-    RunnerSelection, WorkflowEvent, plan_id_for_run,
+    ContractError, NamedCheckLane, ObligationDecision, Plan, PlanMatrix, PlanRunner, ProposedTask,
+    RunnerSelection, WorkflowEvent, canonical_json_bytes, plan_id_for_run,
 };
 use velnor_actions_mise::ToolCatalog;
 
 use self::plan_obligation::{GroupInputs, changed_keys, lane_table, member_changed, plan_group};
 use crate::OrchestratorError;
-use crate::cover::{BaselineInputs, apply_baseline};
 use crate::decisions::dedupe_sorted;
 use crate::discover::Discovery;
 use crate::internal_plan::snapshot::ExecutionSnapshot;
@@ -33,8 +32,6 @@ use crate::internal_plan::{default_generator_with_phase_timings, plan_packages};
 use crate::internal_request::{PlanRequest, checked_plan_request};
 
 pub use self::plan_response::validate_plan_response;
-use self::plan_response::{check_matrix_budget, plan_response};
-use crate::merge::BaselineManifest;
 use crate::prepare::{prepare, prepare_with_phase_timings};
 use crate::select::{classify_changed, select_universe};
 use crate::select_edges::plan_task_graph;
@@ -77,13 +74,6 @@ pub(crate) struct PlanResponse {
     pub(crate) plan: Plan,
     /// Matrix copy, byte-identical to the embedded matrix.
     pub(crate) matrix: PlanMatrix,
-    /// Trusted manifest behind covered obligations, when any covered.
-    ///
-    /// The plan artifact stages these bytes as `baseline.json` so the
-    /// merge revalidates covered claims against the exact evidence the
-    /// planner used; absent when nothing covered.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) baseline_manifest: Option<BaselineManifest>,
 }
 
 /// Compute the affected plan plus matrix for one event (schema-1 JSON).
@@ -110,54 +100,9 @@ fn plan_internal_inner(
     } else {
         prepare(&root)?
     };
+    validate_qualification_request(&request, &prep.default_branch)?;
     let scale_set_image_source_sha = qualification::bind_image_source(&mut request, &prep)?;
-    let (mut plan, changed) = build_event_plan(&mut request, &prep, timings.as_deref_mut())?;
-    qualification::validate_scale_set_image_source(
-        &request,
-        &prep,
-        &plan,
-        scale_set_image_source_sha.as_deref(),
-    )?;
-    let manifest = request.baseline_manifest.and_then(|value| {
-        serde_json::from_value::<BaselineManifest>(value)
-            .inspect_err(|_| {
-                plan.warnings
-                    .push("baseline_miss:malformed_manifest".to_owned());
-            })
-            .ok()
-    });
-    let used_manifest = if request.event == WorkflowEvent::Qualification {
-        None
-    } else {
-        apply_baseline(
-            &mut plan,
-            request.event,
-            BaselineInputs {
-                branch: &prep.default_branch,
-                root: &prep.root,
-                workflow: velnor_actions_workflow_renderer::render::WORKFLOW_PATH,
-                catalog: &prep.catalog,
-                repository: request.repository.as_deref(),
-            },
-            manifest,
-            &prep.discovery,
-            changed.as_ref(),
-        )?
-    };
-    plan.validate().map_err(internal_contract)?;
-    check_matrix_budget(&plan.matrix)?;
-    let response = plan_response(plan, used_manifest);
-    serde_json::to_string(&response).map_err(|err| OrchestratorError::Internal {
-        problem: format!("response_encode:{err}"),
-    })
-}
-
-fn build_event_plan(
-    request: &mut PlanRequest,
-    prep: &crate::prepare::GenerationPreparation,
-    timings: Option<&mut phase_timing::PlanPhaseTimings>,
-) -> Result<(Plan, Option<BTreeSet<String>>), OrchestratorError> {
-    let named_check_lanes = named_lanes::resolve(prep, request.named_check_lanes.take())?;
+    let named_check_lanes = named_lanes::resolve(&prep, request.named_check_lanes.take())?;
     let catalog = &prep.catalog;
     let mut warnings = Vec::new();
     warnings.extend(crate::evidence::workspace_drift_warnings(
@@ -175,7 +120,7 @@ fn build_event_plan(
         &mut warnings,
     );
     let plan = build_plan(
-        request,
+        &request,
         &prep.discovery,
         &prep.root,
         &universe,
@@ -185,9 +130,62 @@ fn build_event_plan(
         catalog,
         &named_check_lanes,
         warnings,
-        timings,
+        timings.as_deref_mut(),
     )?;
-    Ok((plan, changed))
+    qualification::validate_scale_set_image_source(
+        &request,
+        &prep,
+        &plan,
+        scale_set_image_source_sha.as_deref(),
+    )?;
+    plan.validate().map_err(internal_contract)?;
+    check_matrix_budget(&plan.matrix)?;
+    let response = plan_response(plan);
+    serde_json::to_string(&response).map_err(|err| OrchestratorError::Internal {
+        problem: format!("response_encode:{err}"),
+    })
+}
+
+/// Bind qualification provenance to the prepared repository and checkout.
+fn validate_qualification_request(
+    request: &PlanRequest,
+    default_branch: &str,
+) -> Result<(), OrchestratorError> {
+    match (request.event, request.qualification.as_ref()) {
+        (WorkflowEvent::Qualification, Some(context)) => {
+            let repository = request
+                .repository
+                .as_deref()
+                .ok_or_else(|| internal("missing_qualification_repository"))?;
+            context
+                .validate_for(default_branch, repository, &request.head)
+                .map_err(internal_contract)
+        }
+        (WorkflowEvent::Qualification, None) => Err(internal("missing_qualification_context")),
+        (_, Some(_)) => Err(internal("qualification_context_on_wrong_event")),
+        (_, None) => Ok(()),
+    }
+}
+
+/// Assemble the `plan-v1` response: the plan plus its matrix copy.
+fn plan_response(plan: Plan) -> PlanResponse {
+    PlanResponse {
+        schema: SCHEMA,
+        matrix: plan.matrix.clone(),
+        plan,
+    }
+}
+
+/// Reject a matrix whose canonical bytes exceed the budget.
+fn check_matrix_budget(matrix: &PlanMatrix) -> Result<(), OrchestratorError> {
+    let bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
+    if bytes.len() > MATRIX_BUDGET_BYTES {
+        return Err(internal(&format!(
+            "matrix_budget_exceeded:{}:broaden selection or reduce matrix entries",
+            bytes.len()
+        )));
+    }
+    Ok(())
 }
 
 /// Reject any schema other than 1.
@@ -219,9 +217,9 @@ pub(crate) fn internal_contract(error: ContractError) -> OrchestratorError {
 
 /// Build the validated plan from the obligation universe.
 ///
-/// Identities attach for every member before changed-work hints and
-/// baseline evidence classify dispositions; the execution matrix keeps
-/// execute obligations only after that classification.
+/// Identities attach for every member before changed-work hints
+/// classify dispositions; the execution matrix keeps execute
+/// obligations only after that classification.
 #[expect(
     clippy::too_many_arguments,
     reason = "one call site threads plan scope, universe, classification, and per-call timings"
@@ -292,10 +290,10 @@ fn build_plan(
     if let Some(dup) = duplicates.first() {
         return Err(internal(&format!("duplicate_task_id:{dup}")));
     }
-    let selected_ids: BTreeSet<&str> = universe
-        .iter()
-        .map(|task| task.identity.unit_id.as_str())
-        .collect();
+    let needs = crate::plan_dispositions::job_needs(universe, &job_owners, request.event)?;
+    let jobs =
+        crate::plan_dispositions::finalize_dispositions(&mut obligations, &mut entries, &needs);
+    let selected_ids = executing_units(universe, &obligations);
     Ok(Plan {
         schema: Plan::SCHEMA,
         run_key: request.run_key.clone(),
@@ -309,15 +307,32 @@ fn build_plan(
             selection,
         },
         trust: velnor_actions_contract::trust_for_event(request.event),
-        baseline: PlanBaseline::unavailable(Some("baseline_lookup_deferred"))?,
         generator,
         packages: plan_packages(discovery, &selected_ids),
         obligations,
         matrix: PlanMatrix { include: entries },
         task_ids,
+        jobs,
         warnings,
         edges,
     })
+}
+
+/// Unit IDs owning at least one obligation that is not `not_affected`.
+fn executing_units<'a>(
+    universe: &[&'a ProposedTask],
+    obligations: &[velnor_actions_contract::PlanObligation],
+) -> BTreeSet<&'a str> {
+    let executing: BTreeSet<&str> = obligations
+        .iter()
+        .filter(|ob| ob.decision != ObligationDecision::NotAffected)
+        .map(|ob| ob.task_id.as_str())
+        .collect();
+    universe
+        .iter()
+        .filter(|task| executing.contains(task.task_id.as_str()))
+        .map(|task| task.identity.unit_id.as_str())
+        .collect()
 }
 
 #[cfg(test)]

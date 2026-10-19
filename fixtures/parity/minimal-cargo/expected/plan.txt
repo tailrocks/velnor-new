@@ -16,7 +16,7 @@ Workflow to generate
   Jobs:
     - actionlint (9 steps)
     - plan (12 steps)
-    - publish-baseline (5 steps)
+    - publish-baseline (6 steps)
     - required (8 steps)
     - rust-minimal-cargo (16 steps)
     - 1 Rust package job

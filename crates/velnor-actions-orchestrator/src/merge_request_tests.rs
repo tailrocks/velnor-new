@@ -3,7 +3,6 @@
 //! Declared via `#[path]` from `merge_request.rs` under `cfg(test)`.
 
 use super::*;
-use crate::merge::required_evidence::MAX_BASELINE_MANIFEST_BYTES;
 
 /// Minimal plan JSON naming `(artifact-id, matrix-key)` entries.
 pub(crate) fn plan_with(entries: &[(&str, &str)]) -> String {
@@ -186,12 +185,10 @@ fn assembly_records_gaps_and_rejects_bad_report() {
 fn assembly_rejects_links_oversize_and_unreadable_inputs() {
     let dir = staged("{}", &[]);
     std::fs::write(dir.path().join("real.json"), "{}").expect("real");
+    std::fs::remove_file(dir.path().join("matrix.json")).expect("rm matrix");
     #[cfg(unix)]
-    std::os::unix::fs::symlink(
-        dir.path().join("real.json"),
-        dir.path().join("baseline.json"),
-    )
-    .expect("link");
+    std::os::unix::fs::symlink(dir.path().join("real.json"), dir.path().join("matrix.json"))
+        .expect("link");
     #[cfg(unix)]
     {
         let request = assemble_with_needs(
@@ -205,11 +202,13 @@ fn assembly_rejects_links_oversize_and_unreadable_inputs() {
         .expect("asm");
         let errors = error_list(&request);
         assert!(
-            errors.contains(&"symlink_baseline".to_owned()),
-            "symlinked baseline.json reports: {errors:?}"
+            errors.contains(&"symlink_matrix".to_owned()),
+            "symlinked matrix.json reports: {errors:?}"
         );
-        std::fs::remove_file(dir.path().join("baseline.json")).expect("rm");
+        std::fs::remove_file(dir.path().join("matrix.json")).expect("rm");
     }
+    #[cfg(not(unix))]
+    std::fs::remove_file(dir.path().join("matrix.json")).ok();
     std::fs::write(
         dir.path().join("plan.json"),
         "x".repeat(usize::try_from(MAX_ASSEMBLY_JSON_BYTES + 10).expect("bound")),
@@ -227,7 +226,7 @@ fn assembly_rejects_links_oversize_and_unreadable_inputs() {
     let errors = error_list(&request);
     assert!(errors.contains(&"oversize_plan".to_owned()), "{errors:?}");
     std::fs::write(dir.path().join("plan.json"), "{}").expect("restore plan");
-    std::fs::create_dir(dir.path().join("baseline.json")).expect("dir");
+    std::fs::create_dir(dir.path().join("matrix.json")).expect("dir");
     let request = assemble_with_needs(
         "local",
         dir.path(),
@@ -239,50 +238,8 @@ fn assembly_rejects_links_oversize_and_unreadable_inputs() {
     .expect("asm");
     let errors = error_list(&request);
     assert!(
-        errors.contains(&"unreadable_baseline".to_owned()),
+        errors.contains(&"unreadable_matrix".to_owned()),
         "{errors:?}"
-    );
-}
-
-#[test]
-fn baseline_raw_limit_covers_nested_parents_and_padding() {
-    let dir = staged("{}", &[]);
-    let nested = serde_json::json!({"parent": {"parent": {"parent": null}}}).to_string();
-    let padded_len = MAX_BASELINE_MANIFEST_BYTES + 1;
-    let padded = format!("{nested}{}", " ".repeat(padded_len - nested.len()));
-    std::fs::write(dir.path().join("baseline.json"), padded).expect("padded baseline");
-    let request = assemble_with_needs(
-        "local",
-        dir.path(),
-        Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
-        Some("push"),
-        Some("{}"),
-    )
-    .expect("assemble");
-    assert!(
-        error_list(&request).contains(&"oversize_baseline".to_owned()),
-        "{request}"
-    );
-
-    let expanded = serde_json::json!({
-        "parent": {"parent": null},
-        "padding": "x".repeat(padded_len),
-    })
-    .to_string();
-    std::fs::write(dir.path().join("baseline.json"), expanded).expect("expanded baseline");
-    let request = assemble_with_needs(
-        "local",
-        dir.path(),
-        Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
-        Some("push"),
-        Some("{}"),
-    )
-    .expect("assemble");
-    assert!(
-        error_list(&request).contains(&"oversize_baseline".to_owned()),
-        "{request}"
     );
 }
 

@@ -68,7 +68,7 @@ fn accepts_only_the_authorized_caller_workflow_and_branch() {
 
 #[test]
 fn qualification_wrapper_accepts_only_its_exact_selected_branch() {
-    let path = velnor_actions_contract::QUALIFICATION_WORKFLOW_PATH;
+    let path = velnor_actions_contract::workflow::QUALIFICATION_WORKFLOW_PATH;
     for accepted in [
         path.to_owned(),
         format!("{path}@sea/integration"),

@@ -39,6 +39,7 @@ fn record(workspace_root: &str, manifests: &[&str]) -> WorkspaceRecord {
         packages: manifests.iter().map(|m| package(m)).collect(),
         edges: Vec::new(),
         skipped_edges: Vec::new(),
+        has_external_dependencies: false,
     }
 }
 

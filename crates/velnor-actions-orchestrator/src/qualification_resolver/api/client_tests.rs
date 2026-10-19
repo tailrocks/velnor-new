@@ -9,7 +9,7 @@ const SOURCE: &str = "0123456789abcdef0123456789abcdef01234567";
 fn verification_dispatch() -> QualificationDispatch {
     let workflow_ref = format!(
         "owner/project/{}@refs/heads/main",
-        velnor_actions_contract::QUALIFICATION_WORKFLOW_PATH
+        velnor_actions_contract::workflow::QUALIFICATION_WORKFLOW_PATH
     );
     let campaign = verification_repeat_campaign(
         "owner/project",
@@ -86,7 +86,7 @@ fn verification_exception_rejects_wrong_path_source_or_branch() {
     wrong_branch.git_ref = "refs/heads/feature".to_owned();
     wrong_branch.workflow_ref = format!(
         "owner/project/{}@{}",
-        velnor_actions_contract::QUALIFICATION_WORKFLOW_PATH,
+        velnor_actions_contract::workflow::QUALIFICATION_WORKFLOW_PATH,
         wrong_branch.git_ref
     );
     wrong_branch.campaign = verification_repeat_campaign(
@@ -116,7 +116,7 @@ fn configured_unprotected_verification_branch_keeps_existing_admission() {
     context.git_ref = "refs/heads/sea/integration".to_owned();
     context.workflow_ref = format!(
         "owner/project/{}@{}",
-        velnor_actions_contract::QUALIFICATION_WORKFLOW_PATH,
+        velnor_actions_contract::workflow::QUALIFICATION_WORKFLOW_PATH,
         context.git_ref
     );
     context.campaign = verification_repeat_campaign(

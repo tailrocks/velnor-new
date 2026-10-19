@@ -61,7 +61,6 @@ const EXPECTED_MODULES: &[&str] = &[
     "custom_run.rs",
     "error.rs",
     "gate6.rs",
-    "gh.rs",
     "git.rs",
     "git_tap_capture.rs",
     "git_tap_capture_tests.rs",

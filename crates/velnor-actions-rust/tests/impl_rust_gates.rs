@@ -47,7 +47,6 @@ fn extension_serializes_and_gates_reuse() {
         err.to_string().contains("unresolved_input:lockfile"),
         "{err}"
     );
-    assert!(ext.coverage_eligible().is_err());
     assert!(ext.conservative_execution_required());
     let resolved = RustTaskIdentityExtension {
         lock_digest: Some(velnor_actions_contract::digest_b3(b"lock")),
@@ -56,7 +55,6 @@ fn extension_serializes_and_gates_reuse() {
         ..ext
     };
     assert!(resolved.reuse_eligible().is_ok());
-    assert!(resolved.coverage_eligible().is_ok());
     assert!(!resolved.conservative_execution_required());
     let wrapped = resolved.to_stack_extension();
     assert_eq!(wrapped.schema, "rust-task-identity-v1");
@@ -89,7 +87,6 @@ fn slot_states_survive_serialization_distinctly() {
     assert_eq!(absent_value["lock_state"], "absent_proven");
     assert_ne!(value["lock_state"], absent_value["lock_state"]);
     assert!(absent.reuse_eligible().is_ok());
-    assert!(absent.coverage_eligible().is_ok());
 }
 
 #[test]
@@ -252,13 +249,11 @@ fn unknown_nextest_config_blocks_nextest_only() {
         err.to_string().contains("unresolved_input:nextest_config"),
         "{err}"
     );
-    assert!(nextest.coverage_eligible().is_err());
     let mut cargo = inputs.clone();
     cargo.kind = TaskKind::Test;
     cargo.runner = TestRunner::CargoTest;
     let test = RustTaskIdentityExtension::for_task(&cargo);
     assert!(test.reuse_eligible().is_ok());
-    assert!(test.coverage_eligible().is_ok());
 }
 
 #[test]
@@ -277,7 +272,6 @@ fn unbound_archive_source_reports_without_blocking() {
     let build = RustTaskIdentityExtension::for_task(&inputs);
     assert!(build.archive.is_none());
     assert!(build.reuse_eligible().is_ok());
-    assert!(build.coverage_eligible().is_ok());
     assert!(!build.conservative_execution_required());
 }
 

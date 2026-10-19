@@ -27,7 +27,7 @@ pub use crate::config::{
     QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend, QualifiedToolExecutable,
     QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe, RESERVED_SUITE_IDS,
     RESERVED_SUITE_WORKFLOW_SLUGS, ResourcesConfig, RootProblem, RoutingWorkflow, RunnerPlatform,
-    RunnerSelection, RunsOn, RustConfiguration, RustCrateConfig, RustStackConfig,
+    RunnerSelection, RunsOn, RustConfiguration, RustCrateConfig, RustInputRule, RustStackConfig,
     RustSuiteArtifact, RustSuiteArtifactWhen, RustSuiteBuildMode, RustSuiteConfig,
     RustSuiteTrigger, S3BackendConfig, SCALE_SET_NAME, SCALE_SET_PROFILE_ID, ScaleSetSelector,
     ShardTimingEvidence, StacksConfig, TestShardingConfig, TofuApplyConfig, TofuStackConfig,

@@ -17,7 +17,7 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{
     GenerateOptions, finalized_jobs, generate, plan_internal, prepare,
 };
-use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
+use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID};
 
 use self::tofu_perf_fixtures_t24::{commit_two_tofu, tofu_repo, tofu_repo_with_lock};
 use crate::impl_common::{Snapshot, TestResult, snapshot};
@@ -98,7 +98,7 @@ pub(crate) fn token_hits(
 
 /// True for generated crate jobs (neither plan, lint, gate, nor publish).
 pub(crate) fn is_crate_job(id: &str) -> bool {
-    id != PLAN_JOB_ID && id != "actionlint" && id != FINAL_JOB_ID && id != PUBLISH_JOB_ID
+    id != PLAN_JOB_ID && id != "actionlint" && id != FINAL_JOB_ID && id != "publish-baseline"
 }
 
 /// Step names of one finalized job.

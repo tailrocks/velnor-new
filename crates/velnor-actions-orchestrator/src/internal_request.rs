@@ -9,6 +9,7 @@ use velnor_actions_contract::{
     NAMED_CHECK_LANES_ENV, NamedCheckLane, QualificationDispatch, WorkflowEvent,
     canonical_json_bytes, run_key_for_ci, validate_run_key,
 };
+use velnor_actions_workflow_renderer::render::PLAN_ATTEMPT_ENV;
 
 use crate::OrchestratorError;
 use crate::internal::{MERGE_OP, PLAN_OP, SCHEMA, internal, internal_contract};
@@ -213,9 +214,14 @@ pub(crate) fn resolve_run_key(explicit: Option<&str>) -> Result<String, Orchestr
         return Ok(key.to_owned());
     }
     let id = env::var("GITHUB_RUN_ID").ok().filter(|v| !v.is_empty());
-    let attempt = env::var("GITHUB_RUN_ATTEMPT")
+    let attempt = env::var(PLAN_ATTEMPT_ENV)
         .ok()
-        .filter(|v| !v.is_empty());
+        .filter(|v| !v.is_empty())
+        .or_else(|| {
+            env::var("GITHUB_RUN_ATTEMPT")
+                .ok()
+                .filter(|v| !v.is_empty())
+        });
     let (Some(id), Some(attempt)) = (id, attempt) else {
         return Err(internal("missing_run_key"));
     };

@@ -74,24 +74,23 @@ const ENV_EXPRESSIONS: [&str; 14] = [
 /// Exact `${{ }}` inners permitted in action `with:` values.
 ///
 /// Run-scoped names, runner paths, matrix coordinates, the
-/// push-gated cache-save flag, and the publish step's derived
-/// artifact name. Notably absent: every `secrets.*` handle (rejected
+/// push-gated cache-save flag, and runtime cache identities. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
 const WITH_EXPRESSIONS: [&str; 14] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
+    "env.VELNOR_RUN_KEY_ATTEMPT",
     "github.event_name == 'push'",
     "github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork",
-    "steps.publish-baseline.outputs.artifact_name",
     "steps.v2.outputs.identity",
     "steps.v2.outputs.seed_admitted",
     "runner.environment",
     "github.job",
     "steps.tofu-providers.outputs.cache-key",
     "steps.tofu-providers.outputs.cache-path",
-    "needs.plan.outputs.covered_tasks",
     "steps.preseed-stage.outputs.helper-sha256",
+    "steps.publish-baseline.outputs.artifact_name",
 ];
 
 /// True for a `matrix.*` field reference (both layers allow the family).

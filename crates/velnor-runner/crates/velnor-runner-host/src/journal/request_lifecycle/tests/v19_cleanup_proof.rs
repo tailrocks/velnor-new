@@ -1,4 +1,4 @@
-use super::helpers::{TEST_ENGINE_ID, record_owned_storage_cleanup};
+use super::helpers::{TEST_ENGINE_ID, record_owned_network_cleanup, record_owned_storage_cleanup};
 use super::review_counterexamples::ready;
 use crate::error::HostError;
 use crate::journal::{Journal, ReservationState, StorageRole};
@@ -196,6 +196,7 @@ async fn exact_five_object_cleanup_settles_only_after_all_owned_absence() -> Res
     );
     fixture.scope.record_remote_cleanup(reservation_id).await?;
     fixture.scope.record_local_cleanup(reservation_id).await?;
+    record_owned_network_cleanup(&fixture.scope, reservation_id).await?;
     assert_eq!(
         fixture
             .scope

@@ -38,8 +38,15 @@ pub const PLAN_STEP_ID: &str = StepId::Plan.as_str();
 pub const PLAN_ID_OUTPUT: &str = "plan_id";
 /// Job-output name carrying the run key (`r<run-id>-a<run-attempt>`).
 pub const RUN_KEY_OUTPUT: &str = "run_key";
-/// Job-output name carrying the comma-wrapped covered task IDs.
-pub const COVERED_TASKS_OUTPUT: &str = "covered_tasks";
+/// Plan job output listing `not_affected` crate jobs as `,id1,id2,`.
+///
+/// Negative list: empty or missing means every crate job runs, so a
+/// failed or garbled plan can never skip work by itself.
+pub const NOT_AFFECTED_JOBS_OUTPUT: &str = "not_affected_jobs";
+/// Plan job output carrying the run attempt that produced the plan.
+pub const PLAN_ATTEMPT_OUTPUT: &str = "plan_attempt";
+/// Env key binding run-scoped identities to the plan's attempt.
+pub const PLAN_ATTEMPT_ENV: &str = "VELNOR_RUN_KEY_ATTEMPT";
 
 /// Typed matrix source for the task job's `strategy.matrix`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -220,7 +227,7 @@ pub(crate) fn attach_task_matrix(
         output.clone(),
         Yaml::str(format!("${{{{ steps.{PLAN_STEP_ID}.outputs.{output} }}}}")),
     )];
-    for name in [PLAN_ID_OUTPUT, RUN_KEY_OUTPUT, COVERED_TASKS_OUTPUT]
+    for name in [PLAN_ID_OUTPUT, RUN_KEY_OUTPUT, NOT_AFFECTED_JOBS_OUTPUT]
         .into_iter()
         .chain(QUALIFICATION_OUTPUTS)
     {
@@ -231,6 +238,7 @@ pub(crate) fn attach_task_matrix(
             ));
         }
     }
+    outputs.push(plan_attempt_output());
     insert_job_key(jobs, needs_job, "outputs", Yaml::Map(outputs))?;
     require_plan_step_id(jobs, needs_job, output)
 }
@@ -268,11 +276,22 @@ pub(crate) fn attach_crate_job_caps(
     Ok(())
 }
 
-/// Emit the plan job's `covered_tasks` output plus the plan step ID.
+/// The plan job's `plan_attempt` output: the attempt that ran the plan.
 ///
-/// Static (non-matrix) workflows still gate obligation steps on plan
-/// coverage, so the plan job always exports the covered set; without
-/// a plan job or plan step there is nothing to export.
+/// Evaluated by the plan job itself, so a partial re-run that keeps the
+/// plan job's earlier result keeps its attempt too.
+fn plan_attempt_output() -> (String, Yaml) {
+    (
+        PLAN_ATTEMPT_OUTPUT.to_owned(),
+        Yaml::str("${{ github.run_attempt }}"),
+    )
+}
+
+/// Emit the plan job's selection, attempt, and qualification outputs.
+///
+/// Static (non-matrix) workflows gate crate jobs on `not_affected_jobs`
+/// and bind downstream run identities to `plan_attempt`; without a plan
+/// job or plan step there is nothing to export.
 pub(crate) fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError> {
     let Yaml::Map(entries) = document else {
         return Err(matrix_invalid("matrix_without_document"));
@@ -287,7 +306,7 @@ pub(crate) fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError
     if !has_step_id(jobs, PLAN_JOB_ID, PLAN_STEP_ID) {
         return Ok(());
     }
-    let outputs = std::iter::once(COVERED_TASKS_OUTPUT)
+    let mut outputs: Vec<(String, Yaml)> = std::iter::once(NOT_AFFECTED_JOBS_OUTPUT)
         .chain(QUALIFICATION_OUTPUTS)
         .map(|name| {
             (
@@ -296,6 +315,7 @@ pub(crate) fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError
             )
         })
         .collect();
+    outputs.push(plan_attempt_output());
     insert_job_key(jobs, PLAN_JOB_ID, "outputs", Yaml::Map(outputs))
 }
 

@@ -15,7 +15,6 @@
 
 use std::collections::BTreeSet;
 
-use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
     FinalReport, JobConclusion, ObligationDecision, Plan, RequiredJobResult,
 };
@@ -23,82 +22,6 @@ use velnor_actions_contract::{
 use super::MergeRequest;
 use crate::cover::Signals;
 use crate::internal::internal_contract;
-
-/// Maximum accepted `baseline.json` bytes: evidence stays bounded.
-pub(crate) const MAX_BASELINE_MANIFEST_BYTES: usize = 1_048_576;
-
-/// One trusted-baseline task proof: identities plus provenance run IDs.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct BaselineTaskEntry {
-    /// Covered task ID.
-    pub(crate) task_id: String,
-    /// Covered task digest.
-    pub(crate) task_digest: String,
-    /// Covered input digest.
-    pub(crate) input_digest: String,
-    /// Canonical digest over the task's complete input closure.
-    ///
-    /// Required with no default: entries recorded before closure binding
-    /// (schema 1) fail deserialization instead of covering blindly.
-    pub(crate) closure_digest: String,
-    /// Original direct-execution proof run.
-    pub(crate) proof_run_id: u64,
-    /// Carrying run that revalidated the proof.
-    pub(crate) observed_run_id: u64,
-    /// Immediate authenticated ancestor binding; null for direct execution.
-    #[serde(deserialize_with = "deserialize_required_option")]
-    pub(crate) carried_from: Option<velnor_actions_contract::BaselineProof>,
-    /// External-data freshness (required for advisory kinds).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) external_data: Option<crate::external_data::ExternalDataFreshness>,
-    /// Structured task proof, when the publisher recorded one (PAR-5.3).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) proof: Option<velnor_actions_contract::ManifestTaskProof>,
-}
-
-/// Trusted `baseline.json`: minimum shape plus artifact binding.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(crate) struct BaselineManifest {
-    /// Manifest schema; must be 2 (closure-bound entries).
-    pub(crate) schema: u32,
-    /// Repository identity digest.
-    pub(crate) repository_id: String,
-    /// Exact trusted source commit.
-    pub(crate) source_commit: String,
-    /// Protected ref under test.
-    #[serde(rename = "ref")]
-    pub ref_: String,
-    /// Protected event; must be `push`.
-    pub(crate) event: String,
-    /// Protected workflow ref.
-    pub(crate) workflow_ref: String,
-    /// Proof run ID.
-    pub(crate) run_id: u64,
-    /// Proof run attempt.
-    pub(crate) run_attempt: u64,
-    /// Final result; must be `passed`.
-    pub(crate) final_status: String,
-    /// Generator version.
-    pub(crate) generator_version: String,
-    /// Generator SHA-256.
-    pub generator_sha256: String,
-    /// Compatibility identity.
-    pub(crate) compatibility_id: String,
-    /// Manifest-assigned numeric fingerprint of the artifact name.
-    pub(crate) artifact_id: u64,
-    /// Derived baseline artifact name.
-    pub(crate) artifact_name: String,
-    /// Per-task proofs.
-    pub(crate) tasks: Vec<BaselineTaskEntry>,
-    /// Prior protected successful baseline, bound by every carried entry.
-    #[serde(deserialize_with = "deserialize_required_option")]
-    pub(crate) parent: Option<Box<BaselineManifest>>,
-    /// Unix expiry; absent means the baseline never expires.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) expires_at_unix: Option<u64>,
-}
 
 /// Enforce the closed inventory: jobs and obligation proofs.
 ///
@@ -157,9 +80,8 @@ fn check_job_inventory(
 
 /// Every non-execute disposition carries verifiable proof.
 ///
-/// Baseline coverage revalidates against the manifest in
-/// `revalidate_coverage`; task-cache reuse has no restore-proof channel
-/// yet (P04), so any reuse decision fails closed here. The match stays
+/// Task-cache reuse has no restore-proof channel yet (P04), so any
+/// reuse decision fails closed here. The match stays
 /// exhaustive so a future decision variant fails to compile here
 /// instead of slipping through unchecked.
 fn check_obligation_proofs(
@@ -173,19 +95,7 @@ fn check_obligation_proofs(
                 signals.planning_failed = true;
                 miss_reasons.insert("no_entry".to_owned());
             }
-            ObligationDecision::Execute | ObligationDecision::CoveredByTrustedBaseline => {}
-        }
-    }
-}
-
-/// Fold required job conclusions; skipped is never success.
-pub(crate) fn fold_jobs(jobs: &[RequiredJobResult], signals: &mut Signals) {
-    for job in jobs {
-        match job.conclusion {
-            JobConclusion::Success => {}
-            JobConclusion::Cancelled => signals.cancelled = true,
-            JobConclusion::Skipped | JobConclusion::Neutral => signals.not_run = true,
-            JobConclusion::Failure | JobConclusion::Missing => signals.failed = true,
+            ObligationDecision::Execute | ObligationDecision::NotAffected => {}
         }
     }
 }
@@ -244,13 +154,4 @@ fn assembly_tokens(errors: &[String]) -> BTreeSet<String> {
             .to_owned()
         })
         .collect()
-}
-
-/// Require explicit null for absent lineage: old manifests fail closed.
-fn deserialize_required_option<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    Option::<T>::deserialize(deserializer)
 }

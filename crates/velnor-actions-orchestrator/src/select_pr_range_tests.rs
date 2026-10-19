@@ -138,6 +138,7 @@ fn discovery() -> Discovery {
         target: None,
     };
     Discovery {
+        affected: crate::affected_inputs::AffectedInputs::default(),
         mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: vec![PlannedWorkspace {
@@ -150,6 +151,7 @@ fn discovery() -> Discovery {
                 packages,
                 edges: vec![edge("c", "a"), edge("d", "c")],
                 skipped_edges: Vec::new(),
+                has_external_dependencies: false,
             },
             profile: RustExecutionProfile {
                 compile_driver: CompileDriver::Cargo,

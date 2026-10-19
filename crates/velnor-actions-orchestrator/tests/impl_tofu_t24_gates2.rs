@@ -60,10 +60,6 @@ fn gate5_cache_hit_never_replaces_validate() {
             .reuse_eligible()
             .expect_err("init/validate reuse stays OFF");
         assert!(err.to_string().contains("tofu_reuse_disabled"), "got {err}");
-        assert!(
-            ext.coverage_eligible().is_ok(),
-            "coverage untouched by the reuse refusal"
-        );
     }
     let fmt = TofuTaskIdentityExtension::for_task(&gate_inputs(
         lock(),
@@ -113,6 +109,10 @@ fn gate6_limits_bound_fanout_and_subprocess_budgets() -> TestResult {
     let jobs = finalized_jobs(&prepare(dir.path())?)?;
     let ids: Vec<&String> = jobs.keys().filter(|id| is_crate_job(id)).collect();
     assert_eq!(ids.len(), 3, "one job per root, never per step");
+    assert!(
+        jobs.contains_key("publish-baseline"),
+        "baseline publisher remains in workflow"
+    );
     for (id, job) in &jobs {
         let minutes = job.timeout_minutes.minutes();
         assert!(

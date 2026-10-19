@@ -1,33 +1,62 @@
-//! Event-time `publish-baseline-v1`: trusted evidence publication.
+//! Publish baseline evidence from successful reports in the current run.
 //!
-//! Runs in the `publish-baseline` job after Required passes: it binds
-//! the downloaded plan to the protected-push refs, builds the exact
-//! `baseline.json` later lookups consume, and stages it for the
-//! artifact upload. Publication never runs inside merge consumption:
-//! the merge only reads staged evidence, while this op only writes it.
-//!
-//! Every gate fails closed with a `publish_refused:*` reason: wrong
-//! event, unprotected ref, unanchored repository, head or plan-event
-//! mismatch, unverifiable generator, malformed source commit, or an
-//! unproven reuse disposition. Covered obligations carry only when the
-//! downloaded parent exactly binds the planner's revalidated identities.
-//! Before staging, the op self-checks the manifest through the same
-//! [`validate_provenance`](crate::cover_baseline::provenance_check::validate_provenance)
-//! consumers run, so publish and consume agree by construction.
+//! The operation checks the push request, plan, matrix entries, and task
+//! reports. It writes one proof for each obligation after all its matrix
+//! reports pass. It does not use baseline evidence to skip verification.
 
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
-use velnor_actions_contract::{WorkflowEvent, canonical_json_bytes, digest_b3, parse_strict_json};
+use serde::{Deserialize, Serialize};
+use velnor_actions_contract::{
+    ManifestTaskProof, ObligationDecision, TaskReport, TaskStatus, Trust, WorkflowEvent,
+    canonical_json_bytes, digest_b3, parse_strict_json,
+};
 
 use crate::OrchestratorError;
-use crate::cover_baseline::provenance_check::{
-    ProvenanceExpectations, is_unverifiable_generator_sha, validate_provenance,
-};
 use crate::internal::{SCHEMA, check_schema, internal, internal_contract};
 use crate::internal_request::resolve_run_key;
-use crate::merge::BaselineManifest;
 use crate::request_event::{request_refs, workflow_event_for};
+
+/// Schema-2 publication task row. Coverage lineage is intentionally absent.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PublishedTask {
+    task_id: String,
+    task_digest: String,
+    input_digest: String,
+    closure_digest: String,
+    proof_run_id: u64,
+    observed_run_id: u64,
+    carried_from: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    external_data: Option<serde_json::Value>,
+    proof: Option<ManifestTaskProof>,
+}
+
+/// Existing schema-2 baseline artifact, written only from this run's successful reports.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BaselineManifest {
+    schema: u32,
+    repository_id: String,
+    source_commit: String,
+    #[serde(rename = "ref")]
+    ref_: String,
+    event: String,
+    workflow_ref: String,
+    run_id: u64,
+    run_attempt: u64,
+    final_status: String,
+    generator_version: String,
+    generator_sha256: String,
+    compatibility_id: String,
+    artifact_id: u64,
+    artifact_name: String,
+    tasks: Vec<PublishedTask>,
+    parent: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    expires_at_unix: Option<u64>,
+}
 
 /// Publish operation tag.
 pub const PUBLISH_OP: &str = "publish-baseline-v1";
@@ -173,9 +202,30 @@ pub(crate) fn baseline_publish_to(
     publish_gate(&request)?;
     let plan = crate::task_report::load_plan(run_key, runner_temp)?;
     bind_plan(&request, &plan)?;
-    let parent = baseline_publish_lineage::load_parent_for_publish(&request, &plan, runner_temp)?;
-    let manifest = publish_manifest(&request, &plan, run_id, run_attempt, parent.as_ref())?;
-    self_check(&request, &manifest)?;
+    let run_dir = runner_temp.join("velnor").join(run_key);
+    let downloaded = crate::retrieve_reports::retrieve_reports_to(run_id, &run_dir);
+    if downloaded == 0 {
+        return Err(internal("publish_refused:reports_missing"));
+    }
+    let plan_value =
+        serde_json::to_value(&plan).map_err(|_| internal("publish_refused:plan_encode"))?;
+    let mut report_errors = Vec::new();
+    let (_, task_values) = crate::retrieve_reports::read_staged_reports(
+        run_key,
+        &plan_value,
+        &run_dir.join("reports"),
+        &mut report_errors,
+    );
+    if !report_errors.is_empty() {
+        return Err(internal("publish_refused:reports_invalid"));
+    }
+    let reports = task_values
+        .into_iter()
+        .map(serde_json::from_value::<TaskReport>)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| internal("publish_refused:reports_invalid"))?;
+    let manifest = publish_manifest(&request, &plan, run_id, run_attempt, &reports)?;
+    self_check(&manifest)?;
     let bytes = canonical_json_bytes(&manifest).map_err(internal_contract)?;
     let output_dir = runner_temp
         .join("velnor")
@@ -266,49 +316,107 @@ fn bind_plan(
 
 /// Build the trusted manifest over the plan's executed obligations.
 ///
-/// Compatibility derives from the plan alone so later lookups name
-/// this exact artifact; covered obligations carry only from a validated
-/// parent, and any reuse disposition refuses outright.
+/// Each executed obligation may have multiple matrix-lane reports. Validate
+/// every planned lane independently, then emit one manifest proof per task.
 fn publish_manifest(
     request: &PublishRequest,
     plan: &velnor_actions_contract::Plan,
     run_id: u64,
     run_attempt: u64,
-    parent: Option<&BaselineManifest>,
+    reports: &[TaskReport],
 ) -> Result<BaselineManifest, OrchestratorError> {
-    if is_unverifiable_generator_sha(&plan.generator.sha256) {
+    if plan.generator.sha256.is_empty() || plan.generator.sha256.chars().any(char::is_uppercase) {
         return Err(internal("publish_refused:generator_unverifiable"));
+    }
+    if reports.len() != plan.matrix.include.len() {
+        return Err(internal("publish_refused:task_report_inventory_mismatch"));
     }
     let mut tasks = Vec::new();
     for obligation in &plan.obligations {
-        match obligation.decision {
-            velnor_actions_contract::ObligationDecision::Execute => {
-                tasks.push(crate::merge::required_evidence::BaselineTaskEntry {
-                    task_id: obligation.task_id.clone(),
-                    task_digest: obligation.task_digest.clone(),
-                    input_digest: obligation.input_digest.clone(),
-                    closure_digest: obligation.closure_digest.clone(),
-                    proof_run_id: run_id,
-                    carried_from: None,
-                    observed_run_id: run_id,
-                    external_data: None,
-                    proof: None,
-                });
-            }
-            velnor_actions_contract::ObligationDecision::CoveredByTrustedBaseline => {
-                let parent = parent.ok_or_else(|| internal("publish_refused:parent_missing"))?;
-                tasks.push(baseline_publish_lineage::carried_entry(
-                    obligation, parent, run_id,
-                )?);
-            }
-            velnor_actions_contract::ObligationDecision::ReusedFromTaskCache => {
-                return Err(internal("publish_refused:unproven_reuse"));
-            }
+        if obligation.decision != ObligationDecision::Execute {
+            return Err(internal("publish_refused:nonexecuted_obligation"));
         }
+        let entries: Vec<_> = plan
+            .matrix
+            .include
+            .iter()
+            .filter(|entry| entry.task_id == obligation.task_id)
+            .collect();
+        if entries.is_empty() {
+            return Err(internal("publish_refused:task_matrix_missing"));
+        }
+        let mut matched = Vec::with_capacity(entries.len());
+        for entry in &entries {
+            let mut lane_reports = reports.iter().filter(|report| {
+                report.task_id == obligation.task_id
+                    && report.matrix_id == entry.id
+                    && report.matrix_key == entry.matrix_key
+            });
+            let report = lane_reports
+                .next()
+                .ok_or_else(|| internal("publish_refused:task_report_missing"))?;
+            if lane_reports.next().is_some() {
+                return Err(internal("publish_refused:duplicate_matrix_report"));
+            }
+            if report.task_digest != obligation.task_digest
+                || report.event != WorkflowEvent::Push
+                || report.run_key != plan.run_key
+                || report.trust != Trust::Trusted
+                || report.status != TaskStatus::Executed
+                || report.exit_code != 0
+            {
+                return Err(internal("publish_refused:task_report_mismatch"));
+            }
+            if entry.task_id != obligation.task_id {
+                return Err(internal("publish_refused:matrix_task_mismatch"));
+            }
+            report
+                .validate_for_plan_entry(entry)
+                .map_err(|_| internal("publish_refused:task_report_invalid"))?;
+            matched.push((entry, report));
+        }
+        if reports.iter().any(|report| {
+            report.task_id == obligation.task_id
+                && !matched.iter().any(|(entry, _)| {
+                    report.matrix_id == entry.id && report.matrix_key == entry.matrix_key
+                })
+        }) {
+            return Err(internal("publish_refused:matrix_report_mismatch"));
+        }
+        let (entry, _) = matched
+            .iter()
+            .find(|(entry, _)| entry.job_id == obligation.job_id)
+            .ok_or_else(|| internal("publish_refused:primary_matrix_lane_missing"))?;
+        let toolchain_id = entry
+            .toolchain_id
+            .as_deref()
+            .ok_or_else(|| internal("publish_refused:toolchain_identity_missing"))?;
+        let proof = ManifestTaskProof::new(
+            &obligation.task_id,
+            &obligation.task_digest,
+            &obligation.input_digest,
+            &obligation.graph_digest,
+            toolchain_id,
+            &obligation.mbx_digest,
+            &entry.planned_platform.platform_id,
+            &obligation.profile,
+            run_id,
+        )
+        .map_err(internal_contract)?;
+        tasks.push(PublishedTask {
+            task_id: obligation.task_id.clone(),
+            task_digest: obligation.task_digest.clone(),
+            input_digest: obligation.input_digest.clone(),
+            closure_digest: obligation.closure_digest.clone(),
+            proof_run_id: run_id,
+            observed_run_id: run_id,
+            carried_from: None,
+            external_data: None,
+            proof: Some(proof),
+        });
     }
     tasks.sort_by(|left, right| left.task_id.cmp(&right.task_id));
-    let compat =
-        crate::cover_compat::baseline_compat_for_plan(plan).map_err(|reason| internal(&reason))?;
+    let compat = baseline_compat_for_plan(plan)?;
     let name = velnor_actions_contract::artifact_id_for_baseline(&request.head, &compat)
         .map_err(|_| internal("publish_refused:bad_source_commit"))?;
     let slug = request
@@ -322,7 +430,7 @@ fn publish_manifest(
         .ok_or_else(|| internal("publish_refused:unprotected_ref"))?;
     let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
     Ok(BaselineManifest {
-        schema: crate::internal_plan::snapshot::CANONICAL_SCHEMA_VERSION,
+        schema: velnor_actions_contract::Plan::SCHEMA,
         repository_id: digest_b3(format!("github.com/{slug}").as_bytes()),
         source_commit: request.head.clone(),
         ref_: git_ref.clone(),
@@ -334,55 +442,63 @@ fn publish_manifest(
         generator_version: plan.generator.version.clone(),
         generator_sha256: plan.generator.sha256.clone(),
         compatibility_id: compat,
-        artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
+        artifact_id: baseline_artifact_numeric_id(&name),
         artifact_name: name,
         tasks,
-        parent: parent.map(|manifest| Box::new(manifest.clone())),
+        parent: None,
         expires_at_unix: None,
     })
 }
 
-/// Self-check the staged manifest through consumer validation.
-///
-/// The expectations mirror the request refs exactly; a manifest this
-/// check rejects would fail every consumer, so the op errors loudly
-/// instead of uploading unprovable bytes.
-fn self_check(
-    request: &PublishRequest,
-    manifest: &BaselineManifest,
-) -> Result<(), OrchestratorError> {
-    let slug = request
-        .repository
-        .as_deref()
-        .and_then(crate::origin::validate_repository_slug)
-        .ok_or_else(|| internal("publish_refused:repository_unanchored"))?;
-    let branch = request
-        .default_branch
-        .clone()
-        .ok_or_else(|| internal("publish_refused:unprotected_ref"))?;
-    let expected = ProvenanceExpectations {
-        base: request.head.clone(),
-        branch,
-        workflow_path: velnor_actions_workflow_renderer::render::WORKFLOW_PATH.to_owned(),
-        generator_version: manifest.generator_version.clone(),
-        generator_sha256: manifest.generator_sha256.clone(),
-        repository_id: Some(digest_b3(format!("github.com/{slug}").as_bytes())),
-        repository_slug: Some(slug),
-        repository_conflict: false,
-    };
-    let digest = digest_b3(&canonical_json_bytes(manifest).map_err(internal_contract)?);
-    validate_provenance(manifest, &digest, &expected)
-        .map_err(|reason| internal(&format!("publish_self_check:{reason}")))?;
+/// Check publication schema and each task proof before serialization.
+fn self_check(manifest: &BaselineManifest) -> Result<(), OrchestratorError> {
+    if manifest.schema != 2
+        || manifest.event != "push"
+        || manifest.final_status != "passed"
+        || manifest.tasks.is_empty()
+        || manifest.tasks.iter().any(|task| task.proof.is_none())
+    {
+        return Err(internal("publish_self_check:invalid_manifest"));
+    }
+    for task in &manifest.tasks {
+        task.proof
+            .as_ref()
+            .ok_or_else(|| internal("publish_self_check:missing_task_proof"))?
+            .validate()
+            .map_err(internal_contract)?;
+    }
+    let _ = canonical_json_bytes(manifest).map_err(internal_contract)?;
     Ok(())
+}
+
+fn baseline_compat_for_plan(
+    plan: &velnor_actions_contract::Plan,
+) -> Result<String, OrchestratorError> {
+    let mut pairs: Vec<(&str, &str)> = plan
+        .obligations
+        .iter()
+        .map(|item| (item.task_id.as_str(), item.task_digest.as_str()))
+        .collect();
+    pairs.sort_unstable();
+    let bytes =
+        canonical_json_bytes(&serde_json::json!({"label": plan.runner.label, "tasks": pairs}))
+            .map_err(internal_contract)?;
+    Ok(digest_b3(&bytes))
+}
+
+fn baseline_artifact_numeric_id(name: &str) -> u64 {
+    let digest = digest_b3(name.as_bytes());
+    digest
+        .strip_prefix("b3-")
+        .and_then(|hex| hex.get(..16))
+        .and_then(|hex| u64::from_str_radix(hex, 16).ok())
+        .unwrap_or(0)
+        .max(1)
 }
 
 #[cfg(test)]
 #[path = "baseline_publish_tests.rs"]
 mod baseline_publish_tests;
-
-#[path = "baseline_publish_lineage.rs"]
-mod baseline_publish_lineage;
-pub(crate) use baseline_publish_lineage::carry_candidate_fits;
 
 #[cfg(test)]
 #[path = "baseline_publish_branch_tests.rs"]

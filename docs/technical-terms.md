@@ -25,3 +25,8 @@
 | Resource permit | An approval to start work once with no more than the allowed host capacity. |
 | Worker pair | The runner container and its private Docker-in-Docker container for one job. |
 | Recovery observation | A guest resource sample used to check an existing reservation during recovery. |
+| Field | An item with a name in software data, such as a TOML value or a database column. |
+| Schema | The structure of a database, with its tables, columns, and checks. |
+| Database trigger | A database operation that starts automatically when specified data changes. |
+| Execution proof | A journal record used to check a job request and its worker pair. |
+| Proof guard | A database trigger that stops a change to an execution proof when the data is not correct. |
