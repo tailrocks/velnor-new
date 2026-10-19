@@ -1,0 +1,220 @@
+use super::*;
+
+#[test]
+fn generated_dispatch_plan_gates_native_mbx_and_tools_cache_steps() -> Result<(), crate::RenderError>
+{
+    let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
+    let ir = dispatch_ir(dispatch_plan_job(&staged)?);
+    let context = dispatch_render_context(staged);
+    let jobs = crate::render::finalize_jobs(
+        &ir,
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &context,
+        &dispatch_mise(),
+        &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
+    )?;
+    let plan = jobs.get(PLAN_JOB_ID).expect("finalized plan job");
+    assert_native_mbx_step(plan);
+    assert_seed_and_mise_steps(plan)?;
+    assert_rendered_dispatch_guard(&ir, &context)?;
+    Ok(())
+}
+
+#[test]
+fn finalization_requires_and_uses_the_selected_routing_policy() -> Result<(), crate::RenderError> {
+    let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
+    let mut ir = dispatch_ir(dispatch_plan_job(&staged)?);
+    let selector = velnor_actions_contract::ScaleSetSelector::try_new(
+        "ubuntu-26.04-scale-set",
+        &["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()],
+    )
+    .expect("valid test selector");
+    ir.jobs
+        .get_mut(PLAN_JOB_ID)
+        .expect("dispatch plan job")
+        .runs_on = selector.token();
+    let context = dispatch_render_context(staged);
+    let mise = dispatch_mise();
+    let hosted = crate::workflow_routing::WorkflowRoutingPolicy::hosted_only();
+    let error = crate::render::finalize_jobs(
+        &ir,
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &context,
+        &mise,
+        &hosted,
+    )
+    .expect_err("hosted policy rejects selector leaves");
+    assert!(
+        error
+            .to_string()
+            .contains("scale_set_selector_unconfigured"),
+        "{error}"
+    );
+
+    let image = velnor_actions_contract::config::ValidatedImageReference::parse(
+        "ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )
+    .expect("valid test image");
+    let scale_set = crate::workflow_routing::WorkflowRoutingPolicy::configured(
+        velnor_actions_contract::ExecutionMode::Both,
+        selector,
+        Some(image),
+    );
+    assert!(
+        crate::render::finalize_jobs(
+            &ir,
+            WorkflowPolicy::ConsumerV1,
+            None,
+            &context,
+            &mise,
+            &scale_set,
+        )
+        .is_ok()
+    );
+    Ok(())
+}
+
+fn assert_native_mbx_step(plan: &Job) {
+    let mbx = plan
+        .steps
+        .iter()
+        .find(|step| step.name == "Restore MBX objects")
+        .expect("MBX action");
+    assert!(mbx.condition.as_deref().is_some_and(|condition| {
+        condition.contains("github.event_name != 'workflow_dispatch'")
+    }));
+    let native_mode = match &mbx.kind {
+        StepKind::Action { env, .. } => env
+            .get(crate::cache_steps::MBX_CACHE_MODE_ENV)
+            .map(String::as_str),
+        _ => None,
+    };
+    assert_eq!(
+        native_mode,
+        Some(
+            "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}"
+        ),
+        "native object writes remain limited to protected default-branch pushes"
+    );
+}
+
+fn assert_seed_and_mise_steps(plan: &Job) -> Result<(), crate::RenderError> {
+    // V2 carries the tool seed inside the runtime-identity prelude; the
+    // boundary still gates the MBX object step below. The prelude digest is
+    // static and content-bound, so dispatch cannot smuggle a foreign seed.
+    let prelude = plan
+        .steps
+        .iter()
+        .find(|step| step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity))
+        .expect("V2 tools-cache identity prelude");
+    let acquired = plan
+        .steps
+        .iter()
+        .position(|step| step.role == Some(velnor_actions_contract::StepRole::AcquireVelnor))
+        .expect("verified helper acquisition");
+    let prelude_at = plan
+        .steps
+        .iter()
+        .position(|step| step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity))
+        .expect("identity prelude index");
+    let restore_at = plan
+        .steps
+        .iter()
+        .position(|step| step.role == Some(velnor_actions_contract::StepRole::ToolsCacheRestore))
+        .expect("tools-cache restore index");
+    assert!(acquired < prelude_at && prelude_at < restore_at);
+    assert_eq!(
+        prelude.condition.as_deref(),
+        Some(crate::cache_p08::TOOLS_CACHE_PLAN_RUN_CONDITION)
+    );
+    assert!(
+        !prelude
+            .condition
+            .as_deref()
+            .unwrap_or_default()
+            .contains("needs.plan"),
+        "the plan job does not depend on its own output"
+    );
+    let StepKind::Action { with, .. } = &prelude.kind else {
+        return Err(crate::RenderError::InvalidWorkflow(
+            "tools_cache_prelude_not_action".to_owned(),
+        ));
+    };
+    let digest = with
+        .get(crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
+        .map(String::as_str)
+        .unwrap_or_default();
+    assert!(
+        digest.len() == 64
+            && digest.bytes().all(|byte| byte.is_ascii_hexdigit()
+                && (byte.is_ascii_digit() || byte.is_ascii_lowercase())),
+        "prelude binds the exact static runtime digest"
+    );
+    let restore = plan
+        .steps
+        .iter()
+        .find(|step| step.role == Some(velnor_actions_contract::StepRole::ToolsCacheRestore))
+        .expect("V2 tools-cache restore");
+    assert_eq!(
+        restore.condition.as_deref(),
+        Some(crate::cache_p08::TOOLS_CACHE_PLAN_RESTORE_CONDITION)
+    );
+    assert!(
+        plan.steps
+            .iter()
+            .all(|step| !step.name.contains("MBX bundle")),
+        "the retired manual transport is absent"
+    );
+    let mise = plan
+        .steps
+        .iter()
+        .find(|step| step.name == crate::setup::SETUP_MISE_NAME)
+        .expect("Mise setup");
+    let StepKind::Action { with, .. } = &mise.kind else {
+        return Err(crate::RenderError::InvalidWorkflow(
+            "setup_mise_not_action".to_owned(),
+        ));
+    };
+    assert_eq!(with.get("cache").map(String::as_str), Some("false"));
+    Ok(())
+}
+
+fn assert_rendered_dispatch_guard(
+    ir: &WorkflowIr,
+    context: &RenderContext,
+) -> Result<(), crate::RenderError> {
+    let rendered = crate::render::render_workflow_ir_strict_shared(
+        ir,
+        WorkflowPolicy::ConsumerV1,
+        None,
+        context,
+        &dispatch_mise(),
+    )?;
+    assert!(
+        rendered
+            .yaml
+            .contains(crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME)
+    );
+    assert!(
+        rendered
+            .yaml
+            .contains("github.event_name != 'workflow_dispatch'")
+    );
+    Ok(())
+}
+
+#[test]
+fn empty_seed_key_exits_before_the_trusted_image_tree_is_inspected() {
+    let script = crate::tool_seed::tool_seed_action_script(crate::tool_seed::SEED_ROOT)
+        .expect("fixed seed script");
+    let disabled = script.find("if [ -z \"$key\" ]").expect("empty key gate");
+    let trust = script
+        .find("trusted_seed_is_trusted")
+        .expect("trusted tree check");
+    assert!(disabled < trust, "empty key must exit before seed access");
+}
+
+#[path = "dispatch_cache_boundary_seed_tests.rs"]
+mod seed_tests;

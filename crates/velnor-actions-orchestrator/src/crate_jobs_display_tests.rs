@@ -48,7 +48,7 @@ fn id_and_display_prefixes_agree_per_partition() {
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 3, "rust plus tofu plus mixed");
+    assert_eq!(found.jobs.len(), 4, "Rust and ToFu groups stay separate");
     for (id, job) in &found.jobs {
         let tofu_id = id.starts_with(TOFU_JOB_ID_PREFIX);
         let tofu_display = job.display_name.starts_with(TOFU_DISPLAY_PREFIX);
@@ -66,7 +66,7 @@ fn id_and_display_prefixes_agree_per_partition() {
             .map(|(_, job)| job.display_name.clone())
             .expect("built job")
     };
-    assert_eq!(display("rust-demo"), "Rust / demo");
+    assert_eq!(display("rust-demo"), "Rust / demo (Cargo.toml)");
     assert_eq!(display("tofu-stacks-a"), "OpenToFu — stacks/a");
     let mixed = found
         .jobs

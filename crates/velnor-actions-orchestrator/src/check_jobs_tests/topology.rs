@@ -122,7 +122,7 @@ fn mixed_platform_checks_keep_exact_tools_and_unconditional_reports() {
 }
 
 #[test]
-fn mixed_rust_tofu_and_named_checks_bind_qualification_plan_to_required_jobs() {
+fn mixed_rust_tofu_and_named_checks_share_required_job_ids() {
     let mut java = check("java", hosted("ubuntu-26.04", CheckPlatform::LinuxX64));
     java.task = "check:java".to_owned();
     let mut frontend = check("frontend", hosted("ubuntu-26.04", CheckPlatform::LinuxX64));
@@ -161,27 +161,30 @@ fn mixed_rust_tofu_and_named_checks_bind_qualification_plan_to_required_jobs() {
         planned.push(job_id);
     }
     planned.sort();
-    let required_qualification: Vec<&str> = required
-        .iter()
-        .copied()
-        .filter(|job_id| {
-            job_id.starts_with("rust-qualification-")
-                || job_id.starts_with("tofu-qualification-")
-                || job_id.starts_with(velnor_actions_contract::QUALIFICATION_CHECK_JOB_PREFIX)
-        })
-        .collect();
     assert_eq!(
-        required_qualification,
-        planned.iter().map(String::as_str).collect::<Vec<_>>()
+        workflow
+            .ir
+            .jobs
+            .keys()
+            .filter(|id| id.starts_with("rust-qualification-"))
+            .count(),
+        0,
+        "Rust tasks share their package job"
     );
     assert_eq!(
-        workflow.ir.jobs["qualification-check-java"].check_runner,
-        workflow.ir.jobs["check-java"].check_runner
+        workflow
+            .ir
+            .jobs
+            .keys()
+            .filter(|id| id.starts_with("qualification-check-"))
+            .count(),
+        0,
+        "named checks share their declared job"
     );
-    assert_eq!(
-        workflow.ir.jobs["qualification-check-frontend"].check_runner,
-        workflow.ir.jobs["check-frontend"].check_runner
-    );
+    for id in ["check-java", "check-frontend"] {
+        assert!(required.contains(id), "Required omits {id}");
+        assert!(workflow.ir.jobs.contains_key(id), "missing {id}");
+    }
 
     assert_named_check_plan_entries(root.path(), &discovery, &required);
 }

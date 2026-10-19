@@ -1,14 +1,13 @@
 //! Crate-job identity: grouping plus owning-job binding.
 //!
-//! Runnable obligations group by `(package_id, configuration)`; the
-//! contract assigns one stable unbranded job ID per group. Both the
-//! renderer ([`build_crate_jobs`](crate::crate_jobs::build_crate_jobs))
-//! and the planner resolve through this module, so the plan's
-//! per-entry job binding and the rendered jobs can never disagree.
+//! Rust tasks use package IDs. `ToFu` tasks use package and configuration IDs.
+//! The contract assigns one stable job ID to each group. The renderer
+//! ([`build_crate_jobs`](crate::crate_jobs::build_crate_jobs)) and planner use
+//! this module. This keeps plan bindings equal to rendered jobs.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::workflow::QUALIFICATION_CHECK_JOB_PREFIX;
+use velnor_actions_contract::workflow::jobs::assign_rust_crate_job_ids;
 use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, ProposedTask, Stack, TOFU_JOB_ID_PREFIX, WorkflowEvent,
     assign_crate_job_ids, matrix_id_for_task_group, matrix_key_for_id,
@@ -27,7 +26,9 @@ pub(crate) fn job_id_for_member(
     member: &ProposedTask,
     event: WorkflowEvent,
 ) -> Option<String> {
-    if event == WorkflowEvent::Qualification {
+    if event == WorkflowEvent::Qualification
+        && Stack::from_id(&member.stack_id) == Some(Stack::Tofu)
+    {
         return qualification_job_id_for_member(member).ok();
     }
     if Stack::from_id(&member.stack_id) == Some(Stack::Mise) {
@@ -38,36 +39,30 @@ pub(crate) fn job_id_for_member(
     }
     let grouped = group_runnable(tasks);
     let assigned = assign_group_ids(&grouped);
-    assigned
-        .get(&(
-            member.identity.unit_id.clone(),
-            member.configuration.clone(),
-        ))
-        .cloned()
+    assigned.get(&group_key(member)).cloned()
 }
 
-/// Stable one-entry job ID derived from the plan matrix key.
-///
-/// These IDs exist beside grouped crate IDs so Qualification can run
-/// each cache lane in its own job without changing ordinary CI grouping.
+/// Stable job ID for `ToFu` Qualification or a named check.
 pub(crate) fn qualification_job_id_for_member(
     member: &ProposedTask,
 ) -> Result<String, velnor_actions_contract::ContractError> {
-    if Stack::from_id(&member.stack_id) == Some(Stack::Mise) {
-        return Ok(format!(
-            "{QUALIFICATION_CHECK_JOB_PREFIX}{}",
-            member.identity.unit_id
-        ));
+    match Stack::from_id(&member.stack_id) {
+        Some(Stack::Mise) => return Ok(format!("check-{}", member.identity.unit_id)),
+        Some(Stack::Tofu) => {}
+        _ => {
+            return Err(velnor_actions_contract::ContractError::identity(
+                "qualification.job_id",
+                "unsupported_stack",
+            ));
+        }
     }
     let id = matrix_id_for_task_group(&member.stack_id, &member.task_id)?;
     let key = matrix_key_for_id(&id)?;
     qualification_job_id_for_key(&member.stack_id, &key)
 }
 
-/// Map each per-entry Qualification crate job to its ordinary grouped job.
-///
-/// The renderer uses this map to keep the source job's runner override while
-/// splitting Qualification into one physical job per matrix entry.
+/// Connect each Rust or `ToFu` Qualification job to its source job.
+/// This connection keeps the source job's runner selector.
 /// # Errors
 pub(crate) fn qualification_job_sources(
     tasks: &[ProposedTask],
@@ -80,17 +75,20 @@ pub(crate) fn qualification_job_sources(
         {
             continue;
         }
-        let group = (task.identity.unit_id.clone(), task.configuration.clone());
+        let group = group_key(task);
         let source_id = assigned.get(&group).ok_or_else(|| {
             velnor_actions_contract::ContractError::identity(
                 "qualification.sources",
                 "grouped_job_missing",
             )
         })?;
-        let qualification_id = qualification_job_id_for_member(task)?;
-        if sources
-            .insert(qualification_id, source_id.clone())
-            .is_some()
+        let qualification_id = if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+            qualification_job_id_for_member(task)?
+        } else {
+            source_id.clone()
+        };
+        if let Some(previous) = sources.insert(qualification_id, source_id.clone())
+            && previous != *source_id
         {
             return Err(velnor_actions_contract::ContractError::Collision(
                 "qualification source job".to_owned(),
@@ -122,7 +120,7 @@ pub(crate) fn qualification_job_sources_for_ir(
 }
 
 fn is_qualification_crate_job(id: &str) -> bool {
-    id.starts_with("rust-qualification-") || id.starts_with("tofu-qualification-")
+    id.starts_with(CRATE_JOB_ID_PREFIX) || id.starts_with("tofu-qualification-")
 }
 
 /// Stable one-entry job ID for one validated stack and matrix key.
@@ -131,7 +129,6 @@ pub(crate) fn qualification_job_id_for_key(
     matrix_key: &str,
 ) -> Result<String, velnor_actions_contract::ContractError> {
     let prefix = match Stack::from_id(stack_id) {
-        Some(Stack::Rust) => CRATE_JOB_ID_PREFIX,
         Some(Stack::Tofu) => TOFU_JOB_ID_PREFIX,
         _ => {
             return Err(velnor_actions_contract::ContractError::identity(
@@ -162,7 +159,11 @@ pub(crate) fn assign_group_ids(
     grouped: &BTreeMap<(String, String), Vec<&ProposedTask>>,
 ) -> BTreeMap<(String, String), String> {
     let (rust, tofu) = id_inputs(grouped);
-    let mut assigned = assign_crate_job_ids(&rust, CRATE_JOB_ID_PREFIX);
+    let rust_ids = assign_rust_crate_job_ids(&rust, CRATE_JOB_ID_PREFIX);
+    let mut assigned: BTreeMap<(String, String), String> = rust_ids
+        .into_iter()
+        .map(|(package_id, job_id)| ((package_id, String::new()), job_id))
+        .collect();
     assigned.extend(assign_crate_job_ids(&tofu, TOFU_JOB_ID_PREFIX));
     assigned
 }
@@ -179,7 +180,7 @@ pub(crate) fn group_is_tofu(members: &[&ProposedTask]) -> bool {
             .all(|task| Stack::from_id(&task.stack_id) == Some(Stack::Tofu))
 }
 
-/// Runnable tasks by `(package_id, configuration)` in sorted order.
+/// Runnable tasks by package, with `ToFu` kept separate by configuration.
 ///
 /// Skips tasks without test targets (no command is emitted for them)
 /// and package-less workspace tasks (the plan job owns that scope).
@@ -191,35 +192,43 @@ pub(crate) fn group_runnable(
         if !crate::crate_jobs::is_runnable(task) {
             continue;
         }
-        grouped
-            .entry((task.identity.unit_id.clone(), task.configuration.clone()))
-            .or_default()
-            .push(task);
+        grouped.entry(group_key(task)).or_default().push(task);
     }
     grouped
 }
 
-/// ID-assignment input triples: `(package_id, package_name, configuration)`.
-type IdInputs = BTreeSet<(String, String, String)>;
+/// Package-only groups use an empty configuration key; `ToFu` keeps its config key.
+fn group_key(task: &ProposedTask) -> (String, String) {
+    let configuration = if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+        task.configuration.clone()
+    } else {
+        String::new()
+    };
+    (task.identity.unit_id.clone(), configuration)
+}
 
-/// ID-assignment inputs per stack: one triple per group, named by its
-/// first member.
-fn id_inputs(grouped: &BTreeMap<(String, String), Vec<&ProposedTask>>) -> (IdInputs, IdInputs) {
+/// Rust package identity and `ToFu` package/configuration identity.
+type IdInputs = (
+    BTreeSet<(String, String)>,
+    BTreeSet<(String, String, String)>,
+);
+
+/// ID-assignment inputs per stack: one identity per group.
+fn id_inputs(grouped: &BTreeMap<(String, String), Vec<&ProposedTask>>) -> IdInputs {
     let mut rust = BTreeSet::new();
     let mut tofu = BTreeSet::new();
     for ((package_id, configuration), members) in grouped {
         let Some(first) = members.first() else {
             continue;
         };
-        let triple = (
-            package_id.clone(),
-            first.display_name.clone(),
-            configuration.clone(),
-        );
         if group_is_tofu(members) {
-            tofu.insert(triple);
+            tofu.insert((
+                package_id.clone(),
+                first.display_name.clone(),
+                configuration.clone(),
+            ));
         } else {
-            rust.insert(triple);
+            rust.insert((package_id.clone(), first.display_name.clone()));
         }
     }
     (rust, tofu)

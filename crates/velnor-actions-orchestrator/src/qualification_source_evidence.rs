@@ -67,27 +67,43 @@ pub fn write_qualification_source_evidence() -> Result<(), OrchestratorError> {
         return Err(internal("qualification_source_runner_temp_mismatch"));
     }
 
-    let entry = unique_job_entry(&plan, &authenticated.job_id)?;
-    let (entry_for_task, task_digest) =
-        crate::task_report::entry_and_digest_for_job(&plan, &entry.task_id, &authenticated.job_id)?;
-    if entry_for_task.matrix_key != entry.matrix_key {
-        return Err(internal("qualification_source_entry_mismatch"));
+    let entries = job_entries(&plan, &authenticated.job_id)?;
+    let mut evidence = Vec::with_capacity(entries.len());
+    for entry in entries {
+        validate_runner_directories(&runner_temp, &run_key, Some(&entry.matrix_key))?;
+        let obligation = unique_execute_obligation(&plan, &entry.task_id)?;
+        let reports = read_successful_lane_reports(&runner_temp, &plan, entry, &entry.task_digest)?;
+        let observed = recompute_lane_closure(&prepared, &plan, entry)?;
+        require_plan_match(&observed, entry, obligation)?;
+        evidence.push((entry, observed, reports));
     }
-    validate_runner_directories(&runner_temp, &run_key, Some(&entry.matrix_key))?;
-    let obligation = unique_execute_obligation(&plan, &entry.task_id)?;
-    let reports = read_successful_lane_reports(&runner_temp, &plan, entry, task_digest)?;
-    let observed = recompute_lane_closure(&prepared, &plan, entry)?;
-    require_plan_match(&observed, entry, obligation)?;
 
-    write_sidecar(
-        &runner_temp,
-        &plan,
-        entry,
-        &authenticated,
-        &generator,
-        &observed,
-        reports,
-    )
+    write_job_sidecars(&runner_temp, &plan, &authenticated, &generator, evidence)
+}
+
+fn write_job_sidecars(
+    runner_temp: &Path,
+    plan: &Plan,
+    authenticated: &AuthenticatedProducerContext,
+    generator: &PlanGenerator,
+    evidence: Vec<(
+        &velnor_actions_contract::MatrixEntry,
+        ObservedLaneClosure,
+        SuccessfulLaneReports,
+    )>,
+) -> Result<(), OrchestratorError> {
+    for (entry, observed, reports) in evidence {
+        write_sidecar(
+            runner_temp,
+            plan,
+            entry,
+            authenticated,
+            generator,
+            &observed,
+            reports,
+        )?;
+    }
+    Ok(())
 }
 
 /// Make the generated helper step used only by Qualification consumers.
@@ -142,22 +158,34 @@ fn validate_plan_context(
     Ok(())
 }
 
-fn unique_job_entry<'a>(
+fn job_entries<'a>(
     plan: &'a Plan,
     job_id: &str,
-) -> Result<&'a velnor_actions_contract::MatrixEntry, OrchestratorError> {
-    let mut entries = plan
+) -> Result<Vec<&'a velnor_actions_contract::MatrixEntry>, OrchestratorError> {
+    let entries: Vec<_> = plan
         .matrix
         .include
         .iter()
-        .filter(|entry| entry.job_id == job_id);
-    let entry = entries
-        .next()
-        .ok_or_else(|| internal("qualification_source_job_missing"))?;
-    if entries.next().is_some() {
-        return Err(internal("qualification_source_job_ambiguous"));
+        .filter(|entry| entry.job_id == job_id)
+        .collect();
+    if entries.is_empty() {
+        return Err(internal("qualification_source_job_missing"));
     }
-    Ok(entry)
+    let artifact_id = &entries[0].artifact_id;
+    let platform = &entries[0].planned_platform;
+    let mut matrix_keys = std::collections::BTreeSet::new();
+    let mut task_ids = std::collections::BTreeSet::new();
+    for entry in &entries {
+        if entry.artifact_id != *artifact_id || entry.planned_platform != *platform {
+            return Err(internal("qualification_source_job_entry_mismatch"));
+        }
+        if !matrix_keys.insert(entry.matrix_key.as_str())
+            || !task_ids.insert(entry.task_id.as_str())
+        {
+            return Err(internal("qualification_source_job_entry_duplicate"));
+        }
+    }
+    Ok(entries)
 }
 
 fn unique_execute_obligation<'a>(

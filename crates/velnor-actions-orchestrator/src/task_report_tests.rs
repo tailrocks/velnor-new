@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::fs;
 
 use tempfile::TempDir;
+use velnor_actions_contract::workflow::NamedCheckLaneVariant;
 use velnor_actions_contract::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision,
     Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform,
@@ -30,13 +31,6 @@ fn exit_codes_accept_the_eight_bit_range() {
     for bad in ["", " ", "-1", "256", "99999", "0x1", "1\n", "ok"] {
         assert!(parse_exit_code(bad).is_err(), "must reject {bad:?}");
     }
-}
-
-#[test]
-fn downstream_ids_split_dedupe_and_drop_blanks() {
-    assert_eq!(parse_downstream(None), [] as [String; 0]);
-    assert_eq!(parse_downstream(Some("")), [] as [String; 0]);
-    assert_eq!(parse_downstream(Some("b,a,b,, a ,")), ["b", "a"]);
 }
 
 #[test]
@@ -200,8 +194,7 @@ fn executed_report_binds_plan_identities() {
     let temp = staged_run(&plan, "local");
     let entry = &plan.matrix.include[0];
     let obligation = &plan.obligations[0];
-    let reported =
-        write_task_report_to("local", CLIPPY, 0, None, &[], temp.path()).expect("report");
+    let reported = write_task_report_to("local", CLIPPY, 0, None, temp.path()).expect("report");
     assert_eq!(reported, 1);
     let expect_id = velnor_actions_contract::task_report_id_for_task(
         "local",
@@ -228,8 +221,7 @@ fn failed_report_marks_entry_failed() {
     let temp = staged_run(&plan, "local");
     let entry = &plan.matrix.include[0];
     let obligation = &plan.obligations[0];
-    let reported =
-        write_task_report_to("local", CLIPPY, 3, Some(1), &[], temp.path()).expect("report");
+    let reported = write_task_report_to("local", CLIPPY, 3, Some(1), temp.path()).expect("report");
     assert_eq!(reported, 1);
     let expect_id = velnor_actions_contract::task_report_id_for_task(
         "local",
@@ -271,7 +263,7 @@ fn tofu_executed_report_carries_measured_timing() {
     plan.validate().expect("mixed plan validates");
     let temp = staged_run(&plan, "local");
     let reported =
-        write_task_report_to("local", TOFU_VALIDATE, 0, Some(1), &[], temp.path()).expect("report");
+        write_task_report_to("local", TOFU_VALIDATE, 0, Some(1), temp.path()).expect("report");
     assert_eq!(reported, 1);
     let expect_id =
         velnor_actions_contract::task_report_id_for_task("local", &entry.matrix_key, &digest)
@@ -286,15 +278,14 @@ fn tofu_executed_report_carries_measured_timing() {
 }
 
 #[test]
-fn failure_reports_downstream_skips_and_success_reports_none() {
+fn failure_reports_only_the_obligation_that_ran() {
     let plan = fixture_plan();
     let failing = staged_run(&plan, "local");
     let reported =
-        write_task_report_to("local", CLIPPY, 1, None, &[TEST.to_owned()], failing.path())
-            .expect("report with skips");
-    assert_eq!(reported, 2);
-    let entry = &plan.matrix.include[1];
-    let obligation = &plan.obligations[1];
+        write_task_report_to("local", CLIPPY, 1, None, failing.path()).expect("failed task report");
+    assert_eq!(reported, 1);
+    let entry = &plan.matrix.include[0];
+    let obligation = &plan.obligations[0];
     let expect_id = velnor_actions_contract::task_report_id_for_task(
         "local",
         &entry.matrix_key,
@@ -302,99 +293,24 @@ fn failure_reports_downstream_skips_and_success_reports_none() {
     )
     .expect("task report id");
     let (task, matrix) = read_entry(&failing, "local", &entry.matrix_key, &expect_id);
-    assert_eq!(task.status, TaskStatus::NotSelected);
-    assert_eq!(
-        task.not_selected_reason,
-        Some(velnor_actions_contract::NotSelectedReason::UpstreamFailed)
-    );
-    assert_eq!(matrix.not_selected, 1);
+    assert_eq!(task.status, TaskStatus::Failed);
+    assert_eq!(matrix.failed, 1);
+    let successor_entry = &plan.matrix.include[1];
 
     let passing = staged_run(&plan, "local");
     let reported =
-        write_task_report_to("local", CLIPPY, 0, None, &[TEST.to_owned()], passing.path())
-            .expect("clean report");
+        write_task_report_to("local", CLIPPY, 0, None, passing.path()).expect("clean report");
     assert_eq!(reported, 1);
     assert!(
         !passing
             .path()
             .join("velnor")
             .join("local")
-            .join(&entry.matrix_key)
+            .join(&successor_entry.matrix_key)
             .exists(),
-        "success reports no downstream"
+        "the failed task does not fabricate a report for another task"
     );
 }
 
-#[test]
-fn unbound_inputs_fail_before_writing() {
-    let plan = fixture_plan();
-    let temp = staged_run(&plan, "local");
-    for (run_key, task, exit) in [
-        ("local", CLIPPY, 256),
-        ("local", CLIPPY, -1),
-        ("local", "stack/rust/demo/unknown/default", 0),
-        ("r1-a1", CLIPPY, 0),
-    ] {
-        assert!(
-            write_task_report_to(run_key, task, exit, None, &[], temp.path()).is_err(),
-            "must reject {run_key}/{task}/{exit}"
-        );
-    }
-    let missing = TempDir::new().expect("tempdir");
-    assert!(write_task_report_to("local", CLIPPY, 0, None, &[], missing.path()).is_err());
-    let corrupt = TempDir::new().expect("tempdir");
-    let dir = corrupt.path().join("velnor").join("local");
-    fs::create_dir_all(&dir).expect("run dir");
-    fs::write(dir.join("plan.json"), "not json").expect("plan file");
-    assert!(write_task_report_to("local", CLIPPY, 0, None, &[], corrupt.path()).is_err());
-    let drifted = staged_run(&plan, "r1-a1");
-    assert!(write_task_report_to("r1-a1", CLIPPY, 0, None, &[], drifted.path()).is_err());
-    let rewrite = staged_run(&plan, "local");
-    write_task_report_to("local", CLIPPY, 0, None, &[], rewrite.path()).expect("first write");
-    assert!(write_task_report_to("local", CLIPPY, 0, None, &[], rewrite.path()).is_err());
-}
-
-#[cfg(unix)]
-#[test]
-fn planted_symlink_at_report_path_refuses_without_writing() {
-    let plan = fixture_plan();
-    let temp = staged_run(&plan, "local");
-    let entry = &plan.matrix.include[0];
-    let dir = temp
-        .path()
-        .join("velnor")
-        .join("local")
-        .join(&entry.matrix_key);
-    let report_dir = dir.join("tasks");
-    fs::create_dir_all(&report_dir).expect("report dirs");
-    let loot = temp.path().join("loot.json");
-    std::os::unix::fs::symlink(&loot, dir.join("matrix-report.json")).expect("plant");
-    let err = write_task_report_to("local", CLIPPY, 0, None, &[], temp.path())
-        .expect_err("plant refused");
-    assert!(err.to_string().contains("symlink_refused"), "{err}");
-    assert!(!loot.exists(), "producer bytes never followed the plant");
-}
-
-#[test]
-fn ambiguous_entries_refuse_rather_than_guess() {
-    let mut plan = fixture_plan();
-    plan.matrix.include[0]
-        .execute_task_ids
-        .tasks
-        .insert("extra".to_owned(), ExecuteTaskRef::Single(TEST.to_owned()));
-    let multi = staged_run(&plan, "local");
-    assert!(write_task_report_to("local", CLIPPY, 0, None, &[], multi.path()).is_err());
-
-    let mut plan = fixture_plan();
-    plan.matrix.include[0].execute_task_ids.tasks =
-        BTreeMap::from([("only".to_owned(), ExecuteTaskRef::Single(TEST.to_owned()))]);
-    let dupe = staged_run(&plan, "local");
-    assert!(write_task_report_to("local", TEST, 0, None, &[], dupe.path()).is_err());
-
-    let mut plan = fixture_plan();
-    plan.obligations.clear();
-    plan.task_ids.clear();
-    plan.validate().expect("obligation-free plan validates");
-    let orphan = staged_run(&plan, "local");
-    assert!(write_task_report_to("local", CLIPPY, 0, None, &[], orphan.path()).is_err());
-}
+#[path = "task_report_lane_tests.rs"]
+mod lane_tests;

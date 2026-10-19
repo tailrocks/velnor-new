@@ -68,6 +68,17 @@ fn lane_identity_rejects_wrong_stack_or_emitted_job_suffix() {
 }
 
 #[test]
+fn rust_crate_lanes_bind_to_the_single_package_job() {
+    for (job_id, variant) in [
+        ("rust-demo__hosted", NamedCheckLaneVariant::Hosted),
+        ("rust-demo__local", NamedCheckLaneVariant::ScaleSet),
+    ] {
+        validate_lane_binding("rust", job_id, Some(variant))
+            .expect("Rust crate lane uses the package job ID");
+    }
+}
+
+#[test]
 fn uncached_named_check_binds_its_toolchain_without_cache_ids() {
     let mut check = entry(NamedCheckLaneVariant::Hosted, "check-demo__hosted");
     let inputs = ToolchainInputs {

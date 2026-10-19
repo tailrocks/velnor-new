@@ -1,4 +1,6 @@
-use super::{render_checked_workflow, render_marked_workflow};
+use super::{
+    render_checked_workflow, render_checked_workflow_before_extraction, render_marked_workflow,
+};
 use crate::{
     RenderError, marker,
     workflow_size::MAX_WORKFLOW_BYTES,
@@ -88,6 +90,34 @@ fn over_cap_workflow_uses_marked_step_run_aliases() -> Result<(), RenderError> {
     assert!(rendered.contains("run: &r1"));
     assert!(rendered.contains("run: *r1"));
     Ok(())
+}
+
+#[test]
+fn pre_extraction_fallback_shares_values_deterministically() -> Result<(), RenderError> {
+    let command = "x".repeat(260_000);
+    let document = workflow(&command, 2);
+    let first =
+        render_checked_workflow_before_extraction(".github/workflows/ci.yml", &document, VERSION)?;
+    let second =
+        render_checked_workflow_before_extraction(".github/workflows/ci.yml", &document, VERSION)?;
+
+    assert_eq!(first, second);
+    assert!(first.starts_with(&marker::marker_for_version(VERSION)?));
+    assert!(first.len() <= MAX_WORKFLOW_BYTES);
+    assert!(first.contains("run: &r1"));
+    assert!(first.contains("run: *r1"));
+    Ok(())
+}
+
+#[test]
+fn pre_extraction_fallback_keeps_the_workflow_size_limit() {
+    let command = "x".repeat(MAX_WORKFLOW_BYTES + 100);
+    let document = workflow(&command, 1);
+    let error =
+        render_checked_workflow_before_extraction(".github/workflows/ci.yml", &document, VERSION)
+            .expect_err("irreducible workflow must fail");
+    assert!(matches!(error, RenderError::InvalidWorkflow(problem)
+        if problem.starts_with("workflow_too_large:.github/workflows/ci.yml:")));
 }
 
 #[test]

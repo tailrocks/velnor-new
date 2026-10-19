@@ -29,7 +29,7 @@ fn probe_tool_rows() -> Vec<ProbeRow> {
         (
             "https://api.github.com/repos/jdx/mise/releases/latest",
             "mise.json",
-            "{\"tag_name\": \"v2026.10.13\"}",
+            "{\"tag_name\": \"v2026.10.14\"}",
         ),
         (
             "https://static.rust-lang.org/dist/channel-rust-stable.toml",
@@ -120,7 +120,7 @@ fn probe_action_rows() -> Vec<ProbeRow> {
         (
             "https://api.github.com/repos/asamarts/alint/releases/latest",
             "alint.json",
-            "{\"tag_name\": \"v0.18.4\"}",
+            "{\"tag_name\": \"v0.19.0\"}",
         ),
         (
             "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest",

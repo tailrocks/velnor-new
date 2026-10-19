@@ -218,6 +218,9 @@ pub(crate) fn check_matrix_job_inventory(
 }
 
 /// Check that each matrix owner occurs in the final-gate inventory.
+///
+/// Matrix entries may share one physical owner. Keep every entry in the check
+/// so a missing owner still fails, while repeated owner IDs remain valid.
 fn matrix_jobs_are_required<'a>(
     matrix_jobs: impl IntoIterator<Item = &'a str>,
     required_job_ids: &[String],
@@ -231,14 +234,11 @@ fn matrix_jobs_are_required<'a>(
 #[test]
 fn matrix_job_inventory_requires_every_owner() {
     assert!(matrix_jobs_are_required(
-        ["plan", "rust-qualification-0123456789abcdef"],
-        &[
-            "plan".to_owned(),
-            "rust-qualification-0123456789abcdef".to_owned(),
-        ],
+        ["plan", "rust-demo", "rust-demo"],
+        &["plan".to_owned(), "rust-demo".to_owned()],
     ));
     assert!(!matrix_jobs_are_required(
-        ["plan", "rust-qualification-0123456789abcdef"],
-        &["plan".to_owned(), "rust-demo".to_owned()],
+        ["plan", "rust-demo"],
+        &["plan".to_owned()],
     ));
 }

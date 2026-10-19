@@ -1,13 +1,27 @@
 use super::*;
 
 #[test]
+fn ordinary_rust_job_needs_no_separate_qualification_mapping() {
+    let mut source = ir(&[]);
+    source
+        .jobs
+        .insert("rust-demo".to_owned(), job("rust-demo", None, &["plan"]));
+
+    let lanes = qualification_job_lanes(
+        &source,
+        &config(ExecutionMode::ScaleSet),
+        None,
+        &BTreeMap::new(),
+    )
+    .expect("one Rust job does not need a duplicate mapping");
+    assert!(lanes.is_empty());
+}
+
+#[test]
 fn qualification_crate_lanes_match_hosted_scale_set_and_both_jobs() {
     let source = qualification_crate_ir();
     let sources = BTreeMap::from([
-        (
-            "rust-qualification-0123456789abcdef".to_owned(),
-            "rust-demo".to_owned(),
-        ),
+        ("rust-demo".to_owned(), "rust-demo".to_owned()),
         (
             "tofu-qualification-fedcba9876543210".to_owned(),
             "tofu-demo".to_owned(),
@@ -18,25 +32,22 @@ fn qualification_crate_lanes_match_hosted_scale_set_and_both_jobs() {
         (
             ExecutionMode::Hosted,
             vec![
-                ("rust-qualification-0123456789abcdef", "ubuntu-26.04"),
+                ("rust-demo", "ubuntu-26.04"),
                 ("tofu-qualification-fedcba9876543210", "ubuntu-26.04"),
             ],
         ),
         (
             ExecutionMode::ScaleSet,
             vec![
-                ("rust-qualification-0123456789abcdef", scale_set),
+                ("rust-demo", scale_set),
                 ("tofu-qualification-fedcba9876543210", scale_set),
             ],
         ),
         (
             ExecutionMode::Both,
             vec![
-                (
-                    "rust-qualification-0123456789abcdef__hosted",
-                    "ubuntu-26.04",
-                ),
-                ("rust-qualification-0123456789abcdef__local", scale_set),
+                ("rust-demo__hosted", "ubuntu-26.04"),
+                ("rust-demo__local", scale_set),
                 (
                     "tofu-qualification-fedcba9876543210__hosted",
                     "ubuntu-26.04",
@@ -84,10 +95,7 @@ fn qualification_crate_lanes_match_hosted_scale_set_and_both_jobs() {
 fn qualification_crate_lanes_inherit_source_runner_override() {
     let source = qualification_crate_ir();
     let sources = BTreeMap::from([
-        (
-            "rust-qualification-0123456789abcdef".to_owned(),
-            "rust-demo".to_owned(),
-        ),
+        ("rust-demo".to_owned(), "rust-demo".to_owned()),
         (
             "tofu-qualification-fedcba9876543210".to_owned(),
             "tofu-demo".to_owned(),
@@ -106,9 +114,7 @@ fn qualification_crate_lanes_inherit_source_runner_override() {
     let lanes =
         qualification_job_lanes(&source, &config, None, &sources).expect("Qualification lane map");
     assert_eq!(
-        lanes["rust-qualification-0123456789abcdef"][0]
-            .runs_on
-            .as_deref(),
+        lanes["rust-demo"][0].runs_on.as_deref(),
         Some("scale-set:velnor+orbstack-linux")
     );
 }
@@ -117,10 +123,7 @@ fn qualification_crate_lanes_inherit_source_runner_override() {
 fn mixed_qualification_jobs_keep_required_and_plan_lanes_aligned() {
     let source = mixed_qualification_ir();
     let sources = BTreeMap::from([
-        (
-            "rust-qualification-0123456789abcdef".to_owned(),
-            "rust-demo".to_owned(),
-        ),
+        ("rust-demo".to_owned(), "rust-demo".to_owned()),
         (
             "tofu-qualification-fedcba9876543210".to_owned(),
             "tofu-demo".to_owned(),
@@ -146,10 +149,10 @@ fn mixed_qualification_jobs_keep_required_and_plan_lanes_aligned() {
             .map(String::as_str)
             .collect();
         for id in [
-            "rust-qualification-0123456789abcdef",
+            "rust-demo",
             "tofu-qualification-fedcba9876543210",
-            "qualification-check-java",
-            "qualification-check-frontend",
+            "check-java",
+            "check-frontend",
         ] {
             for lane in &lanes[id] {
                 assert!(

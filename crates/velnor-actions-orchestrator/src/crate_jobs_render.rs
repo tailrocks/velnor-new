@@ -74,23 +74,14 @@ pub(super) fn render_job(
             all_features,
         )?);
     }
-    steps.extend(crate::workflow::wire_w1::maybe_task_cache_steps(
-        None,
-        TaskCacheMode::Off,
-        "",
-    )?);
-    steps.extend(render_obligation_steps(
+    steps.extend(render_terminal_steps(
         model,
         catalog,
         use_opentofu,
         max_parallel_jobs,
         helper_version,
+        qualification,
     )?);
-    if qualification {
-        steps.push(crate::qualification_source_evidence::source_evidence_step(
-            catalog,
-        )?);
-    }
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
     Ok(Job {
         display_name: model.display_name.clone(),
@@ -104,6 +95,32 @@ pub(super) fn render_job(
         steps,
         cache_mode: None,
     })
+}
+
+fn render_terminal_steps(
+    model: &CrateJob,
+    catalog: &ToolCatalog,
+    use_opentofu: bool,
+    max_parallel_jobs: u32,
+    helper_version: &str,
+    qualification: bool,
+) -> Result<Vec<Step>, OrchestratorError> {
+    let mut steps = crate::workflow::wire_w1::maybe_task_cache_steps(None, TaskCacheMode::Off, "")?;
+    steps.extend(render_obligation_steps(
+        model,
+        catalog,
+        use_opentofu,
+        max_parallel_jobs,
+        helper_version,
+    )?);
+    if qualification {
+        let mut source_evidence =
+            crate::qualification_source_evidence::source_evidence_step(catalog)?;
+        source_evidence.condition =
+            Some("needs.plan.outputs.qualification_campaign != ''".to_owned());
+        steps.push(source_evidence);
+    }
+    Ok(steps)
 }
 
 fn obligations_use_all_features(
@@ -126,20 +143,10 @@ fn render_obligation_steps(
         .iter()
         .enumerate()
         .map(|(index, obligation)| {
-            let downstream = model.obligations[index + 1..]
-                .iter()
-                .map(|later| later.task_id.clone())
-                .collect::<Vec<_>>();
             // The first obligation declares the root job's concurrency cap;
             // the renderer turns the marker into `strategy.max-parallel`.
             let cap = (index == 0 && use_opentofu).then_some(max_parallel_jobs);
-            crate::matrix_step::obligation_step(
-                obligation,
-                catalog,
-                &downstream,
-                cap,
-                helper_version,
-            )
+            crate::matrix_step::obligation_step(obligation, catalog, cap, helper_version)
         })
         .collect()
 }

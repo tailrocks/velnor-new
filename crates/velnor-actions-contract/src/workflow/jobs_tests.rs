@@ -3,9 +3,11 @@
 //! Declared via `#[path]` from `jobs.rs` under `cfg(test)`.
 
 use super::{
-    TOFU_DISPLAY_PREFIX, ValidatorKind, crate_display_label, crate_display_name,
-    is_safe_display_name, tofu_display_name, validate_job_id,
+    TOFU_DISPLAY_PREFIX, ValidatorKind, assign_crate_job_ids, assign_rust_crate_job_ids,
+    crate_display_label, crate_display_name, is_safe_display_name, tofu_display_name,
+    validate_job_id,
 };
+use std::collections::BTreeSet;
 
 #[test]
 fn display_names_reject_expressions_and_controls() {
@@ -30,15 +32,63 @@ fn display_names_reject_expressions_and_controls() {
         "$?{{x}}"
     );
     assert_eq!(crate_display_label("", "crates/a\nb/Cargo.toml"), "a?b");
-    assert_eq!(
-        crate_display_name("", "crates/a/Cargo.toml", "default"),
-        "Rust / a"
-    );
+    assert_eq!(crate_display_name("", "crates/a/Cargo.toml"), "Rust / a");
     assert!(is_safe_display_name(&crate_display_name(
         "",
-        "crates/${{x}}/Cargo.toml",
-        "evil\ncfg"
+        "crates/${{x}}/Cargo.toml"
     )));
+}
+
+#[test]
+fn crate_job_ids_ignore_task_configuration_variants() {
+    let packages = BTreeSet::from([
+        ("package-a".to_owned(), "velnor-core".to_owned()),
+        ("package-b".to_owned(), "velnor-cli".to_owned()),
+    ]);
+    let ids = assign_rust_crate_job_ids(&packages, "rust-");
+
+    assert_eq!(ids.len(), packages.len());
+    assert_eq!(ids["package-a"], "rust-velnor-core");
+    assert_eq!(ids["package-b"], "rust-velnor-cli");
+}
+
+#[test]
+fn crate_job_id_collisions_keep_distinct_package_ids() {
+    let packages = BTreeSet::from([
+        ("package-a".to_owned(), "same-name".to_owned()),
+        ("package-b".to_owned(), "same-name".to_owned()),
+    ]);
+    let ids = assign_rust_crate_job_ids(&packages, "rust-");
+
+    assert_eq!(ids.len(), 2);
+    assert_ne!(ids["package-a"], ids["package-b"]);
+}
+
+#[test]
+fn configuration_group_ids_keep_tofu_variants() {
+    let groups = BTreeSet::from([
+        (
+            "package-a".to_owned(),
+            "infra".to_owned(),
+            "default".to_owned(),
+        ),
+        (
+            "package-a".to_owned(),
+            "infra".to_owned(),
+            "checks".to_owned(),
+        ),
+    ]);
+    let ids = assign_crate_job_ids(&groups, "tofu-");
+
+    assert_eq!(ids.len(), 2);
+    assert_eq!(
+        ids[&("package-a".to_owned(), "default".to_owned())],
+        "tofu-infra"
+    );
+    assert_eq!(
+        ids[&("package-a".to_owned(), "checks".to_owned())],
+        "tofu-infra-checks"
+    );
 }
 
 #[test]

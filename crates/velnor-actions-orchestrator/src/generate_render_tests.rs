@@ -157,6 +157,7 @@ fn final_generator_audit_checks_typed_native_and_scale_set_jobs() {
 fn full_generator_renders_typed_native_check_before_its_final_audit() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let root = isolated_generation_root(&source);
+    append_native_check_fixture(root.path());
     let mut prep = crate::prepare(root.path()).expect("the repository has a valid generation plan");
     let execution = prep
         .config
@@ -173,8 +174,8 @@ fn full_generator_renders_typed_native_check_before_its_final_audit() {
         .workflow
         .ir
         .jobs
-        .get_mut("check-maintenance-helpers")
-        .expect("the maintenance check exists");
+        .get_mut("check-native-fixture")
+        .expect("the fixture check exists");
     job.runs_on = "native-scale-set".to_owned();
     job.condition = Some(EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned());
     job.check_runner = Some(CheckRunner {
@@ -205,9 +206,27 @@ fn full_generator_renders_typed_native_check_before_its_final_audit() {
     assert!(
         strict_error
             .to_string()
-            .contains("unsupported_darwin_workload:check-maintenance-helpers:native-scale-set"),
+            .contains("unsupported_darwin_workload:check-native-fixture:native-scale-set"),
         "strict policy error: {strict_error}"
     );
+}
+
+fn append_native_check_fixture(root: &Path) {
+    let path = root.join(".velnor/config.toml");
+    let config = fs::read_to_string(&path).expect("fixture config is readable");
+    let check = r#"
+[[checks]]
+id = "native-fixture"
+task = "test-maintenance-helpers"
+inputs = ["mise.toml"]
+tools = ["cargo-nextest", "rust"]
+timeout_minutes = 5
+[checks.runner]
+label = "ubuntu-26.04"
+platform = "linux_x64"
+executor = "hosted"
+"#;
+    fs::write(path, format!("{config}{check}")).expect("fixture config accepts one test check");
 }
 
 fn isolated_generation_root(source: &Path) -> tempfile::TempDir {

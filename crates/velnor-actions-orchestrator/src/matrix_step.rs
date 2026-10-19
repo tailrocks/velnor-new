@@ -204,7 +204,6 @@ pub(crate) fn obligation_identity_env(
 pub(crate) fn obligation_step(
     obligation: &CrateObligation,
     catalog: &ToolCatalog,
-    _downstream: &[String],
     matrix_cap: Option<u32>,
     helper_version: &str,
 ) -> Result<Step, OrchestratorError> {
@@ -270,7 +269,12 @@ pub(crate) fn obligation_step(
     // Task IDs reaching here validated at obligation construction, and
     // the grammar admits no quotes or commas, so the generated
     // expression cannot break out of its string literal.
-    step.condition = Some(crate::covered_tasks::skip_condition(&obligation.task_id)?);
+    step.condition = Some(if needs_rust {
+        velnor_actions_contract::task_execution_condition(&obligation.task_id)
+            .map_err(crate::internal::internal_contract)?
+    } else {
+        crate::covered_tasks::skip_condition(&obligation.task_id)?
+    });
     Ok(step)
 }
 

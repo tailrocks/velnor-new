@@ -155,7 +155,7 @@ fn rust_jobs_carry_no_provider_restore() {
 }
 
 #[test]
-fn mixed_job_restores_both_sources_and_providers() {
+fn rust_and_tofu_jobs_restore_separate_caches() {
     use velnor_actions_tofu::TofuTaskKind;
     let mut rust = crate_jobs_tests::group("demo", TaskKind::Clippy, &[]);
     let tofu = tofu_group("stacks/a", TofuTaskKind::Validate);
@@ -173,27 +173,42 @@ fn mixed_job_restores_both_sources_and_providers() {
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 1, "shared group renders once");
-    let names = crate_jobs_tests::names(&found.jobs[0].1);
+    assert_eq!(found.jobs.len(), 2, "Rust and ToFu jobs stay separate");
+    let rust = found
+        .jobs
+        .iter()
+        .find(|(id, _)| id.starts_with("rust-"))
+        .expect("Rust job");
+    let tofu = found
+        .jobs
+        .iter()
+        .find(|(id, _)| id.starts_with("tofu-"))
+        .expect("ToFu job");
+    let rust_names = crate_jobs_tests::names(&rust.1);
+    let tofu_names = crate_jobs_tests::names(&tofu.1);
     assert!(
-        names.contains(&"Restore Cargo sources"),
-        "mixed restores sources: {names:?}"
+        rust_names.contains(&"Restore Cargo sources"),
+        "Rust restores its sources: {rust_names:?}"
     );
     assert!(
-        names.contains(&"Restore Tofu providers"),
-        "mixed restores providers: {names:?}"
+        !rust_names.contains(&"Restore Tofu providers"),
+        "Rust does not restore ToFu providers: {rust_names:?}"
     );
-    let restore_at = names
+    assert!(
+        tofu_names.contains(&"Restore Tofu providers"),
+        "ToFu restores its providers: {tofu_names:?}"
+    );
+    let restore_at = tofu_names
         .iter()
         .position(|step| *step == "Restore Tofu providers")
         .expect("provider restore present");
-    let validate_at = names
+    let validate_at = tofu_names
         .iter()
         .position(|step| *step == "Validate")
         .expect("validate present");
     assert!(
         restore_at < validate_at,
-        "provider restore precedes obligations: {names:?}"
+        "provider restore precedes obligations: {tofu_names:?}"
     );
 }
 

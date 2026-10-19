@@ -1,13 +1,20 @@
 use super::TestResult;
 
+#[path = "schema2_image_build_fixture_mocks.rs"]
+mod mocks;
+use mocks::{DOCKER_MOCK, FILE_MOCK, MISE_MOCK};
+
 struct Fixture {
     temporary: tempfile::TempDir,
     workspace: std::path::PathBuf,
     bin: std::path::PathBuf,
     target: std::path::PathBuf,
     storage_init: std::path::PathBuf,
+    job_start_hook: std::path::PathBuf,
     probe_sha: String,
     init_sha: String,
+    hook_sha: String,
+    wrapper_sha: String,
 }
 
 struct Scenario {
@@ -16,8 +23,12 @@ struct Scenario {
     tracked_change: &'static str,
     untracked_path: &'static str,
     utility_kind: &'static str,
+    hook_kind: &'static str,
     image_sha: &'static str,
     image_mode: &'static str,
+    hook_sha: &'static str,
+    hook_mode: &'static str,
+    hook_owner: &'static str,
 }
 
 pub(super) fn run() -> TestResult {
@@ -36,6 +47,9 @@ pub(super) fn run() -> TestResult {
         assert_rejected_before_build(&fixture, &scenario)?;
     }
     for scenario in binary_failures() {
+        assert_rejected_before_docker(&fixture, &scenario)?;
+    }
+    for scenario in hook_failures() {
         assert_rejected_before_docker(&fixture, &scenario)?;
     }
     for scenario in image_failures() {
@@ -61,11 +75,14 @@ fn prepare() -> Result<Fixture, Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&release)?;
     let probe = release.join("velnor-resource-probe");
     let storage_init = release.join("velnor-storage-init");
+    let job_start_hook = release.join("velnor-job-start-hook");
     let revision = "0123456789012345678901234567890123456789";
     std::fs::write(&probe, format!("source {revision}"))?;
     let payload = temporary.path().join("utility-payload");
     std::fs::write(&payload, b"utility")?;
     let init_sha = sha256(&payload)?;
+    let hook_sha = sha256(&payload)?;
+    let wrapper_sha = sha256(&workspace.join("images/runner/ubuntu-26.04/job-started-hook.sh"))?;
     std::fs::remove_file(payload)?;
     install_mocks(&bin)?;
     Ok(Fixture {
@@ -74,8 +91,11 @@ fn prepare() -> Result<Fixture, Box<dyn std::error::Error>> {
         bin,
         target,
         storage_init,
+        job_start_hook,
         probe_sha: sha256(&probe)?,
         init_sha,
+        hook_sha,
+        wrapper_sha,
     })
 }
 
@@ -113,7 +133,9 @@ fn invoke(fixture: &Fixture, scenario: &Scenario) -> std::io::Result<std::proces
         .env("MOCK_TRACKED_CHANGE", scenario.tracked_change)
         .env("MOCK_UNTRACKED_PATH", scenario.untracked_path)
         .env("MOCK_STORAGE_INIT", &fixture.storage_init)
+        .env("MOCK_JOB_START_HOOK", &fixture.job_start_hook)
         .env("MOCK_UTILITY_KIND", scenario.utility_kind)
+        .env("MOCK_HOOK_KIND", scenario.hook_kind)
         .env("VELNOR_SOURCE_REVISION", SOURCE_REVISION)
         .env("RUNNER_TEMP", fixture.temporary.path())
         .env("DOCKER_CALLS", docker_path(fixture, scenario))
@@ -122,7 +144,12 @@ fn invoke(fixture: &Fixture, scenario: &Scenario) -> std::io::Result<std::proces
         .env("EXPECTED_PROBE_SHA", &fixture.probe_sha)
         .env("EXPECTED_INIT_SHA", &fixture.init_sha)
         .env("ACTUAL_INIT_SHA", scenario.image_sha)
-        .env("ACTUAL_INIT_MODE", scenario.image_mode);
+        .env("ACTUAL_INIT_MODE", scenario.image_mode)
+        .env("EXPECTED_HOOK_SHA", &fixture.hook_sha)
+        .env("ACTUAL_HOOK_SHA", scenario.hook_sha)
+        .env("ACTUAL_HOOK_MODE", scenario.hook_mode)
+        .env("ACTUAL_HOOK_OWNER", scenario.hook_owner)
+        .env("EXPECTED_WRAPPER_SHA", &fixture.wrapper_sha);
     command.output()
 }
 
@@ -130,6 +157,8 @@ fn assert_build_was_run(fixture: &Fixture, scenario: &Scenario) -> TestResult {
     assert_mise_invoked(fixture, scenario)?;
     assert!(fixture.storage_init.is_file());
     assert_eq!(std::fs::read(&fixture.storage_init)?, b"utility");
+    assert!(fixture.job_start_hook.is_file());
+    assert_eq!(std::fs::read(&fixture.job_start_hook)?, b"utility");
     let trace = std::fs::read_to_string(trace_path(fixture, scenario))?;
     let mut events = trace.lines();
     assert_eq!(events.next(), Some("mise"));
@@ -156,7 +185,7 @@ fn assert_rejected_before_docker(fixture: &Fixture, scenario: &Scenario) -> Test
 
 fn assert_mise_invoked(fixture: &Fixture, scenario: &Scenario) -> TestResult {
     let calls = std::fs::read_to_string(mise_path(fixture, scenario))?;
-    let expected = "--no-config --no-env --no-hooks exec rust@1.99.1 -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --package velnor-resource-probe --bin velnor-storage-init --release --target x86_64-unknown-linux-musl\n";
+    let expected = "--no-config --no-env --no-hooks exec rust@1.99.1 -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --package velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook --release --target x86_64-unknown-linux-musl\n";
     assert_eq!(calls, expected);
     let trace = std::fs::read_to_string(trace_path(fixture, scenario))?;
     assert_eq!(trace.lines().next(), Some("mise"));
@@ -218,7 +247,32 @@ fn binary_failures() -> [Scenario; 4] {
     ]
 }
 
-fn image_failures() -> [Scenario; 2] {
+fn hook_failures() -> [Scenario; 4] {
+    [
+        Scenario {
+            name: "missing-hook",
+            hook_kind: "missing",
+            ..Scenario::good()
+        },
+        Scenario {
+            name: "wrong-hook-architecture",
+            hook_kind: "wrong-arch",
+            ..Scenario::good()
+        },
+        Scenario {
+            name: "dynamic-hook",
+            hook_kind: "dynamic",
+            ..Scenario::good()
+        },
+        Scenario {
+            name: "bad-hook",
+            hook_kind: "bad",
+            ..Scenario::good()
+        },
+    ]
+}
+
+fn image_failures() -> [Scenario; 5] {
     [
         Scenario {
             name: "wrong-image-hash",
@@ -228,6 +282,21 @@ fn image_failures() -> [Scenario; 2] {
         Scenario {
             name: "wrong-image-mode",
             image_mode: "755",
+            ..Scenario::good()
+        },
+        Scenario {
+            name: "wrong-hook-hash",
+            hook_sha: "0",
+            ..Scenario::good()
+        },
+        Scenario {
+            name: "wrong-hook-owner",
+            hook_owner: "1:1",
+            ..Scenario::good()
+        },
+        Scenario {
+            name: "wrong-hook-mode",
+            hook_mode: "755",
             ..Scenario::good()
         },
     ]
@@ -241,8 +310,12 @@ impl Scenario {
             tracked_change: "clean",
             untracked_path: "",
             utility_kind: "static",
+            hook_kind: "static",
             image_sha: "good",
             image_mode: "555",
+            hook_sha: "good",
+            hook_mode: "555",
+            hook_owner: "0:0",
         }
     }
 }
@@ -300,48 +373,5 @@ case "$*" in
   'diff --quiet HEAD --') [[ "$MOCK_TRACKED_CHANGE" == clean ]] ;;
   'ls-files --others --exclude-standard') [[ -z "$MOCK_UNTRACKED_PATH" ]] || printf '%s\n' "$MOCK_UNTRACKED_PATH" ;;
   *) exit 97 ;;
-esac
-"#;
-
-const MISE_MOCK: &str = r#"#!/bin/bash
-printf '%s\n' "$*" >> "$MISE_CALLS"
-printf 'mise\n' >> "$TRACE"
-[[ "$*" == '--no-config --no-env --no-hooks exec rust@1.99.1 -- cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --package velnor-resource-probe --bin velnor-storage-init --release --target x86_64-unknown-linux-musl' ]] || exit 97
-mkdir -p "$(dirname "$MOCK_STORAGE_INIT")"
-rm -f "$MOCK_STORAGE_INIT"
-[[ "$MOCK_UTILITY_KIND" == missing ]] || printf utility > "$MOCK_STORAGE_INIT"
-"#;
-
-const FILE_MOCK: &str = r#"#!/bin/bash
-case "$*:$MOCK_UTILITY_KIND" in
-  *velnor-storage-init:wrong-arch) printf 'Mach-O arm64\n' ;;
-  *velnor-storage-init:dynamic) printf 'ELF 64-bit LSB pie executable, x86-64, dynamically linked\n' ;;
-  *velnor-storage-init:bad) printf 'data\n' ;;
-  *) printf 'ELF 64-bit LSB pie executable, x86-64, static-pie linked\n' ;;
-esac
-"#;
-
-const DOCKER_MOCK: &str = r#"#!/bin/bash
-printf 'docker\n' >> "$TRACE"
-printf '<%s>' "$@" >> "$DOCKER_CALLS"
-printf '\n' >> "$DOCKER_CALLS"
-previous=''
-for argument in "$@"; do
-  if [[ "$previous" == '--format' && "$argument" == '{{.Architecture}}' ]]; then printf 'amd64\n'; fi
-  if [[ "$previous" == '--format' && "$argument" == '{{.Id}}' ]]; then printf 'sha256:%064d\n' 0; fi
-  if [[ "$previous" == '--entrypoint' && "$argument" == '/usr/bin/uname' ]]; then printf 'x86_64\n'; fi
-  if [[ "$previous" == '--entrypoint' && "$argument" == '/usr/bin/sha256sum' ]]; then entrypoint=sha256sum; fi
-  if [[ "$previous" == '--entrypoint' && "$argument" == '/usr/bin/stat' ]]; then entrypoint=stat; fi
-  previous="$argument"
-done
-case " $* " in
-  *'/velnor/storage-init'*)
-    if [[ "$entrypoint" == sha256sum ]]; then
-      if [[ "$ACTUAL_INIT_SHA" == good ]]; then printf '%s  /velnor/storage-init\n' "$EXPECTED_INIT_SHA"; else printf '%s  /velnor/storage-init\n' "$ACTUAL_INIT_SHA"; fi
-    elif [[ "$entrypoint" == stat ]]; then printf '%s\n' "$ACTUAL_INIT_MODE"; fi
-    ;;
-  *'/velnor/resource-probe'*)
-    [[ "$entrypoint" == sha256sum ]] && printf '%s  /velnor/resource-probe\n' "$EXPECTED_PROBE_SHA"
-    ;;
 esac
 "#;

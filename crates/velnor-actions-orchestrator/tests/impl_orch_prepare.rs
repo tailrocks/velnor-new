@@ -50,6 +50,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         config_calls,
         [
             "check_runtime.rs",
+            "job_image_preview.rs",
             "owned_tool_preview.rs",
             "prepare.rs",
             "preview_producer_entry.rs",

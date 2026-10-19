@@ -1,13 +1,20 @@
 use super::*;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
+use crate::cover::{CoverSinks, Fold, Signals, cover_entry};
+use crate::merge::FinalStatus;
 use velnor_actions_contract::{
-    PlanGenerator, PlanRunner, QualificationDispatch, QualificationPhase, QualificationRunRef,
-    RunnerSelection, Trust, WorkflowEvent, plan_id_for_run,
+    CacheLayer, CacheOutcome, CacheResult, ExecuteTaskIds, ExecuteTaskRef, MatrixEntry,
+    MatrixReport, MatrixStatus, MatrixTaskEntry, ObligationDecision, PlanGenerator, PlanObligation,
+    PlanRunner, PlannedPlatform, PlatformBinding, PlatformRunnerEnvironment, QualificationDispatch,
+    QualificationPhase, QualificationRunRef, RunnerSelection, TaskReport, TaskStatus, Trust,
+    WorkflowEvent, plan_id_for_run, task_report_id_for_task,
 };
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+const CLIPPY: &str = "stack/rust/demo/clippy/default";
+const TEST: &str = "stack/rust/demo/test/default";
 
 fn context() -> QualificationDispatch {
     QualificationDispatch {
@@ -128,16 +135,5 @@ fn merge_requires_identical_qualification_provenance() {
     assert!(!is_coherent(&plan, &request(None)));
 }
 
-#[test]
-fn plan_matrix_owners_must_remain_in_required_inventory() {
-    let all_matrix_jobs = ["plan", "rust-qualification-0123456789abcdef"];
-    let required = vec![
-        "plan".to_owned(),
-        "rust-qualification-0123456789abcdef".to_owned(),
-    ];
-    assert!(matrix_jobs_are_required(all_matrix_jobs, &required));
-    assert!(!matrix_jobs_are_required(
-        ["plan", "rust-qualification-0123456789abcdef"],
-        &["plan".to_owned(), "rust-demo".to_owned()],
-    ));
-}
+#[path = "merge_qualification_group_tests.rs"]
+mod group_tests;

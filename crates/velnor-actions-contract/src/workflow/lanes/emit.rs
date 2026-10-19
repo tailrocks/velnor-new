@@ -1,10 +1,7 @@
 use super::super::ir::Job;
-use super::super::named_check_lanes::qualification_check_source_id;
 use super::{
     EPHEMERAL_CHECK_ADMISSION_CONDITION, EmitLane, HOSTED_SUFFIX, LaneClass,
-    NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NORMAL_CHECK_ADMISSION_CONDITION,
-    NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION, Placement, QUALIFICATION_CHECK_ADMISSION_CONDITION,
-    SCALE_SUFFIX,
+    NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Placement, SCALE_SUFFIX,
 };
 use crate::config::ExecutionConfig;
 use crate::errors::ContractError;
@@ -79,16 +76,7 @@ fn retarget(
     if let Some(token) = runs_on {
         token.clone_into(&mut next.runs_on);
         if next.check_runner.is_some() {
-            next.condition = Some(if qualification_check_source_id(source_id).is_some() {
-                QUALIFICATION_CHECK_ADMISSION_CONDITION.to_owned()
-            } else if matches!(
-                job.condition.as_deref(),
-                Some(NORMAL_CHECK_ADMISSION_CONDITION | NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION)
-            ) {
-                NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned()
-            } else {
-                EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned()
-            });
+            next.condition = Some(EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned());
         }
     }
     retarget_check_identity(&mut next, source_id, output_id, lane);

@@ -1,11 +1,6 @@
 use velnor_actions_contract::{
     CheckExecutor, CheckPlatform, Job, RunnerPlatform, RunsOn,
-    config::{
-        EPHEMERAL_CHECK_ADMISSION_CONDITION, NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION,
-        QUALIFICATION_CHECK_ADMISSION_CONDITION,
-    },
-    runner_platform,
-    workflow::QUALIFICATION_CHECK_JOB_PREFIX,
+    config::EPHEMERAL_CHECK_ADMISSION_CONDITION, runner_platform,
 };
 
 use super::{WorkflowRoutingPolicy, invalid, labels};
@@ -94,19 +89,16 @@ fn is_valid_typed_check(job_id: &str, job: &Job, require_runner_label: bool) -> 
     };
     if runner.executor != CheckExecutor::EphemeralSelfHosted
         || (require_runner_label && runner.label != job.runs_on)
-        || (!job_id.starts_with("check-") && !job_id.starts_with(QUALIFICATION_CHECK_JOB_PREFIX))
+        || !job_id.starts_with("check-")
         || runner.validate(".github/workflows/ci.yml", job_id).is_err()
     {
         return false;
     }
-    let qualification = job_id.starts_with(QUALIFICATION_CHECK_JOB_PREFIX);
-    match job.condition.as_deref() {
-        Some(condition) if qualification => condition == QUALIFICATION_CHECK_ADMISSION_CONDITION,
-        Some(EPHEMERAL_CHECK_ADMISSION_CONDITION | NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION) => {
-            !qualification
-        }
-        _ => false,
-    }
+    job.condition.as_deref().is_some_and(|condition| {
+        condition == EPHEMERAL_CHECK_ADMISSION_CONDITION
+            || condition
+                == "always() && needs.plan.result == 'success' && ((needs.plan.outputs.qualification_campaign == '' && (github.event_name == 'push' || github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))) || needs.plan.outputs.qualification_campaign != '')"
+    })
 }
 
 fn is_valid_typed_native_check(job_id: &str, job: &Job) -> bool {

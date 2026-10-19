@@ -7,18 +7,14 @@ use super::ValidatorKind;
 use super::ir::{Job, WorkflowIr};
 use super::jobs::{PLAN_JOB_ID, REQUIRED_JOB_ID};
 use super::named_check_lanes::add_named_check_lanes;
-use super::named_check_lanes::qualification_check_source_id;
 pub use super::named_check_lanes::{
     NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NAMED_CHECK_LANES_ENV, NamedCheckLane,
-    NamedCheckLaneVariant, QUALIFICATION_CHECK_JOB_PREFIX, named_check_lanes,
-    qualification_job_lanes,
+    NamedCheckLaneVariant, named_check_lanes, qualification_job_lanes,
 };
 use crate::config::{
     CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION, ExecutionConfig,
-    ExecutionMode, ExecutionRole, NORMAL_CHECK_ADMISSION_CONDITION,
-    NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION, QUALIFICATION_CHECK_ADMISSION_CONDITION,
-    RUNNER_LABEL_CATALOG, RunsOn, VelnorConfig, VerificationRunner, WORKFLOW_TASK_JOB_PREFIX,
-    WorkflowTask,
+    ExecutionMode, ExecutionRole, RUNNER_LABEL_CATALOG, RunsOn, VelnorConfig, VerificationRunner,
+    WORKFLOW_TASK_JOB_PREFIX, WorkflowTask,
 };
 use crate::errors::ContractError;
 use std::collections::BTreeMap;
@@ -90,10 +86,9 @@ pub fn expand_workflow(
     expand_workflow_with_qualification_sources(ir, config, dispatch, &BTreeMap::new())
 }
 
-/// Expand jobs using source-job identities for per-entry Qualification jobs.
+/// Expand jobs using source identities for selected crate jobs.
 ///
-/// The source map binds each individual Rust or `ToFu` Qualification job to
-/// its grouped verification job so existing runner overrides stay in force.
+/// The source map keeps runner overrides when a selected job uses another ID.
 /// # Errors
 pub fn expand_workflow_with_qualification_sources(
     ir: &WorkflowIr,
@@ -190,16 +185,7 @@ pub(super) fn placement_for(
     job_id: &str,
     job: &Job,
 ) -> Result<Placement, ContractError> {
-    let override_id = qualification_check_source_id(job_id).unwrap_or_else(|| job_id.to_owned());
-    placement_for_source(
-        config,
-        execution,
-        dispatch,
-        class,
-        job_id,
-        &override_id,
-        job,
-    )
+    placement_for_source(config, execution, dispatch, class, job_id, job_id, job)
 }
 
 fn placement_for_executor(
@@ -211,8 +197,7 @@ fn placement_for_executor(
     job: &Job,
     qualification_sources: &std::collections::BTreeMap<String, String>,
 ) -> Result<Placement, ContractError> {
-    let source_id = qualification_check_source_id(job_id)
-        .or_else(|| qualification_sources.get(job_id).cloned());
+    let source_id = qualification_sources.get(job_id).cloned();
     match source_id {
         Some(source_id) => {
             placement_for_source(config, execution, dispatch, class, job_id, &source_id, job)

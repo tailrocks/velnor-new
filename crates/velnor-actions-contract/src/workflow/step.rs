@@ -19,7 +19,7 @@ pub const MAX_TASK_EXECUTION_ENV: usize = 64;
 /// Plan output consumed by generated obligation skip conditions.
 pub const TASK_COVERED_OUTPUT: &str = "covered_tasks";
 
-/// Exact generated condition that skips one task only after plan coverage.
+/// Exact generated condition that stops cancelled tasks and skips covered tasks.
 ///
 /// # Errors
 ///
@@ -27,8 +27,26 @@ pub const TASK_COVERED_OUTPUT: &str = "covered_tasks";
 pub fn task_execution_condition(task_id: &str) -> Result<String, ContractError> {
     crate::ids::validate_task_id(task_id)?;
     Ok(format!(
-        "!contains(needs.plan.outputs.{TASK_COVERED_OUTPUT}, ',{task_id},')"
+        "!cancelled() && !contains(needs.plan.outputs.{TASK_COVERED_OUTPUT}, ',{task_id},')"
     ))
+}
+
+#[cfg(test)]
+mod task_execution_condition_tests {
+    use super::task_execution_condition;
+
+    #[test]
+    fn condition_keeps_independent_tasks_running_after_failure_and_stops_on_cancel() {
+        assert_eq!(
+            task_execution_condition("stack/demo/crate/check/default").expect("valid task ID"),
+            "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/demo/crate/check/default,')"
+        );
+    }
+
+    #[test]
+    fn condition_rejects_invalid_task_ids() {
+        assert!(task_execution_condition("stack/demo/crate/check/default' || true").is_err());
+    }
 }
 
 /// One workflow step.

@@ -1,4 +1,4 @@
-pub const MISE_VERSION: &str = "2026.10.13";
+pub const MISE_VERSION: &str = "2026.10.14";
 pub const RUST_VERSION: &str = "1.99.1";
 pub const MR_BOXINGTON_VERSION: &str = "1.24.1";
 pub const GH_VERSION: &str = "2.102.0";

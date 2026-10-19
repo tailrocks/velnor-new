@@ -15,6 +15,7 @@ nested `crates/velnor-runner` are governed by `docs/proposed/macos-scaleset-runn
 which defines its own workspace lints, rust version, and quality invariants.
 
 The words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
+See [Technical Terms](../technical-terms.md) for definitions.
 
 ## 1. Repository shape and authority
 
@@ -55,13 +56,12 @@ exactly the eight product package names below plus repository-only member `velno
 and utility `velnor-archive-guard`. Cargo metadata defines membership; V1 adds
 no custom architecture linter; §5, Alint, Clippy, tests, and review govern boundaries.
 Within V1 product behavior, Rust/Cargo metadata and `rust-toolchain.toml` belong to `velnor-actions-rust`; Mise syntax, environment, and task metadata belong to `velnor-actions-mise`; actionlint metadata belongs to `velnor-actions-actionlint`.
-Freshness may inspect Velnor-owned Cargo/Mise sources for private maintenance;
-results MUST NOT feed V1 planning. Scripts provision archive guard. Neither
-helper enters V1 Rust task derivation or the product crate matrix. The
-canonical Velnor repository uses the existing named-Mise-check contract to
-run both helper packages' Rust test suites as one required
-`maintenance-helpers` repository-quality check; ordinary ConsumerV1
-configurations do not declare this repository-owned check. Alint enforces only configured
+Freshness does a check of Velnor policy files. Repository scripts run the
+compiler for the archive guard. Each support package has one Rust crate job in
+VelnorRepositoryV1. Owner metadata can stop this policy from making package
+tasks. The Rust adapter rejects unknown owner values. ConsumerV1 makes tasks
+for packages with this metadata. Package names and paths do not change the task
+list. Alint enforces only configured
 generic file/path, required-file, and line-count rules.
 The CLI package MUST declare binary `velnor-actions`, the only target name without the package-purpose suffix. Non-Rust directories MAY remain in their own conventional locations.
 
@@ -81,9 +81,9 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 | `velnor-actions-freshness` (repository-only support) | Read-only repository freshness/pin/lock/advisory checks and bounded bootstrap metadata operations behind the existing CLI private gate | V1 planning, task graph or selection, runner behavior, product evidence claims, public commands, or workflow generation |
 | `velnor-archive-guard` (repository-only security utility) | Bounded framing validation of owned candidate, Cargo-package, and cache-payload tar bytes through explicit profiles | V1 stack behavior, task derivation, workflow generation, cache paths/manifests/links, extraction, or product behavior beyond the explicit orchestrator framing call |
 
-Both repository-only members are outside the eight-product V1 task graph. The
-CLI private gate consumes freshness at runtime. Repository scripts provision
-the archive guard binary; the orchestrator links its library only for bounded
+These two packages are repository support tools. Each has one Rust crate job.
+The CLI private gate uses freshness at runtime. Repository scripts run the compiler
+for the archive guard binary. The orchestrator links its library for bounded
 cache-payload raw-tar framing. The guard does not inspect cache paths or
 manifests, validate links, or extract files.
 
@@ -97,18 +97,22 @@ The source policy MUST allow one bounded output write in
 in `bounded_file_filter.rs`. It MUST reject extra or relocated expressions.
 All other file writes, path changes, links, and installer operations remain
 forbidden in Mise source.
-The canonical repository's `maintenance-helpers` named Mise check runs their
-package test suites independently of Rust task derivation and the product
-matrix; this repository's VelnorRepositoryV1 configuration makes it required.
+Freshness and archive-guard test tasks run in their own Rust crate jobs.
+The local `test-maintenance-helpers` Mise task remains for manual checks.
 
-Each repository-only package declares its task owner with Cargo package metadata:
+Cargo package metadata can specify the task owner:
 
 ```toml
 [package.metadata.velnor]
 v1-task-owner = "repository-maintenance"
 ```
 
-The Rust metadata adapter maps that value to a typed owner and rejects unknown owner values. Under `VelnorRepositoryV1`, the orchestrator omits only root-workspace packages with this owner from V1 task derivation and feature union; `prepare` verifies the canonical origin first. Under `ConsumerV1`, the same metadata does not exclude a same-named project. Package names and paths alone never grant this exclusion.
+The Rust adapter uses this value to select an owner type. The Rust adapter
+rejects unknown values. VelnorRepositoryV1 includes root-workspace packages
+without this owner.
+`prepare` does a check of the canonical origin first. ConsumerV1 makes tasks
+for packages with this metadata. Package names and paths do not change the task
+list.
 
 Hard invariants 10–12 (spec §3.3) are normative throughout. 10 — One owner per
 domain rule per the table above; extend an existing owner before making a new
@@ -354,7 +358,7 @@ full-SHA pin (repository-structure alint, distinct
 from workflow-syntax actionlint):
 
 ```yaml
-- uses: asamarts/alint@b02109b84dd59f3f96f33ad98b829b4d2fcd4b0a # v0.18.3
+- uses: asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87 # v0.19.0
 ```
 
 It runs only the generic rules configured in `.alint.yml`: file/path rules,

@@ -247,7 +247,11 @@ fn repo_config_sets_velnor_repository_v1() -> Result<(), String> {
     );
     let pinned = format!("{}/../../.mise-version", env!("CARGO_MANIFEST_DIR"));
     let mise = std::fs::read_to_string(&pinned).map_err(|err| format!("mise-version:{err}"))?;
-    assert_eq!(mise.trim(), "2026.10.13", "mise pin drift");
+    assert_eq!(
+        mise.trim(),
+        velnor_actions_mise::MISE_VERSION,
+        "mise pin drift"
+    );
     Ok(())
 }
 

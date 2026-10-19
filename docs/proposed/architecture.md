@@ -46,20 +46,12 @@ MUST use explicit stack names such as `velnor-actions-node`; each adapter
 contains only its named stack. Alint is the sole repository-structure linter
 and runs as a separate GitHub Actions job.
 
-The workspace also contains `velnor-actions-freshness` and
-`velnor-archive-guard` as repository-only maintenance members. Both are
-outside the eight-product V1 graph and do not enter V1 Rust task derivation.
-The orchestrator links the archive guard only for bounded framing validation
-of cache-payload raw tar bytes; the guard does not validate cache paths,
-manifests, links, or imports. Only the CLI's private maintenance gate consumes
-freshness at runtime; repository scripts provision the archive guard binary. Under
-`VelnorRepositoryV1`, the existing named-Mise-check contract emits one
-independent `maintenance-helpers` Required check for both packages' Rust test
-suites. That repository-quality check stays outside the product crate matrix;
-ordinary ConsumerV1 configurations do not declare this repository-owned
-check. Both manifests declare
-the typed `repository-maintenance` task owner; package names and paths alone
-never grant the task-derivation exclusion.
+The workspace includes `velnor-actions-freshness` and `velnor-archive-guard`.
+Each support package has one Rust crate job in VelnorRepositoryV1. Freshness
+does a check of Velnor policy files. Repository scripts run the compiler for
+the archive guard. Owner metadata can stop this policy from making package
+tasks. ConsumerV1 makes tasks for packages with this metadata. Package names
+and paths do not change the task list.
 
 | Crate | Owns | Must not own |
 |---|---|---|

@@ -67,11 +67,11 @@ pub const AWS_CREDENTIALS_ACTION_VERSION: &str = "v6.3.0";
 pub const AWS_CREDENTIALS_ACTION_SHA: &str = "e1253824e5c10ff9df46874f81ed3ec929e19cfd";
 
 /// Selected `asamarts/alint` release; candidate binary passed local checks
-/// 2026-10-17. Full hosted qualification remains part of the reviewed update.
-/// Source: `https://api.github.com/repos/asamarts/alint/releases/tags/v0.18.4`.
-pub const ALINT_ACTION_VERSION: &str = "v0.18.4";
+/// 2026-10-19. Full hosted qualification remains part of the reviewed update.
+/// Source: `https://api.github.com/repos/asamarts/alint/releases/tags/v0.19.0`.
+pub const ALINT_ACTION_VERSION: &str = "v0.19.0";
 /// Full commit SHA for [`ALINT_ACTION_VERSION`] from its immutable tag ref.
-pub const ALINT_ACTION_SHA: &str = "18e1a66db7444fed817c5d8c75292c7709fff32e";
+pub const ALINT_ACTION_SHA: &str = "f39a25a7e061bb8738a87372561d8b9a6a29ca87";
 
 /// Selected `jdx/mise-action` candidate; the updated action is checked by CI.
 ///

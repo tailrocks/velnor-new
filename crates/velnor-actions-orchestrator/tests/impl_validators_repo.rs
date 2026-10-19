@@ -59,18 +59,17 @@ fn repo_mise_text() -> Result<String, Box<dyn std::error::Error>> {
 fn fixture_config_sample(sample: &str) -> Result<String, Box<dyn std::error::Error>> {
     let table: toml::Table = toml::from_str(sample)?;
     let mut table = table;
-    let checks = table
+    if let Some(check) = table
         .get_mut("checks")
         .and_then(toml::Value::as_array_mut)
-        .ok_or("live sample has no checks array")?;
-    let check = checks
-        .first_mut()
+        .and_then(|checks| checks.first_mut())
         .and_then(toml::Value::as_table_mut)
-        .ok_or("live sample has no named check")?;
-    check.insert(
-        "inputs".into(),
-        toml::Value::Array(vec![toml::Value::String("mise.toml".into())]),
-    );
+    {
+        check.insert(
+            "inputs".into(),
+            toml::Value::Array(vec![toml::Value::String("mise.toml".into())]),
+        );
+    }
     Ok(toml::to_string(&table)?)
 }
 
@@ -129,6 +128,7 @@ fn repo_config_sample_parses_through_prepare() -> TestResult {
         let repo = make_sample_repo(&sample, &mise)?;
         let prep = prepare(repo.path())?;
         assert_eq!(prep.config.schema, 2);
+        assert_eq!(prep.config.checks, Vec::new());
         let execution = prep
             .config
             .execution

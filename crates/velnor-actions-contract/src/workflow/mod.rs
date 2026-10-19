@@ -50,14 +50,14 @@ pub use jobs::{
     PLAN_DISPLAY_NAME, PLAN_JOB_ID, QUALIFICATION_WORKFLOW_PATH, REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID, STALE_WORKFLOW_PATHS, TOFU_APPLY_WORKFLOW_PATH,
     TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, ValidatorKind, WORKFLOW_DISPLAY_NAME,
-    assign_crate_job_ids, crate_display_label, crate_display_name, is_crate_job_id,
-    is_safe_display_name, slugify_segment, tofu_display_name, validate_job_id,
+    assign_crate_job_ids, assign_rust_crate_job_ids, crate_display_label, crate_display_name,
+    is_crate_job_id, is_safe_display_name, slugify_segment, tofu_display_name, validate_job_id,
 };
 pub use lanes::{
     HOSTED_SUFFIX, LaneClass, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
-    NAMED_CHECK_LANES_ENV, NamedCheckLane, NamedCheckLaneVariant, QUALIFICATION_CHECK_JOB_PREFIX,
-    SCALE_SUFFIX, expand_workflow, expand_workflow_with_qualification_sources, lane_class,
-    named_check_lanes, qualification_job_lanes,
+    NAMED_CHECK_LANES_ENV, NamedCheckLane, NamedCheckLaneVariant, SCALE_SUFFIX, expand_workflow,
+    expand_workflow_with_qualification_sources, lane_class, named_check_lanes,
+    qualification_job_lanes,
 };
 pub use needs::{
     NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions,

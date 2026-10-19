@@ -17,7 +17,7 @@ fn pull_request_keeps_earlier_changes_and_transitive_dependents() {
     let repo = tempfile::tempdir().expect("temporary repository");
     initialize_repo(repo.path());
     write_workspace(repo.path());
-    commit(repo.path(), "baseline", "Initialize the crate graph.");
+    commit(repo.path(), "baseline", "Make the crate graph.");
     let base = rev(repo.path(), "HEAD");
 
     write_source(repo.path(), "a", "pub fn changed() {}\n");
@@ -38,7 +38,7 @@ fn pull_request_keeps_earlier_changes_and_transitive_dependents() {
     .expect("valid pull request range");
 
     assert_eq!(selected, ids(&["a", "b", "c", "d"]));
-    assert!(!selected.contains("e"), "Crate e must not be selected.");
+    assert!(!selected.contains("e"), "The plan must not select crate e.");
     assert!(warnings.is_empty(), "The test has warnings: {warnings:?}");
 }
 
@@ -47,7 +47,7 @@ fn initialize_repo(root: &Path) {
         .arg("init")
         .arg(root)
         .status()
-        .expect("Create the test repository.");
+        .expect("Make the test repository.");
     assert!(status.success());
 }
 

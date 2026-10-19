@@ -2,7 +2,6 @@
 //! Reports bind task and matrix identities through the staged plan. Named
 //! Mise success requires the qualified execution producer and final receipt proof.
 //!
-//! Failed obligations also report downstream tasks as `upstream_failed`.
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -25,25 +24,19 @@ use timing::{elapsed_ms, parse_exit_code, parse_start_ms};
 
 pub(crate) use crate::task_report_aggregate::single_task_aggregate;
 
-#[path = "task_report_order.rs"]
-mod task_report_order;
-
 /// Report-production operation tag.
 pub const REPORT_OP: &str = "write-task-report-v1";
 /// Env key carrying the executed obligation's task ID.
 pub(crate) const TASK_ID_ENV: &str = "VELNOR_TASK_ID";
 /// Env key carrying the captured obligation exit code.
 pub(crate) const EXIT_CODE_ENV: &str = "VELNOR_EXIT_CODE";
-/// Env key carrying comma-separated downstream task IDs for skip reports.
-pub(crate) const DOWNSTREAM_IDS_ENV: &str = "VELNOR_DOWNSTREAM_TASK_IDS";
 /// Env key carrying the wrapper-captured start time (unix millis).
 pub(crate) const START_MS_ENV: &str = "VELNOR_START_MS";
 
-/// Write the executed obligation's reports plus downstream skip reports.
+/// Write reports for the executed obligation.
 ///
 /// Resolves the run key from the GitHub environment and the plan from the
-/// downloaded plan artifact; returns the count of tasks reported (one plus
-/// downstream skips on failure).
+/// downloaded plan artifact; returns the number of task reports written.
 ///
 /// # Errors
 ///
@@ -66,38 +59,40 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
     let reason = crate::noop_report::noop_reason_present();
     let digest = env::var(crate::noop_report::TASK_DIGEST_ENV).ok();
     let exit_code = parse_exit_code(&exit_raw)?;
+    let job_id = env::var("GITHUB_JOB")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| internal("missing_github_job"))?;
     if let Some(request) =
         crate::noop_report::parse_noop_request(reason.as_deref(), digest.as_deref())?
     {
-        return crate::noop_report::write_noop_report_to(
+        return crate::noop_report::write_noop_report_for_job(
             &run_key,
             &task_id,
             exit_code,
             &request,
+            &job_id,
             Path::new(&runner_temp),
         );
     }
-    let downstream_env = env::var(DOWNSTREAM_IDS_ENV).ok();
-    let downstream = parse_downstream(downstream_env.as_deref());
     let start_ms = env::var(START_MS_ENV)
         .ok()
         .and_then(|raw| parse_start_ms(&raw));
-    write_task_report_to(
+    write_task_report_for_job(
         &run_key,
         &task_id,
         exit_code,
         start_ms,
-        &downstream,
+        &job_id,
         Path::new(&runner_temp),
     )
 }
 
-/// Write reports for one outcome with explicit inputs (testable core).
+/// Write the report for one outcome with explicit inputs.
 ///
 /// The plan at `$RUNNER_TEMP/velnor/<run-key>/plan.json` binds every
-/// identity: task digest, matrix coordinates, event, and trust. A nonzero
-/// exit additionally reports each downstream ID as skipped; anything the
-/// plan cannot bind errors instead of emitting unbound bytes. A
+/// identity: task digest, matrix coordinates, event, and trust. The job ID
+/// selects the exact lane entry when the plan has paired lane entries. A
 /// baseline-covered obligation proves nothing here: the merge
 /// revalidates it against the manifest, so this op succeeds silently
 /// with zero reports instead of failing `task_not_in_plan`.
@@ -106,12 +101,41 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
 ///
 /// Returns [`OrchestratorError::Internal`] for invalid plans, run-key
 /// mismatches, unknown or multi-task entries, and unwritable paths.
+#[cfg(test)]
 pub(crate) fn write_task_report_to(
     run_key: &str,
     task_id: &str,
     exit_code: i32,
     start_ms: Option<u64>,
-    downstream: &[String],
+    runner_temp: &Path,
+) -> Result<usize, OrchestratorError> {
+    validate_run_key(run_key).map_err(internal_contract)?;
+    let plan = load_plan(run_key, runner_temp)?;
+    if crate::covered_tasks::covered_by_baseline(&plan, task_id) {
+        return Ok(0);
+    }
+    let mut matching_jobs = plan
+        .matrix
+        .include
+        .iter()
+        .filter(|entry| flattened(entry).contains(&task_id))
+        .map(|entry| entry.job_id.as_str());
+    let job_id = matching_jobs
+        .next()
+        .ok_or_else(|| internal("task_not_in_plan"))?;
+    if matching_jobs.next().is_some() {
+        return Err(internal("ambiguous_task_entry"));
+    }
+    write_task_report_for_job(run_key, task_id, exit_code, start_ms, job_id, runner_temp)
+}
+
+/// Write one report for the exact GitHub job that executed the task.
+pub(crate) fn write_task_report_for_job(
+    run_key: &str,
+    task_id: &str,
+    exit_code: i32,
+    start_ms: Option<u64>,
+    job_id: &str,
     runner_temp: &Path,
 ) -> Result<usize, OrchestratorError> {
     validate_run_key(run_key).map_err(internal_contract)?;
@@ -122,7 +146,7 @@ pub(crate) fn write_task_report_to(
     if crate::covered_tasks::covered_by_baseline(&plan, task_id) {
         return Ok(0);
     }
-    let (entry, digest) = entry_and_digest(&plan, task_id)?;
+    let (entry, digest) = entry_and_digest_for_job(&plan, task_id, job_id)?;
     if entry.stack_id == "mise" && exit_code == 0 {
         return Err(internal("named_check_requires_qualified_execution"));
     }
@@ -131,30 +155,7 @@ pub(crate) fn write_task_report_to(
         .map_err(internal_contract)?;
     let matrix = single_task_aggregate(&plan, entry, &task).map_err(internal_contract)?;
     write_entry_reports(runner_temp, &plan, entry, &task, &matrix)?;
-    let mut reported = 1usize;
-    if exit_code != 0 {
-        let downstream_tasks: Vec<String> = if downstream.is_empty() {
-            task_report_order::derive_downstream(&plan, task_id, &entry.job_id)
-        } else {
-            downstream.to_vec()
-        };
-        reported +=
-            crate::noop_report::write_skip_reports(&plan, task_id, &downstream_tasks, runner_temp)?;
-    }
-    Ok(reported)
-}
-
-/// Split downstream IDs on commas, dropping blanks and duplicates.
-fn parse_downstream(raw: Option<&str>) -> Vec<String> {
-    let mut seen = std::collections::BTreeSet::new();
-    let mut ids = Vec::new();
-    for id in raw.unwrap_or_default().split(',') {
-        let id = id.trim();
-        if !id.is_empty() && seen.insert(id.to_owned()) {
-            ids.push(id.to_owned());
-        }
-    }
-    ids
+    Ok(1)
 }
 
 /// Load and validate the downloaded plan, bound to this run key.
@@ -190,44 +191,6 @@ fn plan_path(runner_temp: &Path, run_key: &str) -> PathBuf {
     runner_temp.join("velnor").join(run_key).join("plan.json")
 }
 
-/// Obligation entry plus plan task digest for one task ID.
-///
-/// The entry must name exactly this task: multi-task (sharded-ref)
-/// entries have no per-task outcome here and refuse rather than emit a
-/// lying aggregate. No producer emits sharded refs today.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for unknown tasks, tasks
-/// without an obligation digest, and multi-task entries.
-pub(crate) fn entry_and_digest<'a>(
-    plan: &'a Plan,
-    task_id: &str,
-) -> Result<(&'a MatrixEntry, &'a str), OrchestratorError> {
-    validate_task_id(task_id).map_err(internal_contract)?;
-    let mut found = None;
-    for entry in &plan.matrix.include {
-        if !flattened(entry).contains(&task_id) {
-            continue;
-        }
-        if flattened(entry).len() != 1 {
-            return Err(internal("multi_task_entry"));
-        }
-        if found.is_some() {
-            return Err(internal("duplicate_task_entry"));
-        }
-        found = Some(entry);
-    }
-    let entry = found.ok_or_else(|| internal("task_not_in_plan"))?;
-    let digest = plan
-        .obligations
-        .iter()
-        .find(|obligation| obligation.task_id == task_id)
-        .map(|obligation| obligation.task_digest.as_str())
-        .ok_or_else(|| internal("task_without_obligation"))?;
-    Ok((entry, digest))
-}
-
 /// Resolve one named-check report entry by its generated job identity.
 pub(crate) fn entry_and_digest_for_job<'a>(
     plan: &'a Plan,
@@ -259,7 +222,7 @@ pub(crate) fn entry_and_digest_for_job<'a>(
 }
 
 /// Declared task IDs of one matrix entry, sorted.
-fn flattened(entry: &MatrixEntry) -> Vec<&str> {
+pub(crate) fn flattened(entry: &MatrixEntry) -> Vec<&str> {
     let mut ids = Vec::new();
     for task_ref in entry.execute_task_ids.tasks.values() {
         match task_ref {
@@ -367,8 +330,6 @@ mod task_report_cover_tests;
 #[path = "task_report_merge_tests.rs"]
 mod task_report_merge_tests;
 #[cfg(test)]
-#[path = "task_report_order_tests.rs"]
-mod task_report_order_tests;
 #[cfg(test)]
 #[path = "task_report_tests.rs"]
 mod task_report_tests;

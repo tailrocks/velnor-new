@@ -7,14 +7,15 @@ fn obligation_step_skips_when_plan_covered_it() {
     let step = obligation_step(
         &obligation,
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
     )
     .expect("step");
     assert_eq!(
         step.condition.as_deref(),
-        Some("!contains(needs.plan.outputs.covered_tasks, ',stack/rust/demo/clippy/default,')")
+        Some(
+            "!cancelled() && !contains(needs.plan.outputs.covered_tasks, ',stack/rust/demo/clippy/default,')"
+        )
     );
     let mut forged = obligation.clone();
     forged.task_id = "not-a-task".to_owned();
@@ -22,7 +23,6 @@ fn obligation_step_skips_when_plan_covered_it() {
         obligation_step(
             &forged,
             &ToolCatalog::pinned(),
-            &[],
             None,
             env!("CARGO_PKG_VERSION")
         )
@@ -101,7 +101,6 @@ fn doc_obligation_step_carries_typed_rustdocflags() {
     let step = obligation_step(
         &doc,
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
     )
@@ -151,7 +150,6 @@ fn assert_tofu_step_automation_environment() {
     let step = obligation_step(
         &tofu,
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
     )
@@ -203,7 +201,6 @@ fn assert_rust_step_owned_homes() {
     let step = obligation_step(
         &obligation(),
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
     )
@@ -233,7 +230,6 @@ fn non_doc_obligation_steps_carry_no_rustdocflags() {
     let step = obligation_step(
         &obligation(),
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
     )

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use super::*;
 use velnor_actions_contract::cachekey::{RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SCHEMA};
-use velnor_actions_contract::{NamedCheckLaneVariant, digest_b3};
+use velnor_actions_contract::{NamedCheckLaneVariant, WorkflowEvent, digest_b3};
 
 const HOSTED_RUNNER: &str = "ubuntu-26.04";
 const SCALE_SET_RUNNER: &str = "scale-set:velnor+orbstack-linux";
@@ -79,8 +79,12 @@ fn rust_proposal() -> ProposedTask {
 }
 
 fn qualification_lanes(task: &ProposedTask) -> Vec<NamedCheckLane> {
-    let id = crate::crate_job_ids::qualification_job_id_for_member(task)
-        .expect("qualification job identity");
+    let id = crate::crate_job_ids::job_id_for_member(
+        std::slice::from_ref(task),
+        task,
+        WorkflowEvent::Qualification,
+    )
+    .expect("shared qualification job identity");
     vec![
         NamedCheckLane {
             variant: Some(NamedCheckLaneVariant::Hosted),

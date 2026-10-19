@@ -104,6 +104,7 @@ fn assert_task_report_identity(
     assert_eq!(helper_version, env!("CARGO_PKG_VERSION"));
     let expected_condition =
         crate::covered_tasks::skip_condition(&task.task_id).expect("task condition");
+    let expected_condition = format!("!cancelled() && {expected_condition}");
     assert_eq!(
         step.condition.as_deref(),
         Some(expected_condition.as_str()),
@@ -130,8 +131,7 @@ fn assert_task_environment(
         .expect("validated task environment");
     assert_eq!(env, &expected_env, "exact task environment");
     assert!(
-        !env.contains_key(crate::task_report::TASK_ID_ENV)
-            && !env.contains_key(crate::task_report::DOWNSTREAM_IDS_ENV),
+        !env.contains_key(crate::task_report::TASK_ID_ENV),
         "report authority stays in TaskExecution fields, not environment"
     );
 }

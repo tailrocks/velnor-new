@@ -129,6 +129,7 @@ fn resolver_rejects_untrusted_marker_version_before_manifest_selection() {
         RUN_KEY,
         &record.execution_digest,
         "0.1.6",
+        "crate_clippy",
     )
     .expect_err("wrong static renderer version rejected");
     assert_error(&error, "task_execution_marker_mismatch");
@@ -143,6 +144,7 @@ fn resolver_rejects_execution_and_plan_identity_mismatches() {
         RUN_KEY,
         &digest(90),
         GENERATOR_VERSION,
+        "crate_clippy",
     )
     .expect_err("wrong action execution digest rejected");
     assert_error(&error, "execution_digest_mismatch");
@@ -231,3 +233,6 @@ fn resolver_rejects_noncanonical_and_duplicate_manifest_data() {
 #[path = "task_execution_test_support.rs"]
 mod support;
 use support::*;
+
+#[path = "task_execution_gates_tests.rs"]
+mod gates;

@@ -181,8 +181,8 @@ impl Drop for DoneGuard<'_> {
 #[test]
 fn atomic_commit_never_exposes_missing_tree() -> TestResult {
     let repo = make_repo(config_with_branch())?;
-    let root = repo.path();
-    let prep = prepare(root)?;
+    let root = repo.path().canonicalize()?;
+    let prep = prepare(&root)?;
     let opts = GenerateOptions { output_dir: None };
     generate(&prep, &opts)?;
     let live = root.join(".github");
@@ -201,7 +201,7 @@ fn atomic_commit_never_exposes_missing_tree() -> TestResult {
             writer_phase.store(WRITER_COMPLETE, Ordering::Relaxed);
         });
         for observer in 0..4 {
-            let parent = root.to_path_buf();
+            let parent = root.clone();
             let target = live.clone();
             let done_ref = &done;
             let counts_ref = &counts;

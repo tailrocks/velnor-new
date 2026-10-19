@@ -34,6 +34,7 @@ pub const RUNTIME_RUNNER_TEMP_ENV: &str = "VELNOR_RUNTIME_RUNNER_TEMP";
 const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 const TASK_EXECUTION_FRAME_END: &str = "END";
 const RUNNER_TEMP_EXPRESSION: &str = "${{ runner.temp }}";
+const GITHUB_JOB_ENV: &str = "GITHUB_JOB";
 
 /// Resolve the selected task from GitHub's runner environment and emit its
 /// NUL-framed data record. This function only reads and validates data.
@@ -59,12 +60,14 @@ pub fn resolve_task_execution() -> Result<Vec<u8>, OrchestratorError> {
     let run_key = crate::internal_request::resolve_run_key(None)?;
     let execution_digest = required_env(TASK_EXECUTION_DIGEST_ENV, "missing_execution_digest")?;
     let generator_version = required_env(GENERATOR_VERSION_ENV, "missing_generator_version")?;
+    let job_id = required_env(GITHUB_JOB_ENV, "missing_github_job")?;
     resolve_task_execution_to(
         &root,
         &runner_temp,
         &run_key,
         &execution_digest,
         &generator_version,
+        &job_id,
     )
 }
 
@@ -84,6 +87,7 @@ pub(crate) fn resolve_task_execution_to(
     run_key: &str,
     expected_execution_digest: &str,
     expected_generator_version: &str,
+    job_id: &str,
 ) -> Result<Vec<u8>, OrchestratorError> {
     if !root.is_absolute() {
         return Err(internal("runner_paths_must_be_absolute"));
@@ -103,19 +107,24 @@ pub(crate) fn resolve_task_execution_to(
     if obligation.decision != ObligationDecision::Execute {
         return Err(internal("task_not_executable_in_plan"));
     }
-    let (entry, plan_task_digest) = crate::task_report::entry_and_digest(&plan, task_id)?;
+    let (entry, plan_task_digest) =
+        crate::task_report::entry_and_digest_for_job(&plan, task_id, job_id)?;
     if record.task_digest != plan_task_digest
         || entry.task_digest != plan_task_digest
-        || record.matrix_id != entry.id
-        || record.matrix_key != entry.matrix_key
+        || !task_execution_gates::entry_matches_manifest(record, entry, job_id)?
     {
         return Err(internal("task_execution_plan_binding_mismatch"));
     }
 
+    task_execution_gates::validate_prerequisites(&plan, entry, task_id, job_id, runner_temp)?;
+
     // The manifest digest and existing plan digest bind the original literal
     // expression. Materialize it only after both bindings have been checked.
-    encode_runtime_frame(record, runner_temp)
+    encode_runtime_frame(record, &entry.id, &entry.matrix_key, runner_temp)
 }
+
+#[path = "task_execution_gates.rs"]
+mod task_execution_gates;
 
 /// Select a single validated manifest record using its full execution digest.
 ///
@@ -169,6 +178,8 @@ fn validate_runner_temp_path(path: &Path) -> Result<&str, OrchestratorError> {
 
 fn encode_runtime_frame(
     record: &TaskExecutionManifestEntryV1,
+    matrix_id: &str,
+    matrix_key: &str,
     runner_temp: &Path,
 ) -> Result<Vec<u8>, OrchestratorError> {
     record.validate().map_err(internal_contract)?;
@@ -183,8 +194,8 @@ fn encode_runtime_frame(
         record.task_id.clone(),
         record.execution_digest.clone(),
         record.task_digest.clone(),
-        record.matrix_id.clone(),
-        record.matrix_key.clone(),
+        matrix_id.to_owned(),
+        matrix_key.to_owned(),
         record.report_helper_version.clone(),
         u8::from(record.matrix_max_parallel.is_some()).to_string(),
         record

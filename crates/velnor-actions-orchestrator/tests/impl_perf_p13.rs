@@ -235,9 +235,15 @@ fn generate_150_crates_schedules_every_member() -> TestResult {
     let text = String::from_utf8(workflow)?;
     for index in 0..members {
         let job = format!("  rust-c{index:03}:");
-        assert!(text.contains(&job), "missing {job}");
+        assert_eq!(text.lines().filter(|line| *line == job).count(), 1, "{job}");
     }
     assert!(text.contains("  rust-demo:"), "missing root package job");
+    assert_eq!(
+        text.lines()
+            .filter(|line| line.starts_with("  rust-"))
+            .count(),
+        members + 1
+    );
     let actions = report
         .files_written
         .iter()
@@ -245,10 +251,7 @@ fn generate_150_crates_schedules_every_member() -> TestResult {
             path.starts_with(".github/actions/crate-obligation-") && path.ends_with("/action.yml")
         })
         .count();
-    assert!(
-        actions >= members,
-        "expected one composite per member, wrote {actions}"
-    );
+    assert_eq!(actions, 0);
     Ok(())
 }
 

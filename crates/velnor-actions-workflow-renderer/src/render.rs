@@ -40,12 +40,16 @@ mod validator_tools;
 #[path = "render_cache_helper_tests.rs"]
 mod cache_helper_tests;
 
+#[cfg(test)]
+#[path = "render_grouped_fallback_tests.rs"]
+mod grouped_fallback_tests;
+
 #[path = "render_cache_helper.rs"]
 mod cache_helper_support;
 use self::cache_helper_support::insert_verified_cache_helper;
 
 /// Pinned Alint binary release tag for the step's `version:` input.
-pub const ALINT_BINARY_VERSION: &str = "v0.18.4";
+pub const ALINT_BINARY_VERSION: &str = "v0.19.0";
 
 #[path = "render_context.rs"]
 mod context;

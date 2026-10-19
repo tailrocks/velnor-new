@@ -55,8 +55,7 @@ pub(crate) fn render_checked_workflow(
     Ok(text)
 }
 
-/// Render without representation sharing so the caller can run structural
-/// extraction before applying the over-cap YAML fallback.
+/// Render with lossless YAML sharing before structural extraction.
 pub(crate) fn render_checked_workflow_before_extraction(
     path: &str,
     document: &Yaml,
@@ -68,7 +67,7 @@ pub(crate) fn render_checked_workflow_before_extraction(
     {
         return render_checked_workflow(path, document, generator_version);
     }
-    let text = marker::with_marker(generator_version, &render_yaml(document))?;
+    let text = render_marked_workflow(path, document, generator_version)?;
     workflow_size::check_workflow_size(path, &text)?;
     Ok(text)
 }

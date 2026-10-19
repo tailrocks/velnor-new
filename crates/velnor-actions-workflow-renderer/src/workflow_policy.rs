@@ -77,9 +77,7 @@ fn check_runner_is_valid(
     job: &velnor_actions_contract::Job,
     runner: &velnor_actions_contract::CheckRunner,
 ) -> bool {
-    let qualification =
-        id.starts_with(velnor_actions_contract::workflow::QUALIFICATION_CHECK_JOB_PREFIX);
-    if !qualification && !id.starts_with("check-") {
+    if !id.starts_with("check-") {
         return false;
     }
     let scale_set = velnor_actions_contract::RunsOn::parse(&job.runs_on)
@@ -90,21 +88,15 @@ fn check_runner_is_valid(
 
     runner.platform == velnor_actions_contract::CheckPlatform::LinuxX64
         && runner.executor == velnor_actions_contract::CheckExecutor::Hosted
-        && scale_set_check_admission(job.condition.as_deref(), qualification)
+        && scale_set_check_admission(job.condition.as_deref())
 }
 
-fn scale_set_check_admission(condition: Option<&str>, qualification: bool) -> bool {
-    if qualification {
-        return condition
-            == Some(velnor_actions_contract::config::QUALIFICATION_CHECK_ADMISSION_CONDITION);
-    }
-    matches!(
-        condition,
-        Some(
-            velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
-                | velnor_actions_contract::config::NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION
-        )
-    )
+fn scale_set_check_admission(condition: Option<&str>) -> bool {
+    condition.is_some_and(|condition| {
+        condition == velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+            || condition
+                == "always() && needs.plan.result == 'success' && ((needs.plan.outputs.qualification_campaign == '' && (github.event_name == 'push' || github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))) || needs.plan.outputs.qualification_campaign != '')"
+    })
 }
 
 #[cfg(test)]

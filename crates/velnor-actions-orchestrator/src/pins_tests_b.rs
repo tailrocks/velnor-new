@@ -51,16 +51,16 @@ fn release_mise_setup_uses_shared_verified_platforms() {
     for (target, digest) in [
         (
             ReleaseTarget::LinuxX86_64,
-            "94c45523c7b6760b7da704f16051171ca32e8447a849a02266a439a4455e9a12",
+            "50be7185bcf75929f01cc5630276bcb43ca367f7c5b176e2580903d28c611dc4",
         ),
         (
             ReleaseTarget::MacosArm64,
-            "92fd6898dc213808d1c81f0bead9668dbea036e5946c94c0e82554603205a3aa",
+            "005b32b9c22ca9cb63ff9d35c74b3abe69c433e9ca655fea288ba3dcbe7e4918",
         ),
     ] {
         let setup = resolve_mise_setup_for_release_target(&config, target)
             .expect("supported consumer runner");
-        assert_eq!(setup.version, "2026.10.13");
+        assert_eq!(setup.version, "2026.10.14");
         assert_eq!(setup.sha256, digest);
     }
     let intel = resolve_mise_setup_for_release_target(&config, ReleaseTarget::MacosX86_64)

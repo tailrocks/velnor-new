@@ -181,6 +181,9 @@ libraries and selected components/targets. It does not project only compiler
 executables. The entire prefix is byte-bound, and the check's
 `RUSTUP_TOOLCHAIN` points to that owned prefix with isolated Cargo/Rustup homes;
 repository toolchain files cannot select another installation.
+The task PATH exposes only the executable names declared and successfully
+probed for that platform. Retaining a component in the prefix does not expose
+its commands implicitly.
 
 Before any Mise invocation, the helper locates candidate bytes, checks the
 platform-specific pinned SHA-256, and exclusively copies those same bytes into
@@ -212,9 +215,21 @@ installed identity.
 Each executable declares its exposed `name`, normalized prefix-relative `path`,
 SHA-256, and a closed `probe`. Supported probes are `version` (`--version`),
 `version_subcommand` (`version`), `rustc_verbose` (`rustc -vV`), and
-`cargo_nextest_version` (`cargo-nextest --version`). Expected output is exact:
+`cargo_nextest_version` (`cargo-nextest --version`). Rust's formatter component
+also has the closed `rustfmt_version` probe with fixed `--version` arguments.
+It admits only Core Rust with the `rustfmt` component selected and the canonical
+`rustfmt`/`bin/rustfmt` or `cargo-fmt`/`bin/cargo-fmt` name/path pair. Its truthful
+`rustfmt <component-version>-stable (<compiler-prefix> <compiler-date>)` banner
+uses the formatter's own version, not the parent Rust release. The ten-character
+lowercase compiler prefix and valid calendar date must match the same platform's
+canonical `rustc`/`bin/rustc` declaration and its validated `rustc_verbose` full
+compiler hash/date. This relationship is checked at shared recipe admission and
+again through complete runtime declaration and receipt validation.
+
+Expected output is exact:
 the first stdout line for ordinary probes, or complete stdout without its
-trailing newline for `rustc_verbose`. Probe families are validated against
+trailing newline for `rustc_verbose` and `rustfmt_version`. Extra formatter
+output lines fail closed. Probe families are validated against
 their declared tool identity; arbitrary probe argv is unsupported.
 
 The helper verifies the full installed tree, each executable's bytes, and its

@@ -184,7 +184,7 @@ fn build_workflow_jobs(
     let mut jobs = BTreeMap::new();
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
     let qualification_jobs_enabled = qualification_jobs_enabled(input.config);
-    let built = crate::crate_jobs::build_for_workflow(
+    let crate_job_inputs = crate::crate_jobs::workflow_job_inputs(
         input.config,
         input.label,
         input.discovery,
@@ -192,7 +192,9 @@ fn build_workflow_jobs(
         input.fetch_roots,
         prepared.acquire.as_ref(),
         &prepared.report_helper_version,
-    )?;
+    );
+    let built =
+        crate::crate_jobs::build_for_workflow(crate_job_inputs, qualification_jobs_enabled)?;
     let qualification = if qualification_jobs_enabled {
         crate::crate_jobs::build_qualification_for_workflow(
             input.config,
@@ -209,7 +211,8 @@ fn build_workflow_jobs(
     let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     required_ids.extend(qualification.jobs.iter().map(|(id, _)| id.clone()));
     for (id, mut job) in built.jobs {
-        if qualification_jobs_enabled {
+        if qualification_jobs_enabled && id.starts_with(velnor_actions_contract::TOFU_JOB_ID_PREFIX)
+        {
             set_crate_job_condition(&mut job, false);
         }
         insert_job(&mut jobs, id, job)?;
@@ -264,24 +267,14 @@ fn insert_check_jobs(
     qualification_jobs_enabled: bool,
 ) -> Result<Vec<String>, OrchestratorError> {
     let mut required_ids = Vec::new();
-    for (id, mut job) in
-        check_jobs::build_check_jobs(prepared.policy, input.discovery, &prepared.catalog)?
-    {
-        if qualification_jobs_enabled {
-            set_normal_check_condition(&mut job);
-        }
+    for (id, job) in check_jobs::build_check_jobs_with_qualification(
+        prepared.policy,
+        input.discovery,
+        &prepared.catalog,
+        qualification_jobs_enabled,
+    )? {
         required_ids.push(id.clone());
         insert_job(jobs, id, job)?;
-    }
-    if qualification_jobs_enabled {
-        for (id, job) in check_jobs::build_qualification_check_jobs(
-            prepared.policy,
-            input.discovery,
-            &prepared.catalog,
-        )? {
-            required_ids.push(id.clone());
-            insert_job(jobs, id, job)?;
-        }
     }
     Ok(required_ids)
 }
@@ -296,7 +289,7 @@ fn qualification_jobs_enabled(config: &VelnorConfig) -> bool {
         })
 }
 
-/// Gate one static crate-job set on the validated Qualification output.
+/// Gate one static `ToFu` crate-job set on the validated Qualification output.
 fn set_crate_job_condition(job: &mut Job, qualification: bool) {
     let mode = if qualification {
         "needs.plan.outputs.qualification_campaign != ''"
@@ -306,18 +299,6 @@ fn set_crate_job_condition(job: &mut Job, qualification: bool) {
     job.condition = Some(format!(
         "always() && needs.plan.result == 'success' && {mode}"
     ));
-}
-
-fn set_normal_check_condition(job: &mut Job) {
-    job.condition = Some(
-        if job.check_runner.as_ref().is_some_and(|runner| {
-            runner.executor == velnor_actions_contract::config::CheckExecutor::EphemeralSelfHosted
-        }) {
-            velnor_actions_contract::config::NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned()
-        } else {
-            velnor_actions_contract::config::NORMAL_CHECK_ADMISSION_CONDITION.to_owned()
-        },
-    );
 }
 
 /// Insert one generated job without replacing an existing identity.

@@ -48,7 +48,7 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
     // reloads the captured tap's own config before using its updater task.
     // Backend cache operations read source configuration before each request.
     // Preview admission and producer checks load configuration at separate boundaries.
-    assert_eq!(config_calls.len(), 9, "{config_calls:?}");
+    assert_eq!(config_calls.len(), 10, "{config_calls:?}");
     assert!(
         config_calls
             .iter()
@@ -86,6 +86,7 @@ fn assert_configuration_admission_boundaries(config_calls: &[String]) {
                 || call.starts_with("check_runtime.rs")
                 || call.starts_with("routing.rs")
                 || call.starts_with("owned_tool_preview.rs")
+                || call.starts_with("job_image_preview.rs")
                 || call.starts_with("qualification_cache_backend.rs")
                 || call.starts_with("qualification_resolver.rs")
                 || call.starts_with("tap_prepare.rs")

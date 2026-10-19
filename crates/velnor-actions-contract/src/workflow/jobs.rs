@@ -177,7 +177,7 @@ impl ValidatorKind {
 
 /// Package-slug job-ID prefix: IDs below it derive from real package names.
 ///
-/// [`assign_crate_job_ids`] emits one `rust-<slug>` ID per rust crate,
+/// [`assign_rust_crate_job_ids`] emits one `rust-<slug>` ID per Rust package,
 /// so the branding gate in [`validate_job_id`] skips this prefix:
 /// self-hosting repositories keep their package names while
 /// orchestration IDs stay unbranded (P05-7).
@@ -301,21 +301,11 @@ pub fn crate_display_label(package_name: &str, manifest: &str) -> String {
     }
 }
 
-/// Display name for one crate job: `Rust / <label>` plus config suffix.
-///
-/// The default configuration shows the bare label; extra feature
-/// configurations append ` (<config>)` so variants never silently drop
-/// checks or multiply default jobs (P05-4). The composed name is
-/// sanitized whole so the configuration suffix is covered too.
+/// Display name for one crate job: `Rust / <label>`.
 #[must_use]
-pub fn crate_display_name(package_name: &str, manifest: &str, configuration: &str) -> String {
+pub fn crate_display_name(package_name: &str, manifest: &str) -> String {
     let label = crate_display_label(package_name, manifest);
-    let composed = if configuration == "default" {
-        format!("Rust / {label}")
-    } else {
-        format!("Rust / {label} ({configuration})")
-    };
-    sanitize_display_text(&composed)
+    sanitize_display_text(&format!("Rust / {label}"))
 }
 
 /// Display name for one tofu root job: `OpenToFu — <label>`.
@@ -329,14 +319,7 @@ pub fn tofu_display_name(root_label: &str) -> String {
     sanitize_display_text(&format!("{TOFU_DISPLAY_PREFIX}{root_label}"))
 }
 
-/// Assign stable collision-safe crate job IDs for one package set.
-///
-/// Base form is `<prefix><slug>` (`<prefix><slug>-<config>` off
-/// default); on slug collision the later key in sorted order takes
-/// `-<digest8>` of its package ID plus configuration. Deterministic
-/// for a fixed set. Callers pass [`CRATE_JOB_ID_PREFIX`] for rust
-/// groups and [`TOFU_JOB_ID_PREFIX`] for all-tofu groups; namespaces
-/// never collide across prefixes.
+/// Give stable IDs to package and configuration groups.
 #[must_use]
 pub fn assign_crate_job_ids(
     crates: &BTreeSet<(String, String, String)>,
@@ -365,6 +348,28 @@ pub fn assign_crate_job_ids(
         assigned.insert((package_id.clone(), configuration.clone()), id);
     }
     assigned
+}
+
+/// Give one stable ID to each Rust package for all its configurations.
+#[must_use]
+pub fn assign_rust_crate_job_ids(
+    crates: &BTreeSet<(String, String)>,
+    prefix: &str,
+) -> BTreeMap<String, String> {
+    let groups = crates
+        .iter()
+        .map(|(package_id, package_name)| {
+            (
+                package_id.clone(),
+                package_name.clone(),
+                "default".to_owned(),
+            )
+        })
+        .collect();
+    assign_crate_job_ids(&groups, prefix)
+        .into_iter()
+        .map(|((package_id, _), job_id)| (package_id, job_id))
+        .collect()
 }
 
 #[cfg(test)]

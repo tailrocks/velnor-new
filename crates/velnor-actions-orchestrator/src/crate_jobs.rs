@@ -1,15 +1,7 @@
-//! Crate-job construction: one ordered IR job per crate (P05).
-//!
-//! Root cause (P05): logical obligations were equated with execution
-//! jobs, so every task fanned out into matrix legs behind one shared
-//! template. The structural fix groups runnable obligations by
-//! `(package, configuration)` into one ordered [`CrateJob`](velnor_actions_contract::CrateJob)
-//! each, validates the grouping through the contract model (stable
-//! unbranded IDs, gates referencing strictly earlier obligations),
-//! then renders each group to a fixed IR job: checkout, pinned tools,
-//! components, lockful sources, the per-root provider restore on
-//! opentofu crates, the MBX local setup on MBX crates, and one
-//! shell step per obligation in gate order.
+//! Rust packages use one job for all task configurations.
+//! `ToFu` packages use one job for each configuration.
+//! Each job runs its tasks in the specified order.
+//! The job uses the tools, caches, and setup that its tasks need.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -56,26 +48,13 @@ pub(crate) struct CrateBuild {
 /// Build crate jobs with the repository's workflow and Rust-stack config.
 /// # Errors
 pub(crate) fn build_for_workflow(
-    config: &VelnorConfig,
-    label: &str,
-    discovery: &Discovery,
-    catalog: &ToolCatalog,
-    fetch_roots: &[String],
-    acquire: Option<&Step>,
-    helper_version: &str,
+    input: CrateJobInputs<'_>,
+    qualification: bool,
 ) -> Result<CrateBuild, OrchestratorError> {
-    build_crate_jobs(workflow_job_inputs(
-        config,
-        label,
-        discovery,
-        catalog,
-        fetch_roots,
-        acquire,
-        helper_version,
-    ))
+    build_crate_jobs_inner(input, qualification)
 }
 
-/// Build one Qualification executor per runnable plan matrix entry.
+/// Make one `ToFu` Qualification executor for each matrix entry that has tasks.
 pub(crate) fn build_qualification_for_workflow(
     config: &VelnorConfig,
     label: &str,
@@ -96,8 +75,8 @@ pub(crate) fn build_qualification_for_workflow(
     ))
 }
 
-/// Shared rendering inputs for grouped and Qualification jobs.
-fn workflow_job_inputs<'a>(
+/// Shared rendering inputs for grouped and `ToFu` Qualification jobs.
+pub(crate) fn workflow_job_inputs<'a>(
     config: &'a VelnorConfig,
     label: &'a str,
     discovery: &'a Discovery,
@@ -146,35 +125,14 @@ pub(crate) struct CrateJobInputs<'a> {
 /// # Errors
 ///
 /// Returns contract, render-context, or tool-request errors.
+#[cfg(test)]
 pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, OrchestratorError> {
-    let grouped = group_runnable(&input.discovery.proposals);
-    let assigned = assign_group_ids(&grouped);
-    let mut jobs = Vec::with_capacity(grouped.len());
-    let mut drivers = BTreeMap::new();
-    let mut tofu_ids = Vec::new();
-    for ((package_id, configuration), tasks) in &grouped {
-        let key = (package_id.clone(), configuration.clone());
-        let job_id = assigned
-            .get(&key)
-            .ok_or_else(|| internal("crate_job_id_missing"))?
-            .clone();
-        let (job, driver, use_opentofu) = build_job_for_members(input, &job_id, tasks, false)?;
-        drivers.insert(job_id.clone(), driver);
-        if use_opentofu {
-            tofu_ids.push(job_id.clone());
-        }
-        jobs.push((job_id, job));
-    }
-    stage::stage_tofu_root_jobs(&mut jobs, &tofu_ids, input.max_parallel_jobs);
-    jobs.sort_by(|left, right| left.0.cmp(&right.0));
-    Ok(CrateBuild { jobs, drivers })
+    build_crate_jobs_inner(input, false)
 }
 
-/// Build one independently reported job for each executable matrix entry.
+/// Make one `ToFu` Qualification job for each matrix entry that has tasks.
 ///
-/// Ordinary CI keeps [`build_crate_jobs`] grouping. Qualification lanes
-/// need a distinct job per matrix key so cache restore and save evidence
-/// cannot combine unrelated task identities.
+/// Rust Qualification obligations use the same package job as normal CI.
 pub(crate) fn build_qualification_crate_jobs(
     input: CrateJobInputs<'_>,
 ) -> Result<CrateBuild, OrchestratorError> {
@@ -182,7 +140,7 @@ pub(crate) fn build_qualification_crate_jobs(
         .discovery
         .proposals
         .iter()
-        .filter(|task| is_runnable(task))
+        .filter(|task| is_runnable(task) && Stack::from_id(&task.stack_id) == Some(Stack::Tofu))
         .collect();
     tasks.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     let mut jobs = Vec::with_capacity(tasks.len());
@@ -207,6 +165,66 @@ pub(crate) fn build_qualification_crate_jobs(
     Ok(CrateBuild { jobs, drivers })
 }
 
+/// Add manifest context only when two Rust packages share one display name.
+fn disambiguate_rust_job_names(
+    jobs: &mut [(String, Job)],
+    manifests: &BTreeMap<String, String>,
+) -> Result<(), OrchestratorError> {
+    let mut counts = BTreeMap::<String, usize>::new();
+    for (job_id, job) in jobs.iter() {
+        if job_id.starts_with("rust-") {
+            *counts.entry(job.display_name.clone()).or_default() += 1;
+        }
+    }
+    for (job_id, job) in jobs.iter_mut() {
+        if job_id.starts_with("rust-")
+            && counts
+                .get(&job.display_name)
+                .is_some_and(|count| *count > 1)
+        {
+            let manifest = manifests
+                .get(job_id)
+                .ok_or_else(|| internal("rust_job_manifest_missing"))?;
+            job.display_name = format!("{} ({manifest})", job.display_name);
+        }
+    }
+    Ok(())
+}
+
+fn build_crate_jobs_inner(
+    input: CrateJobInputs<'_>,
+    qualification: bool,
+) -> Result<CrateBuild, OrchestratorError> {
+    let grouped = group_runnable(&input.discovery.proposals);
+    let assigned = assign_group_ids(&grouped);
+    let mut jobs = Vec::with_capacity(grouped.len());
+    let mut drivers = BTreeMap::new();
+    let mut tofu_ids = Vec::new();
+    let mut manifests = BTreeMap::new();
+    for ((package_id, configuration), tasks) in &grouped {
+        let key = (package_id.clone(), configuration.clone());
+        let job_id = assigned
+            .get(&key)
+            .ok_or_else(|| internal("crate_job_id_missing"))?
+            .clone();
+        let is_tofu = group_is_tofu(tasks);
+        if !is_tofu {
+            manifests.insert(job_id.clone(), tasks[0].identity.unit_path.clone());
+        }
+        let (job, driver, use_opentofu) =
+            build_job_for_members(input, &job_id, tasks, qualification && !is_tofu)?;
+        drivers.insert(job_id.clone(), driver);
+        if use_opentofu {
+            tofu_ids.push(job_id.clone());
+        }
+        jobs.push((job_id, job));
+    }
+    stage::stage_tofu_root_jobs(&mut jobs, &tofu_ids, input.max_parallel_jobs);
+    disambiguate_rust_job_names(&mut jobs, &manifests)?;
+    jobs.sort_by(|left, right| left.0.cmp(&right.0));
+    Ok(CrateBuild { jobs, drivers })
+}
+
 /// Build and validate one crate job from its exact obligation slice.
 fn build_job_for_members(
     input: CrateJobInputs<'_>,
@@ -220,7 +238,7 @@ fn build_job_for_members(
     let display = if tofu {
         tofu_display_name(&first.display_name)
     } else {
-        crate_display_name(&first.display_name, &manifest, &first.configuration)
+        crate_display_name(&first.display_name, &manifest)
     };
     let use_rust = tasks.iter().any(|task| is_rust(task));
     let use_mbx = tasks.iter().any(|task| is_mbx(task));
@@ -237,7 +255,6 @@ fn build_job_for_members(
         package_name: first.display_name.clone(),
         package_id: first.identity.unit_id.clone(),
         manifest,
-        configuration: first.configuration.clone(),
         obligations: obligations_for(tasks, input.catalog)?,
     };
     model.validate()?;
@@ -310,6 +327,7 @@ fn obligation_for(
     let matrix_key = matrix_key_for_id(&matrix_id)?;
     Ok(CrateObligation {
         task_id: task.task_id.clone(),
+        configuration: task.configuration.clone(),
         kind: task.task_kind.clone(),
         step_name: step_name_for(&task.task_kind, &task.task_id),
         gated_by: gates_for(task, executed),

@@ -283,7 +283,7 @@ fn validate_lane_binding(
     };
     let check_lane = stack_id == "mise" && job_id.starts_with("check-");
     let qualification_crate_lane = match stack_id {
-        "rust" => job_id.starts_with("rust-qualification-"),
+        "rust" => job_id.starts_with("rust-"),
         "tofu" => job_id.starts_with("tofu-qualification-"),
         _ => false,
     };

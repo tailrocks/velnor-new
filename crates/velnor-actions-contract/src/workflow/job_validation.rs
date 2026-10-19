@@ -7,20 +7,16 @@ impl Job {
     /// Validate runner metadata before rendering placement.
     fn validate_runner(&self, id: &str) -> Result<(), ContractError> {
         if let Some(runner) = &self.check_runner {
-            if !id.starts_with("check-")
-                && !id.starts_with(crate::workflow::QUALIFICATION_CHECK_JOB_PREFIX)
-            {
+            if !id.starts_with("check-") {
                 return Err(ContractError::identity(
                     "job.check_runner",
                     "check_runner_requires_check_job",
                 ));
             }
             runner.validate("workflow", &format!("jobs.{id}.check_runner"))?;
-            let qualification_check =
-                id.starts_with(crate::workflow::QUALIFICATION_CHECK_JOB_PREFIX);
             let admission = self.condition.as_deref();
             if runner.executor == crate::config::CheckExecutor::EphemeralSelfHosted
-                && !check_admission_matches(admission, qualification_check)
+                && !check_admission_matches(admission)
             {
                 return Err(ContractError::identity(
                     "job.condition",
@@ -31,7 +27,7 @@ impl Job {
                 .is_ok_and(|selector| selector.is_scale_set());
             if scale_set
                 && (runner.platform != crate::config::CheckPlatform::LinuxX64
-                    || !check_admission_matches(admission, qualification_check))
+                    || !check_admission_matches(admission))
             {
                 return Err(ContractError::identity(
                     "job.runs_on",
@@ -128,17 +124,8 @@ impl Job {
     }
 }
 
-fn check_admission_matches(condition: Option<&str>, qualification: bool) -> bool {
-    if qualification {
-        return condition == Some(crate::config::QUALIFICATION_CHECK_ADMISSION_CONDITION);
-    }
-    matches!(
-        condition,
-        Some(
-            crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
-                | crate::config::NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION
-        )
-    )
+fn check_admission_matches(condition: Option<&str>) -> bool {
+    condition == Some(crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION)
 }
 
 #[cfg(test)]

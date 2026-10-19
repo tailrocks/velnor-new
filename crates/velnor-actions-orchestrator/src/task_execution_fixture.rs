@@ -213,6 +213,7 @@ impl Fixture {
             RUN_KEY,
             &record.execution_digest,
             GENERATOR_VERSION,
+            "crate_clippy",
         )
     }
 }

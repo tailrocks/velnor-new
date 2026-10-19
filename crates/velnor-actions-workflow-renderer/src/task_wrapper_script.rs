@@ -49,9 +49,13 @@ while IFS= read -r -d '' field; do frame+=("$field"); done < "$frame_file"
 [[ "${frame[1]}" =~ ^(stack|internal)/[a-z0-9._/-]+$ ]] || fail_frame
 [[ "${frame[2]}" =~ ^b3-[0-9a-f]{64}$ ]] || fail_frame
 [[ "${frame[3]}" =~ ^b3-[0-9a-f]{64}$ ]] || fail_frame
-[[ "${frame[4]}" =~ ^stack:[a-z0-9._-]+\|task:(stack|internal)/[a-z0-9._/-]+$ ]] || fail_frame
+[[ "${frame[4]}" =~ ^stack:[a-z0-9._-]+\|task:(stack|internal)/[a-z0-9._/-]+(/lane-hosted|/lane-scale-set)?$ ]] || fail_frame
 [[ "${frame[5]}" =~ ^m-[0-9a-f]{16}$ ]] || fail_frame
-[[ "${frame[4]#*|task:}" == "${frame[1]}" ]] || fail_frame
+matrix_task=${frame[4]#*|task:}
+case "$matrix_task" in
+  "${frame[1]}"|"${frame[1]}/lane-hosted"|"${frame[1]}/lane-scale-set") ;;
+  *) fail_frame ;;
+esac
 [[ "${frame[6]}" == "#,
     );
     script.push('"');

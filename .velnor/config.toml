@@ -60,75 +60,7 @@ kind = "github-scale-set"
 name = "ubuntu-26.04-scale-set"
 labels = ["velnor", "ubuntu-26.04-scale-set"]
 platform = "linux/amd64"
-
-[[checks]]
-id = "maintenance-helpers"
-task = "test-maintenance-helpers"
-inputs = [
-  ".config/nextest.toml",
-  ".mise-version",
-  ".velnor/version-policy.toml",
-  "Cargo.lock",
-  "Cargo.toml",
-  "crates/velnor-actions-freshness/Cargo.toml",
-  "crates/velnor-actions-freshness/src/context.rs",
-  "crates/velnor-actions-freshness/src/dependencies.rs",
-  "crates/velnor-actions-freshness/src/dependencies/lock.rs",
-  "crates/velnor-actions-freshness/src/dependencies/lock/graph.rs",
-  "crates/velnor-actions-freshness/src/dependencies/lock/identity.rs",
-  "crates/velnor-actions-freshness/src/dependencies/workspace.rs",
-  "crates/velnor-actions-freshness/src/evidence.rs",
-  "crates/velnor-actions-freshness/src/evidence/advisories.rs",
-  "crates/velnor-actions-freshness/src/evidence/exceptions.rs",
-  "crates/velnor-actions-freshness/src/evidence/freshness.rs",
-  "crates/velnor-actions-freshness/src/evidence/freshness/tests.rs",
-  "crates/velnor-actions-freshness/src/inventory.rs",
-  "crates/velnor-actions-freshness/src/inventory/tests.rs",
-  "crates/velnor-actions-freshness/src/inventory/mirror.rs",
-  "crates/velnor-actions-freshness/src/inventory/pins.rs",
-  "crates/velnor-actions-freshness/src/inventory/pins_mirrors.rs",
-  "crates/velnor-actions-freshness/src/lib.rs",
-  "crates/velnor-actions-freshness/src/members.rs",
-  "crates/velnor-actions-freshness/src/patterns.rs",
-  "crates/velnor-actions-freshness/src/probe.rs",
-  "crates/velnor-actions-freshness/src/probe/tests.rs",
-  "crates/velnor-actions-freshness/src/probe/tests/http.rs",
-  "crates/velnor-actions-freshness/src/probe/transport.rs",
-  "crates/velnor-actions-freshness/src/probe/transport/range.rs",
-  "crates/velnor-actions-freshness/src/process.rs",
-  "crates/velnor-actions-freshness/src/process/capture.rs",
-  "crates/velnor-actions-freshness/src/process/tests.rs",
-  "crates/velnor-actions-freshness/src/tests.rs",
-  "crates/velnor-actions-freshness/src/time.rs",
-  "crates/velnor-actions-freshness/src/trailer_policy.rs",
-  "crates/velnor-actions-freshness/src/trailer_policy/tests.rs",
-  "crates/velnor-actions-freshness/src/validation.rs",
-  "crates/velnor-actions-freshness/tests/freshness_contract.rs",
-  "crates/velnor-archive-guard/Cargo.toml",
-  "crates/velnor-archive-guard/build.rs",
-  "crates/velnor-archive-guard/build_support/archive_guard_inputs.rs",
-  "crates/velnor-archive-guard/src/bin/velnor_archive_guard.rs",
-  "crates/velnor-archive-guard/src/lib.rs",
-  "crates/velnor-archive-guard/src/owned_archive_guard/additional_tests.rs",
-  "crates/velnor-archive-guard/src/owned_archive_guard/mod.rs",
-  "crates/velnor-archive-guard/src/owned_archive_guard/pax.rs",
-  "crates/velnor-archive-guard/src/owned_archive_guard/profile.rs",
-  "crates/velnor-archive-guard/src/owned_archive_guard/stream.rs",
-  "crates/velnor-archive-guard/src/owned_archive_guard/tests.rs",
-  "crates/velnor-archive-guard/tests/archive_guard_cli.rs",
-  "scripts/archive-guard-build-namespace.sh",
-  "scripts/archive-guard-inputs.txt",
-  "scripts/build-owned-archive-guard.sh",
-  "scripts/check-owned-archive-guard-sources.sh",
-  "scripts/owned_archive_preflight.py",
-  "mise.toml",
-]
-tools = ["cargo-nextest", "rust"]
-timeout_minutes = 5
-[checks.runner]
-label = "ubuntu-26.04"
-platform = "linux_x64"
-executor = "hosted"
+job_container_image = "ghcr.io/tailrocks/velnor-job@sha256:b36946574402eb0c79fb6d7a9f7a77195d2ef943c92bc6b0fbc466ff3ea408f9"
 
 [[qualified_tools]]
 id = "cargo-nextest"

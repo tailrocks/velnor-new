@@ -92,7 +92,7 @@ pub(crate) fn parse_needs(
     let inactive: std::collections::BTreeSet<String> = all_expected
         .iter()
         .filter(|job_id| is_crate_executor(job_id))
-        .filter(|job_id| is_qualification_executor(job_id) != qualification)
+        .filter(|job_id| is_inactive_executor(job_id, qualification))
         .cloned()
         .collect();
     for job_id in &inactive {
@@ -116,14 +116,21 @@ fn is_crate_executor(job_id: &str) -> bool {
     job_id.starts_with(velnor_actions_contract::CRATE_JOB_ID_PREFIX)
         || job_id.starts_with(velnor_actions_contract::TOFU_JOB_ID_PREFIX)
         || job_id.starts_with("check-")
-        || job_id.starts_with(velnor_actions_contract::QUALIFICATION_CHECK_JOB_PREFIX)
 }
 
 /// Whether an ID names the one-entry Qualification executor set.
 fn is_qualification_executor(job_id: &str) -> bool {
-    job_id.starts_with("rust-qualification-")
-        || job_id.starts_with("tofu-qualification-")
-        || job_id.starts_with(velnor_actions_contract::QUALIFICATION_CHECK_JOB_PREFIX)
+    job_id.starts_with("tofu-qualification-")
+}
+
+/// Rust package jobs run in both plan modes; `ToFu` and named checks retain split lanes.
+fn is_inactive_executor(job_id: &str, qualification: bool) -> bool {
+    if job_id.starts_with(velnor_actions_contract::CRATE_JOB_ID_PREFIX)
+        || job_id.starts_with("check-")
+    {
+        return false;
+    }
+    is_qualification_executor(job_id) != qualification
 }
 
 /// Rendered expected inventory minus the matrix-driver job.
@@ -227,66 +234,71 @@ mod tests {
     }
 
     #[test]
-    fn qualification_keeps_only_per_entry_jobs_and_requires_grouped_jobs_skipped() {
+    fn qualification_keeps_shared_rust_jobs_and_requires_tofu_normal_jobs_skipped() {
         let (inventory, results, errors) = parse_for_event(
-            r#"{"plan":"success","rust-demo":"skipped","rust-qualification-0123456789abcdef":"success","actionlint":"success"}"#,
-            r#"["actionlint","plan","rust-demo","rust-qualification-0123456789abcdef"]"#,
+            r#"{"plan":"success","rust-demo":"success","tofu-demo":"skipped","tofu-qualification-0123456789abcdef":"success","actionlint":"success"}"#,
+            r#"["actionlint","plan","rust-demo","tofu-demo","tofu-qualification-0123456789abcdef"]"#,
             WorkflowEvent::Qualification,
         );
         assert_eq!(
             inventory,
-            ["actionlint", "plan", "rust-qualification-0123456789abcdef"]
+            [
+                "actionlint",
+                "plan",
+                "rust-demo",
+                "tofu-qualification-0123456789abcdef"
+            ]
         );
-        assert_eq!(results.len(), 3);
+        assert_eq!(results.len(), 4);
         assert!(errors.is_empty(), "{errors:?}");
     }
 
     #[test]
     fn ordinary_event_keeps_grouped_jobs_and_requires_qualification_jobs_skipped() {
         let (inventory, results, errors) = parse_for_event(
-            r#"{"plan":"success","rust-demo":"success","rust-qualification-0123456789abcdef":"skipped","actionlint":"success"}"#,
-            r#"["actionlint","plan","rust-demo","rust-qualification-0123456789abcdef"]"#,
+            r#"{"plan":"success","rust-demo":"success","tofu-demo":"success","tofu-qualification-0123456789abcdef":"skipped","actionlint":"success"}"#,
+            r#"["actionlint","plan","rust-demo","tofu-demo","tofu-qualification-0123456789abcdef"]"#,
             WorkflowEvent::Push,
         );
-        assert_eq!(inventory, ["actionlint", "plan", "rust-demo"]);
-        assert_eq!(results.len(), 3);
+        assert_eq!(inventory, ["actionlint", "plan", "rust-demo", "tofu-demo"]);
+        assert_eq!(results.len(), 4);
         assert!(errors.is_empty(), "{errors:?}");
     }
 
     #[test]
-    fn inactive_executor_success_fails_closed() {
+    fn inactive_tofu_qualification_executor_success_fails_closed() {
         let (_, _, errors) = parse_for_event(
-            r#"{"plan":"success","rust-demo":"skipped","rust-qualification-0123456789abcdef":"success"}"#,
-            r#"["plan","rust-demo","rust-qualification-0123456789abcdef"]"#,
+            r#"{"plan":"success","rust-demo":"success","tofu-qualification-0123456789abcdef":"success"}"#,
+            r#"["plan","rust-demo","tofu-qualification-0123456789abcdef"]"#,
             WorkflowEvent::Push,
         );
         assert_eq!(
             errors,
-            ["inactive_crate_job_not_skipped:rust-qualification-0123456789abcdef"]
+            ["inactive_crate_job_not_skipped:tofu-qualification-0123456789abcdef"]
         );
     }
 
     #[test]
     fn mixed_stack_qualification_keeps_only_its_active_rust_tofu_and_check_jobs() {
-        let expected = r#"["check-frontend","qualification-check-frontend","plan","rust-demo","rust-qualification-0123456789abcdef","tofu-demo","tofu-qualification-fedcba9876543210"]"#;
+        let expected = r#"["check-frontend","plan","rust-demo","tofu-demo","tofu-qualification-fedcba9876543210"]"#;
         let (inventory, _, errors) = parse_for_event(
-            r#"{"check-frontend":"skipped","qualification-check-frontend":"success","plan":"success","rust-demo":"skipped","rust-qualification-0123456789abcdef":"success","tofu-demo":"skipped","tofu-qualification-fedcba9876543210":"success"}"#,
+            r#"{"check-frontend":"success","plan":"success","rust-demo":"success","tofu-demo":"skipped","tofu-qualification-fedcba9876543210":"success"}"#,
             expected,
             WorkflowEvent::Qualification,
         );
         assert_eq!(
             inventory,
             [
+                "check-frontend",
                 "plan",
-                "qualification-check-frontend",
-                "rust-qualification-0123456789abcdef",
+                "rust-demo",
                 "tofu-qualification-fedcba9876543210"
             ]
         );
         assert!(errors.is_empty(), "{errors:?}");
 
         let (inventory, _, errors) = parse_for_event(
-            r#"{"check-frontend":"success","qualification-check-frontend":"skipped","plan":"success","rust-demo":"success","rust-qualification-0123456789abcdef":"skipped","tofu-demo":"success","tofu-qualification-fedcba9876543210":"skipped"}"#,
+            r#"{"check-frontend":"success","plan":"success","rust-demo":"success","tofu-demo":"success","tofu-qualification-fedcba9876543210":"skipped"}"#,
             expected,
             WorkflowEvent::Push,
         );
@@ -294,26 +306,6 @@ mod tests {
             inventory,
             ["check-frontend", "plan", "rust-demo", "tofu-demo"]
         );
-        assert!(errors.is_empty(), "{errors:?}");
-    }
-
-    #[test]
-    fn named_check_id_cannot_collide_with_qualification_classification() {
-        let expected = r#"["check-qualification-frontend","qualification-check-frontend"]"#;
-        let (inventory, _, errors) = parse_for_event(
-            r#"{"check-qualification-frontend":"skipped","qualification-check-frontend":"success"}"#,
-            expected,
-            WorkflowEvent::Qualification,
-        );
-        assert_eq!(inventory, ["qualification-check-frontend"]);
-        assert!(errors.is_empty(), "{errors:?}");
-
-        let (inventory, _, errors) = parse_for_event(
-            r#"{"check-qualification-frontend":"success","qualification-check-frontend":"skipped"}"#,
-            expected,
-            WorkflowEvent::Push,
-        );
-        assert_eq!(inventory, ["check-qualification-frontend"]);
         assert!(errors.is_empty(), "{errors:?}");
     }
 

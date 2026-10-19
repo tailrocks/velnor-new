@@ -80,9 +80,7 @@ fn job(id: &str, check_runner: Option<CheckRunner>, needs: &[&str]) -> Job {
         check_runner,
         timeout_minutes: JobTimeout::new(5).expect("timeout"),
         needs: needs.iter().map(ToString::to_string).collect(),
-        condition: id
-            .starts_with(QUALIFICATION_CHECK_JOB_PREFIX)
-            .then(|| crate::config::QUALIFICATION_CHECK_ADMISSION_CONDITION.to_owned()),
+        condition: None,
         permissions: Some(Permissions::default()),
         cache_mode: None,
         environment: None,
@@ -157,14 +155,12 @@ fn ir(checks: &[(&str, CheckRunner)]) -> WorkflowIr {
 
 fn qualification_crate_ir() -> WorkflowIr {
     let mut source = ir(&[]);
-    let qualification_ids = [
-        "rust-qualification-0123456789abcdef",
+    let qualification_ids = ["rust-demo", "tofu-qualification-fedcba9876543210"];
+    for id in [
+        "rust-demo",
+        "tofu-demo",
         "tofu-qualification-fedcba9876543210",
-    ];
-    for id in ["rust-demo", "tofu-demo"]
-        .into_iter()
-        .chain(qualification_ids)
-    {
+    ] {
         source.jobs.insert(id.to_owned(), job(id, None, &["plan"]));
     }
     source.jobs.get_mut("required").expect("Required job").needs =
@@ -175,22 +171,17 @@ fn qualification_crate_ir() -> WorkflowIr {
 fn mixed_qualification_ir() -> WorkflowIr {
     let check_runner = runner("ubuntu-26.04", CheckPlatform::LinuxX64);
     let mut source = qualification_crate_ir();
-    for id in [
-        "check-java",
-        "qualification-check-java",
-        "check-frontend",
-        "qualification-check-frontend",
-    ] {
+    for id in ["check-java", "check-frontend"] {
         source.jobs.insert(
             id.to_owned(),
             job(id, Some(check_runner.clone()), &["plan"]),
         );
     }
     source.jobs.get_mut("required").expect("Required job").needs = [
-        "rust-qualification-0123456789abcdef",
+        "rust-demo",
         "tofu-qualification-fedcba9876543210",
-        "qualification-check-java",
-        "qualification-check-frontend",
+        "check-java",
+        "check-frontend",
     ]
     .map(ToString::to_string)
     .to_vec();

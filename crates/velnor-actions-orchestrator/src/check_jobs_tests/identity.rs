@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn qualification_named_check_keeps_command_but_uses_its_own_report_identity() {
+fn qualification_named_check_reuses_the_same_job_and_report_identity() {
     let (_root, discovery) = fixture(&[check(
         "java",
         hosted("ubuntu-26.04", CheckPlatform::LinuxX64),
@@ -12,19 +12,27 @@ fn qualification_named_check_keeps_command_but_uses_its_own_report_identity() {
         &ToolCatalog::pinned(),
     )
     .expect("normal check");
-    let qualification = build_qualification_check_jobs(
+    let qualification = build_check_jobs_with_qualification(
         WorkflowPolicy::VelnorRepositoryV1,
         &discovery,
         &ToolCatalog::pinned(),
+        true,
     )
-    .expect("Qualification check");
+    .expect("Qualification-enabled check");
     let (normal_id, normal_job) = &normal[0];
     let (qualification_id, qualification_job) = &qualification[0];
     assert_eq!(normal_id, "check-java");
-    assert_eq!(qualification_id, "qualification-check-java");
+    assert_eq!(qualification_id, "check-java");
     assert_eq!(normal_job.runs_on, qualification_job.runs_on);
     assert_eq!(normal_job.check_runner, qualification_job.check_runner);
+    assert_same_named_check_command(normal_job, qualification_job);
+    assert_qualification_check_evidence(normal_job, qualification_job);
+}
 
+fn assert_same_named_check_command(
+    normal_job: &velnor_actions_contract::Job,
+    qualification_job: &velnor_actions_contract::Job,
+) {
     let (
         StepKind::Shell {
             run: normal_run,
@@ -48,15 +56,20 @@ fn qualification_named_check_keeps_command_but_uses_its_own_report_identity() {
     normal_env.remove(NAMED_CHECK_JOB_ID_ENV);
     assert_eq!(normal_env, qualification_env);
     assert_eq!(normal_env["VELNOR_CHECK_ID"], "java");
+}
 
+fn assert_qualification_check_evidence(
+    normal_job: &velnor_actions_contract::Job,
+    qualification_job: &velnor_actions_contract::Job,
+) {
     let upload_name = |job: &velnor_actions_contract::Job| {
         let StepKind::Action { with, .. } = &job.steps.last().expect("upload step").kind else {
             panic!("report upload");
         };
         with["name"].clone()
     };
-    assert_ne!(upload_name(normal_job), upload_name(qualification_job));
-    assert!(upload_name(qualification_job).ends_with("-qualification-check-java"));
+    assert_eq!(upload_name(normal_job), upload_name(qualification_job));
+    assert!(upload_name(qualification_job).ends_with("-check-java"));
     let step_names: Vec<&str> = qualification_job
         .steps
         .iter()
@@ -77,6 +90,10 @@ fn qualification_named_check_keeps_command_but_uses_its_own_report_identity() {
     assert!(normal_job.steps.iter().all(|step| {
         step.name != crate::qualification_source_evidence::SOURCE_EVIDENCE_STEP_NAME
     }));
+    assert_eq!(
+        qualification_job.steps[evidence].condition.as_deref(),
+        Some("needs.plan.outputs.qualification_campaign != ''")
+    );
     assert!(matches!(
         &qualification_job.steps[evidence].kind,
         StepKind::Shell { env, .. }

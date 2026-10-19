@@ -24,6 +24,8 @@ pub struct CrateObligation {
     pub task_id: String,
     /// Stack-neutral kind word (e.g. `clippy`).
     pub kind: String,
+    /// Configuration identity for this task, such as `default` or a feature set.
+    pub configuration: String,
     /// Human step name (no IDs, keys, paths, or matrix JSON).
     pub step_name: String,
     /// Task IDs that must pass first (strictly earlier obligations).
@@ -51,8 +53,6 @@ pub struct CrateJob {
     pub package_id: String,
     /// Package manifest path.
     pub manifest: String,
-    /// Configuration name.
-    pub configuration: String,
     /// Ordered obligations; gates reference strictly earlier entries.
     pub obligations: Vec<CrateObligation>,
 }
@@ -128,6 +128,19 @@ impl CrateObligation {
                 format!("empty_kind:{job_id}"),
             ));
         }
+        if self.configuration.trim().is_empty() || self.configuration.chars().any(char::is_control)
+        {
+            return Err(ContractError::identity(
+                "crate_obligation.configuration",
+                format!("bad_configuration:{job_id}"),
+            ));
+        }
+        if task_configuration(&self.task_id) != Some(self.configuration.as_str()) {
+            return Err(ContractError::identity(
+                "crate_obligation.configuration",
+                format!("configuration_mismatch:{job_id}"),
+            ));
+        }
         if self.step_name.trim().is_empty()
             || self.step_name.contains('/')
             || self.step_name.contains("${{")
@@ -151,6 +164,18 @@ impl CrateObligation {
         }
         Ok(())
     }
+}
+
+fn task_configuration(task_id: &str) -> Option<&str> {
+    if task_id.starts_with("internal/") {
+        return task_id.rsplit('/').next();
+    }
+    if !task_id.starts_with("stack/") {
+        return None;
+    }
+    let base =
+        crate::ids::split_shard_suffix(task_id).map_or(task_id, |(unsharded, _, _)| unsharded);
+    base.rsplit('/').next()
 }
 
 /// Compute the task digest from its stable identity, argv, and toolchain ID.

@@ -215,12 +215,18 @@ fn assert_both_ci(ci: &str) -> TestResult {
     assert!(!local.contains("runs-on: ubuntu-26.04\n"), "{local}");
     shell_tests::assert_scale_set_shell_and_same_steps(hosted, local)?;
     let plan = job_body(ci, "plan")?;
-    assert!(plan.contains(HOSTED_RUNS), "{plan}");
-    assert!(!plan.contains("ubuntu-26.04-scale-set"), "{plan}");
+    assert_eq!(job_runs_on_values(plan), [HOSTED_RUNS], "{plan}");
     let required = job_body(ci, "required")?;
     assert!(required.contains("rust-demo__hosted"), "{required}");
     assert!(required.contains("rust-demo__local"), "{required}");
     Ok(())
+}
+
+fn job_runs_on_values(job: &str) -> Vec<&str> {
+    job.lines()
+        .map(str::trim)
+        .filter(|line| line.starts_with("runs-on:"))
+        .collect()
 }
 
 fn assert_hosted_release(release: &str) {

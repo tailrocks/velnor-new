@@ -12,14 +12,6 @@ use std::collections::BTreeMap;
 
 /// Env key carrying the static named-check output identities into `plan-v1`.
 pub const NAMED_CHECK_LANES_ENV: &str = "VELNOR_NAMED_CHECK_LANES_JSON";
-/// Prefix for separate per-entry Qualification jobs for named checks.
-pub const QUALIFICATION_CHECK_JOB_PREFIX: &str = "qualification-check-";
-
-pub(super) fn qualification_check_source_id(job_id: &str) -> Option<String> {
-    job_id
-        .strip_prefix(QUALIFICATION_CHECK_JOB_PREFIX)
-        .map(|check_id| format!("check-{check_id}"))
-}
 /// Env key binding a check worker to its exact report-owning job ID.
 pub const NAMED_CHECK_JOB_ID_ENV: &str = "VELNOR_CHECK_JOB_ID";
 /// Env key binding a check worker to its exact lane variant.
@@ -90,10 +82,9 @@ pub fn named_check_lanes(
     Ok(result)
 }
 
-/// Derive the concrete lanes for per-entry Rust and `ToFu` Qualification jobs.
+/// Derive lanes for crate jobs selected by a Qualification plan.
 ///
-/// `sources` maps each per-entry job to its ordinary grouped job so existing
-/// profile overrides select the same runner for both job forms.
+/// `sources` binds each selected job to the identity used by runner overrides.
 /// # Errors
 pub fn qualification_job_lanes(
     ir: &WorkflowIr,
@@ -140,7 +131,11 @@ pub fn qualification_job_lanes(
         let lanes = executor_lanes_for_placement(id, job, placement, execution)?;
         result.insert(id.clone(), lanes);
     }
-    for id in ir.jobs.keys().filter(|id| is_qualification_crate_job(id)) {
+    for id in ir
+        .jobs
+        .keys()
+        .filter(|id| id.starts_with("tofu-qualification-"))
+    {
         if !result.contains_key(id) {
             return Err(ContractError::identity(
                 "workflow.qualification_sources",
@@ -152,7 +147,7 @@ pub fn qualification_job_lanes(
 }
 
 fn is_qualification_crate_job(id: &str) -> bool {
-    id.starts_with("rust-qualification-") || id.starts_with("tofu-qualification-")
+    id.starts_with("rust-") || id.starts_with("tofu-")
 }
 
 fn executor_lanes_for_placement(

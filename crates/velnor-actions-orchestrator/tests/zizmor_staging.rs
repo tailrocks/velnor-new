@@ -67,9 +67,10 @@ fn lock_text() -> String {
         .map(|target| binary_record(target))
         .collect::<String>();
     format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.13\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"{mise_version}\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "e".repeat(40),
-        "b".repeat(64)
+        "b".repeat(64),
+        mise_version = velnor_actions_mise::MISE_VERSION,
     )
 }
 
@@ -300,8 +301,8 @@ fn staging_suppressions_stable_no_new() -> TestResult {
         "SHA-pinned refs produce no findings: {text}"
     );
     assert_eq!(
-        ignores, 45,
-        "Only the 45 local action calls have an ignore entry."
+        ignores, 25,
+        "Only the 25 local action calls have an ignore entry."
     );
     assert!(
         text.contains(&format!("{ignores} ignored")),

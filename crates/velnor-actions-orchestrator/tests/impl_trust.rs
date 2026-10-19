@@ -261,10 +261,11 @@ fn release_lock_never_resolves_generator_identity() -> TestResult {
         write!(bins, "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://example.invalid/r/{version}/{target}\"\nsha256 = \"{sha}\"\n").expect("write to String");
     }
     let lock = format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.13\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n[[actions]]\nname = \"actions/checkout\"\nversion = \"v7.0.1\"\nsha = \"{}\"\nreviewed = \"2026-09-28\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"{mise_version}\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n[[actions]]\nname = \"actions/checkout\"\nversion = \"v7.0.1\"\nsha = \"{}\"\nreviewed = \"2026-09-28\"\n",
         "f".repeat(40),
         "c".repeat(64),
-        "d".repeat(40)
+        "d".repeat(40),
+        mise_version = velnor_actions_mise::MISE_VERSION,
     );
     std::fs::write(repo.path().join(".velnor/generator.lock"), lock)?;
     let (plan, _) = plan_with(repo.path(), Some(&base), &head, None)?;

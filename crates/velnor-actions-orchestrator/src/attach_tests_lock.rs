@@ -18,7 +18,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
             }],
         },
         mise_bootstrap: MiseBootstrap {
-            version: "2026.10.13".to_owned(),
+            version: velnor_actions_mise::MISE_VERSION.to_owned(),
             artifact: "https://example.invalid/m".to_owned(),
             sha256: "b".repeat(64),
         },
@@ -99,7 +99,7 @@ fn lock_acquire_records_source_commit() {
             }],
         },
         mise_bootstrap: MiseBootstrap {
-            version: "2026.10.13".to_owned(),
+            version: velnor_actions_mise::MISE_VERSION.to_owned(),
             artifact: "https://example.invalid/m".to_owned(),
             sha256: "b".repeat(64),
         },

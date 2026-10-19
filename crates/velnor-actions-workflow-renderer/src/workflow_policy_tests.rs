@@ -82,35 +82,29 @@ fn accepts(id: &str, runs_on: &str, condition: Option<&str>) -> bool {
 
 #[test]
 fn hosted_check_jobs_keep_their_labels_in_hosted_and_both_modes() {
-    for id in [
-        "check-system",
-        "check-system-hosted",
-        "qualification-check-system",
-    ] {
+    for id in ["check-system", "check-system-hosted"] {
         assert!(accepts(id, "ubuntu-26.04", None), "{id}");
     }
 }
 
 #[test]
-fn qualification_scale_set_check_requires_its_lane_admission_and_linux_hosted_runner() {
+fn unified_scale_set_check_requires_event_admission_and_linux_hosted_runner() {
     let scale = scale_set_label();
     let valid = check_workflow(
-        "qualification-check-maintenance-helpers",
+        "check-maintenance-helpers",
         &scale,
         "ubuntu-26.04",
         CheckPlatform::LinuxX64,
         CheckExecutor::Hosted,
-        Some(velnor_actions_contract::config::QUALIFICATION_CHECK_ADMISSION_CONDITION),
+        Some(
+            "always() && needs.plan.result == 'success' && ((needs.plan.outputs.qualification_campaign == '' && (github.event_name == 'push' || github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))) || needs.plan.outputs.qualification_campaign != '')",
+        ),
     );
     assert!(check_single_label(&valid, "ubuntu-26.04", &[]).is_ok());
 
-    for condition in [
-        None,
-        Some(velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION),
-        Some(velnor_actions_contract::config::NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION),
-    ] {
+    for condition in [None, Some("true")] {
         let wrong_condition = check_workflow(
-            "qualification-check-maintenance-helpers",
+            "check-maintenance-helpers",
             &scale,
             "ubuntu-26.04",
             CheckPlatform::LinuxX64,
@@ -125,39 +119,31 @@ fn qualification_scale_set_check_requires_its_lane_admission_and_linux_hosted_ru
         (CheckPlatform::LinuxX64, CheckExecutor::EphemeralSelfHosted),
     ] {
         let wrong_runner = check_workflow(
-            "qualification-check-maintenance-helpers",
+            "check-maintenance-helpers",
             &scale,
             "ubuntu-26.04",
             platform,
             executor,
-            Some(velnor_actions_contract::config::QUALIFICATION_CHECK_ADMISSION_CONDITION),
+            Some(
+                "always() && needs.plan.result == 'success' && ((needs.plan.outputs.qualification_campaign == '' && (github.event_name == 'push' || github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))) || needs.plan.outputs.qualification_campaign != '')",
+            ),
         );
         assert!(check_single_label(&wrong_runner, "ubuntu-26.04", &[]).is_err());
     }
 }
 
 #[test]
-fn ordinary_scale_set_checks_keep_both_existing_admission_conditions() {
+fn ordinary_scale_set_checks_keep_normal_admission_condition() {
     let scale = scale_set_label();
-    for condition in [
-        velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION,
-        velnor_actions_contract::config::NORMAL_EPHEMERAL_CHECK_ADMISSION_CONDITION,
-    ] {
-        let workflow = check_workflow(
-            "check-maintenance-helpers",
-            &scale,
-            "ubuntu-26.04",
-            CheckPlatform::LinuxX64,
-            CheckExecutor::Hosted,
-            Some(condition),
-        );
-        assert!(check_single_label(&workflow, "ubuntu-26.04", &[]).is_ok());
-    }
-    assert!(!accepts(
+    let workflow = check_workflow(
         "check-maintenance-helpers",
         &scale,
-        Some(velnor_actions_contract::config::QUALIFICATION_CHECK_ADMISSION_CONDITION),
-    ));
+        "ubuntu-26.04",
+        CheckPlatform::LinuxX64,
+        CheckExecutor::Hosted,
+        Some(velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION),
+    );
+    assert!(check_single_label(&workflow, "ubuntu-26.04", &[]).is_ok());
 }
 
 #[test]

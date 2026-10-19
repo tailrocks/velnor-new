@@ -10,9 +10,9 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::{NotSelectedReason, Plan, validate_run_key};
+use velnor_actions_contract::{NotSelectedReason, validate_run_key};
 
-use crate::task_report::{entry_and_digest, single_task_aggregate, write_entry_reports};
+use crate::task_report::{single_task_aggregate, write_entry_reports};
 
 use crate::OrchestratorError;
 use crate::decisions::{NotSelectedInputs, not_selected_report};
@@ -93,11 +93,41 @@ pub(crate) fn noop_reason_present() -> Option<String> {
 /// Returns [`OrchestratorError::Internal`] for malformed run keys,
 /// contradictory exits, digest mismatches, and the plan-resolution
 /// failures of the base op.
+#[cfg(test)]
 pub(crate) fn write_noop_report_to(
     run_key: &str,
     task_id: &str,
     exit_code: i32,
     request: &NoOpRequest,
+    runner_temp: &Path,
+) -> Result<usize, OrchestratorError> {
+    validate_run_key(run_key).map_err(internal_contract)?;
+    let plan = crate::task_report::load_plan(run_key, runner_temp)?;
+    if crate::covered_tasks::covered_by_baseline(&plan, task_id) {
+        return Ok(0);
+    }
+    let mut matching_jobs = plan
+        .matrix
+        .include
+        .iter()
+        .filter(|entry| crate::task_report::flattened(entry).contains(&task_id))
+        .map(|entry| entry.job_id.as_str());
+    let job_id = matching_jobs
+        .next()
+        .ok_or_else(|| internal("task_not_in_plan"))?;
+    if matching_jobs.next().is_some() {
+        return Err(internal("ambiguous_task_entry"));
+    }
+    write_noop_report_for_job(run_key, task_id, exit_code, request, job_id, runner_temp)
+}
+
+/// Write one no-op report for the exact GitHub job that selected it.
+pub(crate) fn write_noop_report_for_job(
+    run_key: &str,
+    task_id: &str,
+    exit_code: i32,
+    request: &NoOpRequest,
+    job_id: &str,
     runner_temp: &Path,
 ) -> Result<usize, OrchestratorError> {
     validate_run_key(run_key).map_err(internal_contract)?;
@@ -108,7 +138,7 @@ pub(crate) fn write_noop_report_to(
     if crate::covered_tasks::covered_by_baseline(&plan, task_id) {
         return Ok(0);
     }
-    let (entry, digest) = entry_and_digest(&plan, task_id)?;
+    let (entry, digest) = crate::task_report::entry_and_digest_for_job(&plan, task_id, job_id)?;
     if digest != request.task_digest {
         return Err(internal("noop_digest_mismatch"));
     }
@@ -127,51 +157,6 @@ pub(crate) fn write_noop_report_to(
     let matrix = single_task_aggregate(&plan, entry, &task).map_err(internal_contract)?;
     write_entry_reports(runner_temp, &plan, entry, &task, &matrix)?;
     Ok(1)
-}
-
-/// Report every downstream ID as skipped behind a failure.
-///
-/// Baseline-covered downstream IDs prove nothing here: the merge
-/// revalidates them against the manifest, so they pass through
-/// silently instead of failing `task_not_in_plan` and hiding the
-/// later skips behind them.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for unbound downstream IDs
-/// and unwritable paths.
-pub(crate) fn write_skip_reports(
-    plan: &Plan,
-    task_id: &str,
-    downstream: &[String],
-    runner_temp: &Path,
-) -> Result<usize, OrchestratorError> {
-    let mut reported = 0usize;
-    for downstream_id in downstream {
-        if downstream_id == task_id {
-            return Err(internal("downstream_self"));
-        }
-        if crate::covered_tasks::covered_by_baseline(plan, downstream_id) {
-            continue;
-        }
-        let (entry, digest) = entry_and_digest(plan, downstream_id)?;
-        let task = not_selected_report(&NotSelectedInputs {
-            run_key: &plan.run_key,
-            event: plan.event,
-            trust: plan.trust,
-            matrix_id: &entry.id,
-            planned_platform: &entry.planned_platform,
-            matrix_key: &entry.matrix_key,
-            task_id: downstream_id,
-            task_digest: digest,
-            reason: NotSelectedReason::UpstreamFailed,
-        })
-        .map_err(internal_contract)?;
-        let matrix = single_task_aggregate(plan, entry, &task).map_err(internal_contract)?;
-        write_entry_reports(runner_temp, plan, entry, &task, &matrix)?;
-        reported += 1;
-    }
-    Ok(reported)
 }
 
 #[cfg(test)]

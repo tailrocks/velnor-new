@@ -73,6 +73,7 @@ fn tofu_obligation() -> CrateObligation {
         .expect("matrix identity");
     CrateObligation {
         task_id: task_id.clone(),
+        configuration: "default".to_owned(),
         kind: "init".to_owned(),
         step_name: "Init for validate".to_owned(),
         gated_by: Vec::new(),
@@ -109,7 +110,6 @@ fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
     let step = obligation_step(
         &tofu_obligation(),
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
     )
@@ -128,11 +128,50 @@ fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
 }
 
 #[test]
+fn tofu_validate_keeps_implicit_success_gate_after_init_failure() {
+    let init = tofu_obligation();
+    let task_id = "stack/tofu/dir-/validate/default".to_owned();
+    let run = vec!["tofu".to_owned(), "validate".to_owned()];
+    let matrix_id = velnor_actions_contract::matrix_id_for_task_group("tofu", &task_id)
+        .expect("matrix identity");
+    let validate = CrateObligation {
+        task_id: task_id.clone(),
+        configuration: "default".to_owned(),
+        kind: "validate".to_owned(),
+        step_name: "Validate".to_owned(),
+        gated_by: vec![init.task_id],
+        matrix_key: velnor_actions_contract::matrix_key_for_id(&matrix_id).expect("matrix key"),
+        task_digest: task_digest_for_execution(
+            &task_id,
+            &run,
+            &toolchain_id(&init.toolchain_inputs).expect("toolchain ID"),
+        )
+        .expect("task digest"),
+        toolchain_inputs: init.toolchain_inputs,
+        run,
+    };
+    let step = obligation_step(
+        &validate,
+        &ToolCatalog::pinned(),
+        None,
+        env!("CARGO_PKG_VERSION"),
+    )
+    .expect("ToFu validate step");
+    let expected = crate::covered_tasks::skip_condition(&task_id).expect("coverage condition");
+    assert_eq!(step.condition.as_deref(), Some(expected.as_str()));
+    assert!(
+        !expected.contains("cancelled()")
+            && !expected.contains("always()")
+            && !expected.contains("failure()"),
+        "GitHub must retain its implicit success gate: {expected}"
+    );
+}
+
+#[test]
 fn tofu_obligation_step_carries_isolated_cache_dir() {
     let step = obligation_step(
         &tofu_obligation(),
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
     )
@@ -166,7 +205,6 @@ fn stackless_obligation_task_ids_keep_malformed_vocabulary() {
     let err = obligation_step(
         &bad,
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
     )
@@ -181,7 +219,6 @@ fn tofu_obligation_rejects_legacy_root_alias() {
     let err = obligation_step(
         &bad,
         &ToolCatalog::pinned(),
-        &[],
         None,
         env!("CARGO_PKG_VERSION"),
     )

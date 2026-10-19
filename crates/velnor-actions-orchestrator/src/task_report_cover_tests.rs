@@ -62,7 +62,7 @@ fn covered_obligation_reports_nothing_and_succeeds() {
     let plan = covered_fixture();
     let temp = staged_run(&plan, "local");
     let reported =
-        write_task_report_to("local", TEST, 0, None, &[], temp.path()).expect("covered succeeds");
+        write_task_report_to("local", TEST, 0, None, temp.path()).expect("covered succeeds");
     assert_eq!(reported, 0);
     assert_eq!(
         staged_report_count(temp.path()),
@@ -72,13 +72,12 @@ fn covered_obligation_reports_nothing_and_succeeds() {
 }
 
 #[test]
-fn covered_downstream_skips_silently_behind_failure() {
+fn covered_task_remains_silent_after_an_unrelated_failure() {
     let plan = covered_fixture();
     let temp = staged_run(&plan, "local");
-    // CLIPPY fails with covered TEST downstream: the failure still
-    // reports itself, and the covered skip never surfaces as an error.
-    let reported = write_task_report_to("local", CLIPPY, 1, None, &[TEST.to_owned()], temp.path())
-        .expect("failure with covered downstream reports");
+    // CLIPPY reports its failure. The covered TEST task needs no report.
+    let reported =
+        write_task_report_to("local", CLIPPY, 1, None, temp.path()).expect("failure report");
     assert_eq!(reported, 1);
     let dir = temp
         .path()

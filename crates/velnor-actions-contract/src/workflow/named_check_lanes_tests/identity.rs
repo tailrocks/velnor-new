@@ -85,32 +85,20 @@ fn both_emits_coherent_named_check_and_required_proof_lanes() {
 }
 
 #[test]
-fn qualification_named_checks_follow_hosted_scale_set_and_both_placement() {
-    let source = ir(&[
-        (
-            "check-linux",
-            runner("ubuntu-26.04", CheckPlatform::LinuxX64),
-        ),
-        (
-            "qualification-check-linux",
-            runner("ubuntu-26.04", CheckPlatform::LinuxX64),
-        ),
-    ]);
+fn named_check_uses_one_job_across_qualification_events() {
+    let source = ir(&[(
+        "check-linux",
+        runner("ubuntu-26.04", CheckPlatform::LinuxX64),
+    )]);
     let scale_set = "scale-set:velnor+orbstack-linux";
     let cases = [
-        (
-            ExecutionMode::Hosted,
-            vec![("qualification-check-linux", "ubuntu-26.04")],
-        ),
-        (
-            ExecutionMode::ScaleSet,
-            vec![("qualification-check-linux", scale_set)],
-        ),
+        (ExecutionMode::Hosted, vec![("check-linux", "ubuntu-26.04")]),
+        (ExecutionMode::ScaleSet, vec![("check-linux", scale_set)]),
         (
             ExecutionMode::Both,
             vec![
-                ("qualification-check-linux__hosted", "ubuntu-26.04"),
-                ("qualification-check-linux__local", scale_set),
+                ("check-linux__hosted", "ubuntu-26.04"),
+                ("check-linux__local", scale_set),
             ],
         ),
     ];
@@ -119,7 +107,7 @@ fn qualification_named_checks_follow_hosted_scale_set_and_both_placement() {
         let config = config(mode);
         let expanded = expand_workflow(&source, &config, None).expect("expanded workflow");
         let lanes = named_check_lanes(&source, &config, None).expect("qualification lane map");
-        let qualification_lanes = &lanes["qualification-check-linux"];
+        let qualification_lanes = &lanes["check-linux"];
         assert_eq!(
             qualification_lanes
                 .iter()
@@ -137,11 +125,9 @@ fn qualification_named_checks_follow_hosted_scale_set_and_both_placement() {
             assert!(required.needs.iter().any(|need| need == job_id), "{job_id}");
             let job = &expanded.jobs[*job_id];
             assert_eq!(job.runs_on, *runs_on, "{job_id}");
-            assert_eq!(
-                job.condition.as_deref(),
-                Some(crate::config::QUALIFICATION_CHECK_ADMISSION_CONDITION),
-                "{job_id}"
-            );
+            let expected_condition = (*runs_on == scale_set)
+                .then_some(crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION);
+            assert_eq!(job.condition.as_deref(), expected_condition, "{job_id}");
         }
 
         let StepKind::Internal { env, .. } = &expanded.jobs["plan"].steps[0].kind else {
@@ -151,24 +137,18 @@ fn qualification_named_checks_follow_hosted_scale_set_and_both_placement() {
         let decoded: BTreeMap<String, Vec<NamedCheckLane>> =
             serde_json::from_str(encoded).expect("typed lane map");
         assert_eq!(
-            decoded["qualification-check-linux"], *qualification_lanes,
+            decoded["check-linux"], *qualification_lanes,
             "plan receives the same lane map used by Required for {mode:?}"
         );
     }
 }
 
 #[test]
-fn qualification_named_check_inherits_its_source_override() {
-    let source = ir(&[
-        (
-            "check-linux",
-            runner("ubuntu-26.04", CheckPlatform::LinuxX64),
-        ),
-        (
-            "qualification-check-linux",
-            runner("ubuntu-26.04", CheckPlatform::LinuxX64),
-        ),
-    ]);
+fn named_check_uses_its_package_job_override() {
+    let source = ir(&[(
+        "check-linux",
+        runner("ubuntu-26.04", CheckPlatform::LinuxX64),
+    )]);
     let mut config = config(ExecutionMode::Hosted);
     let execution = config.execution.as_mut().expect("execution config");
     execution.mode = None;
@@ -182,18 +162,16 @@ fn qualification_named_check_inherits_its_source_override() {
 
     let expanded = expand_workflow(&source, &config, None).expect("source override applies");
     assert_eq!(
-        expanded.jobs["qualification-check-linux"].runs_on,
+        expanded.jobs["check-linux"].runs_on,
         "scale-set:velnor+orbstack-linux"
     );
     assert_eq!(
-        expanded.jobs["qualification-check-linux"]
-            .condition
-            .as_deref(),
-        Some(crate::config::QUALIFICATION_CHECK_ADMISSION_CONDITION)
+        expanded.jobs["check-linux"].condition.as_deref(),
+        Some(crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION)
     );
     let lanes = named_check_lanes(&source, &config, None).expect("qualification lane map");
     assert_eq!(
-        lanes["qualification-check-linux"][0].runs_on.as_deref(),
+        lanes["check-linux"][0].runs_on.as_deref(),
         Some("scale-set:velnor+orbstack-linux")
     );
 }

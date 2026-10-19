@@ -42,12 +42,12 @@ mod versions;
 pub use versions::{check_freshness_requirements, validate_exact_version};
 use versions::{invalid_version, tool_source};
 
-/// Adopted Mise runner release (tag `v2026.10.13`); local official-asset
-/// digest and version qualification passed 2026-10-17. Hosted qualification
-/// is required before release.
-/// Source: `https://api.github.com/repos/jdx/mise/releases/tags/v2026.10.13`; checked 2026-10-17.
-pub const MISE_VERSION: &str = "2026.10.13";
-/// Selected Rust stable toolchain from the 2026-10-15 official channel manifest.
+/// Selected Mise release (tag `v2026.10.14`); official asset bytes, signed
+/// checksums and signed inventory were verified 2026-10-19. Runtime and hosted
+/// qualification remain part of the release gates.
+/// Source: `https://api.github.com/repos/jdx/mise/releases/tags/v2026.10.14`.
+pub const MISE_VERSION: &str = "2026.10.14";
+/// Selected Rust stable toolchain (2026-10-15 official stable manifest).
 /// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-10-18.
 pub const RUST_VERSION: &str = "1.99.1";
 /// Selected current `mr-boxington` release (binary on PATH is `mbx`; tag `v1.24.1`).

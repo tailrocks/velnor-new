@@ -60,12 +60,44 @@ fn groups_obligations_into_one_ordered_job_per_crate() {
 }
 
 #[test]
-fn qualification_crate_jobs_keep_one_matrix_entry_each() {
+fn duplicate_rust_display_names_include_manifest_context() {
+    let mut first = group("alpha", TaskKind::Clippy, &[]);
+    first.display_name = "shared".to_owned();
+    first.identity.unit_path = "workspace-a/crates/shared/Cargo.toml".to_owned();
+    let mut second = group("beta", TaskKind::Clippy, &[]);
+    second.display_name = "shared".to_owned();
+    second.identity.unit_path = "workspace-b/crates/shared/Cargo.toml".to_owned();
+    let found = build_crate_jobs(CrateJobInputs {
+        label: "ubuntu-26.04",
+        policy: WorkflowPolicy::ConsumerV1,
+        discovery: &discovery(vec![first, second]),
+        catalog: &ToolCatalog::pinned(),
+        fetch_roots: &[],
+        acquire: None,
+        max_parallel_jobs: 2,
+        helper_version: env!("CARGO_PKG_VERSION"),
+        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+    })
+    .expect("same-name crate jobs");
+    let names: Vec<&str> = found
+        .jobs
+        .iter()
+        .map(|(_, job)| job.display_name.as_str())
+        .collect();
+    assert_eq!(names.len(), 2);
+    assert_ne!(names[0], names[1]);
+    assert!(names.iter().all(|name| name.contains("Cargo.toml")));
+}
+
+#[test]
+fn rust_qualification_reuses_one_job_for_all_configurations_and_tasks() {
     let clippy = group("demo", TaskKind::Clippy, &[]);
-    let test = group("demo", TaskKind::Test, &[clippy.task_id.as_str()]);
+    let mut test = group("demo", TaskKind::Test, &[clippy.task_id.as_str()]);
+    test.task_id = test.task_id.replace("/default", "/all-features");
+    test.configuration = "all-features".to_owned();
     let proposals = vec![clippy, test];
     let discovery = discovery(proposals.clone());
-    let normal = build_crate_jobs(CrateJobInputs {
+    let input = CrateJobInputs {
         label: "ubuntu-26.04",
         policy: WorkflowPolicy::ConsumerV1,
         discovery: &discovery,
@@ -75,8 +107,9 @@ fn qualification_crate_jobs_keep_one_matrix_entry_each() {
         max_parallel_jobs: 2,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-    })
-    .expect("normal grouped jobs");
+    };
+    let normal = build_crate_jobs(input).expect("normal grouped jobs");
+    let qualified = build_crate_jobs_inner(input, true).expect("shared qualification jobs");
     let qualification = build_qualification_crate_jobs(CrateJobInputs {
         label: "ubuntu-26.04",
         policy: WorkflowPolicy::ConsumerV1,
@@ -97,67 +130,72 @@ fn qualification_crate_jobs_keep_one_matrix_entry_each() {
             |step| step.name != crate::qualification_source_evidence::SOURCE_EVIDENCE_STEP_NAME
         )
     );
-    assert_eq!(qualification.jobs.len(), 2);
-    let mut expected_ids: Vec<String> = proposals
-        .iter()
-        .map(|task| qualification_job_id_for_member(task).expect("qualification ID"))
-        .collect();
-    expected_ids.sort();
-    assert_eq!(
-        qualification
-            .jobs
-            .iter()
-            .map(|(job_id, _)| job_id.clone())
-            .collect::<Vec<_>>(),
-        expected_ids
+    assert!(
+        qualification.jobs.is_empty(),
+        "Rust has no duplicate executor jobs"
     );
-    for (job_id, job) in &qualification.jobs {
-        assert_qualification_job_has_source_evidence(job_id, job);
-    }
+    assert_eq!(qualified.jobs.len(), 1);
+    assert_eq!(qualified.jobs[0].0, "rust-demo");
+    assert_grouped_qualification_steps(&qualified.jobs[0].1, &proposals);
 }
 
-fn assert_qualification_job_has_source_evidence(job_id: &str, job: &velnor_actions_contract::Job) {
-    let model_step_count = job
+fn assert_grouped_qualification_steps(job: &Job, proposals: &[ProposedTask]) {
+    let execution_steps: Vec<_> = job
         .steps
         .iter()
         .filter(|step| {
             matches!(
-                &step.kind,
+                step.kind,
                 velnor_actions_contract::StepKind::TaskExecution { .. }
             )
         })
-        .count();
-    assert_eq!(model_step_count, 1, "{job_id}");
-    assert!(job.needs.contains(&PLAN_JOB_ID.to_owned()));
-    let steps = names(job);
-    let evidence = steps
-        .iter()
-        .position(|name| *name == crate::qualification_source_evidence::SOURCE_EVIDENCE_STEP_NAME)
-        .expect("qualification source evidence step");
+        .collect();
     assert_eq!(
-        evidence + 2,
-        steps.len(),
-        "evidence precedes report upload: {steps:?}"
+        execution_steps.len(),
+        2,
+        "both task obligations stay in one job"
     );
-    assert!(matches!(
-        &job.steps[evidence].kind,
-        velnor_actions_contract::StepKind::Shell { env, .. }
-            if env.get(velnor_actions_workflow_renderer::steps::INTERNAL_OP_ENV)
-                .is_some_and(|op| op == crate::qualification_source_evidence::SOURCE_EVIDENCE_OP)
-    ));
+    let expected_conditions: Vec<String> = proposals
+        .iter()
+        .map(|task| {
+            format!(
+                "!cancelled() && {}",
+                crate::covered_tasks::skip_condition(&task.task_id).expect("condition")
+            )
+        })
+        .collect();
+    assert_eq!(
+        execution_steps
+            .iter()
+            .map(|step| step.condition.as_deref())
+            .collect::<Vec<_>>(),
+        expected_conditions
+            .iter()
+            .map(String::as_str)
+            .map(Some)
+            .collect::<Vec<_>>()
+    );
+    let evidence = job
+        .steps
+        .iter()
+        .find(|step| step.name == crate::qualification_source_evidence::SOURCE_EVIDENCE_STEP_NAME)
+        .expect("one aggregated source evidence step");
+    assert_eq!(
+        evidence.condition.as_deref(),
+        Some("needs.plan.outputs.qualification_campaign != ''")
+    );
 }
 
 #[test]
 fn qualification_plan_binding_uses_the_per_entry_job_id() {
     let task = group("demo", TaskKind::Clippy, &[]);
-    let expected = qualification_job_id_for_member(&task).expect("qualification ID");
     assert_eq!(
         job_id_for_member(
             std::slice::from_ref(&task),
             &task,
             velnor_actions_contract::WorkflowEvent::Qualification,
         ),
-        Some(expected)
+        Some("rust-demo".to_owned())
     );
 }
 
