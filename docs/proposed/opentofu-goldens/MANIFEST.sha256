@@ -5,7 +5,7 @@ fef53de8e9478d29ab2c7fe80733045edcd2b83477f4d097e911b117ed52732a  ./dogfood/gene
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/plan.stderr.txt
-7e4a5978dee19533af845a80453975bfb08826e35fb7c9a60d66728fbffb5580  ./dogfood/plan.txt
+9098017c07f836c85c67b63f215afb2bb70dd372dfc08f127f3414035932873d  ./dogfood/plan.txt
 e55cc5cd0bc5efefb8e2376da574c8ce7815d2f49ac93d484dc3d5c18cb5dcec  ./dogfood/preview/.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./dogfood/preview/.github/CLAUDE.md
 952c78c7e8f944dc89ae7733a76f912e2c6b7f7e6013bb2bad00ae85e5ceed3a  ./dogfood/preview/.github/PULL_REQUEST_TEMPLATE.md
@@ -42,7 +42,7 @@ f5b5a4972acaa284b3f3098dad0cd91e572007bc093dda4ef27138ce48fec898  ./dogfood/tree
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/plan.stderr.txt
-196defda63f4db686b76a48aab1e219666eb0bb39d07c93de8a13158dcd14033  ./empty-suite/plan.txt
+341757a346c67eb97911ec92bb9cddd3a25b4f42a4526220c86bf81241868779  ./empty-suite/plan.txt
 e55cc5cd0bc5efefb8e2376da574c8ce7815d2f49ac93d484dc3d5c18cb5dcec  ./empty-suite/preview/.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./empty-suite/preview/.github/CLAUDE.md
 90e64d7c90807fcacfb3311fa6b9e8e3b60e1dd78548249dae3dbabe84412619  ./empty-suite/preview/.github/actionlint.yaml
@@ -60,7 +60,7 @@ b54e11b4eafe73d34be32f8afcddf0c16f5a35bceb7885608f5045cc7dfbeee3  ./mbx-nextest/
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./mbx-nextest/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/plan.stderr.txt
-778d3e0710dae684b1c0f1cdf621976a1eae1de8b4c035a3503577abe8514c12  ./mbx-nextest/plan.txt
+3c905b0df58adc2bc86ceb27dabba096670c26d508f68414c0ddd544c7a6a206  ./mbx-nextest/plan.txt
 e55cc5cd0bc5efefb8e2376da574c8ce7815d2f49ac93d484dc3d5c18cb5dcec  ./mbx-nextest/preview/.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./mbx-nextest/preview/.github/CLAUDE.md
 90e64d7c90807fcacfb3311fa6b9e8e3b60e1dd78548249dae3dbabe84412619  ./mbx-nextest/preview/.github/actionlint.yaml
@@ -78,7 +78,7 @@ f8551382647cd36ab286b88a2c8441c7e468c5367585b8f2dbcfba6ed3c565a2  ./mbx-nextest/
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-cargo/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./minimal-cargo/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-cargo/plan.stderr.txt
-0cb1a8597b3f5db81831e0995b08fe5e890b36c3fb6c7c95dac364a770de2c81  ./minimal-cargo/plan.txt
+fc3c0f78f1c392f028115c780244975c70748687023761e34a3d320e87e2dd0b  ./minimal-cargo/plan.txt
 e55cc5cd0bc5efefb8e2376da574c8ce7815d2f49ac93d484dc3d5c18cb5dcec  ./minimal-cargo/preview/.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./minimal-cargo/preview/.github/CLAUDE.md
 90e64d7c90807fcacfb3311fa6b9e8e3b60e1dd78548249dae3dbabe84412619  ./minimal-cargo/preview/.github/actionlint.yaml
@@ -96,7 +96,7 @@ abbfe8d72093cc0647850107091bc4d42cde191f272cf6057045aa2c758fb3eb  ./minimal-carg
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./nested/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./nested/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./nested/plan.stderr.txt
-d1052cfcc70b2f8c71a44f7f05ceb5d31d8d51c59ed999fec4ec35b6fb662cbb  ./nested/plan.txt
+16081b44f4edd98ee58e88b1db264dd9fa58c1bb54c91d753f3ca66fdcbe1f71  ./nested/plan.txt
 e55cc5cd0bc5efefb8e2376da574c8ce7815d2f49ac93d484dc3d5c18cb5dcec  ./nested/preview/.github/AGENTS.md
 336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49  ./nested/preview/.github/CLAUDE.md
 90e64d7c90807fcacfb3311fa6b9e8e3b60e1dd78548249dae3dbabe84412619  ./nested/preview/.github/actionlint.yaml

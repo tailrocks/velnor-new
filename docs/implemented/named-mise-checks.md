@@ -114,7 +114,7 @@ path = "evidence/orbstack-container.json"
 expected_scenarios = ["production-build", "production-smoke"]
 ```
 
-`directory` defaults to `.`; timeout defaults to five minutes and accepts 1–5.
+`directory` defaults to `.`; timeout defaults to five minutes and accepts 1–360.
 Inputs must be nonempty and unique; tool IDs must be unique. Select an explicitly
 declared qualified Rust tool ID when a task needs Rust for FFI fixtures or
 helpers. Non-Rust qualified tools requiring Cargo source installation, exposing

@@ -135,7 +135,7 @@ Protected release/signing is separate and is not provided by this kind.
 
 At most one `workflow.tasks` entry with `kind = "build"` declares a task that
 may compile repository code. It carries a stable `id`, exact `mise_task`,
-`runner = "macos-26-arm64"`, a `timeout_minutes` from 1 through 5,
+`runner = "macos-26-arm64"`, a `timeout_minutes` from 1 through 360,
 `cargo_build_jobs` from 1 through 2, and `nextest_test_threads` from 1 through
 2. The task uses the same workflow-wide ID namespace and sorted list as every
 other task kind. The generated job key is `task-{id}`. This native job remains
@@ -180,7 +180,7 @@ One `workflow.tasks` entry with `kind = "native-image"` declares an
 unconditional native-host image validation job in the same sorted ID
 namespace and generated `task-{id}` job namespace. Its closed fields are
 `id`, `platform = "linux-arm64"`, a repository-owned `script` below
-`maintained-image-build/`, `timeout_minutes` from 1 through 5, and
+`maintained-image-build/`, `timeout_minutes` from 1 through 360, and
 `cache = "task-owned-builder"`. The script must be a tracked regular file
 whose path components are not symlinks. The runner is fixed to
 `ubuntu-26.04-arm`. The job verifies the checked-out script bytes against the

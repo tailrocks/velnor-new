@@ -62,6 +62,8 @@ struct StagedAssetProof {
 /// Fails closed on context, source, plan, inventory, task, artifact, or path errors.
 pub fn execute_preview_producer() -> Result<(), OrchestratorError> {
     let started = Instant::now();
+    // Absolute ceiling (GitHub's job limit) until the configured producer
+    // budget is read; the nested scope below can only shorten it.
     let maximum = CheckDeadline::from_start_with_cleanup_reserve(
         started,
         Duration::from_secs(u64::from(velnor_actions_contract::JobTimeout::MAX_MINUTES) * 60),
