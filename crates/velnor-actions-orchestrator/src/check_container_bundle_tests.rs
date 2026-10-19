@@ -1,6 +1,6 @@
 use super::tree;
 use super::*;
-use crate::cover_identity::generator::sha256_hex;
+use crate::generator::sha256_hex;
 use std::fs;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;

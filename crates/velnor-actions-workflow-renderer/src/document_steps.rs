@@ -26,12 +26,10 @@ fn is_verdict_download(step: &Step) -> bool {
 
 /// Env for one internal step: op plus request file, authorized reads carry auth.
 ///
-/// When authorized by typed job permissions, the plan op authenticates only
-/// its internal baseline lookup. The fetch
-/// op takes no request file; it reads the plan from the run directory and
+/// The fetch op takes no request file; it reads the plan from the run directory and
 /// authenticates `gh` with the job token plus the repository slug (fixed
 /// literals, never caller input). This render-time pair is emitted only on
-/// those two exact internal steps. Merge-family steps in the final job
+/// that exact internal step. Merge-family steps in the final job
 /// additionally carry the finalized `needs` conclusions channel plus the
 /// rendered expected inventory, so the merge binds required validators to
 /// the committed workflow.
@@ -42,7 +40,6 @@ fn internal_env(
     needs_envs: &[(String, String)],
     job_env: &BTreeMap<String, String>,
     step_env: &BTreeMap<String, String>,
-    actions_read: bool,
 ) -> Result<Yaml, RenderError> {
     commands::validate_env(step_env)?;
     if op == steps::FETCH_OPERATION {
@@ -59,10 +56,6 @@ fn internal_env(
     }
     let request = format!("{}/{target}-request.json", ctx.request_dir);
     let mut env = Vec::new();
-    if actions_read && op == steps::PLAN_OPERATION && target == steps::PLAN_OPERATION {
-        env.push(("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")));
-        env.push(("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")));
-    }
     if op == steps::RESOLVE_QUALIFICATION_OPERATION {
         env.push(("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")));
     }
@@ -329,15 +322,7 @@ fn internal_step_to_yaml(
     crate::step_ids::push_step_id(&mut entries, step);
     entries.push((
         "env".to_owned(),
-        internal_env(
-            op,
-            target,
-            ctx,
-            channel,
-            step_context.job_env,
-            step_env,
-            step_context.actions_read,
-        )?,
+        internal_env(op, target, ctx, channel, step_context.job_env, step_env)?,
     ));
     push_composite_shell(&mut entries, composite);
     entries.push((

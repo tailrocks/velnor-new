@@ -44,11 +44,10 @@ impl WorkflowTask {
 /// True for a bounded task ID in the workflow-wide namespace.
 #[must_use]
 pub fn is_valid_workflow_task_id(id: &str) -> bool {
-    const RESERVED: [&str; 7] = [
+    const RESERVED: [&str; 6] = [
         "actionlint",
         "candidate",
         "plan",
-        "publish-baseline",
         "required",
         "task",
         "velnor-task",

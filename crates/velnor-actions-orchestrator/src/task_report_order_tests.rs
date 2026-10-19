@@ -29,7 +29,7 @@ fn order_fixture(with_build: bool) -> Plan {
     for (task_id, kind, seed) in tasks {
         let (entry, task_digest) = entry_for("rust", task_id, kind, seed, JOB);
         entries.push(entry);
-        obligations.push(obligation_for(task_id, task_digest, seed));
+        obligations.push(obligation_for(task_id, task_digest, seed, JOB));
     }
     let mut plan = fixture_plan();
     plan.matrix.include = entries;
@@ -44,6 +44,7 @@ fn order_fixture(with_build: bool) -> Plan {
         .iter()
         .map(|obligation| obligation.task_id.clone())
         .collect();
+    plan.jobs = super::task_report_tests::run_jobs(&plan);
     plan.validate().expect("order fixture validates");
     plan
 }

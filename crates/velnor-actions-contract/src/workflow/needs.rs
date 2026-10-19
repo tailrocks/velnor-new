@@ -194,7 +194,7 @@ mod tests {
         let mut jobs = BTreeMap::new();
         jobs.insert("plan".to_owned(), job_with_needs(&[]));
         jobs.insert("required".to_owned(), job_with_needs(&["plan"]));
-        jobs.insert("publish-baseline".to_owned(), job_with_needs(&["required"]));
+        jobs.insert("downstream".to_owned(), job_with_needs(&["required"]));
         jobs.insert("unrelated".to_owned(), job_with_needs(&[]));
         let conclusions = NeedsConclusions::from_finalized_jobs("required", &jobs)
             .expect("gate with needs derives");

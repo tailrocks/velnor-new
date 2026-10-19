@@ -62,7 +62,7 @@ fn root_package_fmt_has_unique_task_ids() -> TestResult {
     git(&["add", "."], dir.path())?;
     git(&["commit", "-m", "one"], dir.path())?;
     let head = git_line(&["rev-parse", "HEAD"], dir.path())?;
-    let plan = plan_value(dir.path(), "local", None, &head, None)?;
+    let plan = plan_value(dir.path(), "local", None, &head)?;
     assert_eq!(plan["schema"], 1);
     Ok(())
 }
@@ -88,7 +88,7 @@ fn virtual_workspace_fmt_has_unique_task_ids() -> TestResult {
     git(&["add", "."], dir.path())?;
     git(&["commit", "-m", "one"], dir.path())?;
     let head = git_line(&["rev-parse", "HEAD"], dir.path())?;
-    let plan = plan_value(dir.path(), "local", None, &head, None)?;
+    let plan = plan_value(dir.path(), "local", None, &head)?;
     assert_eq!(plan["schema"], 1);
     Ok(())
 }

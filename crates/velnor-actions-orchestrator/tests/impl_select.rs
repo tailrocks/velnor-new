@@ -177,13 +177,13 @@ fn narrow_change_keeps_universe_with_reasons() -> TestResult {
     assert!(
         plan.obligations
             .iter()
-            .all(|ob| ob.decision == ObligationDecision::Execute),
-        "no proof, all execute"
+            .all(|ob| (ob.decision == ObligationDecision::Execute) == ob.task_id.contains("beta")),
+        "only the changed member executes"
     );
     let beta = reasons_for(&plan, "beta");
     assert!(beta.iter().all(|r| *r == "affected_by_change"), "{beta:?}");
     let alpha = reasons_for(&plan, "alpha");
-    assert!(alpha.iter().all(|r| *r == "forced_uncached"), "{alpha:?}");
+    assert!(alpha.iter().all(|r| *r == "not_affected"), "{alpha:?}");
     assert!(warnings.is_empty(), "no warnings: {warnings:?}");
     Ok(())
 }
@@ -204,7 +204,7 @@ fn md_in_package_selects_narrowly() -> TestResult {
         "{alpha:?}"
     );
     let beta = reasons_for(&plan, "beta");
-    assert!(beta.iter().all(|r| *r == "forced_uncached"), "{beta:?}");
+    assert!(beta.iter().all(|r| *r == "not_affected"), "{beta:?}");
     assert!(warnings.is_empty(), "no warnings: {warnings:?}");
     Ok(())
 }
@@ -385,7 +385,7 @@ fn nested_change_stays_narrow_with_root_package() -> TestResult {
     let beta = reasons_for(&plan, "beta");
     assert!(beta.iter().all(|r| *r == "affected_by_change"), "{beta:?}");
     let alpha = reasons_for(&plan, "alpha");
-    assert!(alpha.iter().all(|r| *r == "forced_uncached"), "{alpha:?}");
+    assert!(alpha.iter().all(|r| *r == "not_affected"), "{alpha:?}");
     assert!(warnings.is_empty(), "no warnings: {warnings:?}");
     Ok(())
 }

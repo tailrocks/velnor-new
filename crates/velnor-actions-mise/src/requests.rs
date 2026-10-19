@@ -112,7 +112,7 @@ impl PinnedToolExec {
         full_mise_argv(catalog, &self.tools, &self.payload())
     }
 
-    /// Isolated command running this pinned execution (`gh` selects Baseline).
+    /// Isolated command running this pinned execution (`gh` selects `GhApi`).
     ///
     /// # Errors
     ///
@@ -122,7 +122,7 @@ impl PinnedToolExec {
         let specs = catalog.tool_specs(&self.tools);
         let command = IsolatedCommand::mise_exec(&specs, &self.payload())?;
         if self.tools.as_slice() == [PinnedTool::Gh] {
-            return Ok(command.with_policy(crate::command::EnvPolicy::Baseline));
+            return Ok(command.with_policy(crate::command::EnvPolicy::GhApi));
         }
         Ok(command)
     }

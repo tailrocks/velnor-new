@@ -2,6 +2,62 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::Job;
+
+use crate::cache_steps::{
+    MBX_BUILD_SCRIPT_EXECUTION_ENV, MBX_BUILD_SCRIPT_EXECUTION_VALUE, MBX_CC_ENV, MBX_CC_VALUE,
+    MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE,
+};
+use crate::render::{PLAN_ATTEMPT_ENV, PLAN_JOB_ID};
+
+/// `VELNOR_RUN_KEY_ATTEMPT` value for one job of a workflow with a plan job.
+///
+/// The plan job binds its own attempt; jobs that need it bind the attempt
+/// that produced the plan, so a "re-run failed jobs" attempt keeps every
+/// run-scoped identity (plan artifact, run directory, report run key,
+/// crate artifact names) on the plan its first attempt produced; a missing
+/// plan output falls back to the current attempt so diagnostics still
+/// land. Other jobs keep their own attempt. Workflows without a plan job
+/// get nothing.
+pub(super) fn plan_attempt_value(
+    id: &str,
+    job: &Job,
+    jobs: &BTreeMap<String, Job>,
+) -> Option<&'static str> {
+    if !jobs.contains_key(PLAN_JOB_ID) {
+        return None;
+    }
+    if id != PLAN_JOB_ID && job.needs.iter().any(|need| need == PLAN_JOB_ID) {
+        Some("${{ needs.plan.outputs.plan_attempt || github.run_attempt }}")
+    } else {
+        Some("${{ github.run_attempt }}")
+    }
+}
+
+/// Add the native MBX policy and the plan-attempt binding to a job env.
+pub(super) fn extend_job_env(
+    job_env: &mut BTreeMap<String, String>,
+    native_mbx: bool,
+    plan_attempt: Option<&str>,
+) {
+    if native_mbx {
+        for (key, val) in [
+            (MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE),
+            (MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE),
+            (MBX_CC_ENV, MBX_CC_VALUE),
+            (
+                MBX_BUILD_SCRIPT_EXECUTION_ENV,
+                MBX_BUILD_SCRIPT_EXECUTION_VALUE,
+            ),
+        ] {
+            job_env.insert(key.to_owned(), val.to_owned());
+        }
+    }
+    if let Some(value) = plan_attempt {
+        job_env.insert(PLAN_ATTEMPT_ENV.to_owned(), value.to_owned());
+    }
+}
+
 /// Build the workflow-wide environment from generated repository policy.
 ///
 /// Credential scrubbing always applies globally. Mise isolation becomes

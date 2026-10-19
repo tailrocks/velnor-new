@@ -88,6 +88,7 @@ fn qualification_argv_carries_locked_offline() -> Result<(), String> {
             "1",
             "--locked",
             "--offline",
+            "--all-features",
             "--manifest-path",
             "/repo/Cargo.toml",
         ])

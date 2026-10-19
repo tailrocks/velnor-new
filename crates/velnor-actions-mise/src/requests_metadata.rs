@@ -95,8 +95,10 @@ impl MetadataDiscovery {
 /// Locked/offline qualification after dependency sources have been prepared.
 ///
 /// Exact payload: `cargo metadata --format-version 1 --locked --offline
-/// --manifest-path <workspace-root>/Cargo.toml`. Missing offline
-/// dependencies surface as `preparation_incomplete` upstream, never a fetch.
+/// --all-features --manifest-path <workspace-root>/Cargo.toml`. Missing
+/// offline dependencies surface as `preparation_incomplete` upstream, never
+/// a fetch. `--all-features` makes the resolve list every optional edge any
+/// configuration could activate: affected-work selection walks it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetadataQualification {
     /// Workspace-root manifest whose resolution is qualified.
@@ -134,6 +136,7 @@ impl MetadataQualification {
             OsString::from("1"),
             OsString::from("--locked"),
             OsString::from("--offline"),
+            OsString::from("--all-features"),
             OsString::from("--manifest-path"),
             self.workspace_manifest.as_os_str().to_owned(),
         ]
@@ -156,7 +159,7 @@ impl MetadataQualification {
         IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
     }
 
-    /// Run qualification and return the raw metadata JSON string.
+    /// Run qualification and return the raw full-resolve metadata JSON.
     ///
     /// # Errors
     ///

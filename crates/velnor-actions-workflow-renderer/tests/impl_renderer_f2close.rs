@@ -14,15 +14,15 @@ use super::impl_renderer_fixtures::*;
 fn candidate_artifact_name_derives_run_and_target() -> Result<(), RenderError> {
     assert_eq!(
         candidate_artifact_name("x86_64-unknown-linux-gnu")?.as_str(),
-        "velnor-candidate-r${{ github.run_id }}-a${{ github.run_attempt }}-x86-64-unknown-linux-gnu",
+        "velnor-candidate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-x86-64-unknown-linux-gnu",
     );
     assert_eq!(
         candidate_artifact_name("aarch64-apple-darwin")?.as_str(),
-        "velnor-candidate-r${{ github.run_id }}-a${{ github.run_attempt }}-aarch64-apple-darwin",
+        "velnor-candidate-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}-aarch64-apple-darwin",
     );
     assert!(candidate_artifact_name("").is_err());
     let resolved = candidate_artifact_name("x86_64-unknown-linux-gnu")?.replace(
-        "r${{ github.run_id }}-a${{ github.run_attempt }}",
+        "r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}",
         "r123-a1",
     );
     velnor_actions_contract::validate_artifact_id(&resolved).map_err(RenderError::Contract)?;

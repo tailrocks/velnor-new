@@ -1,6 +1,6 @@
 //! Stack-extension schema registry checks (cache §1).
 //!
-//! Unknown extension schemas disable reuse and baseline coverage. Stacks
+//! Unknown extension schemas disable reuse. Stacks
 //! map to their adapter schema; task IDs map to their stack segment.
 
 use velnor_actions_contract::Stack;
@@ -10,8 +10,8 @@ use velnor_actions_contract::cachekey::{
 
 /// Adapter extension schema for one stack ID, if the stack is known.
 ///
-/// Unknown stack IDs map to `None` (unknown), disabling reuse and
-/// baseline coverage for their tasks.
+/// Unknown stack IDs map to `None` (unknown), disabling reuse for
+/// their tasks.
 #[must_use]
 pub fn extension_schema_for_stack(stack_id: &str) -> Option<&'static str> {
     match Stack::from_id(stack_id) {
@@ -72,20 +72,6 @@ pub fn task_key_segment(task_id: &str) -> Option<String> {
     Some(parts[1..parts.len() - 2].join("/"))
 }
 
-/// True when `task_id` carries no unknown extension schema.
-///
-/// Internal obligations have no adapter extension, so nothing is
-/// unknown; stack obligations need a known stack schema.
-#[must_use]
-pub fn coverage_schema_known(task_id: &str) -> bool {
-    if task_id.starts_with("internal/") {
-        return task_kind_segment(task_id).is_some();
-    }
-    task_stack_segment(task_id)
-        .and_then(extension_schema_for_stack)
-        .is_some()
-}
-
 /// True when reuse decisions may rest on `schema` (cache §1).
 #[must_use]
 pub fn reuse_eligible_for_schema(schema: &str) -> bool {
@@ -141,7 +127,7 @@ mod tests {
     }
 
     #[test]
-    fn known_rust_covers_but_unknown_stacks_do_not() {
+    fn known_rust_schema_is_reusable_but_unknown_is_not() {
         assert_eq!(
             extension_schema_for_stack("rust"),
             Some(RUST_EXTENSION_SCHEMA)
@@ -150,24 +136,16 @@ mod tests {
             extension_schema_for_stack("mise"),
             Some(velnor_actions_contract::NAMED_CHECK_EXTENSION_SCHEMA)
         );
-        assert!(coverage_schema_known("stack/rust/root/clippy/default"));
-        assert!(!coverage_schema_known("stack/unknown/root/test/default"));
-        assert!(coverage_schema_known("internal/policy/default"));
-        assert!(!coverage_schema_known("bogus"));
         assert!(reuse_eligible_for_schema(RUST_EXTENSION_SCHEMA));
         assert!(!reuse_eligible_for_schema("rust-task-v2"));
     }
 
     #[test]
-    fn tofu_schema_covers_tofu_tasks() {
+    fn tofu_schema_is_reusable() {
         assert_eq!(
             extension_schema_for_stack("tofu"),
             Some(TOFU_EXTENSION_SCHEMA)
         );
-        assert!(coverage_schema_known("stack/tofu/dir-/validate/default"));
-        assert!(coverage_schema_known(
-            "stack/tofu/dir-737461636b732f61/init/default/shard-1-of-2"
-        ));
         assert!(reuse_eligible_for_schema(TOFU_EXTENSION_SCHEMA));
     }
 }

@@ -2,7 +2,7 @@
 //!
 //! The private gate requires `VELNOR_INTERNAL_OP` plus the exact request file
 //! in `VELNOR_REQUEST_FILE`: `write-request-v1` needs GitHub event env and no
-//! pre-existing file, `plan-v1`/`merge-v1`/`publish-baseline-v1` need a
+//! pre-existing file, `plan-v1`/`merge-v1` need a
 //! pre-existing request file, `fetch-reports-v1`/`write-task-report-v1`
 //! need runner temp plus the numeric run ID instead, and
 //! `write-preseed-manifest-v1` needs runner temp only, and
@@ -23,15 +23,13 @@ use velnor_actions_orchestrator::{
     CAPTURE_REVIEW_COMPLETION_OP, DYNAMIC_MATRIX_OUTPUT_MODE, EMIT_REVIEW_COMPLETION_OP,
     EXECUTE_CHECK_OP, EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP,
     OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PREPARE_HOMEBREW_TAP_OP,
-    PRESEED_MANIFEST_OP, PUBLISH_OP, PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode,
-    RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV, SELECT_PREVIEW_TAP_CONTINUATION_OP,
-    SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP,
-    WRITE_REQUEST_OP, execute_check, merge_internal, merge_passed, plan_internal, plan_outputs,
-    publish_final_report, publish_plan_files, resolve_task_execution, response_path_for,
-    retrieve_reports, write_preseed_manifest, write_request, write_task_report,
+    PRESEED_MANIFEST_OP, PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP,
+    REPORT_OP, REQUEST_FILE_ENV, SELECT_PREVIEW_TAP_CONTINUATION_OP, SIGN_PACKAGE_RELEASE_OP,
+    TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, execute_check,
+    merge_internal, merge_passed, plan_internal, plan_outputs, publish_final_report,
+    publish_plan_files, resolve_task_execution, response_path_for, retrieve_reports,
+    write_preseed_manifest, write_request, write_task_report,
 };
-
-use crate::dispatch_publish::run_publish_internal;
 
 #[path = "dispatch_preview_production.rs"]
 mod preview_production;
@@ -102,7 +100,6 @@ fn internal_op() -> Option<InternalOp> {
         Ok(tag) if tag == FETCH_OP => InternalOp::Fetch,
         Ok(tag) if tag == REPORT_OP => InternalOp::Report,
         Ok(tag) if tag == PRESEED_MANIFEST_OP => InternalOp::PreseedManifest,
-        Ok(tag) if tag == PUBLISH_OP => InternalOp::Publish,
         Ok("repo-policy-v1") => InternalOp::RepoPolicy,
         Ok(tag) if crate::dispatch_qualification::is_resolver_op(tag) => {
             InternalOp::ResolveQualification
@@ -160,10 +157,7 @@ fn gate_request() -> Option<InternalRequest> {
                 return None;
             }
         }
-        InternalOp::Plan
-        | InternalOp::Merge
-        | InternalOp::Publish
-        | InternalOp::ExecutePreviewProducer => {
+        InternalOp::Plan | InternalOp::Merge | InternalOp::ExecutePreviewProducer => {
             if !path.is_file() {
                 return None;
             }
@@ -252,7 +246,6 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
-        InternalOp::Publish => run_publish_internal(&request.path),
         InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
         InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
         InternalOp::ResolveTaskExecution => match resolve_task_execution() {

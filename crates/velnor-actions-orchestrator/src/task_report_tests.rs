@@ -10,9 +10,8 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_contract::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision,
-    Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform,
-    RunnerSelection, TaskReport, TaskStatus, Trust, WorkflowEvent, matrix_json_bytes,
-    plan_id_for_run,
+    Plan, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform, RunnerSelection,
+    TaskReport, TaskStatus, Trust, WorkflowEvent, matrix_json_bytes, plan_id_for_run,
 };
 
 use super::*;
@@ -21,48 +20,6 @@ use super::*;
 pub(super) const CLIPPY: &str = "stack/rust/demo/clippy/default";
 /// Test fixture task ID.
 pub(super) const TEST: &str = "stack/rust/demo/test/default";
-
-#[test]
-fn exit_codes_accept_the_eight_bit_range() {
-    assert_eq!(parse_exit_code("0").expect("zero"), 0);
-    assert_eq!(parse_exit_code("1").expect("one"), 1);
-    assert_eq!(parse_exit_code("255").expect("max"), 255);
-    for bad in ["", " ", "-1", "256", "99999", "0x1", "1\n", "ok"] {
-        assert!(parse_exit_code(bad).is_err(), "must reject {bad:?}");
-    }
-}
-
-#[test]
-fn downstream_ids_split_dedupe_and_drop_blanks() {
-    assert_eq!(parse_downstream(None), [] as [std::string::String; 0]);
-    assert_eq!(parse_downstream(Some("")), [] as [std::string::String; 0]);
-    assert_eq!(parse_downstream(Some("b,a,b,, a ,")), ["b", "a"]);
-}
-
-#[test]
-fn start_stamps_parse_and_measure_or_fail_closed() {
-    assert_eq!(parse_start_ms("0"), Some(0));
-    assert_eq!(parse_start_ms("1759270000000"), Some(1_759_270_000_000));
-    assert_eq!(parse_start_ms("99999999999999999999999999"), None);
-    for bad in ["", " ", "-1", "12.5", "0x1", "abc", "1\n"] {
-        assert_eq!(parse_start_ms(bad), None, "must reject {bad:?}");
-    }
-    assert_eq!(elapsed_ms(None), None, "absent telemetry stays unmeasured");
-    assert_eq!(
-        elapsed_ms(Some(u64::MAX)),
-        None,
-        "future stamps stay unmeasured"
-    );
-    assert!(
-        elapsed_ms(Some(1)).is_some_and(|elapsed| elapsed >= 1),
-        "past stamps measure"
-    );
-    let now = now_ms().expect("wall clock");
-    assert!(
-        elapsed_ms(Some(now)).is_some_and(|elapsed| elapsed >= 1),
-        "present stamps never read zero"
-    );
-}
 
 /// One `b3-` digest with every byte set to `byte`.
 fn digest(byte: u8) -> String {
@@ -97,7 +54,12 @@ pub(super) fn entry_for(
 }
 
 /// One execute obligation.
-pub(super) fn obligation_for(task_id: &str, task_digest: String, seed: u8) -> PlanObligation {
+pub(super) fn obligation_for(
+    task_id: &str,
+    task_digest: String,
+    seed: u8,
+    job_id: &str,
+) -> PlanObligation {
     PlanObligation {
         task_id: task_id.to_owned(),
         decision: ObligationDecision::Execute,
@@ -105,8 +67,29 @@ pub(super) fn obligation_for(task_id: &str, task_digest: String, seed: u8) -> Pl
         task_digest,
         input_digest: digest(seed + 10),
         closure_digest: digest(seed + 20),
-        baseline_proof: None,
+        job_id: job_id.to_owned(),
     }
+}
+
+/// Run dispositions for every job named by the plan's obligations and entries.
+pub(super) fn run_jobs(plan: &Plan) -> Vec<velnor_actions_contract::PlanJob> {
+    let mut ids: std::collections::BTreeSet<&str> = plan
+        .obligations
+        .iter()
+        .map(|ob| ob.job_id.as_str())
+        .collect();
+    ids.extend(
+        plan.matrix
+            .include
+            .iter()
+            .map(|entry| entry.job_id.as_str()),
+    );
+    ids.into_iter()
+        .map(|job_id| velnor_actions_contract::PlanJob {
+            job_id: job_id.to_owned(),
+            disposition: velnor_actions_contract::JobDisposition::Run,
+        })
+        .collect()
 }
 
 /// Valid two-task fixture plan (clippy plus test).
@@ -126,7 +109,6 @@ pub(super) fn fixture_plan() -> Plan {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(None).expect("baseline"),
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -134,16 +116,19 @@ pub(super) fn fixture_plan() -> Plan {
         },
         packages: Vec::new(),
         obligations: vec![
-            obligation_for(CLIPPY, clippy_digest, 1),
-            obligation_for(TEST, test_digest, 2),
+            obligation_for(CLIPPY, clippy_digest, 1, "crate_clippy"),
+            obligation_for(TEST, test_digest, 2, "crate_test"),
         ],
         matrix: PlanMatrix {
             include: vec![clippy_entry, test_entry],
         },
         task_ids: vec![CLIPPY.to_owned(), TEST.to_owned()],
+        jobs: Vec::new(),
         warnings: Vec::new(),
         edges: Vec::new(),
     };
+    let mut plan = plan;
+    plan.jobs = run_jobs(&plan);
     plan.validate().expect("fixture validates");
     plan
 }
@@ -266,8 +251,9 @@ fn tofu_executed_report_carries_measured_timing() {
     let (tofu_entry, digest) = entry_for("tofu", TOFU_VALIDATE, "validate", 7, "tofu_validate");
     plan.matrix.include[1] = tofu_entry;
     let entry = &plan.matrix.include[1];
-    plan.obligations[1] = obligation_for(TOFU_VALIDATE, digest.clone(), 7);
+    plan.obligations[1] = obligation_for(TOFU_VALIDATE, digest.clone(), 7, "tofu_validate");
     plan.task_ids[1] = TOFU_VALIDATE.to_owned();
+    plan.jobs = run_jobs(&plan);
     plan.validate().expect("mixed plan validates");
     let temp = staged_run(&plan, "local");
     let reported =

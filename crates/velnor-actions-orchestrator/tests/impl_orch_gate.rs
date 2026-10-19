@@ -1,11 +1,8 @@
 //! F1 end to end: the merge inventory equals the gate's `needs`.
 //!
 //! `VELNOR_NEEDS_EXPECTED` must list exactly the jobs `toJSON(needs)`
-//! can observe at runtime — the `required` job's `needs`. Deriving it
-//! from the finalized job set admitted the downstream
-//! `publish-baseline` job (which needs `required` and so can never be
-//! in `required.needs`), failing the merge with
-//! `needs_inventory_mismatch` on every run.
+//! can observe at runtime — the `required` job's `needs`, never the
+//! whole finalized job set.
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
@@ -96,24 +93,11 @@ fn generated_ci_gate_matches_needs_and_excludes_downstream() -> TestResult {
         .into_iter()
         .collect();
     assert!(!gate.is_empty(), "required must need jobs: {needs:?}");
-    assert!(
-        !gate.contains("publish-baseline"),
-        "gate cannot need its downstream: {gate:?}"
-    );
-    let publish = needs.get("publish-baseline").cloned().unwrap_or_default();
-    assert!(
-        publish.contains(&"required".to_owned()),
-        "publish-baseline stays downstream of required: {publish:?}"
-    );
     let expected = expected_inventories(&yaml)?;
     assert_eq!(expected.len(), 2, "write-request plus merge carry it");
     for inventory in &expected {
         let seen: BTreeSet<String> = inventory.iter().cloned().collect();
         assert_eq!(seen, gate, "EXPECTED must equal required.needs");
-        assert!(
-            !inventory.contains(&"publish-baseline".to_owned()),
-            "EXPECTED excludes downstream: {inventory:?}"
-        );
     }
     Ok(())
 }

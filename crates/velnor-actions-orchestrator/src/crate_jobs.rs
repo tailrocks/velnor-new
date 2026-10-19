@@ -23,8 +23,7 @@ use velnor_actions_contract::{
 #[cfg(test)]
 use velnor_actions_mise::PinnedTool;
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
-#[cfg(test)]
-use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
+use velnor_actions_workflow_renderer::render::{NOT_AFFECTED_JOBS_OUTPUT, PLAN_JOB_ID};
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
 use crate::OrchestratorError;
@@ -291,12 +290,21 @@ fn render_job(
         check_runner: None,
         timeout_minutes: input.timeout,
         needs,
-        condition: None,
+        condition: (use_rust && !use_opentofu).then(|| not_affected_gate(&model.job_id)),
         permissions: None,
         environment: None,
         steps,
         cache_mode: None,
     })
+}
+
+/// Job-level gate skipping one Rust crate job the plan marks `not_affected`.
+///
+/// Negative list over the plan's `not_affected_jobs` output (`,a,b,`): an
+/// empty or missing output matches nothing and runs the job, and the
+/// implicit `success()` skips it when the plan fails (hard decision 4).
+pub(crate) fn not_affected_gate(job_id: &str) -> String {
+    format!("!contains(needs.{PLAN_JOB_ID}.outputs.{NOT_AFFECTED_JOBS_OUTPUT}, ',{job_id},')")
 }
 
 /// Report-wrapped obligation steps in validated order.

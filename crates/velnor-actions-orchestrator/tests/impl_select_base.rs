@@ -189,16 +189,16 @@ fn missing_or_bad_base_tags_comparison_unavailable() -> TestResult {
 }
 
 #[test]
-fn push_missing_base_tags_comparison_unavailable() -> TestResult {
+fn push_runs_everything_with_an_explicit_tag() -> TestResult {
     let repo = make_ws_repo(false)?;
     let root = repo.path();
     let head = commit(root, "one")?;
     let (plan, warnings) = plan_push(root, None, &head)?;
-    assert!(selects_both(&plan), "missing base broadens");
+    assert!(selects_both(&plan), "push is a full run");
     assert!(
         warnings
             .iter()
-            .any(|warning| warning == "comparison_unavailable:missing_base:all_changed"),
+            .any(|warning| warning == "full_run_event:push:all_changed"),
         "tag: {warnings:?}"
     );
     assert_all_changed(&plan);

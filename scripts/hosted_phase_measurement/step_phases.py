@@ -37,8 +37,6 @@ STEP_PHASES = {
     "plan": "plan",
     "publish plan": "plan_publish",
     "publish final report": "final_report_publish",
-    "publish baseline": "baseline_publish",
-    "upload baseline": "baseline_upload",
 }
 
 

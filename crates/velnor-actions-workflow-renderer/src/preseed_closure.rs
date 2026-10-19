@@ -6,7 +6,7 @@ use velnor_actions_contract::{Job, StepRole, is_crate_job_id};
 
 use crate::{
     RenderError,
-    render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID},
+    render::{FINAL_JOB_ID, PLAN_JOB_ID},
 };
 
 /// Pre-seed closure: single plan build plus artifact sharing (Gap A).
@@ -40,7 +40,7 @@ pub(crate) fn check_preseed_closure(
         }
     }
     for (id, job) in jobs {
-        if id != FINAL_JOB_ID && id != PUBLISH_JOB_ID && !is_crate_job_id(id) {
+        if id != FINAL_JOB_ID && !is_crate_job_id(id) {
             continue;
         }
         let position = |role| job.steps.iter().position(|step| step.role == Some(role));

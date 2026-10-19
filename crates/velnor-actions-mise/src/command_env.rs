@@ -126,12 +126,12 @@ pub const PROXY_ENV_KEYS: [&str; 8] = [
 pub const CREDENTIAL_ALLOWLIST_BOOTSTRAP: [&str; 3] =
     ["MISE_GITHUB_TOKEN", "GITHUB_TOKEN", "GH_TOKEN"];
 
-/// Credential keys the baseline policy keeps for `gh` API reads.
+/// Credential keys the GitHub API policy keeps for `gh` API reads.
 ///
 /// `gh` authenticates with the ambient CI identity only; the
 /// download token, the runtime token, the OIDC pair, and the
 /// registry token are stripped.
-pub const CREDENTIAL_ALLOWLIST_BASELINE: [&str; 2] = ["GITHUB_TOKEN", "GH_TOKEN"];
+pub const CREDENTIAL_ALLOWLIST_GH_API: [&str; 2] = ["GITHUB_TOKEN", "GH_TOKEN"];
 
 /// Velnor-owned `MISE_*` keys that declared extras may still carry.
 ///
@@ -213,9 +213,9 @@ pub enum EnvPolicy {
     /// never load repo config (`MISE_NO_CONFIG=1` always); explicit
     /// `tool@exact` specs are the sole version authority.
     Bootstrap,
-    /// Exact-base baseline lookup via `gh`: inherits minus everything
-    /// outside the baseline allowlist, plus the isolation overlay.
-    Baseline,
+    /// GitHub API reads via pinned `gh`: inherits minus everything
+    /// outside the `gh` API allowlist, plus the isolation overlay.
+    GhApi,
     /// Trusted evidence validation (offline): inherits minus every
     /// credential key, plus the isolation overlay.
     Verify,
@@ -245,7 +245,7 @@ impl EnvPolicy {
     pub const fn allowed_credentials(&self) -> &'static [&'static str] {
         match self {
             Self::Bootstrap => &CREDENTIAL_ALLOWLIST_BOOTSTRAP,
-            Self::Baseline => &CREDENTIAL_ALLOWLIST_BASELINE,
+            Self::GhApi => &CREDENTIAL_ALLOWLIST_GH_API,
             Self::Verify
             | Self::Discovery
             | Self::GitHubToken

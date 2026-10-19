@@ -60,6 +60,7 @@ fn config_validation_reports_key_paths() {
                 binary_release: RustBinaryReleaseConfig::default(),
                 suites: Vec::new(),
                 crates: BTreeMap::new(),
+                inputs: Vec::new(),
             }),
             tofu: None,
         },

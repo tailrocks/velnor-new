@@ -80,6 +80,7 @@ fn workspace(owner: VelnorV1TaskOwner) -> PlannedWorkspace {
             packages,
             edges: Vec::new(),
             skipped_edges: Vec::new(),
+            has_external_dependencies: false,
         },
         profile: RustExecutionProfile {
             compile_driver: CompileDriver::Cargo,

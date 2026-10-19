@@ -207,7 +207,6 @@ fn build_workflow_jobs(
     insert_gate_jobs(
         &mut jobs,
         input.label,
-        input.branch,
         &required_ids,
         prepared.acquire.take(),
         &prepared.catalog,

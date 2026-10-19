@@ -17,8 +17,8 @@ pub struct PlanOutputs {
     pub plan_id: String,
     /// Run key for step outputs (WF-4.15).
     pub run_key: String,
-    /// Comma-wrapped covered task IDs (empty when none covered).
-    pub covered_tasks: String,
+    /// `not_affected` crate jobs as `,id1,id2,`; empty runs every job.
+    pub not_affected_jobs: String,
     /// Validated qualification namespace, empty outside Qualification.
     pub qualification_campaign: String,
     /// Validated qualification phase, empty outside Qualification.
@@ -57,7 +57,7 @@ pub fn plan_outputs_with_admission(
         matrix: canonical_json_str(&response.plan.matrix).map_err(internal_contract)?,
         plan_id: response.plan.plan_id.clone(),
         run_key: response.plan.run_key.clone(),
-        covered_tasks: crate::covered_tasks::CoveredTasks::for_plan(&response.plan).encode(),
+        not_affected_jobs: crate::plan_dispositions::encode_not_affected_jobs(&response.plan.jobs),
         qualification_campaign: qualification
             .map_or_else(String::new, |value| value.campaign.clone()),
         qualification_phase: qualification
@@ -107,7 +107,7 @@ pub const JOB_OUTPUTS_BUDGET_UTF16_BYTES: usize = 900_000;
 /// Which outputs the plan job promotes to downstream jobs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlanOutputMode {
-    /// Static crate jobs promote coverage and qualification policy outputs.
+    /// Static crate jobs promote qualification policy outputs.
     Static,
     /// A task job promotes every plan-step output for matrix consumers.
     DynamicMatrix,
@@ -121,7 +121,7 @@ impl PlanOutputs {
             ("matrix", &self.matrix),
             ("plan_id", &self.plan_id),
             ("run_key", &self.run_key),
-            (crate::COVERED_TASKS_OUTPUT, &self.covered_tasks),
+            (NOT_AFFECTED_JOBS_OUTPUT, &self.not_affected_jobs),
             (
                 crate::QUALIFICATION_CAMPAIGN_OUTPUT,
                 &self.qualification_campaign,
@@ -147,7 +147,7 @@ impl PlanOutputs {
     pub fn promoted_job_outputs(&self, mode: PlanOutputMode) -> Vec<(&'static str, &str)> {
         match mode {
             PlanOutputMode::Static => vec![
-                (crate::COVERED_TASKS_OUTPUT, &self.covered_tasks),
+                (NOT_AFFECTED_JOBS_OUTPUT, &self.not_affected_jobs),
                 (
                     crate::QUALIFICATION_CAMPAIGN_OUTPUT,
                     &self.qualification_campaign,
@@ -170,6 +170,8 @@ impl PlanOutputs {
         }
     }
 }
+
+use velnor_actions_workflow_renderer::render::NOT_AFFECTED_JOBS_OUTPUT;
 
 fn bool_output(value: bool) -> &'static str {
     if value { "true" } else { "false" }
@@ -199,7 +201,7 @@ pub(crate) fn check_plan_outputs(
     };
     if bytes > JOB_OUTPUTS_BUDGET_UTF16_BYTES {
         return Err(internal(&format!(
-            "job_outputs_budget_exceeded:{bytes}:reduce matrix entries or covered work"
+            "job_outputs_budget_exceeded:{bytes}:reduce matrix entries"
         )));
     }
     Ok(bytes)

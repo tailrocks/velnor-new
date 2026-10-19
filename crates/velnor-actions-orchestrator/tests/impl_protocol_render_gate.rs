@@ -59,7 +59,7 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
     let ir = WorkflowIr {
         name: "CI".to_owned(),
         triggers: Trigger {
-            pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
+            pull_request_types: velnor_actions_workflow_renderer::render::EXPECTED_PR_TYPES
                 .iter()
                 .map(ToString::to_string)
                 .collect(),

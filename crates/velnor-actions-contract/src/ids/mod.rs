@@ -2,7 +2,7 @@
 //!
 //! Derivation formulas are normative; example strings are illustrative.
 //! `artifact_id` values are derived GitHub artifact names. Numeric run IDs
-//! appear only inside `run_key`/baseline proofs, never as identity inputs.
+//! appear only inside `run_key`, never as identity inputs.
 //! Task, input, and compatibility identities never include cwd, absolute
 //! paths, or `run_key`.
 
@@ -12,8 +12,8 @@ pub mod shard;
 mod task_ids;
 
 pub use artifact::{
-    artifact_id_for_baseline, artifact_id_for_crate_job, artifact_id_for_final,
-    artifact_id_for_matrix, artifact_id_for_plan, target_key, validate_artifact_id,
+    artifact_id_for_crate_job, artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan,
+    target_key, validate_artifact_id,
 };
 pub use branch::is_valid_branch_name;
 pub use shard::split_shard_suffix;

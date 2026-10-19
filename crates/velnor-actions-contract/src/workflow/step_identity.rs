@@ -36,8 +36,6 @@ pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.out
 pub enum StepId {
     /// Planner output consumed by downstream jobs.
     Plan,
-    /// Baseline publisher output consumed by the release uploader.
-    PublishBaseline,
     /// V2 hosted tools-cache output consumed by restore and save.
     ToolsCacheIdentity,
     /// `OpenTofu` provider-cache composite outputs consumed by the save step.
@@ -52,7 +50,6 @@ impl StepId {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Plan => "plan",
-            Self::PublishBaseline => "publish-baseline",
             Self::ToolsCacheIdentity => "v2",
             Self::TofuProviders => "tofu-providers",
             Self::MbxReady => "mbx-ready",
@@ -94,8 +91,6 @@ pub enum StepRole {
     NativeValidators,
     /// Planner producing the plan outputs.
     PlanProducer,
-    /// Baseline publisher producing the artifact name output.
-    BaselinePublisher,
     /// Digest-verified Velnor executable acquisition.
     AcquireVelnor,
     /// Pre-seed copy of the helper into runner-temp staging.
@@ -179,7 +174,6 @@ impl StepRole {
             Self::MiseSetup => valid_mise_setup(kind),
             Self::TofuProviderUse => super::step_protocol::valid_provider_use(kind),
             Self::PlanProducer => internal_operation(kind, "plan-v1"),
-            Self::BaselinePublisher => internal_operation(kind, "publish-baseline-v1"),
             Self::FetchReports => internal_operation(kind, "fetch-reports-v1"),
             Self::DownloadPlan | Self::AttestationDownload | Self::PreseedDownload => {
                 action_has_prefix_for_kind(kind, "actions/download-artifact@")
@@ -232,7 +226,6 @@ impl StepRole {
     pub(crate) const fn required_id(self) -> Option<StepId> {
         match self {
             Self::PlanProducer => Some(StepId::Plan),
-            Self::BaselinePublisher => Some(StepId::PublishBaseline),
             Self::ToolsCacheIdentity => Some(StepId::ToolsCacheIdentity),
             Self::TofuProvidersRestore => Some(StepId::TofuProviders),
             Self::MbxVersionCheck => Some(StepId::MbxReady),
@@ -244,7 +237,6 @@ impl StepRole {
     pub(crate) const fn for_id(id: StepId) -> Self {
         match id {
             StepId::Plan => Self::PlanProducer,
-            StepId::PublishBaseline => Self::BaselinePublisher,
             StepId::ToolsCacheIdentity => Self::ToolsCacheIdentity,
             StepId::TofuProviders => Self::TofuProvidersRestore,
             StepId::MbxReady => Self::MbxVersionCheck,
