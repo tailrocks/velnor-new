@@ -34,7 +34,7 @@ and overlaps the independent checks.
   job at the join, and the always-on report upload still runs afterwards.
   Required still demands every task report and every crate job the plan
   schedules; a crate job the plan marks `not_affected` must be skipped
-  (decision 4).
+  (decision 3).
 - Clippy and Documentation compile in their own Cargo target lanes
   (`target/velnor-clippy`, `target/velnor-doc`, inside the MBX target cache
   payload) so Cargo's target-directory lock never serializes test execution
@@ -58,14 +58,7 @@ root job). The default is `5`; accepted values are `1..=360`. Zero or more than
 360 is rejected, never clamped. See
 [job timeout limits](implemented/job-timeout-limits.md).
 
-## 3. Commit trailers
-
-**Decision.** Commits use the Claude co-author trailer
-`Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. No repository rule,
-ruleset, check, or hook may require any other agent trailer. A human sign-off
-(`Signed-off-by`) may be added but must not be required.
-
-## 4. Pull requests test only what they affect
+## 3. Pull requests test only what they affect
 
 **Decision.** On `pull_request` (fork pull requests included), the plan
 classifies every crate job as `run` or `not_affected` from the pull request's
@@ -78,6 +71,10 @@ job. The baseline-coverage skip path (trusted-baseline artifacts and
 mechanism. See [affected selection](implemented/affected-selection.md).
 Approved by the human owner on 2026-10-19, together with the decision 1
 amendment ("every crate job the plan schedules").
+The `complete = true` input rule, which lets a package with an unbounded
+read be selected only by its declared inputs, was approved by the human owner
+on 2026-10-20 (PR #192 review question; the alternative, running every such
+package on every pull request, was declined).
 
 **Rationale.** In a monorepo most pull requests touch one or two crates, but
 every crate job paid runner start, checkout, tool setup, cache restore, and a
@@ -141,7 +138,7 @@ passes a skipped job the plan scheduled, a protected check a cancelled run can
 leave skipped, one stack's ownership hiding another stack's claims, or a forced
 package whose dependents do not run.
 
-## 5. Tool versions come from the project's Mise config
+## 4. Tool versions come from the project's Mise config
 
 **Decision.** Project configuration declares project tool versions. Generated
 workflows do not copy these versions. Velnor pins tools that the project does

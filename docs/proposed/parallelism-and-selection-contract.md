@@ -20,7 +20,7 @@ cancelled
 blocked by a failed prerequisite
 ```
 
-The final gate succeeds only when each obligation is executed successfully, validly reused, or `not_affected` with its crate job skipped exactly as the plan decided ([hard decision 4](../hard-decisions.md#4-pull-requests-test-only-what-they-affect)). Parallel scheduling MUST NOT remove an obligation. A missing plan entry, task report, or test shard is a failure or causes conservative execution; it is never implicit success.
+The final gate succeeds only when each obligation is executed successfully, validly reused, or `not_affected` with its crate job skipped exactly as the plan decided ([hard decision 3](../hard-decisions.md#3-pull-requests-test-only-what-they-affect)). Parallel scheduling MUST NOT remove an obligation. A missing plan entry, task report, or test shard is a failure or causes conservative execution; it is never implicit success.
 
 Use `executed`, `reused`, and `not_affected` as distinct states. MBX compilation reuse is not a task-result hit. `not_affected` is a plan-time decision proven by the plan itself in the same run; it never depends on a historical run. Pushes, merge groups, and qualification runs never produce it.
 
@@ -142,7 +142,7 @@ The generated matrix MUST be derived from this exact plan; matrix jobs MUST NOT 
 ## 5. Not-affected crate jobs
 
 Implemented; see [affected selection](../implemented/affected-selection.md) and
-[hard decision 4](../hard-decisions.md#4-pull-requests-test-only-what-they-affect).
+[hard decision 3](../hard-decisions.md#3-pull-requests-test-only-what-they-affect).
 The trusted-baseline coverage path (`baseline.json`, `publish-baseline`,
 `covered_tasks` step gates) was removed completely; it is not a second skip
 mechanism.
