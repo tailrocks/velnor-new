@@ -132,7 +132,13 @@ fn bind_job(id: &str, job: &mut Yaml) -> Result<(), RenderError> {
         setup + 1,
         Yaml::Map(vec![
             ("name".to_owned(), Yaml::str(PROJECT_TOOLS_STEP_NAME)),
-            ("run".to_owned(), Yaml::str(script)),
+            // zizmor audits `GITHUB_ENV` writes under `workflow_run` (the
+            // Cache seed); this one appends only digits-and-dots values the
+            // script validated, exactly like the composite resolver.
+            (
+                "run".to_owned(),
+                Yaml::annotated(script, "zizmor: ignore[github-env]"),
+            ),
         ]),
     );
     Ok(())

@@ -38,6 +38,12 @@ pub(crate) fn owned_preparation(
                 &prep.runner_label,
                 env!("CARGO_PKG_VERSION"),
             )?;
+            crate::attach::attach_seed_lock_acquire(
+                &mut owned.workflow.seed,
+                &lock,
+                &prep.runner_label,
+                env!("CARGO_PKG_VERSION"),
+            )?;
         } else {
             attach_preseed(
                 &mut owned.workflow,

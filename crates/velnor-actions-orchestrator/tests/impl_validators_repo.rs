@@ -279,6 +279,7 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
                 "default_branch",
                 "generator_validation",
                 "max_parallel_jobs",
+                "seed_max_bytes",
                 "runner_label",
             ]
             .contains(&key.as_str()),

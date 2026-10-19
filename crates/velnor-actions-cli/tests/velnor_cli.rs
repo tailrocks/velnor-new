@@ -13,6 +13,8 @@ mod impl_cli_gate_preseed;
 mod impl_cli_gate_qualification;
 #[path = "impl_cli_gate_repo_policy.rs"]
 mod impl_cli_gate_repo_policy;
+#[path = "impl_cli_gate_seed.rs"]
+mod impl_cli_gate_seed;
 #[path = "impl_cli_gate_tap_merge.rs"]
 mod impl_cli_gate_tap_merge;
 #[path = "impl_cli_gate_tap_recovery.rs"]

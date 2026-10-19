@@ -49,6 +49,10 @@ pub use super::qualify::qualify_argv_staged;
 pub use super::retrieve_reports::{FETCH_OP, retrieve_reports};
 pub use super::root::resolve_root;
 pub use super::routing::{migrate_config, parse_dispatch_mode};
+pub use super::seed_ops::{
+    RESOLVE_SEED_TASK_OP, SEED_SKELETON_OP, SEED_TRIM_OP, resolve_seed_task, seed_skeleton,
+    seed_trim,
+};
 pub use super::tap_merge::review_completion::{
     CAPTURE_REVIEW_COMPLETION_OP, EMIT_REVIEW_COMPLETION_OP, capture_review_completion,
     emit_review_completion,

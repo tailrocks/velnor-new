@@ -8,8 +8,9 @@
 //!   a 40-hex action SHA, a literal semver (tool or Velnor version),
 //!   `ImageVersion`, or `hashFiles(`.
 //! - I2: every restore and save of one family uses the family's one path list.
-//! - I3: no path is owned by two families; sources paths stay in sources.
-//! - I7: every save is trust-gated; no save can run on forks or merge groups.
+//! - I3: no path is owned by two families, and no family path nests another's.
+//! - I7: every save is trust-gated; no save can run on forks or merge groups;
+//!   dependency seeds are saved only by the Cache seed workflow.
 //! - Keys fit GitHub's 512-byte cap.
 
 use std::collections::BTreeMap;
@@ -25,6 +26,10 @@ use velnor_actions_contract::workflow::step_identity::{
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::RenderError;
+
+#[path = "cache_doctor_seed.rs"]
+mod seed;
+pub(crate) use seed::DoctorScope;
 
 /// Families the doctor knows: the runtime-keyed families plus V2 tools.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -44,10 +49,13 @@ struct CacheUse<'a> {
 /// # Errors
 ///
 /// Returns [`RenderError::InvalidWorkflow`] naming the job and broken rule.
-pub(crate) fn check(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
+pub(crate) fn check(jobs: &BTreeMap<String, Job>, scope: DoctorScope) -> Result<(), RenderError> {
     let mut owners: BTreeMap<String, Family> = BTreeMap::new();
     for (id, job) in jobs {
         for step in &job.steps {
+            if !seed::role_in_scope(step, scope) {
+                return Err(doctor(id, &format!("seed_role_outside_seed:{}", step.name)));
+            }
             let Some((key, path, save)) = classify(id, step)? else {
                 continue;
             };
@@ -57,7 +65,7 @@ pub(crate) fn check(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
             let cache = CacheUse { family, save, path };
             check_paths(id, step, &cache)?;
             if cache.save {
-                check_save(id, step, cache.family)?;
+                check_save(id, step, cache.family, scope)?;
             }
             if let Some(path) = cache.path {
                 for line in path.lines() {
@@ -70,7 +78,7 @@ pub(crate) fn check(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
             }
         }
     }
-    check_sources_isolation(&owners)
+    check_disjoint(&owners)
 }
 
 fn doctor(job: &str, problem: &str) -> RenderError {
@@ -104,6 +112,9 @@ fn classify<'a>(job: &str, step: &'a Step) -> Result<Option<CacheInputs<'a>>, Re
 }
 
 fn family_for_key(key: &str) -> Option<Family> {
+    if let Some(family) = seed::family_for_key(key) {
+        return Some(Family::Runtime(family));
+    }
     if key == SOURCES_KEY_STEP_EXPR || key == SOURCES_KEY_PLAN_EXPR {
         return Some(Family::Runtime(CacheFamily::Sources));
     }
@@ -208,6 +219,10 @@ fn check_paths(job: &str, step: &Step, cache: &CacheUse<'_>) -> Result<(), Rende
                     path == CacheFamily::TofuProviders.spec().path_input(Some(slug))
                 })
         }
+        (
+            Family::Runtime(family @ (CacheFamily::Rsdeps | CacheFamily::RsdepsHelper)),
+            Some(path),
+        ) => seed::paths_ok(family, step, path, cache.save),
         (Family::Runtime(_), None) => false,
     };
     if ok {
@@ -243,13 +258,21 @@ fn tofu_slug(path: &str) -> Option<&str> {
 }
 
 /// I7: every save carries its family's trust gate.
-fn check_save(job: &str, step: &Step, family: Family) -> Result<(), RenderError> {
+fn check_save(
+    job: &str,
+    step: &Step,
+    family: Family,
+    scope: DoctorScope,
+) -> Result<(), RenderError> {
     let condition = step.condition.as_deref().unwrap_or_default();
     let ok = match family {
         Family::Runtime(CacheFamily::Sources) => {
             condition == SOURCES_SAVE_CONDITION && job == crate::render::PLAN_JOB_ID
         }
         Family::Runtime(CacheFamily::TofuProviders) => condition == TOFU_PROVIDERS_SAVE_CONDITION,
+        Family::Runtime(family @ (CacheFamily::Rsdeps | CacheFamily::RsdepsHelper)) => {
+            seed::save_ok(family, step, scope)
+        }
         Family::Tools => condition == crate::cache_p08::tools_cache_save_condition(),
     };
     if ok {
@@ -262,23 +285,19 @@ fn check_save(job: &str, step: &Step, family: Family) -> Result<(), RenderError>
     }
 }
 
-/// I3: no other family archives or nests a sources path.
-fn check_sources_isolation(owners: &BTreeMap<String, Family>) -> Result<(), RenderError> {
-    let sources = CacheFamily::Sources.spec().resolved_paths(None);
+/// I3: no path of one family equals or nests a path of another family.
+fn check_disjoint(owners: &BTreeMap<String, Family>) -> Result<(), RenderError> {
     for (path, family) in owners {
-        if *family == Family::Runtime(CacheFamily::Sources) {
-            continue;
-        }
-        let overlaps = sources.iter().any(|source| {
-            path == source
-                || path.starts_with(&format!("{source}/"))
-                || source.starts_with(&format!("{path}/"))
-        });
-        if overlaps {
-            return Err(doctor(
-                "workflow",
-                &format!("i3_sources_path_shared:{path}"),
-            ));
+        for (other, other_family) in owners {
+            if family == other_family {
+                continue;
+            }
+            if path == other || other.starts_with(&format!("{path}/")) {
+                return Err(doctor(
+                    "workflow",
+                    &format!("i3_path_shared:{path}:{other}"),
+                ));
+            }
         }
     }
     Ok(())

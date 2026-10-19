@@ -60,6 +60,7 @@ fn provider_restore_precedes_init_obligation() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -98,6 +99,7 @@ fn provider_restore_keys_are_per_root() {
         max_parallel_jobs: 5,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -139,6 +141,7 @@ fn rust_jobs_carry_no_provider_restore() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -168,6 +171,7 @@ fn mixed_job_restores_both_sources_and_providers() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -239,8 +243,10 @@ fn provider_keys_reject_unsafe_roots() {
     ] {
         let err = crate::cache_keys::cache_keys_step(
             &velnor_actions_mise::ToolCatalog::pinned(),
-            &[],
-            &[root.to_owned()],
+            &crate::cache_keys::CacheKeyInputs {
+                tofu_roots: vec![root.to_owned()],
+                ..crate::cache_keys::CacheKeyInputs::default()
+            },
         )
         .expect_err("unsafe roots fail closed");
         assert!(

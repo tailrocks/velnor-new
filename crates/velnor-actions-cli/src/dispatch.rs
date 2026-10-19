@@ -8,7 +8,9 @@
 //! `write-preseed-manifest-v1` needs runner temp only, and
 //! `resolve-qualification-v1` requires a dispatch event, request file, and
 //! read-only GitHub token. `resolve-task-execution-v1` requires runner temp
-//! and the run ID; it emits only the plan-bound task data frame. Anything else
+//! and the run ID; it emits only the plan-bound task data frame. The Cache
+//! seed ops (`resolve-seed-task-v1`, `seed-skeleton-v1`, `seed-trim-v1`)
+//! need runner temp only. Anything else
 //! falls through to Clap, so public behavior is byte-identical with or without
 //! the environment set.
 
@@ -47,6 +49,8 @@ mod package_release;
 mod package_release_publish;
 #[path = "dispatch_package_release_recovery.rs"]
 mod package_release_recovery;
+#[path = "dispatch_seed.rs"]
+mod seed;
 #[path = "dispatch_tap_merge.rs"]
 mod tap_merge;
 #[path = "dispatch_tap_prepare.rs"]
@@ -112,6 +116,7 @@ fn internal_op() -> Option<InternalOp> {
         Ok(tag) if tag == ADMIT_HOMEBREW_TAP_OP => InternalOp::TapAdmission,
         Ok(tag) if tag == WRITE_HOMEBREW_TAP_PR_OP => InternalOp::TapWriter,
         Ok(tag) if tag == MERGE_HOMEBREW_TAP_PR_OP => InternalOp::TapMerge,
+        Ok(tag) if seed::op_for(tag).is_some() => seed::op_for(tag)?,
         _ => return None,
     })
 }
@@ -135,7 +140,7 @@ fn gate_request() -> Option<InternalRequest> {
         }
         return None;
     }
-    if op == InternalOp::PreseedManifest {
+    if seed::is_seed(op) || op == InternalOp::PreseedManifest {
         return runner_velnor_dir().map(|path| InternalRequest { op, path });
     }
     if op == InternalOp::RepoPolicy {
@@ -193,7 +198,10 @@ fn gate_request() -> Option<InternalRequest> {
         | InternalOp::PreseedManifest
         | InternalOp::RepoPolicy
         | InternalOp::ExecuteCheck
-        | InternalOp::ResolveTaskExecution => {}
+        | InternalOp::ResolveTaskExecution
+        | InternalOp::SeedTask
+        | InternalOp::SeedSkeleton
+        | InternalOp::SeedTrim => {}
     }
     Some(InternalRequest { op, path })
 }
@@ -262,6 +270,9 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         InternalOp::TapAdmission => tap_prepare::run_admission(),
         InternalOp::TapWriter => tap_prepare::run_writer(),
         InternalOp::TapMerge => tap_merge::run(),
+        InternalOp::SeedTask | InternalOp::SeedSkeleton | InternalOp::SeedTrim => {
+            seed::run(request.op)
+        }
     }
 }
 

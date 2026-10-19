@@ -115,9 +115,25 @@ pub(crate) fn run_shellcheck_bodies(
     }
 }
 
+/// Drop one trailing generated `# zizmor: ignore[<audit>]` comment.
+///
+/// Only a comment after a closing double quote is a YAML comment; inside
+/// a quoted scalar the same text is shell payload and stays.
+fn strip_zizmor_ignore(scalar: &str) -> &str {
+    scalar
+        .rsplit_once(" # zizmor: ignore[")
+        .filter(|(body, audit)| {
+            body.ends_with('"')
+                && audit.strip_suffix(']').is_some_and(|name| {
+                    !name.is_empty() && name.bytes().all(|b| b.is_ascii_lowercase() || b == b'-')
+                })
+        })
+        .map_or(scalar, |(body, _)| body)
+}
+
 /// Unquote one single-line scalar: plain or double-quoted only.
 fn unquote_run_scalar(scalar: &str) -> Result<String, OrchestratorError> {
-    let scalar = scalar.trim();
+    let scalar = strip_zizmor_ignore(scalar.trim());
     if !scalar.starts_with('"') {
         if scalar.starts_with('\'') {
             return Err(shellcheck_fail("run_single_quoted_unlintable"));

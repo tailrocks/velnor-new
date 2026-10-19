@@ -122,6 +122,20 @@ pub enum StepRole {
     MbxVersionCheck,
     /// Exact MBX and Rust toolchain preflight.
     MbxPreflight,
+    /// Lookup-only probe of one dependency seed key.
+    DependencySeedLookup,
+    /// Read-only restore of one root's dependency seed.
+    DependencySeedRestore,
+    /// The Cache seed workflow's dependency seed save.
+    DependencySeedSave,
+    /// Cache seed skeleton: metadata read and member source stubs.
+    SeedSkeleton,
+    /// One sequential Cache seed lane.
+    SeedLane,
+    /// Cache seed trim to registry and Git dependency units.
+    SeedTrim,
+    /// Deletion of superseded generations of one dependency seed family.
+    SeedJanitor,
 }
 
 impl StepRole {
@@ -162,6 +176,9 @@ impl StepRole {
                 StepKind::Action { uses, .. } if uses == TOOLS_CACHE_RESTORE_USES
             ),
             Self::CargoSourcesRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
+            Self::DependencySeedLookup => cache_restore(kind, true),
+            Self::DependencySeedRestore => cache_restore(kind, false),
+            Self::DependencySeedSave => action_has_prefix_for_kind(kind, "actions/cache/save@"),
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
             Self::MbxInstall => valid_mbx_install(kind),
@@ -188,7 +205,11 @@ impl StepRole {
             | Self::PreseedManifest
             | Self::PreseedVerifyBuild
             | Self::PreseedVerifyManifest
-            | Self::MbxPreflight => matches!(kind, StepKind::Shell { .. }),
+            | Self::MbxPreflight
+            | Self::SeedSkeleton
+            | Self::SeedLane
+            | Self::SeedTrim
+            | Self::SeedJanitor => matches!(kind, StepKind::Shell { .. }),
         }
     }
 
@@ -200,6 +221,7 @@ impl StepRole {
             Self::TofuProvidersRestore => Some(StepId::TofuProviders),
             Self::CacheKeys => Some(StepId::CacheKeys),
             Self::ToolsCacheRestore => Some(StepId::ToolsRestore),
+            Self::SeedTrim => Some(StepId::SeedTrim),
             _ => None,
         }
     }
@@ -214,6 +236,14 @@ impl StepRole {
             StepId::SourcesRestore => Self::CargoSourcesRestore,
             StepId::SourcesFetch => Self::CargoSourcesFetch,
             StepId::ToolsRestore => Self::ToolsCacheRestore,
+            StepId::RsdepsLookup(_) | StepId::SeedLookup | StepId::SeedHelperLookup => {
+                Self::DependencySeedLookup
+            }
+            StepId::SeedBuild | StepId::SeedClippy | StepId::SeedDoc | StepId::SeedHelper => {
+                Self::SeedLane
+            }
+            StepId::SeedTrim => Self::SeedTrim,
+            StepId::SeedSave | StepId::SeedHelperSave => Self::DependencySeedSave,
         }
     }
 }
@@ -251,7 +281,10 @@ fn valid_configured_checkout_payload(kind: &StepKind) -> bool {
         if valid_checkout_payload(kind)
             && (with.len() == 1
                 || (with.len() == 2
-                    && with.get("fetch-depth").is_some_and(|value| value == "0")))
+                    && with.get("fetch-depth").is_some_and(|value| value == "0"))
+                || (with.len() == 3
+                    && with.get("fetch-depth").is_some_and(|value| value == "1")
+                    && with.get("ref").is_some_and(|value| value == super::cache_family::SEED_CHECKOUT_REF)))
             && env.is_empty())
 }
 
@@ -278,6 +311,13 @@ pub(super) fn valid_tools_cache_identity(kind: &StepKind) -> bool {
 /// True when an action payload uses a fixed name prefix.
 fn action_has_prefix_for_kind(kind: &StepKind, prefix: &str) -> bool {
     matches!(kind, StepKind::Action { uses, .. } if action_has_prefix(uses, prefix))
+}
+
+/// An `actions/cache/restore` call that is (or is not) a lookup-only probe.
+fn cache_restore(kind: &StepKind, lookup_only: bool) -> bool {
+    matches!(kind, StepKind::Action { uses, with, .. }
+        if action_has_prefix(uses, "actions/cache/restore@")
+            && with.get("lookup-only").map(String::as_str) == lookup_only.then_some("true"))
 }
 
 /// True when a pinned action ref starts with its required owner/repository.

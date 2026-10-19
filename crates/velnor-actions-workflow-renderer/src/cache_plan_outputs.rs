@@ -9,7 +9,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::workflow::cache_family::{
     PLAN_CACHE_OUTPUTS, PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES, PLAN_CACHE_TRUST_OUTPUT,
-    cache_output_reserve_utf16_bytes, is_plan_cache_output,
+    RSDEPS_EXACT_OUTPUT_PREFIX, TOFU_PROVIDERS_KEY_OUTPUT_PREFIX, cache_output_reserve_utf16_bytes,
+    is_plan_cache_output, output_ordinal, rsdeps_exact_output, rsdeps_output_ordinal,
 };
 use velnor_actions_contract::{Job, Step, StepId, StepKind};
 
@@ -37,14 +38,21 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
             }
         }
     }
-    let has_key_step = jobs.get(crate::render::PLAN_JOB_ID).is_some_and(|plan| {
-        plan.steps
-            .iter()
-            .any(|step| step.id == Some(StepId::CacheKeys))
-    });
+    let plan_steps = jobs
+        .get(crate::render::PLAN_JOB_ID)
+        .map_or(&[][..], |plan| plan.steps.as_slice());
+    let has_key_step = plan_steps
+        .iter()
+        .any(|step| step.id == Some(StepId::CacheKeys));
     if has_key_step {
-        // Trust is always written and always published for health reporting.
+        // Trust and every exact-seed probe are always published for health
+        // reporting.
         names.insert(PLAN_CACHE_TRUST_OUTPUT.to_owned());
+        for step in plan_steps {
+            if let Some(StepId::RsdepsLookup(ordinal)) = step.id {
+                names.insert(rsdeps_exact_output(usize::from(ordinal)));
+            }
+        }
     } else if names.is_empty() {
         return Ok(Vec::new());
     } else {
@@ -54,9 +62,14 @@ pub(crate) fn consumed(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Stri
     }
     let tofu = names
         .iter()
-        .filter(|name| !PLAN_CACHE_OUTPUTS.iter().any(|(output, _)| output == name))
+        .filter(|name| output_ordinal(name, TOFU_PROVIDERS_KEY_OUTPUT_PREFIX).is_some())
         .count();
-    if cache_output_reserve_utf16_bytes(tofu) > PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES {
+    let rsdeps = names
+        .iter()
+        .filter_map(|name| rsdeps_output_ordinal(name))
+        .collect::<BTreeSet<_>>()
+        .len();
+    if cache_output_reserve_utf16_bytes(tofu, rsdeps) > PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES {
         return Err(RenderError::InvalidWorkflow(format!(
             "plan_cache_outputs_exceed_reserve:{tofu}"
         )));
@@ -92,12 +105,15 @@ pub(crate) fn output_entries(cache: &[(String, String)]) -> Vec<(String, crate::
     cache
         .iter()
         .map(|(name, step_output)| {
+            let source = output_ordinal(name, RSDEPS_EXACT_OUTPUT_PREFIX)
+                .and_then(StepId::rsdeps_lookup)
+                .map_or_else(
+                    || format!("{}.outputs.{step_output}", StepId::CacheKeys.as_str()),
+                    |lookup| format!("{}.outputs.cache-hit", lookup.as_str()),
+                );
             (
                 name.clone(),
-                crate::yaml::Yaml::str(format!(
-                    "${{{{ steps.{}.outputs.{step_output} }}}}",
-                    StepId::CacheKeys.as_str()
-                )),
+                crate::yaml::Yaml::str(format!("${{{{ steps.{source} }}}}")),
             )
         })
         .collect()

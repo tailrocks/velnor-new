@@ -32,6 +32,16 @@ pub(crate) fn plan_sources_steps() -> Result<(Step, Step), OrchestratorError> {
     Ok((restore, save))
 }
 
+/// Cache seed restore: the job runs the key step itself, so it reads the
+/// step outputs (the trusted snapshot; a `workflow_run` run has trust
+/// `none` and never saves sources).
+/// # Errors
+///
+/// Returns contract, actionlint, or render errors for rejected pins or paths.
+pub(crate) fn seed_sources_restore() -> Result<Step, OrchestratorError> {
+    sources_step(true, SOURCES_KEY_STEP_EXPR, SOURCES_RESTORE_KEYS_STEP_EXPR)
+}
+
 /// The one sources restore/save constructor (paths from the family spec).
 fn sources_step(restore: bool, key: &str, restore_keys: &str) -> Result<Step, OrchestratorError> {
     use velnor_actions_actionlint::PinnedActionRef;

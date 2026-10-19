@@ -100,6 +100,9 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # generator_validation = "bootstrap"  # Generator validation mode.
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.
 # crate_timeout_minutes = 5            # timeout-minutes for every Rust crate job and OpenTofu root job; bounded 1..=360.
+# seed_timeout_minutes = 45            # timeout-minutes for every Cache seed job; bounded 1..=360.
+# seed_max_bytes = 8589934592          # Raw-byte ceiling of one saved dependency seed generation.
+# cache_quota_bytes = 10000000000      # Actions cache quota the generation-time budget proves against.
 
 # Optional verification jobs, one support job per entry, all covered by the
 # required gate. Unknown names fail generate. Enabled jobs may need

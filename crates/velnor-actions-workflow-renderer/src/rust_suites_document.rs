@@ -126,7 +126,7 @@ fn finalize_suite_workflow_jobs(
     }
     crate::cache_p08::elect_cache_writers(jobs)?;
     crate::cache_steps::validate_mbx_lifecycles(jobs)?;
-    crate::cache_doctor::check(jobs)
+    crate::cache_doctor::check(jobs, crate::cache_doctor::DoctorScope::Ci)
 }
 
 fn workflow_display_name(slug: &str) -> String {

@@ -72,6 +72,7 @@ pub(crate) fn build_for_workflow(
     acquire: Option<&Step>,
     helper_version: &str,
 ) -> Result<CrateBuild, OrchestratorError> {
+    let seed_roots = &crate::cache_seed::seed_roots(discovery, fetch_roots)?;
     let no_crates = BTreeMap::new();
     let crates = config
         .stacks
@@ -90,6 +91,7 @@ pub(crate) fn build_for_workflow(
         timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)?,
         helper_version,
         crates,
+        seed_roots,
         seed_parallel_targets: config
             .stacks
             .rust
@@ -111,6 +113,8 @@ pub(crate) struct CrateJobInputs<'a> {
     /// Literal timeout for every emitted crate job.
     pub(crate) timeout: JobTimeout,
     pub(crate) helper_version: &'a str,
+    /// Seeded workspace roots (dependency seed restore per root ordinal).
+    pub(crate) seed_roots: &'a [String],
     /// Opt-in cold target initialization; never changes obligation ownership.
     pub(crate) seed_parallel_targets: bool,
     /// Per-package Rust options keyed by Cargo package name.
@@ -252,8 +256,10 @@ fn render_job(
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
-    steps.extend(crate::source_cache::restore_step_for_crate(
+    steps.extend(crate::cache_seed::crate_restores(
         fetch_roots,
+        input.seed_roots,
+        &model.manifest,
         use_rust,
     )?);
     if use_opentofu {

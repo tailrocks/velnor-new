@@ -46,6 +46,7 @@ fn id_and_display_prefixes_agree_per_partition() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })

@@ -25,6 +25,10 @@ use crate::{
     steps::{action_step, validate_uses},
 };
 
+#[path = "cache_steps_rsdeps.rs"]
+mod rsdeps;
+pub use rsdeps::{SeedCacheUse, seed_cache_step, seed_path_input, validate_seed_root};
+
 #[path = "cache_steps_tools.rs"]
 mod tools;
 

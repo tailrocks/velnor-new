@@ -120,7 +120,7 @@ pub(crate) fn resolve_task_execution_to(
 /// Select a single validated manifest record using its full execution digest.
 ///
 /// A collision must fail closed instead of depending on map iteration order.
-fn unique_record_by_execution_digest<'a>(
+pub(crate) fn unique_record_by_execution_digest<'a>(
     manifest: &'a TaskExecutionManifestV1,
     expected_execution_digest: &str,
 ) -> Result<&'a TaskExecutionManifestEntryV1, OrchestratorError> {
@@ -149,7 +149,7 @@ fn validate_runner_temp_binding(
     Ok(())
 }
 
-fn validate_runner_temp_path(path: &Path) -> Result<&str, OrchestratorError> {
+pub(crate) fn validate_runner_temp_path(path: &Path) -> Result<&str, OrchestratorError> {
     let Some(value) = path.to_str() else {
         return Err(internal("invalid_runner_temp"));
     };
@@ -216,7 +216,7 @@ fn encode_runtime_frame(
     Ok(bytes)
 }
 
-fn resolve_runner_temp_expression(
+pub(crate) fn resolve_runner_temp_expression(
     value: &str,
     runner_temp: &str,
 ) -> Result<String, OrchestratorError> {
@@ -263,7 +263,7 @@ pub(crate) fn resolve_project_tool_refs(
     }))
 }
 
-fn read_manifest(
+pub(crate) fn read_manifest(
     root: &Path,
     expected_generator_version: &str,
 ) -> Result<TaskExecutionManifestV1, OrchestratorError> {

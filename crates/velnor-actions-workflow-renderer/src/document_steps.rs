@@ -184,6 +184,20 @@ pub(crate) fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
     )
 }
 
+/// Render-time `GH_TOKEN` binding of the Cache seed janitor (cache deletes
+/// need the job token); no constructed step env may carry it.
+fn seed_janitor_binding(
+    step: &Step,
+    env: &BTreeMap<String, String>,
+    composite: bool,
+) -> BTreeMap<String, String> {
+    let mut bound = env.clone();
+    if !composite && step.role == Some(velnor_actions_contract::StepRole::SeedJanitor) {
+        bound.insert("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned());
+    }
+    bound
+}
+
 fn shell_step_to_yaml(
     step: &Step,
     run: &[String],
@@ -209,7 +223,8 @@ fn shell_step_to_yaml(
             Yaml::Int(steps::ACQUIRE_TIMEOUT_MINUTES),
         ));
     }
-    let filtered_env: BTreeMap<String, String> = env
+    let bound = seed_janitor_binding(step, env, composite);
+    let filtered_env: BTreeMap<String, String> = bound
         .iter()
         .filter(|(k, v)| job_env.get(*k).map(String::as_str) != Some(v.as_str()))
         .map(|(k, v)| (k.clone(), v.clone()))

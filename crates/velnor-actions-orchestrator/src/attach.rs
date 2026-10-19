@@ -71,6 +71,23 @@ pub(crate) fn attach_lock_acquire(
     Ok(())
 }
 
+/// The Cache seed jobs acquire the lock-backed helper like crate jobs.
+/// # Errors
+///
+/// Returns lock errors for a runner target without a lock record.
+pub(crate) fn attach_seed_lock_acquire(
+    seed: &mut crate::cache_seed::SeedSpec,
+    lock: &GeneratorLock,
+    label: &str,
+    version: &str,
+) -> Result<(), OrchestratorError> {
+    if !seed.is_empty() {
+        let staged = format!("{STAGED_BINARY_PREFIX}{version}");
+        seed.acquire = Some(lock_acquire_step(lock, label, &staged)?);
+    }
+    Ok(())
+}
+
 /// Attach explicit pre-seed build-once steps (Velnor policy, no lock).
 ///
 /// The plan job restores the MBX object store (shared-snapshot plans),
@@ -110,6 +127,7 @@ pub(crate) fn attach_preseed(
         }
     }
     let build = candidate_build_argv(catalog)?;
+    attach_seed_helper(workflow, &build, target)?;
     let probe = mbx_probe_argv(catalog)?;
     let staged = format!("{STAGED_BINARY_PREFIX}{version}");
     let homes = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
@@ -128,6 +146,17 @@ pub(crate) fn attach_preseed(
     insert_plan_mbx_install(catalog, &mut plan.steps)?;
     let at = preseed_anchor(&plan.steps);
     plan.steps.splice(at..at, plan_steps);
+    if !workflow.seed.is_empty() {
+        // The helper dependency seed restores right before `Build helper`.
+        let build_at = plan
+            .steps
+            .iter()
+            .position(|step| step.role == Some(StepRole::PreseedBuild))
+            .ok_or_else(|| OrchestratorError::Contract {
+                problem: "preseed_build_missing".to_owned(),
+            })?;
+        plan.steps.insert(build_at, helper_seed_restore()?);
+    }
     let Some(final_gate) = workflow.ir.jobs.get_mut(FINAL_JOB_ID) else {
         return Err(OrchestratorError::Contract {
             problem: "final_job_missing".to_owned(),
@@ -145,6 +174,73 @@ pub(crate) fn attach_preseed(
     }
     workflow.context.preseed = true;
     Ok(())
+}
+
+/// Pre-seed mode completes the seed spec and the Plan key step with the
+/// helper dependency seed (`rsdeps-helper`, built in Plan with this argv).
+fn attach_seed_helper(
+    workflow: &mut WorkflowPlan,
+    build: &[String],
+    target: &str,
+) -> Result<(), OrchestratorError> {
+    if workflow.seed.is_empty() {
+        return Ok(());
+    }
+    workflow.seed.keys.seed.helper_build = Some(build.to_vec());
+    workflow.seed.plan_keys.seed.helper_build = Some(build.to_vec());
+    workflow.seed.preseed_target = Some(target.to_owned());
+    let key_step =
+        crate::cache_keys::cache_keys_step(workflow.seed.catalog()?, &workflow.seed.plan_keys)?;
+    let plan =
+        workflow
+            .ir
+            .jobs
+            .get_mut(PLAN_JOB_ID)
+            .ok_or_else(|| OrchestratorError::Contract {
+                problem: "plan_job_missing".to_owned(),
+            })?;
+    let slot = plan
+        .steps
+        .iter_mut()
+        .find(|step| step.id == Some(velnor_actions_contract::StepId::CacheKeys))
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: "plan_cache_keys_missing".to_owned(),
+        })?;
+    if let Some(step) = key_step {
+        *slot = step;
+    }
+    Ok(())
+}
+
+fn helper_seed_restore() -> Result<Step, OrchestratorError> {
+    use velnor_actions_contract::workflow::cache_family::{
+        CacheFamily, RSDEPS_HELPER_KEY_STEP_EXPR, RSDEPS_HELPER_RESTORE_KEYS_STEP_EXPR,
+    };
+    Ok(velnor_actions_workflow_renderer::steps::seed_cache_step(
+        &crate::cache_seed::cache_uses(true)?,
+        CacheFamily::RsdepsHelper,
+        "",
+        velnor_actions_workflow_renderer::steps::SeedCacheUse::Restore,
+        RSDEPS_HELPER_KEY_STEP_EXPR,
+        Some(RSDEPS_HELPER_RESTORE_KEYS_STEP_EXPR),
+    )?)
+}
+
+/// Cache seed helper consumers: the triggering run's artifact, verified
+/// against its head commit, then staged like every other consumer.
+/// # Errors
+pub(crate) fn seed_preseed_consumers(
+    target: &str,
+    staged: &str,
+) -> Result<Vec<Step>, OrchestratorError> {
+    use velnor_actions_workflow_renderer::preseed_seed::{
+        seed_preseed_download_step, seed_preseed_manifest_verify_step,
+    };
+    Ok(vec![
+        seed_preseed_download_step()?,
+        seed_preseed_manifest_verify_step(target)?,
+        preseed_stage_step(PreseedStageSource::DownloadedArtifact, staged)?,
+    ])
 }
 
 /// Same-target consumers verify the artifact before staging its bytes.

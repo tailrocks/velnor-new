@@ -109,6 +109,9 @@ default_branch = "main"
 generator_validation = "bootstrap"
 max_parallel_jobs = 2
 crate_timeout_minutes = 5 # default; bounded 1..=360; applies to every Rust crate job and OpenTofu root job
+seed_timeout_minutes = 45 # default; bounded 1..=360; every Cache seed job (dependency seed writer)
+seed_max_bytes = 8589934592 # default 8 GiB raw; a larger trimmed seed is not saved (`seed: over_ceiling`)
+cache_quota_bytes = 10000000000 # default; the projected hot set must stay at or below 85% of it
 mise_quiet = true # default; `false` drops MISE_QUIET so the mise wrapper-dispatch trace stays visible
 preserve_workflows = [] # optional [".github/workflows/<slug>.yml"] allowlist
 

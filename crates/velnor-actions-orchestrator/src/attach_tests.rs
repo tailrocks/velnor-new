@@ -79,8 +79,14 @@ fn lock_acquire_inserts_digest_verified_stage() {
     let mut ir = bare_ir(BTreeMap::from([
         (
             "plan".to_owned(),
-            plan_job("ubuntu-26.04", None, &catalog, rust_plan_needs(), &[], &[])
-                .expect("plan job"),
+            plan_job(
+                "ubuntu-26.04",
+                None,
+                &catalog,
+                rust_plan_needs(),
+                &crate::cache_keys::CacheKeyInputs::default(),
+            )
+            .expect("plan job"),
         ),
         (
             "required".to_owned(),
@@ -147,7 +153,14 @@ fn lock_acquire_records_source_commit() {
     let catalog = ToolCatalog::pinned();
     let mut ir = bare_ir(BTreeMap::from([(
         "plan".to_owned(),
-        plan_job("ubuntu-26.04", None, &catalog, rust_plan_needs(), &[], &[]).expect("plan job"),
+        plan_job(
+            "ubuntu-26.04",
+            None,
+            &catalog,
+            rust_plan_needs(),
+            &crate::cache_keys::CacheKeyInputs::default(),
+        )
+        .expect("plan job"),
     )]));
     ir.jobs.insert(
         "required".to_owned(),
@@ -178,8 +191,14 @@ fn preseed_attach_plan(catalog: &ToolCatalog) -> WorkflowPlan {
         ir: bare_ir(BTreeMap::from([
             (
                 "plan".to_owned(),
-                plan_job("ubuntu-26.04", None, catalog, rust_plan_needs(), &[], &[])
-                    .expect("plan job"),
+                plan_job(
+                    "ubuntu-26.04",
+                    None,
+                    catalog,
+                    rust_plan_needs(),
+                    &crate::cache_keys::CacheKeyInputs::default(),
+                )
+                .expect("plan job"),
             ),
             ("rust-demo".to_owned(), legacy_task_job()),
             (
@@ -205,6 +224,7 @@ fn preseed_attach_plan(catalog: &ToolCatalog) -> WorkflowPlan {
             plan_consumer_env: std::collections::BTreeMap::new(),
         },
         actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
+        seed: crate::cache_seed::SeedSpec::default(),
     }
 }
 
@@ -300,8 +320,10 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
                     None,
                     &catalog,
                     rust_plan_needs(),
-                    fetch_roots,
-                    &[],
+                    &crate::cache_keys::CacheKeyInputs {
+                        fetch_roots: fetch_roots.to_vec(),
+                        ..crate::cache_keys::CacheKeyInputs::default()
+                    },
                 )
                 .expect("plan job"),
             ),
@@ -327,6 +349,7 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
             plan_consumer_env: BTreeMap::new(),
         },
         actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
+        seed: crate::cache_seed::SeedSpec::default(),
     }
 }
 

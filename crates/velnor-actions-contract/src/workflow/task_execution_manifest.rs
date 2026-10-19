@@ -159,6 +159,46 @@ pub fn task_execution_manifest_marker_line(
 }
 
 impl TaskExecutionManifestEntryV1 {
+    /// The digested record of one `TaskExecution` step, or `None` for others.
+    ///
+    /// The renderer writes exactly this record into the manifest, so any
+    /// other consumer (the Cache seed lane selection) derives the same
+    /// execution digest from the same step.
+    ///
+    /// # Errors
+    ///
+    /// Returns a contract error if canonical JSON serialization fails.
+    pub fn from_step_kind(kind: &super::step::StepKind) -> Result<Option<Self>, ContractError> {
+        let super::step::StepKind::TaskExecution {
+            argv,
+            env,
+            task_id,
+            task_digest,
+            matrix_id,
+            matrix_key,
+            report_helper_version,
+            matrix_max_parallel,
+            toolchain_inputs,
+        } = kind
+        else {
+            return Ok(None);
+        };
+        let mut record = Self {
+            task_id: task_id.clone(),
+            execution_digest: String::new(),
+            task_digest: task_digest.clone(),
+            toolchain_inputs: toolchain_inputs.clone(),
+            argv: argv.clone(),
+            env: env.clone(),
+            matrix_id: matrix_id.clone(),
+            matrix_key: matrix_key.clone(),
+            report_helper_version: report_helper_version.clone(),
+            matrix_max_parallel: *matrix_max_parallel,
+        };
+        record.refresh_execution_digest()?;
+        Ok(Some(record))
+    }
+
     /// Compute the execution digest without replacing the plan digest.
     ///
     /// # Errors

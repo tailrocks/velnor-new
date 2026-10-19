@@ -139,8 +139,7 @@ fn prepare_task_execution<'a>(
         matrix_id,
         matrix_key,
         report_helper_version: task_helper_version,
-        matrix_max_parallel,
-        toolchain_inputs,
+        ..
     } = &step.kind
     else {
         return Ok(None);
@@ -169,21 +168,11 @@ fn prepare_task_execution<'a>(
         context.report_helper_version,
     )?;
     validate_task_fields(argv, env, task_id, task_digest, matrix_id, matrix_key)?;
-    let mut record = TaskExecutionManifestEntryV1 {
-        task_id: task_id.clone(),
-        execution_digest: String::new(),
-        task_digest: task_digest.clone(),
-        toolchain_inputs: toolchain_inputs.clone(),
-        argv: argv.clone(),
-        env: env.clone(),
-        matrix_id: matrix_id.clone(),
-        matrix_key: matrix_key.clone(),
-        report_helper_version: task_helper_version.clone(),
-        matrix_max_parallel: *matrix_max_parallel,
-    };
-    record
-        .refresh_execution_digest()
-        .map_err(RenderError::Contract)?;
+    let record = TaskExecutionManifestEntryV1::from_step_kind(&step.kind)
+        .map_err(RenderError::Contract)?
+        .ok_or_else(|| {
+            RenderError::InvalidWorkflow("declared_task_not_task_execution".to_owned())
+        })?;
     let reference = TaskExecutionRef {
         execution_digest: record.execution_digest.clone(),
         helper_version: task_helper_version,

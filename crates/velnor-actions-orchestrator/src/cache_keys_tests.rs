@@ -5,7 +5,12 @@ use velnor_actions_contract::StepKind;
 use super::*;
 
 fn script(fetch_roots: &[String], tofu_roots: &[String]) -> (String, BTreeMap<String, String>) {
-    let step = cache_keys_step(&ToolCatalog::pinned(), fetch_roots, tofu_roots)
+    let inputs = CacheKeyInputs {
+        fetch_roots: fetch_roots.to_vec(),
+        tofu_roots: tofu_roots.to_vec(),
+        ..CacheKeyInputs::default()
+    };
+    let step = cache_keys_step(&ToolCatalog::pinned(), &inputs)
         .expect("builds")
         .expect("emitted");
     assert_eq!(step.id, Some(StepId::CacheKeys));
@@ -165,7 +170,7 @@ fn compat_excludes_the_toolchain_and_snapshot_tracks_lockfiles() {
         Some(HEAD_FORK_EXPR)
     );
     assert!(
-        cache_keys_step(&ToolCatalog::pinned(), &[], &[])
+        cache_keys_step(&ToolCatalog::pinned(), &CacheKeyInputs::default())
             .expect("builds")
             .is_none()
     );

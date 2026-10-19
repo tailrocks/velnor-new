@@ -98,6 +98,31 @@ fn is_tofu_providers_plan_key(inner: &str) -> bool {
         })
 }
 
+/// True for a dependency seed key or restore prefix from the key step or Plan.
+fn is_rsdeps_key_reference(inner: &str) -> bool {
+    use velnor_actions_contract::workflow::cache_family::{
+        RSDEPS_EXACT_OUTPUT_PREFIX, RSDEPS_HELPER_KEY_OUTPUT, RSDEPS_HELPER_RESTORE_KEYS_OUTPUT,
+        rsdeps_output_ordinal,
+    };
+    let rsdeps = |name: &str| {
+        rsdeps_output_ordinal(name).is_some() && !name.starts_with(RSDEPS_EXACT_OUTPUT_PREFIX)
+    };
+    if let Some(name) = inner.strip_prefix("steps.cache-keys.outputs.") {
+        return rsdeps(name)
+            || name == RSDEPS_HELPER_KEY_OUTPUT
+            || name == RSDEPS_HELPER_RESTORE_KEYS_OUTPUT;
+    }
+    inner
+        .strip_prefix("needs.plan.outputs.")
+        .is_some_and(rsdeps)
+}
+
+/// Triggering-run identities the Cache seed workflow reads.
+const SEED_RUN_EXPRESSIONS: [&str; 2] = [
+    "github.event.workflow_run.head_sha",
+    "github.event.workflow_run.id",
+];
+
 /// True for a `matrix.*` field reference (both layers allow the family).
 fn is_matrix_field(inner: &str) -> bool {
     inner.strip_prefix("matrix.").is_some_and(|field| {
@@ -161,11 +186,21 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
             && !composite_input
             && !workflow_input
             && !is_github_token_secret(inner)
+            && !is_seed_env(key, inner)
         {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
     }
     Ok(())
+}
+
+/// Cache seed env: the triggering head and the seed keys.
+fn is_seed_env(key: &str, inner: &str) -> bool {
+    match key {
+        "VELNOR_SEED_HEAD_SHA" => inner == SEED_RUN_EXPRESSIONS[0],
+        "VELNOR_SEED_KEY" | "VELNOR_SEED_HELPER_KEY" => is_rsdeps_key_reference(inner),
+        _ => false,
+    }
 }
 
 fn is_task_execution_input(name: &str) -> bool {
@@ -228,6 +263,9 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
             && !is_matrix_field(inner)
             && !is_hash_files(inner)
             && !is_tofu_providers_plan_key(inner)
+            && !is_rsdeps_key_reference(inner)
+            && !SEED_RUN_EXPRESSIONS.contains(&inner)
+            && !(key == "github-token" && inner == "github.token")
         {
             return Err(RenderError::BadActionRef(format!(
                 "bad_with_expression:{key}"

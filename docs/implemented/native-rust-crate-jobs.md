@@ -9,8 +9,8 @@ is no per-phase job, phase suffix, phase type or cross-phase gate left.
 ## Job layout
 
 1. Shared setup, once: checkout, the Velnor helper, the plan, pinned tools and
-   Rust components, Cargo sources, the MBX target cache restore and the locked
-   offline source fetch.
+   Rust components, Cargo sources, the root's dependency seed (`rsdeps`,
+   read-only), the install-only MBX action and the locked offline source fetch.
 2. `Build test executables` (Nextest profiles only), sequential: the one
    same-job data producer. Every same-job gate references a strictly earlier
    obligation, so producers are ordered before the parallel group.
@@ -18,7 +18,7 @@ is no per-phase job, phase suffix, phase type or cross-phase gate left.
    Unit and integration tests (each shard), Doctests and Documentation. Each
    member renders as a GitHub `background: true` step; one generated
    `Wait for parallel checks` `wait-all` step joins the group.
-4. `Upload crate reports` (`if: always()`), MBX cleanup and cache saves.
+4. `Upload crate reports` (`if: always()`) and the elected tools save.
 
 A failed member fails the `wait-all` join (runner `BackgroundStepCoordinator`,
 see the [runner reference](../proposed/github-actions-reference.md)), so the
@@ -51,15 +51,17 @@ so each compiles in its own lane through `CARGO_TARGET_DIR`:
 | Documentation | `<workspace>/target/velnor-doc` |
 | Format | none (no compilation) |
 
-The lanes live inside the workspace `target/`, which is exactly the payload the
-MBX action's `github-cache-mode: target` saves and restores, so every lane is
-cached under the crate job's single cache key; the action prunes each nested
-profile the same way as `target/debug`. MBX shares one compiler CPU/memory
-budget and deduplicates identical in-flight compilations across target
-directories (upstream "Parallel Cargo steps" guidance). The final MBX cleanup
-also preserves each lane's `doc/` output, which the restore step puts back.
-The contract admits `CARGO_TARGET_DIR` only as a workspace-relative
-`target/velnor-<lane>` path.
+Each lane's profile directory (`target/debug`, `target/velnor-clippy/debug`,
+`target/velnor-doc/debug`) is restored from the root's dependency seed before
+any task, so registry and Git dependencies are fresh and only the workspace
+members compile. The seed is written only by the generated Cache seed workflow,
+which replays exactly these task records against stubbed member sources and
+trims each profile to dependency units (see the
+[cache contract](../proposed/cache-contract.md)). Crate jobs never save
+compiled outputs. MBX shares one compiler CPU/memory budget and deduplicates
+identical in-flight compilations across target directories (upstream
+"Parallel Cargo steps" guidance); its store is job-local. The contract admits
+`CARGO_TARGET_DIR` only as a workspace-relative `target/velnor-<lane>` path.
 
 ## Compile parallelism limit
 

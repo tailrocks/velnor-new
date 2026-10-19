@@ -186,6 +186,7 @@ schema = 1
 # generator_validation = "bootstrap"  # Generator validation mode.
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.
 # crate_timeout_minutes = 5            # timeout-minutes for every Rust phase and OpenTofu root job; bounded 1..=360.
+# seed_timeout_minutes = 45            # Cache seed job timeout (1..=360); also seed_max_bytes (8 GiB raw) and cache_quota_bytes (10 GB).
 
 # Optional resource limits for generated jobs.
 # [resources]

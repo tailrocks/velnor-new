@@ -192,6 +192,7 @@ fn render_all(
         &mise,
     )?;
     let workflow = rendered.yaml;
+    let seed_file = crate::cache_seed::render_seed(prep, &mise, &ir, &render_context)?;
     let actionlint = render_actionlint_yaml(&actionlint_input)?;
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
     let mut extra = crate::release_emit::release_files(prep, &mise)?;
@@ -212,6 +213,7 @@ fn render_all(
             dco, version,
         )?);
     }
+    extra.extend(seed_file);
     extra.extend(rendered.shared);
     let tree = render_tree_with_claude_mode(
         &workflow,

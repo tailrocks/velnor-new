@@ -260,15 +260,7 @@ fn validate_mbx_lifecycle(id: &str, job: &Job) -> Result<(), RenderError> {
     if actions.is_empty() && ready.is_empty() && preflights.is_empty() {
         return Ok(());
     }
-    let problem = match (actions.as_slice(), ready.as_slice(), preflights.as_slice()) {
-        ([], _, _) => Some("mbx_lifecycle_without_action"),
-        ([_, _, ..], _, _) => Some("mbx_action_duplicated"),
-        (_, [], _) => Some("mbx_ready_check_missing"),
-        (_, [_, _, ..], _) => Some("mbx_ready_check_duplicated"),
-        (_, _, [_, _, ..]) => Some("mbx_preflight_duplicated"),
-        ([action], [check], _) if action >= check => Some("mbx_ready_check_order"),
-        _ => None,
-    };
+    let problem = count_problem(&actions, &ready, &preflights);
     if let Some(problem) = problem {
         return Err(RenderError::InvalidWorkflow(format!("{problem}:{id}")));
     }
@@ -281,7 +273,7 @@ fn validate_mbx_lifecycle(id: &str, job: &Job) -> Result<(), RenderError> {
     let version = with
         .get("version")
         .ok_or_else(|| RenderError::InvalidWorkflow(format!("mbx_version_missing:{id}")))?;
-    if !same(
+    if !same_unconditioned(
         &job.steps[action_at],
         &mbx_install_action_step(uses, version, env.clone())?,
     ) {
@@ -296,7 +288,7 @@ fn validate_mbx_lifecycle(id: &str, job: &Job) -> Result<(), RenderError> {
     };
     let rust = crate::action_mbx_shell::script_rust_toolchain(run)
         .ok_or_else(|| RenderError::InvalidWorkflow(format!("mbx_ready_check_mismatch:{id}")))?;
-    if !same(
+    if !same_unconditioned(
         &job.steps[ready_at],
         &mbx_version_check_step(version, rust, env.clone())?,
     ) {
@@ -306,13 +298,23 @@ fn validate_mbx_lifecycle(id: &str, job: &Job) -> Result<(), RenderError> {
     }
     if let Some(&preflight_at) = preflights.first()
         && (preflight_at >= action_at
-            || !same(
+            || !same_unconditioned(
                 &job.steps[preflight_at],
                 &canonical_mbx_preflight_step(version, rust, env)?,
             ))
     {
         return Err(RenderError::InvalidWorkflow(format!(
             "mbx_preflight_mismatch:{id}"
+        )));
+    }
+    let shared = &job.steps[action_at].condition;
+    if job.steps[ready_at].condition != *shared
+        || preflights
+            .first()
+            .is_some_and(|&at| job.steps[at].condition != *shared)
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "mbx_lifecycle_condition_split:{id}"
         )));
     }
     let consumer_before_ready = job.steps.iter().take(ready_at).any(|step| {
@@ -331,6 +333,27 @@ fn validate_mbx_lifecycle(id: &str, job: &Job) -> Result<(), RenderError> {
 /// Display names never carry authority: compare everything else.
 fn same(actual: &Step, expected: &Step) -> bool {
     actual.parallel == expected.parallel && crate::cache_p08::same_step_semantics(actual, expected)
+}
+
+/// Like [`same`], but admits one condition the caller checks is shared by
+/// the whole trio (the Cache seed skips the trio with the rest of its work).
+fn same_unconditioned(actual: &Step, expected: &Step) -> bool {
+    let mut actual = actual.clone();
+    actual.condition.clone_from(&expected.condition);
+    same(&actual, expected)
+}
+
+/// The first count or order rule a lifecycle breaks, if any.
+fn count_problem(actions: &[usize], ready: &[usize], preflights: &[usize]) -> Option<&'static str> {
+    match (actions, ready, preflights) {
+        ([], _, _) => Some("mbx_lifecycle_without_action"),
+        ([_, _, ..], _, _) => Some("mbx_action_duplicated"),
+        (_, [], _) => Some("mbx_ready_check_missing"),
+        (_, [_, _, ..], _) => Some("mbx_ready_check_duplicated"),
+        (_, _, [_, _, ..]) => Some("mbx_preflight_duplicated"),
+        ([action], [check], _) if action >= check => Some("mbx_ready_check_order"),
+        _ => None,
+    }
 }
 
 fn role_indices(job: &Job, role: StepRole) -> Vec<usize> {

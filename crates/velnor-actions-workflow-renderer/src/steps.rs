@@ -21,9 +21,11 @@ pub(crate) use crate::cache_steps::tools_cache_step;
 pub use crate::cache_steps::{
     CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, MBX_BACKEND,
     MBX_INSTALL_NAME, MBX_PREFLIGHT_NAME, MBX_VERSION_CHECK_NAME, NEVER_ARCHIVE_MARKERS,
-    TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH, TOOLS_CACHE_PATHS, TOOLS_RESTORE_ACTION_USES,
-    TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step,
-    check_cache_step_order, check_mbx_gating, is_never_archive_path, mbx_steps_for_driver,
+    SeedCacheUse, TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH, TOOLS_CACHE_PATHS,
+    TOOLS_RESTORE_ACTION_USES, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME,
+    TOOLS_SAVE_USES, cache_action_step, check_cache_step_order, check_mbx_gating,
+    is_never_archive_path, mbx_steps_for_driver, seed_cache_step, seed_path_input,
+    validate_seed_root,
 };
 pub use crate::parallel_target_seed::seed_parallel_targets_step;
 pub(crate) use crate::steps_shell::action_owned_mbx_shell_step;

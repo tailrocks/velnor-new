@@ -99,6 +99,9 @@ jobs:
       qualification_cache_directives: ${{ steps.plan.outputs.qualification_cache_directives }}
       plan_attempt: ${{ github.run_attempt }}
       cache_trust: ${{ steps.cache-keys.outputs.trust }}
+      rsdeps_exact_0: ${{ steps.rsdeps-lookup-0.outputs.cache-hit }}
+      rsdeps_key_0: ${{ steps.cache-keys.outputs.rsdeps_key_0 }}
+      rsdeps_restore_keys_0: ${{ steps.cache-keys.outputs.rsdeps_restore_keys_0 }}
       sources_key: ${{ steps.cache-keys.outputs.sources_key }}
       sources_restore_keys: ${{ steps.cache-keys.outputs.sources_restore_keys }}
     steps:
@@ -136,9 +139,19 @@ jobs:
       - name: Compute cache keys
         id: cache-keys
         env:
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           VELNOR_DEFAULT_REF: ${{ format('refs/heads/{0}', github.event.repository.default_branch) }}
           VELNOR_PR_HEAD_FORK: ${{ github.event.pull_request.head.repo.fork }}
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; elif [ \"${GITHUB_EVENT_NAME:-}\" = pull_request ] && [ \"${VELNOR_PR_HEAD_FORK:-}\" = false ]; then trust=pr; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; if [ \"$trust\" = pr ]; then key=\"velnor-v2-sources-pr-$compat-$snap\"; else key=\"$trusted$snap\"; fi; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; if [ \"$trust\" = pr ]; then printf '\\''%s\\n'\\'' \"$trusted$snap\" >> \"$GITHUB_OUTPUT\"; fi; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; d=\"$RUNNER_TEMP/velnor/cache-keys\"; rm -rf \"$d\"; mkdir -p \"$d\"; s256() { sha256sum \"$1\" > \"$d/sum\"; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in '\\'''\\''|*[!0-9a-f]*) printf '\\''%s\\n'\\'' '\\''sha256sum returned no digest'\\'' >&2; exit 1 ;; esac; [ \"${#h}\" -eq 64 ] || exit 1; }; uname -s > \"$d/platform\"; uname -m >> \"$d/platform\"; default_ref=\"${VELNOR_DEFAULT_REF:-}\"; trust=none; if [ \"${GITHUB_EVENT_NAME:-}\" = push ] && [ -n \"${default_ref#refs/heads/}\" ] && [ \"${GITHUB_REF:-}\" = \"$default_ref\" ] && [ \"${GITHUB_REF_PROTECTED:-}\" = true ]; then trust=trusted; elif [ \"${GITHUB_EVENT_NAME:-}\" = pull_request ] && [ \"${VELNOR_PR_HEAD_FORK:-}\" = false ]; then trust=pr; fi; check_key() { [ \"${#1}\" -le 512 ] || { printf '\\''cache key exceeds 512 bytes: %s\\n'\\'' \"$1\" >&2; exit 1; }; }; printf '\\''%s\\n'\\'' \"family=sources\" \"schema=2\" \"$RUNNER_TEMP/velnor/cargo/registry/index\" \"$RUNNER_TEMP/velnor/cargo/registry/cache\" \"$RUNNER_TEMP/velnor/cargo/git/db\" > \"$d/sources-compat\"; cat \"$d/platform\" >> \"$d/sources-compat\"; printf '\\''%s\\n'\\'' \"$RUNNER_TEMP/velnor/cargo\" >> \"$d/sources-compat\"; s256 \"$d/sources-compat\"; compat=\"s256-$h\"; : > \"$d/sources-locks\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''%s\\t%s\\n'\\'' \".\" \"$h\" >> \"$d/sources-locks\"; LC_ALL=C sort \"$d/sources-locks\" > \"$d/sources-snapshot\"; s256 \"$d/sources-snapshot\"; snap=\"s256-$h\"; trusted=\"velnor-v2-sources-trusted-$compat-\"; if [ \"$trust\" = pr ]; then key=\"velnor-v2-sources-pr-$compat-$snap\"; else key=\"$trusted$snap\"; fi; check_key \"$key\"; save=false; [ \"$trust\" = none ] || save=true; printf '\\''%s\\n'\\'' \"sources_key=$key\" \"sources_save=$save\" \"sources_snapshot=$snap\" '\\''sources_restore_keys<<VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; if [ \"$trust\" = pr ]; then printf '\\''%s\\n'\\'' \"$trusted$snap\" >> \"$GITHUB_OUTPUT\"; fi; printf '\\''%s\\n'\\'' \"$trusted\" '\\''VELNOR_CACHE_KEYS_EOF'\\'' >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: cache trust=%s sources key=%s save=%s\\n'\\'' \"$trust\" \"$key\" \"$save\"; mkdir -p \"$d/rust-empty\"; (cd \"$d/rust-empty\" && mise --no-config --no-env --no-hooks exec rust@1.99.1 -- rustc -vV) > \"$d/rustc-vv\"; printf '\\''%s\\n'\\'' \"family=rsdeps\" \"schema=2\" \"target/debug\" \"target/velnor-clippy/debug\" \"target/velnor-doc/debug\" > \"$d/rsdeps-0-compat\"; cat \"$d/platform\" >> \"$d/rsdeps-0-compat\"; printf '\\''%s\\n'\\'' \"image_os=${ImageOS:-}\" \"workspace=$GITHUB_WORKSPACE\" \"cargo_home=$RUNNER_TEMP/velnor/cargo\" \"root=\" >> \"$d/rsdeps-0-compat\"; printf '\\''RUSTFLAGS=%s\\nRUSTDOCFLAGS=%s\\nCARGO_ENCODED_RUSTFLAGS=%s\\nCARGO_BUILD_RUSTFLAGS=%s\\n'\\'' \"${RUSTFLAGS:-}\" \"${RUSTDOCFLAGS:-}\" \"${CARGO_ENCODED_RUSTFLAGS:-}\" \"${CARGO_BUILD_RUSTFLAGS:-}\" >> \"$d/rsdeps-0-compat\"; cat \"$d/rustc-vv\" >> \"$d/rsdeps-0-compat\"; s256 \"$d/rsdeps-0-compat\"; rc=\"s256-$h\"; s256 \"$GITHUB_WORKSPACE/Cargo.lock\"; printf '\\''lock\\t%s\\n'\\'' \"$h\" > \"$d/rsdeps-0-depset\"; git -C \"$GITHUB_WORKSPACE\" ls-files -s -- '\\'':(glob)**/Cargo.toml'\\'' '\\'':(glob).cargo/config'\\'' '\\'':(glob).cargo/config.toml'\\'' >> \"$d/rsdeps-0-depset\"; python3 -I -c '\\''exec(\"import json, sys\\npath, root, nested = sys.argv[1], sys.argv[2], sys.argv[3:]\\nwith open(path, encoding=\\\"utf-8\\\") as handle:\\n    handle.readline()\\n    tasks = json.loads(handle.read())[\\\"tasks\\\"]\\ndef owned(manifest):\\n    if root and not manifest.startswith(root + \\\"/\\\"):\\n        return False\\n    return not any(manifest.startswith(other + \\\"/\\\") for other in nested)\\nselected = {}\\nfor task_id, record in sorted(tasks.items()):\\n    argv = record[\\\"argv\\\"]\\n    if task_id.split(\\\"/\\\")[-2] not in (\\\"build\\\", \\\"clippy\\\", \\\"doc\\\") or \\\"--manifest-path\\\" not in argv:\\n        continue\\n    at = argv.index(\\\"--manifest-path\\\") + 1\\n    if at < len(argv) and owned(argv[at]):\\n        selected[task_id] = {\\\"argv\\\": argv, \\\"env\\\": record[\\\"env\\\"]}\\nprint(json.dumps(selected, sort_keys=True, separators=(\\\",\\\", \\\":\\\")))\\n\")'\\'' \"$GITHUB_WORKSPACE/.github/velnor/task-execution-manifest-v1.json\" \"\" >> \"$d/rsdeps-0-depset\"; s256 \"$d/rsdeps-0-depset\"; p=\"velnor-v2-rsdeps-trusted-re3b0c44298fc-$rc-\"; k=\"${p}s256-$h\"; check_key \"$k\"; printf '\\''%s\\n'\\'' \"rsdeps_key_0=$k\" \"rsdeps_restore_keys_0=$p\" >> \"$GITHUB_OUTPUT\"; printf '\\''velnor: rsdeps key=%s\\n'\\'' \"$k\"; printf '\\''%s\\n'\\'' \"trust=$trust\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Look up dependency seed
+        id: rsdeps-lookup-0
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{steps.cache-keys.outputs.rsdeps_key_0}}
+          lookup-only: "true"
+          path: "target/debug\ntarget/velnor-clippy/debug\ntarget/velnor-doc/debug"
       - name: Restore Cargo sources
         id: sources-restore
         if: github.event_name != 'workflow_dispatch'
@@ -351,6 +364,13 @@ jobs:
           key: ${{needs.plan.outputs.sources_key}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: ${{needs.plan.outputs.sources_restore_keys}}
+      - name: Restore dependency seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{needs.plan.outputs.rsdeps_key_0}}
+          path: "target/debug\ntarget/velnor-clippy/debug\ntarget/velnor-doc/debug"
+          restore-keys: ${{needs.plan.outputs.rsdeps_restore_keys_0}}
       - name: Verify Rust before MBX action
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -500,6 +520,13 @@ jobs:
           key: ${{needs.plan.outputs.sources_key}}
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: ${{needs.plan.outputs.sources_restore_keys}}
+      - name: Restore dependency seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: ${{needs.plan.outputs.rsdeps_key_0}}
+          path: "target/debug\ntarget/velnor-clippy/debug\ntarget/velnor-doc/debug"
+          restore-keys: ${{needs.plan.outputs.rsdeps_restore_keys_0}}
       - name: Verify Rust before MBX action
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo

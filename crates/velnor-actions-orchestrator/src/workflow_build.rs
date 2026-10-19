@@ -46,6 +46,7 @@ struct PreparedWorkflow {
     acquire: Option<Step>,
     format: Option<Step>,
     needs: PlanJobToolNeeds,
+    keys: crate::cache_keys::CacheKeyInputs,
 }
 
 pub(crate) fn build_workflow_for_consumer_release(
@@ -53,7 +54,7 @@ pub(crate) fn build_workflow_for_consumer_release(
 ) -> Result<WorkflowPlan, OrchestratorError> {
     let mut prepared = prepare_workflow(input)?;
     let plan = build_workflow_plan(input, &mut prepared)?;
-    let jobs = build_workflow_jobs(input, &mut prepared, plan)?;
+    let (jobs, seed) = build_workflow_jobs(input, &mut prepared, plan)?;
     let mut ir = workflow_ir(input.config, input.branch, jobs, prepared.policy);
     let context = workflow_context::render_context(workflow_context::RenderContextInputs {
         config: input.config,
@@ -90,6 +91,7 @@ pub(crate) fn build_workflow_for_consumer_release(
         support: prepared.support,
         context,
         actionlint,
+        seed,
     })
 }
 
@@ -119,6 +121,15 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         WorkflowPolicy::VelnorRepositoryV1 => None,
     };
     let format = wire_w1::workspace_format_step(input.discovery, catalog)?;
+    let keys = crate::cache_keys::CacheKeyInputs {
+        fetch_roots: input.fetch_roots.to_vec(),
+        tofu_roots: crate::tofu_cache::tofu_cache_roots(input.discovery)?,
+        seed: crate::cache_keys::SeedKeyInputs {
+            roots: crate::cache_seed::seed_roots(input.discovery, input.fetch_roots)?,
+            workspace_roots: input.fetch_roots.to_vec(),
+            helper_build: None,
+        },
+    };
     let rust = match (plan_uses_rust(input.discovery, policy), format.is_some()) {
         (false, false) => PlanRustNeed::None,
         (_, true) => PlanRustNeed::CompilerAndComponents,
@@ -141,6 +152,7 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         acquire,
         format,
         needs,
+        keys,
     })
 }
 
@@ -153,7 +165,7 @@ fn build_workflow_plan(
         prepared.acquire.clone(),
         &prepared.catalog,
         prepared.needs,
-        input.fetch_roots,
+        &prepared.keys,
         input.discovery,
     )?;
     if let Some(format) = prepared.format.take() {
@@ -169,7 +181,7 @@ fn build_workflow_jobs(
     input: &WorkflowBuildInput<'_>,
     prepared: &mut PreparedWorkflow,
     plan: Job,
-) -> Result<BTreeMap<String, Job>, OrchestratorError> {
+) -> Result<(BTreeMap<String, Job>, crate::cache_seed::SeedSpec), OrchestratorError> {
     let mut jobs = BTreeMap::new();
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
     let built = crate::crate_jobs::build_for_workflow(
@@ -181,6 +193,17 @@ fn build_workflow_jobs(
         prepared.acquire.as_ref(),
         &prepared.report_helper_version,
     )?;
+    let seed = crate::cache_seed::seed_spec(&crate::cache_seed::SeedSpecInputs {
+        catalog: &prepared.catalog,
+        config: input.config,
+        label: input.label,
+        keys: &prepared.keys,
+        built: &built,
+        acquire: prepared.acquire.as_ref(),
+        helper_version: &prepared.report_helper_version,
+        generator_version: prepared.generator_version,
+        default_branch: input.branch,
+    })?;
     let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.jobs {
         jobs.insert(id, job);
@@ -211,5 +234,5 @@ fn build_workflow_jobs(
         &prepared.catalog,
     )?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
-    Ok(jobs)
+    Ok((jobs, seed))
 }

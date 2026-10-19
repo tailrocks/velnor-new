@@ -70,7 +70,7 @@ pub(super) fn workflow_env(
 }
 
 /// Remove job values already inherited unchanged from workflow scope.
-pub(super) fn exclude_inherited(
+pub(crate) fn exclude_inherited(
     job: &BTreeMap<String, String>,
     workflow: &BTreeMap<String, String>,
 ) -> BTreeMap<String, String> {

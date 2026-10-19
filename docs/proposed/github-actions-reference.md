@@ -134,7 +134,7 @@ change; Velnor emits no new aliases into composite `action.yml` files.
     - `none`: disable all cache reads and writes.
     - Dynamic expressions (for example, `${{ github.event_name == 'pull_request' && 'read' || 'write' }}`).
 - **Velnor Implementation**:
-  - `velnor-actions-contract` defines `CacheMode` (`Read`, `Write`, `WriteOnly`, `None`, `Expression(String)`) and optional `cache_mode: Option<CacheMode>` on both `WorkflowIr` and `Job`, with `CacheMode::for_pull_request_policy(PullRequestCachePolicy)` mapping `PullRequestCachePolicy::ReadOnly` to `CacheMode::Expression("${{ github.event_name == 'pull_request' && 'read' || 'write' }}")` and `PullRequestCachePolicy::SharedSeed` to `CacheMode::Write`.
+  - `velnor-actions-contract` defines `CacheMode` (`Read`, `Write`, `WriteOnly`, `None`, `Expression(String)`) and optional `cache_mode: Option<CacheMode>` on both `WorkflowIr` and `Job`.
   - `velnor-actions-workflow-renderer` emits top-level and job-level `cache-mode:` when `cache_mode` is `Some(...)` and omits it when `None`.
   - `velnor-actions-actionlint` tracks `native_cache_mode` in `ActionlintCapabilities` (`supports_native_cache_mode()`, `qualify_native_cache_mode()`, `check_native_cache_mode()`), defaulting to `false` for pinned `actionlint` `v1.7.12` until upstream `actionlint` recognizes `cache-mode`.
 

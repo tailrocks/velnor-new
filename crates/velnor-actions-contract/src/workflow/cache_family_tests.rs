@@ -3,7 +3,7 @@ use super::*;
 /// Pinned `(schema, paths)` digests. Editing a family's paths without a
 /// schema bump changes the digest and fails here; bump the schema, then
 /// update the pin.
-const PINS: [(CacheFamily, &str); 2] = [
+const PINS: [(CacheFamily, &str); 4] = [
     (
         CacheFamily::Sources,
         "fc961241ea3626cce35dbd7f53c4634c97edca039bf4b911bdbe1ce545db5ce9",
@@ -11,6 +11,14 @@ const PINS: [(CacheFamily, &str); 2] = [
     (
         CacheFamily::TofuProviders,
         "c6c86468be7d44a4fcd95ac816c3eb3f633aea470ad28c6b2fd5713a8cd4d6e9",
+    ),
+    (
+        CacheFamily::Rsdeps,
+        "708f240869a7cc80d28ed561a3bede05bacdf5aee0ee35146d75e3bb943f5bb5",
+    ),
+    (
+        CacheFamily::RsdepsHelper,
+        "f6eb7dbcc6cb70eb6ed64ea98c84c9f890c46e92dae196600819def8ff1ab7c7",
     ),
 ];
 
@@ -47,6 +55,21 @@ fn sources_spec_is_the_owned_cargo_home_subset() {
 }
 
 #[test]
+fn rsdeps_specs_are_root_prefixed_workspace_profiles() {
+    let spec = CacheFamily::Rsdeps.spec();
+    assert!(spec.is_per_root() && spec.root_scoped);
+    assert_eq!(
+        spec.path_input(Some("")),
+        "target/debug\ntarget/velnor-clippy/debug\ntarget/velnor-doc/debug"
+    );
+    assert_eq!(
+        CacheFamily::RsdepsHelper.spec().path_input(Some("nested/")),
+        "nested/target/release"
+    );
+    assert_eq!(CacheFamily::Rsdeps.key_prefix(), "velnor-v2-rsdeps-");
+}
+
+#[test]
 fn tofu_spec_is_per_root_under_the_plugin_cache_base() {
     let spec = CacheFamily::TofuProviders.spec();
     assert!(spec.is_per_root());
@@ -74,6 +97,14 @@ fn every_family_key_fits_the_github_cap() {
         18 + 7 + 1 + 69 + 1 + 69
     );
     assert_eq!(CacheFamily::for_key("velnor-v1-sources-x"), None);
+    assert_eq!(
+        CacheFamily::for_key("velnor-v2-rsdeps-helper-trusted-r0-x"),
+        Some(CacheFamily::RsdepsHelper)
+    );
+    assert_eq!(
+        CacheFamily::Rsdeps.max_key_bytes(),
+        17 + 7 + 1 + 14 + 69 + 1 + 69
+    );
 }
 
 #[test]
@@ -97,5 +128,5 @@ fn expressions_name_the_typed_step_ids() {
         tofu_providers_key_plan_expr(0),
         "${{needs.plan.outputs.tofu_providers_key_0}}"
     );
-    assert!(cache_output_reserve_utf16_bytes(2) > cache_output_reserve_utf16_bytes(0));
+    assert!(cache_output_reserve_utf16_bytes(2, 0) > cache_output_reserve_utf16_bytes(0, 0));
 }

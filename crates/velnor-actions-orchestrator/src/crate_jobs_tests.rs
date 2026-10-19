@@ -93,6 +93,7 @@ fn skips_testless_and_workspace_groups() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -122,6 +123,7 @@ fn member_binding_agrees_with_built_jobs() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -213,6 +215,7 @@ fn drivers_follow_per_crate_selection() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -237,6 +240,7 @@ fn empty_groups_build_no_jobs() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -267,6 +271,7 @@ fn acquire_stages_before_report_wrappers() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -316,6 +321,7 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })

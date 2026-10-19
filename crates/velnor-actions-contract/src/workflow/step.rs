@@ -179,8 +179,19 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         StepId::TofuProviders => {
             matches!(kind, StepKind::Action { uses, .. } if uses == TOFU_PROVIDER_ADMISSION_USES)
         }
-        StepId::CacheKeys | StepId::SourcesFetch => {
-            matches!(kind, StepKind::Shell { .. })
+        StepId::CacheKeys
+        | StepId::SourcesFetch
+        | StepId::SeedBuild
+        | StepId::SeedClippy
+        | StepId::SeedDoc
+        | StepId::SeedHelper
+        | StepId::SeedTrim => matches!(kind, StepKind::Shell { .. }),
+        StepId::RsdepsLookup(_) | StepId::SeedLookup | StepId::SeedHelperLookup => {
+            id.in_range()
+                && matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/cache/restore@"))
+        }
+        StepId::SeedSave | StepId::SeedHelperSave => {
+            matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/cache/save@"))
         }
         StepId::SourcesRestore => {
             matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/cache/restore@"))

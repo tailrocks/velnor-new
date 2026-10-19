@@ -102,42 +102,22 @@ rustup component add --toolchain <exact>-<triple> clippy rustfmt`):
 the pinned toolchain's own rustup, writing only Velnor-owned tool homes.
 
 For an MBX profile, a Rust-only preflight first verifies the exact selected
-Rustup shim and toolchain. The pinned v1.6 `jdx/mr-boxington-action` then
-installs and owns production MBX at exact version `1.21.1`, with
-`github-cache-mode: objects`. Velnor keeps the action's default compiler
-identity key and binds cache generation to the action SHA, actual runner environment,
-GitHub job ID,
-MBX version, and `MBX_SHARE_OUT_DIR=0` / `MBX_GC_AUTO=0` policy. The action's
-stable logical object path is `$RUNNER_TEMP/velnor/mbx`; runner job namespaces
-provide physical isolation. The workflow does not install MBX through Mise.
-A following guard checks both `mbx --version` and `mbx cache dir` through the
-selected Rust Mise environment, requiring the exact version and the expected
-action-owned store before the build. Automatic GC stays off while task results
-are in flight. After the final foreground workspace consumer and report step,
-a cleanup guarded by the successful version/store check runs `mbx clean`; this
-removes managed workspace outputs while leaving the action-owned object store
-and receipts available to the action's post export.
-
-This generation does not yet bind the canonical `platform_id` from the exact
-runner label, runtime `ImageOS`/`ImageVersion`, and execution target required by
-the cache contract. Current MBX cache hits are therefore unqualified across
-image changes; a bounded runtime identity bridge and fail-cold behavior are
-still required before those hits can be treated as compatible.
-
-In ordinary task workflows, `ACTIONS_CACHE_MODE` is `write` only on a
-protected default-branch push and `read` otherwise. The separate authorized
-`workflow_dispatch` qualification job is a run-bound writer exception; its
-permissions, explicit save input, and run/attempt/source-SHA cache generation
-are specified in the cache contract. The action owns the ordinary MBX
-object-store post step. Preflight exports the validated runner-private
-`MBX_CACHE_DIR` through `GITHUB_ENV`; the action step receives the same
-runner-derived value explicitly so its main and post phases use that store.
-Velnor does not transport the live object store.
-Cargo source archives and qualified Mise task artifacts remain separate
-owners. Run `37114238559` is historical evidence for the retired read-only
-workaround, not qualification. Protected-writer saves, fresh-reader restores,
-success/failure post cleanup, cold-run parity, and disk usage still require
-measurement against the exact generated workflow and runner.
+Rustup shim and toolchain. The pinned `jdx/mr-boxington-action` then installs
+MBX at the exact resolved version, install-only: `backend: local` and
+`cache-links: "false"`, with no GitHub cache input. The store's stable logical
+path is `$RUNNER_TEMP/velnor/mbx`; runner job namespaces provide physical
+isolation and nothing transports it between jobs. The workflow does not install
+MBX through Mise. A following guard checks `mbx --version`, `mbx cache dir`,
+and that `mbx-rustc <rustc> -vV` equals `rustc -vV` through the selected Rust
+Mise environment before the build. Every MBX job carries `MBX_GC_AUTO=0`,
+`MBX_SHARE_OUT_DIR=0`, `MBX_CC=0`, `MBX_BUILD_SCRIPT_EXECUTION=0`, and
+`MBX_TARGET_VIEWS=0`. Compiled dependencies reach crate jobs only through the
+read-only dependency seed (`rsdeps`) the Cache seed workflow writes. The
+separately authorized `workflow_dispatch` qualification harness
+(`qualification.yml`) keeps its own run-bound MBX objects writer, specified in
+the cache contract.
+Cargo source archives, dependency seeds, and qualified Mise task artifacts
+remain separate owners.
 
 For a Cargo-profile task job, the MBX action and native MBX installation are
 absent. A separate plan-job pre-seed may select the native MBX owner when it

@@ -22,6 +22,7 @@ fn one_job_per_crate_builds_first_then_runs_checks_in_parallel() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -86,6 +87,7 @@ fn nested_workspace_lanes_live_below_that_workspace_target() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })

@@ -31,6 +31,12 @@ const SOURCES_PATHS: [&str; 3] = [
     "${{ runner.temp }}/velnor/cargo/git/db",
 ];
 const TOFU_PROVIDERS_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/tofu-cache/{root}"];
+const RSDEPS_PATHS: [&str; 3] = [
+    "{root}target/debug",
+    "{root}target/velnor-clippy/debug",
+    "{root}target/velnor-doc/debug",
+];
+const RSDEPS_HELPER_PATHS: [&str; 1] = ["{root}target/release"];
 
 /// One runtime-keyed cache family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -39,6 +45,11 @@ pub enum CacheFamily {
     Sources,
     /// One `OpenTofu` root's job-private provider plugin cache.
     TofuProviders,
+    /// One Cargo workspace root's dependency seed: the lane profile
+    /// directories trimmed to registry and Git dependency units.
+    Rsdeps,
+    /// The bootstrap Plan helper build's release dependency seed.
+    RsdepsHelper,
 }
 
 /// Static identity of one family: key layer, schema, and archive paths.
@@ -50,22 +61,43 @@ pub struct FamilySpec {
     pub schema: u32,
     /// Archive paths in expression form, in declared order.
     pub paths: &'static [&'static str],
+    /// Keys carry an `r<root12>-` scope segment after the trust.
+    pub root_scoped: bool,
 }
 
 const SOURCES: FamilySpec = FamilySpec {
     layer: "sources",
     schema: 2,
     paths: &SOURCES_PATHS,
+    root_scoped: false,
 };
 const TOFU_PROVIDERS: FamilySpec = FamilySpec {
     layer: "tofu-providers",
     schema: 2,
     paths: &TOFU_PROVIDERS_PATHS,
+    root_scoped: false,
+};
+const RSDEPS: FamilySpec = FamilySpec {
+    layer: "rsdeps",
+    schema: 2,
+    paths: &RSDEPS_PATHS,
+    root_scoped: true,
+};
+const RSDEPS_HELPER: FamilySpec = FamilySpec {
+    layer: "rsdeps-helper",
+    schema: 2,
+    paths: &RSDEPS_HELPER_PATHS,
+    root_scoped: true,
 };
 
 impl CacheFamily {
     /// Every family, in key-prefix order.
-    pub const ALL: [Self; 2] = [Self::Sources, Self::TofuProviders];
+    pub const ALL: [Self; 4] = [
+        Self::Sources,
+        Self::TofuProviders,
+        Self::Rsdeps,
+        Self::RsdepsHelper,
+    ];
 
     /// Static family identity.
     #[must_use]
@@ -73,6 +105,8 @@ impl CacheFamily {
         match self {
             Self::Sources => &SOURCES,
             Self::TofuProviders => &TOFU_PROVIDERS,
+            Self::Rsdeps => &RSDEPS,
+            Self::RsdepsHelper => &RSDEPS_HELPER,
         }
     }
 
@@ -83,12 +117,17 @@ impl CacheFamily {
         format!("velnor-v{}-{}-", spec.schema, spec.layer)
     }
 
-    /// Family owning `key`, by exact prefix.
+    /// Family owning `key`, by the longest matching prefix.
+    ///
+    /// `velnor-v2-rsdeps-helper-` extends `velnor-v2-rsdeps-`; the longest
+    /// prefix wins, and an `rsdeps` key never starts with `helper-` (its
+    /// next segment is a trust value).
     #[must_use]
     pub fn for_key(key: &str) -> Option<Self> {
         Self::ALL
             .into_iter()
-            .find(|family| key.starts_with(&family.key_prefix()))
+            .filter(|family| key.starts_with(&family.key_prefix()))
+            .max_by_key(|family| family.key_prefix().len())
     }
 
     /// Longest key the runtime step can emit for this family.
@@ -99,7 +138,12 @@ impl CacheFamily {
             .map(|trust| trust.as_str().len())
             .max()
             .unwrap_or(0);
-        self.key_prefix().len() + trust + 1 + S256_DIGEST_BYTES + 1 + S256_DIGEST_BYTES
+        let scope = if self.spec().root_scoped {
+            1 + ROOT_SCOPE_HEX + 1
+        } else {
+            0
+        };
+        self.key_prefix().len() + trust + 1 + scope + S256_DIGEST_BYTES + 1 + S256_DIGEST_BYTES
     }
 
     /// Fail generation when this family's longest key exceeds GitHub's cap.
@@ -162,6 +206,9 @@ impl FamilySpec {
 #[must_use]
 pub fn spec_pin_digest(spec: &FamilySpec) -> String {
     let mut bytes = format!("layer={}\nschema={}\n", spec.layer, spec.schema);
+    if spec.root_scoped {
+        bytes.push_str("root_scoped\n");
+    }
     for path in spec.paths {
         bytes.push_str(path);
         bytes.push('\n');
@@ -194,6 +241,9 @@ impl CacheTrust {
         }
     }
 }
+
+/// Hex characters of the `r<root12>` scope segment of root-scoped keys.
+pub const ROOT_SCOPE_HEX: usize = 12;
 
 /// `s256-` plus 64 lowercase hex characters.
 pub const S256_DIGEST_BYTES: usize = 69;
@@ -259,35 +309,9 @@ pub fn tofu_providers_key_plan_expr(ordinal: usize) -> String {
     )
 }
 
-/// True for a Plan output promoted from the key step.
-#[must_use]
-pub fn is_plan_cache_output(name: &str) -> bool {
-    PLAN_CACHE_OUTPUTS.iter().any(|(output, _)| *output == name)
-        || name
-            .strip_prefix(TOFU_PROVIDERS_KEY_OUTPUT_PREFIX)
-            .is_some_and(|ordinal| {
-                !ordinal.is_empty() && ordinal.bytes().all(|b| b.is_ascii_digit())
-            })
-}
-
-/// UTF-16 bytes reserved out of the Plan job output budget for cache outputs.
-pub const PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES: usize = 64 * 1024;
-
-/// Conservative UTF-16 bytes the key-step outputs add to the Plan job outputs.
-///
-/// Generation fails when this exceeds [`PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES`],
-/// which the plan step keeps free, so cache keys never push the promoted
-/// outputs past GitHub's per-job limit.
-#[must_use]
-pub fn cache_output_reserve_utf16_bytes(tofu_roots: usize) -> usize {
-    let record = |name: &str, value: usize| (name.len() + 1 + value + 1) * 2;
-    let sources = CacheFamily::Sources.max_key_bytes();
-    let tofu = CacheFamily::TofuProviders.max_key_bytes();
-    record(PLAN_CACHE_TRUST_OUTPUT, 7)
-        + record(SOURCES_KEY_OUTPUT, sources)
-        + record(SOURCES_RESTORE_KEYS_OUTPUT, 2 * sources + 1)
-        + tofu_roots * record(&tofu_providers_key_output(tofu_roots), tofu)
-}
+#[path = "cache_family_seed.rs"]
+mod seed;
+pub use seed::*;
 
 #[cfg(test)]
 #[path = "cache_family_tests.rs"]

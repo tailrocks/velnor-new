@@ -90,6 +90,7 @@ fn pure_tofu_group_renders_without_rust_setup() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -200,6 +201,7 @@ fn build_staged(tasks: Vec<ProposedTask>, max_parallel_jobs: u32) -> CrateBuild 
         max_parallel_jobs,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
+        seed_roots: &[],
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })

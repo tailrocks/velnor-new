@@ -84,17 +84,16 @@ pub(crate) fn plan_job(
     acquire: Option<Step>,
     catalog: &ToolCatalog,
     needs: PlanJobToolNeeds,
-    fetch_roots: &[String],
-    tofu_roots: &[String],
+    keys: &crate::cache_keys::CacheKeyInputs,
 ) -> Result<Job, OrchestratorError> {
+    let fetch_roots = keys.fetch_roots.as_slice();
     let mut steps = vec![checkout_history_action()?];
     let prepare = prepare_pinned_tools_step(catalog, plan_tools(needs), needs.rust.has_compiler())?;
     steps.push(prepare);
     if needs.rust.has_components() {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
-    let cached =
-        crate::workflow_jobs_cache::cache_steps_for_plan(catalog, fetch_roots, tofu_roots)?;
+    let cached = crate::workflow_jobs_cache::cache_steps_for_plan(catalog, keys)?;
     steps.extend(cached.restore);
     let mut source_steps = fetch_steps_for_plan(catalog, fetch_roots)?;
     crate::workflow_jobs_cache::mark_writer_gate(&mut source_steps);

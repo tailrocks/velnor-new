@@ -19,6 +19,10 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use crate::OrchestratorError;
 
+#[path = "cache_keys_seed.rs"]
+mod seed;
+pub(crate) use seed::{SeedKeyInputs, nested_roots};
+
 /// Default-branch ref, compared against `GITHUB_REF` for trusted pushes.
 pub(crate) const DEFAULT_REF_ENV: &str = "VELNOR_DEFAULT_REF";
 /// Pull-request head fork flag (`false` only for same-repository PRs).
@@ -29,6 +33,20 @@ const HEAD_FORK_EXPR: &str = "${{ github.event.pull_request.head.repo.fork }}";
 const OUTPUT_DELIMITER: &str = "VELNOR_CACHE_KEYS_EOF";
 const MAX_KEY: usize = velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
 
+/// Every root the key step computes keys for.
+///
+/// The Plan job and the Cache seed workflow render the step from the same
+/// inputs (the seed clears `tofu_roots`: it installs no `OpenTofu`).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct CacheKeyInputs {
+    /// Lockful Cargo workspace roots (sources snapshot).
+    pub(crate) fetch_roots: Vec<String>,
+    /// `OpenTofu` roots (provider caches).
+    pub(crate) tofu_roots: Vec<String>,
+    /// Dependency seed roots and the optional helper build.
+    pub(crate) seed: SeedKeyInputs,
+}
+
 /// Build the key step, or nothing when no runtime-keyed family exists.
 /// # Errors
 ///
@@ -36,9 +54,13 @@ const MAX_KEY: usize = velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
 /// or a rejected step shape.
 pub(crate) fn cache_keys_step(
     catalog: &ToolCatalog,
-    fetch_roots: &[String],
-    tofu_roots: &[String],
+    inputs: &CacheKeyInputs,
 ) -> Result<Option<Step>, OrchestratorError> {
+    let CacheKeyInputs {
+        fetch_roots,
+        tofu_roots,
+        seed,
+    } = inputs;
     if fetch_roots.is_empty() && tofu_roots.is_empty() {
         return Ok(None);
     }
@@ -58,13 +80,24 @@ pub(crate) fn cache_keys_step(
             .map_err(contract)?;
         script.extend(tofu_commands(catalog, tofu_roots)?);
     }
-    script.push(format!(
-        "printf '%s\\n' \"{TRUST_OUTPUT}=$trust\" >> \"$GITHUB_OUTPUT\""
-    ));
-    let env = BTreeMap::from([
+    let seed_script = seed::seed_commands(catalog, seed)?;
+    let mut env = BTreeMap::from([
         (DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned()),
         (HEAD_FORK_ENV.to_owned(), HEAD_FORK_EXPR.to_owned()),
     ]);
+    if !seed_script.is_empty() {
+        // `rustc -vV` runs the Mise-installed toolchain under its owned homes.
+        let homes = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
+        env.extend(
+            homes
+                .into_iter()
+                .filter(|(key, _)| key == "MISE_CARGO_HOME" || key == "MISE_RUSTUP_HOME"),
+        );
+    }
+    script.extend(seed_script);
+    script.push(format!(
+        "printf '%s\\n' \"{TRUST_OUTPUT}=$trust\" >> \"$GITHUB_OUTPUT\""
+    ));
     let mut step = velnor_actions_workflow_renderer::shell_step(
         CACHE_KEYS_STEP_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script.join("; ")],

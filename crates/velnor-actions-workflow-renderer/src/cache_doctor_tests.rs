@@ -104,13 +104,15 @@ fn with_reader(step: Step) -> BTreeMap<String, Job> {
 }
 
 fn rejects(jobs: &BTreeMap<String, Job>, rule: &str) {
-    let err = check(jobs).expect_err(rule).to_string();
+    let err = check(jobs, super::DoctorScope::Ci)
+        .expect_err(rule)
+        .to_string();
     assert!(err.contains(rule), "{rule}: {err}");
 }
 
 #[test]
 fn doctor_accepts_the_generated_family_shapes() {
-    check(&valid()).expect("valid workflow");
+    check(&valid(), super::DoctorScope::Ci).expect("valid workflow");
 }
 
 #[test]
@@ -197,15 +199,18 @@ fn i3_rejects_sources_paths_in_another_family() {
         "${{ runner.temp }}/velnor/cargo/registry".to_owned(),
     );
     rejects(&with_reader(save), "i2_path_not_from_spec");
-    let shared = super::check_sources_isolation(&BTreeMap::from([(
-        "${{ runner.temp }}/velnor/cargo/registry".to_owned(),
-        super::Family::Tools,
-    )]))
+    let shared = super::check_disjoint(&BTreeMap::from([
+        (
+            "${{ runner.temp }}/velnor/cargo/registry".to_owned(),
+            super::Family::Tools,
+        ),
+        (
+            "${{ runner.temp }}/velnor/cargo/registry/index".to_owned(),
+            super::Family::Runtime(CacheFamily::Sources),
+        ),
+    ]))
     .expect_err("nested sources path");
-    assert!(
-        shared.to_string().contains("i3_sources_path_shared"),
-        "{shared}"
-    );
+    assert!(shared.to_string().contains("i3_path_shared"), "{shared}");
 }
 
 #[test]

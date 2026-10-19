@@ -49,4 +49,10 @@ pub(super) enum InternalOp {
     TapWriter,
     /// Isolated exact-head App-authenticated tap promotion merge.
     TapMerge,
+    /// Data-only Cache seed lane record resolution.
+    SeedTask,
+    /// Cache seed workspace member stubs.
+    SeedSkeleton,
+    /// Cache seed trim, report, and ceiling verdicts.
+    SeedTrim,
 }

@@ -2,7 +2,7 @@
 
 This document defines the generated workflow's V2 archive for pinned Mise tools, Rustup components, and
 Cargo-installed binaries. It complements the broader [cache and report contract](cache-contract.md); Cargo
-registry sources, MBX objects, target directories, and task results retain their separate owners.
+registry sources, dependency seeds, target directories, and task results retain their separate owners.
 
 ## Archive ownership
 
@@ -18,7 +18,7 @@ ${{ runner.temp }}/velnor/cargo/bin
 
 `CARGO_HOME` and `MISE_CARGO_HOME` are `${{ runner.temp }}/velnor/cargo`; `RUSTUP_HOME` and
 `MISE_RUSTUP_HOME` are `${{ runner.temp }}/velnor/rustup`. The archive does not include Cargo registry or Git
-sources, credentials, Cargo targets, MBX objects, or task artifacts. The source layer owns only Cargo's
+sources, credentials, Cargo targets or dependency seeds, MBX stores, or task artifacts. The source layer owns only Cargo's
 `registry/index`, `registry/cache`, and `git/db` paths.
 
 The generator derives the static digest from exact Mise action and binary pins, selected tool versions, Rust

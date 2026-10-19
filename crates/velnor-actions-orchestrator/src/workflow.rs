@@ -70,6 +70,8 @@ pub struct WorkflowPlan {
     pub context: RenderContext,
     /// Actionlint config input.
     pub actionlint: ActionlintConfigInput,
+    /// Cache seed workflow inputs (empty when no root is seeded).
+    pub(crate) seed: crate::cache_seed::SeedSpec,
 }
 
 /// Build the plan job with its deferred format steps attached.
@@ -82,11 +84,10 @@ fn build_plan_job(
     acquire: Option<Step>,
     catalog: &ToolCatalog,
     needs: PlanJobToolNeeds,
-    fetch_roots: &[String],
+    keys: &crate::cache_keys::CacheKeyInputs,
     discovery: &Discovery,
 ) -> Result<Job, OrchestratorError> {
-    let tofu_roots = crate::tofu_cache::tofu_cache_roots(discovery)?;
-    let mut plan = plan_job(label, acquire, catalog, needs, fetch_roots, &tofu_roots)?;
+    let mut plan = plan_job(label, acquire, catalog, needs, keys)?;
     insert_format_report_steps(
         &mut plan,
         wire_w1::workspace_format_report_steps(discovery)?,
