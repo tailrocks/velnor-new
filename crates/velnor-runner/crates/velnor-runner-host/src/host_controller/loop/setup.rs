@@ -128,7 +128,8 @@ pub(super) async fn bind_connection(
             &config.docker.endpoint,
             &config.docker.platform,
         )
-        .await
+        .await?;
+    scoped.install_job_authority_policy(config).await
 }
 
 /// Keep durable identifiers when preparation fails after acquire.
@@ -261,3 +262,7 @@ pub(super) fn connection_pat(credential: &[u8]) -> Result<&str, HostError> {
     }
     str::from_utf8(credential).map_err(|_| HostError::Keychain)
 }
+
+#[cfg(test)]
+#[path = "setup/policy_tests.rs"]
+mod policy_tests;
