@@ -119,7 +119,10 @@ fn rust_mr_boxington_option_carries_the_repo_pin_into_the_catalog() {
     let catalog = resolve_tool_catalog(dir.path(), &cfg).expect("resolve");
     assert!(catalog.rust_mr_boxington());
     assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.24.0");
-    assert_eq!(catalog.version(PinnedTool::Rust), "1.99.1");
+    // Hard decision 4: the project's `[tools] rust` record is the version authority.
+    assert_eq!(catalog.version(PinnedTool::Rust), "1.94.1");
+    assert!(catalog.is_project_declared(PinnedTool::Rust));
+    assert!(catalog.is_project_declared(PinnedTool::MrBoxington));
 }
 
 #[test]
@@ -208,20 +211,27 @@ fn rust_mr_boxington_option_matching_the_config_override_resolves_once() {
 }
 
 #[test]
-fn rust_mr_boxington_option_absent_leaves_the_catalog_unchanged() {
+fn rust_mr_boxington_option_absent_still_takes_project_versions() {
     let dir = tempfile::tempdir().expect("tempdir");
     std::fs::write(
         dir.path().join("mise.toml"),
         "[tools]\nrust = \"1.98.1\"\nmr-boxington = \"1.21.1\"\n",
     )
     .expect("write mise.toml");
+    let catalog = resolve_tool_catalog(dir.path(), &config_with(BTreeMap::new())).expect("resolve");
+    assert!(!catalog.rust_mr_boxington());
+    assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.21.1");
+    assert_eq!(catalog.version(PinnedTool::Rust), "1.98.1");
     let mut cfg = config_with(BTreeMap::new());
     cfg.tools
         .overrides
         .insert("mr-boxington".to_owned(), "1.20.0".to_owned());
-    let catalog = resolve_tool_catalog(dir.path(), &cfg).expect("resolve");
-    assert!(!catalog.rust_mr_boxington());
-    assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.20.0");
+    let err = resolve_tool_catalog(dir.path(), &cfg).expect_err("a disagreeing pin fails");
+    assert!(
+        err.to_string()
+            .contains("conflicting_project_tool_pin:project=1.21.1,tools.mr-boxington=1.20.0"),
+        "got {err}"
+    );
 }
 
 #[test]

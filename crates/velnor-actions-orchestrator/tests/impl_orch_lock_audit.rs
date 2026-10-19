@@ -212,13 +212,15 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
             installs.push(run.join(" "));
         }
     }
-    let yaml = velnor_actions_workflow_renderer::render_workflow_ir(
-        &prep.workflow.ir,
-        prep.config.workflow.policy,
-        prep.workflow.support.as_ref(),
-        &prep.workflow.context,
-    )
-    .map_err(|err| format!("render: {err}"))?;
+    let yaml = fs::read_to_string(parent.path().join("preview/.github/workflows/ci.yml"))?;
+    // The hostile record still declares Rust (hard decision 4): its version
+    // resolves at run time through `config get`, which loads no config.
+    assert!(yaml.contains("VELNOR_TOOL_RUST"), "{yaml}");
+    assert!(!yaml.contains("1.98.1"), "declared version copied: {yaml}");
+    assert!(
+        yaml.contains("--no-config --no-env --no-hooks config get"),
+        "{yaml}"
+    );
     for line in yaml.lines() {
         if line.contains("mise ") && line.contains(" install ") {
             installs.push(line.trim().to_owned());

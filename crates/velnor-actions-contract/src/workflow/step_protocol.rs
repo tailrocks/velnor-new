@@ -285,14 +285,7 @@ fn valid_lock_path(path: &str) -> bool {
 
 /// Exact `major.minor.patch` version spelling used by the provider key.
 fn valid_exact_version(version: &str) -> bool {
-    let mut parts = version.split('.');
-    let is_numeric = |part: Option<&str>| {
-        part.is_some_and(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
-    };
-    is_numeric(parts.next())
-        && is_numeric(parts.next())
-        && is_numeric(parts.next())
-        && parts.next().is_none()
+    crate::config::project_tool_refs::is_exact_or_project_version(version)
 }
 
 /// True for an action or shell step with provider environment bindings.

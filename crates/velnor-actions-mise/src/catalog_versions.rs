@@ -14,7 +14,24 @@ use crate::error::MiseError;
 ///
 /// Returns [`MiseError::InvalidToolVersion`] for empty, `v`-prefixed,
 /// `latest`, two-part, or non-numeric versions.
+///
+/// A project reference (`${VELNOR_TOOL_<TOOL>}`, hard decision 4) also
+/// passes: it names the project's exact version, which the generated
+/// resolver validates at run time. [`validate_concrete_exact_version`]
+/// accepts literal pins only.
 pub fn validate_exact_version(tool: &str, version: &str) -> Result<(), MiseError> {
+    if super::project::is_project_tool_ref(version) {
+        return Ok(());
+    }
+    validate_concrete_exact_version(tool, version)
+}
+
+/// Literal exact `major.minor.patch` pin; project references are rejected.
+///
+/// # Errors
+///
+/// Returns [`MiseError::InvalidToolVersion`] for any non-literal or loose version.
+pub fn validate_concrete_exact_version(tool: &str, version: &str) -> Result<(), MiseError> {
     let exact = version.split('.').collect::<Vec<_>>();
     let [major, minor, patch] = exact.as_slice() else {
         return Err(invalid_version(tool, version));

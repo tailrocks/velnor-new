@@ -212,6 +212,8 @@ fn assert_dogfood_cargo_warmup(
     assert!(
         qualification_helpers.contains(
             "mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked"
+        ) || qualification_helpers.contains(
+            r#"mise --no-config --no-env --no-hooks exec rust@'\"${VELNOR_TOOL_RUST}\"' -- cargo fetch --locked"#
         ),
         "{qualification_helpers}"
     );

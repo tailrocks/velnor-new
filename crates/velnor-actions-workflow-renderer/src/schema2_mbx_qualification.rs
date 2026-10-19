@@ -230,7 +230,7 @@ fn verify_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
         (
             "run".to_owned(),
             Yaml::str(format!(
-                "test \"$MBX_VERSION\" = '{}' && test \"$CACHE_SAVE_ELIGIBLE\" = '{}' && test \"$CACHE_SAVE_REASON\" = '{}'{}",
+                "test \"$MBX_VERSION\" = \"{}\" && test \"$CACHE_SAVE_ELIGIBLE\" = '{}' && test \"$CACHE_SAVE_REASON\" = '{}'{}",
                 request.mbx_version, save_eligible, save_reason, exact_cache_hit
             )),
         ),
@@ -288,12 +288,7 @@ fn mapping(pairs: &[(&str, &str)]) -> Yaml {
 }
 
 fn validate_exact_version(value: &str, tool: &str) -> Result<(), RenderError> {
-    let parts: Vec<_> = value.split('.').collect();
-    if parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
-    {
+    if crate::commands::is_exact_or_project_version(value) {
         Ok(())
     } else {
         Err(RenderError::BadCommand(format!(

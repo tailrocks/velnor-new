@@ -231,3 +231,22 @@ fn resolver_rejects_noncanonical_and_duplicate_manifest_data() {
 #[path = "task_execution_test_support.rs"]
 mod support;
 use support::*;
+
+#[test]
+fn project_tool_refs_materialize_only_exact_resolved_versions() {
+    use super::resolve_project_tool_refs;
+    let lookup = |name: &str| (name == "VELNOR_TOOL_RUST").then(|| "1.42.7".to_owned());
+    assert_eq!(
+        resolve_project_tool_refs("rust@${VELNOR_TOOL_RUST}", lookup).expect("resolved"),
+        "rust@1.42.7"
+    );
+    assert!(resolve_project_tool_refs("mr-boxington@${VELNOR_TOOL_MR_BOXINGTON}", lookup).is_err());
+    let loose = |_: &str| Some("1.42".to_owned());
+    assert!(resolve_project_tool_refs("${VELNOR_TOOL_RUST}", loose).is_err());
+    let injected = |_: &str| Some("1.2.3 --evil".to_owned());
+    assert!(resolve_project_tool_refs("${VELNOR_TOOL_RUST}", injected).is_err());
+    assert_eq!(
+        resolve_project_tool_refs("plain", |_| None).expect("no refs"),
+        "plain"
+    );
+}

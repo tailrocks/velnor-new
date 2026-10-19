@@ -38,7 +38,7 @@ pub(super) fn step(payload: &super::ToolsCachePayload) -> Result<Step, RenderErr
             uses: uses.to_owned(),
             with: BTreeMap::from([(
                 cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT.to_owned(),
-                payload.static_digest.clone(),
+                payload.identity_input(),
             )]),
             env: BTreeMap::new(),
         },
@@ -67,11 +67,7 @@ pub(super) fn validate_action_call(
         .ok_or_else(|| {
             RenderError::InvalidWorkflow("malformed_tools_cache_identity_action".to_owned())
         })?;
-    if digest.len() != 64
-        || !digest
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-    {
+    if !velnor_actions_contract::config::project_tool_refs::is_tools_cache_identity_input(digest) {
         return Err(RenderError::InvalidWorkflow(
             "bad_tools_cache_identity_digest".to_owned(),
         ));

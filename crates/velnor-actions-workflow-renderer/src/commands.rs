@@ -165,6 +165,12 @@ pub fn quote_run_arg(arg: &str) -> Result<String, RenderError> {
     flush_run_literal(&mut literal, &mut out);
     Ok(out)
 }
+/// Exact `X.Y.Z` pin, or a project version reference the generated
+/// resolver validates at run time (hard decision 4).
+pub(crate) fn is_exact_or_project_version(version: &str) -> bool {
+    velnor_actions_contract::config::project_tool_refs::is_exact_or_project_version(version)
+}
+
 /// True for `/cargo` or paths ending in `/cargo`.
 fn is_absolute_cargo(arg: &str) -> bool {
     arg.starts_with('/') && (arg == "/cargo" || arg.ends_with("/cargo"))

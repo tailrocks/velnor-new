@@ -238,7 +238,29 @@ fn resolve_runner_temp_expression(
     if resolved.contains("${{") {
         return Err(internal("unresolved_task_execution_expression"));
     }
-    Ok(resolved)
+    resolve_project_tool_refs(&resolved, |name| env::var(name).ok())
+}
+
+/// Materialize `${VELNOR_TOOL_<NAME>}` references (hard decision 4) from
+/// the variables the generated resolver step exported, after the manifest
+/// and plan bindings have matched the literal record. Every value must be
+/// an exact `X.Y.Z` version; a missing or loose value fails closed.
+pub(crate) fn resolve_project_tool_refs(
+    value: &str,
+    lookup: impl Fn(&str) -> Option<String>,
+) -> Result<String, OrchestratorError> {
+    use velnor_actions_contract::config::project_tool_refs::{
+        map_project_tool_refs, project_tool_ref_names,
+    };
+    for name in project_tool_ref_names(value) {
+        let version = lookup(name).unwrap_or_default();
+        if velnor_actions_mise::validate_concrete_exact_version(name, &version).is_err() {
+            return Err(internal("unresolved_project_tool_version"));
+        }
+    }
+    Ok(map_project_tool_refs(value, |name| {
+        lookup(name).unwrap_or_default()
+    }))
 }
 
 fn read_manifest(

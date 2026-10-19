@@ -101,6 +101,7 @@ pub(crate) mod task_report;
 mod task_report_aggregate;
 mod tofu_apply_emit;
 mod tofu_cache;
+pub(crate) mod tool_catalog_project;
 pub(crate) mod tool_catalog_resolve;
 mod toolcheck;
 mod toolfindings;

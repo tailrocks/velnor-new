@@ -93,7 +93,7 @@ pub(super) fn canonical_mbx_preflight_step(
     rust_toolchain: &str,
     action_env: &BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
-    if !is_exact_mbx_version(mbx_version) {
+    if !crate::commands::is_exact_or_project_version(mbx_version) {
         return Err(RenderError::BadCommand(format!(
             "bad_mbx_version:{mbx_version}"
         )));
@@ -178,7 +178,7 @@ pub(crate) fn mbx_version_check_step(
     rust_toolchain: &str,
     env: BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
-    if !is_exact_mbx_version(mbx_version) {
+    if !crate::commands::is_exact_or_project_version(mbx_version) {
         return Err(RenderError::BadCommand(format!(
             "bad_mbx_version:{mbx_version}"
         )));
@@ -245,7 +245,7 @@ pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step,
     let rust_toolchain = with
         .get("toolchain")
         .ok_or_else(|| RenderError::InvalidWorkflow("mbx_cleanup_toolchain_missing".to_owned()))?;
-    if !is_exact_mbx_version(version) {
+    if !crate::commands::is_exact_or_project_version(version) {
         return Err(RenderError::BadCommand(format!(
             "bad_mbx_version:{version}"
         )));
@@ -305,7 +305,7 @@ fn mbx_objects_action_step(
             "not_pinned_mbx_action:{uses}"
         )));
     }
-    if !is_exact_mbx_version(mbx_version) {
+    if !crate::commands::is_exact_or_project_version(mbx_version) {
         return Err(RenderError::BadCommand(format!(
             "bad_mbx_version:{mbx_version}"
         )));
@@ -367,16 +367,8 @@ fn with_rustup_process_homes(
     Ok(env)
 }
 
-fn is_exact_mbx_version(version: &str) -> bool {
-    let parts: Vec<&str> = version.split('.').collect();
-    parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
-}
-
 fn validate_rust_toolchain(toolchain: &str) -> Result<(), RenderError> {
-    is_exact_mbx_version(toolchain)
+    crate::commands::is_exact_or_project_version(toolchain)
         .then_some(())
         .ok_or_else(|| RenderError::BadCommand(format!("bad_rust_toolchain:{toolchain}")))
 }

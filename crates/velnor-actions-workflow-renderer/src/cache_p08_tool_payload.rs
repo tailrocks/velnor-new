@@ -72,6 +72,8 @@ pub struct ToolsCacheInputs<'a> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolsCachePayload {
     static_digest: String,
+    /// Whether any spec is a project-declared run-time reference.
+    project_bound: bool,
     paths: Vec<String>,
     runs_on: String,
     target: String,
@@ -102,8 +104,12 @@ impl ToolsCachePayload {
             .get(3..)
             .ok_or_else(|| RenderError::BadCommand("bad_tools_cache_digest".to_owned()))?
             .to_owned();
+        let project_bound = specs.iter().any(|spec| {
+            velnor_actions_contract::config::project_tool_refs::has_project_tool_ref(spec)
+        });
         Ok(Self {
             static_digest,
+            project_bound,
             paths,
             runs_on: inputs.runs_on.to_owned(),
             target: inputs.target.to_owned(),
@@ -114,6 +120,23 @@ impl ToolsCachePayload {
     #[must_use]
     pub fn static_digest(&self) -> &str {
         &self.static_digest
+    }
+
+    /// `d` input of the runtime identity step: the static digest, bound to
+    /// the project tool sources when any version is project-declared, so a
+    /// `mise.toml`/`mise.lock` bump invalidates the tools cache (hard
+    /// decision 4) before the resolver step has run.
+    #[must_use]
+    pub fn identity_input(&self) -> String {
+        if self.project_bound {
+            format!(
+                "{}-{}",
+                self.static_digest,
+                velnor_actions_contract::config::project_tool_refs::project_tool_sources_hash()
+            )
+        } else {
+            self.static_digest.clone()
+        }
     }
 
     /// Whether this lane has an exact hosted image identity for V2 restores.
@@ -211,7 +234,8 @@ fn validate_inputs(inputs: &ToolsCacheInputs<'_>) -> Result<(), RenderError> {
             .any(|candidate| candidate != spec)
         {
             return Err(RenderError::BadCommand(format!(
-                "conflicting_tools_cache_spec:{tool}"
+                "conflicting_tools_cache_spec:{tool}:{}",
+                inputs.tool_specs.join(",")
             )));
         }
     }

@@ -15,7 +15,8 @@ pub(super) fn assert_intel_cross_build(
     assert!(intel.contains("runs-on: macos-15\n"), "{intel}");
     let intel_action = action(actions, "generator-release-build-macos-intel")?;
     assert!(
-        intel_action.contains("mr-boxington@1.24.1")
+        (intel_action.contains("mr-boxington@1.24.1")
+            || intel_action.contains(r#"'mr-boxington@'\"${VELNOR_TOOL_MR_BOXINGTON}\""#))
             && intel_action.contains("mbx build --release --locked")
             && intel_action.contains("--target x86_64-apple-darwin"),
         "the ARM-hosted cross-build must use the qualified MBX release for its Intel target: {intel_action}"
@@ -48,6 +49,8 @@ pub(super) fn assert_intel_cross_build(
     assert!(
         intel_action.contains(
             "rustup target add --toolchain 1.99.1-aarch64-apple-darwin x86_64-apple-darwin"
+        ) || intel_action.contains(
+            r#"rustup target add --toolchain \"${VELNOR_TOOL_RUST}\"'-aarch64-apple-darwin' x86_64-apple-darwin"#
         ),
         "{intel_action}"
     );
@@ -122,6 +125,10 @@ pub(super) fn assert_qualify_install_tools(
     let run = format!(
         "mise --no-config --no-env --no-hooks install rust@{RUST_VERSION} actionlint@{ACTIONLINT_VERSION} shellcheck@{SHELLCHECK_VERSION} zizmor@{ZIZMOR_VERSION}"
     );
+    // The Velnor repository declares Rust in `mise.toml` (hard decision 4).
+    let project_run = format!(
+        r#"mise --no-config --no-env --no-hooks install 'rust@'\"${{VELNOR_TOOL_RUST}}\" actionlint@{ACTIONLINT_VERSION} shellcheck@{SHELLCHECK_VERSION} zizmor@{ZIZMOR_VERSION}"#
+    );
     for name in [
         "generator-release-qualify-linux",
         "generator-release-qualify-macos",
@@ -140,7 +147,7 @@ pub(super) fn assert_qualify_install_tools(
             "{name}: install step must follow Mise setup and precede the download: {body}"
         );
         assert!(
-            body.contains(&run),
+            body.contains(&run) || body.contains(&project_run),
             "{name}: install step must carry the pinned qualification specs: {body}"
         );
         assert!(

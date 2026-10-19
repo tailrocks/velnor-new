@@ -3,6 +3,8 @@
 //! Declared from `catalog.rs` (`#[path]`); re-exported there so
 //! `catalog::MbxProvisioning` keeps working.
 
+use super::versions::invalid_version;
+use super::{PinnedTool, ToolCatalog, validate_exact_version};
 use crate::error::MiseError;
 
 /// How the effective MBX binary is provisioned (P07-10 contract).
@@ -35,5 +37,19 @@ impl MbxProvisioning {
         Ok(Self::PreinstalledTool {
             tool_path: tool_path.to_owned(),
         })
+    }
+}
+
+impl ToolCatalog {
+    /// Fail unless the action-installed MBX equals the catalog pin (action SHA alone never proves it).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::InvalidToolVersion`] for a loose or mismatched version.
+    pub fn reconcile_action_mbx(&self, reported: &str) -> Result<(), MiseError> {
+        validate_exact_version(PinnedTool::MrBoxington.tool_name(), reported)?;
+        (reported == self.version(PinnedTool::MrBoxington))
+            .then_some(())
+            .ok_or_else(|| invalid_version(PinnedTool::MrBoxington.tool_name(), reported))
     }
 }

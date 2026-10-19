@@ -34,7 +34,6 @@ use crate::internal_plan::{
 };
 use crate::schedule::assign_lanes;
 use crate::select::group_changed;
-use crate::vectors::task_argv;
 
 #[cfg(test)]
 #[path = "plan_obligation_tests.rs"]
@@ -231,7 +230,8 @@ pub(crate) fn plan_group(
     }
     let _ = inputs.lane;
     let toolchain = toolchain_id(task, inputs.catalog).map_err(internal_contract)?;
-    let argv = task_argv(task, inputs.catalog)?;
+    let (argv, binding_toolchain) =
+        crate::tool_catalog_project::task_binding(task, inputs.catalog)?;
     let platform_id = platform_id_for_group(inputs.label, task).map_err(internal_contract)?;
     let identity = planned_identity(inputs, &argv, &toolchain, &platform_id, &mut *reads)?;
     let reuse_eligible = identity.reuse_eligible;
@@ -269,7 +269,7 @@ pub(crate) fn plan_group(
     complete_group(
         inputs,
         &argv,
-        &toolchain,
+        &binding_toolchain,
         &input_digest,
         closure_digest,
         reuse,

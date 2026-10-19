@@ -43,6 +43,8 @@ mod parallel_steps;
 pub mod plan_format;
 pub mod preseed;
 mod preseed_closure;
+/// Project tool-version resolver binding (hard decision 4).
+mod project_tool_resolver;
 pub mod release_checkout_gates;
 pub mod release_config;
 pub mod release_gates;

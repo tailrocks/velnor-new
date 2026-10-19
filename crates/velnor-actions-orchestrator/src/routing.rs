@@ -55,6 +55,7 @@ pub fn parse_dispatch_mode(text: &str) -> Result<ExecutionMode, OrchestratorErro
 /// Illegal selectors or a bad generator version fail.
 pub(crate) fn extra_files(
     config: &VelnorConfig,
+    catalog: &velnor_actions_mise::ToolCatalog,
     version: &str,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
     if config.schema != VelnorConfig::SCHEMA_V2 {
@@ -66,7 +67,7 @@ pub(crate) fn extra_files(
     if execution.workflows.is_empty() {
         return Ok(Vec::new());
     }
-    let request = workflow_request(config, execution, version)?;
+    let request = workflow_request(config, execution, catalog, version)?;
     render_schema2_workflows(&request).map_err(|err| OrchestratorError::Render {
         problem: err.to_string(),
     })
@@ -113,6 +114,7 @@ fn with_trailing_newline(text: String) -> String {
 fn workflow_request(
     config: &VelnorConfig,
     execution: &ExecutionConfig,
+    catalog: &velnor_actions_mise::ToolCatalog,
     version: &str,
 ) -> Result<Schema2WorkflowRequest, OrchestratorError> {
     let hosted = execution
@@ -133,7 +135,7 @@ fn workflow_request(
             velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_SHA,
             velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_VERSION,
         )?;
-        let tool_catalog = velnor_actions_mise::ToolCatalog::pinned();
+        let tool_catalog = catalog;
         Some(MbxQualificationPins {
             mise_setup: crate::pins::resolve_mise_setup(config, &hosted)?,
             candidate_action_uses: mbx_action.uses_value(),
@@ -160,7 +162,7 @@ fn workflow_request(
     .iter()
     .any(|workflow| execution.workflows.contains(workflow));
     let product_release = product_release_requested
-        .then(|| crate::product_release_pins::resolve(config))
+        .then(|| crate::product_release_pins::resolve(config, catalog))
         .transpose()?;
     Ok(Schema2WorkflowRequest {
         version: version.to_owned(),
