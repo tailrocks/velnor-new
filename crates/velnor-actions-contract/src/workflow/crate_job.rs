@@ -1,8 +1,11 @@
 //! Crate-job representation: ordered, individually reported obligations.
 //!
-//! Obligations stay per task; jobs group by crate. Gates reference
-//! strictly earlier obligations, so in-crate ordering (Clippy before
-//! tests) holds by construction, not by renderer convention.
+//! Obligations stay per task; jobs group by package/configuration and a fixed
+//! adapter-owned execution responsibility. Rust uses lint, tests and docs
+//! phases under the crate-job timeout; `OpenTofu` keeps its root jobs. Local
+//! gates reference strictly earlier obligations by construction. Cross-job
+//! quality/data gates are preserved through exact owning-job IR dependencies,
+//! never interpreted as optional or silently dropped when a phase changes.
 
 use std::collections::BTreeSet;
 
@@ -40,7 +43,7 @@ pub struct CrateObligation {
     pub run: Vec<String>,
 }
 
-/// One crate job: ordered, individually reported obligations (P05-1).
+/// One crate responsibility: ordered, individually reported obligations (P05-1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CrateJob {
     /// Stable collision-safe job ID.

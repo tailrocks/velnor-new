@@ -9,7 +9,7 @@ use std::collections::BTreeSet;
 use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
 
 /// Runnable fixture proposal for one package/kind pair.
-pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> ProposedTask {
+pub(crate) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> ProposedTask {
     group_with_all_features(package, kind, gated_by, false)
 }
 
@@ -100,6 +100,9 @@ fn shards_name_their_index() {
 #[path = "crate_jobs_mbx_tests.rs"]
 mod mbx_tests;
 
+#[path = "crate_jobs_timeout_tests.rs"]
+mod timeout_tests;
+
 #[test]
 fn drivers_follow_per_crate_selection() {
     let mut mbx = group("demo", TaskKind::Clippy, &[]);
@@ -113,6 +116,7 @@ fn drivers_follow_per_crate_selection() {
         fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
@@ -141,6 +145,7 @@ fn all_features_obligation_selects_all_features_source_probe() {
         fetch_roots: &source_roots,
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
@@ -167,6 +172,7 @@ fn empty_groups_build_no_jobs() {
         fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
@@ -194,6 +200,7 @@ fn acquire_stages_before_report_wrappers() {
         fetch_roots: &[],
         acquire: Some(&acquire),
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
@@ -241,6 +248,7 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
         fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })

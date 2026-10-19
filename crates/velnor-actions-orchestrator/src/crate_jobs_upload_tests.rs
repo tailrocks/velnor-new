@@ -7,8 +7,8 @@ use super::crate_jobs_tests::{discovery, group, names};
 use super::*;
 use velnor_actions_rust::{CompileDriver, TaskKind};
 
-/// One demo job with clippy plus test obligations on one selected driver.
-fn two_obligation_job(driver: CompileDriver) -> (String, Job, ProposedTask, ProposedTask) {
+/// Both demo obligations use one selected driver and one package job.
+fn two_task_jobs(driver: CompileDriver) -> (Vec<(String, Job)>, ProposedTask, ProposedTask) {
     let mut clippy = group("demo", TaskKind::Clippy, &[]);
     clippy.identity.compile_driver = driver.as_str().to_owned();
     clippy.validate().expect("clippy proposal");
@@ -25,12 +25,14 @@ fn two_obligation_job(driver: CompileDriver) -> (String, Job, ProposedTask, Prop
         fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
-    let (job_id, job) = found.jobs.into_iter().next().expect("demo job");
-    (job_id, job, clippy, test)
+    let ids: Vec<_> = found.jobs.iter().map(|(id, _)| id.as_str()).collect();
+    assert_eq!(ids, ["rust-demo"]);
+    (found.jobs, clippy, test)
 }
 
 /// Compare the emitted command and exact catalog-backed toolchain.
@@ -170,30 +172,40 @@ fn assert_task_execution_matches(task: &ProposedTask, step: &Step, catalog: &Too
 
 #[test]
 fn obligations_wrap_report_capture() {
-    let (_, demo, clippy, test) = two_obligation_job(CompileDriver::Mbx);
-    let steps = names(&demo);
-    assert_eq!(&steps[..2], ["Checkout", "Download plan"], "{steps:?}");
+    let (jobs, clippy, test) = two_task_jobs(CompileDriver::Mbx);
     let catalog = ToolCatalog::pinned();
+    let demo = &jobs[0].1;
     for task in [&clippy, &test] {
+        let steps = names(demo);
+        assert_eq!(&steps[..2], ["Checkout", "Download plan"], "{steps:?}");
         let name = crate::matrix_step::step_name_for(&task.task_kind, &task.task_id);
-        let step = demo
+        let executions: Vec<_> = demo
             .steps
             .iter()
+            .filter(|step| {
+                matches!(
+                    step.kind,
+                    velnor_actions_contract::StepKind::TaskExecution { .. }
+                )
+            })
+            .collect();
+        let execution = executions
+            .iter()
             .find(|step| step.name == name)
-            .unwrap_or_else(|| panic!("missing task step {name}"));
-        assert_task_execution_matches(task, step, &catalog);
+            .expect("task execution");
+        assert_task_execution_matches(task, execution, &catalog);
+        assert_eq!(executions.len(), 2, "both obligations use one job");
     }
 }
 
-#[test]
-fn obligations_upload_one_artifact_per_job() {
-    let (job_id, demo, _, _) = two_obligation_job(CompileDriver::Cargo);
+/// Check the unique upload after every package task.
+fn assert_job_upload(job_id: &str, demo: &Job) -> String {
     let uploads: Vec<_> = demo
         .steps
         .iter()
         .filter(|step| step.name == velnor_actions_workflow_renderer::CRATE_REPORT_UPLOAD_NAME)
         .collect();
-    assert_eq!(uploads.len(), 1, "one upload for two obligations");
+    assert_eq!(uploads.len(), 1, "one upload for job {job_id}");
     let step = uploads[0];
     let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
         panic!("crate upload must be an action step");
@@ -220,13 +232,40 @@ fn obligations_upload_one_artifact_per_job() {
             .starts_with(velnor_actions_workflow_renderer::MATRIX_REPORT_UPLOAD_NAME)),
         "no per-entry matrix uploads survive",
     );
-    let steps = names(&demo);
-    let at = |name: &str| steps.iter().position(|seen| *seen == name);
-    let (Some(run), Some(upload)) = (
-        at("Unit and integration tests"),
-        at(velnor_actions_workflow_renderer::CRATE_REPORT_UPLOAD_NAME),
-    ) else {
-        panic!("report/upload steps missing: {steps:?}");
-    };
-    assert!(run < upload, "uploads close the job: {steps:?}");
+    let steps = names(demo);
+    let upload = steps
+        .iter()
+        .position(|name| *name == velnor_actions_workflow_renderer::CRATE_REPORT_UPLOAD_NAME)
+        .expect("job upload");
+    let tasks: Vec<_> = demo
+        .steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| {
+            matches!(
+                step.kind,
+                velnor_actions_contract::StepKind::TaskExecution { .. }
+            )
+        })
+        .collect();
+    assert!(!tasks.is_empty(), "job has executed obligations");
+    assert!(
+        tasks.iter().all(|(at, _)| *at < upload),
+        "upload follows every task: {steps:?}"
+    );
+    with["name"].clone()
+}
+
+#[test]
+fn obligations_upload_one_artifact_per_job() {
+    let (jobs, _, _) = two_task_jobs(CompileDriver::Cargo);
+    let artifacts: BTreeSet<_> = jobs
+        .iter()
+        .map(|(id, job)| assert_job_upload(id, job))
+        .collect();
+    assert_eq!(
+        artifacts.len(),
+        1,
+        "one package job has one report artifact"
+    );
 }

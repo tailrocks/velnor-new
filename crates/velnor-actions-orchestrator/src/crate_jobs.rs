@@ -13,6 +13,7 @@ use velnor_actions_contract::{
 #[cfg(test)]
 use velnor_actions_mise::PinnedTool;
 use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
+#[cfg(test)]
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
@@ -31,6 +32,9 @@ use render::render_job;
 
 #[path = "crate_jobs_stage.rs"]
 mod stage;
+
+#[path = "crate_jobs_dependencies.rs"]
+mod crate_jobs_dependencies;
 
 #[cfg(test)]
 pub(crate) use stage::needs;
@@ -72,7 +76,7 @@ pub(crate) fn build_qualification_for_workflow(
         fetch_roots,
         acquire,
         helper_version,
-    ))
+    )?)
 }
 
 /// Shared rendering inputs for grouped and `ToFu` Qualification jobs.
@@ -84,8 +88,8 @@ pub(crate) fn workflow_job_inputs<'a>(
     fetch_roots: &'a [String],
     acquire: Option<&'a Step>,
     helper_version: &'a str,
-) -> CrateJobInputs<'a> {
-    CrateJobInputs {
+) -> Result<CrateJobInputs<'a>, OrchestratorError> {
+    Ok(CrateJobInputs {
         label,
         policy: config.workflow.policy,
         discovery,
@@ -93,9 +97,11 @@ pub(crate) fn workflow_job_inputs<'a>(
         fetch_roots,
         acquire,
         max_parallel_jobs: config.workflow.max_parallel_jobs,
+        timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)
+            .map_err(crate::internal::internal_contract)?,
         helper_version,
         cache_policy: config.workflow.pull_request_cache_policy,
-    }
+    })
 }
 
 /// All authority and rendering inputs for one crate-job build.
@@ -108,6 +114,8 @@ pub(crate) struct CrateJobInputs<'a> {
     pub(crate) fetch_roots: &'a [String],
     pub(crate) acquire: Option<&'a Step>,
     pub(crate) max_parallel_jobs: u32,
+    /// Literal timeout for each emitted crate job.
+    pub(crate) timeout: JobTimeout,
     pub(crate) helper_version: &'a str,
     pub(crate) cache_policy: velnor_actions_contract::PullRequestCachePolicy,
 }
@@ -149,8 +157,14 @@ pub(crate) fn build_qualification_crate_jobs(
     for task in tasks {
         let job_id =
             qualification_job_id_for_member(task).map_err(crate::internal::internal_contract)?;
+        let needs = crate_jobs_dependencies::external_needs(
+            std::slice::from_ref(&task),
+            &input.discovery.proposals,
+            &job_id,
+            velnor_actions_contract::WorkflowEvent::Qualification,
+        )?;
         let (job, driver, use_opentofu) =
-            build_job_for_members(input, &job_id, std::slice::from_ref(&task), true)?;
+            build_job_for_members(input, &job_id, std::slice::from_ref(&task), needs, true)?;
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
             tofu_ids.push(job_id.clone());
@@ -195,24 +209,29 @@ fn build_crate_jobs_inner(
     input: CrateJobInputs<'_>,
     qualification: bool,
 ) -> Result<CrateBuild, OrchestratorError> {
-    let grouped = group_runnable(&input.discovery.proposals);
+    let grouped = group_runnable(&input.discovery.proposals)?;
     let assigned = assign_group_ids(&grouped);
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
     let mut tofu_ids = Vec::new();
     let mut manifests = BTreeMap::new();
-    for ((package_id, configuration), tasks) in &grouped {
-        let key = (package_id.clone(), configuration.clone());
+    for (key, tasks) in &grouped {
         let job_id = assigned
-            .get(&key)
+            .get(key)
             .ok_or_else(|| internal("crate_job_id_missing"))?
             .clone();
         let is_tofu = group_is_tofu(tasks);
         if !is_tofu {
             manifests.insert(job_id.clone(), tasks[0].identity.unit_path.clone());
         }
+        let needs = crate_jobs_dependencies::external_needs(
+            tasks,
+            &input.discovery.proposals,
+            &job_id,
+            velnor_actions_contract::WorkflowEvent::PullRequest,
+        )?;
         let (job, driver, use_opentofu) =
-            build_job_for_members(input, &job_id, tasks, qualification && !is_tofu)?;
+            build_job_for_members(input, &job_id, tasks, needs, qualification && !is_tofu)?;
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
             tofu_ids.push(job_id.clone());
@@ -230,6 +249,7 @@ fn build_job_for_members(
     input: CrateJobInputs<'_>,
     job_id: &str,
     tasks: &[&ProposedTask],
+    needs: Vec<String>,
     qualification: bool,
 ) -> Result<(Job, RenderDriver, bool), OrchestratorError> {
     let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
@@ -272,6 +292,8 @@ fn build_job_for_members(
         input.max_parallel_jobs,
         input.helper_version,
         input.cache_policy,
+        input.timeout,
+        needs,
         qualification,
     )?;
     Ok((job, driver, use_opentofu))
@@ -367,21 +389,7 @@ fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
 /// roles; pure-tofu roles carry the opentofu driver with no Rust
 /// setup, mixed roles the union.
 #[cfg(test)]
-#[path = "crate_jobs_tests.rs"]
-mod crate_jobs_tests;
-
+#[path = "crate_jobs_test_modules.rs"]
+mod test_modules;
 #[cfg(test)]
-#[path = "crate_jobs_display_tests.rs"]
-mod crate_jobs_display_tests;
-
-#[cfg(test)]
-#[path = "crate_jobs_tofu_cache_tests.rs"]
-mod crate_jobs_tofu_cache_tests;
-
-#[cfg(test)]
-#[path = "crate_jobs_tofu_tests.rs"]
-mod crate_jobs_tofu_tests;
-
-#[cfg(test)]
-#[path = "crate_jobs_upload_tests.rs"]
-mod crate_jobs_upload_tests;
+pub(crate) use test_modules::crate_jobs_tests;

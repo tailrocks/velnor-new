@@ -1,16 +1,24 @@
 use super::*;
+use crate::workflow_routing::WorkflowRoutingPolicy;
+use velnor_actions_contract::config::ValidatedImageReference;
 
 #[test]
 fn every_schema2_family_renders_only_bounded_executable_jobs() {
     let pins = product_release_test_pins::test_pins();
-    let scale_set = Schema2WorkflowRequest::canonical_scale_set().expect("selector");
     let request = Schema2WorkflowRequest {
         version: "0.1.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: scale_set.clone(),
-        routing: crate::workflow_routing::test_policy(
+        scale_set: Schema2WorkflowRequest::canonical_scale_set().expect("selector"),
+        routing: WorkflowRoutingPolicy::configured(
             velnor_actions_contract::ExecutionMode::Hosted,
-            scale_set,
+            Schema2WorkflowRequest::canonical_scale_set().expect("selector"),
+            Some(
+                ValidatedImageReference::parse(&format!(
+                    "ghcr.io/team/job@sha256:{}",
+                    "a".repeat(64)
+                ))
+                .expect("image reference"),
+            ),
         ),
         workflows: BTreeSet::from([
             RoutingWorkflow::Qualification,
@@ -32,11 +40,18 @@ fn every_schema2_family_renders_only_bounded_executable_jobs() {
         product_release: Some(pins),
     };
     let files = render_schema2_workflows(&request).expect("every family is admitted");
+    let paths: BTreeSet<_> = files.iter().map(|file| file.path.as_str()).collect();
+    assert_eq!(paths.len(), files.len(), "workflow paths must be unique");
     let workflows: Vec<_> = files
         .iter()
         .filter(|file| file.path.starts_with(".github/workflows/"))
         .collect();
     assert_eq!(workflows.len(), 7);
+    assert!(
+        workflows
+            .iter()
+            .any(|workflow| workflow.path == ".github/workflows/job-image-candidate.yml")
+    );
     for workflow in workflows {
         let timeouts: Vec<_> = workflow
             .bytes
@@ -46,7 +61,12 @@ fn every_schema2_family_renders_only_bounded_executable_jobs() {
         assert!(!timeouts.is_empty(), "{}", workflow.path);
         for timeout in timeouts {
             let minutes: u16 = timeout.parse().expect("literal timeout");
-            assert!((1..=5).contains(&minutes), "{}: {minutes}", workflow.path);
+            assert_eq!(
+                minutes,
+                velnor_actions_contract::JobTimeout::DEFAULT_MINUTES,
+                "{}",
+                workflow.path
+            );
         }
     }
 }

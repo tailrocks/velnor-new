@@ -194,16 +194,16 @@ pub fn render_schema2_workflows(
             files.push(file(&path, &request.version, &action)?);
         }
     }
+    if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
+        files.push(schema2_job_image_candidate::render_candidate_workflow(
+            request,
+        )?);
+    }
     if request.workflows.contains(&RoutingWorkflow::Monitoring) {
         files.push(file(
             MONITORING_WORKFLOW,
             &request.version,
             &route_workflow(request, MONITORING_WORKFLOW, monitoring(request)?)?,
-        )?);
-    }
-    if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
-        files.push(schema2_job_image_candidate::render_candidate_workflow(
-            request,
         )?);
     }
     Ok(files)

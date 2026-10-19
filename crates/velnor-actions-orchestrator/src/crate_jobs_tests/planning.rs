@@ -17,6 +17,7 @@ fn groups_obligations_into_one_ordered_job_per_crate() {
         fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
@@ -75,6 +76,7 @@ fn duplicate_rust_display_names_include_manifest_context() {
         fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
@@ -105,6 +107,7 @@ fn rust_qualification_reuses_one_job_for_all_configurations_and_tasks() {
         fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     };
@@ -118,6 +121,7 @@ fn rust_qualification_reuses_one_job_for_all_configurations_and_tasks() {
         fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
@@ -195,7 +199,7 @@ fn qualification_plan_binding_uses_the_per_entry_job_id() {
             &task,
             velnor_actions_contract::WorkflowEvent::Qualification,
         ),
-        Some("rust-demo".to_owned())
+        Ok(Some("rust-demo".to_owned()))
     );
 }
 
@@ -215,6 +219,7 @@ fn skips_testless_and_workspace_groups() {
         fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
@@ -242,6 +247,7 @@ fn member_binding_agrees_with_built_jobs() {
         fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
@@ -254,6 +260,7 @@ fn member_binding_agrees_with_built_jobs() {
             &groups[0],
             velnor_actions_contract::WorkflowEvent::Push
         )
+        .expect("owner")
         .as_deref(),
         Some(built)
     );
@@ -263,6 +270,7 @@ fn member_binding_agrees_with_built_jobs() {
             &groups[1],
             velnor_actions_contract::WorkflowEvent::Push
         )
+        .expect("owner")
         .as_deref(),
         Some(built)
     );
@@ -272,6 +280,7 @@ fn member_binding_agrees_with_built_jobs() {
             &groups[2],
             velnor_actions_contract::WorkflowEvent::Push
         )
+        .expect("owner")
         .as_deref(),
         Some(PLAN_JOB_ID)
     );
@@ -282,7 +291,7 @@ fn member_binding_agrees_with_built_jobs() {
             &outsider,
             velnor_actions_contract::WorkflowEvent::Push
         ),
-        None
+        Ok(None)
     );
 }
 

@@ -150,6 +150,8 @@ struct PartialWorkflow {
     generator_validation: Option<GeneratorValidation>,
     /// Maximum parallel matrix jobs.
     max_parallel_jobs: Option<u32>,
+    /// Crate-job timeout in minutes.
+    crate_timeout_minutes: Option<u16>,
     /// Workflow-level Mise silencing override.
     mise_quiet: Option<bool>,
     /// Pull-request cache-write policy.
@@ -249,6 +251,9 @@ impl PartialWorkflow {
                 .generator_validation
                 .unwrap_or(GeneratorValidation::Bootstrap),
             max_parallel_jobs: self.max_parallel_jobs.unwrap_or(2),
+            crate_timeout_minutes: self
+                .crate_timeout_minutes
+                .unwrap_or_else(velnor_actions_contract::config::default_crate_timeout_minutes),
             mise_quiet: self.mise_quiet.unwrap_or(true),
             pull_request_cache_policy: self.pull_request_cache_policy,
             runner_label: self.runner_label,

@@ -10,6 +10,12 @@ pub(crate) mod perf_fixtures_p13;
 #[path = "perf_harness_p13.rs"]
 pub(crate) mod perf_harness_p13;
 
+use std::collections::BTreeSet;
+use velnor_actions_contract::{
+    StepKind,
+    workflow::{TASK_EXECUTION_MANIFEST_PATH, TaskExecutionManifestV1},
+};
+
 use velnor_actions_orchestrator::{
     GenerateOptions, OrchestratorError, PlanOutputMode, generate, plan_internal, plan_outputs,
     prepare,
@@ -135,7 +141,7 @@ fn plan_100_crates_fits_matrix_budget() -> TestResult {
 /// Measured generation stays within the fixed byte cap for 1/10/29/30/40 members.
 ///
 /// The 500,000-byte workflow contract, not a crate-count promise, is the
-/// limit. Large repeated workflows may fit after deterministic run-scalar sharing.
+/// limit. Large repeated workflows may fit after deterministic workflow-node sharing.
 #[test]
 fn generate_scales_to_workflow_file_limit_then_fails_closed() -> TestResult {
     for members in [1_usize, 10, 29, 30, 40, 60, 100] {
@@ -210,13 +216,38 @@ fn generate_scales_to_workflow_file_limit_then_fails_closed() -> TestResult {
     Ok(())
 }
 
-/// One hundred fifty workspace members each get a crate job inside 500 KB.
+/// One hundred fifty members retain every fixed phase and obligation inside 500 KB.
 #[test]
 fn generate_150_crates_schedules_every_member() -> TestResult {
     let members = 150_usize;
     let repo = workspace_repo(members)?;
     let root = repo.path();
     let prep = prepare(root)?;
+    let expected_jobs: BTreeSet<_> = (0..members)
+        .map(|index| format!("c{index:03}"))
+        .chain(["demo".to_owned()])
+        .map(|package| format!("rust-{package}"))
+        .collect();
+    let actual_jobs: BTreeSet<_> = prep
+        .workflow
+        .ir
+        .jobs
+        .keys()
+        .filter(|id| id.starts_with("rust-"))
+        .cloned()
+        .collect();
+    assert_eq!(actual_jobs, expected_jobs, "one Rust job for every package");
+    let expected_tasks: BTreeSet<_> = prep
+        .workflow
+        .ir
+        .jobs
+        .values()
+        .flat_map(|job| &job.steps)
+        .filter_map(|step| match &step.kind {
+            StepKind::TaskExecution { task_id, .. } => Some(task_id.clone()),
+            _ => None,
+        })
+        .collect();
     let out = tempfile::TempDir::new()?;
     let target = out.path().join("gen-150");
     let report = generate(
@@ -233,25 +264,26 @@ fn generate_150_crates_schedules_every_member() -> TestResult {
         workflow.len()
     );
     let text = String::from_utf8(workflow)?;
-    for index in 0..members {
-        let job = format!("  rust-c{index:03}:");
-        assert_eq!(text.lines().filter(|line| *line == job).count(), 1, "{job}");
+    for job in &expected_jobs {
+        assert!(text.contains(&format!("  {job}:")), "missing {job}");
     }
-    assert!(text.contains("  rust-demo:"), "missing root package job");
+    let marked = std::fs::read_to_string(target.join(TASK_EXECUTION_MANIFEST_PATH))?;
+    let (_, json) = marked.split_once('\n').ok_or("task manifest marker")?;
+    let manifest: TaskExecutionManifestV1 = serde_json::from_str(json)?;
+    manifest.validate()?;
     assert_eq!(
-        text.lines()
-            .filter(|line| line.starts_with("  rust-"))
-            .count(),
-        members + 1
+        manifest.tasks.keys().cloned().collect::<BTreeSet<_>>(),
+        expected_tasks,
+        "factoring retains every task, not one arbitrary composite per package"
     );
-    let actions = report
-        .files_written
-        .iter()
-        .filter(|path| {
-            path.starts_with(".github/actions/crate-obligation-") && path.ends_with("/action.yml")
-        })
-        .count();
-    assert_eq!(actions, 0);
+    assert!(
+        report
+            .files_written
+            .iter()
+            .any(|path| path.starts_with(".github/actions/declared-task-")
+                && path.ends_with("/action.yml")),
+        "the canonical structural task wrapper is emitted"
+    );
     Ok(())
 }
 
@@ -294,7 +326,10 @@ fn nested_cross_workspace_path_dep_skips_not_fails() -> TestResult {
             assert_eq!(workspace.record.members.len(), 1);
             assert_eq!(workspace.record.skipped_edges.len(), 1);
         } else {
-            assert_eq!(workspace.record.skipped_edges, []);
+            assert_eq!(
+                workspace.record.skipped_edges,
+                [] as [velnor_actions_rust::SkippedPathEdge; 0]
+            );
         }
     }
     Ok(())
@@ -325,7 +360,7 @@ fn member_metadata_parses_to_same_record() -> TestResult {
         }
         Ok(String::from_utf8(output.stdout)?)
     };
-    let known = std::collections::BTreeSet::new();
+    let known = BTreeSet::new();
     let from_root = parse_metadata_json(&run("Cargo.toml")?, root, "Cargo.toml", &known)?;
     let from_member = parse_metadata_json(&run("crates/c001/Cargo.toml")?, root, "member", &known)?;
     assert_eq!(from_root, from_member, "parsed records identical");

@@ -90,13 +90,14 @@ Define stable package/task IDs before rendering workflows. `plan` and `generate`
 
 Every internal task has a stable ID, declared package/configuration, tool identity, inputs, outputs, and execution command. The generated workflow invokes only validated commands emitted by the workflow/Mise adapters; no public `task run`, `task explain`, `report validate`, or `report merge` command exists. The orchestrator validates task identities before generated workflow output is written, and the workflow preserves child exit codes and writes run-scoped reports for its final gate.
 
-The generated workflow has one planning/format job, an affected-crate matrix, and a required result job. The default matrix entry performs Clippy, test build, tests, then doctests as distinct steps. Matrix entries run concurrently. A crate's test work begins only after its Clippy succeeds. This is crate-scoped fail-fast; a global lint-before-any-test barrier is not the default.
+The generated workflow has one planning job, literal nonempty Rust lint/tests/docs jobs for each package and configuration, dedicated check jobs, and a required result job. Explicit package formatting and Clippy belong to lint; workspace formatting remains in plan; executable building, tests and doctests belong to tests; documentation building belongs to docs. Each owner preserves its local obligation order and needs every external declared gate owner. A crate's test work begins only after its Clippy succeeds, and documentation retains its declared doctest gate. Independent owners may run concurrently; a global lint-before-any-test barrier is not the default. Explicitly selected suites retain their separately specified fan-out contract.
 
 The planner emits one schema-1 `plan.json` and one compact
 `{"include": [...]}` matrix output. Each entry has a stable `id` and derived
 `matrix_key`; the run adds exact `report_id` and `artifact_id` values. The
-matrix job writes one task report per expected task plus one aggregate matrix
-report. The final job aggregates only those declared IDs and fails on missing,
+execution owner writes one task report per expected task plus its aggregate
+report. The compact matrix remains planning data rather than a default Rust
+matrix execution job. The final job aggregates only those declared IDs and fails on missing,
 duplicate, malformed, or unexpected reports. The exact fields, paths, and
 derivation rules are normative in [the cache contract](cache-contract.md).
 

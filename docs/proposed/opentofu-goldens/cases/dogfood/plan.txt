@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.19
+Velnor Actions plan 0.1.22
 Repository: <repo>
 
 Detected stacks
@@ -62,8 +62,9 @@ Workflow to generate
     - rust-velnor-runner-github (25 steps)
     - rust-velnor-runner-host (25 steps)
     - zizmor (11 steps)
-    - 15 Rust crate jobs
-      Each: Clippy -> build -> run tests -> doctests -> doc build -> format check
+    - 15 Rust package jobs
+      Timeout: 10 minutes per crate job
+      Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-velnor-actions-actionlint
         - rust-velnor-actions-cli
@@ -170,7 +171,7 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
-  Parallel: 15 independent crate jobs; no matrix fan-out
+  Parallel: 15 execution jobs; dependencies preserved; no matrix fan-out
   Critical path: stack/rust/crates/velnor-actions-actionlint/clippy/default -> stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (3 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects

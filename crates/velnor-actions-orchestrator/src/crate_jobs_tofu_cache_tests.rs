@@ -58,6 +58,7 @@ fn provider_restore_precedes_init_obligation() {
         fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
@@ -101,6 +102,7 @@ fn provider_restore_keys_are_per_root() {
         fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 5,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
@@ -142,6 +144,7 @@ fn rust_jobs_carry_no_provider_restore() {
         fetch_roots: &[String::new()],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
@@ -155,7 +158,7 @@ fn rust_jobs_carry_no_provider_restore() {
 }
 
 #[test]
-fn rust_and_tofu_jobs_restore_separate_caches() {
+fn mixed_job_restores_both_sources_and_providers() {
     use velnor_actions_tofu::TofuTaskKind;
     let mut rust = crate_jobs_tests::group("demo", TaskKind::Clippy, &[]);
     let tofu = tofu_group("stacks/a", TofuTaskKind::Validate);
@@ -169,47 +172,61 @@ fn rust_and_tofu_jobs_restore_separate_caches() {
         fetch_roots: &[String::new()],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 2, "Rust and ToFu jobs stay separate");
-    let rust = found
+    assert_eq!(found.jobs.len(), 2, "each stack owns its execution job");
+    let rust = &found
         .jobs
         .iter()
         .find(|(id, _)| id.starts_with("rust-"))
-        .expect("Rust job");
-    let tofu = found
+        .expect("Rust owner")
+        .1;
+    let tofu = &found
         .jobs
         .iter()
         .find(|(id, _)| id.starts_with("tofu-"))
-        .expect("ToFu job");
-    let rust_names = crate_jobs_tests::names(&rust.1);
-    let tofu_names = crate_jobs_tests::names(&tofu.1);
+        .expect("Tofu owner")
+        .1;
+    let rust_names = crate_jobs_tests::names(rust);
+    let tofu_names = crate_jobs_tests::names(tofu);
     assert!(
         rust_names.contains(&"Restore Cargo sources"),
-        "Rust restores its sources: {rust_names:?}"
+        "{rust_names:?}"
     );
     assert!(
         !rust_names.contains(&"Restore Tofu providers"),
-        "Rust does not restore ToFu providers: {rust_names:?}"
+        "{rust_names:?}"
     );
     assert!(
         tofu_names.contains(&"Restore Tofu providers"),
-        "ToFu restores its providers: {tofu_names:?}"
+        "{tofu_names:?}"
     );
-    let restore_at = tofu_names
-        .iter()
-        .position(|step| *step == "Restore Tofu providers")
-        .expect("provider restore present");
-    let validate_at = tofu_names
-        .iter()
-        .position(|step| *step == "Validate")
-        .expect("validate present");
     assert!(
-        restore_at < validate_at,
-        "provider restore precedes obligations: {tofu_names:?}"
+        !tofu_names.contains(&"Restore Cargo sources"),
+        "{tofu_names:?}"
     );
+    assert!(!rust_names.contains(&"Validate"), "no foreign obligation");
+    assert!(!tofu_names.contains(&"Clippy"), "no foreign obligation");
+    for (names, restore, obligation) in [
+        (&rust_names, "Restore Cargo sources", "Clippy"),
+        (&tofu_names, "Restore Tofu providers", "Validate"),
+    ] {
+        let restore_at = names
+            .iter()
+            .position(|step| *step == restore)
+            .expect("restore");
+        let obligation_at = names
+            .iter()
+            .position(|step| *step == obligation)
+            .expect("obligation");
+        assert!(
+            restore_at < obligation_at,
+            "restore precedes its owned obligation: {names:?}"
+        );
+    }
 }
 
 #[test]

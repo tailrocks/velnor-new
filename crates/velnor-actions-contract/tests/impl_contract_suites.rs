@@ -166,7 +166,7 @@ fn rust_suite_id_profile_and_scalar_bounds_fail_closed() {
         "bad_suite_timeout",
     );
     chk(
-        |s| s.timeout_minutes = 11,
+        |s| s.timeout_minutes = 361,
         "timeout_minutes",
         "bad_suite_timeout",
     );

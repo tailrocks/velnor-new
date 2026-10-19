@@ -89,11 +89,13 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTree
         0 => push(out, "  Parallel: single job; no matrix fan-out"),
         1 => push(
             out,
-            "  Parallel: 1 independent crate job; no matrix fan-out",
+            "  Parallel: 1 execution job; dependencies preserved; no matrix fan-out",
         ),
         count => push(
             out,
-            &format!("  Parallel: {count} independent crate jobs; no matrix fan-out"),
+            &format!(
+                "  Parallel: {count} execution jobs; dependencies preserved; no matrix fan-out"
+            ),
         ),
     }
     critical_path_lines(out, prep);
@@ -178,10 +180,7 @@ fn crate_job_ids(jobs: &BTreeMap<String, Job>) -> Vec<&str> {
         .collect()
 }
 
-/// Crate-job count plus the per-obligation kind chain.
-///
-/// Counts finalized crate jobs, never task groups; otherwise the
-/// static no-work line keeps plan and YAML in agreement.
+/// Rust package and `OpenTofu` root counts with each obligation kind.
 fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) {
     let crates = crate_job_ids(jobs);
     if crates.is_empty() {
@@ -193,11 +192,18 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
         .filter(|id| id.starts_with(CRATE_JOB_ID_PREFIX))
         .count();
     let tofu = crates.len() - rust;
-    count_line(out, rust, "Rust crate job");
+    count_line(out, rust, "Rust package job");
     count_line(out, tofu, "OpenTofu root job");
+    if let Some(job) = crates.first().and_then(|id| jobs.get(*id)) {
+        let minutes = job.timeout_minutes.minutes();
+        push(
+            out,
+            &format!("      Timeout: {minutes} minutes per crate job"),
+        );
+    }
     let kinds = present_kinds(&prep.discovery.proposals);
     if !kinds.is_empty() {
-        push(out, &format!("      Each: {}", kinds.join(" -> ")));
+        push(out, &format!("      Obligations: {}", kinds.join(" -> ")));
     }
     push(out, "      Entries:");
     for id in crates {
@@ -218,10 +224,7 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
     }
 }
 
-/// One per-stack count line; zero-count stacks stay silent.
-///
-/// Rust-only plans keep their exact historical line, so golden parity
-/// holds; tofu adds its own line in fixed order below.
+/// Add one count line for each non-empty job type.
 fn count_line(out: &mut String, count: usize, label: &str) {
     if count == 1 {
         push(out, &format!("    - 1 {label}"));

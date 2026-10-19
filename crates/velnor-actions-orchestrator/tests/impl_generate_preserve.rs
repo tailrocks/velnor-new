@@ -100,9 +100,13 @@ fn dispatch_switch_preserves_custom_actions_and_removes_shared_outputs() -> Test
 
     let prep = prepare(root)?;
     let both_tree = render_staged_tree_with(&prep, Some(ExecutionMode::Both))?;
-    let expected_shared = both_tree
-        .get(".github/actions/rust-demo/action.yml")
-        .ok_or("Both must render its current Rust shared action")?;
+    let shared_paths = [".github/actions/rust-demo/action.yml"];
+    for path in &shared_paths {
+        assert!(
+            both_tree.get(path).is_some(),
+            "Both must render the package action {path}"
+        );
+    }
     let both = generate_dispatched(
         &prep,
         &GenerateOptions::default(),
@@ -120,19 +124,25 @@ fn dispatch_switch_preserves_custom_actions_and_removes_shared_outputs() -> Test
         "both-mode declared-task manifest is generated: {:?}",
         both.files_written
     );
-    assert!(
-        both.files_written
-            .iter()
-            .any(|path| path == ".github/actions/rust-demo/action.yml"),
-        "Both still emits the current Rust shared action"
-    );
+    for path in &shared_paths {
+        assert!(
+            both.files_written
+                .iter()
+                .any(|written| written.as_str() == *path),
+            "Both emits the package action {path}"
+        );
+    }
     assert!(github.join("actions/declared-task-0/action.yml").is_file());
     assert!(
         github
             .join("velnor/task-execution-manifest-v1.json")
             .is_file()
     );
-    assert_current_shared_action(&github, expected_shared)?;
+    for path in &shared_paths {
+        let expected = both_tree.get(path).ok_or("missing package action")?;
+        assert_current_shared_action(&github, path, expected)?;
+    }
+    assert!(github.join("actions/rust-demo/action.yml").is_file());
     assert_custom_actions_preserved(&github)?;
     assert!(!github.join("actions/retired").exists());
 
@@ -151,6 +161,12 @@ fn dispatch_switch_preserves_custom_actions_and_removes_shared_outputs() -> Test
             .is_file()
     );
     assert!(!github.join("actions/rust-demo/action.yml").exists());
+    for path in &shared_paths {
+        assert!(
+            !root.join(path).exists(),
+            "hosted removes the package action {path}"
+        );
+    }
     assert!(!github.join("actions/retired").exists());
     assert_custom_actions_preserved(&github)?;
     Ok(())
@@ -184,8 +200,13 @@ fn dispatch_switch_fixture() -> Result<(TempDir, PathBuf), Box<dyn std::error::E
     Ok((repo, github))
 }
 
-fn assert_current_shared_action(github: &std::path::Path, expected: &str) -> TestResult {
-    let actual = fs::read(github.join("actions/rust-demo/action.yml"))?;
+fn assert_current_shared_action(
+    github: &std::path::Path,
+    path: &str,
+    expected: &str,
+) -> TestResult {
+    let relative = path.strip_prefix(".github/").ok_or("shared action path")?;
+    let actual = fs::read(github.join(relative))?;
     assert_eq!(
         actual,
         expected.as_bytes(),

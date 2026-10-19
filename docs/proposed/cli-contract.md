@@ -187,6 +187,7 @@ schema = 1
 # runner_label = "<latest pinned label>" # Exact latest pinned runner; omit for the default.
 # generator_validation = "bootstrap"  # Generator validation mode.
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.
+# crate_timeout_minutes = 5            # timeout-minutes for every Rust phase and OpenTofu root job; bounded 1..=360.
 
 # Optional resource limits for generated jobs.
 # [resources]
@@ -212,7 +213,7 @@ schema = 1
 # kind = "verification"
 # mise_task = "desktop-format-check"
 # runner = "macos-arm64"           # Or "linux-x64".
-# timeout_minutes = 5              # Required, bounded 1..=10.
+# timeout_minutes = 5              # Required, bounded 1..=360.
 
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]
@@ -244,15 +245,14 @@ YAML, JSON, shell scripts, full command arguments, cache keys, task reports,
 timestamps, or volatile run IDs. Findings and actionable recommendations go
 to stderr.
 
-The report MUST list detected stacks and their selected/ignored state; Rust
-workspace roots; each crate's package name, relative manifest path, targets,
-and local dependency names; planned workflow file paths; job groups and their
-purpose; matrix entry count; focused step names; parallel groups; runner label;
-planned cache layers; actionlint version/configuration; selected action pins;
-detected Rust test runner and compile driver with evidence; and concise reasons
-for ignored or ineligible work. It
-MUST list every discovered crate in stable package/path order. Tool-file
-recommendations MUST match `generate`.
+The report MUST list detected stacks and their selected/ignored state; Rust workspace
+roots; each crate's package name, relative manifest path, targets, and local dependency
+names; planned workflow file paths; job groups and their purpose; Rust phase and Tofu
+root job counts and their shared `timeout-minutes`; obligation names; runner label;
+planned cache layers; actionlint version/configuration; selected action pins; detected
+Rust test runner and compile driver with evidence; and concise reasons for ignored or
+ineligible work. It MUST list every discovered crate in stable package/path order.
+Tool-file recommendations MUST match `generate`.
 
 The report describes the full configured workflow template and MUST explain
 that pull-request execution can narrow crate obligations through its event-time
@@ -282,10 +282,10 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - plan and formatting
-    - Rust crate matrix: 5 entries
-      Each: Clippy → build tests → run tests → doctests
+    - 15 Rust phase jobs
+      Obligations: Clippy → build tests → run tests → doctests → docs
     - final required result
-  Parallel: independent crate entries; eligible Clippy lanes
+  Parallel: 15 execution jobs; dependencies preserved; no matrix fan-out
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
 
 Recommendations

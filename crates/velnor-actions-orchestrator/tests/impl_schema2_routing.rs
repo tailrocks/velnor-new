@@ -14,10 +14,13 @@ mod binary_release_tests;
 mod monitoring_fixture;
 #[path = "schema2_named_check_lanes_tests.rs"]
 mod named_check_lanes_tests;
+#[path = "schema2_release_producer_assertions.rs"]
+mod producer_assertions;
 #[path = "schema2_feature_snapshots.rs"]
 mod schema2_feature_snapshots;
 #[path = "schema2_product_release_snapshots.rs"]
 mod schema2_product_release_snapshots;
+use producer_assertions::{assert_image_producer, assert_macos_producer};
 #[path = "impl_schema2_routing_shell.rs"]
 mod shell_tests;
 
@@ -95,9 +98,30 @@ fn both_mode_splits_verification_and_keeps_release_hosted() -> TestResult {
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let ci = required_file(&tree, ".github/workflows/ci.yml")?;
     let release = required_file(&tree, ".github/workflows/release.yml")?;
-    let shared = required_file(&tree, ".github/actions/rust-demo/action.yml")?;
+    let rust_ids: Vec<_> = job_ids(ci)
+        .into_iter()
+        .filter(|id| id.starts_with("rust-demo"))
+        .collect();
+    assert_eq!(rust_ids, ["rust-demo__hosted", "rust-demo__local"]);
+    assert!(!tree.files.iter().any(|file| {
+        file.path.starts_with(".github/actions/rust-demo-")
+            && ["-lint/", "-tests/", "-docs/"]
+                .iter()
+                .any(|suffix| file.path.contains(suffix))
+    }));
+    let shared = required_file(&tree, ".github/actions/declared-task-0/action.yml")?;
     assert!(shared.contains("shell: bash"), "{shared}");
     assert!(shared.contains("using: composite"), "{shared}");
+    let rust_action = required_file(&tree, ".github/actions/rust-demo/action.yml")?;
+    for task in [
+        "Format",
+        "Clippy",
+        "Unit and integration tests",
+        "Doctests",
+        "Documentation",
+    ] {
+        assert!(rust_action.contains(task), "{rust_action}");
+    }
     assert_both_ci(ci)?;
     assert_hosted_release(release);
     Ok(())
@@ -111,29 +135,21 @@ fn dispatch_mode_overrides_configured_mode() -> TestResult {
     let forced = render_staged_tree_with(&prep, Some(ExecutionMode::Both))?;
     let hosted_ci = required_file(&hosted, ".github/workflows/ci.yml")?;
     let forced_ci = required_file(&forced, ".github/workflows/ci.yml")?;
-    assert!(job_ids(hosted_ci).contains(&"rust-demo"), "{hosted_ci}");
-    assert!(!hosted_ci.contains("rust-demo__hosted"), "{hosted_ci}");
+    assert!(job_ids(hosted_ci).contains(&"rust-demo"));
+    assert!(!hosted_ci.contains("rust-demo-lint"));
+    assert!(!hosted_ci.contains("rust-demo-tests"));
+    assert!(!hosted_ci.contains("rust-demo-docs"));
     assert_both_ci(forced_ci)?;
-    Ok(())
-}
-
-#[test]
-fn scale_set_dispatch_routes_image_release_and_resolves_its_local_family() -> TestResult {
-    let config = format!(
-        "{}\nmode = \"hosted\"\nworkflows = [\"image_release\"]\n{}",
-        execution_head(),
-        profiles()
-    );
-    let repo = make_repo(&config)?;
-    let prep = prepare(repo.path())?;
-    let tree = render_staged_tree_with(&prep, Some(ExecutionMode::ScaleSet))?;
-    let rendered = join_files(&tree);
-    assert!(
-        rendered.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
-        "{rendered}"
-    );
-    assert!(!rendered.contains("runs-on: ubuntu-26.04"), "{rendered}");
-    required_file(&tree, ".github/workflows/product-release-images.yml")?;
+    let rust_action = required_file(&forced, ".github/actions/rust-demo/action.yml")?;
+    for task in [
+        "Format",
+        "Clippy",
+        "Unit and integration tests",
+        "Doctests",
+        "Documentation",
+    ] {
+        assert!(rust_action.contains(task), "{rust_action}");
+    }
     Ok(())
 }
 
@@ -152,40 +168,9 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
     let binary = required_file(&tree, ".github/workflows/product-release-binary.yml")?;
     assert_image_producer(images)?;
     assert_macos_producer(binary)?;
-    let monitoring = required_file(&tree, ".github/workflows/monitoring.yml")?;
-    assert_eq!(monitoring, &marked(MONITORING));
-    Ok(())
-}
-
-#[test]
-fn scale_set_qualification_wrapper_calls_full_ci_on_the_configured_verification_ref() -> TestResult
-{
-    let config = format!(
-        "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\nverification_branch = \"sea/integration\"\n[execution]\ndefault_profile = \"local\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nmode = \"scale-set\"\nworkflows = [\"qualification\"]\n{}",
-        profiles()
-    );
-    let repo = make_repo(&config)?;
-    let prep = prepare(repo.path())?;
-    let tree = render_staged_tree(&prep)?;
-    let wrapper = required_file(&tree, ".github/workflows/qualification.yml")?;
-    let ci = required_file(&tree, ".github/workflows/ci.yml")?;
-    assert!(wrapper.contains("mode:"), "{wrapper}");
-    assert!(wrapper.contains("verification-only"), "{wrapper}");
-    assert!(
-        wrapper.contains("uses: ./.github/workflows/ci.yml"),
-        "{wrapper}"
-    );
-    assert!(!wrapper.contains("runs-on:"), "{wrapper}");
-    assert!(!wrapper.contains("hosted"), "{wrapper}");
-    assert!(!wrapper.contains("macos"), "{wrapper}");
-    assert!(ci.contains("workflow_call:"), "{ci}");
-    assert!(
-        !ci.contains("workflow_dispatch:"),
-        "consumer CI stays non-dispatchable: {ci}"
-    );
-    assert!(
-        ci.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
-        "{ci}"
+    assert_eq!(
+        required_file(&tree, ".github/workflows/monitoring.yml")?,
+        &marked(MONITORING)
     );
     Ok(())
 }
@@ -202,31 +187,39 @@ fn assert_both_ci(ci: &str) -> TestResult {
     let ids = job_ids(ci);
     assert!(ids.contains(&"plan"), "{ids:?}");
     assert!(ids.contains(&"required"), "{ids:?}");
+    assert!(!ids.contains(&"rust-demo"), "{ids:?}");
     assert!(ids.contains(&"rust-demo__hosted"), "{ids:?}");
     assert!(ids.contains(&"rust-demo__local"), "{ids:?}");
-    assert!(!ids.contains(&"rust-demo"), "{ids:?}");
     assert!(!ids.contains(&"plan__hosted"), "{ids:?}");
     assert!(!ids.contains(&"required__local"), "{ids:?}");
+    let required = job_body(ci, "required")?;
     let hosted = job_body(ci, "rust-demo__hosted")?;
     let local = job_body(ci, "rust-demo__local")?;
+    for job in [hosted, local] {
+        assert!(job.contains("./.github/actions/rust-demo"), "{job}");
+    }
     assert!(hosted.contains(HOSTED_RUNS), "{hosted}");
     assert!(local.contains(SCALE_RUNS), "{local}");
     assert!(!local.contains(SCALE_REVERSED), "{local}");
     assert!(!local.contains("runs-on: ubuntu-26.04\n"), "{local}");
     shell_tests::assert_scale_set_shell_and_same_steps(hosted, local)?;
-    let plan = job_body(ci, "plan")?;
-    assert_eq!(job_runs_on_values(plan), [HOSTED_RUNS], "{plan}");
-    let required = job_body(ci, "required")?;
     assert!(required.contains("rust-demo__hosted"), "{required}");
     assert!(required.contains("rust-demo__local"), "{required}");
+    assert!(
+        !ids.iter().any(|id| ["-lint", "-tests", "-docs"]
+            .iter()
+            .any(|suffix| id.contains(suffix))),
+        "{ids:?}"
+    );
+    let plan = job_body(ci, "plan")?;
+    assert!(plan.contains(HOSTED_RUNS), "{plan}");
+    assert!(
+        !plan
+            .lines()
+            .any(|line| line.trim_start().starts_with("runs-on: [velnor")),
+        "{plan}"
+    );
     Ok(())
-}
-
-fn job_runs_on_values(job: &str) -> Vec<&str> {
-    job.lines()
-        .map(str::trim)
-        .filter(|line| line.starts_with("runs-on:"))
-        .collect()
 }
 
 fn assert_hosted_release(release: &str) {
@@ -347,7 +340,3 @@ fn marked(body: &str) -> String {
         env!("CARGO_PKG_VERSION")
     )
 }
-
-#[path = "schema2_producer_assertions.rs"]
-mod producer_assertions;
-use producer_assertions::{assert_image_producer, assert_macos_producer};

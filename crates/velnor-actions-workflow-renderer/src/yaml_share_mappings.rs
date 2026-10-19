@@ -1,279 +1,243 @@
-//! Share exact repeated workflow step mappings.
+//! Exact workflow fields and whole-step sharing, preserving global prior anchors.
 
+use super::{next_name, validation};
+use crate::{
+    RenderError,
+    yaml::{AnchorName, Yaml, quote_scalar, render_yaml},
+};
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::yaml::{AnchorName, Yaml, render_yaml};
-
-const MAX_SIGNATURE_NODES: usize = 100_000;
+#[derive(Clone, Copy)]
+pub(super) enum Mode {
+    Fields,
+    Steps,
+}
 
 #[derive(Default)]
-struct RepeatGroup {
+struct Repeat {
     count: usize,
-    total_bytes: usize,
-    first_bytes: usize,
+    total: usize,
+    first: usize,
 }
 
-pub(super) fn share_step_mappings(mut node: Yaml) -> Yaml {
-    let mut used = BTreeSet::new();
-    collect_anchor_names(&node, &mut used);
-    let anchors = anchor_values(&node);
-    let mut groups = BTreeMap::new();
-    visit_steps(&node, &mut |step| note_repeat(&mut groups, step, &anchors));
-    replace_steps(&mut node, &groups, &anchors, &mut used);
-    node
+pub(super) fn share(
+    node: &mut Yaml,
+    mode: Mode,
+    used: &mut BTreeSet<AnchorName>,
+) -> Result<(), RenderError> {
+    let anchors = validation::expand(node)?.anchors;
+    let mut groups: BTreeMap<String, Repeat> = BTreeMap::new();
+    visit(node, mode, &mut |value| {
+        if !shareable(value, mode) {
+            return Ok(());
+        }
+        let signature = signature(value, &anchors)?;
+        let bytes = render_yaml(value).len();
+        let group = groups.entry(signature).or_default();
+        if group.count == 0 {
+            group.first = bytes;
+        }
+        group.count += 1;
+        group.total = group
+            .total
+            .checked_add(bytes)
+            .ok_or_else(|| validation::invalid("sharing_size"))?;
+        Ok(())
+    })?;
+    let mut named: BTreeMap<String, AnchorName> = BTreeMap::new();
+    let mut next = 1;
+    visit(node, mode, &mut |value| {
+        if !shareable(value, mode) {
+            return Ok(());
+        }
+        let signature = signature(value, &anchors)?;
+        if let Some(name) = named.get(&signature) {
+            // Removing a prior declaration would orphan its later uses.
+            if !has_declaration(value) {
+                *value = Yaml::Alias(name.clone());
+            }
+            return Ok(());
+        }
+        let group = groups
+            .get(&signature)
+            .ok_or_else(|| validation::invalid("missing_repeat"))?;
+        if group.count < 2 {
+            return Ok(());
+        }
+        let prefix = match mode {
+            Mode::Fields => "m",
+            Mode::Steps => "s",
+        };
+        let name = next_name(used, prefix, &mut next);
+        let overhead = name.as_str().len() + 4;
+        let projected = group
+            .first
+            .saturating_add(overhead)
+            .saturating_add((group.count - 1).saturating_mul(overhead));
+        if projected >= group.total {
+            return Ok(());
+        }
+        let Yaml::Map(entries) = value else {
+            return Err(validation::invalid("nonmap_candidate"));
+        };
+        let entries = std::mem::take(entries);
+        used.insert(name.clone());
+        named.insert(signature, name.clone());
+        *value = Yaml::AnchoredMap { name, entries };
+        Ok(())
+    })
 }
 
-fn visit_steps(node: &Yaml, visit: &mut impl FnMut(&Yaml)) {
-    let Yaml::Map(root) = node else { return };
+fn visit(
+    node: &mut Yaml,
+    mode: Mode,
+    f: &mut impl FnMut(&mut Yaml) -> Result<(), RenderError>,
+) -> Result<(), RenderError> {
+    let Yaml::Map(root) = node else {
+        return Err(validation::invalid("root_not_map"));
+    };
     for (key, jobs) in root {
         if key != "jobs" {
             continue;
         }
-        let Yaml::Map(jobs) = jobs else { continue };
+        let Yaml::Map(jobs) = jobs else {
+            return Err(validation::invalid("jobs_not_map"));
+        };
         for (_, job) in jobs {
-            let Yaml::Map(job) = job else { continue };
-            for (key, steps) in job {
-                if key != "steps" {
-                    continue;
-                }
-                let Yaml::Seq(steps) = steps else { continue };
-                for step in steps {
-                    if matches!(step, Yaml::Map(_)) {
-                        visit(step);
+            let Yaml::Map(job) = job else {
+                return Err(validation::invalid("job_not_map"));
+            };
+            for (key, value) in job {
+                if key == "env" && matches!(mode, Mode::Fields) {
+                    candidate(value, mode, f)?;
+                } else if key == "steps" {
+                    let Yaml::Seq(steps) = value else {
+                        return Err(validation::invalid("steps_not_sequence"));
+                    };
+                    for step in steps {
+                        if matches!(mode, Mode::Steps) {
+                            candidate(step, mode, f)?;
+                            continue;
+                        }
+                        let Yaml::Map(entries) = step else { continue };
+                        for (key, value) in entries {
+                            if matches!(key.as_str(), "env" | "with") {
+                                candidate(value, mode, f)?;
+                            }
+                        }
                     }
                 }
             }
         }
     }
+    Ok(())
 }
 
-fn replace_steps(
-    node: &mut Yaml,
-    groups: &BTreeMap<String, RepeatGroup>,
-    anchors: &BTreeMap<AnchorName, Yaml>,
-    used: &mut BTreeSet<AnchorName>,
-) {
-    let Yaml::Map(root) = node else { return };
-    let mut named = BTreeMap::new();
-    let mut next = 1;
-    for (key, jobs) in root {
-        if key != "jobs" {
-            continue;
-        }
-        let Yaml::Map(jobs) = jobs else { continue };
-        for (_, job) in jobs {
-            let Yaml::Map(job) = job else { continue };
-            for (key, steps) in job {
-                if key != "steps" {
-                    continue;
-                }
-                let Yaml::Seq(steps) = steps else { continue };
-                for step in steps {
-                    replace_mapping(step, groups, anchors, used, &mut named, &mut next);
-                }
-            }
-        }
-    }
-}
-
-fn note_repeat(
-    groups: &mut BTreeMap<String, RepeatGroup>,
-    value: &Yaml,
-    anchors: &BTreeMap<AnchorName, Yaml>,
-) {
-    let Yaml::Map(_) = value else { return };
-    let Some(signature) = canonical_signature(value, anchors) else {
-        return;
-    };
-    let bytes = render_yaml(value).len();
-    let group = groups.entry(signature).or_default();
-    if group.count == 0 {
-        group.first_bytes = bytes;
-    }
-    group.count += 1;
-    group.total_bytes = group.total_bytes.saturating_add(bytes);
-}
-
-fn replace_mapping(
+fn candidate(
     value: &mut Yaml,
-    groups: &BTreeMap<String, RepeatGroup>,
-    anchors: &BTreeMap<AnchorName, Yaml>,
-    used: &mut BTreeSet<AnchorName>,
-    named: &mut BTreeMap<String, AnchorName>,
-    next: &mut usize,
-) {
-    if !matches!(value, Yaml::Map(_)) {
-        return;
+    mode: Mode,
+    f: &mut impl FnMut(&mut Yaml) -> Result<(), RenderError>,
+) -> Result<(), RenderError> {
+    match value {
+        Yaml::Map(_) => f(value),
+        Yaml::FlowMap(_) if matches!(mode, Mode::Fields) => Ok(()),
+        Yaml::Alias(_) | Yaml::AnchoredMap { .. } => Ok(()),
+        _ => Err(validation::invalid("mapping_candidate_kind")),
     }
-    let Some(signature) = canonical_signature(value, anchors) else {
-        return;
-    };
-    if let Some(name) = named.get(&signature) {
-        *value = Yaml::Alias(name.clone());
-        return;
-    }
-    let Some(group) = groups.get(&signature) else {
-        return;
-    };
-    if group.count < 2 {
-        return;
-    }
-    let name = next_name(used, next);
-    if !saves_repeated_node(group.total_bytes, group.first_bytes, group.count, &name) {
-        return;
-    }
-    let Yaml::Map(entries) = value else { return };
-    let entries = std::mem::take(entries);
-    used.insert(name.clone());
-    named.insert(signature, name.clone());
-    *value = Yaml::AnchoredMap { name, entries };
 }
 
-fn canonical_signature(value: &Yaml, anchors: &BTreeMap<AnchorName, Yaml>) -> Option<String> {
-    let mut nodes = MAX_SIGNATURE_NODES;
-    let expanded = expand_anchors(value, anchors, &mut BTreeSet::new(), &mut nodes)?;
-    Some(render_yaml(&expanded))
+fn signature(value: &Yaml, anchors: &BTreeMap<AnchorName, Yaml>) -> Result<String, RenderError> {
+    Ok(format!("{:?}", normalized(value, anchors)?))
 }
 
-fn expand_anchors(
-    value: &Yaml,
-    anchors: &BTreeMap<AnchorName, Yaml>,
-    resolving: &mut BTreeSet<AnchorName>,
-    nodes: &mut usize,
-) -> Option<Yaml> {
-    *nodes = nodes.checked_sub(1)?;
-    Some(match value {
+fn normalized(value: &Yaml, anchors: &BTreeMap<AnchorName, Yaml>) -> Result<Yaml, RenderError> {
+    Ok(match value {
         Yaml::AnchoredScalar { value, .. } => Yaml::Str(value.clone()),
-        Yaml::AnchoredMap { entries, .. } | Yaml::Map(entries) => Yaml::Map(
+        Yaml::Alias(name) => anchors
+            .get(name)
+            .cloned()
+            .ok_or_else(|| validation::invalid("unknown_signature_alias"))?,
+        Yaml::Map(entries) | Yaml::AnchoredMap { entries, .. } => Yaml::Map(
             entries
                 .iter()
-                .map(|(key, value)| {
-                    Some((
-                        key.clone(),
-                        expand_anchors(value, anchors, resolving, nodes)?,
-                    ))
-                })
-                .collect::<Option<Vec<_>>>()?,
+                .map(|(k, v)| Ok((k.clone(), normalized(v, anchors)?)))
+                .collect::<Result<_, RenderError>>()?,
         ),
-        Yaml::Alias(name) => {
-            if !resolving.insert(name.clone()) {
-                return None;
-            }
-            let expanded = expand_anchors(anchors.get(name)?, anchors, resolving, nodes);
-            resolving.remove(name);
-            expanded?
-        }
         Yaml::Seq(items) => Yaml::Seq(
             items
                 .iter()
-                .map(|item| expand_anchors(item, anchors, resolving, nodes))
-                .collect::<Option<Vec<_>>>()?,
+                .map(|v| normalized(v, anchors))
+                .collect::<Result<_, _>>()?,
         ),
         other => other.clone(),
     })
 }
 
-fn next_name(used: &BTreeSet<AnchorName>, next: &mut usize) -> AnchorName {
-    loop {
-        let candidate = format!("s{}", *next);
-        *next = next.saturating_add(1);
-        if let Some(name) = AnchorName::new(candidate)
-            && !used.contains(&name)
-        {
-            return name;
-        }
+fn has_declaration(value: &Yaml) -> bool {
+    match value {
+        Yaml::AnchoredScalar { .. } | Yaml::AnchoredMap { .. } => true,
+        Yaml::Map(entries) => entries.iter().any(|(_, v)| has_declaration(v)),
+        Yaml::Seq(items) => items.iter().any(has_declaration),
+        _ => false,
     }
 }
 
-fn saves_repeated_node(
-    total_bytes: usize,
-    first_bytes: usize,
-    count: usize,
-    name: &AnchorName,
-) -> bool {
-    if count < 2 {
+/// Admit only bodies accepted by the staged normalizer's matching anchor kind.
+fn shareable(value: &Yaml, mode: Mode) -> bool {
+    let Yaml::Map(entries) = value else {
+        return false;
+    };
+    if entries.is_empty() {
         return false;
     }
-    let alias_bytes = name.as_str().len().saturating_add(4);
-    let anchor_bytes = alias_bytes;
-    let saved_repetitions = total_bytes.saturating_sub(first_bytes);
-    let replacement_bytes = (count - 1)
-        .saturating_mul(alias_bytes)
-        .saturating_add(anchor_bytes);
-    saved_repetitions > replacement_bytes
-}
-
-fn anchor_values(node: &Yaml) -> BTreeMap<AnchorName, Yaml> {
-    let mut anchors = BTreeMap::new();
-    collect_anchor_values(node, &mut anchors);
-    anchors
-}
-
-fn collect_anchor_values(node: &Yaml, anchors: &mut BTreeMap<AnchorName, Yaml>) {
-    match node {
-        Yaml::AnchoredScalar { name, value } => {
-            anchors.insert(name.clone(), Yaml::Str(value.clone()));
-        }
-        Yaml::AnchoredMap { name, entries } => {
-            anchors.insert(name.clone(), Yaml::Map(entries.clone()));
-            for (_, value) in entries {
-                collect_anchor_values(value, anchors);
+    match mode {
+        Mode::Fields => entries.iter().all(|(key, value)| {
+            !key.is_empty()
+                && quote_scalar(key) == *key
+                && key
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+                && value.is_inline()
+                && !matches!(value, Yaml::Null)
+        }),
+        Mode::Steps => {
+            if entries.first().is_none_or(|(key, value)| {
+                key != "name"
+                    || !matches!(value,Yaml::Str(name) | Yaml::Quoted(name) if !name.is_empty())
+            }) {
+                return false;
             }
-        }
-        Yaml::Map(entries) => {
-            for (_, value) in entries {
-                collect_anchor_values(value, anchors);
+            if !entries.iter().all(|(key, _)| {
+                matches!(
+                    key.as_str(),
+                    "name"
+                        | "id"
+                        | "if"
+                        | "uses"
+                        | "run"
+                        | "shell"
+                        | "working-directory"
+                        | "continue-on-error"
+                        | "timeout-minutes"
+                        | "env"
+                        | "with"
+                )
+            }) {
+                return false;
             }
+            // Nested quoted scalar keys (e.g. ON) are preserved verbatim and
+            // accepted in a whole-step body; whitespace-containing keys and
+            // nested sequences are outside the normalizer's line grammar.
+            render_yaml(value).lines().all(|line| {
+                let content = line.trim();
+                content.is_empty()
+                    || content.starts_with('#')
+                    || content.split_once(':').is_some_and(|(key, value)| {
+                        !key.is_empty()
+                            && !key.bytes().any(|b| b.is_ascii_whitespace())
+                            && !value.trim_start().starts_with('!')
+                    })
+            })
         }
-        Yaml::Seq(items) => {
-            for value in items {
-                collect_anchor_values(value, anchors);
-            }
-        }
-        Yaml::Null
-        | Yaml::Str(_)
-        | Yaml::Bool(_)
-        | Yaml::Int(_)
-        | Yaml::Flow(_)
-        | Yaml::FlowMap(_)
-        | Yaml::Quoted(_)
-        | Yaml::Annotated { .. }
-        | Yaml::Alias(_) => {}
     }
 }
-
-fn collect_anchor_names(node: &Yaml, used: &mut BTreeSet<AnchorName>) {
-    match node {
-        Yaml::AnchoredScalar { name, .. } | Yaml::Alias(name) => {
-            used.insert(name.clone());
-        }
-        Yaml::AnchoredMap { name, entries } => {
-            used.insert(name.clone());
-            for (_, value) in entries {
-                collect_anchor_names(value, used);
-            }
-        }
-        Yaml::Map(entries) => {
-            for (_, value) in entries {
-                collect_anchor_names(value, used);
-            }
-        }
-        Yaml::Seq(items) => {
-            for value in items {
-                collect_anchor_names(value, used);
-            }
-        }
-        Yaml::Null
-        | Yaml::Str(_)
-        | Yaml::Bool(_)
-        | Yaml::Int(_)
-        | Yaml::Flow(_)
-        | Yaml::FlowMap(_)
-        | Yaml::Quoted(_)
-        | Yaml::Annotated { .. } => {}
-    }
-}
-
-#[cfg(test)]
-#[path = "yaml_share_mappings_tests.rs"]
-mod tests;

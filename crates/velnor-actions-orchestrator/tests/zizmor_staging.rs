@@ -145,7 +145,7 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
         report
             .files_written
             .iter()
-            .any(|path| { path == ".github/actions/velnor-cache-tar-launchers/action.yml" })
+            .any(|path| path == ".github/actions/velnor-cache-tar-launchers/action.yml")
     );
     assert!(
         report

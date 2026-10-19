@@ -192,7 +192,7 @@ fn build_workflow_jobs(
         input.fetch_roots,
         prepared.acquire.as_ref(),
         &prepared.report_helper_version,
-    );
+    )?;
     let built =
         crate::crate_jobs::build_for_workflow(crate_job_inputs, qualification_jobs_enabled)?;
     let qualification = if qualification_jobs_enabled {

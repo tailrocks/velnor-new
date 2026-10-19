@@ -27,6 +27,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             generator_validation: velnor_actions_contract::GeneratorValidation::Bootstrap,
             mise_quiet: true,
             max_parallel_jobs: 2,
+            crate_timeout_minutes: 5,
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
             tasks: Vec::new(),

@@ -41,7 +41,7 @@ fn assert_source_ir(mbx: bool) -> TestResult {
         "${{ runner.temp }}/velnor/cargo/registry/cache",
         "${{ runner.temp }}/velnor/cargo/git/db",
     ];
-    for id in ["plan", "rust-demo"] {
+    for id in ["plan", "rust-demo", "rust-demo", "rust-demo"] {
         let job = prep
             .workflow
             .ir
@@ -111,4 +111,40 @@ fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
         .ok_or("plan source save")?;
     assert_eq!(step.condition.as_deref(), Some(CACHE_SAVE_CONDITION));
     assert_elected_writer(false)
+}
+
+/// The Rust package job restores both caches before it fetches sources and runs tasks.
+pub(super) fn assert_restore_before_obligations(
+    prep: &velnor_actions_orchestrator::GenerationPreparation,
+) -> TestResult {
+    {
+        let id = "rust-demo";
+        let job = prep.workflow.ir.jobs.get(id).ok_or("missing package job")?;
+        let names: Vec<_> = job.steps.iter().map(|step| step.name.as_str()).collect();
+        let at = |name: &str| names.iter().position(|seen| *seen == name);
+        let (Some(restore), Some(mbx), Some(fetch)) = (
+            at("Restore Cargo sources"),
+            at("Restore MBX objects"),
+            at("Fetch Cargo sources"),
+        ) else {
+            return Err(format!("{id} cache order missing: {names:?}").into());
+        };
+        assert!(
+            restore < mbx && mbx < fetch,
+            "{id}: restore<mbx<fetch: {names:?}"
+        );
+        let tasks: Vec<_> = job
+            .steps
+            .iter()
+            .enumerate()
+            .filter(|(_, step)| matches!(step.kind, StepKind::TaskExecution { .. }))
+            .collect();
+        assert!(!tasks.is_empty(), "{id} owns obligations");
+        assert!(
+            tasks.iter().all(|(at, _)| fetch < *at),
+            "{id}: fetch precedes every obligation"
+        );
+        assert!(names.contains(&"Clippy"), "{id} retains Clippy");
+    }
+    Ok(())
 }

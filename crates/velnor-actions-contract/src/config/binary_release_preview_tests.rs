@@ -78,7 +78,7 @@ fn rejects_duplicate_or_unsafe_inventory_and_unbounded_producer_settings() {
     preview.companions[0].path = "../formula.rb".to_owned();
     assert!(preview.validate("config.toml").is_err());
     let mut preview = enabled_preview();
-    preview.producer.timeout_minutes = 11;
+    preview.producer.timeout_minutes = 361;
     assert!(preview.validate("config.toml").is_err());
     let mut preview = enabled_preview();
     preview.producer.build_jobs = 65;
@@ -282,13 +282,13 @@ fn rejects_inventory_larger_than_canonical_receipt_limits() {
 }
 
 #[test]
-fn timeout_accepts_budgets_through_ten_minutes() {
-    for minutes in 1..=10 {
+fn timeout_accepts_configured_budgets_and_rejects_above_github_limit() {
+    for minutes in [1, 5, 6, 30, 360] {
         let mut value = enabled_preview();
         value.producer.timeout_minutes = minutes;
         assert!(value.validate("config.toml").is_ok(), "{minutes}");
     }
-    for minutes in [0, 11, 30, 360, u16::MAX] {
+    for minutes in [0, 361, u16::MAX] {
         let mut value = enabled_preview();
         value.producer.timeout_minutes = minutes;
         assert!(value.validate("config.toml").is_err(), "{minutes}");

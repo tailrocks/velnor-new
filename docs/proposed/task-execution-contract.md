@@ -10,6 +10,28 @@ their own workflow steps; the orchestrator handles typed task definitions
 without assuming Cargo, Clippy, MBX, or Nextest. Internal task identities are
 used in plans and reports only. Velnor V1 does not generate Mise task files.
 
+## Fixed Rust execution phases
+
+Rust obligations keep their existing task identities, argument vectors and
+execution manifests. Their owning execution job is selected by the Rust
+adapter's closed lint/tests/docs phase, independently of package configuration.
+Formatting and Clippy belong to lint; executable builds, tests and doctests
+belong to tests; documentation building belongs to docs. Empty phases emit no
+job. Unknown kinds are rejected rather than omitted.
+
+A test executable build and its consumers remain on the same runner. Declared
+quality and data gates inside a phase remain ordered local obligations. Gates
+owned by another phase become exact owning-job dependencies. Required validates
+all phase conclusions and their exact task/report ownership; timeout, absent
+reports or a skipped predecessor cannot be promoted as success. Each phase has
+its own cumulative job execution budget of `workflow.crate_timeout_minutes`
+(default five, bounded `1..=360`).
+
+Plan and report artifact names bind both workflow run and attempt. A retry MUST
+rerun the complete workflow to create the new attempt's Plan and all reports.
+Failed-jobs-only reruns fail closed; they MUST NOT consume earlier-attempt plans
+or reports to make a partial retry appear complete.
+
 ## Current manifest and resolver boundary
 
 This section records the implemented data contract for generated task
@@ -63,8 +85,12 @@ argv directly with the validated environment. The workflow action input is
 the full `digest`; task ID stays in the manifest and plan-coverage condition,
 not as a second selector.
 
-Each matrix job MUST expose these named steps. A step MAY be a validated no-op, but it MUST write a
-report explaining why.
+Each nonempty fixed Rust phase job MUST expose its owned obligations as named
+steps, preceded by the common preparation applicable to its tools and inputs.
+It MUST NOT repeat another phase's obligation or emit placeholder work merely
+to reproduce the former combined job. A validated no-op for an applicable
+obligation MUST report its reason; no-target tasks remain excluded by the
+existing planning rule.
 
 The job's action prelude checks out the selected commit with the pinned
 `actions/checkout` and `persist-credentials: false`, initializes the pinned Mise action without project config
@@ -119,38 +145,47 @@ absent. A separate plan-job pre-seed may select the native MBX owner when it
 must build Velnor's source helper; that preparation does not install MBX into
 the Cargo-profile task job.
 
+Common preparation for each phase follows the existing tool and source ownership:
+
 1. `Prepare pinned tools`: install exact Velnor policy tools through a fixed
    Mise invocation that loads no project config (`--no-config` plus
    `MISE_NO_CONFIG=1`; project env/hooks disabled, Velnor-owned tool
    homes). Download bytes trust upstream TLS plus exact catalog pins;
    the committed `mise.lock` is never consulted at install time.
-2. `Verify toolchain`: verify Rust, selected compile driver, selected test
-   runner, target, runner platform, and report optional tool-file findings.
-3. `Restore Cargo sources`: restore only the Cargo source cache owned by Velnor.
-4. `Restore compiler objects`: use MBX's supported portable-object restore
-   path only when this workspace's detected profile selects MBX; otherwise
-   this step reports `not_applicable`.
-5. `Verify prepared inputs`: run locked/offline preparation checks.
-6. `Clippy`: run the matrix entry's fixed Clippy command and stop this job on
-   failure.
-7. `Build test executables`: build the selected test configuration once.
-8. `Unit and integration tests`: run the detected test runner for this
-   workspace. Nextest is selected only with explicit project usage; otherwise
-   invoke `cargo test`. V1 uses one command per package/configuration.
-9. `Doctests`: run the selected compile driver's doctest command.
-11. `Documentation`: build package docs with rustdoc warnings denied.
-12. `Save eligible caches`: save only permitted immutable snapshots.
-13. `Report timings and reuse`: write the final machine-readable report.
+2. Verify the selected Rust toolchain, compile driver, test runner, target and
+   runner platform, and report optional tool-file findings.
+3. Restore the Cargo source cache owned by Velnor and the selected compiler
+   cache when applicable. Keep their existing independent trust/write rules.
+4. Verify prepared inputs through locked/offline checks before obligations.
 
-The matrix job MUST execute Clippy before test compilation. Different matrix entries MUST run in
-parallel. Matrix `fail-fast` MUST be false so a package failure does not cancel independent package
-obligations. Test build and test execution steps MUST NOT run for a package whose Clippy task failed. See
-the [parallelism and affected-work contract](parallelism-and-selection-contract.md) for native
-background/wait groups, resource bounds, exact baseline coverage, and complete test partitioning.
-Formatting runs once in `plan` unless the package has an explicit formatting configuration.
+The closed phase owners execute these obligations:
 
-Nextest does not run doctests. The MBX profile uses `mbx test --doc` as the
-doctest harness. The Cargo profile uses its command in the table below.
+- `lint`: package formatting when explicitly configured, then Clippy.
+  Workspace formatting remains owned by `plan`.
+- `tests`: the applicable test-executable build, the detected test runner,
+  then doctests. Nextest is selected only with explicit project usage;
+  otherwise the existing Cargo-test command compiles and runs tests. Keep
+  executable builds and their consumers on the same runner. Existing shard
+  steps retain their complete partition coverage requirements.
+- `docs`: package documentation with rustdoc warnings denied.
+
+Every runnable task has exactly one owner. Same-phase quality/data gates MUST
+refer to strictly earlier obligations. A gate owned by another phase MUST
+become an exact owning-job `needs` dependency. Thus test work cannot start
+after its Clippy owner fails, and docs cannot start before their applicable
+Clippy and doctest owners succeed. Different packages or configurations may
+run concurrently only when no declared dependency orders them; distinct job
+names do not imply independence. There is no global all-package lint barrier.
+
+Each phase retains eligible cache saves and exact task/report publication under
+its own `workflow.crate_timeout_minutes` job budget. `Required` joins every emitted phase and admits
+all expected task proofs and job conclusions. A missing, skipped, canceled or
+failed required phase cannot be treated as success. Default Rust validation
+uses literal phase jobs, not a per-task matrix. Explicit named Nextest suites
+retain their separately declared matrix/archive fan-out and `fail-fast: false`
+policy; that suite mechanism does not redefine the default phase owners.
+See the [parallelism and affected-work contract](parallelism-and-selection-contract.md)
+for resource bounds, exact baseline coverage and complete test partitioning.
 
 All compile and test commands run through exact Velnor-pinned Mise tools with
 project config, env files, and hooks disabled. The Rust adapter records one
@@ -335,7 +370,7 @@ Each `[[stacks.rust.suites]]` entry validates fail-closed before rendering:
 - `run_ignored`: optional `"default" | "only" | "all"` (alias `"ignored-only"` for `"only"`), passing `--run-ignored only` or `--run-ignored all` when non-default; `[stacks.rust] run_ignored` sets the workspace-level default for standard crate tasks.
 - `partitions`: `1..=64` (default `1`), rendered as a GitHub Actions `strategy.matrix.shard` (`[1..=N]`, `fail-fast: false`) with `VELNOR_SUITE_SHARD: ${{ matrix.shard }}` in step `env` and `--partition "hash:$VELNOR_SUITE_SHARD/<N>"` passed to `nextest run`, independent of `resources.test_process_budget`.
 - `build`: `"inline" | "archive"` (default `"inline"`). When `partitions > 1` and `build = "archive"`, Velnor emits `suite-build-<id>` (`nextest archive` + archive artifact upload) and `suite-<id>` (`needs: [suite-build-<id>]`, downloading the archive and running `cargo nextest run --archive-file ... --workspace-remap . --extract-to . --extract-overwrite`).
-- `timeout_minutes`: `1..=10` (default `5`). Rust crate jobs use `10`.
+- `timeout_minutes`: `1..=360` (default `5`).
 - `test_threads`: optional `1..=64`, exported as `NEXTEST_TEST_THREADS`.
 - `runner_label`: optional catalog runner label override; defaults to `workflow.runner_label` or the latest pinned default.
 - `workflow`: optional standalone workflow slug (`[a-z0-9][a-z0-9_-]*` without `.yml`, default `"suites"` emitting `.github/workflows/suites.yml`); reserved generator slugs (`ci`, `freshness`, `release`, `binary-release`, `tofu-apply`, `qualification`, `product-release`, `monitoring`) are rejected.

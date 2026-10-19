@@ -115,8 +115,23 @@ fn orch_gen_plan_matches_generated_tree() -> TestResult {
             ".github/workflows/ci.yml"
         ]
     );
-    assert!(plan.contains("1 Rust crate job"), "crate wording:\n{plan}");
-    assert!(yaml.contains("  rust-demo:"), "crate presence parity");
+    assert!(
+        plan.contains("1 Rust package job"),
+        "crate wording:\n{plan}"
+    );
+    assert_eq!(yaml.matches("  rust-demo:\n").count(), 1, "one Rust job");
+    for obligation in [
+        "Format",
+        "Clippy",
+        "Unit and integration tests",
+        "Doctests",
+        "Documentation",
+    ] {
+        assert!(
+            yaml.contains(&format!("- name: {obligation}")),
+            "missing {obligation}"
+        );
+    }
     Ok(())
 }
 

@@ -160,32 +160,36 @@ fn mbx_evidence_keeps_plan_mise_free_and_uses_task_action() -> TestResult {
         "the non-compiling plan job must not install MBX:\n{}",
         steps[prepare_at].1
     );
-    let task_start = yaml.find("  rust-demo:").ok_or("missing MBX task job")?;
-    let task_tail = &yaml[task_start..];
-    let mut task_end = 0;
-    for line in task_tail.split_inclusive('\n') {
-        if task_end > 0 && is_job_header(line.trim_end_matches('\n')) {
-            break;
+    {
+        let task_start = yaml
+            .find("  rust-demo:")
+            .ok_or("missing Rust package job")?;
+        let task_tail = &yaml[task_start..];
+        let mut task_end = 0;
+        for line in task_tail.split_inclusive('\n') {
+            if task_end > 0 && is_job_header(line.trim_end_matches('\n')) {
+                break;
+            }
+            task_end += line.len();
         }
-        task_end += line.len();
+        let task = &task_tail[..task_end];
+        let version = catalog.version(PinnedTool::MrBoxington);
+        assert!(
+            task.matches("uses: jdx/mr-boxington-action@").count() == 1
+                && task.contains(&format!("version: {version}"))
+                && task.contains(MBX_VERSION_CHECK_NAME),
+            "the Rust package job has one pinned MBX action and version guard:\n{task}"
+        );
+        assert!(
+            !task.contains(&spec),
+            "MBX is not duplicated through Mise:\n{task}"
+        );
+        assert_eq!(
+            task.matches(MBX_RESTORE_NAME).count(),
+            1,
+            "one action-owner step:\n{task}"
+        );
     }
-    let task = &task_tail[..task_end];
-    let version = catalog.version(PinnedTool::MrBoxington);
-    assert!(
-        task.matches("uses: jdx/mr-boxington-action@").count() == 1
-            && task.contains(&format!("version: {version}"))
-            && task.contains(MBX_VERSION_CHECK_NAME),
-        "the MBX task has one pinned native action and version guard:\n{task}"
-    );
-    assert!(
-        !task.contains(&spec),
-        "MBX is not duplicated through Mise:\n{task}"
-    );
-    assert_eq!(
-        task.matches(MBX_RESTORE_NAME).count(),
-        1,
-        "one action-owner step:\n{task}"
-    );
     Ok(())
 }
 

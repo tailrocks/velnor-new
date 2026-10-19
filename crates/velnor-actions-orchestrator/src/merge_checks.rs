@@ -234,7 +234,7 @@ fn matrix_jobs_are_required<'a>(
 #[test]
 fn matrix_job_inventory_requires_every_owner() {
     assert!(matrix_jobs_are_required(
-        ["plan", "rust-demo", "rust-demo"],
+        ["plan", "rust-demo"],
         &["plan".to_owned(), "rust-demo".to_owned()],
     ));
     assert!(!matrix_jobs_are_required(

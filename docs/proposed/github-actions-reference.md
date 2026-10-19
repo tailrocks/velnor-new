@@ -49,6 +49,34 @@ the host's `xcode-select` setting.
 
 ## Compatibility Rules and Verification Procedures
 
+### Workflow YAML sharing (checked 2026-10-19)
+
+GitHub's official [workflow reuse reference](https://docs.github.com/en/actions/reference/workflows-and-actions/reusing-workflow-configurations#yaml-anchors-and-aliases)
+documents same-document environment mapping aliases and an entire job alias
+containing a steps sequence. These are YAML node substitution, not a reusable
+workflow or composite-action call: expressions and environment values retain
+their use-site job and step context. The [official announcement](https://github.blog/changelog/2025-09-18-actions-yaml-anchors-and-non-public-workflow-templates/)
+records workflow anchor/alias support.
+
+Velnor uses a narrower grammar only when a workflow exceeds its unchanged
+500,000-byte transport limit: exact job `env`, step `env`/`with`, whole step
+mapping, and existing `run` scalar reuse. It never moves execution, credentials,
+permissions, dependencies, caches or outputs into a different scope. Definitions
+precede uses in one globally unique document namespace. Staged shell validation
+normalizes only those emitted forms before its existing ancestry, effective-shell
+and ShellCheck checks. Input is bounded to 500,000 bytes, nesting to 32 levels,
+and normalization work to 262,144 nodes and 16 MiB; merge keys, tags on shared
+nodes, forward/cyclic references and other alias scopes fail closed.
+
+This Velnor admission does **not** extend to local action manifests. The original
+runner's [legacy `YamlObjectReader.EvaluateCurrent`](https://github.com/actions/runner/blob/main/src/Sdk/DTPipelines/Pipelines/ObjectTemplating/YamlObjectReader.cs)
+rejects scalar/mapping/sequence anchors and alias events, but
+[`ActionManifestManager` at runner v2.337.0](https://github.com/actions/runner/blob/v2.337.0/src/Runner.Worker/ActionManifestManager.cs)
+loads action manifests through the separate `GitHub.Actions.WorkflowParser`
+reader. The legacy implementation alone does not prove that package's behavior.
+Action-manifest alias compatibility is not qualified by this workflow-only
+change; Velnor emits no new aliases into composite `action.yml` files.
+
 1. **Protocol Fidelity Over Assumptions**:
    - `actions/runner` and `actions/scaleset` define the exact wire protocols, message shapes, and validation behaviors.
    - Any runner implementation or generator assumption must be verified against the official C#/Go source code in these repositories.
@@ -242,50 +270,7 @@ require the PR branch to be current before merging. Therefore a workflow whose
 contract promises PR-only promotion must independently require the server-side
 pull-request rule; required checks and a client-side PR workflow are insufficient.
 
-### Cache save outcome and stored-payload evidence (2026-10-18)
-
-Velnor pins `actions/cache` to `55cc8345863c7cc4c66a329aec7e433d2d1c52a9`
-(v6.1.0). Its pinned [save-only bundle](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/dist/save-only/index.js)
-records a warning when the cache service does not save the bytes. A successful step outcome
-records the action result only. It does not show that the service stored the
-bytes sent for storage.
-
-The action's [lockfile](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/package-lock.json)
-selects `@actions/cache` 6.1.0. Its [package artifact](https://registry.npmjs.org/@actions/cache/-/cache-6.1.0.tgz)
-has integrity `sha512-LVqybSbzhBp2uAETOQ3HnVjXA4AcjavgMH+LCr+cjgO+PZfciv/1QAgoW+esXBaAhvDid+vXeV70GGJpAh4V5Q==`
-and SHA-256 `88ed2cf43d91201de44a2f1b40741dc67d50fb0f1260b3ac8e6c3cfd1842bd47`.
-The package's `lib/cache.js`, `lib/internal/cacheUtils.js`, and
-`lib/internal/tar.js` files are in that artifact. The `getCacheVersion` function
-hashes the initial `paths` input in its given sequence, the compression method,
-and the version salt. Save and restore must use the same values. The
-`resolvePaths` function makes archive member paths relative to the workspace; it
-does not supply the version input. On Darwin, the action selects `gtar` before
-`tar`. On Linux, it selects `tar` from `PATH`. The tar command uses `-P
--C GITHUB_WORKSPACE` to write the archive contents. Archive member paths
-identify the write locations. The pinned [restore-only bundle](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/dist/restore-only/index.js)
-contains the restore implementation.
-
-The action outcome, cache service observation, and stored-payload result are
-three records. Before you record a stored-payload result, do these checks:
-
-- An exact-key restore to an owned stage.
-- Pre-extraction archive checks.
-- A format-3 manifest check.
-- Agreement between the restored useful-state digest and the export digest kept
-  outside the restore stage.
-- A backend record with the same key, ref, version, and cache ID as the restored entry.
-
-This records agreement for the stored bytes. It does not say that this run
-made the cache entry. The restore action output, a successful save step, or an
-exact-key backend listing alone gives no stored-payload result.
-
-The runner's archive adapter still needs an action-level check of the selected
-tar executable and confinement environment for the pinned restore action. The
-check must include `gtar` on Darwin. Until the action-level check shows
-pre-extraction confinement for the staged path used by the action, do not report a
-stored-payload result.
-
-## Job budgets and cancellation (2026-10-18)
+## Job budgets and cancellation (2026-10-18, range widened 2026-10-19)
 
 Compatibility was checked against original `actions/runner` commit
 [`9abfe11d2abd9de09d3a8d933d7ed701ea0518a3`](https://github.com/actions/runner/commit/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3).
@@ -293,7 +278,11 @@ The runner's [executable-job schema](https://github.com/actions/runner/blob/9abf
 accepts `timeout-minutes` on a job with `runs-on`. GitHub's
 [job-timeout contract](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idtimeout-minutes)
 says expiration automatically cancels that job; its default is 360 minutes.
-Velnor must explicitly emit a timeout between one and ten minutes on every
+GitHub's [Actions limits](https://docs.github.com/en/actions/reference/limits)
+cap each GitHub-hosted job at six hours of execution time (self-hosted: five
+days), so Velnor's configurable upper bound is 360 minutes.
+Velnor must explicitly emit a timeout between one and 360 minutes (five by
+default; never GitHub's implicit default) on every
 executable job, including CI, qualification, native image, signing, publication,
 recovery, and reusable-workflow callees. GitHub provides no workflow-wide timeout
 keyword: queued time, environment approval, and successive jobs are separate

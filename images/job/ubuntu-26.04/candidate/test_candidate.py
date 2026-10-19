@@ -198,31 +198,31 @@ class CandidateTests(unittest.TestCase):
     def test_wrong_platform_rejected(self) -> None:
         entries = archive_entries({"architecture": "arm64", "os": "linux"})
         write_archive(self.archive, entries)
-        with self.assertRaisesRegex(candidate.CandidateError, "exactly linux/amd64"):
+        with self.assertRaisesRegex(candidate.CandidateError, "platform is not linux/amd64"):
             candidate.verify_oci_archive(self.archive)
 
     def test_invalid_rootfs_diff_id_rejected(self) -> None:
         entries = archive_entries(diff_ids="x")
         write_archive(self.archive, entries)
-        with self.assertRaisesRegex(candidate.CandidateError, "layers do not match"):
+        with self.assertRaisesRegex(candidate.CandidateError, "incorrect DiffID data"):
             candidate.verify_oci_archive(self.archive)
 
     def test_wrong_but_well_formed_diff_id_rejected(self) -> None:
         entries = archive_entries(diff_ids=["sha256:" + "0" * 64])
         write_archive(self.archive, entries)
-        with self.assertRaisesRegex(candidate.CandidateError, "DiffID does not match"):
+        with self.assertRaisesRegex(candidate.CandidateError, "DiffID is not the same as"):
             candidate.verify_oci_archive(self.archive)
 
     def test_unregistered_layer_media_type_rejected(self) -> None:
         entries = archive_entries(media_type="application/vnd.oci.image.layer.v1.evil")
         write_archive(self.archive, entries)
-        with self.assertRaisesRegex(candidate.CandidateError, "media type is invalid"):
+        with self.assertRaisesRegex(candidate.CandidateError, "media type is incorrect"):
             candidate.verify_oci_archive(self.archive)
 
     def test_layer_must_be_a_tar_archive(self) -> None:
         entries = archive_entries(layer_data=b"not a tar archive")
         write_archive(self.archive, entries)
-        with self.assertRaisesRegex(candidate.CandidateError, "not a valid tar archive"):
+        with self.assertRaisesRegex(candidate.CandidateError, "not a tar archive"):
             candidate.verify_oci_archive(self.archive)
 
     def test_gzip_layer_uses_uncompressed_diff_id(self) -> None:
@@ -354,7 +354,7 @@ class CandidateTests(unittest.TestCase):
     def test_record_rejects_unrecorded_build_arguments(self) -> None:
         record = valid_record(self.archive)
         record["build"]["arguments"] = ["TOKEN=secret"]
-        with self.assertRaisesRegex(candidate.CandidateError, "empty build argument list"):
+        with self.assertRaisesRegex(candidate.CandidateError, "Build arguments must be empty"):
             candidate.validate_record(record)
 
     def test_buildx_banner_does_not_replace_binary_hash(self) -> None:
@@ -370,7 +370,7 @@ class CandidateTests(unittest.TestCase):
             f" print(json.dumps([{{'Name': 'buildx', 'Version': 'v0.38.0', 'Path': {str(binary)!r}}}]))\n"
         )
         docker.chmod(0o755)
-        with self.assertRaisesRegex(candidate.CandidateError, "binary does not match"):
+        with self.assertRaisesRegex(candidate.CandidateError, "binary is not the same as"):
             candidate._buildx_details(str(docker), candidate.ROOT)
 
     def test_archive_size_limit_rejects_oversized_input(self) -> None:

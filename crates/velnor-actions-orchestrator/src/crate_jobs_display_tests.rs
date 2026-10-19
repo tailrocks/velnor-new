@@ -2,7 +2,7 @@
 //!
 //! Declared via `#[path]` from `crate_jobs.rs` under `cfg(test)`: ID
 //! and display prefixes derive from the same all-tofu partition, so
-//! they can never disagree; mixed groups keep the rust union.
+//! they can never disagree; collocated Rust and Tofu obligations keep separate owners.
 
 use super::crate_jobs_tests::{discovery, group};
 use super::*;
@@ -44,11 +44,12 @@ fn id_and_display_prefixes_agree_per_partition() {
         fetch_roots: &[],
         acquire: None,
         max_parallel_jobs: 2,
+        timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 4, "Rust and ToFu groups stay separate");
+    assert_eq!(found.jobs.len(), 4, "one job for each package or root");
     for (id, job) in &found.jobs {
         let tofu_id = id.starts_with(TOFU_JOB_ID_PREFIX);
         let tofu_display = job.display_name.starts_with(TOFU_DISPLAY_PREFIX);
@@ -66,16 +67,18 @@ fn id_and_display_prefixes_agree_per_partition() {
             .map(|(_, job)| job.display_name.clone())
             .expect("built job")
     };
-    assert_eq!(display("rust-demo"), "Rust / demo (Cargo.toml)");
     assert_eq!(display("tofu-stacks-a"), "OpenToFu — stacks/a");
-    let mixed = found
+    assert_eq!(display("tofu-stacks-b"), "OpenToFu — stacks/b");
+    let rust_jobs: Vec<_> = found
         .jobs
         .iter()
-        .find(|(id, _)| id.starts_with("rust-") && *id != "rust-demo")
-        .expect("mixed group");
+        .filter(|(id, _)| id.starts_with("rust-"))
+        .collect();
+    assert_eq!(rust_jobs.len(), 2);
+    assert!(rust_jobs.iter().all(|(id, _)| !id.ends_with("-lint")));
     assert!(
-        mixed.1.display_name.starts_with("Rust / "),
-        "mixed keeps rust: {}",
-        mixed.1.display_name
+        rust_jobs
+            .iter()
+            .all(|(_, job)| job.display_name.starts_with("Rust / "))
     );
 }

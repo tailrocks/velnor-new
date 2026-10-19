@@ -1,4 +1,4 @@
-//! Render the workflow that builds and attests a Linux job image.
+//! Render the workflow that builds, attests, and publishes a Linux job image.
 
 use velnor_actions_contract::{JobTimeout, RoutingWorkflow};
 
@@ -10,11 +10,13 @@ use crate::{RenderError, render::RenderedFile, runs_on::runs_on_yaml, yaml::Yaml
 use super::Schema2WorkflowRequest;
 
 /// The file path for the job image candidate workflow.
-pub const WORKFLOW_PATH: &str = ".github/workflows/job-image-candidate.yml";
+pub(super) const WORKFLOW_PATH: &str = ".github/workflows/job-image-candidate.yml";
 
 const ARCHIVE: &str = "job-image.oci.tar";
 const RECORD: &str = "job-image-candidate.json";
-const ARTIFACT_PREFIX: &str = "velnor-job-image";
+const ARTIFACT_NAME: &str = "velnor-job-image-candidate-${{ github.run_attempt }}";
+const PUBLICATION_EVIDENCE: &str =
+    "velnor-job-image-publication-evidence-${{ github.run_attempt }}";
 const BUILDX_INSTALL: &str = r#"python3 - "$GITHUB_WORKSPACE/.velnor/runner.lock" "$RUNNER_TEMP/velnor-docker-config/cli-plugins/docker-buildx" <<'PY'
 import hashlib
 import os
@@ -57,11 +59,11 @@ finally:
         os.unlink(temporary)
 PY"#;
 
-/// Render the job image candidate workflow with the specified routing policy.
+/// Render the job image candidate workflow on the hosted runner.
 ///
 /// # Errors
 ///
-/// The function returns an error if runner labels, workflow routing, or workflow bytes are incorrect.
+/// The function returns an error if the request or workflow bytes are incorrect.
 pub fn render_candidate_workflow(
     request: &Schema2WorkflowRequest,
 ) -> Result<RenderedFile, RenderError> {
@@ -79,7 +81,8 @@ fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let hosted = runs_on_yaml(&request.hosted_label)?;
     let artifact_id = "${{ needs.build-image-candidate.outputs.artifact_id }}";
     let build = build_job(hosted.clone());
-    let attest = attest_job(hosted, artifact_id);
+    let attest = attest_job(hosted.clone(), artifact_id);
+    let publish = publish_job(hosted, artifact_id);
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Job image candidate")),
         (
@@ -93,26 +96,22 @@ fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
             "permissions".to_owned(),
             permissions(&[("contents", "read")]),
         ),
-        ("jobs".to_owned(), Yaml::Map(vec![build, attest])),
+        ("jobs".to_owned(), Yaml::Map(vec![build, attest, publish])),
     ]))
 }
 
 fn build_job(hosted: Yaml) -> (String, Yaml) {
-    let artifact_name = format!(
-        "{ARTIFACT_PREFIX}-${{{{ github.run_id }}}}-a${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}-${{{{ github.workflow_sha }}}}-${{{{ steps.artifact_identity.outputs.ref_sha256 }}}}"
-    );
     let build_command = format!(
         "DOCKER_CONFIG=\"$RUNNER_TEMP/velnor-docker-config\" python3 images/job/ubuntu-26.04/candidate/candidate.py build --source-commit \"$GITHUB_SHA\" --archive \"$RUNNER_TEMP/{ARCHIVE}\" --record \"$RUNNER_TEMP/{RECORD}\""
     );
     let steps = vec![
-        checkout_step("Use the exact source commit"),
-        ref_identity_step(),
+        checkout_step("Use the source commit selected by GitHub."),
         run_step(
             "Install the Buildx plugin from .velnor/runner.lock",
             BUILDX_INSTALL,
         ),
         run_step("Build the job image candidate", &build_command),
-        upload_step(&artifact_name),
+        upload_step(),
     ];
     let fields = vec![
         (
@@ -131,7 +130,7 @@ fn build_job(hosted: Yaml) -> (String, Yaml) {
         (
             "outputs".to_owned(),
             Yaml::Map(vec![
-                ("artifact_name".to_owned(), Yaml::str(artifact_name.clone())),
+                ("artifact_name".to_owned(), Yaml::str(ARTIFACT_NAME)),
                 (
                     "artifact_id".to_owned(),
                     Yaml::str("${{ steps.upload.outputs.artifact-id }}"),
@@ -150,10 +149,7 @@ fn attest_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
         "python3 images/job/ubuntu-26.04/candidate/candidate.py validate --archive \"{archive}\" --record \"{record}\""
     );
     let attest = Yaml::Map(vec![
-        (
-            "name".to_owned(),
-            Yaml::str("Attest the exact candidate bytes"),
-        ),
+        ("name".to_owned(), Yaml::str("Attest all candidate bytes.")),
         ("uses".to_owned(), Yaml::str(ATTEST_BUILD_PROVENANCE_USES)),
         (
             "with".to_owned(),
@@ -164,7 +160,7 @@ fn attest_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
         ),
     ]);
     let steps = vec![
-        checkout_step("Use the exact source commit"),
+        checkout_step("Use the source commit selected by GitHub."),
         artifact_id_check_step(artifact_id),
         download_step(artifact_id),
         run_step("Do a check of source and archive identity", &validate),
@@ -199,6 +195,80 @@ fn attest_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
     ("attest-image-candidate".to_owned(), Yaml::Map(fields))
 }
 
+fn publish_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
+    let archive = format!("candidate/{ARCHIVE}");
+    let record = format!("candidate/{RECORD}");
+    let result = "$RUNNER_TEMP/job-image-publication.json";
+    let publish = format!(
+        "python3 images/job/ubuntu-26.04/candidate/publish.py --root . --archive \"{archive}\" --record \"{record}\" --result \"{result}\""
+    );
+    let mut publish_step = run_step(
+        "Publish the job image with its signed build evidence.",
+        &publish,
+    );
+    if let Yaml::Map(fields) = &mut publish_step {
+        fields.push((
+            "env".to_owned(),
+            Yaml::Map(vec![
+                ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
+                (
+                    "VELNOR_CANDIDATE_ARTIFACT_ID".to_owned(),
+                    Yaml::str(artifact_id),
+                ),
+            ]),
+        ));
+    }
+    let steps = vec![
+        checkout_step("Use the source commit selected by GitHub."),
+        artifact_id_check_step(artifact_id),
+        download_step(artifact_id),
+        publish_step,
+        publication_evidence_upload_step("${{ runner.temp }}/job-image-publication.json"),
+    ];
+    let fields = vec![
+        ("name".to_owned(), Yaml::str("Publish Linux job image")),
+        ("runs-on".to_owned(), hosted),
+        (
+            "timeout-minutes".to_owned(),
+            Yaml::Int(i64::from(JobTimeout::PUBLISH.minutes())),
+        ),
+        (
+            "if".to_owned(),
+            Yaml::str(
+                "${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}",
+            ),
+        ),
+        (
+            "needs".to_owned(),
+            Yaml::Seq(vec![
+                Yaml::str("build-image-candidate"),
+                Yaml::str("attest-image-candidate"),
+            ]),
+        ),
+        (
+            "concurrency".to_owned(),
+            Yaml::Map(vec![
+                (
+                    "group".to_owned(),
+                    Yaml::str("${{ github.repository }}-job-image-publish"),
+                ),
+                ("cancel-in-progress".to_owned(), Yaml::Bool(false)),
+            ]),
+        ),
+        (
+            "permissions".to_owned(),
+            permissions(&[
+                ("actions", "read"),
+                ("attestations", "read"),
+                ("contents", "read"),
+                ("packages", "write"),
+            ]),
+        ),
+        ("steps".to_owned(), Yaml::Seq(steps)),
+    ];
+    ("publish-job-image".to_owned(), Yaml::Map(fields))
+}
+
 fn checkout_step(name: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
@@ -214,17 +284,6 @@ fn checkout_step(name: &str) -> Yaml {
     ])
 }
 
-fn ref_identity_step() -> Yaml {
-    let mut step = run_step(
-        "Set the artifact name from the Git ref",
-        "set -eu\nref_sha256=\"$(printf '%s' \"$GITHUB_REF\" | sha256sum | awk '{ print $1 }')\"\ntest \"${#ref_sha256}\" -eq 64\nprintf 'ref_sha256=%s\\n' \"$ref_sha256\" >> \"$GITHUB_OUTPUT\"",
-    );
-    if let Yaml::Map(fields) = &mut step {
-        fields.push(("id".to_owned(), Yaml::str("artifact_identity")));
-    }
-    step
-}
-
 fn run_step(name: &str, command: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
@@ -233,18 +292,18 @@ fn run_step(name: &str, command: &str) -> Yaml {
     ])
 }
 
-fn upload_step(name: &str) -> Yaml {
+fn upload_step() -> Yaml {
     Yaml::Map(vec![
         (
             "name".to_owned(),
-            Yaml::str("Store candidate archive and record"),
+            Yaml::str("Upload candidate archive and record"),
         ),
         ("id".to_owned(), Yaml::str("upload")),
         ("uses".to_owned(), Yaml::str(UPLOAD_ARTIFACT_USES)),
         (
             "with".to_owned(),
             Yaml::Map(vec![
-                ("name".to_owned(), Yaml::str(name)),
+                ("name".to_owned(), Yaml::str(ARTIFACT_NAME)),
                 (
                     "path".to_owned(),
                     Yaml::str(format!(
@@ -253,6 +312,25 @@ fn upload_step(name: &str) -> Yaml {
                 ),
                 ("if-no-files-found".to_owned(), Yaml::str("error")),
                 ("retention-days".to_owned(), Yaml::Int(30)),
+            ]),
+        ),
+    ])
+}
+
+fn publication_evidence_upload_step(result: &str) -> Yaml {
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Upload job image publication evidence"),
+        ),
+        ("uses".to_owned(), Yaml::str(UPLOAD_ARTIFACT_USES)),
+        (
+            "with".to_owned(),
+            Yaml::Map(vec![
+                ("name".to_owned(), Yaml::str(PUBLICATION_EVIDENCE)),
+                ("path".to_owned(), Yaml::str(result)),
+                ("if-no-files-found".to_owned(), Yaml::str("error")),
+                ("retention-days".to_owned(), Yaml::Int(7)),
             ]),
         ),
     ])
@@ -282,7 +360,7 @@ fn download_step(artifact_id: &str) -> Yaml {
     Yaml::Map(vec![
         (
             "name".to_owned(),
-            Yaml::str("Get the job image candidate from this workflow run"),
+            Yaml::str("Download the job image candidate from this workflow run"),
         ),
         ("uses".to_owned(), Yaml::str(DOWNLOAD_ARTIFACT_USES)),
         (

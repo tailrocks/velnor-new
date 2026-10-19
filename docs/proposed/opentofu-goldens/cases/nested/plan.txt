@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.19
+Velnor Actions plan 0.1.22
 Repository: <repo>
 
 Detected stacks
@@ -21,8 +21,9 @@ Workflow to generate
     - required (8 steps)
     - rust-a (18 steps)
     - rust-lib (17 steps)
-    - 2 Rust crate jobs
-      Each: Clippy -> run tests -> doctests -> doc build -> format check
+    - 2 Rust package jobs
+      Timeout: 5 minutes per crate job
+      Obligations: Clippy -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-a
         - rust-lib
@@ -37,7 +38,7 @@ Workflow to generate
         - stack/rust/nested/lib/doctest/default
         - stack/rust/nested/lib/fmt/default
         - stack/rust/nested/lib/test/default
-  Parallel: 2 independent crate jobs; no matrix fan-out
+  Parallel: 2 execution jobs; dependencies preserved; no matrix fan-out
   Critical path: stack/rust/crates/a/clippy/default -> stack/rust/crates/a/doctest/default -> stack/rust/crates/a/doc/default (3 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources

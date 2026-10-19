@@ -106,7 +106,7 @@ fn rejects_unqualified_inputs_tools_and_unbounded_task() {
     config.updater.tools.push("jq".to_owned());
     assert!(config.validate("config.toml").is_err());
     config = valid();
-    config.updater.timeout_minutes = 11;
+    config.updater.timeout_minutes = 361;
     assert!(config.validate("config.toml").is_err());
     config = valid();
     config.updater.inputs.retain(|path| path != "mise.toml");
@@ -159,13 +159,13 @@ fn closed_enums_reject_arbitrary_source_environment_and_merge_values() {
 }
 
 #[test]
-fn timeout_accepts_budgets_through_ten_minutes() {
-    for minutes in 1..=10 {
+fn timeout_accepts_configured_budgets_and_rejects_above_github_limit() {
+    for minutes in [1, 5, 6, 30, 360] {
         let mut value = valid();
         value.updater.timeout_minutes = minutes;
         assert!(value.validate("config.toml").is_ok(), "{minutes}");
     }
-    for minutes in [0, 11, 30, 360, u32::MAX] {
+    for minutes in [0, 361, u32::MAX] {
         let mut value = valid();
         value.updater.timeout_minutes = minutes;
         assert!(value.validate("config.toml").is_err(), "{minutes}");

@@ -253,6 +253,7 @@ fn complete_group(
         task,
         inputs.wire.event,
     )
+    .map_err(internal_contract)?
     .ok_or_else(|| internal("crate_job_id_missing"))?;
     let lanes = inputs
         .named_check_lanes

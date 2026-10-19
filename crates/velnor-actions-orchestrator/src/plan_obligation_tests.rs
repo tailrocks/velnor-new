@@ -84,6 +84,7 @@ fn qualification_lanes(task: &ProposedTask) -> Vec<NamedCheckLane> {
         task,
         WorkflowEvent::Qualification,
     )
+    .expect("valid owner lookup")
     .expect("shared qualification job identity");
     vec![
         NamedCheckLane {

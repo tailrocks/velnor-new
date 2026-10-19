@@ -1,6 +1,5 @@
 use super::{
-    CrateJob, Job, JobTimeout, OrchestratorError, PLAN_JOB_ID, Step, TaskCacheMode, ToolCatalog,
-    WorkflowPolicy,
+    CrateJob, Job, JobTimeout, OrchestratorError, Step, TaskCacheMode, ToolCatalog, WorkflowPolicy,
 };
 
 #[expect(
@@ -22,6 +21,8 @@ pub(super) fn render_job(
     max_parallel_jobs: u32,
     helper_version: &str,
     cache_policy: velnor_actions_contract::PullRequestCachePolicy,
+    timeout: JobTimeout,
+    needs: Vec<String>,
     qualification: bool,
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
@@ -87,8 +88,8 @@ pub(super) fn render_job(
         display_name: model.display_name.clone(),
         runs_on: label.to_owned(),
         check_runner: None,
-        timeout_minutes: JobTimeout::CRATE,
-        needs: vec![PLAN_JOB_ID.to_owned()],
+        timeout_minutes: timeout,
+        needs,
         condition: None,
         permissions: None,
         environment: None,

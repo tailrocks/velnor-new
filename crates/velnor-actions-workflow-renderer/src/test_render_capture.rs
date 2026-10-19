@@ -37,10 +37,9 @@ pub fn take() -> Option<RenderCapture> {
     CAPTURE.with(|capture| capture.borrow_mut().take())
 }
 
-/// Run diagnostic capture without applying the per-file workflow limit.
+/// Run diagnostic capture without the per-file size limit.
 ///
-/// Callers must validate the complete staged tree after rendering. This
-/// feature exists only for the ignored render-capture test harness.
+/// The caller must check the complete workflow tree after rendering.
 pub fn with_full_tree_capture<T>(capture: impl FnOnce() -> T) -> T {
     let previous = FULL_TREE_CAPTURE.with(|enabled| enabled.replace(true));
     let _scope = FullTreeCaptureScope(previous);
@@ -61,4 +60,38 @@ pub(crate) fn record(path: &str, canonical: String, selected: String) {
             selected,
         });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+
+    use super::{full_tree_capture_enabled, with_full_tree_capture};
+
+    #[test]
+    fn full_tree_capture_scope_restores_nested_state() {
+        assert!(!full_tree_capture_enabled());
+
+        let result = with_full_tree_capture(|| {
+            assert!(full_tree_capture_enabled());
+            with_full_tree_capture(|| assert!(full_tree_capture_enabled()));
+            assert!(full_tree_capture_enabled());
+            7
+        });
+
+        assert_eq!(result, 7);
+        assert!(!full_tree_capture_enabled());
+    }
+
+    #[test]
+    fn full_tree_capture_scope_restores_state_after_panic() {
+        assert!(!full_tree_capture_enabled());
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            with_full_tree_capture(|| panic!("test unwind"));
+        }));
+
+        assert!(result.is_err());
+        assert!(!full_tree_capture_enabled());
+    }
 }

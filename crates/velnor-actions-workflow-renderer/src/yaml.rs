@@ -123,15 +123,8 @@ impl Yaml {
 #[path = "yaml_share.rs"]
 mod share;
 
-#[path = "yaml_share_mappings.rs"]
-mod share_mappings;
-
-pub(crate) fn share_step_run_scalars(node: Yaml) -> Yaml {
-    share::share_step_run_scalars(node)
-}
-
-pub(crate) fn share_step_mappings(node: Yaml) -> Yaml {
-    share_mappings::share_step_mappings(node)
+pub(crate) fn share_workflow_nodes(node: Yaml) -> Result<Yaml, crate::RenderError> {
+    share::share_workflow_nodes(node)
 }
 
 #[path = "yaml_emit.rs"]

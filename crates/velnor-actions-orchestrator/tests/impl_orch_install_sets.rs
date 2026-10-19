@@ -177,15 +177,15 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
         }
         let cli = runs
             .get("rust-velnor-actions-cli")
-            .ok_or("cli crate job missing")?;
+            .ok_or("CLI package job missing")?;
         for spec in trio {
-            assert!(cli.contains(spec), "cli suite spawns validators: {cli}");
+            assert!(cli.contains(spec), "CLI job keeps {spec}: {cli}");
         }
-        let demo = runs.get("rust-demo").ok_or("demo crate job missing")?;
+        let demo = runs.get("rust-demo").ok_or("demo package job missing")?;
         for spec in trio {
-            assert!(!demo.contains(spec), "demo must trim {spec}: {demo}");
+            assert!(!demo.contains(spec), "demo job omits {spec}: {demo}");
         }
-        assert!(demo.contains("rust@"), "demo keeps its driver: {demo}");
+        assert!(demo.contains("rust@"), "demo job keeps its driver: {demo}");
         let required = runs.get("required").ok_or("required missing")?;
         assert!(required.contains("gh@"), "required installs gh: {required}");
         for spec in trio {

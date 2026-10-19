@@ -133,14 +133,14 @@ mod tests {
 
     #[test]
     fn timeout_is_bounded_and_runner_targets_are_platform_specific() {
-        for timeout in 1..=10 {
+        for timeout in [1, 5, 6, 30, 360] {
             assert!(
                 task("audit", "audit", timeout)
                     .validate("config.toml")
                     .is_ok()
             );
         }
-        for timeout in [0, 11, 360, u16::MAX] {
+        for timeout in [0, 361, u16::MAX] {
             assert!(
                 task("audit", "audit", timeout)
                     .validate("config.toml")

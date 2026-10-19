@@ -168,7 +168,7 @@ fn cache_path_entries(yaml: &str) -> Vec<String> {
 fn per_job_sources_keys_identical_plan_and_crates() -> TestResult {
     let (_repo, prep) = prep_for(true)?;
     let crates = crate_jobs(&prep);
-    assert_eq!(crates.len(), 2, "two crate jobs: {crates:?}");
+    assert_eq!(crates, ["rust-a", "rust-b"]);
     let plan_restore = action_inputs(job_steps(&prep, "plan")?, "Restore Cargo sources")?
         .get("key")
         .cloned();
@@ -199,7 +199,14 @@ fn per_job_mise_keys_qualified_without_job_suffix() -> TestResult {
     for mbx in [false, true] {
         let yaml = yaml_for(mbx)?;
         let pairs = tools_keys_by_job(&yaml);
-        assert!(pairs.len() >= 3, "plan plus crates (mbx={mbx}): {pairs:?}");
+        assert_eq!(
+            pairs
+                .iter()
+                .map(|(job, _)| job.as_str())
+                .collect::<Vec<_>>(),
+            ["actionlint", "plan", "rust-a", "rust-b"],
+            "each tool consumer has one cache key (mbx={mbx})"
+        );
         for (job, key) in &pairs {
             assert!(!job.is_empty(), "key inside a job: {key}");
             assert!(key.starts_with("mise-tools-v2-"), "qualified: {key}");
@@ -214,12 +221,13 @@ fn per_job_mise_keys_qualified_without_job_suffix() -> TestResult {
                 .find(|(job, _)| job == want)
                 .map(|(_, key)| key.clone())
         };
+        let a = key_for("rust-a");
+        let b = key_for("rust-b");
+        assert!(a.is_some() && b.is_some() && key_for("plan").is_some());
         assert_eq!(
-            key_for("rust-a"),
-            key_for("rust-b"),
-            "identical unions share (mbx={mbx}): {pairs:?}"
+            a, b,
+            "the package tool sets have the same key (mbx={mbx}): {pairs:?}"
         );
-        assert!(key_for("rust-a").is_some() && key_for("plan").is_some());
     }
     Ok(())
 }

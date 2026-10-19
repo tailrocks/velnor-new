@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn plan_matrix_owners_must_remain_in_required_inventory() {
-    let all_matrix_jobs = ["plan", "rust-demo", "rust-demo"];
+    let all_matrix_jobs = ["plan", "rust-demo"];
     let required = vec!["plan".to_owned(), "rust-demo".to_owned()];
     assert!(matrix_jobs_are_required(all_matrix_jobs, &required));
     assert!(!matrix_jobs_are_required(

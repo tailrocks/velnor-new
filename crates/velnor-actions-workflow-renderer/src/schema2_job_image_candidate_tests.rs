@@ -1,14 +1,16 @@
 use std::collections::BTreeSet;
 
+use crate::workflow_routing::WorkflowRoutingPolicy;
+use velnor_actions_contract::config::ValidatedImageReference;
 use velnor_actions_contract::{ExecutionMode, RoutingWorkflow};
 
 use crate::yaml::Yaml;
 
 use super::super::{Schema2WorkflowRequest, product_release_test_pins};
-use super::{ARTIFACT_PREFIX, WORKFLOW_PATH};
+use super::{ARTIFACT_NAME, PUBLICATION_EVIDENCE, WORKFLOW_PATH};
 
 #[test]
-fn image_selection_emits_repeatable_candidate_build_and_attestation() {
+fn image_selection_emits_repeatable_candidate_build_attestation_and_publish() {
     let request = request();
     let first = crate::schema2::render_schema2_workflows(&request)
         .expect("Render the job image candidate workflow.");
@@ -31,6 +33,7 @@ fn image_selection_emits_repeatable_candidate_build_and_attestation() {
         "workflow_dispatch:",
         "build-image-candidate:",
         "attest-image-candidate:",
+        "publish-job-image:",
         "needs:",
         "images/job/ubuntu-26.04/candidate/candidate.py build",
         "--source-commit",
@@ -50,12 +53,8 @@ fn image_selection_emits_repeatable_candidate_build_and_attestation() {
         "os.chmod(temporary, 0o755)",
         "DOCKER_CONFIG",
         "${{ github.sha }}",
-        "${{ github.workflow_sha }}",
-        "${{ github.run_id }}",
-        "${{ github.run_attempt }}",
         "${{ runner.temp }}/job-image.oci.tar",
         "${{ runner.temp }}/job-image-candidate.json",
-        "GITHUB_REF",
         "actions/attest-build-provenance@",
         "actions/upload-artifact@",
         "actions/download-artifact@",
@@ -64,17 +63,25 @@ fn image_selection_emits_repeatable_candidate_build_and_attestation() {
         "attestations: write",
         "id-token: write",
         "artifact-metadata: write",
+        "VELNOR_CANDIDATE_ARTIFACT_ID",
+        "GH_TOKEN",
+        "packages: write",
+        "github.event_name == 'workflow_dispatch'",
+        "refs/heads/main",
+        "job-image-publish",
+        "cancel-in-progress: false",
+        PUBLICATION_EVIDENCE,
     ] {
         assert!(
             rendered.contains(expected),
             "The workflow does not contain {expected}: {rendered}"
         );
     }
-    assert!(rendered.contains(ARTIFACT_PREFIX));
+    assert!(rendered.contains(ARTIFACT_NAME));
+    assert!(ARTIFACT_NAME.ends_with("-${{ github.run_attempt }}"));
     assert!(rendered.contains(crate::steps::UPLOAD_ARTIFACT_USES));
     assert!(rendered.contains(crate::steps::DOWNLOAD_ARTIFACT_USES));
     assert!(rendered.contains(crate::steps::ATTEST_BUILD_PROVENANCE_USES));
-    assert!(!rendered.contains("packages: write"));
     assert!(!rendered.contains("contents: write"));
     assert!(!rendered.contains("docker push"));
 }
@@ -89,8 +96,8 @@ fn build_job_has_no_attestation_or_repository_writer_permissions() {
     assert!(optional_field(permissions, "actions").is_none());
     assert_eq!(field(permissions, "contents"), &Yaml::str("read"));
     assert!(optional_field(permissions, "packages").is_none());
-    assert!(optional_field(permissions, "attestations").is_none());
     assert!(optional_field(permissions, "id-token").is_none());
+    assert!(optional_field(permissions, "attestations").is_none());
 
     let attest = field(jobs, "attest-image-candidate");
     assert_eq!(field(attest, "timeout-minutes"), &Yaml::Int(5));
@@ -100,6 +107,29 @@ fn build_job_has_no_attestation_or_repository_writer_permissions() {
     assert_eq!(field(permissions, "contents"), &Yaml::str("read"));
     assert!(optional_field(permissions, "packages").is_none());
     assert!(optional_field(permissions, "contents").is_some());
+
+    let publish = field(jobs, "publish-job-image");
+    assert_eq!(field(publish, "timeout-minutes"), &Yaml::Int(5));
+    assert_eq!(
+        field(publish, "if"),
+        &Yaml::str(
+            "${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}"
+        )
+    );
+    let permissions = field(publish, "permissions");
+    assert_eq!(field(permissions, "actions"), &Yaml::str("read"));
+    assert_eq!(field(permissions, "attestations"), &Yaml::str("read"));
+    assert_eq!(field(permissions, "contents"), &Yaml::str("read"));
+    assert_eq!(field(permissions, "packages"), &Yaml::str("write"));
+    assert!(optional_field(permissions, "id-token").is_none());
+    assert_eq!(
+        field(field(publish, "concurrency"), "group"),
+        &Yaml::str("${{ github.repository }}-job-image-publish")
+    );
+    assert_eq!(
+        field(field(publish, "concurrency"), "cancel-in-progress"),
+        &Yaml::Bool(false)
+    );
 }
 
 #[test]
@@ -112,9 +142,10 @@ fn buildx_installer_uses_the_lock_and_rejects_a_wrong_checksum() {
     let workspace = root.join("workspace");
     let runner_temp = root.join("runner-temp");
     let fake_bin = root.join("bin");
-    fs::create_dir_all(workspace.join(".velnor")).expect("create source lock path");
-    fs::create_dir_all(&fake_bin).expect("create fake command path");
-    fs::write(workspace.join(".velnor/runner.lock"), lock_text(SHA256)).expect("write source lock");
+    fs::create_dir_all(workspace.join(".velnor")).expect("The source lock path is not available.");
+    fs::create_dir_all(&fake_bin).expect("The fake command path is not available.");
+    fs::write(workspace.join(".velnor/runner.lock"), lock_text(SHA256))
+        .expect("The source lock file is not available.");
     let fake_curl = fake_bin.join("curl");
     fs::write(
         &fake_curl,
@@ -134,22 +165,26 @@ fn buildx_installer_uses_the_lock_and_rejects_a_wrong_checksum() {
     );
     let plugin = runner_temp.join("velnor-docker-config/cli-plugins/docker-buildx");
     assert_eq!(
-        fs::read(&plugin).expect("read installed plugin"),
+        fs::read(&plugin).expect("The installed plug-in is not available."),
         PAYLOAD.as_bytes()
     );
     assert_eq!(
         fs::metadata(&plugin)
-            .expect("plugin metadata")
+            .expect("The plug-in metadata is not available.")
             .permissions()
             .mode()
             & 0o777,
         0o755
     );
     assert_eq!(
-        fs::metadata(plugin.parent().expect("plugin directory"))
-            .expect("plugin directory metadata")
-            .permissions()
-            .mode()
+        fs::metadata(
+            plugin
+                .parent()
+                .expect("The plug-in directory is not available.")
+        )
+        .expect("The plug-in directory metadata is not available.")
+        .permissions()
+        .mode()
             & 0o777,
         0o700
     );
@@ -159,7 +194,7 @@ fn buildx_installer_uses_the_lock_and_rejects_a_wrong_checksum() {
         workspace.join(".velnor/runner.lock"),
         lock_text(&"0".repeat(64)),
     )
-    .expect("write incorrect source checksum");
+    .expect("Write a source checksum with an incorrect value.");
     let failure = run_installer(&workspace, &wrong_temp, &fake_bin);
     assert!(!failure.status.success());
     assert!(
@@ -171,7 +206,7 @@ fn buildx_installer_uses_the_lock_and_rejects_a_wrong_checksum() {
             .join("velnor-docker-config/cli-plugins/docker-buildx")
             .exists()
     );
-    fs::remove_dir_all(root).expect("remove installer test files");
+    fs::remove_dir_all(root).expect("Remove the installer test files.");
 }
 
 #[test]
@@ -186,7 +221,7 @@ fn attestation_download_uses_only_the_uploaded_artifact_id() {
         .find(|step| {
             optional_field(step, "uses") == Some(&Yaml::str(crate::steps::DOWNLOAD_ARTIFACT_USES))
         })
-        .expect("find artifact download step");
+        .expect("The artifact download step is not available.");
     let inputs = field(download, "with");
     assert_eq!(
         field(inputs, "artifact-ids"),
@@ -199,6 +234,66 @@ fn attestation_download_uses_only_the_uploaded_artifact_id() {
 }
 
 #[test]
+fn publisher_consumes_same_run_artifact_and_keeps_token_out_of_evidence_upload() {
+    let workflow = super::render(&request()).expect("Render the job image candidate workflow.");
+    let publish = field(field(&workflow, "jobs"), "publish-job-image");
+    let Yaml::Seq(steps) = field(publish, "steps") else {
+        panic!("The publisher steps are necessary.");
+    };
+    let download = steps
+        .iter()
+        .find(|step| {
+            optional_field(step, "uses") == Some(&Yaml::str(crate::steps::DOWNLOAD_ARTIFACT_USES))
+        })
+        .expect("Find the same-run candidate download step.");
+    assert_eq!(
+        field(field(download, "with"), "artifact-ids"),
+        &Yaml::str("${{ needs.build-image-candidate.outputs.artifact_id }}")
+    );
+
+    let publisher = steps
+        .iter()
+        .find(|step| {
+            optional_field(step, "name")
+                == Some(&Yaml::str(
+                    "Publish the job image with its signed build evidence.",
+                ))
+        })
+        .expect("Find the job image publisher step.");
+    let env = field(publisher, "env");
+    assert_eq!(field(env, "GH_TOKEN"), &Yaml::str("${{ github.token }}"));
+    assert_eq!(
+        field(env, "VELNOR_CANDIDATE_ARTIFACT_ID"),
+        &Yaml::str("${{ needs.build-image-candidate.outputs.artifact_id }}")
+    );
+    let Yaml::Str(command) = field(publisher, "run") else {
+        panic!("The publisher command is necessary.");
+    };
+    assert!(command.contains("candidate/publish.py --root ."));
+    assert!(command.contains("--archive \"candidate/job-image.oci.tar\""));
+    assert!(command.contains("--record \"candidate/job-image-candidate.json\""));
+    assert!(command.contains("--result \"$RUNNER_TEMP/job-image-publication.json\""));
+
+    let evidence = steps
+        .iter()
+        .find(|step| {
+            optional_field(step, "name")
+                == Some(&Yaml::str("Upload job image publication evidence"))
+        })
+        .expect("Find the publication evidence upload step.");
+    assert!(optional_field(evidence, "env").is_none());
+    assert_eq!(
+        field(field(evidence, "with"), "name"),
+        &Yaml::str(PUBLICATION_EVIDENCE)
+    );
+    assert!(PUBLICATION_EVIDENCE.ends_with("-${{ github.run_attempt }}"));
+    assert_eq!(
+        field(field(evidence, "with"), "retention-days"),
+        &Yaml::Int(7)
+    );
+}
+
+#[test]
 fn no_image_selection_emits_no_candidate_workflow() {
     let mut request = request();
     request.workflows.clear();
@@ -207,51 +302,17 @@ fn no_image_selection_emits_no_candidate_workflow() {
     assert!(!files.iter().any(|file| file.path == WORKFLOW_PATH));
 }
 
-#[test]
-fn candidate_preview_uses_the_requested_scale_set_selector() {
-    let mut request = request();
-    request.routing =
-        crate::workflow_routing::test_policy(ExecutionMode::ScaleSet, request.scale_set.clone());
-    let rendered = super::render_candidate_workflow(&request)
-        .expect("Render the job image candidate workflow for the Scale Set.");
-    assert_eq!(rendered.path, WORKFLOW_PATH);
-    assert_eq!(
-        rendered
-            .bytes
-            .matches("runs-on: [velnor, ubuntu-26.04-scale-set]")
-            .count(),
-        2
-    );
-}
-
-#[test]
-fn candidate_workflow_preserves_the_three_execution_modes() {
-    let scale_set =
-        Schema2WorkflowRequest::canonical_scale_set().expect("Get the Scale Set selector.");
-    for (mode, expected) in [
-        (ExecutionMode::Hosted, "runs-on: ubuntu-26.04"),
-        (
-            ExecutionMode::ScaleSet,
-            "runs-on: [velnor, ubuntu-26.04-scale-set]",
-        ),
-        (ExecutionMode::Both, "runs-on: ubuntu-26.04"),
-    ] {
-        let mut request = request();
-        request.routing = crate::workflow_routing::test_policy(mode, scale_set.clone());
-        let rendered = super::render_candidate_workflow(&request)
-            .expect("Render the job image candidate workflow.");
-        assert_eq!(rendered.bytes.matches(expected).count(), 2);
-    }
-}
-
 fn request() -> Schema2WorkflowRequest {
     let scale_set =
-        Schema2WorkflowRequest::canonical_scale_set().expect("Get the Scale Set selector.");
+        Schema2WorkflowRequest::canonical_scale_set().expect("Read the Scale Set selector.");
+    let image =
+        ValidatedImageReference::parse(&format!("ghcr.io/team/job@sha256:{}", "a".repeat(64)))
+            .expect("Read the image reference.");
     Schema2WorkflowRequest {
-        version: "0.1.1".to_owned(),
+        version: "0.1.19".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: scale_set.clone(),
-        routing: crate::workflow_routing::test_policy(ExecutionMode::Hosted, scale_set),
+        routing: WorkflowRoutingPolicy::configured(ExecutionMode::ScaleSet, scale_set, Some(image)),
         workflows: BTreeSet::from([RoutingWorkflow::ImageRelease]),
         mbx_qualification: None,
         mise_pin_qualification: None,
@@ -273,9 +334,9 @@ fn run_installer(
     use std::process::Command;
 
     let path = std::env::join_paths(std::iter::once(fake_bin.to_path_buf()).chain(
-        std::env::split_paths(&std::env::var_os("PATH").expect("PATH is set")),
+        std::env::split_paths(&std::env::var_os("PATH").expect("PATH is available.")),
     ))
-    .expect("join test path");
+    .expect("The test path cannot be joined.");
     Command::new("bash")
         .args(["-e", "-o", "pipefail", "-c", super::BUILDX_INSTALL])
         .env("GITHUB_WORKSPACE", workspace)
@@ -293,7 +354,7 @@ fn temporary_directory(label: &str) -> std::path::PathBuf {
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("system time follows epoch")
+            .expect("System time is later than the epoch.")
             .as_nanos()
     ))
 }

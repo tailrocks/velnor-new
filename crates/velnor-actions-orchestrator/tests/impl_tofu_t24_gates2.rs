@@ -90,7 +90,7 @@ fn gate6_limits_bound_fanout_and_subprocess_budgets() -> TestResult {
         "capture fails closed past 8 MiB"
     );
     assert_eq!(JobTimeout::PLAN.minutes(), 5);
-    assert_eq!(JobTimeout::CRATE.minutes(), 10);
+    assert_eq!(JobTimeout::CRATE.minutes(), 5);
     assert_eq!(JobTimeout::REQUIRED.minutes(), 5);
     assert_eq!(JobTimeout::VALIDATOR.minutes(), 5);
     let renderer = crate_src("../velnor-actions-workflow-renderer");

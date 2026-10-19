@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn declaration_rejects_bad_shared_id_and_unbounded_timeout() {
-        for timeout in 1..=10 {
+        for timeout in [1, 2, 3, 4, 5] {
             assert!(
                 task(
                     "architect-arm64-image",
@@ -186,7 +186,7 @@ mod tests {
                 "{id:?}"
             );
         }
-        for timeout in [0, 11, 60, u16::MAX] {
+        for timeout in [0, 361, u16::MAX] {
             assert!(
                 task(
                     "architect-arm64-image",

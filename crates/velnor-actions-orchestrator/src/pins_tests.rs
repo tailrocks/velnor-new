@@ -22,6 +22,7 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
             generator_validation: GeneratorValidation::Bootstrap,
             mise_quiet: true,
             max_parallel_jobs: 2,
+            crate_timeout_minutes: 5,
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
             tasks: Vec::new(),

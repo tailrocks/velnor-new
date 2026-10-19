@@ -6,6 +6,9 @@ use crate::errors::ContractError;
 use crate::workflow::ValidatorKind;
 use serde::{Deserialize, Serialize};
 
+#[path = "workflow_verify.rs"]
+mod verify;
+
 /// Latest pinned runner label: the default when `workflow.runner_label` is absent.
 ///
 /// Qualified 2026-09-28 (`ubuntu-latest` then pointed at 24.04; 26.04 is the
@@ -41,6 +44,15 @@ pub struct WorkflowConfig {
     pub generator_validation: GeneratorValidation,
     /// Maximum parallel matrix jobs.
     pub max_parallel_jobs: u32,
+    /// Literal `timeout-minutes` for every generated crate job (`1..=360`, default `5`).
+    ///
+    /// Applies to each Rust package job and each `OpenTofu` root job.
+    /// Control jobs (plan, required, validators) keep the built-in default.
+    #[serde(
+        default = "default_crate_timeout_minutes",
+        skip_serializing_if = "is_default_crate_timeout"
+    )]
+    pub crate_timeout_minutes: u16,
     /// Keep `MISE_QUIET=1` in the generated workflow environment (default true).
     ///
     /// Silence is the default for log hygiene. `false` omits `MISE_QUIET` so
@@ -176,6 +188,11 @@ impl WorkflowConfig {
                 "must_be_at_least_one",
             ));
         }
+        crate::workflow::timeout::JobTimeout::check_config(
+            u32::from(self.crate_timeout_minutes),
+            file,
+            "workflow.crate_timeout_minutes",
+        )?;
         if let Some(branch) = &self.default_branch
             && !crate::is_valid_branch_name(branch)
         {
@@ -270,95 +287,19 @@ impl WorkflowConfig {
     }
 }
 
-impl VerifyConfig {
-    /// True when no verification job is selected.
-    #[must_use]
-    pub fn is_empty(&self) -> bool {
-        self.jobs.is_empty()
-    }
-
-    /// Validate the verify allowlist: known IDs, no duplicates.
-    /// # Errors
-    pub fn validate(&self, file: &str) -> Result<(), ContractError> {
-        let mut seen = std::collections::BTreeSet::new();
-        for job in &self.jobs {
-            if ValidatorKind::from_verify_name(job).is_none() {
-                return Err(ContractError::config(
-                    file,
-                    "workflow.verify.jobs",
-                    format!("unknown_verify_job:{job}"),
-                ));
-            }
-            if !seen.insert(job) {
-                return Err(ContractError::config(
-                    file,
-                    "workflow.verify.jobs",
-                    format!("duplicate_verify_job:{job}"),
-                ));
-            }
-        }
-        if let Some(files) = &self.strict_json_files {
-            if !self.jobs.iter().any(|job| job == "strict-json") || files.is_empty() {
-                return Err(ContractError::config(
-                    file,
-                    "workflow.verify.strict_json_files",
-                    "requires_strict_json_and_nonempty_files",
-                ));
-            }
-            let mut paths = std::collections::BTreeSet::new();
-            for path in files {
-                if !valid_json_path(path) || !paths.insert(path) {
-                    return Err(ContractError::config(
-                        file,
-                        "workflow.verify.strict_json_files",
-                        format!("invalid_or_duplicate_path:{path}"),
-                    ));
-                }
-            }
-        }
-        for arg in &self.lychee_args {
-            if !valid_lychee_arg(arg) {
-                return Err(ContractError::config(
-                    file,
-                    "workflow.verify.lychee_args",
-                    format!("invalid_or_duplicate_lychee_arg:{arg}"),
-                ));
-            }
-        }
-        if !self.lychee_args.is_empty() && !self.jobs.iter().any(|job| job == "link-check") {
-            return Err(ContractError::config(
-                file,
-                "workflow.verify.lychee_args",
-                "requires_link_check",
-            ));
-        }
-        Ok(())
-    }
+/// Default crate-job timeout: the shared five-minute job default.
+#[must_use]
+pub const fn default_crate_timeout_minutes() -> u16 {
+    crate::workflow::timeout::JobTimeout::DEFAULT_MINUTES
 }
 
-fn valid_json_path(value: &str) -> bool {
-    !value.is_empty()
-        && std::path::Path::new(value)
-            .extension()
-            .is_some_and(|extension| extension.eq_ignore_ascii_case("json"))
-        && !value.starts_with('/')
-        && value.split('/').all(|part| {
-            !part.is_empty()
-                && part != "."
-                && part != ".."
-                && part
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
-        })
-}
-
-fn valid_lychee_arg(value: &str) -> bool {
-    !value.is_empty()
-        && value != "--"
-        && !value.contains("${{")
-        && !value.contains(['$', '`'])
-        && !value.chars().any(char::is_control)
-        && !value.split_whitespace().any(|word| word == "mise")
+/// Serialization predicate keeping the default crate timeout out of emitted config.
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if requires fn(&u16) -> bool"
+)]
+fn is_default_crate_timeout(value: &u16) -> bool {
+    *value == default_crate_timeout_minutes()
 }
 
 /// Default `mise_quiet` value: silence stays on.

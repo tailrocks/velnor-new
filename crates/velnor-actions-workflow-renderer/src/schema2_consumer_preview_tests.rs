@@ -367,7 +367,7 @@ fn scale_set_rejects_the_native_preview_producer_with_a_specific_error() {
 
 #[test]
 fn preview_rejects_unbounded_producer_limits_before_rendering() {
-    for minutes in [0, 6, 30, 120, 360, u16::MAX] {
+    for minutes in [0, 361, u16::MAX] {
         let mut spec = fixture();
         spec.producer_timeout_minutes = minutes;
         assert!(

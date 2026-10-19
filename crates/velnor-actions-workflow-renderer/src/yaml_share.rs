@@ -1,8 +1,36 @@
-//! Share only repeated `jobs.*.steps[*].run` scalars.
+//! Workflow-only, equivalence-checked sharing of repeated scalars and mappings.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::yaml::{AnchorName, Yaml, quote_scalar};
+use crate::{
+    RenderError,
+    yaml::{AnchorName, Yaml, quote_scalar},
+};
+
+#[path = "yaml_share_mappings.rs"]
+mod mappings;
+#[path = "yaml_share_prune.rs"]
+mod prune;
+#[path = "yaml_share_validation.rs"]
+mod validation;
+
+/// Over-cap workflow fallback only; action manifests never call this projection.
+pub(super) fn share_workflow_nodes(node: Yaml) -> Result<Yaml, RenderError> {
+    let original = validation::expand(&node)?.value;
+    let mut shared = share_step_run_scalars(node);
+    let mut used = BTreeSet::new();
+    collect_anchor_names(&shared, &mut used);
+    mappings::share(&mut shared, mappings::Mode::Fields, &mut used)?;
+    mappings::share(&mut shared, mappings::Mode::Steps, &mut used)?;
+    if validation::expand(&shared)?.value != original {
+        return Err(validation::invalid("projection_changed"));
+    }
+    prune::prune(&mut shared);
+    if validation::expand(&shared)?.value != original {
+        return Err(validation::invalid("projection_changed"));
+    }
+    Ok(shared)
+}
 
 pub(super) fn share_step_run_scalars(mut node: Yaml) -> Yaml {
     let mut counts = BTreeMap::new();
@@ -86,7 +114,7 @@ fn replace_step_runs(
                         if count < 2 {
                             continue;
                         }
-                        let name = next_name(used, next);
+                        let name = next_name(used, "r", next);
                         if !saves_bytes(&command, count, &name) {
                             continue;
                         }
@@ -103,9 +131,9 @@ fn replace_step_runs(
     }
 }
 
-fn next_name(used: &BTreeSet<AnchorName>, next: &mut usize) -> AnchorName {
+fn next_name(used: &BTreeSet<AnchorName>, prefix: &str, next: &mut usize) -> AnchorName {
     loop {
-        let candidate = format!("r{}", *next);
+        let candidate = format!("{prefix}{}", *next);
         *next = next.saturating_add(1);
         if let Some(name) = AnchorName::new(candidate)
             && !used.contains(&name)
@@ -159,3 +187,7 @@ fn collect_anchor_names(node: &Yaml, names: &mut BTreeSet<AnchorName>) {
 #[cfg(test)]
 #[path = "yaml_share_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "yaml_share_workflow_tests.rs"]
+mod workflow_tests;
