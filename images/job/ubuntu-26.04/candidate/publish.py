@@ -443,19 +443,35 @@ def _request(transport: _HttpsTransport, token: str, method: str, url: str,
 
 
 def _validate_location(base: str, location: str) -> str:
-    if not location or len(location) > 4096 or "\r" in location or "\n" in location or "\\" in location:
+    if (not location or len(location) > 4096 or "\\" in location
+            or any(ord(char) < 32 or ord(char) == 127 for char in location)):
         _fail("Registry upload location is missing or too long.")
-    resolved = urljoin(base, location)
-    parsed = urlsplit(resolved)
-    expected_prefix = f"/v2/{PACKAGE}/blobs/uploads/"
+    try:
+        location_parts = urlsplit(location)
+        raw_path = unquote(location_parts.path)
+        resolved = urljoin(base, location)
+        parsed = urlsplit(resolved)
+        port = parsed.port
+    except ValueError:
+        _fail("Registry upload location is outside the fixed HTTPS upload path.")
+    if any(part in {".", ".."} for part in raw_path.split("/")):
+        _fail("Registry upload location is outside the fixed HTTPS upload path.")
     decoded_path = unquote(parsed.path)
-    if (parsed.scheme != "https" or parsed.hostname != REGISTRY or parsed.port not in (None, 443)
+    expected_prefixes = (
+        f"/v2/{PACKAGE}/blobs/upload/",
+        f"/v2/{PACKAGE}/blobs/uploads/",
+    )
+    query_values = parse_qsl(parsed.query, keep_blank_values=True)
+    if (parsed.scheme != "https" or parsed.hostname != REGISTRY or port not in (None, 443)
             or parsed.username is not None or parsed.password is not None or parsed.fragment
-            or not decoded_path.startswith(expected_prefix)
+            or not decoded_path.startswith(expected_prefixes)
+            or "\\" in decoded_path or any(ord(char) < 32 for char in decoded_path)
+            or any(ord(char) == 127 for char in decoded_path)
+            or any(ord(char) < 32 or ord(char) == 127 for key, value in query_values
+                   for char in key + value)
             or any(part in {".", ".."} for part in decoded_path.split("/"))):
         _fail("Registry upload location is outside the fixed HTTPS upload path.")
-    if any(not key or "\r" in key + value or "\n" in key + value
-           for key, value in parse_qsl(parsed.query, keep_blank_values=True)):
+    if any(not key for key, _ in query_values):
         _fail("Registry upload query has an incorrect format.")
     return resolved
 
