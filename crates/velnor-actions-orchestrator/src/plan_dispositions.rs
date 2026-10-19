@@ -20,8 +20,6 @@ use velnor_actions_contract::{
     ProposedTask, WorkflowEvent,
 };
 
-use velnor_actions_workflow_renderer::render::{NOT_AFFECTED_JOBS_OUTPUT, PLAN_JOB_ID};
-
 use crate::OrchestratorError;
 use crate::crate_job_ids::JobOwners;
 use crate::internal::internal_contract;
@@ -144,15 +142,6 @@ pub(crate) fn finalize_dispositions(
             },
         })
         .collect()
-}
-
-/// Job-level gate skipping one Rust crate job the plan marks `not_affected`.
-///
-/// Negative list over the plan's `not_affected_jobs` output (`,a,b,`): an
-/// empty or missing output matches nothing and runs the job, and the
-/// implicit `success()` skips it when the plan fails (hard decision 4).
-pub(crate) fn not_affected_gate(job_id: &str) -> String {
-    format!("!contains(needs.{PLAN_JOB_ID}.outputs.{NOT_AFFECTED_JOBS_OUTPUT}, ',{job_id},')")
 }
 
 /// Encode `not_affected` job IDs for the plan job's output: `,a,b,` or empty.

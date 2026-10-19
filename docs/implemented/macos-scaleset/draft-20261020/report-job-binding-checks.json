@@ -1,0 +1,14 @@
+{
+  "source_head": "b63bf1decb718cd5cc73e1cb0fc70f721a17ec33",
+  "report_job_binding": {
+    "result": "PASS",
+    "passed": 18,
+    "run_id": "c47826ff-2666-44e3-98a8-15fbf83aaa1b",
+    "log_sha256": "aec0c5df544f8aa8f483cd093aecb7ae84e067bd7a5d0d7b6b347037f439045d",
+    "independent_review": "PASS"
+  },
+  "format": "PASS",
+  "library_compile": "PASS: No production warnings.",
+  "full_release_gates": "NOT_RUN",
+  "live_installation": "NOT_RUN"
+}

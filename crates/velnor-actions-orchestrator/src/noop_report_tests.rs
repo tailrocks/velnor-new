@@ -8,6 +8,7 @@ use std::fs;
 
 use crate::matrix_step::OBLIGATION_TASK_DIGEST_ENV;
 use tempfile::TempDir;
+use velnor_actions_contract::workflow::NamedCheckLaneVariant;
 use velnor_actions_contract::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision,
     Plan, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform, RunnerSelection,
@@ -164,6 +165,112 @@ fn noop_report_writes_not_selected_with_reason() {
     assert_eq!(matrix.status, MatrixStatus::Passed);
     assert_eq!(matrix.not_selected, 1);
     assert_eq!(matrix.report_id, entry.report_id);
+}
+
+fn paired_fixture_plan() -> (Plan, String) {
+    let (mut plan, task_digest) = fixture_plan();
+    let original = plan.matrix.include[0].clone();
+    let lanes = [
+        (
+            NamedCheckLaneVariant::Hosted,
+            "rust-demo__hosted",
+            original.planned_platform.clone(),
+        ),
+        (
+            NamedCheckLaneVariant::ScaleSet,
+            "rust-demo__local",
+            PlannedPlatform::new(
+                "scale-set:velnor+ubuntu-26.04-scale-set",
+                "x86_64-unknown-linux-gnu",
+            )
+            .expect("Scale Set platform"),
+        ),
+    ];
+    plan.matrix.include = lanes
+        .into_iter()
+        .map(|(variant, job_id, platform)| {
+            MatrixEntry::derive_for_lane(
+                &original.stack_id,
+                &original.task_id,
+                &original.run,
+                &original.task_digest,
+                original.adapter_metadata.clone(),
+                original.execute_task_ids.clone(),
+                &original.input_digest,
+                "local",
+                job_id,
+                Some(variant),
+                platform,
+            )
+            .expect("paired entry")
+        })
+        .collect();
+    plan.matrix
+        .include
+        .sort_by(|left, right| left.id.cmp(&right.id));
+    plan.obligations[0].job_id = "rust-demo__hosted".to_owned();
+    plan.jobs = ["rust-demo__hosted", "rust-demo__local"]
+        .into_iter()
+        .map(|job_id| velnor_actions_contract::PlanJob {
+            job_id: job_id.to_owned(),
+            disposition: velnor_actions_contract::JobDisposition::Run,
+        })
+        .collect();
+    plan.validate().expect("paired plan validates");
+    (plan, task_digest)
+}
+
+#[test]
+fn noop_report_requires_and_writes_the_exact_paired_job_lane() {
+    let (plan, task_digest) = paired_fixture_plan();
+    let temp = staged_run(&plan);
+    let request = NoOpRequest {
+        reason: NotSelectedReason::Unsupported,
+        task_digest: task_digest.clone(),
+    };
+    for job_id in ["", "rust-demo__unknown"] {
+        let error = write_noop_report_for_job("local", CLIPPY, 0, &request, job_id, temp.path())
+            .expect_err("missing or wrong job must not select a lane");
+        assert!(
+            error.to_string().contains("task_not_in_plan_for_job"),
+            "{error}"
+        );
+    }
+
+    write_noop_report_for_job(
+        "local",
+        CLIPPY,
+        0,
+        &request,
+        "rust-demo__local",
+        temp.path(),
+    )
+    .expect("local lane report");
+    let local = plan
+        .matrix
+        .include
+        .iter()
+        .find(|entry| entry.job_id == "rust-demo__local")
+        .expect("local entry");
+    let hosted = plan
+        .matrix
+        .include
+        .iter()
+        .find(|entry| entry.job_id == "rust-demo__hosted")
+        .expect("hosted entry");
+    assert!(
+        temp.path()
+            .join("velnor/local")
+            .join(&local.matrix_key)
+            .exists()
+    );
+    assert!(
+        !temp
+            .path()
+            .join("velnor/local")
+            .join(&hosted.matrix_key)
+            .exists()
+    );
 }
 
 #[test]

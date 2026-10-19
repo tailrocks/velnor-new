@@ -90,10 +90,9 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
 
 /// Write the report for one outcome with explicit inputs.
 ///
-/// The plan at `$RUNNER_TEMP/velnor/<run-key>/plan.json` binds every
-/// identity: task digest, matrix coordinates, event, and trust. A nonzero
-/// exit additionally reports each downstream ID as skipped; anything the
-/// plan cannot bind errors instead of emitting unbound bytes.
+/// The plan at `$RUNNER_TEMP/velnor/<run-key>/plan.json` binds task digests,
+/// matrix coordinates, events, and trust.
+/// The function returns an error if the plan does not contain the necessary data.
 ///
 /// # Errors
 ///
@@ -181,35 +180,6 @@ pub(crate) fn load_plan(run_key: &str, runner_temp: &Path) -> Result<Plan, Orche
 /// Downloaded plan path under runner temp.
 fn plan_path(runner_temp: &Path, run_key: &str) -> PathBuf {
     runner_temp.join("velnor").join(run_key).join("plan.json")
-}
-
-/// Resolve one unambiguous task entry and its plan-bound digest.
-pub(crate) fn entry_and_digest<'a>(
-    plan: &'a Plan,
-    task_id: &str,
-) -> Result<(&'a MatrixEntry, &'a str), OrchestratorError> {
-    validate_task_id(task_id).map_err(internal_contract)?;
-    let mut found = None;
-    for entry in &plan.matrix.include {
-        if !flattened(entry).contains(&task_id) {
-            continue;
-        }
-        if flattened(entry).len() != 1 {
-            return Err(internal("multi_task_entry"));
-        }
-        if found.is_some() {
-            return Err(internal("duplicate_task_entry"));
-        }
-        found = Some(entry);
-    }
-    let entry = found.ok_or_else(|| internal("task_not_in_plan"))?;
-    let digest = plan
-        .obligations
-        .iter()
-        .find(|obligation| obligation.task_id == task_id)
-        .map(|obligation| obligation.task_digest.as_str())
-        .ok_or_else(|| internal("task_without_obligation"))?;
-    Ok((entry, digest))
 }
 
 /// Resolve one named-check report entry by its generated job identity.

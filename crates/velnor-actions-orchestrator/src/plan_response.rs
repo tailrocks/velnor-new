@@ -1,11 +1,9 @@
 //! Shared validation for serialized plan responses.
 
-use velnor_actions_contract::{Plan, PlanMatrix, canonical_json_bytes};
+use velnor_actions_contract::canonical_json_bytes;
 
 use crate::OrchestratorError;
-use crate::internal::{
-    MATRIX_BUDGET_BYTES, PlanResponse, SCHEMA, check_schema, internal, internal_contract,
-};
+use crate::internal::{PlanResponse, check_schema, internal, internal_contract};
 
 impl PlanResponse {
     /// Parse and validate the complete plan response before any consumer reads it.
@@ -35,28 +33,4 @@ impl PlanResponse {
 /// # Errors
 pub fn validate_plan_response(response_json: &str) -> Result<(), OrchestratorError> {
     PlanResponse::parse(response_json).map(|_| ())
-}
-
-/// Assemble the `plan-v1` response, staging trusted bytes when covered.
-///
-/// The manifest rides along only behind covered obligations: a
-/// rejected manifest must never reach the plan artifact.
-pub(super) fn plan_response(plan: Plan) -> PlanResponse {
-    PlanResponse {
-        schema: SCHEMA,
-        matrix: plan.matrix.clone(),
-        plan,
-    }
-}
-
-/// Reject a matrix whose canonical bytes exceed the budget.
-pub(super) fn check_matrix_budget(matrix: &PlanMatrix) -> Result<(), OrchestratorError> {
-    let bytes = canonical_json_bytes(matrix).map_err(internal_contract)?;
-    if bytes.len() > MATRIX_BUDGET_BYTES {
-        return Err(internal(&format!(
-            "matrix_budget_exceeded:{}:broaden selection or reduce matrix entries",
-            bytes.len()
-        )));
-    }
-    Ok(())
 }

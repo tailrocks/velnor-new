@@ -7,14 +7,11 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use velnor_actions_contract::{CandidateOutcome, Stack, StackCandidate};
-use velnor_actions_mise::{
-    MetadataDiscovery, MetadataQualification, PinnedTool, ToolCatalog, ToolPresence,
-};
+use velnor_actions_mise::{MetadataDiscovery, PinnedTool, ToolCatalog, ToolPresence};
 use velnor_actions_rust::{WorkspaceRecord, parse_metadata_json};
 
 use crate::OrchestratorError;
 use crate::decisions::{MetadataFailure, classify_metadata_failure};
-use crate::discover::{PlannedWorkspace, workspace_lock, workspace_manifest};
 use crate::generate::ToolSnapshot;
 use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::inventory_reuse::MemberIndex;
@@ -341,48 +338,6 @@ pub(crate) fn require_rust_pin(catalog: &ToolCatalog) -> Result<(), Orchestrator
         })
 }
 
-/// Qualify locked/offline resolution where a lockfile pins deps.
-/// A tool snapshot brackets the runs, failing closed on tool drift.
-/// # Errors
-/// Returns `preparation_incomplete` when a lockfile cannot be qualified.
-pub(crate) fn qualify_workspaces_with_all_features(
-    root: &Path,
-    workspaces: &[PlannedWorkspace],
-    all_features: bool,
-    catalog: &ToolCatalog,
-) -> Result<(), OrchestratorError> {
-    let tools = ToolSnapshot::capture(root);
-    // Only rust workspaces qualify lockful metadata; an empty list never
-    // spawns, so it must not require the pin.
-    if !workspaces.is_empty() {
-        require_rust_pin(catalog)?;
-    }
-    for workspace in workspaces {
-        let prefix = workspace.record.workspace_root.clone();
-        let lock = workspace_lock(&prefix);
-        if !root.join(&lock).is_file() {
-            continue;
-        }
-        let manifest = workspace_manifest(&prefix);
-        let request = MetadataQualification::new(root.join(&manifest))
-            .map(|request| request.with_all_features(all_features))
-            .map_err(|err| OrchestratorError::PreparationIncomplete {
-                manifest: manifest.clone(),
-                problem: format!("bad_manifest_path:{err}"),
-            })?;
-        if let Err(err) = request.run(catalog) {
-            let text = err.to_string();
-            let first = text.lines().next().unwrap_or("metadata_offline");
-            let short: String = first.chars().take(160).collect();
-            return Err(OrchestratorError::PreparationIncomplete {
-                manifest,
-                problem: format!("metadata_offline:{short}"),
-            });
-        }
-    }
-    tools.verify(root)?;
-    Ok(())
-}
 #[path = "inventory_resolve.rs"]
 mod resolve;
 pub(crate) use resolve::{WorkspaceResolve, qualify_workspaces};

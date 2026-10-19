@@ -33,7 +33,6 @@ use velnor_actions_contract::{
     ProposedTask, Stack, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput,
     VcsInputs, component_id_for_unit, digest_b3, input_digest,
 };
-use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::{CompileDriver, Evidence, entry_metadata_for_task};
 
 use crate::discover::Discovery;
@@ -165,14 +164,6 @@ pub(crate) fn cache_ids_for_platform(
 /// derives from the responsibility-based lane digest, never an ordinal.
 pub(crate) fn target_dir_for_lane_id(lane_id: &str) -> String {
     velnor_actions_workflow_renderer::lane_target::target_dir_for_lane(lane_id)
-}
-
-/// Toolchain identity digest for one task.
-pub(crate) fn toolchain_id(
-    task: &ProposedTask,
-    catalog: &ToolCatalog,
-) -> Result<String, ContractError> {
-    identities::toolchain_digest_for(task, catalog)
 }
 
 /// Record task-cache reuse outputs on entry metadata (REUSE-3, CACHE-2.8).
