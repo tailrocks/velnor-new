@@ -11,7 +11,8 @@ use crate::impl_common::{
 use crate::impl_merge::{merge, merge_request, success_jobs};
 
 /// Plan an empty pull-request diff; returns the plan and its skipped jobs.
-pub(crate) fn empty_diff_plan() -> Result<(tempfile::TempDir, Plan, Vec<String>), Box<dyn std::error::Error>> {
+pub(crate) fn empty_diff_plan()
+-> Result<(tempfile::TempDir, Plan, Vec<String>), Box<dyn std::error::Error>> {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     git(&["add", "."], root)?;

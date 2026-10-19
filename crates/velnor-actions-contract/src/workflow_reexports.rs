@@ -27,8 +27,7 @@ pub use crate::workflow::{
     crate_display_name, expand_workflow, final_report_id_for_run, final_report_relpath,
     is_allowed_workflow_event, is_crate_job_id, is_restricted_action_event, is_safe_display_name,
     join_runner_temp, matrix_json_bytes, matrix_report_relpath, named_check_lanes, plan_json_bytes,
-    plan_skips_work, selects_affected_work,
-    slugify_segment, task_report_relpath, tofu_display_name, trust_for_event,
-    validate_final_report_id, validate_job_id, validate_matrix_run,
-    validate_workflow_trigger_event, validate_workflow_trigger_events,
+    plan_skips_work, selects_affected_work, slugify_segment, task_report_relpath,
+    tofu_display_name, trust_for_event, validate_final_report_id, validate_job_id,
+    validate_matrix_run, validate_workflow_trigger_event, validate_workflow_trigger_events,
 };

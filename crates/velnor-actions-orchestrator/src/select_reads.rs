@@ -10,11 +10,12 @@
 //! - **Out-of-directory source reads.** A tracked `.rs` file owned by the
 //!   package reads a path the package does not claim, found by
 //!   [`scan_source`](crate::select_reads_scan::scan_source). A resolved
-//!   read is covered only when the package claims the exact target (its
-//!   own directory, a scoped config, its workspace root, a declared
-//!   `[[stacks.rust.inputs]]` rule, or a tracked symlink). An unbounded
-//!   read (`CARGO_MANIFEST_DIR` plus `..`, a computed include, Git's
-//!   repository root) is covered only once the package declares its inputs
+//!   read is covered when the package claims the exact target (its own
+//!   directory, a scoped config, its workspace root, a declared
+//!   `[[stacks.rust.inputs]]` rule, or a tracked symlink), or when no
+//!   package claims it at all: a change there is unowned and already
+//!   selects everything. An unbounded
+//!   read (`CARGO_MANIFEST_DIR` plus `..`, a computed include) is covered only once the package declares its inputs
 //!   with at least one `[[stacks.rust.inputs]]` rule: the declaration is
 //!   the owner's statement of what it reads, which Velnor cannot verify
 //!   statically. A read outside the repository can never change with a
@@ -85,7 +86,7 @@ pub(crate) fn forced_ids(forced: &Forced) -> BTreeSet<String> {
 /// True when package `id` claims what `target` reads.
 fn covered(ownership: &Ownership<'_>, id: &str, target: &ReadTarget) -> bool {
     match target {
-        ReadTarget::Path(path) => ownership.claim(path).contains(id),
+        ReadTarget::Path(path) => !ownership.is_owned(path) || ownership.claim(path).contains(id),
         ReadTarget::Outside => true,
         ReadTarget::Unbounded(_) => ownership.declares_inputs(id),
     }
@@ -101,7 +102,10 @@ fn reason(read: &SourceRead) -> String {
 }
 
 /// Reads in every tracked `.rs` file, attributed to its deepest package.
-fn source_reads(root: &Path, ownership: &Ownership<'_>) -> Result<Vec<(String, SourceRead)>, String> {
+fn source_reads(
+    root: &Path,
+    ownership: &Ownership<'_>,
+) -> Result<Vec<(String, SourceRead)>, String> {
     let output = GitRequest::ls_files(vec![OsString::from("-z")])
         .run_in(root)
         .map_err(|err| err.to_string())?;

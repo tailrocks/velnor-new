@@ -42,7 +42,12 @@ fn required_rejects_not_affected_work_on_a_full_actual_event() -> TestResult {
     let matrix = serde_json::to_value(&plan.matrix)?;
     let no_reports = serde_json::json!([]);
     let passing = merge(&merge_request(&plan, &matrix, &no_reports, &jobs))?;
-    assert_eq!(passing.status, FinalStatus::Passed, "{:?}", passing.miss_reasons);
+    assert_eq!(
+        passing.status,
+        FinalStatus::Passed,
+        "{:?}",
+        passing.miss_reasons
+    );
     for event in ["push", "merge_group", "qualification"] {
         let mut request = merge_request(&plan, &matrix, &no_reports, &jobs);
         request["actual_event"] = serde_json::json!(event);

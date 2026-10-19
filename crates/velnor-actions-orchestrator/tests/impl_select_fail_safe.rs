@@ -54,7 +54,11 @@ fn root_tofu_project_keeps_unowned_paths_running_everything() -> TestResult {
         |root| put(root, "docs/notes.md", "changed\n"),
     )?;
     assert_runs(&plan, &PACKAGES);
-    assert!(has_warning(&plan, "unclassified_files:all_changed"), "{:?}", plan.warnings);
+    assert!(
+        has_warning(&plan, "unclassified_files:all_changed"),
+        "{:?}",
+        plan.warnings
+    );
     Ok(())
 }
 
@@ -127,7 +131,11 @@ fn manifest_dir_read_of_a_deleted_sibling_fixture_runs_the_reader() -> TestResul
                 "#[test] fn t(){ std::fs::read(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../libs/util/fixtures/x.json\")).unwrap(); }\n",
             )
         },
-        |root| Ok(std::fs::remove_file(root.join("libs/util/fixtures/x.json"))?),
+        |root| {
+            Ok(std::fs::remove_file(
+                root.join("libs/util/fixtures/x.json"),
+            )?)
+        },
     )?;
     assert_runs(&plan, &["a2", "a7", "util"]);
     Ok(())
@@ -184,10 +192,20 @@ fn forced_packages_and_dependents_run_on_an_empty_change_set() -> TestResult {
     let plan = plan_with(
         "",
         |root| put(root, "libs/core/build.rs", "fn main() {}\n"),
-        |root| put(root, "rust-toolchain.toml", "[toolchain]\nchannel = \"1.99.1\"\n"),
+        |root| {
+            put(
+                root,
+                "rust-toolchain.toml",
+                "[toolchain]\nchannel = \"1.99.1\"\n",
+            )
+        },
     )?;
     assert_runs(&plan, &CORE_CLOSURE);
-    assert!(has_warning(&plan, "toolfiles_only:all_unchanged"), "{:?}", plan.warnings);
+    assert!(
+        has_warning(&plan, "toolfiles_only:all_unchanged"),
+        "{:?}",
+        plan.warnings
+    );
     Ok(())
 }
 
@@ -198,7 +216,11 @@ fn merge_group_runs_everything() -> TestResult {
     let head = commit(dir.path(), "change")?;
     let (plan, warnings) = plan_event(dir.path(), Some(&base), &head, "merge_group")?;
     assert_runs(&plan, &PACKAGES);
-    assert!(warnings.iter().any(|w| w == "full_run_event:merge_group:all_changed"));
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w == "full_run_event:merge_group:all_changed")
+    );
     Ok(())
 }
 
@@ -235,7 +257,10 @@ fn workflow_dispatch_qualification_runs_everything() -> TestResult {
     let value: serde_json::Value = serde_json::from_str(&response)?;
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
     assert_runs(&plan, &PACKAGES);
-    assert!(has_warning(&plan, "full_run_event:qualification:all_changed"));
+    assert!(has_warning(
+        &plan,
+        "full_run_event:qualification:all_changed"
+    ));
     Ok(())
 }
 
@@ -257,7 +282,10 @@ fn dirty_worktree_runs_everything() -> TestResult {
     put(dir.path(), "libs/util/src/lib.rs", "pub fn dirty() {}\n")?;
     let (plan, warnings) = plan_pr(dir.path(), Some(&base), &head)?;
     assert_runs(&plan, &PACKAGES);
-    assert!(warnings.iter().any(|w| w == "dirty_worktree:all_changed"), "{warnings:?}");
+    assert!(
+        warnings.iter().any(|w| w == "dirty_worktree:all_changed"),
+        "{warnings:?}"
+    );
     Ok(())
 }
 
@@ -285,6 +313,24 @@ fn stale_merge_ref_runs_everything() -> TestResult {
         "{warnings:?}"
     );
     let (plan, _) = plan_pr(root, Some(&moved), &head)?;
+    assert_runs(&plan, &["a1"]);
+    Ok(())
+}
+
+#[test]
+fn reads_of_unowned_paths_never_force() -> TestResult {
+    let plan = plan_with(
+        "",
+        |root| {
+            put(
+                root,
+                "apps/a7/src/lib.rs",
+                "pub const D: &str = include_str!(\"../../../docs/notes.md\");\n",
+            )
+        },
+        |root| put(root, "apps/a1/src/lib.rs", "pub fn g() {}\n"),
+    )?;
+    // A change to `docs/notes.md` is unowned and runs everything already.
     assert_runs(&plan, &["a1"]);
     Ok(())
 }

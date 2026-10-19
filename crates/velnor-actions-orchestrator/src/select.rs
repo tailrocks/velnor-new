@@ -163,9 +163,9 @@ fn affected_from_changed(
             warnings.push(warning);
             return all_packages;
         }
-        let Some(keys) =
-            crate::select_tofu::tofu_keys_or_broaden(root, base, head, discovery, changed, warnings)
-        else {
+        let Some(keys) = crate::select_tofu::tofu_keys_or_broaden(
+            root, base, head, discovery, changed, warnings,
+        ) else {
             return all_packages;
         };
         keys
@@ -180,8 +180,14 @@ fn affected_from_changed(
 /// The whole-run broadening warning one changed path triggers, if any.
 fn broadening_warning(changed: &BTreeSet<String>) -> Option<String> {
     for (kind, warning) in [
-        (SelectionBroadening::Lockfile, "cargo_lock_changed:all_changed"),
-        (SelectionBroadening::RootConfig, "root_config_changed:all_changed"),
+        (
+            SelectionBroadening::Lockfile,
+            "cargo_lock_changed:all_changed",
+        ),
+        (
+            SelectionBroadening::RootConfig,
+            "root_config_changed:all_changed",
+        ),
     ] {
         if changed
             .iter()

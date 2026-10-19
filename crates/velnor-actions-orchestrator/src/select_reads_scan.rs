@@ -14,8 +14,7 @@
 //! - A file that names `CARGO_MANIFEST_DIR` or calls `current_dir` and
 //!   also holds a string literal with a `..` component, or calls
 //!   `parent`/`ancestors`, can reach any path: unbounded
-//!   (`manifest_dir_escape`). A `--show-toplevel` literal (Git's repository
-//!   root) is unbounded (`repository_root`).
+//!   (`manifest_dir_escape`).
 //! - A literal whose first component is `..` passed directly to a file
 //!   system call (`read`, `read_to_string`, `read_dir`, `open`,
 //!   `metadata`, `symlink_metadata`, `canonicalize`, `copy`) resolves
@@ -24,7 +23,10 @@
 //!
 //! Limits: reads through computed paths without any of these anchors
 //! (an environment variable other than `CARGO_MANIFEST_DIR`, a path built
-//! from a non-literal, a spawned process, a non-Rust file) are invisible.
+//! from a non-literal relative to the working directory, a spawned process
+//! such as `git rev-parse --show-toplevel`, a non-Rust file, a macro
+//! expanding to a read) are invisible. In-job read verification (phase 1b)
+//! closes them.
 
 use crate::select_reads_lex::{Token, tokenize};
 
@@ -105,7 +107,9 @@ impl Scan<'_> {
         let mut attribute_depth = 0usize;
         while let Some(token) = self.tokens.get(at) {
             match token {
-                Token::Ident(word) if self.is_macro(at) && INCLUDE_MACROS.contains(&word.as_str()) => {
+                Token::Ident(word)
+                    if self.is_macro(at) && INCLUDE_MACROS.contains(&word.as_str()) =>
+                {
                     let (args, next) = group(self.tokens, at + 2);
                     if let Some(target) = self.include_target(args) {
                         self.targets.push(target);
@@ -122,9 +126,13 @@ impl Scan<'_> {
                     }
                 }
                 Token::Ident(word) if FS_CALLS.contains(&word.as_str()) => self.fs_call(at),
-                Token::Ident(word) if word == "path" && attribute_depth > 0 => self.path_attribute(at),
+                Token::Ident(word) if word == "path" && attribute_depth > 0 => {
+                    self.path_attribute(at)
+                }
                 Token::Ident(word) if word == "current_dir" => self.anchored = true,
-                Token::Ident(word) if word == "parent" || word == "ancestors" => self.escapes = true,
+                Token::Ident(word) if word == "parent" || word == "ancestors" => {
+                    self.escapes = true
+                }
                 Token::Str(body) => self.literal(body),
                 Token::Punct('[') if attribute_depth > 0 || self.opens_attribute(at) => {
                     attribute_depth += 1;
@@ -144,7 +152,10 @@ impl Scan<'_> {
 
     /// True when the `[` at `at` follows `#` or `#!`.
     fn opens_attribute(&self, at: usize) -> bool {
-        let before = |back: usize| at.checked_sub(back).and_then(|index| self.tokens.get(index));
+        let before = |back: usize| {
+            at.checked_sub(back)
+                .and_then(|index| self.tokens.get(index))
+        };
         before(1) == Some(&Token::Punct('#'))
             || (before(1) == Some(&Token::Punct('!')) && before(2) == Some(&Token::Punct('#')))
     }
@@ -153,8 +164,6 @@ impl Scan<'_> {
     fn literal(&mut self, body: &str) {
         if body == "CARGO_MANIFEST_DIR" {
             self.anchored = true;
-        } else if body.contains("--show-toplevel") {
-            self.targets.push(ReadTarget::Unbounded("repository_root"));
         } else if body.split('/').any(|component| component == "..") {
             self.escapes = true;
         }
@@ -164,12 +173,15 @@ impl Scan<'_> {
     fn include_target(&self, args: &[Token]) -> Option<ReadTarget> {
         match args {
             [Token::Str(body)] => Some(resolve_literal(self.file_dir, body)),
-            [Token::Ident(word), Token::Punct('!'), Token::Punct('('), inner @ .., Token::Punct(')')]
-                if word == "concat" =>
-            {
-                self.concat_target(inner)
-                    .unwrap_or(Some(ReadTarget::Unbounded("include_argument")))
-            }
+            [
+                Token::Ident(word),
+                Token::Punct('!'),
+                Token::Punct('('),
+                inner @ ..,
+                Token::Punct(')'),
+            ] if word == "concat" => self
+                .concat_target(inner)
+                .unwrap_or(Some(ReadTarget::Unbounded("include_argument"))),
             _ => Some(ReadTarget::Unbounded("include_argument")),
         }
     }

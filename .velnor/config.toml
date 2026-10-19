@@ -32,6 +32,16 @@ test_runner = "cargo_nextest"
 globs = ["scripts/parallel-targets/**"]
 packages = ["velnor-actions-workflow-renderer"]
 
+# velnor-actions-cli's repository-policy tests read every crate's manifests,
+# sources, and tests in both workspaces (MSRV parity with
+# crates/velnor-runner/Cargo.toml, test registration, metadata policy), so it
+# runs on any crate change. Other crates whose tests read the repository
+# through CARGO_MANIFEST_DIR stay always-run (`undeclared_reads`) until their
+# inputs are declared here.
+[[stacks.rust.inputs]]
+globs = ["crates/**"]
+packages = ["velnor-actions-cli"]
+
 [[stacks.rust.configurations]]
 name = "default"
 features = ["default"]

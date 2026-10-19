@@ -43,10 +43,7 @@ fn manifest_dir_concat_resolves_from_the_package_directory() {
 #[test]
 fn out_dir_includes_read_build_output() {
     let text = "include!(concat!(env!(\"OUT_DIR\"), \"/gen.rs\"));";
-    assert_eq!(
-        targets("apps/a7/src/lib.rs", "apps/a7", text),
-        Vec::new()
-    );
+    assert_eq!(targets("apps/a7/src/lib.rs", "apps/a7", text), Vec::new());
 }
 
 #[test]
@@ -83,15 +80,9 @@ fn manifest_dir_with_parent_components_is_unbounded() {
 #[test]
 fn manifest_dir_without_escape_is_local() {
     let text = "let f = Path::new(env!(\"CARGO_MANIFEST_DIR\")).join(\"tests/data\");";
-    assert_eq!(targets("crates/cli/tests/t.rs", "crates/cli", text), Vec::new());
-}
-
-#[test]
-fn repository_root_queries_are_unbounded() {
-    let text = "Command::new(\"git\").args([\"rev-parse\", \"--show-toplevel\"]);";
     assert_eq!(
         targets("crates/cli/tests/t.rs", "crates/cli", text),
-        vec![ReadTarget::Unbounded("repository_root")]
+        Vec::new()
     );
 }
 
@@ -107,13 +98,19 @@ fn relative_fs_calls_resolve_from_the_package_directory() {
 #[test]
 fn traversal_literals_without_reads_are_not_reads() {
     let text = "assert!(validate(\"../etc/passwd\").is_err()); let p = Path::new(\"../x\");";
-    assert_eq!(targets("crates/cli/src/v.rs", "crates/cli", text), Vec::new());
+    assert_eq!(
+        targets("crates/cli/src/v.rs", "crates/cli", text),
+        Vec::new()
+    );
 }
 
 #[test]
 fn comments_never_count() {
     let text = "// include_str!(\"../../x\")\n/* env!(\"CARGO_MANIFEST_DIR\") \"../\" */";
-    assert_eq!(targets("crates/cli/src/v.rs", "crates/cli", text), Vec::new());
+    assert_eq!(
+        targets("crates/cli/src/v.rs", "crates/cli", text),
+        Vec::new()
+    );
 }
 
 #[test]

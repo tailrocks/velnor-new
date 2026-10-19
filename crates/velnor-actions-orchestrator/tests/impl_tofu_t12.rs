@@ -76,7 +76,10 @@ fn module_target_change_selects_calling_root_only() -> TestResult {
     let rust = reasons_for(&plan, "stack/rust");
     assert!(!rust.is_empty(), "the root crate proposes tasks");
     for reason in rust {
-        assert_eq!(reason, "affected_by_change", "root crate owns the module path");
+        assert_eq!(
+            reason, "affected_by_change",
+            "root crate owns the module path"
+        );
     }
     assert!(
         !warnings

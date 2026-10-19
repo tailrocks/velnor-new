@@ -127,7 +127,12 @@ fn lone_root_package_classifies_everything() {
 fn nested_change_selects_deepest_beside_root() {
     let discovery = discovery_with(&[("root", "Cargo.toml"), ("a", "crates/a/Cargo.toml")]);
     let ownership = Ownership::new(&discovery);
-    let selected = affected_packages(&ownership, &set(&["crates/a/src/lib.rs"]), &BTreeSet::new(), &[]);
+    let selected = affected_packages(
+        &ownership,
+        &set(&["crates/a/src/lib.rs"]),
+        &BTreeSet::new(),
+        &[],
+    );
     assert_eq!(selected, set(&["a"]));
 }
 
@@ -139,7 +144,12 @@ fn declared_input_inside_another_package_selects_both() {
         package_ids: set(&["a"]),
     }];
     let ownership = Ownership::new(&discovery);
-    let selected = affected_packages(&ownership, &set(&["b/proto/x.proto"]), &BTreeSet::new(), &[]);
+    let selected = affected_packages(
+        &ownership,
+        &set(&["b/proto/x.proto"]),
+        &BTreeSet::new(),
+        &[],
+    );
     assert_eq!(selected, set(&["a", "b"]), "owner and declarer both run");
 }
 
@@ -153,7 +163,10 @@ fn declared_input_outside_packages_is_owned() {
     let ownership = Ownership::new(&discovery);
     let changed = set(&["protos/v1/x.proto"]);
     assert!(!has_unowned_file(&ownership, &changed));
-    assert_eq!(affected_packages(&ownership, &changed, &BTreeSet::new(), &[]), set(&["a"]));
+    assert_eq!(
+        affected_packages(&ownership, &changed, &BTreeSet::new(), &[]),
+        set(&["a"])
+    );
     assert!(
         has_unowned_file(&ownership, &set(&["protos/README.md"])),
         "only matching paths are claimed"
@@ -202,7 +215,12 @@ fn scoped_tool_configs_select_every_member_below() {
     }
     assert!(!has_unowned_file(&ownership, &set(&["crates/clippy.toml"])));
     assert_eq!(
-        affected_packages(&ownership, &set(&["crates/clippy.toml"]), &BTreeSet::new(), &[]),
+        affected_packages(
+            &ownership,
+            &set(&["crates/clippy.toml"]),
+            &BTreeSet::new(),
+            &[]
+        ),
         set(&["inner", "outer"])
     );
 }
@@ -235,7 +253,12 @@ fn symlink_targets_select_the_link_owner() {
     };
     let ownership = Ownership::new(&discovery).with_links(vec![link]);
     assert_eq!(
-        affected_packages(&ownership, &set(&["b/data/real/x.sql"]), &BTreeSet::new(), &[]),
+        affected_packages(
+            &ownership,
+            &set(&["b/data/real/x.sql"]),
+            &BTreeSet::new(),
+            &[]
+        ),
         set(&["a", "b"])
     );
     assert_eq!(
