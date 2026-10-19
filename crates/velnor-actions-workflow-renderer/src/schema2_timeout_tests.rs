@@ -31,7 +31,12 @@ fn every_schema2_family_renders_only_bounded_executable_jobs() {
         .iter()
         .filter(|file| file.path.starts_with(".github/workflows/"))
         .collect();
-    assert_eq!(workflows.len(), 6);
+    assert_eq!(workflows.len(), 7);
+    assert!(
+        workflows
+            .iter()
+            .any(|workflow| workflow.path == ".github/workflows/job-image-candidate.yml")
+    );
     for workflow in workflows {
         let timeouts: Vec<_> = workflow
             .bytes

@@ -23,6 +23,7 @@ Repository: <repo>
 .github/velnor/task-execution-manifest-v1.json
 .github/workflows/ci.yml
 .github/workflows/freshness.yml
+.github/workflows/job-image-candidate.yml
 .github/workflows/product-release-binary.yml
 .github/workflows/product-release-generator.yml
 .github/workflows/product-release-images.yml
