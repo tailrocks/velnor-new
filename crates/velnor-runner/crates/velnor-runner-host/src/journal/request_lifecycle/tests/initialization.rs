@@ -6,6 +6,7 @@ use super::admission::JOB_LIMIT;
 use super::helpers::{Scratch, binding, created_scope};
 
 mod cleanup_guard;
+mod late_initializer;
 mod v21_migration;
 
 #[tokio::test]
@@ -153,57 +154,6 @@ async fn migration_rejects_home_volume_without_matching_created_object() -> Resu
     drop(database);
 
     assert!(Journal::open(&path).await.is_err());
-    Ok(())
-}
-
-#[tokio::test]
-async fn migrated_active_reservation_cannot_claim_a_late_initializer() -> Result<(), HostError> {
-    let scratch = Scratch::new()?;
-    let journal = Journal::open(&scratch.file()).await?;
-    journal.configure_capacity(JOB_LIMIT).await?;
-    let binding = binding("storage-late-claim", 946)?;
-    let scope = created_scope(&journal, &binding, 1946).await?;
-    let provisioned = Box::pin(super::helpers::provision_physical_intent(&scope, '6')).await?;
-    let path = scratch.file();
-    drop(scope);
-    drop(journal);
-
-    let database = turso::Builder::new_local(path.to_str().ok_or(HostError::Path)?)
-        .build()
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let connection = database.connect().map_err(|_| HostError::Journal)?;
-    connection
-        .execute("DROP TRIGGER storage_initialization_no_delete", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute(
-            "DELETE FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1",
-            [provisioned.reservation_id],
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute("PRAGMA user_version = 19", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    drop(connection);
-    drop(database);
-
-    let migrated = Journal::open(&path).await?;
-    let migrated_scope = migrated.connection_scope(&binding).await?;
-    let image = crate::worker::storage_initialization::specification::test_verified_image()?;
-    assert!(
-        migrated_scope
-            .claim_storage_initialization(
-                provisioned.reservation_id,
-                &image,
-                super::helpers::test_initializer_limits()?,
-            )
-            .await?
-            .is_none()
-    );
     Ok(())
 }
 
