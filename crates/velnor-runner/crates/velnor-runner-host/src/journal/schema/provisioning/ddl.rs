@@ -86,7 +86,7 @@ const INDEXES: [(&str, &str); 3] = [
     ),
 ];
 
-const TRIGGERS: [(&str, &str); 44] = [
+const TRIGGERS: [(&str, &str); 56] = [
     (
         "provisioning_hold_no_update",
         "CREATE TRIGGER IF NOT EXISTS provisioning_hold_no_update BEFORE UPDATE ON capacity_reservation_provisioning BEGIN SELECT RAISE(ABORT, 'immutable provisioning hold'); END",
@@ -140,16 +140,64 @@ const TRIGGERS: [(&str, &str); 44] = [
         "CREATE TRIGGER IF NOT EXISTS provisioning_container_no_delete BEFORE DELETE ON capacity_reservation_bootstrap_containers BEGIN SELECT RAISE(ABORT, 'immutable bootstrap container'); END",
     ),
     (
-        "provisioning_container_transition",
-        "CREATE TRIGGER IF NOT EXISTS provisioning_container_transition BEFORE UPDATE ON capacity_reservation_bootstrap_containers WHEN OLD.role != NEW.role OR OLD.reservation_id != NEW.reservation_id OR OLD.container_name != NEW.container_name OR NOT ((OLD.create_state = NEW.create_state AND OLD.container_id IS NEW.container_id AND OLD.start_state = NEW.start_state) OR (OLD.create_state = 'unclaimed' AND NEW.create_state = 'requested' AND NEW.container_id IS NULL AND NEW.start_state = 'not_requested') OR (OLD.create_state = 'requested' AND NEW.create_state = 'created' AND NEW.container_id IS NOT NULL AND NEW.start_state = 'not_requested') OR (OLD.create_state = 'requested' AND NEW.create_state = 'uncertain' AND NEW.container_id IS NULL AND NEW.start_state = 'not_requested') OR (OLD.create_state = 'created' AND OLD.container_id = NEW.container_id AND ((OLD.start_state = 'not_requested' AND NEW.start_state = 'requested') OR (OLD.start_state = 'requested' AND NEW.start_state IN ('started', 'uncertain'))))) BEGIN SELECT RAISE(ABORT, 'invalid bootstrap transition'); END",
+        "provisioning_container_role_guard",
+        "CREATE TRIGGER IF NOT EXISTS provisioning_container_role_guard BEFORE UPDATE ON capacity_reservation_bootstrap_containers WHEN OLD.role != NEW.role BEGIN SELECT RAISE(ABORT, 'invalid bootstrap transition'); END",
+    ),
+    (
+        "provisioning_container_reservation_guard",
+        "CREATE TRIGGER IF NOT EXISTS provisioning_container_reservation_guard BEFORE UPDATE ON capacity_reservation_bootstrap_containers WHEN OLD.reservation_id != NEW.reservation_id BEGIN SELECT RAISE(ABORT, 'invalid bootstrap transition'); END",
+    ),
+    (
+        "provisioning_container_name_guard",
+        "CREATE TRIGGER IF NOT EXISTS provisioning_container_name_guard BEFORE UPDATE ON capacity_reservation_bootstrap_containers WHEN OLD.container_name != NEW.container_name BEGIN SELECT RAISE(ABORT, 'invalid bootstrap transition'); END",
+    ),
+    (
+        "provisioning_container_unclaimed_transition",
+        "CREATE TRIGGER IF NOT EXISTS provisioning_container_unclaimed_transition BEFORE UPDATE ON capacity_reservation_bootstrap_containers WHEN OLD.create_state = 'unclaimed' AND NOT ((OLD.create_state = NEW.create_state AND OLD.container_id IS NEW.container_id AND OLD.start_state = NEW.start_state) OR (OLD.create_state = 'unclaimed' AND NEW.create_state = 'requested' AND NEW.container_id IS NULL AND NEW.start_state = 'not_requested')) BEGIN SELECT RAISE(ABORT, 'invalid bootstrap transition'); END",
+    ),
+    (
+        "provisioning_container_requested_transition",
+        "CREATE TRIGGER IF NOT EXISTS provisioning_container_requested_transition BEFORE UPDATE ON capacity_reservation_bootstrap_containers WHEN OLD.create_state = 'requested' AND NOT ((OLD.create_state = NEW.create_state AND OLD.container_id IS NEW.container_id AND OLD.start_state = NEW.start_state) OR (OLD.create_state = 'requested' AND NEW.create_state = 'created' AND NEW.container_id IS NOT NULL AND NEW.start_state = 'not_requested') OR (OLD.create_state = 'requested' AND NEW.create_state = 'uncertain' AND NEW.container_id IS NULL AND NEW.start_state = 'not_requested')) BEGIN SELECT RAISE(ABORT, 'invalid bootstrap transition'); END",
+    ),
+    (
+        "provisioning_container_created_transition",
+        "CREATE TRIGGER IF NOT EXISTS provisioning_container_created_transition BEFORE UPDATE ON capacity_reservation_bootstrap_containers WHEN OLD.create_state = 'created' AND NOT ((OLD.create_state = NEW.create_state AND OLD.container_id IS NEW.container_id AND OLD.start_state = NEW.start_state) OR (OLD.create_state = 'created' AND OLD.container_id = NEW.container_id AND ((OLD.start_state = 'not_requested' AND NEW.start_state = 'requested') OR (OLD.start_state = 'requested' AND NEW.start_state IN ('started', 'uncertain'))))) BEGIN SELECT RAISE(ABORT, 'invalid bootstrap transition'); END",
+    ),
+    (
+        "provisioning_container_uncertain_transition",
+        "CREATE TRIGGER IF NOT EXISTS provisioning_container_uncertain_transition BEFORE UPDATE ON capacity_reservation_bootstrap_containers WHEN OLD.create_state = 'uncertain' AND NOT (OLD.create_state = NEW.create_state AND OLD.container_id IS NEW.container_id AND OLD.start_state = NEW.start_state) BEGIN SELECT RAISE(ABORT, 'invalid bootstrap transition'); END",
     ),
     (
         "provisioning_state_no_delete",
         "CREATE TRIGGER IF NOT EXISTS provisioning_state_no_delete BEFORE DELETE ON capacity_reservation_provisioning_state BEGIN SELECT RAISE(ABORT, 'immutable provisioning state'); END",
     ),
     (
-        "provisioning_state_transition",
-        "CREATE TRIGGER IF NOT EXISTS provisioning_state_transition BEFORE UPDATE ON capacity_reservation_provisioning_state WHEN OLD.reservation_id != NEW.reservation_id OR NOT ((OLD.bootstrap_start_state = NEW.bootstrap_start_state AND OLD.runner_container_id IS NEW.runner_container_id AND OLD.dind_container_id IS NEW.dind_container_id) OR (OLD.bootstrap_start_state = 'not_requested' AND NEW.bootstrap_start_state = 'requested' AND NEW.runner_container_id IS NULL AND NEW.dind_container_id IS NULL) OR (OLD.bootstrap_start_state = 'requested' AND NEW.bootstrap_start_state = 'started' AND NEW.runner_container_id IS NOT NULL AND NEW.dind_container_id IS NOT NULL) OR (OLD.bootstrap_start_state = 'requested' AND NEW.bootstrap_start_state = 'uncertain' AND NEW.runner_container_id IS NULL AND NEW.dind_container_id IS NULL)) OR NOT ((OLD.resources_bound = NEW.resources_bound AND OLD.instance_binding_digest IS NEW.instance_binding_digest AND OLD.guest_boot_id IS NEW.guest_boot_id) OR (OLD.resources_bound = 0 AND NEW.resources_bound = 1 AND NEW.instance_binding_digest IS NOT NULL AND NEW.guest_boot_id IS NOT NULL)) OR NOT ((OLD.jit_state = NEW.jit_state AND OLD.runner_id IS NEW.runner_id AND OLD.runner_name IS NEW.runner_name AND OLD.runner_scale_set_id IS NEW.runner_scale_set_id) OR (OLD.jit_state = 'not_requested' AND NEW.jit_state = 'requested' AND NEW.runner_id IS NULL AND NEW.runner_name IS NULL AND NEW.runner_scale_set_id IS NULL) OR (OLD.jit_state = 'requested' AND NEW.jit_state = 'bound' AND NEW.runner_id > 0 AND NEW.runner_name IS NOT NULL AND NEW.runner_scale_set_id > 0) OR (OLD.jit_state = 'requested' AND NEW.jit_state = 'uncertain' AND NEW.runner_id IS NULL AND NEW.runner_name IS NULL AND NEW.runner_scale_set_id IS NULL) OR (OLD.jit_state = 'bound' AND NEW.jit_state = 'cleaned' AND NEW.runner_id = OLD.runner_id AND NEW.runner_name = OLD.runner_name AND NEW.runner_scale_set_id = OLD.runner_scale_set_id)) OR NOT ((OLD.publication_state = NEW.publication_state AND OLD.projection_sha256 IS NEW.projection_sha256 AND OLD.publication_directory_device IS NEW.publication_directory_device AND OLD.publication_directory_inode IS NEW.publication_directory_inode AND OLD.publication_mount_id IS NEW.publication_mount_id) OR (OLD.publication_state = 'not_requested' AND NEW.publication_state = 'requested' AND NEW.projection_sha256 IS NULL AND NEW.publication_directory_device IS NULL AND NEW.publication_directory_inode IS NULL AND NEW.publication_mount_id IS NULL) OR (OLD.publication_state = 'requested' AND NEW.publication_state = 'published' AND NEW.projection_sha256 IS NOT NULL AND NEW.publication_directory_device IS NOT NULL AND NEW.publication_directory_inode IS NOT NULL AND NEW.publication_mount_id > 0) OR (OLD.publication_state = 'requested' AND NEW.publication_state = 'uncertain' AND NEW.projection_sha256 IS NULL AND NEW.publication_directory_device IS NULL AND NEW.publication_directory_inode IS NULL AND NEW.publication_mount_id IS NULL)) OR NOT ((OLD.delivery_state = NEW.delivery_state) OR (OLD.delivery_state = 'not_requested' AND NEW.delivery_state = 'requested' AND NEW.publication_state = 'published' AND NEW.jit_state = 'bound') OR (OLD.delivery_state = 'requested' AND NEW.delivery_state IN ('delivered', 'uncertain'))) OR NOT ((OLD.storage_cleanup_proven = NEW.storage_cleanup_proven) OR (OLD.storage_cleanup_proven = 0 AND NEW.storage_cleanup_proven = 1 AND NEW.resources_bound = 1)) BEGIN SELECT RAISE(ABORT, 'invalid provisioning state transition'); END",
+        "provisioning_state_reservation_guard",
+        "CREATE TRIGGER IF NOT EXISTS provisioning_state_reservation_guard BEFORE UPDATE ON capacity_reservation_provisioning_state WHEN OLD.reservation_id != NEW.reservation_id BEGIN SELECT RAISE(ABORT, 'invalid provisioning state transition'); END",
+    ),
+    (
+        "provisioning_state_bootstrap_transition",
+        "CREATE TRIGGER IF NOT EXISTS provisioning_state_bootstrap_transition BEFORE UPDATE ON capacity_reservation_provisioning_state WHEN NOT ((OLD.bootstrap_start_state = NEW.bootstrap_start_state AND OLD.runner_container_id IS NEW.runner_container_id AND OLD.dind_container_id IS NEW.dind_container_id) OR (OLD.bootstrap_start_state = 'not_requested' AND NEW.bootstrap_start_state = 'requested' AND NEW.runner_container_id IS NULL AND NEW.dind_container_id IS NULL) OR (OLD.bootstrap_start_state = 'requested' AND NEW.bootstrap_start_state = 'started' AND NEW.runner_container_id IS NOT NULL AND NEW.dind_container_id IS NOT NULL) OR (OLD.bootstrap_start_state = 'requested' AND NEW.bootstrap_start_state = 'uncertain' AND NEW.runner_container_id IS NULL AND NEW.dind_container_id IS NULL)) BEGIN SELECT RAISE(ABORT, 'invalid provisioning state transition'); END",
+    ),
+    (
+        "provisioning_state_resources_transition",
+        "CREATE TRIGGER IF NOT EXISTS provisioning_state_resources_transition BEFORE UPDATE ON capacity_reservation_provisioning_state WHEN NOT ((OLD.resources_bound = NEW.resources_bound AND OLD.instance_binding_digest IS NEW.instance_binding_digest AND OLD.guest_boot_id IS NEW.guest_boot_id) OR (OLD.resources_bound = 0 AND NEW.resources_bound = 1 AND NEW.instance_binding_digest IS NOT NULL AND NEW.guest_boot_id IS NOT NULL)) BEGIN SELECT RAISE(ABORT, 'invalid provisioning state transition'); END",
+    ),
+    (
+        "provisioning_state_jit_transition",
+        "CREATE TRIGGER IF NOT EXISTS provisioning_state_jit_transition BEFORE UPDATE ON capacity_reservation_provisioning_state WHEN NOT ((OLD.jit_state = NEW.jit_state AND OLD.runner_id IS NEW.runner_id AND OLD.runner_name IS NEW.runner_name AND OLD.runner_scale_set_id IS NEW.runner_scale_set_id) OR (OLD.jit_state = 'not_requested' AND NEW.jit_state = 'requested' AND NEW.runner_id IS NULL AND NEW.runner_name IS NULL AND NEW.runner_scale_set_id IS NULL) OR (OLD.jit_state = 'requested' AND NEW.jit_state = 'bound' AND NEW.runner_id > 0 AND NEW.runner_name IS NOT NULL AND NEW.runner_scale_set_id > 0) OR (OLD.jit_state = 'requested' AND NEW.jit_state = 'uncertain' AND NEW.runner_id IS NULL AND NEW.runner_name IS NULL AND NEW.runner_scale_set_id IS NULL) OR (OLD.jit_state = 'bound' AND NEW.jit_state = 'cleaned' AND NEW.runner_id = OLD.runner_id AND NEW.runner_name = OLD.runner_name AND NEW.runner_scale_set_id = OLD.runner_scale_set_id)) BEGIN SELECT RAISE(ABORT, 'invalid provisioning state transition'); END",
+    ),
+    (
+        "provisioning_state_publication_transition",
+        "CREATE TRIGGER IF NOT EXISTS provisioning_state_publication_transition BEFORE UPDATE ON capacity_reservation_provisioning_state WHEN NOT ((OLD.publication_state = NEW.publication_state AND OLD.projection_sha256 IS NEW.projection_sha256 AND OLD.publication_directory_device IS NEW.publication_directory_device AND OLD.publication_directory_inode IS NEW.publication_directory_inode AND OLD.publication_mount_id IS NEW.publication_mount_id) OR (OLD.publication_state = 'not_requested' AND NEW.publication_state = 'requested' AND NEW.projection_sha256 IS NULL AND NEW.publication_directory_device IS NULL AND NEW.publication_directory_inode IS NULL AND NEW.publication_mount_id IS NULL) OR (OLD.publication_state = 'requested' AND NEW.publication_state = 'published' AND NEW.projection_sha256 IS NOT NULL AND NEW.publication_directory_device IS NOT NULL AND NEW.publication_directory_inode IS NOT NULL AND NEW.publication_mount_id > 0) OR (OLD.publication_state = 'requested' AND NEW.publication_state = 'uncertain' AND NEW.projection_sha256 IS NULL AND NEW.publication_directory_device IS NULL AND NEW.publication_directory_inode IS NULL AND NEW.publication_mount_id IS NULL)) BEGIN SELECT RAISE(ABORT, 'invalid provisioning state transition'); END",
+    ),
+    (
+        "provisioning_state_delivery_transition",
+        "CREATE TRIGGER IF NOT EXISTS provisioning_state_delivery_transition BEFORE UPDATE ON capacity_reservation_provisioning_state WHEN NOT ((OLD.delivery_state = NEW.delivery_state) OR (OLD.delivery_state = 'not_requested' AND NEW.delivery_state = 'requested' AND NEW.publication_state = 'published' AND NEW.jit_state = 'bound') OR (OLD.delivery_state = 'requested' AND NEW.delivery_state IN ('delivered', 'uncertain'))) BEGIN SELECT RAISE(ABORT, 'invalid provisioning state transition'); END",
+    ),
+    (
+        "provisioning_state_cleanup_transition",
+        "CREATE TRIGGER IF NOT EXISTS provisioning_state_cleanup_transition BEFORE UPDATE ON capacity_reservation_provisioning_state WHEN NOT ((OLD.storage_cleanup_proven = NEW.storage_cleanup_proven) OR (OLD.storage_cleanup_proven = 0 AND NEW.storage_cleanup_proven = 1 AND NEW.resources_bound = 1)) BEGIN SELECT RAISE(ABORT, 'invalid provisioning state transition'); END",
     ),
     CLEANUP_GUARDS[0],
     CLEANUP_GUARDS[1],

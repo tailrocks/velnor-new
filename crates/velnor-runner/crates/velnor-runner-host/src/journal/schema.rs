@@ -28,7 +28,7 @@ mod storage_initialization;
 mod storage_network;
 mod storage_root_backing;
 
-pub(super) const JOURNAL_VERSION: i64 = 28;
+pub(super) const JOURNAL_VERSION: i64 = 29;
 const CURRENT_COLUMNS: [ColumnShape; 23] = [
     ColumnShape::new("id", "INTEGER", false, None),
     ColumnShape::new("kind", "TEXT", true, None),
@@ -153,6 +153,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
                 25 => migration::from_version_twenty_five(conn).await?,
                 26 => migration::from_version_twenty_six(conn).await?,
                 27 => migration::from_version_twenty_seven(conn).await?,
+                28 => migration::from_version_twenty_eight(conn).await?,
                 _ => return Err(HostError::Journal),
             }
             version = journal_version(conn).await?;
@@ -166,7 +167,7 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
 
 fn expected_next_version(version: i64) -> Option<i64> {
     match version {
-        0..=8 | 10..=27 => Some(version + 1),
+        0..=8 | 10..=28 => Some(version + 1),
         9 => Some(11),
         _ => None,
     }
@@ -182,10 +183,10 @@ mod migration_driver_tests {
             assert_eq!(expected_next_version(version), Some(version + 1));
         }
         assert_eq!(expected_next_version(9), Some(11));
-        for version in 10..=27 {
+        for version in 10..=28 {
             assert_eq!(expected_next_version(version), Some(version + 1));
         }
-        for version in [-1, 28, 29] {
+        for version in [-1, 29, 30] {
             assert_eq!(expected_next_version(version), None);
         }
     }

@@ -178,6 +178,7 @@ pub(super) async fn from_version_fifteen(conn: &turso::Connection) -> Result<(),
 }
 
 pub(super) async fn from_version_sixteen(conn: &turso::Connection) -> Result<(), HostError> {
+    provisioning::upgrade_transition_guards(conn).await?;
     provisioning::upgrade_from_version_sixteen(conn).await?;
     conn.execute("PRAGMA user_version = 17", ())
         .await
@@ -198,6 +199,7 @@ pub(super) async fn from_version_seventeen(conn: &turso::Connection) -> Result<(
 }
 
 pub(super) async fn from_version_eighteen(conn: &turso::Connection) -> Result<(), HostError> {
+    provisioning::upgrade_transition_guards(conn).await?;
     provisioning::upgrade_from_version_eighteen(conn).await?;
     conn.execute("PRAGMA user_version = 19", ())
         .await
@@ -209,6 +211,7 @@ pub(super) async fn from_version_eighteen(conn: &turso::Connection) -> Result<()
 }
 
 pub(super) async fn from_version_nineteen(conn: &turso::Connection) -> Result<(), HostError> {
+    provisioning::upgrade_transition_guards(conn).await?;
     provisioning::replace_cleanup_guards(conn).await?;
     storage_initialization::bootstrap(conn).await?;
     conn.execute("PRAGMA user_version = 20", ())
@@ -275,6 +278,7 @@ pub(super) async fn from_version_twenty_five(conn: &turso::Connection) -> Result
 }
 
 pub(super) async fn from_version_twenty_six(conn: &turso::Connection) -> Result<(), HostError> {
+    provisioning::upgrade_transition_guards(conn).await?;
     storage_initialization::repair_v27_metadata_volume_name_guard(conn).await?;
     super::storage_root_backing::bootstrap(conn).await?;
     super::storage_root_backing::upgrade_v27(conn).await?;
@@ -289,6 +293,14 @@ pub(super) async fn from_version_twenty_six(conn: &turso::Connection) -> Result<
 pub(super) async fn from_version_twenty_seven(conn: &turso::Connection) -> Result<(), HostError> {
     super::execution_authorization::upgrade_v28(conn).await?;
     conn.execute("PRAGMA user_version = 28", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+pub(super) async fn from_version_twenty_eight(conn: &turso::Connection) -> Result<(), HostError> {
+    provisioning::upgrade_transition_guards(conn).await?;
+    conn.execute("PRAGMA user_version = 29", ())
         .await
         .map_err(|_| HostError::Journal)?;
     Ok(())
