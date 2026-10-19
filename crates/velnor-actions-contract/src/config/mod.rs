@@ -33,6 +33,7 @@ mod tofu_apply;
 mod tools;
 mod verification;
 mod workflow;
+mod workflow_defaults;
 mod workflow_task;
 
 pub(crate) use binary_release::validate_static_release_inventory;
@@ -113,8 +114,11 @@ pub use tofu_apply::{GitHubTokenSecret, S3BackendConfig, TofuApplyConfig};
 pub use tools::{OVERRIDABLE_TOOLS, ToolsConfig, is_exact_semver};
 pub use verification::{VerificationRunner, VerificationTask};
 pub use workflow::{
-    GeneratorValidation, LATEST_RUNNER_LABEL, PullRequestCachePolicy, RUNNER_LABEL_CATALOG,
-    RunnerSelection, VelnorSupportWorkflow, VerifyConfig, WorkflowConfig, WorkflowPolicy,
+    GeneratorValidation, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, RunnerSelection,
+    VelnorSupportWorkflow, VerifyConfig, WorkflowConfig, WorkflowPolicy,
+};
+pub use workflow_defaults::{
+    DEFAULT_CACHE_QUOTA_BYTES, DEFAULT_SEED_MAX_BYTES, DEFAULT_SEED_TIMEOUT_MINUTES,
     default_crate_timeout_minutes,
 };
 pub use workflow_task::{WORKFLOW_TASK_JOB_PREFIX, WorkflowTask, is_valid_workflow_task_id};

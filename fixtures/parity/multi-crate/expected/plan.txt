@@ -21,8 +21,8 @@ Workflow to generate
     - plan (15 steps)
     - required (8 steps)
     - required-gate (1 steps)
-    - rust-parity-app (23 steps)
-    - rust-parity-tool (21 steps)
+    - rust-parity-app (22 steps)
+    - rust-parity-tool (20 steps)
     - 2 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check

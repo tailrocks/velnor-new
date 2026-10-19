@@ -85,7 +85,7 @@ fn c4_restore_and_mbx_precede_fetch_with_offline_skip() {
         Some(StepRole::Checkout),
         Some(StepRole::PreparePinnedTools),
         Some(StepRole::CargoSourcesRestore),
-        Some(StepRole::MbxCache),
+        Some(StepRole::MbxInstall),
         Some(StepRole::CargoSourcesFetch),
         None,
     ];
@@ -108,7 +108,7 @@ fn c4_restore_and_mbx_precede_fetch_with_offline_skip() {
     let fetch_first = [
         Some(StepRole::Checkout),
         Some(StepRole::CargoSourcesFetch),
-        Some(StepRole::MbxCache),
+        Some(StepRole::MbxInstall),
         Some(StepRole::CargoSourcesRestore),
     ];
     assert!(sources::check_restore_before_fetch(&fetch_first, true).is_err());

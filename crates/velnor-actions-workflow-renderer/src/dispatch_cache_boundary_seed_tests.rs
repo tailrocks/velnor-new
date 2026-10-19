@@ -37,10 +37,10 @@ fn dispatch_denies_the_local_tool_seed_action() {
 }
 
 #[test]
-fn dispatch_denies_native_mbx_object_restore_before_use() {
+fn dispatch_leaves_the_install_only_mbx_action_unconditional() {
     let native = cache_step(
         &format!("{}@{}", crate::cache_steps::MBX_ACTION_NAME, "a".repeat(40)),
-        "Restore MBX objects",
+        "Install MBX",
     );
     let mut jobs = BTreeMap::from([("plan".to_owned(), job(&[], native))]);
 
@@ -48,7 +48,7 @@ fn dispatch_denies_native_mbx_object_restore_before_use() {
 
     assert_eq!(
         jobs["plan"].steps[0].condition.as_deref(),
-        Some(DISPATCH_DENY),
-        "native MBX restore is skipped on every workflow dispatch"
+        None,
+        "the install-only MBX action transports no cache and installs MBX on dispatch too"
     );
 }

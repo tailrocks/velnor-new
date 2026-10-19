@@ -37,7 +37,7 @@ pub mod lane_target;
 pub mod marker;
 mod matrix;
 mod matrix_output_mode;
-mod mbx_gc_policy;
+pub mod mbx_job_env;
 pub mod msrv;
 pub mod overlap;
 pub mod owned_tool_publication;

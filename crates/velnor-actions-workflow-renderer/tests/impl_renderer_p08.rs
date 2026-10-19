@@ -218,7 +218,7 @@ fn mbx_restore_precedes_fetch() {
         parallel: false,
         name: "Restore MBX objects".to_owned(),
         id: None,
-        role: Some(velnor_actions_contract::StepRole::MbxCache),
+        role: Some(velnor_actions_contract::StepRole::MbxInstall),
         condition: None,
         kind: StepKind::Action {
             uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),

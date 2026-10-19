@@ -158,7 +158,7 @@ pub fn finalize_jobs(
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
     // Both cache families are validated globally before either gets a save.
-    cache_p08::elect_cache_writers_with_policy(&mut jobs, ctx.pull_request_cache_policy)?;
+    cache_p08::elect_cache_writers(&mut jobs)?;
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
@@ -174,7 +174,7 @@ pub fn finalize_jobs(
 
 /// Validate every finalized job after policy merging and internal expansion.
 fn validate_final_jobs(ir: &WorkflowIr, jobs: &mut JobMap) -> Result<(), RenderError> {
-    crate::cache_steps::append_workspace_cleanups(jobs)?;
+    crate::cache_steps::validate_mbx_lifecycles(jobs)?;
     let mut finalized = ir.clone();
     finalized.jobs.clone_from(jobs);
     finalized.validate().map_err(RenderError::Contract)

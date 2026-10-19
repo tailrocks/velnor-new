@@ -22,7 +22,7 @@ fn typed_mbx_owner_precedes_cargo_source_fetch_independent_of_labels() {
         parallel: false,
         name: "Presentation-only MBX label".to_owned(),
         id: None,
-        role: Some(StepRole::MbxCache),
+        role: Some(StepRole::MbxInstall),
         condition: None,
         kind: StepKind::Action {
             uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),

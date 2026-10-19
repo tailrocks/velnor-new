@@ -44,9 +44,7 @@ fn is_cache_access(step: &Step) -> bool {
     let StepKind::Action { uses, .. } = &step.kind else {
         return false;
     };
-    uses.starts_with("actions/cache@")
-        || uses.starts_with("actions/cache/")
-        || uses.starts_with("jdx/mr-boxington-action@")
+    uses.starts_with("actions/cache@") || uses.starts_with("actions/cache/")
 }
 
 fn is_tool_seed(step: &Step) -> bool {
@@ -108,12 +106,7 @@ fn suppress_dispatch(step: &mut Step) {
 /// adding no further protection.
 fn is_push_only_cache_save(step: &Step) -> bool {
     let condition = step.condition.as_deref();
-    let tools_save_readonly = crate::cache_p08::tools_cache_save_condition(
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-    );
-    let tools_save_pr_scoped = crate::cache_p08::tools_cache_save_condition(
-        velnor_actions_contract::PullRequestCachePolicy::SameRepositoryScoped,
-    );
+    let tools_save = crate::cache_p08::tools_cache_save_condition();
     let condition_is_push_only = condition
         == Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
         || condition
@@ -121,8 +114,7 @@ fn is_push_only_cache_save(step: &Step) -> bool {
         || condition
             == Some(velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION)
         || (step.role == Some(velnor_actions_contract::StepRole::ToolsCacheSave)
-            && (condition == Some(tools_save_readonly.as_str())
-                || condition == Some(tools_save_pr_scoped.as_str())));
+            && condition == Some(tools_save.as_str()));
     condition_is_push_only
         && matches!(&step.kind, StepKind::Action { uses, .. }
             if uses.starts_with("actions/cache/save@"))

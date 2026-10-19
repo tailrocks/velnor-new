@@ -11,8 +11,8 @@ fn config_validation_reports_key_paths() {
     use velnor_actions_contract::config::ActionsConfig;
     use velnor_actions_contract::config::{RustBinaryReleaseConfig, RustReleaseConfig};
     use velnor_actions_contract::{
-        DiscoveryConfig, PullRequestCachePolicy, ResourcesConfig, RustConfiguration,
-        RustStackConfig, StacksConfig, TestShardingConfig, VelnorConfig, WorkflowConfig,
+        DiscoveryConfig, ResourcesConfig, RustConfiguration, RustStackConfig, StacksConfig,
+        TestShardingConfig, VelnorConfig, WorkflowConfig,
     };
     let valid = VelnorConfig {
         checks: Vec::new(),
@@ -27,7 +27,9 @@ fn config_validation_reports_key_paths() {
             mise_quiet: true,
             max_parallel_jobs: 2,
             crate_timeout_minutes: 5,
-            pull_request_cache_policy: PullRequestCachePolicy::default(),
+            seed_timeout_minutes: 45,
+            seed_max_bytes: 8 * 1024 * 1024 * 1024,
+            cache_quota_bytes: 10_000_000_000,
             runner_label: None,
             tasks: Vec::new(),
             tofu_apply: None,
@@ -103,8 +105,8 @@ fn runner_label_uses_exact_catalog_match() {
     use velnor_actions_contract::config::ActionsConfig;
     use velnor_actions_contract::config::{LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG};
     use velnor_actions_contract::{
-        ContractError, DiscoveryConfig, PullRequestCachePolicy, ResourcesConfig, StacksConfig,
-        TestShardingConfig, VelnorConfig,
+        ContractError, DiscoveryConfig, ResourcesConfig, StacksConfig, TestShardingConfig,
+        VelnorConfig,
     };
     let base = || VelnorConfig {
         checks: Vec::new(),
@@ -119,7 +121,9 @@ fn runner_label_uses_exact_catalog_match() {
             mise_quiet: true,
             max_parallel_jobs: 2,
             crate_timeout_minutes: 5,
-            pull_request_cache_policy: PullRequestCachePolicy::default(),
+            seed_timeout_minutes: 45,
+            seed_max_bytes: 8 * 1024 * 1024 * 1024,
+            cache_quota_bytes: 10_000_000_000,
             runner_label: None,
             tasks: Vec::new(),
             tofu_apply: None,

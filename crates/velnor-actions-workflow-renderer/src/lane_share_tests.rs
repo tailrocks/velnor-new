@@ -28,7 +28,6 @@ pub(super) fn ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         workflow_tasks: Vec::new(),
-        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         mise_quiet: true,
         plan_consumer_env: BTreeMap::new(),
     }
@@ -286,9 +285,7 @@ fn elected_save_stays_on_the_winner_job() {
     let save = crate::cache_steps::tools_cache_step(
         false,
         crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
-        Some(crate::cache_p08::tools_cache_save_condition(
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-        )),
+        Some(crate::cache_p08::tools_cache_save_condition()),
     )
     .expect("save");
     jobs.get_mut("rust-0__hosted")

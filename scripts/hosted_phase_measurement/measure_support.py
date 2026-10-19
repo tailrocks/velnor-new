@@ -144,11 +144,11 @@ def extract_log_evidence(raw: bytes, phase: str, log_name: str) -> dict[str, Any
         if mbx is not None:
             mbx_rows.append({"timestamp": stamp, **mbx})
     result: dict[str, Any] = {"log_file": log_name, "log_size_bytes": len(raw), "log_sha256": hashlib.sha256(raw).hexdigest(), "pinned_action_refs": sorted(set(action_refs)), "cache_received_observations": received, "cache_sent_observations": sent, "mbx_object_cache_summaries": mbx_rows, "mise_download_progress": tool_rows, "cargo_download_package_lines": cargo_rows}
-    if phase in {"cargo_source_restore", "mbx_object_restore", "mbx_bundle_restore", "other_cache_step"}:
+    if phase in {"cargo_source_restore", "dependency_seed_restore", "mbx_bundle_restore", "other_cache_step"}:
         result["cache_bytes_received"] = max((row["received_bytes"] for row in received), default=None)
         result["cache_transfer_duration_ms"] = None
         result["cache_transfer_duration_unknown_reason"] = "GitHub API gives the whole step span; cache log has cumulative receive counters but no isolated transfer start/end pair."
-    if phase in {"cargo_source_save", "mbx_bundle_save", "mbx_object_post_upload"}:
+    if phase in {"cargo_source_save", "mbx_bundle_save"}:
         result["cache_bytes_uploaded"] = max((row["uploaded_bytes"] for row in sent), default=None)
         result["cache_transfer_duration_ms"] = None
         result["cache_transfer_duration_unknown_reason"] = "GitHub API gives the whole step span; cache log has cumulative sent counters but no isolated transfer start/end pair."

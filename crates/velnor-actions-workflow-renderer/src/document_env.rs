@@ -4,10 +4,6 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::Job;
 
-use crate::cache_steps::{
-    MBX_BUILD_SCRIPT_EXECUTION_ENV, MBX_BUILD_SCRIPT_EXECUTION_VALUE, MBX_CC_ENV, MBX_CC_VALUE,
-    MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE,
-};
 use crate::render::{PLAN_ATTEMPT_ENV, PLAN_JOB_ID};
 
 /// `VELNOR_RUN_KEY_ATTEMPT` value for one job of a workflow with a plan job.
@@ -41,17 +37,7 @@ pub(super) fn extend_job_env(
     plan_attempt: Option<&str>,
 ) {
     if native_mbx {
-        for (key, val) in [
-            (MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE),
-            (MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE),
-            (MBX_CC_ENV, MBX_CC_VALUE),
-            (
-                MBX_BUILD_SCRIPT_EXECUTION_ENV,
-                MBX_BUILD_SCRIPT_EXECUTION_VALUE,
-            ),
-        ] {
-            job_env.insert(key.to_owned(), val.to_owned());
-        }
+        crate::mbx_job_env::extend_mbx_job_env(job_env);
     }
     if let Some(value) = plan_attempt {
         job_env.insert(PLAN_ATTEMPT_ENV.to_owned(), value.to_owned());

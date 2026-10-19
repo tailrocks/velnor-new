@@ -54,8 +54,6 @@ pub(crate) fn mbx_tool_steps(
         mbx_version,
         rust_toolchain,
         mbx_tool_env(rust_toolchain),
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-        None,
     )?
     .ok_or_else(|| RenderError::InvalidWorkflow("mbx_steps_missing".to_owned()))
 }
@@ -85,7 +83,6 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         workflow_tasks: Vec::new(),
-        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         mise_quiet: true,
         plan_consumer_env: std::collections::BTreeMap::new(),
     }

@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 use std::error::Error;
 
 use velnor_actions_contract::{
-    ClaudeMdMode, NextestRunIgnored, PullRequestCachePolicy, RustSuiteArtifact,
-    RustSuiteArtifactWhen, RustSuiteBuildMode, RustSuiteConfig, RustSuiteTrigger, StepKind,
-    WorkflowDispatchConfig, WorkflowDispatchInputConfig, WorkflowDispatchInputType,
+    ClaudeMdMode, NextestRunIgnored, RustSuiteArtifact, RustSuiteArtifactWhen, RustSuiteBuildMode,
+    RustSuiteConfig, RustSuiteTrigger, StepKind, WorkflowDispatchConfig,
+    WorkflowDispatchInputConfig, WorkflowDispatchInputType,
 };
 
 use super::{
@@ -39,7 +39,6 @@ fn sample_spec(suites: Vec<RustSuiteConfig>) -> RustSuitesRenderSpec {
         cargo_nextest_version: "0.9.133".to_owned(),
         compile_driver: CompileDriver::Cargo,
         mbx_action: None,
-        pull_request_cache_policy: PullRequestCachePolicy::ReadOnly,
         export_rustup_toolchain: true,
     }
 }

@@ -19,7 +19,6 @@ fn context(checkout_uses: &str) -> RenderContext {
         candidate: None,
         preseed: false,
         workflow_tasks: Vec::new(),
-        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         mise_quiet: true,
         plan_consumer_env: BTreeMap::new(),
     }

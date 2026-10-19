@@ -27,8 +27,8 @@ fn plain_parallel_members_validate() {
 #[test]
 fn parallel_members_reject_ids_roles_and_internal_operations() {
     let mut with_role = shell(true);
-    with_role.role = Some(StepRole::MbxVersionCheck);
-    with_role.id = Some(StepId::MbxReady);
+    with_role.role = Some(StepRole::CacheKeys);
+    with_role.id = Some(StepId::CacheKeys);
     let internal = Step {
         kind: StepKind::Internal {
             operation: "plan-v1".to_owned(),

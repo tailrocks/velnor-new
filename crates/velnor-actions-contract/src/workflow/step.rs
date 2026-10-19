@@ -1,8 +1,6 @@
 //! Workflow step payloads and local validation.
 
-use super::step_identity::{
-    MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole, TOFU_PROVIDER_ADMISSION_USES,
-};
+use super::step_identity::{StepId, StepRole, TOFU_PROVIDER_ADMISSION_USES};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
@@ -149,14 +147,6 @@ impl Step {
                     format!("tool_seed_conditional:{job}"),
                 ));
             }
-            if role == StepRole::MbxWorkspaceCleanup
-                && self.condition.as_deref() != Some(MBX_WORKSPACE_CLEAN_CONDITION)
-            {
-                return Err(ContractError::identity(
-                    "step.condition",
-                    format!("mbx_cleanup_condition_mismatch:{job}"),
-                ));
-            }
             if let Some(expected) = role.required_id()
                 && self.id != Some(expected)
             {
@@ -189,7 +179,7 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         StepId::TofuProviders => {
             matches!(kind, StepKind::Action { uses, .. } if uses == TOFU_PROVIDER_ADMISSION_USES)
         }
-        StepId::MbxReady | StepId::CacheKeys | StepId::SourcesFetch => {
+        StepId::CacheKeys | StepId::SourcesFetch => {
             matches!(kind, StepKind::Shell { .. })
         }
         StepId::SourcesRestore => {

@@ -27,7 +27,7 @@ pub(crate) fn emit_shared(
         BTreeSet<String>,
     ),
 ) -> Result<RenderedWorkflow, RenderError> {
-    let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(jobs);
+    let mbx_jobs = crate::mbx_job_env::jobs_with_mbx(jobs);
     let mut document = document::workflow_to_yaml(ir, shared, ctx, &mbx_jobs)?;
     let cache_outputs = crate::cache_plan_outputs::consumed(jobs)?;
     if let Some((source, max_parallel)) = matrix {

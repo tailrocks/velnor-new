@@ -1,6 +1,4 @@
-use super::{
-    GeneratorValidation, PullRequestCachePolicy, VerifyConfig, WorkflowConfig, WorkflowPolicy,
-};
+use super::{GeneratorValidation, VerifyConfig, WorkflowConfig, WorkflowPolicy};
 use crate::config::{
     BuildTask, BuildTaskRunner, MiseTaskSource, NativeImageCachePolicy, NativeImagePlatform,
     NativeImageTask, VerificationRunner, VerificationTask, WorkflowTask,
@@ -16,7 +14,9 @@ fn named(name: &str) -> WorkflowConfig {
         mise_quiet: true,
         max_parallel_jobs: 2,
         crate_timeout_minutes: 5,
-        pull_request_cache_policy: PullRequestCachePolicy::default(),
+        seed_timeout_minutes: 45,
+        seed_max_bytes: 8 * 1024 * 1024 * 1024,
+        cache_quota_bytes: 10_000_000_000,
         runner_label: None,
         tasks: Vec::new(),
         tofu_apply: None,
@@ -25,29 +25,6 @@ fn named(name: &str) -> WorkflowConfig {
         dispatch: crate::config::WorkflowDispatchConfig::default(),
         preserve_workflows: Vec::new(),
     }
-}
-
-#[test]
-fn pull_request_cache_policy_is_strict_and_uses_kebab_case() {
-    for (policy, wire) in [
-        (PullRequestCachePolicy::ReadOnly, "\"read-only\""),
-        (
-            PullRequestCachePolicy::SameRepositoryScoped,
-            "\"same-repository-scoped\"",
-        ),
-    ] {
-        let serialized = serde_json::to_string(&policy).expect("serialize policy");
-        assert_eq!(serialized, wire);
-        assert_eq!(
-            serde_json::from_str::<PullRequestCachePolicy>(wire).expect("deserialize policy"),
-            policy
-        );
-    }
-    assert_eq!(
-        PullRequestCachePolicy::default(),
-        PullRequestCachePolicy::ReadOnly
-    );
-    assert!(serde_json::from_str::<PullRequestCachePolicy>("\"same-repo\"").is_err());
 }
 
 #[test]
@@ -97,35 +74,6 @@ fn mise_quiet_rejects_non_boolean_values() {
             "mise_quiet = {wire} must fail as a non-boolean"
         );
     }
-}
-
-#[test]
-fn workflow_cache_policy_defaults_when_missing_and_serializes_opt_in() {
-    let mut value = serde_json::json!({
-        "name": "CI",
-        "policy": "consumer-v1",
-        "generator_validation": "bootstrap",
-        "max_parallel_jobs": 2
-    });
-    let config: WorkflowConfig =
-        serde_json::from_value(value.clone()).expect("deserialize default workflow");
-    assert_eq!(
-        config.pull_request_cache_policy,
-        PullRequestCachePolicy::ReadOnly
-    );
-
-    value["pull_request_cache_policy"] =
-        serde_json::Value::String("same-repository-scoped".to_owned());
-    let config: WorkflowConfig =
-        serde_json::from_value(value).expect("deserialize opted-in workflow");
-    assert_eq!(
-        serde_json::to_value(config)
-            .expect("serialize workflow")
-            .get("pull_request_cache_policy"),
-        Some(&serde_json::Value::String(
-            "same-repository-scoped".to_owned()
-        ))
-    );
 }
 
 #[test]

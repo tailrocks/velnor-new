@@ -19,7 +19,7 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
     let (restore, preflight, mbx, version_check, probe, build, verify, save) = (
         at(StepRole::CargoSourcesRestore),
         at(StepRole::MbxPreflight),
-        at(StepRole::MbxCache),
+        at(StepRole::MbxInstall),
         at(StepRole::MbxVersionCheck),
         at(StepRole::CargoSourcesFetch),
         at(StepRole::PreseedBuild),
@@ -48,12 +48,12 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
     assert_owned_homes(steps, StepRole::MbxPreflight, "MBX preflight");
     let mbx_action = steps
         .iter()
-        .find(|step| step.role == Some(StepRole::MbxCache))
+        .find(|step| step.role == Some(StepRole::MbxInstall))
         .expect("MBX action");
     let velnor_actions_contract::StepKind::Action { env, with, .. } = &mbx_action.kind else {
         panic!("MBX restore must be an action");
     };
-    assert_eq!(with.get("toolchain").map(String::as_str), Some("1.99.1"));
+    assert_eq!(with.get("backend").map(String::as_str), Some("local"));
     assert!(
         with.get("version").map(String::as_str)
             == Some(ToolCatalog::pinned().version(PinnedTool::MrBoxington)),
@@ -83,7 +83,7 @@ fn lockless_preseed_installs_mbx_before_the_build_without_a_restore() {
     };
     let prepare_components = at(StepRole::PrepareRustComponents);
     let preflight = at(StepRole::MbxPreflight);
-    let action = at(StepRole::MbxCache);
+    let action = at(StepRole::MbxInstall);
     let version_check = at(StepRole::MbxVersionCheck);
     let build = at(StepRole::PreseedBuild);
     assert!(
@@ -96,7 +96,7 @@ fn lockless_preseed_installs_mbx_before_the_build_without_a_restore() {
     assert_eq!(
         roles
             .iter()
-            .filter(|seen| **seen == Some(StepRole::MbxCache))
+            .filter(|seen| **seen == Some(StepRole::MbxInstall))
             .count(),
         1
     );

@@ -1,6 +1,6 @@
 use super::{BTreeMap, RenderError, commands, guard, marker, steps, validator_tools};
 use velnor_actions_contract::{
-    CI_WORKFLOW_PATH, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,
+    CI_WORKFLOW_PATH, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION, REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID,
     REQUIRED_VERDICT_DISPLAY_NAME as CONTRACT_REQUIRED_VERDICT_DISPLAY_NAME, ScaleSetSelector,
     ValidatorKind,
@@ -86,8 +86,6 @@ pub struct RenderContext {
     pub preseed: bool,
     /// One sorted, variant-dispatched graph of explicitly declared workflow tasks.
     pub workflow_tasks: Vec<crate::verification_jobs::WorkflowTaskPolicy>,
-    /// Pull-request cache writes; scoped writes require explicit same-repository opt-in.
-    pub pull_request_cache_policy: PullRequestCachePolicy,
     /// Workflow-level Mise silencing from `workflow.mise_quiet` (default
     /// true): `false` omits `MISE_QUIET` from the generated workflow
     /// environment so the wrapper-dispatch trace stays visible.

@@ -7,7 +7,7 @@ use std::path::Path;
 
 use tempfile::TempDir;
 use velnor_actions_contract::DetectionStatus;
-use velnor_actions_contract::{PullRequestCachePolicy, WorkflowPolicy};
+use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_orchestrator::prepare;
 
 use crate::impl_common::without_ambient_identity;
@@ -183,10 +183,6 @@ fn repo_config_sample_parses_through_prepare() -> TestResult {
             WorkflowPolicy::VelnorRepositoryV1
         );
         assert_eq!(
-            prep.config.workflow.pull_request_cache_policy,
-            PullRequestCachePolicy::SameRepositoryScoped
-        );
-        assert_eq!(
             prep.config.discovery.exclude,
             vec!["fixtures/**", "crates/**/tests/fixtures/**"]
         );
@@ -283,7 +279,6 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
                 "default_branch",
                 "generator_validation",
                 "max_parallel_jobs",
-                "pull_request_cache_policy",
                 "runner_label",
             ]
             .contains(&key.as_str()),
@@ -323,7 +318,6 @@ fn assert_sample_mentions(sample: &str) {
         "default_branch",
         "generator_validation",
         "max_parallel_jobs",
-        "pull_request_cache_policy",
         "[resources]",
         "compiler_process_budget",
         "test_process_budget",

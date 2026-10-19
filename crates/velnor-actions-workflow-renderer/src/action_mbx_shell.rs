@@ -53,33 +53,6 @@ pub(crate) fn validate_argv_for_role(
                 BTreeMap::new(),
             )?)?
         }
-        Some(StepRole::MbxWorkspaceCleanup) => {
-            let mut with = BTreeMap::from([
-                ("version".to_owned(), "1.0.0".to_owned()),
-                ("toolchain".to_owned(), rust.to_owned()),
-            ]);
-            if let Some((_, after)) = script.split_once("; target_dir=\"")
-                && let Some((td, _)) = after.split_once('"')
-                && let Some(dir) = td.strip_suffix("/target")
-            {
-                with.insert("working-directory".to_owned(), dir.to_owned());
-            }
-            let action = Step {
-                parallel: false,
-                name: crate::cache_steps::MBX_RESTORE_NAME.to_owned(),
-                id: None,
-                role: Some(StepRole::MbxCache),
-                condition: None,
-                kind: StepKind::Action {
-                    uses: format!("{}@{}", crate::cache_steps::MBX_ACTION_NAME, "a".repeat(40)),
-                    with,
-                    env: BTreeMap::new(),
-                },
-            };
-            shell_run(crate::cache_steps::mbx_workspace_clean_step_for_action(
-                &action,
-            )?)?
-        }
         Some(StepRole::PreseedBuild) => {
             let with_toolchain = script.contains(&format!("+{rust}"));
             let build = candidate_build_argv(rust, with_toolchain);
@@ -121,16 +94,11 @@ pub(crate) fn validate_step_argv(
     }
 }
 
-/// Whether this role selects one of the four complete MBX templates.
+/// Whether this role selects one of the three complete MBX templates.
 fn role_uses_resolver(role: Option<StepRole>) -> bool {
     matches!(
         role,
-        Some(
-            StepRole::MbxVersionCheck
-                | StepRole::MbxWorkspaceCleanup
-                | StepRole::PreseedBuild
-                | StepRole::PreseedVerifyBuild
-        )
+        Some(StepRole::MbxVersionCheck | StepRole::PreseedBuild | StepRole::PreseedVerifyBuild)
     )
 }
 
@@ -218,30 +186,10 @@ fn shell_run(step: Step) -> Result<Vec<String>, RenderError> {
     }
 }
 
-pub(crate) fn target_dir_for_action(
-    with: &BTreeMap<String, String>,
-) -> Result<String, RenderError> {
-    let Some(dir) = with
-        .get("working-directory")
-        .map(String::as_str)
-        .filter(|d| !d.is_empty() && *d != ".")
-    else {
-        return Ok("target".to_owned());
-    };
-    if !dir.starts_with('/')
-        && !dir.ends_with('/')
-        && dir.split('/').all(|s| {
-            !s.is_empty()
-                && s != "."
-                && s != ".."
-                && s.bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
-        })
-    {
-        Ok(format!("{dir}/target"))
-    } else {
-        Err(RenderError::BadCommand(format!("bad_working_dir:{dir}")))
-    }
+/// Exact Rust toolchain named by a canonical MBX shell template.
+pub(crate) fn script_rust_toolchain(run: &[String]) -> Option<&str> {
+    let script_at = commands::inline_shell_script_at(run)?;
+    rust_toolchain(&run[script_at]).ok()
 }
 
 fn bad_shape(reason: &str) -> RenderError {
@@ -252,7 +200,7 @@ fn bad_shape(reason: &str) -> RenderError {
 mod tests {
     use std::collections::BTreeMap;
 
-    use velnor_actions_contract::{Step, StepKind, StepRole};
+    use velnor_actions_contract::{Step, StepKind};
 
     use super::{
         ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN, candidate_build_argv, mbx_probe_argv,
@@ -263,25 +211,6 @@ mod tests {
     fn version_check() -> Step {
         cache_steps::mbx_version_check_step("1.23.0", "1.99.0", BTreeMap::new())
             .expect("version check")
-    }
-
-    fn cleanup() -> Step {
-        let action = Step {
-            parallel: false,
-            name: cache_steps::MBX_RESTORE_NAME.to_owned(),
-            id: None,
-            role: Some(StepRole::MbxCache),
-            condition: None,
-            kind: StepKind::Action {
-                uses: format!("{}@{}", cache_steps::MBX_ACTION_NAME, "a".repeat(40)),
-                with: BTreeMap::from([
-                    ("version".to_owned(), "1.23.0".to_owned()),
-                    ("toolchain".to_owned(), "1.99.0".to_owned()),
-                ]),
-                env: BTreeMap::new(),
-            },
-        };
-        cache_steps::mbx_workspace_clean_step_for_action(&action).expect("cleanup")
     }
 
     fn build() -> Step {
@@ -302,8 +231,8 @@ mod tests {
     }
 
     #[test]
-    fn whole_templates_accept_all_four_producer_roles() {
-        for step in [version_check(), cleanup(), build(), verify_build()] {
+    fn whole_templates_accept_all_three_producer_roles() {
+        for step in [version_check(), build(), verify_build()] {
             assert!(role_uses_resolver(step.role));
             validate_argv_for_role(run(&step), step.role).expect("canonical MBX template");
             crate::commands::join_validated_argv_for_run(run(&step))

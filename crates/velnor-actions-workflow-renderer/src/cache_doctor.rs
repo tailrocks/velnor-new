@@ -22,14 +22,9 @@ use velnor_actions_contract::workflow::cache_family::{
 use velnor_actions_contract::workflow::step_identity::{
     TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDERS_KEY_OUTPUT_EXPR, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
 };
-use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind};
+use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::RenderError;
-
-/// The MBX target-mode action keys on `github.job`, `hashFiles`, and tool
-/// versions and saves on same-repository PRs. It is exempt from the doctor
-/// only until target mode is deleted (the next cache PR removes this).
-pub(crate) const MBX_TARGET_MODE_DOCTOR_EXEMPTION: &str = "jdx/mr-boxington-action@";
 
 /// Families the doctor knows: the runtime-keyed families plus V2 tools.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -90,9 +85,6 @@ fn classify<'a>(job: &str, step: &'a Step) -> Result<Option<CacheInputs<'a>>, Re
     let StepKind::Action { uses, with, .. } = &step.kind else {
         return Ok(None);
     };
-    if uses.starts_with(MBX_TARGET_MODE_DOCTOR_EXEMPTION) {
-        return Ok(None);
-    }
     let get = |name: &str| with.get(name).map(String::as_str);
     let (key, path, save) = if uses.starts_with("actions/cache/restore@") {
         (get("key"), get("path"), false)
@@ -258,12 +250,7 @@ fn check_save(job: &str, step: &Step, family: Family) -> Result<(), RenderError>
             condition == SOURCES_SAVE_CONDITION && job == crate::render::PLAN_JOB_ID
         }
         Family::Runtime(CacheFamily::TofuProviders) => condition == TOFU_PROVIDERS_SAVE_CONDITION,
-        Family::Tools => [
-            PullRequestCachePolicy::ReadOnly,
-            PullRequestCachePolicy::SameRepositoryScoped,
-        ]
-        .into_iter()
-        .any(|policy| condition == crate::cache_p08::tools_cache_save_condition(policy)),
+        Family::Tools => condition == crate::cache_p08::tools_cache_save_condition(),
     };
     if ok {
         Ok(())

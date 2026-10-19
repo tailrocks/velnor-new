@@ -12,8 +12,6 @@ pub enum StepId {
     ToolsCacheIdentity,
     /// `OpenTofu` provider-cache composite outputs consumed by the save step.
     TofuProviders,
-    /// Successful MBX version/store guard that enables final workspace cleanup.
-    MbxReady,
     /// Runtime cache trust and family keys consumed by restores and saves.
     CacheKeys,
     /// Plan-job sources restore whose hit outputs gate the sources save.
@@ -32,7 +30,6 @@ impl StepId {
             Self::Plan => "plan",
             Self::ToolsCacheIdentity => "v2",
             Self::TofuProviders => "tofu-providers",
-            Self::MbxReady => "mbx-ready",
             Self::CacheKeys => "cache-keys",
             Self::SourcesRestore => "sources-restore",
             Self::SourcesFetch => "sources-fetch",

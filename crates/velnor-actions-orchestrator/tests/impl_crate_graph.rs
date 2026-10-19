@@ -165,13 +165,12 @@ fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
             "MBX action uses the exact catalog version:\n{task}"
         );
         assert_eq!(
-            task.matches("Restore MBX objects").count(),
+            task.matches("Install MBX").count(),
             1,
-            "one objects step:\n{task}"
+            "one install step:\n{task}"
         );
         assert!(
-            task.contains("github-cache-mode: target")
-                || task.contains("github-cache-mode: \"target\""),
+            task.contains("backend: local") && !task.contains("github-cache-mode"),
             "{task}"
         );
     }

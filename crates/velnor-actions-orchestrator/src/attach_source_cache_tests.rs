@@ -26,7 +26,7 @@ fn cargo_only_preseed_uses_exact_sources_and_native_helper_owners() {
     let source_restore = role_at(StepRole::CargoSourcesRestore);
     let probe = role_at(StepRole::CargoSourcesFetch);
     let native_preflight = role_at(StepRole::MbxPreflight);
-    let native_owner = role_at(StepRole::MbxCache);
+    let native_owner = role_at(StepRole::MbxInstall);
     let version_check = role_at(StepRole::MbxVersionCheck);
     let build = role_at(StepRole::PreseedBuild);
     let source_save = role_at(StepRole::CargoSourcesSave);
@@ -42,7 +42,7 @@ fn cargo_only_preseed_uses_exact_sources_and_native_helper_owners() {
     assert_eq!(
         steps
             .iter()
-            .filter(|step| step.role == Some(StepRole::MbxCache))
+            .filter(|step| step.role == Some(StepRole::MbxInstall))
             .count(),
         1,
         "the native action is the only MBX owner"

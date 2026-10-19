@@ -165,7 +165,7 @@ pub fn check_restore_before_fetch(
         if has_mbx {
             let mbx_restore = roles
                 .iter()
-                .position(|role| *role == Some(StepRole::MbxCache));
+                .position(|role| *role == Some(StepRole::MbxInstall));
             if mbx_restore.is_some_and(|restore_at| fetch_at < restore_at) {
                 return Err(MiseError::CacheNotEligible {
                     task: "fetch".to_owned(),

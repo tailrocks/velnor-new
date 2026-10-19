@@ -61,11 +61,8 @@ fn dispatch_suppression_preserves_canonical_push_only_save_gate() {
 
 #[test]
 fn dispatch_suppression_preserves_qualified_tools_save_gate() {
-    for policy in [
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-        velnor_actions_contract::PullRequestCachePolicy::SameRepositoryScoped,
-    ] {
-        let expected = crate::cache_p08::tools_cache_save_condition(policy);
+    {
+        let expected = crate::cache_p08::tools_cache_save_condition();
         let mut save = cache_step("actions/cache/save@sha", "Save Mise tools");
         save.role = Some(velnor_actions_contract::StepRole::ToolsCacheSave);
         save.condition = Some(expected.clone());

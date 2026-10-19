@@ -101,22 +101,20 @@ fn acquire_step(staged: &str) -> Result<Step, crate::RenderError> {
 fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
     let action = Step {
         parallel: false,
-        name: "Restore MBX objects".to_owned(),
+        name: "Install MBX".to_owned(),
         id: None,
         role: None,
         condition: None,
-            kind: StepKind::Action {
-                uses: format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
-                with: BTreeMap::from([("toolchain".to_owned(), "1.98.1".to_owned())]),
-                env: BTreeMap::from([
-                    ("VELNOR_MBX_VERSION".to_owned(), "1.21.1".to_owned()),
-                    (
-                        crate::cache_steps::MBX_CACHE_MODE_ENV.to_owned(),
-                        "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}".to_owned(),
-                    ),
-                ]),
-            },
-        };
+        kind: StepKind::Action {
+            uses: format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
+            with: BTreeMap::from([
+                ("backend".to_owned(), "local".to_owned()),
+                ("cache-links".to_owned(), "false".to_owned()),
+                ("version".to_owned(), "1.21.1".to_owned()),
+            ]),
+            env: BTreeMap::new(),
+        },
+    };
     Ok(Job {
         display_name: "Velnor Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
@@ -213,7 +211,6 @@ fn dispatch_render_context(staged: String) -> RenderContext {
         candidate: None,
         preseed: false,
         workflow_tasks: Vec::new(),
-        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         mise_quiet: true,
         plan_consumer_env: BTreeMap::new(),
     }
@@ -251,23 +248,11 @@ fn assert_native_mbx_step(plan: &Job) {
     let mbx = plan
         .steps
         .iter()
-        .find(|step| step.name == "Restore MBX objects")
+        .find(|step| step.name == "Install MBX")
         .expect("MBX action");
-    assert!(mbx.condition.as_deref().is_some_and(|condition| {
-        condition.contains("github.event_name != 'workflow_dispatch'")
-    }));
-    let native_mode = match &mbx.kind {
-        StepKind::Action { env, .. } => env
-            .get(crate::cache_steps::MBX_CACHE_MODE_ENV)
-            .map(String::as_str),
-        _ => None,
-    };
     assert_eq!(
-        native_mode,
-        Some(
-            "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}"
-        ),
-        "native object writes remain limited to protected default-branch pushes"
+        mbx.condition, None,
+        "the install-only MBX action touches no cache and runs on dispatch too"
     );
 }
 
@@ -331,11 +316,7 @@ fn assert_rendered_dispatch_guard(
             .yaml
             .contains(crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME)
     );
-    assert!(
-        rendered
-            .yaml
-            .contains("github.event_name != 'workflow_dispatch'")
-    );
+    assert!(rendered.yaml.contains("backend: local"));
     Ok(())
 }
 

@@ -42,8 +42,6 @@ pub(super) fn compile_driver_steps(spec: &RustSuitesRenderSpec) -> Result<Vec<St
         mbx_version,
         &spec.rust_version,
         base_suite_env(spec),
-        spec.pull_request_cache_policy,
-        None,
     )?;
     Ok(steps.map_or_else(Vec::new, Into::into))
 }

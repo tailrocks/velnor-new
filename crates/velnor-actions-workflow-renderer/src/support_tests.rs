@@ -1,9 +1,7 @@
 //! Consumer verification-merge cases.
 
 use super::*;
-use velnor_actions_contract::{
-    JobTimeout, PullRequestCachePolicy, ValidatorKind, VelnorSupportWorkflow,
-};
+use velnor_actions_contract::{JobTimeout, ValidatorKind, VelnorSupportWorkflow};
 
 /// Render context with the given validator commands.
 fn fixture_ctx(commands: Vec<ValidatorCommand>) -> RenderContext {
@@ -19,7 +17,6 @@ fn fixture_ctx(commands: Vec<ValidatorCommand>) -> RenderContext {
         candidate: None,
         preseed: false,
         workflow_tasks: Vec::new(),
-        pull_request_cache_policy: PullRequestCachePolicy::ReadOnly,
         mise_quiet: true,
         plan_consumer_env: BTreeMap::new(),
     };

@@ -6,8 +6,8 @@ use std::path::Path;
 use serde::Deserialize;
 use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig, MiseCheck, QualifiedTool};
 use velnor_actions_contract::{
-    DiscoveryConfig, GeneratorValidation, PullRequestCachePolicy, ResourcesConfig,
-    TestShardingConfig, VelnorConfig, VerifyConfig, WorkflowConfig, WorkflowPolicy, WorkflowTask,
+    DiscoveryConfig, GeneratorValidation, ResourcesConfig, TestShardingConfig, VelnorConfig,
+    VerifyConfig, WorkflowConfig, WorkflowPolicy, WorkflowTask,
 };
 
 use crate::OrchestratorError;
@@ -152,9 +152,12 @@ struct PartialWorkflow {
     crate_timeout_minutes: Option<u16>,
     /// Workflow-level Mise silencing override.
     mise_quiet: Option<bool>,
-    /// Pull-request cache-write policy.
-    #[serde(default)]
-    pull_request_cache_policy: PullRequestCachePolicy,
+    /// Cache seed job timeout in minutes.
+    seed_timeout_minutes: Option<u16>,
+    /// Raw-byte ceiling of one dependency seed generation.
+    seed_max_bytes: Option<u64>,
+    /// Repository Actions cache quota for the budget check.
+    cache_quota_bytes: Option<u64>,
     /// Pinned runner-label override.
     runner_label: Option<String>,
     /// One tagged task inventory for all explicit workflow work.
@@ -254,7 +257,15 @@ impl PartialWorkflow {
                 .crate_timeout_minutes
                 .unwrap_or_else(velnor_actions_contract::config::default_crate_timeout_minutes),
             mise_quiet: self.mise_quiet.unwrap_or(true),
-            pull_request_cache_policy: self.pull_request_cache_policy,
+            seed_timeout_minutes: self
+                .seed_timeout_minutes
+                .unwrap_or(velnor_actions_contract::config::DEFAULT_SEED_TIMEOUT_MINUTES),
+            seed_max_bytes: self
+                .seed_max_bytes
+                .unwrap_or(velnor_actions_contract::config::DEFAULT_SEED_MAX_BYTES),
+            cache_quota_bytes: self
+                .cache_quota_bytes
+                .unwrap_or(velnor_actions_contract::config::DEFAULT_CACHE_QUOTA_BYTES),
             runner_label: self.runner_label,
             tasks: self.tasks,
             tofu_apply: self.tofu_apply,

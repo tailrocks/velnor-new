@@ -97,17 +97,10 @@ fn mbx_transport_stays_with_mr_boxington_action() {
         ),
         ("RUSTUP_TOOLCHAIN".to_owned(), rust.clone()),
     ]);
-    let [preflight, step, version_check] = mbx_steps_for_driver(
-        &mbx,
-        CompileDriver::Mbx,
-        pin,
-        &rust,
-        env.clone(),
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-        None,
-    )
-    .expect("objects steps")
-    .expect("MBX profile");
+    let [preflight, step, version_check] =
+        mbx_steps_for_driver(&mbx, CompileDriver::Mbx, pin, &rust, env.clone())
+            .expect("objects steps")
+            .expect("MBX profile");
     assert_eq!(preflight.name, "Verify Rust before MBX action");
     assert_eq!(version_check.name, "Verify native MBX version");
     assert!(
@@ -115,33 +108,14 @@ fn mbx_transport_stays_with_mr_boxington_action() {
         "mbx bytes move only through the external action"
     );
     assert!(
-        format!("{:?}", step.kind).contains("toolchain"),
-        "action uses the catalog Rust pin after an exact preflight"
+        format!("{:?}", step.kind).contains("\"backend\": \"local\""),
+        "the action installs MBX with a local in-job store"
     );
     assert!(
-        mbx_steps_for_driver(
-            &mbx,
-            CompileDriver::Cargo,
-            pin,
-            &rust,
-            env.clone(),
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-            None,
-        )
-        .expect("Cargo profile")
-        .is_none()
+        mbx_steps_for_driver(&mbx, CompileDriver::Cargo, pin, &rust, env.clone(),)
+            .expect("Cargo profile")
+            .is_none()
     );
     let other = uses("actions/cache/restore");
-    assert!(
-        mbx_steps_for_driver(
-            &other,
-            CompileDriver::Mbx,
-            pin,
-            &rust,
-            env,
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-            None,
-        )
-        .is_err()
-    );
+    assert!(mbx_steps_for_driver(&other, CompileDriver::Mbx, pin, &rust, env,).is_err());
 }

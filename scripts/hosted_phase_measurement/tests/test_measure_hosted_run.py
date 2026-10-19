@@ -134,18 +134,11 @@ class MeasurementTests(unittest.TestCase):
         self.assertEqual(uploaded["cache_bytes_uploaded"], 20)
         self.assertEqual([row["uploaded_bytes"] for row in uploaded["cache_sent_observations"]], [10, 20])
 
-    def test_actual_step49_maps_post_restore_to_distinct_mbx_upload(self):
-        raw = (Path(__file__).parent / "fixtures" / "runner-core-step-49-post-restore-mbx-objects.txt").read_bytes()
-        self.assertEqual(hashlib.sha256(raw).hexdigest(), "2221dcfd7e75c097876fdb634f0572b5ef36f20f4e061db055c59a34a1b0adf9")
-        phase = measure.phase_for_step("Post Restore MBX objects")
-        self.assertEqual(phase, "mbx_object_post_upload")
-        self.assertEqual(measure.phase_for_step("Restore MBX objects"), "mbx_object_restore")
-        self.assertEqual(measure.phase_for_step("prefix Post Restore MBX objects suffix"), "other")
-        evidence = measure.extract_log_evidence(raw, phase, "Rust _ velnor-runner-core/49_Post Restore MBX objects.txt")
-        self.assertEqual([row["uploaded_bytes"] for row in evidence["cache_sent_observations"]], [23_855_104, 29_062_963])
-        self.assertEqual(evidence["cache_bytes_uploaded"], 29_062_963)
-        self.assertNotIn("cache_bytes_received", evidence)
-        self.assertIsNone(evidence["cache_transfer_duration_ms"])
+    def test_install_and_dependency_seed_steps_map_to_their_phases(self):
+        self.assertEqual(measure.phase_for_step("Install MBX"), "mbx_install")
+        self.assertEqual(measure.phase_for_step("Restore dependency seed"), "dependency_seed_restore")
+        self.assertEqual(measure.phase_for_step("Restore MBX objects"), "other")
+        self.assertEqual(measure.phase_for_step("prefix Install MBX suffix"), "other")
 
     def test_compiling_text_is_not_compiler_units_or_link_time(self):
         evidence = measure.extract_log_evidence(b"Compiling example v1.0.0\nLinking example\n", "test_build", "job/1_build.txt")

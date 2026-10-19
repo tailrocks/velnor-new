@@ -201,7 +201,6 @@ fn build_render_spec(
         cargo_nextest_version: catalog.version(PinnedTool::Nextest).to_owned(),
         compile_driver,
         mbx_action,
-        pull_request_cache_policy: config.workflow.pull_request_cache_policy,
         export_rustup_toolchain: catalog.exports_rustup_toolchain(),
     }))
 }

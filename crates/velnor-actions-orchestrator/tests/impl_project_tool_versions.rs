@@ -74,8 +74,8 @@ fn project_declared_versions_never_appear_in_generated_text() -> TestResult {
         "commands name the run-time reference: {ci}"
     );
     assert!(
-        ci.contains("${{ env.VELNOR_TOOL_RUST }}"),
-        "cache keys and action inputs read the resolved version: {ci}"
+        ci.contains("version: ${{ env.VELNOR_TOOL_MR_BOXINGTON }}"),
+        "action inputs read the resolved version: {ci}"
     );
     Ok(())
 }

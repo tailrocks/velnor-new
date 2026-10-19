@@ -1,6 +1,6 @@
 //! Cache and lane step templates over validated action refs.
 //!
-//! Covers MBX objects-mode restore, `actions/cache` restore/save, and
+//! Covers the install-only MBX action, `actions/cache` restore/save, and
 //! per-lane target directories; pins arrive validated.
 
 use std::collections::BTreeMap;
@@ -11,22 +11,13 @@ use velnor_actions_contract::{Step, StepKind};
 mod mbx_command;
 #[path = "cache_steps_mbx_gate.rs"]
 mod mbx_gate;
-#[path = "cache_steps_mbx_mode.rs"]
-mod mbx_mode;
 #[path = "cache_steps_mbx_preflight.rs"]
 mod mbx_preflight;
-pub(crate) use mbx_gate::append_workspace_cleanups;
 pub use mbx_gate::check_mbx_gating;
-pub(crate) use mbx_gate::is_mbx_action;
-pub(crate) use mbx_preflight::{
-    ACTION_MBX_BIN, MBX_BUILD_SCRIPT_EXECUTION_ENV, MBX_BUILD_SCRIPT_EXECUTION_VALUE, MBX_CC_ENV,
-    MBX_CC_VALUE, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV,
-    MBX_SHARE_OUT_DIR_VALUE, RESOLVE_ACTION_MBX_BIN, mbx_version_check_step,
-    mbx_workspace_clean_step_for_action,
-};
+pub(crate) use mbx_gate::{is_mbx_action, validate_mbx_lifecycles};
+pub(crate) use mbx_preflight::{ACTION_MBX_BIN, RESOLVE_ACTION_MBX_BIN, mbx_version_check_step};
 pub use mbx_preflight::{
-    MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME,
-    mbx_steps_for_driver,
+    MBX_BACKEND, MBX_INSTALL_NAME, MBX_PREFLIGHT_NAME, MBX_VERSION_CHECK_NAME, mbx_steps_for_driver,
 };
 
 use crate::{
@@ -61,7 +52,7 @@ pub(crate) fn validate_tools_restore_call(step: &Step) -> Result<&str, RenderErr
     tools::validate_restore_call(step)
 }
 
-/// Pinned mr-boxington action name (objects mode).
+/// Pinned mr-boxington action name (install-only, local backend).
 pub const MBX_ACTION_NAME: &str = "jdx/mr-boxington-action";
 /// Cache restore/save action names.
 pub const CACHE_RESTORE_NAME: &str = "actions/cache/restore";

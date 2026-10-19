@@ -5,9 +5,9 @@ use velnor_actions_contract::config::ActionsConfig;
 use velnor_actions_contract::{
     AGENTS_MD_PATH, CLAUDE_MD_PATH, ContractError, DECLARED_GITHUB_FORMATS, DiscoveryConfig,
     ObligationDecision, Plan, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner,
-    PullRequestCachePolicy, ResourcesConfig, RunnerSelection, RustStackConfig, StacksConfig,
-    TestShardingConfig, Trust, VelnorConfig, WorkflowConfig, WorkflowEvent, WorkflowPolicy,
-    digest_b3, find_github_format, is_declared_github_format, plan_id_for_run, run_key_for_ci,
+    ResourcesConfig, RunnerSelection, RustStackConfig, StacksConfig, TestShardingConfig, Trust,
+    VelnorConfig, WorkflowConfig, WorkflowEvent, WorkflowPolicy, digest_b3, find_github_format,
+    is_declared_github_format, plan_id_for_run, run_key_for_ci,
 };
 
 /// Valid config shared by remediation cases.
@@ -25,7 +25,9 @@ pub(crate) fn valid_config() -> VelnorConfig {
             mise_quiet: true,
             max_parallel_jobs: 2,
             crate_timeout_minutes: 5,
-            pull_request_cache_policy: PullRequestCachePolicy::default(),
+            seed_timeout_minutes: 45,
+            seed_max_bytes: 8 * 1024 * 1024 * 1024,
+            cache_quota_bytes: 10_000_000_000,
             runner_label: None,
             tasks: Vec::new(),
             tofu_apply: None,

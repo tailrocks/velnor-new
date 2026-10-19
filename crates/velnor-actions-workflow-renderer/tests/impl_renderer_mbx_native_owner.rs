@@ -1,4 +1,4 @@
-//! The pinned MBX action is the sole object-cache owner.
+//! The pinned MBX action installs MBX and transports no cache.
 
 use std::collections::BTreeMap;
 
@@ -42,61 +42,51 @@ fn render_mbx_job(scale_set: bool) -> Result<String, RenderError> {
 }
 
 #[test]
-fn native_action_is_the_only_mbx_cache_owner_on_both_lanes() -> Result<(), RenderError> {
+fn native_action_installs_mbx_and_owns_no_cache_on_both_lanes() -> Result<(), RenderError> {
     for scale_set in [false, true] {
         let yaml = render_mbx_job(scale_set)?;
         assert!(yaml.contains("uses: jdx/mr-boxington-action@"), "{yaml}");
         assert!(yaml.contains("version: 1.21.1"), "{yaml}");
-        assert!(yaml.contains("github-cache-mode: target"), "{yaml}");
-        assert!(
-            yaml.contains("MBX_GC_AUTO: \"0\""),
-            "native MBX consumers set the shared collection policy: {yaml}"
-        );
-        assert!(yaml.contains("MBX_SHARE_OUT_DIR: \"0\""), "{yaml}");
-        assert!(yaml.contains("MBX_CC: \"0\""), "{yaml}");
-        assert!(yaml.contains("MBX_BUILD_SCRIPT_EXECUTION: \"0\""), "{yaml}");
+        assert!(yaml.contains("backend: local"), "{yaml}");
+        assert!(yaml.contains("cache-links: \"false\""), "{yaml}");
+        for key in [
+            "MBX_GC_AUTO",
+            "MBX_SHARE_OUT_DIR",
+            "MBX_CC",
+            "MBX_BUILD_SCRIPT_EXECUTION",
+            "MBX_TARGET_VIEWS",
+        ] {
+            assert!(yaml.contains(&format!("{key}: \"0\"")), "{key}: {yaml}");
+        }
         assert_eq!(
             yaml.matches("MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx")
                 .count(),
-            4,
-            "preflight, action, version check, and cleanup use the same step-level path: {yaml}"
+            3,
+            "preflight, action, and version check use the same step-level path: {yaml}"
         );
         assert!(yaml.contains("GITHUB_ENV"), "job-wide path export: {yaml}");
         assert!(
             !yaml.contains("\n      MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx\n"),
             "runner.temp must never appear in jobs.<id>.env: {yaml}"
         );
-        assert!(yaml.contains("runner.environment"), "lane identity: {yaml}");
         assert!(
             yaml.contains("Read MBX store during build")
                 && yaml.contains("test -n \\\"$MBX_CACHE_DIR\\\""),
             "a later build step inherits the preflight-exported store: {yaml}"
         );
-        assert!(yaml.contains("cache-generation: "), "{yaml}");
-        assert!(yaml.contains("name: Clean MBX workspace outputs"), "{yaml}");
-        assert!(
-            yaml.contains("cache-key: "),
-            "content-addressed target cache key is set: {yaml}"
-        );
-        assert!(
-            yaml.contains("restore-keys: "),
-            "layered target restore-keys prefix is set: {yaml}"
-        );
-        assert!(
-            !yaml.contains("cache-key-suffix:"),
-            "v1.7-only suffix input is absent"
-        );
-        assert!(
-            !yaml.contains("isolate-objects-cache:"),
-            "v1.7-only isolation input is absent"
-        );
         for removed in [
+            "github-cache-mode",
+            "cache-generation",
+            "cache-key",
+            "restore-keys",
+            "runner.environment",
+            "Clean MBX workspace outputs",
             "mbx-bundle",
             "MBX_BUNDLE",
             "actions/cache/restore@",
             "actions/cache/save@",
         ] {
-            assert!(!yaml.contains(removed), "legacy owner {removed}: {yaml}");
+            assert!(!yaml.contains(removed), "retired owner {removed}: {yaml}");
         }
     }
     Ok(())

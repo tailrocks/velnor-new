@@ -87,7 +87,7 @@ fn assert_restore_steps_are_dispatch_denied(yaml: &str) {
     let restore_names = [
         "Restore Cargo sources",
         "Restore Mise tools",
-        "Restore MBX objects",
+        "Install MBX",
         "Restore MBX single bundle",
         "Restore Tofu providers",
     ];

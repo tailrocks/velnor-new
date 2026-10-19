@@ -4,9 +4,9 @@ use velnor_actions_contract::workflow::cache_family::{
     CacheFamily, SOURCES_KEY_PLAN_EXPR, SOURCES_KEY_STEP_EXPR, SOURCES_RESTORE_KEYS_PLAN_EXPR,
     SOURCES_RESTORE_KEYS_STEP_EXPR, SOURCES_SAVE_CONDITION,
 };
-use velnor_actions_contract::{Job, JobTimeout, PullRequestCachePolicy, Step, StepKind};
+use velnor_actions_contract::{Job, JobTimeout, Step, StepKind};
 
-use super::{MBX_TARGET_MODE_DOCTOR_EXEMPTION, check};
+use super::check;
 
 const RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -64,7 +64,7 @@ fn tools_save(condition: &str) -> Step {
 /// A valid Plan writer plus one crate reader.
 fn valid() -> BTreeMap<String, Job> {
     let paths = sources_paths();
-    let tools = crate::cache_p08::tools_cache_save_condition(PullRequestCachePolicy::ReadOnly);
+    let tools = crate::cache_p08::tools_cache_save_condition();
     let plan = job(vec![
         action(
             "Restore Cargo sources",
@@ -187,7 +187,7 @@ fn i2_rejects_a_path_list_not_taken_from_the_spec() {
 
 #[test]
 fn i3_rejects_sources_paths_in_another_family() {
-    let tools = crate::cache_p08::tools_cache_save_condition(PullRequestCachePolicy::ReadOnly);
+    let tools = crate::cache_p08::tools_cache_save_condition();
     let mut save = tools_save(&tools);
     let StepKind::Action { with, .. } = &mut save.kind else {
         unreachable!("action");
@@ -240,21 +240,13 @@ fn i7_rejects_ungated_or_misplaced_saves() {
 }
 
 #[test]
-fn only_the_named_mbx_target_mode_exemption_skips_the_doctor() {
-    let mbx = format!("{MBX_TARGET_MODE_DOCTOR_EXEMPTION}47ce49b32025d93a7a2f4570815afaa2b7092240");
+fn any_action_carrying_a_cache_key_is_checked_including_mbx() {
     let key = "velnor-mbx-1.24.1-job-${{ github.job }}";
-    check(&with_reader(action(
-        "Restore MBX objects",
-        &mbx,
-        &[("cache-key", key)],
-        None,
-    )))
-    .expect("exempt");
-    let other = action(
-        "Other",
+    for uses in [
+        "jdx/mr-boxington-action@47ce49b32025d93a7a2f4570815afaa2b7092240",
         "owner/other-cache@47ce49b32025d93a7a2f4570815afaa2b7092240",
-        &[("cache-key", key)],
-        None,
-    );
-    rejects(&with_reader(other), "i1_key_contains:github.job");
+    ] {
+        let step = action("Cache", uses, &[("cache-key", key)], None);
+        rejects(&with_reader(step), "i1_key_contains:github.job");
+    }
 }

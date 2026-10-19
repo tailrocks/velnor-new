@@ -64,12 +64,7 @@ fn linux_resource_probe_build_uses_cargo_and_pinned_rust() {
 #[test]
 fn release_qualification_uses_catalog_action_and_exact_version_probe() {
     let catalog = ToolCatalog::pinned();
-    let steps = steps_for_catalog(
-        &catalog,
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-        None,
-    )
-    .expect("catalog qualification MBX steps");
+    let steps = steps_for_catalog(&catalog).expect("catalog qualification MBX steps");
     let StepKind::Action { uses, with, .. } = &steps[1].kind else {
         panic!("qualification middle step must install the native MBX action");
     };
@@ -80,7 +75,7 @@ fn release_qualification_uses_catalog_action_and_exact_version_probe() {
     let mbx_ver = catalog.version(PinnedTool::MrBoxington);
     let rust_ver = catalog.version(PinnedTool::Rust);
     assert_eq!(with.get("version").map(String::as_str), Some(mbx_ver));
-    assert_eq!(with.get("toolchain").map(String::as_str), Some(rust_ver));
+    assert_eq!(with.get("backend").map(String::as_str), Some("local"));
     let StepKind::Shell { run, .. } = &steps[2].kind else {
         panic!("qualification last step must verify the native MBX version");
     };

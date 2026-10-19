@@ -89,7 +89,6 @@ pub(crate) fn build_for_workflow(
         max_parallel_jobs: config.workflow.max_parallel_jobs,
         timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)?,
         helper_version,
-        cache_policy: config.workflow.pull_request_cache_policy,
         crates,
         seed_parallel_targets: config
             .stacks
@@ -112,7 +111,6 @@ pub(crate) struct CrateJobInputs<'a> {
     /// Literal timeout for every emitted crate job.
     pub(crate) timeout: JobTimeout,
     pub(crate) helper_version: &'a str,
-    pub(crate) cache_policy: velnor_actions_contract::PullRequestCachePolicy,
     /// Opt-in cold target initialization; never changes obligation ownership.
     pub(crate) seed_parallel_targets: bool,
     /// Per-package Rust options keyed by Cargo package name.
@@ -266,13 +264,7 @@ fn render_job(
         )?);
     }
     if use_mbx {
-        let root = crate::source_prep::workspace_root_for_manifest(&model.manifest, fetch_roots);
-        let working_dir = (!root.is_empty()).then_some(root);
-        steps.extend(crate::mbx_preflight::steps_for_catalog(
-            catalog,
-            input.cache_policy,
-            working_dir,
-        )?);
+        steps.extend(crate::mbx_preflight::steps_for_catalog(catalog)?);
     }
     if use_rust {
         let scoped_roots = crate::source_prep::crate_fetch_roots(

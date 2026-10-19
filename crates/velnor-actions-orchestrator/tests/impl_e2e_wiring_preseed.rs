@@ -3,7 +3,7 @@
 use velnor_actions_mise::{CandidateBuild, PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::{
-    MBX_VERSION_CHECK_NAME, WORKFLOW_PATH, steps::MBX_RESTORE_NAME,
+    MBX_VERSION_CHECK_NAME, WORKFLOW_PATH, steps::MBX_INSTALL_NAME,
 };
 
 use super::{JobText, check_tree, check_verify_mbx, make_velnor_repo};
@@ -52,7 +52,7 @@ fn assert_native_preseed_owner(jobs: &[JobText], yaml: &str) -> TestResult {
         .find(|job| job.id == "plan")
         .ok_or("missing plan job")?;
     let position = |name: &str| plan.steps.iter().position(|step| step.name == name);
-    let action_at = position(MBX_RESTORE_NAME).ok_or("missing native MBX action")?;
+    let action_at = position(MBX_INSTALL_NAME).ok_or("missing native MBX action")?;
     let version_at = position(MBX_VERSION_CHECK_NAME).ok_or("missing MBX version guard")?;
     let build_at = plan
         .steps

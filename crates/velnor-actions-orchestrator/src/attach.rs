@@ -125,11 +125,7 @@ pub(crate) fn attach_preseed(
             problem: "plan_job_missing".to_owned(),
         });
     };
-    insert_plan_mbx_restore(
-        catalog,
-        &mut plan.steps,
-        workflow.context.pull_request_cache_policy,
-    )?;
+    insert_plan_mbx_install(catalog, &mut plan.steps)?;
     let at = preseed_anchor(&plan.steps);
     plan.steps.splice(at..at, plan_steps);
     let Some(final_gate) = workflow.ir.jobs.get_mut(FINAL_JOB_ID) else {
@@ -176,10 +172,9 @@ fn after_prepare(steps: &[Step]) -> usize {
 /// Lockful Cargo-only plans replace their registry-only fallback with the
 /// canonical shared-sources cache, then restore MBX after that action.
 /// Lockless plans have no source cache and install MBX after Rust setup.
-fn insert_plan_mbx_restore(
+fn insert_plan_mbx_install(
     catalog: &ToolCatalog,
     steps: &mut Vec<Step>,
-    policy: velnor_actions_contract::PullRequestCachePolicy,
 ) -> Result<(), OrchestratorError> {
     if steps.iter().any(is_mbx_action) {
         return Err(OrchestratorError::Contract {
@@ -190,7 +185,7 @@ fn insert_plan_mbx_restore(
         .iter()
         .position(|step| step.role == Some(StepRole::CargoSourcesRestore))
         .map_or_else(|| after_rust_setup(steps), |index| index + 1);
-    for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog, policy, None)?
+    for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog)?
         .into_iter()
         .enumerate()
     {
@@ -213,7 +208,7 @@ fn after_rust_setup(steps: &[Step]) -> usize {
 }
 
 fn is_mbx_action(step: &Step) -> bool {
-    step.role == Some(StepRole::MbxCache)
+    step.role == Some(StepRole::MbxInstall)
 }
 
 /// Insert index for the plan-job pre-seed build block.
@@ -232,7 +227,7 @@ fn preseed_anchor(steps: &[Step]) -> usize {
                 Some(
                     StepRole::CargoSourcesFetch
                         | StepRole::CargoSourcesRestore
-                        | StepRole::MbxCache
+                        | StepRole::MbxInstall
                         | StepRole::MbxVersionCheck
                 )
             )

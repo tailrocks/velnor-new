@@ -1,9 +1,9 @@
-//! Native MBX collection stays off until the guarded post-task cleanup.
+//! Native MBX jobs share one job env policy and one install lifecycle.
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_workflow_renderer::steps::{MBX_CACHE_MODE_ENV, checkout_step};
+use velnor_actions_workflow_renderer::steps::checkout_step;
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
@@ -25,10 +25,8 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
         None,
         &fixture_ctx(),
     )?;
-    assert!(
-        text.contains("github.ref_protected == true && 'write' || 'read'"),
-        "only protected default-branch pushes write:\n{text}"
-    );
+    assert!(!text.contains("ACTIONS_CACHE_MODE"), "{text}");
+    assert!(text.contains("MBX_TARGET_VIEWS: \"0\""), "{text}");
     assert!(
         text.contains("MBX_GC_AUTO: \"0\""),
         "MBX jobs defer GC while action results may be in flight:\n{text}"
@@ -36,7 +34,6 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     assert!(text.contains("MBX_SHARE_OUT_DIR: \"0\""), "{text}");
     assert!(text.contains("MBX_CC: \"0\""), "{text}");
     assert!(text.contains("MBX_BUILD_SCRIPT_EXECUTION: \"0\""), "{text}");
-    assert!(text.contains(&format!("{MBX_CACHE_MODE_ENV}:")), "{text}");
 
     let plain = checkout_step(&checkout_pin())?;
     let cargo_text = render_workflow_ir(
@@ -64,7 +61,7 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Lane extraction preserves GC policy and final cleanup on both runners.
+/// Lane extraction preserves the MBX job policy on both runners.
 #[test]
 fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderError> {
     let text = render_mbx_lane_pair()?;
@@ -87,28 +84,15 @@ fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderEr
     assert_eq!(
         text.matches("MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx")
             .count(),
-        8,
-        "preflight, action main/post, version guard, and cleanup use one path per job: {text}"
+        6,
+        "preflight, install action, and version guard use one path per job: {text}"
     );
     assert_eq!(
-        text.matches("name: Clean MBX workspace outputs").count(),
+        text.matches("MBX_TARGET_VIEWS: \"0\"").count(),
         2,
-        "each hosted and Scale Set native job cleans after its shared task body: {text}"
+        "MBX never adopts a CI target in either lane: {text}"
     );
-    assert_eq!(
-        text.matches("if: always() && steps.mbx-ready.outcome == 'success'")
-            .count(),
-        2,
-        "task failures still clean after a successful native setup guard: {text}"
-    );
-    assert_eq!(
-        text.matches(
-            "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- \\\"$mbx_bin\\\" cache dir >/dev/null 2>&1"
-        )
-        .count(),
-        2,
-        "cleanup uses the exact Rust-only Mise toolchain in both lanes: {text}"
-    );
+    assert!(!text.contains("Clean MBX workspace outputs"), "{text}");
     assert!(
         !text.contains("isolate-objects-cache"),
         "v1.6 has no isolation input"
@@ -119,69 +103,37 @@ fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderEr
 #[test]
 fn mbx_ready_guard_stays_outside_each_shared_lane_body() -> Result<(), RenderError> {
     let text = render_mbx_lane_pair()?;
-    let ready_checks = positions(&text, "id: mbx-ready");
+    let ready_checks = positions(&text, "name: Verify native MBX version");
     let lane_calls = positions(&text, "uses: ./.github/actions/rust-demo");
-    let cleanups = positions(&text, "name: Clean MBX workspace outputs");
     assert_eq!(ready_checks.len(), 2, "one ready guard per lane: {text}");
     assert_eq!(lane_calls.len(), 2, "one shared task call per lane: {text}");
-    assert_eq!(cleanups.len(), 2, "one cleanup per lane: {text}");
-    for ((ready, call), cleanup) in ready_checks.iter().zip(&lane_calls).zip(&cleanups) {
-        assert!(
-            ready < call && call < cleanup,
-            "ready → shared tasks → clean: {text}"
-        );
+    for (ready, call) in ready_checks.iter().zip(&lane_calls) {
+        assert!(ready < call, "ready → shared tasks: {text}");
     }
     Ok(())
 }
 
 #[test]
-fn native_mbx_disk_samples_cover_the_active_lifecycle_boundaries() -> Result<(), RenderError> {
+fn native_mbx_disk_samples_bracket_the_install() -> Result<(), RenderError> {
     let text = render_mbx_lane_pair()?;
-    let pre_restore = positions(&text, "mbx_disk_sample before-action-restore");
+    let before = positions(&text, "mbx_disk_sample before-action-restore");
     let actions = positions(&text, "uses: jdx/mr-boxington-action@");
-    let post_restore = positions(&text, "mbx_disk_sample after-cache-restore");
+    let after = positions(&text, "mbx_disk_sample after-mbx-install");
     let consumers = positions(&text, "uses: ./.github/actions/rust-demo");
-    let before_clean = positions(&text, "mbx_disk_sample before-final-clean");
-    let clean_calls = positions(&text, "\\\"$mbx_bin\\\" cache dir >/dev/null 2>&1");
-    let after_clean = positions(&text, "mbx_disk_sample after-final-clean");
-    for positions in [
-        &pre_restore,
-        &actions,
-        &post_restore,
-        &consumers,
-        &before_clean,
-        &clean_calls,
-        &after_clean,
-    ] {
-        assert_eq!(
-            positions.len(),
-            2,
-            "one sample boundary per native lane: {text}"
-        );
+    for positions in [&before, &actions, &after, &consumers] {
+        assert_eq!(positions.len(), 2, "one sample boundary per lane: {text}");
     }
-    for ((((((pre_restore, action), post_restore), consumer), before_clean), clean), after_clean) in
-        pre_restore
-            .iter()
-            .zip(&actions)
-            .zip(&post_restore)
-            .zip(&consumers)
-            .zip(&before_clean)
-            .zip(&clean_calls)
-            .zip(&after_clean)
+    for (((before, action), after), consumer) in
+        before.iter().zip(&actions).zip(&after).zip(&consumers)
     {
         assert!(
-            pre_restore < action
-                && action < post_restore
-                && post_restore < consumer
-                && consumer < before_clean
-                && before_clean < clean
-                && clean < after_clean,
-            "samples bracket import, consumers, and final cleanup: {text}"
+            before < action && action < after && after < consumer,
+            "samples bracket the install before consumers: {text}"
         );
     }
-    assert_eq!(text.matches("df -Pk").count(), 6);
-    assert_eq!(text.matches("df -Pi").count(), 6);
-    assert_eq!(text.matches("du -sk").count(), 12);
+    assert_eq!(text.matches("df -Pk").count(), 4);
+    assert_eq!(text.matches("df -Pi").count(), 4);
+    assert_eq!(text.matches("du -sk").count(), 8);
     Ok(())
 }
 
@@ -245,9 +197,9 @@ fn public_renderer_rejects_missing_duplicate_and_misordered_mbx_ready_checks() {
     duplicate.push(valid[2].clone());
     assert!(
         render_native_steps(duplicate)
-            .expect_err("duplicate same-job ready IDs are rejected")
+            .expect_err("duplicate same-job ready checks are rejected")
             .to_string()
-            .contains("duplicate_step_id"),
+            .contains("mbx_ready_check_duplicated"),
     );
 
     let mut misordered = valid.clone();

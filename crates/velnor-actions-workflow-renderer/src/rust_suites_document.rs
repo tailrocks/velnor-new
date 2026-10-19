@@ -41,7 +41,7 @@ pub(super) fn render_workflow_for_slug(
     } else {
         matrix::scrub_matrix_marker(&jobs)
     };
-    let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&scrubbed);
+    let mbx_jobs = crate::mbx_job_env::jobs_with_mbx(&scrubbed);
     let workflow_env = crate::toolchain_env::workflow_level_env();
     let mut rendered_jobs = Vec::with_capacity(scrubbed.len());
     for (id, job) in &scrubbed {
@@ -124,8 +124,8 @@ fn finalize_suite_workflow_jobs(
         crate::cache_p08::check_no_legacy_rust_cache(id, job)?;
         crate::cache_p08::check_mbx_before_fetch(id, job)?;
     }
-    crate::cache_p08::elect_cache_writers_with_policy(jobs, spec.pull_request_cache_policy)?;
-    crate::cache_steps::append_workspace_cleanups(jobs)?;
+    crate::cache_p08::elect_cache_writers(jobs)?;
+    crate::cache_steps::validate_mbx_lifecycles(jobs)?;
     crate::cache_doctor::check(jobs)
 }
 
@@ -356,22 +356,7 @@ fn extract_suite_job_env(job: &Job, native_mbx: bool) -> BTreeMap<String, String
         }
     }
     if native_mbx {
-        use crate::cache_steps::{
-            MBX_BUILD_SCRIPT_EXECUTION_ENV, MBX_BUILD_SCRIPT_EXECUTION_VALUE, MBX_CC_ENV,
-            MBX_CC_VALUE, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV,
-            MBX_SHARE_OUT_DIR_VALUE,
-        };
-        for (key, val) in [
-            (MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE),
-            (MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE),
-            (MBX_CC_ENV, MBX_CC_VALUE),
-            (
-                MBX_BUILD_SCRIPT_EXECUTION_ENV,
-                MBX_BUILD_SCRIPT_EXECUTION_VALUE,
-            ),
-        ] {
-            job_env.insert(key.to_owned(), val.to_owned());
-        }
+        crate::mbx_job_env::extend_mbx_job_env(&mut job_env);
     }
     job_env
 }

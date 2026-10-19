@@ -25,8 +25,6 @@ pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = super::cache_family::TOFU_PROVID
 pub const TOFU_PROVIDERS_KEY_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-key }}";
 /// Composite output expression for the owned provider-cache path.
 pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-path }}";
-/// Run MBX workspace cleanup only after the exact-version/store guard passed.
-pub const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
 
 pub use super::step_id::StepId;
 
@@ -118,14 +116,12 @@ pub enum StepRole {
     PreseedDownload,
     /// Pre-seed manifest verification.
     PreseedVerifyManifest,
-    /// Native MBX action owns hosted and local object-cache lifecycle.
-    MbxCache,
+    /// Install-only native MBX action (local backend, in-job store).
+    MbxInstall,
     /// Exact MBX binary and object-store verification after the native action.
     MbxVersionCheck,
     /// Exact MBX and Rust toolchain preflight.
     MbxPreflight,
-    /// Final workspace-target cleanup before the native MBX action post step.
-    MbxWorkspaceCleanup,
 }
 
 impl StepRole {
@@ -168,10 +164,8 @@ impl StepRole {
             Self::CargoSourcesRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
-            Self::MbxCache => valid_mbx_cache(kind),
-            Self::MbxVersionCheck | Self::MbxWorkspaceCleanup => {
-                matches!(kind, StepKind::Shell { .. })
-            }
+            Self::MbxInstall => valid_mbx_install(kind),
+            Self::MbxVersionCheck => matches!(kind, StepKind::Shell { .. }),
             Self::PreparePinnedTools
             | Self::PrepareRustComponents
             | Self::CargoDeny
@@ -204,7 +198,6 @@ impl StepRole {
             Self::PlanProducer => Some(StepId::Plan),
             Self::ToolsCacheIdentity => Some(StepId::ToolsCacheIdentity),
             Self::TofuProvidersRestore => Some(StepId::TofuProviders),
-            Self::MbxVersionCheck => Some(StepId::MbxReady),
             Self::CacheKeys => Some(StepId::CacheKeys),
             Self::ToolsCacheRestore => Some(StepId::ToolsRestore),
             _ => None,
@@ -217,7 +210,6 @@ impl StepRole {
             StepId::Plan => Self::PlanProducer,
             StepId::ToolsCacheIdentity => Self::ToolsCacheIdentity,
             StepId::TofuProviders => Self::TofuProvidersRestore,
-            StepId::MbxReady => Self::MbxVersionCheck,
             StepId::CacheKeys => Self::CacheKeys,
             StepId::SourcesRestore => Self::CargoSourcesRestore,
             StepId::SourcesFetch => Self::CargoSourcesFetch,
@@ -310,15 +302,15 @@ fn valid_mise_setup(kind: &StepKind) -> bool {
             && with.get("cache_save").is_some_and(|value| value == "false" || value == "true"))
 }
 
-/// Validate the local provider admission call and exact same-restore outputs.
-/// Validate the native MBX action that owns the object-cache lifecycle.
-fn valid_mbx_cache(kind: &StepKind) -> bool {
+/// Validate the install-only native MBX action: local backend, exact
+/// version, no cache links, and no other input (no GitHub cache transport).
+fn valid_mbx_install(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { uses, with, .. }
         if action_has_prefix(uses, "jdx/mr-boxington-action@")
-            && with.get("github-cache-mode").is_some_and(|mode| mode == "target" || mode == "objects")
-            && with.get("version").is_some_and(|version| !version.is_empty())
-            && with.get("toolchain").is_some_and(|toolchain| !toolchain.is_empty())
-            && with.get("cache-generation").is_some_and(|generation| !generation.is_empty()))
+            && with.len() == 3
+            && with.get("backend").is_some_and(|backend| backend == "local")
+            && with.get("cache-links").is_some_and(|links| links == "false")
+            && with.get("version").is_some_and(|version| !version.is_empty()))
 }
 /// Validate one serialized step scope, including role payloads and unique output IDs.
 ///
@@ -329,7 +321,6 @@ fn valid_mbx_cache(kind: &StepKind) -> bool {
 /// Returns a contract error for an invalid role/payload or duplicate step ID.
 pub fn validate_step_sequence(steps: &[Step], scope: &str) -> Result<(), ContractError> {
     validate_step_identities(steps, scope)?;
-    super::step_mbx_lifecycle::validate_mbx_cleanup_sequence(steps, scope)?;
     super::step_protocol::validate_tofu_provider_sequence(steps, scope)
 }
 

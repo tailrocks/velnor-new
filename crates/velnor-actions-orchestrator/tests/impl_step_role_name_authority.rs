@@ -87,7 +87,7 @@ fn assert_finalized_roles(jobs: &std::collections::BTreeMap<String, Job>) {
         StepRole::TofuProvidersSave,
         StepRole::ToolsCacheSave,
         StepRole::MbxPreflight,
-        StepRole::MbxCache,
+        StepRole::MbxInstall,
         StepRole::MbxVersionCheck,
     ] {
         assert!(
@@ -115,7 +115,7 @@ fn rename_authority_steps(jobs: &mut std::collections::BTreeMap<String, Job>) {
         StepRole::TofuProvidersRestore,
         StepRole::TofuProviderUse,
         StepRole::MbxPreflight,
-        StepRole::MbxCache,
+        StepRole::MbxInstall,
         StepRole::MbxVersionCheck,
     ] {
         assert!(changed.contains(&role), "fixture must rename {role:?}");
@@ -223,7 +223,7 @@ fn is_authority_role(role: StepRole) -> bool {
             | StepRole::TofuProviderUse
             | StepRole::TofuProvidersSave
             | StepRole::MbxPreflight
-            | StepRole::MbxCache
+            | StepRole::MbxInstall
             | StepRole::MbxVersionCheck
     )
 }

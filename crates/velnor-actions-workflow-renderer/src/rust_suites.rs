@@ -6,9 +6,9 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    DEFAULT_SUITE_WORKFLOW_SLUG, Job, JobTimeout, PermissionLevel, Permissions,
-    PullRequestCachePolicy, RunsOn, RustSuiteBuildMode, RustSuiteConfig, RustSuiteTrigger, Step,
-    WorkflowDispatchConfig, validate_rust_suites, validate_suites_with_dispatch,
+    DEFAULT_SUITE_WORKFLOW_SLUG, Job, JobTimeout, PermissionLevel, Permissions, RunsOn,
+    RustSuiteBuildMode, RustSuiteConfig, RustSuiteTrigger, Step, WorkflowDispatchConfig,
+    validate_rust_suites, validate_suites_with_dispatch,
 };
 
 use crate::{CompileDriver, MiseSetup, RenderError, RenderedFile, steps};
@@ -47,8 +47,6 @@ pub struct RustSuitesRenderSpec {
     pub compile_driver: CompileDriver,
     /// Optional MBX action `(uses, version)` when `compile_driver` is `CompileDriver::Mbx`.
     pub mbx_action: Option<(String, String)>,
-    /// Pull-request cache save policy.
-    pub pull_request_cache_policy: PullRequestCachePolicy,
     /// Whether step environments export `RUSTUP_TOOLCHAIN`.
     pub export_rustup_toolchain: bool,
 }

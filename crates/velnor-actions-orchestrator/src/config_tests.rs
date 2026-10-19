@@ -1,36 +1,50 @@
-//! Pull-request cache policy parsing across both supported config schemas.
+//! Workflow cache settings parsing across both supported config schemas.
 
 use std::error::Error;
 
 use super::{CONFIG_REL, PartialConfig};
-use velnor_actions_contract::{PullRequestCachePolicy, VelnorConfig};
+use velnor_actions_contract::VelnorConfig;
 
 #[test]
-fn pull_request_cache_policy_defaults_and_opts_in_for_both_schemas() -> Result<(), Box<dyn Error>> {
+fn cache_settings_default_and_parse_for_both_schemas() -> Result<(), Box<dyn Error>> {
     for schema in [VelnorConfig::SCHEMA, VelnorConfig::SCHEMA_V2] {
         let default = parse_config(&source(schema, None))?;
+        assert_eq!(default.workflow.seed_timeout_minutes, 45, "schema {schema}");
+        assert_eq!(default.workflow.seed_max_bytes, 8 * 1024 * 1024 * 1024);
+        assert_eq!(default.workflow.cache_quota_bytes, 10_000_000_000);
+        let set = parse_config(&source(
+            schema,
+            Some(
+                "seed_timeout_minutes = 90\nseed_max_bytes = 4294967296\ncache_quota_bytes = 20000000000\n",
+            ),
+        ))?;
         assert_eq!(
-            default.workflow.pull_request_cache_policy,
-            PullRequestCachePolicy::ReadOnly,
-            "schema {schema} default"
-        );
-
-        let opted_in = parse_config(&source(schema, Some("same-repository-scoped")))?;
-        assert_eq!(
-            opted_in.workflow.pull_request_cache_policy,
-            PullRequestCachePolicy::SameRepositoryScoped,
-            "schema {schema} opt-in"
+            (
+                set.workflow.seed_timeout_minutes,
+                set.workflow.seed_max_bytes,
+                set.workflow.cache_quota_bytes
+            ),
+            (90, 4_294_967_296, 20_000_000_000),
+            "schema {schema}"
         );
     }
     Ok(())
 }
 
 #[test]
-fn pull_request_cache_policy_rejects_invalid_values_for_both_schemas() {
+fn the_deleted_pull_request_cache_policy_key_is_rejected_for_both_schemas() {
     for schema in [VelnorConfig::SCHEMA, VelnorConfig::SCHEMA_V2] {
         assert!(
-            parse_config(&source(schema, Some("same-repo"))).is_err(),
-            "schema {schema} accepted an invalid policy"
+            parse_config(&source(
+                schema,
+                Some("pull_request_cache_policy = \"read-only\"\n")
+            ))
+            .is_err(),
+            "schema {schema} accepted the deleted key"
+        );
+        assert!(
+            parse_config(&source(schema, Some("seed_timeout_minutes = 0\n"))).is_err(),
+            "schema {schema} accepted a zero seed timeout"
         );
     }
 }
@@ -108,10 +122,8 @@ fn mise_quiet_source(mise_quiet: Option<&str>) -> String {
     format!("schema = 1\n[workflow]\nname = \"CI\"\n{value}")
 }
 
-fn source(schema: u32, pull_request_cache_policy: Option<&str>) -> String {
-    let policy = pull_request_cache_policy.map_or_else(String::new, |policy| {
-        format!("pull_request_cache_policy = \"{policy}\"\n")
-    });
+fn source(schema: u32, workflow_lines: Option<&str>) -> String {
+    let policy = workflow_lines.unwrap_or_default();
     let execution = if schema == VelnorConfig::SCHEMA_V2 {
         SCHEMA2_EXECUTION
     } else {

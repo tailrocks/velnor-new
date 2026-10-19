@@ -57,7 +57,6 @@ pub(super) fn render_context(
         candidate,
         preseed: false,
         workflow_tasks: input.workflow_tasks,
-        pull_request_cache_policy: input.config.workflow.pull_request_cache_policy,
         mise_quiet: input.config.workflow.mise_quiet,
         plan_consumer_env: crate::matrix_step::task_step_env(
             input.catalog,

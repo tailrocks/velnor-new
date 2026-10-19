@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, PullRequestCachePolicy, Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::RenderError;
 
@@ -20,22 +20,8 @@ use crate::RenderError;
 /// when a save is orphaned or belongs to a non-elected job, or when a
 /// winner's save step cannot be built.
 pub fn elect_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
-    elect_cache_writers_with_policy(jobs, PullRequestCachePolicy::ReadOnly)
-}
-
-/// Validate both cache families under `policy`, then append every elected save atomically.
-///
-/// # Errors
-///
-/// Returns [`RenderError`] when a restore or existing save is malformed,
-/// when a save is orphaned or belongs to a non-elected job, or when a
-/// winner's save step cannot be built.
-pub fn elect_cache_writers_with_policy(
-    jobs: &mut BTreeMap<String, Job>,
-    policy: PullRequestCachePolicy,
-) -> Result<(), RenderError> {
     let mut planned = Vec::new();
-    planned.extend(plan_tools_saves(jobs, policy)?);
+    planned.extend(plan_tools_saves(jobs)?);
     planned.extend(plan_provider_saves(jobs)?);
     for (id, save) in planned {
         let Some(job) = jobs.get_mut(&id) else {
@@ -49,10 +35,7 @@ pub fn elect_cache_writers_with_policy(
 }
 
 /// Construct, but do not append, validated V2 tools saves.
-fn plan_tools_saves(
-    jobs: &BTreeMap<String, Job>,
-    policy: PullRequestCachePolicy,
-) -> Result<Vec<(String, Step)>, RenderError> {
+fn plan_tools_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step)>, RenderError> {
     let mut by_identity: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
     for (id, job) in jobs {
         let identity = tools_restore_identity(id, job)?;
@@ -94,7 +77,7 @@ fn plan_tools_saves(
     for (id, job) in jobs {
         let saves = tools_save_steps(job);
         if let Some((key, _)) = elected.get(id) {
-            validate_existing_tools_save(job, key, policy)?;
+            validate_existing_tools_save(job, key)?;
         } else if !saves.is_empty() {
             let kind = if has_tools_restore(job) {
                 "tools_cache_save_not_elected"
@@ -112,7 +95,7 @@ fn plan_tools_saves(
             ));
         };
         if tools_save_steps(job).is_empty() {
-            planned.push((id, expected_tools_save(&key, policy)?));
+            planned.push((id, expected_tools_save(&key)?));
         }
     }
     Ok(planned)
@@ -139,22 +122,18 @@ fn tools_save_steps(job: &Job) -> Vec<&Step> {
         .collect()
 }
 
-fn expected_tools_save(key: &str, policy: PullRequestCachePolicy) -> Result<Step, RenderError> {
+fn expected_tools_save(key: &str) -> Result<Step, RenderError> {
     let mut expected = crate::steps::tools_cache_step(
         false,
         key,
-        Some(crate::cache_p08::tools_cache_save_condition(policy)),
+        Some(crate::cache_p08::tools_cache_save_condition()),
     )?;
     expected.role = Some(StepRole::ToolsCacheSave);
     Ok(expected)
 }
 
-fn validate_existing_tools_save(
-    job: &Job,
-    key: &str,
-    policy: PullRequestCachePolicy,
-) -> Result<(), RenderError> {
-    let expected = expected_tools_save(key, policy)?;
+fn validate_existing_tools_save(job: &Job, key: &str) -> Result<(), RenderError> {
+    let expected = expected_tools_save(key)?;
     let saves = tools_save_steps(job);
     if saves.len() > 1
         || saves

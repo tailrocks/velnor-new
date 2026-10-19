@@ -5,11 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 
-CACHE_PHASES = {"cargo_source_restore", "cargo_source_save", "mbx_object_restore",
-                "mbx_object_post_upload", "mbx_bundle_restore", "mbx_bundle_import",
-                "mbx_bundle_export", "mbx_bundle_save"}
-RESTORE_PHASES = {"cargo_source_restore", "mbx_object_restore", "mbx_bundle_restore"}
-SAVE_PHASES = {"cargo_source_save", "mbx_bundle_save", "mbx_object_post_upload"}
+CACHE_PHASES = {"cargo_source_restore", "cargo_source_save", "dependency_seed_restore",
+                "mbx_bundle_restore", "mbx_bundle_import", "mbx_bundle_export", "mbx_bundle_save"}
+RESTORE_PHASES = {"cargo_source_restore", "dependency_seed_restore", "mbx_bundle_restore"}
+SAVE_PHASES = {"cargo_source_save", "mbx_bundle_save"}
 
 
 def _transfer_totals(event_steps: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:

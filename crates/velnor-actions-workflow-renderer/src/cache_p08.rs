@@ -19,7 +19,7 @@ mod save_policy;
 #[path = "cache_p08_setup.rs"]
 mod setup_pipeline;
 
-pub use crate::cache_elect::{elect_cache_writers, elect_cache_writers_with_policy};
+pub use crate::cache_elect::elect_cache_writers;
 
 /// Display name of the shared sources restore step.
 pub const RESTORE_SOURCES_NAME: &str = "Restore Cargo sources";
@@ -36,11 +36,9 @@ pub(crate) const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str =
     velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
 /// Cache restore is unavailable unless runtime roots/image were qualified.
 pub const TOOLS_CACHE_RESTORE_CONDITION: &str = "steps.v2.outputs.enabled == 'true'";
-/// Cache writes require an eligible producer under `policy` and qualified identity.
-pub(crate) fn tools_cache_save_condition(
-    policy: velnor_actions_contract::PullRequestCachePolicy,
-) -> String {
-    save_policy::condition(policy)
+/// Cache writes require a protected push, a qualified identity, and an exact miss.
+pub(crate) fn tools_cache_save_condition() -> String {
+    save_policy::condition()
 }
 
 /// Insert pinned Mise setup and a V2 tools-cache restore into one job.
@@ -73,7 +71,7 @@ pub fn check_no_legacy_rust_cache(job_id: &str, job: &Job) -> Result<(), RenderE
 /// # Errors
 pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError> {
     let at = |role| job.steps.iter().position(|step| step.role == Some(role));
-    let mbx = at(velnor_actions_contract::StepRole::MbxCache);
+    let mbx = at(velnor_actions_contract::StepRole::MbxInstall);
     let fetch = job
         .steps
         .iter()

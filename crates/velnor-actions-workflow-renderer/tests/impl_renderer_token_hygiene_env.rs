@@ -7,8 +7,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, StepRole, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     RenderError, action_step_with_env, ambient_shell_step, checkout_step, plan_step,
-    render_workflow_ir, steps::MBX_CACHE_MODE_ENV, steps::RESOLVE_QUALIFICATION_OPERATION,
-    steps::internal_step,
+    render_workflow_ir, steps::RESOLVE_QUALIFICATION_OPERATION, steps::internal_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -40,11 +39,11 @@ fn token_in_action_env_fails_render() -> Result<(), RenderError> {
     // Constructor-legal value (no expression spans) that names a
     // token: the render-time gate must still catch it in `env:`.
     let leaked = action_step_with_env(
-        "Restore MBX objects",
+        "Install MBX",
         &mbx_pin(),
-        BTreeMap::from([("github-cache-mode".to_owned(), "objects".to_owned())]),
+        BTreeMap::from([("backend".to_owned(), "local".to_owned())]),
         BTreeMap::from([(
-            MBX_CACHE_MODE_ENV.to_owned(),
+            "MBX_CACHE_DIR".to_owned(),
             "see GITHUB_TOKEN here".to_owned(),
         )]),
     )?;
@@ -53,9 +52,9 @@ fn token_in_action_env_fails_render() -> Result<(), RenderError> {
 }
 
 #[test]
-fn benign_mbx_cache_mode_env_passes() -> Result<(), RenderError> {
-    // The genuine MBX restore step pins its push-gated cache mode in
-    // step env; the extended gate must not flag that expression.
+fn benign_mbx_install_env_passes() -> Result<(), RenderError> {
+    // The genuine MBX install step pins its store and homes in step env;
+    // the extended gate must not flag those expressions.
     let restore = mbx_tool_steps(&mbx_pin(), "1.5.0", "1.98.1")?;
     render_workflow_ir(
         &fixture_ir(vec![action_plan_job(restore.into())?]),

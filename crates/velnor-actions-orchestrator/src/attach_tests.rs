@@ -201,7 +201,6 @@ fn preseed_attach_plan(catalog: &ToolCatalog) -> WorkflowPlan {
             candidate: None,
             preseed: false,
             workflow_tasks: Vec::new(),
-            pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
             mise_quiet: true,
             plan_consumer_env: std::collections::BTreeMap::new(),
         },
@@ -213,7 +212,7 @@ fn preseed_attach_plan(catalog: &ToolCatalog) -> WorkflowPlan {
 fn preseed_attach_builds_once_and_sets_mode() {
     use velnor_actions_workflow_renderer::{
         MBX_PREFLIGHT_NAME, MBX_VERSION_CHECK_NAME, PRESEED_BUILD_NAME, PRESEED_STAGE_NAME,
-        steps::MBX_RESTORE_NAME,
+        steps::MBX_INSTALL_NAME,
     };
     let mut plan = preseed_attach_plan(&ToolCatalog::pinned());
     assert!(attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &ToolCatalog::pinned()).is_ok());
@@ -230,7 +229,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
             "Prepare pinned tools",
             "Prepare Rust components",
             MBX_PREFLIGHT_NAME,
-            MBX_RESTORE_NAME,
+            MBX_INSTALL_NAME,
             MBX_VERSION_CHECK_NAME,
             PRESEED_BUILD_NAME,
             "Verify MBX compile (pre-seed trust-on-review)",
@@ -324,7 +323,6 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
             candidate: None,
             preseed: false,
             workflow_tasks: Vec::new(),
-            pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
             mise_quiet: true,
             plan_consumer_env: BTreeMap::new(),
         },

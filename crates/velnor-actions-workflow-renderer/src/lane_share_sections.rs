@@ -116,16 +116,14 @@ pub(crate) fn peel_postlude(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
 fn is_mbx_prelude_step(step: &Step) -> bool {
     matches!(
         step.role,
-        Some(StepRole::MbxPreflight | StepRole::MbxCache | StepRole::MbxVersionCheck)
+        Some(StepRole::MbxPreflight | StepRole::MbxInstall | StepRole::MbxVersionCheck)
     )
 }
 
 fn is_postlude_step(step: &Step) -> bool {
     matches!(
         step.role,
-        Some(
-            StepRole::ToolsCacheSave | StepRole::TofuProvidersSave | StepRole::MbxWorkspaceCleanup
-        )
+        Some(StepRole::ToolsCacheSave | StepRole::TofuProvidersSave)
     )
 }
 

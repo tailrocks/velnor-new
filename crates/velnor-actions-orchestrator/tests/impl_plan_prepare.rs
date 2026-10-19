@@ -8,7 +8,7 @@
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::{
-    MBX_VERSION_CHECK_NAME, WORKFLOW_PATH, steps::MBX_RESTORE_NAME,
+    MBX_VERSION_CHECK_NAME, WORKFLOW_PATH, steps::MBX_INSTALL_NAME,
 };
 
 use crate::impl_common::{
@@ -183,7 +183,7 @@ fn mbx_evidence_keeps_plan_mise_free_and_uses_task_action() -> TestResult {
             "MBX is not duplicated through Mise:\n{task}"
         );
         assert_eq!(
-            task.matches(MBX_RESTORE_NAME).count(),
+            task.matches(MBX_INSTALL_NAME).count(),
             1,
             "one action-owner step:\n{task}"
         );

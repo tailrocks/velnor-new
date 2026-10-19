@@ -2,12 +2,10 @@
 
 use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION as CACHE_SAVE_CONDITION;
-use velnor_actions_contract::{
-    Job, JobTimeout, PullRequestCachePolicy, Step, StepId, StepKind, StepRole,
-};
+use velnor_actions_contract::{Job, JobTimeout, Step, StepId, StepKind, StepRole};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::cache_p08::{
-    ToolsCacheInputs, ToolsCachePayload, elect_cache_writers, elect_cache_writers_with_policy,
+    ToolsCacheInputs, ToolsCachePayload, elect_cache_writers,
 };
 use velnor_actions_workflow_renderer::steps::{TOOLS_CACHE_PATHS, TOOLS_SAVE_USES};
 use velnor_actions_workflow_renderer::tofu_cache::{
@@ -134,14 +132,6 @@ fn tools_cache_writer_saves_exact_payload_and_is_push_gated() -> Result<(), Rend
     assert_eq!(
         with.get("path").map(String::as_str),
         Some(TOOLS_CACHE_PATHS.join("\n").as_str())
-    );
-    let mut pr_jobs = BTreeMap::from([("plan".to_owned(), keyed_job("actionlint@1.7.12")?)]);
-    elect_cache_writers_with_policy(&mut pr_jobs, PullRequestCachePolicy::SameRepositoryScoped)?;
-    assert_eq!(
-        tools_saves(&pr_jobs["plan"])[0].condition.as_deref(),
-        Some(
-            "success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'"
-        )
     );
     Ok(())
 }

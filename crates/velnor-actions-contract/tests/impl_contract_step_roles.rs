@@ -2,7 +2,6 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
 use velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION;
 use velnor_actions_contract::workflow::step_identity::validate_step_sequence;
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
@@ -64,65 +63,54 @@ fn role_kind_mismatch_fails_even_when_display_name_matches() {
 }
 
 #[test]
-fn mbx_cleanup_requires_the_successful_ready_outcome_guard() {
-    let action = Step {
+fn the_mbx_role_admits_only_the_install_only_local_action() {
+    let install = |with: &[(&str, &str)]| Step {
         parallel: false,
-        name: "Restore MBX objects".to_owned(),
+        name: "Install MBX".to_owned(),
         id: None,
-        role: Some(StepRole::MbxCache),
+        role: Some(StepRole::MbxInstall),
         condition: None,
         kind: StepKind::Action {
             uses: "jdx/mr-boxington-action@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_owned(),
-            with: BTreeMap::from([
-                ("github-cache-mode".to_owned(), "objects".to_owned()),
-                ("version".to_owned(), "1.21.1".to_owned()),
-                ("toolchain".to_owned(), "1.98.1".to_owned()),
-                ("cache-generation".to_owned(), "test-generation".to_owned()),
-            ]),
+            with: with
+                .iter()
+                .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+                .collect(),
             env: BTreeMap::new(),
         },
     };
-    let ready = Step {
-        parallel: false,
-        name: "Verify native MBX version".to_owned(),
-        id: Some(StepId::MbxReady),
-        role: Some(StepRole::MbxVersionCheck),
-        condition: None,
-        kind: StepKind::Shell {
-            run: vec!["mbx --version".to_owned()],
-            env: BTreeMap::new(),
-        },
-    };
-    let cleanup = Step {
-        parallel: false,
-        name: "Clean MBX workspace outputs".to_owned(),
-        id: None,
-        role: Some(StepRole::MbxWorkspaceCleanup),
-        condition: Some(MBX_WORKSPACE_CLEAN_CONDITION.to_owned()),
-        kind: StepKind::Shell {
-            run: vec!["mbx".to_owned(), "clean".to_owned()],
-            env: BTreeMap::new(),
-        },
-    };
-    validate_step_sequence(&[action.clone(), ready.clone(), cleanup.clone()], "mbx-job")
-        .expect("cleanup is guarded by the native ready check");
-
-    let unguarded_template = cleanup.clone();
-    let mut unguarded = cleanup;
-    unguarded.condition = None;
-    let error = validate_step_sequence(&[action.clone(), ready.clone(), unguarded], "mbx-job")
-        .expect_err("unconditional MBX cleanup must fail validation");
-    assert!(error.to_string().contains("mbx_cleanup_condition_mismatch"));
-
-    let mut missing_ready = unguarded_template;
-    missing_ready.condition = Some(MBX_WORKSPACE_CLEAN_CONDITION.to_owned());
-    let error = validate_step_sequence(&[action.clone(), missing_ready.clone()], "mbx-job")
-        .expect_err("cleanup cannot point at a missing same-job ready guard");
-    assert!(error.to_string().contains("mbx_cleanup_sequence_mismatch"));
-
-    let error = validate_step_sequence(&[ready, action, missing_ready], "mbx-job")
-        .expect_err("ready guard must follow native action setup");
-    assert!(error.to_string().contains("mbx_cleanup_sequence_mismatch"));
+    let exact = [
+        ("backend", "local"),
+        ("cache-links", "false"),
+        ("version", "1.21.1"),
+    ];
+    validate_step_sequence(&[install(&exact)], "mbx-job").expect("install-only action");
+    for forged in [
+        vec![
+            ("backend", "github"),
+            ("cache-links", "false"),
+            ("version", "1.21.1"),
+        ],
+        vec![
+            ("backend", "local"),
+            ("cache-links", "auto"),
+            ("version", "1.21.1"),
+        ],
+        vec![
+            ("backend", "local"),
+            ("cache-links", "false"),
+            ("version", "1.21.1"),
+            ("github-cache-mode", "target"),
+        ],
+        vec![("backend", "local"), ("cache-links", "false")],
+    ] {
+        let error = validate_step_sequence(&[install(&forged)], "mbx-job")
+            .expect_err("a cache-transport MBX action is rejected");
+        assert!(
+            error.to_string().contains("role_kind_mismatch"),
+            "{forged:?}"
+        );
+    }
 }
 
 fn tofu_restore() -> Step {

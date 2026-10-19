@@ -16,8 +16,10 @@ use super::{MbxQualificationPins, RunnerSpec};
 use crate::cache_steps::MBX_ACTION_NAME;
 use crate::yaml::Yaml;
 use crate::{RenderError, steps::validate_uses};
+
+/// Run the qualification lane cleanup only after its own exact-version guard.
+const MBX_WORKSPACE_CLEAN_CONDITION: &str = "always() && steps.mbx-ready.outcome == 'success'";
 use velnor_actions_contract::JobTimeout;
-use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
 
 const MAIN_REF: &str = "github.ref == 'refs/heads/main' && github.ref_protected == true";
 const SMOKE_CRATE: &str = r#"set -eu

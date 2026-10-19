@@ -74,7 +74,7 @@ esac
         let preflight = preflight_step(&catalog)?;
         let [_, mbx_action, version_check] = mbx_steps(&catalog)?;
         assert_eq!(preflight.name, "Verify Rust before MBX action");
-        assert_eq!(mbx_action.name, "Restore MBX objects");
+        assert_eq!(mbx_action.name, "Install MBX");
         assert_eq!(version_check.name, "Verify native MBX version");
         assert!(
             !shell_run(&rust_install)?
@@ -88,14 +88,8 @@ esac
             uses,
             &format!("jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}")
         );
-        assert_eq!(
-            with.get("github-cache-mode").map(String::as_str),
-            Some("target")
-        );
-        assert_eq!(
-            with.get("save-on-workflow-dispatch").map(String::as_str),
-            Some("false")
-        );
+        assert_eq!(with.get("backend").map(String::as_str), Some("local"));
+        assert_eq!(with.get("cache-links").map(String::as_str), Some("false"));
         let version_command = shell_run(&version_check)?.join(" ");
         assert!(
             version_command.contains("command -v mbx"),
@@ -155,8 +149,6 @@ esac
             catalog.version(PinnedTool::MrBoxington),
             catalog.version(PinnedTool::Rust),
             env,
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-            None,
         )?
         .ok_or_else(|| std::io::Error::other("MBX driver steps missing"))?;
         steps
@@ -175,8 +167,6 @@ esac
             catalog.version(PinnedTool::MrBoxington),
             catalog.version(PinnedTool::Rust),
             env,
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-            None,
         )?
         .ok_or_else(|| std::io::Error::other("MBX driver steps missing"))?;
         Ok(steps)

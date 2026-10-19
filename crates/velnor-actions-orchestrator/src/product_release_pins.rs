@@ -51,11 +51,7 @@ pub(crate) fn resolve(
             &catalog,
         )?,
         install_qualify_tools_argv: qualify_install_argv(&catalog)?,
-        qualify_mbx_action_steps: steps_for_catalog(
-            &catalog,
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-            None,
-        )?,
+        qualify_mbx_action_steps: steps_for_catalog(&catalog)?,
         install_runner_build_tools_argv: install_argv(&[PinnedTool::Rust], &catalog)?,
         install_gh_argv: install_argv(&[PinnedTool::Gh], &catalog)?,
         build_argv: mbx_build_argv(&[], &catalog)?,

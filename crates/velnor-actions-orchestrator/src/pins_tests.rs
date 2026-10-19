@@ -2,8 +2,8 @@ use super::*;
 use std::collections::BTreeMap;
 use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
 use velnor_actions_contract::{
-    DiscoveryConfig, GeneratorValidation, PullRequestCachePolicy, ResourcesConfig, StacksConfig,
-    TestShardingConfig, VerifyConfig, WorkflowConfig, WorkflowPolicy,
+    DiscoveryConfig, GeneratorValidation, ResourcesConfig, StacksConfig, TestShardingConfig,
+    VerifyConfig, WorkflowConfig, WorkflowPolicy,
 };
 
 /// Config carrying exactly the given action-pin overrides.
@@ -21,7 +21,9 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
             mise_quiet: true,
             max_parallel_jobs: 2,
             crate_timeout_minutes: 5,
-            pull_request_cache_policy: PullRequestCachePolicy::default(),
+            seed_timeout_minutes: 45,
+            seed_max_bytes: 8 * 1024 * 1024 * 1024,
+            cache_quota_bytes: 10_000_000_000,
             runner_label: None,
             tasks: Vec::new(),
             tofu_apply: None,

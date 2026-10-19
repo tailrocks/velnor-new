@@ -21,7 +21,7 @@ fn tofu_group(root: &str, kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTa
 
 /// Provider restore present, rust restores absent, for pure-tofu names.
 fn assert_provider_restore_only(names: &[&str]) {
-    for rust in ["Restore Cargo sources", "Restore MBX objects"] {
+    for rust in ["Restore Cargo sources", "Install MBX"] {
         assert!(!names.contains(&rust), "no rust-pinned {rust}: {names:?}");
     }
     assert!(
@@ -90,7 +90,6 @@ fn pure_tofu_group_renders_without_rust_setup() {
         max_parallel_jobs: 2,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
@@ -201,7 +200,6 @@ fn build_staged(tasks: Vec<ProposedTask>, max_parallel_jobs: u32) -> CrateBuild 
         max_parallel_jobs,
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: false,
         crates: &std::collections::BTreeMap::new(),
     })
