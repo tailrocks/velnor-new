@@ -1,0 +1,111 @@
+{
+  "result": "FAIL",
+  "scope": "Focused source checks only.",
+  "checks": [
+    {
+      "name": "inbox",
+      "integration_commit": "1360da74dc0b5d868f37861e4f84df3766499693",
+      "nextest_run": "1c81d7f7-47f4-4cb5-809b-b0449b8d9fee",
+      "result": "PASS",
+      "tests_passed": 1,
+      "exit_status": 0,
+      "log_sha256": "1ba5d64bba8a968c8a52dd193126405ec7b6432c60e376d92284fb14492becf4",
+      "author": "/root/journal_restart_repair",
+      "reviewer": "/root/journal_database_architecture"
+    },
+    {
+      "name": "job_authority",
+      "integration_commit": "14e35ccbd083551e107de31ea61d7862bb8f11f0",
+      "nextest_run": "c4512343-b209-41d1-8d95-476403c770ad",
+      "result": "PASS",
+      "tests_passed": 12,
+      "exit_status": 0,
+      "log_sha256": "0faaaa2a8090c1f6b6bcfe33f8b2b496c6f9644aea0730393b08de3884454bc6",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "/root/execution_source_security_review"
+    },
+    {
+      "name": "pair_start",
+      "integration_commit": "585f2c57d171babd1f1ca7765466cd00da5305b4",
+      "nextest_run": "904ecd4c-fd29-4fde-a1c4-477aa9c7a6d9",
+      "result": "PASS",
+      "tests_passed": 1,
+      "exit_status": 0,
+      "log_sha256": "7be53a65830c74f803450d22eb98132c54f007965b98fc817aae922b917c0d35",
+      "author": "/root/grouped_source_evidence",
+      "reviewer": "/root/journal_database_architecture"
+    },
+    {
+      "name": "adverse_results",
+      "integration_commit": "7d41fa60ae686e3814602117eccf13846c3ca30d",
+      "nextest_run": "90627167-4440-4456-88d9-4182046f7364",
+      "result": "PASS",
+      "tests_passed": 2,
+      "exit_status": 0,
+      "log_sha256": "e93f63da5adfdb72e69eaa349c413db354c39b47de3db21e706f8e3978e0587a",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "/root/journal_database_architecture"
+    },
+    {
+      "name": "cleanup_identity",
+      "integration_commit": "42e4903dd725a8f9e036bee32045450968e72e15",
+      "nextest_run": "020888f0-4796-4ed8-a7d7-1fb816c1cbaf",
+      "result": "PASS",
+      "tests_passed": 1,
+      "exit_status": 0,
+      "log_sha256": "ac5ca08e24c6199fed96bdd3e11f60cc0408990fe3b94d577adede37dba444a1",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "/root/journal_database_architecture"
+    },
+    {
+      "name": "historical_v18_v21",
+      "integration_commit": "db5b34743533294753dbe0718be4e96ca9b52374",
+      "nextest_run": "23a7d49c-7537-4eca-9213-3f8b376e28e5",
+      "result": "PASS",
+      "tests_passed": 4,
+      "exit_status": 0,
+      "log_sha256": "4915e7c3fa3e285dbef6b6a6bcb9602f8632780942217366c7e127f983080f5a",
+      "author": "/root/execution_channel_helper",
+      "reviewer": "/root/execution_source_security_review"
+    },
+    {
+      "name": "event_cleanup",
+      "integration_commit": "18859e84cb897971134f3823df6a05b9675d03ec",
+      "nextest_run": "be0e7897-c64c-45c9-b221-2a3b5c14828b",
+      "result": "PASS",
+      "tests_passed": 2,
+      "exit_status": 0,
+      "log_sha256": "1c4b33d01e38ea78735373dcdbeb08129d46277643e59c412019a4f8c3286f9a",
+      "author": "/root/helper_language_review",
+      "reviewer": "/root/execution_source_security_review"
+    },
+    {
+      "name": "host_modules",
+      "integration_commit": "5ff6b7af8c182974d52b498005174189d57b8487",
+      "nextest_run": "01d84375-84cb-4dba-8cc6-81b861cf7355",
+      "result": "PASS",
+      "tests_passed": 5,
+      "exit_status": 0,
+      "log_sha256": "ce2cc8da9643ba4845b55d610b1c7d90f511039fc67ac0866f2d0cc6d65074eb",
+      "author": "/root/journal_restart_repair",
+      "reviewer": "/root/execution_source_security_review"
+    },
+    {
+      "name": "worker_modules",
+      "integration_commit": "98980c71ae98b70e295e92aa931b8c17d88f4591",
+      "nextest_run": "1c65dbae-b9c3-4d2f-9374-683a81a397bc",
+      "result": "PASS",
+      "tests_passed": 12,
+      "exit_status": 0,
+      "log_sha256": "8b6386b9c48d5030b958050750a7206c85215627858f8ac0aa35332169442b48",
+      "author": "/root/obsolete_capacity_cleanup",
+      "reviewer": "/root/journal_database_architecture"
+    }
+  ],
+  "final_integrated_checks": "NOT_RUN",
+  "release": "NOT_RUN",
+  "essential_mac_installation": "NOT_RUN",
+  "chainargos_installation": "NOT_RUN",
+  "next": "Complete the runner checks before release.",
+  "source_scope": "The integration_commit field identifies the source port. It does not identify the complete tested checkout. Each test result applies to its retained source copy. Run the final integrated checks before release."
+}
