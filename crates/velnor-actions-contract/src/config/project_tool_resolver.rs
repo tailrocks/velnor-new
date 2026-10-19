@@ -103,7 +103,7 @@ velnor_tool() {
       { tr -d ' \t\r\n' < "$file" && echo; } > "$velnor_scratch"
     else
       velnor_get "$file" "$key" || continue
-      if grep -q = "$velnor_scratch"; then
+      if grep -q '^[A-Za-z0-9_-]* = ' "$velnor_scratch"; then
         velnor_get "$file" "$key.version" || velnor_fail "$file $key declares no version"
       fi
     fi
