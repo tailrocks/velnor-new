@@ -67,6 +67,7 @@ fn valid_identity(step: &Step, runs_on: &str) -> bool {
 
 fn valid_restore(step: &Step) -> bool {
     step.role == Some(StepRole::ToolsCacheRestore)
+        && step.id == Some(velnor_actions_contract::StepId::ToolsRestore)
         && step.condition.as_deref() == Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
         && matches!(
             &step.kind,

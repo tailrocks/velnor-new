@@ -163,3 +163,45 @@ fn crate_fetch_roots_scopes_to_matching_workspace_unless_all_needed() {
         roots
     );
 }
+
+/// Run one root's fetch script against a fake `mise` and return (status, stdout).
+fn run_fetch(mode: &str) -> (Option<i32>, String) {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!("velnor-fetch-{mode}-{}", std::process::id()));
+    std::fs::remove_dir_all(&dir).ok();
+    let bin = dir.join("bin");
+    std::fs::create_dir_all(&bin).expect("bin");
+    let mise = bin.join("mise");
+    std::fs::write(
+        &mise,
+        "#!/bin/sh\nfor a; do case \"$a\" in metadata) exit 1 ;; fetch) printf '%s\\n' '  Downloaded serde v1.0.0' '  Downloaded foo-bar v0.1.0' '  Downloaded 2 crates (10 KB) in 0.1s' >&2; [ \"$FETCH_MODE\" = ok ] && exit 0; exit 101 ;; esac; done; exit 9\n",
+    )
+    .expect("fake mise");
+    std::fs::set_permissions(&mise, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    let script = fetch_script(&ToolCatalog::pinned(), "");
+    let output = std::process::Command::new("sh")
+        .arg("-c")
+        .arg(&script)
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+        .env("RUNNER_TEMP", &dir)
+        .env("GITHUB_WORKSPACE", &dir)
+        .env("FETCH_MODE", mode)
+        .output()
+        .expect("sh");
+    std::fs::remove_dir_all(&dir).ok();
+    (
+        output.status.code(),
+        String::from_utf8_lossy(&output.stdout).into_owned(),
+    )
+}
+
+#[test]
+fn fetch_fallback_counts_downloaded_crates_and_keeps_the_fetch_status() {
+    let (status, stdout) = run_fetch("ok");
+    assert_eq!(status, Some(0), "{stdout}");
+    assert!(stdout.contains("velnor: sources miss (source_missing), fetching"));
+    assert!(stdout.contains("velnor: sources downloaded=2"), "{stdout}");
+    let (status, stdout) = run_fetch("fail");
+    assert_eq!(status, Some(101), "a failed fetch fails the step: {stdout}");
+    assert!(stdout.contains("velnor: sources downloaded=2"), "{stdout}");
+}

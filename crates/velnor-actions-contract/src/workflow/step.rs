@@ -189,7 +189,15 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
         StepId::TofuProviders => {
             matches!(kind, StepKind::Action { uses, .. } if uses == TOFU_PROVIDER_ADMISSION_USES)
         }
-        StepId::MbxReady => matches!(kind, StepKind::Shell { .. }),
+        StepId::MbxReady | StepId::CacheKeys | StepId::SourcesFetch => {
+            matches!(kind, StepKind::Shell { .. })
+        }
+        StepId::SourcesRestore => {
+            matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/cache/restore@"))
+        }
+        StepId::ToolsRestore => {
+            matches!(kind, StepKind::Action { uses, .. } if uses == super::step_identity::TOOLS_CACHE_RESTORE_USES)
+        }
     };
     if valid {
         Ok(())

@@ -254,9 +254,12 @@ fn step_conditions_serialize_as_if_with_upload_default()
     use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
     use velnor_actions_workflow_renderer::{action_step, matrix_report_upload_step};
     let mut save = action_step(
-        "Save Cargo sources",
-        &format!("actions/cache/save@{}", "c".repeat(40)),
-        BTreeMap::from([("key".to_owned(), "k".to_owned())]),
+        "Save extra",
+        &format!("actions/upload-artifact@{}", "c".repeat(40)),
+        BTreeMap::from([
+            ("name".to_owned(), "extra".to_owned()),
+            ("path".to_owned(), "extra.txt".to_owned()),
+        ]),
     )?;
     save.condition = Some(CACHE_SAVE_CONDITION.to_owned());
     let mut check = scrubbed_shell_step(
@@ -279,12 +282,11 @@ fn step_conditions_serialize_as_if_with_upload_default()
         )]),
         &fixture_ctx(),
     )?;
-    let save_at = text.find("Save Cargo sources").expect("save step");
+    let save_at = text.find("Save extra").expect("action step");
     assert!(
-        text[save_at..].starts_with(
-            "Save Cargo sources\n        if: success() && github.event_name == 'push'",
-        ),
-        "the canonical push-only save gate already denies dispatch:\n{text}"
+        text[save_at..]
+            .starts_with("Save extra\n        if: success() && github.event_name == 'push'",),
+        "action condition serializes:\n{text}"
     );
     let check_at = text.find("- name: Check\n").expect("check step");
     assert!(

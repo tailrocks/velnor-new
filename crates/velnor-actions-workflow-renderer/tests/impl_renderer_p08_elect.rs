@@ -1,7 +1,7 @@
 //! P08 writer-election cases for tools and Tofu-provider cache keys.
 
 use std::collections::BTreeMap;
-use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+use velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION as CACHE_SAVE_CONDITION;
 use velnor_actions_contract::{
     Job, JobTimeout, PullRequestCachePolicy, Step, StepId, StepKind, StepRole,
 };
@@ -120,7 +120,7 @@ fn tools_cache_writer_saves_exact_payload_and_is_push_gated() -> Result<(), Rend
     assert_eq!(
         save.condition.as_deref(),
         Some(
-            "success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'"
+            "success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'"
         )
     );
     let StepKind::Action { uses, with, .. } = &save.kind else {
@@ -140,7 +140,7 @@ fn tools_cache_writer_saves_exact_payload_and_is_push_gated() -> Result<(), Rend
     assert_eq!(
         tools_saves(&pr_jobs["plan"])[0].condition.as_deref(),
         Some(
-            "success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true'"
+            "success() && ((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && !github.event.pull_request.head.repo.fork)) && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'"
         )
     );
     Ok(())
@@ -235,9 +235,9 @@ fn provider_saved_key(job: &Job) -> Option<&str> {
     }
 }
 
-const PROVIDER_KEY_A: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-${{hashFiles('.terraform.lock.hcl')}}";
+const PROVIDER_KEY_A: &str = "${{needs.plan.outputs.tofu_providers_key_0}}";
 const PROVIDER_PATH_A: &str = "${{ runner.temp }}/velnor/tofu-cache/root-0123456789ab";
-const PROVIDER_KEY_B: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-stacks-vpc-abcdef012345-${{hashFiles('stacks/vpc/.terraform.lock.hcl')}}";
+const PROVIDER_KEY_B: &str = "${{needs.plan.outputs.tofu_providers_key_1}}";
 const PROVIDER_PATH_B: &str = "${{ runner.temp }}/velnor/tofu-cache/stacks-vpc-abcdef012345";
 
 #[test]

@@ -8,6 +8,7 @@ mod binary_preview_emit;
 mod binary_release_emit;
 mod build_task_tools;
 mod build_tasks;
+mod cache_keys;
 mod check_evidence;
 mod check_runtime;
 mod clippy_groups;

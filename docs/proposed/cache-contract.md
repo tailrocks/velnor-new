@@ -86,14 +86,19 @@ contract](parallelism-and-selection-contract.md).
 The GitHub cache key MUST be:
 
 ```text
-velnor-v1-${layer}-${trust}-${compatibility_id}-${snapshot_id}
+velnor-v${schema}-${layer}-${trust}-${compatibility_id}-${snapshot_id}
 ```
 
-`layer` is `sources`, `mbx`, or `task`; `trust` is `trusted` or `pr`; every digest is `b3-` plus 64 lowercase
-hex characters. `snapshot_id` is the full `input_digest` for an exact task result, a source-input digest for
-Cargo sources, and a unique run/matrix closure digest for MBX. The complete key MUST be no longer than 512
-bytes; the generator MUST fail if it is longer. Restore prefixes MAY omit `snapshot_id` only for the same
-compatibility ID. A commit SHA alone MUST NOT be a cache identity.
+Runtime-computed families (`sources`, `tofu-providers`) take `layer`, `schema`, and their one path list from
+the typed family spec (`workflow::cache_family`); a path change requires a schema bump (pinned by test). The
+Plan `Compute cache keys` step computes `trust` (`trusted`: protected default-branch push; `pr`: same-repo PR;
+`none` otherwise) and `s256-<64 hex>` digests with coreutils `sha256sum`. Sources compat hashes family,
+schema, paths, `uname -s`/`-m`, and `CARGO_HOME`, never a toolchain or tool version; its snapshot hashes the
+sorted `<root>\t<sha256 of Cargo.lock>` lines (providers add `tofu version`; snapshot is the root lock). The
+cache doctor rejects keys with `hashFiles`, job/workflow/run IDs, action SHAs, literal versions, or
+`ImageVersion`. Keys over 512 bytes fail generation (family bound) and the key step. Restore prefixes omit
+`snapshot_id` only within the same compatibility ID and the `trusted` scope; a `pr` prefix is never restored.
+A commit SHA alone MUST NOT be a cache identity.
 
 ## 2. V1 Rust cache paths, transport, fallback, and [host seeds](host-seed-contract.md)
 
@@ -105,7 +110,7 @@ Each path has one owner:
 | Data | Owner | Rule |
 |---|---|---|
 | Mise tools and Rust components | V2 tools layer | Archive exact tool, Rustup, and Cargo-bin paths under typed static and runtime-qualified identity; disable Mise's built-in cache |
-| Cargo registry and Git sources | Velnor source layer | Archive only `registry/index`, `registry/cache`, and `git/db`; exclude binaries and credentials |
+| Cargo registry and Git sources | Velnor source layer | Archive only `registry/index`, `registry/cache`, and `git/db`; exclude binaries and credentials; Rust jobs set `CARGO_CACHE_AUTO_CLEAN_FREQUENCY=never` |
 | Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | The action runs in `github-cache-mode: target` with content-addressed `cache-key` and layered `restore-keys` over lock/toolchain and source hashes, and owns the cache transport and post step. Velnor sets `MBX_GC_AUTO=0`, `MBX_SHARE_OUT_DIR=0`, `MBX_CC=0`, and `MBX_BUILD_SCRIPT_EXECUTION=0` during active work, restores cached `target/doc` and unchanged tracked source `mtime`s via Git blob OIDs in `Verify native MBX version`, and in `Clean MBX workspace outputs` prunes transient directories (`tmp`, `debug/examples`, `debug/incremental`, `velnor-cli-nested-cargo`) while preserving linked test binaries in `target/debug/deps`, stashing `target/doc` into `debug/.mbx-build-script-shims/.velnor-doc`, and recording tracked file blob OIDs and `mtime`s in `debug/.mbx-build-script-shims/.velnor-source-oids` before action post. The stable logical store path is `$RUNNER_TEMP/velnor/mbx`. Velnor does not install MBX through Mise or implement the object format |
 | Mutable target directory | Matrix job | Reuse sequentially; never share concurrently. MBX manifest and Rust-source input hashes recurse through custom member layouts and exclude only this workspace's mutable `target/` (`!target/**`, or `!<workspace>/target/**` for a scoped workspace). A source member named `target` below another directory remains an input; never use a blanket `!**/target/**` exclusion. The mutable output root itself is not a source location. |
 | Successful task result | Mise task cache | Use only for qualified deterministic tasks and complete outputs |
@@ -117,7 +122,9 @@ exact MBX binary and owns the object format, cache transport, and post step. Vel
 not transport MBX objects.
 
 Cache save is allowed only after its producer succeeded, the current run is trusted for that namespace, and
-the export has a useful delta. A task-result cache hit, failed/cancelled task, untrusted PR, empty export, or
+the export has a useful delta. Sources have one writer, the Plan job, saving when not cancelled, after the
+last fetch succeeded, with `trusted` or `pr` trust (a PR-scoped entry visible only to that PR), and unless the
+restore already holds the snapshot; crate jobs restore read-only, forks and merge groups never write. A task-result cache hit, failed/cancelled task, untrusted PR, empty export, or
 unavailable producer MUST NOT trigger a trusted save. Restore and save destinations MUST not overlap active
 compiler writers.
 
@@ -139,11 +146,10 @@ the listed index, registry-cache, and Git-database paths, never credentials, bin
 `$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that environment variable before Mise starts and archives
 only that directory.
 
-Velnor's cache steps MAY archive only `CARGO_SOURCE_PATHS` and qualified
-`MISE_TASK_ARTIFACTS`; they MUST NOT archive MBX objects or manual bundles.
-The protected-push writer rule applies to ordinary task workflows. A separately
-authorized `workflow_dispatch` qualification job grants `actions:write`, enables
-its action save, and uses a run/attempt/source-SHA-bound generation.
+Velnor's cache steps MAY archive only `CARGO_SOURCE_PATHS` and qualified `MISE_TASK_ARTIFACTS`; they MUST NOT
+archive MBX objects or manual bundles. The protected-push writer rule applies to ordinary task workflows. A
+separately authorized `workflow_dispatch` qualification job grants `actions:write`, enables its action save,
+and uses a run/attempt/source-SHA-bound generation.
 
 Velnor MUST NOT configure Mise `task.cache.remote_url`, remote namespaces, remote tokens, or OIDC task-cache
 credentials in V1. There is no Velnor cache server. The selected task-result transport is an opaque GitHub
@@ -307,18 +313,14 @@ run-scoped qualification outputs and MUST NOT be restored by ordinary cache keys
 generator binary. The merge re-checks the head-bound attestation (`commit == plan.head`) in candidate mode;
 manifest fields beyond the commit are consumer-asserted audit data at merge time (S10/D6 residual).
 
-Field grammars here are normative over examples. `*_digest` fields are
-path-independent semantic identities: BLAKE3 over canonical JSON with
-absolute paths stripped and repository-relative POSIX paths. Artifact
-`*_id` values (`velnor-<kind>-<run-key>-…`) are derived NAMEs for
-upload/download matching only. Bare numeric service IDs are permitted
-ONLY in evidence records (`baseline.proof` and the final report's
-`downloaded_artifacts` array), never in identities or NAME derivation
-beyond the run-key correlator. Platform, toolchain, cache-format, or
-declared-input changes invalidate. `shard-1-of-1` runs in one step;
-multi-shard entries use archive-plus-partition fan-out. Publication is
-atomic: validate in staging, then rename-swap; failure leaves prior
-bytes byte-identical.
+Field grammars here are normative over examples. `*_digest` fields are path-independent semantic identities:
+BLAKE3 over canonical JSON with absolute paths stripped and repository-relative POSIX paths. Artifact `*_id`
+values (`velnor-<kind>-<run-key>-…`) are derived NAMEs for upload/download matching only. Bare numeric service
+IDs are permitted ONLY in evidence records (`baseline.proof` and the final report's `downloaded_artifacts`
+array), never in identities or NAME derivation beyond the run-key correlator. Platform, toolchain,
+cache-format, or declared-input changes invalidate. `shard-1-of-1` runs in one step; multi-shard entries use
+archive-plus-partition fan-out. Publication is atomic: validate in staging, then rename-swap; failure leaves
+prior bytes byte-identical.
 
 ## 4. Final gate and exit rules
 
@@ -369,13 +371,11 @@ matrix report is `not_run`.
 
 ## 5. Human plan report
 
-`velnor-actions plan` MAY describe cache layers and eligibility from the
-validated workflow plan. It MUST NOT restore, write, or publish cache contents.
-Cache reads and writes belong only to generated workflow execution. `plan`
-MUST NOT claim cache hits, task-result reuse, or baseline coverage because it
-does not perform event-time lookup or execute the generated workflow. It may
-show which cache layers would be used and which planned tasks are eligible;
-the evidence result remains unknown until workflow execution.
+`velnor-actions plan` MAY describe cache layers and eligibility from the validated workflow plan. It MUST NOT
+restore, write, or publish cache contents. Cache reads and writes belong only to generated workflow execution.
+`plan` MUST NOT claim cache hits, task-result reuse, or baseline coverage because it does not perform
+event-time lookup or execute the generated workflow. It may show which cache layers would be used and which
+planned tasks are eligible; the evidence result remains unknown until workflow execution.
 
 ## 6. Acceptance gates
 

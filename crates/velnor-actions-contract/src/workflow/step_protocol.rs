@@ -3,11 +3,13 @@
 use std::collections::BTreeMap;
 
 use super::{
-    ir::CACHE_SAVE_CONDITION,
+    cache_family::{
+        TOFU_PROVIDERS_KEY_OUTPUT_PREFIX, TOFU_PROVIDERS_SAVE_CONDITION, is_plan_cache_output,
+    },
     step::{Step, StepKind},
     step_identity::{
         StepId, StepRole, TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDER_CACHE_BASE_EXPR,
-        TOFU_PROVIDERS_KEY_OUTPUT_EXPR, TOFU_PROVIDERS_KEY_PREFIX, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
+        TOFU_PROVIDERS_KEY_OUTPUT_EXPR, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
     },
 };
 use crate::errors::ContractError;
@@ -95,9 +97,8 @@ fn validate_restore_admission<'a>(
         .get("cache-path")
         .map(String::as_str)
         .ok_or_else(|| invalid(scope, "tofu_restore_path_missing"))?;
-    let slug =
-        provider_path_slug(path).ok_or_else(|| invalid(scope, "tofu_provider_path_invalid"))?;
-    if !valid_provider_cache_key(key, slug) {
+    provider_path_slug(path).ok_or_else(|| invalid(scope, "tofu_provider_path_invalid"))?;
+    if !valid_provider_cache_key(key) {
         return Err(invalid(scope, "tofu_provider_key_invalid"));
     }
     Ok(ProviderBinding {
@@ -165,7 +166,7 @@ fn validate_provider_save(
         {
             return Err(invalid(scope, "tofu_provider_save_binding_mismatch"));
         }
-        if save.condition.as_deref() != Some(CACHE_SAVE_CONDITION) {
+        if save.condition.as_deref() != Some(TOFU_PROVIDERS_SAVE_CONDITION) {
             return Err(invalid(scope, "tofu_provider_save_gate_mismatch"));
         }
         if roles.consumers.iter().any(|consumer| index <= *consumer) {
@@ -195,7 +196,8 @@ pub(crate) fn valid_provider_restore(kind: &StepKind) -> bool {
     with.len() == 2
         && uses == TOFU_PROVIDER_ADMISSION_USES
         && env.is_empty()
-        && provider_path_slug(path).is_some_and(|slug| valid_provider_cache_key(key, slug))
+        && provider_path_slug(path).is_some()
+        && valid_provider_cache_key(key)
 }
 
 /// Validate one provider save payload before cross-step binding.
@@ -240,59 +242,16 @@ fn provider_path_slug(path: &str) -> Option<&str> {
     .then_some(slug)
 }
 
-/// Require the full key to bind a supported target, exact `ToFu` pin, leaf, and lock file.
-fn valid_provider_cache_key(key: &str, slug: &str) -> bool {
-    if key.len() > crate::cachekey::MAX_CACHE_KEY_BYTES
-        || key.bytes().any(|byte| byte.is_ascii_whitespace())
-    {
-        return false;
-    }
-    let Some((identity, lock_suffix)) = key
-        .strip_prefix(&format!("{TOFU_PROVIDERS_KEY_PREFIX}-"))
-        .and_then(|rest| rest.split_once("-${{hashFiles('"))
-    else {
-        return false;
-    };
-    let Some(lock_path) = lock_suffix.strip_suffix("')}}") else {
-        return false;
-    };
-    if !valid_lock_path(lock_path) {
-        return false;
-    }
-    let Some(identity) = identity.strip_suffix(&format!("-{slug}")) else {
-        return false;
-    };
-    crate::targets::SUPPORTED_TARGETS.iter().any(|target| {
-        identity
-            .strip_prefix(&format!("{target}-"))
-            .is_some_and(valid_exact_version)
-    })
-}
-
-/// Validate the configured lock-file path used by `hashFiles`.
-fn valid_lock_path(path: &str) -> bool {
-    path.ends_with(".terraform.lock.hcl")
-        && !path.starts_with('/')
-        && path.split('/').all(|segment| {
-            !segment.is_empty()
-                && segment != "."
-                && segment != ".."
-                && segment
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+/// Require the key to be the Plan job's runtime provider key for one root.
+///
+/// The Plan key step binds the family schema, this root's owned path, the
+/// platform, the installed `tofu version`, and the root lock file.
+fn valid_provider_cache_key(key: &str) -> bool {
+    key.strip_prefix("${{needs.plan.outputs.")
+        .and_then(|rest| rest.strip_suffix("}}"))
+        .is_some_and(|name| {
+            name.starts_with(TOFU_PROVIDERS_KEY_OUTPUT_PREFIX) && is_plan_cache_output(name)
         })
-}
-
-/// Exact `major.minor.patch` version spelling used by the provider key.
-fn valid_exact_version(version: &str) -> bool {
-    let mut parts = version.split('.');
-    let is_numeric = |part: Option<&str>| {
-        part.is_some_and(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
-    };
-    is_numeric(parts.next())
-        && is_numeric(parts.next())
-        && is_numeric(parts.next())
-        && parts.next().is_none()
 }
 
 /// True for an action or shell step with provider environment bindings.
@@ -318,7 +277,7 @@ fn is_provider_cache_action(step: &Step) -> bool {
     cache_action
         && (with
             .get("key")
-            .is_some_and(|key| key.starts_with(TOFU_PROVIDERS_KEY_PREFIX))
+            .is_some_and(|key| valid_provider_cache_key(key))
             || with
                 .get("path")
                 .is_some_and(|path| path.contains(TOFU_PROVIDER_CACHE_BASE_EXPR)))

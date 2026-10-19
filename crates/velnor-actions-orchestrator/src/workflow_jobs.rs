@@ -85,7 +85,7 @@ pub(crate) fn plan_job(
     catalog: &ToolCatalog,
     needs: PlanJobToolNeeds,
     fetch_roots: &[String],
-    policy: velnor_actions_contract::PullRequestCachePolicy,
+    tofu_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_history_action()?];
     let prepare = prepare_pinned_tools_step(catalog, plan_tools(needs), needs.rust.has_compiler())?;
@@ -94,9 +94,11 @@ pub(crate) fn plan_job(
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
     let cached =
-        crate::workflow_jobs_cache::cache_steps_for_plan(label, catalog, fetch_roots, policy)?;
+        crate::workflow_jobs_cache::cache_steps_for_plan(catalog, fetch_roots, tofu_roots)?;
     steps.extend(cached.restore);
-    steps.extend(fetch_steps_for_plan(catalog, fetch_roots)?);
+    let mut source_steps = fetch_steps_for_plan(catalog, fetch_roots)?;
+    crate::workflow_jobs_cache::mark_writer_gate(&mut source_steps);
+    steps.extend(source_steps);
     steps.extend(cached.save);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);

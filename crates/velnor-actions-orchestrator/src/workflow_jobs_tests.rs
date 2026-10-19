@@ -115,7 +115,7 @@ fn plan_job_writes_request_before_plan() {
             &catalog,
             needs(PlanRustNeed::CompilerAndComponents),
             &[],
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            &[],
         )
         .expect("plan job");
         assert_request_before(&job, "Plan", "write-request-v1:plan-v1", PLAN_OPERATION);
@@ -141,7 +141,7 @@ fn qualification_resolver_is_scoped_between_request_and_plan() {
             ..needs(PlanRustNeed::CompilerAndComponents)
         },
         &[],
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        &[],
     )
     .expect("qualification plan job");
     let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
@@ -181,7 +181,7 @@ fn plan_job_checks_out_full_history_for_archaeology() {
         &catalog,
         needs(PlanRustNeed::CompilerAndComponents),
         &[],
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        &[],
     )
     .expect("plan job");
     let StepKind::Action { with, .. } = &job.steps[0].kind else {
@@ -282,7 +282,7 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
                 ..needs(PlanRustNeed::CompilerAndComponents)
             },
             &[],
-            velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            &[],
         )
         .expect("plan job");
         let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();

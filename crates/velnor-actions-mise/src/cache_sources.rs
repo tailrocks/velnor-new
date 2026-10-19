@@ -15,8 +15,9 @@
 use crate::error::MiseError;
 use velnor_actions_contract::StepRole;
 
-/// Sufficient Cargo-home subset (relative to the owned home).
-pub const SOURCE_SUBSET: [&str; 3] = ["registry/index", "registry/cache", "git/db"];
+/// Sufficient Cargo-home subset (relative to the owned home), owned by the
+/// typed sources family spec.
+pub use velnor_actions_contract::workflow::cache_family::SOURCE_SUBSET;
 
 /// Role allowed to save the shared sources snapshot.
 pub const TRUSTED_WRITER_ROLE: &str = "plan";
