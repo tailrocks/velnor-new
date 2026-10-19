@@ -149,7 +149,10 @@ fn candidate_attestation_script_attests_live_plan() -> Result<(), RenderError> {
             .args(["-c", &script])
             .env("RUNNER_TEMP", &root)
             .env("GITHUB_RUN_ID", "7")
-            .env("GITHUB_RUN_ATTEMPT", "2")
+            // A re-run attempt still reads the run directory of the plan's
+            // attempt, never its own.
+            .env("GITHUB_RUN_ATTEMPT", "3")
+            .env("VELNOR_RUN_KEY_ATTEMPT", "2")
             .status()
             .expect("sh")
             .success();
