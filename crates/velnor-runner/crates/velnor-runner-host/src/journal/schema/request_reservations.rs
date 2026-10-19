@@ -124,17 +124,77 @@ async fn validate_triggers(connection: &turso::Connection) -> Result<(), HostErr
 }
 
 async fn validate_rows(connection: &turso::Connection) -> Result<(), HostError> {
-    let invalid = scalar_count(
-        connection,
-        "SELECT COUNT(*) FROM connection_request_reservations AS link LEFT JOIN connection_request_authorizations AS auth ON auth.connection_id = link.connection_id AND auth.scale_set_id = link.scale_set_id AND auth.request_id = link.request_id LEFT JOIN capacity_reservations AS reservation ON reservation.id = link.reservation_id LEFT JOIN connection_intents AS intent ON intent.id = reservation.intent_id WHERE auth.request_id IS NULL OR auth.binding_digest != link.binding_digest OR auth.acquire_state = 'authorized' OR reservation.connection_id != link.connection_id OR reservation.binding_digest != link.binding_digest OR reservation.assignment_key != 'v1|' || link.connection_id || '|' || link.scale_set_id || '|remote|6:runner|32:' || link.physical_nonce OR intent.connection_id != link.connection_id OR intent.scale_set_id != link.scale_set_id OR intent.kind != 'launch' OR intent.assignment_key != reservation.assignment_key OR intent.runner_name != 'v' || link.physical_nonce OR intent.runner_request_id IS NOT NULL",
-    )
-    .await?;
+    let invalid = scalar_count(connection, INVALID_RESERVATION_ROWS).await?;
     if invalid == 0 {
         Ok(())
     } else {
         Err(HostError::Journal)
     }
 }
+
+const INVALID_RESERVATION_ROWS: &str = r"
+    SELECT COUNT(*)
+    FROM connection_request_reservations AS link
+    LEFT JOIN connection_request_authorizations AS auth
+        ON auth.connection_id = link.connection_id
+        AND auth.scale_set_id = link.scale_set_id
+        AND auth.request_id = link.request_id
+    LEFT JOIN capacity_reservations AS reservation
+        ON reservation.id = link.reservation_id
+    LEFT JOIN connection_intents AS intent
+        ON intent.id = reservation.intent_id
+    WHERE auth.request_id IS NULL
+        OR auth.binding_digest != link.binding_digest
+        OR auth.acquire_state = 'authorized'
+        OR reservation.id IS NULL
+        OR intent.id IS NULL
+        OR reservation.connection_id != link.connection_id
+        OR reservation.binding_digest != link.binding_digest
+        OR reservation.assignment_key != 'v1|' || link.connection_id || '|' || link.scale_set_id || '|remote|6:runner|32:' || link.physical_nonce
+        OR intent.connection_id != link.connection_id
+        OR intent.scale_set_id != link.scale_set_id
+        OR intent.kind != 'launch'
+        OR intent.assignment_key != reservation.assignment_key
+        OR intent.runner_name != 'v' || link.physical_nonce
+        OR (
+            intent.runner_request_id IS NOT NULL
+            AND NOT EXISTS (
+                SELECT 1
+                FROM connection_runner_jits AS jit
+                JOIN connection_request_authorizations AS actual
+                    ON actual.connection_id = jit.connection_id
+                    AND actual.scale_set_id = jit.scale_set_id
+                    AND actual.request_id = intent.runner_request_id
+                WHERE jit.intent_id = intent.id
+                    AND jit.connection_id = link.connection_id
+                    AND jit.scale_set_id = link.scale_set_id
+                    AND jit.witness_request_id = link.request_id
+                    AND jit.requested_name = intent.runner_name
+                    AND jit.runner_name = intent.runner_name
+                    AND intent.github_runner_id = CAST(jit.runner_id AS TEXT)
+                    AND actual.binding_digest = link.binding_digest
+                    AND actual.authority_model = 'created_empty_exclusive_admin_session_v1'
+                    AND actual.acquire_state = 'acquired'
+                    AND (
+                        (
+                            jit.started_request_id = intent.runner_request_id
+                            AND jit.state IN ('started', 'completed', 'cleaned')
+                            AND actual.started_event_digest IS NOT NULL
+                            AND actual.started_runner_id = jit.runner_id
+                            AND actual.started_runner_name = jit.runner_name
+                        )
+                        OR (
+                            jit.completed_request_id = intent.runner_request_id
+                            AND jit.state IN ('completed', 'cleaned')
+                            AND actual.completed_event_digest IS NOT NULL
+                            AND actual.completed_runner_id = jit.runner_id
+                            AND actual.completed_runner_name = jit.runner_name
+                            AND actual.completed_intent_id = intent.id
+                        )
+                    )
+            )
+        )
+";
 
 async fn object_sql(
     connection: &turso::Connection,

@@ -4,6 +4,7 @@ mod admission;
 mod correlation;
 mod event_source;
 mod helpers;
+mod linked_request_reopen;
 mod phase_recovery;
 mod profile_lifecycle;
 mod request_link;
