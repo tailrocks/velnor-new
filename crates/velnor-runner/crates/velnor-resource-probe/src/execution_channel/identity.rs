@@ -2,7 +2,7 @@ use std::{fs, io::Read, os::unix::fs::MetadataExt};
 
 use crate::ProbeError;
 
-pub(super) fn read_boot_id() -> Result<String, ProbeError> {
+pub(crate) fn read_boot_id() -> Result<String, ProbeError> {
     let file = fs::File::open("/proc/sys/kernel/random/boot_id")
         .map_err(|error| ProbeError::Read("execution_channel_boot_id", error))?;
     let mut bytes = Vec::with_capacity(36);
@@ -29,7 +29,7 @@ pub(super) fn read_boot_id() -> Result<String, ProbeError> {
     Ok(value.to_owned())
 }
 
-pub(super) fn mount_namespace_id() -> Result<u64, ProbeError> {
+pub(crate) fn mount_namespace_id() -> Result<u64, ProbeError> {
     fs::metadata("/proc/self/ns/mnt")
         .map(|metadata| metadata.ino())
         .map_err(|error| ProbeError::Read("execution_channel_namespace", error))

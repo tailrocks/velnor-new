@@ -62,6 +62,34 @@ pub(crate) fn attachment_mount(input: &[u8], target: &str) -> Result<MountEntry,
     found.ok_or(ProbeError::Invalid("attachment_mount_missing"))
 }
 
+/// Return the measured mount source.
+#[cfg(any(target_os = "linux", test))]
+pub(crate) fn attachment_mount_source(input: &[u8], target: &str) -> Result<String, ProbeError> {
+    attachment_mount(input, target)?;
+    let text = std::str::from_utf8(input).map_err(|_| ProbeError::Invalid("mountinfo_utf8"))?;
+    let mut found = None;
+    for line in text.lines() {
+        let fields = line.split_ascii_whitespace().collect::<Vec<_>>();
+        let separator = fields
+            .iter()
+            .position(|field| *field == "-")
+            .ok_or(ProbeError::Invalid("mountinfo_separator"))?;
+        if decode_mount_field(fields[4])? != target {
+            continue;
+        }
+        let source = decode_mount_field(fields[separator + 2])?;
+        if source.is_empty() || found.replace(source).is_some() {
+            return Err(ProbeError::Invalid("attachment_mount_source"));
+        }
+    }
+    found.ok_or(ProbeError::Invalid("attachment_mount_missing"))
+}
+
+#[cfg(not(any(target_os = "linux", test)))]
+pub(crate) fn attachment_mount_source(_input: &[u8], _target: &str) -> Result<String, ProbeError> {
+    Err(ProbeError::Invalid("linux_guest_required"))
+}
+
 /// Require one read-only cgroup-v2 mount rooted at the host hierarchy.
 pub(crate) fn cgroup2_root(input: &[u8]) -> Result<MountEntry, ProbeError> {
     unique_mount(
@@ -237,6 +265,21 @@ mod tests {
         assert!(mount.read_only);
         assert!(!mount.executable);
         assert!(attachment_mount(format!("{row}{row}").as_bytes(), "/home/runner/_work").is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn attachment_mount_source_decodes_the_unique_source_field() -> Result<(), ProbeError> {
+        let row = "31 20 41:7 /store /home/runner/_work rw,nosuid - ext4 /dev/work\\040disk rw\n";
+        assert_eq!(
+            attachment_mount_source(row.as_bytes(), "/home/runner/_work")?,
+            "/dev/work disk"
+        );
+        assert!(attachment_mount_source(row.as_bytes(), "/missing").is_err());
+        assert!(
+            attachment_mount_source(format!("{row}{row}").as_bytes(), "/home/runner/_work")
+                .is_err()
+        );
         Ok(())
     }
 

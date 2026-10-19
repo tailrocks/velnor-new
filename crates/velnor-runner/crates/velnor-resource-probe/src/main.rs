@@ -46,6 +46,7 @@ fn run(arguments: &[String]) -> Result<(), ProbeError> {
         "self_storage" => run_self_storage(),
         "execution_channel" => run_execution_channel(),
         "execution_request" => run_execution_request(),
+        "execution_publication" => run_execution_publication(),
         "cleanup_observation" => run_cleanup_observation(),
         "owned_container_cgroup" => run_owned_cgroup(),
         _ => Err(ProbeError::Invalid("worker_mode")),
@@ -85,6 +86,24 @@ fn run_execution_channel() -> Result<(), ProbeError> {
 
 #[cfg(not(target_os = "linux"))]
 fn run_execution_request() -> Result<(), ProbeError> {
+    Err(ProbeError::Invalid("linux_guest_required"))
+}
+
+#[cfg(target_os = "linux")]
+fn run_execution_publication() -> Result<(), ProbeError> {
+    use velnor_resource_probe::execution_publication::{
+        ExecutionPublicationContext, PUBLICATION_REQUEST_LIMIT, publish_execution_control,
+    };
+
+    let request: ExecutionPublicationContext = read_worker_request(PUBLICATION_REQUEST_LIMIT)?;
+    let operation_id = request.operation_id.clone();
+    let record = publish_execution_control(request)?;
+    write_worker_record(&record, &mut io::stdout().lock())?;
+    wait_for_ack(&operation_id)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn run_execution_publication() -> Result<(), ProbeError> {
     Err(ProbeError::Invalid("linux_guest_required"))
 }
 

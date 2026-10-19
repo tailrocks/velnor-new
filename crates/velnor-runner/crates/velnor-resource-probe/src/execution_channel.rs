@@ -7,32 +7,36 @@ use rustix::fs::{
 };
 use sha2::{Digest, Sha256};
 
-use crate::{ProbeError, mountinfo::attachment_mount};
+use crate::{
+    ProbeError,
+    filesystem::filesystem_name,
+    mountinfo::{attachment_mount, attachment_mount_source},
+};
 
-mod identity;
+pub(crate) mod identity;
 mod request;
 #[cfg(test)]
 mod tests;
-mod wire;
-use identity::{mount_namespace_id, read_boot_id};
-use request::read_request_file;
-pub use wire::{
+pub use crate::execution_channel_wire::{
     ExecutionChannelContext, ExecutionChannelDirectory, ExecutionChannelObservation,
     ExecutionRequestContext, ExecutionRequestRecord,
 };
+use identity::{mount_namespace_id, read_boot_id};
+use request::read_request_file;
 
 const CONTROL_PATH: &str = "/opt/velnor/source-proof/control";
 const INBOX_PATH: &str = "/opt/velnor/source-proof/inbox";
+const JOB_FACTS_PATH: &str = "/opt/velnor/job-facts";
 pub(super) const REQUEST_FILE: &str = "request.json";
 pub(super) const REQUEST_LIMIT: usize = 16 * 1024;
 const MOUNTINFO_PATH: &str = "/proc/self/mountinfo";
 const MOUNTINFO_LIMIT: usize = 64 * 1024;
-const CONTROL_UID: u32 = 0;
-const CONTROL_GID: u32 = 0;
-const RUNNER_UID: u32 = 1000;
-const RUNNER_GID: u32 = 1000;
+const CONTROL_OWNER: (u32, u32) = (0, 0);
+const CONTROL_MODE: u32 = 0o555;
+const RUNNER_OWNER: (u32, u32) = (1000, 1000);
+const INBOX_MODE: u32 = 0o700;
 
-/// Measure both specified channel directories in this process mount namespace.
+/// Measure the channel and job facts directories in this process mount namespace.
 ///
 /// # Errors
 ///
@@ -50,40 +54,52 @@ pub fn observe_execution_channel(
         MOUNTINFO_LIMIT,
         "execution_channel_mountinfo",
     )?;
-    let control = observe_directory(CONTROL_PATH, CONTROL_UID, CONTROL_GID, 0o555, &mountinfo)?;
-    let inbox = observe_directory(INBOX_PATH, RUNNER_UID, RUNNER_GID, 0o700, &mountinfo)?;
-    if control.mount_id == inbox.mount_id
-        || control.inode == inbox.inode
-        || control.filesystem_id != inbox.filesystem_id
-        || control.filesystem_type_magic != inbox.filesystem_type_magic
-        || control.mount_device_major != inbox.mount_device_major
-        || control.mount_device_minor != inbox.mount_device_minor
-        || control.statx_device_major != inbox.statx_device_major
-        || control.statx_device_minor != inbox.statx_device_minor
-    {
-        return Err(ProbeError::Invalid("execution_channel_identity"));
-    }
+    let control = observe_directory(CONTROL_PATH, &mountinfo)?;
+    let inbox = observe_directory(INBOX_PATH, &mountinfo)?;
+    let job_facts = observe_directory(JOB_FACTS_PATH, &mountinfo)?;
+    ensure_distinct_mounts(&control, &inbox)?;
+    ensure_distinct_mounts(&control, &job_facts)?;
+    ensure_distinct_mounts(&inbox, &job_facts)?;
     let namespace = mount_namespace_id()?;
     if read_bounded(
         MOUNTINFO_PATH,
         MOUNTINFO_LIMIT,
         "execution_channel_mountinfo",
     )? != mountinfo
-        || observe_directory(CONTROL_PATH, CONTROL_UID, CONTROL_GID, 0o555, &mountinfo)? != control
-        || observe_directory(INBOX_PATH, RUNNER_UID, RUNNER_GID, 0o700, &mountinfo)? != inbox
+        || observe_directory(CONTROL_PATH, &mountinfo)? != control
+        || observe_directory(INBOX_PATH, &mountinfo)? != inbox
+        || observe_directory(JOB_FACTS_PATH, &mountinfo)? != job_facts
         || read_boot_id()? != boot_id
         || mount_namespace_id()? != namespace
     {
         return Err(ProbeError::Invalid("execution_channel_changed"));
     }
     Ok(ExecutionChannelObservation {
-        schema_version: 1,
+        schema_version: 3,
         operation_id: context.operation_id,
         guest_boot_id: boot_id,
         mount_namespace_id: namespace,
         control,
         inbox,
+        job_facts,
     })
+}
+
+fn ensure_distinct_mounts(
+    control: &ExecutionChannelDirectory,
+    inbox: &ExecutionChannelDirectory,
+) -> Result<(), ProbeError> {
+    let same_backing_object = control.inode == inbox.inode
+        && control.filesystem_id == inbox.filesystem_id
+        && control.filesystem_type_magic == inbox.filesystem_type_magic
+        && control.statx_device_major == inbox.statx_device_major
+        && control.statx_device_minor == inbox.statx_device_minor
+        && control.mount_root == inbox.mount_root;
+    if control.mount_id == inbox.mount_id || same_backing_object {
+        Err(ProbeError::Invalid("execution_channel_identity"))
+    } else {
+        Ok(())
+    }
 }
 
 /// Read request bytes from the specified inbox directory.
@@ -114,29 +130,15 @@ pub fn read_execution_request(
         MOUNTINFO_LIMIT,
         "execution_channel_mountinfo",
     )?;
-    let inbox_before = observe_open_directory(
-        &inbox,
-        INBOX_PATH,
-        RUNNER_UID,
-        RUNNER_GID,
-        0o700,
-        &mountinfo_before,
-    )?;
+    let inbox_before = observe_open_directory(&inbox, INBOX_PATH, &mountinfo_before)?;
     ensure_channel_directory(&current.inbox, &inbox_before)?;
-    let (bytes, after) = read_request_file(&inbox, RUNNER_UID, RUNNER_GID)?;
+    let (bytes, after) = read_request_file(&inbox, RUNNER_OWNER.0, RUNNER_OWNER.1)?;
     let mountinfo_after = read_bounded(
         MOUNTINFO_PATH,
         MOUNTINFO_LIMIT,
         "execution_channel_mountinfo",
     )?;
-    let inbox_after = observe_open_directory(
-        &inbox,
-        INBOX_PATH,
-        RUNNER_UID,
-        RUNNER_GID,
-        0o700,
-        &mountinfo_after,
-    )?;
+    let inbox_after = observe_open_directory(&inbox, INBOX_PATH, &mountinfo_after)?;
     let channel_after = observe_execution_channel(ExecutionChannelContext {
         schema_version: context.schema_version,
         operation_id: context.operation_id.clone(),
@@ -148,7 +150,7 @@ pub fn read_execution_request(
     }
     let sha256 = lower_hex(&Sha256::digest(&bytes));
     Ok(ExecutionRequestRecord {
-        schema_version: 1,
+        schema_version: 3,
         operation_id: context.operation_id,
         guest_boot_id: current.guest_boot_id.clone(),
         channel: current,
@@ -164,13 +166,10 @@ pub fn read_execution_request(
 
 fn observe_directory(
     path: &str,
-    user_id: u32,
-    group_id: u32,
-    expected_mode: u32,
     mountinfo: &[u8],
 ) -> Result<ExecutionChannelDirectory, ProbeError> {
     let file = open_fixed_directory(path)?;
-    observe_open_directory(&file, path, user_id, group_id, expected_mode, mountinfo)
+    observe_open_directory(&file, path, mountinfo)
 }
 
 fn ensure_channel_directory(
@@ -187,38 +186,9 @@ fn ensure_channel_directory(
 fn observe_open_directory(
     file: &File,
     path: &str,
-    user_id: u32,
-    group_id: u32,
-    expected_mode: u32,
     mountinfo: &[u8],
 ) -> Result<ExecutionChannelDirectory, ProbeError> {
-    let metadata = file
-        .metadata()
-        .map_err(|error| ProbeError::Read("execution_channel_stat", error))?;
-    let mode = metadata.mode() & 0o777;
-    if !metadata.is_dir()
-        || metadata.uid() != user_id
-        || metadata.gid() != group_id
-        || mode != expected_mode
-    {
-        return Err(ProbeError::Invalid("execution_channel_directory"));
-    }
-    let stat =
-        fstat(file).map_err(|error| ProbeError::Read("execution_channel_fstat", error.into()))?;
-    if FileType::from_raw_mode(stat.st_mode) != FileType::Directory {
-        return Err(ProbeError::Invalid("execution_channel_directory"));
-    }
-    let statx_value = statx(
-        file,
-        "",
-        AtFlags::EMPTY_PATH | AtFlags::SYMLINK_NOFOLLOW,
-        StatxFlags::BASIC_STATS | StatxFlags::MNT_ID,
-    )
-    .map_err(|error| ProbeError::Read("execution_channel_statx", error.into()))?;
-    let required = StatxFlags::BASIC_STATS | StatxFlags::MNT_ID;
-    if statx_value.stx_mask & required.bits() != required.bits() {
-        return Err(ProbeError::Invalid("execution_channel_statx_fields"));
-    }
+    let (metadata, statx_value, mode) = opened_directory_identity(file)?;
     let fs = fstatfs(file)
         .map_err(|error| ProbeError::Read("execution_channel_statfs", error.into()))?;
     let vfs = fstatvfs(file)
@@ -235,9 +205,9 @@ fn observe_open_directory(
     {
         return Err(ProbeError::Invalid("execution_channel_mount_identity"));
     }
-    if (path == CONTROL_PATH && !mount.read_only) || (path == INBOX_PATH && mount.read_only) {
-        return Err(ProbeError::Invalid("execution_channel_mount_mode"));
-    }
+    validate_directory_contract(path, (metadata.uid(), metadata.gid()), mode, &mount)?;
+    let mount_source = attachment_mount_source(mountinfo, path)?;
+    let filesystem_type_name = filesystem_name(&mount, filesystem_type_magic)?;
     Ok(ExecutionChannelDirectory {
         target: path.to_owned(),
         inode: metadata.ino(),
@@ -246,15 +216,75 @@ fn observe_open_directory(
         mode,
         mount_id: mount.mount_id,
         statx_mount_id: statx_value.stx_mnt_id,
+        mount_root: mount.root,
+        mount_source,
         mount_device_major: mount.device_major,
         mount_device_minor: mount.device_minor,
         statx_device_major: statx_value.stx_dev_major,
         statx_device_minor: statx_value.stx_dev_minor,
         filesystem_type_magic,
+        filesystem_type_name,
         filesystem_id: vfs.f_fsid,
         read_only: mount.read_only,
         executable_mount: mount.executable,
     })
+}
+
+fn opened_directory_identity(
+    file: &File,
+) -> Result<(std::fs::Metadata, rustix::fs::Statx, u32), ProbeError> {
+    let metadata = file
+        .metadata()
+        .map_err(|error| ProbeError::Read("execution_channel_stat", error))?;
+    let mode = metadata.mode() & 0o7777;
+    if !metadata.is_dir() {
+        return Err(ProbeError::Invalid("execution_channel_directory"));
+    }
+    let stat =
+        fstat(file).map_err(|error| ProbeError::Read("execution_channel_fstat", error.into()))?;
+    if FileType::from_raw_mode(stat.st_mode) != FileType::Directory
+        || stat.st_ino != metadata.ino()
+        || stat.st_uid != metadata.uid()
+        || stat.st_gid != metadata.gid()
+    {
+        return Err(ProbeError::Invalid("execution_channel_directory"));
+    }
+    let statx_value = statx(
+        file,
+        "",
+        AtFlags::EMPTY_PATH | AtFlags::SYMLINK_NOFOLLOW,
+        StatxFlags::BASIC_STATS | StatxFlags::MNT_ID,
+    )
+    .map_err(|error| ProbeError::Read("execution_channel_statx", error.into()))?;
+    let required = StatxFlags::BASIC_STATS | StatxFlags::MNT_ID;
+    if statx_value.stx_mask & required.bits() != required.bits() {
+        return Err(ProbeError::Invalid("execution_channel_statx_fields"));
+    }
+    if u32::from(statx_value.stx_mode) != stat.st_mode
+        || statx_value.stx_ino != metadata.ino()
+        || statx_value.stx_uid != metadata.uid()
+        || statx_value.stx_gid != metadata.gid()
+    {
+        return Err(ProbeError::Invalid("execution_channel_statx_identity"));
+    }
+    Ok((metadata, statx_value, mode))
+}
+
+fn validate_directory_contract(
+    path: &str,
+    owner: (u32, u32),
+    actual_mode: u32,
+    mount: &crate::mountinfo::MountEntry,
+) -> Result<(), ProbeError> {
+    let expected = match path {
+        CONTROL_PATH | JOB_FACTS_PATH => (CONTROL_OWNER, CONTROL_MODE, true),
+        INBOX_PATH => (RUNNER_OWNER, INBOX_MODE, false),
+        _ => return Err(ProbeError::Invalid("execution_channel_path")),
+    };
+    if owner != expected.0 || actual_mode != expected.1 || mount.read_only != expected.2 {
+        return Err(ProbeError::Invalid("execution_channel_directory_contract"));
+    }
+    Ok(())
 }
 
 fn open_fixed_directory(path: &str) -> Result<File, ProbeError> {
@@ -299,7 +329,7 @@ fn read_bounded(path: &str, limit: usize, name: &'static str) -> Result<Vec<u8>,
 }
 
 fn validate_context(schema_version: u8, operation_id: &str) -> Result<(), ProbeError> {
-    if schema_version != 1
+    if schema_version != 3
         || operation_id.len() != 32
         || !operation_id
             .bytes()

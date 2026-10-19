@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ExecutionChannelContext {
-    /// Wire schema version. The value must be one.
+    /// Wire schema version. The value must be three.
     pub schema_version: u8,
     /// Operation identity supplied by the host.
     pub operation_id: String,
@@ -30,6 +30,10 @@ pub struct ExecutionChannelDirectory {
     pub mount_id: u64,
     /// Mount ID from statx.
     pub statx_mount_id: u64,
+    /// Mount root from mount information.
+    pub mount_root: String,
+    /// Mount source from mount information.
+    pub mount_source: String,
     /// Device major number from mountinfo.
     pub mount_device_major: u32,
     /// Device minor number from mountinfo.
@@ -40,6 +44,8 @@ pub struct ExecutionChannelDirectory {
     pub statx_device_minor: u32,
     /// Filesystem magic value from statfs.
     pub filesystem_type_magic: u64,
+    /// Filesystem name from mount information.
+    pub filesystem_type_name: String,
     /// Filesystem ID from statvfs.
     pub filesystem_id: u64,
     /// Read-only state from mountinfo.
@@ -48,11 +54,11 @@ pub struct ExecutionChannelDirectory {
     pub executable_mount: bool,
 }
 
-/// Measured identities for both specified source-proof directories.
+/// Measured identities for the Runner source-proof and job-facts directories.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ExecutionChannelObservation {
-    /// Wire schema version. The value must be one.
+    /// Wire schema version. The value must be three.
     pub schema_version: u8,
     /// Operation identity supplied by the host.
     pub operation_id: String,
@@ -64,13 +70,15 @@ pub struct ExecutionChannelObservation {
     pub control: ExecutionChannelDirectory,
     /// Measured inbox directory.
     pub inbox: ExecutionChannelDirectory,
+    /// Measured job facts directory.
+    pub job_facts: ExecutionChannelDirectory,
 }
 
 /// Read the request from the specified inbox after a check of its measured binding.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ExecutionRequestContext {
-    /// Wire schema version. The value must be one.
+    /// Wire schema version. The value must be three.
     pub schema_version: u8,
     /// Operation identity supplied by the host.
     pub operation_id: String,
@@ -84,7 +92,7 @@ pub struct ExecutionRequestContext {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ExecutionRequestRecord {
-    /// Wire schema version. The value must be one.
+    /// Wire schema version. The value must be three.
     pub schema_version: u8,
     /// Operation identity supplied by the host.
     pub operation_id: String,
