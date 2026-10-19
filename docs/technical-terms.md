@@ -22,6 +22,6 @@
 | Acquired request | A job request that GitHub returned in response to `AcquireJobs`. |
 | Physical reservation | A journal record that holds host capacity for one job request. |
 | Guest resource sample | A measurement of CPU, memory, or storage from the selected guest engine. |
-| Resource permit | A one-use approval to start work within the host capacity limit. |
+| Resource permit | An approval to start work once with no more than the allowed host capacity. |
 | Worker pair | The runner container and its private Docker-in-Docker container for one job. |
 | Recovery observation | A guest resource sample used to check an existing reservation during recovery. |

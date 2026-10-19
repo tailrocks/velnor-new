@@ -45,7 +45,7 @@ async fn production_poll_turn_rotates_durable_sessions_after_drain_and_exact_del
         HeaderPollPlan::Zero { cursor: 0 }
     );
 
-    // The mock first returns an Available request. Do not delete that request.
+    // The mock first returns an Available request. Do not delete its session.
     // The next empty response has a zero header.
     let available_head_deferred = true;
     let zero_poll = journal.begin_zero_header_poll(&waiting).await?;

@@ -64,7 +64,7 @@ impl AcquiredRecoveryCandidate {
 }
 
 impl ConnectionJournal {
-    /// Check that this acquired request has an unused reservation.
+    /// Check this acquired request and its reservation before recovery.
     pub(crate) async fn acquired_recovery_candidate(
         &self,
         request: &AssignmentIdentity,

@@ -12,7 +12,7 @@ use crate::journal::{
 #[path = "assigned_population_tests.rs"]
 mod tests;
 
-/// Work that an approved acquired request can support.
+/// Work that an acquired request with source approval can support.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AssignedPopulationAction {
     /// Continue an existing reservation through the checked recovery path.
@@ -35,9 +35,9 @@ pub(crate) enum AssignedPopulationBlock {
     UncertainPhysicalWork,
     /// The journal has more than one reservation for one request.
     DuplicateRequestReservation,
-    /// The assigned job count has no matching acquired request.
+    /// The assigned job count has no acquired request with the same identity.
     MissingSourceWitness,
-    /// An acquired request has no matching saved reservation.
+    /// An acquired request has no saved reservation with the same identity.
     ClosedUnproven,
 }
 
@@ -50,7 +50,7 @@ pub(crate) struct AssignedPopulationPlan {
     pub(crate) owned_coverage: u64,
     /// Each action names a request and reservation from the journal. This list has no generated request IDs.
     pub(crate) actions: Vec<AssignedPopulationAction>,
-    /// Demand without a matching acquired request.
+    /// Demand without an acquired request with the same identity.
     pub(crate) uncovered: u64,
     /// Reason to stop when source or reservation state prevents planning.
     pub(crate) blocked: Option<AssignedPopulationBlock>,

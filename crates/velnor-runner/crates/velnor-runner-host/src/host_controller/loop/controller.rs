@@ -326,7 +326,9 @@ impl<'a> ControllerLoop<'a> {
                     self.rotation_due = false;
                 }
                 Err(error) => {
-                    eprintln!("The host controller cannot rotate capacity: {error}");
+                    eprintln!(
+                        "The host controller cannot assign capacity to the next connection: {error}"
+                    );
                 }
             }
         }

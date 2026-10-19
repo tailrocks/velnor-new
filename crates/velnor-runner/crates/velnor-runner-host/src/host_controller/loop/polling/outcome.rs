@@ -22,8 +22,7 @@ impl ControllerPollOutcome {
             assigned_total: outcome.assigned_total,
             started_request_ids: outcome.started_request_ids,
             wake_cleanup: outcome.wake_cleanup,
-            // A filtered response does not prove that the queue is empty. This later lifecycle
-            // message has an acknowledgement in the journal.
+            // A filtered response does not prove that the queue head is empty.
             session_delete_candidate: outcome.session_delete_candidate && cursor == 0,
             acquired: None,
             positive_poll_settled: false,
