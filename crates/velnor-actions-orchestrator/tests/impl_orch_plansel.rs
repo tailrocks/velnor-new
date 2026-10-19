@@ -9,7 +9,7 @@ use std::fs;
 use std::path::Path;
 use tempfile::TempDir;
 use velnor_actions_contract::{FinalStatus, MatrixReport, Plan};
-use velnor_actions_orchestrator::{baseline_artifact_numeric_id, merge_internal, plan_internal};
+use velnor_actions_orchestrator::{merge_internal, plan_internal};
 
 /// Git repo with workspace `members` plus path `deps` as (from, to, table).
 pub(crate) fn make_ws(
@@ -94,20 +94,16 @@ pub(crate) fn plan_change(
         put(repo.path(), path, text)?;
     }
     let head = commit(repo.path(), "two")?;
-    plan_at(repo.path(), Some(&base), &head, None)
+    plan_at(repo.path(), Some(&base), &head)
 }
 
-/// Plan PR `base..head` with an optional manifest; plan + warnings.
+/// Plan PR `base..head`; plan + warnings.
 pub(crate) fn plan_at(
     root: &Path,
     base: Option<&str>,
     head: &str,
-    manifest: Option<Json>,
 ) -> Result<(Plan, Vec<String>), Box<dyn std::error::Error>> {
-    let mut request = serde_json::json!({"schema": 1, "run_key": "local", "base": base, "head": head, "event": "pull_request", "root": root.display().to_string()});
-    if let Some(manifest) = manifest {
-        request["baseline_manifest"] = manifest;
-    }
+    let request = serde_json::json!({"schema": 1, "run_key": "local", "base": base, "head": head, "event": "pull_request", "root": root.display().to_string()});
     let response = plan_internal(&request.to_string())?;
     let value: Json = serde_json::from_str(&response)?;
     Ok((
@@ -135,22 +131,6 @@ pub(crate) fn reasons_are(plan: &Plan, needle: &str, reason: &str) -> bool {
         }
     }
     any
-}
-
-pub(crate) use crate::impl_common::{anchor_id, anchor_repo};
-
-/// Manifest binding `base` with `tasks` entries for the seed plan.
-pub(crate) fn manifest_for(plan: &Plan, base: &str, tasks: &Json) -> Json {
-    let compat = velnor_actions_contract::digest_b3(b"compat");
-    let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
-    let name = format!("velnor-baseline-{base}-{compat}");
-    let numeric = baseline_artifact_numeric_id(&name);
-    serde_json::json!({"schema": 2, "repository_id": anchor_id(), "source_commit": base, "ref": "refs/heads/testmain", "event": "push", "workflow_ref": format!("o/r/{workflow}@refs/heads/testmain"), "run_id": 7, "run_attempt": 1, "final_status": "passed", "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256, "compatibility_id": compat, "artifact_id": numeric, "artifact_name": name, "tasks": tasks, "parent": Json::Null})
-}
-
-/// Task entries binding every seed obligation exactly.
-pub(crate) fn entries_for(plan: &Plan) -> Json {
-    Json::Array(plan.obligations.iter().map(|ob| serde_json::json!({"task_id": ob.task_id, "task_digest": ob.task_digest, "input_digest": ob.input_digest, "closure_digest": ob.closure_digest, "proof_run_id": 7, "observed_run_id": 7, "carried_from": Json::Null})).collect())
 }
 
 /// One test identity JSON value.

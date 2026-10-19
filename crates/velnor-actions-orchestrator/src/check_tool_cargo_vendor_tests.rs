@@ -54,7 +54,7 @@ fn fixture() -> Fixture {
             default_features: false,
             features: Vec::new(),
             installation: QualifiedCargoInstallation::Source {
-                source_lock_sha256: crate::cover_identity::generator::sha256_hex(lock.as_bytes()),
+                source_lock_sha256: crate::generator::sha256_hex(lock.as_bytes()),
             },
         },
         depends_on: vec!["rust".to_owned()],
@@ -116,7 +116,7 @@ fn verified_sources_move_into_an_owned_complete_vendor_tree() {
     assert_eq!(checksum["package"], "d".repeat(64));
     assert_eq!(
         checksum["files"]["src/lib.rs"],
-        crate::cover_identity::generator::sha256_hex(b"pub fn dependency() {}\n")
+        crate::generator::sha256_hex(b"pub fn dependency() {}\n")
     );
     let config = fs::read_to_string(fixture.home.join("cargo-source.toml")).expect("source config");
     assert!(config.contains("replace-with = \"velnor-vendor\""));
@@ -134,7 +134,7 @@ fn lock_drift_and_missing_archive_closure_fail_before_source_moves() {
         ..
     } = &mut fixture.tool.options
     {
-        *source_lock_sha256 = crate::cover_identity::generator::sha256_hex(&lock);
+        *source_lock_sha256 = crate::generator::sha256_hex(&lock);
     }
     assert!(prepare(&fixture).is_err());
     assert!(fixture.primary.exists());

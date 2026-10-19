@@ -15,14 +15,13 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    ContractError, NamedCheckLane, Plan, PlanBaseline, PlanMatrix, PlanRunner, ProposedTask,
-    RunnerSelection, WorkflowEvent, canonical_json_bytes, plan_id_for_run,
+    ContractError, NamedCheckLane, Plan, PlanMatrix, PlanRunner, ProposedTask, RunnerSelection,
+    WorkflowEvent, canonical_json_bytes, plan_id_for_run,
 };
 use velnor_actions_mise::ToolCatalog;
 
 use self::plan_obligation::{GroupInputs, changed_keys, lane_table, member_changed, plan_group};
 use crate::OrchestratorError;
-use crate::cover::{BaselineInputs, apply_baseline};
 use crate::decisions::dedupe_sorted;
 use crate::discover::Discovery;
 use crate::internal_plan::snapshot::ExecutionSnapshot;
@@ -31,7 +30,6 @@ use crate::internal_plan::{default_generator_with_phase_timings, plan_packages};
 use crate::internal_request::{PlanRequest, checked_plan_request};
 
 pub use self::plan_response::validate_plan_response;
-use crate::merge::BaselineManifest;
 use crate::prepare::{prepare, prepare_with_phase_timings};
 use crate::select::{classify_changed, select_universe};
 use crate::select_edges::plan_task_graph;
@@ -74,13 +72,6 @@ pub(crate) struct PlanResponse {
     pub(crate) plan: Plan,
     /// Matrix copy, byte-identical to the embedded matrix.
     pub(crate) matrix: PlanMatrix,
-    /// Trusted manifest behind covered obligations, when any covered.
-    ///
-    /// The plan artifact stages these bytes as `baseline.json` so the
-    /// merge revalidates covered claims against the exact evidence the
-    /// planner used; absent when nothing covered.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) baseline_manifest: Option<BaselineManifest>,
 }
 
 /// Compute the affected plan plus matrix for one event (schema-1 JSON).
@@ -125,7 +116,7 @@ fn plan_internal_inner(
         &prep.discovery,
         &mut warnings,
     );
-    let mut plan = build_plan(
+    let plan = build_plan(
         &request,
         &prep.discovery,
         &prep.root,
@@ -138,35 +129,9 @@ fn plan_internal_inner(
         warnings,
         timings.as_deref_mut(),
     )?;
-    let manifest = request.baseline_manifest.and_then(|value| {
-        serde_json::from_value::<BaselineManifest>(value)
-            .inspect_err(|_| {
-                plan.warnings
-                    .push("baseline_miss:malformed_manifest".to_owned());
-            })
-            .ok()
-    });
-    let used_manifest = if request.event == WorkflowEvent::Qualification {
-        None
-    } else {
-        apply_baseline(
-            &mut plan,
-            request.event,
-            BaselineInputs {
-                branch: &prep.default_branch,
-                root: &prep.root,
-                workflow: velnor_actions_workflow_renderer::render::WORKFLOW_PATH,
-                catalog,
-                repository: request.repository.as_deref(),
-            },
-            manifest,
-            &prep.discovery,
-            changed.as_ref(),
-        )?
-    };
     plan.validate().map_err(internal_contract)?;
     check_matrix_budget(&plan.matrix)?;
-    let response = plan_response(plan, used_manifest);
+    let response = plan_response(plan);
     serde_json::to_string(&response).map_err(|err| OrchestratorError::Internal {
         problem: format!("response_encode:{err}"),
     })
@@ -193,17 +158,12 @@ fn validate_qualification_request(
     }
 }
 
-/// Assemble the `plan-v1` response, staging trusted bytes when covered.
-///
-/// The manifest rides along only behind covered obligations: a
-/// rejected manifest must never reach the plan artifact.
-fn plan_response(plan: Plan, manifest: Option<BaselineManifest>) -> PlanResponse {
-    let covered = crate::covered_tasks::plan_has_covered(&plan);
+/// Assemble the `plan-v1` response: the plan plus its matrix copy.
+fn plan_response(plan: Plan) -> PlanResponse {
     PlanResponse {
         schema: SCHEMA,
         matrix: plan.matrix.clone(),
         plan,
-        baseline_manifest: covered.then_some(manifest).flatten(),
     }
 }
 
@@ -248,9 +208,9 @@ pub(crate) fn internal_contract(error: ContractError) -> OrchestratorError {
 
 /// Build the validated plan from the obligation universe.
 ///
-/// Identities attach for every member before changed-work hints and
-/// baseline evidence classify dispositions; the execution matrix keeps
-/// execute obligations only after that classification.
+/// Identities attach for every member before changed-work hints
+/// classify dispositions; the execution matrix keeps execute
+/// obligations only after that classification.
 #[expect(
     clippy::too_many_arguments,
     reason = "one call site threads plan scope, universe, classification, and per-call timings"
@@ -338,7 +298,6 @@ fn build_plan(
             selection,
         },
         trust: velnor_actions_contract::trust_for_event(request.event),
-        baseline: PlanBaseline::unavailable(Some("baseline_lookup_deferred"))?,
         generator,
         packages: plan_packages(discovery, &selected_ids),
         obligations,

@@ -1,5 +1,4 @@
 //! Schema-2 affected plan and generic matrix entries.
-use super::baseline::{BaselineProof, PlanBaseline};
 use super::lanes::NamedCheckLaneVariant;
 pub use super::matrix_entry::MatrixEntry;
 use super::qualification_dispatch::QualificationDispatch;
@@ -45,8 +44,6 @@ pub struct Plan {
     pub runner: PlanRunner,
     /// Trust scope.
     pub trust: Trust,
-    /// Baseline evidence.
-    pub baseline: PlanBaseline,
     /// Generator identity.
     pub generator: PlanGenerator,
     /// Complete package inventory (sorted).
@@ -135,13 +132,8 @@ pub struct PlanObligation {
     /// Canonical digest over the task's complete input closure.
     ///
     /// The plan path resolves the closure against the checkout and binds
-    /// this digest into `input_digest`; baseline publishers copy it into
-    /// their entries so coverage can compare closures explicitly instead
-    /// of trusting the changed-work hint.
+    /// this digest into `input_digest`.
     pub closure_digest: String,
-    /// Baseline proof (required when covered).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub baseline_proof: Option<BaselineProof>,
 }
 /// Obligation coverage decision.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -151,8 +143,6 @@ pub enum ObligationDecision {
     Execute,
     /// Reused from the task cache.
     ReusedFromTaskCache,
-    /// Covered by the trusted baseline.
-    CoveredByTrustedBaseline,
 }
 /// Bounded matrix payload.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -283,16 +273,6 @@ impl PlanObligation {
                 "obligations.reason",
                 "empty_reason",
             ));
-        }
-        let covered = self.decision == ObligationDecision::CoveredByTrustedBaseline;
-        if covered && self.baseline_proof.is_none() {
-            return Err(ContractError::identity(
-                "obligations.baseline_proof",
-                "missing_proof",
-            ));
-        }
-        if let Some(proof) = &self.baseline_proof {
-            proof.validate()?;
         }
         Ok(())
     }

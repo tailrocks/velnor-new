@@ -6,14 +6,12 @@ use velnor_actions_orchestrator::merge_internal;
 
 use crate::impl_common::{
     TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,
-    plan_for_source_change, without_ambient_ci_env,
+    plan_for_source_change,
 };
 use crate::impl_merge::{merge, merge_request, success_jobs};
-use crate::impl_orch_core::{merge as core_merge, merge_request as core_merge_request};
-use crate::impl_orch_core_cover::covered_plan;
 
 #[test]
-fn empty_diff_no_baseline_executes_all() -> TestResult {
+fn empty_diff_executes_all() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     git(&["add", "."], root)?;
@@ -270,27 +268,6 @@ fn task_file_gaps_fail_closed() -> TestResult {
 }
 
 #[test]
-fn covered_claim_binds_numeric_artifact_id() -> TestResult {
-    without_ambient_ci_env("covered_claim_binds_numeric_artifact_id", || {
-        let (_repo, plan) = plan_for_source_change()?;
-        let (plan_json, mut manifest) = covered_plan(&plan)?;
-        manifest["artifact_id"] = serde_json::json!(10);
-        let matrix = plan_json["matrix"].clone();
-        let mut request =
-            core_merge_request(&plan_json, &matrix, &serde_json::json!([]), &success_jobs());
-        request["baseline_manifest"] = manifest;
-        let final_report = core_merge(&request)?;
-        assert_eq!(final_report.status, FinalStatus::PlanningFailed);
-        assert!(
-            final_report
-                .miss_reasons
-                .contains(&"cache_corrupt".to_owned())
-        );
-        Ok(())
-    })
-}
-
-#[test]
 fn uncovered_leg_carries_miss_token() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     let matrix = serde_json::to_value(&plan.matrix)?;
@@ -310,52 +287,4 @@ fn uncovered_leg_carries_miss_token() -> TestResult {
         final_report.miss_reasons
     );
     Ok(())
-}
-
-#[test]
-fn revalidate_failures_carry_miss_tokens() -> TestResult {
-    without_ambient_ci_env("revalidate_failures_carry_miss_tokens", || {
-        let (_repo, plan) = plan_for_source_change()?;
-
-        // Covered claims without a manifest have no proof source: source_missing.
-        let (plan_json, _manifest) = covered_plan(&plan)?;
-        let covered_matrix = plan_json["matrix"].clone();
-        let request = core_merge_request(
-            &plan_json,
-            &covered_matrix,
-            &serde_json::json!([]),
-            &success_jobs(),
-        );
-        let final_report = core_merge(&request)?;
-        assert_eq!(final_report.status, FinalStatus::PlanningFailed);
-        assert!(
-            final_report
-                .miss_reasons
-                .contains(&"source_missing".to_owned()),
-            "{:?}",
-            final_report.miss_reasons
-        );
-
-        // Covered claims bound to a tampered proof run: cache_corrupt.
-        let (mut plan_json, manifest) = covered_plan(&plan)?;
-        plan_json["obligations"][0]["baseline_proof"]["run_id"] = serde_json::json!(8);
-        let covered_matrix = plan_json["matrix"].clone();
-        let mut request = core_merge_request(
-            &plan_json,
-            &covered_matrix,
-            &serde_json::json!([]),
-            &success_jobs(),
-        );
-        request["baseline_manifest"] = manifest;
-        let final_report = core_merge(&request)?;
-        assert_eq!(final_report.status, FinalStatus::PlanningFailed);
-        assert!(
-            final_report
-                .miss_reasons
-                .contains(&"cache_corrupt".to_owned()),
-            "{:?}",
-            final_report.miss_reasons
-        );
-        Ok(())
-    })
 }

@@ -1,9 +1,9 @@
 //! Contract qualification-dispatch plan cases.
 use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
 use velnor_actions_contract::{
-    ContractError, ObligationDecision, Plan, PlanBaseline, PlanGenerator, PlanMatrix,
-    PlanObligation, PlanPackage, PlanRunner, QualificationDispatch, QualificationPhase,
-    RunnerSelection, Trust, WorkflowEvent, digest_b3, plan_id_for_run, run_key_for_ci,
+    ContractError, ObligationDecision, Plan, PlanGenerator, PlanMatrix, PlanObligation,
+    PlanPackage, PlanRunner, QualificationDispatch, QualificationPhase, RunnerSelection, Trust,
+    WorkflowEvent, digest_b3, plan_id_for_run, run_key_for_ci,
 };
 
 #[test]
@@ -66,7 +66,6 @@ fn sample_qualification_plan() -> Result<Plan, ContractError> {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(Some("qualification_bypass"))?,
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -87,7 +86,6 @@ fn sample_qualification_plan() -> Result<Plan, ContractError> {
             task_digest: digest_b3(b"task"),
             input_digest: digest_b3(b"inputs"),
             closure_digest: digest_b3(b"closure"),
-            baseline_proof: None,
         }],
         matrix: PlanMatrix {
             include: vec![entry],

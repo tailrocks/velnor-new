@@ -97,10 +97,7 @@ pub fn write_task_report() -> Result<usize, OrchestratorError> {
 /// The plan at `$RUNNER_TEMP/velnor/<run-key>/plan.json` binds every
 /// identity: task digest, matrix coordinates, event, and trust. A nonzero
 /// exit additionally reports each downstream ID as skipped; anything the
-/// plan cannot bind errors instead of emitting unbound bytes. A
-/// baseline-covered obligation proves nothing here: the merge
-/// revalidates it against the manifest, so this op succeeds silently
-/// with zero reports instead of failing `task_not_in_plan`.
+/// plan cannot bind errors instead of emitting unbound bytes.
 ///
 /// # Errors
 ///
@@ -119,9 +116,6 @@ pub(crate) fn write_task_report_to(
         return Err(internal("bad_exit_code"));
     }
     let plan = load_plan(run_key, runner_temp)?;
-    if crate::covered_tasks::covered_by_baseline(&plan, task_id) {
-        return Ok(0);
-    }
     let (entry, digest) = entry_and_digest(&plan, task_id)?;
     if entry.stack_id == "mise" && exit_code == 0 {
         return Err(internal("named_check_requires_qualified_execution"));
@@ -360,9 +354,6 @@ pub(crate) fn write_entry_reports(
     Ok(())
 }
 
-#[cfg(test)]
-#[path = "task_report_cover_tests.rs"]
-mod task_report_cover_tests;
 #[cfg(test)]
 #[path = "task_report_merge_tests.rs"]
 mod task_report_merge_tests;

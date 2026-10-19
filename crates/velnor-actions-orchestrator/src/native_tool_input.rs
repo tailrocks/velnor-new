@@ -101,7 +101,7 @@ pub(crate) fn native_mise_source(
         _ => return None,
     };
     Some(NativeToolInput {
-        sha256: crate::cover_identity::generator::sha256_hex(bytes),
+        sha256: crate::generator::sha256_hex(bytes),
         source,
     })
 }

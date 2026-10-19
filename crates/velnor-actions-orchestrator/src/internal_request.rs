@@ -154,16 +154,6 @@ fn write_request_parts_with_lanes(
     if op == MERGE_OP {
         return crate::merge_request::write_merge_request(&path);
     }
-    if op == crate::baseline_publish::PUBLISH_OP {
-        return crate::baseline_publish::write_publish_request(
-            &path,
-            event_name,
-            payload_json,
-            github_sha,
-            repository,
-            anchor,
-        );
-    }
     let payload: serde_json::Value =
         serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
     let event = workflow_event_for(event_name, &payload)?;
@@ -249,9 +239,7 @@ pub fn publish_plan_files(
 /// Write canonical `plan.json` plus `matrix.json` into one directory.
 ///
 /// `matrix.json` is exactly `{"include": [...]}`: the same matrix the
-/// plan step emits through `$GITHUB_OUTPUT`. When obligations covered,
-/// the trusted `baseline.json` rides along so the merge revalidates
-/// covered claims against the exact planner evidence.
+/// plan step emits through `$GITHUB_OUTPUT`.
 ///
 /// # Errors
 ///
@@ -265,12 +253,6 @@ pub(crate) fn write_plan_files(
     response.validate()?;
     let plan = plan_json_bytes(&response.plan).map_err(internal_contract)?;
     let matrix = matrix_json_bytes(&response.plan.matrix).map_err(internal_contract)?;
-    let baseline = response
-        .baseline_manifest
-        .as_ref()
-        .map(canonical_json_bytes)
-        .transpose()
-        .map_err(internal_contract)?;
     crate::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, dir)?;
     crate::exclusive_write::write_exclusive(&dir.join(PLAN_JSON_FILENAME), &plan, "plan_artifact")?;
     crate::exclusive_write::write_exclusive(
@@ -278,13 +260,6 @@ pub(crate) fn write_plan_files(
         &matrix,
         "plan_artifact",
     )?;
-    if let Some(bytes) = baseline {
-        crate::exclusive_write::write_exclusive(
-            &dir.join(crate::baseline_publish::BASELINE_FILENAME),
-            &bytes,
-            "plan_artifact",
-        )?;
-    }
     Ok(())
 }
 
@@ -375,7 +350,7 @@ fn request_op(path: &Path) -> Result<String, OrchestratorError> {
         .and_then(|name| name.to_str())
         .unwrap_or_default();
     let op = name.strip_suffix("-request.json").unwrap_or_default();
-    if op == PLAN_OP || op == MERGE_OP || op == crate::baseline_publish::PUBLISH_OP {
+    if op == PLAN_OP || op == MERGE_OP {
         Ok(op.to_owned())
     } else {
         Err(internal("unknown_request_op"))

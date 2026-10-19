@@ -42,18 +42,6 @@ pub fn artifact_id_for_crate_job(run_key: &str, job_id: &str) -> Result<String, 
     Ok(super::ArtifactId::parse(&id)?.into_inner())
 }
 
-/// Derive `velnor-baseline-<commit>-<compat>` with full IDs (par §5).
-/// # Errors
-pub fn artifact_id_for_baseline(commit: &str, compat: &str) -> Result<String, ContractError> {
-    if !super::is_lower_hex_len(commit, 40) {
-        return Err(ContractError::identity("artifact_id", "bad_source_commit"));
-    }
-    crate::canonical::validate_digest(compat)
-        .map_err(|_| ContractError::identity("artifact_id", "bad_compatibility_id"))?;
-    let id = format!("velnor-baseline-{commit}-{compat}");
-    Ok(super::ArtifactId::parse(&id)?.into_inner())
-}
-
 /// Validate a target-key shape (matches [`target_key`] output grammar).
 /// # Errors
 pub fn validate_target_key(value: &str) -> Result<(), ContractError> {
@@ -95,9 +83,6 @@ pub fn validate_artifact_id(value: &str) -> Result<(), ContractError> {
     }
     if let Some(rest) = value.strip_prefix("velnor-candidate-") {
         return validate_candidate_artifact(rest);
-    }
-    if let Some(rest) = value.strip_prefix("velnor-baseline-") {
-        return validate_baseline_artifact(rest);
     }
     Err(ContractError::identity(
         "artifact_id",
@@ -162,18 +147,6 @@ fn validate_candidate_artifact(rest: &str) -> Result<(), ContractError> {
     ))
 }
 
-/// Validate the commit/compat tail of a baseline artifact name.
-fn validate_baseline_artifact(rest: &str) -> Result<(), ContractError> {
-    let bad = || ContractError::identity("artifact_id", "bad_baseline_artifact");
-    let Some((commit, compat)) = rest.split_once('-') else {
-        return Err(bad());
-    };
-    if !super::is_lower_hex_len(commit, 40) {
-        return Err(bad());
-    }
-    crate::canonical::validate_digest(compat).map_err(|_| bad())
-}
-
 /// Check target-key shape (matches [`target_key`] output grammar).
 fn is_target_key(tail: &str) -> bool {
     !tail.is_empty()
@@ -194,9 +167,6 @@ mod tests {
     use super::validate_artifact_id;
     use super::{artifact_id_for_crate_job, artifact_id_for_plan, target_key};
     use crate::canonical::{Digest, PosixPath, digest_b3, digest_b3_typed};
-    use crate::workflow::baseline::{
-        BaselineProof, BaselineStatus, ManifestTaskProof, PlanBaseline,
-    };
 
     /// Parse/serde round-trip must accept `good` and reject `bad`.
     macro_rules! check_id {
@@ -289,83 +259,6 @@ mod tests {
         let json = serde_json::to_string(&path).expect("serialize");
         assert_eq!(serde_json::from_str::<PosixPath>(&json).expect("de"), path);
         assert!(serde_json::from_str::<PosixPath>("\"/abs\"").is_err());
-    }
-
-    /// Sample manifest digest for proof tests.
-    fn proof_digest() -> String {
-        digest_b3(b"manifest")
-    }
-
-    /// Sample source commit for proof tests.
-    fn proof_commit() -> String {
-        "ab".repeat(20)
-    }
-
-    #[test]
-    fn proof_constructor_validates_every_input() {
-        let digest = proof_digest();
-        let commit = proof_commit();
-        let proof =
-            BaselineProof::new(&commit, 7, 9, "velnor-plan-local", &digest).expect("valid proof");
-        assert_eq!(proof.run_id(), 7);
-        assert_eq!(proof.artifact_id(), 9);
-        assert_eq!(proof.source_commit(), commit);
-        assert_eq!(proof.artifact_name(), "velnor-plan-local");
-        assert_eq!(proof.manifest_digest(), digest);
-        proof.validate().expect("revalidate");
-        assert!(BaselineProof::new("short", 7, 9, "velnor-plan-local", &digest).is_err());
-        assert!(BaselineProof::new(&commit, 0, 9, "velnor-plan-local", &digest).is_err());
-        assert!(BaselineProof::new(&commit, 7, 0, "velnor-plan-local", &digest).is_err());
-        assert!(BaselineProof::new(&commit, 7, 9, "velnor-nope-x", &digest).is_err());
-        assert!(BaselineProof::new(&commit, 7, 9, "velnor-plan-local", "b3-nope").is_err());
-        let json = serde_json::to_string(&proof).expect("serialize");
-        assert!(serde_json::from_str::<BaselineProof>(&json).is_ok());
-        let forged = json.replace(&digest, "b3-nope");
-        assert!(serde_json::from_str::<BaselineProof>(&forged).is_err());
-    }
-
-    #[test]
-    fn baseline_states_are_exhaustive() {
-        let digest = proof_digest();
-        let commit = proof_commit();
-        let used = PlanBaseline::used(&commit, 7, 9, "velnor-plan-local", &digest).expect("used");
-        assert_eq!(used.status(), BaselineStatus::Used);
-        assert!(PlanBaseline::used("short", 7, 9, "velnor-plan-local", &digest).is_err());
-        let mut stale = used;
-        stale.mark_unavailable("baseline_expired").expect("mark");
-        assert_eq!(stale.status(), BaselineStatus::Unavailable);
-        assert_eq!(stale.reason(), Some("baseline_expired"));
-        assert!(stale.mark_unavailable("").is_err());
-        let wire = serde_json::to_string(&stale).expect("serialize");
-        assert!(!wire.contains("base_commit"));
-        let with_stale = r#"{"status":"unavailable","run_id":7}"#;
-        assert!(serde_json::from_str::<PlanBaseline>(with_stale).is_err());
-        assert!(serde_json::from_str::<PlanBaseline>(r#"{"status":"used"}"#).is_err());
-        let fresh = PlanBaseline::used(&commit, 7, 9, "velnor-plan-local", &digest).expect("used");
-        let mut wire_used: serde_json::Value =
-            serde_json::from_str(&serde_json::to_string(&fresh).expect("ser")).expect("de");
-        wire_used["reason"] = serde_json::json!("stale");
-        assert!(serde_json::from_value::<PlanBaseline>(wire_used).is_err());
-    }
-
-    #[test]
-    fn task_proof_needs_valid_ids_and_digests() {
-        let task = "stack/rust/root/clippy/default";
-        let good = proof_digest();
-        let build = |task: &str, td: &str, run: u64| {
-            ManifestTaskProof::new(task, td, &good, &good, &good, &good, &good, "default", run)
-        };
-        let proof = build(task, &good, 7).expect("valid task proof");
-        assert_eq!(proof.task_id(), task);
-        assert_eq!(proof.proof_run_id(), 7);
-        proof.validate().expect("revalidate");
-        assert!(build("bogus", &good, 7).is_err());
-        assert!(build(task, "b3-nope", 7).is_err());
-        assert!(build(task, &good, 0).is_err());
-        let json = serde_json::to_string(&proof).expect("serialize");
-        assert!(serde_json::from_str::<ManifestTaskProof>(&json).is_ok());
-        let forged = json.replace(&good, "b3-nope");
-        assert!(serde_json::from_str::<ManifestTaskProof>(&forged).is_err());
     }
 
     #[test]

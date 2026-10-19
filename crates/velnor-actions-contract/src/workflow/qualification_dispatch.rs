@@ -8,7 +8,7 @@ use crate::workflow::plan::{ObligationDecision, Plan, WorkflowEvent};
 use crate::workflow::qualification_phase::QualificationPhase;
 
 /// Validate that a serialized plan carries qualification context only when its
-/// source, run, trust, baseline, and selected work still satisfy the dispatch
+/// source, run, trust, and selected work still satisfy the dispatch
 /// contract.
 pub(super) fn validate_plan_qualification(plan: &Plan) -> Result<(), ContractError> {
     match (plan.event, plan.qualification.as_ref()) {
@@ -17,11 +17,10 @@ pub(super) fn validate_plan_qualification(plan: &Plan) -> Result<(), ContractErr
             if context.source_sha != plan.head
                 || plan.run_key
                     != crate::ids::run_key_for_ci(context.run_id, u64::from(context.run_attempt))
-                || plan.baseline.status() != crate::workflow::baseline::BaselineStatus::Unavailable
             {
                 return Err(ContractError::identity(
                     "qualification.binding",
-                    "source_run_or_baseline_mismatch",
+                    "source_or_run_mismatch",
                 ));
             }
             if plan.trust != crate::workflow::trust::Trust::Pr {

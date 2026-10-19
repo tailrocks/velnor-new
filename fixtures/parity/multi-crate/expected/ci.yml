@@ -85,7 +85,6 @@ jobs:
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.22/velnor-actions-0.1.22-x86_64-unknown-linux-gnu
       VELNOR_RELEASE_COMMIT: a5242ea86856e723c829059d716a76b898229070
     outputs:
-      covered_tasks: ${{ steps.plan.outputs.covered_tasks }}
       qualification_campaign: ${{ steps.plan.outputs.qualification_campaign }}
       qualification_phase: ${{ steps.plan.outputs.qualification_phase }}
       qualification_cache_enabled: ${{ steps.plan.outputs.qualification_cache_enabled }}
@@ -174,44 +173,6 @@ jobs:
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
-  publish-baseline:
-    name: Publish baseline
-    runs-on: ubuntu-26.04
-    timeout-minutes: 5
-    env:
-      VELNOR_ASSET_SHA256: 290c8a96d037ee82bbf97a49c2542011feeb1280bd2b6a5acf5794279d6569d8
-      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.22/velnor-actions-0.1.22-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: a5242ea86856e723c829059d716a76b898229070
-    needs:
-      - required
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Acquire Velnor
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.22\"&&mkdir -p \"${d%/*}\"&&s=\"/opt/velnor/seed/generator/${d##*/}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|sha256sum -c -;then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|sha256sum -c -;fi&&chmod +x \"$d\"'"
-      - name: Download plan
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
-        with:
-          name: velnor-plan-r${{ github.run_id }}-a${{ github.run_attempt }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
-      - name: Write request
-        env:
-          VELNOR_INTERNAL_OP: write-request-v1
-          VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/publish-baseline-v1-request.json
-        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.22'"
-      - name: Publish baseline
-        id: publish-baseline
-        env:
-          VELNOR_INTERNAL_OP: publish-baseline-v1
-          VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/publish-baseline-v1-request.json
-        run: "\"$RUNNER_TEMP\"'/velnor/bin/velnor-actions-0.1.22'"
-      - name: Upload baseline
-        if: always()
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          if-no-files-found: error
-          name: ${{ steps.publish-baseline.outputs.artifact_name }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/published-baseline/baseline.json
-          retention-days: "90"
   required:
     name: Required
     runs-on: ubuntu-26.04
@@ -391,37 +352,30 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-734dabe74d8f0ba3daa0fd35860718378d033d108c7fb95d1ceedbf60cabd933"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-88933a053ef09eae52a26065b226c759391f14179d60ee026dd6599a077b3876"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-617244eda864dde781c6c7b271c6e3b0cf5182c89719f5722b42f136d84a5803"}
       - name: Unit and integration tests (shard 1 of 2)
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/nextest/default/shard-1-of-2,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-49d88da9432842c4dfe0a178a19840775f881d3480257e4144c8b38d5369cd77"}
       - name: Unit and integration tests (shard 2 of 2)
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/nextest/default/shard-2-of-2,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-518f5cfce84f1f6872b174e558b3c08ed070140fe76cf784286b3085bab6e33f"}
       - name: Doctests
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/doctest/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-e3334d8b981394b69532a98089fecf42285d8b30f9178fe1d777f793ed481bd5"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-969a740974f52413de211a1ab871792b65e48e2f8a666a867cf4269b2b505baa"}
       - name: Wait for parallel checks
@@ -559,32 +513,26 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.99.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
       - name: Build test executables
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/build/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-c76c5e55badf1e290a9dbaa356f5d70674b1150d8f79cdab72bde31c6c006c38"}
       - name: Format
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/fmt/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-14ec4de5cd178e46588bd402c7d87f21f70d1506ee36b29b478d5feeeea3e79a"}
       - name: Clippy
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/clippy/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-002a248a7d1ad410420d904523d02ece79400ef376cb1880e752bbf86810d2cf"}
       - name: Unit and integration tests (shard 1 of 2)
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/nextest/default/shard-1-of-2,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-b7fd3bc12b6c4198bd20441a3f0796fe1bbb1b3173b60b5209334e9dcf077b1c"}
       - name: Unit and integration tests (shard 2 of 2)
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/nextest/default/shard-2-of-2,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-e892872ff8903051a11e6b51c81c37cd72710fde4397594bcc75529e86f0dd75"}
       - name: Documentation
         background: true
-        if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/doc/default,')"
         uses: ./.github/actions/declared-task-0 # zizmor: ignore[self-repository]
         with: {"digest": "b3-b2df9a633c9293604f0e978e3deecf8772b73134300f595a243052bbdbf01bf4"}
       - name: Wait for parallel checks

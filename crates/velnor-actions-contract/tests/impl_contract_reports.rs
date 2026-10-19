@@ -2,13 +2,12 @@
 use crate::impl_contract_ids::{MANIFEST, TASK, sample_entry};
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    BaselineProof, CacheLayer, CacheOutcome, CacheResult, Concurrency, ContractError, Job,
-    JobTimeout, MatrixEntry, MatrixReport, MatrixStatus, NotSelectedReason, ObligationDecision,
-    Permissions, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage,
-    PlanRunner, PlannedPlatform, PlatformBinding, PlatformRunnerEnvironment,
-    PlatformUnavailableReason, RunnerSelection, Step, StepKind, TaskReport, TaskStatus, Trigger,
-    Trust, WorkflowEvent, WorkflowIr, artifact_id_for_plan, canonical_json_bytes, digest_b3,
-    plan_id_for_run, run_key_for_ci, task_report_id_for_task,
+    CacheLayer, CacheOutcome, CacheResult, Concurrency, ContractError, Job, JobTimeout,
+    MatrixEntry, MatrixReport, MatrixStatus, NotSelectedReason, ObligationDecision, Permissions,
+    Plan, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlannedPlatform,
+    PlatformBinding, PlatformRunnerEnvironment, PlatformUnavailableReason, RunnerSelection, Step,
+    StepKind, TaskReport, TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr,
+    canonical_json_bytes, digest_b3, plan_id_for_run, run_key_for_ci, task_report_id_for_task,
 };
 
 #[test]
@@ -28,7 +27,6 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(Some("no_entry"))?,
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -49,7 +47,6 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
             task_digest: digest_b3(b"task"),
             input_digest: digest_b3(b"inputs"),
             closure_digest: digest_b3(b"closure"),
-            baseline_proof: None,
         }],
         matrix: PlanMatrix {
             include: vec![entry],
@@ -62,19 +59,12 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
     let mut bad = plan.clone();
     bad.task_ids = vec![TASK.to_owned(), "aaa".to_owned()];
     assert!(bad.validate().is_err());
-    let covered = PlanObligation {
-        decision: ObligationDecision::CoveredByTrustedBaseline,
-        baseline_proof: Some(BaselineProof::new(
-            &"ab".repeat(20),
-            99,
-            4242,
-            &artifact_id_for_plan(&run_key)?,
-            &digest_b3(b"manifest"),
-        )?),
+    let reused = PlanObligation {
+        decision: ObligationDecision::ReusedFromTaskCache,
         ..plan.obligations[0].clone()
     };
     let mut plan2 = plan.clone();
-    plan2.obligations = vec![covered];
+    plan2.obligations = vec![reused];
     plan2.validate()?;
     Ok(())
 }

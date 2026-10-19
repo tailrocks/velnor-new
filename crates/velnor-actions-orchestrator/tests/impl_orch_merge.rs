@@ -8,14 +8,12 @@ use velnor_actions_orchestrator::{assemble_merge_request, plan_internal};
 
 use crate::impl_common::{
     TestResult, err_of, git, git_line, passing_reports, plan_for_source_change,
-    without_ambient_ci_env,
 };
 use crate::impl_merge::task_reports_for;
 use crate::impl_orch_core::{
     committed_repo, merge, merge_request, plan_for_partial_change, push_request, set_task,
     success_jobs, wide_repo, wide_repo_configured,
 };
-use crate::impl_orch_core_cover::covered_plan;
 
 #[test]
 fn orch_core_merge_counts_cover_five_states() -> TestResult {
@@ -69,36 +67,6 @@ fn orch_core_merge_counts_cover_five_states() -> TestResult {
         "each obligation ends in exactly one state"
     );
     assert_eq!(final_report.status, FinalStatus::Failed);
-    Ok(())
-}
-
-#[test]
-fn orch_core_all_covered_merges_passed() -> TestResult {
-    without_ambient_ci_env("orch_core_all_covered_merges_passed", || {
-        let (_repo, plan) = plan_for_source_change()?;
-        assert!(!plan.task_ids.is_empty(), "fixture must select work");
-        let (plan_json, manifest) = covered_plan(&plan)?;
-        let matrix = plan_json["matrix"].clone();
-        let mut request =
-            merge_request(&plan_json, &matrix, &serde_json::json!([]), &success_jobs());
-        request["baseline_manifest"] = manifest;
-        let final_report = merge(&request)?;
-        assert_eq!(final_report.status, FinalStatus::Passed);
-        assert_eq!(final_report.counts.covered as usize, plan.task_ids.len());
-        assert_eq!(final_report.counts.not_run, 0);
-        Ok(())
-    })
-}
-
-#[test]
-fn orch_core_covered_claim_binds_original_proof_run() -> TestResult {
-    let (_repo, plan) = plan_for_source_change()?;
-    let (mut plan_json, manifest) = covered_plan(&plan)?;
-    plan_json["obligations"][0]["baseline_proof"]["run_id"] = serde_json::json!(8);
-    let matrix = plan_json["matrix"].clone();
-    let mut request = merge_request(&plan_json, &matrix, &serde_json::json!([]), &success_jobs());
-    request["baseline_manifest"] = manifest;
-    assert_eq!(merge(&request)?.status, FinalStatus::PlanningFailed);
     Ok(())
 }
 
@@ -223,7 +191,7 @@ fn obligation_universe_matches_independent_oracle() -> TestResult {
             expected.insert(format!("stack/rust/{key}/{kind}/default"));
         }
     }
-    let (plan, _) = plan_at(&root, Some(&base), &head, None)?;
+    let (plan, _) = plan_at(&root, Some(&base), &head)?;
     let planned: BTreeSet<String> = plan.task_ids.iter().cloned().collect();
     assert_eq!(planned, expected, "oracle set equals plan output");
     assert!(plan.obligations.iter().all(|ob| ob.decision == Execute));

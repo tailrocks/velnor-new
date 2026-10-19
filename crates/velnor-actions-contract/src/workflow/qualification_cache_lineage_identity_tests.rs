@@ -1,8 +1,8 @@
 use super::*;
 
 use crate::workflow::{
-    EntryCacheIds, ExecuteTaskIds, MatrixEntry, ObligationDecision, PlanBaseline, PlanGenerator,
-    PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlannedPlatform, QualificationDispatch,
+    EntryCacheIds, ExecuteTaskIds, MatrixEntry, ObligationDecision, PlanGenerator, PlanMatrix,
+    PlanObligation, PlanPackage, PlanRunner, PlannedPlatform, QualificationDispatch,
     QualificationPhase, QualificationRunRef, WorkflowEvent,
 };
 use crate::{
@@ -67,8 +67,6 @@ fn plan_for_checkout(
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(Some("qualification_bypass"))
-            .expect("unavailable baseline"),
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -82,7 +80,6 @@ fn plan_for_checkout(
             task_digest: digest_b3(b"task configuration"),
             input_digest: digest_b3(input.as_bytes()),
             closure_digest: digest_b3(closure.as_bytes()),
-            baseline_proof: None,
         }],
         matrix: PlanMatrix {
             include: vec![matrix_for_id(&raw_id, input)],

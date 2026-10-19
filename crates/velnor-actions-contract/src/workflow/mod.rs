@@ -1,6 +1,5 @@
 //! Stack-neutral workflow IR, matrix, plan, and report types.
 pub mod artifacts;
-pub mod baseline;
 pub mod cache_ids;
 pub mod crate_job;
 pub mod dispatch;
@@ -33,7 +32,6 @@ pub use artifacts::{
     MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, check_matrix_agreement, matrix_json_bytes,
     plan_json_bytes,
 };
-pub use baseline::{BaselineProof, BaselineStatus, ManifestTaskProof, PlanBaseline};
 pub use cache_ids::EntryCacheIds;
 pub use crate_job::{CrateJob, CrateObligation};
 pub use dispatch::{DispatchInput, DispatchInputType, WorkflowDispatch};
@@ -100,10 +98,7 @@ pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
     NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
 };
-pub use step::{
-    MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, Step, StepKind, TASK_COVERED_OUTPUT,
-    task_execution_condition,
-};
+pub use step::{MAX_TASK_EXECUTION_ARGV, MAX_TASK_EXECUTION_ENV, Step, StepKind};
 pub use step_identity::{MBX_WORKSPACE_CLEAN_CONDITION, StepId, StepRole};
 pub use task_execution_manifest::{
     MAX_TASK_EXECUTION_FRAME_BYTES, MAX_TASK_EXECUTION_RECORDS, TASK_EXECUTION_FRAME_MAGIC,

@@ -7,8 +7,8 @@ use velnor_actions_contract::{
 };
 
 pub use crate::matrix::{
-    COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
-    MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
+    MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource, PLAN_ID_OUTPUT,
+    PLAN_STEP_ID, RUN_KEY_OUTPUT,
 };
 pub use crate::setup::MiseSetup;
 
@@ -39,8 +39,6 @@ pub const PLAN_JOB_ID: &str = CONTRACT_PLAN_JOB_ID;
 pub const TASK_JOB_ID: &str = "velnor-task";
 /// Candidate validation job ID (Velnor policy only).
 pub const CANDIDATE_JOB_ID: &str = "candidate";
-/// Baseline-publish job ID: runs after the final gate passes.
-pub const PUBLISH_JOB_ID: &str = "publish-baseline";
 /// Full-SHA Alint pin for the repository-policy `alint` job.
 pub const ALINT_USES: &str = "asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87";
 

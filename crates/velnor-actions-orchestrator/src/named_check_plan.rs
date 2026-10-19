@@ -105,7 +105,6 @@ pub(crate) fn derive_lanes_until(
         task_digest: task_digest.clone(),
         input_digest: input_digest.clone(),
         closure_digest,
-        baseline_proof: None,
     };
     let run = velnor_actions_workflow_renderer::join_argv_for_run(&argv)
         .map_err(|e| internal(&e.to_string()))?;

@@ -125,7 +125,7 @@ pub struct FinalCounts {
     pub executed: u32,
     /// Empty-partition count.
     pub empty_partition: u32,
-    /// Baseline-covered count.
+    /// Obligations satisfied without execution (reused from the task cache).
     pub covered: u32,
     /// Failed count.
     pub failed: u32,

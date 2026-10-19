@@ -202,7 +202,7 @@ fn validate_task_job_scope(job_id: &str, job: &Job, step: &Step) -> Result<(), R
             "declared_task_job_scope_mismatch:{job_id}"
         )));
     }
-    if step.id.is_some() || step.role.is_some() || step.condition.is_none() {
+    if step.id.is_some() || step.role.is_some() || step.condition.is_some() {
         return Err(RenderError::InvalidWorkflow(format!(
             "declared_task_authority_mismatch:{job_id}"
         )));

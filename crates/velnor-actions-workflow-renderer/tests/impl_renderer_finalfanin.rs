@@ -262,9 +262,8 @@ fn candidate_mode_downloads_attestation_before_merge() -> Result<(), RenderError
 #[test]
 fn expected_inventory_excludes_post_gate_jobs() -> Result<(), RenderError> {
     use velnor_actions_contract::NEEDS_EXPECTED_ENV;
-    use velnor_actions_workflow_renderer::render::{
-        FINAL_CONDITION, FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID,
-    };
+    use velnor_actions_workflow_renderer::render::{FINAL_CONDITION, FINAL_JOB_ID, PLAN_JOB_ID};
+    const POST_GATE_JOB_ID: &str = "post-gate";
     let plan = job(
         PLAN_JOB_ID,
         "Plan",
@@ -286,11 +285,11 @@ fn expected_inventory_excludes_post_gate_jobs() -> Result<(), RenderError> {
         ],
     );
     final_job.condition = Some(FINAL_CONDITION.to_owned());
-    // Downstream of the gate by construction: needs the gate, push-gated
-    // like the real baseline publisher, so PR runs always skip it.
+    // Downstream of the gate by construction: needs the gate and is
+    // push-gated, so PR runs always skip it.
     let (publish_id, mut publish) = job(
-        PUBLISH_JOB_ID,
-        "Publish baseline",
+        POST_GATE_JOB_ID,
+        "Post gate",
         vec![FINAL_JOB_ID.to_owned()],
         vec![checkout_step(&checkout_pin())?],
     );
@@ -303,12 +302,12 @@ fn expected_inventory_excludes_post_gate_jobs() -> Result<(), RenderError> {
     assert!(
         !ir.jobs[FINAL_JOB_ID]
             .needs
-            .contains(&PUBLISH_JOB_ID.to_owned())
+            .contains(&POST_GATE_JOB_ID.to_owned())
     );
-    assert_eq!(ir.jobs[PUBLISH_JOB_ID].needs, [FINAL_JOB_ID.to_owned()]);
+    assert_eq!(ir.jobs[POST_GATE_JOB_ID].needs, [FINAL_JOB_ID.to_owned()]);
     let text = strict(&ir, &fixture_ctx())?;
     assert!(
-        text.contains(&format!("  {PUBLISH_JOB_ID}:")),
+        text.contains(&format!("  {POST_GATE_JOB_ID}:")),
         "downstream job renders: {text}"
     );
     let conclusions = NeedsConclusions::from_finalized_jobs(FINAL_JOB_ID, &ir.jobs)
@@ -332,7 +331,7 @@ fn expected_inventory_excludes_post_gate_jobs() -> Result<(), RenderError> {
         .trim_matches('"');
     assert_eq!(scalar.replace("\\\"", "\""), value);
     assert!(
-        !merge.contains(PUBLISH_JOB_ID),
+        !merge.contains(POST_GATE_JOB_ID),
         "merge expects upstream only:\n{merge}"
     );
     Ok(())

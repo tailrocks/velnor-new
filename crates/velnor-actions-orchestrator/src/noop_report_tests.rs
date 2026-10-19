@@ -10,9 +10,8 @@ use crate::matrix_step::OBLIGATION_TASK_DIGEST_ENV;
 use tempfile::TempDir;
 use velnor_actions_contract::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision,
-    Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform,
-    RunnerSelection, TaskReport, TaskStatus, Trust, WorkflowEvent, matrix_json_bytes,
-    plan_id_for_run,
+    Plan, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform, RunnerSelection,
+    TaskReport, TaskStatus, Trust, WorkflowEvent, matrix_json_bytes, plan_id_for_run,
 };
 
 use super::*;
@@ -60,7 +59,6 @@ fn fixture_plan() -> (Plan, String) {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(None).expect("baseline"),
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),
@@ -74,7 +72,6 @@ fn fixture_plan() -> (Plan, String) {
             task_digest: task_digest.clone(),
             input_digest: digest(11),
             closure_digest: digest(21),
-            baseline_proof: None,
         }],
         matrix: PlanMatrix {
             include: vec![entry],

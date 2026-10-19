@@ -3,8 +3,7 @@
 //! Every universe member gets content identities first; the changed-work
 //! classification then assigns exactly one disposition: changed
 //! obligations execute unconditionally, while unchanged ones take the
-//! reuse outcome (execute until task-cache proof exists) and stay
-//! eligible for later baseline coverage.
+//! reuse outcome (execute until task-cache proof exists).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
@@ -207,8 +206,7 @@ fn planned_identity(
 /// Obligation plus matrix entry for one universe member.
 ///
 /// Identities attach first; changed members execute unconditionally
-/// while unchanged members take the reuse outcome for later baseline
-/// classification.
+/// while unchanged members take the reuse outcome.
 pub(crate) fn plan_group(
     inputs: &GroupInputs<'_>,
     reads: &mut velnor_actions_tofu::FileCache,
@@ -306,7 +304,6 @@ fn complete_group(
         task_digest: task_digest.clone(),
         input_digest: recorded,
         closure_digest,
-        baseline_proof: None,
     };
     let mut metadata = adapter_metadata(task, evidence_for_group(inputs.discovery, task))
         .map_err(internal_contract)?;

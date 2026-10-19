@@ -1,14 +1,13 @@
-//! Plan-selection acceptance: broaden, baseline, shards (OW2).
+//! Plan-selection acceptance: broaden and shards (OW2).
 
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_orch_plansel::{
-    BUMP, anchor_repo, commit, entries_for, has, inv_digest, make_ws, manifest_for, merge_status,
-    plan_at, plan_change, proof, put, reasons_are, shard_plan, sharded_reports, test_value,
+    BUMP, commit, has, inv_digest, make_ws, merge_status, plan_at, plan_change, proof, put,
+    reasons_are, shard_plan, sharded_reports, test_value,
 };
 use serde_json::Value as Json;
-use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
+use velnor_actions_contract::{FinalStatus, ObligationDecision};
 use velnor_actions_mise::catalog::RUST_VERSION;
-use velnor_actions_orchestrator::plan_internal;
 
 #[test]
 fn generator_and_workflow_changes_broaden() -> TestResult {
@@ -101,7 +100,7 @@ fn untracked_files_broaden() -> TestResult {
     let repo = make_ws(&["alpha", "beta"], &[])?;
     let head = commit(repo.path(), "one")?;
     put(repo.path(), "notes.md", "draft\n")?;
-    let (plan, warnings) = plan_at(repo.path(), Some(&head), &head, None)?;
+    let (plan, warnings) = plan_at(repo.path(), Some(&head), &head)?;
     assert!(
         has(&plan, "alpha") && has(&plan, "beta"),
         "broadens: {:?}",
@@ -111,120 +110,6 @@ fn untracked_files_broaden() -> TestResult {
         warnings.iter().any(|w| w.contains("untracked_files")),
         "{warnings:?}"
     );
-    Ok(())
-}
-
-#[test]
-fn exact_baseline_covers_unchanged() -> TestResult {
-    let (repo, seed) = plan_for_source_change()?;
-    anchor_repo(repo.path())?;
-    let head = seed.head.clone();
-    let (bare, _) = plan_at(repo.path(), Some(&head), &head, None)?;
-    assert!(!bare.task_ids.is_empty(), "empty diff keeps universe");
-    assert!(
-        bare.obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::Execute && ob.reason == "forced_uncached"),
-        "empty diff forced_uncached without baseline: {:?}",
-        bare.obligations
-    );
-    let manifest = manifest_for(&bare, &head, &entries_for(&bare));
-    let (plan, _) = plan_at(repo.path(), Some(&head), &head, Some(manifest))?;
-    assert!(
-        plan.obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline)
-    );
-    assert!(plan.matrix.include.is_empty(), "matrix pruned");
-    assert_eq!(plan.task_ids, bare.task_ids, "plan retains all");
-    assert_eq!(
-        plan.baseline.status(),
-        velnor_actions_contract::BaselineStatus::Used
-    );
-    assert!(
-        plan.obligations
-            .iter()
-            .all(|ob| ob.baseline_proof.is_some())
-    );
-    Ok(())
-}
-
-#[test]
-fn baseline_miss_reasons_are_precise() -> TestResult {
-    let (repo, seed) = plan_for_source_change()?;
-    let base = seed.base.clone().ok_or("missing base")?;
-    let tasks = entries_for(&seed);
-    for (field, value, reason) in [
-        ("ref", "refs/heads/other", "wrong_ref"),
-        ("generator_version", "0.0.0", "generator_mismatch"),
-    ] {
-        let mut manifest = manifest_for(&seed, &base, &tasks);
-        manifest[field] = Json::String(value.into());
-        let (plan, warnings) = plan_at(repo.path(), Some(&base), &seed.head, Some(manifest))?;
-        assert!(
-            plan.obligations
-                .iter()
-                .all(|ob| ob.decision == ObligationDecision::Execute),
-            "{reason}"
-        );
-        assert!(
-            warnings.iter().any(|w| w.contains(reason)),
-            "{reason}: {warnings:?}"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn carried_proof_fails_closed_without_originating_attestation() -> TestResult {
-    let (repo, seed) = plan_for_source_change()?;
-    anchor_repo(repo.path())?;
-    let head = seed.head.clone();
-    let (bare, _) = plan_at(repo.path(), Some(&head), &head, None)?;
-    let mut tasks = entries_for(&bare);
-    for task in tasks.as_array_mut().ok_or("tasks shape")? {
-        task["proof_run_id"] = Json::from(5);
-        task["observed_run_id"] = Json::from(7);
-    }
-    let manifest = manifest_for(&bare, &head, &tasks);
-    let (plan, warnings) = plan_at(repo.path(), Some(&head), &head, Some(manifest))?;
-    // A forwarded proof run claims success for an originating run the
-    // manifest cannot prove: validation fails closed with its precise
-    // reason instead of warning-and-covering.
-    assert!(
-        plan.obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::Execute)
-    );
-    assert_eq!(
-        plan.baseline.reason(),
-        Some("baseline_invalid:originating_run_unverified")
-    );
-    assert!(
-        warnings
-            .iter()
-            .any(|w| w == "baseline_miss:originating_run_unverified"),
-        "{warnings:?}"
-    );
-    Ok(())
-}
-
-#[test]
-fn lookup_without_repo_scope_misses_before_spawn() -> TestResult {
-    let (repo, seed) = plan_for_source_change()?;
-    let request = serde_json::json!({"schema": 1, "run_key": "local", "base": seed.base, "head": seed.head, "event": "pull_request", "root": repo.path().display().to_string()});
-    let value: Json = serde_json::from_str(&plan_internal(&request.to_string())?)?;
-    let plan: Plan = serde_json::from_value(value["plan"].clone())?;
-    assert!(
-        plan.obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::Execute)
-    );
-    // The exact artifact name always forms from the plan; with no
-    // repository scope (no origin, no request slug) the live lookup
-    // misses before spawning anything: execute-all with the precise
-    // miss reason, never a whole-run download.
-    assert_eq!(plan.baseline.reason(), Some("baseline_repo_unresolved"));
     Ok(())
 }
 

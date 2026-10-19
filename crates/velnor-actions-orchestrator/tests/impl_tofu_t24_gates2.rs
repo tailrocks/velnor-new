@@ -60,10 +60,6 @@ fn gate5_cache_hit_never_replaces_validate() {
             .reuse_eligible()
             .expect_err("init/validate reuse stays OFF");
         assert!(err.to_string().contains("tofu_reuse_disabled"), "got {err}");
-        assert!(
-            ext.coverage_eligible().is_ok(),
-            "coverage untouched by the reuse refusal"
-        );
     }
     let fmt = TofuTaskIdentityExtension::for_task(&gate_inputs(
         lock(),

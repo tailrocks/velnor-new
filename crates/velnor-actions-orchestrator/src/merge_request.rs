@@ -40,7 +40,6 @@ use self::needs_channel::{NEEDS_ENV, parse_needs};
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
-use crate::merge::required_evidence::MAX_BASELINE_MANIFEST_BYTES;
 use crate::request_event::{
     QualificationRunnerContext, qualification_dispatch_for_parts, workflow_event_for,
 };
@@ -50,8 +49,7 @@ use crate::request_event::{
 /// Reads `plan.json`, `matrix.json`, exactly the plan-expected
 /// `reports/<artifact-id>/matrix-report.json` files plus their
 /// `tasks/<task-report-id>.json` files (sorted by ID for determinism;
-/// anything else under `reports/` is ignored, never globbed), plus
-/// optional `baseline.json`.
+/// anything else under `reports/` is ignored, never globbed).
 /// Validator inventory and conclusions come from `VELNOR_NEEDS_JSON`. Every
 /// missing or unparsable input is recorded in `assembly_errors`, never
 /// dropped, so the merge judges the gap explicitly.
@@ -120,14 +118,6 @@ pub(crate) fn assemble_with_needs(
         &task_reports,
         &mut errors,
     );
-    let baseline = read_json_with_limit(
-        run_dir,
-        "baseline.json",
-        "baseline",
-        false,
-        u64::try_from(MAX_BASELINE_MANIFEST_BYTES).unwrap_or(u64::MAX),
-        &mut errors,
-    );
     let (inventory, jobs) = parse_needs(needs, expected, &mut errors);
     let attestation = read_attestation(run_dir, &inventory, &mut errors);
     let request = serde_json::json!({
@@ -144,7 +134,6 @@ pub(crate) fn assemble_with_needs(
         "required_job_ids": inventory,
         "required_jobs": jobs,
         "assembly_errors": errors,
-        "baseline_manifest": baseline,
     });
     canonical_json_str(&request).map_err(internal_contract)
 }
@@ -320,8 +309,8 @@ const MAX_ASSEMBLY_JSON_BYTES: u64 = 4 << 20;
 /// Absence errors only for required artifacts; corruption, duplicate
 /// keys, symlinks, unreadable paths, and oversize payloads always
 /// error. Reads enforce the shared staged-text gates (symlink rejection
-/// plus size bound) and the strict key check, so `baseline.json` and
-/// every other assembly input hardens alike.
+/// plus size bound) and the strict key check, so every assembly input
+/// hardens alike.
 fn read_json(
     run_dir: &Path,
     name: &str,

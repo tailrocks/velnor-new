@@ -175,14 +175,12 @@ fn task_step(index: usize) -> Step {
         ),
         ("RUSTUP_TOOLCHAIN".to_owned(), "1.99.0".to_owned()),
     ]);
-    let condition = velnor_actions_contract::workflow::step::task_execution_condition(&task_id)
-        .expect("coverage condition");
     Step {
         parallel: false,
         name: format!("Test crate {index}"),
         id: None,
         role: None,
-        condition: Some(condition),
+        condition: None,
         kind: StepKind::TaskExecution {
             argv,
             env,

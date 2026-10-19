@@ -1,13 +1,12 @@
 //! Remediation cases: PAR audit rows.
-use crate::impl_contract_ids::{MANIFEST, TASK, sample_identity};
+use crate::impl_contract_ids::{MANIFEST, sample_identity};
 use crate::impl_remed_contract::{sample_plan, valid_config};
 use std::collections::BTreeMap;
 use velnor_actions_contract::graph::{CpuMilli, MemoryMb};
 use velnor_actions_contract::{
-    ArchiveInputs, CachePolicy, ContractError, EdgeKind, ManifestTaskProof, ResourceClass,
-    ResourceDemand, ShardTimingEvidence, TaskEdge, TaskGraph, TaskNode, archive_id,
-    artifact_id_for_baseline, digest_b3, input_digest, run_key_for_ci, validate_artifact_id,
-    validate_shard_changes_need_evidence,
+    ArchiveInputs, CachePolicy, ContractError, EdgeKind, ResourceClass, ResourceDemand,
+    ShardTimingEvidence, TaskEdge, TaskGraph, TaskNode, archive_id, digest_b3, input_digest,
+    run_key_for_ci, validate_shard_changes_need_evidence,
 };
 
 #[test]
@@ -190,20 +189,6 @@ fn par_task_ids_match_obligations() -> Result<(), ContractError> {
 }
 
 #[test]
-fn par_baseline_artifact_name_shape() -> Result<(), ContractError> {
-    let commit = "ab".repeat(20);
-    let compat = digest_b3(b"compat");
-    let name = artifact_id_for_baseline(&commit, &compat)?;
-    assert_eq!(name, format!("velnor-baseline-{commit}-{compat}"));
-    assert_eq!(validate_artifact_id(&name), Ok(()));
-    assert!(artifact_id_for_baseline("short", &compat).is_err());
-    assert!(artifact_id_for_baseline(&"AB".repeat(20), &compat).is_err());
-    assert!(artifact_id_for_baseline(&commit, "nope").is_err());
-    assert!(validate_artifact_id("velnor-baseline-short-b3-zzz").is_err());
-    Ok(())
-}
-
-#[test]
 fn par_resource_classes_cover_six_kinds() {
     let classes = [
         ResourceClass::Lightweight,
@@ -344,26 +329,4 @@ fn par_shard_changes_require_timing_evidence() {
         validate_shard_changes_need_evidence(&previous, &previous, &[], "cfg"),
         Ok(())
     );
-}
-
-#[test]
-fn par_manifest_task_proof_binds_identities() {
-    let task = digest_b3(b"task");
-    let inputs = digest_b3(b"inputs");
-    let graph = digest_b3(b"graph");
-    let toolchain = digest_b3(b"toolchain");
-    let mbx = digest_b3(b"mbx");
-    let platform = digest_b3(b"platform");
-    let build = |task_id: &str, digest: &str, run: u64| {
-        ManifestTaskProof::new(
-            task_id, digest, &inputs, &graph, &toolchain, &mbx, &platform, "test", run,
-        )
-    };
-    let proof = build(TASK, &task, 4242).expect("valid proof");
-    assert_eq!(proof.validate(), Ok(()));
-    assert_eq!(proof.task_id(), TASK);
-    assert_eq!(proof.proof_run_id(), 4242);
-    assert!(build(TASK, "nope", 4242).is_err());
-    assert!(build(TASK, &task, 0).is_err());
-    assert!(build("bogus", &task, 4242).is_err());
 }

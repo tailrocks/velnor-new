@@ -10,9 +10,8 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_contract::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, MatrixReport, MatrixStatus, ObligationDecision,
-    Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform,
-    RunnerSelection, TaskReport, TaskStatus, Trust, WorkflowEvent, matrix_json_bytes,
-    plan_id_for_run,
+    Plan, PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform, RunnerSelection,
+    TaskReport, TaskStatus, Trust, WorkflowEvent, matrix_json_bytes, plan_id_for_run,
 };
 
 use super::*;
@@ -105,7 +104,6 @@ pub(super) fn obligation_for(task_id: &str, task_digest: String, seed: u8) -> Pl
         task_digest,
         input_digest: digest(seed + 10),
         closure_digest: digest(seed + 20),
-        baseline_proof: None,
     }
 }
 
@@ -126,7 +124,6 @@ pub(super) fn fixture_plan() -> Plan {
             selection: RunnerSelection::LatestDefault,
         },
         trust: Trust::Pr,
-        baseline: PlanBaseline::unavailable(None).expect("baseline"),
         generator: PlanGenerator {
             version: "0.1.0".to_owned(),
             target: "x86_64-unknown-linux-gnu".to_owned(),

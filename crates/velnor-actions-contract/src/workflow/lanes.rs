@@ -60,10 +60,7 @@ pub fn lane_class(job_id: &str) -> LaneClass {
         )
     {
         LaneClass::Control
-    } else if job_id == "publish-baseline"
-        || job_id.starts_with("release-")
-        || job_id.starts_with("deploy-")
-    {
+    } else if job_id.starts_with("release-") || job_id.starts_with("deploy-") {
         LaneClass::SingleWriter
     } else {
         LaneClass::Verification

@@ -21,7 +21,7 @@ checks passing; those checks were green at `bdfffb9` (dogfood CI run
 - [Gate 2: deterministic generator](gate-2-deterministic-generator.md)
 - [Gate 3: generated execution and visible jobs](gate-3-execution-visible-jobs.md)
 - [Gate 4: tool and compilation reuse](gate-4-tool-compilation-reuse.md)
-- [Gate 5: trusted baseline coverage](gate-5-trusted-baseline.md)
+- [Gate 5: trusted baseline coverage](gate-5-trusted-baseline.md) (removed; historical)
 - [Gate 6: task-result reuse](gate-6-task-result-reuse.md)
 - [Gate 7: parallel test fan-out](gate-7-parallel-fanout.md)
 - [Gate 8: Velnor dogfooding](gate-8-dogfooding.md)

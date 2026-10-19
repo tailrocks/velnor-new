@@ -11,7 +11,7 @@
 //! malformed: those stay hard `malformed_request` errors.
 //!
 //! The shape mirrors [`super::MergeRequest`] exactly except that staged
-//! evidence (`plan`, `matrix`, reports, baseline, attestation) stays
+//! evidence (`plan`, `matrix`, reports, attestation) stays
 //! untyped; keep the two in sync. The strict path runs first, so
 //! well-formed requests never reach this fallback.
 
@@ -59,9 +59,6 @@ struct LenientRequest {
     /// Assembly failure details; every entry fails the verdict.
     #[serde(default)]
     assembly_errors: Vec<String>,
-    /// Trusted baseline manifest for coverage revalidation.
-    #[serde(default)]
-    baseline_manifest: Option<serde_json::Value>,
     /// Shard proofs for partitioned test entries.
     #[serde(default)]
     shard_proofs: Vec<ShardProof>,
@@ -84,11 +81,6 @@ pub(crate) fn lenient_request(envelope: &serde_json::Value) -> Option<MergeReque
     let candidate_attestation = untyped_option(
         raw.candidate_attestation,
         "unparsable_candidate_attestation",
-        &mut assembly_errors,
-    );
-    let baseline_manifest = untyped_option(
-        raw.baseline_manifest,
-        "unparsable_baseline",
         &mut assembly_errors,
     );
     let plan = untyped_option(raw.plan, "unparsable_plan", &mut assembly_errors);
@@ -117,7 +109,6 @@ pub(crate) fn lenient_request(envelope: &serde_json::Value) -> Option<MergeReque
         required_job_ids: raw.required_job_ids,
         required_jobs: raw.required_jobs,
         assembly_errors,
-        baseline_manifest,
         shard_proofs: raw.shard_proofs,
         limits: raw.limits,
         reference_task_ids: raw.reference_task_ids,

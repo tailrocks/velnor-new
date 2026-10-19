@@ -22,7 +22,6 @@ use self::merge_checks::{
     check_plan_evidence, check_plan_shape, check_trust_coherence, expected_task_reports,
     partition_task_reports, plan_digests, plan_entries, shards_failed,
 };
-pub(crate) use self::required_evidence::BaselineManifest;
 use self::required_evidence::{
     check_required_evidence, diagnostic_without_plan, fold_jobs, reported_job_results,
 };
@@ -71,9 +70,6 @@ pub(crate) struct MergeRequest {
     /// Assembly failure details; every entry fails the verdict.
     #[serde(default)]
     pub(crate) assembly_errors: Vec<String>,
-    /// Trusted baseline manifest for coverage revalidation.
-    #[serde(default)]
-    baseline_manifest: Option<BaselineManifest>,
     /// Shard proofs for partitioned test entries.
     #[serde(default)]
     shard_proofs: Vec<ShardProof>,
@@ -305,8 +301,7 @@ fn covered_count(plan: &Plan) -> u32 {
     for obligation in &plan.obligations {
         match obligation.decision {
             ObligationDecision::Execute => {}
-            ObligationDecision::ReusedFromTaskCache
-            | ObligationDecision::CoveredByTrustedBaseline => covered += 1,
+            ObligationDecision::ReusedFromTaskCache => covered += 1,
         }
     }
     u32::try_from(covered).unwrap_or(u32::MAX)

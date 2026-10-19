@@ -3,30 +3,17 @@
 //! Unregistered: the parent wires this module into `velnor_orchestrator.rs`
 //! (P09 pattern). Cases run through the public plan API only.
 
-use velnor_actions_contract::{BaselineStatus, ObligationDecision, Plan};
+use velnor_actions_contract::{ObligationDecision, Plan};
 
 use super::impl_common::{
     TestResult, config_with_branch, git, git_line, make_repo, plan_for_source_change,
     write_nextest_task,
 };
-use super::impl_orch_core::{has_warning, manifest_for, plan_value};
+use super::impl_orch_core::plan_value;
 
 /// Typed plan from a plan-response value.
 fn typed(value: &serde_json::Value) -> Result<Plan, Box<dyn std::error::Error>> {
     Ok(serde_json::from_value(value["plan"].clone())?)
-}
-
-/// Anchor a fixture repo so fail-closed provenance can validate it.
-fn anchor_repo(root: &std::path::Path) -> TestResult {
-    git(
-        &["remote", "add", "origin", "https://github.com/o/r.git"],
-        root,
-    )
-}
-
-/// Manifest `repository_id` matching [`anchor_repo`].
-fn anchor_id() -> String {
-    velnor_actions_contract::digest_b3(b"github.com/o/r")
 }
 
 #[test]
@@ -127,20 +114,11 @@ fn source_edit_with_empty_changed_set_executes() -> TestResult {
     git(&["add", "."], root)?;
     git(&["commit", "-m", "one"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
-    anchor_repo(root)?;
-    // Baseline recorded over the clean tree.
-    let clean = typed(&plan_value(root, "pull_request", Some(&head), &head, None)?)?;
-    let stale: std::collections::BTreeMap<&str, &str> = clean
-        .obligations
-        .iter()
-        .map(|ob| (ob.task_id.as_str(), ob.closure_digest.as_str()))
-        .collect();
+    let clean = typed(&plan_value(root, "pull_request", Some(&head), &head)?)?;
     // Uncommitted source edit: invisible to the base==head diff, visible
     // to the closure resolved against the checkout.
     std::fs::write(root.join("src/lib.rs"), "pub fn f() {}\npub fn g() {}\n")?;
-    // Manifest with matching input digests but stale closure digests:
-    // only the closure comparison can refuse coverage here.
-    let edited = typed(&plan_value(root, "pull_request", Some(&head), &head, None)?)?;
+    let edited = typed(&plan_value(root, "pull_request", Some(&head), &head)?)?;
     assert!(
         clean
             .obligations
@@ -149,80 +127,21 @@ fn source_edit_with_empty_changed_set_executes() -> TestResult {
             .any(|(before, after)| before.input_digest != after.input_digest),
         "plan-time input_digest must bind source bytes"
     );
-    let mut manifest = manifest_for(&edited, &head, "testmain")?;
-    manifest["repository_id"] = serde_json::Value::String(anchor_id());
-    for task in manifest["tasks"].as_array_mut().ok_or("tasks")? {
-        let id = task["task_id"].as_str().ok_or("task id")?;
-        let digest = stale.get(id).copied().ok_or("stale closure")?;
-        task["closure_digest"] = serde_json::Value::String(digest.to_owned());
-    }
-    let value = plan_value(root, "pull_request", Some(&head), &head, Some(&manifest))?;
-    let plan = typed(&value)?;
     assert!(
-        has_warning(&value, "no_affected_files:all_unchanged"),
-        "the changed set must be empty, not broadened: {:?}",
-        value["plan"]["warnings"]
-    );
-    assert!(
-        plan.obligations
+        edited
+            .obligations
             .iter()
             .all(|ob| ob.decision == ObligationDecision::Execute),
-        "source edits are never baseline-coverable: {:?}",
-        plan.obligations
-            .iter()
-            .map(|ob| &ob.decision)
-            .collect::<Vec<_>>()
+        "source edits always execute"
     );
-    assert!(
-        has_warning(&value, "closure_mismatch"),
-        "{:?}",
-        value["plan"]["warnings"]
-    );
-    Ok(())
-}
-
-#[test]
-fn unchanged_inputs_with_valid_baseline_cover() -> TestResult {
-    let repo = make_repo(config_with_branch())?;
-    let root = repo.path();
-    git(&["add", "."], root)?;
-    git(&["commit", "-m", "one"], root)?;
-    let head = git_line(&["rev-parse", "HEAD"], root)?;
-    anchor_repo(root)?;
-    let seed = typed(&plan_value(root, "pull_request", Some(&head), &head, None)?)?;
-    let mut manifest = manifest_for(&seed, &head, "testmain")?;
-    manifest["repository_id"] = serde_json::Value::String(anchor_id());
-    let value = plan_value(root, "pull_request", Some(&head), &head, Some(&manifest))?;
-    let plan = typed(&value)?;
-    assert!(
-        plan.obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline),
-        "unchanged inputs stay coverable: {:?}",
-        value["plan"]["warnings"]
-    );
-    assert_eq!(plan.baseline.status(), BaselineStatus::Used);
-    assert!(plan.matrix.include.is_empty());
     Ok(())
 }
 
 #[test]
 fn task_cache_stays_disabled_without_qualification() -> TestResult {
-    let (repo, seed) = plan_for_source_change()?;
-    for plan in [
-        &seed,
-        &typed(&plan_value(
-            repo.path(),
-            "pull_request",
-            seed.base.as_deref(),
-            &seed.head,
-            Some(&manifest_for(
-                &seed,
-                &seed.base.clone().unwrap_or_default(),
-                "testmain",
-            )?),
-        )?)?,
-    ] {
+    let (_repo, seed) = plan_for_source_change()?;
+    let plan = &seed;
+    {
         for entry in &plan.matrix.include {
             let meta = entry.adapter_metadata.as_object().ok_or("metadata")?;
             assert_eq!(
@@ -242,7 +161,7 @@ fn task_cache_stays_disabled_without_qualification() -> TestResult {
 }
 
 #[test]
-fn known_lockfile_covers_and_nextest_binds_toolchain() -> TestResult {
+fn known_lockfile_nextest_binds_toolchain() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     write_nextest_task(root)?;
@@ -253,30 +172,12 @@ fn known_lockfile_covers_and_nextest_binds_toolchain() -> TestResult {
     git(&["add", "."], root)?;
     git(&["commit", "-m", "one"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
-    anchor_repo(root)?;
-    let seed = typed(&plan_value(root, "pull_request", Some(&head), &head, None)?)?;
+    let seed = typed(&plan_value(root, "pull_request", Some(&head), &head)?)?;
     assert!(
         seed.task_ids.iter().any(|id| id.contains("/nextest/")),
         "{:?}",
         seed.task_ids
     );
-    let mut manifest = manifest_for(&seed, &head, "testmain")?;
-    manifest["repository_id"] = serde_json::Value::String(anchor_id());
-    let plan = typed(&plan_value(
-        root,
-        "pull_request",
-        Some(&head),
-        &head,
-        Some(&manifest),
-    )?)?;
-    assert!(
-        plan.obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline),
-        "known lockfile plus nextest still covers: {:?}",
-        plan.warnings
-    );
-    assert_eq!(plan.baseline.status(), BaselineStatus::Used);
     let (_plain_repo, unseeded) = plan_for_source_change()?;
     let nextest_toolchain = seed
         .matrix
@@ -294,46 +195,6 @@ fn known_lockfile_covers_and_nextest_binds_toolchain() -> TestResult {
             .filter_map(|entry| entry.cache_ids.as_ref())
             .all(|ids| ids.toolchain_id() != nextest_toolchain),
         "nextest selection changes the toolchain identity"
-    );
-    Ok(())
-}
-
-#[test]
-fn reports_stay_fresh_per_run() -> TestResult {
-    let (repo, seed) = plan_for_source_change()?;
-    let root = repo.path();
-    anchor_repo(root)?;
-    let head = seed.head.clone();
-    let nodiff = typed(&plan_value(root, "pull_request", Some(&head), &head, None)?)?;
-    let mut manifest = manifest_for(&nodiff, &head, "testmain")?;
-    manifest["repository_id"] = serde_json::Value::String(anchor_id());
-    let warm = typed(&plan_value(
-        root,
-        "pull_request",
-        Some(&head),
-        &head,
-        Some(&manifest),
-    )?)?;
-    assert!(
-        warm.obligations
-            .iter()
-            .all(|ob| ob.decision == ObligationDecision::CoveredByTrustedBaseline)
-    );
-    let mut tampered = manifest_for(&nodiff, &head, "testmain")?;
-    tampered["repository_id"] = serde_json::Value::String(anchor_id());
-    tampered["tasks"][0]["input_digest"] =
-        serde_json::Value::String(velnor_actions_contract::digest_b3(b"tampered"));
-    let cold = plan_value(root, "pull_request", Some(&head), &head, Some(&tampered))?;
-    let plan = typed(&cold)?;
-    assert!(
-        plan.obligations
-            .iter()
-            .any(|ob| ob.decision == ObligationDecision::Execute)
-    );
-    assert!(
-        has_warning(&cold, "no_entry"),
-        "{:?}",
-        cold["plan"]["warnings"]
     );
     Ok(())
 }

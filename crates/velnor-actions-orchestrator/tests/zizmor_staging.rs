@@ -273,7 +273,7 @@ fn velnor_policy_blessed_sha_validates_green() -> TestResult {
 
 /// The two suppressed findings are `undocumented-permissions` (low,
 /// auditor/pedantic-only): Plan and Required each grant Actions read to their
-/// bounded internal baseline/artifact operation. The staged config has no
+/// bounded internal qualification/artifact operation. The staged config has no
 /// unpinned-uses ignores; inline ignores are only `self-repository` on
 /// local actions and zizmor must report that count.
 #[test]

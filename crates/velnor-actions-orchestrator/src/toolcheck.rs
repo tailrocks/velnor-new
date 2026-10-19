@@ -137,7 +137,7 @@ fn check_toolchain(path: &str, content: Option<&str>) -> ToolInputCheck {
         digest,
         codes: finding_codes(&inspection.findings),
         native: content.map(|text| NativeToolInput {
-            sha256: crate::cover_identity::generator::sha256_hex(text.as_bytes()),
+            sha256: crate::generator::sha256_hex(text.as_bytes()),
             source: NativeToolSource::RustToolchain,
         }),
     }

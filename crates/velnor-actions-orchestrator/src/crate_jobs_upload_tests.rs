@@ -106,13 +106,7 @@ fn assert_task_report_identity(
     assert_eq!(matrix_key, expected_matrix_key.as_str(), "matrix key");
     assert_eq!(matrix_max_parallel, None, "crate obligations are uncapped");
     assert_eq!(helper_version, env!("CARGO_PKG_VERSION"));
-    let expected_condition =
-        crate::covered_tasks::skip_condition(&task.task_id).expect("task condition");
-    assert_eq!(
-        step.condition.as_deref(),
-        Some(expected_condition.as_str()),
-        "plan-coverage gate"
-    );
+    assert_eq!(step.condition, None, "obligation steps run unconditionally");
 }
 
 /// Check that only task payload/isolation values enter the task environment.
