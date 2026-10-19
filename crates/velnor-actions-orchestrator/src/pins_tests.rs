@@ -48,6 +48,7 @@ pub(crate) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> Vel
         },
         actions: ActionsConfig { overrides },
         agents: velnor_actions_contract::AgentsConfig::default(),
+        dco: None,
         execution: None,
         tools: velnor_actions_contract::ToolsConfig::default(),
     }
@@ -239,7 +240,7 @@ fn assert_native_checksum_utility(step: velnor_actions_contract::Step, target: R
     );
     assert!(script.contains("cp \"$s\" \"$d\""), "{script}");
     assert!(
-        script.contains("curl -fsSL --retry 5 --retry-all-errors"),
+        script.contains("curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180"),
         "{script}"
     );
     assert!(

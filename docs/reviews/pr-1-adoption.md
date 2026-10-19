@@ -53,9 +53,11 @@ as the default. Every generated job still carries a literal bounded
 `timeout-minutes`; the general bound is `1..=360` (GitHub's hosted per-job
 execution limit). `[workflow] crate_timeout_minutes` sets every crate job, and
 existing general task, check, and suite `timeout_minutes` fields accept the same
-range. Native preview producers and tap updaters retain their separate `1..=5`
-publication/promotion boundary; this amendment does not widen their configuration
-or operation deadlines. Control jobs keep the default. See
+range. This amendment originally retained the separate `1..=5` native
+publication/promotion boundary. The later explicit Jackin CI/CD authorization
+supersedes that producer ceiling with `1..=10`, still defaulting to five; tap
+updaters remain `1..=5`. Producer execution uses one original clock bounded by
+the configured value and the ten-minute ceiling. Control jobs keep the default. See
 [job timeout limits](../implemented/job-timeout-limits.md).
 
 ### One job per crate amendment (2026-10-19)

@@ -1,6 +1,6 @@
 //! Sequential test-build barrier and independent parallel check target lanes.
 
-use super::CrateJobInputs;
+use super::{CrateJobInputs, build_jobs::cap_cargo_jobs};
 use crate::{OrchestratorError, internal::internal};
 use std::collections::BTreeSet;
 use velnor_actions_contract::{CrateJob, CrateObligation, Step};
@@ -73,6 +73,9 @@ pub(super) fn obligation_steps(
             lane.as_deref(),
         )?;
         step.parallel = parallel;
+        if let Some(options) = input.crates.get(&model.package_name) {
+            cap_cargo_jobs(&mut step, options.build_jobs);
+        }
         steps.push(step);
     }
     Ok(steps)

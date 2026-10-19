@@ -60,6 +60,7 @@ fn config_validation_reports_key_paths() {
                 release: RustReleaseConfig::default(),
                 binary_release: RustBinaryReleaseConfig::default(),
                 suites: Vec::new(),
+                crates: BTreeMap::new(),
             }),
             tofu: None,
         },
@@ -69,6 +70,7 @@ fn config_validation_reports_key_paths() {
         actions: ActionsConfig::default(),
         tools: velnor_actions_contract::ToolsConfig::default(),
         agents: velnor_actions_contract::AgentsConfig::default(),
+        dco: None,
         execution: None,
     };
     assert_eq!(valid.validate(".velnor/config.toml"), Ok(()));
@@ -142,6 +144,7 @@ fn runner_label_uses_exact_catalog_match() {
         actions: ActionsConfig::default(),
         tools: velnor_actions_contract::ToolsConfig::default(),
         agents: velnor_actions_contract::AgentsConfig::default(),
+        dco: None,
         execution: None,
     };
     assert!(RUNNER_LABEL_CATALOG.contains(&LATEST_RUNNER_LABEL));

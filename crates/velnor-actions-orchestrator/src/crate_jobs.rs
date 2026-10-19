@@ -17,8 +17,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CrateJob, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig, WorkflowPolicy,
-    crate_display_name, tofu_display_name,
+    CrateJob, Job, JobTimeout, ProposedTask, RustCrateConfig, Stack, Step, VelnorConfig,
+    WorkflowPolicy, crate_display_name, tofu_display_name,
 };
 #[cfg(test)]
 use velnor_actions_mise::PinnedTool;
@@ -37,6 +37,10 @@ mod stage;
 
 #[path = "crate_jobs_gates.rs"]
 mod gates;
+
+#[path = "crate_jobs_build_jobs.rs"]
+mod build_jobs;
+use build_jobs::reject_unknown_crates;
 
 #[path = "crate_jobs_steps.rs"]
 mod job_steps;
@@ -70,6 +74,13 @@ pub(crate) fn build_for_workflow(
     acquire: Option<&Step>,
     helper_version: &str,
 ) -> Result<CrateBuild, OrchestratorError> {
+    let no_crates = BTreeMap::new();
+    let crates = config
+        .stacks
+        .rust
+        .as_ref()
+        .map_or(&no_crates, |rust| &rust.crates);
+    reject_unknown_crates(crates, discovery)?;
     build_crate_jobs(CrateJobInputs {
         label,
         policy: config.workflow.policy,
@@ -81,6 +92,7 @@ pub(crate) fn build_for_workflow(
         timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)?,
         helper_version,
         cache_policy: config.workflow.pull_request_cache_policy,
+        crates,
         seed_parallel_targets: config
             .stacks
             .rust
@@ -105,6 +117,8 @@ pub(crate) struct CrateJobInputs<'a> {
     pub(crate) cache_policy: velnor_actions_contract::PullRequestCachePolicy,
     /// Opt-in cold target initialization; never changes obligation ownership.
     pub(crate) seed_parallel_targets: bool,
+    /// Per-package Rust options keyed by Cargo package name.
+    pub(crate) crates: &'a BTreeMap<String, RustCrateConfig>,
 }
 
 /// Build one ordered IR job for each runnable package/configuration.

@@ -14,6 +14,10 @@ fn seeded(tasks: Vec<ProposedTask>, enabled: bool, roots: &[String]) -> CrateBui
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         seed_parallel_targets: enabled,
+        crates: &BTreeMap::from([(
+            "demo".to_owned(),
+            velnor_actions_contract::RustCrateConfig { build_jobs: 1 },
+        )]),
     })
     .expect("crate jobs")
 }
@@ -35,6 +39,11 @@ fn seed_barrier_is_opt_in_after_build_before_every_parallel_check() {
     let enabled = seeded(tasks, true, &[]);
     let original = &ordinary.jobs[0].1;
     let prepared = &enabled.jobs[0].1;
+    for step in &prepared.steps {
+        if let velnor_actions_contract::StepKind::TaskExecution { env, .. } = &step.kind {
+            assert_eq!(env.get("CARGO_BUILD_JOBS").map(String::as_str), Some("1"));
+        }
+    }
     assert_eq!(original.needs, prepared.needs);
     assert_eq!(original.timeout_minutes, prepared.timeout_minutes);
     let index = prepared

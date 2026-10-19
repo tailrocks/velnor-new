@@ -24,7 +24,8 @@ fn strict_rejects_unstaged_internal() -> Result<(), RenderError> {
     );
     let bare_final = job("required", "Required", Vec::new(), vec![merge_step()]);
     let mut final_job = bare_final.1;
-    final_job.condition = Some("always()".to_owned());
+    final_job.condition =
+        Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     assert!(
         strict(
             &fixture_ir(vec![("required".to_owned(), final_job)]),

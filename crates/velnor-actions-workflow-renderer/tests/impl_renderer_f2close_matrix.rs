@@ -58,7 +58,8 @@ fn write_request_inserted_before_plan_and_merge() -> Result<(), RenderError> {
         vec![acquire_fixture()?, merge_step()],
     )
     .1;
-    final_job.condition = Some("always()".to_owned());
+    final_job.condition =
+        Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     let text = render_workflow_ir(
         &fixture_ir(vec![
             minimal_plan_job()?,

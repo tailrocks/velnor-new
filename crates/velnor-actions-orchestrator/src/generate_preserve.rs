@@ -226,6 +226,23 @@ fn generated_marked_script(
     first_line_is_generated_marker(source)
 }
 
+/// Recognize a generated dco2 config by exact path and marker.
+///
+/// An unmarked `dco.yml` stays repository-owned: with `[dco]` configured it
+/// collides with the generated file and generation refuses to overwrite it;
+/// without `[dco]` it is preserved untouched. A marked file is generator
+/// output, so it is retired when `[dco]` is removed.
+fn generated_marked_dco(
+    relative: &Path,
+    source: &Path,
+    metadata: &std::fs::Metadata,
+) -> Result<bool, OrchestratorError> {
+    if relative != Path::new("dco.yml") || !metadata.is_file() {
+        return Ok(false);
+    }
+    first_line_is_generated_marker(source)
+}
+
 fn first_line_is_generated_marker(source: &Path) -> Result<bool, OrchestratorError> {
     let file = fs::File::open(source).map_err(|error| io(source, &error))?;
     let mut reader = std::io::BufReader::new(file);
@@ -254,6 +271,7 @@ fn copy_entry(
     if generator_owned(relative, preserve_workflows)
         || generated_shared_action(relative, source, &metadata)?
         || generated_marked_script(relative, source, &metadata)?
+        || generated_marked_dco(relative, source, &metadata)?
     {
         return Ok(false);
     }

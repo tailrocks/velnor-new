@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.24
+Velnor Actions plan 0.1.25
 Repository: <repo>
 
 Detected stacks
@@ -36,6 +36,7 @@ Workflow to generate
   .github/actionlint.yaml
   .github/workflows/ci.yml
   .github/workflows/freshness.yml
+  .github/dco.yml
   Workflow: CI (velnor-repository-v1)
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)

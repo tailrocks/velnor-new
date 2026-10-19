@@ -18,6 +18,7 @@ mod commands_env;
 mod commands_scan;
 mod composite;
 mod crate_obligations;
+pub mod dco;
 mod dispatch_cache_boundary;
 mod document;
 mod document_env;

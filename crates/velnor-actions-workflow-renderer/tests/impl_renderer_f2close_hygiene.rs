@@ -114,7 +114,8 @@ fn render_carries_no_warmup_prune_or_invented_nextest() -> Result<(), RenderErro
         vec![acquire_fixture()?, merge_step()],
     )
     .1;
-    final_job.condition = Some("always()".to_owned());
+    final_job.condition =
+        Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     let text = render_workflow_ir(
         &fixture_ir(vec![
             minimal_plan_job()?,
@@ -182,7 +183,8 @@ fn velnor_policy_renders_with_empty_matrix() -> Result<(), RenderError> {
         vec![merge_step()],
     )
     .1;
-    final_job.condition = Some("always()".to_owned());
+    final_job.condition =
+        Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     let support =
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Bootstrap);
     let text = render_workflow_ir(

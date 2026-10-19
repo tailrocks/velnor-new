@@ -51,6 +51,9 @@ pub(crate) struct PartialRustStack {
     /// Optional exact `X.Y.Z` Rust toolchain channel override.
     #[serde(default)]
     toolchain: Option<String>,
+    /// Per-package options (`[stacks.rust.crates.<package>]`).
+    #[serde(default)]
+    crates: std::collections::BTreeMap<String, velnor_actions_contract::RustCrateConfig>,
 }
 
 /// Tofu stack section: `roots` required when the table is present.
@@ -76,6 +79,7 @@ impl PartialStacks {
                 binary_release: stack.binary_release.unwrap_or_default(),
                 suites: stack.suites,
                 toolchain: stack.toolchain,
+                crates: stack.crates,
             }
         });
         let tofu = self
