@@ -197,20 +197,13 @@ fn build_script_library_dependents_run() -> TestResult {
 
 #[test]
 fn forced_packages_and_dependents_run_on_an_empty_change_set() -> TestResult {
-    let plan = plan_with(
-        "",
-        |root| put(root, "libs/core/build.rs", "fn main() {}\n"),
-        |root| {
-            put(
-                root,
-                "rust-toolchain.toml",
-                "[toolchain]\nchannel = \"1.99.1\"\n",
-            )
-        },
-    )?;
+    let (dir, _) = fixture("", false)?;
+    put(dir.path(), "libs/core/build.rs", "fn main() {}\n")?;
+    let head = commit(dir.path(), "build script")?;
+    let (plan, _) = plan_pr(dir.path(), Some(&head), &head)?;
     assert_runs(&plan, &CORE_CLOSURE);
     assert!(
-        has_warning(&plan, "toolfiles_only:all_unchanged"),
+        has_warning(&plan, "no_affected_files:all_unchanged"),
         "{:?}",
         plan.warnings
     );

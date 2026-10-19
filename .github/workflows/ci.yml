@@ -450,8 +450,7 @@ jobs:
     name: Required
     runs-on: ubuntu-26.04
     timeout-minutes: 5
-    env:
-      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
+    env: *m1
     needs:
       - required
     if: ${{ always() }}
