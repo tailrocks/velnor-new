@@ -74,7 +74,7 @@ jobs:
         run: mise --no-config --no-env --no-hooks install gh@2.102.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.31.1
       - name: Run actionlint
         shell: bash
-        run: mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
+        run: "mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color -ignore '^unexpected key \"background\" for step to (run shell command|execute action)\\. ' -ignore '^step must run script with \"run\" section or run action with \"uses\" section$'"
       - name: Run zizmor
         shell: bash
         run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec zizmor@1.31.1 -- zizmor --no-online-audits --config .zizmor.yml .github/workflows

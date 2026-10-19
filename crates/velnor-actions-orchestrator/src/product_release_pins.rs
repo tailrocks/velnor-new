@@ -82,7 +82,10 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
         actionlint_argv: exec_argv(
             &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
             "actionlint",
-            &["-color"],
+            &velnor_actions_actionlint::workflow_lint_args()
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
             &catalog,
         )?,
         // Scrubbed like the validator vector: an empty-string GH_TOKEN
