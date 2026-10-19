@@ -6,6 +6,32 @@ use super::helpers::{
     Scratch, binding, created_scope, prepare_physical_initializer, provision_physical_intent,
 };
 
+async fn add_excess_attachment(journal: &Journal, reservation_id: i64) -> Result<usize, HostError> {
+    let connection = journal.connection().await?;
+    connection
+        .execute(
+            "INSERT INTO capacity_reservation_bound_storage_attachments (reservation_id, role, observer, container_id, mount_target, source_target, read_only, mount_id, device_major, device_minor, statx_device_major, statx_device_minor, fs_type_magic, v16_filesystem_id_0, v16_filesystem_id_1, filesystem_id, filesystem_instance_digest) SELECT reservation_id, role, observer, container_id, '/unexpected-extra', source_target, read_only, mount_id + 1000, device_major, device_minor, statx_device_major, statx_device_minor, fs_type_magic, v16_filesystem_id_0, v16_filesystem_id_1, filesystem_id, filesystem_instance_digest FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = ?1 AND role = 'runner-home' AND observer = 'runner' LIMIT 1",
+            [reservation_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let mut rows = connection
+        .query(
+            "SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = ?1",
+            [reservation_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let count = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?
+        .get::<i64>(0)
+        .map_err(|_| HostError::Journal)?;
+    usize::try_from(count).map_err(|_| HostError::Journal)
+}
+
 #[tokio::test]
 async fn cleanup_identity_requires_a_bound_held_reservation_and_reads_exact_owned_rows()
 -> Result<(), HostError> {
@@ -53,14 +79,15 @@ async fn cleanup_identity_requires_a_bound_held_reservation_and_reads_exact_owne
         2 => assert_eq!(identity.volumes().len(), 5),
         _ => return Err(HostError::Journal),
     }
-    assert_eq!(
-        identity.mounts().len(),
-        if identity.topology_version() == 1 {
-            14
-        } else {
-            16
-        }
-    );
+    let expected_mounts = if identity.topology_version() == 1 {
+        14
+    } else {
+        crate::journal::connection::StorageRole::PHYSICAL
+            .iter()
+            .map(|role| role.attachments().len())
+            .sum()
+    };
+    assert_eq!(identity.mounts().len(), expected_mounts);
     assert_eq!(identity.cgroups().len(), 2);
     assert!(identity.mounts().iter().any(|mount| {
         mount.role() == "engine-metadata"
@@ -75,5 +102,15 @@ async fn cleanup_identity_requires_a_bound_held_reservation_and_reads_exact_owne
             .iter()
             .all(|cgroup| cgroup.memory_max_bytes() > 0 && !cgroup.path().is_empty())
     );
+    assert_eq!(
+        add_excess_attachment(&journal, provisioned.reservation_id).await?,
+        expected_mounts + 1
+    );
+    assert!(matches!(
+        scope
+            .storage_cleanup_identity(provisioned.reservation_id)
+            .await,
+        Err(HostError::Journal)
+    ));
     Ok(())
 }

@@ -301,7 +301,11 @@ async fn read_mounts(
         }
         mounts.push(item);
     }
-    if mounts.len() < 14 || mounts.len() > 16 {
+    let maximum_mounts = StorageRole::PHYSICAL
+        .iter()
+        .map(|role| role.attachments().len())
+        .sum::<usize>();
+    if mounts.len() < 14 || mounts.len() > maximum_mounts {
         return Err(HostError::Journal);
     }
     Ok(mounts)
