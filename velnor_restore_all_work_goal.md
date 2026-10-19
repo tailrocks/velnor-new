@@ -456,7 +456,6 @@ Do not substitute old PR evidence for tests of the integrated branch.
 Do not claim production readiness for an unqualified runner path.
 
 Make small commits with source PR references and accurate authorship.
-End commit messages with the Claude co-author trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`; no sign-off is required.
 Push recovery refs and target changes without force.
 Check for remote changes before each target push.
 Do not change main, publish releases, or deploy runner services.

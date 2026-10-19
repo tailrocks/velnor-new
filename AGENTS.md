@@ -16,7 +16,7 @@
   - Before fixing a bug, identify why the architecture permitted it and whether relatives hide nearby. Prefer structural fixes removing enabling conditions; symptom patches must name deferred root causes.
   - Delegate first: use subagents for parallel research, implementation, review, and verification. Resolve ambiguity autonomously from evidence and docs.
 - Commits and review integrity:
-  - Commit meaningful, verified changes frequently; push regularly. Prefer one working branch. Commit messages end with the Claude co-author trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`; no `Signed-off-by` sign-off (DCO) or other trailer is required.
+  - Commit meaningful, verified changes frequently; push regularly. Prefer one working branch.
   - Before every PR merge, read all reviews, comments, replies, and unresolved or outdated threads. Verify findings with independent subagents against code, tests, docs, and recorded decisions.
   - Accepted feedback: fix, verify, commit, push, and reply on GitHub with fixing commit URL before resolving. Rejected feedback: reply with evidence and rationale before resolving. Re-fetch feedback at final head SHA; merge only with zero unaddressed feedback and all required checks passing.
   - Keep agent instructions lean. Put explanations, plans, and progress in documentation, not here.
