@@ -82,4 +82,8 @@ cd "$root"
 # A present socket is not a serving API. Refuse to start on a stalled daemon.
 # (/var/run/docker.sock and /run/docker.sock are the same file.)
 "${entrypoint_dir}/velnor-wait-docker-api" "unix:///var/run/docker.sock"
+# The host approval hook must keep its fixed path.
+unset ACTIONS_RUNNER_CONTAINER_HOOKS
+export ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER=true
+export ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/bin/velnor-job-start-hook
 ACTIONS_RUNNER_INPUT_JITCONFIG="$payload" exec "$listener" run

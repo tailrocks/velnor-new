@@ -142,10 +142,18 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz \
     && docker buildx version | grep -F "v${BUILDX_VERSION}"
 
 COPY entrypoint.sh /usr/local/bin/velnor-runner-entrypoint
+COPY --from=job_start_hook job-start-hook /velnor/job-start-hook
+COPY --from=job_started_hook job-started-hook.sh /usr/local/bin/velnor-job-start-hook
 COPY wait-docker-sock.sh /usr/local/bin/wait-docker-sock
 COPY wait-docker-api.sh /usr/local/bin/velnor-wait-docker-api
 COPY clear-dockerenv.sh /usr/local/bin/clear-dockerenv
-RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docker-sock /usr/local/bin/velnor-wait-docker-api /usr/local/bin/clear-dockerenv \
+RUN chown root:root /velnor/job-start-hook /usr/local/bin/velnor-job-start-hook \
+    && chmod 0555 /velnor/job-start-hook /usr/local/bin/velnor-job-start-hook \
+    && test "$(stat -c %a /velnor/job-start-hook)" = 555 \
+    && test "$(stat -c %a /usr/local/bin/velnor-job-start-hook)" = 555 \
+    && test -x /velnor/job-start-hook \
+    && test -x /usr/local/bin/velnor-job-start-hook \
+    && chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docker-sock /usr/local/bin/velnor-wait-docker-api /usr/local/bin/clear-dockerenv \
     && apt-get update \
     && apt-get install -y --no-install-recommends build-essential clang cmake git-lfs jq libclang-dev libssl-dev netcat-openbsd perl pkg-config protobuf-compiler python3 zstd \
     && cc --version \
