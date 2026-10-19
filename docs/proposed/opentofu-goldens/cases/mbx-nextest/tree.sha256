@@ -8,4 +8,4 @@ a6256a2105ac4e11346df82a1961f405951e88d54d8af961e857a56e34b0806c  ./.github/acti
 a50a21048a3151060618f015d738d591ef37c7d8b78b2620d733539f2efc19c7  ./.github/actions/velnor-tools-prelude-u26/action.yml
 f5bffc5f2eef106b0e7eb20d7465a1b00a85ad1dd0dcf10f6f7afa74c021cc41  ./.github/scripts/velnor-tools-cache-identity.sh
 0c8245ab4d213de056dbdf035780d353ee6b5c0462c6780c67cc663c377bf811  ./.github/velnor/task-execution-manifest-v1.json
-6e93e81beec4cdcdc43b84c448a3160ba887d1787a7b2529c38c5d15bd520fcd  ./.github/workflows/ci.yml
+35164d7afc610d52d10c76c2ce959d1e4c07a3686398204c67923367769c98b4  ./.github/workflows/ci.yml

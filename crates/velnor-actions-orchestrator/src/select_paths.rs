@@ -60,15 +60,6 @@ pub(super) fn untracked_files(root: &Path) -> Result<BTreeSet<String>, String> {
     split_nul_paths(&output.stdout)
 }
 
-/// Warning recorded when a root project tool source changed.
-pub(super) const PROJECT_TOOL_CONFIG_CHANGED: &str = "project_tool_config_changed:all_changed";
-
-/// Root files generated CI reads tool versions from (hard decision 5): a
-/// change there re-tests everything, because CI runs the declared versions.
-pub(super) fn is_project_tool_source(path: &str) -> bool {
-    velnor_actions_contract::config::project_tool_refs::PROJECT_TOOL_SOURCE_FILES.contains(&path)
-}
-
 /// Other tool files (nested Mise configs) produce findings only and never
 /// select or broaden.
 pub(super) fn is_advisory_toolfile(path: &str) -> bool {

@@ -32,10 +32,10 @@ pub(crate) use checkout::{verify_checkout, verify_checkout_until};
 pub(crate) use mode::{SelectionMode, selection_mode};
 use mode::{event_token, resolved_edges, resolved_links};
 
-use paths::{
-    PROJECT_TOOL_CONFIG_CHANGED, head_sha, is_advisory_toolfile, is_project_tool_source,
-    tree_diff_names, untracked_files,
-};
+#[path = "select_tool_sources.rs"]
+mod tool_sources;
+
+use paths::{head_sha, is_advisory_toolfile, tree_diff_names, untracked_files};
 
 /// Full obligation universe: every task with applicable targets.
 ///
@@ -110,7 +110,7 @@ fn classify_local(
             return None;
         }
     };
-    let (changed, toolfiles) = local_change_set(root, warnings)?;
+    let (changed, toolfiles) = local_change_set(root, &sha, warnings)?;
     Some(affected_from_changed(
         discovery, &changed, toolfiles, root, &sha, &sha, warnings,
     ))
@@ -277,11 +277,10 @@ fn change_sets(
             }
         }
     }
-    if changed.iter().any(|path| is_project_tool_source(path)) {
-        warnings.push(PROJECT_TOOL_CONFIG_CHANGED.to_owned());
-        return None;
-    }
-    let toolfiles = changed.iter().any(|path| is_advisory_toolfile(path))
+    let unchanged =
+        tool_sources::unchanged_declaration_sources(root, base, Some(head), &changed, warnings)?;
+    let toolfiles = !unchanged.is_empty()
+        || changed.iter().any(|path| is_advisory_toolfile(path))
         || untracked.iter().any(|path| is_advisory_toolfile(path));
     if untracked
         .into_iter()
@@ -298,7 +297,7 @@ fn change_sets(
     }
     let changed = changed
         .into_iter()
-        .filter(|path| !is_advisory_toolfile(path))
+        .filter(|path| !is_advisory_toolfile(path) && !unchanged.contains(path))
         .collect();
     Some((changed, toolfiles))
 }
@@ -307,7 +306,11 @@ fn change_sets(
 ///
 /// Staged plus unstaged diffs plus untracked files form the local union;
 /// git failures broaden with a recorded warning.
-fn local_change_set(root: &Path, warnings: &mut Vec<String>) -> Option<(BTreeSet<String>, bool)> {
+fn local_change_set(
+    root: &Path,
+    base: &str,
+    warnings: &mut Vec<String>,
+) -> Option<(BTreeSet<String>, bool)> {
     let mut changed = BTreeSet::new();
     for cached in [true, false] {
         match tree_diff_names(root, cached) {
@@ -326,14 +329,12 @@ fn local_change_set(root: &Path, warnings: &mut Vec<String>) -> Option<(BTreeSet
         }
     };
     changed.extend(untracked);
-    if changed.iter().any(|path| is_project_tool_source(path)) {
-        warnings.push(PROJECT_TOOL_CONFIG_CHANGED.to_owned());
-        return None;
-    }
-    let toolfiles = changed.iter().any(|path| is_advisory_toolfile(path));
+    let unchanged =
+        tool_sources::unchanged_declaration_sources(root, base, None, &changed, warnings)?;
+    let toolfiles = !unchanged.is_empty() || changed.iter().any(|path| is_advisory_toolfile(path));
     let changed = changed
         .into_iter()
-        .filter(|path| !is_advisory_toolfile(path))
+        .filter(|path| !is_advisory_toolfile(path) && !unchanged.contains(path))
         .collect();
     Some((changed, toolfiles))
 }

@@ -49,11 +49,20 @@ everything and records a stable `*:all_changed` or `*:selecting_all` warning:
   loops (`symlink_unbounded:<path>:<reason>:all_changed`);
 - any changed path no rule below claims (`unclassified_files:all_changed`).
 
-A root project tool source (`mise.toml`, `.mise.toml`, `mise.lock`,
-`.mise.lock`, `rust-toolchain.toml`, `rust-toolchain`) selects everything
-(`project_tool_config_changed:all_changed`): generated CI runs the tool
-versions those files declare (hard decision 5). Nested Mise tool files stay
-advisory and never select work.
+A change to a **declared tool version** selects everything
+(`project_tool_config_changed:all_changed`): generated CI runs the versions
+the project declares (hard decision 5). Every location Mise reads `[tools]`
+from counts (`mise.toml`, `.mise.toml`, `mise.<env>.toml`, `mise.local.toml`,
+`.config/mise.toml`, `.config/mise/config.toml`, `.config/mise/conf.d/*.toml`,
+`mise/config.toml`, `.mise/config.toml`, `.tool-versions`, `rust-toolchain.toml`,
+`rust-toolchain`). The base and head files are parsed with the generator's
+reader (`project_tool_sources.rs`) and only the declared catalog versions are
+compared, so editing a task, a Node pin, or a comment selects nothing on its
+own; such a file is reported like an advisory tool file
+(`toolfiles_only:all_unchanged` when nothing else changed). `mise.lock` and
+`.mise.lock` always select everything, as does any doubt (a file that does not
+parse, or a side git cannot show). Nested Mise tool files stay advisory and
+never select work.
 
 ## Ownership
 

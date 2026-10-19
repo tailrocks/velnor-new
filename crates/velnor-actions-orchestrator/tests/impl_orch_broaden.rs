@@ -45,30 +45,104 @@ fn generator_and_workflow_changes_broaden() -> TestResult {
     Ok(())
 }
 
-#[test]
-fn project_tool_source_edits_select_everything() -> TestResult {
-    // Hard decision 5: CI runs the versions these files declare, so a
-    // change there re-tests every crate.
-    let rust_toolchain = format!("[toolchain]\nchannel = \"{RUST_VERSION}\"\n");
-    for (path, body) in [
-        ("mise.toml", "[tools]\n"),
-        ("rust-toolchain.toml", rust_toolchain.as_str()),
-    ] {
-        let (plan, warnings) = plan_change(&["alpha", "beta"], &[], &[], &[], &[(path, body)])?;
-        assert!(
-            reasons_are(&plan, "alpha", "affected_by_change")
-                && reasons_are(&plan, "beta", "affected_by_change"),
-            "{path} selects everything: {:?}",
-            plan.obligations
-        );
-        assert!(
-            warnings
-                .iter()
-                .any(|w| w.contains("project_tool_config_changed:all_changed")),
-            "{warnings:?}"
-        );
-    }
+/// Every crate job is selected by a change to a declared tool version.
+fn selects_everything(extra: &[(&str, &str)], change: &[(&str, &str)], label: &str) -> TestResult {
+    let (plan, warnings) = plan_change(&["alpha", "beta"], &[], extra, &[], change)?;
+    assert!(
+        reasons_are(&plan, "alpha", "affected_by_change")
+            && reasons_are(&plan, "beta", "affected_by_change"),
+        "{label} selects everything: {:?}",
+        plan.obligations
+    );
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("project_tool_config_changed:all_changed")),
+        "{label}: {warnings:?}"
+    );
     Ok(())
+}
+
+/// A change to a project tool source that leaves every declared catalog
+/// version alone selects no crate job.
+fn selects_nothing(extra: &[(&str, &str)], change: &[(&str, &str)], label: &str) -> TestResult {
+    let (plan, warnings) = plan_change(&["alpha", "beta"], &[], extra, &[], change)?;
+    assert!(
+        !reasons_are(&plan, "alpha", "affected_by_change")
+            && !reasons_are(&plan, "beta", "affected_by_change"),
+        "{label} must not select everything: {:?}",
+        plan.obligations
+    );
+    assert!(
+        !warnings
+            .iter()
+            .any(|w| w.contains("project_tool_config_changed")),
+        "{label}: {warnings:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn project_tool_version_edits_select_everything() -> TestResult {
+    // Hard decision 5: CI runs the versions these files declare, so a
+    // changed declaration re-tests every crate.
+    let rust_toolchain = format!("[toolchain]\nchannel = \"{RUST_VERSION}\"\n");
+    let declared = format!("[tools]\nrust = \"{RUST_VERSION}\"\nnode = \"20.1.0\"\n");
+    selects_everything(&[], &[("mise.toml", declared.as_str())], "new declaration")?;
+    selects_everything(
+        &[],
+        &[("rust-toolchain.toml", rust_toolchain.as_str())],
+        "toolchain file",
+    )?;
+    selects_everything(
+        &[("mise.toml", "[tools]\nrelease-plz = \"0.3.1\"\n")],
+        &[("mise.toml", "[tools]\nrelease-plz = \"0.3.2\"\n")],
+        "bumped version",
+    )?;
+    selects_everything(
+        &[("mise.toml", declared.as_str())],
+        &[("mise.toml", "[tools]\nnode = \"20.1.0\"\n")],
+        "removed declaration",
+    )?;
+    selects_everything(
+        &[],
+        &[(".config/mise/conf.d/ci.toml", declared.as_str())],
+        "conf.d",
+    )?;
+    selects_everything(
+        &[],
+        &[(".tool-versions", "release-plz 0.3.2\n")],
+        ".tool-versions",
+    )?;
+    selects_everything(&[], &[("mise.lock", "# lock\n")], "lock file")
+}
+
+#[test]
+fn unrelated_project_tool_source_edits_select_nothing() -> TestResult {
+    // The same files edited without touching a declared catalog version:
+    // a task body, a non-catalog pin, a comment.
+    let before = format!(
+        "[tools]\nrust = \"{RUST_VERSION}\"\nnode = \"20.1.0\"\n\n[tasks.a]\nrun = \"echo a\"\n"
+    );
+    let after = format!(
+        "# edited\n[tools]\nrust = \"{RUST_VERSION}\"\nnode = \"22.0.0\"\n\n[tasks.a]\nrun = \"echo b\"\n"
+    );
+    selects_nothing(
+        &[("mise.toml", before.as_str())],
+        &[("mise.toml", after.as_str())],
+        "task and node edit",
+    )?;
+    selects_nothing(
+        &[(".tool-versions", "release-plz 0.3.1\njava 21\n")],
+        &[(".tool-versions", "release-plz 0.3.1 # pinned\njava 22\n")],
+        ".tool-versions java edit",
+    )?;
+    // A new source that declares no catalog tool.
+    selects_nothing(
+        &[],
+        &[("mise.local.toml", "[tools]\nnode = \"22.0.0\"\n")],
+        "new local file",
+    )
 }
 
 #[test]

@@ -145,7 +145,7 @@ rust-version = "1.99"
 
 Mise MUST execute Rust tooling locally and in CI. Generated commands use exact
 `tool@version` selectors through `mise exec`: a tool the project's Mise config
-(`mise.toml`, plus the Rust toolchain file Mise reads) declares takes the
+(any location Mise reads `[tools]` from, plus the Rust toolchain file Mise reads) declares takes the
 project's version, resolved at run time and never copied into generated text;
 every other tool takes the exact pin from the compiled-in generator catalog
 ([hard decision 5](../hard-decisions.md)).
@@ -161,8 +161,8 @@ pinned nightly MAY exist only for a check that needs it.
 Velnor MUST check for `rust-toolchain.toml`, `mise.toml`, and `mise.lock`; it
 MAY report their versions, components, tasks, lock coverage, and conflicts.
 They are never generated, synchronized, locked, or rewritten; their declared
-tool versions replace the corresponding Velnor pins (hard decision 5). Missing/malformed files produce manual recommendations, not
-automatic repair or generation failure. See the [tooling input contract](tooling-input-contract.md).
+tool versions replace the corresponding Velnor pins (hard decision 5). Missing files produce manual recommendations, not
+automatic repair or generation failure; a malformed or unusable declaration (unparseable, loose, or disagreeing with another source) fails generation naming the file, because a Velnor pin must never silently replace it. See the [tooling input contract](tooling-input-contract.md).
 
 Every member MUST inherit the workspace metadata and lints:
 

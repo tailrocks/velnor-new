@@ -76,7 +76,7 @@ fn malformed_mise_wrapper_fails_closed_before_toolcheck() -> TestResult {
     fs::write(root.join("mise.toml"), "[tools\nrust = \n")?;
     let err = err_of(prepare(root).map(|_| ()), "malformed wrapper")?;
     assert!(
-        err.to_string().contains("wrapper_invalid"),
+        err.to_string().contains("malformed_project_tool_source"),
         "diagnostic: {err}"
     );
     let mise = check_tool_inputs(root)
@@ -89,7 +89,7 @@ fn malformed_mise_wrapper_fails_closed_before_toolcheck() -> TestResult {
 }
 
 #[test]
-fn conflicting_tool_values_yield_findings() -> TestResult {
+fn conflicting_tool_values_fail_generation_and_yield_findings() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     fs::write(
@@ -101,42 +101,43 @@ fn conflicting_tool_values_yield_findings() -> TestResult {
         fs::read(root.join("rust-toolchain.toml"))?,
         fs::read(root.join("mise.toml"))?,
     );
-    let prep = prepare(root)?;
-    let findings = tool_conflicts(&prep.discovery.tool_checks);
+    // Generation cannot choose between two declarations: the generated
+    // resolver would fail every job on the same disagreement.
+    let err = err_of(prepare(root).map(|_| ()), "conflicting declarations")?;
+    let text = err.to_string();
+    assert!(
+        text.contains("conflicting_project_tool_versions:tool=rust")
+            && text.contains("mise.toml rust=1.85.0")
+            && text.contains("rust-toolchain.toml toolchain.channel"),
+        "{text}"
+    );
+    // The read-only tool-input check still reports the conflict as a finding.
+    let findings = tool_conflicts(&check_tool_inputs(root));
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].code, CONFLICTING_TOOL_VALUES);
     findings[0].validate()?;
-    assert!(
-        prep.discovery
-            .recommendations
-            .iter()
-            .any(|line| line.contains(CONFLICTING_TOOL_VALUES)),
-        "{:?}",
-        prep.discovery.recommendations
-    );
     assert_eq!(fs::read(root.join("rust-toolchain.toml"))?, before.0);
     assert_eq!(fs::read(root.join("mise.toml"))?, before.1);
     Ok(())
 }
 
 #[test]
-fn unsupported_tool_values_yield_findings() -> TestResult {
+fn unsupported_tool_values_fail_generation_and_yield_findings() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     fs::write(root.join("mise.toml"), "[tools]\nrust = \"frobnicator\"\n")?;
-    let prep = prepare(root)?;
-    let findings = tool_conflicts(&prep.discovery.tool_checks);
+    let err = err_of(prepare(root).map(|_| ()), "unsupported value")?;
+    assert!(
+        err.to_string().contains(
+            "project_tool_version_not_exact:tool=rust,file=mise.toml,key=rust,value=frobnicator"
+        ),
+        "{err}"
+    );
+    let findings = tool_conflicts(&check_tool_inputs(root));
     assert_eq!(findings.len(), 1);
     assert_eq!(findings[0].code, UNSUPPORTED_TOOL_VALUE);
     findings[0].validate()?;
-    assert!(
-        prep.discovery
-            .recommendations
-            .iter()
-            .any(|line| line.contains(UNSUPPORTED_TOOL_VALUE)),
-        "{:?}",
-        prep.discovery.recommendations
-    );
+    fs::remove_file(root.join("mise.toml"))?;
     fs::write(
         root.join("rust-toolchain.toml"),
         "[toolchain]\nchannel = \"frobnicator\"\n",
@@ -147,7 +148,7 @@ fn unsupported_tool_values_yield_findings() -> TestResult {
             .contains("invalid_rust_toolchain:frobnicator"),
         "{err}"
     );
-    assert_eq!(tool_conflicts(&check_tool_inputs(root)).len(), 2);
+    assert_eq!(tool_conflicts(&check_tool_inputs(root)).len(), 1);
     Ok(())
 }
 

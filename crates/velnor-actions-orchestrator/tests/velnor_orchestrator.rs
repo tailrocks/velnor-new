@@ -92,6 +92,8 @@ mod impl_prepare_generate;
 mod impl_prepare_generate_outputs;
 mod impl_preseed_cold;
 mod impl_preseed_manifest;
+mod impl_project_tool_resolver_exec;
+mod impl_project_tool_resolver_exec_sources;
 mod impl_project_tool_versions;
 mod impl_protocol;
 mod impl_protocol_fork;
