@@ -34,7 +34,7 @@ fn crate_jobs_depend_on_the_plan_and_keep_existing_conditions() {
         crate_job.condition.as_deref(),
         Some("(always()) && !contains(needs.plan.outputs.not_affected_jobs, ',rust-demo,')")
     );
-    assert!(jobs["required"].needs.is_empty());
+    assert_eq!(jobs["required"].needs, Vec::<String>::new());
     assert!(jobs["required"].condition.is_none());
 }
 
@@ -44,6 +44,6 @@ fn crate_jobs_run_when_the_workflow_has_no_plan_job() {
 
     apply_affected_job_gates(&mut jobs).expect("valid jobs");
 
-    assert!(jobs["rust-demo"].needs.is_empty());
+    assert_eq!(jobs["rust-demo"].needs, Vec::<String>::new());
     assert!(jobs["rust-demo"].condition.is_none());
 }

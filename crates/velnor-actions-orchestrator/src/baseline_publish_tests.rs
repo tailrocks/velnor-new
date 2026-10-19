@@ -236,7 +236,7 @@ fn paired_obligation_requires_and_validates_each_matrix_lane_report() {
 fn generic_request_writer_dispatches_baseline_publish_operation() {
     let head = "a".repeat(40);
     let temp = tempfile::tempdir().expect("tempdir");
-    let path = temp.path().join(format!("{}-request.json", PUBLISH_OP));
+    let path = temp.path().join(format!("{PUBLISH_OP}-request.json"));
     let payload = serde_json::json!({
         "ref": "refs/heads/testmain",
         "before": "b".repeat(40),

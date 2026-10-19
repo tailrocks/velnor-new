@@ -296,6 +296,6 @@ fn tofu_only_candidates_skip_the_rust_pin_gate() -> Result<(), String> {
     assert!(inventories.is_empty(), "tofu yields no rust inventories");
     let resolved_workspaces = qualify_workspaces(dir.path(), &[], &resolved)
         .map_err(|err| format!("empty qualification must not require the rust pin: {err}"))?;
-    assert!(resolved_workspaces.is_empty());
+    assert_eq!(resolved_workspaces, Vec::new());
     Ok(())
 }

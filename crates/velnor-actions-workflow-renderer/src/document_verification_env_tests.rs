@@ -20,10 +20,6 @@ fn report_fetch_requires_the_exact_read_permission() {
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one fixture spells out the complete verification job policy"
-)]
 fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
     let rendered = rendered_verification_job();
 

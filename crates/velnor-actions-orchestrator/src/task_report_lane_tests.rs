@@ -2,7 +2,45 @@ use super::*;
 
 #[test]
 fn task_report_uses_the_exact_physical_job_lane() {
-    let mut plan = fixture_plan();
+    let plan = paired_lane_plan(fixture_plan());
+    let temp = staged_run(&plan, "local");
+    assert_eq!(
+        write_task_report_for_job("local", CLIPPY, 0, None, "rust-demo__local", temp.path())
+            .expect("scale-set report"),
+        1
+    );
+    let local = plan
+        .matrix
+        .include
+        .iter()
+        .find(|entry| {
+            entry.task_id == CLIPPY && entry.lane_variant == Some(NamedCheckLaneVariant::ScaleSet)
+        })
+        .expect("scale-set matrix entry");
+    let hosted = plan
+        .matrix
+        .include
+        .iter()
+        .find(|entry| {
+            entry.task_id == CLIPPY && entry.lane_variant == Some(NamedCheckLaneVariant::Hosted)
+        })
+        .expect("hosted matrix entry");
+    assert!(
+        temp.path()
+            .join("velnor/local")
+            .join(&local.matrix_key)
+            .exists()
+    );
+    assert!(
+        !temp
+            .path()
+            .join("velnor/local")
+            .join(&hosted.matrix_key)
+            .exists()
+    );
+}
+
+fn paired_lane_plan(mut plan: Plan) -> Plan {
     let mut paired = Vec::new();
     for entry in &plan.matrix.include {
         for variant in [
@@ -54,41 +92,7 @@ fn task_report_uses_the_exact_physical_job_lane() {
         })
         .collect();
     plan.validate().expect("paired plan validates");
-    let temp = staged_run(&plan, "local");
-    assert_eq!(
-        write_task_report_for_job("local", CLIPPY, 0, None, "rust-demo__local", temp.path())
-            .expect("scale-set report"),
-        1
-    );
-    let local = plan
-        .matrix
-        .include
-        .iter()
-        .find(|entry| {
-            entry.task_id == CLIPPY && entry.lane_variant == Some(NamedCheckLaneVariant::ScaleSet)
-        })
-        .expect("scale-set matrix entry");
-    let hosted = plan
-        .matrix
-        .include
-        .iter()
-        .find(|entry| {
-            entry.task_id == CLIPPY && entry.lane_variant == Some(NamedCheckLaneVariant::Hosted)
-        })
-        .expect("hosted matrix entry");
-    assert!(
-        temp.path()
-            .join("velnor/local")
-            .join(&local.matrix_key)
-            .exists()
-    );
-    assert!(
-        !temp
-            .path()
-            .join("velnor/local")
-            .join(&hosted.matrix_key)
-            .exists()
-    );
+    plan
 }
 
 #[test]

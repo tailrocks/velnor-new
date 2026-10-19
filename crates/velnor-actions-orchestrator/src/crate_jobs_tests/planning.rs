@@ -148,10 +148,10 @@ fn rust_qualification_reuses_one_job_for_all_configurations_and_tasks() {
     );
     assert_eq!(qualified.jobs.len(), 1);
     assert_eq!(qualified.jobs[0].0, "rust-demo");
-    assert_grouped_qualification_steps(&qualified.jobs[0].1, &proposals);
+    assert_grouped_qualification_steps(&qualified.jobs[0].1);
 }
 
-fn assert_grouped_qualification_steps(job: &Job, proposals: &[ProposedTask]) {
+fn assert_grouped_qualification_steps(job: &Job) {
     let execution_steps: Vec<_> = job
         .steps
         .iter()

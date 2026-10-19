@@ -9,9 +9,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde::Serialize;
+
 use velnor_actions_contract::{
-    MatrixEntry, NamedCheckLane, PlanObligation, PlannedPlatform, ProposedTask, Stack,
-    canonical_json_bytes, digest_b3,
+    MatrixEntry, NamedCheckLane, PlanObligation, ProposedTask, Stack, canonical_json_bytes,
+    digest_b3,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
@@ -20,11 +21,8 @@ use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::internal::{internal, internal_contract};
 use crate::internal_plan::identities::platform_id_for_group;
-use crate::internal_plan::snapshot::{ExecutionSnapshot, platform_target_for_group};
+use crate::internal_plan::snapshot::ExecutionSnapshot;
 use crate::internal_plan::wire_w2::{self, GroupWire};
-use crate::internal_plan::{
-    adapter_metadata, cache_ids_for, evidence_for_group, execute_ids, record_task_cache,
-};
 use crate::schedule::assign_lanes;
 use crate::select::group_changed;
 use crate::vectors::task_argv;
@@ -94,15 +92,16 @@ pub(crate) fn member_changed(
     changed.is_none_or(|set| group_changed(task, set, keys))
 }
 
-/// Digest the pinned MBX cache generation used by publication identity.
-fn mbx_identity_digest() -> String {
-    let generation = velnor_actions_contract::cachekey::mbx_cache_generation(
-        velnor_actions_mise::catalog::MR_BOXINGTON_VERSION,
-    );
-    velnor_actions_contract::digest_b3(generation.as_bytes())
-}
-
 type PlannedIdentity = identity::TaskIdentityDerivation;
+
+#[path = "plan_obligation/complete.rs"]
+mod complete;
+#[cfg(test)]
+use crate::internal_plan::execute_ids;
+#[cfg(test)]
+use complete::LaneEntryInputs;
+#[cfg(test)]
+use complete::derive_lane_entries;
 
 #[cfg(test)]
 use identity::extension_for_task;
@@ -207,175 +206,18 @@ pub(crate) fn plan_group(
             reuse_eligible,
         )?
     };
-    complete_group(
+    complete::complete_group(
         inputs,
-        &argv,
-        &toolchain,
-        &toolchain_inputs,
-        &input_digest,
-        closure_digest,
-        graph_digest,
-        reuse,
-    )
-}
-
-/// Complete existing matrix transport after execution disposition is decided.
-fn complete_group(
-    inputs: &GroupInputs<'_>,
-    argv: &[String],
-    toolchain: &str,
-    toolchain_inputs: &velnor_actions_contract::cachekey::ToolchainInputs,
-    input_digest: &str,
-    closure_digest: String,
-    graph_digest: String,
-    reuse: wire_w2::ReuseOutcome,
-) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
-    let task = inputs.task;
-    let task_digest = task_digest(&task.task_id, argv, toolchain).map_err(internal_contract)?;
-    // The persisted input digest flows through the validated reuse
-    // outcome when one exists, so merge-time live comparison judges the
-    // exact recorded value; forced-execution paths carry the identity.
-    let recorded = reuse
-        .recorded_input_digest
-        .clone()
-        .unwrap_or_else(|| input_digest.to_owned());
-    let Some(job_id) = inputs.job_owners.for_member(task, inputs.wire.event)? else {
-        return Err(internal("crate_job_id_missing"));
-    };
-    let obligation = PlanObligation {
-        task_id: task.task_id.clone(),
-        decision: reuse.decision,
-        reason: reuse.reason,
-        task_digest: task_digest.clone(),
-        input_digest: recorded,
-        closure_digest,
-        graph_digest,
-        mbx_digest: mbx_identity_digest(),
-        profile: task.configuration.clone(),
-        job_id: job_id.clone(),
-    };
-    let mut metadata = adapter_metadata(task, evidence_for_group(inputs.discovery, task))
-        .map_err(internal_contract)?;
-    record_task_cache(
-        &mut metadata,
-        reuse.task_cache_enabled,
-        reuse.task_cache_key.as_deref(),
-    );
-    let run = velnor_actions_workflow_renderer::join_argv_for_run(argv)
-        .map_err(|err| internal(&err.to_string()))?;
-    let job_id = inputs
-        .job_owners
-        .for_member(task, inputs.wire.event)
-        .map_err(internal_contract)?
-        .ok_or_else(|| internal("crate_job_id_missing"))?;
-    let lanes = inputs
-        .named_check_lanes
-        .get(&job_id)
-        .cloned()
-        .unwrap_or_else(|| {
-            vec![NamedCheckLane {
-                variant: None,
-                job_id,
-                runs_on: Some(inputs.label.to_owned()),
-            }]
-        });
-    if lanes.is_empty() {
-        return Err(internal("qualification_executor_lane_missing"));
-    }
-    let target = platform_target_for_group(inputs.label, task).map_err(internal_contract)?;
-    let entries = derive_lane_entries(
-        &LaneEntryInputs {
-            task,
-            run: &run,
-            task_digest: &task_digest,
-            metadata: &metadata,
-            execute_task_ids: &execute_ids(task),
-            input_digest,
-            run_key: inputs.run_key,
-            target: &target,
-            default_runs_on: inputs.label,
-            toolchain,
-            toolchain_inputs,
+        complete::GroupCompletion {
+            argv: &argv,
+            toolchain: &toolchain,
+            toolchain_inputs: &toolchain_inputs,
+            input_digest: &input_digest,
+            closure_digest,
+            graph_digest,
+            reuse,
         },
-        lanes,
-    )?;
-    Ok((obligation, entries))
-}
-
-/// Inputs shared by every lane derived for one obligation.
-struct LaneEntryInputs<'a> {
-    task: &'a ProposedTask,
-    run: &'a str,
-    task_digest: &'a str,
-    metadata: &'a serde_json::Value,
-    execute_task_ids: &'a velnor_actions_contract::ExecuteTaskIds,
-    input_digest: &'a str,
-    run_key: &'a str,
-    target: &'a str,
-    default_runs_on: &'a str,
-    toolchain: &'a str,
-    toolchain_inputs: &'a velnor_actions_contract::cachekey::ToolchainInputs,
-}
-
-/// Derive the exact persisted `MatrixEntry` identities for physical lanes.
-fn derive_lane_entries(
-    inputs: &LaneEntryInputs<'_>,
-    lanes: Vec<NamedCheckLane>,
-) -> Result<Vec<MatrixEntry>, OrchestratorError> {
-    let mut entries = Vec::with_capacity(lanes.len());
-    for lane in lanes {
-        let runs_on = lane.runs_on.as_deref().unwrap_or(inputs.default_runs_on);
-        let planned_platform =
-            PlannedPlatform::new(runs_on, inputs.target).map_err(internal_contract)?;
-        let platform_id = planned_platform.platform_id.clone();
-        let mut entry = MatrixEntry::derive_for_lane(
-            &inputs.task.stack_id,
-            &inputs.task.task_id,
-            inputs.run,
-            inputs.task_digest,
-            inputs.metadata.clone(),
-            inputs.execute_task_ids.clone(),
-            inputs.input_digest,
-            inputs.run_key,
-            &lane.job_id,
-            lane.variant,
-            planned_platform,
-        )
-        .map_err(internal_contract)?;
-        let cache_ids = if velnor_actions_contract::RunsOn::parse(runs_on)
-            .map_err(internal_contract)?
-            .is_scale_set()
-        {
-            crate::internal_plan::cache_ids_for_platform(
-                inputs.task,
-                inputs.toolchain,
-                &platform_id,
-            )
-        } else {
-            cache_ids_for(inputs.task, runs_on, inputs.toolchain)
-        }
-        .map_err(internal_contract)?;
-        record_lane_target_dir(&mut entry.adapter_metadata, cache_ids.lane_id());
-        entry.cache_ids = Some(cache_ids);
-        entry.toolchain_inputs = Some(inputs.toolchain_inputs.clone());
-        entry.toolchain_id = Some(inputs.toolchain.to_owned());
-        entries.push(entry);
-    }
-    Ok(entries)
-}
-
-/// Record the lane's isolated `CARGO_TARGET_DIR` on entry metadata.
-///
-/// Generated legs read this path for their step env; the value derives
-/// from the responsibility-based lane digest via `target_dir_for_lane`.
-fn record_lane_target_dir(metadata: &mut serde_json::Value, lane_id: &str) {
-    let Some(object) = metadata.as_object_mut() else {
-        return;
-    };
-    object.insert(
-        "cargo_target_dir".to_owned(),
-        serde_json::Value::String(crate::internal_plan::target_dir_for_lane_id(lane_id)),
-    );
+    )
 }
 
 /// Digest of canonical bytes for a serializable input struct.

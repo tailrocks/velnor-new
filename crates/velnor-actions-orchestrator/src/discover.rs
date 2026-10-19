@@ -116,7 +116,7 @@ fn discover_inner(
     root: &Path,
     config: &VelnorConfig,
     catalog: &ToolCatalog,
-    mut phases: Option<&mut PlanPhaseTimings>,
+    phases: Option<&mut PlanPhaseTimings>,
 ) -> Result<Discovery, OrchestratorError> {
     let (index, skipped_non_utf8) = build_file_index(root, &config.discovery.exclude)?;
     let mut candidates = Vec::new();
@@ -137,31 +137,15 @@ fn discover_inner(
         problem: err.to_string(),
     })?;
     let initial = apply_stack_ignores(projects, &config.stacks.ignore);
-    let all_features = rust_all_features(config);
-    #[expect(
-        clippy::needless_option_as_deref,
-        reason = "the original Option must remain available after this branch"
-    )]
-    let inventory_result = match phases.as_deref_mut() {
-        Some(phases) => run_inventories_with_phase_timings_and_all_features(
-            root,
-            &candidates,
-            index.files(),
-            &mut reads,
-            phases,
-            all_features,
-            catalog,
-        ),
-        None => run_inventories_with_all_features(
-            root,
-            &candidates,
-            index.files(),
-            &mut reads,
-            all_features,
-            catalog,
-        ),
-    };
-    let ((outcomes, inventories), tofu_units) = inventory_result?;
+    let ((outcomes, inventories), tofu_units) = run_candidate_inventories(
+        root,
+        &candidates,
+        index.files(),
+        &mut reads,
+        phases,
+        rust_all_features(config),
+        catalog,
+    )?;
     let statuses = check_candidate_outcomes(initial, &outcomes).map_err(|err| {
         OrchestratorError::Detection {
             problem: err.to_string(),
@@ -200,6 +184,37 @@ fn discover_inner(
         tofu_units,
         affected: crate::affected_inputs::AffectedInputs { resolves, rules },
     })
+}
+
+fn run_candidate_inventories(
+    root: &Path,
+    candidates: &[velnor_actions_contract::StackCandidate],
+    files: &[String],
+    reads: &mut velnor_actions_tofu::FileCache,
+    phases: Option<&mut PlanPhaseTimings>,
+    all_features: bool,
+    catalog: &ToolCatalog,
+) -> Result<
+    (
+        crate::inventory::Inventories,
+        Vec<crate::select_tofu::TofuSelectionUnit>,
+    ),
+    OrchestratorError,
+> {
+    match phases {
+        Some(phases) => run_inventories_with_phase_timings_and_all_features(
+            root,
+            candidates,
+            files,
+            reads,
+            phases,
+            all_features,
+            catalog,
+        ),
+        None => {
+            run_inventories_with_all_features(root, candidates, files, reads, all_features, catalog)
+        }
+    }
 }
 
 fn rust_all_features(config: &VelnorConfig) -> bool {
