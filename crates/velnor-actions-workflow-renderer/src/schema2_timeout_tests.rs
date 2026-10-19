@@ -36,7 +36,7 @@ fn every_schema2_family_renders_only_bounded_executable_jobs() {
         .iter()
         .filter(|file| file.path.starts_with(".github/workflows/"))
         .collect();
-    assert_eq!(workflows.len(), 6);
+    assert_eq!(workflows.len(), 7);
     for workflow in workflows {
         let timeouts: Vec<_> = workflow
             .bytes

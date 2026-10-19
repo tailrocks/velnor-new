@@ -63,6 +63,8 @@ pub mod release_eligibility;
 mod resource_probe_image;
 #[path = "schema2_image_release.rs"]
 mod schema2_image_release;
+#[path = "schema2_job_image_candidate.rs"]
+pub mod schema2_job_image_candidate;
 pub use product_release_pins::ProductReleasePins;
 
 /// Render the generic one-package consumer binary release workflow.
@@ -197,6 +199,11 @@ pub fn render_schema2_workflows(
             MONITORING_WORKFLOW,
             &request.version,
             &route_workflow(request, MONITORING_WORKFLOW, monitoring(request)?)?,
+        )?);
+    }
+    if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
+        files.push(schema2_job_image_candidate::render_candidate_workflow(
+            request,
         )?);
     }
     Ok(files)
