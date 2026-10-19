@@ -79,12 +79,7 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
             &catalog,
         )?,
         resource_probe_build_argv: resource_probe_build_argv(&catalog)?,
-        actionlint_argv: exec_argv(
-            &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
-            "actionlint",
-            &["-color"],
-            &catalog,
-        )?,
+        actionlint_argv: release_actionlint_argv(&catalog)?,
         // Scrubbed like the validator vector: an empty-string GH_TOKEN
         // makes zizmor abort, while an absent one is clean offline.
         zizmor_argv: with_env_unset_argv(&exec_argv(
@@ -102,6 +97,19 @@ pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, Orche
         rust_version: catalog.version(PinnedTool::Rust).to_owned(),
         mr_boxington_version: catalog.version(PinnedTool::MrBoxington).to_owned(),
     })
+}
+
+/// Release gates use the same narrow syntax bridge as ordinary workflow lint.
+fn release_actionlint_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
+    let mut args = vec!["-color".to_owned()];
+    args.extend(velnor_actions_actionlint::step_parallelism_ignore_args());
+    let borrowed = args.iter().map(String::as_str).collect::<Vec<_>>();
+    exec_argv(
+        &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
+        "actionlint",
+        &borrowed,
+        catalog,
+    )
 }
 
 fn resource_probe_target_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
@@ -213,3 +221,7 @@ fn contract_error(problem: impl std::fmt::Display) -> OrchestratorError {
 #[cfg(test)]
 #[path = "product_release_pins_mbx_tests.rs"]
 mod mbx_tests;
+
+#[cfg(test)]
+#[path = "product_release_pins_actionlint_tests.rs"]
+mod actionlint_tests;

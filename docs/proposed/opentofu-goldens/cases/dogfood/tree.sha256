@@ -25,7 +25,7 @@ ad8a4ff8b7d22279ceb622001072a6a4e1324be5a43297d404f9610ce7fe2f71  ./.github/work
 b6ae33ecdbe582c8da9932b5ede2684b296e43a2468f245a47e0cb281bc94e29  ./.github/workflows/freshness.yml
 ae091e5d607b102e23291ed50b5a19b8602659376b03bf1c81cb3fb4f960ec30  ./.github/workflows/job-image-candidate.yml
 3d4848bd284ae4d4d3670bce991c72b5cdb97f57d1f7ddd08017f311c89c97e2  ./.github/workflows/product-release-binary.yml
-09da5ac4a49790c7a740e6399d8383241c22033b4d3795dd26df310c92b99c7a  ./.github/workflows/product-release-generator.yml
+23ad10c2fd9e01022b8cec0069b3fc46b4394d95737146eeef3afdba1447ee3c  ./.github/workflows/product-release-generator.yml
 28e26549ba27d269d8e1c3314fa6de2fee99fc34e30ddc1dda14be30ae768091  ./.github/workflows/product-release-images.yml
-bff5708342b98ece9dbf81eb93d7bf561b683118ee3334d8fd6722ab4148d23b  ./.github/workflows/product-release.yml
+055102da322de0a318fe4ad2836ab5fb15fae4c811069e094a4315fe3489216c  ./.github/workflows/product-release.yml
 c71a0d361dbaa0b770b5bd2a030d120f1a4f6147b6c9f66811d8380d0b68feb3  ./.github/workflows/qualification.yml

@@ -64,12 +64,7 @@ pub(super) fn test_pins() -> ProductReleasePins {
         install_resource_probe_target_argv,
         runner_build_argv: build.runner,
         resource_probe_build_argv: build.resource_probe,
-        actionlint_argv: exec_argv(
-            &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
-            "actionlint",
-            &["-color"],
-            &catalog,
-        ),
+        actionlint_argv: actionlint_argv(&catalog),
         zizmor_argv: with_env_unset_argv(&exec_argv(
             &[PinnedTool::Zizmor],
             "zizmor",
@@ -226,4 +221,77 @@ fn target_argv(host: ReleaseTarget, target: &str, catalog: &ToolCatalog) -> Vec<
         .into_iter()
         .map(|arg| arg.into_string().expect("Mise argv is UTF-8"))
         .collect()
+}
+
+fn actionlint_argv(catalog: &ToolCatalog) -> Vec<String> {
+    let mut args = vec!["-color".to_owned()];
+    args.extend(velnor_actions_actionlint::step_parallelism_ignore_args());
+    let borrowed = args.iter().map(String::as_str).collect::<Vec<_>>();
+    exec_argv(
+        &[PinnedTool::Actionlint, PinnedTool::Shellcheck],
+        "actionlint",
+        &borrowed,
+        catalog,
+    )
+}
+
+#[test]
+fn root_and_generator_release_gates_keep_the_authoritative_actionlint_bridge() {
+    use super::Schema2WorkflowRequest;
+    use velnor_actions_contract::RoutingWorkflow;
+    let pins = test_pins();
+    let expected = crate::commands::join_argv_for_run(&pins.actionlint_argv)
+        .expect("valid pinned release argv");
+    let request = Schema2WorkflowRequest {
+        version: "2.0.0".to_owned(),
+        hosted_label: "ubuntu-26.04".to_owned(),
+        scale_set: Schema2WorkflowRequest::canonical_scale_set().expect("selector"),
+        workflows: [RoutingWorkflow::GeneratorRelease].into_iter().collect(),
+        mbx_qualification: None,
+        mise_pin_qualification: None,
+        product_release: Some(pins),
+    };
+    let root = super::product_release::render(&request)
+        .expect("root release render")
+        .expect("selected release");
+    let generator =
+        super::generator_release::generator_release(&request).expect("generator release render");
+    assert_actionlint_step(&root.workflow, &expected);
+    assert_actionlint_step(&generator.workflow, &expected);
+}
+
+fn assert_actionlint_step(document: &crate::Yaml, expected: &str) {
+    use crate::Yaml;
+    fn field<'a>(value: &'a Yaml, name: &str) -> &'a Yaml {
+        let Yaml::Map(fields) = value else {
+            panic!("expected mapping")
+        };
+        &fields
+            .iter()
+            .find(|(key, _)| key == name)
+            .expect("required field")
+            .1
+    }
+    let Yaml::Map(jobs) = field(document, "jobs") else {
+        panic!("jobs")
+    };
+    let mut runs = Vec::new();
+    for (_, job) in jobs {
+        // Reusable-workflow call jobs have no local step list.
+        if matches!(job, Yaml::Map(fields) if fields.iter().any(|(key, _)| key == "uses")) {
+            continue;
+        }
+        let Yaml::Seq(steps) = field(job, "steps") else {
+            panic!("steps")
+        };
+        for step in steps {
+            if field(step, "name") == &Yaml::str("Run actionlint") {
+                let Yaml::Str(run) = field(step, "run") else {
+                    panic!("run")
+                };
+                runs.push(run.trim());
+            }
+        }
+    }
+    assert_eq!(runs, [expected]);
 }
