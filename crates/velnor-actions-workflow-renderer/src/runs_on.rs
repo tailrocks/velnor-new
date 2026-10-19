@@ -1,6 +1,6 @@
 //! Render a typed [`RunsOn`] value. Hosted stays a scalar string.
 
-use velnor_actions_contract::{ReleaseTarget, RunsOn, SCALE_SET_NAME};
+use velnor_actions_contract::{ReleaseTarget, RunsOn};
 
 use crate::{RenderError, yaml::Yaml};
 
@@ -8,10 +8,7 @@ use crate::{RenderError, yaml::Yaml};
 pub(crate) fn target_for_runner(label: &str) -> Option<&'static str> {
     match RunsOn::parse(label).ok()? {
         RunsOn::Hosted(label) => ReleaseTarget::for_runner_label(&label).map(ReleaseTarget::triple),
-        RunsOn::ScaleSet(selector) if selector.name() == SCALE_SET_NAME => {
-            Some(ReleaseTarget::LinuxX86_64.triple())
-        }
-        RunsOn::ScaleSet(_) => None,
+        RunsOn::ScaleSet(_) => Some(ReleaseTarget::LinuxX86_64.triple()),
     }
 }
 

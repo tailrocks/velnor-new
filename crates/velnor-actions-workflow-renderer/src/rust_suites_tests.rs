@@ -372,3 +372,6 @@ fn multi_workflow_grouping_and_non_matrix_tools_cache_writer_election() -> TestR
     assert!(!run_section.contains("name: Save Mise tools\n"));
     Ok(())
 }
+
+#[path = "rust_suites_custom_selector_tests.rs"]
+mod custom_selector_tests;
