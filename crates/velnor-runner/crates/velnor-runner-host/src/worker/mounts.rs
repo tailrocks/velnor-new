@@ -20,7 +20,7 @@ use velnor_runner_core::runner_work_path;
 
 pub(super) fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostError> {
     let budget = spec.resource_budget;
-    let mut mounts = docker_mounts(&spec.mounts, spec.privileged)?.unwrap_or_default();
+    let mut mounts = docker_mounts(&spec.mounts)?.unwrap_or_default();
     mounts.extend(bind_mounts(spec)?);
     let limits = if spec.privileged {
         budget.dind()
@@ -101,24 +101,20 @@ fn bind_mounts(spec: &CreateProjection) -> Result<Vec<DockerMount>, HostError> {
         .collect())
 }
 
-fn docker_mounts(
-    mounts: &[Mount],
-    no_copy_work: bool,
-) -> Result<Option<Vec<DockerMount>>, HostError> {
+fn docker_mounts(mounts: &[Mount]) -> Result<Option<Vec<DockerMount>>, HostError> {
     if mounts.is_empty() {
         return Ok(None);
     }
     let mut out = Vec::with_capacity(mounts.len());
     for mount in mounts {
-        out.push(docker_mount(mount, no_copy_work)?);
+        out.push(docker_mount(mount)?);
     }
     Ok(Some(out))
 }
 
-fn docker_mount(mount: &Mount, no_copy_work: bool) -> Result<DockerMount, HostError> {
+fn docker_mount(mount: &Mount) -> Result<DockerMount, HostError> {
     let (typ, source) = mount_source(&mount.source)?;
-    let no_copy =
-        mount.target == "/home/runner" || no_copy_work && mount.target == runner_work_path();
+    let no_copy = mount.target == "/home/runner" || mount.target == runner_work_path();
     let volume_options = no_copy.then_some(MountVolumeOptions {
         no_copy: Some(true),
         ..Default::default()
@@ -226,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn home_volume_is_separate_from_work_and_uses_no_copy() -> Result<(), HostError> {
+    fn home_and_work_volumes_are_separate_and_use_no_copy() -> Result<(), HostError> {
         for spec in [runner()?, dind_create("worker_a", test_resource_budget()?)?] {
             let host = host_config(&spec)?;
             let mounts = host.mounts.as_ref().ok_or(HostError::Docker)?;
@@ -253,7 +249,7 @@ mod tests {
                 work.volume_options
                     .as_ref()
                     .and_then(|options| options.no_copy),
-                spec.privileged.then_some(true)
+                Some(true)
             );
         }
         Ok(())

@@ -7,6 +7,8 @@ use bollard::models::{HostConfigCgroupnsModeEnum, MountType};
 use super::super::mounts::{label_map, mount_source};
 use super::super::{CreateProjection, identity_labels_match, launch_identity_labels_match};
 use crate::error::HostError;
+use bollard::models::MountVolumeOptions;
+use velnor_runner_core::runner_work_path;
 
 mod environment;
 use environment::environment_matches;
@@ -50,7 +52,7 @@ fn topology_matches(
         || host.privileged != Some(spec.privileged)
         || host.cgroupns_mode != Some(HostConfigCgroupnsModeEnum::PRIVATE)
         || !resource_limits_match(spec, host)
-        || !home_no_copy_matches(spec, host)
+        || !home_and_work_no_copy_match(spec, host)
         || !network_matches(spec.network_mode.as_deref(), host.network_mode.as_deref())
     {
         return Ok(false);
@@ -58,28 +60,39 @@ fn topology_matches(
     Ok(expected_mounts(spec)? == observed_mounts(found)?)
 }
 
-fn home_no_copy_matches(spec: &CreateProjection, host: &bollard::models::HostConfig) -> bool {
-    let homes: Vec<_> = spec
-        .mounts
-        .iter()
-        .filter(|mount| mount.target == "/home/runner")
-        .collect();
-    if homes.len() != 1 {
-        return false;
-    }
+fn home_and_work_no_copy_match(
+    spec: &CreateProjection,
+    host: &bollard::models::HostConfig,
+) -> bool {
     let Some(mounts) = host.mounts.as_ref() else {
         return false;
     };
-    let expected = homes[0];
-    mounts.iter().any(|mount| {
-        mount.target.as_deref() == Some(expected.target.as_str())
-            && mount.source.as_deref() == expected.source.strip_prefix("volume:")
-            && mount.typ == Some(MountType::VOLUME)
-            && mount
-                .volume_options
-                .as_ref()
-                .is_some_and(|options| options.no_copy == Some(true))
-    })
+    let work_target = runner_work_path();
+    ["/home/runner", work_target.as_str()]
+        .into_iter()
+        .all(|target| {
+            let expected: Vec<_> = spec
+                .mounts
+                .iter()
+                .filter(|mount| mount.target == target)
+                .collect();
+            let actual: Vec<_> = mounts
+                .iter()
+                .filter(|mount| mount.target.as_deref() == Some(target))
+                .collect();
+            if expected.len() != 1 || actual.len() != 1 {
+                return false;
+            }
+            let expected = expected[0];
+            let actual = actual[0];
+            let expected_options = MountVolumeOptions {
+                no_copy: Some(true),
+                ..Default::default()
+            };
+            actual.source.as_deref() == expected.source.strip_prefix("volume:")
+                && actual.typ == Some(MountType::VOLUME)
+                && actual.volume_options.as_ref() == Some(&expected_options)
+        })
 }
 
 fn execution_matches(spec: &CreateProjection, config: &bollard::models::ContainerConfig) -> bool {

@@ -12,6 +12,7 @@ use crate::error::HostError;
 use crate::launch_identity::LaunchIdentity;
 use crate::worker::mounts::label_map;
 use crate::worker::{CreateProjection, dind_create_for_identity, runner_create_for_identity};
+use velnor_runner_core::runner_work_path;
 
 use super::{inspect_labels_match, same_launch, topology_matches, validate_existing_row};
 
@@ -19,6 +20,10 @@ use super::{inspect_labels_match, same_launch, topology_matches, validate_existi
 mod cgroupns;
 #[path = "containers_limits_tests.rs"]
 mod limits;
+#[path = "containers_no_copy_tests.rs"]
+mod no_copy;
+#[path = "containers_runtime_tests.rs"]
+mod runtime;
 #[path = "containers_topology_tests.rs"]
 mod topology;
 
@@ -54,6 +59,7 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
     let mut mounts = Vec::with_capacity(spec.mounts.len() + spec.bind_mounts.len());
     let mut host_mounts = Vec::with_capacity(spec.mounts.len());
     let mut env = vec![UBUNTU_PATH.to_owned()];
+    let work_target = runner_work_path();
     env.extend(spec.env.iter().cloned());
     for mount in &spec.mounts {
         let name = mount
@@ -71,8 +77,7 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
             target: Some(mount.target.clone()),
             source: Some(name.to_owned()),
             typ: Some(MountType::VOLUME),
-            volume_options: (mount.target == "/home/runner"
-                || spec.privileged && mount.target == "/home/runner/_work")
+            volume_options: (mount.target == "/home/runner" || mount.target == work_target)
                 .then_some(MountVolumeOptions {
                     no_copy: Some(true),
                     ..Default::default()
@@ -117,29 +122,6 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
         mounts: Some(mounts),
         ..Default::default()
     })
-}
-
-#[test]
-fn topology_rejects_home_copy_up_or_missing_host_mount() -> Result<(), HostError> {
-    let spec = runner_create_for_identity(&identity()?, None)?;
-    let mut inspected = inspect_projection(&spec)?;
-    let host = inspected.host_config.as_mut().ok_or(HostError::Ownership)?;
-    let mounts = host.mounts.as_mut().ok_or(HostError::Ownership)?;
-    let home = mounts
-        .iter_mut()
-        .find(|mount| mount.target.as_deref() == Some("/home/runner"))
-        .ok_or(HostError::Ownership)?;
-    home.volume_options = None;
-    assert!(!topology_matches(&spec, &inspected)?);
-
-    let mut inspected = inspect_projection(&spec)?;
-    inspected
-        .host_config
-        .as_mut()
-        .ok_or(HostError::Ownership)?
-        .mounts = None;
-    assert!(!topology_matches(&spec, &inspected)?);
-    Ok(())
 }
 
 #[test]
@@ -393,16 +375,6 @@ fn runner_topology_rejects_stdin_flag_drift() -> Result<(), HostError> {
 }
 
 #[test]
-fn runner_topology_rejects_tty_drift() -> Result<(), HostError> {
-    let spec = runner_create_for_identity(&identity()?, None)?;
-    let mut inspected = inspect_projection(&spec)?;
-    inspected.config.as_mut().ok_or(HostError::Ownership)?.tty = Some(true);
-
-    assert!(!topology_matches(&spec, &inspected)?);
-    Ok(())
-}
-
-#[test]
 fn runner_topology_rejects_user_and_working_directory_drift() -> Result<(), HostError> {
     let spec = runner_create_for_identity(&identity()?, None)?;
     let valid = inspect_projection(&spec)?;
@@ -418,19 +390,5 @@ fn runner_topology_rejects_user_and_working_directory_drift() -> Result<(), Host
         .ok_or(HostError::Ownership)?
         .working_dir = Some("/".to_owned());
     assert!(!topology_matches(&spec, &wrong_directory)?);
-    Ok(())
-}
-
-#[test]
-fn dind_topology_rejects_entrypoint_override() -> Result<(), HostError> {
-    let spec = dind_create_for_identity(&identity()?)?;
-    let mut inspected = inspect_projection(&spec)?;
-    inspected
-        .config
-        .as_mut()
-        .ok_or(HostError::Ownership)?
-        .entrypoint = Some(vec!["/bin/echo".to_owned()]);
-
-    assert!(!topology_matches(&spec, &inspected)?);
     Ok(())
 }

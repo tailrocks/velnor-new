@@ -107,7 +107,7 @@ fn runner_create_rejects_empty_or_mismatched_plan_mounts() -> Result<(), HostErr
 }
 
 #[test]
-fn dind_disables_work_volume_copy_and_runner_keeps_default_copy() -> Result<(), HostError> {
+fn runner_and_dind_disable_copy_for_home_and_work_volumes() -> Result<(), HostError> {
     let identity = identity()?;
     let target = runner_work_path();
     let runner = bollard_create(&runner_create_for_identity(&identity, None)?)?;
@@ -130,7 +130,7 @@ fn dind_disables_work_volume_copy_and_runner_keeps_default_copy() -> Result<(), 
         .ok_or(HostError::Docker)?;
 
     assert_eq!(runner_work["Type"].as_str(), Some("volume"));
-    assert!(runner_work.get("VolumeOptions").is_none());
+    assert_eq!(runner_work["VolumeOptions"]["NoCopy"].as_bool(), Some(true));
     assert_eq!(dind_work["Type"].as_str(), Some("volume"));
     assert_eq!(dind_work["Source"], runner_work["Source"]);
     assert_eq!(dind_work["VolumeOptions"]["NoCopy"].as_bool(), Some(true));
@@ -140,22 +140,20 @@ fn dind_disables_work_volume_copy_and_runner_keeps_default_copy() -> Result<(), 
         .find(|mount| mount["Target"].as_str() == Some("/home/runner"))
         .ok_or(HostError::Docker)?;
     assert_eq!(runner_home["VolumeOptions"]["NoCopy"].as_bool(), Some(true));
-    let runner_work = runner_mounts
+    let dind_home = dind_mounts
         .iter()
-        .find(|mount| mount["Target"].as_str() == Some(target.as_str()))
+        .find(|mount| mount["Target"].as_str() == Some("/home/runner"))
         .ok_or(HostError::Docker)?;
-    assert!(runner_work.get("VolumeOptions").is_none());
-    for mount in dind_mounts {
-        let no_copy = mount
-            .get("VolumeOptions")
-            .and_then(|options| options.get("NoCopy"))
-            .and_then(serde_json::Value::as_bool);
-        if mount["Target"].as_str() == Some(target.as_str())
-            || mount["Target"].as_str() == Some("/home/runner")
-        {
-            assert_eq!(no_copy, Some(true));
-        } else {
-            assert_ne!(no_copy, Some(true));
+    assert_eq!(dind_home["VolumeOptions"]["NoCopy"].as_bool(), Some(true));
+    for mounts in [runner_mounts, dind_mounts] {
+        for mount in mounts {
+            let mount_target = mount["Target"].as_str();
+            let no_copy = mount["VolumeOptions"]["NoCopy"].as_bool();
+            if mount_target == Some("/home/runner") || mount_target == Some(target.as_str()) {
+                assert_eq!(no_copy, Some(true));
+            } else {
+                assert_ne!(no_copy, Some(true));
+            }
         }
     }
     Ok(())
