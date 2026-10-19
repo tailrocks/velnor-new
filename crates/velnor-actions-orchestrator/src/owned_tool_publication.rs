@@ -21,7 +21,7 @@ use crate::{OrchestratorError, prepare::GenerationPreparation, workflow::CHECKOU
 pub(crate) const SOURCE_APPROVAL_PATH: &str = ".velnor/owned-tool-sources.json";
 
 pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, OrchestratorError> {
-    files_with_routing(prep, &WorkflowRoutingPolicy::Preserve)
+    files_with_routing(prep, &WorkflowRoutingPolicy::hosted_only())
 }
 
 pub(crate) fn files_with_routing(
@@ -49,7 +49,7 @@ pub(crate) fn files_for_trigger(
     root: &Path,
     trigger: SourceQualificationTrigger,
 ) -> Result<Vec<RenderedFile>, OrchestratorError> {
-    files_for_trigger_with_routing(root, trigger, &WorkflowRoutingPolicy::Preserve)
+    files_for_trigger_with_routing(root, trigger, &WorkflowRoutingPolicy::hosted_only())
 }
 
 fn files_for_trigger_with_routing(

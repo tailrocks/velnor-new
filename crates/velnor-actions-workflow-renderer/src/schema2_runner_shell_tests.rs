@@ -7,7 +7,6 @@ use super::{
     qualification, render_schema2_workflows,
 };
 use crate::setup::MiseSetup;
-use crate::workflow_routing::WorkflowRoutingPolicy;
 use crate::yaml::Yaml;
 
 fn request() -> Schema2WorkflowRequest {
@@ -16,7 +15,7 @@ fn request() -> Schema2WorkflowRequest {
         version: "2.0.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: scale_set.clone(),
-        routing: WorkflowRoutingPolicy::from_mode(ExecutionMode::Both, scale_set),
+        routing: crate::workflow_routing::test_policy(ExecutionMode::Both, scale_set),
         workflows: BTreeSet::from([RoutingWorkflow::Qualification]),
         mbx_qualification: Some(MbxQualificationPins {
             mise_setup: MiseSetup {
@@ -52,7 +51,7 @@ fn request() -> Schema2WorkflowRequest {
 fn scale_set_mode_emits_only_the_full_ci_verification_wrapper() {
     let mut request = request();
     request.routing =
-        WorkflowRoutingPolicy::from_mode(ExecutionMode::ScaleSet, request.scale_set.clone());
+        crate::workflow_routing::test_policy(ExecutionMode::ScaleSet, request.scale_set.clone());
     let workflow = render_schema2_workflows(&request)
         .expect("scale-set wrapper renders without host jobs")
         .into_iter()
@@ -106,7 +105,7 @@ fn hosted_qualification_keeps_its_both_mode_default() {
 fn scale_set_mode_routes_monitoring_controls_to_the_scale_set() {
     let mut request = request();
     request.routing =
-        WorkflowRoutingPolicy::from_mode(ExecutionMode::ScaleSet, request.scale_set.clone());
+        crate::workflow_routing::test_policy(ExecutionMode::ScaleSet, request.scale_set.clone());
     request.workflows = BTreeSet::from([RoutingWorkflow::Monitoring]);
     let files = render_schema2_workflows(&request).expect("monitoring renders");
     let monitoring = files

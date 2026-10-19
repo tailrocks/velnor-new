@@ -108,7 +108,7 @@ fn valid_rust_version(value: &str) -> bool {
 ///
 /// Returns [`RenderError`] for invalid spec scalars or steps.
 pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, RenderError> {
-    render_freshness_workflow_with_routing(spec, &WorkflowRoutingPolicy::Preserve)
+    render_freshness_workflow_with_routing(spec, &WorkflowRoutingPolicy::hosted_only())
 }
 
 /// Render the freshness workflow with the generator's effective placement policy.

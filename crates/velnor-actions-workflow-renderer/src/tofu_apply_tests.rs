@@ -3,7 +3,6 @@ use super::{
     render_tofu_apply_workflow, render_tofu_apply_workflow_with_routing,
 };
 use crate::MiseSetup;
-use crate::workflow_routing::WorkflowRoutingPolicy;
 use velnor_actions_contract::{
     GitHubTokenSecret, S3BackendConfig, TofuApplyConfig, Utf8RepoRelDir,
 };
@@ -87,7 +86,8 @@ fn output_matches_generator_golden_snapshot() {
 
 #[test]
 fn scale_set_routes_the_protected_linux_apply_job() {
-    let policy = WorkflowRoutingPolicy::ScaleSet(
+    let policy = crate::workflow_routing::test_policy(
+        velnor_actions_contract::ExecutionMode::ScaleSet,
         crate::schema2::Schema2WorkflowRequest::canonical_scale_set().expect("selector"),
     );
     let file = render_tofu_apply_workflow_with_routing(&spec(), &policy).expect("render");

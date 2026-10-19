@@ -39,7 +39,7 @@ pub(super) const BINARY_RELEASE_WORKFLOW: &str = ".github/workflows/binary-relea
 pub(super) fn render(spec: &ConsumerBinaryReleaseSpec) -> Result<RenderedFile, RenderError> {
     render_with_routing(
         spec,
-        &crate::workflow_routing::WorkflowRoutingPolicy::Preserve,
+        &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
     )
 }
 

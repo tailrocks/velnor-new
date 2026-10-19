@@ -152,10 +152,8 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
     let binary = required_file(&tree, ".github/workflows/product-release-binary.yml")?;
     assert_image_producer(images)?;
     assert_macos_producer(binary)?;
-    assert_eq!(
-        required_file(&tree, ".github/workflows/monitoring.yml")?,
-        &marked(MONITORING)
-    );
+    let monitoring = required_file(&tree, ".github/workflows/monitoring.yml")?;
+    assert_eq!(monitoring, &marked(MONITORING));
     Ok(())
 }
 
@@ -333,7 +331,7 @@ fn execution_ids() -> &'static str {
 }
 
 fn profiles() -> &'static str {
-    "[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\""
+    "[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\njob_container_image = \"ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\""
 }
 
 fn marked(body: &str) -> String {

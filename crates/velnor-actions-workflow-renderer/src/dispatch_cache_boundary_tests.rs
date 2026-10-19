@@ -234,11 +234,67 @@ fn generated_dispatch_plan_gates_native_mbx_and_tools_cache_steps() -> Result<()
         None,
         &context,
         &dispatch_mise(),
+        &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
     )?;
     let plan = jobs.get(PLAN_JOB_ID).expect("finalized plan job");
     assert_native_mbx_step(plan);
     assert_seed_and_mise_steps(plan)?;
     assert_rendered_dispatch_guard(&ir, &context)?;
+    Ok(())
+}
+
+#[test]
+fn finalization_requires_and_uses_the_selected_routing_policy() -> Result<(), crate::RenderError> {
+    let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
+    let mut ir = dispatch_ir(dispatch_plan_job(&staged)?);
+    let selector = velnor_actions_contract::ScaleSetSelector::try_new(
+        "ubuntu-26.04-scale-set",
+        &["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()],
+    )
+    .expect("valid test selector");
+    ir.jobs
+        .get_mut(PLAN_JOB_ID)
+        .expect("dispatch plan job")
+        .runs_on = selector.token();
+    let context = dispatch_render_context(staged);
+    let mise = dispatch_mise();
+    let hosted = crate::workflow_routing::WorkflowRoutingPolicy::hosted_only();
+    let error = crate::render::finalize_jobs(
+        &ir,
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &context,
+        &mise,
+        &hosted,
+    )
+    .expect_err("hosted policy rejects selector leaves");
+    assert!(
+        error
+            .to_string()
+            .contains("scale_set_selector_unconfigured"),
+        "{error}"
+    );
+
+    let image = velnor_actions_contract::config::ValidatedImageReference::parse(
+        "ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )
+    .expect("valid test image");
+    let scale_set = crate::workflow_routing::WorkflowRoutingPolicy::configured(
+        velnor_actions_contract::ExecutionMode::Both,
+        selector,
+        Some(image),
+    );
+    assert!(
+        crate::render::finalize_jobs(
+            &ir,
+            WorkflowPolicy::ConsumerV1,
+            None,
+            &context,
+            &mise,
+            &scale_set,
+        )
+        .is_ok()
+    );
     Ok(())
 }
 

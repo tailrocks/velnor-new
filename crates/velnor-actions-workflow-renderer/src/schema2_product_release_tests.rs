@@ -5,7 +5,6 @@ use std::process::Command;
 use velnor_actions_contract::{ExecutionMode, RoutingWorkflow};
 
 use crate::schema2::{Schema2WorkflowRequest, render_schema2_workflows};
-use crate::workflow_routing::WorkflowRoutingPolicy;
 use crate::yaml::render_yaml;
 
 use super::super::product_release_family as family;
@@ -31,7 +30,7 @@ fn request(
         version: "2.0.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: scale_set.clone(),
-        routing: WorkflowRoutingPolicy::from_mode(mode, scale_set),
+        routing: crate::workflow_routing::test_policy(mode, scale_set),
         workflows: BTreeSet::from_iter(families.iter().copied()),
         mbx_qualification: None,
         mise_pin_qualification: None,
@@ -108,7 +107,7 @@ fn empty_release_request_emits_no_workflow() -> Result<(), Box<dyn Error>> {
         version: "2.0.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: scale_set.clone(),
-        routing: WorkflowRoutingPolicy::from_mode(ExecutionMode::Hosted, scale_set),
+        routing: crate::workflow_routing::test_policy(ExecutionMode::Hosted, scale_set),
         workflows: BTreeSet::new(),
         mbx_qualification: None,
         mise_pin_qualification: None,

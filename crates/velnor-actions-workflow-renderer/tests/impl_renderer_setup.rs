@@ -356,6 +356,61 @@ fn public_ephemeral_ir_rejects_fork_admission_bypass() -> Result<(), RenderError
 }
 
 #[test]
+fn strict_scale_set_mode_rejects_typed_darwin_ephemeral_check() -> Result<(), RenderError> {
+    use velnor_actions_contract::config::{
+        CheckExecutor, CheckPlatform, CheckRunner, EPHEMERAL_CHECK_ADMISSION_CONDITION,
+        SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL, ValidatedImageReference,
+    };
+    use velnor_actions_contract::{ExecutionMode, WorkflowPolicy};
+    use velnor_actions_workflow_renderer::workflow_routing::WorkflowRoutingPolicy;
+
+    let mut check = job(
+        "check-external",
+        "Check / external",
+        Vec::new(),
+        vec![checkout_step(&checkout_pin())?],
+    );
+    check.1.runs_on = "native-scale-set".to_owned();
+    check.1.condition = Some(EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned());
+    check.1.check_runner = Some(CheckRunner {
+        label: "native-scale-set".to_owned(),
+        platform: CheckPlatform::MacosArm64,
+        executor: CheckExecutor::EphemeralSelfHosted,
+        container: None,
+    });
+    let selector = ScaleSetSelector::try_new(
+        SCALE_SET_NAME,
+        &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
+    )
+    .map_err(|_| RenderError::InvalidWorkflow("bad_scale_set".to_owned()))?;
+    let image = ValidatedImageReference::parse(
+        "ghcr.io/tailrocks/velnor-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )
+    .map_err(|_| RenderError::InvalidWorkflow("bad_test_image".to_owned()))?;
+    let routing = WorkflowRoutingPolicy::configured(ExecutionMode::ScaleSet, selector, Some(image));
+    let result =
+        velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared_with_routing(
+            &fixture_ir(vec![check]),
+            WorkflowPolicy::ConsumerV1,
+            None,
+            &fixture_ctx(),
+            &mise(),
+            &routing,
+        );
+    let Err(error) = result else {
+        return Err(RenderError::InvalidWorkflow(
+            "scale_set_mode_accepted_native_check".to_owned(),
+        ));
+    };
+    assert!(
+        error
+            .to_string()
+            .contains("typed_ephemeral_check_policy_invalid")
+    );
+    Ok(())
+}
+
+#[test]
 fn native_check_without_catalog_tools_still_bootstraps_mise() -> Result<(), RenderError> {
     use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
     use velnor_actions_workflow_renderer::setup::MISE_BINARY_SHA256_MACOS_ARM64;

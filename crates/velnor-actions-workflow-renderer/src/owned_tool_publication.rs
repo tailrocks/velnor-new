@@ -147,7 +147,7 @@ impl OwnedPublicationSpec {
 pub fn render_owned_publication_files(
     spec: &OwnedPublicationSpec,
 ) -> Result<Vec<RenderedFile>, RenderError> {
-    render_owned_publication_files_with_routing(spec, &WorkflowRoutingPolicy::Preserve)
+    render_owned_publication_files_with_routing(spec, &WorkflowRoutingPolicy::hosted_only())
 }
 
 /// Render source candidate workflows under the generator's effective placement policy.

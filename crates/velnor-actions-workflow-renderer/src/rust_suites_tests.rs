@@ -346,7 +346,7 @@ fn multi_workflow_grouping_and_non_matrix_tools_cache_writer_election() -> TestR
     let helper_steps = BTreeMap::from([("ubuntu-24.04".to_owned(), verified_acquire_step())]);
     let files = render_suites_workflows_with_routing_and_helpers(
         &spec,
-        &WorkflowRoutingPolicy::Preserve,
+        &WorkflowRoutingPolicy::hosted_only(),
         &helper_steps,
     )?;
     assert_eq!(files.len(), 2);

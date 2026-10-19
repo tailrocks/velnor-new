@@ -5,7 +5,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::{Job, WorkflowIr};
 
 use super::{MatrixSource, RenderContext, RenderedWorkflow, WORKFLOW_PATH, fallback};
-use crate::{RenderError, document, matrix, steps};
+use crate::{
+    RenderError, document, matrix, steps,
+    workflow_routing::{WorkflowRoutingPolicy, route_workflow_yaml_for_jobs},
+};
 
 pub(crate) struct EmitSettings<'a> {
     pub(crate) matrix: Option<&'a (MatrixSource, u32)>,
@@ -31,9 +34,11 @@ pub(crate) fn emit_shared(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
     settings: &EmitSettings<'_>,
+    routing: &WorkflowRoutingPolicy,
 ) -> Result<RenderedWorkflow, RenderError> {
     let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(jobs);
     let mut document = document::workflow_to_yaml(ir, shared, ctx, &mbx_jobs)?;
+    document = route_workflow_yaml_for_jobs(WORKFLOW_PATH, document, routing, jobs)?;
     if let Some((source, max_parallel)) = settings.matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
     } else {

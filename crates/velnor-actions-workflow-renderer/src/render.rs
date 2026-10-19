@@ -120,7 +120,14 @@ pub fn render_workflow_ir_strict_shared(
     ctx: &RenderContext,
     mise: &MiseSetup,
 ) -> Result<RenderedWorkflow, RenderError> {
-    let jobs = finalize_jobs(ir, policy, support, ctx, mise)?;
+    let jobs = finalize_jobs(
+        ir,
+        policy,
+        support,
+        ctx,
+        mise,
+        &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
+    )?;
     render_merged(ir, &jobs, ctx)
 }
 
@@ -136,23 +143,6 @@ pub fn render_workflow_ir_strict_shared(
 /// Returns [`RenderError`] for invalid pins, context, IR, policy,
 /// missing setup/staging, or steps.
 pub fn finalize_jobs(
-    ir: &WorkflowIr,
-    policy: WorkflowPolicy,
-    support: Option<&VelnorSupportWorkflow>,
-    ctx: &RenderContext,
-    mise: &MiseSetup,
-) -> Result<BTreeMap<String, Job>, RenderError> {
-    finalize_jobs_with_routing(
-        ir,
-        policy,
-        support,
-        ctx,
-        mise,
-        &crate::workflow_routing::WorkflowRoutingPolicy::Preserve,
-    )
-}
-
-fn finalize_jobs_with_routing(
     ir: &WorkflowIr,
     policy: WorkflowPolicy,
     support: Option<&VelnorSupportWorkflow>,
@@ -219,6 +209,7 @@ fn finalize_jobs_with_routing(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    crate::workflow_routing::route_jobs(&mut jobs, routing)?;
     crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
     crate::cache_tar_setup::insert_launcher_steps(&mut jobs)?;
     validate_final_jobs(ir, &mut jobs)?;
@@ -285,6 +276,20 @@ fn render_merged(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
 ) -> Result<RenderedWorkflow, RenderError> {
+    render_merged_with_routing(
+        ir,
+        jobs,
+        ctx,
+        &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only(),
+    )
+}
+
+fn render_merged_with_routing(
+    ir: &WorkflowIr,
+    jobs: &BTreeMap<String, Job>,
+    ctx: &RenderContext,
+    routing: &crate::workflow_routing::WorkflowRoutingPolicy,
+) -> Result<RenderedWorkflow, RenderError> {
     let matrix = matrix::task_matrix_of(jobs)?;
     let caps = matrix::crate_job_caps(jobs)?;
     let suite_matrices = (
@@ -316,7 +321,7 @@ fn render_merged(
         suite_matrices: &suite_matrices,
         allow_step_aliases: false,
     };
-    match emit::emit_shared(ir, &shared, &jobs, ctx, &first_emit) {
+    match emit::emit_shared(ir, &shared, &jobs, ctx, &first_emit, routing) {
         Ok(workflow) => Ok(workflow),
         Err(error) if emit::workflow_file_too_large(&error) => {
             let extracted =
@@ -328,7 +333,7 @@ fn render_merged(
                 allow_step_aliases: true,
                 ..first_emit
             };
-            emit::emit_shared(ir, &shared, &jobs, ctx, &retry_emit)
+            emit::emit_shared(ir, &shared, &jobs, ctx, &retry_emit, routing)
         }
         Err(error) => Err(error),
     }

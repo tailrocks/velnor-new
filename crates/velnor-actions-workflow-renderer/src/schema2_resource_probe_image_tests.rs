@@ -6,7 +6,6 @@ use velnor_actions_contract::{ExecutionMode, RoutingWorkflow};
 use super::product_release_family::{self, Family};
 use super::product_release_test_pins::test_pins;
 use super::{Schema2WorkflowRequest, product_release, resource_probe_image};
-use crate::workflow_routing::WorkflowRoutingPolicy;
 use crate::yaml::{Yaml, render_yaml};
 
 const IMAGE_BUILD_SCRIPT: &str =
@@ -59,7 +58,7 @@ fn image_family_uses_pinned_musl_build_and_exact_five_file_inventory() -> Result
         version: "2.0.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: scale_set.clone(),
-        routing: WorkflowRoutingPolicy::from_mode(ExecutionMode::Hosted, scale_set),
+        routing: crate::workflow_routing::test_policy(ExecutionMode::Hosted, scale_set),
         workflows: BTreeSet::from([RoutingWorkflow::ImageRelease]),
         mbx_qualification: None,
         mise_pin_qualification: None,

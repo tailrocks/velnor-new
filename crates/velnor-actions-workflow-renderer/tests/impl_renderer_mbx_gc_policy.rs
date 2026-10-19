@@ -1,9 +1,13 @@
 //! Native MBX collection stays off until the guarded post-task cleanup.
 
+use velnor_actions_contract::ExecutionMode;
 use velnor_actions_contract::WorkflowPolicy;
-use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+use velnor_actions_contract::config::{
+    SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL, ValidatedImageReference,
+};
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_workflow_renderer::steps::{MBX_CACHE_MODE_ENV, checkout_step};
+use velnor_actions_workflow_renderer::workflow_routing::WorkflowRoutingPolicy;
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
@@ -206,19 +210,27 @@ fn render_mbx_lane_pair() -> Result<String, RenderError> {
         Vec::new(),
         vec![checkout, mbx[0].clone(), mbx[1].clone(), mbx[2].clone()],
     );
-    local.1.runs_on = ScaleSetSelector::try_new(
+    let selector = ScaleSetSelector::try_new(
         SCALE_SET_NAME,
         &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
     )
-    .map_err(|_| RenderError::InvalidWorkflow("bad_scale_set".to_owned()))?
-    .token();
-    let text = render_workflow_ir(
-        &fixture_ir(vec![hosted, local]),
-        WorkflowPolicy::ConsumerV1,
-        None,
-        &fixture_ctx(),
-    )?;
-    Ok(text)
+    .map_err(|_| RenderError::InvalidWorkflow("bad_scale_set".to_owned()))?;
+    local.1.runs_on = selector.token();
+    let image = ValidatedImageReference::parse(
+        "ghcr.io/tailrocks/velnor-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )
+    .map_err(|_| RenderError::InvalidWorkflow("bad_test_image".to_owned()))?;
+    let routing = WorkflowRoutingPolicy::configured(ExecutionMode::Hosted, selector, Some(image));
+    let rendered =
+        velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared_with_routing(
+            &fixture_ir(vec![hosted, local]),
+            WorkflowPolicy::ConsumerV1,
+            None,
+            &fixture_ctx(),
+            &mise(),
+            &routing,
+        )?;
+    Ok(rendered.yaml)
 }
 
 fn positions(text: &str, needle: &str) -> Vec<usize> {

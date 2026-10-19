@@ -1,8 +1,12 @@
 //! Shared renderer-owned runtime identity script emission and cold-lane routing.
 
-use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+use velnor_actions_contract::ExecutionMode;
+use velnor_actions_contract::config::{
+    SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL, ValidatedImageReference,
+};
 use velnor_actions_contract::{WorkflowIr, WorkflowPolicy};
 use velnor_actions_workflow_renderer::render::RenderedWorkflow;
+use velnor_actions_workflow_renderer::workflow_routing::WorkflowRoutingPolicy;
 use velnor_actions_workflow_renderer::{RenderError, checkout_step};
 
 use super::impl_renderer_fixtures::*;
@@ -46,12 +50,12 @@ fn render_cache_fixture(with_plan_dependency: bool) -> Result<RenderedWorkflow, 
             tool_step()?,
         ],
     );
-    local.1.runs_on = ScaleSetSelector::try_new(
+    let selector = ScaleSetSelector::try_new(
         SCALE_SET_NAME,
         &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
     )
-    .map_err(|_| RenderError::InvalidWorkflow("bad_scale_set".to_owned()))?
-    .token();
+    .map_err(|_| RenderError::InvalidWorkflow("bad_scale_set".to_owned()))?;
+    local.1.runs_on = selector.token();
     let unpaired = job(
         "unpaired",
         "Unpaired",
@@ -76,12 +80,18 @@ fn render_cache_fixture(with_plan_dependency: bool) -> Result<RenderedWorkflow, 
         ));
     }
     let ir = fixture_ir(jobs);
-    velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
+    let image = ValidatedImageReference::parse(
+        "ghcr.io/tailrocks/velnor-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )
+    .map_err(|_| RenderError::InvalidWorkflow("bad_test_image".to_owned()))?;
+    let routing = WorkflowRoutingPolicy::configured(ExecutionMode::Hosted, selector, Some(image));
+    velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared_with_routing(
         &ir,
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
         &mise(),
+        &routing,
     )
 }
 

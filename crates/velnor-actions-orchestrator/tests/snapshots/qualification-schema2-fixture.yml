@@ -28,6 +28,8 @@ jobs:
     steps:
       - name: Qualify scale-set lane
         run: echo qualification-scale-set
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   compare:
     name: Compare hosted and Velnor execution
     if: inputs.mode == 'both'
@@ -70,6 +72,8 @@ jobs:
         run: git rev-parse HEAD
       - name: Run JavaScript
         run: "node -e 'console.log(\"js-action-ok\")'"
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   services-hosted:
     name: Services / GitHub hosted
     if: inputs.mode == 'features' || inputs.mode == 'services'
@@ -82,7 +86,7 @@ jobs:
         ports:
           - "6379:6379"
     steps:
-      - name: Localhost port
+      - name: Service check
         run: timeout 20 bash -c 'until echo >/dev/tcp/127.0.0.1/6379; do sleep 1; done'
   services-scale-set:
     name: Services / Velnor Scale Set
@@ -99,8 +103,10 @@ jobs:
         ports:
           - "6379:6379"
     steps:
-      - name: Localhost port
-        run: timeout 20 bash -c 'until echo >/dev/tcp/127.0.0.1/6379; do sleep 1; done'
+      - name: Service check
+        run: timeout 20 bash -c 'until echo >/dev/tcp/redis/6379; do sleep 1; done'
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   artifacts-hosted:
     name: Artifacts / GitHub hosted
     if: inputs.mode == 'features' || inputs.mode == 'artifacts'
@@ -138,6 +144,8 @@ jobs:
           name: g4-proof-scale-set
           path: g4-proof.txt
           if-no-files-found: error
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   buildx-hosted:
     name: Buildx / GitHub hosted
     if: inputs.mode == 'features' || inputs.mode == 'buildx'
@@ -157,6 +165,8 @@ jobs:
     steps:
       - name: Buildx probe
         run: docker buildx version && printf 'FROM scratch\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   expect-fail-hosted:
     name: Expected negative / GitHub hosted
     if: inputs.mode == 'negative'
@@ -176,6 +186,8 @@ jobs:
     steps:
       - name: Intentional failure
         run: echo expected-negative && exit 1
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   composite-hosted:
     name: Composite / GitHub hosted
     if: inputs.mode == 'composite'
@@ -203,6 +215,8 @@ jobs:
           persist-credentials: "false"
       - name: Local composite
         uses: ./qualification/actions/composite # zizmor: ignore[self-repository]
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   js-pin-hosted:
     name: Pinned JavaScript / GitHub hosted
     if: inputs.mode == 'js-pin'
@@ -226,6 +240,8 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
         with:
           script: console.log('js-pin-ok')
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   docker-action-hosted:
     name: Docker action / GitHub hosted
     if: inputs.mode == 'docker-action'
@@ -253,6 +269,8 @@ jobs:
           persist-credentials: "false"
       - name: Local docker
         uses: ./qualification/actions/docker # zizmor: ignore[self-repository]
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   container-hosted:
     name: Container / GitHub hosted
     if: inputs.mode == 'container'
@@ -307,6 +325,8 @@ jobs:
         run: "mkdir -p \"$RUNNER_TEMP/g4-bin\" && printf '%s\\n' '#!/bin/sh' 'echo path-ok' > \"$RUNNER_TEMP/g4-bin/g4-path-ok\" && chmod +x \"$RUNNER_TEMP/g4-bin/g4-path-ok\" && echo proof=outputs-ok >> \"$GITHUB_OUTPUT\" && echo G4_ENV=outputs-ok >> \"$GITHUB_ENV\" && echo \"$RUNNER_TEMP/g4-bin\" >> \"$GITHUB_PATH\""
       - name: Check env and path
         run: "test \"$G4_ENV\" = outputs-ok && g4-path-ok | grep -qx path-ok"
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   outputs-hosted:
     name: Outputs / GitHub hosted
     if: inputs.mode == 'outputs'
@@ -338,6 +358,8 @@ jobs:
     steps:
       - name: Mask canary
         run: "echo \"::add-mask::g4-mask-canary\" && echo g4-mask-canary"
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   cache-scale-set:
     name: Cache / Velnor Scale Set
     if: inputs.mode == 'cache'
@@ -357,6 +379,8 @@ jobs:
         with:
           path: g4-cache.txt
           key: g4-cache-${{ github.run_id }}
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   cache-hosted:
     name: Cache / GitHub hosted
     if: inputs.mode == 'cache'
@@ -459,6 +483,8 @@ jobs:
         env:
           HIT: ${{ steps.space.outputs.cache-hit }}
         run: "grep -qx cache-ok \"g4 cache/note.txt\" && test \"$HIT\" = true"
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   oidc-hosted:
     name: OIDC / GitHub hosted
     if: inputs.mode == 'oidc'
@@ -484,6 +510,8 @@ jobs:
     steps:
       - name: Require OIDC request URL
         run: "test -n \"$ACTIONS_ID_TOKEN_REQUEST_URL\""
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   post-fail-hosted:
     name: Post failure / GitHub hosted
     if: inputs.mode == 'post-fail'
@@ -511,6 +539,8 @@ jobs:
           persist-credentials: "false"
       - name: Main fails post runs
         uses: ./qualification/actions/post-fail # zizmor: ignore[self-repository]
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   cancel-hosted:
     name: Cancel / GitHub hosted
     if: inputs.mode == 'cancel'
@@ -530,6 +560,8 @@ jobs:
     steps:
       - name: Sleep until cancelled
         run: sleep 180
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   compose-hosted:
     name: Compose / GitHub hosted
     if: inputs.mode == 'compose'
@@ -569,6 +601,8 @@ jobs:
         run: docker compose -f qualification/compose/stack.yml down --volumes
       - name: Record compose
         run: echo compose-ok
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   bind-hosted:
     name: Bind / GitHub hosted
     if: inputs.mode == 'bind'
@@ -588,6 +622,8 @@ jobs:
     steps:
       - name: Bind workspace file
         run: "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   cancel-service-hosted:
     name: Cancel service / GitHub hosted
     if: inputs.mode == 'cancel-service'
@@ -600,7 +636,7 @@ jobs:
         ports:
           - "6379:6379"
     steps:
-      - name: Probe service then sleep
+      - name: Service check
         run: "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 127.0.0.1 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 127.0.0.1 6379 && echo service-up && sleep 900"
   cancel-service-scale-set:
     name: Cancel service / Velnor Scale Set
@@ -617,8 +653,10 @@ jobs:
         ports:
           - "6379:6379"
     steps:
-      - name: Probe service then sleep
-        run: "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 127.0.0.1 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 127.0.0.1 6379 && echo service-up && sleep 900"
+      - name: Service check
+        run: "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 redis 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 redis 6379 && echo service-up && sleep 900"
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   testcontainers-hosted:
     name: Testcontainers / GitHub hosted
     if: inputs.mode == 'testcontainers'
@@ -646,6 +684,8 @@ jobs:
           persist-credentials: "false"
       - name: Install and reap
         run: npm ci --prefix qualification/testcontainers && node qualification/testcontainers/reap.mjs
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   submodule-hosted:
     name: Submodule / GitHub hosted
     if: inputs.mode == 'submodule'
@@ -677,6 +717,8 @@ jobs:
           persist-credentials: "false"
       - name: Prove submodule and LFS
         run: "git rev-parse HEAD > \"$RUNNER_TEMP/g4-head\" && grep -qx \"$GITHUB_SHA\" \"$RUNNER_TEMP/g4-head\" && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt"
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   ports-a-hosted:
     name: Ports A / GitHub hosted
     if: inputs.mode == 'ports'
@@ -704,6 +746,8 @@ jobs:
     steps:
       - name: Hold host port
         run: "docker run -d --name g4-hold -p 8080:80 alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   ports-b-scale-set:
     name: Ports B / Velnor Scale Set
     if: inputs.mode == 'ports'
@@ -715,6 +759,8 @@ jobs:
     steps:
       - name: Hold host port
         run: "docker run -d --name g4-hold -p 8080:80 alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   pressure-a-hosted:
     name: Pressure A / GitHub hosted
     if: inputs.mode == 'pressure'
@@ -750,6 +796,8 @@ jobs:
     steps:
       - name: Pressure sleep
         run: echo pressure-start && sleep 150 && echo pressure-ok
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   pressure-b-scale-set:
     name: Pressure B / Velnor Scale Set
     if: inputs.mode == 'pressure'
@@ -761,6 +809,8 @@ jobs:
     steps:
       - name: Pressure sleep
         run: echo pressure-start && sleep 150 && echo pressure-ok
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   pressure-c-scale-set:
     name: Pressure C / Velnor Scale Set
     if: inputs.mode == 'pressure'
@@ -772,6 +822,8 @@ jobs:
     steps:
       - name: Pressure sleep
         run: echo pressure-start && sleep 150 && echo pressure-ok
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   secret-hosted:
     name: Secret / GitHub hosted
     if: inputs.mode == 'secret'
@@ -795,6 +847,8 @@ jobs:
         env:
           G3_CANARY: ${{ secrets.G3_CANARY }}
         run: "test -n \"$G3_CANARY\" && sleep 180"
+    container:
+      image: ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
   mbx-cache-write-hosted:
     name: MBX objects cache / protected-main writer
     if: inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true

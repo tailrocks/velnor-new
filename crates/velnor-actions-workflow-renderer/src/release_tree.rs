@@ -81,7 +81,7 @@ pub fn render_release_workflow(
     spec: &ReleaseWorkflowSpec,
     ctx: &ReleaseRenderContext,
 ) -> Result<String, RenderError> {
-    render_release_workflow_with_routing(spec, ctx, &WorkflowRoutingPolicy::Preserve)
+    render_release_workflow_with_routing(spec, ctx, &WorkflowRoutingPolicy::hosted_only())
 }
 
 /// Render the release workflow with the generator's effective placement policy.
@@ -278,7 +278,7 @@ pub fn render_release_files(
         ctx,
         config,
         bootstrap,
-        &WorkflowRoutingPolicy::Preserve,
+        &WorkflowRoutingPolicy::hosted_only(),
     )
 }
 

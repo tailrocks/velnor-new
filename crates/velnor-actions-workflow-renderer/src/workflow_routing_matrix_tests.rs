@@ -15,7 +15,7 @@ fn selector() -> ScaleSetSelector {
 }
 
 fn scale_set() -> WorkflowRoutingPolicy {
-    WorkflowRoutingPolicy::from_mode(ExecutionMode::ScaleSet, selector())
+    crate::workflow_routing::test_policy(ExecutionMode::ScaleSet, selector())
 }
 
 fn workflow(job: Yaml) -> Yaml {

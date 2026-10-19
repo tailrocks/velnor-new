@@ -3,11 +3,15 @@ use super::*;
 #[test]
 fn every_schema2_family_renders_only_bounded_executable_jobs() {
     let pins = product_release_test_pins::test_pins();
+    let scale_set = Schema2WorkflowRequest::canonical_scale_set().expect("selector");
     let request = Schema2WorkflowRequest {
         version: "0.1.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: Schema2WorkflowRequest::canonical_scale_set().expect("selector"),
-        routing: crate::workflow_routing::WorkflowRoutingPolicy::Preserve,
+        scale_set: scale_set.clone(),
+        routing: crate::workflow_routing::test_policy(
+            velnor_actions_contract::ExecutionMode::Hosted,
+            scale_set,
+        ),
         workflows: BTreeSet::from([
             RoutingWorkflow::Qualification,
             RoutingWorkflow::Monitoring,

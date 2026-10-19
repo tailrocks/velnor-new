@@ -7,17 +7,11 @@ use velnor_actions_contract::{
 };
 
 fn hosted_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
-    crate::workflow_routing::WorkflowRoutingPolicy::from_mode(
-        ExecutionMode::Hosted,
-        scale_set_selector(),
-    )
+    crate::workflow_routing::test_policy(ExecutionMode::Hosted, scale_set_selector())
 }
 
 fn scale_set_policy() -> crate::workflow_routing::WorkflowRoutingPolicy {
-    crate::workflow_routing::WorkflowRoutingPolicy::from_mode(
-        ExecutionMode::ScaleSet,
-        scale_set_selector(),
-    )
+    crate::workflow_routing::test_policy(ExecutionMode::ScaleSet, scale_set_selector())
 }
 
 fn scale_set_selector() -> ScaleSetSelector {
@@ -338,22 +332,20 @@ fn tap_updater_rejects_self_hosted_execution_without_native_provisioning() {
 }
 
 #[test]
-fn scale_set_routes_every_preview_and_tap_job_without_changing_job_policy() {
+fn scale_set_routes_every_preview_and_tap_job_into_pinned_containers() {
     let mut spec = with_tap();
     spec.producer_runner = VerificationRunner::LinuxX64;
     let hosted = render_preview(&spec).expect("hosted preview");
     let scale_set = render_consumer_preview(&spec, &scale_set_policy()).expect("Scale Set preview");
-    let hosted_label = "runs-on: ubuntu-26.04";
     let selector = "runs-on: [velnor, ubuntu-26.04-scale-set]";
     assert_eq!(
         scale_set.bytes.matches(selector).count(),
         8,
         "every preview and tap job must use the selected Scale Set"
     );
-    assert_eq!(
-        scale_set.bytes.replace(selector, hosted_label),
-        hosted.bytes
-    );
+    let image = "container:\n      image: ghcr.io/tailrocks/velnor-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    assert_eq!(scale_set.bytes.matches(image).count(), 8);
+    assert!(!hosted.bytes.contains(image));
     crate::workflow_routing::validate_generated_workflow_calls(
         std::slice::from_ref(&scale_set),
         &scale_set_policy(),
@@ -381,7 +373,7 @@ fn preview_rejects_unbounded_producer_limits_before_rendering() {
         assert!(
             render_consumer_preview(
                 &spec,
-                &crate::workflow_routing::WorkflowRoutingPolicy::Preserve
+                &crate::workflow_routing::WorkflowRoutingPolicy::hosted_only()
             )
             .is_err(),
             "{minutes}"

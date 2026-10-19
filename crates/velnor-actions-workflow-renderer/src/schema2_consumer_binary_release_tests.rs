@@ -1,5 +1,4 @@
 use super::{ConsumerBinaryReleaseSpec, render_consumer_binary_release};
-use crate::workflow_routing::WorkflowRoutingPolicy;
 use crate::{HelperProvenance, provision_acquire_step, setup::MiseSetup};
 use std::{
     fs,
@@ -375,7 +374,8 @@ fn git_output(cwd: &Path, args: &[&str]) -> String {
 
 #[test]
 fn scale_set_rejects_the_native_macos_binary_build_job() {
-    let policy = WorkflowRoutingPolicy::ScaleSet(
+    let policy = crate::workflow_routing::test_policy(
+        velnor_actions_contract::ExecutionMode::ScaleSet,
         crate::schema2::Schema2WorkflowRequest::canonical_scale_set().expect("selector"),
     );
     let error = super::render_consumer_binary_release_with_routing(&spec(), &policy)

@@ -1,6 +1,5 @@
 use crate::schema2::Schema2WorkflowRequest;
 use crate::setup::MiseSetup;
-use crate::workflow_routing::WorkflowRoutingPolicy;
 use crate::yaml::Yaml;
 use std::collections::BTreeSet;
 use std::error::Error;
@@ -17,7 +16,7 @@ fn each_archive_consumer_has_target_pinned_mise_before_extraction() -> Result<()
         version: env!("CARGO_PKG_VERSION").to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: scale_set.clone(),
-        routing: WorkflowRoutingPolicy::from_mode(ExecutionMode::Hosted, scale_set),
+        routing: crate::workflow_routing::test_policy(ExecutionMode::Hosted, scale_set),
         workflows: BTreeSet::new(),
         mbx_qualification: None,
         mise_pin_qualification: None,

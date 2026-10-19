@@ -3,7 +3,6 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::RustSuiteTrigger;
 
 use super::{TestResult, minimal_suite, sample_spec};
-use crate::workflow_routing::WorkflowRoutingPolicy;
 
 pub(super) fn verified_acquire_step() -> velnor_actions_contract::Step {
     let helper = format!("{}0.1.0", crate::steps::STAGED_BINARY_PREFIX);
@@ -45,7 +44,8 @@ fn scale_set_routes_standalone_scheduled_linux_suites() -> TestResult {
     let mut suite = minimal_suite("nightly", vec![RustSuiteTrigger::Schedule]);
     suite.schedule = vec!["0 4 * * *".to_owned()];
     let spec = sample_spec(vec![suite]);
-    let policy = WorkflowRoutingPolicy::ScaleSet(
+    let policy = crate::workflow_routing::test_policy(
+        velnor_actions_contract::ExecutionMode::ScaleSet,
         crate::schema2::Schema2WorkflowRequest::canonical_scale_set()?,
     );
     let helper_steps = BTreeMap::from([("ubuntu-24.04".to_owned(), verified_acquire_step())]);

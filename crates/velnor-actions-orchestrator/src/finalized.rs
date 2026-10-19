@@ -149,11 +149,13 @@ pub fn finalized_jobs(
     .map_err(|err| OrchestratorError::Contract {
         problem: err.to_string(),
     })?;
+    let routing = crate::routing::workflow_routing_policy(&owned.config, None)?;
     Ok(finalize_render_jobs(
         &ir,
         owned.config.workflow.policy,
         owned.workflow.support.as_ref(),
         &owned.workflow.context,
         &mise,
+        &routing,
     )?)
 }

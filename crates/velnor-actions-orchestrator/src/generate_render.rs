@@ -2,16 +2,20 @@
 
 use velnor_actions_actionlint::render_actionlint_yaml;
 use velnor_actions_contract::{ExecutionMode, expand_workflow_with_qualification_sources};
-use velnor_actions_workflow_renderer::render::RenderedTree;
+use velnor_actions_workflow_renderer::render::{RenderedFile, RenderedTree};
 use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
 use velnor_actions_workflow_renderer::tree::render_tree_with_claude_mode;
-use velnor_actions_workflow_renderer::validate_generated_workflow_calls;
+use velnor_actions_workflow_renderer::validate_generated_workflow_calls_with_ir;
 
 use crate::OrchestratorError;
 use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::routing::workflow_routing_policy;
 use crate::workflow::scale_set_selector_for_dispatch;
+
+#[cfg(test)]
+#[path = "generate_render_tests.rs"]
+mod tests;
 
 /// Render base files plus release extras into the marker-checked tree, in memory only.
 pub(super) fn render_all(
@@ -81,6 +85,15 @@ pub(super) fn render_all(
         version,
         prep.config.agents.claude_md,
     )?;
-    validate_generated_workflow_calls(&tree.files, &routing)?;
+    validate_final_routing(&tree.files, &routing, &ir)?;
     Ok(tree)
+}
+
+fn validate_final_routing(
+    files: &[RenderedFile],
+    policy: &velnor_actions_workflow_renderer::WorkflowRoutingPolicy,
+    workflow: &velnor_actions_contract::WorkflowIr,
+) -> Result<(), OrchestratorError> {
+    validate_generated_workflow_calls_with_ir(files, policy, workflow)?;
+    Ok(())
 }

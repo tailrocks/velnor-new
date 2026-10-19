@@ -10,7 +10,7 @@ use crate::impl_common::{TestResult, anchor_repo, git, make_repo};
 const CONSUMER: &str =
     "schema = 1\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n";
 const ENABLED: &str = "schema = 1\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n[stacks.rust.binary_release]\nenabled = true\npackage = \"demo\"\nbin = \"demo\"\n";
-const SCALE_SET_ENABLED: &str = "schema = 2\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n[stacks.rust.binary_release]\nenabled = true\npackage = \"demo\"\nbin = \"demo\"\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\n";
+const SCALE_SET_ENABLED: &str = "schema = 2\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n[stacks.rust.binary_release]\nenabled = true\npackage = \"demo\"\nbin = \"demo\"\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\njob_container_image = \"ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n";
 
 fn binary_repo(config: &str) -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
     let repo = make_repo(config)?;

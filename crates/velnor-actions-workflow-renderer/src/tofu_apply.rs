@@ -91,7 +91,7 @@ impl TofuApplySpec {
 ///
 /// Returns [`RenderError`] for invalid typed inputs or workflow size.
 pub fn render_tofu_apply_workflow(spec: &TofuApplySpec) -> Result<RenderedFile, RenderError> {
-    render_tofu_apply_workflow_with_routing(spec, &WorkflowRoutingPolicy::Preserve)
+    render_tofu_apply_workflow_with_routing(spec, &WorkflowRoutingPolicy::hosted_only())
 }
 
 /// Render the apply workflow with the generator's effective placement policy.

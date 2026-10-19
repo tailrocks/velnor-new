@@ -111,7 +111,7 @@ pub fn render_suites_workflow_with_helpers(
         DEFAULT_SUITE_WORKFLOW_SLUG,
         &entries,
         spec,
-        &WorkflowRoutingPolicy::Preserve,
+        &WorkflowRoutingPolicy::hosted_only(),
         helper_steps,
     )
     .map(Some)
@@ -126,7 +126,7 @@ pub fn render_suites_workflow_with_helpers(
 pub fn render_suites_workflows(
     spec: &RustSuitesRenderSpec,
 ) -> Result<Vec<RenderedFile>, RenderError> {
-    render_suites_workflows_with_routing(spec, &WorkflowRoutingPolicy::Preserve)
+    render_suites_workflows_with_routing(spec, &WorkflowRoutingPolicy::hosted_only())
 }
 
 /// Render standalone suite workflows under the generator's effective placement policy.

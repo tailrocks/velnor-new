@@ -87,7 +87,7 @@ pub(crate) fn workflow_routing_policy(
                 "scale_set_dispatch_requires_execution_profile",
             ));
         }
-        return Ok(WorkflowRoutingPolicy::Preserve);
+        return Ok(WorkflowRoutingPolicy::hosted_only());
     };
     let mode = dispatch.or(execution.mode).unwrap_or_else(|| {
         if execution.default_profile == execution.scale_set_profile {
@@ -96,12 +96,16 @@ pub(crate) fn workflow_routing_policy(
             ExecutionMode::Hosted
         }
     });
-    match mode {
-        ExecutionMode::Hosted | ExecutionMode::Both => Ok(WorkflowRoutingPolicy::Preserve),
-        ExecutionMode::ScaleSet => execution
-            .scale_selector()
-            .map(WorkflowRoutingPolicy::ScaleSet)
-            .map_err(config_error),
+    let has_selector_leaves = mode != ExecutionMode::Hosted || execution.emits_scale_set_selector();
+    if has_selector_leaves {
+        let selector = execution.scale_selector().map_err(config_error)?;
+        let image = execution
+            .profiles
+            .get(&execution.scale_set_profile)
+            .and_then(|profile| profile.job_container_image.clone());
+        Ok(WorkflowRoutingPolicy::configured(mode, selector, image))
+    } else {
+        Ok(WorkflowRoutingPolicy::hosted_only())
     }
 }
 
@@ -207,3 +211,7 @@ fn workflow_request(
         product_release,
     })
 }
+
+#[cfg(test)]
+#[path = "routing_tests.rs"]
+mod tests;

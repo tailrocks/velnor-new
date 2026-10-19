@@ -19,6 +19,6 @@ pub fn render_workflow_ir_strict_shared_with_routing(
     mise: &MiseSetup,
     routing: &WorkflowRoutingPolicy,
 ) -> Result<RenderedWorkflow, RenderError> {
-    let jobs = super::finalize_jobs_with_routing(ir, policy, support, ctx, mise, routing)?;
-    super::render_merged(ir, &jobs, ctx)
+    let jobs = super::finalize_jobs(ir, policy, support, ctx, mise, routing)?;
+    super::render_merged_with_routing(ir, &jobs, ctx, routing)
 }

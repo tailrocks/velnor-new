@@ -1,5 +1,4 @@
 use super::*;
-use crate::workflow_routing::WorkflowRoutingPolicy;
 use velnor_actions_contract::FRESHNESS_CRON_WEEKLY;
 
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
@@ -99,7 +98,8 @@ fn renders_schedule_only_read_only_probe() {
 
 #[test]
 fn scale_set_routes_the_scheduled_linux_probe() {
-    let policy = WorkflowRoutingPolicy::ScaleSet(
+    let policy = crate::workflow_routing::test_policy(
+        velnor_actions_contract::ExecutionMode::ScaleSet,
         crate::schema2::Schema2WorkflowRequest::canonical_scale_set().expect("selector"),
     );
     let file = render_freshness_workflow_with_routing(&spec(), &policy).expect("render");

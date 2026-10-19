@@ -133,9 +133,7 @@ fn final_byte_gate_cannot_recover_runner_axis_after_rewrite() {
         path: ".github/workflows/ci.yml".to_owned(),
         bytes: crate::yaml::render_yaml(&workflow(fixed_scale_set_job(matrix))),
     };
-    assert_eq!(
-        validate_generated_workflow_calls(&[file], &scale_set()),
-        Ok(()),
-        "final workflow inventory cannot infer a runner choice removed by routing"
-    );
+    let error = validate_generated_workflow_calls(&[file], &scale_set())
+        .expect_err("final workflow inventory requires the selector container");
+    assert!(matches!(error, RenderError::InvalidWorkflow(_)));
 }

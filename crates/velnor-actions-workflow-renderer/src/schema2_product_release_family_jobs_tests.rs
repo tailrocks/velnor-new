@@ -3,7 +3,6 @@ use std::error::Error;
 use velnor_actions_contract::ExecutionMode;
 
 use crate::schema2::{ProductReleasePins, Schema2WorkflowRequest};
-use crate::workflow_routing::WorkflowRoutingPolicy;
 use crate::yaml::Yaml;
 
 use super::super::Family;
@@ -17,7 +16,7 @@ fn request(pins: ProductReleasePins) -> Result<Schema2WorkflowRequest, crate::Re
         version: "2.0.0".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: scale_set.clone(),
-        routing: WorkflowRoutingPolicy::from_mode(ExecutionMode::Hosted, scale_set),
+        routing: crate::workflow_routing::test_policy(ExecutionMode::Hosted, scale_set),
         workflows: BTreeSet::new(),
         mbx_qualification: None,
         mise_pin_qualification: None,
