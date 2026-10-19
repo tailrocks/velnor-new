@@ -139,7 +139,10 @@ executor = "hosted"
     let repo = binary_repo(&config)?;
     std::fs::write(
         repo.path().join("mise.toml"),
-        "[tasks.release-preview]\nrun = 'true'\n[tasks.verify-native]\nrun = 'true'\n",
+        format!(
+            "[tools]\nrust = '{}'\n[tasks.release-preview]\nrun = 'true'\n[tasks.verify-native]\nrun = 'true'\n",
+            velnor_actions_mise::RUST_VERSION
+        ),
     )?;
     git(&["add", "mise.toml"], repo.path())?;
     let prep = prepare(repo.path())?;
@@ -148,6 +151,7 @@ executor = "hosted"
         .get(".github/workflows/binary-preview.yml")
         .ok_or("preview missing")?;
     assert!(preview.contains("runs-on: xcode-27"));
+    assert!(preview.contains("Resolve project tool versions"));
     let ci = tree.get(".github/workflows/ci.yml").ok_or("CI missing")?;
     assert!(ci.contains("check-native:"));
     assert!(ci.contains("runs-on: macos-26"));
@@ -169,6 +173,48 @@ executor = "hosted"
             .iter()
             .any(|path| path == ".github/workflows/binary-preview.yml")
     );
+    assert!(
+        report
+            .validated_by
+            .iter()
+            .any(|tool| tool.starts_with("zizmor@"))
+    );
+    assert!(preview.contains("zizmor: ignore[github-env]"));
+    Ok(())
+}
+
+#[test]
+fn unrelated_privileged_environment_write_still_fails_real_zizmor() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let workflow = dir.path().join("unsafe.yml");
+    std::fs::write(
+        &workflow,
+        "name: Unsafe environment write\n\"on\": pull_request_target\npermissions: {}\njobs:\n  unsafe:\n    runs-on: ubuntu-26.04\n    steps:\n      - run: echo \"$UNTRUSTED\" >> \"$GITHUB_ENV\"\n",
+    )?;
+    let output = velnor_actions_mise::PinnedToolExec::new(
+        vec![velnor_actions_mise::PinnedTool::Zizmor],
+        std::ffi::OsStr::new("zizmor"),
+        [
+            "--offline",
+            "--no-progress",
+            "--color",
+            "never",
+            "unsafe.yml",
+        ]
+        .into_iter()
+        .map(Into::into)
+        .collect(),
+    )?
+    .command(&velnor_actions_mise::ToolCatalog::pinned())?
+    .with_cwd(dir.path().to_path_buf())
+    .run_bounded(128 * 1024, std::time::Duration::from_secs(30))?;
+    let diagnostics = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!output.success, "{diagnostics}");
+    assert!(diagnostics.contains("github-env"), "{diagnostics}");
     Ok(())
 }
 

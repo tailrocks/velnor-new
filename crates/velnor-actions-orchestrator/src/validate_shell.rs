@@ -116,6 +116,7 @@ pub(crate) fn run_shellcheck_bodies(
 }
 
 /// Unquote one single-line scalar: plain or double-quoted only.
+/// A quoted scalar may carry a separated YAML comment emitted by `Yaml::annotated`.
 fn unquote_run_scalar(scalar: &str) -> Result<String, OrchestratorError> {
     let scalar = scalar.trim();
     if !scalar.starts_with('"') {
@@ -124,15 +125,22 @@ fn unquote_run_scalar(scalar: &str) -> Result<String, OrchestratorError> {
         }
         return Ok(scalar.to_owned());
     }
-    let Some(body) = scalar
+    let body = scalar
         .strip_prefix('"')
-        .and_then(|rest| rest.strip_suffix('"'))
-    else {
-        return Err(shellcheck_fail("run_scalar_unbalanced"));
-    };
+        .ok_or_else(|| shellcheck_fail("run_scalar_unbalanced"))?;
     let mut out = String::with_capacity(body.len());
     let mut chars = body.chars();
     while let Some(ch) = chars.next() {
+        if ch == '"' {
+            let tail = chars.as_str();
+            if !tail.is_empty()
+                && (!tail.starts_with([' ', '\t'])
+                    || !tail.trim_start_matches([' ', '\t']).starts_with('#'))
+            {
+                return Err(shellcheck_fail("run_scalar_trailing_data"));
+            }
+            return Ok(out);
+        }
         if ch != '\\' {
             out.push(ch);
             continue;
@@ -145,7 +153,7 @@ fn unquote_run_scalar(scalar: &str) -> Result<String, OrchestratorError> {
             _ => return Err(shellcheck_fail("run_scalar_bad_escape")),
         }
     }
-    Ok(out)
+    Err(shellcheck_fail("run_scalar_unbalanced"))
 }
 
 /// Shorthand for a shellcheck validation failure.
@@ -219,6 +227,44 @@ mod tests {
                 matches!(&err, OrchestratorError::Validation { tool, .. } if tool == "shellcheck")
                     && err.to_string().contains("SC2086")
             })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn quoted_run_comments_preserve_script_bytes_and_reject_trailing_data() {
+        for (encoded, expected) in [
+            (r#""echo hi" # zizmor: ignore[github-env]"#, "echo hi"),
+            ("\"echo hi\"\t# comment", "echo hi"),
+            (
+                r#""printf '# %s\\n' \"$VALUE\"\n" # annotation"#,
+                "printf '# %s\\n' \"$VALUE\"\n",
+            ),
+            ("echo hi # shell comment", "echo hi # shell comment"),
+        ] {
+            assert_eq!(unquote_run_scalar(encoded).expect("legal scalar"), expected);
+        }
+        for malformed in [
+            r##""echo hi"# unseparated"##,
+            r#""echo hi" trailing"#,
+            r#""echo hi" "second scalar""#,
+            r#""echo hi\" # no closing quote"#,
+            r#""echo \q" # invalid escape"#,
+        ] {
+            assert!(unquote_run_scalar(malformed).is_err(), "{malformed}");
+        }
+    }
+
+    #[test]
+    fn annotated_run_still_lints_the_entire_script() -> Result<(), String> {
+        let catalog = ToolCatalog::pinned();
+        let (clean, workflows) = staged_run(r#""echo \"hi\"\n" # zizmor: ignore[github-env]"#)?;
+        run_shellcheck_bodies(&catalog, clean.path(), &workflows).map_err(|err| err.to_string())?;
+        let (dirty, workflows) =
+            staged_run(r#""echo \"hi\"\necho $FOO/bar\n" # zizmor: ignore[github-env]"#)?;
+        assert!(
+            run_shellcheck_bodies(&catalog, dirty.path(), &workflows)
+                .is_err_and(|err| { err.to_string().contains("SC2086") })
         );
         Ok(())
     }
