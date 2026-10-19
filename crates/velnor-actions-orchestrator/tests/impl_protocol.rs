@@ -268,8 +268,19 @@ fn plan_outputs_bind_qualification_phase_and_cache_policy() -> TestResult {
         outputs.not_affected_jobs, "",
         "qualification runs everything"
     );
-    let directives: serde_json::Value =
-        serde_json::from_str(&outputs.qualification_cache_directives)?;
+    check_cold_cache_directives(&outputs.qualification_cache_directives)?;
+    let promoted = outputs.promoted_job_outputs(PlanOutputMode::Static);
+    let expected_bytes = promoted
+        .iter()
+        .map(|(name, value)| (name.encode_utf16().count() + value.encode_utf16().count() + 2) * 2)
+        .sum::<usize>()
+        + velnor_actions_contract::workflow::cache_family::cache_output_reserve_utf16_bytes(0);
+    assert_eq!(outputs.job_outputs_utf16_bytes, expected_bytes);
+    Ok(())
+}
+
+fn check_cold_cache_directives(raw: &str) -> TestResult {
+    let directives: serde_json::Value = serde_json::from_str(raw)?;
     assert_eq!(directives["schema"], 2);
     assert_eq!(directives["phase"], "cold");
     let lanes = directives["lanes"]
@@ -281,17 +292,6 @@ fn plan_outputs_bind_qualification_phase_and_cache_policy() -> TestResult {
             .as_array()
             .is_some_and(|layers| layers.len() == 5)
     }));
-    assert!(
-        !outputs
-            .qualification_cache_directives
-            .contains("mbx_bundle")
-    );
-    let promoted = outputs.promoted_job_outputs(PlanOutputMode::Static);
-    let expected_bytes = promoted
-        .iter()
-        .map(|(name, value)| (name.encode_utf16().count() + value.encode_utf16().count() + 2) * 2)
-        .sum::<usize>()
-        + velnor_actions_contract::workflow::cache_family::cache_output_reserve_utf16_bytes(0);
-    assert_eq!(outputs.job_outputs_utf16_bytes, expected_bytes);
+    assert!(!raw.contains("mbx_bundle"));
     Ok(())
 }
