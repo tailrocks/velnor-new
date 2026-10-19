@@ -116,6 +116,9 @@ pub fn infer_job_tools(job: &Job) -> Vec<String> {
 
 /// True for catalog version spellings (`2026.10.13`); never `latest`.
 pub(crate) fn is_catalog_version(value: &str) -> bool {
+    if velnor_actions_contract::config::project_tool_refs::is_project_tool_ref(value) {
+        return true;
+    }
     !value.is_empty()
         && value != "latest"
         && !value.contains("latest")
@@ -142,9 +145,10 @@ pub(crate) fn is_tool_spec(value: &str) -> bool {
                     b':' | b'/' | b'-' | b'_' | b'.' | b'[' | b']' | b'=' | b','
                 )
         })
-        && version
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_' | b'+'))
+        && (velnor_actions_contract::config::project_tool_refs::is_project_tool_ref(version)
+            || version
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_' | b'+')))
 }
 
 /// Detect the current pinned Setup Mise shape, with cache delegated to V2.

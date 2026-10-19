@@ -185,7 +185,12 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     fs::write(
         repo.path().join("mise.toml"),
-        "[tools.rust]\nversion = \"1.98.1\"\npostinstall = \"touch pwned\"\n\n[plugins.evil]\nurl = \"https://example.invalid/evil\"\n",
+        // Generation inventory runs the declared Rust locally: use the
+        // generator pin so every host has it installed.
+        format!(
+            "[tools.rust]\nversion = \"{}\"\npostinstall = \"touch pwned\"\n\n[plugins.evil]\nurl = \"https://example.invalid/evil\"\n",
+            velnor_actions_mise::RUST_VERSION
+        ),
     )?;
     let prep = prepare(repo.path())?;
     assert!(
@@ -212,13 +217,18 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
             installs.push(run.join(" "));
         }
     }
-    let yaml = velnor_actions_workflow_renderer::render_workflow_ir(
-        &prep.workflow.ir,
-        prep.config.workflow.policy,
-        prep.workflow.support.as_ref(),
-        &prep.workflow.context,
-    )
-    .map_err(|err| format!("render: {err}"))?;
+    let yaml = fs::read_to_string(parent.path().join("preview/.github/workflows/ci.yml"))?;
+    // The hostile record still declares Rust (hard decision 5): its version
+    // resolves at run time through `config get`, which loads no config.
+    assert!(yaml.contains("VELNOR_TOOL_RUST"), "{yaml}");
+    assert!(
+        !yaml.contains(&format!("rust@{}", velnor_actions_mise::RUST_VERSION)),
+        "declared version copied: {yaml}"
+    );
+    assert!(
+        yaml.contains("--no-config --no-env --no-hooks config get"),
+        "{yaml}"
+    );
     for line in yaml.lines() {
         if line.contains("mise ") && line.contains(" install ") {
             installs.push(line.trim().to_owned());

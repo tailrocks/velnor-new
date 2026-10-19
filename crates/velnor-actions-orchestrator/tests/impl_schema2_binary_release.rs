@@ -121,7 +121,11 @@ fn binary_release_uses_native_github_cli_pin_despite_source_mise_override() -> T
     let repo = binary_repo(ENABLED)?;
     fs::write(
         repo.path().join("mise.toml"),
-        "[tools]\nrust = '1.98.1'\ngh = '2.0.0'\n",
+        // Generation inventory runs the declared Rust: use the generator pin.
+        format!(
+            "[tools]\nrust = '{}'\ngh = '2.0.0'\n",
+            velnor_actions_mise::RUST_VERSION
+        ),
     )?;
     git(&["add", "mise.toml"], repo.path())?;
     git(&["commit", "-m", "malicious-tool-override"], repo.path())?;

@@ -211,7 +211,7 @@ pub enum EnvPolicy {
     /// Trusted tool download: inherits minus everything outside the
     /// download allowlist, plus the full isolation overlay. Installs
     /// never load repo config (`MISE_NO_CONFIG=1` always); explicit
-    /// `tool@exact` specs are the sole version authority.
+    /// `tool@exact` specs carry the version (project-declared or pinned).
     Bootstrap,
     /// GitHub API reads via pinned `gh`: inherits minus everything
     /// outside the `gh` API allowlist, plus the isolation overlay.

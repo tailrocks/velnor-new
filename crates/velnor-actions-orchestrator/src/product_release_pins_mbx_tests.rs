@@ -99,7 +99,8 @@ fn release_qualification_uses_catalog_action_and_exact_version_probe() {
 fn production_host_build_uses_pinned_mbx_for_only_the_nested_host_binary() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let config = crate::config::load_config(&root).expect("repository release configuration");
-    let pins = super::resolve(&config).expect("production release pins");
+    let pins = super::resolve(&config, &velnor_actions_mise::ToolCatalog::pinned())
+        .expect("production release pins");
     let catalog = ToolCatalog::pinned();
     let rust = format!("rust@{}", catalog.version(PinnedTool::Rust));
     let mbx = format!("mr-boxington@{}", catalog.version(PinnedTool::MrBoxington));

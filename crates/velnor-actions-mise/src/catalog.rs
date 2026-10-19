@@ -1,7 +1,9 @@
 //! Pinned tool catalog: exact mise tool selectors for every Velnor command.
 //!
-//! Exact Velnor-owned pins; project `mise.toml` selectors never alter them.
-//! Each source and check date is recorded beside its release constant.
+//! Exact Velnor-owned pins for tools the project does not declare; a tool
+//! the project's Mise config declares takes the project's version instead
+//! (hard decision 5, [`project`]). Each source and check date is recorded
+//! beside its release constant.
 
 use crate::error::MiseError;
 
@@ -39,8 +41,14 @@ pub mod owned_source;
 /// Exact-version validation plus qualification sources (split for size).
 #[path = "catalog_versions.rs"]
 mod versions;
-pub use versions::{check_freshness_requirements, validate_exact_version};
-use versions::{invalid_version, tool_source};
+pub use versions::{
+    check_freshness_requirements, validate_concrete_exact_version, validate_exact_version,
+};
+
+/// Project-declared versions and their run-time references (hard decision 5).
+#[path = "catalog_project.rs"]
+pub mod project;
+use versions::tool_source;
 
 /// Selected Mise release (tag `v2026.10.14`); official asset bytes, signed
 /// checksums and signed inventory were verified 2026-10-19. Runtime and hosted
@@ -118,7 +126,7 @@ const TOOL_PLATFORMS: [&str; 2] = ["ubuntu-24.04", "ubuntu-26.04"];
 const PLACEHOLDER_DIGEST: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 /// Tools Velnor may select through mise, by registry name.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PinnedTool {
     /// Rust toolchain (`rust`, invoked as `cargo`/`rustc`).
     Rust,
@@ -207,6 +215,12 @@ pub struct ToolCatalog {
     nextest: String,
     /// Pinned `OpenTofu` engine version.
     opentofu: String,
+    /// Pinned release-plz coordinator version.
+    release_plz: String,
+    /// Project-declared tools and the sources declaring them.
+    project: std::collections::BTreeSet<PinnedTool>,
+    /// Whether project versions render as run-time references.
+    emission: bool,
     /// Whether `RUSTUP_TOOLCHAIN` is exported in step environments.
     export_rustup_toolchain: bool,
     /// Whether the repository `mise.toml` rust record sets `mr_boxington = true`,
@@ -230,6 +244,9 @@ impl ToolCatalog {
             zizmor: ZIZMOR_VERSION.to_owned(),
             nextest: NEXTEST_VERSION.to_owned(),
             opentofu: OPENTOFU_VERSION.to_owned(),
+            release_plz: RELEASE_PLZ_VERSION.to_owned(),
+            project: std::collections::BTreeSet::new(),
+            emission: false,
             export_rustup_toolchain: true,
             rust_mr_boxington: false,
         }
@@ -255,14 +272,18 @@ impl ToolCatalog {
         nextest: &str,
         opentofu: &str,
     ) -> Result<Self, MiseError> {
-        validate_exact_version(PinnedTool::Rust.tool_name(), rust)?;
-        validate_exact_version(PinnedTool::MrBoxington.tool_name(), mr_boxington)?;
-        validate_exact_version(PinnedTool::Gh.tool_name(), gh)?;
-        validate_exact_version(PinnedTool::Actionlint.tool_name(), actionlint)?;
-        validate_exact_version(PinnedTool::Shellcheck.tool_name(), shellcheck)?;
-        validate_exact_version(PinnedTool::Zizmor.tool_name(), zizmor)?;
-        validate_exact_version(PinnedTool::Nextest.tool_name(), nextest)?;
-        validate_exact_version(PinnedTool::Opentofu.tool_name(), opentofu)?;
+        for (tool, version) in [
+            (PinnedTool::Rust, rust),
+            (PinnedTool::MrBoxington, mr_boxington),
+            (PinnedTool::Gh, gh),
+            (PinnedTool::Actionlint, actionlint),
+            (PinnedTool::Shellcheck, shellcheck),
+            (PinnedTool::Zizmor, zizmor),
+            (PinnedTool::Nextest, nextest),
+            (PinnedTool::Opentofu, opentofu),
+        ] {
+            validate_concrete_exact_version(tool.tool_name(), version)?;
+        }
         Ok(Self {
             rust: rust.to_owned(),
             mr_boxington: mr_boxington.to_owned(),
@@ -272,6 +293,9 @@ impl ToolCatalog {
             zizmor: zizmor.to_owned(),
             nextest: nextest.to_owned(),
             opentofu: opentofu.to_owned(),
+            release_plz: RELEASE_PLZ_VERSION.to_owned(),
+            project: std::collections::BTreeSet::new(),
+            emission: false,
             export_rustup_toolchain: true,
             rust_mr_boxington: false,
         })
@@ -289,7 +313,7 @@ impl ToolCatalog {
             PinnedTool::Zizmor => &self.zizmor,
             PinnedTool::Nextest => &self.nextest,
             PinnedTool::Opentofu => &self.opentofu,
-            PinnedTool::ReleasePlz => RELEASE_PLZ_VERSION,
+            PinnedTool::ReleasePlz => &self.release_plz,
         }
     }
 
@@ -369,17 +393,5 @@ impl ToolCatalog {
         } else {
             None
         }
-    }
-
-    /// Fail unless the action-installed MBX equals the catalog pin (action SHA alone never proves it).
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidToolVersion`] for a loose or mismatched version.
-    pub fn reconcile_action_mbx(&self, reported: &str) -> Result<(), MiseError> {
-        validate_exact_version(PinnedTool::MrBoxington.tool_name(), reported)?;
-        (reported == self.version(PinnedTool::MrBoxington))
-            .then_some(())
-            .ok_or_else(|| invalid_version(PinnedTool::MrBoxington.tool_name(), reported))
     }
 }

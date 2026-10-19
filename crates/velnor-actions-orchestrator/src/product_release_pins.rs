@@ -25,8 +25,13 @@ fn resolve_setups(
     ))
 }
 
-pub(crate) fn resolve(config: &VelnorConfig) -> Result<ProductReleasePins, OrchestratorError> {
-    let catalog = ToolCatalog::pinned();
+/// `catalog` is the emission catalog: project-declared versions render as
+/// run-time references (hard decision 5).
+pub(crate) fn resolve(
+    config: &VelnorConfig,
+    catalog: &ToolCatalog,
+) -> Result<ProductReleasePins, OrchestratorError> {
+    let catalog = catalog.clone();
     let (linux_x86_64_setup, macos_arm64_setup, macos_x86_64_setup) = resolve_setups(config)?;
     Ok(ProductReleasePins {
         linux_x86_64_setup,

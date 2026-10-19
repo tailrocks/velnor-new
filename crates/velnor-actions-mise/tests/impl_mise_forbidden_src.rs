@@ -20,6 +20,8 @@ const EXPECTED_MODULES: &[&str] = &[
     "catalog_mbx.rs",
     "catalog_owned_source.rs",
     "catalog_owned_source_tests.rs",
+    "catalog_project.rs",
+    "catalog_project_tests.rs",
     "catalog_source_build_bootstrap.rs",
     "catalog_source_build_bootstrap_tests.rs",
     "catalog_versions.rs",
