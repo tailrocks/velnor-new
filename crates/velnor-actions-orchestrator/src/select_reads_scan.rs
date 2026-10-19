@@ -63,6 +63,9 @@ pub(crate) struct SourceRead {
     pub(crate) file: String,
     /// Where the read lands.
     pub(crate) target: ReadTarget,
+    /// The target is compiled into the package (`include!`, `#[path]`), so
+    /// its own reads count for the package too.
+    pub(crate) compiled: bool,
 }
 
 /// Reads and escape signals one source file carries.
@@ -98,9 +101,10 @@ pub(crate) fn scan_source(file: &str, package_dir: &str, text: &str) -> FileRead
         reads: scan
             .targets
             .into_iter()
-            .map(|target| SourceRead {
+            .map(|(target, compiled)| SourceRead {
                 file: file.to_owned(),
                 target,
+                compiled,
             })
             .collect(),
         anchored: scan.anchored,
@@ -123,7 +127,7 @@ struct Scan<'a> {
     tokens: &'a [Token],
     file_dir: &'a str,
     package_dir: &'a str,
-    targets: Vec<ReadTarget>,
+    targets: Vec<(ReadTarget, bool)>,
     anchored: bool,
     escapes: bool,
 }
@@ -139,7 +143,7 @@ impl Scan<'_> {
                 {
                     let (args, next) = group(self.tokens, at + 2);
                     if let Some(target) = self.include_target(args) {
-                        self.targets.push(target);
+                        self.targets.push((target, word == "include"));
                     }
                     at = next;
                     continue;
@@ -150,7 +154,7 @@ impl Scan<'_> {
                         // The resolved path is still a manifest-dir value
                         // that later `parent()` calls can walk out of.
                         self.anchored = true;
-                        self.targets.push(target);
+                        self.targets.push((target, false));
                         at = next;
                         continue;
                     }
@@ -245,7 +249,8 @@ impl Scan<'_> {
         if self.tokens.get(at + 1) == Some(&Token::Punct('='))
             && let Some(Token::Str(body)) = self.tokens.get(at + 2)
         {
-            self.targets.push(resolve_literal(self.file_dir, body));
+            self.targets
+                .push((resolve_literal(self.file_dir, body), true));
         }
     }
 
@@ -257,7 +262,7 @@ impl Scan<'_> {
         if let Some(Token::Str(body)) = self.tokens.get(at + 2)
             && body.split('/').next() == Some("..")
         {
-            self.targets.push(resolve(self.package_dir, body));
+            self.targets.push((resolve(self.package_dir, body), false));
         }
     }
 }

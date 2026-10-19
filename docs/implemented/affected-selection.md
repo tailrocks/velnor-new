@@ -138,14 +138,19 @@ file and attribute it to its deepest package. Detected reads:
 |---|---|
 | `include_str!`, `include_bytes!`, `include!` of a literal | resolved from the file's directory |
 | `concat!(env!("CARGO_MANIFEST_DIR"), "...")`, anywhere | resolved from the package directory |
-| `#[path = "..."]` | resolved from the file's directory |
+| `#[path = "..."]` | resolved from the file's directory; the target is scanned as part of the package |
 | `read`, `read_to_string`, `read_dir`, `open`, `metadata`, `symlink_metadata`, `canonicalize`, `copy` with a literal starting `..` | resolved from the package directory (Cargo's test and build-script cwd) |
 | `CARGO_MANIFEST_DIR` or `current_dir` plus a literal with a `..` component, or `parent()`/`ancestors()`, in one file | unbounded (`manifest_dir_escape`) |
 | an include whose argument is not a literal or manifest-dir `concat!` | unbounded (`include_argument`) |
 
-`env!("OUT_DIR")` includes read build output and are ignored. A resolved read
-is covered when the package claims the target (rules 1-5 above) or when no
-package claims it (a change there is unowned and runs everything already). A
+`include!` and `#[path]` targets are compiled into the package: each tracked
+target (any owner, any extension) is scanned in turn, with `CARGO_MANIFEST_DIR`
+resolved against the including package, and the anchor and escape signals of
+all of a package's files combine. `env!("OUT_DIR")` includes read build output
+and are ignored. A resolved read is covered when the package claims the target
+(rules 1-5 above), or when no package claims it and nothing claimable lies
+below it (a change to an unowned file runs everything already; a directory
+such as the repository root reaches every package beneath it). A
 read outside the repository can never change with a pull request and is
 ignored. An unbounded read is covered only once a `[[stacks.rust.inputs]]`
 rule naming the package sets `complete = true`: the owner's statement that the
@@ -288,13 +293,17 @@ only the artifacts of matrix entries, which exist only for `run` jobs.
   `tests/impl_merge_plan.rs` (`empty_diff_skips_every_crate_job`,
   `planned_run_job_skipped_fails_required`) proves the same rows through
   `merge-v1`.
-- `crates/velnor-actions-orchestrator/tests/impl_select_fail_safe.rs`: the
+- `crates/velnor-actions-orchestrator/tests/impl_select_fail_safe.rs` and
+  `tests/impl_select_read_scan.rs`: the
   false negatives of review 2 as plan-level regressions. A repository-root
   Tofu project neither hides a library change nor an unowned file; a Tofu
   root inside a crate still selects the crate; an undeclared `include_str!`
   and a manifest-dir fixture read into a sibling run the reader; a declared
   include narrows again; an unbounded manifest-dir read runs until inputs are
-  declared; a read of an unowned path never forces; a build-script library's
+  declared (`complete = true`); a read of an unowned path never forces, but a
+  read of a directory above packages does; anchor and escape split across
+  files, included support files and fragments, and another package's
+  declared module all count for the includer; a build-script library's
   dependents run, on an empty change set too; `merge_group` and
   `workflow_dispatch` run everything; fork pull requests select affected
   work; a dirty worktree and a stale merge ref run everything.

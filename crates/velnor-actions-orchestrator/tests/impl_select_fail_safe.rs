@@ -13,10 +13,10 @@ use crate::impl_select::{commit, plan_event, plan_pr};
 use crate::impl_select_affected_jobs::{PACKAGES, assert_runs, fixture, put};
 
 /// Dependents of `core`, `core` included.
-const CORE_CLOSURE: [&str; 6] = ["a1", "a3", "a4", "a5", "a6", "core"];
+pub(crate) const CORE_CLOSURE: [&str; 6] = ["a1", "a3", "a4", "a5", "a6", "core"];
 
 /// Fixture plus `setup` (base) and `edit` (head), planned as a pull request.
-fn plan_with(
+pub(crate) fn plan_with(
     extra_config: &str,
     setup: impl FnOnce(&Path) -> TestResult,
     edit: impl FnOnce(&Path) -> TestResult,
@@ -29,7 +29,7 @@ fn plan_with(
     Ok(plan_pr(dir.path(), Some(&base), &head)?.0)
 }
 
-fn has_warning(plan: &Plan, warning: &str) -> bool {
+pub(crate) fn has_warning(plan: &Plan, warning: &str) -> bool {
     plan.warnings.iter().any(|w| w == warning)
 }
 
@@ -70,108 +70,6 @@ fn tofu_root_inside_a_crate_still_selects_the_crate() -> TestResult {
         |root| put(root, "apps/a1/infra/main.tf", "terraform {}\n# x\n"),
     )?;
     assert_runs(&plan, &["a1"]);
-    Ok(())
-}
-
-#[test]
-fn undeclared_include_into_a_sibling_runs_the_reader() -> TestResult {
-    let plan = plan_with(
-        "",
-        |root| {
-            put(root, "libs/util/data.txt", "a\n")?;
-            put(
-                root,
-                "apps/a7/src/lib.rs",
-                "pub const D: &str = include_str!(\"../../../libs/util/data.txt\");\n",
-            )
-        },
-        |root| put(root, "libs/util/data.txt", "b\n"),
-    )?;
-    assert_runs(&plan, &["a2", "a7", "util"]);
-    assert!(
-        has_warning(
-            &plan,
-            "undeclared_reads:a7:apps/a7/src/lib.rs:reads:libs/util/data.txt"
-        ),
-        "{:?}",
-        plan.warnings
-    );
-    Ok(())
-}
-
-#[test]
-fn declared_include_is_covered_and_narrows_again() -> TestResult {
-    let rule = "\n[[stacks.rust.inputs]]\nglobs = [\"libs/util/data.txt\"]\npackages = [\"a7\"]\n";
-    let setup = |root: &Path| {
-        put(root, "libs/util/data.txt", "a\n")?;
-        put(
-            root,
-            "apps/a7/src/lib.rs",
-            "pub const D: &str = include_str!(\"../../../libs/util/data.txt\");\n",
-        )
-    };
-    let plan = plan_with(rule, setup, |root| {
-        put(root, "apps/a1/src/lib.rs", "pub fn g() {}\n")
-    })?;
-    assert_runs(&plan, &["a1"]);
-    let plan = plan_with(rule, setup, |root| put(root, "libs/util/data.txt", "b\n"))?;
-    assert_runs(&plan, &["a2", "a7", "util"]);
-    Ok(())
-}
-
-#[test]
-fn manifest_dir_read_of_a_deleted_sibling_fixture_runs_the_reader() -> TestResult {
-    let plan = plan_with(
-        "",
-        |root| {
-            put(root, "libs/util/fixtures/x.json", "{}\n")?;
-            put(
-                root,
-                "apps/a7/tests/t.rs",
-                "#[test] fn t(){ std::fs::read(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../libs/util/fixtures/x.json\")).unwrap(); }\n",
-            )
-        },
-        |root| {
-            Ok(std::fs::remove_file(
-                root.join("libs/util/fixtures/x.json"),
-            )?)
-        },
-    )?;
-    assert_runs(&plan, &["a2", "a7", "util"]);
-    Ok(())
-}
-
-#[test]
-fn unbounded_manifest_dir_reads_run_until_inputs_are_declared() -> TestResult {
-    let reader = |root: &Path| {
-        put(
-            root,
-            "apps/a7/tests/t.rs",
-            "#[test] fn t(){ let _ = std::path::Path::new(env!(\"CARGO_MANIFEST_DIR\")).join(\"../..\"); }\n",
-        )
-    };
-    let edit = |root: &Path| put(root, "apps/a1/src/lib.rs", "pub fn g() {}\n");
-    let plan = plan_with("", reader, edit)?;
-    assert_runs(&plan, &["a1", "a7"]);
-    assert!(
-        has_warning(
-            &plan,
-            "undeclared_reads:a7:apps/a7/tests/t.rs:manifest_dir_escape"
-        ),
-        "{:?}",
-        plan.warnings
-    );
-    // An input rule alone is not a statement that the inputs are complete.
-    let partial = "\n[[stacks.rust.inputs]]\nglobs = [\"libs/util/**\"]\npackages = [\"a7\"]\n";
-    let plan = plan_with(partial, reader, edit)?;
-    assert_runs(&plan, &["a1", "a7"]);
-    let complete = "\n[[stacks.rust.inputs]]\nglobs = [\"libs/util/**\"]\npackages = [\"a7\"]\ncomplete = true\n";
-    let plan = plan_with(complete, reader, edit)?;
-    assert_runs(&plan, &["a1"]);
-    let plan = plan_with(complete, reader, |root| {
-        put(root, "libs/util/src/lib.rs", "pub fn g() {}\n")
-    })?;
-    assert_runs(&plan, &["a2", "a7", "util"]);
     Ok(())
 }
 
@@ -315,85 +213,5 @@ fn stale_merge_ref_runs_everything() -> TestResult {
     );
     let (plan, _) = plan_pr(root, Some(&moved), &head)?;
     assert_runs(&plan, &["a1"]);
-    Ok(())
-}
-
-#[test]
-fn reads_of_unowned_paths_never_force() -> TestResult {
-    let plan = plan_with(
-        "",
-        |root| {
-            put(
-                root,
-                "apps/a7/src/lib.rs",
-                "pub const D: &str = include_str!(\"../../../docs/notes.md\");\n",
-            )
-        },
-        |root| put(root, "apps/a1/src/lib.rs", "pub fn g() {}\n"),
-    )?;
-    // A change to `docs/notes.md` is unowned and runs everything already.
-    assert_runs(&plan, &["a1"]);
-    Ok(())
-}
-
-#[test]
-fn directory_reads_above_packages_force_the_reader() -> TestResult {
-    let plan = plan_with(
-        "",
-        |root| {
-            put(
-                root,
-                "apps/a7/tests/t.rs",
-                "#[test] fn t(){ let _ = std::fs::read_dir(\"../..\"); }\n",
-            )
-        },
-        |root| put(root, "apps/a1/src/lib.rs", "pub fn g() {}\n"),
-    )?;
-    assert_runs(&plan, &["a1", "a7"]);
-    Ok(())
-}
-
-#[test]
-fn manifest_dir_anchor_and_escape_in_different_files_force_the_package() -> TestResult {
-    let plan = plan_with(
-        "",
-        |root| {
-            put(
-                root,
-                "apps/a7/tests/common/mod.rs",
-                "pub fn dir() -> std::path::PathBuf { std::path::PathBuf::from(env!(\"CARGO_MANIFEST_DIR\")) }\n",
-            )?;
-            put(
-                root,
-                "apps/a7/tests/t.rs",
-                "mod common;\n#[test] fn t(){ let _ = std::fs::read(common::dir().join(\"../../libs/util/x.json\")); }\n",
-            )
-        },
-        |root| put(root, "apps/a1/src/lib.rs", "pub fn g() {}\n"),
-    )?;
-    assert_runs(&plan, &["a1", "a7"]);
-    Ok(())
-}
-
-#[test]
-fn reads_inside_included_unowned_support_files_count_for_the_includer() -> TestResult {
-    let plan = plan_with(
-        "",
-        |root| {
-            put(root, "libs/util/data.txt", "a\n")?;
-            put(
-                root,
-                "shared/support.rs",
-                "pub const D: &str = include_str!(\"../libs/util/data.txt\");\n",
-            )?;
-            put(
-                root,
-                "apps/a7/tests/t.rs",
-                "#[path = \"../../../shared/support.rs\"]\nmod support;\n",
-            )
-        },
-        |root| put(root, "libs/util/data.txt", "b\n"),
-    )?;
-    assert_runs(&plan, &["a2", "a7", "util"]);
     Ok(())
 }

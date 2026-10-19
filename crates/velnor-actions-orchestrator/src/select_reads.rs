@@ -111,11 +111,12 @@ fn reason(read: &SourceRead) -> String {
 
 /// Every read each package's compiled sources perform.
 ///
-/// A package compiles the tracked `.rs` files it owns plus every unowned
-/// `.rs` file they pull in through `#[path]` or `include!` (shared test
-/// support), transitively; included files resolve `CARGO_MANIFEST_DIR`
-/// against the including package. Anchor and escape signals combine over
-/// all of a package's files.
+/// A package compiles the tracked `.rs` files it owns plus every tracked
+/// file they pull in through `#[path]` or `include!` (shared test support,
+/// `.rs.in` fragments, another package's module), transitively, whoever
+/// owns it and whatever its extension; included files resolve
+/// `CARGO_MANIFEST_DIR` against the including package. Anchor and escape
+/// signals combine over all of a package's files.
 fn source_reads(
     root: &Path,
     ownership: &Ownership<'_>,
@@ -126,13 +127,9 @@ fn source_reads(
     output
         .require_success("git")
         .map_err(|err| err.to_string())?;
-    let files: Vec<String> = split_nul_paths(&output.stdout)?;
-    let sources: BTreeSet<String> = files
-        .into_iter()
-        .filter(|file| is_rust_source(file))
-        .collect();
+    let tracked: BTreeSet<String> = split_nul_paths(&output.stdout)?;
     let mut by_package: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
-    for file in &sources {
+    for file in tracked.iter().filter(|file| is_rust_source(file)) {
         if let Some((dir, id)) = ownership.package_of(file) {
             by_package
                 .entry((id.clone(), dir.clone()))
@@ -142,18 +139,17 @@ fn source_reads(
     }
     let mut reads = Vec::new();
     for ((id, dir), owned) in by_package {
-        for read in package_reads(root, ownership, &sources, &dir, owned) {
+        for read in package_reads(root, &tracked, &dir, owned) {
             reads.push((id.clone(), read));
         }
     }
     Ok(reads)
 }
 
-/// Reads of one package: its owned files plus the unowned files they include.
+/// Reads of one package: its owned files plus every file they compile in.
 fn package_reads(
     root: &Path,
-    ownership: &Ownership<'_>,
-    sources: &BTreeSet<String>,
+    tracked: &BTreeSet<String>,
     dir: &str,
     owned: Vec<String>,
 ) -> Vec<SourceRead> {
@@ -175,8 +171,8 @@ fn package_reads(
         escapes |= scanned.escapes;
         for read in scanned.reads {
             if let ReadTarget::Path(target) = &read.target
-                && sources.contains(target)
-                && ownership.package_of(target).is_none()
+                && read.compiled
+                && tracked.contains(target)
                 && seen.insert(target.clone())
             {
                 queue.push(target.clone());
@@ -188,6 +184,7 @@ fn package_reads(
         reads.push(SourceRead {
             file,
             target: ReadTarget::Unbounded("manifest_dir_escape"),
+            compiled: false,
         });
     }
     reads.sort_by(|left, right| left.file.cmp(&right.file));

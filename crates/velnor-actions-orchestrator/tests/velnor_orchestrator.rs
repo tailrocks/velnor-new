@@ -111,6 +111,7 @@ mod impl_select;
 mod impl_select_affected_jobs;
 mod impl_select_base;
 mod impl_select_fail_safe;
+mod impl_select_read_scan;
 mod impl_select_removed;
 mod impl_step_role_name_authority;
 mod impl_strict_envelope;
