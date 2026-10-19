@@ -33,3 +33,17 @@ before enabling a downstream required completion check. A missing, pending,
 blocked or failed observation is never successful review completion. The
 completion App never merges; the independently credentialed merge gate remains
 responsible for protection, checks, feedback and final-head revalidation.
+
+Authenticated `codex-v1` completion is owned by the closed summary's two exact-head
+roles: both must be completed with both finding flags explicitly false, and each
+terminal clock must follow known finding edits and review restarts. A genuine
+clean review may emit no formal GitHub review at all. PR177's retained public
+summary (comment 6265103425 at head 2bc7dc02b508d99dcf97b2afccef833a5d54d7af)
+exhibits that protocol. The adapter authenticates every formal receipt that is
+present, including historical receipts and their finding custody, but does not
+require a new formal code receipt after clean completion. Each present receipt's
+submission and authenticated edit time must be covered by its matching Code or
+Security terminal clock; later activity remains pending until the summary catches up. Reactions, prose,
+missing fields, silence and threshold-only signals never replace the summary.
+The retained wire fixture and parser tests establish this historical shape; they
+do not qualify automatic review of live writer-App PRs or activate unattended merge.
