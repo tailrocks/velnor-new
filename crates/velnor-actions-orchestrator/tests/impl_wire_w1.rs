@@ -161,13 +161,14 @@ fn w1_catalog_matches_actionlint_crate_pins() {
 }
 
 #[test]
-fn w1_native_parallelism_unqualified() {
+fn w1_native_parallelism_bridged() {
     let caps = ActionlintCapabilities::for_pinned();
     assert!(caps.check_step_syntax(StepSyntax::JobMatrix).is_ok());
-    let err = caps
-        .check_step_syntax(StepSyntax::NativeParallelism)
-        .expect_err("native gated");
-    assert!(err.to_string().contains("native_parallelism"), "{err}");
+    assert!(
+        caps.check_step_syntax(StepSyntax::NativeParallelism)
+            .is_ok()
+    );
+    assert!(caps.requires_step_parallelism_bridge());
 }
 
 #[test]

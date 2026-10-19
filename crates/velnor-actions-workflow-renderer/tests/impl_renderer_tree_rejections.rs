@@ -24,6 +24,7 @@ fn renderer_rejects_unpinned_actions_inside_ir() -> Result<(), RenderError> {
         ir.jobs.insert(
             "velnor-task".to_owned(),
             task_job(Step {
+                parallel: false,
                 name: name.to_owned(),
                 id: None,
                 role: None,
@@ -94,6 +95,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
     ir.jobs.insert(
         "velnor-task".to_owned(),
         task_job(Step {
+            parallel: false,
             name: "Install".to_owned(),
             id: None,
             role: None,
@@ -109,6 +111,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
     ir.jobs.insert(
         "velnor-task".to_owned(),
         task_job(Step {
+            parallel: false,
             name: "Fetch".to_owned(),
             id: None,
             role: None,
@@ -125,6 +128,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
     ir.jobs.insert(
         "velnor-task".to_owned(),
         task_job(Step {
+            parallel: false,
             name: "Run Alint".to_owned(),
             id: None,
             role: None,

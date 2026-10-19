@@ -9,8 +9,8 @@ use crate::matrix_step::{shard_suffix, step_name_for};
 use std::collections::BTreeSet;
 use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
 
-#[path = "crate_jobs_phase_prelude_tests.rs"]
-mod phase_preludes;
+#[path = "crate_jobs_prelude_tests.rs"]
+mod preludes;
 
 /// Runnable fixture proposal for one package/kind pair.
 pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> ProposedTask {
@@ -71,77 +71,8 @@ pub(super) fn names(job: &Job) -> Vec<&str> {
     job.steps.iter().map(|step| step.name.as_str()).collect()
 }
 
-#[test]
-fn groups_obligations_into_closed_phases_with_exact_predecessors() {
-    let clippy = group("demo", TaskKind::Clippy, &[]);
-    let clippy_id = clippy.task_id.clone();
-    let test = group("demo", TaskKind::Test, &[clippy_id.as_str()]);
-    let doctest = group("demo", TaskKind::Doctest, &[clippy_id.as_str()]);
-    let mut doc = group("demo", TaskKind::Doc, &[clippy_id.as_str()]);
-    doc.depends_on.push(doctest.task_id.clone());
-    let other = group("nested", TaskKind::Clippy, &[]);
-    let found = build_crate_jobs(CrateJobInputs {
-        label: "ubuntu-26.04",
-        policy: WorkflowPolicy::ConsumerV1,
-        discovery: &discovery(vec![test, doc, doctest, clippy, other]),
-        catalog: &ToolCatalog::pinned(),
-        fetch_roots: &[],
-        acquire: None,
-        max_parallel_jobs: 2,
-        timeout: velnor_actions_contract::JobTimeout::CRATE,
-        helper_version: env!("CARGO_PKG_VERSION"),
-        cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-    })
-    .expect("crate jobs");
-    let ids: Vec<&str> = found.jobs.iter().map(|(id, _)| id.as_str()).collect();
-    assert_eq!(
-        ids,
-        [
-            "rust-demo-docs",
-            "rust-demo-lint",
-            "rust-demo-tests",
-            "rust-nested-lint"
-        ]
-    );
-    let jobs: BTreeMap<&str, &Job> = found
-        .jobs
-        .iter()
-        .map(|(id, job)| (id.as_str(), job))
-        .collect();
-    assert_eq!(jobs["rust-demo-lint"].needs, [PLAN_JOB_ID]);
-    assert_eq!(
-        jobs["rust-demo-tests"].needs,
-        [PLAN_JOB_ID, "rust-demo-lint"]
-    );
-    assert_eq!(
-        jobs["rust-demo-docs"].needs,
-        [PLAN_JOB_ID, "rust-demo-lint", "rust-demo-tests"]
-    );
-    phase_preludes::assert_phase_preludes(&found.jobs);
-    assert_eq!(jobs["rust-demo-lint"].display_name, "Rust / demo / Lint");
-    assert_eq!(jobs["rust-demo-tests"].display_name, "Rust / demo / Tests");
-    assert_eq!(
-        jobs["rust-demo-docs"].display_name,
-        "Rust / demo / Documentation"
-    );
-    let lint = names(jobs["rust-demo-lint"]);
-    assert!(lint.contains(&"Clippy"));
-    assert!(!lint.contains(&"Unit and integration tests"));
-    let tests = names(jobs["rust-demo-tests"]);
-    let run = tests
-        .iter()
-        .position(|name| *name == "Unit and integration tests")
-        .expect("tests");
-    let doctests = tests
-        .iter()
-        .position(|name| *name == "Doctests")
-        .expect("doctests");
-    assert!(run < doctests);
-    assert!(!tests.contains(&"Clippy") && !tests.contains(&"Documentation"));
-    let docs = names(jobs["rust-demo-docs"]);
-    assert!(docs.contains(&"Documentation"));
-    assert!(!docs.contains(&"Doctests") && !docs.contains(&"Clippy"));
-}
+#[path = "crate_jobs_parallel_tests.rs"]
+mod parallel_tests;
 
 #[test]
 fn skips_testless_and_workspace_groups() {
@@ -192,9 +123,9 @@ fn member_binding_agrees_with_built_jobs() {
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 2);
+    assert_eq!(found.jobs.len(), 1);
     let lint = found.jobs[0].0.as_str();
-    let tests = found.jobs[1].0.as_str();
+    let tests = lint;
     assert_eq!(
         job_id_for_member(&groups, &groups[0])
             .expect("valid owner")
@@ -273,8 +204,8 @@ fn drivers_follow_per_crate_selection() {
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
-    assert_eq!(found.drivers["rust-demo-lint"], RenderDriver::Mbx);
-    assert_eq!(found.drivers["rust-nested-lint"], RenderDriver::Cargo);
+    assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);
+    assert_eq!(found.drivers["rust-nested"], RenderDriver::Cargo);
     let steps = names(&found.jobs[0].1);
     assert!(steps.contains(&"Restore MBX objects"), "{steps:?}");
     let steps = names(&found.jobs[1].1);
@@ -302,6 +233,7 @@ fn empty_groups_build_no_jobs() {
 #[test]
 fn acquire_stages_before_report_wrappers() {
     let acquire = Step {
+        parallel: false,
         name: "Acquire Velnor".to_owned(),
         id: None,
         role: None,
@@ -375,8 +307,7 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
     assert_eq!(found.jobs.len(), 3);
     for (id, job) in &found.jobs {
         let run = prepare_run(job);
-        let spawning =
-            id == "rust-velnor-actions-orchestrator-tests" || id == "rust-velnor-actions-cli-tests";
+        let spawning = id == "rust-velnor-actions-orchestrator" || id == "rust-velnor-actions-cli";
         for spec in &trio {
             assert_eq!(
                 run.contains(spec),

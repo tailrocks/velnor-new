@@ -28,6 +28,7 @@ fn job(runs_on: &str) -> Job {
         environment: None,
         check_runner: None,
         steps: vec![Step {
+            parallel: false,
             name: "Run probe".to_owned(),
             id: None,
             role: None,
@@ -185,6 +186,7 @@ fn field<'a>(value: &'a crate::yaml::Yaml, key: &str) -> Option<&'a crate::yaml:
 #[test]
 fn rustdocflags_remain_scoped_to_the_documentation_step() {
     let doc_step = Step {
+        parallel: false,
         name: "Documentation".to_owned(),
         id: None,
         role: None,
@@ -195,6 +197,7 @@ fn rustdocflags_remain_scoped_to_the_documentation_step() {
         },
     };
     let test_step = Step {
+        parallel: false,
         name: "Tests".to_owned(),
         id: None,
         role: None,

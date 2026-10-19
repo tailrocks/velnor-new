@@ -178,6 +178,7 @@ fn task_step(index: usize) -> Step {
     let condition = velnor_actions_contract::workflow::step::task_execution_condition(&task_id)
         .expect("coverage condition");
     Step {
+        parallel: false,
         name: format!("Test crate {index}"),
         id: None,
         role: None,

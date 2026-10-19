@@ -28,10 +28,7 @@ fn assert_ir_component_order(mbx: bool) -> TestResult {
             assert_job_components(id, job, mbx)?;
         }
     }
-    assert_eq!(
-        rust_jobs, 6,
-        "all phases of both crates are watched (mbx={mbx})"
-    );
+    assert_eq!(rust_jobs, 2, "both crate jobs are watched (mbx={mbx})");
     Ok(())
 }
 
@@ -83,14 +80,7 @@ fn assert_yaml_component_order(mbx: bool) -> TestResult {
         .get(WORKFLOW_PATH)
         .ok_or_else(|| std::io::Error::other("missing workflow"))?;
     let emitted = yaml_steps(yaml);
-    for id in [
-        "rust-a-docs",
-        "rust-a-lint",
-        "rust-a-tests",
-        "rust-b-docs",
-        "rust-b-lint",
-        "rust-b-tests",
-    ] {
+    for id in ["rust-a", "rust-b"] {
         let names = emitted
             .get(id)
             .ok_or_else(|| std::io::Error::other(format!("missing {id}")))?;

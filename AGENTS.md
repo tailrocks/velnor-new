@@ -1,5 +1,6 @@
 # Rules
 
+- **Hard decisions: read [`docs/hard-decisions.md`](docs/hard-decisions.md) first.** Never silently change a hard decision; changing one requires the human owner's explicit approval.
 - Official GitHub Actions sources of truth:
   - [actions/runner](https://github.com/actions/runner)
   - [actions/scaleset](https://github.com/actions/scaleset)

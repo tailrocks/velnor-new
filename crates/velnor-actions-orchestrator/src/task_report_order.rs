@@ -1,33 +1,53 @@
 //! Same-job execution ordering for downstream report synthesis.
 
-use velnor_actions_contract::{ExecuteTaskRef, Plan};
+use velnor_actions_contract::{ExecuteTaskRef, Plan, Stack};
 
-/// Downstream obligation IDs in the crate job's execution order.
+/// Obligation IDs a failure actually skips, in the crate job's execution order.
+///
+/// `OpenTofu` and other sequential jobs skip every later obligation. A Rust
+/// crate job runs its sequential producers (the Nextest build) first and then
+/// every other check as one parallel group: a failed producer skips the whole
+/// group, while a failed parallel member skips nothing because its siblings
+/// still run and report for themselves.
 pub(super) fn derive_downstream(plan: &Plan, task_id: &str, job_id: &str) -> Vec<String> {
     let mut ordered = Vec::new();
+    let mut rust_job = true;
     for entry in &plan.matrix.include {
         if entry.job_id != job_id {
             continue;
         }
+        rust_job &= entry.stack_id == Stack::Rust.id();
         for (kind, task_ref) in &entry.execute_task_ids.tasks {
-            match task_ref {
-                ExecuteTaskRef::Single(id) => ordered.push(
+            let ids: &[String] = match task_ref {
+                ExecuteTaskRef::Single(id) => std::slice::from_ref(id),
+                ExecuteTaskRef::Shards(ids) => ids,
+            };
+            for id in ids {
+                ordered.push((
                     crate::obligation_order::obligation_order_key(&entry.stack_id, kind, id),
-                ),
-                ExecuteTaskRef::Shards(ids) => {
-                    ordered.extend(ids.iter().map(|id| {
-                        crate::obligation_order::obligation_order_key(&entry.stack_id, kind, id)
-                    }));
-                }
+                    kind.as_str(),
+                ));
             }
         }
     }
-    ordered.sort_unstable();
-    let Some(current) = ordered.iter().position(|(_, id)| *id == task_id) else {
+    if rust_job {
+        ordered.sort_unstable_by_key(|(key, kind)| {
+            (
+                !velnor_actions_rust::runs_before_parallel_checks(kind),
+                *key,
+            )
+        });
+    } else {
+        ordered.sort_unstable();
+    }
+    let Some(current) = ordered.iter().position(|((_, id), _)| *id == task_id) else {
         return Vec::new();
     };
+    if rust_job && !velnor_actions_rust::runs_before_parallel_checks(ordered[current].1) {
+        return Vec::new();
+    }
     ordered[current + 1..]
         .iter()
-        .map(|(_, id)| (*id).to_owned())
+        .map(|((_, id), _)| (*id).to_owned())
         .collect()
 }

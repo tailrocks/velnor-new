@@ -49,16 +49,10 @@ pub(crate) fn render_job_steps(
                 "checkout_without_shared_lane:{id}"
             )));
         }
-        for step in &job.steps {
-            rendered.push(step_to_yaml(
-                id,
-                step,
-                ctx,
-                needs_envs,
-                false,
-                step_context,
-            )?);
-        }
+        rendered.extend(crate::parallel_steps::render_step_sequence(
+            &job.steps,
+            |step| step_to_yaml(id, step, ctx, needs_envs, false, step_context),
+        )?);
     }
     Ok(rendered)
 }
@@ -142,6 +136,7 @@ fn append_steps(
         .get(id)
         .ok_or_else(|| RenderError::InvalidWorkflow(format!("shared_lane_missing_{label}:{id}")))?;
     for step in steps {
+        crate::parallel_steps::reject_parallel(step, label)?;
         rendered.push(step_to_yaml(
             id,
             step,

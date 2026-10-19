@@ -17,7 +17,7 @@ pub type DetectorEntry = (&'static str, u32, fn(&FileIndex) -> Vec<StackCandidat
 pub const DETECTION_SCHEMA: u32 = 1;
 
 /// Known stacks for closed per-stack dispatch.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Stack {
     /// Explicit repository-owned Mise checks (`mise`).
     Mise,

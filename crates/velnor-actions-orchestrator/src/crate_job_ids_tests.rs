@@ -30,7 +30,7 @@ fn task(package: &str, kind: TaskKind) -> ProposedTask {
 }
 
 #[test]
-fn all_obligations_have_exactly_one_phase_owner() {
+fn all_obligations_of_a_crate_share_one_job() {
     let tasks: Vec<_> = [
         TaskKind::Fmt,
         TaskKind::Clippy,
@@ -44,7 +44,7 @@ fn all_obligations_have_exactly_one_phase_owner() {
     .map(|kind| task("demo", kind))
     .collect();
     let groups = group_runnable(&tasks).expect("groups");
-    assert_eq!(groups.len(), 3);
+    assert_eq!(groups.len(), 1);
     let mut observed: Vec<_> = groups
         .values()
         .flatten()
@@ -54,19 +54,16 @@ fn all_obligations_have_exactly_one_phase_owner() {
     let mut expected: Vec<_> = tasks.iter().map(|task| &task.task_id).collect();
     expected.sort();
     assert_eq!(observed, expected);
-    for (index, suffix) in ["lint", "lint", "tests", "tests", "tests", "tests", "docs"]
-        .into_iter()
-        .enumerate()
-    {
+    for task in &tasks {
         assert_eq!(
-            job_id_for_member(&tasks, &tasks[index]).expect("owner"),
-            Some(format!("rust-demo-{suffix}"))
+            job_id_for_member(&tasks, task).expect("owner"),
+            Some("rust-demo".to_owned())
         );
     }
 }
 
 #[test]
-fn identity_collision_assignment_precedes_phase_suffixes() {
+fn identity_collision_assignment_is_shared_by_planner_and_renderer() {
     let first = task("demo", TaskKind::Clippy);
     let mut second = task("other", TaskKind::Clippy);
     second.display_name = first.display_name.clone();
@@ -89,10 +86,7 @@ fn identity_collision_assignment_precedes_phase_suffixes() {
     for (key, id) in &assigned {
         assert_eq!(
             id,
-            &format!(
-                "{}-lint",
-                expected[&(key.package_id.clone(), key.configuration.clone())]
-            )
+            &expected[&(key.package_id.clone(), key.configuration.clone())]
         );
     }
     assert_eq!(assigned.values().collect::<BTreeSet<_>>().len(), 2);
@@ -104,7 +98,7 @@ fn identity_collision_assignment_precedes_phase_suffixes() {
 }
 
 #[test]
-fn configuration_is_not_overloaded_with_phase() {
+fn each_configuration_owns_its_own_job() {
     let first = task("demo", TaskKind::Clippy);
     let mut second = first.clone();
     second.configuration = "host".to_owned();
@@ -113,11 +107,11 @@ fn configuration_is_not_overloaded_with_phase() {
     let assigned = assign_group_ids(&group_runnable(&tasks).expect("groups"));
     assert_eq!(
         job_id_for_member(&tasks, &tasks[0]).expect("default"),
-        Some("rust-demo-lint".to_owned())
+        Some("rust-demo".to_owned())
     );
     assert_eq!(
         job_id_for_member(&tasks, &tasks[1]).expect("host"),
-        Some("rust-demo-host-lint".to_owned())
+        Some("rust-demo-host".to_owned())
     );
     assert_eq!(assigned.len(), 2);
 }
@@ -148,17 +142,15 @@ fn workspace_no_targets_and_named_check_keep_their_authorities() {
 }
 
 #[test]
-fn unknown_rust_kind_and_stack_fail_without_losing_tasks() {
+fn unknown_stack_fails_without_losing_tasks() {
     let mut unknown = task("demo", TaskKind::Clippy);
-    unknown.task_kind = "archive".to_owned();
+    unknown.stack_id = "foreign".to_owned();
     assert!(group_runnable(&[unknown.clone()]).is_err());
     assert!(job_id_for_member(&[unknown.clone()], &unknown).is_err());
-    unknown.stack_id = "foreign".to_owned();
-    assert!(group_runnable(&[unknown]).is_err());
 }
 
 #[test]
-fn tofu_namespace_is_not_partitioned_by_rust_kind() {
+fn collocated_tofu_and_rust_keep_separate_jobs() {
     let mut tofu = task("root", TaskKind::Clippy);
     tofu.stack_id = Stack::Tofu.id().to_owned();
     tofu.task_kind = "validate".to_owned();
@@ -166,22 +158,23 @@ fn tofu_namespace_is_not_partitioned_by_rust_kind() {
     let tasks = vec![tofu, rust];
     let groups = group_runnable(&tasks).expect("mixed source groups");
     assert_eq!(groups.len(), 2);
-    assert!(groups.keys().any(|key| key.phase.is_none()));
+    assert!(groups.keys().any(|key| key.stack == Stack::Tofu));
+    assert!(groups.keys().any(|key| key.stack == Stack::Rust));
     assert_eq!(
         job_id_for_member(&tasks, &tasks[0]).expect("tofu"),
         Some("tofu-root".to_owned())
     );
     assert_eq!(
         job_id_for_member(&tasks, &tasks[1]).expect("rust"),
-        Some("rust-root-lint".to_owned())
+        Some("rust-root".to_owned())
     );
 }
 
 #[test]
-fn outsider_cannot_claim_a_missing_phase() {
+fn outsider_package_has_no_owner() {
     let tasks = vec![task("demo", TaskKind::Clippy)];
     assert_eq!(
-        job_id_for_member(&tasks, &task("demo", TaskKind::Doc)).expect("outsider"),
+        job_id_for_member(&tasks, &task("other", TaskKind::Doc)).expect("outsider"),
         None
     );
 }

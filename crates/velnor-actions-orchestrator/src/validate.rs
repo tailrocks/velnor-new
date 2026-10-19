@@ -224,7 +224,11 @@ mod tests {
                 ".github/actionlint.yaml"
             ]
         );
-        assert_eq!(argv[4], workflows[0]);
+        assert_eq!(
+            argv[4..8],
+            velnor_actions_actionlint::step_parallelism_ignore_args()
+        );
+        assert_eq!(argv[8], workflows[0]);
         assert_eq!(
             argv.iter()
                 .filter(|arg| arg.as_str() == "-config-file")

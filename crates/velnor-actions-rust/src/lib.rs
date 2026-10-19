@@ -14,7 +14,6 @@ pub mod evidence;
 mod evidence_text;
 pub mod graph;
 pub mod identity;
-mod job_phase;
 mod manifest_edges;
 pub mod metadata;
 pub mod metadata_edges;
@@ -54,7 +53,6 @@ pub use identity::{
     GroupExtensionInputs, adapter_entry_metadata, entry_metadata_for_task, expand_shards_for_group,
     extension_for_proposal,
 };
-pub use job_phase::RustJobPhase;
 pub use manifest_edges::manifest_edges;
 pub use metadata::{
     METADATA_FORMAT_VERSION, MetadataError, PackageRecord, TargetRecord, VelnorV1TaskOwner,
@@ -69,9 +67,9 @@ pub use profile::{
     detect_profile,
 };
 pub use propose::{
-    KIND_DISPLAY_WORDS, ToolNeeds, is_clippy_kind, is_nextest_kind, is_workspace_fmt_task,
-    payload_env_for_kind, propose_task, resource_class_for_kind, step_base_name, task_kind_rank,
-    tool_needs,
+    KIND_DISPLAY_WORDS, ToolNeeds, concurrent_target_lane, is_clippy_kind, is_nextest_kind,
+    is_workspace_fmt_task, payload_env_for_kind, propose_task, resource_class_for_kind,
+    runs_before_parallel_checks, step_base_name, task_kind_rank, tool_needs,
 };
 pub use release_config::{
     DEFAULT_TAG_PATTERN, EmitOptions, ExistingTag, TagOutcome, TagState, VersionGroup,

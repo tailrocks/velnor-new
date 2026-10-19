@@ -75,6 +75,7 @@ pub(crate) fn shell(name: &str, argv: &[&str], env: &[(&str, &str)]) -> Step {
     // Direct IR: these tests pin the release gates as the enforcing
     // layer, so construction bypasses the constructor gates.
     Step {
+        parallel: false,
         name: name.to_owned(),
         id: None,
         role: None,

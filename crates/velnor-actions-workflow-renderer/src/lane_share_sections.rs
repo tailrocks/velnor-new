@@ -165,6 +165,7 @@ pub(crate) fn factor_provider_preludes(
         let logical = format!("tofu-provider-prelude-{index}");
         files.push(composite_file(&logical, &prefix, ctx)?);
         let call = Step {
+            parallel: false,
             name: "Prepare ToFu provider prelude".to_owned(),
             id: None,
             role: None,

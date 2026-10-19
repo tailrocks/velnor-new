@@ -75,21 +75,21 @@ fn assert_no_query_or_exposure(text: &str) {
     }
 }
 
-/// Phase-job count from the `- N Rust phase job(s)` plan line.
-fn phase_count(stdout: &str) -> Result<usize, Box<dyn Error>> {
+/// Crate-job count from the `- N Rust crate job(s)` plan line.
+fn crate_count(stdout: &str) -> Result<usize, Box<dyn Error>> {
     for line in stdout.lines() {
         let Some(rest) = line.trim().strip_prefix("- ") else {
             continue;
         };
         let Some(count) = rest
-            .strip_suffix(" Rust phase jobs")
-            .or_else(|| rest.strip_suffix(" Rust phase job"))
+            .strip_suffix(" Rust crate jobs")
+            .or_else(|| rest.strip_suffix(" Rust crate job"))
         else {
             continue;
         };
         return Ok(count.parse()?);
     }
-    Err("phase count line missing".into())
+    Err("crate count line missing".into())
 }
 
 /// Snapshot every file under `dir` except `.git`, as relative path to bytes.
@@ -223,11 +223,8 @@ fn plan_reports_full_configured_crates_in_agreement_with_yaml() -> Result<(), Bo
     let stdout = plan_stdout(&tmp)?;
     // PAR-10.1 cli half: the full configured count (never narrowed here),
     // the per-obligation kind chain, and the event-time narrowing explanation.
-    let count = phase_count(&stdout)?;
-    assert_eq!(
-        count, 6,
-        "all three phases of both crates planned:\n{stdout}"
-    );
+    let count = crate_count(&stdout)?;
+    assert_eq!(count, 2, "one job per crate planned:\n{stdout}");
     assert!(
         stdout.contains("Obligations: "),
         "kind chain missing:\n{stdout}"
@@ -248,21 +245,14 @@ fn plan_reports_full_configured_crates_in_agreement_with_yaml() -> Result<(), Bo
     )?;
     assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
     let yaml = std::fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
-    let phase_ids: Vec<_> = workflow_job_ids(&yaml)
+    let crate_ids: Vec<_> = workflow_job_ids(&yaml)
         .into_iter()
         .filter(|id| id.starts_with("rust-"))
         .collect();
     assert_eq!(
-        phase_ids,
-        [
-            "rust-apple-docs",
-            "rust-apple-lint",
-            "rust-apple-tests",
-            "rust-zebra-docs",
-            "rust-zebra-lint",
-            "rust-zebra-tests",
-        ],
-        "exact phase owners; no combined or extra job"
+        crate_ids,
+        ["rust-apple", "rust-zebra"],
+        "exactly one job per crate; no per-phase or extra job"
     );
     assert!(
         yaml.contains("name: Rust / apple"),
@@ -274,7 +264,7 @@ fn plan_reports_full_configured_crates_in_agreement_with_yaml() -> Result<(), Bo
     // Ignored work: no crates in plan and none in YAML (both directions).
     ignore_rust(&tmp)?;
     let ignored = plan_stdout(&tmp)?;
-    assert!(!ignored.contains("Rust phase job"), "{ignored}");
+    assert!(!ignored.contains("Rust crate job"), "{ignored}");
     assert!(ignored.contains("no matrix entries"), "{ignored}");
     let second = outer.join("second");
     let output = spawn(

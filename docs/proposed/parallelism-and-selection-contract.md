@@ -235,7 +235,7 @@ Baseline trust is separate from the semantic task digest. Trust controls who may
 
 GitHub `parallel:` runs its child steps concurrently and implicitly joins them. `background: true` launches an identified child that must later be joined with `wait`/`wait-all` or cancelled explicitly. A background step’s outputs and environment changes are unavailable until its wait completes. GitHub allows at most ten concurrent background steps in one job; additional work queues. These constructs are job-step syntax and cannot be placed inside composite actions.
 
-Velnor may emit native GitHub `parallel`/`background`/`wait` syntax only when the exact pinned actionlint version used by generation and CI parses and validates that syntax. The currently verified actionlint v1.7.12 does not support these GitHub step keys, so V1 MUST NOT emit them by default. Until a qualified actionlint release supports them, parallelize through independent workflow jobs and matrices. Never emulate background work with shell `&`, `wait`, or detached processes. A future syntax-capability update must qualify successful joins, failed children, cancellation, output visibility, and timing before enabling the syntax. A wait remains a synchronization point, not work to add to child durations.
+Velnor emits native step concurrency for the checks of one crate job, a [hard decision](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps). It uses only the `background: true` plus `wait-all` spelling: members carry no ids, roles or internal operations, and one generated `wait-all` joins each contiguous group before the next sequential step. Composite actions never contain members. The pinned actionlint v1.7.12 does not parse these keys (rhysd/actionlint#693); generation and the CI `actionlint` job pass the two exact anchored `STEP_PARALLELISM_IGNORES`, which suppress only the unknown `background` key on a `run`/`uses` step and the body-less join, while every member is still fully validated. The `parallel:` sugar is not emitted because actionlint skips its children. The bridge is removed when a pinned actionlint parses the keys. Never emulate background work with shell `&`, `wait`, or detached processes. A wait remains a synchronization point, not work to add to child durations.
 
 Overlap independent preparation, such as downloading a verified build artifact while pulling a pinned test image. Do not overlap installation with consumers that need the installed tool or environment exports. Restore independent cache layers concurrently only when paths do not overlap. Cache export/save begins only after all writers join.
 
@@ -243,33 +243,34 @@ Overlap independent preparation, such as downloading a verified build artifact w
 
 1. Planning, structural policy, generated-file freshness and workspace format
    validation run early.
-2. Each selected package/configuration has the nonempty members of the closed
-   `lint`, `tests` and `docs` execution phases. These are literal jobs, not a
-   task matrix or user-configurable phase list. Task identities, configuration
-   identities and argument vectors remain unchanged; the planner and renderer
-   use the same exact owning-job assignment.
-3. `lint` owns explicit package formatting and Clippy. `tests` owns the
-   applicable executable build, detected test runner and doctests. `docs`
-   owns documentation building. Same-phase gates retain obligation order;
-   cross-phase gates become exact owning-job dependencies. Tests wait for
-   their Clippy gate, and docs wait for their applicable Clippy/doctest gates.
+2. Each selected package/configuration owns exactly one literal job,
+   `Rust / <crate>`, not a task matrix or per-phase split. Task identities,
+   configuration identities and argument vectors remain unchanged; the planner
+   and renderer use the same exact owning-job assignment.
+3. The job prepares tools, sources and caches once, runs the Nextest
+   test-executable build sequentially, then runs package formatting, Clippy,
+   the detected test runner (each shard), doctests and documentation as one
+   parallel group. The checks carry no quality gates on each other; each must
+   pass on its own. A failed build skips (and reports) the whole group; a
+   failed member skips nothing. Gates owned by other jobs become exact job
+   dependencies.
 4. Independent packages/configurations may continue after another package
-   fails; dependent phases do not start after a failed predecessor. No global
-   lint-before-any-test barrier is introduced. Each job retains its own
-   bounded compiler/test resources and isolated paths. `workflow.max_parallel_jobs`
-   is not a `strategy.max-parallel` limit on these literal Rust jobs; its
-   existing OpenTofu lane-staging responsibility remains unchanged.
-5. The final `Required` job always joins every emitted phase and the complete
-   expected task/report inventory. Missing, skipped, canceled or failed phase
-   evidence fails the gate. Every concrete phase job carries the literal
+   fails. No global lint-before-any-test barrier is introduced. Each job
+   retains its own bounded compiler/test resources and isolated paths.
+   `workflow.max_parallel_jobs` is not a `strategy.max-parallel` limit on these
+   literal Rust jobs; its existing OpenTofu lane-staging responsibility remains
+   unchanged.
+5. The final `Required` job always joins every emitted crate job and the
+   complete expected task/report inventory. Missing, skipped, canceled or failed
+   evidence fails the gate. Every crate job carries the literal
    `workflow.crate_timeout_minutes` bound (default five, at most 360); the sum
    of dependent jobs, queueing and approvals is not a workflow-wide bound.
 
 Explicit named Nextest suites remain a separate supported fan-out mechanism.
 Their declared matrix uses `fail-fast: false`; an archive-backed suite builds
 its qualified archive once and runs its complete nonoverlapping partitions on
-separate runners. Cargo-test profiles do not invent Nextest work. Default phase
-partitioning keeps test compilation and execution together and introduces no
+separate runners. Cargo-test profiles do not invent Nextest work. The default crate
+job keeps test compilation and execution together and introduces no
 compiled-binary artifact handoff. Unsupported all-feature combinations are not
 generated; supported feature configurations remain explicit declarations.
 
@@ -284,13 +285,13 @@ GitHub background concurrency, matrix jobs, Cargo build jobs, and Nextest test t
 
 Concurrent Cargo writers MUST use different target directories. A stable lane identity includes package/task family, target, features, profile, compiler configuration, and concurrent-writer lane. The planner MUST insert a resource exclusion when two tasks would write the same target directory, generated destination, database, snapshot path, HOME/config, or cache-export destination.
 
-For MBX profiles, MBX supplies compiler-output reuse and compiler resource coordination; it does not make simultaneous writes to one Cargo target directory safe and does not prove tests passed. Each lane’s target path and selected driver MUST be recorded. Cache restore completes before compilation starts. Cache export follows the join of all compiler writers. Separate target directories are not automatically persisted by a cache action: Velnor MUST declare their owner and verify the actual restored/saved paths. Cargo profiles use the separately owned Cargo source/cache layers and MUST NOT install or invoke MBX.
+For MBX profiles, MBX supplies compiler-output reuse and compiler resource coordination; it does not make simultaneous writes to one Cargo target directory safe and does not prove tests passed. Each lane’s target path and selected driver MUST be recorded. Cache restore completes before compilation starts. Cache export follows the join of all compiler writers. Separate target directories are not automatically persisted by a cache action: Velnor MUST declare their owner and verify the actual restored/saved paths. A crate job's concurrent Clippy and documentation lanes are `<workspace>/target/velnor-clippy` and `<workspace>/target/velnor-doc`, inside the workspace `target/` that the MBX action's `target` payload saves and restores; the build, test runner and doctests share `<workspace>/target`, where the sequential build leaves only freshness checks to the concurrent steps. Cargo profiles use the separately owned Cargo source/cache layers and MUST NOT install or invoke MBX.
 
 Parallel Clippy may increase peak memory. Where the measured runner cannot safely support both configurations, schedule them in separate groups while retaining both checks. Resource barriers are valid optimization choices; removing checks is not.
 
 ## 8. Build once and partition tests safely
 
-Only a detected Nextest profile uses Nextest build reuse. Compile each required test configuration once into a qualified archive, then execute that archive. Small suites use one Nextest invocation. Large suites fan out partition jobs only when measurement shows execution savings exceed extra runner setup and artifact transfer. Until actionlint supports native step parallel syntax, Velnor MUST use job-level matrix fan-out rather than `parallel:` steps. Each partition uses a unique extraction directory. The archive identity MUST include source/input digest, package, target, features, profile, toolchain, linker/runtime requirements, Nextest version, and archive format. Cargo-test profiles do not create a Nextest archive. An archive is compiled executable data, so trust and retention rules must match its source.
+Only a detected Nextest profile uses Nextest build reuse. Compile each required test configuration once into a qualified archive, then execute that archive. Small suites use one Nextest invocation. Large suites fan out partition jobs only when measurement shows execution savings exceed extra runner setup and artifact transfer. Partition fan-out across runners uses job-level matrices; native step concurrency is reserved for the checks of one crate job. Each partition uses a unique extraction directory. The archive identity MUST include source/input digest, package, target, features, profile, toolchain, linker/runtime requirements, Nextest version, and archive format. Cargo-test profiles do not create a Nextest archive. An archive is compiled executable data, so trust and retention rules must match its source.
 
 `manifest-key` is the normalized repository-relative path to the Cargo manifest
 without the trailing `/Cargo.toml`; the root manifest uses `root`. Every

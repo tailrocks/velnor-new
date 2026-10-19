@@ -19,23 +19,19 @@ Workflow to generate
     - plan (11 steps)
     - publish-baseline (5 steps)
     - required (8 steps)
-    - rust-empty-suite-docs (11 steps)
-    - rust-empty-suite-lint (11 steps)
-    - rust-empty-suite-tests (10 steps)
-    - 3 Rust phase jobs
+    - rust-empty-suite (14 steps)
+    - 1 Rust crate job
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> doc build -> format check
       Entries:
-        - rust-empty-suite-docs
-        - rust-empty-suite-lint
-        - rust-empty-suite-tests
+        - rust-empty-suite
       Obligations:
         - stack/rust/root/build/default
         - stack/rust/root/clippy/default
         - stack/rust/root/doc/default
         - stack/rust/root/fmt/default
-  Parallel: 3 execution jobs; dependencies preserved; no matrix fan-out
-  Critical path: stack/rust/root/clippy/default -> stack/rust/root/build/default (2 tasks)
+  Parallel: 1 execution job; dependencies preserved; no matrix fan-out
+  Critical path: stack/rust/root/build/default (1 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools
   Actionlint: 1.7.12 pinned

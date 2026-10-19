@@ -12,6 +12,7 @@ use super::{DISPATCH_DENY, suppress_unvalidated_cache_access};
 
 pub(crate) fn cache_step(uses: &str, name: &str) -> Step {
     Step {
+        parallel: false,
         name: name.to_owned(),
         id: None,
         role: None,
@@ -99,6 +100,7 @@ fn acquire_step(staged: &str) -> Result<Step, crate::RenderError> {
 
 fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
     let action = Step {
+        parallel: false,
         name: "Restore MBX objects".to_owned(),
         id: None,
         role: None,
@@ -129,6 +131,7 @@ fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
             acquire_step(staged)?,
             action,
             Step {
+                parallel: false,
                 name: "Build".to_owned(),
                 id: None,
                 role: None,

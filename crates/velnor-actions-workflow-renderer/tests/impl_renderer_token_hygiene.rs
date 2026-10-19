@@ -37,6 +37,7 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
         vec![
             checkout_step(&checkout_pin())?,
             Step {
+                parallel: false,
                 name: "Plan".to_owned(),
                 id: None,
                 role: None,
@@ -70,6 +71,7 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
         vec![
             checkout_step(&checkout_pin())?,
             Step {
+                parallel: false,
                 name: "Leak".to_owned(),
                 id: None,
                 role: None,
@@ -138,6 +140,7 @@ fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
         "Task",
         vec!["plan".to_owned()],
         vec![velnor_actions_contract::Step {
+            parallel: false,
             name: "Run task".to_owned(),
             id: None,
             role: None,
@@ -203,6 +206,7 @@ fn token_hygiene_constructor_owns_overlay_and_rejects_all_nine_keys() -> Result<
             "Task",
             vec!["plan".to_owned()],
             vec![Step {
+                parallel: false,
                 name: "Run task".to_owned(),
                 id: None,
                 role: None,
@@ -242,6 +246,7 @@ fn scrub_coverage_rejects_bare_and_partial_shell_env() -> Result<(), RenderError
             vec![
                 checkout_step(&checkout_pin())?,
                 Step {
+                    parallel: false,
                     name: "Run task".to_owned(),
                     id: None,
                     role: None,

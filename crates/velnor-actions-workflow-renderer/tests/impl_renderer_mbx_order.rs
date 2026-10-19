@@ -8,6 +8,7 @@ use super::impl_renderer_fixtures::LABEL;
 #[test]
 fn typed_mbx_owner_precedes_cargo_source_fetch_independent_of_labels() {
     let fetch = Step {
+        parallel: false,
         name: "Presentation-only fetch label".to_owned(),
         id: None,
         role: Some(StepRole::CargoSourcesFetch),
@@ -18,6 +19,7 @@ fn typed_mbx_owner_precedes_cargo_source_fetch_independent_of_labels() {
         },
     };
     let mbx = Step {
+        parallel: false,
         name: "Presentation-only MBX label".to_owned(),
         id: None,
         role: Some(StepRole::MbxCache),

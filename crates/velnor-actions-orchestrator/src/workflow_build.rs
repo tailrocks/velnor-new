@@ -95,6 +95,7 @@ pub(crate) fn build_workflow_for_consumer_release(
 
 fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, OrchestratorError> {
     wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
+    wire_w1::vet_step_syntax(StepSyntax::NativeParallelism)?;
     crate::rust_suites_emit::validate_suites_against_repo(
         input.root,
         input.config,

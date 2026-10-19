@@ -156,11 +156,14 @@ struct GroupBase<'a> {
     package: &'a PackageRecord,
 }
 
-/// Derive the per-package task groups; Clippy gates build, test, doctest, doc.
+/// Derive the per-package task groups.
 ///
 /// Formatting is per package only with explicit configuration; otherwise the
 /// plan-job Format step covers formatting. The build group exists only for
-/// Nextest profiles; plain `cargo test` compiles and runs in one step.
+/// Nextest profiles; plain `cargo test` compiles and runs in one step. The
+/// only edge is the Nextest data dependency on its build: Clippy,
+/// documentation, test execution and doctests are independent checks that
+/// one crate job runs concurrently, and each must pass on its own.
 ///
 /// # Errors
 ///
@@ -184,33 +187,20 @@ pub fn derive_task_groups(inputs: &DeriveInputs<'_>) -> Result<Vec<TaskGroup>, C
     let mut groups = vec![clippy_group(&base, &clippy_id)];
     let (build_id, test_kind) = if inputs.profile.test_runner == TestRunner::CargoNextest {
         let id = task_id(&base, TaskKind::Build)?;
-        groups.push(plain_group(
-            &base,
-            TaskKind::Build,
-            &id,
-            std::slice::from_ref(&clippy_id),
-            &[],
-        ));
+        groups.push(plain_group(&base, TaskKind::Build, &id));
         (Some(id), TaskKind::Nextest)
     } else {
         (None, TaskKind::Test)
     };
     let test_id = task_id(&base, test_kind)?;
-    groups.push(test_group(
-        &base,
-        test_kind,
-        &test_id,
-        &clippy_id,
-        build_id.as_deref(),
-    ));
+    groups.push(test_group(&base, test_kind, &test_id, build_id.as_deref()));
     let doctest_id = task_id(&base, TaskKind::Doctest)?;
-    groups.push(doctest_group(&base, &doctest_id, &clippy_id));
+    groups.push(doctest_group(&base, &doctest_id));
     let doc_id = task_id(&base, TaskKind::Doc)?;
-    let doc_gates = [clippy_id.clone(), doctest_id.clone()];
-    groups.push(plain_group(&base, TaskKind::Doc, &doc_id, &doc_gates, &[]));
+    groups.push(plain_group(&base, TaskKind::Doc, &doc_id));
     if inputs.explicit_fmt {
         let fmt_id = task_id(&base, TaskKind::Fmt)?;
-        groups.push(plain_group(&base, TaskKind::Fmt, &fmt_id, &[], &[]));
+        groups.push(plain_group(&base, TaskKind::Fmt, &fmt_id));
     }
     Ok(groups)
 }
@@ -293,14 +283,8 @@ fn task_id(base: &GroupBase<'_>, kind: TaskKind) -> Result<String, ContractError
     )
 }
 
-/// Build a group with explicit gate and data edges.
-fn plain_group(
-    base: &GroupBase<'_>,
-    kind: TaskKind,
-    id: &str,
-    gated_by: &[String],
-    depends_on: &[String],
-) -> TaskGroup {
+/// Build a group without gate or data edges.
+fn plain_group(base: &GroupBase<'_>, kind: TaskKind, id: &str) -> TaskGroup {
     TaskGroup {
         task_id: id.to_owned(),
         package_id: base.package.id.clone(),
@@ -310,8 +294,8 @@ fn plain_group(
         configuration: base.configuration.to_owned(),
         features: base.features.to_vec(),
         target: base.target.to_owned(),
-        gated_by: gated_by.to_vec(),
-        depends_on: depends_on.to_vec(),
+        gated_by: Vec::new(),
+        depends_on: Vec::new(),
         target_flags: Vec::new(),
         no_test_targets: false,
         package_arg: None,
@@ -329,20 +313,14 @@ fn plain_group(
 
 /// Build the Clippy gate naming exactly one package.
 fn clippy_group(base: &GroupBase<'_>, id: &str) -> TaskGroup {
-    let mut group = plain_group(base, TaskKind::Clippy, id, &[], &[]);
+    let mut group = plain_group(base, TaskKind::Clippy, id);
     group.package_arg = Some(base.package.name.clone());
     group
 }
 
 /// Build the test group with metadata-derived target flags.
-fn test_group(
-    base: &GroupBase<'_>,
-    kind: TaskKind,
-    id: &str,
-    clippy_id: &str,
-    build_id: Option<&str>,
-) -> TaskGroup {
-    let mut group = plain_group(base, kind, id, &[clippy_id.to_owned()], &[]);
+fn test_group(base: &GroupBase<'_>, kind: TaskKind, id: &str, build_id: Option<&str>) -> TaskGroup {
+    let mut group = plain_group(base, kind, id);
     if kind == TaskKind::Test {
         group.target_flags = target_flags(base.package);
     }
@@ -358,8 +336,8 @@ fn test_group(
 }
 
 /// Build the doctest group, separate in either test profile.
-fn doctest_group(base: &GroupBase<'_>, id: &str, clippy_id: &str) -> TaskGroup {
-    let mut group = plain_group(base, TaskKind::Doctest, id, &[clippy_id.to_owned()], &[]);
+fn doctest_group(base: &GroupBase<'_>, id: &str) -> TaskGroup {
+    let mut group = plain_group(base, TaskKind::Doctest, id);
     group.no_test_targets = !base.package.targets.iter().any(|target| target.doctest);
     group
 }

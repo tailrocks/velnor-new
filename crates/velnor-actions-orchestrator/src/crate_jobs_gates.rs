@@ -1,8 +1,9 @@
-//! Preserve declared quality and data gates across native execution phases.
+//! Lift gates owned by another job into exact job dependencies.
 //!
-//! Same-phase gates remain ordered obligations. A gate in another phase becomes
-//! an exact owning-job dependency; it must succeed before this job can start.
-//! No-target obligations remain vacuous, as in the ordered crate-job model.
+//! Gates inside one crate job are ordered obligations (the Nextest build runs
+//! before the parallel checks). A gate in another job becomes an exact
+//! owning-job dependency; it must succeed before this job can start.
+//! No-target obligations remain vacuous.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -14,7 +15,7 @@ use crate::crate_job_ids::job_id_for_member;
 use crate::internal::internal;
 
 #[cfg(test)]
-#[path = "crate_jobs_phase_workflow_tests.rs"]
+#[path = "crate_jobs_gates_workflow_tests.rs"]
 mod workflow_tests;
 
 /// Lift runnable external gate owners into deterministic job dependencies.
@@ -51,38 +52,21 @@ mod tests {
     use velnor_actions_rust::TaskKind;
 
     #[test]
-    fn cross_phase_quality_gate_becomes_exact_owner_dependency() {
-        let lint = group("demo", TaskKind::Clippy, &[]);
-        let build = group("demo", TaskKind::Build, &[&lint.task_id]);
-        let mut test = group("demo", TaskKind::Nextest, &[&lint.task_id]);
+    fn foreign_gate_becomes_exact_owner_dependency_and_local_data_stays_local() {
+        let foreign = group("other", TaskKind::Clippy, &[]);
+        let build = group("demo", TaskKind::Build, &[]);
+        let mut test = group("demo", TaskKind::Nextest, &[&foreign.task_id]);
         test.depends_on.push(build.task_id.clone());
-        let proposals = vec![lint.clone(), build, test.clone()];
+        let proposals = vec![foreign.clone(), build, test.clone()];
         let current = job_id_for_member(&proposals, &test)
-            .expect("valid phase")
+            .expect("valid owner")
             .expect("test owner");
-        let lint_owner = job_id_for_member(&proposals, &lint)
-            .expect("valid phase")
-            .expect("lint owner");
-        let needs = external_needs(&[&test], &proposals, &current).expect("phase needs");
-        assert_eq!(needs, vec![PLAN_JOB_ID.to_owned(), lint_owner]);
-        assert!(!needs.contains(&current), "same-phase data stays local");
-    }
-
-    #[test]
-    fn docs_retain_both_distinct_quality_and_doctest_owners() {
-        let lint = group("demo", TaskKind::Clippy, &[]);
-        let doctest = group("demo", TaskKind::Doctest, &[&lint.task_id]);
-        let mut docs = group("demo", TaskKind::Doc, &[&lint.task_id]);
-        docs.depends_on = vec![doctest.task_id.clone(), doctest.task_id.clone()];
-        let proposals = vec![docs.clone(), doctest, lint];
-        let owner = job_id_for_member(&proposals, &docs)
-            .expect("valid phase")
-            .expect("docs owner");
-        let needs = external_needs(&[&docs], &proposals, &owner).expect("phase needs");
-        assert_eq!(needs.len(), 3, "plan, lint and tests, without duplicates");
-        assert!(needs.iter().any(|id| id.ends_with("-lint")));
-        assert!(needs.iter().any(|id| id.ends_with("-tests")));
-        assert!(!needs.contains(&owner));
+        let foreign_owner = job_id_for_member(&proposals, &foreign)
+            .expect("valid owner")
+            .expect("foreign owner");
+        let needs = external_needs(&[&test], &proposals, &current).expect("needs");
+        assert_eq!(needs, vec![PLAN_JOB_ID.to_owned(), foreign_owner]);
+        assert!(!needs.contains(&current), "same-job data stays local");
     }
 
     #[test]
@@ -92,7 +76,7 @@ mod tests {
         let docs = group("demo", TaskKind::Doc, &[&doctest.task_id]);
         let proposals = vec![doctest, docs.clone()];
         let owner = job_id_for_member(&proposals, &docs)
-            .expect("valid phase")
+            .expect("valid owner")
             .expect("docs owner");
         assert_eq!(
             external_needs(&[&docs], &proposals, &owner).expect("vacuous gate"),

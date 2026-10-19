@@ -83,6 +83,7 @@ fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
     let cache_path = "${{ runner.temp }}/velnor/tofu-cache/root-0123456789ab";
     let cache_key = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-${{hashFiles('.terraform.lock.hcl')}}";
     let restore = Step {
+        parallel: false,
         name: "Restore Tofu providers".to_owned(),
         id: Some(StepId::TofuProviders),
         role: Some(StepRole::TofuProvidersRestore),
@@ -97,16 +98,15 @@ fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
         },
     };
     let consumer = Step {
+        parallel: false,
         name: "Init for validate".to_owned(),
         id: None,
         role: Some(StepRole::TofuProviderUse),
         condition: None,
         kind: StepKind::Shell {
-            run: vec![
-                "tofu".to_owned(),
-                "init".to_owned(),
-                "-lockfile=readonly".to_owned(),
-            ],
+            run: ["tofu", "init", "-lockfile=readonly"]
+                .map(str::to_owned)
+                .to_vec(),
             env: BTreeMap::from([
                 ("TF_PLUGIN_CACHE_DIR".to_owned(), cache_path.to_owned()),
                 (

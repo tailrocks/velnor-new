@@ -85,10 +85,9 @@ argv directly with the validated environment. The workflow action input is
 the full `digest`; task ID stays in the manifest and plan-coverage condition,
 not as a second selector.
 
-Each nonempty fixed Rust phase job MUST expose its owned obligations as named
-steps, preceded by the common preparation applicable to its tools and inputs.
-It MUST NOT repeat another phase's obligation or emit placeholder work merely
-to reproduce the former combined job. A validated no-op for an applicable
+Each Rust crate job MUST expose its owned obligations as named steps, preceded
+once by the common preparation applicable to its tools and inputs. It MUST NOT
+emit placeholder work. A validated no-op for an applicable
 obligation MUST report its reason; no-target tasks remain excluded by the
 existing planning rule.
 
@@ -158,32 +157,34 @@ Common preparation for each phase follows the existing tool and source ownership
    cache when applicable. Keep their existing independent trust/write rules.
 4. Verify prepared inputs through locked/offline checks before obligations.
 
-The closed phase owners execute these obligations:
+The one crate job (a [hard decision](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps))
+executes these obligations:
 
-- `lint`: package formatting when explicitly configured, then Clippy.
-  Workspace formatting remains owned by `plan`.
-- `tests`: the applicable test-executable build, the detected test runner,
-  then doctests. Nextest is selected only with explicit project usage;
-  otherwise the existing Cargo-test command compiles and runs tests. Keep
-  executable builds and their consumers on the same runner. Existing shard
-  steps retain their complete partition coverage requirements.
-- `docs`: package documentation with rustdoc warnings denied.
+- Sequentially first: the Nextest test-executable build. Nextest is selected
+  only with explicit project usage; otherwise the existing Cargo-test command
+  compiles and runs tests inside the parallel group.
+- Then one parallel group joined by `wait-all`: package formatting when
+  explicitly configured (workspace formatting remains owned by `plan`),
+  Clippy, the detected test runner (each shard keeps its complete partition
+  coverage), doctests, and package documentation with rustdoc warnings denied.
+  Clippy and documentation compile in their own Cargo target lanes.
 
-Every runnable task has exactly one owner. Same-phase quality/data gates MUST
-refer to strictly earlier obligations. A gate owned by another phase MUST
-become an exact owning-job `needs` dependency. Thus test work cannot start
-after its Clippy owner fails, and docs cannot start before their applicable
-Clippy and doctest owners succeed. Different packages or configurations may
-run concurrently only when no declared dependency orders them; distinct job
-names do not imply independence. There is no global all-package lint barrier.
+Every runnable task has exactly one owner. Same-job data gates MUST refer to
+strictly earlier sequential obligations; no parallel member may gate on
+another. The checks carry no quality gates on each other: each must pass on
+its own, and a failed member fails the job at the join. A gate owned by
+another job MUST become an exact owning-job `needs` dependency. Different
+packages or configurations may run concurrently only when no declared
+dependency orders them. There is no global all-package lint barrier.
 
-Each phase retains eligible cache saves and exact task/report publication under
-its own `workflow.crate_timeout_minutes` job budget. `Required` joins every emitted phase and admits
-all expected task proofs and job conclusions. A missing, skipped, canceled or
-failed required phase cannot be treated as success. Default Rust validation
-uses literal phase jobs, not a per-task matrix. Explicit named Nextest suites
-retain their separately declared matrix/archive fan-out and `fail-fast: false`
-policy; that suite mechanism does not redefine the default phase owners.
+Each crate job retains eligible cache saves and exact task/report publication
+under its `workflow.crate_timeout_minutes` job budget; the report upload runs
+after the join. `Required` joins every emitted crate job and admits all expected
+task proofs and job conclusions. A missing, skipped, canceled or failed required
+job cannot be treated as success. Default Rust validation uses literal crate
+jobs, not a per-task matrix. Explicit named Nextest suites retain their
+separately declared matrix/archive fan-out and `fail-fast: false` policy; that
+suite mechanism does not redefine the default crate owners.
 See the [parallelism and affected-work contract](parallelism-and-selection-contract.md)
 for resource bounds, exact baseline coverage and complete test partitioning.
 
