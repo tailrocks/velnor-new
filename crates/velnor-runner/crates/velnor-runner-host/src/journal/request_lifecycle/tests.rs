@@ -1,5 +1,7 @@
 //! Request and physical runner journal regressions.
 
+mod acquired_population_read;
+mod acquired_recovery;
 mod admission;
 mod authorized_offers;
 mod cleanup_identity;
@@ -98,7 +100,7 @@ pub(crate) async fn native_pre_challenge_fixture()
         name: helpers::runner_name('a'),
         runner_scale_set_id: SET_ID,
     };
-    helpers::prepare_jit_and_job_facts(&scope, provisioned, &runner).await?;
+    helpers::prepare_jit_and_job_facts(&scope, provisioned, &runner, REQUEST_ID).await?;
     let channel = crate::worker::execution_authorization::test_channel_for_ready_job_facts(
         initialized.reservation_id,
         initialized.intent_id,
@@ -162,7 +164,7 @@ pub(crate) async fn native_started_intake_fixture()
         name: helpers::runner_name('a'),
         runner_scale_set_id: SET_ID,
     };
-    helpers::prepare_jit_and_job_facts(&scope, provisioned, &runner).await?;
+    helpers::prepare_jit_and_job_facts(&scope, provisioned, &runner, REQUEST_ID).await?;
     let channel = crate::worker::execution_authorization::test_channel_for_ready_job_facts(
         initialized.reservation_id,
         initialized.intent_id,
@@ -195,7 +197,7 @@ pub(crate) async fn native_started_intake_fixture()
         intent_id: initialized.intent_id,
         reservation_id: initialized.reservation_id,
         assignment: initialized.assignment,
-        reservation_assignment: initialized.reservation_assignment,
+        reservation_assignment: initialized.provisioned.assignment.clone(),
         runner,
         source,
         channel,

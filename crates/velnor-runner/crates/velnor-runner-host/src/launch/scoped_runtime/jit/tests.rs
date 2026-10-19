@@ -65,6 +65,7 @@ async fn jit_conflict_keeps_resources_charged_and_never_replays() -> Result<(), 
     crate::journal::request_lifecycle::tests::helpers::record_acquired(&scope, 70).await?;
     let physical = provision_physical_intent_with_initialization(&scope, 'b', 'b').await?;
     let runner_name = format!("v{}", "b".repeat(32));
+    let (policy_generation, policy_digest) = scope.test_active_authority_identity().await?;
     let calls = Arc::new(AtomicUsize::new(0));
     let mut transport = ConflictTransport(calls.clone());
 
@@ -73,8 +74,12 @@ async fn jit_conflict_keeps_resources_charged_and_never_replays() -> Result<(), 
         "test-admin-token",
         &scope,
         physical.intent_id,
+        physical.reservation_id,
+        70,
         &runner_name,
         SET_ID,
+        policy_generation,
+        &policy_digest,
     )
     .await;
     assert!(matches!(result, Err(EnsureError::Conflict)));
@@ -131,8 +136,12 @@ async fn jit_conflict_keeps_resources_charged_and_never_replays() -> Result<(), 
         "test-admin-token",
         &scope,
         physical.intent_id,
+        physical.reservation_id,
+        70,
         &runner_name,
         SET_ID,
+        policy_generation,
+        &policy_digest,
     )
     .await;
     assert!(matches!(replay, Err(EnsureError::Uncertain)));

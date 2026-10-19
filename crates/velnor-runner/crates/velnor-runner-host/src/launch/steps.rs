@@ -32,7 +32,8 @@ pub(super) use scale::scale_id;
 pub(super) use scale::scale_unacked;
 
 pub(crate) use scoped::{
-    AcquiredProvisioning, ScopedProvisioningOutcome, acquire_authorized_request, acquire_scoped,
+    AcquiredProvisioning, CheckedAcquiredRecovery, ScopedProvisioningOutcome,
+    acquire_authorized_request, acquire_scoped,
 };
 
 /// What one poll allows before acquire.

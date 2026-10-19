@@ -29,6 +29,8 @@ pub(super) struct PreparedConnection {
     pub(super) scope: ConnectionJournal,
     pub(super) set_id: i64,
     pub(super) session_intent: i64,
+    /// Assigned job count for this `QueueSession`.
+    pub(super) assigned_total: Option<i64>,
     /// Exclusive queue cursor while an unacknowledged head is deferred.
     pub(super) poll_cursor: i64,
     /// Time after which the deferred head should be retried from cursor zero.
@@ -51,7 +53,17 @@ pub(super) struct PreparedConnection {
     pub(super) unkeyed_acquired_recovery: Vec<PendingAcquiredRecovery>,
 }
 
+pub(super) fn session_assigned_total(
+    statistics: Option<&velnor_runner_github::Statistics>,
+) -> Option<i64> {
+    statistics.map(velnor_runner_github::Statistics::assigned_population)
+}
+
 impl PreparedConnection {
+    pub(super) fn record_assigned_total(&mut self, assigned_total: Option<i64>) {
+        record_assigned_total(&mut self.assigned_total, assigned_total);
+    }
+
     pub(super) fn cursor_for_poll(&mut self, now: Instant) -> i64 {
         (self.poll_cursor, self.poll_retry_at) =
             expire_cursor(self.poll_cursor, self.poll_retry_at, now);
@@ -130,7 +142,9 @@ mod cursor_tests {
 
     use crate::launch::CursorDisposition;
 
-    use super::{apply_cursor_disposition, expire_cursor};
+    use super::{
+        apply_cursor_disposition, expire_cursor, record_assigned_total, session_assigned_total,
+    };
 
     #[test]
     fn deferred_head_does_not_block_lifecycle_cursor_progress() {
@@ -168,6 +182,39 @@ mod cursor_tests {
             apply_cursor_disposition(0, None, Some(0), CursorDisposition::Unchanged, now,),
             (0, None)
         );
+    }
+
+    #[test]
+    fn missing_poll_statistics_retain_the_current_session_snapshot() {
+        let mut assigned_total = session_assigned_total(Some(&statistics(4)));
+        assert_eq!(assigned_total, Some(4));
+        record_assigned_total(&mut assigned_total, Some(6));
+        assert_eq!(assigned_total, Some(6));
+        record_assigned_total(&mut assigned_total, None);
+        assert_eq!(assigned_total, Some(6));
+
+        // A replacement session starts from its own create/refresh response.
+        assigned_total = session_assigned_total(Some(&statistics(2)));
+        record_assigned_total(&mut assigned_total, None);
+        assert_eq!(assigned_total, Some(2));
+    }
+
+    fn statistics(total_assigned_jobs: i64) -> velnor_runner_github::Statistics {
+        velnor_runner_github::Statistics {
+            total_available_jobs: 0,
+            total_acquired_jobs: 0,
+            total_assigned_jobs,
+            total_running_jobs: 0,
+            total_registered_runners: 0,
+            total_busy_runners: 0,
+            total_idle_runners: 0,
+        }
+    }
+}
+
+fn record_assigned_total(current: &mut Option<i64>, sample: Option<i64>) {
+    if sample.is_some() {
+        *current = sample;
     }
 }
 

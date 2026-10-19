@@ -13,13 +13,13 @@ use crate::{
     journal::{ConnectionJournal, StorageInitializationClaim},
 };
 
-use super::super::{
+use super::bounded_by_deadline;
+use crate::worker::storage_initialization::{
     VerifiedStorageInitializerAbortRemoval, VerifiedStorageInitializerAbsent,
     verification::{
         container_matches_claim, inspect_container, verify_engine, verify_image, verify_volumes,
     },
 };
-use super::bounded_by_deadline;
 
 /// Complete helper cleanup before the first job container starts.
 pub(crate) async fn recover_absent(

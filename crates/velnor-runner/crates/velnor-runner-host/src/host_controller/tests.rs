@@ -4,8 +4,12 @@ use crate::config::RepositoryConnection;
 use crate::config_test_support::{basic_connection, host_config};
 use crate::{HostConfig, HostError};
 
+#[path = "tests/header_fairness.rs"]
+mod header_fairness;
+
 use super::loop_driver::{
-    TransitionEffects, apply_config_transition, requested_header_capacity, retire_pending,
+    TransitionEffects, apply_config_transition, requested_header_capacity,
+    requested_header_capacity_after, retire_pending,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -297,5 +301,35 @@ fn session_header_targets_allow_zero_when_connections_exceed_capacity() -> Resul
 
     assert_eq!(targets, [1, 1, 0]);
     assert_eq!(targets.iter().sum::<u32>(), config.max_jobs());
+    Ok(())
+}
+
+#[test]
+fn oversubscribed_header_targets_follow_the_durable_connection_cursor() -> Result<(), HostError> {
+    let config = HostConfig::parse(&host_config(
+        &[
+            basic_connection("gamma", 303, "owner/three", "three", "three-set"),
+            basic_connection("alpha", 101, "owner/one", "one", "one-set"),
+            basic_connection("beta", 202, "owner/two", "two", "two-set"),
+        ],
+        1,
+    ))?;
+    let targets = |cursor: Option<&crate::config::ConnectionId>| {
+        config
+            .connections()
+            .iter()
+            .map(|binding| requested_header_capacity_after(&config, binding, cursor))
+            .collect::<Result<Vec<_>, _>>()
+    };
+
+    assert_eq!(targets(None)?, [0, 1, 0]);
+    assert_eq!(
+        targets(Some(&crate::config::ConnectionId::parse("alpha")?))?,
+        [0, 0, 1]
+    );
+    assert_eq!(
+        targets(Some(&crate::config::ConnectionId::parse("beta")?))?,
+        [1, 0, 0]
+    );
     Ok(())
 }

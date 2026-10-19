@@ -10,14 +10,22 @@ use crate::{
     journal::Journal,
     launch::{
         ReleaseReadSecret, SelectedEngineContext, SessionDeleteOutcome, VerifiedWorkerImages,
-        delete_removed_connection_session, poll_scoped_connection_once,
+        delete_removed_connection_session,
     },
 };
 
 use super::{
-    polling::{ControllerPollOutcome, PositivePollContext, poll_positive_connection},
+    polling::{
+        ControllerPollOutcome, PositivePollContext, poll_positive_connection,
+        poll_zero_header_connection,
+    },
     state::PreparedConnection,
 };
+
+#[path = "connection_poll/fairness.rs"]
+pub(super) mod fairness;
+
+use fairness::{FairnessTurn, HeaderPollPlan};
 
 pub(super) async fn poll_active_connections(
     config: &HostConfig,
@@ -30,7 +38,11 @@ pub(super) async fn poll_active_connections(
     state: &Path,
     release_read_secret: &ReleaseReadSecret,
     admission_ready: bool,
-) -> Result<(), HostError> {
+    fairness_enabled: bool,
+    rotate: bool,
+) -> Result<ConnectionPollOutcome, HostError> {
+    let mut result = ConnectionPollOutcome::default();
+    let mut turn = FairnessTurn::new(fairness_enabled, rotate);
     let mut index = 0;
     while index < connections.len() {
         let prepared = &mut connections[index];
@@ -75,7 +87,7 @@ pub(super) async fn poll_active_connections(
         };
         // A removed binding must pass the read-only drain check before its
         // final zero poll. The delete permission operation does this check again in the same transaction.
-        let drained_before_poll = if is_removed {
+        let drained_before_poll = if is_removed || turn.retiring() {
             match prepared
                 .scope
                 .session_work_drained(prepared.session_intent)
@@ -95,7 +107,10 @@ pub(super) async fn poll_active_connections(
         } else {
             false
         };
-        let outcome = if !is_removed && allocation.target() > 0 {
+        let poll_plan = turn.poll_plan(is_removed, allocation.target(), || {
+            prepared.cursor_for_poll(std::time::Instant::now())
+        });
+        let outcome = if poll_plan == HeaderPollPlan::Positive {
             let poll_context = PositivePollContext {
                 config,
                 journal,
@@ -114,22 +129,31 @@ pub(super) async fn poll_active_connections(
             .await
             .map_err(|_| HostError::Journal)
         } else {
-            let cursor = prepared.cursor_for_poll(std::time::Instant::now());
-            let polled = if let Some(credentials) = prepared.credentials.as_mut() {
-                poll_scoped_connection_once(
-                    &mut credentials.link,
-                    prepared.set_id,
-                    &mut credentials.session,
-                    &prepared.scope,
-                    prepared.session_intent,
-                    &allocation,
-                    cursor,
-                )
-                .await
-            } else {
-                index += 1;
-                continue;
+            let HeaderPollPlan::Zero { cursor } = poll_plan else {
+                return Err(HostError::Journal);
             };
+            let poll_context = PositivePollContext {
+                config,
+                journal,
+                docker,
+                selected_engine,
+                worker_images,
+                state,
+                release_read_secret,
+                admission_ready,
+            };
+            let retired_binding = pending_retirements
+                .iter()
+                .find(|binding| prepared.is_for(binding));
+            let polled = poll_zero_header_connection(
+                prepared,
+                &allocation,
+                &poll_context,
+                cursor,
+                turn.retiring() || is_removed,
+                retired_binding,
+            )
+            .await;
             polled
                 .map(|outcome| {
                     prepared.record_cursor_disposition(
@@ -153,17 +177,38 @@ pub(super) async fn poll_active_connections(
                 continue;
             }
         };
+        if outcome.positive_poll_settled {
+            result.positive_poll_settled = true;
+            turn.observe_positive_poll(true);
+        }
         let started_request_ids = outcome.started_request_ids;
+        prepared.record_assigned_total(outcome.assigned_total);
+        let population_context = PositivePollContext {
+            config,
+            journal,
+            docker,
+            selected_engine,
+            worker_images,
+            state,
+            release_read_secret,
+            admission_ready,
+        };
+        if !is_removed {
+            super::polling::reconcile_assigned_population(prepared, &population_context).await?;
+        }
         if outcome.wake_cleanup
             && let Some(completion) = prepared.completion.as_ref()
         {
             completion.notify();
         }
 
-        let should_delete = is_removed
-            && drained_before_poll
-            && outcome.session_delete_candidate
-            && !prepared.has_live_execution_state();
+        let should_delete = turn.should_delete(
+            is_removed,
+            outcome.poll_kind,
+            drained_before_poll,
+            outcome.session_delete_candidate,
+            !prepared.has_live_execution_state(),
+        );
         let mut remove_prepared = false;
         if should_delete {
             let Some(credentials) = prepared.credentials.as_mut() else {
@@ -230,5 +275,12 @@ pub(super) async fn poll_active_connections(
             index += 1;
         }
     }
-    Ok(())
+    result.rotation_complete = turn.rotation_complete(connections.is_empty());
+    Ok(result)
+}
+
+#[derive(Default)]
+pub(super) struct ConnectionPollOutcome {
+    pub(super) positive_poll_settled: bool,
+    pub(super) rotation_complete: bool,
 }

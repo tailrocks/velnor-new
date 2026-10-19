@@ -82,26 +82,6 @@ pub(super) async fn physical_intent_is_fresh(
         .is_some_and(|nonce| valid_nonce(nonce) && requested_name == format!("v{nonce}")))
 }
 
-pub(super) async fn acquired_witness(
-    connection: &turso::Connection,
-    connection_id: &str,
-    set_id: i64,
-    binding_digest: &str,
-) -> Result<Option<i64>, HostError> {
-    let mut rows = connection
-        .query(
-            "SELECT request_id FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND binding_digest = ?3 AND authority_model = 'created_empty_exclusive_admin_session_v1' AND acquire_state = 'acquired' AND started_event_digest IS NULL AND completed_event_digest IS NULL AND NOT EXISTS (SELECT 1 FROM connection_runner_jits WHERE connection_runner_jits.connection_id = ?1 AND connection_runner_jits.scale_set_id = ?2 AND connection_runner_jits.witness_request_id = connection_request_authorizations.request_id AND connection_runner_jits.state != 'cleaned') ORDER BY request_id LIMIT 1",
-            (connection_id, set_id, binding_digest),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    rows.next()
-        .await
-        .map_err(|_| HostError::Journal)?
-        .map(|row| row.get(0).map_err(|_| HostError::Journal))
-        .transpose()
-}
-
 pub(super) async fn has_legacy_receipts(
     connection: &turso::Connection,
     connection_id: &str,

@@ -70,6 +70,8 @@ pub(super) fn parse_reservation(
     let reservation = read_reservation(row)?;
     let intent = read_intent(row)?;
     let jit = read_runner_jit(row)?;
+    let (acquired_request, request_link_is_consistent) =
+        read_acquired_request(row, scope, current_set_id, &reservation, &intent, &jit)?;
     let encoded_set_id = assignment_set_id(scope, &reservation.key);
     let set_id = intent.set_id.or(encoded_set_id).unwrap_or_default();
     let assignment = parse_assignment(scope, set_id, &reservation.key);
@@ -85,6 +87,7 @@ pub(super) fn parse_reservation(
         assignment.is_some(),
         expected_name.as_deref(),
         runner.is_some(),
+        request_link_is_consistent,
     );
     let ownership = match (known, assignment) {
         (true, Some(identity)) => PhysicalRunnerOwnership::Known(identity),
@@ -98,6 +101,7 @@ pub(super) fn parse_reservation(
         runner,
         ownership,
         resume_eligible,
+        acquired_request,
     ))
 }
 
@@ -111,6 +115,7 @@ fn reservation_identity_is_known(
     assignment_found: bool,
     expected_name: Option<&str>,
     runner_found: bool,
+    request_link_is_consistent: bool,
 ) -> bool {
     intent.row_id == Some(reservation.intent_id)
         && intent.kind.as_deref() == Some("launch")
@@ -135,6 +140,7 @@ fn reservation_identity_is_known(
         )
         && phase_matches_jit(jit.state, intent.phase)
         && request_ids_are_consistent(intent, jit)
+        && request_link_is_consistent
 }
 
 fn request_ids_are_consistent(intent: &IntentSnapshot, jit: &RunnerJitSnapshot) -> bool {
@@ -152,6 +158,73 @@ fn request_ids_are_consistent(intent: &IntentSnapshot, jit: &RunnerJitSnapshot) 
             jit.started_request_id == Some(request_id)
                 || jit.completed_request_id == Some(request_id)
         })
+}
+
+fn read_acquired_request(
+    row: &turso::Row,
+    scope: &ConnectionJournal,
+    current_set_id: Option<i64>,
+    reservation: &ReservationRow,
+    intent: &IntentSnapshot,
+    jit: &RunnerJitSnapshot,
+) -> Result<(Option<AssignmentIdentity>, bool), HostError> {
+    let request_id: Option<i64> = row.get(38).map_err(|_| HostError::Journal)?;
+    let link_set_id: Option<i64> = row.get(39).map_err(|_| HostError::Journal)?;
+    let link_binding: Option<String> = row.get(40).map_err(|_| HostError::Journal)?;
+    let acquire_state: Option<String> = row.get(41).map_err(|_| HostError::Journal)?;
+    let authority_model: Option<String> = row.get(42).map_err(|_| HostError::Journal)?;
+    let auth_binding: Option<String> = row.get(43).map_err(|_| HostError::Journal)?;
+    let started_digest: Option<String> = row.get(44).map_err(|_| HostError::Journal)?;
+    let completed_digest: Option<String> = row.get(45).map_err(|_| HostError::Journal)?;
+    let Some(request_id) = request_id else {
+        let consistent = link_set_id.is_none()
+            && link_binding.is_none()
+            && acquire_state.is_none()
+            && authority_model.is_none()
+            && auth_binding.is_none()
+            && started_digest.is_none()
+            && completed_digest.is_none();
+        return Ok((None, consistent));
+    };
+    let Some(link_set_id) = link_set_id else {
+        return Ok((None, false));
+    };
+    let Some(link_binding) = link_binding else {
+        return Ok((None, false));
+    };
+    let Some(acquire_state) = acquire_state else {
+        return Ok((None, false));
+    };
+    let Some(authority_model) = authority_model else {
+        return Ok((None, false));
+    };
+    let Some(auth_binding) = auth_binding else {
+        return Ok((None, false));
+    };
+    let state_is_valid =
+        crate::journal::request_lifecycle::acquire::parse_state(&acquire_state).is_ok();
+    let consistent = request_id > 0
+        && link_set_id == intent.set_id.unwrap_or_default()
+        && current_set_id == Some(link_set_id)
+        && link_binding == reservation.binding_digest
+        && link_binding == scope.binding_digest()
+        && auth_binding == link_binding
+        && authority_model == "created_empty_exclusive_admin_session_v1"
+        && state_is_valid
+        && jit
+            .witness_request_id
+            .is_none_or(|known| known == request_id);
+    if !consistent {
+        return Ok((None, false));
+    }
+    let identity = AssignmentIdentity::new(
+        scope.connection_id(),
+        link_set_id,
+        AssignmentKey::AssignedRequest { request_id },
+    )?;
+    let acquired =
+        acquire_state == "acquired" && started_digest.is_none() && completed_digest.is_none();
+    Ok((acquired.then_some(identity), true))
 }
 
 fn resume_is_eligible(
@@ -179,6 +252,7 @@ fn build_reservation(
     runner: Option<RunnerReference>,
     ownership: PhysicalRunnerOwnership,
     resume_eligible: bool,
+    acquired_request: Option<AssignmentIdentity>,
 ) -> PhysicalRunnerReservation {
     PhysicalRunnerReservation {
         reservation_id: reservation.reservation_id,
@@ -201,6 +275,7 @@ fn build_reservation(
         started_request_id: jit.started_request_id,
         completed_request_id: jit.completed_request_id,
         runner_request_id: intent.request_id,
+        acquired_request,
         worker_volume: intent.worker_volume,
         runner_container_id: intent.runner_container_id,
         dind_container_id: intent.dind_container_id,
@@ -281,7 +356,9 @@ fn assignment_set_id(scope: &ConnectionJournal, key: &str) -> Option<i64> {
 
 fn phase_matches_jit(state: PhysicalRunnerJitState, phase: Option<LaunchPhase>) -> bool {
     match state {
-        PhysicalRunnerJitState::Absent => phase.is_none(),
+        PhysicalRunnerJitState::Absent => {
+            matches!(phase, None | Some(LaunchPhase::ProvisioningHeld))
+        }
         PhysicalRunnerJitState::Claimed => phase == Some(LaunchPhase::JitRequested),
         PhysicalRunnerJitState::Uncertain => phase == Some(LaunchPhase::JitUncertain),
         PhysicalRunnerJitState::Bound => phase == Some(LaunchPhase::JitBound),

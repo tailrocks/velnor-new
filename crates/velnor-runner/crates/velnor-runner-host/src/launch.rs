@@ -42,10 +42,10 @@ pub(crate) use drive::acquire_scoped_offer;
 pub(crate) use drive::{
     DeferredAuthorizedOffer, DeferredAuthorizedOffers, Drive, GuestAdmission, Lane, Rest,
     ScopedAdmissionInput, acquire_authorized_scoped_offer, authorize_deferred_offer,
+    authorize_deferred_offers, recover_acquired_scoped_offer,
 };
 pub(crate) use engine_context::SelectedEngineContext;
 pub(crate) use inspect::classify_inspect;
-pub(crate) use resource_probe::ReleaseReadSecret;
 pub(crate) use resource_probe::StartObservationWitness;
 pub(crate) use resource_probe::StartPermit;
 pub(crate) use resource_probe::VerifiedProbeCleanup;
@@ -53,15 +53,18 @@ pub(crate) use resource_probe::build_pin_status;
 pub(crate) use resource_probe::publication::VerifiedExecutionPublicationCleanup;
 pub(crate) use resource_probe::run_doctor_probe;
 pub(crate) use resource_probe::start_permit;
+pub(crate) use resource_probe::{RecoveryObservation, ReleaseReadSecret};
 pub(crate) use session::{
     CompletedHeaderPoll, DeletedSession204, ReturnedSessionRefreshTransportError,
     SessionDeleteOutcome, SessionRefreshStartupAuthority, VerifiedSessionRefresh,
     delete_removed_connection_session, open_connection_session,
 };
 pub(crate) use slot::HOLDS_ROWS_SQL;
-pub(crate) use turn::ScopedPollOutcome;
 pub(crate) use turn::{
     CursorDisposition, PositiveAdmission, PositivePollOutcome, admit_when_ready, positive_poll_once,
+};
+pub(crate) use turn::{
+    ScopedPollOutcome, Settlement, ZeroHeaderMode, poll_scoped_connection_once_with_mode,
 };
 mod mint_origin;
 #[cfg(test)]

@@ -1,8 +1,8 @@
-//! Test oracle for fair header allocation.
+//! Tests for shared header allocation.
 //!
-//! The host does not use this allocator. It must persist its cursor before it uses this policy.
+//! Keep these tests until controller tests prove both connections can receive capacity.
 
-/// Allocate a target across active connections and rotate the remainder.
+/// Give active connections capacity from the shared total.
 #[must_use]
 pub(crate) fn allocate_headers(active: &[bool], total: u32, cursor: &mut usize) -> Vec<u32> {
     let mut headers = vec![0; active.len()];

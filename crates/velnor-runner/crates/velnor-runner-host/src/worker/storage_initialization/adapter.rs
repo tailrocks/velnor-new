@@ -1,4 +1,4 @@
-use std::{future::Future, pin::Pin, time::Duration};
+use std::{future::Future, pin::Pin};
 
 mod claims;
 mod handoff;
@@ -23,17 +23,14 @@ use tokio::time::{Instant, timeout_at};
 use crate::{
     docker_client::docker_deadline,
     error::HostError,
-    journal::{ConnectionJournal, CreateInterruptionOutcome, StorageInitializationClaim},
-    launch::bootstrap::VerifiedCreatedStorageObject,
+    journal::{ConnectionJournal, StorageInitializationClaim},
 };
 
 use super::{
-    PendingStorageInitialization, StorageInitializationImage, StorageInitializationLimits,
-    process::run,
+    StorageInitializationImage, StorageInitializationLimits,
     proof::{
-        StorageInitializerCreateResponse, VerifiedStorageInitializerAwaitingHandoff,
-        VerifiedStorageInitializerCreated, VerifiedStorageInitializerRemoved,
-        VerifiedStorageInitializerResult, VerifiedStorageInitializerStarted,
+        StorageInitializerCreateResponse, VerifiedStorageInitializerCreated,
+        VerifiedStorageInitializerRemoved, VerifiedStorageInitializerStarted,
     },
     specification,
     verification::{

@@ -43,8 +43,8 @@ async fn absent_recovery_requires_selected_engine_and_definitive_not_found() -> 
 }
 
 #[tokio::test]
-async fn precreate_validation_failure_holds_capacity_until_absence_recovery()
--> Result<(), HostError> {
+async fn precreate_validation_failure_reconciles_only_after_owned_absence() -> Result<(), HostError>
+{
     let scratch = helpers::Scratch::new()?;
     let journal = Journal::open(&scratch.file()).await?;
     journal
@@ -91,15 +91,12 @@ async fn precreate_validation_failure_holds_capacity_until_absence_recovery()
     );
     assert_eq!(
         helpers::storage_initializer_abort_state(&scope, reservation_id).await?,
-        "not_requested"
-    );
-    assert_eq!(
-        recover_absent(&api.docker, &scope, reservation_id, Duration::from_secs(10)).await,
-        Ok(())
-    );
-    assert_eq!(
-        helpers::storage_initializer_abort_state(&scope, reservation_id).await?,
         "absent"
+    );
+    assert_eq!(
+        journal.occupied_reservation_count().await?,
+        1,
+        "pre-start reconciliation must retain the physical reservation"
     );
     let capture = api.finish().await?;
     assert!(capture.requests.iter().any(|request| {
@@ -181,72 +178,6 @@ async fn inspect_timeout_keeps_owned_initializer_charged_until_recovery() -> Res
     Ok(())
 }
 
-async fn assert_inspect_timeout_keeps_charge(
-    journal: &Journal,
-    api: &mut InitializationDockerApi,
-    scope: &crate::journal::ConnectionJournal,
-    reservation_id: i64,
-    nonce: char,
-) -> Result<(), HostError> {
-    let docker = api.docker.clone();
-    let mut timed_recovery = Box::pin(recover_absent(
-        &docker,
-        scope,
-        reservation_id,
-        Duration::from_secs(2),
-    ));
-    tokio::select! {
-        _ = api.wait_for_inspect() => {}
-        _result = &mut timed_recovery => {
-            return Err(HostError::DockerTimeout);
-        }
-    }
-    assert_eq!(timed_recovery.await, Err(HostError::DockerTimeout));
-    assert_initializer_charge(journal, scope, reservation_id, nonce).await?;
-    assert_eq!(
-        helpers::storage_initializer_abort_state(scope, reservation_id).await?,
-        "uncertain"
-    );
-
-    api.release_inspect_response();
-    tokio::task::yield_now().await;
-    assert_eq!(
-        recover_absent(&api.docker, scope, reservation_id, Duration::from_secs(10)).await,
-        Ok(())
-    );
-    assert_eq!(
-        helpers::storage_initializer_abort_state(scope, reservation_id).await?,
-        "absent"
-    );
-    assert_initializer_charge(journal, scope, reservation_id, nonce).await?;
-    Ok(())
-}
-
-async fn assert_initializer_charge(
-    journal: &Journal,
-    scope: &crate::journal::ConnectionJournal,
-    reservation_id: i64,
-    nonce: char,
-) -> Result<(), HostError> {
-    let assignment = scope
-        .assignment_identity(crate::journal::AssignmentKey::Remote {
-            kind: "runner".to_owned(),
-            subject: nonce.to_string().repeat(32),
-        })
-        .await?;
-    let reservation = scope
-        .reservation(&assignment)
-        .await?
-        .ok_or(HostError::Journal)?;
-    assert_eq!(reservation.reservation_id, reservation_id);
-    assert_ne!(
-        reservation.state,
-        crate::journal::ReservationState::Released
-    );
-    assert_eq!(journal.occupied_reservation_count().await?, 1);
-    Ok(())
-}
-
 #[tokio::test]
 async fn lost_create_response_removes_only_a_fully_verified_owned_helper() -> Result<(), HostError>
 {
@@ -271,7 +202,7 @@ async fn lost_create_response_removes_only_a_fully_verified_owned_helper() -> Re
     let (failed_remove, remove_state, remove_requests) =
         Box::pin(run_lost_create(false, Some(500))).await?;
     assert_eq!(failed_remove, Err(HostError::Cleanup));
-    assert_eq!(remove_state, "uncertain");
+    assert_eq!(remove_state, "remove_requested");
     assert!(
         remove_requests
             .iter()
@@ -427,120 +358,8 @@ async fn recovery_stops_an_uncertain_started_helper_before_removal() -> Result<(
     Ok(())
 }
 
-async fn run_lost_create(
-    foreign_helper: bool,
-    remove_status: Option<u16>,
-) -> Result<(Result<(), HostError>, String, Vec<String>), HostError> {
-    let scratch = helpers::Scratch::new()?;
-    let journal = Journal::open(&scratch.file()).await?;
-    journal
-        .configure_capacity(CapacityLimits {
-            jobs: 1,
-            cpu_millicores: 2_000,
-            memory_bytes: 25_769_803_776,
-        })
-        .await?;
-    let binding = helpers::binding("initializer-lost-create", 918)?;
-    let scope = helpers::created_scope(&journal, &binding, 1918).await?;
-    let reservation_id = helpers::prepare_physical_initializer(&scope, '9').await?;
-    let image = specification::test_verified_image()?;
-    let names = WorkerIdentityNames::from_nonce(&"9".repeat(32))?;
-    let home_volume = names.volume_name(WorkerVolumeRole::Home);
-    let work_volume = names.volume_name(WorkerVolumeRole::Work);
-    let api = InitializationDockerApi::open_lost_create(
-        &home_volume,
-        &work_volume,
-        image.runtime_id(),
-        foreign_helper,
-        remove_status,
-    )?;
-    let limits = StorageInitializationLimits::from_reserved_budget(
-        test_resource_budget()?,
-        100,
-        128 * 1024 * 1024,
-        16,
-    )?;
-    let metadata = test_support::metadata_object(&scope, reservation_id, '9').await?;
-    let initialize_result = initialize(
-        &api.docker,
-        &scope,
-        reservation_id,
-        &image,
-        limits,
-        Duration::from_secs(10),
-        &metadata,
-    )
-    .await;
-    assert_eq!(
-        initialize_result.err(),
-        Some(HostError::ContainerCreateUncertain)
-    );
-    let recovered =
-        recover_absent(&api.docker, &scope, reservation_id, Duration::from_secs(10)).await;
-    let abort_state = helpers::storage_initializer_abort_state(&scope, reservation_id).await?;
-    let capture = api.finish().await?;
-    Ok((recovered, abort_state, capture.requests))
-}
-
-async fn run_recovery(
-    engine_id: &str,
-    inspect_status: Option<u16>,
-) -> Result<(Result<(), HostError>, String, Vec<String>), HostError> {
-    let scratch = helpers::Scratch::new()?;
-    let journal = Journal::open(&scratch.file()).await?;
-    journal
-        .configure_capacity(CapacityLimits {
-            jobs: 1,
-            cpu_millicores: 2_000,
-            memory_bytes: 25_769_803_776,
-        })
-        .await?;
-    let binding = helpers::binding("initializer-recovery", 916)?;
-    let scope = helpers::created_scope(&journal, &binding, 1916).await?;
-    let reservation_id = helpers::prepare_physical_initializer(&scope, 'e').await?;
-    let image = specification::test_verified_image()?;
-    let claim = scope
-        .claim_storage_initialization_v2(
-            reservation_id,
-            &image,
-            StorageInitializationLimits::from_reserved_budget(
-                test_resource_budget()?,
-                100,
-                128 * 1024 * 1024,
-                16,
-            )?,
-            &test_support::metadata_object(&scope, reservation_id, 'e').await?,
-        )
-        .await?
-        .ok_or(HostError::Journal)?;
-    scope
-        .mark_storage_initializer_create_uncertain(&claim)
-        .await?;
-    let names = WorkerIdentityNames::from_nonce(&"e".repeat(32))?;
-    let home_volume = names.volume_name(WorkerVolumeRole::Home);
-    let work_volume = names.volume_name(WorkerVolumeRole::Work);
-    let api = InitializationDockerApi::open_recovery(
-        &home_volume,
-        &work_volume,
-        engine_id,
-        inspect_status,
-    )?;
-    let result = recover_absent(&api.docker, &scope, reservation_id, Duration::from_secs(10)).await;
-    let capture = api.finish().await?;
-    let abort_state = helpers::storage_initializer_abort_state(&scope, reservation_id).await?;
-    if engine_id != helpers::TEST_ENGINE_ID {
-        assert!(
-            !capture
-                .requests
-                .iter()
-                .any(|request| request.starts_with("GET /containers/"))
-        );
-        assert!(
-            !capture
-                .requests
-                .iter()
-                .any(|request| request.starts_with("DELETE /containers/"))
-        );
-    }
-    Ok((result, abort_state, capture.requests))
-}
+#[path = "recovery/support.rs"]
+mod support;
+use support::{
+    assert_initializer_charge, assert_inspect_timeout_keeps_charge, run_lost_create, run_recovery,
+};

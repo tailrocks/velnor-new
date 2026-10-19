@@ -165,14 +165,16 @@ pub(crate) async fn listener_delivery_fixture(
         .await?;
     let repository = binding("listener-fixture", 101)?;
     let scope = created_scope(&journal, &repository, 501).await?;
-    record_acquired(&scope, 70).await?;
-    let provisioned = provision_physical_intent(&scope, nonce).await?;
+    let initialized =
+        provision_acquired_request_with_initialization(&scope, 70, nonce, nonce).await?;
     let runner = velnor_runner_github::RunnerReference {
         id: 770,
         name: runner_name(nonce),
         runner_scale_set_id: 501,
     };
-    let claim = prepare_listener_delivery(&scope, &provisioned, &runner).await?;
+    let claim =
+        prepare_initialized_listener_delivery(&scope, &repository, &initialized, &runner, 70)
+            .await?;
     Ok(ListenerDeliveryFixture {
         _scratch: scratch,
         scope,
@@ -226,6 +228,8 @@ pub(crate) async fn created_scope(
     scope
         .bind_engine_context(TEST_ENGINE_ID, "unix:///var/run/docker.sock", "linux/amd64")
         .await?;
+    let config = crate::config::HostConfig::test_with_job_authority_policy(binding)?;
+    scope.install_job_authority_policy(&config).await?;
     Ok(scope)
 }
 
@@ -462,6 +466,45 @@ pub(crate) struct JobFactsReaderFixture {
     pub(crate) handoff: crate::journal::VerifiedMetadataInitializationHandoff,
     pub(crate) observed: crate::worker::storage_initialization::ObservedStorageInitialization,
     pub(crate) ready: crate::worker::storage_initialization::VerifiedStorageInitializationReady,
+}
+
+pub(crate) async fn initialize_reserved_request(
+    scope: &ConnectionJournal,
+    request: crate::journal::AssignmentIdentity,
+    physical: crate::journal::AssignmentIdentity,
+    nonce: char,
+    reservation_id: i64,
+    intent_id: i64,
+    docker_root_digest: String,
+    sample_generation_id: String,
+) -> Result<JobFactsReaderFixture, HostError> {
+    let artifacts = Box::pin(provisioning::provision_with_initialization(
+        scope,
+        physical.clone(),
+        nonce,
+        reservation_id,
+        intent_id,
+        docker_root_digest,
+        sample_generation_id,
+    ))
+    .await?;
+    let provisioned = artifacts.provisioned;
+    Ok(JobFactsReaderFixture {
+        assignment: request,
+        reservation_assignment: physical,
+        reservation_id: provisioned.reservation_id,
+        intent_id: provisioned.intent_id,
+        runner_container_id: provisioned.runner_container_id.clone(),
+        dind_container_id: provisioned.dind_container_id.clone(),
+        docker_root_digest: provisioned.docker_root_digest.clone(),
+        sample_generation_id: provisioned.sample_generation_id.clone(),
+        instance_binding_digest: provisioned.instance_binding_digest.clone(),
+        provisioned,
+        claim: artifacts.claim,
+        handoff: artifacts.handoff,
+        observed: artifacts.observed,
+        ready: artifacts.ready,
+    })
 }
 
 pub(crate) async fn provision_acquired_physical_intent(

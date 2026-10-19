@@ -102,6 +102,16 @@ impl TransitionEffects for JournalEffects<'_> {
             return setup::bind_connection(self.journal, binding, config, self.selected_engine)
                 .await;
         }
+        let allocations = self.journal.header_allocations().await?;
+        let cursor = self.journal.header_fairness_cursor().await?;
+        let target = if allocations.is_empty() {
+            setup::requested_header_capacity_after(config, binding, cursor.as_ref())?
+        } else {
+            allocations
+                .iter()
+                .find(|allocation| allocation.connection_id() == &binding.connection_id)
+                .map_or(0, crate::journal::HeaderAllocation::target)
+        };
         let prepared = setup::prepare_connection(
             self.state,
             self.journal,
@@ -110,6 +120,7 @@ impl TransitionEffects for JournalEffects<'_> {
             self.selected_engine,
             self.worker_images,
             self.docker,
+            target,
         )
         .await
         .map_err(|_| HostError::Journal)?;

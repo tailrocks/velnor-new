@@ -1,6 +1,8 @@
 //! Local turso journal. Each step opens its own connection and commits
 //! before the caller runs an external effect.
 
+#[cfg(test)]
+pub(crate) use connection::ReservationSnapshot;
 use std::ops::AsyncFnOnce;
 use std::path::Path;
 
@@ -47,6 +49,10 @@ pub(crate) use completion::{
 pub(crate) use connection::JobFactsPublicationClaim;
 pub(crate) use connection::ListenerDeliveryClaim;
 pub(crate) use connection::{
+    PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation, ReservationState,
+};
+
+pub(crate) use connection::{
     AssignmentIdentity, AssignmentKey, BootstrapContainerCreateClaim, BootstrapStartClaim,
     BoundJobFactsSnapshot, CapacityLimits, ConnectionCompletionInboxEntry, ConnectionJournal,
     CreateInterruptionOutcome, EngineContext, OperationalCapacityLimits, RecordedStorageNetwork,
@@ -63,8 +69,7 @@ pub(crate) use connection::{
 pub(crate) use connection::{CreateCommitStage, arm_create_commit_gate};
 #[cfg(test)]
 pub(crate) use connection::{
-    MetadataSettlementResult, ReservationState, StorageCacheProjection, StorageReservationPlan,
-    StorageRoleCharge,
+    MetadataSettlementResult, StorageCacheProjection, StorageReservationPlan, StorageRoleCharge,
 };
 #[cfg(test)]
 pub(crate) use connection::{
@@ -94,7 +99,9 @@ pub(crate) use source_authorization::AssignedAcquireResult;
 pub(crate) use source_authorization::SourceAuthorizationResult;
 use sql::{intent_row, one_row, same_ids, token_rejected};
 
-pub(crate) use request_lifecycle::{AuthorizedOffer, RequestAcquireState};
+pub(crate) use request_lifecycle::{
+    AcquiredRecoveryCandidate, AuthorizedOffer, RequestAcquireState,
+};
 #[cfg(test)]
 pub(crate) use resource_probe::ProbeLeaseState;
 #[cfg(test)]

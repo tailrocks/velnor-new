@@ -1,5 +1,6 @@
 use super::helpers::{
-    Scratch, binding, created_scope, event_source, provision_physical_intent, receipt,
+    Scratch, binding, created_scope, event_source, finish_initialized_listener_delivery,
+    provision_acquired_request_with_initialization, provision_physical_intent, receipt,
     record_acquired, runner_name,
 };
 use crate::error::HostError;
@@ -130,7 +131,6 @@ async fn prepare_correlation_fixture() -> Result<CorrelationFixture, HostError> 
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
     record_acquired(&scope, 100).await?;
-    record_acquired(&scope, 101).await?;
     let canceled_receipt = receipt(&scope, 102, 202, 101).await?;
     let canceled = scope
         .assignment_identity(AssignmentKey::AssignedRequest { request_id: 102 })
@@ -147,8 +147,8 @@ async fn prepare_correlation_fixture() -> Result<CorrelationFixture, HostError> 
             crate::journal::AssignedAcquireResult::Returned(vec![102]),
         )
         .await?;
-
-    let provisioned = provision_physical_intent(&scope, 'a').await?;
+    let initialized = provision_acquired_request_with_initialization(&scope, 101, 'a', 'a').await?;
+    let provisioned = initialized.provisioned.clone();
     let physical = provisioned.assignment.clone();
     let intent_id = provisioned.intent_id;
     let runner = RunnerReference {
@@ -156,7 +156,7 @@ async fn prepare_correlation_fixture() -> Result<CorrelationFixture, HostError> 
         name: runner_name('a'),
         runner_scale_set_id: 501,
     };
-    super::helpers::finish_listener_delivery(&scope, &provisioned, &runner).await?;
+    finish_initialized_listener_delivery(&scope, &binding, &initialized, &runner, 101).await?;
     Ok(CorrelationFixture {
         _scratch: scratch,
         _journal: journal,
@@ -218,6 +218,7 @@ async fn active_legacy_acquire_blocks_new_jit_without_releasing_capacity() -> Re
     let provisioned = provision_physical_intent(&scope, 'c').await?;
     let physical = provisioned.assignment;
     let intent_id = provisioned.intent_id;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
 
     let legacy_id = journal.begin("launch", "legacy-acquired").await?;
     let connection = journal.connection().await?;
@@ -231,7 +232,14 @@ async fn active_legacy_acquire_blocks_new_jit_without_releasing_capacity() -> Re
 
     assert!(
         scope
-            .claim_runner_jit(intent_id, &runner_name('c'))
+            .claim_runner_jit_for_request(
+                intent_id,
+                provisioned.reservation_id,
+                100,
+                &runner_name('c'),
+                generation,
+                &digest
+            )
             .await?
             .is_none()
     );
@@ -260,6 +268,7 @@ async fn every_acquired_request_must_match_the_bound_source_receipt() -> Result<
     let provisioned = provision_physical_intent(&scope, 'd').await?;
     let physical = provisioned.assignment;
     let intent_id = provisioned.intent_id;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
     journal
         .connection()
         .await?
@@ -272,7 +281,14 @@ async fn every_acquired_request_must_match_the_bound_source_receipt() -> Result<
 
     assert!(
         scope
-            .claim_runner_jit(intent_id, &runner_name('d'))
+            .claim_runner_jit_for_request(
+                intent_id,
+                provisioned.reservation_id,
+                100,
+                &runner_name('d'),
+                generation,
+                &digest
+            )
             .await?
             .is_none()
     );
@@ -301,9 +317,17 @@ async fn claimed_jit_stays_one_shot_and_holds_capacity_after_restart() -> Result
     let provisioned = provision_physical_intent(&scope, 'f').await?;
     let physical = provisioned.assignment;
     let intent_id = provisioned.intent_id;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
     assert!(
         scope
-            .claim_runner_jit(intent_id, &runner_name('f'))
+            .claim_runner_jit_for_request(
+                intent_id,
+                provisioned.reservation_id,
+                100,
+                &runner_name('f'),
+                generation,
+                &digest
+            )
             .await?
             .is_some()
     );
@@ -312,9 +336,17 @@ async fn claimed_jit_stays_one_shot_and_holds_capacity_after_restart() -> Result
 
     let journal = Journal::open(&path).await?;
     let scope = journal.connection_scope(&binding).await?;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
     assert!(
         scope
-            .claim_runner_jit(intent_id, &runner_name('f'))
+            .claim_runner_jit_for_request(
+                intent_id,
+                provisioned.reservation_id,
+                100,
+                &runner_name('f'),
+                generation,
+                &digest
+            )
             .await?
             .is_none()
     );

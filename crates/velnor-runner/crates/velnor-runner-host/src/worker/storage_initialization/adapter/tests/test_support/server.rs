@@ -1,3 +1,4 @@
+use super::http::{CapturedRequest, normalized_route, read_http_request, write_http_response};
 use super::*;
 
 pub(super) struct ApiState {
@@ -23,9 +24,15 @@ pub(super) struct ApiState {
     pub(super) start_status: Option<u16>,
     pub(super) create_config: Option<Value>,
     pub(super) helper_name: Option<String>,
-    pub(super) started: bool,
-    pub(super) stopped: bool,
-    pub(super) removed: bool,
+    pub(super) lifecycle: ContainerLifecycle,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum ContainerLifecycle {
+    Created,
+    Started,
+    Stopped,
+    Removed,
 }
 
 pub(super) async fn serve_initialization_api(
@@ -66,76 +73,78 @@ pub(super) async fn serve_initialization_api(
             continue;
         }
         let (status, body) = route_request(&mut state, &request, &route)?;
-        if request.method == "GET"
-            && route.starts_with("/containers/")
-            && route.ends_with("/json")
-            && let Some(gate) = state.inspect_response_gate.take()
-        {
-            if let Some(sender) = state.inspect_response_seen.take() {
-                let _sent = sender.send(());
-            }
-            attach_tasks.push(tokio::spawn(async move {
-                let _released = gate.await;
-                let _response_result =
-                    write_http_response(&mut stream, status, body.as_bytes()).await;
-                Ok(())
-            }));
-            continue;
-        }
-        if request.method == "DELETE"
-            && route.starts_with("/containers/")
-            && let Some(gate) = state.delete_response_gate.take()
-        {
-            if let Some(sender) = state.delete_response_seen.take() {
-                let _sent = sender.send(());
-            }
-            attach_tasks.push(tokio::spawn(async move {
-                let _released = gate.await;
-                let _response_result =
-                    write_http_response(&mut stream, status, body.as_bytes()).await;
-                Ok(())
-            }));
-            continue;
-        }
-        if request.method == "POST"
-            && route == "/containers/create"
-            && let Some(gate) = state.response_gate.take()
-        {
-            if let Some(sender) = state.response_seen.take() {
-                let _sent = sender.send(());
-            }
-            let completed = state.create_completed.take();
-            attach_tasks.push(tokio::spawn(async move {
-                let _released = gate.await;
-                let _response_result =
-                    write_http_response(&mut stream, status, body.as_bytes()).await;
-                if let Some(sender) = completed {
-                    let _sent = sender.send(());
-                }
-                Ok(())
-            }));
-            continue;
-        }
-        if request.method == "POST"
-            && route == "/containers/create"
-            && let Some(sender) = state.create_completed.take()
-        {
+        write_route_response(
+            &mut state,
+            &request.method,
+            &route,
+            stream,
+            status,
+            body,
+            &mut attach_tasks,
+        )
+        .await?;
+    }
+}
+
+async fn write_route_response(
+    state: &mut ApiState,
+    method: &str,
+    route: &str,
+    mut stream: UnixStream,
+    status: u16,
+    body: String,
+    attach_tasks: &mut Vec<tokio::task::JoinHandle<Result<(), String>>>,
+) -> Result<(), String> {
+    let gate = if method == "GET" && route.starts_with("/containers/") && route.ends_with("/json") {
+        state
+            .inspect_response_gate
+            .take()
+            .map(|gate| (gate, &mut state.inspect_response_seen))
+    } else if method == "DELETE" && route.starts_with("/containers/") {
+        state
+            .delete_response_gate
+            .take()
+            .map(|gate| (gate, &mut state.delete_response_seen))
+    } else if method == "POST" && route == "/containers/create" {
+        state
+            .response_gate
+            .take()
+            .map(|gate| (gate, &mut state.response_seen))
+    } else {
+        None
+    };
+    if let Some((gate, seen)) = gate {
+        if let Some(sender) = seen.take() {
             let _sent = sender.send(());
         }
-        if write_http_response(&mut stream, status, body.as_bytes())
-            .await
-            .is_err()
-        {
-            if (request.method == "POST" && route == "/containers/create")
-                || (request.method == "GET"
-                    && route.starts_with("/containers/")
-                    && route.ends_with("/json"))
-            {
-                continue;
+        let completed = (method == "POST" && route == "/containers/create")
+            .then(|| state.create_completed.take())
+            .flatten();
+        attach_tasks.push(tokio::spawn(async move {
+            let _released = gate.await;
+            let _response_result = write_http_response(&mut stream, status, body.as_bytes()).await;
+            if let Some(sender) = completed {
+                let _sent = sender.send(());
             }
-            return Err("Docker response write failed".to_owned());
-        }
+            Ok(())
+        }));
+        return Ok(());
     }
+    if method == "POST"
+        && route == "/containers/create"
+        && let Some(sender) = state.create_completed.take()
+    {
+        let _sent = sender.send(());
+    }
+    if write_http_response(&mut stream, status, body.as_bytes())
+        .await
+        .is_err()
+        && !((method == "POST" && route == "/containers/create")
+            || (method == "GET" && route.starts_with("/containers/") && route.ends_with("/json")))
+    {
+        return Err("Docker response write failed".to_owned());
+    }
+    Ok(())
 }
 
 async fn accept_request(
@@ -197,13 +206,11 @@ fn route_request(
             inspect_response(state)
         }
         ("POST", path) if path.ends_with("/start") => {
-            state.started = true;
-            state.stopped = false;
+            state.lifecycle = ContainerLifecycle::Started;
             Ok((state.start_status.unwrap_or(204), String::new()))
         }
         ("POST", path) if path.ends_with("/stop") => {
-            state.started = false;
-            state.stopped = true;
+            state.lifecycle = ContainerLifecycle::Stopped;
             Ok((204, String::new()))
         }
         ("POST", path) if path.ends_with("/wait") => {
@@ -212,7 +219,7 @@ fn route_request(
         ("DELETE", path) if path.starts_with("/containers/") => {
             let status = state.remove_status.unwrap_or(204);
             if status == 204 {
-                state.removed = true;
+                state.lifecycle = ContainerLifecycle::Removed;
             }
             Ok((status, String::new()))
         }
@@ -261,7 +268,7 @@ fn create_response(state: &mut ApiState, body: &[u8]) -> Result<(u16, String), S
 }
 
 fn inspect_response(state: &ApiState) -> Result<(u16, String), String> {
-    if state.create_config.is_none() || state.removed {
+    if state.create_config.is_none() || state.lifecycle == ContainerLifecycle::Removed {
         return Ok((
             state.inspect_status.unwrap_or(404),
             json!({"message": "No such container"}).to_string(),
@@ -298,7 +305,7 @@ fn container_response(state: &ApiState, config: &Value, host_config: &Value, nam
             {"Type": "volume", "Name": state.metadata_volume, "Destination": "/velnor/init/metadata", "RW": true}
         ],
         "Config": config, "HostConfig": host_config,
-        "State": {"Status": if state.started { "running" } else if state.stopped { "exited" } else { "created" }, "StartedAt": if state.started || state.stopped { "2026-10-19T00:00:00Z" } else { "0001-01-01T00:00:00Z" }},
+        "State": {"Status": match state.lifecycle { ContainerLifecycle::Started => "running", ContainerLifecycle::Stopped => "exited", ContainerLifecycle::Created | ContainerLifecycle::Removed => "created" }, "StartedAt": if matches!(state.lifecycle, ContainerLifecycle::Started | ContainerLifecycle::Stopped) { "2026-10-19T00:00:00Z" } else { "0001-01-01T00:00:00Z" }},
         "NetworkSettings": {"SandboxID": "", "SandboxKey": "", "Ports": {}, "Networks": {"none": {
             "IPAMConfig": null, "Links": null, "Aliases": null, "DriverOpts": null, "GwPriority": 0,
             "NetworkID": "", "EndpointID": "", "Gateway": "", "IPAddress": "", "MacAddress": "",

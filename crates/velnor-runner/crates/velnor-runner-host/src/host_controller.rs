@@ -1,5 +1,8 @@
 //! Run one shared host controller until the process stops.
 
+#[path = "host_controller/assigned_population.rs"]
+mod assigned_population;
+pub(crate) use assigned_population::{AssignedPopulationAction, plan_assigned_population};
 mod config_watch;
 #[path = "host_controller/loop.rs"]
 mod loop_driver;

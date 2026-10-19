@@ -88,7 +88,7 @@ async fn create_claimed(
     if claim.engine_id() != engine.engine_id()
         || claim.docker_root_digest() != engine.docker_root_digest()
         || !engine.matches_images(images)
-        || !observation.is_fresh_for(
+        || !observation.is_fresh_for_admission(
             claim.engine_id(),
             claim.docker_root_digest(),
             claim.sample_generation_id(),
@@ -159,7 +159,7 @@ fn verify_observation(
     engine: &SelectedEngineContext,
     observation: &StartObservationWitness,
 ) -> Result<(), HostError> {
-    if observation.is_fresh_for(
+    if observation.is_fresh_for_admission(
         claim.engine_id(),
         claim.docker_root_digest(),
         claim.sample_generation_id(),

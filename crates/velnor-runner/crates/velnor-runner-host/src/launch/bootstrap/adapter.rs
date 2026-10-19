@@ -42,12 +42,14 @@ pub(crate) async fn prepare_acquired(
     engine: &SelectedEngineContext,
     images: &VerifiedWorkerImages,
 ) -> Result<Option<PreparedAcquiredBootstrap>, HostError> {
-    let ScopedProvisioningOutcome::Acquired(acquired) = outcome else {
-        return Ok(None);
+    let acquired = match outcome {
+        ScopedProvisioningOutcome::NoStart => return Ok(None),
+        ScopedProvisioningOutcome::Acquired(acquired) => acquired,
+        ScopedProvisioningOutcome::Recovered(recovery) => recovery.into_acquired(),
     };
     if acquired.reservation_id() <= 0
         || !engine.matches_images(images)
-        || !acquired.observation().is_fresh_for(
+        || !acquired.observation().is_fresh_for_admission(
             engine.engine_id(),
             engine.docker_root_digest(),
             acquired.sample_generation_id(),

@@ -96,21 +96,30 @@ pub(crate) async fn create_and_bind<T>(
 where
     T: Transport + Lane,
 {
-    let (runner_name, intent_id, scale_set_id) = {
-        let acquired = bound.prepared.acquired();
-        (
-            acquired.runner_name().to_owned(),
-            acquired.intent_id(),
-            acquired.request().scale_set_id(),
-        )
+    let acquired = bound.prepared.acquired();
+    let Some(request_id) = acquired.request().request_id() else {
+        return Err(PendingJitBootstrap {
+            bound,
+            failure: EnsureError::Uncertain,
+        });
     };
+    let runner_name = acquired.runner_name().to_owned();
+    let intent_id = acquired.intent_id();
+    let reservation_id = acquired.reservation_id();
+    let scale_set_id = acquired.request().scale_set_id();
+    let policy_generation = acquired.authority_generation();
+    let policy_digest = acquired.authority_digest().to_owned();
     let result = match request_and_bind(
         lane,
         admin_token,
         scoped,
         intent_id,
+        reservation_id,
+        request_id,
         &runner_name,
         scale_set_id,
+        policy_generation,
+        &policy_digest,
     )
     .await
     {
@@ -130,8 +139,12 @@ async fn request_and_bind<T>(
     admin_token: &str,
     scoped: &ConnectionJournal,
     intent_id: i64,
+    reservation_id: i64,
+    request_id: i64,
     runner_name: &str,
     scale_set_id: i64,
+    policy_generation: u64,
+    policy_digest: &str,
 ) -> Result<(RunnerReference, EncodedJit), EnsureError>
 where
     T: Transport + Lane,
@@ -139,7 +152,14 @@ where
     let body = jit_request(runner_name).map_err(|_| EnsureError::Malformed)?;
     lane.on_admin().map_err(|_| EnsureError::Endpoint)?;
     let claim = scoped
-        .claim_runner_jit(intent_id, runner_name)
+        .claim_runner_jit_for_request(
+            intent_id,
+            reservation_id,
+            request_id,
+            runner_name,
+            policy_generation,
+            policy_digest,
+        )
         .await
         .map_err(|_| EnsureError::Uncertain)?
         .ok_or(EnsureError::Uncertain)?;

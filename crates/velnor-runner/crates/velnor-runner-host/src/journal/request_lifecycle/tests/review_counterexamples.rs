@@ -1,7 +1,8 @@
-use super::admission::{JOB_LIMIT, physical_intent};
+use super::admission::JOB_LIMIT;
 use super::helpers::{
-    ProvisionedRunner, Scratch, binding, created_scope, event_source, provision_physical_intent,
-    receipt, record_acquired, record_owned_storage_cleanup, runner_name, settle_storage_metadata,
+    ProvisionedRunner, Scratch, binding, created_scope, event_source,
+    finish_initialized_listener_delivery, provision_acquired_request_with_initialization, receipt,
+    record_acquired, record_owned_storage_cleanup, runner_name, settle_storage_metadata,
 };
 use crate::error::HostError;
 use crate::journal::{AssignmentIdentity, AssignmentKey, ConnectionJournal, Journal};
@@ -25,8 +26,8 @@ pub(super) async fn ready() -> Result<Ready, HostError> {
     journal.configure_capacity(JOB_LIMIT).await?;
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
-    record_acquired(&scope, 70).await?;
-    let provisioned = provision_physical_intent(&scope, '8').await?;
+    let initialized = provision_acquired_request_with_initialization(&scope, 70, '8', '8').await?;
+    let provisioned = initialized.provisioned.clone();
     let physical = provisioned.assignment.clone();
     let intent = provisioned.intent_id;
     let runner = RunnerReference {
@@ -34,7 +35,7 @@ pub(super) async fn ready() -> Result<Ready, HostError> {
         name: runner_name('8'),
         runner_scale_set_id: 501,
     };
-    super::helpers::finish_listener_delivery(&scope, &provisioned, &runner).await?;
+    finish_initialized_listener_delivery(&scope, &binding, &initialized, &runner, 70).await?;
     let request = scope
         .assignment_identity(AssignmentKey::AssignedRequest { request_id: 70 })
         .await?;
@@ -208,10 +209,18 @@ async fn independent_recovered_unassigned_runner_allows_replacement_for_same_req
     drop(f.journal);
     let journal = Journal::open(&path).await?;
     let scope = journal.connection_scope(&binding).await?;
-    let (_physical, replacement) = physical_intent(&scope, 'f').await?;
+    let replacement = provision_acquired_request_with_initialization(&scope, 72, 'f', 'f').await?;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
     assert!(
         scope
-            .claim_runner_jit(replacement, &runner_name('f'))
+            .claim_runner_jit_for_request(
+                replacement.intent_id,
+                replacement.reservation_id,
+                72,
+                &runner_name('f'),
+                generation,
+                &digest
+            )
             .await?
             .is_some(),
         "cleaned unassigned runner still holds the only acquired request witness"
@@ -273,10 +282,18 @@ async fn independent_completed_cleanup_allows_new_demand_after_restart() -> Resu
         f.intent
     );
     record_acquired(&scope, 72).await?;
-    let (_physical, next) = physical_intent(&scope, 'f').await?;
+    let next = provision_acquired_request_with_initialization(&scope, 72, 'f', 'f').await?;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
     assert!(
         scope
-            .claim_runner_jit(next, &runner_name('f'))
+            .claim_runner_jit_for_request(
+                next.intent_id,
+                next.reservation_id,
+                72,
+                &runner_name('f'),
+                generation,
+                &digest
+            )
             .await?
             .is_some()
     );

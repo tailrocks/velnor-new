@@ -1,9 +1,11 @@
 //! Non-serializable results scoped to one completed probe transaction.
 
 mod production_profile;
+mod recovery;
 mod storage_admission;
 mod witness;
 pub(in crate::launch) use production_profile::retained_tmpfs_bytes;
+pub(crate) use recovery::RecoveryObservation;
 pub(in crate::launch) use storage_admission::filesystem_instance_digest;
 pub(crate) use witness::StartObservationWitness;
 #[cfg(test)]
@@ -176,6 +178,16 @@ pub(crate) struct StartPermit {
 }
 
 impl StartPermit {
+    #[cfg(test)]
+    pub(crate) fn into_test_recovery_observation(mut self) -> Option<RecoveryObservation> {
+        self.observation.effective_cpu_millicores = 4_000;
+        let engine_id = self.observation.engine_id.clone();
+        let root_digest = self.observation.docker_root_digest.clone();
+        let charge = self.charge();
+        self.observation
+            .into_recovery_observation(self.budget, charge, &engine_id, &root_digest)
+    }
+
     pub(crate) const fn resource_budget(&self) -> ResourceBudget {
         self.budget
     }

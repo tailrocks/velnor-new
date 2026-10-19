@@ -101,8 +101,20 @@ pub(super) fn jit_is_consistent(
         (PhysicalRunnerJitState::Absent, None) => {
             intent.jit_requested == Some(false)
                 && intent.runner_id.is_none()
-                && intent.runner_name.is_none()
-                && intent.phase.is_none()
+                && intent.runner_name.as_deref() == expected_name
+                && matches!(intent.phase, None | Some(LaunchPhase::ProvisioningHeld))
+        }
+        (PhysicalRunnerJitState::Absent, Some(id)) => {
+            id == reservation.intent_id
+                && jit.set_id == Some(set_id)
+                && jit.witness_request_id.is_none()
+                && jit.requested_name.is_none()
+                && jit.runner_id.is_none()
+                && jit.runner_name.is_none()
+                && intent.jit_requested == Some(false)
+                && intent.runner_id.is_none()
+                && intent.runner_name.as_deref() == expected_name
+                && matches!(intent.phase, None | Some(LaunchPhase::ProvisioningHeld))
         }
         (PhysicalRunnerJitState::Claimed | PhysicalRunnerJitState::Uncertain, Some(id)) => {
             claimed_jit_is_consistent(

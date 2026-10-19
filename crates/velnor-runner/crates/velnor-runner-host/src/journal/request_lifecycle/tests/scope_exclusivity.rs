@@ -29,19 +29,47 @@ async fn duplicate_scale_set_scope_blocks_jit_for_both_connections() -> Result<(
     second
         .bind_scale_set(501, "integration", crate::connect::SetOwnership::Adopted)
         .await?;
+    let policy = crate::config::HostConfig::test_with_job_authority_policy(&second_binding)?;
+    second.install_job_authority_policy(&policy).await?;
     let (second_physical, second_intent) = physical_intent(&second, '5').await?;
 
     let first_name = runner_name('4');
     let second_name = runner_name('5');
+    let first_reservation_id = first
+        .reservation(&first_physical)
+        .await?
+        .ok_or(HostError::Journal)?
+        .reservation_id;
+    let (first_generation, first_digest) = first.test_active_authority_identity().await?;
     assert!(
         first
-            .claim_runner_jit(first_intent, &first_name)
+            .claim_runner_jit_for_request(
+                first_intent,
+                first_reservation_id,
+                65,
+                &first_name,
+                first_generation,
+                &first_digest
+            )
             .await?
             .is_none()
     );
+    let second_reservation_id = second
+        .reservation(&second_physical)
+        .await?
+        .ok_or(HostError::Journal)?
+        .reservation_id;
+    let (second_generation, second_digest) = second.test_active_authority_identity().await?;
     assert!(
         second
-            .claim_runner_jit(second_intent, &second_name)
+            .claim_runner_jit_for_request(
+                second_intent,
+                second_reservation_id,
+                66,
+                &second_name,
+                second_generation,
+                &second_digest
+            )
             .await?
             .is_none()
     );
@@ -152,8 +180,16 @@ async fn claim_one_duplicate_name(
         _ => return Err(HostError::Journal),
     };
     let intent_id = winner.intent_id;
+    let (generation, digest) = winner_scope.test_active_authority_identity().await?;
     let jit = winner_scope
-        .claim_runner_jit(intent_id, &runner_name('a'))
+        .claim_runner_jit_for_request(
+            intent_id,
+            winner.reservation_id,
+            65,
+            &runner_name('a'),
+            generation,
+            &digest,
+        )
         .await?
         .ok_or(HostError::Journal)?;
     winner_scope.mark_runner_jit_uncertain(jit).await?;
@@ -172,9 +208,22 @@ async fn assert_reopened_duplicate_name_is_held(
     let journal = Journal::open(path).await?;
     let winning_scope = journal.connection_scope(&winner.binding).await?;
     let losing_scope = journal.connection_scope(&winner.losing_binding).await?;
+    let reservation_id = winning_scope
+        .reservation(&winner.assignment)
+        .await?
+        .ok_or(HostError::Journal)?
+        .reservation_id;
+    let (generation, digest) = winning_scope.test_active_authority_identity().await?;
     assert!(
         winning_scope
-            .claim_runner_jit(winner.intent_id, &runner_name('a'))
+            .claim_runner_jit_for_request(
+                winner.intent_id,
+                reservation_id,
+                65,
+                &runner_name('a'),
+                generation,
+                &digest
+            )
             .await?
             .is_none()
     );
@@ -214,12 +263,37 @@ async fn runner_name_must_match_the_physical_intent_nonce() -> Result<(), HostEr
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
     record_acquired(&scope, 100).await?;
-    let (_, intent_id) = physical_intent(&scope, 'a').await?;
+    let (assignment, intent_id) = physical_intent(&scope, 'a').await?;
+    let reservation_id = scope
+        .reservation(&assignment)
+        .await?
+        .ok_or(HostError::Journal)?
+        .reservation_id;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
 
-    assert!(scope.claim_runner_jit(intent_id, "v100").await?.is_none());
     assert!(
         scope
-            .claim_runner_jit(intent_id, &runner_name('a'))
+            .claim_runner_jit_for_request(
+                intent_id,
+                reservation_id,
+                100,
+                "v100",
+                generation,
+                &digest
+            )
+            .await?
+            .is_none()
+    );
+    assert!(
+        scope
+            .claim_runner_jit_for_request(
+                intent_id,
+                reservation_id,
+                100,
+                &runner_name('a'),
+                generation,
+                &digest
+            )
             .await?
             .is_some()
     );
@@ -236,10 +310,23 @@ async fn unscoped_live_work_blocks_jit_without_releasing_capacity() -> Result<()
     record_acquired(&scope, 52).await?;
     let (physical, intent_id) = physical_intent(&scope, 'c').await?;
     let _unscoped = journal.begin("launch", "unassigned-live-work").await?;
+    let reservation_id = scope
+        .reservation(&physical)
+        .await?
+        .ok_or(HostError::Journal)?
+        .reservation_id;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
 
     assert!(
         scope
-            .claim_runner_jit(intent_id, &runner_name('c'))
+            .claim_runner_jit_for_request(
+                intent_id,
+                reservation_id,
+                52,
+                &runner_name('c'),
+                generation,
+                &digest
+            )
             .await?
             .is_none()
     );

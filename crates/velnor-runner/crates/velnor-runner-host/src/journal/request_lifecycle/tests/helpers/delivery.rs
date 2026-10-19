@@ -2,24 +2,24 @@ use crate::worker::execution_authorization::{
     TestControlFile, VerifiedProofChannelBinding, test_execution_challenge_publication_receipt,
 };
 
-pub(super) async fn prepare_listener_delivery(
-    scope: &ConnectionJournal,
-    provisioned: &ProvisionedRunner,
-    runner: &velnor_runner_github::RunnerReference,
-) -> Result<crate::journal::ListenerDeliveryClaim, HostError> {
-    prepare_jit_and_job_facts(scope, provisioned, runner).await?;
-    claim_listener_delivery(scope, provisioned, runner).await
-}
-
 pub(super) async fn prepare_jit_and_job_facts(
     scope: &ConnectionJournal,
     provisioned: &ProvisionedRunner,
     runner: &velnor_runner_github::RunnerReference,
+    request_id: i64,
 ) -> Result<(), HostError> {
     use crate::launch::bootstrap::test_job_facts_publication;
 
+    let (generation, digest) = scope.test_active_authority_identity().await?;
     let jit = scope
-        .claim_runner_jit(provisioned.intent_id, &runner.name)
+        .claim_runner_jit_for_request(
+            provisioned.intent_id,
+            provisioned.reservation_id,
+            request_id,
+            &runner.name,
+            generation,
+            &digest,
+        )
         .await?
         .ok_or(HostError::Journal)?;
     scope.bind_jit_runner(jit, runner).await?;
@@ -138,20 +138,59 @@ pub(super) async fn finish_listener_delivery_after_challenge(
     scope.record_listener_delivered(&delivery, &proof).await
 }
 
-pub(super) async fn finish_listener_delivery(
+pub(super) async fn prepare_initialized_listener_delivery(
     scope: &ConnectionJournal,
-    provisioned: &ProvisionedRunner,
+    binding: &crate::config::RepositoryConnection,
+    initialized: &JobFactsReaderFixture,
     runner: &velnor_runner_github::RunnerReference,
+    request_id: i64,
+) -> Result<crate::journal::ListenerDeliveryClaim, HostError> {
+    use crate::config::HostConfig;
+    use crate::worker::execution_authorization::test_channel_for_ready_job_facts;
+
+    if initialized.assignment.request_id() != Some(request_id) {
+        return Err(HostError::Identity);
+    }
+    prepare_jit_and_job_facts(scope, &initialized.provisioned, runner, request_id).await?;
+    let channel = test_channel_for_ready_job_facts(
+        initialized.reservation_id,
+        initialized.intent_id,
+        scope.connection_id().as_str().to_owned(),
+        runner.runner_scale_set_id,
+        request_id,
+        TEST_ENGINE_ID.to_owned(),
+        initialized.docker_root_digest.clone(),
+        runner.id,
+        runner.name.clone(),
+        initialized.runner_container_id.clone(),
+        initialized.dind_container_id.clone(),
+        initialized.instance_binding_digest.clone(),
+        &initialized.ready,
+    )?;
+    let config = HostConfig::test_with_job_authority_policy(binding)?;
+    scope.install_job_authority_policy(&config).await?;
+    publish_test_execution_challenge(scope, &channel).await?;
+    claim_listener_delivery(scope, &initialized.provisioned, runner).await
+}
+
+pub(super) async fn finish_initialized_listener_delivery(
+    scope: &ConnectionJournal,
+    binding: &crate::config::RepositoryConnection,
+    initialized: &JobFactsReaderFixture,
+    runner: &velnor_runner_github::RunnerReference,
+    request_id: i64,
 ) -> Result<(), HostError> {
     use crate::launch::bootstrap::test_listener_delivery_receipt;
 
-    let delivery = prepare_listener_delivery(scope, provisioned, runner).await?;
+    let delivery =
+        prepare_initialized_listener_delivery(scope, binding, initialized, runner, request_id)
+            .await?;
     let proof = test_listener_delivery_receipt(
-        provisioned.reservation_id,
-        provisioned.intent_id,
+        initialized.reservation_id,
+        initialized.intent_id,
         TEST_ENGINE_ID.to_owned(),
-        provisioned.docker_root_digest.clone(),
-        provisioned.runner_container_id.clone(),
+        initialized.docker_root_digest.clone(),
+        initialized.runner_container_id.clone(),
         runner.clone(),
     )?;
     scope.record_listener_delivered(&delivery, &proof).await

@@ -16,8 +16,14 @@ async fn dispatched_create_restart_marks_hold_uncertain_and_keeps_it_charged()
     let scope = helpers::created_scope(&journal, &binding, 1923).await?;
     let reservation_id = helpers::prepare_physical_initializer(&scope, '9').await?;
     let image = specification::test_verified_image()?;
+    let metadata = test_support::metadata_object(&scope, reservation_id, '9').await?;
     let claim = scope
-        .claim_storage_initialization(reservation_id, &image, helpers::test_initializer_limits()?)
+        .claim_storage_initialization_v2(
+            reservation_id,
+            &image,
+            helpers::test_initializer_limits()?,
+            &metadata,
+        )
         .await?
         .ok_or(HostError::Journal)?;
     scope
@@ -134,6 +140,17 @@ async fn delete_before_absence_commit_survives_journal_reopen() -> Result<(), Ho
     first_recovery.abort();
     assert!(first_recovery.await.is_err());
 
+    verify_removal_survives_restart(scratch, binding, journal, scope, api, reservation_id).await
+}
+
+async fn verify_removal_survives_restart(
+    scratch: helpers::Scratch,
+    binding: crate::config::RepositoryConnection,
+    journal: Journal,
+    scope: crate::journal::ConnectionJournal,
+    api: InitializationDockerApi,
+    reservation_id: i64,
+) -> Result<(), HostError> {
     drop(scope);
     drop(journal);
     let reopened = Journal::open(&scratch.file()).await?;

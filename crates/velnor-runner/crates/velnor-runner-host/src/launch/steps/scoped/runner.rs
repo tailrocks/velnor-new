@@ -5,6 +5,7 @@ use std::future::Future;
 use sha2::{Digest, Sha256};
 use velnor_runner_github::{RunnerReference, Transport, jit, jit_request};
 
+use crate::config::ApprovedJobAuthorityPolicy;
 use crate::error::HostError;
 use crate::journal::{
     AssignmentKey, ConnectionJournal, RequestPhysicalReservationResult, ReservationRequest,
@@ -22,12 +23,23 @@ use super::acquire;
 pub(super) struct PhysicalIntent {
     pub(super) reservation_id: i64,
     intent_id: i64,
+    request_id: Option<i64>,
     assignment: crate::journal::AssignmentIdentity,
     runner_name: String,
     sample_generation_id: String,
+    observation_sample_generation_id: String,
     observation: StartObservationWitness,
     resource_budget: crate::worker::ResourceBudget,
     charge: (u64, u64),
+    pub(super) authority_generation: u64,
+    pub(super) authority_digest: String,
+    origin: PhysicalIntentOrigin,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PhysicalIntentOrigin {
+    NewAcquire,
+    RecoveredAcquire,
 }
 
 pub(crate) struct AcquiredProvisioning {
@@ -78,6 +90,64 @@ impl AcquiredProvisioning {
     pub(crate) const fn charge(&self) -> (u64, u64) {
         self.physical.charge
     }
+
+    pub(crate) const fn authority_generation(&self) -> u64 {
+        self.physical.authority_generation
+    }
+
+    pub(crate) fn authority_digest(&self) -> &str {
+        &self.physical.authority_digest
+    }
+}
+
+/// Keep a checked Acquire result that is safe to continue after restart.
+#[must_use]
+pub(crate) struct CheckedAcquiredRecovery(AcquiredProvisioning);
+
+impl CheckedAcquiredRecovery {
+    pub(crate) fn after_verified_recovery(
+        candidate: crate::journal::AcquiredRecoveryCandidate,
+        observation: crate::launch::RecoveryObservation,
+        engine: &SelectedEngineContext,
+    ) -> Result<Self, HostError> {
+        if candidate.engine_id() != engine.engine_id()
+            || candidate.docker_root_digest() != engine.docker_root_digest()
+            || candidate.charge() != observation.charge()
+        {
+            return Err(HostError::Identity);
+        }
+        let sample_generation_id = candidate.sample_generation_id().to_owned();
+        let observation_sample_generation_id = observation.sample_generation_id().to_owned();
+        let (observation, resource_budget) = observation.consume_for_recovery(
+            engine.engine_id(),
+            engine.docker_root_digest(),
+            candidate.charge(),
+            candidate.sample_generation_id(),
+        )?;
+        let physical = PhysicalIntent {
+            reservation_id: candidate.reservation_id(),
+            intent_id: candidate.intent_id(),
+            request_id: candidate.request().request_id(),
+            assignment: candidate.physical_assignment().clone(),
+            runner_name: candidate.runner_name().to_owned(),
+            sample_generation_id,
+            observation_sample_generation_id,
+            observation,
+            resource_budget,
+            charge: candidate.charge(),
+            authority_generation: candidate.policy_generation(),
+            authority_digest: candidate.policy_digest().to_owned(),
+            origin: PhysicalIntentOrigin::RecoveredAcquire,
+        };
+        Ok(Self(AcquiredProvisioning {
+            physical,
+            request: candidate.request().clone(),
+        }))
+    }
+
+    pub(crate) fn into_acquired(self) -> AcquiredProvisioning {
+        self.0
+    }
 }
 
 pub(super) enum ReservationOutcome {
@@ -92,7 +162,11 @@ pub(super) async fn reserve_and_claim(
     permit: crate::launch::StartPermit,
     storage: StorageProvisioningAdmission,
     request: &crate::journal::AssignmentIdentity,
+    authority_policy: &ApprovedJobAuthorityPolicy,
 ) -> Result<ReservationOutcome, EnsureError> {
+    if authority_policy.connection_id() != scoped.connection_id() {
+        return Err(EnsureError::Uncertain);
+    }
     let nonce = stable_nonce(scoped, request).await?;
     let observation = permit.observation_witness();
     let sample_generation_id = permit.sample_generation_id().to_owned();
@@ -134,12 +208,17 @@ pub(super) async fn reserve_and_claim(
                 PhysicalIntent {
                     reservation_id,
                     intent_id,
+                    request_id: request.request_id(),
                     assignment: identity,
                     runner_name,
+                    observation_sample_generation_id: sample_generation_id.clone(),
                     sample_generation_id,
                     observation,
                     resource_budget,
                     charge: (cpu_millicores, memory_bytes),
+                    authority_generation: authority_policy.generation(),
+                    authority_digest: authority_policy.policy_sha256().to_owned(),
+                    origin: PhysicalIntentOrigin::NewAcquire,
                 },
                 claim,
             ))
@@ -207,15 +286,24 @@ pub(super) async fn reserve(
     if !fresh {
         return Err(EnsureError::Uncertain);
     }
+    let (authority_generation, authority_digest) = scoped
+        .test_active_authority_identity()
+        .await
+        .map_err(super::super::map_journal)?;
     Ok(PhysicalIntent {
         reservation_id,
         intent_id,
+        request_id: None,
         assignment: identity,
         runner_name,
+        observation_sample_generation_id: sample_generation_id.clone(),
         sample_generation_id,
         observation,
         resource_budget,
         charge: (cpu_millicores, memory_bytes),
+        authority_generation,
+        authority_digest,
+        origin: PhysicalIntentOrigin::NewAcquire,
     })
 }
 
@@ -286,14 +374,26 @@ where
         return Err(EnsureError::Uncertain);
     }
     let body = jit_request(&physical.runner_name).map_err(|_| EnsureError::Malformed)?;
+    let request_id = match physical.origin {
+        PhysicalIntentOrigin::NewAcquire | PhysicalIntentOrigin::RecoveredAcquire => {
+            physical.request_id.ok_or(EnsureError::Uncertain)?
+        }
+    };
     let claim = scoped
-        .claim_runner_jit(physical.intent_id, &physical.runner_name)
+        .claim_runner_jit_for_request(
+            physical.intent_id,
+            physical.reservation_id,
+            request_id,
+            &physical.runner_name,
+            physical.authority_generation,
+            &physical.authority_digest,
+        )
         .await
         .map_err(super::super::map_journal)?
         .ok_or(EnsureError::Uncertain)?;
     if verify_effect_boundary(
         &physical.observation,
-        &physical.sample_generation_id,
+        &physical.observation_sample_generation_id,
         docker,
         expected_engine,
         images,
@@ -365,7 +465,7 @@ where
         .ok_or(EnsureError::Uncertain)?;
     if verify_effect_boundary(
         &physical.observation,
-        &physical.sample_generation_id,
+        &physical.observation_sample_generation_id,
         docker,
         expected_engine,
         images,
@@ -382,7 +482,7 @@ where
     let bind = crate::launch::bind::Bind::scoped(scoped, physical.intent_id);
     let admission = crate::stage::StageAdmission::from_observation(
         &physical.observation,
-        &physical.sample_generation_id,
+        &physical.observation_sample_generation_id,
     );
     let started = if let Ok(started) = start(&volume, jit_config.as_bytes(), bind, admission).await
     {

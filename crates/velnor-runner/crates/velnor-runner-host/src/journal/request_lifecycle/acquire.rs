@@ -11,6 +11,9 @@ use super::RequestAcquireState;
 use super::helpers::{bound_set_id, digest, request_id, validate_scope_identity};
 use crate::journal::source_authorization::created_set_matches;
 
+mod recovery;
+pub(crate) use recovery::AcquiredRecoveryCandidate;
+
 const AUTHORITY_MODEL: &str = "created_empty_exclusive_admin_session_v1";
 const MAX_ACQUIRE_RESPONSE_BYTES: usize = 4_096;
 const MAX_ACQUIRE_SCAN: u32 = 4_096;

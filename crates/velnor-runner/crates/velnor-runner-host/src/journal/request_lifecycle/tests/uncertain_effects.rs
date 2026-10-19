@@ -1,5 +1,8 @@
-use super::admission::{JOB_LIMIT, physical_intent};
-use super::helpers::{Scratch, binding, created_scope, record_acquired, runner_name};
+use super::admission::JOB_LIMIT;
+use super::helpers::{
+    Scratch, binding, created_scope, prepare_initialized_listener_delivery,
+    provision_acquired_request_with_initialization, runner_name,
+};
 use crate::error::HostError;
 use crate::journal::{Journal, ReservationState};
 use crate::reconcile::LaunchPhase;
@@ -13,10 +16,19 @@ async fn uncertain_jit_is_not_reclaimed_after_restart() -> Result<(), HostError>
     journal.configure_capacity(JOB_LIMIT).await?;
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
-    record_acquired(&scope, 81).await?;
-    let (physical, intent_id) = physical_intent(&scope, '6').await?;
+    let initialized = provision_acquired_request_with_initialization(&scope, 81, '6', '6').await?;
+    let physical = initialized.reservation_assignment.clone();
+    let intent_id = initialized.intent_id;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
     let claim = scope
-        .claim_runner_jit(intent_id, &runner_name('6'))
+        .claim_runner_jit_for_request(
+            intent_id,
+            initialized.reservation_id,
+            81,
+            &runner_name('6'),
+            generation,
+            &digest,
+        )
         .await?
         .ok_or(HostError::Journal)?;
     scope.mark_runner_jit_uncertain(claim).await?;
@@ -25,9 +37,17 @@ async fn uncertain_jit_is_not_reclaimed_after_restart() -> Result<(), HostError>
 
     let journal = Journal::open(&path).await?;
     let scope = journal.connection_scope(&binding).await?;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
     assert!(
         scope
-            .claim_runner_jit(intent_id, &runner_name('6'))
+            .claim_runner_jit_for_request(
+                intent_id,
+                initialized.reservation_id,
+                81,
+                &runner_name('6'),
+                generation,
+                &digest
+            )
             .await?
             .is_none()
     );
@@ -50,15 +70,16 @@ async fn uncertain_listener_delivery_cannot_replay_and_keeps_charge() -> Result<
     journal.configure_capacity(JOB_LIMIT).await?;
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
-    record_acquired(&scope, 82).await?;
-    let provisioned = super::helpers::provision_physical_intent(&scope, '7').await?;
+    let initialized = provision_acquired_request_with_initialization(&scope, 82, '7', '7').await?;
+    let provisioned = initialized.provisioned.clone();
     let intent_id = provisioned.intent_id;
     let runner = RunnerReference {
         id: 782,
         name: runner_name('7'),
         runner_scale_set_id: 501,
     };
-    let delivery = super::helpers::prepare_listener_delivery(&scope, &provisioned, &runner).await?;
+    let delivery =
+        prepare_initialized_listener_delivery(&scope, &binding, &initialized, &runner, 82).await?;
     scope.mark_listener_delivery_uncertain(&delivery).await?;
     drop(scope);
     drop(journal);

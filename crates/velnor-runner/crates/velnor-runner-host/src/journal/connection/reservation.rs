@@ -9,6 +9,13 @@ mod read;
 mod storage;
 mod storage_budget;
 
+pub(crate) use enumerate::{
+    PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation,
+};
+#[cfg(test)]
+pub(crate) use read::ReservationSnapshot;
+pub(crate) use read::ReservationState;
+
 #[cfg(test)]
 #[path = "reservation/storage_budget_tests.rs"]
 mod storage_budget_tests;
@@ -48,8 +55,6 @@ pub(crate) use provisioning::{
 pub(crate) use provisioning::{
     StorageCleanupCgroup, StorageCleanupMount, StorageNetworkRecoveryIdentity,
 };
-#[cfg(test)]
-pub(crate) use read::ReservationState;
 #[cfg(test)]
 pub(crate) use storage_budget::StorageAdmission;
 pub(crate) use storage_budget::{

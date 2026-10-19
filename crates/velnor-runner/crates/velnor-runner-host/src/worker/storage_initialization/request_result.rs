@@ -12,6 +12,7 @@ const JOB_FACTS_TARGET: &str = "/velnor/init/metadata/job-facts";
 const SOURCE_PROOF_TARGET: &str = "/velnor/init/metadata/source-proof";
 const CONTROL_TARGET: &str = "/velnor/init/metadata/source-proof/control";
 const INBOX_TARGET: &str = "/velnor/init/home/source-proof/inbox";
+const HEX: &[u8; 16] = b"0123456789abcdef";
 
 #[derive(Debug, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -366,8 +367,8 @@ fn sha256_digest(value: &[u8]) -> String {
     let digest = Sha256::digest(value);
     let mut output = String::with_capacity(64);
     for byte in digest {
-        use std::fmt::Write;
-        write!(output, "{byte:02x}").expect("writing to String is infallible");
+        output.push(HEX[(byte >> 4) as usize] as char);
+        output.push(HEX[(byte & 0x0f) as usize] as char);
     }
     output
 }

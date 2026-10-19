@@ -1,7 +1,7 @@
 use super::admission::JOB_LIMIT;
 use super::helpers::{
-    ProvisionedRunner, Scratch, binding, created_scope, prepare_listener_delivery,
-    provision_physical_intent, record_acquired, runner_name,
+    ProvisionedRunner, Scratch, binding, created_scope, prepare_initialized_listener_delivery,
+    provision_acquired_request_with_initialization, runner_name,
 };
 use crate::error::HostError;
 use crate::journal::{ConnectionJournal, Journal, ReservationState};
@@ -23,14 +23,16 @@ async fn starting_runner(nonce: char) -> Result<StartingRunner, HostError> {
     journal.configure_capacity(JOB_LIMIT).await?;
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
-    record_acquired(&scope, 70).await?;
-    let provisioned = provision_physical_intent(&scope, nonce).await?;
+    let initialized =
+        provision_acquired_request_with_initialization(&scope, 70, nonce, nonce).await?;
+    let provisioned = initialized.provisioned.clone();
     let runner = RunnerReference {
         id: 770,
         name: runner_name(nonce),
         runner_scale_set_id: 501,
     };
-    let delivery = prepare_listener_delivery(&scope, &provisioned, &runner).await?;
+    let delivery =
+        prepare_initialized_listener_delivery(&scope, &binding, &initialized, &runner, 70).await?;
     Ok(StartingRunner {
         _scratch: scratch,
         scope,

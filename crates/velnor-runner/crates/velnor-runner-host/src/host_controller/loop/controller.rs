@@ -2,7 +2,6 @@
 
 use std::{
     path::{Path, PathBuf},
-    thread::{self, JoinHandle},
     time::Duration,
 };
 
@@ -25,25 +24,13 @@ use super::{
     setup,
     transitions::{JournalEffects, apply_config_transition, retire_pending},
 };
+#[path = "controller/doctor.rs"]
+mod doctor;
+
+use doctor::DoctorProbeWorker;
 
 const CONFIG_RELOAD_PAUSE: Duration = Duration::from_secs(2);
 const STORAGE_PROFILE_RETRY: Duration = Duration::from_secs(30);
-
-struct DoctorProbeWorker(Option<JoinHandle<()>>);
-
-impl DoctorProbeWorker {
-    fn is_finished(&self) -> bool {
-        self.0.as_ref().is_some_and(JoinHandle::is_finished)
-    }
-}
-
-impl Drop for DoctorProbeWorker {
-    fn drop(&mut self) {
-        if let Some(worker) = self.0.take() {
-            drop(worker.join());
-        }
-    }
-}
 
 pub(super) async fn run_controller(
     current: HostConfig,
@@ -121,6 +108,7 @@ struct ControllerLoop<'a> {
     doctor_attempted_request_id: Option<i64>,
     release_read_secret: ReleaseReadSecret,
     admission_ready: bool,
+    rotation_due: bool,
     next_profile_attempt: tokio::time::Instant,
 }
 
@@ -231,6 +219,7 @@ impl<'a> ControllerLoop<'a> {
             doctor_attempted_request_id: None,
             release_read_secret,
             admission_ready,
+            rotation_due: false,
             next_profile_attempt: tokio::time::Instant::now() + STORAGE_PROFILE_RETRY,
         })
     }
@@ -244,61 +233,6 @@ impl<'a> ControllerLoop<'a> {
             self.refresh_config_and_retire().await?;
             self.poll_connections().await;
         }
-    }
-
-    async fn start_doctor_probe(&mut self) {
-        if self
-            .doctor_worker
-            .as_ref()
-            .is_some_and(DoctorProbeWorker::is_finished)
-        {
-            drop(self.doctor_worker.take());
-        }
-        if self.doctor_worker.is_some() {
-            return;
-        }
-        let request = match self.journal.active_doctor_probe_request().await {
-            Ok(Some(request))
-                if request.state().is_active()
-                    && self.doctor_attempted_request_id != Some(request.request_id()) =>
-            {
-                request
-            }
-            Ok(_) => return,
-            Err(error) => {
-                eprintln!("doctor probe queue read held: {error}");
-                return;
-            }
-        };
-        let ticket = request.ticket();
-        let failure_ticket = request.ticket();
-        self.doctor_attempted_request_id = Some(request.request_id());
-        let worker_config = self.current.clone();
-        let worker_docker = self.docker.clone();
-        let worker_journal = self.journal.clone();
-        let worker_state = self.control_state.clone();
-        let spawned = thread::Builder::new()
-            .name("velnor-doctor-probe".to_owned())
-            .spawn(move || {
-                run_doctor_probe_worker(
-                    worker_config,
-                    worker_docker,
-                    worker_journal,
-                    worker_state,
-                    ticket,
-                );
-            });
-        self.doctor_worker = match spawned {
-            Ok(worker) => Some(DoctorProbeWorker(Some(worker))),
-            Err(error) => {
-                eprintln!("doctor probe worker start failed: {error}");
-                let _ = self
-                    .journal
-                    .fail_queued_doctor_probe_request(&failure_ticket)
-                    .await;
-                None
-            }
-        };
     }
 
     async fn refresh_config_and_retire(&mut self) -> Result<(), ListenFault> {
@@ -349,7 +283,9 @@ impl<'a> ControllerLoop<'a> {
     }
 
     async fn poll_connections(&mut self) {
-        if let Err(error) = poll_active_connections(
+        let fairness_enabled = u32::try_from(self.current.connections().len())
+            .is_ok_and(|count| count > self.current.max_jobs());
+        let outcome = poll_active_connections(
             &self.current,
             &self.pending_retirements,
             &mut self.connection_sessions,
@@ -360,10 +296,39 @@ impl<'a> ControllerLoop<'a> {
             &self.state,
             &self.release_read_secret,
             self.admission_ready,
+            fairness_enabled,
+            self.rotation_due,
         )
-        .await
-        {
-            eprintln!("host controller zero-header polling held: {error}");
+        .await;
+        let outcome = match outcome {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                eprintln!("host controller zero-header polling held: {error}");
+                return;
+            }
+        };
+        if fairness_enabled && outcome.positive_poll_settled {
+            self.rotation_due = true;
+        }
+        if self.rotation_due && outcome.rotation_complete {
+            match setup::prepare_active_connections(
+                &self.state,
+                &self.journal,
+                &self.current,
+                &self.selected_engine,
+                &self.worker_images,
+                &self.docker,
+            )
+            .await
+            {
+                Ok(prepared) => {
+                    self.connection_sessions = prepared;
+                    self.rotation_due = false;
+                }
+                Err(error) => {
+                    eprintln!("host controller fairness rotation held: {error}");
+                }
+            }
         }
     }
 
@@ -418,36 +383,5 @@ async fn apply_config(
             eprintln!("host controller config transition held: {error}");
             false
         }
-    }
-}
-
-fn run_doctor_probe_worker(
-    config: HostConfig,
-    docker: bollard::Docker,
-    journal: Journal,
-    state: crate::controller_ipc::ControlState,
-    ticket: crate::journal::DoctorProbeTicket,
-) {
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build();
-    let result = match runtime {
-        Ok(runtime) => match ReleaseReadSecret::load(&config) {
-            Ok(secret) => runtime.block_on(crate::launch::run_doctor_probe(
-                &docker, &journal, &secret, &ticket,
-            )),
-            Err(error) => {
-                let _ = runtime.block_on(journal.fail_queued_doctor_probe_request(&ticket));
-                Err(error)
-            }
-        },
-        Err(_) => Err(HostError::Journal),
-    };
-    match result {
-        Ok(Some(report)) => {
-            let _ = state.save_doctor_report(ticket.nonce(), report);
-        }
-        Ok(None) => {}
-        Err(error) => eprintln!("doctor probe worker failed: {error}"),
     }
 }

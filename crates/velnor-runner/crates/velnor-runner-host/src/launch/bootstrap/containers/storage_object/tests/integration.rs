@@ -75,6 +75,45 @@ async fn typed_volume_create_uses_journal_claim_and_inspected_docker_effect() ->
 
 #[cfg(unix)]
 #[tokio::test]
+async fn unrelated_fresh_sample_cannot_create_object_for_original_reservation() -> Result<(), String>
+{
+    let fixture = physical_fixture("typed-volume-recovery-sample").await?;
+    let recovery_permit = StartPermit::test_fixture_with_engine_id(&"b".repeat(32), ENGINE_ID);
+    let observation = recovery_permit.observation_witness();
+    assert_ne!(observation.sample_generation_id(), &"a".repeat(32));
+    assert!(observation.is_fresh_for(
+        ENGINE_ID,
+        fixture.selected.docker_root_digest(),
+        observation.sample_generation_id(),
+    ));
+
+    let mut responses = Vec::new();
+    append_verified_engine_responses(&mut responses, &fixture.images);
+    let stub = crate::launch::inspect_tests::DockerStub::open(responses)?;
+
+    let result = create_storage_object(
+        &stub.docker,
+        &fixture.scope,
+        fixture.reservation_id,
+        StorageRole::RunnerHome,
+        &fixture.selected,
+        &fixture.images,
+        &observation,
+    )
+    .await;
+    let requests = stub.finish().await?;
+
+    assert!(matches!(result, Err(crate::error::HostError::Identity)));
+    assert!(
+        !requests
+            .iter()
+            .any(|request| { request.starts_with("POST ") && request.contains("/volumes/create") })
+    );
+    Ok(())
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn foreign_existing_volume_is_never_adopted_or_replaced() -> Result<(), String> {
     let fixture = physical_fixture("typed-volume-foreign").await?;
     let names = WorkerIdentityNames::from_nonce(NONCE).map_err(|error| error.to_string())?;

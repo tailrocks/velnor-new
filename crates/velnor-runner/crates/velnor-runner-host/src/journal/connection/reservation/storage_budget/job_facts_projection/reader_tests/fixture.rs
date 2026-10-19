@@ -3,7 +3,7 @@ use crate::error::HostError;
 use crate::journal::connection::ConnectionJournal;
 use crate::journal::request_lifecycle::tests::helpers::{
     JobFactsReaderFixture, Scratch, binding, created_scope,
-    provision_physical_intent_with_initialization,
+    provision_acquired_request_with_initialization,
 };
 use crate::journal::{
     AssignedAcquireResult, CapacityLimits, JobFactsPublicationClaim, Journal,
@@ -44,14 +44,22 @@ pub(super) async fn bound_fixture(nonce: char) -> Result<BoundFixture, HostError
     let repository = binding("job-facts-reader", 101)?;
     let scope = created_scope(&journal, &repository, 501).await?;
     record_request_acquired(&scope).await?;
-    let ready = provision_physical_intent_with_initialization(&scope, nonce, nonce).await?;
+    let ready = provision_acquired_request_with_initialization(&scope, 70, nonce, nonce).await?;
     let runner = RunnerReference {
         id: 770,
         name: format!("v{}", nonce.to_string().repeat(32)),
         runner_scale_set_id: 501,
     };
+    let (generation, digest) = scope.test_active_authority_identity().await?;
     let jit = scope
-        .claim_runner_jit(ready.intent_id, &runner.name)
+        .claim_runner_jit_for_request(
+            ready.intent_id,
+            ready.reservation_id,
+            70,
+            &runner.name,
+            generation,
+            &digest,
+        )
         .await?
         .ok_or(HostError::Journal)?;
     scope.bind_jit_runner(jit, &runner).await?;

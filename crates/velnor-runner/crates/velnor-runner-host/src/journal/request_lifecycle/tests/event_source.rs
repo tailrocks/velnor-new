@@ -1,8 +1,9 @@
 //! Native event-source validation and restart-safe correlation regressions.
 
 use super::helpers::{
-    ProvisionedRunner, Scratch, binding, created_scope, event_source, provision_physical_intent,
-    receipt, record_acquired, record_owned_storage_cleanup, runner_name, settle_storage_metadata,
+    ProvisionedRunner, Scratch, binding, created_scope, event_source,
+    finish_initialized_listener_delivery, provision_acquired_request_with_initialization, receipt,
+    record_owned_storage_cleanup, runner_name, settle_storage_metadata,
 };
 use crate::error::HostError;
 use crate::journal::{

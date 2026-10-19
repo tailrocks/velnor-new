@@ -18,6 +18,8 @@ use crate::worker::ResourceBudget;
 
 mod deferred_offer;
 pub(crate) use deferred_offer::{DeferredAuthorizedOffer, DeferredAuthorizedOffers};
+mod recovery;
+pub(crate) use recovery::recover_acquired_scoped_offer;
 
 /// Call context. Tokens are redacted in `Debug` and zeroized on drop.
 pub(crate) struct Drive {

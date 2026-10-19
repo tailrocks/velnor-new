@@ -14,6 +14,7 @@ use crate::config::ConnectionId;
 use crate::error::HostError;
 use crate::journal::connection::AssignmentIdentity;
 
+pub(crate) use acquire::AcquiredRecoveryCandidate;
 pub(crate) use authorized_offers::AuthorizedOffer;
 
 /// State of one authorized request's `AcquireJobs` operation.

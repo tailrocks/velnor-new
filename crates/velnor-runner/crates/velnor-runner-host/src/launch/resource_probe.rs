@@ -8,6 +8,7 @@ use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
 
 use self::provider::ReleaseImageProvider;
+pub(crate) use self::sample::RecoveryObservation;
 pub(crate) use self::sample::{StartObservationWitness, StartPermit};
 pub(in crate::launch) use sample::filesystem_instance_digest;
 
@@ -239,6 +240,28 @@ pub(crate) async fn start_permit(
         Ok(Some(sample)) => sample.into_start_permit(budget),
         Ok(None) | Err(_) => None,
     }
+}
+
+/// Obtain fresh guest evidence for one existing physical reservation.
+pub(crate) async fn recovery_observation(
+    docker: &Docker,
+    journal: &Journal,
+    budget: ResourceBudget,
+    charge: (u64, u64),
+    engine: &SelectedEngineContext,
+    release_read_secret: &ReleaseReadSecret,
+) -> Option<RecoveryObservation> {
+    let token = release_read_secret.as_provider_token().ok()?;
+    let provider = ReleaseImageProvider::from_compiled_source(token).ok()?;
+    let sample = Box::pin(lifecycle::collect(docker, journal, &provider))
+        .await
+        .ok()??;
+    sample.into_recovery_observation(
+        budget,
+        charge,
+        engine.engine_id(),
+        engine.docker_root_digest(),
+    )
 }
 
 pub(super) fn consume_permit(permit: StartPermit, engine_id: &str, root_digest: &str) -> bool {

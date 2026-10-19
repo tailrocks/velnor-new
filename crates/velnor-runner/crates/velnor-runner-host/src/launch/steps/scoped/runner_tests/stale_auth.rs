@@ -37,7 +37,17 @@ async fn acquire_401_is_not_replayed_and_keeps_the_physical_charge() -> Result<(
     assert!(
         fixture
             .scope
-            .claim_runner_jit(physical.intent_id, &physical.runner_name)
+            .claim_runner_jit_for_request(
+                physical.intent_id,
+                physical.reservation_id,
+                fixture
+                    .request
+                    .request_id()
+                    .ok_or_else(|| "request ID is absent".to_owned())?,
+                &physical.runner_name,
+                physical.authority_generation,
+                &physical.authority_digest,
+            )
             .await
             .map_err(|error| error.to_string())?
             .is_none()

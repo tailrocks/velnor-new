@@ -1,8 +1,8 @@
 //! Test helpers for linked request reservation recovery.
 
 use super::super::helpers::{
-    Scratch, binding, created_scope, event_source, finish_listener_delivery,
-    provision_reserved_physical_intent, record_owned_storage_cleanup, runner_name,
+    Scratch, binding, created_scope, event_source, finish_initialized_listener_delivery,
+    initialize_reserved_request, record_owned_storage_cleanup, runner_name,
     settle_storage_metadata,
 };
 use super::{
@@ -71,8 +71,9 @@ pub(super) async fn prepare_linked_lifecycle(
     let (recorded_intent_id, fresh) = scope.begin_launch(&physical).await?;
     assert_eq!(recorded_intent_id, intent_id);
     assert!(!fresh);
-    let provisioned = provision_reserved_physical_intent(
+    let initialized = initialize_reserved_request(
         &scope,
+        witness.clone(),
         physical.clone(),
         nonce,
         reservation_id,
@@ -81,12 +82,20 @@ pub(super) async fn prepare_linked_lifecycle(
         sample_generation_id,
     )
     .await?;
+    let provisioned = initialized.provisioned.clone();
     let runner = RunnerReference {
         id: 701,
         name: runner_name(nonce),
         runner_scale_set_id: 501,
     };
-    finish_listener_delivery(&scope, &provisioned, &runner).await?;
+    finish_initialized_listener_delivery(
+        &scope,
+        &repository,
+        &initialized,
+        &runner,
+        witness_request_id,
+    )
+    .await?;
     let source = event_source(101, actual_request_id + 1_000);
     let job_id = format!("opaque-job-{actual_request_id}");
     Ok(LinkedLifecycle {

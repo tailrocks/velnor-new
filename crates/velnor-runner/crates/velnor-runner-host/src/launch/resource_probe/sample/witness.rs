@@ -125,8 +125,15 @@ pub(crate) struct StartObservationWitness {
     engine_id: String,
     docker_root_digest: String,
     sample_generation_id: String,
+    admission_binding: ObservationAdmissionBinding,
     pub(super) observed_at: Instant,
     storage_mount: ProbeStorageMountWitness,
+}
+
+#[derive(Debug, Clone)]
+enum ObservationAdmissionBinding {
+    Fresh(String),
+    Recovered(String),
 }
 
 impl StartObservationWitness {
@@ -140,6 +147,7 @@ impl StartObservationWitness {
         Self {
             engine_id,
             docker_root_digest,
+            admission_binding: ObservationAdmissionBinding::Fresh(sample_generation_id.clone()),
             sample_generation_id,
             observed_at,
             storage_mount: ProbeStorageMountWitness::from_record(record),
@@ -148,6 +156,35 @@ impl StartObservationWitness {
 
     pub(crate) fn storage_mount(&self) -> &ProbeStorageMountWitness {
         &self.storage_mount
+    }
+
+    /// Return the sample identity for this observation.
+    #[must_use]
+    pub(crate) fn sample_generation_id(&self) -> &str {
+        &self.sample_generation_id
+    }
+
+    pub(super) fn bind_recovery_sample(&mut self, admission_sample_generation_id: &str) {
+        self.admission_binding =
+            ObservationAdmissionBinding::Recovered(admission_sample_generation_id.to_owned());
+    }
+
+    /// Check this observation against its original admission sample.
+    #[must_use]
+    pub(crate) fn is_fresh_for_admission(
+        &self,
+        engine_id: &str,
+        docker_root_digest: &str,
+        admission_sample_generation_id: &str,
+    ) -> bool {
+        let bound_sample = match &self.admission_binding {
+            ObservationAdmissionBinding::Fresh(sample)
+            | ObservationAdmissionBinding::Recovered(sample) => sample,
+        };
+        self.engine_id == engine_id
+            && self.docker_root_digest == docker_root_digest
+            && bound_sample == admission_sample_generation_id
+            && self.observed_at.elapsed() <= MAX_OBSERVATION_AGE
     }
 
     /// Whether the original sample remains fresh for this exact engine and Docker root.

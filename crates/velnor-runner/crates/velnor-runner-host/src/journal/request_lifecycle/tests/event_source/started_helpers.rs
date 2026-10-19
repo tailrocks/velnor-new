@@ -1,8 +1,8 @@
 async fn started_fixture(journal: &Journal) -> Result<StartedFixture, HostError> {
     let binding = binding("essential", 101)?;
     let scope = created_scope(journal, &binding, 501).await?;
-    record_acquired(&scope, 91).await?;
-    let provisioned = provision_physical_intent(&scope, 'c').await?;
+    let initialized = provision_acquired_request_with_initialization(&scope, 91, 'c', 'c').await?;
+    let provisioned = initialized.provisioned.clone();
     let physical = provisioned.assignment.clone();
     let intent_id = provisioned.intent_id;
     let runner = RunnerReference {
@@ -10,7 +10,7 @@ async fn started_fixture(journal: &Journal) -> Result<StartedFixture, HostError>
         name: runner_name('c'),
         runner_scale_set_id: 501,
     };
-    super::helpers::finish_listener_delivery(&scope, &provisioned, &runner).await?;
+    finish_initialized_listener_delivery(&scope, &binding, &initialized, &runner, 91).await?;
     let request = scope
         .assignment_identity(AssignmentKey::AssignedRequest { request_id: 91 })
         .await?;

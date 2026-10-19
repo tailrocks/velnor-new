@@ -1,0 +1,37 @@
+{
+  "result": "FAIL",
+  "source_snapshot_sha256": "50d6b1e63b8eca0ebbb45f9f6c360f539d985191730027f2d669a66ca55c8867",
+  "source_overlay": "integration-files.json",
+  "focused_tests": {
+    "result": "PASS",
+    "run_id": "3a4a489d-d94a-4ee0-adcb-1138e799b60c",
+    "run": 40,
+    "passed": 40,
+    "failed": 0,
+    "log_sha256": "bf6d02dfa5883810790b7270e1438cafc46dd33284e8401bd0f1eab1d9f9073e"
+  },
+  "full_snapshot_tests": {
+    "result": "FAIL",
+    "run_id": "7cd3dba3-f07f-47a5-8b92-e617123f7515",
+    "run": 1369,
+    "passed": 1281,
+    "failed": 88,
+    "skipped": 0,
+    "exit_status": null,
+    "log_sha256": "8f02ac6ddfe88259c15c49b55ac11af4e3208beccad6693d47721fb6bb369334"
+  },
+  "pending": [
+    "bounded_proof_constraints",
+    "remaining_runner_tests",
+    "strict_quality_gates",
+    "main_integration",
+    "release",
+    "essential_mac_installation",
+    "chainargos_installation"
+  ],
+  "post_hook_tests_compile": {
+    "result": "PASS",
+    "exit_status": 0,
+    "log_sha256": "d0715a3a2f951ed0952399d53af2b3b781231a84ce5b2360ad720604efbc2875"
+  }
+}

@@ -25,6 +25,8 @@ use support::{
 mod atomic_acquire;
 #[path = "runner_tests/docker_pair.rs"]
 mod docker_pair;
+#[path = "runner_tests/policy_change.rs"]
+mod policy_change;
 #[path = "runner_tests/provisioning.rs"]
 mod provisioning;
 #[path = "runner_tests/stale_auth.rs"]
@@ -153,9 +155,15 @@ async fn exact_acquire_jit_and_bounded_docker_preflight_use_one_physical_nonce()
         .ok_or_else(|| "the verified test sample did not satisfy storage admission".to_owned())?;
     let root_digest = permit.docker_root_digest().to_owned();
     let engine_id = permit.engine_id().to_owned();
-    let reserved = runner::reserve_and_claim(&fixture.scope, permit, storage, &fixture.request)
-        .await
-        .map_err(|error| error.to_string())?;
+    let reserved = runner::reserve_and_claim(
+        &fixture.scope,
+        permit,
+        storage,
+        &fixture.request,
+        &fixture.authority_policy,
+    )
+    .await
+    .map_err(|error| error.to_string())?;
     let ReservationOutcome::AcquireClaimed(physical, claim) = reserved else {
         return Err("the authorized request did not receive one atomic Acquire claim".to_owned());
     };
@@ -257,7 +265,17 @@ async fn exact_acquire_jit_and_bounded_docker_preflight_use_one_physical_nonce()
     assert!(
         fixture
             .scope
-            .claim_runner_jit(physical.intent_id, &physical.runner_name)
+            .claim_runner_jit_for_request(
+                physical.intent_id,
+                physical.reservation_id,
+                fixture
+                    .request
+                    .request_id()
+                    .ok_or_else(|| "request ID is absent".to_owned())?,
+                &physical.runner_name,
+                physical.authority_generation,
+                &physical.authority_digest,
+            )
             .await
             .map_err(|error| error.to_string())?
             .is_none()
@@ -325,7 +343,17 @@ async fn expiry_after_acquire_keeps_charge_and_sends_no_jit_or_docker_request() 
     assert!(
         fixture
             .scope
-            .claim_runner_jit(physical.intent_id, &physical.runner_name)
+            .claim_runner_jit_for_request(
+                physical.intent_id,
+                physical.reservation_id,
+                fixture
+                    .request
+                    .request_id()
+                    .ok_or_else(|| "request ID is absent".to_owned())?,
+                &physical.runner_name,
+                physical.authority_generation,
+                &physical.authority_digest,
+            )
             .await
             .map_err(|error| error.to_string())?
             .is_none()
@@ -391,7 +419,17 @@ async fn uncertain_acquire_keeps_charge_and_blocks_jit_replay() -> Result<(), St
     assert!(
         fixture
             .scope
-            .claim_runner_jit(physical.intent_id, &physical.runner_name)
+            .claim_runner_jit_for_request(
+                physical.intent_id,
+                physical.reservation_id,
+                fixture
+                    .request
+                    .request_id()
+                    .ok_or_else(|| "request ID is absent".to_owned())?,
+                &physical.runner_name,
+                physical.authority_generation,
+                &physical.authority_digest,
+            )
             .await
             .map_err(|error| error.to_string())?
             .is_none()
@@ -432,7 +470,17 @@ async fn already_acquired_request_never_authorizes_a_new_runner() -> Result<(), 
     assert!(
         fixture
             .scope
-            .claim_runner_jit(physical.intent_id, &physical.runner_name)
+            .claim_runner_jit_for_request(
+                physical.intent_id,
+                physical.reservation_id,
+                fixture
+                    .request
+                    .request_id()
+                    .ok_or_else(|| "request ID is absent".to_owned())?,
+                &physical.runner_name,
+                physical.authority_generation,
+                &physical.authority_digest,
+            )
             .await
             .map_err(|error| error.to_string())?
             .is_none()

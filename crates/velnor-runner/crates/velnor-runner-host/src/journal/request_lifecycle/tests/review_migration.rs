@@ -1,9 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use super::admission::physical_intent;
 use super::helpers::{
-    TEST_ENGINE_ID, event_source, record_acquired, record_owned_storage_cleanup, runner_name,
-    settle_storage_metadata,
+    TEST_ENGINE_ID, event_source, provision_acquired_request_with_initialization,
+    record_owned_storage_cleanup, runner_name, settle_storage_metadata,
 };
 use super::review_counterexamples::ready;
 use crate::error::HostError;
@@ -70,14 +69,20 @@ async fn assert_known_cleaned_state_allows_replacement(
     let fixture = ready().await?;
     let (_scratch, journal, scope) =
         close_and_reopen_legacy_fixture(fixture, legacy_state, index).await?;
-    if legacy_state == "started" {
-        record_acquired(&scope, 72).await?;
-    }
     let nonce = char::from(b'a' + u8::try_from(index).map_err(|_| HostError::Journal)?);
-    let (_replacement, replacement_intent) = physical_intent(&scope, nonce).await?;
+    let replacement =
+        provision_acquired_request_with_initialization(&scope, 72, nonce, nonce).await?;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
     assert!(
         scope
-            .claim_runner_jit(replacement_intent, &runner_name(nonce))
+            .claim_runner_jit_for_request(
+                replacement.intent_id,
+                replacement.reservation_id,
+                72,
+                &runner_name(nonce),
+                generation,
+                &digest
+            )
             .await?
             .is_some(),
         "known runner in {legacy_state} with exact released cleanup proof blocked replacement"
@@ -268,11 +273,18 @@ async fn version_ten_cleaned_runner_migrates_and_allows_new_jit() -> Result<(), 
             .await?,
         Some(migrated.intent)
     );
-    record_acquired(&scope, 72).await?;
-    let (_physical, intent) = physical_intent(&scope, 'f').await?;
+    let next = provision_acquired_request_with_initialization(&scope, 72, 'f', 'f').await?;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
     assert!(
         scope
-            .claim_runner_jit(intent, &runner_name('f'))
+            .claim_runner_jit_for_request(
+                next.intent_id,
+                next.reservation_id,
+                72,
+                &runner_name('f'),
+                generation,
+                &digest
+            )
             .await?
             .is_some()
     );

@@ -5,18 +5,30 @@ use std::{path::Path, time::Duration};
 use bollard::Docker;
 
 use crate::{
-    config::HostConfig,
+    config::{HostConfig, RepositoryConnection},
     error::HostError,
     journal::Journal,
     launch::{
         Drive, GuestAdmission, PositiveAdmission, ReleaseReadSecret, Rest, ScopedAdmissionInput,
-        SelectedEngineContext, VerifiedWorkerImages, acquire_authorized_scoped_offer,
-        admit_when_ready, authorize_deferred_offer, positive_poll_once,
-        scoped_runtime::{PendingScopedExecution, RunnerReadyBootstrap, ScopedChannelOutcome},
+        SelectedEngineContext, VerifiedWorkerImages, ZeroHeaderMode,
+        acquire_authorized_scoped_offer, admit_when_ready, authorize_deferred_offer,
+        positive_poll_once, scoped_runtime::ScopedChannelOutcome,
     },
 };
 
-use super::{PendingAcquiredRecovery, state::PreparedConnection};
+use super::state::PreparedConnection;
+#[path = "polling/outcome.rs"]
+mod outcome;
+#[path = "polling/recovery.rs"]
+mod recovery;
+
+pub(crate) use outcome::{ControllerPollOutcome, PollKind};
+use recovery::{
+    remember_acquired_recovery, report_acquired_recovery, retain_authorization_pending,
+    retain_bootstrap_pending, retain_ready_or_pending,
+};
+
+const ASSIGNED_POPULATION_SCAN_LIMIT: u32 = 64;
 
 pub(super) struct PositivePollContext<'a> {
     pub(super) config: &'a HostConfig,
@@ -29,36 +41,54 @@ pub(super) struct PositivePollContext<'a> {
     pub(super) admission_ready: bool,
 }
 
-pub(super) struct ControllerPollOutcome {
-    pub(super) started_request_ids: Vec<i64>,
-    pub(super) wake_cleanup: bool,
-    pub(super) session_delete_candidate: bool,
-    pub(super) acquired: Option<crate::launch::steps::AcquiredProvisioning>,
-}
-
-impl ControllerPollOutcome {
-    pub(super) fn from_scoped(outcome: crate::launch::ScopedPollOutcome, cursor: i64) -> Self {
-        Self {
-            started_request_ids: outcome.started_request_ids,
-            wake_cleanup: outcome.wake_cleanup,
-            // A filtered response cannot prove the queue head is empty, even
-            // when this later lifecycle message was durably acknowledged.
-            session_delete_candidate: outcome.session_delete_candidate && cursor == 0,
-            acquired: None,
-        }
-    }
-
-    pub(super) fn from_positive(outcome: crate::launch::PositivePollOutcome) -> Self {
-        Self {
-            started_request_ids: outcome.started_request_ids,
-            wake_cleanup: outcome.wake_cleanup,
-            session_delete_candidate: outcome.session_delete_candidate,
-            acquired: match outcome.admission {
-                Some(PositiveAdmission::Acquired(acquired)) => Some(acquired),
-                Some(PositiveAdmission::Deferred(_) | PositiveAdmission::NoAcquire) | None => None,
-            },
-        }
-    }
+pub(super) async fn poll_zero_header_connection(
+    prepared: &mut PreparedConnection,
+    allocation: &crate::journal::HeaderAllocation,
+    context: &PositivePollContext<'_>,
+    cursor: i64,
+    defer_available: bool,
+    retired_binding: Option<&RepositoryConnection>,
+) -> Result<crate::launch::ScopedPollOutcome, HostError> {
+    let Some(credentials) = prepared.credentials.as_mut() else {
+        return Err(HostError::Keychain);
+    };
+    let authorization = if defer_available {
+        Some((
+            context
+                .config
+                .connection(&prepared.binding.connection_id)
+                .or(retired_binding)
+                .ok_or(HostError::Config)?,
+            credentials.github_pat.expose(),
+        ))
+    } else {
+        None
+    };
+    let scoped = &prepared.scope;
+    let set_id = prepared.set_id;
+    let mode = if defer_available {
+        ZeroHeaderMode::DeferAuthorizedOffers
+    } else {
+        ZeroHeaderMode::LifecycleOnly
+    };
+    crate::launch::poll_scoped_connection_once_with_mode(
+        &mut credentials.link,
+        set_id,
+        &mut credentials.session,
+        scoped,
+        prepared.session_intent,
+        allocation,
+        cursor,
+        mode,
+        async |poll| {
+            let Some((connection, pat)) = authorization else {
+                return Err(crate::scale_set::EnsureError::AdmissionClosed);
+            };
+            crate::launch::authorize_deferred_offers(connection, scoped, pat, set_id, poll).await
+        },
+    )
+    .await
+    .map_err(|_| HostError::Journal)
 }
 
 pub(super) async fn poll_positive_connection(
@@ -79,6 +109,115 @@ pub(super) async fn poll_positive_connection(
         start_acquired(prepared, acquired, context).await?;
     }
     Ok(outcome)
+}
+
+/// Resume only acquired work that the durable population plan can bind to an
+/// exact existing physical reservation.
+pub(super) async fn reconcile_assigned_population(
+    prepared: &mut PreparedConnection,
+    context: &PositivePollContext<'_>,
+) -> Result<(), HostError> {
+    let Some(assigned_total) = prepared.assigned_total else {
+        return Ok(());
+    };
+    let Some(connection) = context.config.connection(&prepared.binding.connection_id) else {
+        return Ok(());
+    };
+    let Some(policy) = context
+        .config
+        .validated_job_authority_policy(&prepared.binding.connection_id)?
+    else {
+        return Ok(());
+    };
+    let reservations = prepared.scope.physical_runner_reservations().await?;
+    let acquired = prepared
+        .scope
+        .acquired_authorized_requests(ASSIGNED_POPULATION_SCAN_LIMIT)
+        .await?;
+    let mut recovery_candidates = Vec::new();
+    for reservation in &reservations {
+        let Some(request) = reservation.acquired_request.as_ref() else {
+            continue;
+        };
+        if !acquired.contains(request)
+            || reservation.reservation.state != crate::journal::ReservationState::Reserved
+            || reservation.intent_state != Some(crate::journal::IntentState::Pending)
+            || reservation.launch_phase != Some(crate::reconcile::LaunchPhase::ProvisioningHeld)
+            || reservation.jit_state != crate::journal::PhysicalRunnerJitState::Absent
+        {
+            continue;
+        }
+        if let Some(candidate) = prepared
+            .scope
+            .acquired_recovery_candidate(
+                request,
+                reservation.reservation_id,
+                policy.generation(),
+                policy.policy_sha256(),
+            )
+            .await?
+        {
+            recovery_candidates.push(candidate);
+        }
+    }
+    let plan = crate::host_controller::plan_assigned_population(
+        assigned_total,
+        &prepared.binding.connection_id,
+        prepared.set_id,
+        &reservations,
+        &acquired,
+        &recovery_candidates,
+    );
+
+    for action in plan.actions {
+        let crate::host_controller::AssignedPopulationAction::ContinueExisting {
+            request,
+            reservation_id,
+            candidate_index,
+        } = action;
+        let candidate = recovery_candidates
+            .get(candidate_index)
+            .ok_or(HostError::Identity)?;
+        if candidate.request() != &request || candidate.reservation_id() != reservation_id {
+            return Err(HostError::Identity);
+        }
+        let Some(request_id) = request.request_id() else {
+            return Err(HostError::Identity);
+        };
+        if prepared.pending_acquired_recovery.contains_key(&request_id) {
+            continue;
+        }
+        let outcome = crate::launch::recover_acquired_scoped_offer(
+            connection,
+            policy,
+            context.state,
+            &prepared.scope,
+            context.journal,
+            &request,
+            reservation_id,
+            context.config.resource_budget()?,
+            context.docker,
+            context.release_read_secret,
+            context.selected_engine,
+        )
+        .await;
+        match outcome {
+            Ok(crate::launch::steps::ScopedProvisioningOutcome::Recovered(recovery)) => {
+                start_acquired(prepared, recovery.into_acquired(), context).await?;
+            }
+            Ok(crate::launch::steps::ScopedProvisioningOutcome::NoStart) => {}
+            Ok(crate::launch::steps::ScopedProvisioningOutcome::Acquired(_)) => {
+                return Err(HostError::Ownership);
+            }
+            Err(error) => {
+                eprintln!(
+                    "Acquired population recovery held. connection={} request={} reason={error}",
+                    prepared.binding.connection_id, request_id
+                );
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn resume_authorized_offers(
@@ -240,6 +379,9 @@ async fn positive_poll_message(
                     crate::launch::steps::ScopedProvisioningOutcome::Acquired(acquired) => {
                         PositiveAdmission::Acquired(acquired)
                     }
+                    crate::launch::steps::ScopedProvisioningOutcome::Recovered(recovery) => {
+                        PositiveAdmission::Acquired(recovery.into_acquired())
+                    }
                 })
             })
             .await?;
@@ -327,93 +469,4 @@ async fn retain_scoped_channel(
         pending => retain_bootstrap_pending(prepared, request_id, pending),
     }
     Ok(())
-}
-
-fn retain_ready_or_pending(prepared: &mut PreparedConnection, runner: RunnerReadyBootstrap) {
-    let request_id = runner.request_id();
-    match prepared.retain_runner_ready(runner) {
-        Ok(_) => clear_acquired_recovery(prepared, request_id),
-        Err(runner) => retain_authorization_pending(
-            prepared,
-            request_id,
-            PendingScopedExecution::Runner(runner, None, HostError::Ownership),
-        ),
-    }
-}
-
-fn retain_authorization_pending(
-    prepared: &mut PreparedConnection,
-    request_id: Option<i64>,
-    pending: PendingScopedExecution,
-) {
-    if let Some(request_id) = request_id {
-        prepared.retain_pending(request_id, pending);
-        clear_acquired_recovery(prepared, Some(request_id));
-    } else {
-        prepared.unkeyed_authorization.push(pending);
-        prepared.unkeyed_acquired_recovery.pop();
-    }
-}
-
-fn retain_bootstrap_pending(
-    prepared: &mut PreparedConnection,
-    request_id: Option<i64>,
-    pending: ScopedChannelOutcome,
-) {
-    if let Some(request_id) = request_id {
-        prepared
-            .pending_bootstrap
-            .entry(request_id)
-            .or_default()
-            .push(pending);
-        clear_acquired_recovery(prepared, Some(request_id));
-    } else {
-        prepared.unkeyed_bootstrap.push(pending);
-        prepared.unkeyed_acquired_recovery.pop();
-    }
-}
-
-fn remember_acquired_recovery(
-    prepared: &mut PreparedConnection,
-    request_id: Option<i64>,
-    acquired: &crate::launch::steps::AcquiredProvisioning,
-) {
-    let recovery = PendingAcquiredRecovery {
-        reservation_id: acquired.reservation_id(),
-        intent_id: acquired.intent_id(),
-        failure: HostError::Journal,
-    };
-    if let Some(request_id) = request_id {
-        prepared
-            .pending_acquired_recovery
-            .entry(request_id)
-            .or_insert(recovery);
-    } else {
-        prepared.unkeyed_acquired_recovery.push(recovery);
-    }
-}
-
-fn report_acquired_recovery(
-    prepared: &mut PreparedConnection,
-    request_id: Option<i64>,
-    error: HostError,
-) {
-    let recovery = request_id
-        .and_then(|request_id| prepared.pending_acquired_recovery.get_mut(&request_id))
-        .or_else(|| prepared.unkeyed_acquired_recovery.last_mut());
-    if let Some(recovery) = recovery {
-        recovery.failure = error;
-        eprintln!(
-            "Acquired work remains held for recovery. reservation={} intent={} reason={}",
-            recovery.reservation_id, recovery.intent_id, recovery.failure
-        );
-    }
-}
-
-fn clear_acquired_recovery(prepared: &mut PreparedConnection, request_id: Option<i64>) {
-    if let Some(request_id) = request_id {
-        prepared.pending_acquired_recovery.remove(&request_id);
-    } else {
-        prepared.unkeyed_acquired_recovery.pop();
-    }
 }

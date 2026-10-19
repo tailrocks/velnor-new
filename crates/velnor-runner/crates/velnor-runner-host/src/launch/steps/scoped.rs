@@ -11,11 +11,12 @@ use super::{assignment, source_blocked};
 
 mod acquire;
 mod runner;
-pub(crate) use runner::AcquiredProvisioning;
+pub(crate) use runner::{AcquiredProvisioning, CheckedAcquiredRecovery};
 
 pub(crate) enum ScopedProvisioningOutcome {
     NoStart,
     Acquired(runner::AcquiredProvisioning),
+    Recovered(runner::CheckedAcquiredRecovery),
 }
 
 pub(crate) async fn acquire_scoped<T>(
@@ -51,6 +52,10 @@ where
     T: Transport + Lane,
 {
     let (connection, scoped, state) = scoped_context(ctx)?;
+    let authority_policy = ctx
+        .authority_policy
+        .as_ref()
+        .ok_or(EnsureError::Uncertain)?;
     if !ctx.source_authorized || request_id <= 0 {
         return Err(source_blocked(
             super::source::SourceBlock::ClosedWorldUnproven,
@@ -79,7 +84,8 @@ where
     };
     lane.on_admin()?;
 
-    let outcome = runner::reserve_and_claim(scoped, permit, storage, &request).await?;
+    let outcome =
+        runner::reserve_and_claim(scoped, permit, storage, &request, authority_policy).await?;
     let runner::ReservationOutcome::AcquireClaimed(physical, claim) = outcome else {
         return Ok(ScopedProvisioningOutcome::NoStart);
     };

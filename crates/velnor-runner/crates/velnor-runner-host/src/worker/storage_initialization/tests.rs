@@ -54,10 +54,11 @@ fn accepts_the_utility_success_record() -> Result<(), HostError> {
     assert_eq!(result.control().mode(), 0o555);
     assert_eq!(result.layout_digest().len(), 64);
     let ready_hash = Sha256::digest(output(VALID));
-    let expected_ready_digest = ready_hash
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
+    let expected_ready_digest = ready_hash.iter().fold(String::new(), |mut digest, byte| {
+        use std::fmt::Write as _;
+        let _written = write!(&mut digest, "{byte:02x}");
+        digest
+    });
     assert_eq!(result.ready_digest(), expected_ready_digest);
     assert_ne!(result.ready_digest(), result.layout_digest());
     Ok(())

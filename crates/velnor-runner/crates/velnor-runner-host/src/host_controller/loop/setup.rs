@@ -17,7 +17,7 @@ use crate::{
     worker::guest_image::write_guest_image,
 };
 
-use super::state::{PreparedConnection, SessionCredentials};
+use super::state::{PreparedConnection, SessionCredentials, session_assigned_total};
 
 pub(super) fn discover_retirements(
     state: &Path,
@@ -77,8 +77,19 @@ pub(super) async fn prepare_active_connections(
     worker_images: &VerifiedWorkerImages,
     docker: &Docker,
 ) -> Result<Vec<PreparedConnection>, ListenFault> {
+    let allocations = journal.header_allocations().await?;
+    let cursor = journal.header_fairness_cursor().await?;
+    let has_allocations = !allocations.is_empty();
     let mut prepared = Vec::with_capacity(config.connections().len());
     for binding in config.connections() {
+        let target = if has_allocations {
+            allocations
+                .iter()
+                .find(|allocation| allocation.connection_id() == &binding.connection_id)
+                .map_or(0, crate::journal::HeaderAllocation::target)
+        } else {
+            requested_header_capacity_after(config, binding, cursor.as_ref())?
+        };
         prepared.push(
             prepare_connection(
                 state,
@@ -88,6 +99,7 @@ pub(super) async fn prepare_active_connections(
                 selected_engine,
                 worker_images,
                 docker,
+                target,
             )
             .await?,
         );
@@ -129,6 +141,7 @@ pub(super) async fn prepare_connection(
     selected_engine: &SelectedEngineContext,
     worker_images: &VerifiedWorkerImages,
     docker: &Docker,
+    requested_header_capacity: u32,
 ) -> Result<PreparedConnection, ListenFault> {
     bind_connection(journal, binding, config, selected_engine).await?;
     let credential = crate::keychain::load_secret(
@@ -161,14 +174,15 @@ pub(super) async fn prepare_connection(
         link.token().to_owned(),
         state,
     )?;
-    let requested_header_capacity = requested_header_capacity(config, binding)?;
     let (session, session_intent, _header_allocation) =
         open_connection_session(&mut link, set.id, &scoped, requested_header_capacity).await?;
+    let assigned_total = session_assigned_total(session.statistics());
     Ok(PreparedConnection {
         binding: binding.clone(),
         scope: scoped,
         set_id: set.id,
         session_intent,
+        assigned_total,
         poll_cursor: 0,
         poll_retry_at: None,
         guest_image,
@@ -191,9 +205,18 @@ pub(super) async fn prepare_connection(
     })
 }
 
+#[cfg(test)]
 pub(crate) fn requested_header_capacity(
     config: &HostConfig,
     binding: &RepositoryConnection,
+) -> Result<u32, HostError> {
+    requested_header_capacity_after(config, binding, None)
+}
+
+pub(crate) fn requested_header_capacity_after(
+    config: &HostConfig,
+    binding: &RepositoryConnection,
+    cursor: Option<&crate::config::ConnectionId>,
 ) -> Result<u32, HostError> {
     let connections = config.connections();
     let index = connections
@@ -205,6 +228,24 @@ pub(crate) fn requested_header_capacity(
         return Err(HostError::Config);
     }
     let total = config.max_jobs();
+    if count > total {
+        let mut ordered = connections.iter().collect::<Vec<_>>();
+        ordered.sort_by(|left, right| left.connection_id.cmp(&right.connection_id));
+        let start = cursor
+            .and_then(|cursor| {
+                ordered
+                    .iter()
+                    .position(|candidate| candidate.connection_id > *cursor)
+            })
+            .unwrap_or(0);
+        let id = binding.connection_id.clone();
+        let rank = ordered
+            .iter()
+            .position(|candidate| candidate.connection_id == id)
+            .ok_or(HostError::Config)?;
+        let distance = (rank + ordered.len() - start) % ordered.len();
+        return Ok(u32::from(distance < total as usize));
+    }
     let base = total / count;
     let index = u32::try_from(index).map_err(|_| HostError::Config)?;
     let extra = u32::from(index < total % count);

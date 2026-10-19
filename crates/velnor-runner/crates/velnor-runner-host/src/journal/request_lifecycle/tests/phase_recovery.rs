@@ -1,7 +1,7 @@
 use super::admission::JOB_LIMIT;
 use super::helpers::{
-    Scratch, binding, created_scope, event_source, provision_physical_intent, record_acquired,
-    runner_name,
+    Scratch, binding, created_scope, event_source, finish_initialized_listener_delivery,
+    provision_acquired_request_with_initialization, runner_name,
 };
 use crate::error::HostError;
 use crate::journal::{CapacityLimits, Journal, ReservationState};
@@ -22,8 +22,8 @@ async fn runner_started_phase_and_capacity_survive_restart() -> Result<(), HostE
         .await?;
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
-    record_acquired(&scope, 70).await?;
-    let provisioned = provision_physical_intent(&scope, '8').await?;
+    let initialized = provision_acquired_request_with_initialization(&scope, 70, '8', '8').await?;
+    let provisioned = initialized.provisioned.clone();
     let physical = provisioned.assignment.clone();
     let intent_id = provisioned.intent_id;
     let runner = RunnerReference {
@@ -31,7 +31,7 @@ async fn runner_started_phase_and_capacity_survive_restart() -> Result<(), HostE
         name: runner_name('8'),
         runner_scale_set_id: 501,
     };
-    super::helpers::finish_listener_delivery(&scope, &provisioned, &runner).await?;
+    finish_initialized_listener_delivery(&scope, &binding, &initialized, &runner, 70).await?;
     let request = scope
         .assignment_identity(crate::journal::AssignmentKey::AssignedRequest { request_id: 70 })
         .await?;

@@ -31,6 +31,7 @@ pub(super) struct Fixture {
     pub(super) scope: ConnectionJournal,
     pub(super) request: crate::journal::AssignmentIdentity,
     pub(super) binding: RepositoryConnection,
+    pub(super) authority_policy: crate::config::ApprovedJobAuthorityPolicy,
 }
 
 impl Fixture {
@@ -96,6 +97,17 @@ impl Fixture {
             .bind_engine_context(engine_id, "unix:///var/run/docker.sock", "linux/amd64")
             .await
             .map_err(|error| error.to_string())?;
+        let config = crate::config::HostConfig::test_with_job_authority_policy(&binding)
+            .map_err(|error| error.to_string())?;
+        scope
+            .install_job_authority_policy(&config)
+            .await
+            .map_err(|error| error.to_string())?;
+        let authority_policy = config
+            .validated_job_authority_policy(&binding.connection_id)
+            .map_err(|error| error.to_string())?
+            .cloned()
+            .ok_or_else(|| "test authority policy is absent".to_owned())?;
         let request = scope
             .assignment_identity(AssignmentKey::AssignedRequest {
                 request_id: REQUEST_ID,
@@ -123,6 +135,7 @@ impl Fixture {
             scope,
             request,
             binding,
+            authority_policy,
         })
     }
 }

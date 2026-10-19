@@ -20,6 +20,14 @@ impl super::HostConfig {
     pub(crate) fn test_with_job_authority_policy(
         connection: &super::RepositoryConnection,
     ) -> Result<Self, HostError> {
+        Self::test_with_job_authority_policy_generation(connection, 1)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_with_job_authority_policy_generation(
+        connection: &super::RepositoryConnection,
+        generation: u64,
+    ) -> Result<Self, HostError> {
         let text = crate::config_test_support::host_config(
             &[crate::config_test_support::basic_connection(
                 "test-policy",
@@ -32,7 +40,7 @@ impl super::HostConfig {
         );
         let mut config = Self::parse(&text)?;
         config.connections = vec![connection.clone()];
-        config.add_test_job_authority_policy(&connection.connection_id)?;
+        config.add_test_job_authority_policy_generation(&connection.connection_id, generation)?;
         Ok(config)
     }
 
@@ -42,7 +50,20 @@ impl super::HostConfig {
         &mut self,
         connection_id: &super::ConnectionId,
     ) -> Result<(), HostError> {
+        self.add_test_job_authority_policy_generation(connection_id, 1)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn add_test_job_authority_policy_generation(
+        &mut self,
+        connection_id: &super::ConnectionId,
+        generation: u64,
+    ) -> Result<(), HostError> {
         use std::collections::BTreeMap;
+
+        if generation == 0 {
+            return Err(HostError::Config);
+        }
 
         let connection = self
             .connections
@@ -54,7 +75,7 @@ impl super::HostConfig {
             schema_version: POLICY_SCHEMA,
             connection_id: connection.connection_id.clone(),
             binding_sha256: sha256(&connection.canonical_identity_bytes()?),
-            generation: 1,
+            generation,
             policy_sha256: String::new(),
             generator: GeneratorIdentity {
                 source_sha: "a".repeat(40),

@@ -1,6 +1,6 @@
 use super::helpers::{
-    Scratch, binding, created_scope, event_source, finish_listener_delivery,
-    provision_physical_intent, receipt, record_acquired, runner_name,
+    Scratch, binding, created_scope, event_source, finish_initialized_listener_delivery,
+    provision_acquired_request_with_initialization, receipt, record_acquired, runner_name,
 };
 use crate::error::HostError;
 use crate::journal::{
@@ -123,9 +123,22 @@ async fn acquire_replay_requires_exact_single_id_and_uncertainty_holds_jit() -> 
     assert!(!scope.claim_request_acquire(&identity).await?);
     assert!(scope.acquired_authorized_requests(10).await?.is_empty());
     let (physical, intent_id) = physical_intent(&scope, 'f').await?;
+    let reservation_id = scope
+        .reservation(&physical)
+        .await?
+        .ok_or(HostError::Journal)?
+        .reservation_id;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
     assert!(
         scope
-            .claim_runner_jit(intent_id, &runner_name('f'))
+            .claim_runner_jit_for_request(
+                intent_id,
+                reservation_id,
+                44,
+                &runner_name('f'),
+                generation,
+                &digest
+            )
             .await?
             .is_none()
     );
@@ -172,9 +185,22 @@ async fn uncertain_acquire_survives_restart_and_keeps_physical_charge() -> Resul
         .record_request_acquire(&request, AssignedAcquireResult::Uncertain)
         .await?;
     let (physical, intent_id) = physical_intent(&scope, '2').await?;
+    let reservation_id = scope
+        .reservation(&physical)
+        .await?
+        .ok_or(HostError::Journal)?
+        .reservation_id;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
     assert!(
         scope
-            .claim_runner_jit(intent_id, &runner_name('2'))
+            .claim_runner_jit_for_request(
+                intent_id,
+                reservation_id,
+                46,
+                &runner_name('2'),
+                generation,
+                &digest
+            )
             .await?
             .is_none()
     );
@@ -193,7 +219,14 @@ async fn uncertain_acquire_survives_restart_and_keeps_physical_charge() -> Resul
     assert!(!scope.claim_request_acquire(&request).await?);
     assert!(
         scope
-            .claim_runner_jit(intent_id, &runner_name('2'))
+            .claim_runner_jit_for_request(
+                intent_id,
+                reservation_id,
+                46,
+                &runner_name('2'),
+                generation,
+                &digest
+            )
             .await?
             .is_none()
     );
@@ -224,10 +257,23 @@ async fn uncertainty_for_one_request_blocks_another_acquired_request() -> Result
         .record_request_acquire(&request, AssignedAcquireResult::Uncertain)
         .await?;
     let (physical, intent_id) = physical_intent(&scope, '3').await?;
+    let reservation_id = scope
+        .reservation(&physical)
+        .await?
+        .ok_or(HostError::Journal)?
+        .reservation_id;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
 
     assert!(
         scope
-            .claim_runner_jit(intent_id, &runner_name('3'))
+            .claim_runner_jit_for_request(
+                intent_id,
+                reservation_id,
+                54,
+                &runner_name('3'),
+                generation,
+                &digest
+            )
             .await?
             .is_none()
     );
@@ -246,10 +292,23 @@ async fn an_unacquired_authorized_request_cannot_start_a_runner() -> Result<(), 
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
     let (physical, intent_id) = physical_intent(&scope, 'a').await?;
+    let reservation_id = scope
+        .reservation(&physical)
+        .await?
+        .ok_or(HostError::Journal)?
+        .reservation_id;
+    let (generation, digest) = scope.test_active_authority_identity().await?;
 
     assert!(
         scope
-            .claim_runner_jit(intent_id, &runner_name('a'))
+            .claim_runner_jit_for_request(
+                intent_id,
+                reservation_id,
+                45,
+                &runner_name('a'),
+                generation,
+                &digest
+            )
             .await?
             .is_none()
     );
@@ -268,7 +327,14 @@ async fn an_unacquired_authorized_request_cannot_start_a_runner() -> Result<(), 
 
     assert!(
         scope
-            .claim_runner_jit(intent_id, &runner_name('a'))
+            .claim_runner_jit_for_request(
+                intent_id,
+                reservation_id,
+                45,
+                &runner_name('a'),
+                generation,
+                &digest
+            )
             .await?
             .is_none()
     );
@@ -288,9 +354,9 @@ async fn completion_for_request_b_does_not_release_runner_a_and_cancel_is_reques
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
     record_acquired(&scope, 61).await?;
-    record_acquired(&scope, 62).await?;
     let cancel = acquire_request_for_cancellation(&scope, 63).await?;
-    let provisioned = provision_physical_intent(&scope, 'd').await?;
+    let initialized = provision_acquired_request_with_initialization(&scope, 62, 'd', 'd').await?;
+    let provisioned = initialized.provisioned.clone();
     let physical = provisioned.assignment.clone();
     let intent_id = provisioned.intent_id;
     let runner = RunnerReference {
@@ -298,7 +364,7 @@ async fn completion_for_request_b_does_not_release_runner_a_and_cancel_is_reques
         name: runner_name('d'),
         runner_scale_set_id: 501,
     };
-    finish_listener_delivery(&scope, &provisioned, &runner).await?;
+    finish_initialized_listener_delivery(&scope, &binding, &initialized, &runner, 62).await?;
 
     assert_eq!(
         scope

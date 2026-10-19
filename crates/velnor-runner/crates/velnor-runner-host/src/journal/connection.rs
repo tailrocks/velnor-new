@@ -1,5 +1,10 @@
 //! Connection-scoped journal records and shared host reservations.
 
+#[cfg(test)]
+pub(crate) use reservation::ReservationSnapshot;
+pub(crate) use reservation::{
+    PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation, ReservationState,
+};
 mod completion;
 mod identity;
 mod intents;
@@ -30,8 +35,7 @@ pub(crate) use reservation::{
 pub(crate) use reservation::{CreateCommitStage, arm_create_commit_gate};
 #[cfg(test)]
 pub(crate) use reservation::{
-    MetadataSettlementResult, ReservationState, StorageCacheProjection, StorageReservationPlan,
-    StorageRoleCharge,
+    MetadataSettlementResult, StorageCacheProjection, StorageReservationPlan, StorageRoleCharge,
 };
 #[cfg(test)]
 pub(crate) use reservation::{

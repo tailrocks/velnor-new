@@ -13,9 +13,13 @@ use scoped::finish_scoped_poll_response;
 use scoped::poll_scoped_queue;
 
 pub(crate) use positive_poll::{
-    CursorDisposition, PositiveAdmission, PositivePollOutcome, admit_when_ready, positive_poll_once,
+    CursorDisposition, PositiveAdmission, PositivePollOutcome, Settlement, admit_when_ready,
+    positive_poll_once,
 };
-pub(crate) use scoped::{ScopedPollOutcome, poll_scoped_connection_once};
+pub(crate) use scoped::{
+    ScopedPollOutcome, ZeroHeaderMode, poll_scoped_connection_once,
+    poll_scoped_connection_once_with_mode,
+};
 
 #[cfg(test)]
 #[path = "turn/completion_intake_tests.rs"]

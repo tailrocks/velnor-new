@@ -27,7 +27,7 @@ async fn delayed_create_cleans_late_owned_helper_before_response() -> Result<(),
     }
     tokio::select! {
         result = &mut initialize => assert_eq!(result.err(), Some(HostError::DockerTimeout)),
-        _ = tokio::time::sleep(Duration::from_secs(3)) => return Err(HostError::DockerTimeout),
+        () = tokio::time::sleep(Duration::from_secs(3)) => return Err(HostError::DockerTimeout),
     }
 
     let helper_name = api

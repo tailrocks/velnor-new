@@ -21,9 +21,13 @@ mod state;
 #[path = "loop/transitions.rs"]
 mod transitions;
 
+#[cfg(test)]
+pub(crate) use connection_poll::fairness::{FairnessTurn, HeaderPollPlan};
 use controller::run_controller;
 #[cfg(test)]
-pub(crate) use setup::requested_header_capacity;
+pub(crate) use polling::PollKind;
+#[cfg(test)]
+pub(crate) use setup::{requested_header_capacity, requested_header_capacity_after};
 #[cfg(test)]
 pub(crate) use transitions::{TransitionEffects, apply_config_transition, retire_pending};
 
