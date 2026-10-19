@@ -1,6 +1,7 @@
 //! Typed, bounded storage charges carried with one host reservation.
 
 mod cache_projection;
+mod job_facts_projection;
 mod observations;
 mod plan;
 mod profile;
@@ -9,18 +10,19 @@ mod publication;
 mod reservation_store;
 mod role;
 mod sample;
-
 #[cfg(test)]
-pub(crate) use observations::{
-    StorageMemoryObservation, StoragePoolObservation, StorageSampleIdentity,
+pub(crate) use observations::StorageMemoryObservation;
+
+pub(crate) use job_facts_projection::{
+    BoundJobFactsSnapshot, JobFactsReadContext, read_job_facts_snapshot,
 };
+pub(crate) use observations::{StoragePoolObservation, StorageSampleIdentity};
 #[cfg(test)]
 pub(crate) use plan::StorageCacheProjection;
 #[cfg(test)]
 pub(crate) use plan::{StorageReservationPlan, StorageRoleCharge};
 pub(crate) use profile::StoragePoolLimit;
 pub(crate) use profile::StorageProfile;
-#[cfg(test)]
 pub(crate) use profile::StorageRoleLimit;
 pub(crate) use role::{
     StorageFilesystemKind, StorageInodePolicy, StorageMedium, StorageObserver, StorageRole,

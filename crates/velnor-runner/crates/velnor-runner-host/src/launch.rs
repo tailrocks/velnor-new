@@ -13,7 +13,7 @@ use crate::error::HostError;
 use crate::journal::{ConnectionJournal, HeaderAllocation, Journal};
 use crate::listen::Link;
 use crate::scale_set::EnsureError;
-use crate::worker::Started;
+use crate::worker::{ResourceBudget, Started};
 
 mod admission_gate;
 mod bind;
@@ -26,19 +26,23 @@ mod drive;
 #[cfg(all(test, unix))]
 mod effect_tests;
 mod engine_context;
+pub(crate) mod execution_authorization;
 mod gate;
 mod inspect;
 #[cfg(all(test, unix))]
 mod inspect_tests;
 mod name_taken;
-#[cfg(test)]
-mod preflight;
-mod resource_capacity;
 mod resource_probe;
 mod runner_dir;
+pub(crate) mod scoped_runtime;
 
 pub(crate) use admission_gate::lock_connection;
-pub(crate) use drive::{Drive, Lane, Rest};
+#[cfg(test)]
+pub(crate) use drive::acquire_scoped_offer;
+pub(crate) use drive::{
+    DeferredAuthorizedOffer, Drive, GuestAdmission, Lane, Rest, ScopedAdmissionInput,
+    acquire_authorized_scoped_offer, authorize_deferred_offer,
+};
 pub(crate) use engine_context::SelectedEngineContext;
 pub(crate) use inspect::classify_inspect;
 pub(crate) use resource_probe::ReleaseReadSecret;
@@ -46,6 +50,9 @@ pub(crate) use resource_probe::StartObservationWitness;
 pub(crate) use resource_probe::StartPermit;
 pub(crate) use resource_probe::VerifiedProbeCleanup;
 pub(crate) use resource_probe::build_pin_status;
+pub(crate) use resource_probe::publication::VerifiedExecutionPublicationCleanup;
+pub(crate) use resource_probe::run_doctor_probe;
+pub(crate) use resource_probe::start_permit;
 pub(crate) use session::{
     CompletedHeaderPoll, DeletedSession204, ReturnedSessionRefreshTransportError,
     SessionDeleteOutcome, SessionRefreshStartupAuthority, VerifiedSessionRefresh,
@@ -53,14 +60,18 @@ pub(crate) use session::{
 };
 pub(crate) use slot::HOLDS_ROWS_SQL;
 pub(crate) use turn::ScopedPollOutcome;
+pub(crate) use turn::{
+    CursorDisposition, PositiveAdmission, PositivePollOutcome, admit_when_ready, positive_poll_once,
+};
 mod mint_origin;
+#[cfg(test)]
 mod pressure;
 mod session;
 mod slot;
 #[cfg(all(test, unix))]
 #[path = "launch/source_order_tests.rs"]
 mod source_order_tests;
-mod steady;
+pub(crate) mod steady;
 pub(crate) mod steps;
 #[cfg(test)]
 mod subject_tests;
@@ -76,6 +87,24 @@ pub(crate) use gate::{gate_line, reconcile_gate};
 pub(crate) use resource_probe::prepare_worker_images;
 pub(crate) use verified_images::{VerifiedImageIdentity, VerifiedWorkerImages};
 
+pub(crate) async fn startup_storage_profile(
+    docker: &bollard::Docker,
+    journal: &Journal,
+    budget: ResourceBudget,
+    max_jobs: u32,
+    secret: &ReleaseReadSecret,
+    images: &VerifiedWorkerImages,
+) -> Option<crate::journal::StorageProfile> {
+    let permit = resource_probe::start_permit(docker, journal, budget, secret).await?;
+    (permit.resource_budget() == budget)
+        .then(|| permit.storage_profile(images, budget, max_jobs))
+        .flatten()
+}
+
+pub(crate) fn retained_tmpfs_memory_bytes() -> Option<u64> {
+    resource_probe::retained_tmpfs_memory_bytes()
+}
+
 /// Run one scoped queue poll with the supplied durable zero-header allocation.
 pub(crate) async fn poll_scoped_connection_once(
     link: &mut Link,
@@ -84,9 +113,18 @@ pub(crate) async fn poll_scoped_connection_once(
     scoped: &ConnectionJournal,
     session_intent_id: i64,
     allocation: &HeaderAllocation,
+    cursor: i64,
 ) -> Result<ScopedPollOutcome, EnsureError> {
-    turn::poll_scoped_connection_once(link, set_id, session, scoped, session_intent_id, allocation)
-        .await
+    turn::poll_scoped_connection_once(
+        link,
+        set_id,
+        session,
+        scoped,
+        session_intent_id,
+        allocation,
+        cursor,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -131,108 +169,6 @@ where
     steps::launch_id(lane, ctx, batch, journal, request_id, start).await
 }
 
-struct Ready<'a> {
-    set_id: i64,
-    session: &'a QueueSession,
-    admin_token: &'a str,
-    path: String,
-    polled: &'a Poll,
-}
-
-async fn drive_ready<T>(
-    lane: &mut T,
-    ready: Ready<'_>,
-    journal: &Journal,
-    docker: &bollard::Docker,
-    capacity: u32,
-    rest: Rest<'_>,
-) -> Result<Option<Started>, EnsureError>
-where
-    T: Transport + Lane,
-{
-    if !rest.permits_start() {
-        return Ok(None);
-    }
-    let (connection, images, selected_engine, guest_image) = match (
-        rest.connection,
-        rest.worker_images,
-        rest.selected_engine,
-        rest.guest_image,
-    ) {
-        (Some(connection), Some(images), Some(engine), Some(guest_image))
-            if engine.matches_images(images) =>
-        {
-            (connection, images, engine, guest_image)
-        }
-        _ => return Ok(None),
-    };
-    let mut ctx = Drive::from_rest(
-        ready.set_id,
-        ready.path,
-        ready.session.token().to_owned(),
-        ready.admin_token.to_owned(),
-        rest,
-    );
-    steps::authorize_poll(&mut ctx, ready.polled).await?;
-    let except = steps::mint_subject(ready.polled);
-    if slot::busy_except(journal, docker, capacity, except.as_deref()).await? {
-        return Ok(None);
-    }
-    let resource_budget = rest.resource_budget.ok_or(EnsureError::Unexpected {
-        status: 0,
-        step: "resource budget",
-    })?;
-    let Some(release_read_secret) = rest.release_read_secret else {
-        return Ok(None);
-    };
-    let Some(permit) =
-        resource_probe::start_permit(docker, journal, resource_budget, release_read_secret).await
-    else {
-        return Ok(None);
-    };
-    let Some((engine_id, root_digest)) = resource_probe::engine_binding(docker).await.ok() else {
-        return Ok(None);
-    };
-    if permit.engine_id() != engine_id
-        || permit.docker_root_digest() != root_digest
-        || engine_id != selected_engine.engine_id()
-        || root_digest != selected_engine.docker_root_digest()
-    {
-        return Ok(None);
-    }
-    ctx.docker_engine_id = Some(engine_id);
-    steps::launch_scoped(
-        lane,
-        &ctx,
-        ready.polled,
-        permit,
-        None,
-        docker,
-        selected_engine,
-        images,
-        |volume, jit, bind, admission| {
-            let volume = volume.to_owned();
-            let payload = jit.to_vec();
-            async move {
-                bind::start_bound(
-                    docker,
-                    &volume,
-                    &payload,
-                    resource_budget,
-                    connection,
-                    images,
-                    selected_engine,
-                    guest_image,
-                    admission,
-                    &bind,
-                )
-                .await
-            }
-        },
-    )
-    .await
-}
-
 fn ack_ready(
     link: &mut Link,
     session: &QueueSession,
@@ -263,6 +199,7 @@ fn ack_ready(
             static_capacity: false,
             guest_admission: drive::GuestAdmission::Unavailable,
             connection: None,
+            authority_policy: None,
             host_journal: None,
             release_read_secret: None,
             scoped_journal: None,
@@ -275,14 +212,21 @@ fn ack_ready(
         },
     );
     let admin = link.base().to_owned();
-    let mut lane = HostLane { link, admin, queue };
+    let mut lane = HostLane::new(link, admin, queue);
     steps::acknowledge(&mut lane, &ctx, &batch)
 }
 
-struct HostLane<'a> {
+pub(crate) struct HostLane<'a> {
     link: &'a mut Link,
     admin: String,
     queue: Option<String>,
+}
+
+impl<'a> HostLane<'a> {
+    /// Bind one queue callback to its saved admin and queue origins.
+    pub(crate) fn new(link: &'a mut Link, admin: String, queue: Option<String>) -> Self {
+        Self { link, admin, queue }
+    }
 }
 
 impl Transport for HostLane<'_> {

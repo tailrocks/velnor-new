@@ -318,6 +318,7 @@ pub(crate) async fn open_connection_session(
     link: &mut Link,
     set_id: i64,
     journal: &ConnectionJournal,
+    requested_header_capacity: u32,
 ) -> Result<(QueueSession, i64, HeaderAllocation), EnsureError> {
     let binding = journal
         .source_authorization_binding()
@@ -364,10 +365,42 @@ pub(crate) async fn open_connection_session(
         {
             return Err(EnsureError::AdmissionClosed);
         }
-        let session =
+        let mut session =
             refresh_bound_connection_session(link, journal, session_intent_id, set_id, session_id)
                 .await?;
-        return Ok((session, session_intent_id, allocation));
+        if allocation.target() == requested_header_capacity {
+            return Ok((session, session_intent_id, allocation));
+        }
+        let polled = crate::launch::poll_scoped_connection_once(
+            link,
+            set_id,
+            &mut session,
+            journal,
+            session_intent_id,
+            &allocation,
+            0,
+        )
+        .await?;
+        if !polled.session_delete_candidate
+            || !journal
+                .session_work_drained(session_intent_id)
+                .await
+                .map_err(map_journal)?
+        {
+            return Err(EnsureError::AdmissionClosed);
+        }
+        if delete_removed_connection_session(
+            link,
+            &session,
+            journal,
+            session_intent_id,
+            &allocation,
+        )
+        .await
+            != SessionDeleteOutcome::Deleted
+        {
+            return Err(EnsureError::Uncertain);
+        }
     }
     let nonce = match active.first() {
         Some(record) if record.state() == SessionCreateState::Prepared => {
@@ -415,7 +448,7 @@ pub(crate) async fn open_connection_session(
         }
     };
     let bound = journal
-        .record_created_session(&claim, &session.session_id, 0)
+        .record_created_session(&claim, &session.session_id, requested_header_capacity)
         .await
         .map_err(map_journal)?;
     Ok((session, bound.intent_id(), bound.allocation().clone()))

@@ -1,3 +1,101 @@
+mod network;
+mod pair;
+mod storage_object;
+#[cfg(test)]
+pub(crate) use network::remove_owned_network;
+#[cfg(test)]
+pub(crate) use pair::PairStartFailure;
+
+pub(crate) use network::{
+    VerifiedStorageNetworkCreated, VerifiedStorageNetworkRemoved, create_owned_network,
+};
+pub(crate) use pair::{PendingBootstrapPair, StartedBootstrapPair, start_bootstrap_pair};
+pub(crate) use storage_object::{create_metadata_storage_object, create_storage_object};
+
+/// Proof that both workers mounted the exact initialized storage objects.
+pub(crate) struct VerifiedBootstrapMountHandoff {
+    connection_id: String,
+    reservation_id: i64,
+    operation_id: i64,
+    engine_id: String,
+    docker_root_digest: String,
+    metadata_volume_name: String,
+    metadata_volume_id: String,
+    layout_digest: String,
+    runner_container_id: String,
+    dind_container_id: String,
+    mount_evidence_digest: String,
+}
+
+impl VerifiedBootstrapMountHandoff {
+    pub(crate) fn connection_id(&self) -> &str {
+        &self.connection_id
+    }
+    pub(crate) const fn reservation_id(&self) -> i64 {
+        self.reservation_id
+    }
+    pub(crate) const fn operation_id(&self) -> i64 {
+        self.operation_id
+    }
+    pub(crate) fn engine_id(&self) -> &str {
+        &self.engine_id
+    }
+    pub(crate) fn docker_root_digest(&self) -> &str {
+        &self.docker_root_digest
+    }
+    pub(crate) fn metadata_volume_name(&self) -> &str {
+        &self.metadata_volume_name
+    }
+    pub(crate) fn metadata_volume_id(&self) -> &str {
+        &self.metadata_volume_id
+    }
+    pub(crate) fn layout_digest(&self) -> &str {
+        &self.layout_digest
+    }
+    pub(crate) fn runner_container_id(&self) -> &str {
+        &self.runner_container_id
+    }
+    pub(crate) fn dind_container_id(&self) -> &str {
+        &self.dind_container_id
+    }
+    pub(crate) fn mount_evidence_digest(&self) -> &str {
+        &self.mount_evidence_digest
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn test_bootstrap_mount_handoff(
+    metadata: &crate::journal::VerifiedMetadataInitializationHandoff,
+    started: &BootstrapStartReceipt,
+    mount_evidence_digest: &str,
+) -> Result<VerifiedBootstrapMountHandoff, crate::error::HostError> {
+    if metadata.reservation_id() != started.reservation_id()
+        || metadata.operation_id() != started.operation_id()
+        || metadata.engine_id() != started.engine_id()
+        || metadata.docker_root_digest() != started.docker_root_digest()
+        || started.runner_container_id() == started.dind_container_id()
+        || mount_evidence_digest.len() != 64
+        || !mount_evidence_digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(crate::error::HostError::Identity);
+    }
+    Ok(VerifiedBootstrapMountHandoff {
+        connection_id: metadata.connection_id().to_owned(),
+        reservation_id: metadata.reservation_id(),
+        operation_id: metadata.operation_id(),
+        engine_id: metadata.engine_id().to_owned(),
+        docker_root_digest: metadata.docker_root_digest().to_owned(),
+        metadata_volume_name: metadata.metadata_volume_name().to_owned(),
+        metadata_volume_id: metadata.metadata_volume_id().to_owned(),
+        layout_digest: metadata.layout_digest().to_owned(),
+        runner_container_id: started.runner_container_id().to_owned(),
+        dind_container_id: started.dind_container_id().to_owned(),
+        mount_evidence_digest: mount_evidence_digest.to_owned(),
+    })
+}
+
 /// One of the two fixed bootstrap containers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum BootstrapContainerRole {

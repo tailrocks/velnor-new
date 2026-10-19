@@ -278,7 +278,33 @@ fn workspace(script: &str) -> Result<Workspace, String> {
         root,
         assets,
         config,
+        cleanup_verified: false,
     })
+}
+
+#[test]
+fn verified_workspace_cleanup_returns_only_after_exact_root_is_absent() -> Result<(), String> {
+    let workspace = workspace("true")?;
+    let root = workspace.root().to_path_buf();
+    let receipt = workspace
+        .remove_verified()
+        .map_err(|error| format!("verified cleanup failed: {error:?}"))?;
+    if root.exists() || receipt.workspace_digest().len() != 64 {
+        return Err("cleanup receipt returned before workspace removal".to_owned());
+    }
+    Ok(())
+}
+
+#[test]
+fn replaced_workspace_root_does_not_produce_cleanup_receipt() -> Result<(), String> {
+    let workspace = workspace("true")?;
+    let root = workspace.root().to_path_buf();
+    fs::remove_dir_all(&root).map_err(|error| error.to_string())?;
+    fs::write(&root, b"replacement").map_err(|error| error.to_string())?;
+    let result = workspace.remove_verified();
+    assert_eq!(result.err(), Some(ProviderFailure::WorkspaceCleanup));
+    fs::remove_file(root).map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 fn sha256(bytes: &[u8]) -> String {

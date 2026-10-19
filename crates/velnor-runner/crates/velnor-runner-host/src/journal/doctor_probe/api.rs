@@ -90,7 +90,7 @@ impl Journal {
     ) -> Result<DoctorProbePrepareResult, HostError> {
         let request_id = ticket.request_id();
         let expected_nonce = ticket.nonce().to_owned();
-        if request_id <= 0 || !lower_hex(ticket.nonce(), 32) || !operations::seed_valid(&seed) {
+        if request_id <= 0 || !lower_hex(ticket.nonce(), 32) || !doctor_seed_valid(&seed) {
             return Err(HostError::Journal);
         }
         in_transaction(self, async |connection| {
@@ -125,8 +125,8 @@ impl Journal {
             lease::prepare(connection, &seed).await?;
             connection
                 .execute(
-                    "INSERT INTO resource_probe_operations (operation_id, instance_id, engine_id, docker_root_digest, source_revision, runtime_image_id, image_binding_digest, operation_name, role, projection_digest, phase) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'resource-probe', ?9, 'prepared')",
-                    (seed.operation_id.as_str(), seed.instance_id.as_str(), seed.engine_id.as_str(), seed.docker_root_digest.as_str(), seed.source_revision.as_str(), seed.runtime_image_id.as_str(), seed.image_binding_digest.as_str(), seed.operation_name.as_str(), seed.projection_digest.as_str()),
+                    "INSERT INTO resource_probe_operations (operation_id, instance_id, engine_id, docker_root_digest, source_revision, runtime_image_id, image_binding_digest, operation_name, role, projection_digest, phase, helper_role, probe_purpose, request_sha256, request_context) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 'resource-probe', ?9, 'prepared', 'resource-probe', 'capacity', ?10, NULL)",
+                    (seed.operation_id.as_str(), seed.instance_id.as_str(), seed.engine_id.as_str(), seed.docker_root_digest.as_str(), seed.source_revision.as_str(), seed.runtime_image_id.as_str(), seed.image_binding_digest.as_str(), seed.operation_name.as_str(), seed.projection_digest.as_str(), seed.request_sha256.as_str()),
                 )
                 .await
                 .map_err(|_| HostError::Journal)?;
@@ -273,6 +273,7 @@ impl Journal {
         let next = match outcome {
             DoctorProbeOutcome::Failed => DoctorProbeState::Failed,
             DoctorProbeOutcome::Completed => DoctorProbeState::Completed,
+            DoctorProbeOutcome::Stale => DoctorProbeState::Stale,
         };
         in_transaction(self, async |connection| {
             let ticket = ticket_by_id(connection, request_id).await?;
@@ -444,7 +445,7 @@ pub(super) async fn probe_by_id(
 ) -> Result<ProbeRow, HostError> {
     let mut rows = connection
         .query(
-            "SELECT p.operation_id, p.instance_id, p.engine_id, p.docker_root_digest, p.source_revision, p.runtime_image_id, p.image_binding_digest, p.operation_name, p.role, p.projection_digest, p.phase, p.container_id, COALESCE(l.state, 'released'), l.operation_id IS NOT NULL FROM resource_probe_operations AS p LEFT JOIN host_operation_leases AS l ON l.singleton = 1 AND l.operation_id = p.operation_id WHERE p.operation_id = ?1",
+            "SELECT p.operation_id, p.instance_id, p.engine_id, p.docker_root_digest, p.source_revision, p.runtime_image_id, p.image_binding_digest, p.operation_name, p.role, p.projection_digest, p.phase, p.container_id, COALESCE(l.state, 'released'), p.helper_role, p.probe_purpose, p.request_sha256, p.request_context, l.operation_id IS NOT NULL FROM resource_probe_operations AS p LEFT JOIN host_operation_leases AS l ON l.singleton = 1 AND l.operation_id = p.operation_id WHERE p.operation_id = ?1",
             [operation_id],
         )
         .await
@@ -458,7 +459,7 @@ pub(super) async fn probe_by_id(
         return Err(HostError::Journal);
     }
     let probe = operations::decode_row(&row)?;
-    let lease_present = row.get::<i64>(13).map_err(|_| HostError::Journal)? != 0;
+    let lease_present = row.get::<i64>(17).map_err(|_| HostError::Journal)? != 0;
     if !lease_present && !matches!(probe.phase, ProbePhase::Removed | ProbePhase::Aborted) {
         return Err(HostError::Journal);
     }
@@ -486,7 +487,47 @@ fn same_seed(seed: &ProbeSeed, row: &ProbeRow) -> bool {
         && seed.image_binding_digest == row.image_binding_digest
         && seed.operation_name == row.operation_name
         && row.role == "resource-probe"
+        && row.helper_role() == crate::journal::HostHelperRole::ResourceProbe
+        && matches!(
+            row.work(),
+            crate::journal::ProbeWork::ResourceProbe {
+                purpose: crate::journal::ResourceProbePurpose::Capacity,
+                request_sha256,
+                request_context: None,
+            } if request_sha256 == &seed.request_sha256
+        )
         && seed.projection_digest == row.projection_digest
+}
+
+fn doctor_seed_valid(seed: &ProbeSeed) -> bool {
+    seed.purpose == crate::journal::ResourceProbePurpose::Capacity && operations::seed_valid(seed)
+}
+
+#[cfg(test)]
+mod validation_tests {
+    use crate::journal::{ProbeSeed, ResourceProbePurpose};
+
+    use super::doctor_seed_valid;
+
+    #[test]
+    fn doctor_probe_accepts_capacity_work_only() {
+        let mut seed = ProbeSeed {
+            operation_id: "a".repeat(32),
+            instance_id: "b".repeat(32),
+            engine_id: "selected-engine".to_owned(),
+            docker_root_digest: "c".repeat(64),
+            source_revision: "d".repeat(40),
+            runtime_image_id: format!("sha256:{}", "e".repeat(64)),
+            image_binding_digest: "f".repeat(64),
+            operation_name: format!("velnor-resource-probe-{}", "a".repeat(32)),
+            projection_digest: "1".repeat(64),
+            purpose: ResourceProbePurpose::OwnedCgroups,
+            request_sha256: "2".repeat(64),
+        };
+        assert!(!doctor_seed_valid(&seed));
+        seed.purpose = ResourceProbePurpose::Capacity;
+        assert!(doctor_seed_valid(&seed));
+    }
 }
 
 fn lower_hex(value: &str, length: usize) -> bool {

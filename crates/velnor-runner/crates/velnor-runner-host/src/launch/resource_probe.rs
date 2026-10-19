@@ -9,13 +9,19 @@ use crate::worker::ResourceBudget;
 
 use self::provider::ReleaseImageProvider;
 pub(crate) use self::sample::{StartObservationWitness, StartPermit};
+pub(in crate::launch) use sample::filesystem_instance_digest;
 
+mod doctor;
 mod execute;
+pub(in crate::launch) use execute::ProbeStartupEvidence;
 mod inspect;
 mod lifecycle;
 mod ops;
+mod owned_cgroups;
 mod projection;
 mod provider;
+pub(crate) mod publication;
+pub(in crate::launch) use provider::VerifiedWorkspaceCleanup;
 mod release_secret;
 
 pub(in crate::launch) use provider::VerifiedWorkerImageIdentityProof;
@@ -23,8 +29,60 @@ pub(in crate::launch) use provider::VerifiedWorkerImageIdentityProof;
 mod record;
 mod recover;
 mod sample;
+pub(in crate::launch) use sample::retained_tmpfs_bytes as retained_tmpfs_memory_bytes;
 
+pub(crate) use owned_cgroups::{OwnedCgroupSubjects, OwnedContainerSubjects, VerifiedOwnedCgroups};
 pub(crate) use release_secret::ReleaseReadSecret;
+
+/// An attested probe image bound to the current selected daemon and root.
+pub(in crate::launch::resource_probe) struct VerifiedPublicationProbeImage {
+    image: projection::VerifiedProbeImage,
+    evidence: provider::ProbeImagePreparationEvidence,
+}
+
+impl VerifiedPublicationProbeImage {
+    pub(in crate::launch::resource_probe) fn image(&self) -> &projection::VerifiedProbeImage {
+        &self.image
+    }
+
+    pub(in crate::launch::resource_probe) fn evidence(
+        &self,
+    ) -> &provider::ProbeImagePreparationEvidence {
+        &self.evidence
+    }
+}
+
+/// Verify the release image and bind it to fresh selected-engine information.
+pub(in crate::launch::resource_probe) async fn verify_publication_probe_image(
+    docker: &Docker,
+    journal: &Journal,
+    selected: &SelectedEngineContext,
+    release_read_secret: &ReleaseReadSecret,
+) -> Result<VerifiedPublicationProbeImage, crate::error::HostError> {
+    let token = release_read_secret.as_provider_token()?;
+    let provider = ReleaseImageProvider::from_compiled_source(token)
+        .map_err(|_| crate::error::HostError::Docker)?;
+    let (image, evidence) =
+        lifecycle::verify_publication_image(docker, journal, &provider, selected).await?;
+    Ok(VerifiedPublicationProbeImage { image, evidence })
+}
+
+/// Verify the release image before the caller's absolute deadline.
+pub(in crate::launch::resource_probe) async fn verify_publication_probe_image_until(
+    docker: &Docker,
+    journal: &Journal,
+    selected: &SelectedEngineContext,
+    release_read_secret: &ReleaseReadSecret,
+    deadline: std::time::Instant,
+) -> Result<VerifiedPublicationProbeImage, crate::error::HostError> {
+    let token = release_read_secret.as_provider_token()?;
+    let provider = ReleaseImageProvider::from_compiled_source(token)
+        .map_err(|_| crate::error::HostError::Docker)?;
+    let (image, evidence) =
+        lifecycle::verify_publication_image_until(docker, journal, &provider, selected, deadline)
+            .await?;
+    Ok(VerifiedPublicationProbeImage { image, evidence })
+}
 
 /// Proof that one bound probe is absent from its exact selected daemon.
 ///
@@ -136,11 +194,34 @@ pub(crate) async fn prepare_worker_images(
     provider::prepare_worker_images(docker, journal, expected, token).await
 }
 
+pub(crate) async fn run_doctor_probe(
+    docker: &Docker,
+    journal: &Journal,
+    release_read_secret: &ReleaseReadSecret,
+    ticket: &crate::journal::DoctorProbeTicket,
+) -> Result<Option<serde_json::Value>, crate::error::HostError> {
+    doctor::run(docker, journal, release_read_secret, ticket).await
+}
+
+pub(crate) async fn observe_owned_cgroups(
+    docker: &Docker,
+    journal: &Journal,
+    release_read_secret: &ReleaseReadSecret,
+    subjects: &OwnedCgroupSubjects,
+) -> Result<VerifiedOwnedCgroups, crate::error::HostError> {
+    let token = release_read_secret.as_provider_token()?;
+    let provider = ReleaseImageProvider::from_compiled_source(token)
+        .map_err(|_| crate::error::HostError::Docker)?;
+    lifecycle::collect_owned_cgroups(docker, journal, &provider, subjects)
+        .await?
+        .ok_or(crate::error::HostError::Docker)
+}
+
 #[cfg(test)]
 mod tests;
 
 /// Obtain a fresh one-use admission permit immediately before acquire/JIT/start.
-pub(super) async fn start_permit(
+pub(crate) async fn start_permit(
     docker: &Docker,
     journal: &Journal,
     budget: ResourceBudget,
@@ -156,31 +237,6 @@ pub(super) async fn start_permit(
     };
     match Box::pin(lifecycle::collect(docker, journal, &provider)).await {
         Ok(Some(sample)) => sample.into_start_permit(budget),
-        Ok(None) | Err(_) => None,
-    }
-}
-
-/// Obtain a fresh selected-guest sample for D21 poll-header adjustment.
-///
-/// This sample never authorizes a start.
-pub(super) async fn pressure_sample(
-    docker: &Docker,
-    journal: &Journal,
-    release_read_secret: &ReleaseReadSecret,
-) -> Option<super::pressure::Sample> {
-    let token = release_read_secret.as_provider_token().ok()?;
-    let provider = match ReleaseImageProvider::from_compiled_source(token) {
-        Ok(provider) => provider,
-        Err(error) => {
-            eprintln!(
-                "resource_probe=pressure_unavailable reason={}",
-                error.code()
-            );
-            return None;
-        }
-    };
-    match Box::pin(lifecycle::collect(docker, journal, &provider)).await {
-        Ok(Some(observation)) => observation.pressure(),
         Ok(None) | Err(_) => None,
     }
 }

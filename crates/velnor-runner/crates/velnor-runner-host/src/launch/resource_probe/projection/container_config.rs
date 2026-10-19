@@ -7,6 +7,7 @@ use super::{
     PROBE_MEMORY_BYTES, PROBE_PIDS_LIMIT, PROBE_TARGET, PROBE_USER, SOURCE_LABEL,
     VerifiedProbeImage, digest_text,
 };
+use crate::journal::ResourceProbePurpose;
 
 pub(super) fn config(
     root: &DockerRoot,
@@ -14,6 +15,8 @@ pub(super) fn config(
     operation_id: &str,
     instance_id: &str,
     engine_id: &str,
+    purpose: ResourceProbePurpose,
+    request_sha256: &str,
 ) -> ContainerCreateBody {
     let engine_digest = digest_text(engine_id.as_bytes());
     let mut labels = std::collections::HashMap::new();
@@ -21,6 +24,13 @@ pub(super) fn config(
     labels.insert("velnor.operation".to_owned(), operation_id.to_owned());
     labels.insert("velnor.instance".to_owned(), instance_id.to_owned());
     labels.insert("velnor.engine".to_owned(), engine_digest);
+    if purpose == ResourceProbePurpose::OwnedCgroups {
+        labels.insert(
+            "velnor.probe.purpose".to_owned(),
+            purpose.as_str().to_owned(),
+        );
+        labels.insert("velnor.probe.request".to_owned(), request_sha256.to_owned());
+    }
     labels.insert(
         "velnor.probe.binding".to_owned(),
         image.binding_fingerprint.clone(),
@@ -34,18 +44,19 @@ pub(super) fn config(
         image: Some(image.runtime_id.clone()),
         user: Some(PROBE_USER.to_owned()),
         env: None,
-        cmd: None,
         entrypoint: None,
         working_dir: None,
         labels: Some(labels),
-        attach_stdin: Some(false),
-        open_stdin: Some(false),
-        stdin_once: Some(false),
+        attach_stdin: Some(purpose == ResourceProbePurpose::OwnedCgroups),
+        open_stdin: Some(purpose == ResourceProbePurpose::OwnedCgroups),
+        stdin_once: Some(purpose == ResourceProbePurpose::OwnedCgroups),
         attach_stdout: Some(true),
         attach_stderr: Some(false),
         tty: Some(false),
         network_disabled: Some(true),
         host_config: Some(host_config(root)),
+        cmd: (purpose == ResourceProbePurpose::OwnedCgroups)
+            .then(|| vec!["--mode".to_owned(), "owned_container_cgroup".to_owned()]),
         ..Default::default()
     }
 }

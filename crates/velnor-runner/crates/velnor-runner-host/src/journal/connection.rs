@@ -12,17 +12,31 @@ pub(super) mod storage;
 
 pub(crate) use completion::ConnectionCompletionInboxEntry;
 pub(crate) use identity::{AssignmentIdentity, AssignmentKey};
+pub(crate) use reservation::JobFactsPublicationClaim;
+pub(crate) use reservation::ListenerDeliveryClaim;
 pub(crate) use reservation::{
-    CapacityLimits, OperationalCapacityLimits, ReservationRequest, ReservationResult,
-    StorageAdmission, StorageFilesystemKind, StorageInodePolicy, StorageMedium,
-    StorageMetadataSettlementClaim, StorageObserver, StorageRole,
+    BootstrapContainerCreateClaim, BootstrapStartClaim, BoundJobFactsSnapshot, CapacityLimits,
+    CreateInterruptionOutcome, OperationalCapacityLimits, RecordedStorageNetwork,
+    RequestPhysicalReservationResult, ReservationRequest, StorageAdmissionSample,
+    StorageCleanupIdentity, StorageFilesystemKind, StorageInitializationClaim, StorageInodePolicy,
+    StorageMedium, StorageMetadataSettlementClaim, StorageNetworkCreateClaim,
+    StorageNetworkRemovalClaim, StorageObjectCreateClaim, StorageObserver, StoragePoolLimit,
+    StoragePoolObservation, StorageProfile, StorageProvisioningAdmission,
+    StorageProvisioningMemoryObservation, StorageProvisioningPlan, StorageProvisioningRole,
+    StorageRole, StorageRoleLimit, StorageSampleIdentity, VerifiedMetadataInitialization,
+    VerifiedMetadataInitializationHandoff,
+};
+#[cfg(test)]
+pub(crate) use reservation::{CreateCommitStage, arm_create_commit_gate};
+#[cfg(test)]
+pub(crate) use reservation::{
+    MetadataSettlementResult, ReservationState, StorageCacheProjection, StorageReservationPlan,
+    StorageRoleCharge,
 };
 #[cfg(test)]
 pub(crate) use reservation::{
-    ListenerDeliveryClaim, MetadataSettlementResult, RequestPhysicalReservationResult,
-    ReservationState, StorageAdmissionSample, StorageCacheProjection, StoragePoolLimit,
-    StoragePoolObservation, StorageProfile, StorageProvisioningPlan, StorageReservationPlan,
-    StorageRoleCharge, StorageRoleLimit, StorageSampleIdentity,
+    ReservationResult, StorageAdmission, StorageCleanupCgroup, StorageCleanupMount,
+    StorageNetworkRecoveryIdentity,
 };
 #[cfg(test)]
 pub(crate) use reservation::{

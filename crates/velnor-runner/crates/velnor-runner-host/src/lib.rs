@@ -40,8 +40,8 @@ pub use config::{
 };
 pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, disconnect_effects};
 pub use controller_ipc::{
-    reactivate_connection_if_drained, wait_for_connection_detached, wait_for_connection_drain,
-    wait_for_drain,
+    reactivate_connection_if_drained, run_doctor_probe, wait_for_connection_detached,
+    wait_for_connection_drain, wait_for_drain,
 };
 pub use daemon_lock::DaemonLock;
 pub use docker_client::connect_unix;

@@ -136,7 +136,7 @@ fn validate_attachments(
     runner_container_id: &str,
     dind_container_id: &str,
 ) -> Result<(), HostError> {
-    const ATTACHMENTS: [(StorageRole, StorageObserver, &str); 16] = [
+    const ATTACHMENTS: [(StorageRole, StorageObserver, &str); 18] = [
         (StorageRole::RunnerRoot, StorageObserver::Runner, "/"),
         (
             StorageRole::RunnerHome,
@@ -185,6 +185,16 @@ fn validate_attachments(
             StorageObserver::Runner,
             "/opt/velnor/job-facts",
         ),
+        (
+            StorageRole::EngineMetadata,
+            StorageObserver::Runner,
+            "/opt/velnor/source-proof/control",
+        ),
+        (
+            StorageRole::RunnerHome,
+            StorageObserver::Runner,
+            "/opt/velnor/source-proof/inbox",
+        ),
     ];
     if attachments.len() != ATTACHMENTS.len()
         || ATTACHMENTS.iter().any(|(role, observer, target)| {
@@ -219,9 +229,12 @@ fn validate_attachments(
             || (item.device_major, item.device_minor)
                 == (item.statx_device_major, item.statx_device_minor);
         if item.source_target.as_deref() != contract.source_target
+            || item.volume_subpath.as_deref() != contract.volume_subpath
+            || !valid_mount_root(item.mount_root(), contract.volume_subpath)
             || item.read_only != contract.read_only
             || item.container_id.as_deref() != expected_container
             || item.mount_id == 0
+            || item.statx_inode == 0
             || item.fs_type_magic == 0
             || item.filesystem_id == 0
             || !device_matches
@@ -232,6 +245,27 @@ fn validate_attachments(
         }
     }
     Ok(())
+}
+
+fn valid_mount_root(value: &str, volume_subpath: Option<&str>) -> bool {
+    if value == "/" {
+        return volume_subpath.is_none();
+    }
+    if value.is_empty()
+        || value.len() > 1024
+        || !value.starts_with('/')
+        || value.bytes().any(|byte| byte.is_ascii_control())
+        || value
+            .split('/')
+            .any(|component| component == "." || component == "..")
+    {
+        return false;
+    }
+    volume_subpath.is_none_or(|subpath| {
+        value
+            .strip_suffix(subpath)
+            .is_some_and(|prefix| prefix.ends_with('/') && !prefix.is_empty())
+    })
 }
 
 fn validate_cgroups(

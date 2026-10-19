@@ -117,6 +117,73 @@ fn valid_policy_matches_exact_job_context_and_round_trips() -> Result<(), HostEr
 }
 
 #[test]
+fn source_inventory_exposes_the_validated_call_graph_without_mutable_policy_fields()
+-> Result<(), HostError> {
+    let connection = connection()?;
+    let root = ".github/workflows/ci.yml";
+    let leaf = ".github/workflows/reusable.yml";
+    let mut policy = policy(&connection);
+    policy.workflows[0].calls.push(WorkflowCall {
+        repository_id: connection.repository_id,
+        path: leaf.to_owned(),
+        content_sha256: "d".repeat(64),
+    });
+    policy.workflows.push(ApprovedWorkflow {
+        repository_id: connection.repository_id,
+        path: leaf.to_owned(),
+        content_sha256: "d".repeat(64),
+        calls: Vec::new(),
+        jobs: vec![{
+            let mut job = entry(root, "reusable");
+            job.workflow_path = leaf.to_owned();
+            job
+        }],
+    });
+    policy.canonicalize();
+    policy.policy_sha256 = policy_digest(&policy);
+    validate(&policy)?;
+
+    let inventory = policy
+        .workflow_sources()
+        .map(|workflow| {
+            (
+                workflow.repository_id(),
+                workflow.path().to_owned(),
+                workflow.content_sha256().to_owned(),
+                workflow
+                    .calls()
+                    .map(|call| {
+                        (
+                            call.repository_id(),
+                            call.path().to_owned(),
+                            call.content_sha256().to_owned(),
+                        )
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        inventory,
+        vec![
+            (
+                connection.repository_id,
+                root.to_owned(),
+                "c".repeat(64),
+                vec![(connection.repository_id, leaf.to_owned(), "d".repeat(64),)],
+            ),
+            (
+                connection.repository_id,
+                leaf.to_owned(),
+                "d".repeat(64),
+                Vec::new(),
+            ),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
 fn host_config_missing_and_stale_policy_lookup_deny() -> Result<(), HostError> {
     let connection_text = basic_connection("test", 7, "example/repo", "test", "test-scale-set");
     let missing =

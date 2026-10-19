@@ -12,7 +12,7 @@ use crate::error::HostError;
 use crate::journal::Journal;
 
 use super::server::read_drain_token;
-use super::wire::{Request, Target};
+use super::wire::{Request, SOCKET_NAME, Target};
 
 const MAX_CONFIG_BYTES: u64 = 1_048_576;
 
@@ -70,6 +70,9 @@ fn with_journal(state: &Path, request: &Request) -> Result<bool, HostError> {
             } else {
                 run_detached(&journal, binding)
             }
+        }
+        Request::DoctorProbeStart { .. } | Request::DoctorProbeStatus { .. } => {
+            return Err(HostError::Lock);
         }
     }?;
     Ok(result && read_drain_token(&marker).as_deref() == Some(token))
@@ -155,6 +158,7 @@ fn request_token(request: &Request) -> &str {
         Request::DrainStatus { token, .. }
         | Request::Reactivate { token, .. }
         | Request::Detached { token, .. } => token,
+        Request::DoctorProbeStart { .. } | Request::DoctorProbeStatus { .. } => "",
     }
 }
 
@@ -171,6 +175,9 @@ fn marker_path(state: &Path, request: &Request) -> std::path::PathBuf {
         Request::Reactivate { binding, .. } | Request::Detached { binding, .. } => state
             .join("connection-drain")
             .join(binding.connection_id.as_str()),
+        Request::DoctorProbeStart { .. } | Request::DoctorProbeStatus { .. } => {
+            state.join(SOCKET_NAME)
+        }
     }
 }
 

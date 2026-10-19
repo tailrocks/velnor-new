@@ -7,6 +7,8 @@ use velnor_runner_github::{
     RegistrationTokenCall, SessionError, Transport, WireError, admin_connection, poll,
     registration_token, workflow_run::VerifiedRepositoryScope,
 };
+#[cfg(test)]
+use velnor_runner_github::{Exchange, SessionRequest, TransportFail};
 use zeroize::Zeroize;
 
 use crate::config::RepositoryConnection;
@@ -91,6 +93,43 @@ pub(crate) fn link_from_admin(
         admin,
         base,
     })
+}
+
+/// Construct an inert admin link for offline unit tests only.
+#[cfg(test)]
+pub(crate) fn inert_link_for_offline_test() -> Link {
+    struct AdminFixture;
+
+    impl Transport for AdminFixture {
+        fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
+            assert_eq!(request.path, "/actions/runner-registration");
+            Ok(Exchange {
+                status: 200,
+                body: br#"{"url":"https://example.invalid","token":"fixture-token"}"#.to_vec(),
+            })
+        }
+    }
+
+    let mut fixture = AdminFixture;
+    let admin = admin_connection(
+        &mut fixture,
+        &AdminConnectionCall {
+            config_url: "https://github.com/example/repository",
+            registration_token: "fixture-registration-token",
+        },
+    )
+    .expect("offline fixture must produce a typed admin connection");
+    let mut transport = HttpsTransport::new(GITHUB_API)
+        .expect("fixed GitHub API origin is valid for the inert fixture");
+    let base = admin.expose_url().to_owned();
+    transport
+        .set_base(&base)
+        .expect("fixture service origin is valid");
+    Link {
+        transport,
+        admin,
+        base,
+    }
 }
 
 impl Link {

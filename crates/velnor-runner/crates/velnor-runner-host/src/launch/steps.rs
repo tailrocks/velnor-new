@@ -31,7 +31,9 @@ pub(super) use scale::scale_id;
 #[cfg(test)]
 pub(super) use scale::scale_unacked;
 
-pub(super) use scoped::launch_scoped;
+pub(crate) use scoped::{
+    AcquiredProvisioning, ScopedProvisioningOutcome, acquire_authorized_request, acquire_scoped,
+};
 
 /// What one poll allows before acquire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -239,7 +241,7 @@ where
     }
 }
 
-async fn authorize_offer(
+pub(super) async fn authorize_offer(
     connection: Option<&crate::config::RepositoryConnection>,
     scoped: Option<&ConnectionJournal>,
     token: &str,
@@ -323,7 +325,7 @@ pub(super) async fn authorize_poll_rest(
     authorize_source_poll(rest.connection, rest.scoped_journal, rest.pat, polled).await
 }
 
-async fn authorize_source_poll(
+pub(super) async fn authorize_source_poll(
     connection: Option<&crate::config::RepositoryConnection>,
     scoped: Option<&ConnectionJournal>,
     token: &str,

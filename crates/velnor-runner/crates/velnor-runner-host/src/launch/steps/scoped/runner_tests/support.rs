@@ -35,6 +35,10 @@ pub(super) struct Fixture {
 
 impl Fixture {
     pub(super) async fn open(label: &str) -> Result<Self, String> {
+        Self::open_with_engine(label, "test-engine").await
+    }
+
+    pub(super) async fn open_with_engine(label: &str, engine_id: &str) -> Result<Self, String> {
         let scratch = Scratch::new(label)?;
         let journal = Journal::open(&scratch.file())
             .await
@@ -44,7 +48,7 @@ impl Fixture {
             .await
             .map_err(|error| error.to_string())?;
         journal
-            .bind_engine("test-engine")
+            .bind_engine(engine_id)
             .await
             .map_err(|error| error.to_string())?;
         journal
@@ -89,7 +93,7 @@ impl Fixture {
             .await
             .map_err(|error| error.to_string())?;
         scope
-            .bind_engine_context("test-engine", "unix:///var/run/docker.sock", "linux/amd64")
+            .bind_engine_context(engine_id, "unix:///var/run/docker.sock", "linux/amd64")
             .await
             .map_err(|error| error.to_string())?;
         let request = scope
@@ -250,8 +254,12 @@ fn verified_source() -> velnor_runner_github::workflow_run::VerifiedWorkflowSour
 }
 
 pub(super) fn test_images(root_digest: &str) -> VerifiedWorkerImages {
+    test_images_for_engine("test-engine", root_digest)
+}
+
+pub(super) fn test_images_for_engine(engine_id: &str, root_digest: &str) -> VerifiedWorkerImages {
     crate::launch::verified_images::test_worker_images_for(
-        "test-engine",
+        engine_id,
         root_digest,
         "aarch64",
         "linux/amd64",

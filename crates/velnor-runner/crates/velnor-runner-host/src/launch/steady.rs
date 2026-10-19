@@ -9,10 +9,10 @@ use std::time::{Duration, Instant};
 use velnor_runner_github::Poll;
 
 /// Delay before the skipped head is read again.
-pub(super) const RETRY: Duration = Duration::from_secs(5);
+pub(crate) const RETRY: Duration = Duration::from_secs(5);
 
 /// Cursor for this poll. A due retry reads the head.
-pub(super) fn poll_cursor(cursor: i64, retry_at: Option<Instant>, now: Instant) -> i64 {
+pub(crate) fn poll_cursor(cursor: i64, retry_at: Option<Instant>, now: Instant) -> i64 {
     match retry_at {
         Some(at) if cursor > 0 && now >= at => 0,
         _ => cursor,
@@ -28,13 +28,22 @@ pub(super) fn message_id(polled: &Poll) -> i64 {
     }
 }
 
+/// Message id from a response. Empty responses have no id.
+pub(super) fn response_message_id(polled: &Poll) -> Option<i64> {
+    match polled {
+        Poll::Batch(batch) => Some(batch.message_id),
+        Poll::Quarantined(batch) => Some(batch.message_id),
+        Poll::Empty => None,
+    }
+}
+
 /// An empty poll while a head message is skipped must not spin.
-pub(super) const fn pause_empty(cursor: i64) -> bool {
+pub(crate) const fn pause_empty(cursor: i64) -> bool {
     cursor > 0
 }
 
 /// `lastMessageId` that skips `message_id`. Zero cannot be a cursor.
-pub(super) fn steady_cursor(cursor: i64, message_id: i64) -> Option<i64> {
+pub(crate) fn steady_cursor(cursor: i64, message_id: i64) -> Option<i64> {
     if message_id > 0 {
         Some(cursor.max(message_id))
     } else {

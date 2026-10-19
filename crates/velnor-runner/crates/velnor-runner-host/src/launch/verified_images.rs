@@ -5,7 +5,7 @@ use bollard::Docker;
 use crate::error::HostError;
 
 use super::SelectedEngineContext;
-use super::resource_probe::VerifiedWorkerImageIdentityProof;
+use super::resource_probe::{VerifiedWorkerImageIdentityProof, VerifiedWorkspaceCleanup};
 
 /// Verified runner and `DinD` images prepared for one selected Docker engine.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,6 +15,7 @@ pub(crate) struct VerifiedWorkerImages {
     daemon_architecture: String,
     source_sha: String,
     platform: String,
+    release_workspace_cleanup: VerifiedWorkspaceCleanup,
     runner: VerifiedImageIdentity,
     dind: VerifiedImageIdentity,
 }
@@ -23,6 +24,7 @@ impl VerifiedWorkerImages {
     pub(in crate::launch) fn from_verified_proofs(
         expected: &SelectedEngineContext,
         source_sha: &str,
+        release_workspace_cleanup: VerifiedWorkspaceCleanup,
         runner: VerifiedWorkerImageIdentityProof,
         dind: VerifiedWorkerImageIdentityProof,
     ) -> Result<Self, HostError> {
@@ -32,6 +34,7 @@ impl VerifiedWorkerImages {
             || !matches!(expected.daemon_architecture(), "aarch64" | "x86_64")
             || !runner.is_runner()
             || !dind.is_dind()
+            || !lower_hex(release_workspace_cleanup.workspace_digest(), 64)
             || !proof_matches(&runner, expected, source_sha)
             || !proof_matches(&dind, expected, source_sha)
         {
@@ -44,6 +47,7 @@ impl VerifiedWorkerImages {
             daemon_architecture: expected.daemon_architecture().to_owned(),
             source_sha: source_sha.to_owned(),
             platform: expected.platform().to_owned(),
+            release_workspace_cleanup,
             runner: VerifiedImageIdentity::from_proof(runner)?,
             dind: VerifiedImageIdentity::from_proof(dind)?,
         })
@@ -87,6 +91,10 @@ impl VerifiedWorkerImages {
 
     pub(crate) fn dind(&self) -> &VerifiedImageIdentity {
         &self.dind
+    }
+
+    pub(crate) fn release_workspace_cleanup_digest(&self) -> &str {
+        self.release_workspace_cleanup.workspace_digest()
     }
 }
 
@@ -204,6 +212,7 @@ pub(crate) enum TestWorkerImageMutation {
     RunnerConfigDigest,
     Platform,
     SourceSha,
+    ReleaseWorkspaceCleanup,
 }
 
 #[cfg(test)]
@@ -221,6 +230,7 @@ pub(crate) fn test_worker_images_with(
         daemon_architecture: "aarch64".to_owned(),
         source_sha: "a".repeat(40),
         platform: "linux/amd64".to_owned(),
+        release_workspace_cleanup: VerifiedWorkspaceCleanup::test_fixture(),
         runner: test_image("d", "e", Some("f"), "a", "b"),
         dind: test_image("8", "7", Some("9"), "6", "5"),
     };
@@ -254,6 +264,10 @@ pub(crate) fn test_worker_images_with(
         }
         Some(TestWorkerImageMutation::SourceSha) => {
             images.source_sha = "not-a-sha".to_owned();
+        }
+        Some(TestWorkerImageMutation::ReleaseWorkspaceCleanup) => {
+            images.release_workspace_cleanup =
+                VerifiedWorkspaceCleanup::test_fixture_with_digest("not-a-digest");
         }
         None => {}
     }

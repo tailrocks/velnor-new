@@ -41,24 +41,32 @@ pub(super) async fn prepare_worker_images(
         .await
         .map_err(public_failure)?;
 
-    let releases = release::prepare_worker_releases(release_read_secret, source_sha)
+    let release::PreparedWorkerReleases {
+        workspace,
+        runner: runner_artifact,
+        dind: dind_artifact,
+    } = release::prepare_worker_releases(release_read_secret, source_sha)
         .await
         .map_err(public_failure)?;
     verify_selected_daemon(docker, &selected)
         .await
         .map_err(public_failure)?;
 
-    let runner = import_worker_artifact(docker, journal, &selected, source_sha, &releases.runner)
+    let runner = import_worker_artifact(docker, journal, &selected, source_sha, &runner_artifact)
         .await
         .map_err(public_failure)?;
-    let dind = import_worker_artifact(docker, journal, &selected, source_sha, &releases.dind)
+    let dind = import_worker_artifact(docker, journal, &selected, source_sha, &dind_artifact)
         .await
         .map_err(public_failure)?;
 
     verify_selected_daemon(docker, &selected)
         .await
         .map_err(public_failure)?;
-    VerifiedWorkerImages::from_verified_proofs(expected, source_sha, runner, dind)
+    let cleanup = workspace.remove_verified().map_err(public_failure)?;
+    verify_selected_daemon(docker, &selected)
+        .await
+        .map_err(public_failure)?;
+    VerifiedWorkerImages::from_verified_proofs(expected, source_sha, cleanup, runner, dind)
 }
 
 fn public_failure(error: ProviderFailure) -> HostError {

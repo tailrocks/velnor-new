@@ -1,7 +1,9 @@
 use super::projection::{DockerRoot, ProbeProjection, VerifiedProbeImage, expected_image_config};
 use super::record::{InodePolicy, ProbeRecord, fixture_record};
 use crate::Journal;
-use crate::journal::{CapacityLimits, OperationalCapacityLimits, ProbePhase, ProbeSeed};
+use crate::journal::{
+    CapacityLimits, OperationalCapacityLimits, ProbePhase, ProbeSeed, ResourceProbePurpose,
+};
 use crate::launch_harness::Scratch;
 use bollard::models::HostConfigCgroupnsModeEnum;
 use record_fixture::{GIB, MEMORY_TOTAL, record, record_values};
@@ -56,14 +58,14 @@ fn parser_rejects_noncanonical_framing_order_and_duplicates() {
     let reordered = serde_json::to_vec(&serde_json::to_value(fixture_record()).unwrap_or_default())
         .unwrap_or_default();
     let duplicate = valid
-        .windows(b"\"schema_version\":3".len())
-        .position(|part| part == b"\"schema_version\":3")
+        .windows(b"\"schema_version\":5".len())
+        .position(|part| part == b"\"schema_version\":5")
         .map(|position| {
             let mut bytes = valid.clone();
-            bytes.splice(position..position, b"\"schema_version\":3,".iter().copied());
+            bytes.splice(position..position, b"\"schema_version\":5,".iter().copied());
             bytes
         })
-        .unwrap_or_default();
+        .expect("the canonical fixture has the schema version field");
 
     assert!(ProbeRecord::parse(&valid[..valid.len() - 1], MEMORY_TOTAL).is_none());
     assert!(ProbeRecord::parse(&two_newlines, MEMORY_TOTAL).is_none());
@@ -74,9 +76,9 @@ fn parser_rejects_noncanonical_framing_order_and_duplicates() {
 #[test]
 fn parser_rejects_bad_values_missing_fields_and_oversize_output() {
     for invalid in [
-        record_values(3, 41, 40, 30, 125, "null"),
-        record_values(3, 20 * GIB, 40 * GIB, MEMORY_TOTAL + 1, 125, "null"),
-        record_values(3, 20 * GIB, 40 * GIB, 30, 125, "10001"),
+        record_values(5, 41, 40, 30, 125, "null"),
+        record_values(5, 20 * GIB, 40 * GIB, MEMORY_TOTAL + 1, 125, "null"),
+        record_values(5, 20 * GIB, 40 * GIB, 30, 125, "10001"),
         record_values(1, 20 * GIB, 40 * GIB, 30, 125, "null"),
         b"{}\n".to_vec(),
     ] {
@@ -391,5 +393,7 @@ async fn probe_seed_with_id(journal: &Journal, nibble: &str) -> Result<ProbeSeed
         runtime_image_id: format!("sha256:{}", "c".repeat(64)),
         image_binding_digest: "e".repeat(64),
         projection_digest: "f".repeat(64),
+        purpose: ResourceProbePurpose::Capacity,
+        request_sha256: "0".repeat(64),
     })
 }

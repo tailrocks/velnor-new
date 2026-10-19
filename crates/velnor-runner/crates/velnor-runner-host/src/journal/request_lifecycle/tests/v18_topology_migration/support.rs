@@ -53,6 +53,17 @@ pub(crate) async fn restore_version_eighteen_provisioning_shape(
         .map_err(|_| HostError::Journal)?;
     let connection = database.connect().map_err(|_| HostError::Journal)?;
     for trigger in [
+        "storage_initialization_revision_insert",
+        "storage_initialization_revision_update",
+        "storage_initialization_revision_delete",
+        "storage_initialization_insert_guard",
+        "storage_initialization_identity_immutable",
+        "storage_initialization_no_delete",
+        "storage_initialization_create_transition_guard",
+        "storage_initialization_start_transition_guard",
+        "storage_initialization_result_transition_guard",
+        "storage_initialization_abort_transition_guard",
+        "storage_initialization_remove_transition_guard",
         "provisioning_topology_no_update",
         "provisioning_topology_no_delete",
         "provisioning_object_no_delete",
@@ -64,6 +75,13 @@ pub(crate) async fn restore_version_eighteen_provisioning_shape(
         "provisioning_cleanup_no_update",
         "provisioning_cleanup_no_delete",
         "provisioning_storage_cleanup_guard",
+        "provisioning_storage_cleanup_identity_guard",
+        "provisioning_storage_cleanup_shared_run_guard",
+        "provisioning_storage_cleanup_runner_home_guard",
+        "provisioning_storage_cleanup_runner_work_guard",
+        "provisioning_storage_cleanup_dind_data_guard",
+        "provisioning_storage_cleanup_topology_v1_guard",
+        "provisioning_storage_cleanup_topology_v2_guard",
         "metadata_settlement_claim_insert_guard",
     ] {
         connection
@@ -71,6 +89,13 @@ pub(crate) async fn restore_version_eighteen_provisioning_shape(
             .await
             .map_err(|_| HostError::Journal)?;
     }
+    connection
+        .execute(
+            "DROP TABLE IF EXISTS capacity_reservation_storage_initialization",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
     connection
         .execute("DROP INDEX IF EXISTS capacity_bound_attachment_mount", ())
         .await

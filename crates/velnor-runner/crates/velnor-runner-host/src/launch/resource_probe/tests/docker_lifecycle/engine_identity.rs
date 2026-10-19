@@ -22,6 +22,10 @@ impl ImageProvider for FixtureProvider {
             source_revision: REVISION.to_owned(),
             binding_fingerprint: BINDING.to_owned(),
             config: expected_image_config(REVISION),
+            engine_id: ENGINE_ID.to_owned(),
+            docker_root_digest: super::super::super::docker_root_digest("/var/lib/docker")
+                .expect("test root digest"),
+            workspace_cleanup_digest: "d".repeat(64),
         }))
     }
 }
@@ -162,6 +166,7 @@ async fn engine_change_after_create_blocks_start_then_cleans_on_bound_engine() -
         &changed.docker,
         &journal,
         &projection,
+        image_evidence(&projection),
         16 * 1024 * 1024 * 1024,
         &Deadline::new(),
     )
@@ -240,6 +245,7 @@ async fn root_change_after_create_blocks_start_then_cleans_on_original_root() ->
         &changed.docker,
         &journal,
         &projection,
+        image_evidence(&projection),
         16 * 1024 * 1024 * 1024,
         &Deadline::new(),
     )

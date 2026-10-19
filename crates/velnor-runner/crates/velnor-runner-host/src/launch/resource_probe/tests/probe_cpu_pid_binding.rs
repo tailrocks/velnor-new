@@ -32,7 +32,7 @@ fn ancestor_cpu_and_inspected_pid_gate_start_permit() -> Result<(), String> {
     let mut mismatched = fixture_record();
     mismatched.memory_available_bytes = 64 * GIB;
     assert!(
-        Observation::new(
+        Observation::test_new(
             mismatched,
             18,
             4321,
@@ -48,7 +48,7 @@ fn ancestor_cpu_and_inspected_pid_gate_start_permit() -> Result<(), String> {
     let mut namespace_mismatch = fixture_record();
     namespace_mismatch.probe_namespace_pid = 4321;
     assert!(
-        Observation::new(
+        Observation::test_new(
             namespace_mismatch,
             18,
             1234,
@@ -95,7 +95,7 @@ fn inspected_pid_requires_a_running_container_and_positive_state_pid() -> Result
 }
 
 fn observation(record: ProbeRecord, ncpu: u32, inspected_pid: u32) -> Result<Observation, String> {
-    Observation::new(
+    Observation::test_new(
         record,
         ncpu,
         inspected_pid,

@@ -371,6 +371,12 @@ impl StorageProfile {
         {
             return Err(HostError::Journal);
         }
+        let home = self.role_limit(StorageRole::RunnerHome)?;
+        if home.max_bytes() < publication.home_inbox_peak_payload_bytes()
+            || home.max_inodes() < publication.home_inbox_object_count()
+        {
+            return Err(HostError::Journal);
+        }
         Ok(())
     }
 

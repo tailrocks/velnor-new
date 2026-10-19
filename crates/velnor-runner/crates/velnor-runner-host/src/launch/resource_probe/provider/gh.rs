@@ -5,6 +5,7 @@ use std::fs::{self, DirBuilder};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use sha2::{Digest, Sha256};
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::Command;
 use uuid::Uuid;
@@ -28,6 +29,31 @@ pub(super) struct Workspace {
     root: PathBuf,
     assets: PathBuf,
     config: PathBuf,
+    cleanup_verified: bool,
+}
+
+/// Evidence that this private workspace is absent after cleanup.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(in crate::launch) struct VerifiedWorkspaceCleanup {
+    workspace_digest: String,
+}
+
+impl VerifiedWorkspaceCleanup {
+    pub(in crate::launch) fn workspace_digest(&self) -> &str {
+        &self.workspace_digest
+    }
+
+    #[cfg(test)]
+    pub(in crate::launch) fn test_fixture() -> Self {
+        Self::test_fixture_with_digest("d".repeat(64))
+    }
+
+    #[cfg(test)]
+    pub(in crate::launch) fn test_fixture_with_digest(digest: impl Into<String>) -> Self {
+        Self {
+            workspace_digest: digest.into(),
+        }
+    }
 }
 
 impl Workspace {
@@ -49,6 +75,7 @@ impl Workspace {
             root,
             assets,
             config,
+            cleanup_verified: false,
         })
     }
 
@@ -67,12 +94,52 @@ impl Workspace {
     fn executable(&self) -> &Path {
         &self.executable
     }
+
+    pub(super) fn remove_verified(mut self) -> Result<VerifiedWorkspaceCleanup, ProviderFailure> {
+        let workspace_digest = workspace_digest(&self.root);
+        remove_workspace_verified(&self.root)?;
+        self.cleanup_verified = true;
+        Ok(VerifiedWorkspaceCleanup { workspace_digest })
+    }
 }
 
 impl Drop for Workspace {
     fn drop(&mut self) {
-        remove_workspace(&self.root);
+        if !self.cleanup_verified {
+            remove_workspace(&self.root);
+        }
     }
+}
+
+fn remove_workspace_verified(path: &Path) -> Result<(), ProviderFailure> {
+    let metadata = fs::symlink_metadata(path).map_err(|_| ProviderFailure::WorkspaceCleanup)?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Err(ProviderFailure::WorkspaceCleanup);
+    }
+    match fs::remove_dir_all(path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err(ProviderFailure::WorkspaceCleanup),
+    }
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Ok(_) | Err(_) => Err(ProviderFailure::WorkspaceCleanup),
+    }
+}
+
+fn workspace_digest(path: &Path) -> String {
+    let mut digest = Sha256::new();
+    digest.update(b"velnor-release-workspace-cleanup-v1\\0");
+    let encoded = path.as_os_str().to_string_lossy();
+    digest.update((encoded.len() as u64).to_be_bytes());
+    digest.update(encoded.as_bytes());
+    let mut result = String::with_capacity(64);
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    for byte in digest.finalize() {
+        result.push(char::from(HEX[usize::from(byte >> 4)]));
+        result.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    result
 }
 
 fn remove_workspace(path: &Path) {

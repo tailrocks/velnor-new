@@ -3,22 +3,26 @@
 //! Only the Docker adapter can make a production bootstrap receipt. Callers can
 //! read its identity fields for journal comparison.
 
+pub(crate) mod adapter;
 mod cleanup;
 mod containers;
 mod delivery;
 mod publication;
 mod storage;
 
+pub(crate) use adapter::PreparedAcquiredBootstrap;
 pub(crate) use cleanup::VerifiedStorageCleanup;
 pub(crate) use containers::{
-    BootstrapContainerRole, BootstrapStartReceipt, VerifiedBootstrapContainerCreated,
-    VerifiedCreatedStorageObject,
+    BootstrapContainerRole, BootstrapStartReceipt, PendingBootstrapPair, StartedBootstrapPair,
+    VerifiedBootstrapContainerCreated, VerifiedBootstrapMountHandoff, VerifiedCreatedStorageObject,
+    VerifiedStorageNetworkCreated, VerifiedStorageNetworkRemoved, create_owned_network,
+    start_bootstrap_pair,
 };
 pub(crate) use delivery::ListenerDeliveryReceipt;
 pub(crate) use publication::JobFactsPublication;
-pub(crate) use storage::VerifiedStorageResourceBinding;
-#[cfg(test)]
+pub(crate) use publication::job_facts_publication;
 pub(crate) use storage::{ObservedContainerCgroup, ObservedStorageAttachment, ObservedStorageRole};
+pub(crate) use storage::{VerifiedStorageResourceBinding, observe_storage_resources};
 
 #[cfg(test)]
 mod test_fixtures;
@@ -30,3 +34,6 @@ pub(crate) use test_fixtures::{
     test_observed_storage_attachment, test_observed_storage_role, test_verified_storage_cleanup,
     test_verified_storage_resource_binding,
 };
+
+#[cfg(test)]
+pub(crate) use containers::test_bootstrap_mount_handoff;

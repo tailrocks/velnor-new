@@ -6,6 +6,8 @@ use crate::error::HostError;
 
 mod connection;
 mod doctor_probe;
+mod execution_authorization;
+mod execution_publication;
 mod image_import;
 mod migration;
 mod provisioning;
@@ -16,9 +18,14 @@ mod scale_set_create;
 mod session;
 mod session_refresh;
 mod source_authorization;
+mod sql_normalization;
 mod storage_budget;
+mod storage_handoff;
+mod storage_initialization;
+mod storage_network;
+mod storage_root_backing;
 
-pub(super) const JOURNAL_VERSION: i64 = 19;
+pub(super) const JOURNAL_VERSION: i64 = 27;
 const CURRENT_COLUMNS: [ColumnShape; 23] = [
     ColumnShape::new("id", "INTEGER", false, None),
     ColumnShape::new("kind", "TEXT", true, None),
@@ -93,10 +100,24 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
 async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError> {
     let version = journal_version(conn).await?;
     if version == JOURNAL_VERSION {
-        validate_persisted_schema(conn).await?;
+        // Repair only the exact v26 attachment/path contracts before
+        // provisioning validation requires the current v27 definitions.
+        execution_authorization::bootstrap(conn).await?;
+        storage_root_backing::upgrade_v27(conn).await?;
+        validate_persisted_schema_v19(conn).await?;
         migration::ensure_completion_objects(conn).await?;
         crate::journal_schema::bootstrap(conn).await?;
         crate::journal_schema::install_revision_triggers(conn).await?;
+        storage_initialization::bootstrap(conn).await?;
+        crate::journal_schema::install_v20_revision_triggers(conn).await?;
+        storage_network::bootstrap(conn).await?;
+        storage_initialization::upgrade_v22(conn).await?;
+        storage_root_backing::upgrade_v27(conn).await?;
+        storage_root_backing::bootstrap(conn).await?;
+        execution_authorization::bootstrap(conn).await?;
+        execution_publication::bootstrap(conn).await?;
+        execution_publication::upgrade_v25(conn).await?;
+        storage_handoff::bootstrap(conn).await?;
     } else {
         match version {
             0 => migration::from_version_zero(conn).await?,
@@ -118,6 +139,14 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
             16 => migration::from_version_sixteen(conn).await?,
             17 => migration::from_version_seventeen(conn).await?,
             18 => migration::from_version_eighteen(conn).await?,
+            19 => migration::from_version_nineteen(conn).await?,
+            20 => migration::from_version_twenty(conn).await?,
+            21 => migration::from_version_twenty_one(conn).await?,
+            22 => migration::from_version_twenty_two(conn).await?,
+            23 => migration::from_version_twenty_three(conn).await?,
+            24 => migration::from_version_twenty_four(conn).await?,
+            25 => migration::from_version_twenty_five(conn).await?,
+            26 => migration::from_version_twenty_six(conn).await?,
             _ => return Err(HostError::Journal),
         }
     }
@@ -125,6 +154,28 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
 }
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v20(conn).await?;
+    storage_network::validate(conn).await?;
+    storage_initialization::validate_v22(conn).await?;
+    storage_root_backing::validate(conn).await?;
+    execution_authorization::validate(conn).await?;
+    execution_publication::validate(conn).await?;
+    execution_publication::validate_v27(conn).await?;
+    storage_handoff::validate(conn).await
+}
+
+pub(super) async fn validate_persisted_schema_v20(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    validate_persisted_schema_v19(conn).await?;
+    storage_initialization::validate(conn).await?;
+    crate::journal_schema::validate_v20_revision_triggers(conn).await?;
+    Ok(())
+}
+
+pub(super) async fn validate_persisted_schema_v19(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
     validate_persisted_schema_v17(conn).await?;
     doctor_probe::validate(conn).await?;
     request_reservations::validate(conn).await

@@ -271,6 +271,7 @@ fn store_identity_matches(
 
 pub(super) fn candidate(
     engine_id: &str,
+    docker_root_digest: &str,
     daemon_architecture: &str,
     image: ImageInspect,
     release: &release::PreparedRelease,
@@ -290,6 +291,9 @@ pub(super) fn candidate(
         source_revision: release.source_revision.clone(),
         binding_fingerprint,
         config,
+        engine_id: engine_id.to_owned(),
+        docker_root_digest: docker_root_digest.to_owned(),
+        workspace_cleanup_digest: release.workspace_cleanup.workspace_digest().to_owned(),
     })
 }
 

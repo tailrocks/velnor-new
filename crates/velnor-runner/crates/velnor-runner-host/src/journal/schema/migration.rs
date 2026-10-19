@@ -1,12 +1,49 @@
 //! Versioned journal migrations.
 
+use std::{future::Future, pin::Pin};
+
 use crate::error::HostError;
 
 use super::{
     connection, doctor_probe, image_import, provisioning, remote, request_ledger,
     request_reservations, scale_set_create, session, session_refresh, source_authorization,
-    storage_budget,
+    storage_budget, storage_initialization, storage_network,
 };
+
+fn next_step<'a>(
+    conn: &'a turso::Connection,
+    version: u8,
+) -> Pin<Box<dyn Future<Output = Result<(), HostError>> + Send + 'a>> {
+    match version {
+        1 => Box::pin(from_version_one(conn)),
+        2 => Box::pin(from_version_two(conn)),
+        3 => Box::pin(from_version_three(conn)),
+        4 => Box::pin(from_version_four(conn)),
+        5 => Box::pin(from_version_five(conn)),
+        6 => Box::pin(from_version_six(conn)),
+        7 => Box::pin(from_version_seven(conn)),
+        8 => Box::pin(from_version_eight(conn)),
+        9 => Box::pin(from_version_nine(conn)),
+        10 => Box::pin(from_version_ten(conn)),
+        11 => Box::pin(from_version_eleven(conn)),
+        12 => Box::pin(from_version_twelve(conn)),
+        13 => Box::pin(from_version_thirteen(conn)),
+        14 => Box::pin(from_version_fourteen(conn)),
+        15 => Box::pin(from_version_fifteen(conn)),
+        16 => Box::pin(from_version_sixteen(conn)),
+        17 => Box::pin(from_version_seventeen(conn)),
+        18 => Box::pin(from_version_eighteen(conn)),
+        19 => Box::pin(from_version_nineteen(conn)),
+        20 => Box::pin(from_version_twenty(conn)),
+        21 => Box::pin(from_version_twenty_one(conn)),
+        22 => Box::pin(from_version_twenty_two(conn)),
+        23 => Box::pin(from_version_twenty_three(conn)),
+        24 => Box::pin(from_version_twenty_four(conn)),
+        25 => Box::pin(from_version_twenty_five(conn)),
+        26 => Box::pin(from_version_twenty_six(conn)),
+        _ => Box::pin(async { Err(HostError::Journal) }),
+    }
+}
 
 pub(super) async fn from_version_zero(conn: &turso::Connection) -> Result<(), HostError> {
     crate::journal_schema::bootstrap(conn).await?;
@@ -28,7 +65,7 @@ pub(super) async fn from_version_zero(conn: &turso::Connection) -> Result<(), Ho
     conn.execute("PRAGMA user_version = 1", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    from_version_one(conn).await
+    next_step(conn, 1).await
 }
 
 pub(super) async fn from_version_one(conn: &turso::Connection) -> Result<(), HostError> {
@@ -42,7 +79,7 @@ pub(super) async fn from_version_one(conn: &turso::Connection) -> Result<(), Hos
     conn.execute("PRAGMA user_version = 2", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    from_version_two(conn).await
+    next_step(conn, 2).await
 }
 
 pub(super) async fn from_version_two(conn: &turso::Connection) -> Result<(), HostError> {
@@ -56,7 +93,7 @@ pub(super) async fn from_version_two(conn: &turso::Connection) -> Result<(), Hos
     conn.execute("PRAGMA user_version = 3", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    from_version_three(conn).await
+    next_step(conn, 3).await
 }
 
 pub(super) async fn from_version_three(conn: &turso::Connection) -> Result<(), HostError> {
@@ -70,7 +107,7 @@ pub(super) async fn from_version_three(conn: &turso::Connection) -> Result<(), H
     conn.execute("PRAGMA user_version = 4", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    from_version_four(conn).await
+    next_step(conn, 4).await
 }
 
 pub(super) async fn from_version_four(conn: &turso::Connection) -> Result<(), HostError> {
@@ -78,7 +115,7 @@ pub(super) async fn from_version_four(conn: &turso::Connection) -> Result<(), Ho
     conn.execute("PRAGMA user_version = 5", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    from_version_five(conn).await
+    next_step(conn, 5).await
 }
 
 pub(super) async fn from_version_five(conn: &turso::Connection) -> Result<(), HostError> {
@@ -86,7 +123,7 @@ pub(super) async fn from_version_five(conn: &turso::Connection) -> Result<(), Ho
     conn.execute("PRAGMA user_version = 6", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    from_version_six(conn).await
+    next_step(conn, 6).await
 }
 
 pub(super) async fn from_version_six(conn: &turso::Connection) -> Result<(), HostError> {
@@ -94,7 +131,7 @@ pub(super) async fn from_version_six(conn: &turso::Connection) -> Result<(), Hos
     conn.execute("PRAGMA user_version = 7", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    from_version_seven(conn).await
+    next_step(conn, 7).await
 }
 
 pub(super) async fn from_version_seven(conn: &turso::Connection) -> Result<(), HostError> {
@@ -102,7 +139,7 @@ pub(super) async fn from_version_seven(conn: &turso::Connection) -> Result<(), H
     conn.execute("PRAGMA user_version = 8", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    from_version_eight(conn).await
+    next_step(conn, 8).await
 }
 
 pub(super) async fn from_version_eight(conn: &turso::Connection) -> Result<(), HostError> {
@@ -110,7 +147,7 @@ pub(super) async fn from_version_eight(conn: &turso::Connection) -> Result<(), H
     conn.execute("PRAGMA user_version = 9", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    from_version_nine(conn).await
+    next_step(conn, 9).await
 }
 
 pub(super) async fn from_version_nine(conn: &turso::Connection) -> Result<(), HostError> {
@@ -118,7 +155,7 @@ pub(super) async fn from_version_nine(conn: &turso::Connection) -> Result<(), Ho
     conn.execute("PRAGMA user_version = 11", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    from_version_eleven(conn).await
+    next_step(conn, 11).await
 }
 
 pub(super) async fn from_version_ten(conn: &turso::Connection) -> Result<(), HostError> {
@@ -126,7 +163,7 @@ pub(super) async fn from_version_ten(conn: &turso::Connection) -> Result<(), Hos
     conn.execute("PRAGMA user_version = 11", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    from_version_eleven(conn).await
+    next_step(conn, 11).await
 }
 
 pub(super) async fn from_version_eleven(conn: &turso::Connection) -> Result<(), HostError> {
@@ -138,7 +175,7 @@ pub(super) async fn from_version_eleven(conn: &turso::Connection) -> Result<(), 
     conn.execute("PRAGMA user_version = 12", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    from_version_twelve(conn).await
+    next_step(conn, 12).await
 }
 
 pub(super) async fn from_version_twelve(conn: &turso::Connection) -> Result<(), HostError> {
@@ -148,7 +185,7 @@ pub(super) async fn from_version_twelve(conn: &turso::Connection) -> Result<(), 
         .await
         .map(|_| ())
         .map_err(|_| HostError::Journal)?;
-    from_version_thirteen(conn).await
+    next_step(conn, 13).await
 }
 
 pub(super) async fn from_version_thirteen(conn: &turso::Connection) -> Result<(), HostError> {
@@ -157,7 +194,7 @@ pub(super) async fn from_version_thirteen(conn: &turso::Connection) -> Result<()
         .await
         .map(|_| ())
         .map_err(|_| HostError::Journal)?;
-    from_version_fourteen(conn).await
+    next_step(conn, 14).await
 }
 
 pub(super) async fn from_version_fourteen(conn: &turso::Connection) -> Result<(), HostError> {
@@ -166,7 +203,7 @@ pub(super) async fn from_version_fourteen(conn: &turso::Connection) -> Result<()
         .await
         .map(|_| ())
         .map_err(|_| HostError::Journal)?;
-    from_version_fifteen(conn).await
+    next_step(conn, 15).await
 }
 
 pub(super) async fn from_version_fifteen(conn: &turso::Connection) -> Result<(), HostError> {
@@ -174,7 +211,7 @@ pub(super) async fn from_version_fifteen(conn: &turso::Connection) -> Result<(),
     conn.execute("PRAGMA user_version = 16", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    from_version_sixteen(conn).await
+    next_step(conn, 16).await
 }
 
 pub(super) async fn from_version_sixteen(conn: &turso::Connection) -> Result<(), HostError> {
@@ -183,7 +220,7 @@ pub(super) async fn from_version_sixteen(conn: &turso::Connection) -> Result<(),
         .await
         .map_err(|_| HostError::Journal)?;
     super::validate_persisted_schema_v17(conn).await?;
-    from_version_seventeen(conn).await
+    next_step(conn, 17).await
 }
 
 pub(super) async fn from_version_seventeen(conn: &turso::Connection) -> Result<(), HostError> {
@@ -194,7 +231,7 @@ pub(super) async fn from_version_seventeen(conn: &turso::Connection) -> Result<(
         .map_err(|_| HostError::Journal)?;
     crate::journal_schema::install_revision_triggers(conn).await?;
     crate::journal_schema::install_v18_revision_triggers(conn).await?;
-    from_version_eighteen(conn).await
+    next_step(conn, 18).await
 }
 
 pub(super) async fn from_version_eighteen(conn: &turso::Connection) -> Result<(), HostError> {
@@ -204,6 +241,81 @@ pub(super) async fn from_version_eighteen(conn: &turso::Connection) -> Result<()
         .map_err(|_| HostError::Journal)?;
     crate::journal_schema::install_revision_triggers(conn).await?;
     crate::journal_schema::install_v18_revision_triggers(conn).await?;
+    super::validate_persisted_schema_v19(conn).await?;
+    next_step(conn, 19).await
+}
+
+pub(super) async fn from_version_nineteen(conn: &turso::Connection) -> Result<(), HostError> {
+    provisioning::replace_cleanup_guards(conn).await?;
+    storage_initialization::bootstrap(conn).await?;
+    conn.execute("PRAGMA user_version = 20", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    crate::journal_schema::install_v20_revision_triggers(conn).await?;
+    super::validate_persisted_schema_v20(conn).await?;
+    next_step(conn, 20).await
+}
+
+pub(super) async fn from_version_twenty(conn: &turso::Connection) -> Result<(), HostError> {
+    storage_network::bootstrap(conn).await?;
+    conn.execute("PRAGMA user_version = 21", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    next_step(conn, 21).await
+}
+
+pub(super) async fn from_version_twenty_one(conn: &turso::Connection) -> Result<(), HostError> {
+    storage_initialization::upgrade_v22(conn).await?;
+    conn.execute("PRAGMA user_version = 22", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    next_step(conn, 22).await
+}
+
+pub(super) async fn from_version_twenty_two(conn: &turso::Connection) -> Result<(), HostError> {
+    super::storage_root_backing::bootstrap(conn).await?;
+    conn.execute("PRAGMA user_version = 23", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    next_step(conn, 23).await
+}
+
+pub(super) async fn from_version_twenty_three(conn: &turso::Connection) -> Result<(), HostError> {
+    super::execution_authorization::bootstrap(conn).await?;
+    super::execution_authorization::validate(conn).await?;
+    super::execution_publication::bootstrap(conn).await?;
+    super::execution_publication::validate(conn).await?;
+    conn.execute("PRAGMA user_version = 24", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    next_step(conn, 24).await
+}
+
+pub(super) async fn from_version_twenty_four(conn: &turso::Connection) -> Result<(), HostError> {
+    super::execution_publication::upgrade_v25(conn).await?;
+    conn.execute("PRAGMA user_version = 25", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    next_step(conn, 25).await
+}
+
+pub(super) async fn from_version_twenty_five(conn: &turso::Connection) -> Result<(), HostError> {
+    super::storage_handoff::bootstrap(conn).await?;
+    super::storage_handoff::validate(conn).await?;
+    conn.execute("PRAGMA user_version = 26", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    next_step(conn, 26).await
+}
+
+pub(super) async fn from_version_twenty_six(conn: &turso::Connection) -> Result<(), HostError> {
+    storage_initialization::repair_v27_metadata_volume_name_guard(conn).await?;
+    super::storage_root_backing::bootstrap(conn).await?;
+    super::storage_root_backing::upgrade_v27(conn).await?;
+    super::execution_publication::upgrade_v27(conn).await?;
+    conn.execute("PRAGMA user_version = 27", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
     super::validate_persisted_schema(conn).await
 }
 

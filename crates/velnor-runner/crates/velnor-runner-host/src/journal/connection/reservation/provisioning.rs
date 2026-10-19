@@ -3,19 +3,36 @@
 mod admission;
 mod binding;
 mod cleanup;
+pub(crate) use cleanup::StorageCleanupIdentity;
+#[cfg(test)]
+pub(crate) use cleanup::{StorageCleanupCgroup, StorageCleanupMount};
 mod containers;
+pub(crate) use containers::{BootstrapContainerCreateClaim, BootstrapStartClaim};
+mod initialization;
 mod metadata_settlement;
+mod network;
 mod objects;
 mod publication;
 mod request_link;
 mod storage_plan;
 
+#[cfg(test)]
+pub(crate) use initialization::{CreateCommitStage, arm_create_commit_gate};
+pub(crate) use initialization::{CreateInterruptionOutcome, StorageInitializationClaim};
+pub(crate) use initialization::{
+    VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
+};
 pub(crate) use metadata_settlement::{MetadataSettlementResult, StorageMetadataSettlementClaim};
 #[cfg(test)]
+pub(crate) use network::StorageNetworkRecoveryIdentity;
+pub(crate) use network::{
+    RecordedStorageNetwork, StorageNetworkCreateClaim, StorageNetworkRemovalClaim,
+};
+pub(crate) use objects::StorageObjectCreateClaim;
+pub(crate) use publication::JobFactsPublicationClaim;
 pub(crate) use publication::ListenerDeliveryClaim;
-#[cfg(test)]
 pub(crate) use request_link::RequestPhysicalReservationResult;
-pub(crate) use storage_plan::StorageProvisioningPlan;
+pub(crate) use storage_plan::{StorageProvisioningPlan, StorageProvisioningRole};
 
 pub(in crate::journal) async fn insert_metadata_settlement_claim(
     connection: &turso::Connection,
@@ -65,6 +82,54 @@ impl ConnectionJournal {
         .await
     }
 
+    /// Read the exact role plan for a held reservation after its request is acquired.
+    pub(crate) async fn storage_provisioning_plan(
+        &self,
+        reservation_id: i64,
+    ) -> Result<Option<StorageProvisioningPlan>, HostError> {
+        if reservation_id <= 0 {
+            return Err(HostError::Identity);
+        }
+        let connection_id = self.connection_id().as_str().to_owned();
+        read_transaction(self.journal_ref(), async |connection| {
+            self.validate_scope(connection).await?;
+            let Some(context) = hold_context(connection, &connection_id, reservation_id).await? else {
+                return Ok(None);
+            };
+            if context.reservation_state != "reserved"
+                || context.intent_state != "pending"
+                || context.cleanup_proven
+            {
+                return Ok(None);
+            }
+            let mut rows = connection
+                .query(
+                    "SELECT 1 FROM connection_request_reservations AS link JOIN connection_request_authorizations AS auth ON auth.connection_id = link.connection_id AND auth.scale_set_id = link.scale_set_id AND auth.request_id = link.request_id WHERE link.reservation_id = ?1 AND link.connection_id = ?2 AND auth.acquire_state = 'acquired'",
+                    (reservation_id, connection_id.as_str()),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            if rows.next().await.map_err(|_| HostError::Journal)?.is_none() {
+                let mut links = connection
+                    .query(
+                        "SELECT 1 FROM connection_request_reservations WHERE reservation_id = ?1 AND connection_id = ?2",
+                        (reservation_id, connection_id.as_str()),
+                    )
+                    .await
+                    .map_err(|_| HostError::Journal)?;
+                if links.next().await.map_err(|_| HostError::Journal)?.is_some() {
+                    return Ok(None);
+                }
+            } else if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
+                return Err(HostError::Journal);
+            }
+            storage_plan::load(connection, reservation_id, &context)
+                .await
+                .map(Some)
+        })
+        .await
+    }
+
     /// Record one host capacity reservation and the full storage role charges before Docker changes.
     pub(crate) async fn try_reserve_with_provisioning(
         &self,
@@ -79,7 +144,7 @@ impl ConnectionJournal {
     pub(crate) async fn bind_storage_resources(
         &self,
         reservation_id: i64,
-        binding: crate::launch::bootstrap::VerifiedStorageResourceBinding,
+        binding: &crate::launch::bootstrap::VerifiedStorageResourceBinding,
     ) -> Result<(), HostError> {
         binding::bind(self, reservation_id, binding).await
     }
@@ -135,7 +200,7 @@ pub(in crate::journal) async fn release_ready(
 ) -> Result<bool, HostError> {
     let mut rows = connection
         .query(
-            "SELECT s.jit_state, s.storage_cleanup_proven, s.bootstrap_start_state, s.resources_bound, s.publication_state, s.delivery_state, (SELECT COUNT(*) FROM capacity_reservation_provisioning_objects AS o WHERE o.reservation_id = s.reservation_id AND o.create_state != 'unclaimed'), (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS b WHERE b.reservation_id = s.reservation_id AND (b.create_state != 'unclaimed' OR b.start_state != 'not_requested')), (SELECT COUNT(*) FROM capacity_reservation_metadata_settlements AS m WHERE m.reservation_id = s.reservation_id AND m.generation = (SELECT MAX(c.generation) FROM capacity_reservation_metadata_settlement_claims AS c WHERE c.reservation_id = s.reservation_id) AND m.outcome = 'settled') FROM capacity_reservation_provisioning_state AS s WHERE s.reservation_id = ?1",
+            "SELECT s.jit_state, s.storage_cleanup_proven, s.bootstrap_start_state, s.resources_bound, s.publication_state, s.delivery_state, (SELECT COUNT(*) FROM capacity_reservation_provisioning_objects AS o WHERE o.reservation_id = s.reservation_id AND o.create_state != 'unclaimed'), (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS b WHERE b.reservation_id = s.reservation_id AND (b.create_state != 'unclaimed' OR b.start_state != 'not_requested')), (SELECT COUNT(*) FROM capacity_reservation_metadata_settlements AS m WHERE m.reservation_id = s.reservation_id AND m.generation = (SELECT MAX(c.generation) FROM capacity_reservation_metadata_settlement_claims AS c WHERE c.reservation_id = s.reservation_id) AND m.outcome = 'settled'), (SELECT COUNT(*) FROM capacity_reservation_storage_initialization AS init WHERE init.reservation_id = s.reservation_id AND init.remove_state != 'removed' AND init.abort_state != 'absent') FROM capacity_reservation_provisioning_state AS s WHERE s.reservation_id = ?1",
             [reservation_id],
         )
         .await
@@ -155,15 +220,19 @@ pub(in crate::journal) async fn release_ready(
     let object_effects = row.get::<i64>(6).map_err(|_| HostError::Journal)? != 0;
     let container_effects = row.get::<i64>(7).map_err(|_| HostError::Journal)? != 0;
     let metadata_settled = row.get::<i64>(8).map_err(|_| HostError::Journal)? == 1;
+    let initializer_unsettled = row.get::<i64>(9).map_err(|_| HostError::Journal)? != 0;
     let no_storage_effect = !object_effects
         && !container_effects
+        && !initializer_unsettled
         && !resources_bound
         && bootstrap_state == "not_requested"
         && publication_state == "not_requested"
         && delivery_state == "not_requested";
-    let storage_ready = no_storage_effect || (storage_cleaned && metadata_settled);
+    let storage_ready =
+        !initializer_unsettled && (no_storage_effect || (storage_cleaned && metadata_settled));
     let jit_ready = matches!(jit_state.as_str(), "not_requested" | "cleaned");
-    Ok(storage_ready && jit_ready)
+    let network_ready = network::release_ready(connection, reservation_id).await?;
+    Ok(storage_ready && jit_ready && network_ready)
 }
 
 pub(super) struct HoldContext {

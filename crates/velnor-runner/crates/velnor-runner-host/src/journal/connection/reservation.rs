@@ -21,25 +21,46 @@ mod storage_budget_samples_tests;
 #[path = "reservation/storage_cache_projection_tests.rs"]
 mod storage_cache_projection_tests;
 
-pub(crate) use admission::{ReservationRequest, ReservationResult};
+#[cfg(test)]
+#[path = "reservation/network_tests.rs"]
+mod network_tests;
+
+pub(crate) use admission::ReservationRequest;
+#[cfg(test)]
+pub(crate) use admission::ReservationResult;
 pub(crate) use limits::{CapacityLimits, OperationalCapacityLimits};
-pub(crate) use provisioning::StorageMetadataSettlementClaim;
+pub(crate) use provisioning::JobFactsPublicationClaim;
+pub(crate) use provisioning::ListenerDeliveryClaim;
+#[cfg(test)]
+pub(crate) use provisioning::MetadataSettlementResult;
+pub(crate) use provisioning::{
+    BootstrapContainerCreateClaim, BootstrapStartClaim, RecordedStorageNetwork,
+};
+#[cfg(test)]
+pub(crate) use provisioning::{CreateCommitStage, arm_create_commit_gate};
+pub(crate) use provisioning::{
+    CreateInterruptionOutcome, RequestPhysicalReservationResult, StorageCleanupIdentity,
+    StorageInitializationClaim, StorageMetadataSettlementClaim, StorageNetworkCreateClaim,
+    StorageNetworkRemovalClaim, StorageObjectCreateClaim, StorageProvisioningPlan,
+    StorageProvisioningRole, VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
+};
 #[cfg(test)]
 pub(crate) use provisioning::{
-    ListenerDeliveryClaim, MetadataSettlementResult, RequestPhysicalReservationResult,
-    StorageProvisioningPlan,
+    StorageCleanupCgroup, StorageCleanupMount, StorageNetworkRecoveryIdentity,
 };
 #[cfg(test)]
 pub(crate) use read::ReservationState;
+#[cfg(test)]
+pub(crate) use storage_budget::StorageAdmission;
 pub(crate) use storage_budget::{
-    StorageAdmission, StorageFilesystemKind, StorageInodePolicy, StorageMedium, StorageObserver,
-    StorageRole,
+    BoundJobFactsSnapshot, StorageAdmissionSample, StorageFilesystemKind, StorageInodePolicy,
+    StorageMedium, StorageObserver, StoragePoolLimit, StoragePoolObservation, StorageProfile,
+    StorageProvisioningAdmission, StorageProvisioningMemoryObservation, StorageRole,
+    StorageRoleLimit, StorageSampleIdentity,
 };
 #[cfg(test)]
 pub(crate) use storage_budget::{
-    StorageAdmissionSample, StorageCacheProjection, StoragePoolLimit, StoragePoolObservation,
-    StorageProfile, StorageReservationPlan, StorageRoleCharge, StorageRoleLimit,
-    StorageSampleIdentity,
+    StorageCacheProjection, StorageReservationPlan, StorageRoleCharge,
 };
 
 #[cfg(test)]

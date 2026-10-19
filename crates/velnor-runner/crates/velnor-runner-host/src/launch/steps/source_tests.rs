@@ -8,8 +8,15 @@ use crate::config::{
 use crate::config_test_support::{basic_connection, host_config};
 use crate::connect::SetOwnership;
 use crate::launch_harness;
+use velnor_runner_github::SourceMetadata;
 
 use super::{SourceBlock, authorize_policy};
+use api_fixture::SourceApiFixture;
+
+#[path = "source_tests/api_fixture.rs"]
+mod api_fixture;
+#[path = "source_tests/pull_request.rs"]
+mod pull_request;
 
 fn policy(events: Vec<WorkflowEvent>) -> Result<SourcePolicy, crate::error::HostError> {
     let tag_prefixes = if events
@@ -219,6 +226,80 @@ async fn authorization_binding_rejects_changed_policy_before_source_lookup() -> 
             "test-token",
         ),
         Err(SourceBlock::SourceMismatch)
+    );
+    Ok(())
+}
+
+#[test]
+fn source_verifier_sends_only_the_connection_pat_to_github() -> Result<(), String> {
+    let encoded = host_config(
+        &[basic_connection(
+            "source-auth-boundary",
+            77,
+            "chainargos/java-monorepo",
+            "source-auth-boundary",
+            "integration",
+        )],
+        1,
+    );
+    let config = HostConfig::parse(&encoded).map_err(|error| error.to_string())?;
+    let connection = config
+        .connections()
+        .first()
+        .ok_or_else(|| "connection fixture missing".to_owned())?;
+    let source = SourceMetadata {
+        owner_name: Some("chainargos".to_owned()),
+        repository_name: Some("java-monorepo".to_owned()),
+        job_workflow_ref: Some(
+            "chainargos/java-monorepo/.github/workflows/ci.yml@refs/heads/sea/integration"
+                .to_owned(),
+        ),
+        workflow_run_id: Some(900),
+        event_name: Some("push".to_owned()),
+    };
+    let mut transport = SourceApiFixture {
+        authorization: None,
+        authorizations: Vec::new(),
+        pull_request_responses: false,
+        paths: Vec::new(),
+    };
+    let complete = source
+        .complete()
+        .ok_or_else(|| "source metadata incomplete".to_owned())?;
+    let (owner, repository) = super::split_repository(&connection.repository)
+        .map_err(|error| format!("repository invalid: {error:?}"))?;
+    let run = super::get_workflow_run(
+        &mut transport,
+        owner,
+        repository,
+        complete.workflow_run_id,
+        "connection-pat",
+    )
+    .map_err(|error| format!("workflow lookup failed: {error:?}"))?;
+    let verified = super::verify_workflow_source(
+        complete,
+        &run,
+        super::RepositoryTarget {
+            id: connection.repository_id,
+            owner,
+            name: repository,
+        },
+    )
+    .map_err(|error| format!("workflow verification failed: {error:?}"))?;
+    super::authorize_policy(&connection.source_policy, &verified)
+        .map_err(|error| format!("source policy failed: {error:?}"))?;
+
+    assert_eq!(
+        transport.authorization.as_deref(),
+        Some("Bearer connection-pat")
+    );
+    assert_ne!(
+        transport.authorization.as_deref(),
+        Some("Bearer scale-set-bearer")
+    );
+    assert_ne!(
+        transport.authorization.as_deref(),
+        Some("Bearer queue-bearer")
     );
     Ok(())
 }

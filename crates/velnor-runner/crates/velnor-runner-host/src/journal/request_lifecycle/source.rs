@@ -59,7 +59,6 @@ impl ConnectionJournal {
             .await?
             {
                 return if existing.matches_receipt(
-                    receipt.message_id(),
                     policy_mode,
                     &binding_digest,
                     &source_digest,
@@ -97,7 +96,6 @@ impl ConnectionJournal {
 }
 
 struct RequestRow {
-    message_id: i64,
     policy_mode: String,
     authority_model: String,
     binding_digest: String,
@@ -108,14 +106,12 @@ struct RequestRow {
 impl RequestRow {
     fn matches_receipt(
         &self,
-        message_id: i64,
         policy_mode: &str,
         binding_digest: &str,
         source_digest: &str,
         source_json: &str,
     ) -> bool {
-        self.message_id == message_id
-            && self.policy_mode == policy_mode
+        self.policy_mode == policy_mode
             && self.authority_model == AUTHORITY_MODEL
             && self.binding_digest == binding_digest
             && self.source_digest == source_digest
@@ -131,7 +127,7 @@ async fn request_row(
 ) -> Result<Option<RequestRow>, HostError> {
     let mut rows = connection
         .query(
-            "SELECT message_id, policy_mode, authority_model, binding_digest, source_digest, source_json FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3",
+            "SELECT policy_mode, authority_model, binding_digest, source_digest, source_json FROM connection_request_authorizations WHERE connection_id = ?1 AND scale_set_id = ?2 AND request_id = ?3",
             (connection_id, scale_set_id, request_id),
         )
         .await
@@ -140,12 +136,11 @@ async fn request_row(
         return Ok(None);
     };
     Ok(Some(RequestRow {
-        message_id: row.get(0).map_err(|_| HostError::Journal)?,
-        policy_mode: row.get(1).map_err(|_| HostError::Journal)?,
-        authority_model: row.get(2).map_err(|_| HostError::Journal)?,
-        binding_digest: row.get(3).map_err(|_| HostError::Journal)?,
-        source_digest: row.get(4).map_err(|_| HostError::Journal)?,
-        source_json: row.get(5).map_err(|_| HostError::Journal)?,
+        policy_mode: row.get(0).map_err(|_| HostError::Journal)?,
+        authority_model: row.get(1).map_err(|_| HostError::Journal)?,
+        binding_digest: row.get(2).map_err(|_| HostError::Journal)?,
+        source_digest: row.get(3).map_err(|_| HostError::Journal)?,
+        source_json: row.get(4).map_err(|_| HostError::Journal)?,
     }))
 }
 

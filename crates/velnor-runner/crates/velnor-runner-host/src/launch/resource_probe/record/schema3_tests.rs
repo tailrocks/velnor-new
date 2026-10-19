@@ -3,7 +3,7 @@ use super::{InodePolicy, ProbeRecord, fixture_record};
 const MEMORY_TOTAL: u64 = 8 * 1024 * 1024 * 1024;
 
 fn record(psi: &str) -> Vec<u8> {
-    record_values(3, 20 * GIB, 40 * GIB, 8 * GIB, 125, psi)
+    record_values(5, 20 * GIB, 40 * GIB, 8 * GIB, 125, psi)
 }
 
 fn record_values(version: u8, free: u64, total: u64, memory: u64, load: u64, psi: &str) -> Vec<u8> {
@@ -33,9 +33,11 @@ fn parser_accepts_canonical_record_and_nullable_diagnostic() {
 }
 
 #[test]
-fn schema_three_record_contains_the_complete_guest_cpu_and_pid_witness() {
+fn schema_five_record_contains_the_mount_root_source_cpu_and_pid_witness() {
     let record = fixture_record();
-    assert_eq!(record.schema_version, 3);
+    assert_eq!(record.schema_version, 5);
+    assert_eq!(record.docker_root_mount_source, "/dev/vdb");
+    assert_eq!(record.docker_root_mount_root, "/_data");
     assert_eq!(record.cpu_ancestor_limits.len(), 2);
     assert!(record.probe_cgroup_cpuset_cpus_count > 0);
     assert!(record.probe_host_pid > 0);
@@ -47,6 +49,8 @@ fn schema_three_record_contains_the_complete_guest_cpu_and_pid_witness() {
         "cpu_ancestor_limits",
         "probe_host_pid",
         "probe_namespace_pid",
+        "docker_root_mount_source",
+        "docker_root_mount_root",
     ] {
         assert!(
             value.get(required).is_some(),
@@ -120,11 +124,11 @@ fn parser_rejects_noncanonical_framing_order_and_duplicates() {
     let reordered = serde_json::to_vec(&serde_json::to_value(fixture_record()).unwrap_or_default())
         .unwrap_or_default();
     let duplicate = valid
-        .windows(b"\"schema_version\":3".len())
-        .position(|part| part == b"\"schema_version\":3")
+        .windows(b"\"schema_version\":5".len())
+        .position(|part| part == b"\"schema_version\":5")
         .map(|position| {
             let mut bytes = valid.clone();
-            bytes.splice(position..position, b"\"schema_version\":3,".iter().copied());
+            bytes.splice(position..position, b"\"schema_version\":5,".iter().copied());
             bytes
         })
         .unwrap_or_default();
@@ -138,9 +142,9 @@ fn parser_rejects_noncanonical_framing_order_and_duplicates() {
 #[test]
 fn parser_rejects_bad_values_missing_fields_and_oversize_output() {
     for invalid in [
-        record_values(3, 41, 40, 30, 125, "null"),
-        record_values(3, 20 * GIB, 40 * GIB, MEMORY_TOTAL + 1, 125, "null"),
-        record_values(3, 20 * GIB, 40 * GIB, 30, 125, "10001"),
+        record_values(5, 41, 40, 30, 125, "null"),
+        record_values(5, 20 * GIB, 40 * GIB, MEMORY_TOTAL + 1, 125, "null"),
+        record_values(5, 20 * GIB, 40 * GIB, 30, 125, "10001"),
         record_values(1, 20 * GIB, 40 * GIB, 30, 125, "null"),
         b"{}\n".to_vec(),
     ] {
@@ -156,6 +160,13 @@ fn parser_rejects_bad_values_missing_fields_and_oversize_output() {
     let mut missing_statx_device = serde_json::to_vec(&missing_statx_device).unwrap_or_default();
     missing_statx_device.push(b'\n');
     assert!(ProbeRecord::parse(&missing_statx_device, MEMORY_TOTAL).is_none());
+    let mut missing_mount_root = serde_json::to_value(fixture_record()).unwrap_or_default();
+    if let Some(object) = missing_mount_root.as_object_mut() {
+        object.remove("docker_root_mount_root");
+    }
+    let mut missing_mount_root = serde_json::to_vec(&missing_mount_root).unwrap_or_default();
+    missing_mount_root.push(b'\n');
+    assert!(ProbeRecord::parse(&missing_mount_root, MEMORY_TOTAL).is_none());
     let mut bad_inode_policy = fixture_record();
     bad_inode_policy.docker_root_inode_policy = InodePolicy::Finite;
     assert!(ProbeRecord::parse(&serialize(&bad_inode_policy), MEMORY_TOTAL).is_none());
@@ -174,6 +185,29 @@ fn parser_rejects_bad_values_missing_fields_and_oversize_output() {
     let mut oversize = vec![b' '; 2048];
     oversize.push(b'\n');
     assert!(ProbeRecord::parse(&oversize, MEMORY_TOTAL).is_none());
+}
+
+#[test]
+fn parser_rejects_old_schemas_and_invalid_mount_source_or_root() {
+    let mut old_schema = fixture_record();
+    old_schema.schema_version = 4;
+    assert!(ProbeRecord::parse(&serialize(&old_schema), MEMORY_TOTAL).is_none());
+
+    let mut empty_source = fixture_record();
+    empty_source.docker_root_mount_source.clear();
+    assert!(ProbeRecord::parse(&serialize(&empty_source), MEMORY_TOTAL).is_none());
+
+    let mut control_source = fixture_record();
+    control_source.docker_root_mount_source.push('\n');
+    assert!(ProbeRecord::parse(&serialize(&control_source), MEMORY_TOTAL).is_none());
+
+    let mut relative_root = fixture_record();
+    relative_root.docker_root_mount_root = "_data".to_owned();
+    assert!(ProbeRecord::parse(&serialize(&relative_root), MEMORY_TOTAL).is_none());
+
+    let mut escaped_root = fixture_record();
+    escaped_root.docker_root_mount_root = "/_data/bad\\x".to_owned();
+    assert!(ProbeRecord::parse(&serialize(&escaped_root), MEMORY_TOTAL).is_none());
 }
 
 #[test]

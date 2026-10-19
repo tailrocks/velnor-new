@@ -149,6 +149,9 @@ async fn profile_switch_serializes_with_settlement_claim() -> Result<(), HostErr
         image_binding_digest: "d".repeat(64),
         operation_name: format!("velnor-resource-probe-{operation_id}"),
         projection_digest: "e".repeat(64),
+        purpose: crate::journal::ResourceProbePurpose::Capacity,
+        request_sha256: "5d76d86293261804706a16a73e0491cf4caa859f1b876cda706e568592b85cdf"
+            .to_owned(),
     };
 
     let (profile_result, claim_result) = tokio::join!(

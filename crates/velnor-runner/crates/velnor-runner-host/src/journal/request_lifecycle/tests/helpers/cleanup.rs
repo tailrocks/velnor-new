@@ -74,6 +74,8 @@ pub(super) async fn create_cleaned_settlement_probe(
         image_binding_digest: "d".repeat(64),
         operation_name: operation_name.clone(),
         projection_digest: "e".repeat(64),
+        purpose: crate::journal::ResourceProbePurpose::Capacity,
+        request_sha256: "5d76d86293261804706a16a73e0491cf4caa859f1b876cda706e568592b85cdf".to_owned(),
     };
     let claim = trace_test_stage!(
         "settlement probe claim",

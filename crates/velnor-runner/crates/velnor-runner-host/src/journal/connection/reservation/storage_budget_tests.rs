@@ -218,6 +218,39 @@ fn provisioning_fixture_matches_the_fixed_host_contract() {
         .expect("full provisioning profile");
 }
 
+#[test]
+fn provisioning_profile_charges_home_inbox_bytes_and_entries() {
+    let profile = fixture_provisioning_profile();
+    let home_index = profile
+        .roles()
+        .iter()
+        .position(|role| role.role() == StorageRole::RunnerHome)
+        .expect("RunnerHome role");
+    let home = &profile.roles()[home_index];
+
+    for (max_bytes, max_inodes, retained_memory_bytes) in [
+        (32_767, home.max_inodes(), 32_767),
+        (home.max_bytes(), 4, home.retained_memory_bytes()),
+    ] {
+        let mut roles = profile.roles().to_vec();
+        roles[home_index] = StorageRoleLimit::new(
+            StorageRole::RunnerHome,
+            home.pool_id().to_owned(),
+            home.medium(),
+            max_bytes,
+            max_inodes,
+            retained_memory_bytes,
+        )
+        .expect("valid but undersized Home role");
+        let undersized = StorageProfile::new("b".repeat(32), profile.pools().to_vec(), roles)
+            .expect("structurally valid profile");
+        assert!(
+            undersized.validate_provisioning_contract().is_err(),
+            "RunnerHome must cover both inbox bytes and filesystem entries"
+        );
+    }
+}
+
 pub(crate) fn fixture_admission(permit: &StartPermit) -> Result<StorageAdmission, HostError> {
     let profile = fixture_profile();
     let filesystem_instance_digest = "d".repeat(64);

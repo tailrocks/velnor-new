@@ -39,6 +39,23 @@ pub(in crate::journal) async fn prepare(
     connection: &turso::Connection,
     seed: &ProbeSeed,
 ) -> Result<(), HostError> {
+    prepare_identity(
+        connection,
+        &seed.operation_id,
+        &seed.engine_id,
+        &seed.docker_root_digest,
+        &seed.operation_name,
+    )
+    .await
+}
+
+pub(in crate::journal) async fn prepare_identity(
+    connection: &turso::Connection,
+    operation_id: &str,
+    engine_id: &str,
+    docker_root_digest: &str,
+    operation_name: &str,
+) -> Result<(), HostError> {
     let charge_cpu =
         i64::try_from(crate::worker::PROBE_CPU_MILLICORES).map_err(|_| HostError::Journal)?;
     let charge_memory =
@@ -68,10 +85,10 @@ pub(in crate::journal) async fn prepare(
         .execute(
             "UPDATE host_operation_leases SET operation_id = ?1, engine_id = ?2, docker_root_digest = ?3, operation_name = ?4, container_id = NULL, cpu_millicores = ?5, memory_bytes = ?6, state = 'reserved' WHERE singleton = 1 AND state = 'released'",
             (
-                seed.operation_id.as_str(),
-                seed.engine_id.as_str(),
-                seed.docker_root_digest.as_str(),
-                seed.operation_name.as_str(),
+                operation_id,
+                engine_id,
+                docker_root_digest,
+                operation_name,
                 charge_cpu,
                 charge_memory,
             ),
@@ -83,10 +100,10 @@ pub(in crate::journal) async fn prepare(
             .execute(
                 "INSERT INTO host_operation_leases (singleton, operation_id, engine_id, docker_root_digest, operation_name, container_id, cpu_millicores, memory_bytes, state) VALUES (1, ?1, ?2, ?3, ?4, NULL, ?5, ?6, 'reserved')",
                 (
-                    seed.operation_id.as_str(),
-                    seed.engine_id.as_str(),
-                    seed.docker_root_digest.as_str(),
-                    seed.operation_name.as_str(),
+                    operation_id,
+                    engine_id,
+                    docker_root_digest,
+                    operation_name,
                     charge_cpu,
                     charge_memory,
                 ),

@@ -7,10 +7,11 @@ use bollard::query_parameters::CreateContainerOptions;
 use sha2::{Digest, Sha256};
 
 use crate::error::HostError;
+use crate::journal::ResourceProbePurpose;
 use crate::worker::{AdmissionReserve, PROBE_CPU_MILLICORES, PROBE_MEMORY_LIMIT_BYTES};
 
 #[path = "projection/canonical.rs"]
-mod canonical;
+pub(super) mod canonical;
 #[path = "projection/container_config.rs"]
 mod container_config;
 
@@ -29,6 +30,7 @@ const PATH_ENV: &str = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/
 const SOURCE_LABEL: &str = "org.opencontainers.image.revision";
 const DAEMON_ARCH_LABEL: &str = "velnor.daemon.architecture";
 const DIGEST_DOMAIN: &[u8] = b"velnor-resource-probe-root-v1\0";
+const CAPACITY_REQUEST_DOMAIN: &[u8] = b"velnor-capacity-probe-request-v1\0";
 
 const fn probe_cpu_millicores() -> u64 {
     (PROBE_CPU_QUOTA as u64 * MILLICORES_PER_VCPU) / PROBE_CPU_PERIOD as u64
@@ -116,6 +118,10 @@ impl VerifiedProbeImage {
         &self.runtime_id
     }
 
+    pub(super) fn platform(&self) -> &str {
+        &self.platform
+    }
+
     pub(super) fn daemon_architecture(&self) -> &str {
         &self.daemon_architecture
     }
@@ -194,6 +200,8 @@ pub(super) struct ProbeProjection {
     pub(super) options: CreateContainerOptions,
     pub(super) config: ContainerCreateBody,
     pub(super) projection_digest: String,
+    pub(super) purpose: ResourceProbePurpose,
+    pub(super) request_sha256: String,
 }
 
 impl fmt::Debug for ProbeProjection {
@@ -207,6 +215,7 @@ impl fmt::Debug for ProbeProjection {
             .field("engine_id", &self.engine_id)
             .field("instance_id", &self.instance_id)
             .field("projection_digest", &self.projection_digest)
+            .field("purpose", &self.purpose)
             .finish_non_exhaustive()
     }
 }
@@ -220,8 +229,50 @@ impl ProbeProjection {
         root_path: &str,
         image: VerifiedProbeImage,
     ) -> Result<Self, HostError> {
+        Self::build_for_purpose(
+            operation_id,
+            instance_id,
+            engine_id,
+            root_path,
+            image,
+            ResourceProbePurpose::Capacity,
+            capacity_request_sha256(),
+        )
+    }
+
+    pub(super) fn build_owned_cgroups(
+        operation_id: String,
+        instance_id: String,
+        engine_id: String,
+        root_path: &str,
+        image: VerifiedProbeImage,
+        request_sha256: String,
+    ) -> Result<Self, HostError> {
+        Self::build_for_purpose(
+            operation_id,
+            instance_id,
+            engine_id,
+            root_path,
+            image,
+            ResourceProbePurpose::OwnedCgroups,
+            request_sha256,
+        )
+    }
+
+    fn build_for_purpose(
+        operation_id: String,
+        instance_id: String,
+        engine_id: String,
+        root_path: &str,
+        image: VerifiedProbeImage,
+        purpose: ResourceProbePurpose,
+        request_sha256: String,
+    ) -> Result<Self, HostError> {
         if !hex_string(&operation_id, 32)
             || !hex_string(&instance_id, 32)
+            || !hex_string(&request_sha256, 64)
+            || purpose == ResourceProbePurpose::Capacity
+                && request_sha256 != capacity_request_sha256()
             || engine_id.is_empty()
             || engine_id.len() > 256
             || engine_id.chars().any(char::is_control)
@@ -230,8 +281,15 @@ impl ProbeProjection {
         }
         let root = DockerRoot::parse(root_path)?;
         let name = format!("velnor-resource-probe-{operation_id}");
-        let config =
-            container_config::config(&root, &image, &operation_id, &instance_id, &engine_id);
+        let config = container_config::config(
+            &root,
+            &image,
+            &operation_id,
+            &instance_id,
+            &engine_id,
+            purpose,
+            &request_sha256,
+        );
         let options = CreateContainerOptions {
             name: Some(name.clone()),
             platform: image.platform.clone(),
@@ -247,8 +305,34 @@ impl ProbeProjection {
             options,
             config,
             projection_digest: digest,
+            purpose,
+            request_sha256,
         })
     }
+
+    pub(super) fn build_from_purpose(
+        operation_id: String,
+        instance_id: String,
+        engine_id: String,
+        root_path: &str,
+        image: VerifiedProbeImage,
+        purpose: ResourceProbePurpose,
+        request_sha256: String,
+    ) -> Result<Self, HostError> {
+        Self::build_for_purpose(
+            operation_id,
+            instance_id,
+            engine_id,
+            root_path,
+            image,
+            purpose,
+            request_sha256,
+        )
+    }
+}
+
+fn capacity_request_sha256() -> String {
+    digest_text(CAPACITY_REQUEST_DOMAIN)
 }
 
 pub(super) const fn resource_limits() -> (i64, i64, i64, i64, i64) {

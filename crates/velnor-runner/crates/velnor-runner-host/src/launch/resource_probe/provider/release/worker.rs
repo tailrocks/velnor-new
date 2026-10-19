@@ -39,7 +39,7 @@ pub(in crate::launch::resource_probe::provider) async fn prepare_worker_releases
     )
     .await?;
     Ok(PreparedWorkerReleases {
-        _workspace: workspace,
+        workspace,
         runner,
         dind,
     })

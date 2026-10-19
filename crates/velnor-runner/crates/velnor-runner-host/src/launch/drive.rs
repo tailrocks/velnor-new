@@ -3,14 +3,21 @@
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use crate::config::RepositoryConnection;
+use bollard::Docker;
+use velnor_runner_github::Poll;
+
+use crate::config::{ApprovedJobAuthorityPolicy, RepositoryConnection};
 use crate::journal::{ConnectionJournal, Journal};
+use crate::listen::Link;
 use crate::worker::guest_image::GuestImageFile;
 use zeroize::Zeroize;
 
-use super::{ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages};
+use super::{HostLane, ReleaseReadSecret, SelectedEngineContext, VerifiedWorkerImages};
 use crate::scale_set::EnsureError;
 use crate::worker::ResourceBudget;
+
+mod deferred_offer;
+pub(crate) use deferred_offer::DeferredAuthorizedOffer;
 
 /// Call context. Tokens are redacted in `Debug` and zeroized on drop.
 pub(crate) struct Drive {
@@ -32,6 +39,8 @@ pub(crate) struct Drive {
     pub(crate) pat: String,
     /// Repository identity and source policy for scoped admission.
     pub(crate) connection: Option<RepositoryConnection>,
+    /// Validated source policy for this connection.
+    pub(crate) authority_policy: Option<ApprovedJobAuthorityPolicy>,
     /// Shared capacity journal used by selected-engine probes.
     pub(crate) host_journal: Option<Journal>,
     /// Per-connection journal used by launch and completion records.
@@ -61,6 +70,8 @@ pub(crate) struct Rest<'a> {
     pub(crate) guest_admission: GuestAdmission,
     /// Repository connection that authorizes job source metadata.
     pub(crate) connection: Option<&'a RepositoryConnection>,
+    /// Validated source policy for this connection.
+    pub(crate) authority_policy: Option<&'a ApprovedJobAuthorityPolicy>,
     /// Shared host journal for capacity and selected-engine probes.
     pub(crate) host_journal: Option<&'a Journal>,
     /// Dedicated host credential for verified release and probe access.
@@ -141,6 +152,7 @@ impl Drive {
             repo: rest.repo.to_owned(),
             pat: rest.pat.to_owned(),
             connection: rest.connection.cloned(),
+            authority_policy: rest.authority_policy.cloned(),
             host_journal: rest.host_journal.cloned(),
             scoped_journal: rest.scoped_journal.cloned(),
             allocated_header: rest.allocated_header,
@@ -148,6 +160,169 @@ impl Drive {
             admission_state: rest.admission_state.map(Path::to_path_buf),
         }
     }
+}
+
+/// Inputs for one production scoped admission attempt.
+pub(crate) struct ScopedAdmissionInput<'a> {
+    pub(crate) link: &'a mut Link,
+    pub(crate) queue_origin: Option<String>,
+    pub(crate) queue_path: String,
+    pub(crate) queue_token: String,
+    pub(crate) admin_token: String,
+    pub(crate) set_id: i64,
+    pub(crate) polled: &'a Poll,
+    pub(crate) docker: &'a Docker,
+    pub(crate) connection: &'a RepositoryConnection,
+    pub(crate) authority_policy: &'a ApprovedJobAuthorityPolicy,
+    pub(crate) pat: &'a str,
+    pub(crate) host_journal: &'a Journal,
+    pub(crate) scoped_journal: &'a ConnectionJournal,
+    pub(crate) release_read_secret: &'a ReleaseReadSecret,
+    pub(crate) selected_engine: &'a SelectedEngineContext,
+    pub(crate) worker_images: &'a VerifiedWorkerImages,
+    pub(crate) guest_image: &'a GuestImageFile,
+    pub(crate) resource_budget: ResourceBudget,
+    pub(crate) allocated_header: u32,
+    pub(crate) admission_state: &'a Path,
+}
+
+/// Persist exact source authorization for an offer that cannot be acquired now.
+pub(crate) async fn authorize_deferred_offer(
+    connection: &RepositoryConnection,
+    scoped_journal: &ConnectionJournal,
+    pat: &str,
+    set_id: i64,
+    polled: &Poll,
+) -> Result<DeferredAuthorizedOffer, EnsureError> {
+    let (batch, request_id) =
+        super::steps::assignment(polled)?.ok_or(EnsureError::AdmissionClosed)?;
+    if batch.message_id < 0 || request_id <= 0 {
+        return Err(EnsureError::AdmissionClosed);
+    }
+    let source_receipt = super::steps::authorize_offer(
+        Some(connection),
+        Some(scoped_journal),
+        pat,
+        batch,
+        request_id,
+    )
+    .await?
+    .ok_or(EnsureError::Uncertain)?;
+    DeferredAuthorizedOffer::from_poll_receipt(
+        connection,
+        scoped_journal,
+        set_id,
+        polled,
+        source_receipt,
+    )
+    .await
+}
+
+/// Authorize one available request, obtain a fresh permit, then acquire it.
+pub(crate) async fn acquire_scoped_offer(
+    input: ScopedAdmissionInput<'_>,
+) -> Result<super::steps::ScopedProvisioningOutcome, EnsureError> {
+    acquire_scoped_offer_inner(input, None).await
+}
+
+/// Acquire an offer using its exact journal-backed source authorization.
+pub(crate) async fn acquire_authorized_scoped_offer(
+    input: ScopedAdmissionInput<'_>,
+    authorized: &DeferredAuthorizedOffer,
+) -> Result<super::steps::ScopedProvisioningOutcome, EnsureError> {
+    if !authorized
+        .matches_current_envelope(input.polled, input.scoped_journal, input.set_id)
+        .await
+        || authorized.offer().connection_id() != &input.connection.connection_id
+    {
+        return Err(EnsureError::Uncertain);
+    }
+    let offer = authorized.offer();
+    acquire_scoped_offer_inner(input, Some(offer)).await
+}
+
+async fn acquire_scoped_offer_inner(
+    mut input: ScopedAdmissionInput<'_>,
+    authorized: Option<&crate::journal::AuthorizedOffer>,
+) -> Result<super::steps::ScopedProvisioningOutcome, EnsureError> {
+    if input.allocated_header == 0 {
+        return Err(EnsureError::AdmissionClosed);
+    }
+    let (owner, repo) = input
+        .connection
+        .repository
+        .split_once('/')
+        .ok_or(EnsureError::AdmissionClosed)?;
+    let rest = Rest {
+        owner,
+        repo,
+        pat: input.pat,
+        resource_budget: Some(input.resource_budget),
+        static_capacity: true,
+        guest_admission: GuestAdmission::Unavailable,
+        connection: Some(input.connection),
+        authority_policy: Some(input.authority_policy),
+        host_journal: Some(input.host_journal),
+        release_read_secret: Some(input.release_read_secret),
+        scoped_journal: Some(input.scoped_journal),
+        allocated_header: input.allocated_header,
+        source_authorized: authorized.is_some(),
+        admission_state: Some(input.admission_state),
+        worker_images: Some(input.worker_images),
+        selected_engine: Some(input.selected_engine),
+        guest_image: Some(input.guest_image),
+    };
+    if let Some(offer) = authorized {
+        let (_batch, request_id) =
+            super::steps::assignment(input.polled)?.ok_or(EnsureError::Uncertain)?;
+        let binding = input
+            .scoped_journal
+            .source_authorization_binding()
+            .await
+            .map_err(|_| EnsureError::Uncertain)?;
+        if offer.connection_id() != input.scoped_journal.connection_id()
+            || offer.connection_id() != &input.connection.connection_id
+            || offer.scale_set_id() != input.set_id
+            || offer.request_id() != request_id
+            || offer.binding_digest() != binding.binding_digest()
+        {
+            return Err(EnsureError::Uncertain);
+        }
+    } else {
+        super::steps::authorize_poll_rest(&rest, input.polled).await?;
+    }
+
+    let Some(permit) = super::resource_probe::start_permit(
+        input.docker,
+        input.host_journal,
+        input.resource_budget,
+        input.release_read_secret,
+    )
+    .await
+    else {
+        return Ok(super::steps::ScopedProvisioningOutcome::NoStart);
+    };
+    let mut drive = Drive::from_rest(
+        input.set_id,
+        input.queue_path,
+        input.queue_token,
+        input.admin_token,
+        Rest {
+            source_authorized: true,
+            ..rest
+        },
+    );
+    drive.docker_engine_id = Some(input.selected_engine.engine_id().to_owned());
+    let admin = input.link.base().to_owned();
+    let mut lane = HostLane::new(input.link, admin, input.queue_origin.take());
+    super::steps::acquire_scoped(
+        &mut lane,
+        &drive,
+        input.polled,
+        permit,
+        input.selected_engine,
+    )
+    .await
 }
 
 impl Drop for Drive {

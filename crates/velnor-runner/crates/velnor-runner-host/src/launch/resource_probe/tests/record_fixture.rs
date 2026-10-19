@@ -4,7 +4,7 @@ pub(super) const MEMORY_TOTAL: u64 = 8 * 1024 * 1024 * 1024;
 pub(super) const GIB: u64 = 1024 * 1024 * 1024;
 
 pub(super) fn record(psi: &str) -> Vec<u8> {
-    record_values(3, 20 * GIB, 40 * GIB, 8 * GIB, 125, psi)
+    record_values(5, 20 * GIB, 40 * GIB, 8 * GIB, 125, psi)
 }
 
 pub(super) fn record_values(

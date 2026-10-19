@@ -154,6 +154,8 @@ pub(crate) struct StorageAttachmentContract {
     pub(crate) read_only: bool,
     /// Host source for a probe-only attachment.
     pub(crate) source_target: Option<&'static str>,
+    /// Exact named-volume subpath for an attachment.
+    pub(crate) volume_subpath: Option<&'static str>,
 }
 
 impl StorageRole {
@@ -278,9 +280,17 @@ impl StorageRole {
 
         const RUNNER_ROOT: [StorageAttachmentContract; 1] =
             [attachment(StorageRole::RunnerRoot, Runner, "/", true, None)];
-        const RUNNER_HOME: [StorageAttachmentContract; 2] = [
+        const RUNNER_HOME: [StorageAttachmentContract; 3] = [
             attachment(StorageRole::RunnerHome, Runner, "/home/runner", false, None),
             attachment(StorageRole::RunnerHome, Dind, "/home/runner", false, None),
+            attachment_with_subpath(
+                StorageRole::RunnerHome,
+                Runner,
+                "/opt/velnor/source-proof/inbox",
+                false,
+                None,
+                Some("source-proof/inbox"),
+            ),
         ];
         const RUNNER_WORK: [StorageAttachmentContract; 2] = [
             attachment(
@@ -334,7 +344,7 @@ impl StorageRole {
             false,
             None,
         )];
-        const ENGINE_METADATA: [StorageAttachmentContract; 3] = [
+        const ENGINE_METADATA: [StorageAttachmentContract; 4] = [
             attachment(
                 StorageRole::EngineMetadata,
                 Probe,
@@ -342,19 +352,29 @@ impl StorageRole {
                 true,
                 Some("/var/lib/docker"),
             ),
-            attachment(
+            attachment_with_subpath(
                 StorageRole::EngineMetadata,
                 Runner,
                 "/.velnor-runtime-identity",
                 true,
                 None,
+                Some("runtime-identity"),
             ),
-            attachment(
+            attachment_with_subpath(
                 StorageRole::EngineMetadata,
                 Runner,
                 "/opt/velnor/job-facts",
                 true,
                 None,
+                Some("job-facts"),
+            ),
+            attachment_with_subpath(
+                StorageRole::EngineMetadata,
+                Runner,
+                "/opt/velnor/source-proof/control",
+                true,
+                None,
+                Some("source-proof/control"),
             ),
         ];
 
@@ -404,5 +424,61 @@ const fn attachment(
         target,
         read_only,
         source_target,
+        volume_subpath: None,
+    }
+}
+
+const fn attachment_with_subpath(
+    role: StorageRole,
+    observer: StorageObserver,
+    target: &'static str,
+    read_only: bool,
+    source_target: Option<&'static str>,
+    volume_subpath: Option<&'static str>,
+) -> StorageAttachmentContract {
+    StorageAttachmentContract {
+        role,
+        observer,
+        target,
+        read_only,
+        source_target,
+        volume_subpath,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{StorageObserver, StorageRole};
+
+    #[test]
+    fn metadata_and_home_roles_bind_control_and_inbox_to_their_volumes() {
+        let attachments = StorageRole::EngineMetadata.attachments();
+        let control = attachments
+            .iter()
+            .find(|attachment| attachment.target == "/opt/velnor/source-proof/control")
+            .expect("control attachment");
+        let home_attachments = StorageRole::RunnerHome.attachments();
+        let inbox = home_attachments
+            .iter()
+            .find(|attachment| attachment.target == "/opt/velnor/source-proof/inbox")
+            .expect("inbox attachment");
+
+        assert_eq!(control.observer, StorageObserver::Runner);
+        assert!(control.read_only);
+        assert_eq!(control.volume_subpath, Some("source-proof/control"));
+        assert_eq!(inbox.role, StorageRole::RunnerHome);
+        assert_eq!(inbox.observer, StorageObserver::Runner);
+        assert!(!inbox.read_only);
+        assert_eq!(inbox.volume_subpath, Some("source-proof/inbox"));
+        assert_eq!(attachments.len(), 4);
+        for (target, subpath) in [
+            ("/.velnor-runtime-identity", "runtime-identity"),
+            ("/opt/velnor/job-facts", "job-facts"),
+        ] {
+            assert!(attachments.iter().any(|attachment| {
+                attachment.target == target && attachment.volume_subpath == Some(subpath)
+            }));
+        }
+        assert_eq!(home_attachments.len(), 3);
     }
 }

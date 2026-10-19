@@ -12,10 +12,14 @@ use crate::config::{
 use crate::https::HttpsTransport;
 use crate::journal::SourceAuthorizationBinding;
 use sha2::{Digest, Sha256};
+use velnor_runner_github::Transport;
 
 const GITHUB_API: &str = "https://api.github.com";
 
-/// Nonsecret source facts approved by an authenticated workflow run and policy.
+/// Authenticated source facts accepted for queue admission.
+///
+/// This receipt is not execution authorization. A pull request's tested merge commit must still
+/// be proved against the started Runner before the job can proceed.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AuthorizedSourceReceipt {
     connection_id: ConnectionId,
@@ -105,8 +109,6 @@ pub(super) enum SourceBlock {
     RefDenied,
     /// No configured rule accepts this pull request.
     PullRequestDenied,
-    /// The API cannot prove the tested pull request merge commit.
-    TestedMergeProofUnavailable,
     /// The full set of jobs that a generic JIT runner can receive is unproven.
     ClosedWorldUnproven,
 }
@@ -121,7 +123,6 @@ impl SourceBlock {
             Self::EventDenied => "event_denied",
             Self::RefDenied => "ref_denied",
             Self::PullRequestDenied => "pull_request_denied",
-            Self::TestedMergeProofUnavailable => "tested_merge_proof_unavailable",
             Self::ClosedWorldUnproven => "closed_world_unproven",
         }
     }
@@ -136,15 +137,35 @@ pub(super) fn authorize_job(
     message_id: i64,
     token: &str,
 ) -> Result<AuthorizedSourceReceipt, SourceBlock> {
+    let mut transport = HttpsTransport::new(GITHUB_API).map_err(|_| SourceBlock::ApiUnavailable)?;
+    authorize_job_with_transport(
+        connection,
+        binding,
+        source,
+        request_id,
+        message_id,
+        token,
+        &mut transport,
+    )
+}
+
+fn authorize_job_with_transport<T: Transport + ?Sized>(
+    connection: &RepositoryConnection,
+    binding: &SourceAuthorizationBinding,
+    source: &SourceMetadata,
+    request_id: i64,
+    message_id: i64,
+    token: &str,
+    transport: &mut T,
+) -> Result<AuthorizedSourceReceipt, SourceBlock> {
     verify_binding(connection, binding)?;
     if request_id <= 0 || message_id < 0 {
         return Err(SourceBlock::Missing);
     }
     let complete = source.complete().ok_or(SourceBlock::Missing)?;
     let (owner, repository) = split_repository(&connection.repository)?;
-    let mut transport = HttpsTransport::new(GITHUB_API).map_err(|_| SourceBlock::ApiUnavailable)?;
     let run = get_workflow_run(
-        &mut transport,
+        transport,
         owner,
         repository,
         complete.workflow_run_id,
@@ -165,8 +186,7 @@ pub(super) fn authorize_job(
     if verified.event_name == "pull_request"
         && connection.source_policy.mode == SourcePolicyMode::BranchRestricted
     {
-        verify_pull(connection, &mut transport, token, &run, &verified)?;
-        return Err(SourceBlock::TestedMergeProofUnavailable);
+        verify_pull(connection, transport, token, &run, &verified)?;
     }
     Ok(AuthorizedSourceReceipt {
         connection_id: binding.connection_id().clone(),
@@ -208,7 +228,7 @@ fn lower_hex(bytes: &[u8]) -> String {
 
 fn verify_pull(
     connection: &RepositoryConnection,
-    transport: &mut HttpsTransport,
+    transport: &mut (impl Transport + ?Sized),
     token: &str,
     run: &velnor_runner_github::workflow_run::WorkflowRun,
     verified: &VerifiedWorkflowSource,

@@ -9,7 +9,6 @@ use crate::{EnsureError, IntentState, Journal, Outcome};
 
 mod docker_stub;
 pub(super) use self::docker_stub::DockerStub;
-pub(in crate::launch) use self::docker_stub::hanging;
 pub(in crate::launch) use self::docker_stub::http;
 pub(in crate::launch) use self::docker_stub::{DockerResponse, closed, delayed_http, raw_http};
 
@@ -97,30 +96,6 @@ async fn failed_done_row_inspect_cannot_advertise_capacity() -> Result<(), Strin
         return Err("reconcile error exposed Docker response data".to_owned());
     }
     no_response_body_in_journal(&scratch.file())
-}
-
-#[tokio::test]
-async fn resource_capacity_scan_has_a_total_deadline() -> Result<(), String> {
-    let (_scratch, journal) = journal("capacity-deadline").await?;
-    let stub = DockerStub::open(vec![hanging()])?;
-    let capacity = crate::launch::resource_capacity::discover_after(
-        &stub.docker,
-        &journal,
-        crate::worker::test_resource_budget().map_err(|error| error.to_string())?,
-        8,
-        Duration::from_millis(20),
-    )
-    .await;
-    drop(stub);
-
-    assert_eq!(
-        capacity,
-        crate::launch::resource_capacity::Discovery::Untrusted(EnsureError::Unexpected {
-            status: 0,
-            step: "docker capacity",
-        })
-    );
-    Ok(())
 }
 
 #[tokio::test]

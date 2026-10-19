@@ -15,6 +15,83 @@ use crate::error::HostError;
 pub(crate) use validate::validate_policies;
 
 impl super::HostConfig {
+    /// Build a parsed test config with one validator-approved policy for a real binding.
+    #[cfg(test)]
+    pub(crate) fn test_with_job_authority_policy(
+        connection: &super::RepositoryConnection,
+    ) -> Result<Self, HostError> {
+        let text = crate::config_test_support::host_config(
+            &[crate::config_test_support::basic_connection(
+                "test-policy",
+                1,
+                "test/repository",
+                "test-policy",
+                "test-set",
+            )],
+            1,
+        );
+        let mut config = Self::parse(&text)?;
+        config.connections = vec![connection.clone()];
+        config.add_test_job_authority_policy(&connection.connection_id)?;
+        Ok(config)
+    }
+
+    /// Add one valid test-only authority policy through normal HostConfig validation.
+    #[cfg(test)]
+    pub(crate) fn add_test_job_authority_policy(
+        &mut self,
+        connection_id: &super::ConnectionId,
+    ) -> Result<(), HostError> {
+        use std::collections::BTreeMap;
+
+        let connection = self
+            .connections
+            .iter()
+            .find(|connection| &connection.connection_id == connection_id)
+            .ok_or(HostError::Config)?;
+        let path = ".github/workflows/build.yml";
+        let mut policy = ApprovedJobAuthorityPolicy {
+            schema_version: POLICY_SCHEMA,
+            connection_id: connection.connection_id.clone(),
+            binding_sha256: sha256(&connection.canonical_identity_bytes()?),
+            generation: 1,
+            policy_sha256: String::new(),
+            generator: GeneratorIdentity {
+                source_sha: "a".repeat(40),
+                artifact_sha256: "b".repeat(64),
+            },
+            workflows: vec![ApprovedWorkflow {
+                repository_id: connection.repository_id,
+                path: path.to_owned(),
+                content_sha256: "c".repeat(64),
+                calls: Vec::new(),
+                jobs: vec![ApprovedJobAuthorityEntry {
+                    root_path: path.to_owned(),
+                    workflow_path: path.to_owned(),
+                    job_key: "required".to_owned(),
+                    role: JobAuthorityRole::Verification,
+                    contexts: vec![ApprovedEventContext {
+                        event: WorkflowEvent::Push,
+                        refs: vec!["refs/heads/sea/integration".to_owned()],
+                        pull_request_rules: Vec::new(),
+                    }],
+                    permissions_declared: true,
+                    permissions: BTreeMap::from([("contents".to_owned(), PermissionLevel::Read)]),
+                    secrets: Vec::new(),
+                    environments: Vec::new(),
+                    condition_sha256: None,
+                    concurrency: None,
+                    needs: Vec::new(),
+                }],
+            }],
+        };
+        policy.canonicalize();
+        policy.policy_sha256 =
+            sha256(&serde_json::to_vec(&policy.content()).map_err(|_| HostError::Config)?);
+        self.job_authority_policies.push(policy);
+        self.validate()
+    }
+
     /// Remove one repository binding and its approved job policy.
     ///
     /// An empty connection list is a disconnected state. Callers must not start
@@ -194,6 +271,13 @@ enum ConcurrencyScope {
 }
 
 impl ApprovedJobAuthorityPolicy {
+    pub(crate) fn validate_for(
+        &self,
+        connection: &super::RepositoryConnection,
+    ) -> Result<(), HostError> {
+        validate::validate_policy(self, connection)
+    }
+
     pub(crate) fn canonicalize(&mut self) {
         for workflow in &mut self.workflows {
             workflow.calls.sort();
@@ -251,6 +335,11 @@ impl ApprovedJobAuthorityPolicy {
             .map(|workflow| workflow.content_sha256.as_str())
     }
 
+    /// Read the immutable workflow and call inventory used to verify live source.
+    pub(crate) fn workflow_sources(&self) -> impl Iterator<Item = ApprovedWorkflowSource<'_>> {
+        self.workflows.iter().map(ApprovedWorkflowSource)
+    }
+
     pub(crate) fn entry(
         &self,
         lookup: &JobAuthorityLookup<'_>,
@@ -264,6 +353,46 @@ impl ApprovedJobAuthorityPolicy {
                     && entry.job_key == lookup.job_key
                     && entry.contexts.iter().any(|context| context.matches(lookup))
             })
+    }
+}
+
+/// Borrowed workflow identity and call edges from the validated authority inventory.
+#[derive(Clone, Copy)]
+pub(crate) struct ApprovedWorkflowSource<'a>(&'a ApprovedWorkflow);
+
+impl<'a> ApprovedWorkflowSource<'a> {
+    pub(crate) const fn repository_id(&self) -> i64 {
+        self.0.repository_id
+    }
+
+    pub(crate) fn path(&self) -> &'a str {
+        &self.0.path
+    }
+
+    pub(crate) fn content_sha256(&self) -> &'a str {
+        &self.0.content_sha256
+    }
+
+    pub(crate) fn calls(&self) -> impl Iterator<Item = ApprovedWorkflowCall<'a>> + 'a {
+        self.0.calls.iter().map(ApprovedWorkflowCall)
+    }
+}
+
+/// Borrowed exact reusable-workflow edge from the approved call graph.
+#[derive(Clone, Copy)]
+pub(crate) struct ApprovedWorkflowCall<'a>(&'a WorkflowCall);
+
+impl<'a> ApprovedWorkflowCall<'a> {
+    pub(crate) const fn repository_id(&self) -> i64 {
+        self.0.repository_id
+    }
+
+    pub(crate) fn path(&self) -> &'a str {
+        &self.0.path
+    }
+
+    pub(crate) fn content_sha256(&self) -> &'a str {
+        &self.0.content_sha256
     }
 }
 

@@ -6,7 +6,7 @@ use std::ffi::OsString;
 use bollard::models::ContainerConfig;
 use serde_json::Value;
 
-use super::gh::{self, Workspace};
+use super::gh::{self, VerifiedWorkspaceCleanup, Workspace};
 use super::{
     OIDC_ISSUER, ProviderFailure, SIGNER_WORKFLOW, SOURCE_REF, SOURCE_REPOSITORY, hex, valid_sha,
 };
@@ -56,10 +56,11 @@ pub(super) struct PreparedRelease {
     pub(super) load_archive_sha256: String,
     pub(super) load_archive_index_digest: String,
     pub(super) image_reference: String,
+    pub(super) workspace_cleanup: VerifiedWorkspaceCleanup,
 }
 
 pub(super) struct PreparedWorkerReleases {
-    _workspace: Workspace,
+    pub(super) workspace: Workspace,
     pub(super) runner: PreparedWorkerArtifact,
     pub(super) dind: PreparedWorkerArtifact,
 }
@@ -98,6 +99,7 @@ pub(super) async fn prepare(
     let downloads = verify_downloads(&workspace, &assets, source_revision)?;
     verify_asset_attestations(&workspace, pat, &tag, source_revision, &downloads).await?;
     let parsed = super::archive::verify(&downloads.archive, &downloads.manifest, source_revision)?;
+    let workspace_cleanup = workspace.remove_verified()?;
     Ok(PreparedRelease {
         load_archive: parsed.load_archive,
         source_revision: source_revision.to_owned(),
@@ -110,6 +112,7 @@ pub(super) async fn prepare(
         load_archive_sha256: parsed.load_archive_sha256,
         load_archive_index_digest: parsed.load_archive_index_digest,
         image_reference: parsed.image_reference,
+        workspace_cleanup,
     })
 }
 

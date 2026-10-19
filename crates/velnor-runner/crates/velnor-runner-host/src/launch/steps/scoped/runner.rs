@@ -2,16 +2,22 @@
 
 use std::future::Future;
 
+use sha2::{Digest, Sha256};
 use velnor_runner_github::{RunnerReference, Transport, jit, jit_request};
 
 use crate::error::HostError;
 use crate::journal::{
-    AssignmentKey, ConnectionJournal, ReservationRequest, ReservationResult, StorageAdmission,
+    AssignmentKey, ConnectionJournal, RequestPhysicalReservationResult, ReservationRequest,
+    StorageProvisioningAdmission,
 };
+#[cfg(test)]
+use crate::journal::{ReservationResult, StorageAdmission};
 use crate::launch::resource_probe::StartObservationWitness;
 use crate::launch::{Lane, SelectedEngineContext, VerifiedWorkerImages};
 use crate::scale_set::EnsureError;
 use crate::worker::Started;
+
+use super::acquire;
 
 pub(super) struct PhysicalIntent {
     pub(super) reservation_id: i64,
@@ -20,8 +26,133 @@ pub(super) struct PhysicalIntent {
     runner_name: String,
     sample_generation_id: String,
     observation: StartObservationWitness,
+    resource_budget: crate::worker::ResourceBudget,
+    charge: (u64, u64),
 }
 
+pub(crate) struct AcquiredProvisioning {
+    physical: PhysicalIntent,
+    request: crate::journal::AssignmentIdentity,
+}
+
+impl AcquiredProvisioning {
+    pub(super) fn after_recorded_acquire(
+        physical: PhysicalIntent,
+        request: crate::journal::AssignmentIdentity,
+    ) -> Self {
+        Self { physical, request }
+    }
+
+    pub(crate) const fn reservation_id(&self) -> i64 {
+        self.physical.reservation_id
+    }
+
+    pub(crate) const fn intent_id(&self) -> i64 {
+        self.physical.intent_id
+    }
+
+    pub(crate) fn request(&self) -> &crate::journal::AssignmentIdentity {
+        &self.request
+    }
+
+    pub(crate) fn physical_assignment(&self) -> &crate::journal::AssignmentIdentity {
+        &self.physical.assignment
+    }
+
+    pub(crate) fn runner_name(&self) -> &str {
+        &self.physical.runner_name
+    }
+
+    pub(crate) fn sample_generation_id(&self) -> &str {
+        &self.physical.sample_generation_id
+    }
+
+    pub(crate) fn observation(&self) -> &StartObservationWitness {
+        &self.physical.observation
+    }
+
+    pub(crate) const fn resource_budget(&self) -> crate::worker::ResourceBudget {
+        self.physical.resource_budget
+    }
+
+    pub(crate) const fn charge(&self) -> (u64, u64) {
+        self.physical.charge
+    }
+}
+
+pub(super) enum ReservationOutcome {
+    AcquireClaimed(PhysicalIntent, acquire::ClaimedAcquire),
+    Existing,
+    AtCapacity,
+    ReconcileRequired,
+}
+
+pub(super) async fn reserve_and_claim(
+    scoped: &ConnectionJournal,
+    permit: crate::launch::StartPermit,
+    storage: StorageProvisioningAdmission,
+    request: &crate::journal::AssignmentIdentity,
+) -> Result<ReservationOutcome, EnsureError> {
+    let nonce = stable_nonce(scoped, request).await?;
+    let observation = permit.observation_witness();
+    let sample_generation_id = permit.sample_generation_id().to_owned();
+    let identity = scoped
+        .assignment_identity(AssignmentKey::Remote {
+            kind: "runner".to_owned(),
+            subject: nonce.clone(),
+        })
+        .await
+        .map_err(super::super::map_journal)?;
+    let runner_name = format!("v{nonce}");
+    let (cpu_millicores, memory_bytes) = permit.charge();
+    let resource_budget = permit.resource_budget();
+    let engine_id = permit.engine_id().to_owned();
+    let docker_root_digest = permit.docker_root_digest().to_owned();
+    let reservation = scoped
+        .try_reserve_and_claim_request_acquire(
+            ReservationRequest {
+                assignment: &identity,
+                engine_id: &engine_id,
+                docker_root_digest: &docker_root_digest,
+                cpu_millicores,
+                memory_bytes,
+                sample_generation_id: &sample_generation_id,
+            },
+            permit,
+            storage,
+            request,
+        )
+        .await
+        .map_err(super::super::map_journal)?;
+    match reservation {
+        RequestPhysicalReservationResult::AcquireClaimed {
+            reservation_id,
+            intent_id,
+        } => {
+            let claim = acquire::ClaimedAcquire::new(request.clone());
+            Ok(ReservationOutcome::AcquireClaimed(
+                PhysicalIntent {
+                    reservation_id,
+                    intent_id,
+                    assignment: identity,
+                    runner_name,
+                    sample_generation_id,
+                    observation,
+                    resource_budget,
+                    charge: (cpu_millicores, memory_bytes),
+                },
+                claim,
+            ))
+        }
+        RequestPhysicalReservationResult::Existing { .. } => Ok(ReservationOutcome::Existing),
+        RequestPhysicalReservationResult::AtCapacity => Ok(ReservationOutcome::AtCapacity),
+        RequestPhysicalReservationResult::ReconcileRequired { .. } => {
+            Ok(ReservationOutcome::ReconcileRequired)
+        }
+    }
+}
+
+#[cfg(test)]
 pub(super) async fn reserve(
     scoped: &ConnectionJournal,
     permit: crate::launch::StartPermit,
@@ -39,6 +170,7 @@ pub(super) async fn reserve(
         .map_err(super::super::map_journal)?;
     let runner_name = format!("v{nonce}");
     let (cpu_millicores, memory_bytes) = permit.charge();
+    let resource_budget = permit.resource_budget();
     let engine_id = permit.engine_id().to_owned();
     let docker_root_digest = permit.docker_root_digest().to_owned();
     let reservation = scoped
@@ -82,7 +214,50 @@ pub(super) async fn reserve(
         runner_name,
         sample_generation_id,
         observation,
+        resource_budget,
+        charge: (cpu_millicores, memory_bytes),
     })
+}
+
+async fn stable_nonce(
+    scoped: &ConnectionJournal,
+    request: &crate::journal::AssignmentIdentity,
+) -> Result<String, EnsureError> {
+    let binding = scoped
+        .source_authorization_binding()
+        .await
+        .map_err(super::super::map_journal)?;
+    let request_id = request.request_id().ok_or(EnsureError::Uncertain)?;
+    if request.connection_id() != scoped.connection_id()
+        || request.connection_id() != binding.connection_id()
+        || request.scale_set_id() != binding.scale_set_id()
+    {
+        return Err(EnsureError::Uncertain);
+    }
+    let scale_set_id = request.scale_set_id().to_string();
+    let request_id = request_id.to_string();
+    let mut digest = Sha256::new();
+    digest.update(b"velnor-physical-runner-nonce-v1\0");
+    for field in [
+        scoped.connection_id().as_str().as_bytes(),
+        binding.binding_digest().as_bytes(),
+        scale_set_id.as_bytes(),
+        request_id.as_bytes(),
+    ] {
+        digest.update(
+            u64::try_from(field.len())
+                .map_err(|_| EnsureError::Uncertain)?
+                .to_be_bytes(),
+        );
+        digest.update(field);
+    }
+    let bytes = digest.finalize();
+    let mut nonce = String::with_capacity(32);
+    for byte in bytes.iter().take(16) {
+        use std::fmt::Write as _;
+        write!(&mut nonce, "{byte:02x}").map_err(|_| EnsureError::Uncertain)?;
+    }
+    Ok(nonce)
 }
 
 pub(super) async fn start<T, S, F>(

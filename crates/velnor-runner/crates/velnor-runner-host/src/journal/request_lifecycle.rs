@@ -1,17 +1,20 @@
 //! Independent request authorization and charged physical runner lifecycle.
 
 pub(in crate::journal) mod acquire;
+pub(in crate::journal) mod authorized_offers;
 pub(in crate::journal) mod events;
 mod helpers;
 pub(in crate::journal) mod physical;
 mod set_scope;
 pub(in crate::journal) mod source;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 use crate::config::ConnectionId;
 use crate::error::HostError;
 use crate::journal::connection::AssignmentIdentity;
+
+pub(crate) use authorized_offers::AuthorizedOffer;
 
 /// State of one authorized request's `AcquireJobs` operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

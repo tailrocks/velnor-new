@@ -12,6 +12,7 @@ const PLATFORM: &str = "linux/amd64";
 const EXECUTABLE: &str = "/velnor/storage-init";
 const HOME_TARGET: &str = "/velnor/init/home";
 const WORK_TARGET: &str = "/velnor/init/work";
+const METADATA_TARGET: &str = "/velnor/init/metadata";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct StorageInitializationImage {
@@ -36,6 +37,10 @@ impl StorageInitializationImage {
 
     pub(crate) fn source_sha(&self) -> &str {
         &self.source_sha
+    }
+
+    pub(crate) fn runtime_id(&self) -> &str {
+        &self.runtime_id
     }
 }
 
@@ -75,6 +80,18 @@ impl StorageInitializationLimits {
             pids: i64::try_from(pids).map_err(|_| HostError::Config)?,
         })
     }
+
+    pub(crate) const fn cpu_nano(self) -> i64 {
+        self.docker.nano_cpus
+    }
+
+    pub(crate) const fn memory_bytes(self) -> i64 {
+        self.docker.memory_bytes
+    }
+
+    pub(crate) const fn pids(self) -> i64 {
+        self.pids
+    }
 }
 
 pub(crate) struct StorageInitializationCreate {
@@ -86,13 +103,17 @@ pub(crate) fn specification(
     operation_id: &str,
     home_volume: &str,
     work_volume: &str,
+    metadata_volume: &str,
     image: &StorageInitializationImage,
     limits: StorageInitializationLimits,
 ) -> Result<StorageInitializationCreate, HostError> {
     if !valid_operation_id(operation_id)
         || !valid_volume_name(home_volume)
         || !valid_volume_name(work_volume)
+        || !valid_volume_name(metadata_volume)
         || home_volume == work_volume
+        || home_volume == metadata_volume
+        || work_volume == metadata_volume
     {
         return Err(HostError::Identity);
     }
@@ -135,6 +156,7 @@ pub(crate) fn specification(
                 mounts: Some(vec![
                     volume_mount(home_volume, HOME_TARGET),
                     volume_mount(work_volume, WORK_TARGET),
+                    volume_mount(metadata_volume, METADATA_TARGET),
                 ]),
                 ..HostConfig::default()
             }),
@@ -179,9 +201,16 @@ fn lower_hex(value: &str, length: usize) -> bool {
 }
 
 #[cfg(test)]
-pub(super) fn test_image() -> StorageInitializationImage {
+pub(crate) fn test_image() -> StorageInitializationImage {
     StorageInitializationImage {
         runtime_id: format!("sha256:{}", "a".repeat(64)),
         source_sha: "b".repeat(40),
     }
+}
+
+#[cfg(test)]
+pub(crate) fn test_verified_image() -> Result<StorageInitializationImage, HostError> {
+    StorageInitializationImage::from_verified_release(
+        &crate::launch::verified_images::test_worker_images(),
+    )
 }

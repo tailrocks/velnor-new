@@ -22,6 +22,12 @@ pub(super) enum Request {
         binding: RepositoryConnection,
         token: String,
     },
+    DoctorProbeStart {
+        nonce: String,
+    },
+    DoctorProbeStatus {
+        nonce: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,10 +40,20 @@ pub(super) enum Target {
     },
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Response {
     pub(super) value: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) doctor_probe: Option<DoctorProbeReply>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct DoctorProbeReply {
+    pub(super) request_id: Option<i64>,
+    pub(super) state: String,
+    pub(super) report: Option<serde_json::Value>,
 }
 
 impl Request {
@@ -56,7 +72,7 @@ impl Response {
     }
 
     pub(super) fn decode(bytes: &[u8]) -> Result<Self, ()> {
-        if bytes.len() > 64 {
+        if bytes.len() > 4096 {
             return Err(());
         }
         serde_json::from_slice(bytes).map_err(|_| ())

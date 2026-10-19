@@ -70,6 +70,9 @@ async fn seed(journal: &Journal, id: &str) -> Result<ProbeSeed, HostError> {
         image_binding_digest: "d".repeat(64),
         operation_name: format!("velnor-resource-probe-{}", id.repeat(32)),
         projection_digest: "e".repeat(64),
+        purpose: crate::journal::ResourceProbePurpose::Capacity,
+        request_sha256: "5d76d86293261804706a16a73e0491cf4caa859f1b876cda706e568592b85cdf"
+            .to_owned(),
     })
 }
 

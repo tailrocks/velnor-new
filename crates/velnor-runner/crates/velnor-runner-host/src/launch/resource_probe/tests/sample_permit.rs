@@ -14,8 +14,8 @@ fn sample_record(disk_free_bytes: u64) -> ProbeRecord {
 }
 
 #[test]
-fn pressure_sample_uses_selected_guest_values_and_expires_after_thirty_seconds()
--> Result<(), String> {
+fn doctor_report_uses_selected_guest_values_and_expires_after_thirty_seconds() -> Result<(), String>
+{
     let budget = test_resource_budget().map_err(|error| error.to_string())?;
     let root_digest = "a".repeat(64);
     let recent = observation(
@@ -25,12 +25,18 @@ fn pressure_sample_uses_selected_guest_values_and_expires_after_thirty_seconds()
         &root_digest,
         Instant::now(),
     )?
-    .pressure()
+    .doctor_report()
     .ok_or_else(|| "fresh guest metrics were rejected".to_owned())?;
-    assert_eq!(recent.load_millis, 125);
-    assert_eq!(recent.ncpu, 8);
-    assert_eq!(recent.mem_available, 10 * 1024 * 1024 * 1024);
-    assert_eq!(recent.disk_free, 24 * 1024 * 1024 * 1024);
+    assert_eq!(recent["load_milli"], 125);
+    assert_eq!(recent["cpu_count"], 8);
+    assert_eq!(
+        recent["memory_available_bytes"],
+        10 * 1024 * 1024 * 1024_u64
+    );
+    assert_eq!(
+        recent["docker_root_free_bytes"],
+        24 * 1024 * 1024 * 1024_u64
+    );
 
     let stale_at = Instant::now()
         .checked_sub(Duration::from_millis(30_500))
@@ -42,7 +48,7 @@ fn pressure_sample_uses_selected_guest_values_and_expires_after_thirty_seconds()
         &root_digest,
         stale_at,
     )?;
-    assert!(stale.pressure().is_none());
+    assert!(stale.doctor_report().is_none());
     Ok(())
 }
 
@@ -68,7 +74,7 @@ fn observation_with_cpu(
         .docker_root_total_bytes
         .max(budget.pair().memory_bytes);
     let inspected_host_pid = record.probe_host_pid;
-    Observation::new(
+    Observation::test_new(
         record,
         cpus,
         inspected_host_pid,

@@ -30,6 +30,7 @@ async fn completed_probe_cleans_the_exact_container_before_returning_metrics() -
         &docker.docker,
         &journal,
         &projection,
+        image_evidence(&projection),
         16 * 1024 * 1024 * 1024,
         &Deadline::new(),
     )
@@ -111,6 +112,7 @@ async fn parsed_record_with_wrong_running_pid_is_cleaned_without_observation() -
         &docker.docker,
         &journal,
         &projection,
+        image_evidence(&projection),
         memory_total,
         &Deadline::new(),
     )
@@ -168,6 +170,7 @@ async fn lost_or_invalid_execution_results_cleanup_without_a_permit() -> Result<
                 &docker.docker,
                 &journal,
                 &projection,
+                image_evidence(&projection),
                 16 * 1024 * 1024 * 1024,
                 &Deadline::new(),
             )

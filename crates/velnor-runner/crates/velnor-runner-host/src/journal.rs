@@ -12,12 +12,16 @@ pub(crate) mod capacity_header;
 mod completion;
 mod connection;
 mod doctor_probe;
+pub(crate) mod execution_authorization;
 mod file_identity;
 pub(crate) mod header_authority;
 mod image_import;
 mod launch;
 mod read;
+#[cfg(not(test))]
 pub(in crate::journal) mod request_lifecycle;
+#[cfg(test)]
+pub(crate) mod request_lifecycle;
 mod resource_probe;
 mod scale_set_create;
 mod schema;
@@ -40,19 +44,31 @@ pub(crate) use completion::{
     CleanupClaim, CompletedLaunch, CompletionIdentity, CompletionInboxEntry,
     MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
 };
+pub(crate) use connection::JobFactsPublicationClaim;
+pub(crate) use connection::ListenerDeliveryClaim;
 pub(crate) use connection::{
-    AssignmentIdentity, AssignmentKey, CapacityLimits, ConnectionCompletionInboxEntry,
-    ConnectionJournal, EngineContext, OperationalCapacityLimits, ReservationRequest,
-    ReservationResult, SessionCreateState, SessionRefreshClaim, SourceAuthorizationBinding,
-    StorageAdmission, StorageFilesystemKind, StorageInodePolicy, StorageMedium,
-    StorageMetadataSettlementClaim, StorageObserver, StorageRole,
+    AssignmentIdentity, AssignmentKey, BootstrapContainerCreateClaim, BootstrapStartClaim,
+    BoundJobFactsSnapshot, CapacityLimits, ConnectionCompletionInboxEntry, ConnectionJournal,
+    CreateInterruptionOutcome, EngineContext, OperationalCapacityLimits, RecordedStorageNetwork,
+    RequestPhysicalReservationResult, ReservationRequest, SessionCreateState, SessionRefreshClaim,
+    SourceAuthorizationBinding, StorageAdmissionSample, StorageCleanupIdentity,
+    StorageFilesystemKind, StorageInitializationClaim, StorageInodePolicy, StorageMedium,
+    StorageMetadataSettlementClaim, StorageNetworkCreateClaim, StorageNetworkRemovalClaim,
+    StorageObjectCreateClaim, StorageObserver, StoragePoolLimit, StoragePoolObservation,
+    StorageProfile, StorageProvisioningAdmission, StorageProvisioningMemoryObservation,
+    StorageProvisioningPlan, StorageProvisioningRole, StorageRole, StorageRoleLimit,
+    StorageSampleIdentity, VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
+};
+#[cfg(test)]
+pub(crate) use connection::{CreateCommitStage, arm_create_commit_gate};
+#[cfg(test)]
+pub(crate) use connection::{
+    MetadataSettlementResult, ReservationState, StorageCacheProjection, StorageReservationPlan,
+    StorageRoleCharge,
 };
 #[cfg(test)]
 pub(crate) use connection::{
-    ListenerDeliveryClaim, MetadataSettlementResult, RequestPhysicalReservationResult,
-    ReservationState, StorageAdmissionSample, StorageCacheProjection, StoragePoolLimit,
-    StoragePoolObservation, StorageProfile, StorageProvisioningPlan, StorageReservationPlan,
-    StorageRoleCharge, StorageRoleLimit, StorageSampleIdentity,
+    ReservationResult, StorageAdmission, StorageCleanupCgroup, StorageCleanupMount,
 };
 #[cfg(test)]
 pub(crate) use connection::{
@@ -60,8 +76,10 @@ pub(crate) use connection::{
     fixture_storage_provisioning_admission,
 };
 #[cfg(test)]
+pub(crate) use doctor_probe::DoctorProbeRequestRecord;
 pub(crate) use doctor_probe::{
     DoctorProbeOutcome, DoctorProbePrepareResult, DoctorProbeStartResult, DoctorProbeState,
+    DoctorProbeTicket,
 };
 pub(crate) use image_import::{
     ImageImportDescriptor, ImageImportIdentity, ImageImportInspection, ImageImportObservation,
@@ -76,10 +94,14 @@ pub(crate) use source_authorization::AssignedAcquireResult;
 pub(crate) use source_authorization::SourceAuthorizationResult;
 use sql::{intent_row, one_row, same_ids, token_rejected};
 
-pub(crate) use request_lifecycle::RequestAcquireState;
+pub(crate) use request_lifecycle::{AuthorizedOffer, RequestAcquireState};
 #[cfg(test)]
 pub(crate) use resource_probe::ProbeLeaseState;
-pub(crate) use resource_probe::{ProbePhase, ProbeRow, ProbeSeed};
+pub(crate) use resource_probe::{
+    ExecutionPublicationContext, ExecutionPublicationParent, ExecutionPublicationRecoveryRecord,
+    ExecutionPublicationSeed, HostHelperRole, ProbePhase, ProbeRow, ProbeSeed, ProbeWork,
+    PublicationKind, ResourceProbePurpose,
+};
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -23,6 +23,7 @@ async fn cleanup_timeout_keeps_owned_container_retryable_after_reopen() -> Resul
         &docker.docker,
         &journal,
         &projection,
+        image_evidence(&projection),
         16 * 1024 * 1024 * 1024,
         &Deadline::test_with_timeouts(Duration::from_secs(10), Duration::from_millis(500)),
     )
@@ -118,6 +119,7 @@ async fn held_journal_transition_timeout_sends_no_docker_request() -> Result<(),
         &docker.docker,
         &journal,
         &projection,
+        image_evidence(&projection),
         16 * 1024 * 1024 * 1024,
         &Deadline::test_with_timeouts(Duration::from_millis(40), Duration::from_millis(20)),
     )

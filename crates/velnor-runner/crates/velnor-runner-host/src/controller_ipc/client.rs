@@ -13,10 +13,68 @@ use crate::error::HostError;
 use crate::ipc::{MAX_FRAME, encode_frame};
 
 use super::server::{read_drain_token, valid_token};
-use super::wire::{Request, Response, SOCKET_NAME, Target};
+use super::wire::{DoctorProbeReply, Request, Response, SOCKET_NAME, Target};
 
 const RETRY: Duration = Duration::from_millis(100);
+const CALL_TIMEOUT: Duration = Duration::from_secs(5);
+const DOCTOR_TIMEOUT_MAX: Duration = Duration::from_secs(300);
 const MAX_CONFIG_BYTES: u64 = 1_048_576;
+
+/// Run one bounded Doctor probe through the active controller.
+pub fn run_doctor_probe(state: &Path, timeout: Duration) -> Result<serde_json::Value, HostError> {
+    let mut bytes = [0_u8; 16];
+    getrandom::fill(&mut bytes).map_err(|_| HostError::Identity)?;
+    let nonce = bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let start = doctor_call(
+        state,
+        Request::DoctorProbeStart {
+            nonce: nonce.clone(),
+        },
+    )?;
+    if start.state == "busy" {
+        return Err(HostError::Journal);
+    }
+    let deadline = Instant::now()
+        .checked_add(timeout.min(DOCTOR_TIMEOUT_MAX))
+        .ok_or(HostError::Identity)?;
+    loop {
+        let reply = doctor_call(
+            state,
+            Request::DoctorProbeStatus {
+                nonce: nonce.clone(),
+            },
+        )?;
+        match reply.state.as_str() {
+            "completed" => {
+                if let Some(report) = reply.report {
+                    return Ok(serde_json::json!({
+                        "request_id": reply.request_id,
+                        "state": reply.state,
+                        "report": report,
+                    }));
+                }
+            }
+            "queued" | "running" => {}
+            _ => return Err(HostError::Identity),
+        }
+        if Instant::now() >= deadline {
+            return Err(HostError::Docker);
+        }
+        thread::sleep(RETRY.min(deadline.saturating_duration_since(Instant::now())));
+    }
+}
+
+fn doctor_call(state: &Path, request: Request) -> Result<DoctorProbeReply, HostError> {
+    if !valid_request(&request) {
+        return Err(HostError::Frame);
+    }
+    let path = state.join(SOCKET_NAME);
+    let response = call_socket_response(&path, &request)?;
+    response.doctor_probe.ok_or(HostError::Journal)
+}
 
 /// Wait until the host journal is empty while a matching global drain token stays active.
 ///
@@ -156,12 +214,21 @@ fn marker_for(state: &Path, request: &Request) -> std::path::PathBuf {
         Request::Reactivate { binding, .. } | Request::Detached { binding, .. } => state
             .join("connection-drain")
             .join(binding.connection_id.as_str()),
+        Request::DoctorProbeStart { .. } | Request::DoctorProbeStatus { .. } => {
+            state.join(SOCKET_NAME)
+        }
     }
 }
 
 fn call(state: &Path, request: &Request) -> Result<bool, HostError> {
     if !valid_request(request) {
         return Err(HostError::Frame);
+    }
+    if matches!(
+        request,
+        Request::DoctorProbeStart { .. } | Request::DoctorProbeStatus { .. }
+    ) {
+        return Err(HostError::Lock);
     }
     let path = state.join(SOCKET_NAME);
     match call_socket(&path, request) {
@@ -172,8 +239,20 @@ fn call(state: &Path, request: &Request) -> Result<bool, HostError> {
 }
 
 fn call_socket(path: &Path, request: &Request) -> Result<bool, HostError> {
+    call_socket_response(path, request)?
+        .value
+        .ok_or(HostError::Journal)
+}
+
+fn call_socket_response(path: &Path, request: &Request) -> Result<Response, HostError> {
     validate_socket(path)?;
     let mut stream = UnixStream::connect(path).map_err(|_| HostError::Lock)?;
+    stream
+        .set_read_timeout(Some(CALL_TIMEOUT))
+        .map_err(|_| HostError::Lock)?;
+    stream
+        .set_write_timeout(Some(CALL_TIMEOUT))
+        .map_err(|_| HostError::Lock)?;
     let request = request.encode().map_err(|()| HostError::Frame)?;
     stream
         .write_all(&encode_frame(&request)?)
@@ -183,17 +262,14 @@ fn call_socket(path: &Path, request: &Request) -> Result<bool, HostError> {
         .read_exact(&mut prefix)
         .map_err(|_| HostError::Frame)?;
     let length = usize::try_from(u32::from_be_bytes(prefix)).map_err(|_| HostError::Frame)?;
-    if length == 0 || length > 64 || length > MAX_FRAME {
+    if length == 0 || length > 4096 || length > MAX_FRAME {
         return Err(HostError::Frame);
     }
     let mut bytes = vec![0; length];
     stream
         .read_exact(&mut bytes)
         .map_err(|_| HostError::Frame)?;
-    Response::decode(&bytes)
-        .map_err(|()| HostError::Frame)?
-        .value
-        .ok_or(HostError::Journal)
+    Response::decode(&bytes).map_err(|()| HostError::Frame)
 }
 
 fn validate_socket(path: &Path) -> Result<(), HostError> {
@@ -261,6 +337,12 @@ fn valid_request(request: &Request) -> bool {
         Request::Reactivate { binding, token } | Request::Detached { binding, token } => {
             let _ = binding;
             valid_token(token)
+        }
+        Request::DoctorProbeStart { nonce } | Request::DoctorProbeStatus { nonce } => {
+            nonce.len() == 32
+                && nonce
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
         }
     }
 }

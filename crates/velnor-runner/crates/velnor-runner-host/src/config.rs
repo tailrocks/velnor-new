@@ -14,7 +14,10 @@ mod release_read;
 mod source_policy;
 
 pub use connection::{ConnectionId, RepositoryConnection, ScaleSetSelector};
-pub(crate) use job_authority::ApprovedJobAuthorityPolicy;
+pub(crate) use job_authority::{
+    ApprovedJobAuthorityEntry, ApprovedJobAuthorityPolicy, ApprovedWorkflowSource,
+    JobAuthorityLookup, JobAuthorityRole,
+};
 use release_read::{ReleaseReadConfig, validate_release_read};
 pub use source_policy::{PullRequestRule, SourcePolicy, SourcePolicyMode, WorkflowEvent};
 
@@ -240,6 +243,18 @@ impl HostConfig {
         self.connections
             .iter()
             .find(|connection| &connection.connection_id == id)
+    }
+
+    /// Return one policy from a fully validated host configuration.
+    pub(crate) fn validated_job_authority_policy(
+        &self,
+        id: &ConnectionId,
+    ) -> Result<Option<&ApprovedJobAuthorityPolicy>, HostError> {
+        self.validate()?;
+        Ok(self
+            .job_authority_policies
+            .iter()
+            .find(|policy| policy.connection_id() == id))
     }
 
     /// Add one connection without changing an existing binding.

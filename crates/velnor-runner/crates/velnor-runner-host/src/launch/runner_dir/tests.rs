@@ -21,6 +21,7 @@ fn creds() -> Drive {
         repo: "widget".to_owned(),
         pat: "test-pat".to_owned(),
         connection: None,
+        authority_policy: None,
         host_journal: None,
         scoped_journal: None,
         allocated_header: 0,

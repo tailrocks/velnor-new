@@ -3,12 +3,16 @@
 use bollard::{Docker, models::SystemInfo};
 
 use crate::error::HostError;
-use crate::journal::{Journal, ProbePhase, ProbeRow};
+use crate::journal::{HostHelperRole, Journal, ProbePhase, ProbeRow, ProbeWork};
 
+use super::execute::ProbeCleanupEvidence;
+#[path = "recover/dispatch.rs"]
+mod dispatch;
 use super::inspect;
 use super::lifecycle::Deadline;
 use super::ops;
 use super::projection::{DockerRoot, ProbeProjection, VerifiedProbeImage};
+use dispatch::{ActiveRecoveryTarget, active_recovery_target};
 
 pub(super) async fn active(
     docker: &Docker,
@@ -20,6 +24,13 @@ pub(super) async fn active(
 ) -> Result<(), HostError> {
     if row.phase == ProbePhase::Quarantined {
         return Err(HostError::Ownership);
+    }
+    match active_recovery_target(row.helper_role(), row.work())? {
+        ActiveRecoveryTarget::ResourceProbe => {}
+        ActiveRecoveryTarget::ExecutionPublication => {
+            return super::publication::recover_active(docker, journal, info, root, deadline, &row)
+                .await;
+        }
     }
     let instance_id = deadline.within(journal.instance_id()).await??;
     let engine_id = info.id.as_deref().ok_or(HostError::Identity)?;
@@ -54,7 +65,7 @@ pub(super) async fn cleanup(
     row: &ProbeRow,
     projection: &ProbeProjection,
     deadline: &Deadline,
-) -> Result<(), HostError> {
+) -> Result<ProbeCleanupEvidence, HostError> {
     verify_bound_engine(docker, row, projection, deadline).await?;
     if row.container_id.is_none() {
         return bind_created_by_name(docker, journal, row, projection, deadline).await;
@@ -87,7 +98,7 @@ async fn bind_created_by_name(
     row: &ProbeRow,
     projection: &ProbeProjection,
     deadline: &Deadline,
-) -> Result<(), HostError> {
+) -> Result<ProbeCleanupEvidence, HostError> {
     if row.phase != ProbePhase::CreateRequested {
         return quarantine(journal, row, deadline).await;
     }
@@ -113,17 +124,17 @@ async fn cleanup_recorded(
     row: &ProbeRow,
     projection: &ProbeProjection,
     deadline: &Deadline,
-) -> Result<(), HostError> {
+) -> Result<ProbeCleanupEvidence, HostError> {
     let id = row.container_id.as_deref().ok_or(HostError::Ownership)?;
     let Some(response) = inspect_pair(docker, projection, id, deadline).await? else {
-        retire_exact_absence(docker, journal, row, projection, id, row.phase, deadline).await?;
-        return Ok(());
+        return retire_exact_absence(docker, journal, row, projection, id, row.phase, deadline)
+            .await;
     };
     let phase = if inspect::running(&response) {
-        let Some(phase) = stop_owned(docker, journal, row, projection, id, deadline).await? else {
-            return Ok(());
-        };
-        phase
+        match stop_owned(docker, journal, row, projection, id, deadline).await? {
+            CleanupStep::Removed(evidence) => return Ok(evidence),
+            CleanupStep::Stopped(phase) => phase,
+        }
     } else if !inspect::created(&response) && !inspect::exited(&response) {
         return quarantine(journal, row, deadline).await;
     } else {
@@ -139,7 +150,7 @@ async fn stop_owned(
     projection: &ProbeProjection,
     id: &str,
     deadline: &Deadline,
-) -> Result<Option<ProbePhase>, HostError> {
+) -> Result<CleanupStep, HostError> {
     if row.phase == ProbePhase::RemoveRequested || !supports_stop(row.phase) {
         return quarantine(journal, row, deadline).await;
     }
@@ -156,7 +167,7 @@ async fn stop_owned(
     let _stopped = ops::stop(docker, id, deadline).await;
     verify_bound_engine(docker, row, projection, deadline).await?;
     let Some(response) = inspect_pair(docker, projection, id, deadline).await? else {
-        retire_exact_absence(
+        let evidence = retire_exact_absence(
             docker,
             journal,
             row,
@@ -166,12 +177,12 @@ async fn stop_owned(
             deadline,
         )
         .await?;
-        return Ok(None);
+        return Ok(CleanupStep::Removed(evidence));
     };
     if inspect::running(&response) || !inspect::created_or_exited(&response) {
         return quarantine(journal, row, deadline).await;
     }
-    Ok(Some(ProbePhase::StopRequested))
+    Ok(CleanupStep::Stopped(ProbePhase::StopRequested))
 }
 
 async fn remove_owned(
@@ -182,7 +193,7 @@ async fn remove_owned(
     id: &str,
     phase: ProbePhase,
     deadline: &Deadline,
-) -> Result<(), HostError> {
+) -> Result<ProbeCleanupEvidence, HostError> {
     let removal_phase = if phase == ProbePhase::RemoveRequested {
         ProbePhase::RemoveRequested
     } else {
@@ -231,7 +242,7 @@ async fn retire_exact_absence(
     id: &str,
     phase: ProbePhase,
     deadline: &Deadline,
-) -> Result<(), HostError> {
+) -> Result<ProbeCleanupEvidence, HostError> {
     if phase != ProbePhase::RemoveRequested {
         deadline
             .within(journal.transition_probe(&row.operation_id, phase, ProbePhase::RemoveRequested))
@@ -254,7 +265,16 @@ async fn retire_exact_absence(
     }
     verify_bound_engine(docker, &current, projection, deadline).await?;
     let proof = super::VerifiedProbeCleanup::after_verified_removal(&current, projection, id)?;
-    deadline.within(journal.retire_probe(proof)).await?
+    let evidence = ProbeCleanupEvidence::after_journal_retirement(&proof)?;
+    deadline
+        .within(journal.retire_probe(proof))
+        .await?
+        .map(|()| evidence)
+}
+
+enum CleanupStep {
+    Stopped(ProbePhase),
+    Removed(ProbeCleanupEvidence),
 }
 
 async fn verify_bound_engine(
@@ -304,6 +324,14 @@ async fn inspect_pair(
 }
 
 fn persisted_projection(row: &ProbeRow, root: &DockerRoot) -> Result<ProbeProjection, HostError> {
+    let ProbeWork::ResourceProbe {
+        purpose,
+        request_sha256,
+        ..
+    } = row.work()
+    else {
+        return Err(HostError::Ownership);
+    };
     let mut matched = None;
     for daemon_architecture in ["x86_64", "aarch64"] {
         let image = VerifiedProbeImage::from_journal(
@@ -312,12 +340,14 @@ fn persisted_projection(row: &ProbeRow, root: &DockerRoot) -> Result<ProbeProjec
             row.source_revision.clone(),
             row.image_binding_digest.clone(),
         )?;
-        let projection = ProbeProjection::build(
+        let projection = ProbeProjection::build_from_purpose(
             row.operation_id.clone(),
             row.instance_id.clone(),
             row.engine_id.clone(),
             root.path(),
             image,
+            *purpose,
+            request_sha256.clone(),
         )?;
         if row.projection_digest == projection.projection_digest
             && matched.replace(projection).is_some()
@@ -326,7 +356,8 @@ fn persisted_projection(row: &ProbeRow, root: &DockerRoot) -> Result<ProbeProjec
         }
     }
     let projection = matched.ok_or(HostError::Ownership)?;
-    if row.role != "resource-probe"
+    if row.helper_role() != HostHelperRole::ResourceProbe
+        || row.role != "resource-probe"
         || row.operation_name != projection.name
         || row.projection_digest != projection.projection_digest
     {

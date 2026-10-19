@@ -23,7 +23,7 @@ pub(in crate::journal) fn validate_stored_source(
 pub(crate) enum SourceAuthorizationResult {
     /// The exact verified source was committed for this request.
     Recorded,
-    /// The same exact receipt was already committed for this launch.
+    /// The same request source is already stored.
     Replayed,
 }
 

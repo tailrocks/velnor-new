@@ -2,7 +2,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::config::ConnectionId;
-use crate::journal::{AssignedAcquireResult, RequestAcquireState};
+use crate::journal::{
+    AssignedAcquireResult, CapacityLimits, OperationalCapacityLimits, RequestAcquireState,
+    fixture_provisioning_profile,
+};
 use crate::journal::{AssignmentIdentity, AssignmentKey};
 use crate::launch::inspect_tests::DockerStub;
 use crate::launch::resource_probe::StartPermit;
@@ -11,15 +14,19 @@ use serde_json::json;
 use velnor_runner_github::Method;
 
 use super::super::acquire::{self, AcquireDisposition};
-use super::super::runner;
+use super::super::runner::{self, ReservationOutcome};
 use super::super::validate_scope_binding;
 use support::{
     FakeLane, Fixture, REQUEST_ID, SET_ID, assert_runner_name, docker_identity_stub, exchange,
-    fixture_storage, selected_engine, test_images,
+    fixture_storage, selected_engine, test_images, test_images_for_engine,
 };
 
+#[path = "runner_tests/atomic_acquire.rs"]
+mod atomic_acquire;
 #[path = "runner_tests/docker_pair.rs"]
 mod docker_pair;
+#[path = "runner_tests/provisioning.rs"]
+mod provisioning;
 #[path = "runner_tests/stale_auth.rs"]
 mod stale_auth;
 #[path = "runner_tests/support.rs"]
@@ -113,13 +120,45 @@ async fn acquire_rejects_connection_scale_set_and_request_identity_mismatches_be
 #[tokio::test]
 async fn exact_acquire_jit_and_bounded_docker_preflight_use_one_physical_nonce()
 -> Result<(), String> {
-    let fixture = Fixture::open("scoped-exact").await?;
-    let permit = StartPermit::test_fixture();
-    let storage = fixture_storage(&permit)?;
-    let root_digest = permit.docker_root_digest().to_owned();
-    let physical = runner::reserve(&fixture.scope, permit, storage)
+    const ENGINE_ID: &str = crate::journal::request_lifecycle::tests::helpers::TEST_ENGINE_ID;
+    let fixture = Fixture::open_with_engine("scoped-exact", ENGINE_ID).await?;
+    fixture
+        .journal
+        .configure_capacity_with_operational_limits(
+            CapacityLimits {
+                jobs: 1,
+                cpu_millicores: 4_000,
+                memory_bytes: 32 * 1024 * 1024 * 1024,
+            },
+            OperationalCapacityLimits {
+                cpu_millicores: 1_000,
+                memory_bytes: 256 * 1024 * 1024,
+            },
+        )
         .await
         .map_err(|error| error.to_string())?;
+    let profile = fixture_provisioning_profile();
+    fixture
+        .journal
+        .configure_storage_profile(profile.clone())
+        .await
+        .map_err(|error| error.to_string())?;
+    let permit = StartPermit::test_fixture_with_engine_and_available_memory(
+        &"a".repeat(32),
+        ENGINE_ID,
+        32 * 1024 * 1024 * 1024,
+    );
+    let storage = permit
+        .storage_provisioning_admission(&profile, permit.engine_id(), permit.docker_root_digest())
+        .ok_or_else(|| "the verified test sample did not satisfy storage admission".to_owned())?;
+    let root_digest = permit.docker_root_digest().to_owned();
+    let engine_id = permit.engine_id().to_owned();
+    let reserved = runner::reserve_and_claim(&fixture.scope, permit, storage, &fixture.request)
+        .await
+        .map_err(|error| error.to_string())?;
+    let ReservationOutcome::AcquireClaimed(physical, claim) = reserved else {
+        return Err("the authorized request did not receive one atomic Acquire claim".to_owned());
+    };
     assert_runner_name(&physical.runner_name)?;
 
     let mut lane = FakeLane::new([
@@ -138,7 +177,7 @@ async fn exact_acquire_jit_and_bounded_docker_preflight_use_one_physical_nonce()
         )),
     ]);
     assert_eq!(
-        acquire::run(&mut lane, "queue-token", &fixture.scope, &fixture.request,)
+        acquire::run_claimed(&mut lane, "queue-token", &fixture.scope, claim)
             .await
             .map_err(|error| error.to_string())?,
         AcquireDisposition::Acquired
@@ -152,7 +191,24 @@ async fn exact_acquire_jit_and_bounded_docker_preflight_use_one_physical_nonce()
         Some(RequestAcquireState::Acquired)
     );
 
-    let images = test_images(&root_digest);
+    let nonce = physical
+        .runner_name
+        .strip_prefix('v')
+        .ok_or_else(|| "runner name is missing its version prefix".to_owned())?;
+    crate::journal::request_lifecycle::tests::helpers::provision_acquired_physical_intent(
+        &fixture.scope,
+        &engine_id,
+        physical.assignment.clone(),
+        nonce,
+        physical.reservation_id,
+        physical.intent_id,
+        root_digest.clone(),
+        physical.sample_generation_id.clone(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+
+    let images = test_images_for_engine(ENGINE_ID, &root_digest);
     let selected = selected_engine(&images)?;
     let docker = docker_identity_stub(&images)?;
     let calls = Arc::new(AtomicUsize::new(0));

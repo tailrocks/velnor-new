@@ -12,6 +12,11 @@ use crate::keychain::load_secret;
 pub(crate) struct ReleaseReadSecret(Zeroizing<Vec<u8>>);
 
 impl ReleaseReadSecret {
+    #[cfg(test)]
+    pub(crate) fn test_inert() -> Self {
+        Self(Zeroizing::new(Vec::new()))
+    }
+
     /// Load the dedicated host credential after a check of its configured role.
     ///
     /// # Errors

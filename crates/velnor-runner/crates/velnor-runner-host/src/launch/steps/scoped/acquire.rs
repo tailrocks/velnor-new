@@ -19,6 +19,16 @@ pub(super) enum AcquireDisposition {
     Uncertain,
 }
 
+pub(super) struct ClaimedAcquire {
+    identity: AssignmentIdentity,
+}
+
+impl ClaimedAcquire {
+    pub(super) fn new(identity: AssignmentIdentity) -> Self {
+        Self { identity }
+    }
+}
+
 pub(super) async fn require_authorized(
     scoped: &ConnectionJournal,
     identity: &AssignmentIdentity,
@@ -34,6 +44,7 @@ pub(super) async fn require_authorized(
     }
 }
 
+#[cfg(test)]
 pub(super) async fn run<T>(
     lane: &mut T,
     queue_token: &str,
@@ -98,6 +109,69 @@ where
     }
 }
 
+pub(super) async fn run_claimed<T>(
+    lane: &mut T,
+    queue_token: &str,
+    scoped: &ConnectionJournal,
+    claim: ClaimedAcquire,
+) -> Result<AcquireDisposition, EnsureError>
+where
+    T: Transport + ?Sized,
+{
+    let identity = claim.identity;
+    let request_id = identity.request_id().ok_or(EnsureError::Uncertain)?;
+    let binding = scoped
+        .source_authorization_binding()
+        .await
+        .map_err(super::super::map_journal)?;
+    if identity.connection_id() != scoped.connection_id()
+        || identity.connection_id() != binding.connection_id()
+        || identity.scale_set_id() != binding.scale_set_id()
+        || scoped
+            .request_acquire_state(&identity)
+            .await
+            .map_err(super::super::map_journal)?
+            != Some(RequestAcquireState::Requested)
+    {
+        return Err(EnsureError::Uncertain);
+    }
+    let gate = RefreshGate::new();
+    let refresh_requested = Cell::new(false);
+    let result = acquire(
+        lane,
+        identity.scale_set_id(),
+        &[request_id],
+        &[],
+        queue_token,
+        &gate,
+        || {
+            refresh_requested.set(true);
+            Err::<(), WireError>(WireError::RefreshExhausted)
+        },
+    );
+    let (durable, disposition) = if refresh_requested.get() {
+        (
+            AssignedAcquireResult::Uncertain,
+            AcquireDisposition::Uncertain,
+        )
+    } else {
+        classify(&result, request_id)
+    };
+    scoped
+        .record_request_acquire(&identity, durable)
+        .await
+        .map_err(super::super::map_journal)?;
+    match disposition {
+        AcquireDisposition::Uncertain if refresh_requested.get() => Err(EnsureError::Uncertain),
+        AcquireDisposition::Uncertain => match result {
+            Err(error) => Err(crate::listen::map_listen(error)),
+            Ok(_) => Err(EnsureError::Uncertain),
+        },
+        known => Ok(known),
+    }
+}
+
+#[cfg(test)]
 pub(super) async fn release_unstarted(
     scoped: &ConnectionJournal,
     reservation_id: i64,

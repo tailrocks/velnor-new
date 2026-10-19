@@ -1,4 +1,6 @@
-use crate::journal::{ProbeLeaseState, ProbePhase, ProbeRow};
+use crate::journal::{
+    HostHelperRole, ProbeLeaseState, ProbePhase, ProbeRow, ProbeWork, ResourceProbePurpose,
+};
 use crate::launch::resource_probe::VerifiedProbeCleanup;
 use crate::launch::resource_probe::projection::{ProbeProjection, VerifiedProbeImage};
 
@@ -23,6 +25,12 @@ fn fixture() -> (ProbeRow, ProbeProjection, String) {
         image_binding_digest: "c".repeat(64),
         operation_name: projection.name.clone(),
         role: "resource-probe".to_owned(),
+        helper_role: HostHelperRole::ResourceProbe,
+        work: ProbeWork::ResourceProbe {
+            purpose: ResourceProbePurpose::Capacity,
+            request_sha256: projection.request_sha256.clone(),
+            request_context: None,
+        },
         projection_digest: projection.projection_digest.clone(),
         phase: ProbePhase::RemoveRequested,
         container_id: Some(container_id.clone()),

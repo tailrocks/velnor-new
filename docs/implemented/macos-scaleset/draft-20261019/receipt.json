@@ -1,0 +1,20 @@
+{
+  "completed_utc": "2026-10-19T16:25:42Z",
+  "exit_status": 100,
+  "nextest_run_id": "c57eb12e-d2ac-43e4-bad0-c68b20b8be9c",
+  "tests_run": 1333,
+  "passed": 1226,
+  "failed": 107,
+  "skipped": 0,
+  "sigabrt": 3,
+  "rustc": "1.99.1 (58cf8f9c3 2026-10-13)",
+  "mbx": "1.24.1",
+  "nextest": "0.9.148 (cd1d6d5467322dbc0d39a80cb671d000ac302798)",
+  "host": "macOS 27.0.1 arm64",
+  "rust_min_stack": "unset",
+  "source_manifest_sha256": "fbed1749b1cf63fd7dbe04197bf4e6a6af3a131952066491571063119ba47a97",
+  "intent_sha256": "9c3d47a9a1230e4c805fabc805afd80e65c51c4c07459ab32e2410f5f82bc0db",
+  "log_sha256": "d99e74275931d4d01cfe5be2e6b71bb6f5036b7e73bda60d9af35e94bf7daddf",
+  "result": "FAIL",
+  "diagnostic": "Full nested runner workspace Nextest run. No filters. No fail-fast."
+}

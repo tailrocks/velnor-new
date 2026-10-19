@@ -84,3 +84,7 @@ async fn capacity_rows_in_snapshot(
     }
     Ok(out)
 }
+
+#[cfg(test)]
+#[path = "read_tests.rs"]
+mod tests;

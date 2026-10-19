@@ -4,7 +4,9 @@ use crate::config::RepositoryConnection;
 use crate::config_test_support::{basic_connection, host_config};
 use crate::{HostConfig, HostError};
 
-use super::loop_driver::{TransitionEffects, apply_config_transition, retire_pending};
+use super::loop_driver::{
+    TransitionEffects, apply_config_transition, requested_header_capacity, retire_pending,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Event {
@@ -253,5 +255,47 @@ fn stable_connection_id_cannot_change_binding_or_engine() -> Result<(), HostErro
         Err(HostError::Config)
     );
     assert!(effects.events.is_empty());
+    Ok(())
+}
+
+#[test]
+fn session_header_targets_share_the_configured_job_budget() -> Result<(), HostError> {
+    let config = HostConfig::parse(&host_config(
+        &[
+            basic_connection("essential", 101, "owner/one", "one", "one-set"),
+            basic_connection("chainargos", 202, "owner/two", "two", "two-set"),
+            basic_connection("third", 303, "owner/three", "three", "three-set"),
+        ],
+        5,
+    ))?;
+    let targets = config
+        .connections()
+        .iter()
+        .map(|binding| requested_header_capacity(&config, binding))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    assert_eq!(targets, [2, 2, 1]);
+    assert_eq!(targets.iter().sum::<u32>(), config.max_jobs());
+    Ok(())
+}
+
+#[test]
+fn session_header_targets_allow_zero_when_connections_exceed_capacity() -> Result<(), HostError> {
+    let config = HostConfig::parse(&host_config(
+        &[
+            basic_connection("essential", 101, "owner/one", "one", "one-set"),
+            basic_connection("chainargos", 202, "owner/two", "two", "two-set"),
+            basic_connection("third", 303, "owner/three", "three", "three-set"),
+        ],
+        2,
+    ))?;
+    let targets = config
+        .connections()
+        .iter()
+        .map(|binding| requested_header_capacity(&config, binding))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    assert_eq!(targets, [1, 1, 0]);
+    assert_eq!(targets.iter().sum::<u32>(), config.max_jobs());
     Ok(())
 }

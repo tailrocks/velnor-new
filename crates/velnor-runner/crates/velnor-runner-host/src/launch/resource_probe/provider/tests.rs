@@ -7,6 +7,7 @@ use bollard::models::{ContainerConfig, SystemInfo};
 use crate::journal::{ImageImportState, Journal};
 use crate::launch_harness::Scratch;
 
+use super::gh::VerifiedWorkspaceCleanup;
 use super::release::PreparedRelease;
 use super::selected_daemon;
 use super::{ProviderFailure, ReleaseImageProvider, build_pin_status};
@@ -38,6 +39,7 @@ fn prepared_release(source_revision: &str) -> PreparedRelease {
         load_archive_sha256: "1".repeat(64),
         load_archive_index_digest: "2".repeat(64),
         image_reference: format!("velnor-resource-probe:v{source_revision}-{archive_sha256}"),
+        workspace_cleanup: VerifiedWorkspaceCleanup::test_fixture(),
     }
 }
 

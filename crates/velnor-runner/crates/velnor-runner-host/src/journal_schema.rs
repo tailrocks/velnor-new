@@ -6,6 +6,10 @@ use uuid::Uuid;
 use crate::error::HostError;
 
 mod resource_probe;
+mod revision_triggers;
+pub(super) use revision_triggers::{
+    install_v18_revision_triggers, install_v20_revision_triggers, validate_v20_revision_triggers,
+};
 
 /// Run the extended-schema statements inside the caller's transaction.
 ///
@@ -172,6 +176,9 @@ async fn drop_revision_triggers(connection: &Connection) -> Result<(), HostError
         "doctor_probe_requests_revision_insert",
         "doctor_probe_requests_revision_update",
         "doctor_probe_requests_revision_delete",
+        "storage_initialization_revision_insert",
+        "storage_initialization_revision_update",
+        "storage_initialization_revision_delete",
         "journal_lineage_revision",
     ] {
         connection
@@ -214,26 +221,6 @@ pub(super) async fn install_revision_triggers(connection: &Connection) -> Result
         "CREATE TRIGGER IF NOT EXISTS connection_launch_recovery_revision_update AFTER UPDATE ON connection_launch_recovery BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER IF NOT EXISTS connection_launch_recovery_revision_delete AFTER DELETE ON connection_launch_recovery BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER journal_lineage_revision AFTER UPDATE OF instance_id, engine_id, lineage_pinned ON journal_meta WHEN OLD.instance_id IS NOT NEW.instance_id OR OLD.engine_id IS NOT NEW.engine_id OR OLD.lineage_pinned IS NOT NEW.lineage_pinned BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
-    ] {
-        connection
-            .execute(statement, ())
-            .await
-            .map_err(|_| HostError::Journal)?;
-    }
-    Ok(())
-}
-
-/// Install revision triggers introduced in schema v18 after their tables exist.
-pub(super) async fn install_v18_revision_triggers(
-    connection: &Connection,
-) -> Result<(), HostError> {
-    for statement in [
-        "CREATE TRIGGER IF NOT EXISTS connection_request_reservations_revision_insert AFTER INSERT ON connection_request_reservations BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
-        "CREATE TRIGGER IF NOT EXISTS connection_request_reservations_revision_update AFTER UPDATE ON connection_request_reservations BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
-        "CREATE TRIGGER IF NOT EXISTS connection_request_reservations_revision_delete AFTER DELETE ON connection_request_reservations BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
-        "CREATE TRIGGER IF NOT EXISTS doctor_probe_requests_revision_insert AFTER INSERT ON doctor_probe_requests BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
-        "CREATE TRIGGER IF NOT EXISTS doctor_probe_requests_revision_update AFTER UPDATE ON doctor_probe_requests BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
-        "CREATE TRIGGER IF NOT EXISTS doctor_probe_requests_revision_delete AFTER DELETE ON doctor_probe_requests BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
     ] {
         connection
             .execute(statement, ())

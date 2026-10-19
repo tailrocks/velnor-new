@@ -113,6 +113,7 @@ impl ConnectionJournal {
             };
             if !hold_is_claimable(&context)
                 || !objects_are_created(connection, reservation_id).await?
+                || !super::initialization::ready_for_job_create(connection, reservation_id).await?
             {
                 return Ok(None);
             }
@@ -252,6 +253,7 @@ impl ConnectionJournal {
             };
             if !hold_is_claimable(&context)
                 || !objects_are_created(connection, reservation_id).await?
+                || !super::initialization::ready_for_job_create(connection, reservation_id).await?
             {
                 return Ok(None);
             }

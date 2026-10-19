@@ -12,7 +12,6 @@ use super::TIMEOUT;
 pub(in crate::launch) struct DockerResponse {
     status: Option<u16>,
     body: Vec<u8>,
-    hang: bool,
     delay: Duration,
 }
 
@@ -46,7 +45,6 @@ impl DockerStub {
                         let response = responses.next().unwrap_or(DockerResponse {
                                 status: Some(500),
                                 body: br#"{"message":"unexpected Docker request"}"#.to_vec(),
-                                hang: false,
                                 delay: Duration::ZERO,
                             });
                         send_response(&mut stream, &response).await?;
@@ -130,7 +128,6 @@ pub(in crate::launch) fn http(status: u16, body: &str) -> DockerResponse {
     DockerResponse {
         status: Some(status),
         body: body.as_bytes().to_vec(),
-        hang: false,
         delay: Duration::ZERO,
     }
 }
@@ -139,7 +136,6 @@ pub(in crate::launch) fn raw_http(status: u16, body: Vec<u8>) -> DockerResponse 
     DockerResponse {
         status: Some(status),
         body,
-        hang: false,
         delay: Duration::ZERO,
     }
 }
@@ -148,7 +144,6 @@ pub(in crate::launch) fn delayed_http(status: u16, body: &str, delay: Duration) 
     DockerResponse {
         status: Some(status),
         body: body.as_bytes().to_vec(),
-        hang: false,
         delay,
     }
 }
@@ -157,24 +152,11 @@ pub(in crate::launch) fn closed() -> DockerResponse {
     DockerResponse {
         status: None,
         body: Vec::new(),
-        hang: false,
-        delay: Duration::ZERO,
-    }
-}
-
-pub(in crate::launch) fn hanging() -> DockerResponse {
-    DockerResponse {
-        status: None,
-        body: Vec::new(),
-        hang: true,
         delay: Duration::ZERO,
     }
 }
 
 async fn send_response(stream: &mut UnixStream, response: &DockerResponse) -> Result<(), String> {
-    if response.hang {
-        std::future::pending::<()>().await;
-    }
     tokio::time::sleep(response.delay).await;
     let Some(status) = response.status else {
         return Ok(());

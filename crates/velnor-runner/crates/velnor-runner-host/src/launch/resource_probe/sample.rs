@@ -1,12 +1,21 @@
 //! Non-serializable results scoped to one completed probe transaction.
 
+mod production_profile;
+mod storage_admission;
+mod witness;
+pub(in crate::launch) use production_profile::retained_tmpfs_bytes;
+pub(in crate::launch) use storage_admission::filesystem_instance_digest;
+pub(crate) use witness::StartObservationWitness;
+#[cfg(test)]
+mod storage_admission_tests;
+
 #[cfg(test)]
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::launch::pressure::Sample;
 use crate::worker::ResourceBudget;
 
+use super::ProbeStartupEvidence;
 use super::record::ProbeRecord;
 
 const MAX_OBSERVATION_AGE: Duration = Duration::from_secs(30);
@@ -16,10 +25,12 @@ pub(super) struct Observation {
     record: ProbeRecord,
     cpus: u32,
     effective_cpu_millicores: u64,
+    memory_total_bytes: u64,
     engine_id: String,
     docker_root_digest: String,
     sample_generation_id: String,
     observed_at: Instant,
+    startup_evidence: ProbeStartupEvidence,
 }
 
 impl Observation {
@@ -32,6 +43,7 @@ impl Observation {
         docker_root_digest: String,
         sample_generation_id: String,
         observed_at: Instant,
+        startup_evidence: ProbeStartupEvidence,
     ) -> Option<Self> {
         let effective_cpu_millicores = record.effective_cpu_millicores(cpus)?;
         (cpus > 0
@@ -41,16 +53,73 @@ impl Observation {
             && memory_total_bytes > 0
             && record.memory_available_bytes <= memory_total_bytes
             && !engine_id.is_empty()
+            && startup_evidence.cleanup().operation_id() == sample_generation_id
+            && startup_evidence.cleanup().engine_id() == engine_id
+            && startup_evidence.cleanup().docker_root_digest() == docker_root_digest
+            && startup_evidence.cleanup().operation_name()
+                == format!("velnor-resource-probe-{sample_generation_id}")
+            && !startup_evidence.cleanup().container_id().is_empty()
             && valid_generation_id(&sample_generation_id))
         .then_some(Self {
             record,
             cpus,
             effective_cpu_millicores,
+            memory_total_bytes,
             engine_id,
             docker_root_digest,
             sample_generation_id,
             observed_at,
+            startup_evidence,
         })
+    }
+
+    #[cfg(test)]
+    pub(super) fn test_new(
+        record: ProbeRecord,
+        cpus: u32,
+        inspected_host_pid: u32,
+        memory_total_bytes: u64,
+        engine_id: String,
+        docker_root_digest: String,
+        sample_generation_id: String,
+        observed_at: Instant,
+    ) -> Option<Self> {
+        let evidence = ProbeStartupEvidence::test_fixture(
+            &sample_generation_id,
+            &engine_id,
+            &docker_root_digest,
+        );
+        Self::new(
+            record,
+            cpus,
+            inspected_host_pid,
+            memory_total_bytes,
+            engine_id,
+            docker_root_digest,
+            sample_generation_id,
+            observed_at,
+            evidence,
+        )
+    }
+
+    pub(super) fn startup_evidence(&self) -> &ProbeStartupEvidence {
+        &self.startup_evidence
+    }
+
+    pub(super) fn engine_id(&self) -> &str {
+        &self.engine_id
+    }
+
+    pub(super) fn docker_root_digest(&self) -> &str {
+        &self.docker_root_digest
+    }
+
+    pub(super) fn sample_generation_id(&self) -> &str {
+        &self.sample_generation_id
+    }
+
+    pub(super) const fn memory_total_bytes(&self) -> u64 {
+        self.memory_total_bytes
     }
 
     pub(super) fn is_recent_at(&self, now: Instant) -> bool {
@@ -63,12 +132,19 @@ impl Observation {
         self.observed_at
     }
 
-    pub(super) fn pressure(self) -> Option<Sample> {
-        self.is_recent_at(Instant::now()).then_some(Sample {
-            load_millis: u32::try_from(self.record.load_milli).unwrap_or(u32::MAX),
-            ncpu: self.cpus,
-            mem_available: self.record.memory_available_bytes,
-            disk_free: self.record.docker_root_free_bytes,
+    pub(super) fn doctor_report(&self) -> Option<serde_json::Value> {
+        self.is_recent_at(Instant::now()).then(|| {
+            serde_json::json!({
+                "engine_id": &self.engine_id,
+                "docker_root_digest": &self.docker_root_digest,
+                "sample_generation_id": &self.sample_generation_id,
+                "cpu_count": self.cpus,
+                "cpu_millicores": self.effective_cpu_millicores,
+                "memory_total_bytes": self.memory_total_bytes,
+                "memory_available_bytes": self.record.memory_available_bytes,
+                "docker_root_free_bytes": self.record.docker_root_free_bytes,
+                "load_milli": self.record.load_milli,
+            })
         })
     }
 
@@ -86,6 +162,7 @@ impl Observation {
                 observation: self,
                 cpu_millicores: pair.cpu_millicores,
                 memory_bytes: pair.memory_bytes,
+                budget,
             })
     }
 }
@@ -95,9 +172,37 @@ pub(crate) struct StartPermit {
     observation: Observation,
     cpu_millicores: u64,
     memory_bytes: u64,
+    budget: ResourceBudget,
 }
 
 impl StartPermit {
+    pub(crate) const fn resource_budget(&self) -> ResourceBudget {
+        self.budget
+    }
+
+    pub(crate) fn storage_profile(
+        &self,
+        images: &crate::launch::VerifiedWorkerImages,
+        budget: ResourceBudget,
+        max_jobs: u32,
+    ) -> Option<crate::journal::StorageProfile> {
+        production_profile::build(&self.observation, images, budget, max_jobs)
+            .map(production_profile::StartupStorageProfile::into_profile)
+    }
+
+    pub(crate) fn storage_provisioning_admission(
+        &self,
+        profile: &crate::journal::StorageProfile,
+        expected_engine_id: &str,
+        expected_docker_root_digest: &str,
+    ) -> Option<crate::journal::StorageProvisioningAdmission> {
+        self.observation.storage_provisioning_admission(
+            profile,
+            expected_engine_id,
+            expected_docker_root_digest,
+        )
+    }
+
     pub(super) fn consume(self, current_engine_id: &str, current_root_digest: &str) -> bool {
         self.is_valid_at(current_engine_id, current_root_digest, Instant::now())
     }
@@ -126,12 +231,13 @@ impl StartPermit {
     /// Preserve this sample's identity and freshness for effects after admission.
     #[must_use]
     pub(crate) fn observation_witness(&self) -> StartObservationWitness {
-        StartObservationWitness {
-            engine_id: self.observation.engine_id.clone(),
-            docker_root_digest: self.observation.docker_root_digest.clone(),
-            sample_generation_id: self.observation.sample_generation_id.clone(),
-            observed_at: self.observation.observed_at,
-        }
+        StartObservationWitness::from_observation(
+            &self.observation.record,
+            self.observation.engine_id.clone(),
+            self.observation.docker_root_digest.clone(),
+            self.observation.sample_generation_id.clone(),
+            self.observation.observed_at,
+        )
     }
 
     #[cfg(test)]
@@ -169,19 +275,55 @@ impl StartPermit {
         let docker_root_digest = super::projection::DockerRoot::parse("/var/lib/docker")
             .map(|root| root.digest().to_owned())
             .unwrap_or_default();
+        let startup_evidence =
+            ProbeStartupEvidence::test_fixture(generation, "test-engine", &docker_root_digest);
         StartPermit {
             observation: Observation {
                 record: super::record::fixture_record(),
                 cpus: 1,
                 effective_cpu_millicores: 1_000,
+                memory_total_bytes: 64 * 1024 * 1024 * 1024,
                 engine_id: "test-engine".to_owned(),
                 docker_root_digest,
                 sample_generation_id: generation.to_owned(),
                 observed_at: Instant::now(),
+                startup_evidence,
             },
             cpu_millicores: 2_000,
             memory_bytes: 8 * 1024 * 1024 * 1024,
+            budget: crate::worker::ResourceBudgetConfig {
+                runner_cpu_millicores: 1_000,
+                runner_memory_bytes: 4 * 1024 * 1024 * 1024,
+                dind_cpu_millicores: 1_000,
+                dind_memory_bytes: 4 * 1024 * 1024 * 1024,
+                operational_memory_reserve_bytes: 1,
+            }
+            .validate()
+            .expect("valid fixture budget"),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_fixture_with_available_memory(
+        generation: &str,
+        available_memory_bytes: u64,
+    ) -> Self {
+        let mut permit = Self::test_fixture_with_generation(generation);
+        assert!(available_memory_bytes <= permit.observation.memory_total_bytes);
+        permit.observation.record.memory_available_bytes = available_memory_bytes;
+        permit
+    }
+
+    #[cfg(test)]
+    pub(crate) fn test_fixture_with_engine_and_available_memory(
+        generation: &str,
+        engine_id: &str,
+        available_memory_bytes: u64,
+    ) -> Self {
+        let mut permit = Self::test_fixture_with_engine_id(generation, engine_id);
+        assert!(available_memory_bytes <= permit.observation.memory_total_bytes);
+        permit.observation.record.memory_available_bytes = available_memory_bytes;
+        permit
     }
 
     #[cfg(test)]
@@ -191,121 +333,32 @@ impl StartPermit {
         let docker_root_digest = super::projection::DockerRoot::parse("/var/lib/docker")
             .map(|root| root.digest().to_owned())
             .unwrap_or_default();
+        let startup_evidence =
+            ProbeStartupEvidence::test_fixture(generation, engine_id, &docker_root_digest);
         StartPermit {
             observation: Observation {
                 record: super::record::fixture_record(),
                 cpus: 1,
                 effective_cpu_millicores: 1_000,
+                memory_total_bytes: 64 * 1024 * 1024 * 1024,
                 engine_id: engine_id.to_owned(),
                 docker_root_digest,
                 sample_generation_id: generation.to_owned(),
                 observed_at: Instant::now(),
+                startup_evidence,
             },
             cpu_millicores: 2_000,
             memory_bytes: 8 * 1024 * 1024 * 1024,
+            budget: crate::worker::ResourceBudgetConfig {
+                runner_cpu_millicores: 1_000,
+                runner_memory_bytes: 4 * 1024 * 1024 * 1024,
+                dind_cpu_millicores: 1_000,
+                dind_memory_bytes: 4 * 1024 * 1024 * 1024,
+                operational_memory_reserve_bytes: 1,
+            }
+            .validate()
+            .expect("valid fixture budget"),
         }
-    }
-}
-
-/// Freshness evidence for a charged capacity reservation; it cannot reserve more capacity.
-#[derive(Debug, Clone)]
-pub(crate) struct StartObservationWitness {
-    engine_id: String,
-    docker_root_digest: String,
-    sample_generation_id: String,
-    observed_at: Instant,
-}
-
-impl StartObservationWitness {
-    /// Whether the original sample remains fresh for this exact engine and Docker root.
-    #[must_use]
-    pub(crate) fn is_fresh_for(
-        &self,
-        engine_id: &str,
-        docker_root_digest: &str,
-        sample_generation_id: &str,
-    ) -> bool {
-        self.engine_id == engine_id
-            && self.docker_root_digest == docker_root_digest
-            && self.sample_generation_id == sample_generation_id
-            && self.observed_at.elapsed() <= MAX_OBSERVATION_AGE
-    }
-
-    #[cfg(test)]
-    pub(crate) fn test_fixture_for(
-        engine_id: &str,
-        docker_root_digest: &str,
-        stale: bool,
-    ) -> (Self, String) {
-        static NEXT_GENERATION: AtomicU64 = AtomicU64::new(0);
-        let generation = format!("{:032x}", NEXT_GENERATION.fetch_add(1, Ordering::Relaxed));
-        let mut observed_at = Instant::now();
-        if stale {
-            observed_at -= MAX_OBSERVATION_AGE + Duration::from_millis(1);
-        }
-        (
-            Self {
-                engine_id: engine_id.to_owned(),
-                docker_root_digest: docker_root_digest.to_owned(),
-                sample_generation_id: generation.clone(),
-                observed_at,
-            },
-            generation,
-        )
-    }
-
-    #[cfg(test)]
-    fn is_fresh_at(
-        &self,
-        engine_id: &str,
-        root_digest: &str,
-        generation_id: &str,
-        now: Instant,
-    ) -> bool {
-        self.engine_id == engine_id
-            && self.docker_root_digest == root_digest
-            && self.sample_generation_id == generation_id
-            && now
-                .checked_duration_since(self.observed_at)
-                .is_some_and(|age| age <= MAX_OBSERVATION_AGE)
-    }
-}
-
-#[cfg(test)]
-mod witness_tests {
-    use std::time::{Duration, Instant};
-
-    use super::StartPermit;
-
-    #[test]
-    fn observation_witness_is_bound_to_one_sample_and_selected_engine() -> Result<(), String> {
-        let permit = StartPermit::test_fixture_with_generation(&"a".repeat(32));
-        let root = permit.docker_root_digest().to_owned();
-        let witness = permit.observation_witness();
-        assert!(witness.is_fresh_for("test-engine", &root, &"a".repeat(32)));
-        assert!(!witness.is_fresh_for("other-engine", &root, &"a".repeat(32)));
-        assert!(!witness.is_fresh_for("test-engine", &"b".repeat(64), &"a".repeat(32)));
-        assert!(!witness.is_fresh_for("test-engine", &root, &"c".repeat(32)));
-        Ok(())
-    }
-
-    #[test]
-    fn observation_witness_expires_without_authorizing_a_new_reservation() -> Result<(), String> {
-        let permit = StartPermit::test_fixture_with_generation(&"d".repeat(32));
-        let root = permit.docker_root_digest().to_owned();
-        let witness = permit.observation_witness();
-        let stale = witness
-            .observed_at
-            .checked_add(Duration::from_millis(30_001))
-            .ok_or_else(|| "could not construct expiry instant".to_owned())?;
-        assert!(!witness.is_fresh_at("test-engine", &root, &"d".repeat(32), stale));
-        assert!(!witness.is_fresh_at(
-            "test-engine",
-            &root,
-            &"d".repeat(32),
-            Instant::now() - Duration::from_millis(30_001)
-        ));
-        Ok(())
     }
 }
 

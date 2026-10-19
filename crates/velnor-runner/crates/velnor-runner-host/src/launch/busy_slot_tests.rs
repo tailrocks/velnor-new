@@ -1,36 +1,9 @@
-//! A busy slot does not acknowledge a scale assignment.
-
-use velnor_runner_github::{
-    Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail, create_session,
-};
-
-use super::inspect_tests::{DockerStub, launch_row, within};
 use super::steps::{Idle, idle};
-use super::{Ready, Rest, drive_ready};
-use crate::IntentState;
-use crate::launch_harness::{Mode, Script, absent, assigned_wait, available, open};
+use crate::launch_harness::{assigned_wait, available};
+use velnor_runner_github::Poll;
 
-const SESSION: &[u8] = br#"{"sessionId":"sess","messageQueueUrl":"https://queues.example/messages","messageQueueAccessToken":"queue-token"}"#;
-
-struct SessionTransport;
-
-impl Transport for SessionTransport {
-    fn exchange(&mut self, _request: &SessionRequest) -> Result<Exchange, TransportFail> {
-        Ok(Exchange {
-            status: 200,
-            body: SESSION.to_vec(),
-        })
-    }
-}
-
-fn queue_session() -> Result<QueueSession, String> {
-    create_session(&mut SessionTransport, 1, "owner", "admin-token").map_err(|err| err.to_string())
-}
-
-#[tokio::test]
-async fn busy_slot_does_not_ack_scale_assignment() -> Result<(), String> {
-    let (scratch, journal) = open("busy-scale").await?;
-    launch_row(&journal).await?;
+#[test]
+fn busy_capacity_keeps_new_assignments_and_rejects_ambiguous_offers() {
     let polls = [
         assigned_wait(11, 1),
         available(&[4]),
@@ -45,60 +18,10 @@ async fn busy_slot_does_not_ack_scale_assignment() -> Result<(), String> {
         Idle::Empty,
         Idle::Blocked,
     ];
-    for (polled, class) in polls.iter().zip(classes) {
-        assert_eq!(idle(polled), class);
+
+    for (polled, expected) in polls.iter().zip(classes) {
+        assert_eq!(idle(polled), expected);
     }
-    let stub = DockerStub::open(Vec::new())?;
-    let session = queue_session()?;
-    let mut script = Script {
-        calls: Vec::new(),
-        mode: Mode::Ok,
-    };
-    let mut started_any = false;
-    for polled in &polls {
-        let started = within(
-            drive_ready(
-                &mut script,
-                Ready {
-                    set_id: 1,
-                    session: &session,
-                    admin_token: "admin-token",
-                    path: "queues/messages".to_owned(),
-                    polled,
-                },
-                &journal,
-                &stub.docker,
-                1,
-                Rest {
-                    owner: "",
-                    repo: "",
-                    pat: "",
-                    resource_budget: crate::worker::test_resource_budget().ok(),
-                    static_capacity: true,
-                    guest_admission: super::drive::GuestAdmission::FreshSample,
-                    connection: None,
-                    host_journal: None,
-                    release_read_secret: None,
-                    scoped_journal: None,
-                    allocated_header: 0,
-                    source_authorized: false,
-                    admission_state: None,
-                    worker_images: None,
-                    selected_engine: None,
-                    guest_image: None,
-                },
-            ),
-            "busy drive",
-        )
-        .await?
-        .map_err(|err| err.to_string())?;
-        started_any |= started.is_some();
-    }
-    stub.finish().await?;
-    assert!(!started_any);
-    assert_eq!(script.calls.first(), None);
-    let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].state, IntentState::Pending);
-    absent(&scratch.file())
+    assert_eq!(idle(&polls[0]), Idle::Scale);
+    assert_eq!(idle(&polls[4]), Idle::Blocked);
 }

@@ -51,8 +51,10 @@ pub(crate) fn test_observed_storage_attachment(
     container_id: Option<String>,
     target: String,
     source_target: Option<String>,
+    mount_root: String,
     read_only: bool,
     mount_id: u64,
+    statx_inode: u64,
     device: (u32, u32),
     statx_device: (u32, u32),
     fs_type_magic: u64,
@@ -72,8 +74,10 @@ pub(crate) fn test_observed_storage_attachment(
     };
     if !container_valid
         || source_target.as_deref() != contract.source_target
+        || !valid_mount_root(&mount_root, contract.volume_subpath)
         || read_only != contract.read_only
         || mount_id == 0
+        || statx_inode == 0
         || !valid_digest(&filesystem_instance_digest)
         || (device == (0, 0) && statx_device == (0, 0))
         || (fs_type_magic == 0)
@@ -87,8 +91,11 @@ pub(crate) fn test_observed_storage_attachment(
         container_id,
         target,
         source_target,
+        volume_subpath: contract.volume_subpath.map(str::to_owned),
+        mount_root,
         read_only,
         mount_id,
+        statx_inode,
         device_major: device.0,
         device_minor: device.1,
         statx_device_major: statx_device.0,
@@ -96,6 +103,27 @@ pub(crate) fn test_observed_storage_attachment(
         fs_type_magic,
         filesystem_id,
         filesystem_instance_digest,
+    })
+}
+
+fn valid_mount_root(value: &str, volume_subpath: Option<&str>) -> bool {
+    if value == "/" {
+        return volume_subpath.is_none();
+    }
+    if value.is_empty()
+        || value.len() > 1024
+        || !value.starts_with('/')
+        || value.bytes().any(|byte| byte.is_ascii_control())
+        || value
+            .split('/')
+            .any(|component| component == "." || component == "..")
+    {
+        return false;
+    }
+    volume_subpath.is_none_or(|subpath| {
+        value
+            .strip_suffix(subpath)
+            .is_some_and(|prefix| prefix.ends_with('/') && !prefix.is_empty())
     })
 }
 
@@ -138,12 +166,61 @@ pub(crate) fn test_verified_storage_resource_binding(
     profile_digest: String,
     runner_container_id: String,
     dind_container_id: String,
+    connection_id: String,
     instance_binding_digest: String,
     roles: Vec<ObservedStorageRole>,
     attachments: Vec<ObservedStorageAttachment>,
     cgroups: Vec<ObservedContainerCgroup>,
     guest_boot_id: String,
 ) -> Result<super::VerifiedStorageResourceBinding, HostError> {
+    let root_backings = [
+        (
+            StorageRole::RunnerRoot,
+            StorageObserver::Runner,
+            &runner_container_id,
+        ),
+        (
+            StorageRole::DindRoot,
+            StorageObserver::Dind,
+            &dind_container_id,
+        ),
+    ]
+    .into_iter()
+    .map(|(role, observer, container_id)| {
+        let attachment = attachments
+            .iter()
+            .find(|attachment| {
+                attachment.role() == role
+                    && attachment.observer() == observer
+                    && attachment.target() == "/"
+                    && attachment.container_id() == Some(container_id.as_str())
+            })
+            .ok_or(HostError::Journal)?;
+        let capacity_digest = roles
+            .iter()
+            .find(|observed| observed.role() == role)
+            .ok_or(HostError::Journal)?
+            .filesystem_instance_digest();
+        Ok(super::VerifiedRootBackingMapping::test_fixture(
+            reservation_id,
+            operation_id,
+            &connection_id,
+            &engine_id,
+            &docker_root_digest,
+            &sample_generation_id,
+            role,
+            container_id,
+            if observer == StorageObserver::Runner {
+                "runner-image-runtime"
+            } else {
+                "dind-image-runtime"
+            },
+            &"a".repeat(40),
+            attachment,
+            capacity_digest,
+        ))
+    })
+    .collect::<Result<Vec<_>, HostError>>()?;
     let binding = super::VerifiedStorageResourceBinding {
         reservation_id,
         operation_id,
@@ -158,6 +235,7 @@ pub(crate) fn test_verified_storage_resource_binding(
         roles,
         attachments,
         cgroups,
+        root_backings,
         guest_boot_id,
     };
     super::validation::validate_storage_resource_binding(&binding)?;
@@ -239,8 +317,10 @@ mod tests {
             None,
             "/velnor/docker-root".to_owned(),
             Some("/var/lib/docker".to_owned()),
+            "/".to_owned(),
             true,
             237,
+            1237,
             (0, 38),
             (0, 41),
             BTRFS_SUPER_MAGIC,
@@ -255,8 +335,10 @@ mod tests {
             None,
             "/velnor/docker-root".to_owned(),
             Some("/tmp/docker".to_owned()),
+            "/".to_owned(),
             true,
             237,
+            1237,
             (0, 38),
             (0, 41),
             BTRFS_SUPER_MAGIC,
@@ -274,8 +356,10 @@ mod tests {
             Some("b".repeat(64)),
             "/".to_owned(),
             Some("/var/lib/docker".to_owned()),
+            "/".to_owned(),
             true,
             12,
+            1012,
             (0, 41),
             (0, 41),
             BTRFS_SUPER_MAGIC,
@@ -283,5 +367,44 @@ mod tests {
             "a".repeat(64),
         );
         assert!(attachment.is_err());
+    }
+
+    #[test]
+    fn metadata_attachment_requires_its_exact_subpath_root() {
+        let valid = test_observed_storage_attachment(
+            StorageRole::EngineMetadata,
+            StorageObserver::Runner,
+            Some("b".repeat(64)),
+            "/.velnor-runtime-identity".to_owned(),
+            None,
+            "/volume/runtime-identity".to_owned(),
+            true,
+            12,
+            1012,
+            (0, 41),
+            (0, 41),
+            BTRFS_SUPER_MAGIC,
+            12,
+            "a".repeat(64),
+        );
+        assert!(valid.is_ok());
+
+        let wrong_root = test_observed_storage_attachment(
+            StorageRole::EngineMetadata,
+            StorageObserver::Runner,
+            Some("b".repeat(64)),
+            "/.velnor-runtime-identity".to_owned(),
+            None,
+            "/volume/job-facts".to_owned(),
+            true,
+            12,
+            1012,
+            (0, 41),
+            (0, 41),
+            BTRFS_SUPER_MAGIC,
+            12,
+            "a".repeat(64),
+        );
+        assert!(wrong_root.is_err());
     }
 }

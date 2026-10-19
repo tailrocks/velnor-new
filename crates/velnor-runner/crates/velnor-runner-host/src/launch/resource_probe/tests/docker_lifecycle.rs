@@ -1,13 +1,14 @@
 use serde_json::json;
 
 use crate::error::HostError;
-use crate::journal::{Journal, ProbeSeed};
+use crate::journal::{Journal, ProbeSeed, ResourceProbePurpose};
 use crate::launch::inspect_tests::{DockerResponse, DockerStub, closed, delayed_http, http};
 use crate::launch::resource_probe::execute;
 use crate::launch::resource_probe::lifecycle::{self, Deadline};
 use crate::launch::resource_probe::projection::{
     ProbeProjection, VerifiedProbeImage, expected_image_config,
 };
+use crate::launch::resource_probe::provider::ProbeImagePreparationEvidence;
 use crate::launch::resource_probe::provider::UnavailableImageProvider;
 use crate::launch_harness::Scratch;
 use std::time::Duration;
@@ -82,10 +83,21 @@ async fn prepared() -> Result<(Scratch, Journal, ProbeProjection), String> {
             image_binding_digest: projection.image.binding_fingerprint().to_owned(),
             operation_name: projection.name.clone(),
             projection_digest: projection.projection_digest.clone(),
+            purpose: ResourceProbePurpose::Capacity,
+            request_sha256: projection.request_sha256.clone(),
         })
         .await
         .map_err(|error| error.to_string())?;
     Ok((scratch, journal, projection))
+}
+
+fn image_evidence(projection: &ProbeProjection) -> ProbeImagePreparationEvidence {
+    ProbeImagePreparationEvidence::test_fixture(
+        &projection.engine_id,
+        projection.root.digest(),
+        projection.image.daemon_architecture(),
+        projection.image.source_revision(),
+    )
 }
 
 fn start_responses(projection: &ProbeProjection) -> Result<Vec<DockerResponse>, String> {

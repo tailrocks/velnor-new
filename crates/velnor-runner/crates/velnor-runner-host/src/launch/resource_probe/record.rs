@@ -1,9 +1,9 @@
-//! Strict schema-3 output parsing for the isolated guest probe.
+//! Strict schema 5 output parsing for the isolated guest probe.
 
 use serde::{Deserialize, Serialize};
 
 pub(super) const MAX_OUTPUT_BYTES: usize = 2048;
-const SCHEMA_VERSION: u8 = 3;
+const SCHEMA_VERSION: u8 = 5;
 const MAX_PSI_BPS: u64 = 10_000;
 const DOCKER_ROOT_TARGET: &str = "/velnor/docker-root";
 const BTRFS_MAGIC: u64 = 0x9123_683e;
@@ -38,6 +38,10 @@ pub(super) struct ProbeRecord {
     pub(super) schema_version: u8,
     /// Fixed path that the probe measured.
     pub(super) docker_root_mount_target: String,
+    /// Mount source reported by the guest kernel.
+    pub(super) docker_root_mount_source: String,
+    /// Mount root reported by the guest kernel.
+    pub(super) docker_root_mount_root: String,
     /// Mount ID in the probe's mount namespace. It is not a stable pool ID.
     pub(super) docker_root_mount_id: u64,
     /// Mount device major number.
@@ -119,6 +123,8 @@ impl ProbeRecord {
     fn valid_values(&self, memory_total_bytes: u64) -> bool {
         self.schema_version == SCHEMA_VERSION
             && self.docker_root_mount_target == DOCKER_ROOT_TARGET
+            && valid_mount_source(&self.docker_root_mount_source)
+            && valid_mount_root(&self.docker_root_mount_root)
             && self.docker_root_mount_id > 0
             && !self.docker_root_fs_type_name.is_empty()
             && self.filesystem_identity_valid()
@@ -253,6 +259,45 @@ impl ProbeRecord {
     }
 }
 
+fn valid_mount_source(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 1024 && !value.bytes().any(|byte| byte.is_ascii_control())
+}
+
+fn valid_mount_root(value: &str) -> bool {
+    if value == "/" {
+        return true;
+    }
+    if value.is_empty()
+        || value.len() > 1024
+        || !value.starts_with('/')
+        || value.bytes().any(|byte| byte.is_ascii_control())
+    {
+        return false;
+    }
+    value.split('/').skip(1).all(|component| {
+        if component.is_empty() || component == "." || component == ".." {
+            return false;
+        }
+        let bytes = component.as_bytes();
+        let mut index = 0;
+        while index < bytes.len() {
+            if bytes[index] == b'\\' {
+                if index + 3 >= bytes.len()
+                    || !bytes[index + 1..index + 4]
+                        .iter()
+                        .all(|byte| (b'0'..=b'7').contains(byte))
+                {
+                    return false;
+                }
+                index += 4;
+            } else {
+                index += 1;
+            }
+        }
+        true
+    })
+}
+
 fn expected_ancestor_paths(path: &str) -> Option<Vec<String>> {
     if !path.starts_with('/') || path.contains("//") || path.len() > 256 {
         return None;
@@ -318,6 +363,8 @@ pub(super) fn fixture_record() -> ProbeRecord {
     ProbeRecord {
         schema_version: SCHEMA_VERSION,
         docker_root_mount_target: DOCKER_ROOT_TARGET.to_owned(),
+        docker_root_mount_source: "/dev/vdb".to_owned(),
+        docker_root_mount_root: "/_data".to_owned(),
         docker_root_mount_id: 5,
         docker_root_device_major: 0,
         docker_root_device_minor: 38,

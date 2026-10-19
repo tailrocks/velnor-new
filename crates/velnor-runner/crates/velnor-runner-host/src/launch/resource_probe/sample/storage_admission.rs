@@ -1,0 +1,177 @@
+//! Bind one fresh selected-guest sample to the immutable storage profile.
+
+use std::time::Instant;
+
+use sha2::{Digest, Sha256};
+
+use crate::journal::{
+    StorageAdmissionSample, StorageFilesystemKind, StorageInodePolicy, StorageMedium,
+    StoragePoolObservation, StorageProfile, StorageProvisioningAdmission,
+    StorageProvisioningMemoryObservation, StorageRole, StorageSampleIdentity,
+};
+
+use super::super::record::InodePolicy;
+use super::Observation;
+
+const DOCKER_ROOT_TARGET: &str = "/velnor/docker-root";
+const BTRFS_SUPER_MAGIC: u64 = 0x9123_683e;
+const TMPFS_SUPER_MAGIC: u64 = 0x0102_1994;
+
+impl Observation {
+    /// Bind this fresh selected-guest sample to the exact immutable profile.
+    pub(super) fn storage_provisioning_admission(
+        &self,
+        profile: &StorageProfile,
+        expected_engine_id: &str,
+        expected_docker_root_digest: &str,
+    ) -> Option<StorageProvisioningAdmission> {
+        if !self.is_recent_at(Instant::now())
+            || self.engine_id != expected_engine_id
+            || self.docker_root_digest != expected_docker_root_digest
+            || disk_pool_identity(self).is_none()
+            || self.memory_total_bytes == 0
+            || self.record.memory_available_bytes > self.memory_total_bytes
+        {
+            return None;
+        }
+        profile.validate_provisioning_contract().ok()?;
+        let disk_pools = profile
+            .pools()
+            .iter()
+            .filter(|pool| pool.medium() == StorageMedium::Disk)
+            .collect::<Vec<_>>();
+        if disk_pools.len() != 1 {
+            return None;
+        }
+        let engine_metadata = profile.role_limit(StorageRole::EngineMetadata).ok()?;
+        let pool = profile.pool_limit(engine_metadata.pool_id()).ok()?;
+        if disk_pools[0].pool_id() != pool.pool_id() || pool.medium() != StorageMedium::Disk {
+            return None;
+        }
+
+        let record = &self.record;
+        let filesystem_kind = match record.docker_root_fs_type_magic {
+            BTRFS_SUPER_MAGIC => StorageFilesystemKind::Btrfs,
+            TMPFS_SUPER_MAGIC => StorageFilesystemKind::Tmpfs,
+            _ => StorageFilesystemKind::Other,
+        };
+        let inode_policy = match record.docker_root_inode_policy {
+            InodePolicy::Finite => StorageInodePolicy::Finite,
+            InodePolicy::DynamicBtrfs => StorageInodePolicy::DynamicBtrfs,
+            InodePolicy::Unknown => StorageInodePolicy::Unknown,
+        };
+        if pool.inode_policy() != inode_policy {
+            return None;
+        }
+
+        let identity = StorageSampleIdentity::new(
+            self.sample_generation_id.clone(),
+            profile.generation_id().to_owned(),
+            profile.profile_digest().to_owned(),
+            self.engine_id.clone(),
+            self.docker_root_digest.clone(),
+        )
+        .ok()?;
+        let filesystem_instance_digest = filesystem_instance_digest(
+            &self.engine_id,
+            &self.docker_root_digest,
+            record.guest_boot_id.as_bytes(),
+            record.docker_root_mount_source.as_bytes(),
+            record.docker_root_fs_type_name.as_bytes(),
+            record.docker_root_fs_type_magic,
+            record.docker_root_device_major,
+            record.docker_root_device_minor,
+            record.docker_root_statx_device_major,
+            record.docker_root_statx_device_minor,
+            record.docker_root_filesystem_id,
+        );
+        let pool_observation = StoragePoolObservation::new_with_filesystem(
+            pool.pool_id().to_owned(),
+            filesystem_instance_digest,
+            StorageMedium::Disk,
+            filesystem_kind,
+            record.docker_root_total_bytes,
+            record.docker_root_available_bytes,
+            record.docker_root_inode_total,
+            record.docker_root_inode_available,
+        )
+        .ok()?;
+        let sample =
+            StorageAdmissionSample::new(identity, self.observed_at, vec![pool_observation], None)
+                .ok()?;
+        let memory = StorageProvisioningMemoryObservation::new(
+            self.memory_total_bytes,
+            record.memory_available_bytes,
+        )
+        .ok()?;
+        Some(StorageProvisioningAdmission::new(sample, memory))
+    }
+}
+
+pub(super) fn disk_pool_identity(observation: &Observation) -> Option<String> {
+    let record = &observation.record;
+    if record.docker_root_mount_target != DOCKER_ROOT_TARGET
+        || record.docker_root_mount_id == 0
+        || record.docker_root_filesystem_id == 0
+        || record.guest_boot_id.is_empty()
+        || (record.docker_root_device_major == 0
+            && record.docker_root_device_minor == 0
+            && record.docker_root_statx_device_major == 0
+            && record.docker_root_statx_device_minor == 0)
+    {
+        return None;
+    }
+    Some(filesystem_instance_digest(
+        &observation.engine_id,
+        &observation.docker_root_digest,
+        record.guest_boot_id.as_bytes(),
+        record.docker_root_mount_source.as_bytes(),
+        record.docker_root_fs_type_name.as_bytes(),
+        record.docker_root_fs_type_magic,
+        record.docker_root_device_major,
+        record.docker_root_device_minor,
+        record.docker_root_statx_device_major,
+        record.docker_root_statx_device_minor,
+        record.docker_root_filesystem_id,
+    ))
+}
+
+pub(in crate::launch) fn filesystem_instance_digest(
+    engine_id: &str,
+    docker_root_digest: &str,
+    guest_boot_id: &[u8],
+    mount_source: &[u8],
+    filesystem_type_name: &[u8],
+    filesystem_type_magic: u64,
+    mount_device_major: u32,
+    mount_device_minor: u32,
+    statx_device_major: u32,
+    statx_device_minor: u32,
+    filesystem_id: u64,
+) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(b"velnor-storage-filesystem-instance-v1\0");
+    for field in [
+        engine_id.as_bytes(),
+        docker_root_digest.as_bytes(),
+        guest_boot_id,
+        mount_source,
+        filesystem_type_name,
+    ] {
+        hasher.update((field.len() as u64).to_be_bytes());
+        hasher.update(field);
+    }
+    hasher.update(filesystem_type_magic.to_be_bytes());
+    hasher.update(mount_device_major.to_be_bytes());
+    hasher.update(mount_device_minor.to_be_bytes());
+    hasher.update(statx_device_major.to_be_bytes());
+    hasher.update(statx_device_minor.to_be_bytes());
+    hasher.update(filesystem_id.to_be_bytes());
+    let mut digest = String::with_capacity(64);
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    for byte in hasher.finalize() {
+        digest.push(char::from(HEX[usize::from(byte >> 4)]));
+        digest.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
+    digest
+}

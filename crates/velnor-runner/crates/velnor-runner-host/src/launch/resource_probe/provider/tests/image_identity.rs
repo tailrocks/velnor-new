@@ -55,7 +55,13 @@ fn containerd_store_accepts_the_verified_manifest_identity_and_descriptor() {
     };
     assert_eq!(daemon_architecture(&daemon), Some("aarch64"));
     assert!(selected_daemon(&daemon, "selected-engine").is_ok());
-    let candidate = candidate("selected-engine", "aarch64", image, &release);
+    let candidate = candidate(
+        "selected-engine",
+        &"d".repeat(64),
+        "aarch64",
+        image,
+        &release,
+    );
     assert!(candidate.is_ok());
     if let Ok(candidate) = candidate {
         assert_eq!(candidate.platform, "linux/amd64");
@@ -91,7 +97,16 @@ fn exact_daemon_identity_and_config_are_required() {
         verify_daemon_image(&bad_config, &release),
         Err(ProviderFailure::ImageConfig)
     );
-    assert!(candidate("selected-engine", "x86_64", bad_config, &release).is_err());
+    assert!(
+        candidate(
+            "selected-engine",
+            &"d".repeat(64),
+            "x86_64",
+            bad_config,
+            &release
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -114,7 +129,16 @@ fn classic_store_accepts_only_the_verified_config_identity_without_descriptor() 
     };
     assert!(verify_daemon_image(&image, &release).is_ok());
     assert!(image_observation(&image).is_ok());
-    assert!(candidate("selected-engine", "x86_64", image, &release).is_ok());
+    assert!(
+        candidate(
+            "selected-engine",
+            &"d".repeat(64),
+            "x86_64",
+            image,
+            &release
+        )
+        .is_ok()
+    );
 }
 
 #[test]

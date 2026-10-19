@@ -7,6 +7,12 @@ use std::collections::BTreeMap;
 
 use super::{HoldContext, hold_context};
 
+#[path = "cleanup/identity.rs"]
+mod identity;
+pub(crate) use identity::StorageCleanupIdentity;
+#[cfg(test)]
+pub(crate) use identity::{StorageCleanupCgroup, StorageCleanupMount};
+
 pub(super) async fn record(
     journal: &ConnectionJournal,
     proof: VerifiedStorageCleanup,

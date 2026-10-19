@@ -1,7 +1,12 @@
 use crate::error::HostError;
 use crate::journal::connection::ConnectionJournal;
+use crate::journal::connection::reservation::storage_budget::{
+    BoundJobFactsSnapshot, JobFactsReadContext, read_job_facts_snapshot,
+};
 use crate::journal::connection::storage::in_transaction;
 use crate::launch::bootstrap::{JobFactsPublication, ListenerDeliveryReceipt};
+use crate::worker::execution_authorization::VerifiedProofChannelBinding;
+use crate::worker::storage_initialization::VerifiedStorageInitializationReady;
 use velnor_runner_github::RunnerReference;
 
 use super::admission::sql_i64;
@@ -24,6 +29,10 @@ pub(crate) struct JobFactsPublicationClaim {
 }
 
 impl JobFactsPublicationClaim {
+    pub(crate) fn connection_id(&self) -> &str {
+        &self.connection_id
+    }
+
     pub(crate) const fn reservation_id(&self) -> i64 {
         self.reservation_id
     }
@@ -38,6 +47,34 @@ impl JobFactsPublicationClaim {
 
     pub(crate) fn instance_binding_digest(&self) -> &str {
         &self.instance_binding_digest
+    }
+
+    pub(crate) fn engine_id(&self) -> &str {
+        &self.engine_id
+    }
+
+    pub(crate) fn docker_root_digest(&self) -> &str {
+        &self.docker_root_digest
+    }
+
+    pub(crate) fn runner_container_id(&self) -> &str {
+        &self.runner_container_id
+    }
+
+    pub(crate) fn dind_container_id(&self) -> &str {
+        &self.dind_container_id
+    }
+
+    pub(crate) fn profile_generation_id(&self) -> &str {
+        &self.profile_generation_id
+    }
+
+    pub(crate) fn profile_digest(&self) -> &str {
+        &self.profile_digest
+    }
+
+    pub(crate) fn sample_generation_id(&self) -> &str {
+        &self.sample_generation_id
     }
 }
 
@@ -89,6 +126,38 @@ impl ListenerDeliveryClaim {
 }
 
 impl ConnectionJournal {
+    /// Read bound storage facts for the exact publication claim.
+    pub(crate) async fn job_facts_snapshot(
+        &self,
+        claim: &JobFactsPublicationClaim,
+        ready: &VerifiedStorageInitializationReady,
+        channel: &VerifiedProofChannelBinding,
+    ) -> Result<BoundJobFactsSnapshot, HostError> {
+        validate_publication_claim(self, claim)?;
+        read_job_facts_snapshot(
+            self,
+            JobFactsReadContext {
+                reservation_id: claim.reservation_id,
+                operation_id: claim.operation_id,
+                connection_id: &claim.connection_id,
+                engine_id: &claim.engine_id,
+                docker_root_digest: &claim.docker_root_digest,
+                runner_container_id: &claim.runner_container_id,
+                dind_container_id: &claim.dind_container_id,
+                runner_id: claim.runner.id,
+                runner_name: &claim.runner.name,
+                scale_set_id: claim.runner.runner_scale_set_id,
+                instance_binding_digest: &claim.instance_binding_digest,
+                profile_generation_id: &claim.profile_generation_id,
+                profile_digest: &claim.profile_digest,
+                sample_generation_id: &claim.sample_generation_id,
+            },
+            ready,
+            channel,
+        )
+        .await
+    }
+
     /// After the journal records the exact runner JIT data, record permission to publish one job-facts file.
     pub(crate) async fn claim_job_facts_publication(
         &self,

@@ -11,24 +11,119 @@ use super::inspect;
 use super::lifecycle::Deadline;
 use super::ops;
 use super::projection::ProbeProjection;
+use super::provider::ProbeImagePreparationEvidence;
 use super::record::ProbeRecord;
 use super::recover;
+
+#[path = "execute/owned_cgroups.rs"]
+mod owned_cgroups;
+pub(super) use owned_cgroups::run_owned_cgroups;
+
+/// Evidence for one probe image and its cleanup on the selected engine.
+pub(in crate::launch) struct ProbeCleanupEvidence {
+    operation_id: String,
+    engine_id: String,
+    docker_root_digest: String,
+    operation_name: String,
+    container_id: String,
+}
+
+impl ProbeCleanupEvidence {
+    pub(in crate::launch) fn after_journal_retirement(
+        proof: &super::VerifiedProbeCleanup,
+    ) -> Result<Self, HostError> {
+        let container_id = proof.container_id().ok_or(HostError::Ownership)?;
+        if proof.phase() != crate::journal::ProbePhase::RemoveRequested {
+            return Err(HostError::Ownership);
+        }
+        Ok(Self {
+            operation_id: proof.operation_id().to_owned(),
+            engine_id: proof.engine_id().to_owned(),
+            docker_root_digest: proof.docker_root_digest().to_owned(),
+            operation_name: proof.operation_name().to_owned(),
+            container_id: container_id.to_owned(),
+        })
+    }
+
+    pub(in crate::launch) fn operation_id(&self) -> &str {
+        &self.operation_id
+    }
+    pub(in crate::launch) fn engine_id(&self) -> &str {
+        &self.engine_id
+    }
+    pub(in crate::launch) fn docker_root_digest(&self) -> &str {
+        &self.docker_root_digest
+    }
+    pub(in crate::launch) fn operation_name(&self) -> &str {
+        &self.operation_name
+    }
+    pub(in crate::launch) fn container_id(&self) -> &str {
+        &self.container_id
+    }
+}
+
+/// Evidence for the probe and image after cleanup completes.
+pub(in crate::launch) struct ProbeStartupEvidence {
+    cleanup: ProbeCleanupEvidence,
+    image: ProbeImagePreparationEvidence,
+}
+
+impl ProbeStartupEvidence {
+    pub(in crate::launch) fn new(
+        cleanup: ProbeCleanupEvidence,
+        image: ProbeImagePreparationEvidence,
+    ) -> Self {
+        Self { cleanup, image }
+    }
+
+    pub(in crate::launch) fn cleanup(&self) -> &ProbeCleanupEvidence {
+        &self.cleanup
+    }
+    pub(in crate::launch) fn image(&self) -> &ProbeImagePreparationEvidence {
+        &self.image
+    }
+
+    #[cfg(test)]
+    pub(in crate::launch) fn test_fixture(
+        generation: &str,
+        engine_id: &str,
+        docker_root_digest: &str,
+    ) -> Self {
+        Self {
+            cleanup: ProbeCleanupEvidence {
+                operation_id: generation.to_owned(),
+                engine_id: engine_id.to_owned(),
+                docker_root_digest: docker_root_digest.to_owned(),
+                operation_name: format!("velnor-resource-probe-{generation}"),
+                container_id: "d".repeat(64),
+            },
+            image: ProbeImagePreparationEvidence::test_fixture(
+                engine_id,
+                docker_root_digest,
+                "aarch64",
+                &"a".repeat(40),
+            ),
+        }
+    }
+}
 
 pub(super) struct ObservedProbeRecord {
     pub(super) record: ProbeRecord,
     pub(super) container_host_pid: u32,
     pub(super) sample_generation_id: String,
     pub(super) observed_at: Instant,
+    pub(super) startup_evidence: Option<ProbeStartupEvidence>,
 }
 
 pub(super) async fn run(
     docker: &Docker,
     journal: &Journal,
     projection: &ProbeProjection,
+    image: ProbeImagePreparationEvidence,
     memory_total: u64,
     deadline: &Deadline,
 ) -> Result<ObservedProbeRecord, HostError> {
-    let result = execute(docker, journal, projection, memory_total, deadline).await;
+    let result = execute(docker, journal, projection, memory_total, deadline, image).await;
     if result.is_err() {
         recover_current(docker, journal, projection, deadline).await;
     }
@@ -41,6 +136,7 @@ async fn execute(
     projection: &ProbeProjection,
     memory_total: u64,
     deadline: &Deadline,
+    image: ProbeImagePreparationEvidence,
 ) -> Result<ObservedProbeRecord, HostError> {
     deadline
         .within(journal.transition_probe(
@@ -56,12 +152,14 @@ async fn execute(
         .await??;
     recover::verify_current_projection(docker, journal, projection, deadline).await?;
     verify_created(docker, projection, &id, deadline).await?;
-    let record = execute_started(docker, journal, projection, &id, memory_total, deadline).await?;
+    let mut record =
+        execute_started(docker, journal, projection, &id, memory_total, deadline).await?;
     let row = deadline
         .within(journal.active_probe())
         .await??
         .ok_or(HostError::Journal)?;
-    recover::cleanup(docker, journal, &row, projection, deadline).await?;
+    let cleanup = recover::cleanup(docker, journal, &row, projection, deadline).await?;
+    record.startup_evidence = Some(ProbeStartupEvidence::new(cleanup, image));
     Ok(record)
 }
 
@@ -160,6 +258,7 @@ async fn execute_started(
         container_host_pid,
         sample_generation_id: projection.operation_id.clone(),
         observed_at,
+        startup_evidence: None,
     })
 }
 

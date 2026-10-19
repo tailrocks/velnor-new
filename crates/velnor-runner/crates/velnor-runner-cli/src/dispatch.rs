@@ -105,7 +105,19 @@ fn print_status(state: &Path, json: bool) -> ExitCode {
 }
 
 fn print_doctor(state: &Path, probe: bool) -> ExitCode {
-    println!("{}", doctor_json(observe(state), probe));
+    if probe {
+        return match velnor_runner_host::run_doctor_probe(state, Duration::from_secs(240)) {
+            Ok(report) => {
+                println!("{report}");
+                ExitCode::SUCCESS
+            }
+            Err(error) => {
+                eprintln!("doctor probe failed: {error}");
+                ExitCode::from(1)
+            }
+        };
+    }
+    println!("{}", doctor_json(observe(state), false));
     ExitCode::SUCCESS
 }
 

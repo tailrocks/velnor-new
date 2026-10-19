@@ -22,6 +22,7 @@ pub(crate) use volumes::{
     VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
     create_named_volumes, remove_worker_volumes, verify_worker_volume,
 };
+pub(crate) mod execution_authorization;
 pub(crate) mod guest_image;
 mod mounts;
 mod projection;

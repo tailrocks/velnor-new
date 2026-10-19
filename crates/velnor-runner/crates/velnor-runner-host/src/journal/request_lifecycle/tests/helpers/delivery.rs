@@ -1,8 +1,21 @@
+use crate::worker::execution_authorization::{
+    TestControlFile, VerifiedProofChannelBinding, test_execution_challenge_publication_receipt,
+};
+
 pub(super) async fn prepare_listener_delivery(
     scope: &ConnectionJournal,
     provisioned: &ProvisionedRunner,
     runner: &velnor_runner_github::RunnerReference,
 ) -> Result<crate::journal::ListenerDeliveryClaim, HostError> {
+    prepare_jit_and_job_facts(scope, provisioned, runner).await?;
+    claim_listener_delivery(scope, provisioned, runner).await
+}
+
+pub(super) async fn prepare_jit_and_job_facts(
+    scope: &ConnectionJournal,
+    provisioned: &ProvisionedRunner,
+    runner: &velnor_runner_github::RunnerReference,
+) -> Result<(), HostError> {
     use crate::launch::bootstrap::test_job_facts_publication;
 
     let jit = scope
@@ -46,6 +59,50 @@ pub(super) async fn prepare_listener_delivery(
         .record_job_facts_published(&publication, &proof)
         .await?;
 
+    Ok(())
+}
+
+pub(super) async fn publish_test_execution_challenge(
+    scope: &ConnectionJournal,
+    channel: &VerifiedProofChannelBinding,
+) -> Result<(), HostError> {
+    let claim = scope
+        .claim_execution_challenge(channel.reservation_id(), channel)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let control = channel.control();
+    let file = TestControlFile {
+        path: "/opt/velnor/source-proof/control/challenge.json".to_owned(),
+        inode: control
+            .directory_inode()
+            .checked_add(1)
+            .ok_or(HostError::Journal)?,
+        bytes: u64::try_from(claim.canonical_bytes().len()).map_err(|_| HostError::Journal)?,
+        control_directory_inode: control.directory_inode(),
+        uid: 0,
+        gid: 0,
+        mode: 0o444,
+        mount_id: control.mount_id(),
+        device: control.device(),
+        statx_device: control.statx_device(),
+        fs_type_magic: control.fs_type_magic(),
+        filesystem_id: control.filesystem_id(),
+        filesystem_instance_digest: control.filesystem_instance_digest().to_owned(),
+        mount_source: channel.observation().control.mount_source.clone(),
+        read_only: control.read_only(),
+        no_copy: control.no_copy(),
+    };
+    let receipt = test_execution_challenge_publication_receipt(&claim, channel, file)?;
+    scope
+        .record_execution_challenge_published(&claim, &receipt)
+        .await
+}
+
+pub(super) async fn claim_listener_delivery(
+    scope: &ConnectionJournal,
+    provisioned: &ProvisionedRunner,
+    runner: &velnor_runner_github::RunnerReference,
+) -> Result<crate::journal::ListenerDeliveryClaim, HostError> {
     let claim = scope
         .claim_listener_delivery(provisioned.reservation_id)
         .await?
@@ -60,6 +117,25 @@ pub(super) async fn prepare_listener_delivery(
         return Err(HostError::Journal);
     }
     Ok(claim)
+}
+
+pub(super) async fn finish_listener_delivery_after_challenge(
+    scope: &ConnectionJournal,
+    provisioned: &ProvisionedRunner,
+    runner: &velnor_runner_github::RunnerReference,
+) -> Result<(), HostError> {
+    use crate::launch::bootstrap::test_listener_delivery_receipt;
+
+    let delivery = claim_listener_delivery(scope, provisioned, runner).await?;
+    let proof = test_listener_delivery_receipt(
+        provisioned.reservation_id,
+        provisioned.intent_id,
+        TEST_ENGINE_ID.to_owned(),
+        provisioned.docker_root_digest.clone(),
+        provisioned.runner_container_id.clone(),
+        runner.clone(),
+    )?;
+    scope.record_listener_delivered(&delivery, &proof).await
 }
 
 pub(super) async fn finish_listener_delivery(

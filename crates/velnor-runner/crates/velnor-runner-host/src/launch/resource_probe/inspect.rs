@@ -39,10 +39,22 @@ pub(super) fn matches(
         && response.image.as_deref() == Some(projection.image.runtime_id())
         && response.restart_count == Some(0)
         && response.path.as_deref() == Some("/velnor/resource-probe")
-        && response.args.as_ref().is_none_or(Vec::is_empty)
+        && response
+            .args
+            .as_deref()
+            .is_none_or(|args| args == expected_arguments(projection.purpose))
         && config_matches(projection, response, container_id)
         && host_matches(projection, response)
         && mounts_match(projection, response)
+}
+
+fn expected_arguments(purpose: crate::journal::ResourceProbePurpose) -> Vec<String> {
+    match purpose {
+        crate::journal::ResourceProbePurpose::Capacity => Vec::new(),
+        crate::journal::ResourceProbePurpose::OwnedCgroups => {
+            vec!["--mode".to_owned(), "owned_container_cgroup".to_owned()]
+        }
+    }
 }
 
 pub(super) fn exited_successfully(response: &ContainerInspectResponse) -> bool {

@@ -96,7 +96,7 @@ fn drain_flag_is_draining() -> Result<(), String> {
 }
 
 #[test]
-fn empty_directory_keeps_probe_off_the_state() -> Result<(), String> {
+fn doctor_probe_fails_without_an_active_controller() -> Result<(), String> {
     let scratch = Scratch::new("doctor")?;
     let mut quiet = host();
     quiet.arg("--state").arg(scratch.path()).arg("doctor");
@@ -106,15 +106,19 @@ fn empty_directory_keeps_probe_off_the_state() -> Result<(), String> {
         .arg(scratch.path())
         .args(["doctor", "--probe"]);
     let quiet = stdout(&mut quiet)?;
-    let probed = stdout(&mut probed)?;
     if quiet != r#"{"state":"waiting_for_credentials","probe":false}"# {
         return Err(quiet);
     }
-    if probed == r#"{"state":"waiting_for_credentials","probe":true}"# {
+    let probed = probed.output().map_err(|error| error.to_string())?;
+    let stderr = String::from_utf8(probed.stderr).map_err(|error| error.to_string())?;
+    if !probed.status.success()
+        && stderr.contains("doctor probe failed")
+        && !scratch.path().join("launch.db").exists()
+    {
         scratch.cleanup()?;
         Ok(())
     } else {
-        Err(probed)
+        Err(stderr)
     }
 }
 

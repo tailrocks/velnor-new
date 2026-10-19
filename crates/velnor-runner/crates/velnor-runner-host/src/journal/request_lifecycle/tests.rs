@@ -1,9 +1,14 @@
 //! Request and physical runner journal regressions.
 
 mod admission;
+mod authorized_offers;
+mod cleanup_identity;
 mod correlation;
+mod disk_capacity;
 mod event_source;
-mod helpers;
+pub(crate) mod helpers;
+mod initialization;
+mod legacy_migration;
 mod linked_request_reopen;
 mod phase_recovery;
 mod profile_lifecycle;
@@ -17,3 +22,107 @@ mod v16_settlement_liveness;
 mod v18_topology_migration;
 mod v19_cleanup_proof;
 mod worker_ready;
+
+/// A source-authorized request with a durable acquired state and JIT-ready runner.
+pub(crate) struct NativeStartedIntakeFixture {
+    pub(crate) _scratch: helpers::Scratch,
+    pub(crate) _journal: crate::journal::Journal,
+    pub(crate) database_path: std::path::PathBuf,
+    pub(crate) scope: crate::journal::ConnectionJournal,
+    pub(crate) request_id: i64,
+    pub(crate) message_id: i64,
+    pub(crate) intent_id: i64,
+    pub(crate) reservation_id: i64,
+    pub(crate) assignment: crate::journal::AssignmentIdentity,
+    pub(crate) reservation_assignment: crate::journal::AssignmentIdentity,
+    pub(crate) runner: velnor_runner_github::RunnerReference,
+    pub(crate) source: velnor_runner_github::SourceMetadata,
+    pub(crate) channel: crate::worker::execution_authorization::VerifiedProofChannelBinding,
+}
+
+impl NativeStartedIntakeFixture {
+    /// Record the fixture's exact Started event through the production journal API.
+    pub(crate) async fn record_started(&self) -> Result<(), crate::error::HostError> {
+        self.scope
+            .record_job_started(
+                &self.assignment,
+                self.message_id,
+                &self.source,
+                &self.runner,
+                Some("opaque-started-job"),
+            )
+            .await
+            .map(|_| ())
+    }
+}
+
+/// Build the durable state required for a native Started message.
+pub(crate) async fn native_started_intake_fixture()
+-> Result<NativeStartedIntakeFixture, crate::error::HostError> {
+    use crate::journal::{CapacityLimits, Journal};
+
+    const REQUEST_ID: i64 = 101;
+    const MESSAGE_ID: i64 = 1_501;
+    const SET_ID: i64 = 501;
+    const REPOSITORY_ID: i64 = 101;
+    const RUN_ID: i64 = REQUEST_ID + 1_000;
+
+    let scratch = helpers::Scratch::new()?;
+    let journal = Journal::open(&scratch.file()).await?;
+    journal
+        .configure_capacity(CapacityLimits {
+            jobs: 1,
+            cpu_millicores: 2_000,
+            memory_bytes: 25_769_803_776,
+        })
+        .await?;
+    let binding = helpers::binding("native-started-intake", REPOSITORY_ID)?;
+    let scope = helpers::created_scope(&journal, &binding, SET_ID).await?;
+    let initialized =
+        helpers::provision_acquired_request_with_initialization(&scope, REQUEST_ID, 'a', 'a')
+            .await?;
+    let provisioned = &initialized.provisioned;
+    let runner = velnor_runner_github::RunnerReference {
+        id: 701,
+        name: helpers::runner_name('a'),
+        runner_scale_set_id: SET_ID,
+    };
+    helpers::prepare_jit_and_job_facts(&scope, provisioned, &runner).await?;
+    let channel = crate::worker::execution_authorization::test_channel_for_ready_job_facts(
+        initialized.reservation_id,
+        initialized.intent_id,
+        scope.connection_id().as_str().to_owned(),
+        SET_ID,
+        REQUEST_ID,
+        helpers::TEST_ENGINE_ID.to_owned(),
+        initialized.docker_root_digest.clone(),
+        runner.id,
+        runner.name.clone(),
+        initialized.runner_container_id.clone(),
+        initialized.dind_container_id.clone(),
+        initialized.instance_binding_digest.clone(),
+        &initialized.ready,
+    )?;
+    let config = crate::config::HostConfig::test_with_job_authority_policy(&binding)?;
+    scope.install_job_authority_policy(&config).await?;
+    helpers::publish_test_execution_challenge(&scope, &channel).await?;
+    helpers::finish_listener_delivery_after_challenge(&scope, provisioned, &runner).await?;
+    let source = helpers::event_source(REPOSITORY_ID, RUN_ID);
+    let database_path = scratch.file();
+
+    Ok(NativeStartedIntakeFixture {
+        _scratch: scratch,
+        _journal: journal,
+        database_path,
+        scope,
+        request_id: REQUEST_ID,
+        message_id: MESSAGE_ID,
+        intent_id: initialized.intent_id,
+        reservation_id: initialized.reservation_id,
+        assignment: initialized.assignment,
+        reservation_assignment: initialized.reservation_assignment,
+        runner,
+        source,
+        channel,
+    })
+}

@@ -35,7 +35,7 @@ impl DoctorProbeState {
         }
     }
 
-    pub(super) const fn as_str(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Queued => "queued",
             Self::Running => "running",
@@ -47,7 +47,7 @@ impl DoctorProbeState {
         }
     }
 
-    pub(super) const fn is_active(self) -> bool {
+    pub(crate) const fn is_active(self) -> bool {
         matches!(
             self,
             Self::Queued | Self::Running | Self::Recovering | Self::Uncertain
@@ -86,6 +86,7 @@ pub(crate) enum DoctorProbePrepareResult {
 pub(crate) enum DoctorProbeOutcome {
     Failed,
     Completed,
+    Stale,
 }
 
 pub(crate) struct DoctorProbeRequestRecord {

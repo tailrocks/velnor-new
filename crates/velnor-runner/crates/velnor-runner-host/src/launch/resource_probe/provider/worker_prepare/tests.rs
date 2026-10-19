@@ -3,6 +3,7 @@ use bollard::models::SystemInfo;
 use crate::error::HostError;
 use crate::journal::EngineContext;
 use crate::launch::SelectedEngineContext;
+use crate::launch::resource_probe::VerifiedWorkspaceCleanup;
 use crate::launch::resource_probe::projection::DockerRoot;
 use crate::launch::verified_images::VerifiedWorkerImages;
 
@@ -18,7 +19,13 @@ fn verified_runner_and_dind_proofs_bind_to_one_engine_and_source() -> Result<(),
     let expected = selected_context(&selected);
     let (runner, dind) = fixture_proofs(&selected, SOURCE_SHA);
 
-    let images = VerifiedWorkerImages::from_verified_proofs(&expected, SOURCE_SHA, runner, dind)?;
+    let images = VerifiedWorkerImages::from_verified_proofs(
+        &expected,
+        SOURCE_SHA,
+        VerifiedWorkspaceCleanup::test_fixture(),
+        runner,
+        dind,
+    )?;
 
     assert_eq!(images.engine_id(), "selected-engine");
     assert_eq!(images.daemon_architecture(), "aarch64");
@@ -44,6 +51,7 @@ fn verified_proofs_reject_wrong_engine_source_or_image_role() -> Result<(), Host
         VerifiedWorkerImages::from_verified_proofs(
             &expected,
             "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            VerifiedWorkspaceCleanup::test_fixture(),
             runner,
             dind
         ),
@@ -52,14 +60,26 @@ fn verified_proofs_reject_wrong_engine_source_or_image_role() -> Result<(), Host
 
     let (runner, dind) = fixture_proofs(&selected, SOURCE_SHA);
     assert!(matches!(
-        VerifiedWorkerImages::from_verified_proofs(&expected, SOURCE_SHA, dind, runner),
+        VerifiedWorkerImages::from_verified_proofs(
+            &expected,
+            SOURCE_SHA,
+            VerifiedWorkspaceCleanup::test_fixture(),
+            dind,
+            runner,
+        ),
         Err(HostError::Identity)
     ));
 
     let other = selected_daemon("different-engine", "aarch64");
     let (runner, dind) = fixture_proofs(&other, SOURCE_SHA);
     assert!(matches!(
-        VerifiedWorkerImages::from_verified_proofs(&expected, SOURCE_SHA, runner, dind),
+        VerifiedWorkerImages::from_verified_proofs(
+            &expected,
+            SOURCE_SHA,
+            VerifiedWorkspaceCleanup::test_fixture(),
+            runner,
+            dind,
+        ),
         Err(HostError::Identity)
     ));
     Ok(())

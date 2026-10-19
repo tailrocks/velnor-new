@@ -26,15 +26,32 @@ impl ProvisioningFixture<'_> {
             profile.profile_digest().to_owned(),
             runner_id.to_owned(),
             dind_id.to_owned(),
+            self.scope.connection_id().as_str().to_owned(),
             instance_binding_digest.clone(),
             roles,
             attachments,
             cgroups,
             super::BOOT_ID.to_owned(),
         )?;
+        if self
+            .scope
+            .bind_storage_resources(self.reservation_id + 1, &binding)
+            .await
+            .is_ok()
+        {
+            return Err(HostError::Journal);
+        }
         self.scope
-            .bind_storage_resources(self.reservation_id, binding)
+            .bind_storage_resources(self.reservation_id, &binding)
             .await?;
+        if self
+            .scope
+            .bind_storage_resources(self.reservation_id, &binding)
+            .await
+            .is_ok()
+        {
+            return Err(HostError::Journal);
+        }
         Ok(instance_binding_digest)
     }
 
@@ -139,8 +156,13 @@ impl ProvisioningFixture<'_> {
                     container_id,
                     contract.target.to_owned(),
                     contract.source_target.map(str::to_owned),
+                    contract
+                        .volume_subpath
+                        .map(|subpath| format!("/volume/{subpath}"))
+                        .unwrap_or_else(|| "/".to_owned()),
                     contract.read_only,
                     100 + (role as u64 * 2) + index as u64,
+                    500 + (role as u64 * 2) + index as u64,
                     device,
                     statx,
                     magic,
