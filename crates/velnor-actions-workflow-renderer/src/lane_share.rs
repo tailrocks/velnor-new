@@ -222,10 +222,25 @@ fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLa
     if hosted_checkout != local_checkout {
         return None;
     }
-    let (hosted_runtime_prelude, hosted_steps) =
+    let (mut hosted_runtime_prelude, mut hosted_steps) =
         runtime::peel_tools_cache_prelude(hosted_steps, &hosted.runs_on)?;
-    let (local_runtime_prelude, local_steps) =
+    let (mut local_runtime_prelude, mut local_steps) =
         runtime::peel_tools_cache_prelude(local_steps, &local.runs_on)?;
+    // A lane prelude carries Setup Mise first; its pair renders the same
+    // Setup Mise outside the shared body too.
+    if hosted_runtime_prelude.is_empty() != local_runtime_prelude.is_empty() {
+        let (empty, steps) = if hosted_runtime_prelude.is_empty() {
+            (&mut hosted_runtime_prelude, &mut hosted_steps)
+        } else {
+            (&mut local_runtime_prelude, &mut local_steps)
+        };
+        let (setup, rest) = runtime::peel_setup(std::mem::take(steps))?;
+        empty.push(setup);
+        *steps = rest;
+    }
+    if hosted_runtime_prelude.first() != local_runtime_prelude.first() {
+        return None;
+    }
     if !runtime::same_tools_cache_prelude_shape(
         &hosted_runtime_prelude,
         &local_runtime_prelude,

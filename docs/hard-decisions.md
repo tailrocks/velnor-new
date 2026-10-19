@@ -154,7 +154,8 @@ declaration, because Mise (idiomatic version files) and rustup both read it.
   pin never replaces a declaration the generator cannot use.
 - Every job (or composite action) that reads such a reference gets one
   generated **Resolve project tool versions** step right after its Mise
-  setup. It reads every source above with
+  setup (first, in a shared-lane composite whose callers ran Setup Mise),
+  ahead of the tools-cache identity and restore. It reads every source above with
   `mise --no-config --no-env --no-hooks config get` (`.tool-versions` and a
   plain-text `rust-toolchain` are read as text, never executed), fails on an
   unparseable or symlinked source, requires all declarations of a tool to
@@ -166,14 +167,18 @@ declaration, because Mise (idiomatic version files) and rustup both read it.
 - Tools the project does not declare keep the exact Velnor catalog pin (or
   a `.velnor/config.toml [tools]` override). A `.velnor/config.toml` pin
   that disagrees with a project declaration fails generation.
-- Cache identities that bound a version now bind the project config: the
-  tools-cache `d` input appends `hashFiles` over `mise.toml`, `.mise.toml`,
-  `mise.lock`, `.mise.lock`, and both Rust toolchain files; Cargo-source and
-  MBX keys and MBX action inputs read the resolved `env` value. Plan
-  identities, including the MBX cache-format generation, bind the concrete
-  declared versions while the generated record (task digests, argv) stays
-  version-free. The tools-cache `hashFiles` list is the cache design's to
-  change and does not yet cover every source above.
+- Cache identities that bound a version now bind the resolved value: the
+  tools-cache `d` input appends, for exactly the declared tools the job
+  installs, `${{ env.VELNOR_TOOL_<NAME> }}` and `${{
+  env.VELNOR_TOOL_<NAME>_LOCK }}` (the SHA-256 of that tool's `mise.lock`/
+  `.mise.lock` `checksum`/`url` rows for the runner platform, read by a
+  fixed text parser, or `unlocked`), never `hashFiles` of whole files. The
+  resolved version already reflects every source above, so a bump in any of
+  them changes the key, while editing a task, a comment, or another tool
+  leaves the tools cache warm. Cargo-source and MBX keys and MBX action
+  inputs read the resolved `env` value. Plan identities, including the MBX
+  cache-format generation, bind the concrete declared versions while the
+  generated record (task digests, argv) stays version-free.
 - A pull request selects every crate job when a project tool source changes
   a **declared catalog version**: change selection parses each changed
   source at base and head with the generator's own reader and compares the
@@ -202,8 +207,9 @@ the config, so no template, hook, `[env]`, task, plugin, setting
 may change `mise.toml`: that tests its own toolchain, which is expected,
 and its only effect is a different exact version of the same tool through
 the same backend. The resolver accepts only `[0-9.]` values in exact
-`X.Y.Z` shape before writing `$GITHUB_ENV`, so no value can inject another
-variable or line; symlinked sources are refused, and a value is never
+`X.Y.Z` shape (and lock digests only as 64 hex characters or `unlocked`)
+before writing `$GITHUB_ENV`, so no value can inject another variable or
+line; symlinked sources and lock files are refused, and a value is never
 echoed raw into the log (control text such as `::error::` is replaced). Composite actions carry
 `# zizmor: ignore[github-env]` on that one validated write. The GitHub CLI
 runs with a token in every generated use (plan baseline lookup, `Required`
@@ -216,8 +222,8 @@ reference fails generation.
 
 **Trade-offs.** `mise.lock` checksums are not enforced in CI: with
 `--no-config` Mise does not consult the lock (as before this decision). The
-lock audit stays generation-time hygiene, and the lock participates in the
-tools-cache identity. Project-declared catalog tools need an exact
+lock audit stays generation-time hygiene, and each installed tool's lock
+entries participate in the tools-cache identity. Project-declared catalog tools need an exact
 `X.Y.Z` pin; a loose or templated value is still referenced (never replaced
 by a Velnor pin) and the resolver fails the job with the project's value.
 A declared version bypasses Velnor's freshness qualification of its catalog

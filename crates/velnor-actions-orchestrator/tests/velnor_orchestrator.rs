@@ -140,6 +140,7 @@ mod impl_tofu_t27_reports;
 mod impl_tofu_t27_reports_b;
 mod impl_tofu_t32_negatives;
 mod impl_tool_snapshot;
+mod impl_tools_identity_inputs;
 mod impl_trust;
 mod impl_trust_identity;
 mod impl_validators;

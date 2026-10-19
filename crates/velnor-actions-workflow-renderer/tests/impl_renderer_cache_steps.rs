@@ -196,7 +196,7 @@ fn assert_save_gate_and_seed(
 }
 
 #[test]
-fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
+fn strict_wires_runtime_qualified_tools_cache_after_setup_and_saves_once()
 -> Result<(), velnor_actions_workflow_renderer::RenderError> {
     use velnor_actions_workflow_renderer::checkout_step;
     let lint = job(
@@ -224,12 +224,12 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
     assert_eq!(names.iter().filter(|s| *s == TOOLS_SAVE_NAME).count(), 1);
     assert_eq!(
         names.iter().position(|s| s == "Setup Mise"),
-        Some(3),
-        "checkout, combined runtime identity and seed, restore, then setup: {names:?}"
+        Some(1),
+        "checkout, setup, combined runtime identity and seed, then restore: {names:?}"
     );
     assert_eq!(
         names.iter().position(|s| s == TOOLS_RESTORE_NAME),
-        Some(2),
+        Some(3),
         "archive restore follows seed admission: {names:?}"
     );
     assert!(!text.contains("name: Restore Velnor tool seed"), "{text}");

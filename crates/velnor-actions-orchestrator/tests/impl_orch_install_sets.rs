@@ -142,7 +142,8 @@ fn assert_pinned_exec(section: &str, tool: &str) -> Result<(), String> {
     }
 }
 
-/// Cache miss remains executable: explicit install sits after setup and before exec.
+/// Cache miss remains executable: setup precedes the restore (the identity
+/// reads resolved versions), and the explicit install follows both.
 fn assert_cold_install_order(section: &str, command: &str) -> Result<(), String> {
     let position = |name: &str| {
         section
@@ -153,7 +154,7 @@ fn assert_cold_install_order(section: &str, command: &str) -> Result<(), String>
     let setup = position("- name: Setup Mise")?;
     let install = position("- name: Prepare pinned tools")?;
     let run = position(command)?;
-    if !(restore < setup && setup < install && install < run) {
+    if !(setup < restore && restore < install && install < run) {
         return Err(format!("cold install order is wrong: {section}"));
     }
     Ok(())
