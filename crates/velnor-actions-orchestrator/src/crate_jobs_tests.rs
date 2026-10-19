@@ -93,6 +93,7 @@ fn skips_testless_and_workspace_groups() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1);
@@ -121,6 +122,7 @@ fn member_binding_agrees_with_built_jobs() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 1);
@@ -211,6 +213,7 @@ fn drivers_follow_per_crate_selection() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
     assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);
@@ -234,6 +237,7 @@ fn empty_groups_build_no_jobs() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        crates: &std::collections::BTreeMap::new(),
     })
     .expect("empty build");
     assert!(found.jobs.is_empty() && found.drivers.is_empty());
@@ -263,6 +267,7 @@ fn acquire_stages_before_report_wrappers() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
     let steps = names(&found.jobs[0].1);
@@ -311,6 +316,7 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 3);

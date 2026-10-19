@@ -41,7 +41,7 @@ fn checkoutless_required_job_does_not_call_local_cache_action() -> Result<(), Re
             merge_step(),
         ],
     );
-    required.condition = Some("always()".to_owned());
+    required.condition = Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
 
     let text = strict(
         &fixture_ir(vec![plan, (required_id, required)]),

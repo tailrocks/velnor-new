@@ -16,6 +16,7 @@ fn drivers_follow_per_crate_selection() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
     assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);

@@ -30,6 +30,22 @@ impl VelnorConfig {
         Ok(())
     }
 
+    pub(super) fn check_crate_build_jobs(&self, file: &str) -> Result<(), ContractError> {
+        let Some(rust) = &self.stacks.rust else {
+            return Ok(());
+        };
+        for (package, options) in &rust.crates {
+            if options.build_jobs > self.resources.compiler_process_budget {
+                return Err(ContractError::config(
+                    file,
+                    format!("stacks.rust.crates.{package}.build_jobs"),
+                    "exceeds_compiler_process_budget",
+                ));
+            }
+        }
+        Ok(())
+    }
+
     pub(super) fn check_preview_tools(&self, file: &str) -> Result<(), ContractError> {
         let Some(preview) = self
             .stacks

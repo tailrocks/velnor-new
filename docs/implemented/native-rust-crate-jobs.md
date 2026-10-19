@@ -61,6 +61,33 @@ also preserves each lane's `doc/` output, which the restore step puts back.
 The contract admits `CARGO_TARGET_DIR` only as a workspace-relative
 `target/velnor-<lane>` path.
 
+## Compile parallelism limit
+
+Cargo defaults to one compiler process per vCPU. A crate whose lib and
+lib-unittest rustc processes each need several GiB can exhaust a 2 vCPU,
+~7 GB hosted runner when the two compile together. `resources.compiler_process_budget`
+is the repository-wide ceiling (it bounds the preview producer's
+`build_jobs`); it does not change crate jobs by itself. A per-package option
+lowers one crate's compile parallelism:
+
+```toml
+[stacks.rust.crates.platform-preview-app]
+build_jobs = 1 # 1..=64, never above resources.compiler_process_budget
+```
+
+The key is the exact Cargo package name; a name no discovered Rust task
+belongs to fails generation (`unknown_rust_package`), so a typo cannot leave
+the cap silently unapplied. `build_jobs` sets `CARGO_BUILD_JOBS` in the
+environment of every Cargo step of that package's crate job: `Build test
+executables` and each parallel check (Clippy, tests, doctests, Documentation),
+whose separate Cargo invocations otherwise each default to one rustc per
+vCPU. Every invocation, not only the build step, is capped, so no single Cargo
+run (including a test or doctest run that finds a stale unit) can start the
+default number of large compilations. The parallel lanes still run beside one
+another, so the job's worst case is the number of concurrently compiling
+lanes times `build_jobs` rustc processes. Other crates keep Cargo's default. The setting is not part of
+task identity: it changes how fast a task compiles, not what it produces.
+
 ## actionlint bridge
 
 Pinned actionlint 1.7.12 does not parse native step concurrency

@@ -116,7 +116,8 @@ fn rendered_action_inputs_carry_no_shell_expansions() -> Result<(), RenderError>
             merge_step(),
         ],
     );
-    final_job.1.condition = Some("always()".to_owned());
+    final_job.1.condition =
+        Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     let support =
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
     let text = render_workflow_ir(

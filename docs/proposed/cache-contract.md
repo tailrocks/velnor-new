@@ -356,7 +356,7 @@ The final gate computes exactly one result:
 | `not_run` | A selected matrix entry lacks a valid report and no task failure was reported | 1 |
 | `planning_failed` | Discovery, generation, formatting, matrix validation, or plan-report validation failed | 1 |
 
-`required` MUST run with `if: always()` and MUST be the branch-protection check. A skipped job, missing
+`required` MUST run with `if: ${{ !cancelled() }}` (after failed or skipped needs, never after cancellation) and MUST be the branch-protection check. A skipped job, missing
 report, cache miss, or omitted task MUST NOT be treated as success. The final summary MUST show selected,
 reused, executed, empty-partition, covered, failed, cancelled, blocked, and not-run counts plus every
 cache/baseline miss reason.

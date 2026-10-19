@@ -30,6 +30,7 @@ fn crate_jobs(driver: CompileDriver) -> (Vec<(String, Job)>, ProposedTask, Propo
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
     let ids: Vec<_> = found.jobs.iter().map(|(id, _)| id.as_str()).collect();

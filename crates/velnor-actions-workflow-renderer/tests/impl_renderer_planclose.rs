@@ -198,7 +198,8 @@ fn final_job_gets_download_before_write_request() -> Result<(), RenderError> {
             merge_step(),
         ],
     );
-    final_job.condition = Some("always()".to_owned());
+    final_job.condition =
+        Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     let plan = job(
         "plan",
         "Plan",

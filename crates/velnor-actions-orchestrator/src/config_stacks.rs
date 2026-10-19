@@ -49,6 +49,9 @@ pub(crate) struct PartialRustStack {
     /// Optional exact `X.Y.Z` Rust toolchain channel override.
     #[serde(default)]
     toolchain: Option<String>,
+    /// Per-package options (`[stacks.rust.crates.<package>]`).
+    #[serde(default)]
+    crates: std::collections::BTreeMap<String, velnor_actions_contract::RustCrateConfig>,
 }
 
 /// Tofu stack section: `roots` required when the table is present.
@@ -73,6 +76,7 @@ impl PartialStacks {
                 binary_release: stack.binary_release.unwrap_or_default(),
                 suites: stack.suites,
                 toolchain: stack.toolchain,
+                crates: stack.crates,
             }
         });
         let tofu = self
@@ -142,6 +146,36 @@ mod tests {
         assert!(rust.binary_release.enabled);
         assert_eq!(rust.binary_release.package, "repo-scan");
         assert_eq!(rust.binary_release.bin, "repo-scan");
+    }
+
+    #[test]
+    fn crate_build_jobs_parse_validate_and_reject_unknown_keys() {
+        let load = load_config;
+        let root =
+            rooted("schema = 1\n[stacks.rust.crates.platform-preview-app]\nbuild_jobs = 1\n");
+        let config = load(root.path()).expect("crate cap config");
+        let rust = config.stacks.rust.expect("rust stack");
+        assert_eq!(rust.crates["platform-preview-app"].build_jobs, 1);
+        let root = rooted("schema = 1\n[stacks.rust]\n");
+        let rust = load(root.path())
+            .expect("no crates")
+            .stacks
+            .rust
+            .expect("rust stack");
+        assert!(rust.crates.is_empty());
+        for body in [
+            "schema = 1\n[stacks.rust.crates.demo]\nbuild_jobs = 0\n",
+            "schema = 1\n[stacks.rust.crates.demo]\nbuild_jobs = 3\n",
+            "schema = 1\n[stacks.rust.crates.demo]\nbuild_jobs = 1\njobs = 1\n",
+            "schema = 1\n[stacks.rust.crates.demo]\n",
+        ] {
+            let root = rooted(body);
+            assert!(load(root.path()).is_err(), "{body}");
+        }
+        let root = rooted(
+            "schema = 1\n[resources]\ncompiler_process_budget = 4\ntest_process_budget = 2\n[stacks.rust.crates.demo]\nbuild_jobs = 3\n",
+        );
+        assert!(load(root.path()).is_ok(), "cap within raised budget");
     }
 
     #[test]
