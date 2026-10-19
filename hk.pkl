@@ -5,6 +5,7 @@ exclude = List(
   "fixtures/**",
   "crates/**/tests/fixtures/**",
   "docs/proposed/opentofu-goldens/**",
+  "build/**",
 )
 
 steps {
