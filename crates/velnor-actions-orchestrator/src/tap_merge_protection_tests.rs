@@ -90,7 +90,7 @@ fn pending_earlier_check_does_not_hide_later_terminal_failure() {
 }
 
 #[test]
-fn branch_api_requires_app_bound_checks_and_dco() {
+fn branch_api_requires_app_bound_checks() {
     let json = serde_json::json!({
         "enforce_admins": {"enabled": true},
         "required_pull_request_reviews": {
@@ -264,16 +264,33 @@ fn branch_rules_entry_is_resolved_to_the_documented_ruleset_detail_route() {
 }
 
 #[test]
-fn promotion_requires_exact_dco_and_completion_check_app_bindings() {
+fn promotion_requires_exact_dco_and_completion_check_app_binding() {
     let valid = vec![("DCO".to_owned(), 19), ("Review complete".to_owned(), 23)];
-    assert!(validate_required_check_bindings(&valid, "Review complete", 23).is_ok());
-    assert!(validate_required_check_bindings(&valid, "Review complete", 24).is_err());
     assert!(
         validate_required_check_bindings(
             &[
                 ("DCO validation".to_owned(), 19),
                 ("Review complete".to_owned(), 23)
             ],
+            "Review complete",
+            23
+        )
+        .is_err()
+    );
+    assert!(validate_required_check_bindings(&valid, "Review complete", 23).is_ok());
+    assert!(validate_required_check_bindings(&valid, "Review complete", 24).is_err());
+    assert!(
+        validate_required_check_bindings(
+            &[("Review complete".to_owned(), 23)],
+            "Review complete",
+            23
+        )
+        .is_err(),
+        "native promotion must retain protected DCO admission"
+    );
+    assert!(
+        validate_required_check_bindings(
+            &[("DCO".to_owned(), 19), ("Review completion".to_owned(), 23)],
             "Review complete",
             23
         )

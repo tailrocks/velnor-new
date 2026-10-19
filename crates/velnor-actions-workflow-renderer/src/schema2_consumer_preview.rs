@@ -76,7 +76,7 @@ pub fn render_consumer_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFil
     spec.producer_setup.validate()?;
     if spec.plan.channel != PackageReleaseChannel::Preview
         || spec.plan.default_branch != "main"
-        || !JobTimeout::is_valid_minutes(u32::from(spec.producer_timeout_minutes))
+        || !(1..=5).contains(&spec.producer_timeout_minutes)
     {
         return Err(RenderError::InvalidWorkflow(
             "preview_spec_invalid".to_owned(),

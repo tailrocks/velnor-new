@@ -155,7 +155,7 @@ fn authenticate_merge(
         return Err(internal("tap_merge_credentials_reused"));
     }
     let budget = Duration::from_secs(
-        u64::from(velnor_actions_contract::workflow::JobTimeout::MAX_MINUTES) * 60,
+        u64::from(velnor_actions_contract::workflow::JobTimeout::DEFAULT_MINUTES) * 60,
     );
     let remaining = CheckDeadline::after(budget)
         .and_then(CheckDeadline::remaining)

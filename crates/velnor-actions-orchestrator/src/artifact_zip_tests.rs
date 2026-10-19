@@ -362,3 +362,16 @@ fn pinned_upload_rejects_private_mode_for_native_upload_and_detects_crc_corrupti
     assert!(read_fixture_manifest(&corrupt, "mode-600.txt", 1024, deadline()).is_err());
     assert_clean_failure(&corrupt, &pinned_upload_expectations());
 }
+
+#[test]
+fn native_operation_stays_five_minutes_when_general_timeout_allows_six_hours() {
+    assert_eq!(velnor_actions_contract::JobTimeout::MAX_MINUTES, 360);
+    within_operation(|| {
+        let nested = CheckDeadline::after(std::time::Duration::from_secs(21_600))
+            .map_err(|_| invalid("deadline"))?;
+        let remaining = nested.remaining().map_err(|_| invalid("deadline"))?;
+        assert!(remaining <= std::time::Duration::from_secs(300));
+        Ok(())
+    })
+    .expect("native admission scope");
+}

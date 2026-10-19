@@ -99,6 +99,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # runner_label = "ubuntu-24.04" # Exact older pinned runner for compat; omit for the ubuntu-26.04 default.
 # generator_validation = "bootstrap"  # Generator validation mode.
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.
+# crate_timeout_minutes = 5            # timeout-minutes for every Rust phase and OpenTofu root job; bounded 1..=360.
 
 # Optional verification jobs, one support job per entry, all covered by the
 # required gate. Unknown names fail generate. Enabled jobs may need
@@ -118,7 +119,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # source = { mise_config = "native/mise.toml", working_directory = "native" }
 # tools = ["mr-boxington", "rust"]    # Selected closure comes from root mise.toml/mise.lock.
 # runner = "macos-26-arm64"
-# timeout_minutes = 5                 # Bounded 1..=5.
+# timeout_minutes = 5                 # Bounded 1..=360; default 5.
 # cargo_build_jobs = 2                  # Bounded 1..=2; MBX/Rust are selected, while task code owns compiler selection.
 # nextest_test_threads = 2              # Bounded 1..=2.
 # [[workflow.tasks]]
@@ -127,7 +128,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # mise_task = "desktop-format-check"
 # source = { mise_config = "native/mise.toml", working_directory = "native" }
 # runner = "macos-arm64"               # Or "linux-x64".
-# timeout_minutes = 5                  # Bounded 1..=5.
+# timeout_minutes = 5                  # Bounded 1..=360; default 5.
 
 # Optional resource limits for generated jobs.
 # [resources]

@@ -107,6 +107,7 @@ pub use verification::{VerificationRunner, VerificationTask};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, PullRequestCachePolicy, RUNNER_LABEL_CATALOG,
     RunnerSelection, VelnorSupportWorkflow, VerifyConfig, WorkflowConfig, WorkflowPolicy,
+    default_crate_timeout_minutes,
 };
 pub use workflow_task::{WORKFLOW_TASK_JOB_PREFIX, WorkflowTask, is_valid_workflow_task_id};
 
@@ -326,3 +327,6 @@ mod preview_policy_tests;
 mod review_completion;
 pub(crate) use distribution::valid_review_check_name;
 pub use review_completion::{ReviewCompletionConfig, ReviewCompletionProvider};
+
+/// Native release/source execution remains strictly bounded independently of general jobs.
+pub(crate) const NATIVE_PREVIEW_MAX_TIMEOUT_MINUTES: u16 = 5;

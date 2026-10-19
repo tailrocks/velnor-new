@@ -42,6 +42,22 @@ This is an explicit change to the earlier topology decision, not a claim that
 any package's cold workload now fits. Every phase needs cold execution evidence;
 failure still blocks promotion and never increases its five-minute limit.
 
+### Configurable job timeout amendment (2026-10-19)
+
+The repository owner requested a configurable crate-job timeout after hosted
+consumer CI (ChainArgos java-monorepo, scale set temporarily disabled) canceled
+every cold Rust crate job at five minutes: checkout took about 1.5 minutes and
+Clippy about 2.2 minutes before test compilation. This supersedes the
+five-minute maximum above for general workflow jobs while keeping five minutes
+as the default. Every generated job still carries a literal bounded
+`timeout-minutes`; the general bound is `1..=360` (GitHub's hosted per-job
+execution limit). `[workflow] crate_timeout_minutes` sets every crate job, and
+existing general task, check, and suite `timeout_minutes` fields accept the same
+range. Native preview producers and tap updaters retain their separate `1..=5`
+publication/promotion boundary; this amendment does not widen their configuration
+or operation deadlines. Control jobs keep the default. See
+[job timeout limits](../implemented/job-timeout-limits.md).
+
 ## 2. `ci.yml` vs `velnor.yml` — adopt pr-1
 
 - Old: emits `velnor.yml`, `velnor-release.yml`,

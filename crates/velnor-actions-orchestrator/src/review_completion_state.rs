@@ -71,7 +71,7 @@ pub(super) fn operation(job: &str) -> Result<Operation, OrchestratorError> {
     }
     let deadline = CheckDeadline::from_start_with_cleanup_reserve(
         Instant::now(),
-        Duration::from_secs(u64::from(velnor_actions_contract::JobTimeout::MAX_MINUTES) * 60),
+        Duration::from_secs(u64::from(velnor_actions_contract::JobTimeout::DEFAULT_MINUTES) * 60),
     )
     .map_err(|_| internal("review_completion_deadline"))?;
     let temp = PathBuf::from(env_string("RUNNER_TEMP")?)

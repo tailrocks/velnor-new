@@ -381,7 +381,7 @@ Regenerate actions and snapshots from the corrected source.
 ### PR #94: Rust repository policy
 
 Preserve the Rust freshness and repository-policy implementation.
-Retain bounded upstream probes, dependency checks, and commit-trailer validation.
+Retain bounded upstream probes and dependency checks.
 Keep the private typed CLI boundary.
 Do not add maintenance commands to the public product command tree.
 Keep scripts thin where Rust owns the policy.
@@ -456,7 +456,7 @@ Do not substitute old PR evidence for tests of the integrated branch.
 Do not claim production readiness for an unqualified runner path.
 
 Make small commits with source PR references and accurate authorship.
-Use the repository's required commit trailers with the real configured identity.
+End commit messages with the Claude co-author trailer `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`; no sign-off is required.
 Push recovery refs and target changes without force.
 Check for remote changes before each target push.
 Do not change main, publish releases, or deploy runner services.

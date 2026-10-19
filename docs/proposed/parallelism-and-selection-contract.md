@@ -261,9 +261,9 @@ Overlap independent preparation, such as downloading a verified build artifact w
    existing OpenTofu lane-staging responsibility remains unchanged.
 5. The final `Required` job always joins every emitted phase and the complete
    expected task/report inventory. Missing, skipped, canceled or failed phase
-   evidence fails the gate. Every concrete job retains the five-minute maximum;
-   the sum of dependent jobs, queueing and approvals is not a five-minute
-   workflow-wide bound.
+   evidence fails the gate. Every concrete phase job carries the literal
+   `workflow.crate_timeout_minutes` bound (default five, at most 360); the sum
+   of dependent jobs, queueing and approvals is not a workflow-wide bound.
 
 Explicit named Nextest suites remain a separate supported fan-out mechanism.
 Their declared matrix uses `fail-fast: false`; an archive-backed suite builds

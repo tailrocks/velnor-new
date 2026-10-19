@@ -78,7 +78,7 @@ fn rejects_duplicate_or_unsafe_inventory_and_unbounded_producer_settings() {
     preview.companions[0].path = "../formula.rb".to_owned();
     assert!(preview.validate("config.toml").is_err());
     let mut preview = enabled_preview();
-    preview.producer.timeout_minutes = 6;
+    preview.producer.timeout_minutes = 361;
     assert!(preview.validate("config.toml").is_err());
     let mut preview = enabled_preview();
     preview.producer.build_jobs = 65;
@@ -282,13 +282,14 @@ fn rejects_inventory_larger_than_canonical_receipt_limits() {
 }
 
 #[test]
-fn timeout_preserves_shorter_budgets_and_rejects_above_five() {
-    for minutes in 1..=5 {
+fn native_timeout_stays_five_minutes_independent_of_general_job_limit() {
+    assert!(crate::workflow::timeout::JobTimeout::new(360).is_ok());
+    for minutes in [1, 5] {
         let mut value = enabled_preview();
         value.producer.timeout_minutes = minutes;
         assert!(value.validate("config.toml").is_ok(), "{minutes}");
     }
-    for minutes in [0, 6, 30, 360, u16::MAX] {
+    for minutes in [0, 6, 30, 360, 361, u16::MAX] {
         let mut value = enabled_preview();
         value.producer.timeout_minutes = minutes;
         assert!(value.validate("config.toml").is_err(), "{minutes}");

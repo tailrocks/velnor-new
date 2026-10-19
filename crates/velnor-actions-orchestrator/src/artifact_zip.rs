@@ -270,7 +270,7 @@ pub(crate) fn within_operation<T>(
     operation: impl FnOnce() -> Result<T, OrchestratorError>,
 ) -> Result<T, OrchestratorError> {
     let budget = std::time::Duration::from_secs(
-        u64::from(velnor_actions_contract::workflow::JobTimeout::MAX_MINUTES) * 60,
+        u64::from(velnor_actions_contract::workflow::JobTimeout::DEFAULT_MINUTES) * 60,
     );
     let deadline =
         CheckDeadline::from_start_with_cleanup_reserve(std::time::Instant::now(), budget)

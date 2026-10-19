@@ -845,12 +845,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
-name = "unicode-general-category"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b993bddc193ae5bd0d623b49ec06ac3e9312875fdae725a975c51db1cc1677f"
-
-[[package]]
 name = "unicode-ident"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -912,28 +906,27 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-actionlint"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "velnor-actions-contract",
 ]
 
 [[package]]
 name = "velnor-actions-cli"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "clap",
  "proc-macro2",
  "serde_json",
  "sha2",
  "syn",
- "unicode-general-category",
  "velnor-actions-freshness",
  "velnor-actions-orchestrator",
 ]
 
 [[package]]
 name = "velnor-actions-contract"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "blake3",
  "serde",
@@ -944,7 +937,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-freshness"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "flate2",
  "rustix",
@@ -958,7 +951,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-mise"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "rustix",
  "serde",
@@ -970,7 +963,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-orchestrator"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "base64",
  "flate2",
@@ -996,7 +989,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-rust"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "serde",
  "serde_json",
@@ -1006,7 +999,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-tofu"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "hcl-rs",
  "serde",
@@ -1016,7 +1009,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-actions-workflow-renderer"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "serde_json",
  "velnor-actions-actionlint",
@@ -1026,7 +1019,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-archive-guard"
-version = "0.1.21"
+version = "0.1.22"
 dependencies = [
  "flate2",
  "sha2",

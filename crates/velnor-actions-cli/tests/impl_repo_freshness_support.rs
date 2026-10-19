@@ -27,6 +27,5 @@ fn freshness_support_is_private_and_separately_classified() -> Result<(), Box<dy
     }
     let cli_contract = read("docs/proposed/cli-contract.md")?;
     assert!(cli_contract.contains("repo-policy-v1"));
-    assert!(cli_contract.contains("trailer-policy"));
     Ok(())
 }

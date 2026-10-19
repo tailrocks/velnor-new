@@ -2,7 +2,7 @@
 //!
 //! Obligations stay per task; jobs group by package/configuration and a fixed
 //! adapter-owned execution responsibility. Rust uses lint, tests and docs
-//! phases under the five-minute ceiling; `OpenTofu` keeps its root jobs. Local
+//! phases under the crate-job timeout; `OpenTofu` keeps its root jobs. Local
 //! gates reference strictly earlier obligations by construction. Cross-job
 //! quality/data gates are preserved through exact owning-job IR dependencies,
 //! never interpreted as optional or silently dropped when a phase changes.

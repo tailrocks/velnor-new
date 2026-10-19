@@ -336,7 +336,7 @@ fn tap_updater_rejects_self_hosted_execution_without_native_provisioning() {
 
 #[test]
 fn preview_rejects_unbounded_producer_limits_before_rendering() {
-    for minutes in [0, 6, 30, 120, 360, u16::MAX] {
+    for minutes in [0, 6, 30, 360, 361, u16::MAX] {
         let mut spec = fixture();
         spec.producer_timeout_minutes = minutes;
         assert!(render_consumer_preview(&spec).is_err(), "{minutes}");

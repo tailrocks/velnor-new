@@ -110,7 +110,7 @@ fn rejects_unqualified_inputs_tools_and_unbounded_task() {
     config.updater.tools.push("jq".to_owned());
     assert!(config.validate("config.toml").is_err());
     config = valid();
-    config.updater.timeout_minutes = 6;
+    config.updater.timeout_minutes = 361;
     assert!(config.validate("config.toml").is_err());
     config = valid();
     config.updater.inputs.retain(|path| path != "mise.toml");
@@ -163,13 +163,14 @@ fn closed_enums_reject_arbitrary_source_environment_and_merge_values() {
 }
 
 #[test]
-fn timeout_preserves_shorter_budgets_and_rejects_above_five() {
-    for minutes in 1..=5 {
+fn native_timeout_stays_five_minutes_independent_of_general_job_limit() {
+    assert!(crate::workflow::timeout::JobTimeout::new(360).is_ok());
+    for minutes in [1, 5] {
         let mut value = valid();
         value.updater.timeout_minutes = minutes;
         assert!(value.validate("config.toml").is_ok(), "{minutes}");
     }
-    for minutes in [0, 6, 30, 360, u32::MAX] {
+    for minutes in [0, 6, 30, 360, 361, u32::MAX] {
         let mut value = valid();
         value.updater.timeout_minutes = minutes;
         assert!(value.validate("config.toml").is_err(), "{minutes}");

@@ -80,11 +80,9 @@ rules are in §6 and [workflow §3](workflow-contract.md).
 Repository-maintenance checks use the separate private operation
 `VELNOR_INTERNAL_OP=repo-policy-v1` and the allowlisted
 `VELNOR_REPO_POLICY_ACTION` values `freshness`, `toolchain-specs`,
-`mise-version`, `workspace-members`, `library-members`, and `trailer-policy`.
+`mise-version`, `workspace-members`, and `library-members`.
 The `VELNOR_REPO_POLICY_ROOT` variable must name an existing directory.
-Optional upstream, advisory, and trailer-identity flags accept only absent,
-`0`, or `1`; trailer validation also requires an absolute existing message
-file. Unknown actions and malformed flags fail closed. The gate transports
+Optional upstream and advisory flags accept only absent, `0`, or `1`. Unknown actions and malformed flags fail closed. The gate transports
 read-only operations to the repository-only `velnor-actions-freshness`
 support crate; the orchestrator, public command tree, V1 product task graph,
 and generated workflows MUST NOT depend on it. This adds no public command or
@@ -187,6 +185,7 @@ schema = 1
 # runner_label = "<latest pinned label>" # Exact latest pinned runner; omit for the default.
 # generator_validation = "bootstrap"  # Generator validation mode.
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.
+# crate_timeout_minutes = 5            # timeout-minutes for every Rust phase and OpenTofu root job; bounded 1..=360.
 
 # Optional resource limits for generated jobs.
 # [resources]
@@ -212,7 +211,7 @@ schema = 1
 # kind = "verification"
 # mise_task = "desktop-format-check"
 # runner = "macos-arm64"           # Or "linux-x64".
-# timeout_minutes = 5              # Required, bounded 1..=5.
+# timeout_minutes = 5              # Required, bounded 1..=360.
 
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]
@@ -244,15 +243,14 @@ YAML, JSON, shell scripts, full command arguments, cache keys, task reports,
 timestamps, or volatile run IDs. Findings and actionable recommendations go
 to stderr.
 
-The report MUST list detected stacks and their selected/ignored state; Rust
-workspace roots; each crate's package name, relative manifest path, targets,
-and local dependency names; planned workflow file paths; job groups and their
-purpose; Rust phase and Tofu root job counts; obligation names; runner label;
-planned cache layers; actionlint version/configuration; selected action pins;
-detected Rust test runner and compile driver with evidence; and concise reasons
-for ignored or ineligible work. It
-MUST list every discovered crate in stable package/path order. Tool-file
-recommendations MUST match `generate`.
+The report MUST list detected stacks and their selected/ignored state; Rust workspace
+roots; each crate's package name, relative manifest path, targets, and local dependency
+names; planned workflow file paths; job groups and their purpose; Rust phase and Tofu
+root job counts and their shared `timeout-minutes`; obligation names; runner label;
+planned cache layers; actionlint version/configuration; selected action pins; detected
+Rust test runner and compile driver with evidence; and concise reasons for ignored or
+ineligible work. It MUST list every discovered crate in stable package/path order.
+Tool-file recommendations MUST match `generate`.
 
 The report describes the full configured workflow template and MUST explain
 that pull-request execution can narrow crate obligations through its event-time

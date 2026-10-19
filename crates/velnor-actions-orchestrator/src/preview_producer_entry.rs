@@ -50,9 +50,11 @@ const PLAN_NAME: &str = "package-release-plan.json";
 pub fn execute_preview_producer() -> Result<(), OrchestratorError> {
     acquisition::reject_credentials()?;
     let started = Instant::now();
+    // Absolute ceiling (GitHub's job limit) until the configured producer
+    // budget is read; the nested scope below can only shorten it.
     let maximum = CheckDeadline::from_start_with_cleanup_reserve(
         started,
-        Duration::from_secs(u64::from(velnor_actions_contract::JobTimeout::MAX_MINUTES) * 60),
+        Duration::from_secs(u64::from(velnor_actions_contract::JobTimeout::DEFAULT_MINUTES) * 60),
     )
     .map_err(|error| internal(&error.to_string()))?;
     with_proof_ownership(|guard| {

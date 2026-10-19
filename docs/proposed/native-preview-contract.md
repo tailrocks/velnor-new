@@ -216,6 +216,10 @@ The separately published `release.json.bundle` and GitHub attestations are exclu
 
 ## 5. Job boundaries and credential projection
 
+Native preview producer and tap-updater budgets remain one through five minutes.
+The general workflow timeout configuration may support longer unrelated jobs; it
+does not widen this publication and promotion boundary or its operation deadline.
+
 Generated preview workflow is separate from CI and stable release. Its fixed DAG is eligibility; unprivileged producer; independent output/evidence validation; signer; immutable publisher; unprivileged tap preparation; isolated App PR writer; exact-head gated merge. Build has no OIDC, release write, or tap credentials. Signer does not execute repository code. Publisher has release contents permission only and no build/updater execution. The publisher and recovery verifier use an explicitly passed source-repository read token for GitHub attestation lookup; the pinned `gh` child receives only that token after clearing ambient credentials. Reject identical source-read and tap App tokens. Updater has no write credentials. App token exists only in isolated writer/merge boundary with target-scoped `contents:write` and `pull_requests:write`; no `actions:write`, admin, or bypass. Use clean ephemeral jobs, no persisted checkout token, hooks, filters, executable config, producer cache, or environment-file credential handoff.
 
 Manual stable/product release remains explicitly dispatched; eligibility fails immediately if exact-commit CI is not already complete. This scheduling rule grants no new stable release authorization.
@@ -258,7 +262,7 @@ An already-promoted candidate authorizes no branch, commit, PR, or merge write.
 The independently authenticated merge boundary must prove the actual merged
 PR, original formula commit and base, expected bot and branch, canonical formula
 tree, signed-off commit, merge ancestry to captured tap main, exact current
-formula, required exact-head checks including DCO, and trusted completed review.
+formula, every required exact-head check, and trusted completed review.
 A matching formula without that historical proof is blocked. A newer formula is
 not an already-current outcome for an older receipt and must never be downgraded.
 

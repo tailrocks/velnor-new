@@ -93,7 +93,7 @@ pub struct TapUpdaterBinding {
     /// Runtime qualification must verify the exact pinned declarations there;
     /// these IDs never resolve through Velnor's own tool catalog.
     pub tools: Vec<String>,
-    /// Bounded task runtime.
+    /// Native promotion task runtime, bounded to one through five minutes.
     #[serde(default = "default_updater_timeout")]
     pub timeout_minutes: u32,
 }
@@ -232,7 +232,9 @@ impl TapUpdaterBinding {
         if self.tools.is_empty() || !unique_names(&self.tools) {
             return Err(bad("updater.tools", "invalid_task_tools"));
         }
-        if !crate::workflow::timeout::JobTimeout::is_valid_minutes(self.timeout_minutes) {
+        if !(1..=u32::from(crate::config::NATIVE_PREVIEW_MAX_TIMEOUT_MINUTES))
+            .contains(&self.timeout_minutes)
+        {
             return Err(bad("updater.timeout_minutes", "bad_task_timeout"));
         }
         Ok(())

@@ -38,6 +38,15 @@ pub struct WorkflowConfig {
     pub generator_validation: GeneratorValidation,
     /// Maximum parallel matrix jobs.
     pub max_parallel_jobs: u32,
+    /// Literal `timeout-minutes` for every generated crate job (`1..=360`, default `5`).
+    ///
+    /// Applies to each Rust capacity-phase job and each `OpenTofu` root job.
+    /// Control jobs (plan, required, validators) keep the built-in default.
+    #[serde(
+        default = "default_crate_timeout_minutes",
+        skip_serializing_if = "is_default_crate_timeout"
+    )]
+    pub crate_timeout_minutes: u16,
     /// Keep `MISE_QUIET=1` in the generated workflow environment (default true).
     ///
     /// Silence is the default for log hygiene. `false` omits `MISE_QUIET` so
@@ -176,6 +185,11 @@ impl WorkflowConfig {
                 "must_be_at_least_one",
             ));
         }
+        crate::workflow::timeout::JobTimeout::check_config(
+            u32::from(self.crate_timeout_minutes),
+            file,
+            "workflow.crate_timeout_minutes",
+        )?;
         if let Some(branch) = &self.default_branch
             && !crate::is_valid_branch_name(branch)
         {
@@ -346,6 +360,21 @@ fn valid_lychee_arg(value: &str) -> bool {
         && !value.contains(['$', '`'])
         && !value.chars().any(char::is_control)
         && !value.split_whitespace().any(|word| word == "mise")
+}
+
+/// Default crate-job timeout: the shared five-minute job default.
+#[must_use]
+pub const fn default_crate_timeout_minutes() -> u16 {
+    crate::workflow::timeout::JobTimeout::DEFAULT_MINUTES
+}
+
+/// Serialization predicate keeping the default crate timeout out of emitted config.
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if requires fn(&u16) -> bool"
+)]
+fn is_default_crate_timeout(value: &u16) -> bool {
+    *value == default_crate_timeout_minutes()
 }
 
 /// Default `mise_quiet` value: silence stays on.

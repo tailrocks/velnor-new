@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.21
+Velnor Actions plan 0.1.22
 Repository: <repo>
 
 Detected stacks
@@ -22,6 +22,7 @@ Workflow to generate
     - rust-minimal-cargo-lint (11 steps)
     - rust-minimal-cargo-tests (11 steps)
     - 3 Rust phase jobs
+      Timeout: 5 minutes per crate job
       Obligations: Clippy -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-minimal-cargo-docs

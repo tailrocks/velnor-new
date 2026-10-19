@@ -45,8 +45,6 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         "rustls",
         "rustls-native-certs",
         "ureq",
-        // CLI trailer compatibility preserves Python Unicode word-boundary semantics.
-        "unicode-general-category",
     ];
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;
