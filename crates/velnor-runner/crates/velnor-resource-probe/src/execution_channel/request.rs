@@ -23,12 +23,18 @@ pub(super) fn read_request_file(
     inbox: &File,
     user_id: u32,
     group_id: u32,
-) -> Result<(Vec<u8>, RequestMetadata), ProbeError> {
-    let (bytes, before, after) = read_once(inbox, user_id, group_id)?;
-    let (confirmed, reopened, final_state) = read_once(inbox, user_id, group_id)?;
+) -> Result<Option<(Vec<u8>, RequestMetadata)>, ProbeError> {
+    let Some((bytes, before, after)) = read_once(inbox, user_id, group_id)? else {
+        if open_request(inbox)?.is_some() {
+            return Err(ProbeError::Invalid("execution_request_changed"));
+        }
+        return Ok(None);
+    };
+    let (confirmed, reopened, final_state) = read_once(inbox, user_id, group_id)?
+        .ok_or(ProbeError::Invalid("execution_request_changed"))?;
     ensure_stable_identity(before, after, reopened, final_state)?;
     ensure_stable_content(&bytes, &confirmed)?;
-    Ok((bytes, final_state))
+    Ok(Some((bytes, final_state)))
 }
 
 pub(super) fn ensure_stable_identity(
@@ -56,8 +62,10 @@ fn read_once(
     inbox: &File,
     user_id: u32,
     group_id: u32,
-) -> Result<(Vec<u8>, RequestMetadata, RequestMetadata), ProbeError> {
-    let file = open_request(inbox)?;
+) -> Result<Option<(Vec<u8>, RequestMetadata, RequestMetadata)>, ProbeError> {
+    let Some(file) = open_request(inbox)? else {
+        return Ok(None);
+    };
     let before = request_metadata(&file, user_id, group_id)?;
     let mut bytes = Vec::with_capacity(REQUEST_LIMIT.min(4096));
     file.try_clone()
@@ -69,18 +77,20 @@ fn read_once(
         return Err(ProbeError::InputTooLarge("execution_request"));
     }
     let after = request_metadata(&file, user_id, group_id)?;
-    Ok((bytes, before, after))
+    Ok(Some((bytes, before, after)))
 }
 
-fn open_request(inbox: &File) -> Result<File, ProbeError> {
-    openat(
+fn open_request(inbox: &File) -> Result<Option<File>, ProbeError> {
+    match openat(
         inbox,
         REQUEST_FILE,
         OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
         Mode::empty(),
-    )
-    .map(File::from)
-    .map_err(|_| ProbeError::Invalid("execution_request_open"))
+    ) {
+        Ok(file) => Ok(Some(File::from(file))),
+        Err(rustix::io::Errno::NOENT) => Ok(None),
+        Err(_) => Err(ProbeError::Invalid("execution_request_open")),
+    }
 }
 
 fn request_metadata(

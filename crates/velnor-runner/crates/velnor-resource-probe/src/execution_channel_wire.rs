@@ -88,6 +88,28 @@ pub struct ExecutionRequestContext {
     pub expected_channel: ExecutionChannelObservation,
 }
 
+/// One bounded read result from the specified Runner inbox.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
+pub enum ExecutionRequestOutcome {
+    /// The fixed request path was absent on its initial no-follow open.
+    NotYetPresent {
+        /// Wire schema version. The value must be three.
+        schema_version: u8,
+        /// Request operation identity.
+        operation_id: String,
+        /// Guest boot identity measured during the read.
+        guest_boot_id: String,
+        /// Revalidated channel facts measured during the read.
+        channel: ExecutionChannelObservation,
+    },
+    /// A present request and its measured file identity.
+    Present {
+        /// Request record.
+        record: ExecutionRequestRecord,
+    },
+}
+
 /// Request bytes and measured identity of the Runner request.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -114,4 +136,72 @@ pub struct ExecutionRequestRecord {
     pub mode: u32,
     /// Request file byte length.
     pub size: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ExecutionChannelDirectory, ExecutionChannelObservation, ExecutionRequestOutcome};
+
+    #[test]
+    fn absence_wire_is_tagged_and_round_trips_without_request_bytes() {
+        let directory = ExecutionChannelDirectory {
+            target: "/opt/velnor/source-proof/control".to_owned(),
+            inode: 10,
+            owner_uid: 0,
+            owner_gid: 0,
+            mode: 0o555,
+            mount_id: 11,
+            statx_mount_id: 11,
+            mount_root: "/source-proof/control".to_owned(),
+            mount_source: "/dev/vda".to_owned(),
+            mount_device_major: 254,
+            mount_device_minor: 1,
+            statx_device_major: 254,
+            statx_device_minor: 1,
+            filesystem_type_magic: 0x9123_683e,
+            filesystem_type_name: "btrfs".to_owned(),
+            filesystem_id: 12,
+            read_only: true,
+            executable_mount: false,
+        };
+        let channel = ExecutionChannelObservation {
+            schema_version: 3,
+            operation_id: "a".repeat(32),
+            guest_boot_id: "boot".to_owned(),
+            mount_namespace_id: 13,
+            control: directory.clone(),
+            inbox: ExecutionChannelDirectory {
+                target: "/opt/velnor/source-proof/inbox".to_owned(),
+                inode: 14,
+                owner_uid: 1000,
+                owner_gid: 1000,
+                mode: 0o700,
+                ..directory.clone()
+            },
+            job_facts: ExecutionChannelDirectory {
+                target: "/opt/velnor/job-facts".to_owned(),
+                inode: 15,
+                owner_uid: 0,
+                owner_gid: 0,
+                mode: 0o555,
+                ..directory
+            },
+        };
+        let outcome = ExecutionRequestOutcome::NotYetPresent {
+            schema_version: 3,
+            operation_id: "b".repeat(32),
+            guest_boot_id: "boot".to_owned(),
+            channel,
+        };
+        let encoded = serde_json::to_vec(&outcome).expect("encode absence");
+        assert!(
+            encoded
+                .windows(b"\"status\":\"not_yet_present\"".len())
+                .any(|window| { window == b"\"status\":\"not_yet_present\"" })
+        );
+        assert_eq!(
+            serde_json::from_slice::<ExecutionRequestOutcome>(&encoded).expect("decode absence"),
+            outcome
+        );
+    }
 }

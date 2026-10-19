@@ -1,4 +1,4 @@
-//! Publish one trusted source-proof record at a fixed control path.
+//! Publish one source-proof record at the specified control path.
 
 mod wire;
 
@@ -12,11 +12,11 @@ pub use wire::{
 /// Maximum input bytes for one publication request.
 pub const PUBLICATION_REQUEST_LIMIT: usize = 20_480;
 
-/// Publish one challenge or decision record in the fixed control directory.
+/// Publish one challenge or decision record in the specified control directory.
 ///
 /// # Errors
 ///
-/// Returns an error if the request, publisher mount, or control file is not safe.
+/// Returns an error if the request, mount, or control file is incorrect.
 #[cfg(target_os = "linux")]
 pub fn publish_execution_control(
     context: ExecutionPublicationContext,

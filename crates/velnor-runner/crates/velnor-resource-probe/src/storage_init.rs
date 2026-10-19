@@ -1,12 +1,17 @@
 //! Fixed, bounded storage initialization contract.
 
-use serde::Deserialize;
-#[cfg(target_os = "linux")]
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Request {
+    pub(super) operation_id: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+#[cfg(any(target_os = "linux", test))]
+pub(super) struct Acknowledgment {
     pub(super) operation_id: String,
 }
 
@@ -53,6 +58,19 @@ pub(super) fn valid_operation_id(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+}
+
+#[cfg(any(target_os = "linux", test))]
+pub(super) fn validate_acknowledgment(
+    acknowledgment: &Acknowledgment,
+    expected_operation_id: &str,
+) -> Result<(), &'static str> {
+    if !valid_operation_id(expected_operation_id)
+        || acknowledgment.operation_id != expected_operation_id
+    {
+        return Err("acknowledgment_operation_id");
+    }
+    Ok(())
 }
 
 #[cfg(any(target_os = "linux", test))]
@@ -142,9 +160,9 @@ pub(super) fn initialize(operation_id: String) -> Result<ResultRecord, &'static 
 #[cfg(test)]
 mod tests {
     use super::{
-        MountIdentity, Request, valid_operation_id, validate_child_mount, validate_directory_state,
-        validate_distinct_roots, validate_initial_root, validate_mount_identity,
-        validate_mount_pair,
+        Acknowledgment, MountIdentity, Request, valid_operation_id, validate_acknowledgment,
+        validate_child_mount, validate_directory_state, validate_distinct_roots,
+        validate_initial_root, validate_mount_identity, validate_mount_pair,
     };
 
     #[test]
@@ -165,6 +183,21 @@ mod tests {
     fn rejects_unknown_request_fields() {
         assert!(
             serde_json::from_str::<Request>(r#"{"operation_id":"abc","path":"/tmp"}"#).is_err()
+        );
+    }
+
+    #[test]
+    fn accepts_only_acknowledgment_for_the_same_operation() {
+        let acknowledgment: Acknowledgment =
+            serde_json::from_str(r#"{"operation_id":"op-7"}"#).expect("valid acknowledgment");
+        assert_eq!(validate_acknowledgment(&acknowledgment, "op-7"), Ok(()));
+        assert_eq!(
+            validate_acknowledgment(&acknowledgment, "op-8"),
+            Err("acknowledgment_operation_id")
+        );
+        assert!(
+            serde_json::from_str::<Acknowledgment>(r#"{"operation_id":"op-7","extra":true}"#)
+                .is_err()
         );
     }
 
@@ -244,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    fn metadata_children_must_remain_on_the_metadata_mount() {
+    fn inbox_child_must_remain_on_the_home_mount() {
         assert_eq!(validate_child_mount(41, 41), Ok(()));
         assert_eq!(validate_child_mount(41, 42), Err("child_mount_changed"));
         assert_eq!(validate_child_mount(0, 0), Err("child_mount_changed"));

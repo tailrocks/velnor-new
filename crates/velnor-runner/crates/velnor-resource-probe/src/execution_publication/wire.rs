@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::execution_channel_wire::ExecutionChannelDirectory;
 
-/// One fixed source-proof control file.
+/// One specified source-proof control file.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ExecutionPublicationKind {
@@ -30,7 +30,7 @@ impl ExecutionPublicationKind {
     }
 }
 
-/// Bounded input for one control-file publication.
+/// Input with a size limit to publish one control file.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ExecutionPublicationContext {
@@ -38,29 +38,29 @@ pub struct ExecutionPublicationContext {
     pub schema_version: u8,
     /// Operation identity supplied by the host.
     pub operation_id: String,
-    /// Guest boot identity measured by the host.
+    /// Guest boot ID measured by the host.
     pub expected_guest_boot_id: String,
-    /// Fixed control file selected for publication.
+    /// Specified control file to publish.
     pub kind: ExecutionPublicationKind,
-    /// Canonical document bytes in lower-case hexadecimal form.
+    /// Document bytes in the required JSON format, with hexadecimal encoding.
     pub payload_hex: String,
-    /// SHA-256 digest of the canonical document bytes.
+    /// SHA-256 digest of the required JSON document bytes.
     pub payload_sha256: String,
-    /// Control directory measured in the Runner namespace.
+    /// Control directory measured in the Runner mount namespace.
     pub expected_runner_control: ExecutionChannelDirectory,
 }
 
-/// Measured publisher control directory and mount source.
+/// Measured control directory and mount source.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ExecutionPublicationFile {
-    /// Fixed destination path in the Runner container.
+    /// Specified path in the Runner container.
     pub path: String,
-    /// Control directory inode from its open descriptor.
+    /// Control directory inode from its open file descriptor.
     pub control_directory_inode: u64,
-    /// File inode from the open descriptor.
+    /// File inode from the open file descriptor.
     pub inode: u64,
-    /// File byte length from the open descriptor.
+    /// File byte length from the open file descriptor.
     pub bytes: u64,
     /// File owner UID.
     pub owner_uid: u32,
@@ -68,7 +68,7 @@ pub struct ExecutionPublicationFile {
     pub owner_gid: u32,
     /// File mode bits.
     pub mode: u32,
-    /// Mount ID from the publisher mount namespace.
+    /// Mount ID from the mount namespace of the process that publishes the file.
     pub mount_id: u64,
     /// Mount ID from statx.
     pub statx_mount_id: u64,
@@ -88,11 +88,11 @@ pub struct ExecutionPublicationFile {
     pub mount_root: String,
     /// Mount source from mount information.
     pub mount_source: String,
-    /// Lower-case SHA-256 digest read back from the file.
+    /// SHA-256 digest with hexadecimal encoding, calculated from the file bytes.
     pub readback_sha256: String,
 }
 
-/// Actual facts from one completed control-file publication.
+/// Facts measured after the control file is published.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct ExecutionPublicationRecord {
@@ -100,13 +100,13 @@ pub struct ExecutionPublicationRecord {
     pub schema_version: u8,
     /// Operation identity supplied by the host.
     pub operation_id: String,
-    /// Guest boot identity read from procfs.
+    /// Guest boot ID read from procfs.
     pub guest_boot_id: String,
     /// Mount namespace inode read from procfs.
     pub mount_namespace_id: u64,
-    /// Fixed control file selected for publication.
+    /// Specified control file to publish.
     pub kind: ExecutionPublicationKind,
-    /// SHA-256 digest of the expected canonical document.
+    /// SHA-256 digest of the required JSON document.
     pub payload_sha256: String,
     /// Measured file and filesystem facts.
     pub file: ExecutionPublicationFile,

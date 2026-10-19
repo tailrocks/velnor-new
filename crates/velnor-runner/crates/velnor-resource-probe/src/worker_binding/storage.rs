@@ -6,7 +6,7 @@ use crate::{
 #[cfg(target_os = "linux")]
 use crate::{
     filesystem::{filesystem_name, inode_policy},
-    mountinfo::attachment_mount,
+    mountinfo::{attachment_mount, attachment_mount_source},
     worker_binding::{AttachmentSpec, DIND_ATTACHMENTS, RUNNER_ATTACHMENTS},
 };
 
@@ -60,7 +60,7 @@ fn observe_attachment(
     )
     .map_err(|error| ProbeError::Read("attachment_statx", error.into()))?;
     let required = StatxFlags::BASIC_STATS | StatxFlags::MNT_ID;
-    if statx_value.stx_mask & required.bits() != required.bits() {
+    if statx_value.stx_mask & required.bits() != required.bits() || statx_value.stx_ino == 0 {
         return Err(ProbeError::Invalid("attachment_statx_fields"));
     }
     let filesystem = fstatfs(&descriptor)
@@ -68,6 +68,7 @@ fn observe_attachment(
     let capacity = fstatvfs(&descriptor)
         .map_err(|error| ProbeError::Read("attachment_statvfs", error.into()))?;
     let mount = attachment_mount(mountinfo, spec.target)?;
+    let mount_source = attachment_mount_source(mountinfo, spec.target)?;
     let magic =
         u64::try_from(filesystem.f_type).map_err(|_| ProbeError::Invalid("attachment_fs_type"))?;
     if mount.mount_id != statx_value.stx_mnt_id
@@ -100,7 +101,9 @@ fn observe_attachment(
         executable_mount: mount.executable,
         mount_id: mount.mount_id,
         statx_mount_id: statx_value.stx_mnt_id,
+        statx_inode: statx_value.stx_ino,
         mount_root: mount.root,
+        mount_source,
         mount_device_major: mount.device_major,
         mount_device_minor: mount.device_minor,
         statx_device_major: statx_value.stx_dev_major,

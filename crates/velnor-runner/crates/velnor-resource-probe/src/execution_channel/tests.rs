@@ -224,7 +224,8 @@ fn reads_exact_regular_request_and_rejects_changed_owner_or_mode() {
     inbox.file(payload, 0o600);
     let (bytes, identity) =
         read_request_file(&inbox.open(), geteuid().as_raw(), getegid().as_raw())
-            .expect("read request");
+            .expect("read request")
+            .expect("request present");
     assert_eq!(bytes, payload);
     assert_eq!(identity.size, payload.len() as u64);
     assert_eq!(identity.mode, 0o600);
@@ -251,6 +252,19 @@ fn reads_exact_regular_request_and_rejects_changed_owner_or_mode() {
         fs::Permissions::from_mode(0o644),
     )
     .expect("change mode");
+    assert!(read_request_file(&inbox.open(), geteuid().as_raw(), getegid().as_raw()).is_err());
+}
+
+#[test]
+fn only_an_initial_missing_request_is_retryable_absence() {
+    let inbox = TestInbox::new();
+    assert_eq!(
+        read_request_file(&inbox.open(), geteuid().as_raw(), getegid().as_raw())
+            .expect("missing fixed request is a typed absence"),
+        None
+    );
+
+    std::os::unix::fs::symlink("missing", inbox.0.join(REQUEST_FILE)).expect("make symlink");
     assert!(read_request_file(&inbox.open(), geteuid().as_raw(), getegid().as_raw()).is_err());
 }
 

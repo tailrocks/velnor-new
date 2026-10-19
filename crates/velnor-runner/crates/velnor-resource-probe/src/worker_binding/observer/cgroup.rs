@@ -1,14 +1,16 @@
+#[cfg(target_os = "linux")]
 use std::{fs::File, io::Read, path::PathBuf};
 
-use crate::{
-    ProbeError,
-    cgroup::parse_cpuset,
-    worker_binding::{CgroupNodeObservation, MAX_CGROUP_NODES},
-};
+use crate::{ProbeError, worker_binding::MAX_CGROUP_NODES};
+#[cfg(target_os = "linux")]
+use crate::{cgroup::parse_cpuset, worker_binding::CgroupNodeObservation};
 
+#[cfg(target_os = "linux")]
 const CGROUP_ROOT: &str = "/sys/fs/cgroup";
+#[cfg(target_os = "linux")]
 const CGROUP_FILE_LIMIT: usize = 4096;
 
+#[cfg(target_os = "linux")]
 pub(super) fn observe_hierarchy(path: &str) -> Result<Vec<CgroupNodeObservation>, ProbeError> {
     let paths = hierarchy_paths(path)?;
     paths
@@ -18,6 +20,7 @@ pub(super) fn observe_hierarchy(path: &str) -> Result<Vec<CgroupNodeObservation>
         .collect()
 }
 
+#[cfg(target_os = "linux")]
 pub(super) fn verify_membership(path: &str, pid: u32) -> Result<(), ProbeError> {
     let directory = cgroup_directory(path)?;
     let bytes = read_required(&directory.join("cgroup.procs"), "cgroup_procs")?;
@@ -79,6 +82,7 @@ fn hierarchy_paths(path: &str) -> Result<Vec<String>, ProbeError> {
     Ok(paths)
 }
 
+#[cfg(target_os = "linux")]
 fn observe_node(path: &str, root: bool) -> Result<CgroupNodeObservation, ProbeError> {
     let directory = cgroup_directory(path)?;
     let memory = read_optional(&directory.join("memory.max"), root)?;
@@ -121,6 +125,7 @@ fn observe_node(path: &str, root: bool) -> Result<CgroupNodeObservation, ProbeEr
     })
 }
 
+#[cfg(target_os = "linux")]
 fn cgroup_directory(path: &str) -> Result<PathBuf, ProbeError> {
     validate_cgroup_path(path)?;
     let relative = path
@@ -129,6 +134,7 @@ fn cgroup_directory(path: &str) -> Result<PathBuf, ProbeError> {
     Ok(PathBuf::from(CGROUP_ROOT).join(relative))
 }
 
+#[cfg(target_os = "linux")]
 fn read_optional(path: &std::path::Path, root: bool) -> Result<Option<Vec<u8>>, ProbeError> {
     match read_required(path, "cgroup_control") {
         Ok(bytes) => Ok(Some(bytes)),
@@ -139,6 +145,7 @@ fn read_optional(path: &std::path::Path, root: bool) -> Result<Option<Vec<u8>>, 
     }
 }
 
+#[cfg(target_os = "linux")]
 fn read_required(path: &std::path::Path, name: &'static str) -> Result<Vec<u8>, ProbeError> {
     let file = File::open(path).map_err(|error| ProbeError::Read(name, error))?;
     let mut bytes = Vec::with_capacity(128);
@@ -151,6 +158,7 @@ fn read_required(path: &std::path::Path, name: &'static str) -> Result<Vec<u8>, 
     Ok(bytes)
 }
 
+#[cfg(target_os = "linux")]
 fn parse_optional_limit(
     input: Option<&[u8]>,
     root: bool,
@@ -165,6 +173,7 @@ fn parse_optional_limit(
     parse_limit(input, name)
 }
 
+#[cfg(target_os = "linux")]
 fn parse_optional_value(
     input: Option<&[u8]>,
     root: bool,
@@ -229,6 +238,7 @@ fn parse_decimal(input: &[u8], name: &'static str) -> Result<u64, ProbeError> {
     value.parse().map_err(|_| ProbeError::Overflow(name))
 }
 
+#[cfg(target_os = "linux")]
 fn parse_u32(value: &str, name: &'static str) -> Result<u32, ProbeError> {
     let parsed = parse_decimal(value.as_bytes(), name)?;
     u32::try_from(parsed).map_err(|_| ProbeError::Overflow(name))

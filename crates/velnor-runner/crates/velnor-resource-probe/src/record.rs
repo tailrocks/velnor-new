@@ -13,13 +13,17 @@ pub struct CpuAncestorLimit {
     pub cpu_period_micros: u64,
 }
 
-/// Version-3 bounded output record. `None` serializes as the required JSON `null` value.
+/// Version-5 bounded output record. `None` serializes as the required JSON `null` value.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProbeRecord {
     /// Protocol schema version.
     pub schema_version: u8,
     /// Fixed path that the probe measured.
     pub docker_root_mount_target: String,
+    /// Mount source from mount information.
+    pub docker_root_mount_source: String,
+    /// Mount root from mount information.
+    pub docker_root_mount_root: String,
     /// Mount ID in the probe's mount namespace.
     pub docker_root_mount_id: u64,
     /// Mount device major number.

@@ -1,0 +1,38 @@
+//! Publish one checked cache admission document to the fixed Runner volume.
+
+#[cfg(target_os = "linux")]
+mod publish;
+
+use crate::{ProbeError, job_facts_wire::JobFactsPublicationContext};
+
+pub use crate::job_facts_wire::{JobFactsPublicationFile, JobFactsPublicationRecord};
+
+/// Maximum serialized request size for one `JobFacts` publication.
+pub const JOB_FACTS_REQUEST_LIMIT: usize = 160 * 1024;
+
+/// Maximum serialized result size for one `JobFacts` publication.
+pub const JOB_FACTS_RECORD_LIMIT: usize = 16 * 1024;
+
+/// Publish one bounded storage cache admission document at its fixed target.
+///
+/// # Errors
+///
+/// Returns an error when the document, volume, file, or measured identity is unsafe.
+#[cfg(target_os = "linux")]
+pub fn publish_job_facts(
+    context: JobFactsPublicationContext,
+) -> Result<JobFactsPublicationRecord, ProbeError> {
+    publish::publish(context)
+}
+
+/// Reject this operation when the selected guest does not run Linux.
+///
+/// # Errors
+///
+/// Returns an error when this guest does not run Linux.
+#[cfg(not(target_os = "linux"))]
+pub fn publish_job_facts(
+    _context: JobFactsPublicationContext,
+) -> Result<JobFactsPublicationRecord, ProbeError> {
+    Err(ProbeError::Invalid("linux_guest_required"))
+}

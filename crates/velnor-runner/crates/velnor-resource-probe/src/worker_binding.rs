@@ -5,7 +5,7 @@ use std::io::Read;
 
 use crate::ProbeError;
 
-mod observer;
+pub(in crate::worker_binding) mod observer;
 mod records;
 mod requests;
 mod self_storage;
@@ -31,7 +31,7 @@ pub fn observe_self_storage(
 ///
 /// Returns an error when a process or cgroup identity cannot be verified.
 pub fn observe_owned_cgroups(
-    request: OwnedCgroupRequest,
+    request: &OwnedCgroupRequest,
 ) -> Result<OwnedCgroupObservation, ProbeError> {
     observer::observe(request)
 }
@@ -43,11 +43,11 @@ pub const WORKER_REQUEST_LIMIT: usize = 8_192;
 /// Maximum input bytes for one acknowledgment.
 pub const WORKER_ACK_LIMIT: usize = 128;
 /// Worker wire protocol version.
-pub const WORKER_PROTOCOL_VERSION: u16 = 1;
+pub const WORKER_PROTOCOL_VERSION: u16 = 3;
 /// Maximum acknowledgment wait in seconds.
 pub const ACK_TIMEOUT_SECONDS: u64 = 30;
 /// Maximum attachment count in one record.
-pub const MAX_ATTACHMENTS: usize = 8;
+pub const MAX_ATTACHMENTS: usize = 10;
 /// Maximum cgroup node count in one chain.
 pub const MAX_CGROUP_NODES: usize = 17;
 
@@ -81,6 +81,10 @@ pub enum AttachmentRole {
     JobFacts,
     /// Runner runtime identity filesystem.
     RuntimeIdentity,
+    /// Runner source-proof control filesystem.
+    SourceProofControl,
+    /// Runner source-proof inbox filesystem.
+    SourceProofInbox,
     /// Selected daemon Docker-root filesystem.
     EngineMetadata,
     /// `DinD` root filesystem.
@@ -103,7 +107,7 @@ pub struct AttachmentSpec {
 }
 
 #[cfg(any(target_os = "linux", test))]
-pub(crate) const RUNNER_ATTACHMENTS: [AttachmentSpec; 8] = [
+pub(crate) const RUNNER_ATTACHMENTS: [AttachmentSpec; 10] = [
     AttachmentSpec {
         role: AttachmentRole::RunnerRoot,
         target: "/",
@@ -135,6 +139,14 @@ pub(crate) const RUNNER_ATTACHMENTS: [AttachmentSpec; 8] = [
     AttachmentSpec {
         role: AttachmentRole::RuntimeIdentity,
         target: "/.velnor-runtime-identity",
+    },
+    AttachmentSpec {
+        role: AttachmentRole::SourceProofControl,
+        target: "/opt/velnor/source-proof/control",
+    },
+    AttachmentSpec {
+        role: AttachmentRole::SourceProofInbox,
+        target: "/opt/velnor/source-proof/inbox",
     },
 ];
 
@@ -327,10 +339,18 @@ mod tests {
 
     #[test]
     fn role_tables_are_fixed_and_have_no_duplicate_role_target_pairs() {
-        assert_eq!(RUNNER_ATTACHMENTS.len(), 8);
+        assert_eq!(RUNNER_ATTACHMENTS.len(), 10);
         assert_eq!(DIND_ATTACHMENTS.len(), 7);
         assert_eq!(RUNNER_ATTACHMENTS[6].target, "/opt/velnor/job-facts");
         assert_eq!(RUNNER_ATTACHMENTS[7].target, "/.velnor-runtime-identity");
+        assert_eq!(
+            RUNNER_ATTACHMENTS[8].target,
+            "/opt/velnor/source-proof/control"
+        );
+        assert_eq!(
+            RUNNER_ATTACHMENTS[9].target,
+            "/opt/velnor/source-proof/inbox"
+        );
         assert_eq!(DIND_ATTACHMENTS[4].target, "/var/lib/docker");
         for specs in [&RUNNER_ATTACHMENTS[..], &DIND_ATTACHMENTS[..]] {
             for (index, spec) in specs.iter().enumerate() {

@@ -19,7 +19,7 @@ mod request;
 mod tests;
 pub use crate::execution_channel_wire::{
     ExecutionChannelContext, ExecutionChannelDirectory, ExecutionChannelObservation,
-    ExecutionRequestContext, ExecutionRequestRecord,
+    ExecutionRequestContext, ExecutionRequestOutcome, ExecutionRequestRecord,
 };
 use identity::{mount_namespace_id, read_boot_id};
 use request::read_request_file;
@@ -109,7 +109,7 @@ fn ensure_distinct_mounts(
 /// Returns an error if the channel changes or the request file is not safe.
 pub fn read_execution_request(
     context: ExecutionRequestContext,
-) -> Result<ExecutionRequestRecord, ProbeError> {
+) -> Result<ExecutionRequestOutcome, ProbeError> {
     validate_context(context.schema_version, &context.operation_id)?;
     if context.expected_channel.operation_id != context.operation_id
         || context.expected_channel.guest_boot_id != context.expected_guest_boot_id
@@ -132,7 +132,7 @@ pub fn read_execution_request(
     )?;
     let inbox_before = observe_open_directory(&inbox, INBOX_PATH, &mountinfo_before)?;
     ensure_channel_directory(&current.inbox, &inbox_before)?;
-    let (bytes, after) = read_request_file(&inbox, RUNNER_OWNER.0, RUNNER_OWNER.1)?;
+    let request = read_request_file(&inbox, RUNNER_OWNER.0, RUNNER_OWNER.1)?;
     let mountinfo_after = read_bounded(
         MOUNTINFO_PATH,
         MOUNTINFO_LIMIT,
@@ -148,19 +148,29 @@ pub fn read_execution_request(
     if channel_after != current {
         return Err(ProbeError::Invalid("execution_request_channel_changed"));
     }
+    let Some((bytes, after)) = request else {
+        return Ok(ExecutionRequestOutcome::NotYetPresent {
+            schema_version: 3,
+            operation_id: context.operation_id,
+            guest_boot_id: current.guest_boot_id.clone(),
+            channel: current,
+        });
+    };
     let sha256 = lower_hex(&Sha256::digest(&bytes));
-    Ok(ExecutionRequestRecord {
-        schema_version: 3,
-        operation_id: context.operation_id,
-        guest_boot_id: current.guest_boot_id.clone(),
-        channel: current,
-        bytes_hex: lower_hex(&bytes),
-        sha256,
-        inode: after.inode,
-        owner_uid: after.user_id,
-        owner_gid: after.group_id,
-        mode: after.mode,
-        size: after.size,
+    Ok(ExecutionRequestOutcome::Present {
+        record: ExecutionRequestRecord {
+            schema_version: 3,
+            operation_id: context.operation_id,
+            guest_boot_id: current.guest_boot_id.clone(),
+            channel: current,
+            bytes_hex: lower_hex(&bytes),
+            sha256,
+            inode: after.inode,
+            owner_uid: after.user_id,
+            owner_gid: after.group_id,
+            mode: after.mode,
+            size: after.size,
+        },
     })
 }
 
