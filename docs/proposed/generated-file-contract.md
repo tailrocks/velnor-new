@@ -153,6 +153,12 @@ self-hosted-runner:
     - ubuntu-26.04
 ```
 
+When native review completion or Homebrew promotion is enabled,
+`config-variables` MUST contain exactly the configured App ID variable references
+used by those generated workflows, sorted and deduplicated. Secret names and
+disabled policies MUST NOT add entries; undeclared references remain validation
+errors.
+
 `ubuntu-26.04` is listed only as an actionlint compatibility bridge while the
 pinned actionlint release's built-in GitHub-hosted label table lags the
 versioned GitHub runner catalog. Velnor's own runner registry validates that
