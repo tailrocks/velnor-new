@@ -202,6 +202,11 @@ impl StartObservationWitness {
     }
 
     #[cfg(test)]
+    pub(crate) fn mark_stale_for_test(&mut self) {
+        self.observed_at -= MAX_OBSERVATION_AGE + Duration::from_millis(1);
+    }
+
+    #[cfg(test)]
     pub(crate) fn test_fixture_for(
         engine_id: &str,
         docker_root_digest: &str,
@@ -247,7 +252,7 @@ impl StartObservationWitness {
 
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     use super::super::StartPermit;
 

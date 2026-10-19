@@ -4,6 +4,10 @@ mod authorization;
 mod jit;
 mod registry;
 
+#[cfg(test)]
+#[path = "scoped_runtime/stale_acquired_tests.rs"]
+mod stale_acquired_tests;
+
 pub(crate) use authorization::{
     AuthorizedScopedExecution, PendingScopedExecution, authorize_started_execution,
     prepare_listener,

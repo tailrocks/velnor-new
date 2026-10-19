@@ -98,6 +98,11 @@ impl AcquiredProvisioning {
     pub(crate) fn authority_digest(&self) -> &str {
         &self.physical.authority_digest
     }
+
+    #[cfg(test)]
+    pub(crate) fn mark_observation_stale_for_test(&mut self) {
+        self.physical.observation.mark_stale_for_test();
+    }
 }
 
 /// Keep the recorded `AcquireJobs` result so work can continue after restart.
