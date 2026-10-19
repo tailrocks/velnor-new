@@ -1,4 +1,4 @@
-//! Run-time resolver for project-declared tool versions (hard decision 4).
+//! Run-time resolver for project-declared tool versions (hard decision 5).
 //!
 //! The generated workflow names each project-declared version as
 //! `${VELNOR_TOOL_<NAME>}`. One generated step per job, directly after Mise

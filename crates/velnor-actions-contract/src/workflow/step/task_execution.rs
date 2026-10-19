@@ -54,7 +54,7 @@ fn pinned_tool_selector(selector: &str) -> Option<(&'static str, &str)> {
     Some((canonical_tool, version))
 }
 
-/// Literal pin, or a project reference the runtime frame resolves (hard decision 4).
+/// Literal pin, or a project reference the runtime frame resolves (hard decision 5).
 fn valid_pinned_version(version: &str) -> bool {
     if crate::config::project_tool_refs::is_project_tool_ref(version) {
         return true;

@@ -65,7 +65,7 @@ env, and trigger edits as security-sensitive.
 
 A PR may change `mise.toml`, `mise.lock`, or a Rust toolchain file; its CI
 then runs that PR's declared tool versions
-([hard decision 4](../hard-decisions.md)).
+([hard decision 5](../hard-decisions.md)).
 The generated resolver reads the declarations with `mise --no-config --no-env
 --no-hooks config get`, which loads no config and expands no template, so the
 PR gains no code execution beyond the build it already runs. It writes only

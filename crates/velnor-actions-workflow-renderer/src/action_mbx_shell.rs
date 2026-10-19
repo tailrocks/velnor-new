@@ -135,7 +135,7 @@ fn role_uses_resolver(role: Option<StepRole>) -> bool {
 }
 
 fn rust_toolchain(script: &str) -> Result<&str, RenderError> {
-    // Project-declared Rust renders `'rust@'"${VELNOR_TOOL_RUST}"` (hard decision 4).
+    // Project-declared Rust renders `'rust@'"${VELNOR_TOOL_RUST}"` (hard decision 5).
     if let Some((_, after)) = script.split_once(RUST_EXEC_QUOTED_PREFIX)
         && let Some((rust, _)) = after.split_once("\" -- ")
         && velnor_actions_contract::config::project_tool_refs::is_project_tool_ref(rust)

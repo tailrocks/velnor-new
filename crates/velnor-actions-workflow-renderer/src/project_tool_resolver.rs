@@ -1,4 +1,4 @@
-//! Bind project version references to the run-time resolver (hard decision 4).
+//! Bind project version references to the run-time resolver (hard decision 5).
 //!
 //! Generated text carries `${VELNOR_TOOL_<NAME>}` wherever a version comes
 //! from the project's Mise config. This document pass runs on every

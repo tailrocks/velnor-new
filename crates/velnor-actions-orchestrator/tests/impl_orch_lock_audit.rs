@@ -218,7 +218,7 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
         }
     }
     let yaml = fs::read_to_string(parent.path().join("preview/.github/workflows/ci.yml"))?;
-    // The hostile record still declares Rust (hard decision 4): its version
+    // The hostile record still declares Rust (hard decision 5): its version
     // resolves at run time through `config get`, which loads no config.
     assert!(yaml.contains("VELNOR_TOOL_RUST"), "{yaml}");
     assert!(

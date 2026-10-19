@@ -2,7 +2,7 @@
 //!
 //! Exact Velnor-owned pins for tools the project does not declare; a tool
 //! the project's Mise config declares takes the project's version instead
-//! (hard decision 4, [`project`]). Each source and check date is recorded
+//! (hard decision 5, [`project`]). Each source and check date is recorded
 //! beside its release constant.
 
 use crate::error::MiseError;
@@ -45,7 +45,7 @@ pub use versions::{
     check_freshness_requirements, validate_concrete_exact_version, validate_exact_version,
 };
 
-/// Project-declared versions and their run-time references (hard decision 4).
+/// Project-declared versions and their run-time references (hard decision 5).
 #[path = "catalog_project.rs"]
 pub mod project;
 use versions::tool_source;

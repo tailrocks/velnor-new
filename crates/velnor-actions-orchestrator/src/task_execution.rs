@@ -241,7 +241,7 @@ fn resolve_runner_temp_expression(
     resolve_project_tool_refs(&resolved, |name| env::var(name).ok())
 }
 
-/// Materialize `${VELNOR_TOOL_<NAME>}` references (hard decision 4) from
+/// Materialize `${VELNOR_TOOL_<NAME>}` references (hard decision 5) from
 /// the variables the generated resolver step exported, after the manifest
 /// and plan bindings have matched the literal record. Every value must be
 /// an exact `X.Y.Z` version; a missing or loose value fails closed.

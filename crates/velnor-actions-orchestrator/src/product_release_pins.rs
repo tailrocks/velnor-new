@@ -26,7 +26,7 @@ fn resolve_setups(
 }
 
 /// `catalog` is the emission catalog: project-declared versions render as
-/// run-time references (hard decision 4). The credential-bearing GitHub CLI
+/// run-time references (hard decision 5). The credential-bearing GitHub CLI
 /// keeps its qualified fixed pin.
 pub(crate) fn resolve(
     config: &VelnorConfig,

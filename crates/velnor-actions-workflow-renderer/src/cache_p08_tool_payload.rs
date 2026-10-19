@@ -125,7 +125,7 @@ impl ToolsCachePayload {
     /// `d` input of the runtime identity step: the static digest, bound to
     /// the project tool sources when any version is project-declared, so a
     /// `mise.toml`/`mise.lock` bump invalidates the tools cache (hard
-    /// decision 4) before the resolver step has run.
+    /// decision 5) before the resolver step has run.
     #[must_use]
     pub fn identity_input(&self) -> String {
         if self.project_bound {

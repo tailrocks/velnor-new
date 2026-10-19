@@ -1,4 +1,4 @@
-//! Run-time references to project-declared tool versions (hard decision 4).
+//! Run-time references to project-declared tool versions (hard decision 5).
 //!
 //! Generated text never copies a version the project's Mise config
 //! declares. It carries `${VELNOR_TOOL_<NAME>}` instead (`<NAME>` is
@@ -38,7 +38,7 @@ pub fn project_tool_sources_hash() -> String {
 }
 
 /// Valid `d` input: a lower-case SHA-256 static digest, optionally bound to
-/// the project tool sources hash (hard decision 4).
+/// the project tool sources hash (hard decision 5).
 #[must_use]
 pub fn is_tools_cache_identity_input(digest: &str) -> bool {
     let project_suffix = format!("-{}", project_tool_sources_hash());

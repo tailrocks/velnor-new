@@ -125,7 +125,7 @@ pub(super) fn assert_qualify_install_tools(
     let run = format!(
         "mise --no-config --no-env --no-hooks install rust@{RUST_VERSION} actionlint@{ACTIONLINT_VERSION} shellcheck@{SHELLCHECK_VERSION} zizmor@{ZIZMOR_VERSION}"
     );
-    // The Velnor repository declares Rust in `mise.toml` (hard decision 4).
+    // The Velnor repository declares Rust in `mise.toml` (hard decision 5).
     let project_run = format!(
         r#"mise --no-config --no-env --no-hooks install 'rust@'\"${{VELNOR_TOOL_RUST}}\" actionlint@{ACTIONLINT_VERSION} shellcheck@{SHELLCHECK_VERSION} zizmor@{ZIZMOR_VERSION}"#
     );

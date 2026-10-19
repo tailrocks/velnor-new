@@ -1,4 +1,4 @@
-//! Hard decision 4: tool versions come from the project's `mise.toml`.
+//! Hard decision 5: tool versions come from the project's `mise.toml`.
 //!
 //! A version the project's Mise config declares never appears in generated
 //! text; the generated resolver step reads it at run time, so bumping it in

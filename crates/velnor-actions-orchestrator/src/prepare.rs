@@ -51,7 +51,7 @@ pub struct GenerationPreparation {
 
 impl GenerationPreparation {
     /// Catalog for generated text: project-declared versions render as
-    /// run-time references (hard decision 4); execution keeps [`Self::catalog`].
+    /// run-time references (hard decision 5); execution keeps [`Self::catalog`].
     #[must_use]
     pub fn emission_catalog(&self) -> ToolCatalog {
         self.catalog.for_emission()
@@ -113,7 +113,7 @@ fn prepare_inner(
     };
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
-    // Hard decision 4: generated text never copies a project-declared version.
+    // Hard decision 5: generated text never copies a project-declared version.
     let emission = catalog.for_emission();
     let workflow = crate::workflow::build_workflow_for_consumer_release(
         &crate::workflow::WorkflowBuildInput {

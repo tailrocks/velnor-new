@@ -4,7 +4,7 @@
 //! the generated `Prepare pinned tools` install line must carry the
 //! repository's own `mr-boxington` declaration (mise's exec-time wrapper
 //! dispatches cargo through it) as a run-time reference to the project's
-//! config, never as a copied version (hard decision 4); without the option
+//! config, never as a copied version (hard decision 5); without the option
 //! the install lines must stay free of `mr-boxington@` (action-owned only).
 
 use std::fs;

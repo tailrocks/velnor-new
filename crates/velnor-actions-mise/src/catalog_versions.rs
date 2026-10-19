@@ -15,7 +15,7 @@ use crate::error::MiseError;
 /// Returns [`MiseError::InvalidToolVersion`] for empty, `v`-prefixed,
 /// `latest`, two-part, or non-numeric versions.
 ///
-/// A project reference (`${VELNOR_TOOL_<TOOL>}`, hard decision 4) also
+/// A project reference (`${VELNOR_TOOL_<TOOL>}`, hard decision 5) also
 /// passes: it names the project's exact version, which the generated
 /// resolver validates at run time. [`validate_concrete_exact_version`]
 /// accepts literal pins only.

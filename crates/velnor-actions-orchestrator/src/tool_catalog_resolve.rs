@@ -7,7 +7,7 @@
 //!
 //! Every catalog tool the project's Mise config declares (plus Rust from a
 //! toolchain file) takes the project's version and is recorded as
-//! project-declared (hard decision 4, [`crate::tool_catalog_project`]);
+//! project-declared (hard decision 5, [`crate::tool_catalog_project`]);
 //! `.velnor/config.toml` pins apply only to undeclared tools and must agree
 //! with a declaration otherwise.
 //!

@@ -102,7 +102,7 @@ pub(crate) fn audit_prepare_installs_with_catalog(
                 continue;
             }
             for spec in specs {
-                // Emitted specs carry project references (hard decision 4);
+                // Emitted specs carry project references (hard decision 5);
                 // audit the concrete versions the project declares.
                 let spec = catalog.materialize(&spec);
                 match subject_for_install_spec(&spec, catalog) {

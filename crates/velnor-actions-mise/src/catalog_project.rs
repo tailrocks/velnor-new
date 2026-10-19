@@ -1,4 +1,4 @@
-//! Project-declared tool versions (hard decision 4).
+//! Project-declared tool versions (hard decision 5).
 //!
 //! The project's Mise config (`mise.toml` plus `mise.lock`, and the
 //! `rust-toolchain.toml` channel Mise reads for Rust) is the version

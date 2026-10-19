@@ -166,7 +166,7 @@ pub fn quote_run_arg(arg: &str) -> Result<String, RenderError> {
     Ok(out)
 }
 /// Exact `X.Y.Z` pin, or a project version reference the generated
-/// resolver validates at run time (hard decision 4).
+/// resolver validates at run time (hard decision 5).
 pub(crate) fn is_exact_or_project_version(version: &str) -> bool {
     velnor_actions_contract::config::project_tool_refs::is_exact_or_project_version(version)
 }

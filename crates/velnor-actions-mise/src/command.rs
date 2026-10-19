@@ -46,7 +46,7 @@ use crate::error::MiseError;
 /// Every mise invocation carries all three, installs included: no mise
 /// command ever loads repo config, env files, or hooks. Explicit
 /// `tool@exact` specs carry the version: the project's declared version
-/// (hard decision 4) or the Velnor catalog pin.
+/// (hard decision 5) or the Velnor catalog pin.
 pub const MISE_GLOBAL_FLAGS: [&str; 3] = ["--no-config", "--no-env", "--no-hooks"];
 
 /// Separator between mise tool selectors and the payload command.

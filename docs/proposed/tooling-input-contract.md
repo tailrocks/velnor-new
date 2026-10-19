@@ -59,7 +59,7 @@ Download bytes in CI trust upstream TLS plus exact `tool@exact` specs:
 a version the project's Mise config declares is read at run time by the
 generated **Resolve project tool versions** step (`mise --no-config
 --no-env --no-hooks config get`, stored values only, exact `X.Y.Z` only;
-[hard decision 4](../hard-decisions.md)),
+[hard decision 5](../hard-decisions.md)),
 and every other tool uses Velnor's locked catalog pin. Generator-owned Rust-lane installs do not
 consult the committed `mise.lock` — a lone lock is not enforced by mise
 (tampering is ignored), and config-visible verification would re-arm

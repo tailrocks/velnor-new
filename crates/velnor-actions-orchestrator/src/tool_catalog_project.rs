@@ -1,4 +1,4 @@
-//! Project-declared catalog tools (hard decision 4).
+//! Project-declared catalog tools (hard decision 5).
 //!
 //! A catalog tool the repository-root Mise config declares in `[tools]`
 //! takes the project's exact version; a Rust toolchain file is a Rust
@@ -177,7 +177,7 @@ fn declared_version(tool: PinnedTool, selector: &NativeToolSelector) -> Declared
 /// Argv and toolchain identity that bind one task to its generated record.
 ///
 /// The generated record carries project version references (hard decision
-/// 4), so the plan binds the task digest over the emission catalog while
+/// 5), so the plan binds the task digest over the emission catalog while
 /// identity, closure, and reuse gates keep the concrete versions: a
 /// `mise.toml` bump invalidates coverage without regenerating the workflow.
 ///
