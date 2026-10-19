@@ -233,20 +233,23 @@ def verify_oci_archive(path: Path) -> dict[str, Any]:
     layers = manifest.get("layers")
     if not isinstance(layers, list) or not layers:
         raise CandidateError("OCI manifest must contain image layers.")
-    referenced: dict[str, int] = {manifest_hex: len(manifest_raw)}
-    referenced[config["hex"]] = config["size"]
+    referenced: dict[str, tuple[int, str]] = {}
+    _record_blob_descriptor(referenced, {
+        "hex": manifest_hex,
+        "size": len(manifest_raw),
+        "mediaType": manifest["mediaType"],
+    })
+    _record_blob_descriptor(referenced, config)
     layer_digests: list[str] = []
     for layer in layers:
         entry = _descriptor(layer, "layer")
         if entry["mediaType"] not in LAYER_MEDIA_TYPES:
             raise CandidateError("OCI layer media type is invalid.")
-        if entry["hex"] in referenced:
-            raise CandidateError("OCI graph contains a duplicate blob reference.")
-        referenced[entry["hex"]] = entry["size"]
+        _record_blob_descriptor(referenced, entry)
         layer_digests.append(entry["digest"])
     if set(blobs) != set(referenced):
         raise CandidateError("OCI archive has missing or unreferenced blobs.")
-    for digest, size in referenced.items():
+    for digest, (size, _media_type) in referenced.items():
         if blobs[digest] != size:
             raise CandidateError("OCI blob size does not match its descriptor.")
     config_raw = _read_blob(path, config["hex"])
@@ -285,7 +288,7 @@ def verify_oci_archive(path: Path) -> dict[str, Any]:
     for digest in referenced:
         if digest not in {manifest_hex, config["hex"]}:
             actual_digest, actual_size = _hash_blob(path, digest)
-            if actual_digest != digest or actual_size != referenced[digest]:
+            if actual_digest != digest or actual_size != referenced[digest][0]:
                 raise CandidateError("OCI blob bytes do not match their descriptor.")
     index_raw = json_files["index.json"]
     return {
@@ -309,6 +312,16 @@ def _descriptor(value: Any, label: str) -> dict[str, Any]:
     if not isinstance(value["mediaType"], str):
         raise CandidateError(f"OCI {label} media type is invalid.")
     return {"digest": digest, "hex": digest.removeprefix("sha256:"), "size": size, "mediaType": value["mediaType"]}
+
+
+def _record_blob_descriptor(
+    referenced: dict[str, tuple[int, str]], descriptor: dict[str, Any]
+) -> None:
+    metadata = (descriptor["size"], descriptor["mediaType"])
+    existing = referenced.get(descriptor["hex"])
+    if existing is not None and existing != metadata:
+        raise CandidateError("OCI descriptors for the same blob have different size or media type values.")
+    referenced[descriptor["hex"]] = metadata
 
 
 def _read_blob(path: Path, digest: str) -> bytes:

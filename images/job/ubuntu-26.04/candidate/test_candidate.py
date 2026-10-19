@@ -71,6 +71,46 @@ def archive_entries(
     }
 
 
+def duplicate_layer_reference(
+    entries: dict[str, bytes], *, size_delta: int = 0, media_type: str | None = None
+) -> dict[str, bytes]:
+    result = dict(entries)
+    index = json.loads(result["index.json"])
+    old_manifest_digest = index["manifests"][0]["digest"].removeprefix("sha256:")
+    old_manifest_path = f"blobs/sha256/{old_manifest_digest}"
+    manifest = json.loads(result[old_manifest_path])
+    old_config_digest = manifest["config"]["digest"].removeprefix("sha256:")
+    old_config_path = f"blobs/sha256/{old_config_digest}"
+    config = json.loads(result[old_config_path])
+
+    first_layer = manifest["layers"][0]
+    duplicate = dict(first_layer)
+    duplicate["size"] += size_delta
+    if media_type is not None:
+        duplicate["mediaType"] = media_type
+    manifest["layers"].append(duplicate)
+    config["rootfs"]["diff_ids"].append(config["rootfs"]["diff_ids"][0])
+
+    config_bytes = json_bytes(config)
+    config_digest = digest(config_bytes)
+    manifest["config"] = {
+        "mediaType": "application/vnd.oci.image.config.v1+json",
+        "digest": config_digest,
+        "size": len(config_bytes),
+    }
+    manifest_bytes = json_bytes(manifest)
+    manifest_digest = digest(manifest_bytes)
+    index["manifests"][0]["digest"] = manifest_digest
+    index["manifests"][0]["size"] = len(manifest_bytes)
+
+    del result[old_config_path]
+    del result[old_manifest_path]
+    result[f"blobs/sha256/{config_digest.removeprefix('sha256:')}"] = config_bytes
+    result[f"blobs/sha256/{manifest_digest.removeprefix('sha256:')}"] = manifest_bytes
+    result["index.json"] = json_bytes(index)
+    return result
+
+
 def write_archive(path: Path, entries: dict[str, bytes], duplicate: str | None = None) -> None:
     with tarfile.open(path, "w") as archive:
         for name, data in entries.items():
@@ -129,6 +169,31 @@ class CandidateTests(unittest.TestCase):
         record = candidate.validate_record(valid_record(self.archive))
         self.assertEqual(oci["platform_manifest_digest"], record["oci"]["platform_manifest_digest"])
         self.assertNotEqual(record["archive"]["sha256"], oci["platform_manifest_digest"].removeprefix("sha256:"))
+
+    def test_repeated_identical_layer_descriptor_is_valid(self) -> None:
+        entries = duplicate_layer_reference(self.entries)
+        write_archive(self.archive, entries)
+
+        result = candidate.verify_oci_archive(self.archive)
+
+        self.assertEqual(len(result["layer_digests"]), 2)
+        self.assertEqual(result["layer_digests"][0], result["layer_digests"][1])
+
+    def test_repeated_layer_descriptor_with_different_size_is_rejected(self) -> None:
+        entries = duplicate_layer_reference(self.entries, size_delta=1)
+        write_archive(self.archive, entries)
+
+        with self.assertRaisesRegex(candidate.CandidateError, "different size or media type"):
+            candidate.verify_oci_archive(self.archive)
+
+    def test_repeated_layer_descriptor_with_different_media_type_is_rejected(self) -> None:
+        entries = duplicate_layer_reference(
+            self.entries, media_type="application/vnd.oci.image.layer.v1.tar+gzip"
+        )
+        write_archive(self.archive, entries)
+
+        with self.assertRaisesRegex(candidate.CandidateError, "different size or media type"):
+            candidate.verify_oci_archive(self.archive)
 
     def test_wrong_platform_rejected(self) -> None:
         entries = archive_entries({"architecture": "arm64", "os": "linux"})
