@@ -185,7 +185,12 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     fs::write(
         repo.path().join("mise.toml"),
-        "[tools.rust]\nversion = \"1.98.1\"\npostinstall = \"touch pwned\"\n\n[plugins.evil]\nurl = \"https://example.invalid/evil\"\n",
+        // Generation inventory runs the declared Rust locally: use the
+        // generator pin so every host has it installed.
+        format!(
+            "[tools.rust]\nversion = \"{}\"\npostinstall = \"touch pwned\"\n\n[plugins.evil]\nurl = \"https://example.invalid/evil\"\n",
+            velnor_actions_mise::RUST_VERSION
+        ),
     )?;
     let prep = prepare(repo.path())?;
     assert!(
@@ -216,7 +221,10 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
     // The hostile record still declares Rust (hard decision 4): its version
     // resolves at run time through `config get`, which loads no config.
     assert!(yaml.contains("VELNOR_TOOL_RUST"), "{yaml}");
-    assert!(!yaml.contains("1.98.1"), "declared version copied: {yaml}");
+    assert!(
+        !yaml.contains(&format!("rust@{}", velnor_actions_mise::RUST_VERSION)),
+        "declared version copied: {yaml}"
+    );
     assert!(
         yaml.contains("--no-config --no-env --no-hooks config get"),
         "{yaml}"
