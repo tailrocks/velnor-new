@@ -66,6 +66,10 @@ fn producer(
     ));
     let mut steps = source_steps(spec, id)?;
     let mut operation = operation(spec, "execute-preview-producer-v1", pair.is_none())?;
+    // The public full plan is identical for every production owner. Keeping it
+    // at job scope lets existing workflow mapping sharing represent it once,
+    // without changing the literal stage/pair or per-operation source bindings.
+    fields.push(("env".to_owned(), take_plan_environment(&mut operation)?));
     let env = if let Some(pair) = pair {
         vec![
             ("VELNOR_PREVIEW_STAGE", "payload"),
@@ -85,6 +89,34 @@ fn producer(
         super::steps::with_producer_homes(step, &spec.producer_cargo_env)?;
     }
     Ok(finish(id, fields, steps))
+}
+
+fn take_plan_environment(step: &mut Yaml) -> Result<Yaml, RenderError> {
+    let Yaml::Map(fields) = step else {
+        return Err(RenderError::InvalidWorkflow(
+            "preview_operation_not_map".to_owned(),
+        ));
+    };
+    let Some((_, Yaml::Map(env))) = fields.iter_mut().find(|(key, _)| key == "env") else {
+        return Err(RenderError::InvalidWorkflow(
+            "preview_operation_env_missing".to_owned(),
+        ));
+    };
+    if env
+        .iter()
+        .filter(|(key, _)| key == "VELNOR_RELEASE_PLAN")
+        .count()
+        != 1
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "preview_operation_plan_count".to_owned(),
+        ));
+    }
+    let index = env
+        .iter()
+        .position(|(key, _)| key == "VELNOR_RELEASE_PLAN")
+        .ok_or_else(|| RenderError::InvalidWorkflow("preview_operation_plan_missing".to_owned()))?;
+    Ok(Yaml::Map(vec![env.remove(index)]))
 }
 
 pub(super) fn operation_env(step: &mut Yaml, values: &[(&str, &str)]) -> Result<(), RenderError> {

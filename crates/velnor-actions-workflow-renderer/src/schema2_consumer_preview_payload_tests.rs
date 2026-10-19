@@ -106,3 +106,85 @@ fn generated_leaf_names_match_native_admission_without_name_downloads() {
     assert!(!signer.contains("actions/download-artifact"));
     assert!(!rendered.contains("preview-producer:"));
 }
+
+#[test]
+fn production_plan_is_exact_job_environment_and_not_repeated_in_operation() {
+    let spec = fixture();
+    let plan = String::from_utf8(spec.plan.canonical_bytes().expect("full plan")).expect("utf8");
+    for (_, job) in production::jobs(&spec).expect("production") {
+        assert_eq!(
+            field(&job, "env"),
+            &Yaml::Map(vec![("VELNOR_RELEASE_PLAN".to_owned(), Yaml::str(&plan))])
+        );
+        let Yaml::Seq(steps) = field(&job, "steps") else {
+            panic!("steps")
+        };
+        let operation = steps
+            .iter()
+            .find(|step| {
+                fields(step).iter().any(|(key, value)| {
+                    key == "env"
+                        && crate::yaml::render_yaml(value).contains("VELNOR_PREVIEW_STAGE:")
+                })
+            })
+            .expect("operation");
+        assert!(
+            !fields(field(operation, "env"))
+                .iter()
+                .any(|(key, _)| key == "VELNOR_RELEASE_PLAN")
+        );
+        assert!(crate::yaml::render_yaml(operation).contains("$VELNOR_RELEASE_PLAN"));
+    }
+}
+
+#[test]
+fn maximum_literal_payload_inventory_renders_within_workflow_limit() {
+    let mut spec = fixture();
+    let template = spec.plan.products[1].clone();
+    spec.plan.products = (0..32)
+        .map(|index| {
+            let mut product = template.clone();
+            product.id = format!("product-{index:03}");
+            product.package = product.id.clone();
+            product.bins = vec![product.id.clone()];
+            product
+        })
+        .collect();
+    let pairs = expected_preview_payload_pairs(&spec.plan).expect("maximum admitted plan");
+    assert_eq!(pairs.len(), 128);
+    let rendered = render_consumer_preview(&spec)
+        .expect("maximum graph renders")
+        .bytes;
+    assert!(
+        rendered.len() <= crate::workflow_size::MAX_WORKFLOW_BYTES,
+        "{} bytes",
+        rendered.len()
+    );
+    assert!(
+        rendered.matches("VELNOR_RELEASE_PLAN:").count() <= 5,
+        "public plan must use existing mapping sharing"
+    );
+    for pair in &pairs {
+        let id = preview_payload_job_id(&spec.plan, pair).expect("owner");
+        assert_eq!(rendered.matches(&format!("  {id}:\n")).count(), 1);
+    }
+    let jobs = production::jobs(&spec).expect("literal graph");
+    assert_eq!(jobs.len(), 129);
+    let Yaml::Seq(dependencies) = field(&jobs.last().expect("assembly").1, "needs") else {
+        panic!("needs")
+    };
+    assert_eq!(dependencies.len(), 129);
+}
+
+#[test]
+fn irreducible_preview_workflow_still_fails_the_unchanged_byte_limit() {
+    let mut spec = fixture();
+    // One literal argument alone exceeds the workflow limit even after all
+    // repeated job fields and scripts have been shared by existing machinery.
+    spec.install_rust_argv
+        .push("x".repeat(crate::workflow_size::MAX_WORKFLOW_BYTES + 1));
+    let error = render_consumer_preview(&spec).expect_err("irreducible graph rejected");
+    assert!(
+        matches!(error, RenderError::InvalidWorkflow(problem) if problem.starts_with("workflow_too_large:") && problem.ends_with(":500000"))
+    );
+}

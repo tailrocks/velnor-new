@@ -8,8 +8,13 @@ publication. Official release, consumer adoption and two real upgrades remain ga
 ## Literal execution graph
 
 A validated complete preview plan determines sorted product/target pairs, bounded
-by the existing archive limit of 256. Each pair receives the fixed indexed job ID
-`preview-payload-000` through `preview-payload-255`. Jackin has six such jobs.
+by a preview-specific limit of 128. The separate full release archive limit
+remains 256. Each pair receives the fixed indexed job ID `preview-payload-000`
+through `preview-payload-127`. Jackin has six such jobs. The public full plan
+is held in identical production job environment mappings, allowing existing
+workflow mapping sharing to avoid repeating it for every leaf. The rendered
+workflow still must fit the unchanged 500,000-byte limit; irreducible oversized
+graphs are rejected.
 Each builds every declared executable for that pair. Empty or reduced plans,
 partial bin inventories, arbitrary selectors and dynamically selected matrices
 are not supported.

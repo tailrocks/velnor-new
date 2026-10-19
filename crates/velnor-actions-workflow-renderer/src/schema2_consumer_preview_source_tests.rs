@@ -69,7 +69,15 @@ fn preview_owned_homes_are_on_every_producer_step_not_job_scope() {
     let (_, Yaml::Map(fields)) = production::jobs(&spec).expect("producer").remove(0) else {
         unreachable!()
     };
-    assert!(!fields.iter().any(|(key, _)| key == "env"));
+    let plan = String::from_utf8(spec.plan.canonical_bytes().expect("full plan")).expect("utf8");
+    let job_env = fields
+        .iter()
+        .find(|(key, _)| key == "env")
+        .expect("public plan env");
+    assert_eq!(
+        job_env.1,
+        Yaml::Map(vec![("VELNOR_RELEASE_PLAN".to_owned(), Yaml::str(plan))])
+    );
     let Some((_, Yaml::Seq(steps))) = fields.iter().find(|(key, _)| key == "steps") else {
         unreachable!()
     };

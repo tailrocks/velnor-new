@@ -320,10 +320,10 @@ fn artifact_name_binds_pair_run_and_attempt_without_name_lookup_authority() {
 }
 
 #[test]
-fn pair_expansion_retains_the_existing_full_release_bound() {
+fn pair_expansion_has_its_own_bounded_preview_inventory() {
     let mut plan = request().plan;
     let template = plan.products[0].clone();
-    plan.products = (0..64)
+    plan.products = (0..32)
         .map(|index| {
             let mut product = template.clone();
             product.id = format!("product-{index:02}");
@@ -342,13 +342,23 @@ fn pair_expansion_retains_the_existing_full_release_bound() {
         .iter()
         .map(|pair| preview_payload_job_id(&plan, pair).expect("bounded job"))
         .collect::<std::collections::BTreeSet<_>>();
-    assert_eq!(ids.len(), 256);
+    assert_eq!(ids.len(), 128);
     assert_eq!(ids.first().expect("first"), "preview-payload-000");
-    assert_eq!(ids.last().expect("last"), "preview-payload-255");
+    assert_eq!(ids.last().expect("last"), "preview-payload-127");
     let mut extra = template;
-    extra.id = "product-64".to_owned();
+    extra.id = "product-32".to_owned();
+    extra.targets.truncate(1);
     extra.package = extra.id.clone();
     plan.products.push(extra);
+    plan.validate()
+        .expect("129 pairs remain valid full release inventory");
+    assert_eq!(
+        plan.products
+            .iter()
+            .map(|product| product.targets.len())
+            .sum::<usize>(),
+        129
+    );
     assert!(expected_preview_payload_pairs(&plan).is_err());
 }
 

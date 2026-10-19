@@ -20,8 +20,9 @@ pub const PREVIEW_PRODUCTION_SCHEMA_V1: &str = "velnor.preview-production.v1";
 pub const PREVIEW_ASSEMBLE_JOB_ID: &str = "preview-assemble";
 /// Maximum encoded request size, including its complete static plan.
 pub const MAX_PREVIEW_PRODUCTION_BYTES: usize = 1024 * 1024;
-/// Maximum literal leaf jobs; shared with the full release archive bound.
-pub const MAX_PREVIEW_PAYLOAD_PAIRS: usize = crate::package_release::MAX_PACKAGE_RELEASE_ARCHIVES;
+/// Maximum literal preview leaf jobs admitted by the bounded workflow graph.
+/// The separate full release archive limit remains unchanged.
+pub const MAX_PREVIEW_PAYLOAD_PAIRS: usize = 128;
 
 /// Canonically ordered product/target identity, never a reduced release plan.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
