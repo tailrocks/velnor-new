@@ -25,8 +25,16 @@ const INVALID_COUNTS_QUERIES: &[&str] = &[
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id WHERE (t.topology_version = 2 AND (SELECT COUNT(*) FROM capacity_reservation_provisioning_objects AS object WHERE object.reservation_id = p.reservation_id AND object.role = 'engine-metadata' AND object.publication_policy_digest IS NOT NULL) != 1)",
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id WHERE (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS x WHERE x.reservation_id = p.reservation_id) != 2",
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id WHERE (SELECT COUNT(*) FROM capacity_reservation_provisioning_state AS x WHERE x.reservation_id = p.reservation_id) != 1",
-    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id WHERE ((SELECT resources_bound FROM capacity_reservation_provisioning_state WHERE reservation_id = p.reservation_id) = 0 AND ((SELECT COUNT(*) FROM capacity_reservation_bound_storage_roles WHERE reservation_id = p.reservation_id) != 0 OR (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) != 0 OR (SELECT COUNT(*) FROM capacity_reservation_bound_cgroups WHERE reservation_id = p.reservation_id) != 0))",
-    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id WHERE ((SELECT resources_bound FROM capacity_reservation_provisioning_state WHERE reservation_id = p.reservation_id) = 1 AND ((SELECT COUNT(*) FROM capacity_reservation_bound_storage_roles WHERE reservation_id = p.reservation_id) != 11 OR (t.topology_version = 1 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) != 14) OR (t.topology_version = 2 AND NOT (((SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) = 16 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id AND role = 'engine-metadata') = 3) OR ((SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) = 18 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id AND role = 'engine-metadata') IN (4, 5)))) OR (SELECT COUNT(*) FROM capacity_reservation_bound_cgroups WHERE reservation_id = p.reservation_id) != 2 OR (t.topology_version = 1 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id AND role = 'engine-metadata') != 1)))",
+    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 0 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_roles WHERE reservation_id = p.reservation_id) != 0",
+    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 0 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) != 0",
+    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 0 AND (SELECT COUNT(*) FROM capacity_reservation_bound_cgroups WHERE reservation_id = p.reservation_id) != 0",
+    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_roles WHERE reservation_id = p.reservation_id) != 11",
+    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND t.topology_version = 1 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) != 14",
+    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND t.topology_version = 1 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id AND role = 'engine-metadata') != 1",
+    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND t.topology_version = 2 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) NOT IN (16, 18)",
+    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND t.topology_version = 2 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) = 16 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id AND role = 'engine-metadata') != 3",
+    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND t.topology_version = 2 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id) = 18 AND (SELECT COUNT(*) FROM capacity_reservation_bound_storage_attachments WHERE reservation_id = p.reservation_id AND role = 'engine-metadata') NOT IN (4, 5)",
+    r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = p.reservation_id WHERE s.resources_bound = 1 AND (SELECT COUNT(*) FROM capacity_reservation_bound_cgroups WHERE reservation_id = p.reservation_id) != 2",
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id WHERE ((SELECT publication_state FROM capacity_reservation_provisioning_state WHERE reservation_id = p.reservation_id) = 'published' AND (SELECT COUNT(*) FROM capacity_reservation_provisioning_publications WHERE reservation_id = p.reservation_id) != 1)",
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id WHERE ((SELECT publication_state FROM capacity_reservation_provisioning_state WHERE reservation_id = p.reservation_id) != 'published' AND (SELECT COUNT(*) FROM capacity_reservation_provisioning_publications WHERE reservation_id = p.reservation_id) != 0)",
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning AS p JOIN capacity_reservation_provisioning_topology AS t ON t.reservation_id = p.reservation_id WHERE ((SELECT storage_cleanup_proven FROM capacity_reservation_provisioning_state WHERE reservation_id = p.reservation_id) = 1 AND (SELECT COUNT(*) FROM capacity_reservation_provisioning_cleanups WHERE reservation_id = p.reservation_id) != 1)",
@@ -57,3 +65,189 @@ const INVALID_CLEANUP_QUERIES: &[&str] = &[
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning_cleanups AS cleanup JOIN capacity_reservation_provisioning_topology AS topology ON topology.reservation_id = cleanup.reservation_id JOIN capacity_reservation_provisioning_state AS state ON state.reservation_id = cleanup.reservation_id WHERE (topology.topology_version = 2 AND (cleanup.metadata_volume IS NULL OR cleanup.metadata_volume IS NOT (SELECT docker_name FROM capacity_reservation_provisioning_objects WHERE reservation_id = cleanup.reservation_id AND role = 'engine-metadata' AND create_state = 'created' AND docker_id = docker_name AND publication_policy_digest IS NOT NULL) OR (SELECT COUNT(*) FROM capacity_reservation_provisioning_objects WHERE reservation_id = cleanup.reservation_id) != 5))",
     r"SELECT COUNT(*) FROM capacity_reservation_provisioning_cleanups AS cleanup JOIN capacity_reservation_provisioning_topology AS topology ON topology.reservation_id = cleanup.reservation_id JOIN capacity_reservation_provisioning_state AS state ON state.reservation_id = cleanup.reservation_id WHERE (SELECT COUNT(*) FROM capacity_reservation_provisioning_objects WHERE reservation_id = cleanup.reservation_id AND create_state = 'created' AND docker_id = docker_name) != CASE topology.topology_version WHEN 1 THEN 4 WHEN 2 THEN 5 ELSE -1 END",
 ];
+
+#[cfg(test)]
+#[tokio::test]
+async fn query_test_split_bound_resource_checks_reject_each_invalid_count_shape()
+-> Result<(), HostError> {
+    let path = std::env::temp_dir().join(format!(
+        "velnor-provisioning-query-{}-{}.db",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| HostError::Journal)?
+            .as_nanos()
+    ));
+    let path_text = path.to_str().ok_or(HostError::Journal)?;
+    let database = turso::Builder::new_local(path_text)
+        .build()
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let connection = database.connect().map_err(|_| HostError::Journal)?;
+    query_test_create_tables(&connection).await?;
+
+    for (query_index, topology, bound, roles, attachment_count, metadata_count, cgroups) in [
+        (8, 1, 0, 1, 0, 0, 0),
+        (9, 1, 0, 0, 1, 0, 0),
+        (10, 1, 0, 0, 0, 0, 1),
+        (11, 1, 1, 10, 0, 0, 2),
+        (12, 1, 1, 11, 13, 0, 2),
+        (13, 1, 1, 11, 14, 0, 2),
+        (14, 2, 1, 11, 15, 0, 2),
+        (15, 2, 1, 11, 16, 2, 2),
+        (16, 2, 1, 11, 18, 3, 2),
+        (17, 1, 1, 11, 14, 1, 1),
+    ] {
+        query_test_insert_shape(
+            &connection,
+            topology,
+            bound,
+            roles,
+            attachment_count,
+            metadata_count,
+            cgroups,
+        )
+        .await?;
+        assert_eq!(
+            query_test_count(&connection, INVALID_COUNTS_QUERIES[query_index]).await?,
+            1,
+            "invalid count shape at query index {query_index}"
+        );
+    }
+
+    query_test_insert_shape(&connection, 1, 0, 0, 0, 0, 0).await?;
+    for query in INVALID_COUNTS_QUERIES.iter().take(11).skip(8) {
+        assert_eq!(query_test_count(&connection, query).await?, 0);
+    }
+
+    for (topology, attachments, metadata) in [(1, 14, 1), (2, 16, 3), (2, 18, 4), (2, 18, 5)] {
+        query_test_insert_shape(&connection, topology, 1, 11, attachments, metadata, 2).await?;
+        for (query_index, query) in INVALID_COUNTS_QUERIES.iter().enumerate().take(18).skip(8) {
+            assert_eq!(
+                query_test_count(&connection, query).await?,
+                0,
+                "valid count shape at query index {query_index}"
+            );
+        }
+    }
+
+    drop(connection);
+    drop(database);
+    std::fs::remove_file(path).map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+#[cfg(test)]
+async fn query_test_create_tables(connection: &turso::Connection) -> Result<(), HostError> {
+    for statement in [
+        "CREATE TABLE capacity_reservation_provisioning (reservation_id INTEGER PRIMARY KEY)",
+        "CREATE TABLE capacity_reservation_provisioning_topology (reservation_id INTEGER, topology_version INTEGER)",
+        "CREATE TABLE capacity_reservation_provisioning_state (reservation_id INTEGER, resources_bound INTEGER)",
+        "CREATE TABLE capacity_reservation_bound_storage_roles (reservation_id INTEGER)",
+        "CREATE TABLE capacity_reservation_bound_storage_attachments (reservation_id INTEGER, role TEXT)",
+        "CREATE TABLE capacity_reservation_bound_cgroups (reservation_id INTEGER)",
+    ] {
+        connection
+            .execute(statement, ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+async fn query_test_insert_shape(
+    connection: &turso::Connection,
+    topology: i64,
+    bound: i64,
+    roles: i64,
+    attachments: i64,
+    metadata: i64,
+    cgroups: i64,
+) -> Result<(), HostError> {
+    connection
+        .execute("DELETE FROM capacity_reservation_provisioning", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    for table in [
+        "capacity_reservation_provisioning_topology",
+        "capacity_reservation_provisioning_state",
+        "capacity_reservation_bound_storage_roles",
+        "capacity_reservation_bound_storage_attachments",
+        "capacity_reservation_bound_cgroups",
+    ] {
+        connection
+            .execute(&format!("DELETE FROM {table}"), ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    connection
+        .execute(
+            "INSERT INTO capacity_reservation_provisioning VALUES (1)",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    for (statement, value) in [
+        (
+            "INSERT INTO capacity_reservation_provisioning_topology VALUES (1, ?1)",
+            topology,
+        ),
+        (
+            "INSERT INTO capacity_reservation_provisioning_state VALUES (1, ?1)",
+            bound,
+        ),
+    ] {
+        connection
+            .execute(statement, [value])
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    for _ in 0..roles {
+        connection
+            .execute(
+                "INSERT INTO capacity_reservation_bound_storage_roles VALUES (1)",
+                (),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    for index in 0..attachments {
+        let role = if index < metadata {
+            "engine-metadata"
+        } else {
+            "runner-root"
+        };
+        connection
+            .execute(
+                "INSERT INTO capacity_reservation_bound_storage_attachments VALUES (1, ?1)",
+                [role],
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    for _ in 0..cgroups {
+        connection
+            .execute(
+                "INSERT INTO capacity_reservation_bound_cgroups VALUES (1)",
+                (),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+async fn query_test_count(connection: &turso::Connection, query: &str) -> Result<i64, HostError> {
+    let mut rows = connection
+        .query(query, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    rows.next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?
+        .get(0)
+        .map_err(|_| HostError::Journal)
+}
