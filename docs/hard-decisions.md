@@ -58,12 +58,13 @@ root job). The default is `5`; accepted values are `1..=360`. Zero or more than
 360 is rejected, never clamped. See
 [job timeout limits](implemented/job-timeout-limits.md).
 
-## 3. Commit trailers
+## 3. No required model, agent, or trailer
 
-**Decision.** Commits use the Claude co-author trailer
-`Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. No repository rule,
-ruleset, check, or hook may require any other agent trailer. A human sign-off
-(`Signed-off-by`) may be added but must not be required.
+**Decision.** The repository never forces a model or coding agent. No
+instruction, document, rule, ruleset, check, or hook may require a specific
+model, coding agent, or co-author trailer on commits or pull requests; whoever
+makes a commit decides its attribution. A human sign-off (`Signed-off-by`) may
+be added but must not be required.
 
 ## 4. Pull requests test only what they affect
 
@@ -78,6 +79,10 @@ job. The baseline-coverage skip path (trusted-baseline artifacts and
 mechanism. See [affected selection](implemented/affected-selection.md).
 Approved by the human owner on 2026-10-19, together with the decision 1
 amendment ("every crate job the plan schedules").
+The `complete = true` input rule, which lets a package with an unbounded
+read be selected only by its declared inputs, was approved by the human owner
+on 2026-10-20 (PR #192 review question; the alternative, running every such
+package on every pull request, was declined).
 
 **Rationale.** In a monorepo most pull requests touch one or two crates, but
 every crate job paid runner start, checkout, tool setup, cache restore, and a
