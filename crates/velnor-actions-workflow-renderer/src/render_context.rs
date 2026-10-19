@@ -1,9 +1,9 @@
 use super::{BTreeMap, RenderError, commands, guard, marker, steps, validator_tools};
 use velnor_actions_contract::{
     CI_WORKFLOW_PATH, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,
-    REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
-    REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ScaleSetSelector, ValidatorKind,
+    REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION, REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID,
+    REQUIRED_VERDICT_DISPLAY_NAME as CONTRACT_REQUIRED_VERDICT_DISPLAY_NAME, ScaleSetSelector,
+    ValidatorKind,
 };
 
 pub use crate::matrix::{
@@ -34,10 +34,11 @@ pub const CONCURRENCY_GROUP: &str =
     "velnor-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}";
 /// Exact cancel-in-progress expression (PR events only).
 pub const CONCURRENCY_CANCEL: &str = "${{ github.event_name == 'pull_request' }}";
-/// Final gate job ID (contract [`CONTRACT_REQUIRED_JOB_ID`] alias).
+/// Final verdict job ID (contract [`CONTRACT_REQUIRED_JOB_ID`] alias).
 pub const FINAL_JOB_ID: &str = CONTRACT_REQUIRED_JOB_ID;
-/// Exact required-check display name (contract alias).
-pub const FINAL_DISPLAY_NAME: &str = CONTRACT_REQUIRED_DISPLAY_NAME;
+/// Exact verdict display name (contract alias); the protected
+/// `Required` check is the gate job (`required_gate`).
+pub const FINAL_DISPLAY_NAME: &str = CONTRACT_REQUIRED_VERDICT_DISPLAY_NAME;
 /// Final gate condition (contract [`CONTRACT_REQUIRED_CONDITION`] alias).
 pub const FINAL_CONDITION: &str = CONTRACT_REQUIRED_CONDITION;
 /// Job ID of the trusted baseline publisher.

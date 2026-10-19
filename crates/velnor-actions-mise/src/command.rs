@@ -13,6 +13,8 @@ mod env;
 mod git;
 #[path = "command_output.rs"]
 mod output;
+#[path = "command_progress.rs"]
+mod progress;
 #[path = "qualified_acquisition.rs"]
 mod qualified_acquisition;
 #[path = "command_release_signer.rs"]

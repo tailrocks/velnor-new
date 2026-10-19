@@ -56,6 +56,8 @@ const EXPECTED_MODULES: &[&str] = &[
     "command_env.rs",
     "command_git.rs",
     "command_output.rs",
+    "command_progress.rs",
+    "command_progress_tests.rs",
     "command_release_signer.rs",
     "command_release_signer_tests.rs",
     "command_stream.rs",
@@ -229,7 +231,9 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
     let is_filter_process = name == "bounded_file_filter_process.rs";
     let is_filter = name == "bounded_file_filter.rs";
     let is_command_stream = name == "command_stream.rs";
+    let is_command_progress = name == "command_progress.rs";
     let write_expression = "output.write_all(&buffer[..count])";
+    let diagnostic_expression = ".write_all(bytes)";
     let metadata_expression = "std::fs::symlink_metadata(program)";
     path_policy::check_path_openers(name, source, violations);
     if is_filter_process && compact.matches(write_expression).count() != 1 {
@@ -247,9 +251,19 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
             "{name}: expected exactly one caller-owned bounded stream write `{STREAM_FILE_WRITE}`"
         ));
     }
-    if !is_command_stream && compact.contains(STREAM_FILE_WRITE) {
+    if !is_command_stream && !is_command_progress && compact.contains(STREAM_FILE_WRITE) {
         violations.push(format!(
             "{name}: caller-owned stream write is outside its approved module"
+        ));
+    }
+    if is_command_progress && compact.matches(diagnostic_expression).count() != 1 {
+        violations.push(format!(
+            "{name}: expected exactly one borrowed-diagnostic write `{diagnostic_expression}`"
+        ));
+    }
+    if !is_command_progress && !is_command_stream && compact.contains(diagnostic_expression) {
+        violations.push(format!(
+            "{name}: borrowed-diagnostic write is outside its approved module"
         ));
     }
     if !is_filter_process && compact.contains(write_expression) {
@@ -262,11 +276,14 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
             "{name}: program metadata check is outside its approved module"
         ));
     }
+    let mut borrowed_file_writes = 0;
+    let mut diagnostic_writes = 0;
     for (line, mut code) in code_of(source) {
+        let borrowed_stream_write = is_command_stream && code.trim() == ".write_all(bytes)";
         if is_filter_process && code.trim() == ".write_all(&buffer[..count])" {
             code = code.replace("write_all", "");
         }
-        if is_command_stream && code.trim() == ".write_all(bytes)" {
+        if borrowed_stream_write {
             code = code.replace("write_all", "");
         }
         if is_filter && code.contains(metadata_expression) {
@@ -274,6 +291,20 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
         }
         let at = format!("{name}:{line}");
         for token in ALWAYS_BANNED {
+            if name == "command_stream.rs" && *token == "write_all" && borrowed_stream_write {
+                borrowed_file_writes += 1;
+                continue;
+            }
+            if name == "command_progress.rs"
+                && *token == "write_all"
+                && code.trim() == ".write_all(bytes)"
+            {
+                diagnostic_writes += 1;
+                continue;
+            }
+            if name == "command_stream_tests.rs" && matches!(*token, "create_new" | "fs::write") {
+                continue;
+            }
             if code.contains(token) {
                 violations.push(format!("{at}: forbidden `{token}` in `{code}`"));
             }
@@ -292,6 +323,52 @@ fn check_source(name: &str, source: &str, violations: &mut Vec<String>) {
             violations.push(format!("{at}: unsanctioned `.mise/tasks` in `{code}`"));
         }
     }
+    if is_command_stream && borrowed_file_writes != 1 {
+        violations.push(format!("{name}: expected exactly one borrowed-file write"));
+    }
+    if name == "command_progress.rs" && diagnostic_writes != 1 {
+        violations.push(format!(
+            "{name}: expected exactly one borrowed-diagnostic write"
+        ));
+    }
+}
+
+#[test]
+fn diagnostic_write_admission_is_exactly_one_borrowed_sink_expression() -> Result<(), String> {
+    let root = crate::test_temp_dir::TestTempDir::new("mise-diagnostic-policy")
+        .map_err(|error| error.to_string())?;
+    for (name, source, admitted) in [
+        ("command_progress.rs", "{\nsink\n.write_all(bytes)\n}", true),
+        ("command_progress.rs", "", false),
+        (
+            "command_progress.rs",
+            "{\nsink\n.write_all(bytes)\n}\n{\nsink\n.write_all(bytes)\n}",
+            false,
+        ),
+        (
+            "command_progress.rs",
+            "{\nsink\n.write_all(other)\n}",
+            false,
+        ),
+        ("different.rs", "{\nsink\n.write_all(bytes)\n}", false),
+        (
+            "command_progress.rs",
+            "{\nsink\n.write_all(bytes)\n}\nstd::fs::write(path, bytes);",
+            false,
+        ),
+    ] {
+        let path = root.path().join(name);
+        let source = format!("fn example(sink: &mut Sink, bytes: &[u8]) {{\n{source}\n}}");
+        std::fs::write(&path, &source).map_err(|error| error.to_string())?;
+        let mut violations = Vec::new();
+        check_file(&path, &mut violations)?;
+        assert_eq!(
+            violations.is_empty(),
+            admitted,
+            "{name}: {source:?}: {violations:?}"
+        );
+    }
+    Ok(())
 }
 
 #[path = "impl_mise_forbidden_src_filter_tests.rs"]

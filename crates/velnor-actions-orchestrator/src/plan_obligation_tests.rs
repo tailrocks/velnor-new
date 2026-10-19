@@ -125,6 +125,7 @@ fn qualification_matrix_entries(task: &ProposedTask) -> Vec<MatrixEntry> {
             default_runs_on: HOSTED_RUNNER,
             toolchain: &toolchain,
             toolchain_inputs: &toolchain_inputs,
+            catalog: &catalog,
         },
         qualification_lanes(task),
     )

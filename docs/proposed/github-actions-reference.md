@@ -386,3 +386,7 @@ specifies recursive `**` patterns and ordered `!` exclusions. The patterns exclu
 only the selected workspace's mutable target, never every directory named target.
 The native Rust regression tests also bind these patterns to the rendered cache
 keys and unchanged generation, job, toolchain and restore-prefix boundaries.
+
+
+See [credential-free preview progress encoding](../implemented/native-preview-progress.md)
+for the bounded diagnostic output protocol and its runner-source references.

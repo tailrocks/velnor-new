@@ -86,6 +86,28 @@ fn mise_has_rust(version: &str) -> bool {
 }
 
 #[test]
+fn target_qualified_toolchain_channel_fails_generation_by_name() -> Result<(), Box<dyn Error>> {
+    // The generated resolver reads a bare X.Y.Z (hard decision 5), so
+    // generation rejects a target-qualified channel instead of every job.
+    let tmp = fresh_tempdir("tc-toml-target-qualified")?;
+    setup_repo(&tmp, &config_with_suites("", ""))?;
+    fs::write(
+        tmp.join("rust-toolchain.toml"),
+        "[toolchain]\nchannel = \"1.94.1-x86_64-unknown-linux-gnu\"\n",
+    )?;
+    commit_all(&tmp)?;
+    let out = spawn(&["generate"], &[], &tmp)?;
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(code(&out), 1, "{stderr}");
+    assert!(
+        stderr.contains("project_tool_version_not_exact:tool=rust,file=rust-toolchain.toml"),
+        "{stderr}"
+    );
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
 fn rust_toolchain_toml_and_legacy_file_override_rust_and_omit_rustup_toolchain()
 -> Result<(), Box<dyn Error>> {
     for (label, filename, contents, extra_rust) in [
@@ -94,12 +116,6 @@ fn rust_toolchain_toml_and_legacy_file_override_rust_and_omit_rustup_toolchain()
             "rust-toolchain.toml",
             "[toolchain]\nchannel = \"1.94.1\"\ncomponents = [\"rustfmt\", \"clippy\"]\n",
             "toolchain = \"1.94.1\"\n",
-        ),
-        (
-            "toml-target-qualified",
-            "rust-toolchain.toml",
-            "[toolchain]\nchannel = \"1.94.1-x86_64-unknown-linux-gnu\"\n",
-            "",
         ),
         ("legacy-plain-file", "rust-toolchain", "1.94.1\n", ""),
     ] {
@@ -180,6 +196,18 @@ fn config_only_rust_toolchain_exports_rustup_toolchain() -> Result<(), Box<dyn E
 
         let out = spawn(&["generate"], &[], &tmp)?;
         let stderr = String::from_utf8_lossy(&out.stderr);
+        if label == "toml-target-qualified" {
+            // The generated resolver reads a bare X.Y.Z (hard decision 5), so
+            // generation rejects a target-qualified channel by name.
+            assert_eq!(code(&out), 1, "{label}: {stderr}");
+            assert!(
+                stderr
+                    .contains("project_tool_version_not_exact:tool=rust,file=rust-toolchain.toml"),
+                "{label}: {stderr}"
+            );
+            cleanup(&tmp);
+            continue;
+        }
         if !mise_has_rust("1.94.1") {
             assert_eq!(
                 code(&out),

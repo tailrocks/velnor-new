@@ -70,6 +70,25 @@ fn fixture_config_sample(sample: &str) -> Result<String, Box<dyn std::error::Err
             toml::Value::Array(vec![toml::Value::String("mise.toml".into())]),
         );
     }
+    // Keep only the declared Rust inputs whose packages the one-crate
+    // fixture carries (the native-helper rule); the others name live
+    // packages it lacks.
+    if let Some(inputs) = table
+        .get_mut("stacks")
+        .and_then(|stacks| stacks.get_mut("rust"))
+        .and_then(|rust| rust.get_mut("inputs"))
+        .and_then(toml::Value::as_array_mut)
+    {
+        inputs.retain(|rule| {
+            rule.get("packages")
+                .and_then(toml::Value::as_array)
+                .is_some_and(|packages| {
+                    packages
+                        .iter()
+                        .all(|name| name.as_str() == Some("velnor-actions-workflow-renderer"))
+                })
+        });
+    }
     Ok(toml::to_string(&table)?)
 }
 

@@ -156,6 +156,7 @@ fn rust_suite_id_profile_and_scalar_bounds_fail_closed() {
     chk(|s| s.id = "bad-".into(), "id", "bad_suite_id");
     chk(|s| s.id = "Bad_Id".into(), "id", "bad_suite_id");
     chk(|s| s.id = "required".into(), "id", "reserved_suite_id");
+    chk(|s| s.id = "required-gate".into(), "id", "reserved_suite_id");
     chk(|s| s.id = "plan".into(), "id", "reserved_suite_id");
     chk(|s| s.profile = "-f".into(), "profile", "bad_suite_profile");
     chk(|s| s.partitions = 0, "partitions", "bad_suite_partitions");

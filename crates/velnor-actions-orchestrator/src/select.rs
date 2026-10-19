@@ -3,9 +3,12 @@
 //! The plan carries the full configured obligation universe. On events
 //! that select affected work (pull requests), packages the change cannot
 //! reach are classified unchanged and their crate jobs become
-//! `not_affected`; any doubt (unknown files, git failures, lockfile
-//! changes, unresolved graphs, unbounded symlinks) selects everything.
-//! Full-run events (push, merge group, qualification) change everything.
+//! `not_affected`. Every detectable doubt (unknown files, git failures, a
+//! stale merge ref, lockfile changes, unresolved graphs, unbounded
+//! symlinks) selects everything, and packages with unverified reads count
+//! as changed (`select_reads`); reads the static scan cannot see are the
+//! named residual risk (hard decision 4). Full-run events (push, merge
+//! group, qualification) change everything.
 
 use std::collections::BTreeSet;
 use std::ffi::OsString;
@@ -28,14 +31,15 @@ mod checkout;
 mod mode;
 #[path = "select_paths.rs"]
 mod paths;
+use checkout::checkout_bound_to_base;
 pub(crate) use checkout::{verify_checkout, verify_checkout_until};
 pub(crate) use mode::{SelectionMode, selection_mode};
 use mode::{event_token, resolved_edges, resolved_links};
 
-use paths::{
-    PROJECT_TOOL_CONFIG_CHANGED, head_sha, is_advisory_toolfile, is_project_tool_source,
-    tree_diff_names, untracked_files,
-};
+#[path = "select_tool_sources.rs"]
+mod tool_sources;
+
+use paths::{head_sha, is_advisory_toolfile, tree_diff_names, untracked_files};
 
 /// Full obligation universe: every task with applicable targets.
 ///
@@ -62,10 +66,10 @@ pub(crate) fn select_universe<'a>(
 
 /// Changed package IDs, or `None` when the comparison is unknown.
 ///
-/// `None` marks every obligation changed (fail-open broad: the correct
-/// unknown-comparison behavior). An empty set means nothing changed, so
-/// obligations stay eligible for verified coverage instead of executing
-/// unconditionally. Push compares `before...head` when a base exists.
+/// `None` marks every obligation changed (fail-closed broad: the correct
+/// unknown-comparison behavior). A set lists the affected packages; every
+/// other unchanged obligation becomes `not_affected`. Full-run events
+/// always return `None`.
 pub(crate) fn classify_changed(
     root: &Path,
     event: WorkflowEvent,
@@ -91,6 +95,17 @@ pub(crate) fn classify_changed(
         warnings.push("comparison_unavailable:missing_base:all_changed".to_owned());
         return None;
     };
+    match checkout_bound_to_base(root, base, head) {
+        Ok(true) => {}
+        Ok(false) => {
+            warnings.push("comparison_unavailable:stale_merge_ref:all_changed".to_owned());
+            return None;
+        }
+        Err(problem) => {
+            warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
+            return None;
+        }
+    }
     let (changed, toolfiles) = change_sets(root, base, head, warnings)?;
     Some(affected_from_changed(
         discovery, &changed, toolfiles, root, base, head, warnings,
@@ -110,7 +125,7 @@ fn classify_local(
             return None;
         }
     };
-    let (changed, toolfiles) = local_change_set(root, warnings)?;
+    let (changed, toolfiles) = local_change_set(root, &sha, warnings)?;
     Some(affected_from_changed(
         discovery, &changed, toolfiles, root, &sha, &sha, warnings,
     ))
@@ -118,10 +133,13 @@ fn classify_local(
 
 /// Changed package IDs for one change set, broadening on risk.
 ///
-/// An empty change set marks nothing changed: obligations stay eligible
-/// for verified coverage, and execute when no proof covers them. Any
-/// risk (lockfile, root config, broadening paths, unowned files, edge
-/// failures) marks every package changed.
+/// Any risk (lockfile, root config, broadening paths, unowned files, edge
+/// failures) marks every package changed. Rust ownership always sees the
+/// full change set: the Tofu split feeds only Tofu root selection, so a
+/// path some Tofu root owns but no Rust rule claims still selects every
+/// Rust package. Forced packages (unverified reads) count as changed on
+/// every pull request, empty change sets included, and seed the reverse
+/// closure so their dependents run too.
 fn affected_from_changed(
     discovery: &Discovery,
     changed: &BTreeSet<String>,
@@ -131,12 +149,12 @@ fn affected_from_changed(
     head: &str,
     warnings: &mut Vec<String>,
 ) -> BTreeSet<String> {
-    let tasks = &discovery.proposals;
-    let all_packages: BTreeSet<String> = tasks
+    let all_packages: BTreeSet<String> = discovery
+        .proposals
         .iter()
         .map(|task| task.identity.unit_id.clone())
         .collect();
-    if changed.is_empty() {
+    let tofu_affected = if changed.is_empty() {
         warnings.push(
             if toolfiles {
                 "toolfiles_only:all_unchanged"
@@ -145,60 +163,93 @@ fn affected_from_changed(
             }
             .to_owned(),
         );
-        return BTreeSet::new();
-    }
-    if changed
-        .iter()
-        .any(|path| broadening_for_path(path) == Some(SelectionBroadening::Lockfile))
-    {
-        warnings.push("cargo_lock_changed:all_changed".to_owned());
-        return all_packages;
-    }
-    if changed
-        .iter()
-        .any(|path| broadening_for_path(path) == Some(SelectionBroadening::RootConfig))
-    {
-        warnings.push("root_config_changed:all_changed".to_owned());
-        return all_packages;
-    }
-    if let Some(warning) = changed
-        .iter()
-        .find_map(|path| selection_broadens_for_path(path))
-    {
-        warnings.push(warning.to_owned());
-        return all_packages;
-    }
-    let Some((rust_changed, tofu_affected)) =
-        crate::select_tofu::split_or_broaden(root, base, head, discovery, changed, warnings)
-    else {
-        return all_packages;
-    };
-    let Some(resolved) = resolved_edges(discovery, warnings) else {
-        return all_packages;
-    };
-    let ownership = Ownership::new(discovery);
-    let Some(links) = resolved_links(root, &ownership, warnings) else {
-        return all_packages;
-    };
-    let ownership = ownership.with_links(links);
-    if has_unowned_file(&ownership, &rust_changed) {
-        warnings.push("unclassified_files:all_changed".to_owned());
-        return all_packages;
-    }
-    let head_edges = head_edges(discovery);
-    let mut affected = match base_edges(root, base, head, discovery) {
-        Ok(base_edges) => affected_packages(
-            &ownership,
-            &rust_changed,
-            &[&base_edges, &head_edges, &resolved],
-        ),
-        Err(problem) => {
-            warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
+        BTreeSet::new()
+    } else {
+        if let Some(warning) = broadening_warning(changed) {
+            warnings.push(warning);
             return all_packages;
         }
+        let Some(keys) = crate::select_tofu::tofu_keys_or_broaden(
+            root, base, head, discovery, changed, warnings,
+        ) else {
+            return all_packages;
+        };
+        keys
+    };
+    let Some(mut affected) = rust_affected(discovery, changed, root, base, head, warnings) else {
+        return all_packages;
     };
     affected.extend(tofu_affected);
     affected
+}
+
+/// The whole-run broadening warning one changed path triggers, if any.
+fn broadening_warning(changed: &BTreeSet<String>) -> Option<String> {
+    for (kind, warning) in [
+        (
+            SelectionBroadening::Lockfile,
+            "cargo_lock_changed:all_changed",
+        ),
+        (
+            SelectionBroadening::RootConfig,
+            "root_config_changed:all_changed",
+        ),
+    ] {
+        if changed
+            .iter()
+            .any(|path| broadening_for_path(path) == Some(kind))
+        {
+            return Some(warning.to_owned());
+        }
+    }
+    changed
+        .iter()
+        .find_map(|path| selection_broadens_for_path(path))
+        .map(str::to_owned)
+}
+
+/// Rust packages the full change set affects, or `None` to broaden.
+fn rust_affected(
+    discovery: &Discovery,
+    changed: &BTreeSet<String>,
+    root: &Path,
+    base: &str,
+    head: &str,
+    warnings: &mut Vec<String>,
+) -> Option<BTreeSet<String>> {
+    let resolved = resolved_edges(discovery, warnings)?;
+    let ownership = Ownership::new(discovery);
+    let links = resolved_links(root, &ownership, warnings)?;
+    let ownership = ownership.with_links(links);
+    if has_unowned_file(&ownership, changed) {
+        warnings.push("unclassified_files:all_changed".to_owned());
+        return None;
+    }
+    let forced = match crate::select_reads::forced_packages(root, discovery, &ownership) {
+        Ok(forced) => forced,
+        Err(problem) => {
+            warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
+            return None;
+        }
+    };
+    warnings.extend(crate::select_reads::forced_warnings(&ownership, &forced));
+    let forced = crate::select_reads::forced_ids(&forced);
+    if changed.is_empty() && forced.is_empty() {
+        return Some(BTreeSet::new());
+    }
+    let head_edges = head_edges(discovery);
+    match base_edges(root, base, head, discovery) {
+        Ok(base_edges) => Some(affected_packages(
+            &ownership,
+            changed,
+            &forced,
+            &[&base_edges, &head_edges, &resolved],
+        )),
+        Err(problem) => {
+            warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
+            None
+        }
+    }
 }
 
 /// True when one task counts as changed under the affected packages.
@@ -277,11 +328,10 @@ fn change_sets(
             }
         }
     }
-    if changed.iter().any(|path| is_project_tool_source(path)) {
-        warnings.push(PROJECT_TOOL_CONFIG_CHANGED.to_owned());
-        return None;
-    }
-    let toolfiles = changed.iter().any(|path| is_advisory_toolfile(path))
+    let unchanged =
+        tool_sources::unchanged_declaration_sources(root, base, Some(head), &changed, warnings)?;
+    let toolfiles = !unchanged.is_empty()
+        || changed.iter().any(|path| is_advisory_toolfile(path))
         || untracked.iter().any(|path| is_advisory_toolfile(path));
     if untracked
         .into_iter()
@@ -298,7 +348,7 @@ fn change_sets(
     }
     let changed = changed
         .into_iter()
-        .filter(|path| !is_advisory_toolfile(path))
+        .filter(|path| !is_advisory_toolfile(path) && !unchanged.contains(path))
         .collect();
     Some((changed, toolfiles))
 }
@@ -307,7 +357,11 @@ fn change_sets(
 ///
 /// Staged plus unstaged diffs plus untracked files form the local union;
 /// git failures broaden with a recorded warning.
-fn local_change_set(root: &Path, warnings: &mut Vec<String>) -> Option<(BTreeSet<String>, bool)> {
+fn local_change_set(
+    root: &Path,
+    base: &str,
+    warnings: &mut Vec<String>,
+) -> Option<(BTreeSet<String>, bool)> {
     let mut changed = BTreeSet::new();
     for cached in [true, false] {
         match tree_diff_names(root, cached) {
@@ -326,14 +380,12 @@ fn local_change_set(root: &Path, warnings: &mut Vec<String>) -> Option<(BTreeSet
         }
     };
     changed.extend(untracked);
-    if changed.iter().any(|path| is_project_tool_source(path)) {
-        warnings.push(PROJECT_TOOL_CONFIG_CHANGED.to_owned());
-        return None;
-    }
-    let toolfiles = changed.iter().any(|path| is_advisory_toolfile(path));
+    let unchanged =
+        tool_sources::unchanged_declaration_sources(root, base, None, &changed, warnings)?;
+    let toolfiles = !unchanged.is_empty() || changed.iter().any(|path| is_advisory_toolfile(path));
     let changed = changed
         .into_iter()
-        .filter(|path| !is_advisory_toolfile(path))
+        .filter(|path| !is_advisory_toolfile(path) && !unchanged.contains(path))
         .collect();
     Some((changed, toolfiles))
 }

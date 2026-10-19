@@ -95,7 +95,7 @@ fn token_hygiene_allows_final_fetch_token() -> Result<(), RenderError> {
     // its fixed `GH_TOKEN`, never carried through IR env.
     let (id, mut final_job) = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned()],
         vec![
             checkout_step(&checkout_pin())?,

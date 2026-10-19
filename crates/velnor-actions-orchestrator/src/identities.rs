@@ -327,13 +327,14 @@ pub(crate) fn toolchain_inputs_for(
 /// Cache-format identity for one compile driver.
 ///
 /// The single cache format is versioned here; the typed driver admits
-/// no unknown spelling, so no fallback digest can ever trigger.
-pub(crate) fn cache_format_id_for(driver: CompileDriver) -> String {
+/// no unknown spelling, so no fallback digest can ever trigger. The MBX
+/// generation binds the MBX version the workflow actually runs (the
+/// project's declaration or the Velnor pin, hard decision 5), never the
+/// compiled-in pin.
+pub(crate) fn cache_format_id_for(driver: CompileDriver, mbx_version: &str) -> String {
     let generation = match driver {
         CompileDriver::Cargo => "1".to_owned(),
-        CompileDriver::Mbx => {
-            mbx_cache_generation(velnor_actions_mise::catalog::MR_BOXINGTON_VERSION)
-        }
+        CompileDriver::Mbx => mbx_cache_generation(mbx_version),
     };
     if let Ok(id) = cache_format_id(&FormatInputs {
         adapter: driver.as_str().to_owned(),

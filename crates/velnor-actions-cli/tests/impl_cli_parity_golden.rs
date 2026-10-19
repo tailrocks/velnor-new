@@ -53,7 +53,7 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 /// Fresh git checkout of one corpus case; returns the repo and its head SHA.
-fn checkout(case: &str) -> Result<(PathBuf, String), Box<dyn Error>> {
+pub(crate) fn checkout(case: &str) -> Result<(PathBuf, String), Box<dyn Error>> {
     let dir = fresh_tempdir(&format!("parity-{case}"))?;
     let repo = dir.join("repo");
     std::fs::create_dir_all(&repo)?;

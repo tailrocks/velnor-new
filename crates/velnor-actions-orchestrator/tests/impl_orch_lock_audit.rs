@@ -232,7 +232,8 @@ fn hostile_config_ignored_by_isolated_installs() -> TestResult {
         "declared version copied: {yaml}"
     );
     assert!(
-        yaml.contains("--no-config --no-env --no-hooks config get"),
+        yaml.contains(r#"velnor_mise() { mise --no-config --no-env --no-hooks \"$@\"; }"#)
+            && yaml.contains("velnor_mise config get -f"),
         "{yaml}"
     );
     for line in yaml.lines() {

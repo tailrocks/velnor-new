@@ -37,7 +37,10 @@ pub fn validate_concrete_exact_version(tool: &str, version: &str) -> Result<(), 
         return Err(invalid_version(tool, version));
     };
     for part in [major, minor, patch] {
-        if part.is_empty() || !part.bytes().all(|byte| byte.is_ascii_digit()) {
+        if part.is_empty()
+            || !part.bytes().all(|byte| byte.is_ascii_digit())
+            || (part.len() > 1 && part.starts_with('0'))
+        {
             return Err(invalid_version(tool, version));
         }
     }

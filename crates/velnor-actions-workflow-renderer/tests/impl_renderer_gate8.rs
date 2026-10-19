@@ -107,7 +107,7 @@ fn rendered_action_inputs_carry_no_shell_expansions() -> Result<(), RenderError>
     );
     let mut final_job = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned()],
         vec![
             preseed_download_step()?,

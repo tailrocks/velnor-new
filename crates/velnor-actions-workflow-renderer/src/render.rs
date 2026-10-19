@@ -167,6 +167,9 @@ pub fn finalize_jobs(
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }
+        if id == velnor_actions_contract::REQUIRED_GATE_JOB_ID {
+            continue;
+        }
         if !bootstrap_plan {
             insert_verified_cache_helper(id, job, ctx)?;
         }
@@ -219,6 +222,7 @@ pub fn finalize_jobs(
     crate::cache_tar_setup::insert_launcher_steps(&mut jobs)?;
     apply_affected_job_gates(&mut jobs)?;
     validate_final_jobs(ir, &mut jobs)?;
+    crate::required_gate::check_required_gate(&jobs)?;
     crate::cache_doctor::check(&jobs)?;
     Ok(jobs)
 }
@@ -295,9 +299,11 @@ fn merged_jobs(
         &mut jobs,
         &workflow_task_ids,
     )?;
+    crate::required_gate::insert_required_gate(&mut jobs)?;
     msrv::check_no_msrv(&jobs)?;
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
+    crate::required_gate::check_required_gate(&jobs)?;
     support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }

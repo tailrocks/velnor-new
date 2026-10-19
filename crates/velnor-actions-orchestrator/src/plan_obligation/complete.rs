@@ -101,6 +101,7 @@ pub(super) fn complete_group(
             default_runs_on: inputs.label,
             toolchain: completion.toolchain,
             toolchain_inputs: completion.toolchain_inputs,
+            catalog: inputs.catalog,
         },
         lanes,
     )?;
@@ -120,6 +121,7 @@ pub(super) struct LaneEntryInputs<'a> {
     pub(super) default_runs_on: &'a str,
     pub(super) toolchain: &'a str,
     pub(super) toolchain_inputs: &'a velnor_actions_contract::cachekey::ToolchainInputs,
+    pub(super) catalog: &'a velnor_actions_mise::ToolCatalog,
 }
 
 /// Derive the exact persisted `MatrixEntry` identities for physical lanes.
@@ -155,9 +157,10 @@ pub(super) fn derive_lane_entries(
                 inputs.task,
                 inputs.toolchain,
                 &platform_id,
+                inputs.catalog,
             )
         } else {
-            cache_ids_for(inputs.task, runs_on, inputs.toolchain)
+            cache_ids_for(inputs.task, runs_on, inputs.toolchain, inputs.catalog)
         }
         .map_err(internal_contract)?;
         record_lane_target_dir(&mut entry.adapter_metadata, cache_ids.lane_id());

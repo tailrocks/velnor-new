@@ -76,6 +76,108 @@ fn finalization_requires_and_uses_the_selected_routing_policy() -> Result<(), cr
     Ok(())
 }
 
+#[test]
+fn required_gate_skips_cache_setup_but_keeps_scale_set_image() -> Result<(), crate::RenderError> {
+    let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
+    let selector = scale_set_selector();
+    let mut ir = dispatch_ir(dispatch_plan_job(&staged)?);
+    ir.permissions.actions = velnor_actions_contract::PermissionLevel::Read;
+    ir.jobs.get_mut(PLAN_JOB_ID).expect("plan job").runs_on = selector.token();
+    ir.jobs
+        .insert(crate::render::FINAL_JOB_ID.to_owned(), required_verdict());
+    let mut context = dispatch_render_context(staged);
+    context.scale_set_selector = Some(selector.clone());
+    context.scale_set_image_source_sha = Some("b".repeat(40));
+    context.require_verified_cache_helper = true;
+    context.verified_cache_helpers.insert(
+        selector.token(),
+        vec![acquire_step(&context.staged_binary)?],
+    );
+    let image = velnor_actions_contract::config::ValidatedImageReference::parse(
+        "ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    )
+    .expect("valid immutable image");
+    let routing = crate::workflow_routing::WorkflowRoutingPolicy::configured(
+        velnor_actions_contract::ExecutionMode::ScaleSet,
+        selector.clone(),
+        Some(image),
+    );
+
+    let jobs = crate::render::finalize_jobs(
+        &ir,
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &context,
+        &dispatch_mise(),
+        &routing,
+    )?;
+    let gate = &jobs[velnor_actions_contract::REQUIRED_GATE_JOB_ID];
+    assert_eq!(gate.runs_on, selector.token());
+    assert_eq!(gate.steps.len(), 1);
+    let StepKind::Shell { run, .. } = &gate.steps[0].kind else {
+        panic!("gate step stays a shell step");
+    };
+    assert_eq!(run.last().map(String::as_str), Some("false"));
+    assert!(
+        jobs[PLAN_JOB_ID]
+            .steps
+            .iter()
+            .any(|step| { step.role == Some(velnor_actions_contract::StepRole::AcquireVelnor) })
+    );
+    crate::required_gate::check_required_gate(&jobs)?;
+    let rendered = crate::render::render_workflow_ir_strict_shared_with_routing(
+        &ir,
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &context,
+        &dispatch_mise(),
+        &routing,
+    )?;
+    let yaml = rendered.yaml;
+    assert!(yaml.contains("required-gate:"));
+    let gate_yaml = yaml
+        .split("  required-gate:")
+        .nth(1)
+        .expect("required gate YAML");
+    let gate_end = gate_yaml
+        .match_indices("\n  ")
+        .find(|(index, _)| gate_yaml.as_bytes().get(index + 3) != Some(&b' '))
+        .map_or(gate_yaml.len(), |(index, _)| index);
+    let gate_yaml = &gate_yaml[..gate_end];
+    assert!(gate_yaml.contains(
+        "ghcr.io/team/job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ));
+    assert!(!gate_yaml.contains("actions/checkout"));
+    assert!(!gate_yaml.contains("mise"));
+    Ok(())
+}
+
+fn scale_set_selector() -> velnor_actions_contract::ScaleSetSelector {
+    velnor_actions_contract::ScaleSetSelector::try_new(
+        "ubuntu-26.04-scale-set",
+        &["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()],
+    )
+    .expect("valid Scale Set selector")
+}
+
+fn required_verdict() -> Job {
+    Job {
+        display_name: velnor_actions_contract::REQUIRED_VERDICT_DISPLAY_NAME.to_owned(),
+        runs_on: "ubuntu-26.04".to_owned(),
+        check_runner: None,
+        timeout_minutes: JobTimeout::REQUIRED,
+        needs: vec![PLAN_JOB_ID.to_owned()],
+        condition: Some(crate::render::FINAL_CONDITION.to_owned()),
+        permissions: None,
+        cache_mode: None,
+        environment: None,
+        steps: vec![
+            crate::steps::checkout_step(&format!("actions/checkout@{}", "c".repeat(40)))
+                .expect("pinned checkout"),
+        ],
+    }
+}
+
 fn assert_native_mbx_step(plan: &Job) {
     let mbx = plan
         .steps

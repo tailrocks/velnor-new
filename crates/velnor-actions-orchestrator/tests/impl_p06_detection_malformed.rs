@@ -45,10 +45,13 @@ fn malformed_mise_wrapper_fails_closed() -> TestResult {
             write_file(root, name, content)?;
             let before = snapshot(root)?;
             let err = err_of(prepare(root).map(|_| ()), "malformed wrapper")?;
-            assert!(
-                err.to_string().contains("wrapper_invalid"),
-                "diagnostic: {err}"
-            );
+            let expected = if content.starts_with("[tools") {
+                // Not TOML at all: no project tool source may be skipped.
+                "malformed_project_tool_source"
+            } else {
+                "wrapper_invalid"
+            };
+            assert!(err.to_string().contains(expected), "diagnostic: {err}");
             assert!(err.to_string().contains(name), "file named: {err}");
             assert_eq!(snapshot(root)?, before, ".github untouched");
         }

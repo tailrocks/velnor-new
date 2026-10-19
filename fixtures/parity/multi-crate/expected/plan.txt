@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.25
+Velnor Actions plan 0.1.26
 Repository: <repo>
 
 Detected stacks
@@ -21,6 +21,7 @@ Workflow to generate
     - plan (16 steps)
     - publish-baseline (6 steps)
     - required (8 steps)
+    - required-gate (1 steps)
     - rust-parity-app (24 steps)
     - rust-parity-tool (22 steps)
     - 2 Rust package jobs

@@ -186,14 +186,16 @@ pub(crate) fn plan_group(
         inputs.catalog,
     )?;
     // The archive identity binds the content closure, never a manifest
-    // pathname: a same-path source edit flips the closure and the
-    // identity with it. Unbound sources refuse the task (execute with
-    // reason); changed work already executes under its own reason.
-    // Malformed specs stay hard errors: the planner generated them.
+    // pathname. An unchanged task whose source is not content-bound fails
+    // the plan: running it alone would skip its dependents (the closure
+    // digest always binds it today). Malformed specs stay hard errors.
     let reuse = if inputs.changed {
         wire_w2::ReuseOutcome::execute("affected_by_change")
     } else if gate == wire_w2::ArchiveGate::SourceUnbound {
-        wire_w2::ReuseOutcome::execute("archive_source_unbound")
+        return Err(internal(&format!(
+            "archive_source_unbound:{}",
+            task.task_id
+        )));
     } else if Stack::from_id(&task.stack_id) == Some(Stack::Rust) {
         crate::plan_dispositions::unaffected_rust_outcome(task)
     } else {

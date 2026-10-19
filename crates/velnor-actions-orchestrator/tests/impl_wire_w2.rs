@@ -79,9 +79,17 @@ fn build_script_package_rejects_reuse() -> TestResult {
     let value = plan_value(root, "pull_request", Some(&base), &head)?;
     let plan: C::Plan = serde_json::from_value(value["plan"].clone())?;
     assert!(!plan.obligations.is_empty());
+    // Unchanged, but a build script's reads are unbounded: the package
+    // counts as changed on every pull request, dependents included.
+    assert!(
+        plan.warnings
+            .iter()
+            .any(|w| w == "undeclared_reads:demo:build_script"),
+        "{:?}",
+        plan.warnings
+    );
     for ob in &plan.obligations {
-        // Unchanged, but a build script's reads are unbounded: it runs.
-        assert_eq!(ob.reason, "undeclared_reads", "{}", ob.task_id);
+        assert_eq!(ob.reason, "affected_by_change", "{}", ob.task_id);
     }
     assert!(
         plan.obligations

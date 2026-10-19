@@ -175,7 +175,7 @@ fn tofu_metadata_and_cache_ids_derive() {
         identities::toolchain_inputs_for(&task, &catalog).expect("toolchain inputs");
     let toolchain =
         velnor_actions_contract::cachekey::toolchain_id(&toolchain_inputs).expect("toolchain");
-    let ids = cache_ids_for(&task, "ubuntu-24.04", &toolchain).expect("cache ids");
+    let ids = cache_ids_for(&task, "ubuntu-24.04", &toolchain, &catalog).expect("cache ids");
     assert_eq!(
         ids.cache_format_id(),
         identities::cache_format_id_for_tofu().as_str()

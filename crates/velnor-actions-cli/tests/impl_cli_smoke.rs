@@ -211,42 +211,28 @@ fn velnor_generate_omits_consumer_manifest_warning() -> Result<(), Box<dyn Error
 fn generate_writes_manual_change_suggestions_for_malformed_tools() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("smoke-malformed-tools")?;
     init_repo(&tmp)?;
-    // TOOL-2.2: malformed mise.toml stays a read-only input; both commands
-    // report `tooling_input_invalid` plus a concrete manual-change suggestion,
-    // while malformed rust-toolchain.toml fails closed without modifying the file.
+    // Hard decision 5: a malformed mise.toml fails both commands naming the
+    // file, never falls back to a Velnor pin; the file is left untouched.
     std::fs::write(tmp.join("mise.toml"), "[tools\nrust = \n")?;
     let mise_before = std::fs::read(tmp.join("mise.toml"))?;
-    let plan = spawn(&["plan"], &[], &tmp)?;
-    assert_eq!(code(&plan), 0, "stderr: {:?}", plan.stderr);
-    assert_eq!(plan.stderr, [] as [u8; 0]);
-    let stdout = String::from_utf8_lossy(&plan.stdout).into_owned();
-    let invalid: Vec<String> = plan_recommendations(&stdout)
-        .into_iter()
-        .filter(|rec| rec.contains("tooling_input_invalid"))
-        .collect();
-    assert_eq!(invalid.len(), 1, "mise.toml flagged:\n{stdout}");
-    for rec in &invalid {
-        assert!(rec.contains("fix it manually"), "no suggestion: {rec}");
-    }
-    assert!(invalid.iter().any(|rec| rec.contains("mise.toml")));
     let outer = fresh_tempdir("smoke-malformed-preview")?;
     let preview = outer.join("preview");
-    let generated = spawn(
-        &["generate", "--output-dir", preview.to_str().unwrap_or("/")],
-        &[],
-        &tmp,
-    )?;
-    assert_eq!(code(&generated), 0, "stderr: {:?}", generated.stderr);
-    assert_eq!(generated.stdout, [] as [u8; 0]);
-    let stderr = String::from_utf8_lossy(&generated.stderr).into_owned();
-    for rec in &invalid {
+    for args in [
+        vec!["plan"],
+        vec!["generate", "--output-dir", preview.to_str().unwrap_or("/")],
+    ] {
+        let out = spawn(&args, &[], &tmp)?;
+        assert_eq!(code(&out), 1, "{args:?}");
+        let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
         assert!(
-            stderr.lines().any(|line| line == rec),
-            "generate stderr missing: {rec}"
+            stderr.contains("mise.toml") && stderr.contains("malformed_project_tool_source"),
+            "{args:?}: {stderr}"
         );
+        assert_eq!(out.stdout, [] as [u8; 0], "{args:?}");
     }
     assert_eq!(std::fs::read(tmp.join("mise.toml"))?, mise_before);
-    assert!(preview.join(".github/workflows/ci.yml").is_file());
+    assert!(!preview.exists());
+    std::fs::remove_file(tmp.join("mise.toml"))?;
 
     std::fs::write(tmp.join("rust-toolchain.toml"), "[[[\n")?;
     let toolchain_before = std::fs::read(tmp.join("rust-toolchain.toml"))?;

@@ -203,7 +203,7 @@ fn missing_lock_recommends_without_refresh() -> TestResult {
 }
 
 #[test]
-fn conflicting_tool_pins_recommend() -> TestResult {
+fn conflicting_tool_pins_fail_generation_naming_both_files() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let rust_toolchain = format!("[toolchain]\nchannel = \"{RUST_VERSION}\"\n");
     fs::write(repo.path().join("rust-toolchain.toml"), rust_toolchain)?;
@@ -211,12 +211,16 @@ fn conflicting_tool_pins_recommend() -> TestResult {
         repo.path().join("mise.toml"),
         "[tools]\nrust = \"1.85.0\"\n",
     )?;
-    let prep = prepare(repo.path())?;
-    let parent = TempDir::new()?;
-    let report = preview_into(&prep, parent.path().join("preview"))?;
-    let text = report.recommendations.join("\n");
-    assert!(text.contains("conflicting_tool_values"), "{text}");
-    assert!(text.contains("1.85.0"), "{text}");
+    let err = prepare(repo.path()).err().ok_or("conflict must fail")?;
+    let text = err.to_string();
+    assert!(text.contains("conflicting_project_tool_versions"), "{text}");
+    assert!(text.contains("mise.toml rust=1.85.0"), "{text}");
+    assert!(
+        text.contains(&format!(
+            "rust-toolchain.toml toolchain.channel={RUST_VERSION}"
+        )),
+        "{text}"
+    );
     Ok(())
 }
 

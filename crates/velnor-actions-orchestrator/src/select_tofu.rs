@@ -3,10 +3,13 @@
 //! The head graph is captured at inventory time (qualified per-root
 //! edges); the base graph is built from base-revision texts of
 //! head-unit files minus added files plus deleted config files.
-//! Changed paths split by tofu ownership: tofu-owned paths select
-//! through [`select_roots`](velnor_actions_tofu::select_roots) over
-//! the union, rust-owned paths keep the package path. Graph-build
-//! failures broaden via the caller, like the rust base edges.
+//! Tofu-owned changed paths select through
+//! [`select_roots`](velnor_actions_tofu::select_roots) over the union.
+//! The split is Tofu's own input only: Rust ownership always sees the
+//! full change set, so a Tofu-owned path never hides a Rust claim and a
+//! path no Rust rule claims still selects every Rust package (hard
+//! decision 4). Graph-build failures broaden via the caller, like the
+//! rust base edges.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -80,31 +83,31 @@ pub(crate) fn push_chdir_findings(
     Ok(())
 }
 
-/// Split `changed` by tofu ownership and select affected tofu keys.
+/// Affected tofu unit keys for the tofu-owned subset of `changed`.
 ///
-/// Returns the rust-owned subset plus the affected tofu unit keys.
-/// Without tofu roots this is a no-op passthrough (no git calls).
-/// Fallback reasons record as warnings; graph-build failures are
-/// errors that broaden via the caller.
+/// Only the paths a tofu node owns feed tofu root selection; the caller
+/// keeps classifying the full change set for Rust. Without tofu roots
+/// this is empty (no git calls). Fallback reasons record as warnings;
+/// graph-build failures are errors that broaden via the caller.
 ///
 /// Base roots equal head roots: configured-root deletions fall back
 /// to select-all conservatively instead of parsing base config.
-pub(crate) fn split_and_select(
+pub(crate) fn select_tofu_keys(
     root: &Path,
     base: &str,
     head: &str,
     discovery: &Discovery,
     changed: &BTreeSet<String>,
     warnings: &mut Vec<String>,
-) -> Result<(BTreeSet<String>, BTreeSet<String>), String> {
+) -> Result<BTreeSet<String>, String> {
     let head_roots = tofu_selected_roots(&discovery.statuses);
     if head_roots.is_empty() {
-        return Ok((changed.clone(), BTreeSet::new()));
+        return Ok(BTreeSet::new());
     }
     let head_graph = head_module_graph(discovery);
     let base_graph = base_module_graph(root, base, head, discovery)?;
     let nodes = union_nodes(&head_roots, &base_graph, &head_graph);
-    let (rust_changed, tofu_changed) = split_changed(changed, &nodes);
+    let tofu_changed = tofu_owned(changed, &nodes);
     let selection = select_roots(
         &head_roots,
         &head_roots,
@@ -116,27 +119,26 @@ pub(crate) fn split_and_select(
     for reason in &selection.fallback {
         warnings.push(format!("tofu_select_all:{reason}"));
     }
-    let affected = selection
+    Ok(selection
         .selected
         .into_iter()
         .map(|root| key_for_root(&root))
-        .collect();
-    Ok((rust_changed, affected))
+        .collect())
 }
 
-/// Split and select, recording graph-build failures as broaden warnings.
+/// Tofu selection, recording graph-build failures as broaden warnings.
 ///
 /// Returns `None` when selection is unavailable (the caller broadens).
-pub(crate) fn split_or_broaden(
+pub(crate) fn tofu_keys_or_broaden(
     root: &Path,
     base: &str,
     head: &str,
     discovery: &Discovery,
     changed: &BTreeSet<String>,
     warnings: &mut Vec<String>,
-) -> Option<(BTreeSet<String>, BTreeSet<String>)> {
-    match split_and_select(root, base, head, discovery, changed, warnings) {
-        Ok(split) => Some(split),
+) -> Option<BTreeSet<String>> {
+    match select_tofu_keys(root, base, head, discovery, changed, warnings) {
+        Ok(keys) => Some(keys),
         Err(problem) => {
             warnings.push(format!("comparison_unavailable:{problem}:all_changed"));
             None
@@ -216,25 +218,17 @@ fn union_nodes(roots: &[String], base: &ModuleEdges, head: &ModuleEdges) -> BTre
     nodes
 }
 
-/// Split `changed` into rust-owned and tofu-owned paths.
+/// The tofu-owned subset of `changed`, Tofu's own selection input.
 ///
 /// A path is tofu-owned when its nearest ancestor-or-self node is a
 /// tofu node (mirrors selection's attribution, so every tofu-owned
 /// path attributes inside [`select_roots`](velnor_actions_tofu::select_roots)).
-fn split_changed(
-    changed: &BTreeSet<String>,
-    nodes: &BTreeSet<String>,
-) -> (BTreeSet<String>, BTreeSet<String>) {
-    let mut rust = BTreeSet::new();
-    let mut tofu = BTreeSet::new();
-    for path in changed {
-        if owns(nodes, path) {
-            tofu.insert(path.clone());
-        } else {
-            rust.insert(path.clone());
-        }
-    }
-    (rust, tofu)
+fn tofu_owned(changed: &BTreeSet<String>, nodes: &BTreeSet<String>) -> BTreeSet<String> {
+    changed
+        .iter()
+        .filter(|path| owns(nodes, path))
+        .cloned()
+        .collect()
 }
 
 /// True when `path` has an ancestor-or-self node in `nodes`.

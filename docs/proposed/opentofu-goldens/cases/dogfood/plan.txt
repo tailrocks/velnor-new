@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.25
+Velnor Actions plan 0.1.26
 Repository: <repo>
 
 Detected stacks
@@ -47,6 +47,7 @@ Workflow to generate
     - plan (20 steps)
     - publish-baseline (8 steps)
     - required (10 steps)
+    - required-gate (1 steps)
     - rust-velnor-actions-actionlint (26 steps)
     - rust-velnor-actions-cli (26 steps)
     - rust-velnor-actions-contract (25 steps)

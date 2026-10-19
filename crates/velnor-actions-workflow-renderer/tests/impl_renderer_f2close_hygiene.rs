@@ -110,7 +110,7 @@ fn render_carries_no_warmup_prune_or_invented_nextest() -> Result<(), RenderErro
         WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Candidate);
     let mut final_job = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned()],
         vec![acquire_fixture()?, merge_step()],
     )
@@ -179,7 +179,7 @@ fn velnor_policy_renders_with_empty_matrix() -> Result<(), RenderError> {
     ctx.validator_commands = validator_commands();
     let mut final_job = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned()],
         vec![merge_step()],
     )

@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.25
+Velnor Actions plan 0.1.26
 Repository: <repo>
 
 Detected stacks
@@ -17,6 +17,7 @@ Workflow to generate
     - plan (12 steps)
     - publish-baseline (6 steps)
     - required (8 steps)
+    - required-gate (1 steps)
     - no matrix entries (no-work workflow)
   Parallel: single job; no matrix fan-out
   Critical path: none (no obligations)

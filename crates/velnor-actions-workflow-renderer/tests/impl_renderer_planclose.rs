@@ -190,7 +190,7 @@ fn download_plan_shape_mirrors_publish() -> Result<(), RenderError> {
 fn final_job_gets_download_before_write_request() -> Result<(), RenderError> {
     let (id, mut final_job) = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned()],
         vec![
             acquire_fixture()?,

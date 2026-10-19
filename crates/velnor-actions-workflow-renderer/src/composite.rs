@@ -57,10 +57,9 @@ pub(crate) fn composite_yaml(name: &str, steps: Vec<Yaml>) -> Result<Yaml, Rende
 pub(crate) fn composite_yaml_with_inputs(
     name: &str,
     inputs: Vec<(String, Yaml)>,
-    mut steps: Vec<Yaml>,
+    steps: Vec<Yaml>,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(name)?;
-    crate::project_tool_resolver::bind_composite_steps(&mut steps)?;
     let mut fields = vec![
         ("name".to_owned(), Yaml::str(name.to_owned())),
         (

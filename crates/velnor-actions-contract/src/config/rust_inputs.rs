@@ -17,6 +17,16 @@ pub struct RustInputRule {
     pub globs: Vec<String>,
     /// Exact Cargo package names consuming the matched paths.
     pub packages: Vec<String>,
+    /// The named packages' rules, together, list every path they read
+    /// outside their directories.
+    ///
+    /// Affected selection forces a package whose sources read through a
+    /// path it cannot resolve statically (`CARGO_MANIFEST_DIR` with `..`, a
+    /// computed include) until one rule naming it sets this: the owner's
+    /// statement that its declared inputs are complete. Velnor cannot
+    /// verify the statement until in-job read verification exists.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub complete: bool,
 }
 
 /// Validate declared input rules: nonempty well-formed globs and names.

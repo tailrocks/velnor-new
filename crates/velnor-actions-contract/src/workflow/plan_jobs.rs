@@ -8,13 +8,15 @@
 //! entry; a `run` job owns no `not_affected` obligation and at least one
 //! matrix entry; every obligation and entry names a planned job, and every
 //! planned job owns an obligation or an entry (a paired named-check lane
-//! owns only entries).
+//! owns only entries). Only affected-selection events may carry
+//! `not_affected` work: a full-run event (push, merge group,
+//! qualification) never skips anything.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
-use super::plan::{ObligationDecision, Plan};
+use super::plan::{ObligationDecision, Plan, WorkflowEvent};
 use crate::errors::ContractError;
 use crate::graph::check_sorted_by;
 
@@ -38,14 +40,48 @@ pub enum JobDisposition {
     NotAffected,
 }
 
+/// True when `event` selects only affected work (hard decision 4).
+///
+/// Pull requests, fork pull requests included, and local pre-push runs
+/// test what they affect. Pushes, merge groups, and dispatched
+/// qualification runs test everything: the merge queue and the default
+/// branch are the full backstop. Exhaustive on purpose: a new event must
+/// choose here, and plan validation plus `Required` both enforce it.
+#[must_use]
+pub const fn selects_affected_work(event: WorkflowEvent) -> bool {
+    match event {
+        WorkflowEvent::PullRequest | WorkflowEvent::Fork | WorkflowEvent::Local => true,
+        WorkflowEvent::Push | WorkflowEvent::MergeGroup | WorkflowEvent::Qualification => false,
+    }
+}
+
+/// True when the plan skips any job or obligation.
+#[must_use]
+pub fn plan_skips_work(plan: &Plan) -> bool {
+    plan.jobs
+        .iter()
+        .any(|job| job.disposition == JobDisposition::NotAffected)
+        || plan
+            .obligations
+            .iter()
+            .any(|obligation| obligation.decision == ObligationDecision::NotAffected)
+}
+
 /// Validate job dispositions against obligations and matrix entries.
 ///
 /// # Errors
 ///
-/// Returns an identity error for unsorted or duplicate jobs, an
+/// Returns an identity error for any `not_affected` work on a full-run
+/// event, unsorted or duplicate jobs, an
 /// obligation naming an unplanned job, a job without obligations, or any
 /// disposition that disagrees with its obligations or matrix entries.
 pub(crate) fn validate_plan_jobs(plan: &Plan) -> Result<(), ContractError> {
+    if !selects_affected_work(plan.event) && plan_skips_work(plan) {
+        return Err(ContractError::identity(
+            "jobs",
+            "not_affected_on_full_event",
+        ));
+    }
     check_sorted_by(&plan.jobs, "jobs", |job| job.job_id.as_str())?;
     let mut jobs: BTreeMap<&str, JobDisposition> = BTreeMap::new();
     for job in &plan.jobs {

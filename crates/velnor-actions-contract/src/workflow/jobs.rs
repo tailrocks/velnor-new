@@ -37,23 +37,45 @@ pub const TOFU_APPLY_WORKFLOW_PATH: &str = ".github/workflows/tofu-apply.yml";
 /// Canonical orchestration job ID for the planner.
 pub const PLAN_JOB_ID: &str = "plan";
 
-/// Canonical orchestration job ID for the required gate.
+/// Canonical orchestration job ID for the required verdict (`merge-v1`).
 pub const REQUIRED_JOB_ID: &str = "required";
+
+/// Job ID of the branch-protection gate that reports the verdict.
+pub const REQUIRED_GATE_JOB_ID: &str = "required-gate";
 
 /// Display name of the planner job.
 pub const PLAN_DISPLAY_NAME: &str = "Plan";
 
-/// Display name of the required gate.
+/// Display name of the branch-protection check, carried only by the gate
+/// job, which never ends skipped: a cancelled run cannot satisfy it.
 pub const REQUIRED_DISPLAY_NAME: &str = "Required";
 
-/// The Required job checks failed or skipped dependencies.
-/// It does not run after cancellation.
-///
-/// `always()` kept the concurrency group active after cancellation.
-/// `!cancelled()` is a status function.
-/// GitHub does not add the implicit `success()` condition.
-/// Required still checks failed or skipped dependencies.
+/// Display name of the verdict job the gate reports.
+pub const REQUIRED_VERDICT_DISPLAY_NAME: &str = "Required verdict";
+
+/// Verdict run condition: runs after any needed job failed or was
+/// skipped (it judges every conclusion) but not after cancellation.
+/// `always()` also ran the full verdict after cancellation and held the
+/// concurrency group for 20+ minutes. `!cancelled()` is a status function,
+/// so the implicit `success()` is not added and the verdict still
+/// evaluates failed or skipped needs; a cancelled run skips it.
 pub const REQUIRED_CONDITION: &str = "${{ !cancelled() }}";
+
+/// Gate run condition: always, cancellation included.
+///
+/// GitHub reports a skipped job's check as successful, and branch
+/// protection accepts it. A cancelled run skips the verdict, so the
+/// protected check must come from a job that still runs then: the gate
+/// runs one runner-only step and fails unless the verdict succeeded.
+pub const REQUIRED_GATE_CONDITION: &str = "${{ always() }}";
+
+/// Gate step condition: fail whenever the verdict did not succeed.
+///
+/// `always()` keeps the step from inheriting the implicit `success()`,
+/// which a cancelled run could turn false and leave the gate green with
+/// every step skipped.
+pub const REQUIRED_GATE_FAIL_CONDITION: &str =
+    "${{ always() && needs.required.result != 'success' }}";
 
 /// Weekly upstream-freshness schedule (Mondays 06:00 UTC).
 pub const FRESHNESS_CRON_WEEKLY: &str = "0 6 * * 1";

@@ -87,75 +87,124 @@ job to skip steps inside it.
 
 **Invariants.**
 
-- Fail closed: any doubt selects everything. Unknown or unowned files, Git
-  failures, a missing base, untracked files, any `Cargo.lock` change, root Cargo
-  configuration, `.velnor/**` and `.github/**`, a workspace without a complete
-  resolved graph, and an owned symlink that escapes, dangles, or loops all run
-  every job. Selection never narrows on an error.
-- Unowned → all. A changed path is narrowed only when a package directory, a
-  scoped Cargo tool config, a workspace root, a declared
-  `[[stacks.rust.inputs]]` rule, or a tracked symlink claims it. No `ignore`
-  list exists until in-job runtime-read capture exists.
+- Fail closed on every detectable doubt. Unknown or unowned files, Git
+  failures, a missing base, a merge checkout whose first parent is not the
+  pull request's base (`stale_merge_ref`), untracked files, a modified tracked
+  file, any `Cargo.lock` change, root Cargo configuration, `.velnor/**` and
+  `.github/**`, a workspace without a complete resolved graph, and an owned
+  symlink that escapes, dangles, or loops all run every job. Selection never
+  narrows on an error.
+- Unowned → all, per stack. Rust ownership is computed over the full change
+  set: a path is narrowed only when a package directory, a scoped Cargo tool
+  config, a workspace root, a declared `[[stacks.rust.inputs]]` rule, or a
+  tracked symlink claims it. A path an OpenTofu root owns but no Rust rule
+  claims still runs every Rust job; the Tofu split feeds only Tofu root
+  selection. No `ignore` list exists until in-job runtime-read capture exists.
+- Unverified reads force a package (`undeclared_reads`): a package with a
+  build script, or whose tracked `.rs` sources read outside the paths it
+  claims (`include_str!`/`include_bytes!`/`include!`/`#[path]`, a
+  `CARGO_MANIFEST_DIR` path with a `..` component or `parent()`, a relative
+  `..` file-system read), counts as changed on every pull request until it
+  declares those inputs (an unbounded read only through a rule with
+  `complete = true`), and its dependents run with it. An unchanged sharded
+  archive whose source is not content-bound fails the plan instead of running
+  alone (unreachable today: the closure digest always binds it).
+- Residual risk, named: the read scan is static. A read through a computed
+  path with none of those anchors, a spawned process, a non-Rust file, or a
+  macro that expands to a read is invisible to it, and a declared input is
+  the owner's unverified statement. Pull requests can therefore still skip a
+  crate whose undetected read changed; the full runs on `push` and
+  `merge_group` are the backstop until in-job read verification exists.
 - The dependency graph is the full resolve from
   `cargo metadata --locked --offline --all-features` at head, unioned with base
   and head path edges, so registry crates reach `[patch]`ed and vendored crates.
-- Packages with a build script, and sharded archives whose source is not
-  content-bound, always run until in-job read verification exists.
-- The default branch and the merge queue are always full runs.
+- The default branch, the merge queue, and qualification dispatches are always
+  full runs. `Plan::validate` and `Required` both reject `not_affected` work on
+  those events (`not_affected_on_full_event`), whatever the planner did.
 - `Required` compares every planned crate job's disposition with its observed
   result: `not_affected` + skipped passes; `run` + skipped fails
   (`planned_job_skipped`); `not_affected` + ran fails (`gate_mismatch`); a
   missing, invalid, or failed plan fails. A planned job is never assumed
   successful from its conclusion alone.
+- A cancelled run never satisfies protection. The protected `Required` check
+  is the `required-gate` job: it runs under `always()` and fails unless the
+  verdict job (`Required verdict`, `!cancelled()`) succeeded, because GitHub
+  reports a skipped required check as successful.
 - A base retarget re-plans (`edited` is a `pull_request` trigger type), and a
   partial re-run resolves the plan by the attempt that produced it.
 
 **Must not be reintroduced without owner approval:** baseline-gated skipping or
 any other second skip mechanism, hand-written per-job path filters, an `ignore`
 list without runtime-read capture, narrowing on any selection error, affected
-mode on `push`, `merge_group`, or `workflow_dispatch`, or a `Required` rule that
-passes a skipped job the plan scheduled.
+mode on `push`, `merge_group`, or `workflow_dispatch`, a `Required` rule that
+passes a skipped job the plan scheduled, a protected check a cancelled run can
+leave skipped, one stack's ownership hiding another stack's claims, or a forced
+package whose dependents do not run.
 
 ## 5. Tool versions come from the project's Mise config
 
-**Decision.** The project's Mise files declare its tool versions. Generated
+**Decision.** Project configuration declares project tool versions. Generated
 workflows do not copy these versions. Velnor pins tools that the project does
 not declare. The root files `rust-toolchain.toml` and `rust-toolchain` also
 declare Rust versions. Mise and rustup read these files.
 
 **Mechanism.**
 
-- Generation checks every catalog tool against the first parseable root
-  `[tools]` table in `mise.toml` or `.mise.toml`. A matching key marks the
-  tool as project-declared. Backend aliases also match. A root Rust toolchain
-  file also marks Rust as declared.
+- Generation checks every catalog tool against every project source that
+  Mise reads. A source declares a tool when its `[tools]` data names that tool
+  under any backend spelling. Sources include `mise.toml`, `.mise.toml`,
+  `mise.<env>.toml`, `mise.local.toml`, their dot-prefixed forms,
+  `.config/mise.toml`, `.config/mise/config.toml`,
+  `.config/mise/conf.d/*.toml`, `mise/config.toml`, `.mise/config.toml`, and
+  `.tool-versions`. Rust sources also include `rust-toolchain.toml` and
+  `rust-toolchain`. The shared `PROJECT_MISE_CONFIG_PATTERNS` list controls
+  generation, run-time resolution, and change selection.
 - Generated text uses `${VELNOR_TOOL_<NAME>}` for each declared version.
   The `run:` text and task arguments use the shell form. The `with:`, `env:`,
   and cache key values use `${{ env.VELNOR_TOOL_<NAME> }}`.
+- Generation stops and names the source when a declaration is unusable.
+  It stops for a loose version, `latest`, a range, a template, an array, a
+  target-triple channel, or a leading zero. It reports
+  `project_tool_version_not_exact`. It reports
+  `conflicting_project_tool_versions` when sources disagree. It reports
+  `malformed_project_tool_source` when a source does not parse. This includes
+  malformed `mise.toml` beside valid `rust-toolchain.toml`. It also stops for
+  a symlinked source. It reports `nested_rust_toolchain_not_supported` when
+  a Rust toolchain file below the root has another version. Rustup would use
+  that file for commands in its directory. The resolver reads root sources.
+  A Velnor pin never replaces a declaration that the generator cannot use.
 - Each job or composite action that uses a project version gets one
-  **Resolve project tool versions** step after Mise setup. The step reads
-  each declaring source with `mise --no-config --no-env --no-hooks config
-  get`. It requires all sources to give the same exact `X.Y.Z` version. It
-  writes `VELNOR_TOOL_<NAME>=<version>` to `$GITHUB_ENV`. It also sets
-  `RUSTUP_TOOLCHAIN` when the job environment previously held the Rust pin.
+  **Resolve project tool versions** step after Mise setup. It reads each
+  source with `mise --no-config --no-env --no-hooks config get`. It reads
+  `.tool-versions` and plain-text `rust-toolchain` as text. It does not run
+  these files. The step rejects unparseable and symlinked sources. It requires
+  all declarations for a tool to use the same exact `X.Y.Z` version, without
+  leading zeros. It writes `VELNOR_TOOL_<NAME>=<version>` to `$GITHUB_ENV`.
+  It also sets `RUSTUP_TOOLCHAIN` when the job environment used the Rust pin.
   The task helper sets the same variables in task arguments and the
   environment after the manifest and plan bindings match. It stops when a
   value is missing or loose.
-- Tools the project does not declare keep the exact Velnor catalog pin (or
-  a `.velnor/config.toml [tools]` override). A `.velnor/config.toml` pin
-  that disagrees with a project declaration fails generation.
-- The tools-cache `d` input hashes the project tool files. The file list is
-  `mise.toml`, `.mise.toml`, `mise.lock`, `.mise.lock`, `rust-toolchain.toml`,
-  and `rust-toolchain`. Cargo-source and MBX keys use the resolved value.
-  MBX action inputs use the same value. Plan identities include declared
-  versions. Generated records (task digests and arguments) do not include
-  those versions.
-- A pull request that changes a root project tool file selects every crate
-  job under hard decision 4. CI uses the versions declared in those files.
-- A version change in `mise.toml` does not need regeneration. Adding or
-  removing a catalog tool from the project config needs regeneration because
-  it changes which commands use a project reference. An option change, such
-  as `mr_boxington = true`, also needs regeneration.
+- Tools that the project does not declare keep the exact Velnor catalog pin or
+  a `.velnor/config.toml [tools]` override. Generation fails if that override
+  disagrees with a project declaration.
+- Cache identities that bind a version also bind project config. The
+  tools-cache `d` input hashes `mise.toml`, `.mise.toml`, `mise.lock`,
+  `.mise.lock`, and both Rust toolchain files. This list does not yet include
+  every source listed above. The cache design owns this list. Cargo-source and
+  MBX keys and MBX action inputs use the resolved value. Plan identities,
+  including the MBX cache-format generation, bind declared versions. Generated
+  records (task digests and arguments) do not include those versions.
+- A pull request selects every crate job when a project source changes a
+  declared catalog version. Change selection parses each changed source at
+  base and head with the generator's reader. It compares declared versions,
+  not file contents. A task edit, Node pin, or comment in `mise.toml` alone
+  selects no crate job. A lock file (`mise.lock`, `.mise.lock`) always selects
+  every crate job. Any doubt selects every crate job. This includes a parse
+  error or a Git read error for either side.
+- A declared version change in `mise.toml` does not need regeneration. Adding
+  or removing a catalog tool does need regeneration because it changes which
+  commands use a project reference. An option change, such as
+  `mr_boxington = true`, also needs regeneration.
 
 **Rationale.** Developers use the project's Mise config on their computers.
 Copying its versions into generated workflows forced regeneration after each
@@ -177,8 +226,9 @@ the same tool through the same backend.
 The resolver accepts only `[0-9.]` values in exact `X.Y.Z` form. It checks
 each value before it writes to `$GITHUB_ENV`. This prevents a value from
 adding a variable or line. The resolver also rejects symlinked source files.
-Composite actions use `# zizmor: ignore[github-env]` only on the validated
-write.
+It does not write raw values to logs. It replaces control text, such as
+`::error::`, before it reports an error. Composite actions use
+`# zizmor: ignore[github-env]` only on the validated write.
 
 The GitHub CLI uses a token for baseline lookup, required-report fetch, and
 release publication. Cosign signs releases. Velnor keeps its qualified pins

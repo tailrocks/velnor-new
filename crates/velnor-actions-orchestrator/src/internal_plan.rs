@@ -124,9 +124,10 @@ pub(crate) fn cache_ids_for(
     task: &ProposedTask,
     label: &str,
     toolchain: &str,
+    catalog: &velnor_actions_mise::ToolCatalog,
 ) -> Result<EntryCacheIds, ContractError> {
     let platform_id = identities::platform_id_for_group(label, task)?;
-    cache_ids_for_platform(task, toolchain, &platform_id)
+    cache_ids_for_platform(task, toolchain, &platform_id, catalog)
 }
 
 /// Build cache IDs from an already validated planned platform identity.
@@ -135,6 +136,7 @@ pub(crate) fn cache_ids_for_platform(
     task: &ProposedTask,
     toolchain: &str,
     platform_id: &str,
+    catalog: &velnor_actions_mise::ToolCatalog,
 ) -> Result<EntryCacheIds, ContractError> {
     if Stack::require_known(&task.stack_id)? == Stack::Mise {
         return Err(ContractError::identity(
@@ -146,7 +148,10 @@ pub(crate) fn cache_ids_for_platform(
     let format_id = if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
         identities::cache_format_id_for_tofu()
     } else {
-        identities::cache_format_id_for(CompileDriver::parse(&task.identity.compile_driver)?)
+        identities::cache_format_id_for(
+            CompileDriver::parse(&task.identity.compile_driver)?,
+            catalog.version(velnor_actions_mise::PinnedTool::MrBoxington),
+        )
     };
     EntryCacheIds::new(
         &workspace_id,

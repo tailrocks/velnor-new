@@ -258,6 +258,12 @@ fn check_final_inputs(
     check_agreement(request.matrix.as_ref(), plan, signals, miss_reasons)?;
     check_plan_shape(plan, signals, miss_reasons);
     check_trust_coherence(plan, request, signals, miss_reasons);
+    crate::required_dispositions::check_full_event_skips(
+        plan,
+        request.actual_event,
+        signals,
+        miss_reasons,
+    );
     check_candidate_binding(plan, request, signals, miss_reasons);
     check_plan_evidence(plan, request, signals, miss_reasons);
     check_matrix_job_inventory(plan, request, signals, miss_reasons);
