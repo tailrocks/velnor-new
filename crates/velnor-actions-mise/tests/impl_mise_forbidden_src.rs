@@ -53,6 +53,8 @@ const EXPECTED_MODULES: &[&str] = &[
     "command_output.rs",
     "command_release_signer.rs",
     "command_release_signer_tests.rs",
+    "command_stream.rs",
+    "command_stream_tests.rs",
     "command_tofu.rs",
     "custom_run.rs",
     "error.rs",
@@ -207,9 +209,22 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
         .file_name()
         .map(|name| name.to_string_lossy())
         .ok_or_else(|| format!("nameless file: {}", path.display()))?;
+    let mut borrowed_file_writes = 0;
     for (line, code) in code_of(path)? {
         let at = format!("{name}:{line}");
         for token in ALWAYS_BANNED {
+            // The stream sink borrows a caller-owned regular File; it cannot create paths.
+            if name == "command_stream.rs"
+                && *token == "write_all"
+                && code.trim() == ".write_all(bytes)"
+            {
+                borrowed_file_writes += 1;
+                continue;
+            }
+            // Only this cfg(test) module constructs owned temporary stream fixtures.
+            if name == "command_stream_tests.rs" && matches!(*token, "create_new" | "fs::write") {
+                continue;
+            }
             if code.contains(token) {
                 violations.push(format!("{at}: forbidden `{token}` in `{code}`"));
             }
@@ -227,6 +242,9 @@ fn check_file(path: &Path, violations: &mut Vec<String>) -> Result<(), String> {
         if code.contains(".mise/tasks") && !code.contains("contains") {
             violations.push(format!("{at}: unsanctioned `.mise/tasks` in `{code}`"));
         }
+    }
+    if name == "command_stream.rs" && borrowed_file_writes != 1 {
+        violations.push(format!("{name}: expected exactly one borrowed-file write"));
     }
     Ok(())
 }
