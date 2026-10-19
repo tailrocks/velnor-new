@@ -23,6 +23,7 @@ struct FeedbackRecords {
     opinionated_reviews: Vec<Value>,
     review_comments: Vec<Value>,
     issue_comments: Vec<Value>,
+    commit_comments: Vec<Value>,
     threads: Vec<Value>,
 }
 
@@ -66,6 +67,7 @@ pub(super) fn capture_feedback(
             context.repository, context.pull_request_number
         ),
     )?;
+    let commit_comments = paged_commit_comments(api, context.repository, context.head_sha)?;
     let threads = paged_threads(api, context.repository, context.pull_request_number)?;
     let opinionated_reviews =
         paged_opinionated_reviews(api, context.repository, context.pull_request_number)?;
@@ -82,6 +84,7 @@ pub(super) fn capture_feedback(
         opinionated_reviews,
         review_comments,
         issue_comments,
+        commit_comments,
         threads,
     };
     let records_bytes = velnor_actions_contract::canonical_json_bytes(&records)
@@ -102,6 +105,30 @@ pub(super) fn capture_feedback(
         snapshot,
         completion,
     })
+}
+
+/// Every admitted tap PR has exactly one authenticated commit above its base.
+/// Historical receipt PRs pass through this same capture with their own head.
+fn paged_commit_comments(
+    api: &TapMergeGitHub,
+    repository: &str,
+    head_sha: &str,
+) -> Result<Vec<Value>, OrchestratorError> {
+    let comments = paged_values(
+        api,
+        &format!("repos/{repository}/commits/{head_sha}/comments"),
+    )?;
+    let mut ids = std::collections::BTreeSet::new();
+    for comment in &comments {
+        let id = comment["id"]
+            .as_u64()
+            .filter(|id| *id > 0)
+            .ok_or_else(|| internal("tap_merge_commit_comment_identity"))?;
+        if comment["commit_id"].as_str() != Some(head_sha) || !ids.insert(id) {
+            return Err(internal("tap_merge_commit_comment_identity"));
+        }
+    }
+    Ok(comments)
 }
 
 fn paged_opinionated_reviews(
@@ -322,3 +349,7 @@ fn completion_from_checks(
 #[cfg(test)]
 #[path = "tap_merge_feedback_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tap_merge_feedback_commit_tests.rs"]
+mod commit_tests;

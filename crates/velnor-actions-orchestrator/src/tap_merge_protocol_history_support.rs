@@ -131,6 +131,11 @@ fn add_prior_git_responses(
     );
     put(
         responses,
+        format!("repos/{repo}/commits/{head}/comments?per_page=100&page=1"),
+        json!([]),
+    );
+    put(
+        responses,
         format!("repos/{repo}/commits/{head}/check-runs?per_page=100&page=1"),
         json!({"check_runs": []}),
     );

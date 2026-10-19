@@ -284,8 +284,12 @@ compares numeric identities, not merely different variable names. Check metadata
 must come from GitHub's check-run API, never from a self-declared App ID in output.
 
 Completion binds the full normalized feedback snapshot: all paginated review,
-comment, reply, current and outdated thread, and justified-disposition records.
-The snapshot includes the exact PR head and a canonical digest of those records.
+comment (including commit comments), reply, current and outdated thread, and
+justified-disposition records. Each authenticated tap PR contains exactly one
+commit above its validated base; capture therefore paginates comments on that
+exact head, including for historical same-receipt PRs. The REST endpoint is
+[`GET /repos/{owner}/{repo}/commits/{commit_sha}/comments`](https://docs.github.com/en/rest/commits/comments#list-commit-comments),
+checked against GitHub's documentation on 2026-10-19. The snapshot includes the exact PR head and a canonical digest of those records.
 A new comment or disposition change invalidates earlier completion. Unresolved
 threads, findings without an independently verified accepted/rejected disposition,
 and outstanding change requests block merge even if a trusted check says success.

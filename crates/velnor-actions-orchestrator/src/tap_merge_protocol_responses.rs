@@ -13,7 +13,7 @@ pub(super) fn completed_responses(
     number: u64,
 ) -> BTreeMap<String, Value> {
     let mut map = history_responses(candidate, authority, refs, number);
-    add_feedback_responses(&mut map, &candidate.policy.repository, number);
+    add_feedback_responses(&mut map, &candidate.policy.repository, number, &refs.head);
     add_current_main_responses(&mut map, candidate, refs);
     add_protection_responses(&mut map, candidate, authority);
     map
@@ -139,7 +139,12 @@ fn history_git_responses(
     map
 }
 
-fn add_feedback_responses(map: &mut BTreeMap<String, Value>, repository: &str, number: u64) {
+fn add_feedback_responses(
+    map: &mut BTreeMap<String, Value>,
+    repository: &str,
+    number: u64,
+    head: &str,
+) {
     put(
         map,
         format!("repos/{repository}/pulls/{number}/reviews?per_page=100&page=1"),
@@ -153,6 +158,11 @@ fn add_feedback_responses(map: &mut BTreeMap<String, Value>, repository: &str, n
     put(
         map,
         format!("repos/{repository}/issues/{number}/comments?per_page=100&page=1"),
+        json!([]),
+    );
+    put(
+        map,
+        format!("repos/{repository}/commits/{head}/comments?per_page=100&page=1"),
         json!([]),
     );
     put(map, format!("graphql:threads:{number}"), threads());
