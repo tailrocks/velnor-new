@@ -258,7 +258,13 @@ async fn record_receipt_and_check_conflict(
         SourceAuthorizationResult::Recorded
     );
     assert_receipt_replays(scope, assignment, receipt).await?;
-    let changed_receipt = scoped_receipt(
+    let original_offer = scope
+        .authorized_offer_for_receipt(receipt)
+        .await?
+        .ok_or(HostError::Journal)?;
+    assert_eq!(original_offer.message_id(), receipt.message_id());
+
+    let repeated_envelope = scoped_receipt(
         scope,
         33,
         78,
@@ -268,10 +274,45 @@ async fn record_receipt_and_check_conflict(
     .await?;
     assert_eq!(
         scope
+            .record_source_authorization(assignment, &repeated_envelope)
+            .await?,
+        SourceAuthorizationResult::Replayed
+    );
+    let replayed_offer = scope
+        .authorized_offer_for_receipt(&repeated_envelope)
+        .await?
+        .ok_or(HostError::Journal)?;
+    assert_eq!(replayed_offer.message_id(), receipt.message_id());
+    assert_eq!(replayed_offer.request_id(), receipt.request_id());
+    assert_eq!(replayed_offer.source_json(), original_offer.source_json());
+    assert_eq!(
+        replayed_offer.source_digest(),
+        original_offer.source_digest()
+    );
+
+    let changed_receipt = scoped_receipt(
+        scope,
+        33,
+        79,
+        source(101, 901),
+        SourcePolicyMode::Repository,
+    )
+    .await?;
+    assert_eq!(
+        scope
             .record_source_authorization(assignment, &changed_receipt)
             .await,
         Err(HostError::Identity)
     );
+    assert_eq!(
+        scope.authorized_offer_for_receipt(&changed_receipt).await,
+        Err(HostError::Identity)
+    );
+    let durable_offer = scope
+        .authorized_offer_for_receipt(&repeated_envelope)
+        .await?
+        .ok_or(HostError::Journal)?;
+    assert_eq!(durable_offer.message_id(), receipt.message_id());
     Ok(())
 }
 

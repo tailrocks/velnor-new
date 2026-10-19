@@ -1,22 +1,14 @@
-use crate::config::SourcePolicyMode;
 use crate::error::HostError;
 use crate::journal::connection::ConnectionJournal;
 use crate::journal::request_lifecycle::tests::helpers::{
     JobFactsReaderFixture, Scratch, binding, created_scope,
     provision_acquired_request_with_initialization,
 };
-use crate::journal::{
-    AssignedAcquireResult, CapacityLimits, JobFactsPublicationClaim, Journal,
-    SourceAuthorizationResult,
-};
-use crate::launch::steps::source::test_receipt;
+use crate::journal::{CapacityLimits, JobFactsPublicationClaim, Journal};
 use crate::worker::execution_authorization::{
     VerifiedProofChannelBinding, test_channel_for_ready_job_facts,
 };
 use velnor_runner_github::RunnerReference;
-use velnor_runner_github::workflow_run::{
-    VerifiedJobWorkflowRef, VerifiedWorkflowSource, WorkflowRefKind,
-};
 
 pub(super) struct BoundFixture {
     pub(super) scratch: Scratch,
@@ -43,7 +35,6 @@ pub(super) async fn bound_fixture(nonce: char) -> Result<BoundFixture, HostError
         .await?;
     let repository = binding("job-facts-reader", 101)?;
     let scope = created_scope(&journal, &repository, 501).await?;
-    record_request_acquired(&scope).await?;
     let ready = provision_acquired_request_with_initialization(&scope, 70, nonce, nonce).await?;
     let runner = RunnerReference {
         id: 770,
@@ -91,51 +82,4 @@ pub(super) async fn bound_fixture(nonce: char) -> Result<BoundFixture, HostError
         channel,
         claim,
     })
-}
-
-async fn record_request_acquired(scope: &ConnectionJournal) -> Result<(), HostError> {
-    let request_id = 70;
-    let identity = scope
-        .assignment_identity(crate::journal::AssignmentKey::AssignedRequest { request_id })
-        .await?;
-    let source_binding = scope.source_authorization_binding().await?;
-    let workflow = "owner-101/repo-101/.github/workflows/build.yml@refs/heads/main";
-    let source = VerifiedWorkflowSource {
-        repository_id: 101,
-        owner_name: "owner-101".to_owned(),
-        repository_name: "repo-101".to_owned(),
-        workflow_run_id: 170,
-        event_name: "push".to_owned(),
-        head_branch: Some("main".to_owned()),
-        head_sha: "a".repeat(40),
-        job_workflow_ref: workflow.to_owned(),
-        job_workflow: VerifiedJobWorkflowRef {
-            full_ref: workflow.to_owned(),
-            owner_name: "owner-101".to_owned(),
-            repository_name: "repo-101".to_owned(),
-            workflow_path: ".github/workflows/build.yml".to_owned(),
-            reference: "refs/heads/main".to_owned(),
-            kind: WorkflowRefKind::Branch,
-        },
-        workflow_source_sha: None,
-        run_attempt: 1,
-    };
-    let receipt = test_receipt(
-        &source_binding,
-        request_id,
-        request_id + 100,
-        source,
-        SourcePolicyMode::Repository,
-    );
-    if scope
-        .record_source_authorization(&identity, &receipt)
-        .await?
-        != SourceAuthorizationResult::Recorded
-        || !scope.claim_request_acquire(&identity).await?
-    {
-        return Err(HostError::Journal);
-    }
-    scope
-        .record_request_acquire(&identity, AssignedAcquireResult::Returned(vec![request_id]))
-        .await
 }
