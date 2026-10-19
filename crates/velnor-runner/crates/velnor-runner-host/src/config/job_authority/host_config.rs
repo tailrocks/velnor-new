@@ -1,6 +1,11 @@
+#[cfg(test)]
 use super::{
-    ApprovedJobAuthorityEntry, ConnectionId, Deserialize, Digest, JobAuthorityLookup, Serialize,
+    ApprovedEventContext, ApprovedJobAuthorityPolicy, ApprovedWorkflow, GeneratorIdentity,
+    JobAuthorityRole, POLICY_SCHEMA, PermissionLevel, WorkflowEvent, sha256,
 };
+use super::{ApprovedJobAuthorityEntry, ConnectionId, JobAuthorityLookup};
+#[cfg(test)]
+use crate::config::RepositoryConnection;
 use crate::error::HostError;
 
 impl super::super::HostConfig {
