@@ -1,16 +1,22 @@
-# Five-minute execution limit
+# Job timeout limits
 
-Every concrete generated GitHub Actions job has an explicit literal timeout of
-one through five minutes. Five is the default and maximum. Configuration that
-requests zero or more than five is rejected, including custom checks, native
-builds, verification, preview production, suites, and tap updates. No job family
-may substitute GitHub's implicit six-hour default or silently clamp a request.
+Every generated job has a constant timeout from one to ten minutes. The default
+is five minutes. Rust crate jobs use ten minutes. The configuration rejects
+zero and values above ten. The change does not remove tasks or checks.
 
-The contract owns the range and defaults. Typed workflow factories use that
-contract, and final workflow admission rejects missing, dynamic, or oversized
-limits. Reusable workflow callers cannot declare a job timeout; their exact
-canonical local callee inventory is admitted together, and each executable
-callee job has its own bounded timeout. External or missing callees are rejected.
+The [job log for run 39228409103](https://github.com/tailrocks/velnor-new/actions/runs/39228409103/job/117981938699)
+on commit `b5784d13283e8c44871d0b200709653210a82f9d` shows the limit. Setup
+time was 36 seconds. Build time was 44 seconds. Test time was 205 seconds.
+Cleanup time was 15 seconds. The time for these four stages was 300 seconds.
+GitHub stopped the job at its five-minute limit. A ten-minute limit gives five
+more minutes for job execution.
+
+The contract gives the range and defaults. Workflow factories use that
+contract. Workflow admission rejects missing timeout values, expressions, and
+values outside the permitted range. Reusable workflow callers cannot have a
+job timeout. Their local callees must agree with the canonical inventory.
+Each executable callee job has a constant timeout. The generator rejects
+external or missing callees.
 
 Native preview production starts one monotonic deadline before reading its
 context, configuration, plan, or preparation. A shorter configured budget uses
@@ -27,19 +33,20 @@ Preexisting evidence and foreign replacements are preserved. Signing and
 publication still require successful independently validated evidence; timeout
 never grants approval or bypasses authenticated recovery.
 
-These are execution budgets, not a five-minute total pipeline promise. Queuing,
-environment approval, separate DAG jobs, and separately authorized recovery
-attempts are distinct. GitHub starts cancellation at the job timeout and has
-additional cancellation grace. Scoped native deadlines do not preempt arbitrary
-blocking kernel operations or propagate implicitly to new threads. See the
+These timeouts limit each job. They do not limit the full workflow. Job
+timeouts do not include queue time, environment approval, other jobs, or
+approved recovery attempts. GitHub starts cancellation at the job timeout.
+Cancellation can continue after that timeout. Scoped native deadlines cannot
+stop every blocked system call. A new thread starts without the scoped native
+deadline of its parent thread. See the
 [pinned runner-source reference](../proposed/github-actions-reference.md).
 
 The canceled Jackin run 39133387860 spent 73 minutes 21 seconds inside an opaque
 native operation after 45 seconds of bootstrap. Its captured output did not
 identify the internal stage. A prior partially cached six-payload diagnostic
 took 37 minutes 37 seconds, with each CLI target already exceeding five minutes.
-The new policy does not claim those builds fit: they must fail within the budget
-until measured build changes make the required artifacts available in time.
+Those results do not show that the builds can complete within ten minutes.
+A measured run that completes within that limit is necessary for artifact qualification.
 
 Regression coverage exercises configuration boundaries, all workflow families,
 reusable callee admission, cumulative preparation and retry budgets, scoped

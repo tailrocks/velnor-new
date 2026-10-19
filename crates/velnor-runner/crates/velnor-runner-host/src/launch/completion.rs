@@ -1,9 +1,11 @@
 //! Bounded background reconciliation for journaled runner completion.
 
 mod cleanup;
+mod diagnostics;
 mod journal_ref;
 
 use std::collections::VecDeque;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, SyncSender, TrySendError};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
@@ -31,6 +33,7 @@ pub(super) struct Resources {
     pub(super) docker: Docker,
     pub(super) transport: HttpsTransport,
     pub(super) admin: Secret,
+    pub(super) diagnostics: diagnostics::DiagnosticsRoot,
 }
 
 /// One independently scheduled completion cleanup worker.
@@ -70,12 +73,15 @@ impl CompletionWorker {
         docker: Docker,
         admin_base: &str,
         admin_token: String,
+        state: &Path,
     ) -> Result<Self, HostError> {
         Self::start_with_journal(
             journal_ref::CompletionJournal::root(journal),
+            "root",
             docker,
             admin_base,
             admin_token,
+            state,
         )
     }
 
@@ -85,20 +91,26 @@ impl CompletionWorker {
         docker: Docker,
         admin_base: &str,
         admin_token: String,
+        state: &Path,
     ) -> Result<Self, HostError> {
+        let connection_id = journal.connection_id().as_str().to_owned();
         Self::start_with_journal(
             journal_ref::CompletionJournal::scoped(journal),
+            &connection_id,
             docker,
             admin_base,
             admin_token,
+            state,
         )
     }
 
     fn start_with_journal(
         journal: journal_ref::CompletionJournal,
+        connection_id: &str,
         docker: Docker,
         admin_base: &str,
         admin_token: String,
+        state: &Path,
     ) -> Result<Self, HostError> {
         if admin_token.is_empty() {
             return Err(HostError::EmptySecret);
@@ -115,7 +127,13 @@ impl CompletionWorker {
         let thread_stopping = Arc::clone(&stopping);
         let (wake, receiver) = mpsc::sync_channel(1);
         let (finished_tx, finished) = oneshot::channel();
+        let journal_identity = journal.instance_identity();
         let resources = Resources {
+            diagnostics: diagnostics::DiagnosticsRoot::open_for_journal(
+                state,
+                journal_identity,
+                connection_id,
+            )?,
             journal,
             docker: bounded_docker(docker),
             transport,

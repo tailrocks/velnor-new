@@ -4,18 +4,20 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use velnor_runner_github::{Exchange, Method, SessionRequest, Transport, TransportFail};
 
 use crate::error::HostError;
+
+mod process;
 
 /// One Actions or GitHub API origin. The path on each call is relative.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpsTransport {
     base: String,
     max_time_seconds: u64,
+    deadline: Option<Instant>,
 }
 
 impl HttpsTransport {
@@ -28,6 +30,16 @@ impl HttpsTransport {
         Ok(Self {
             base: checked_base(base)?,
             max_time_seconds: 60,
+            deadline: None,
+        })
+    }
+
+    /// Create a transport that shares one absolute deadline across its requests.
+    pub(crate) fn with_deadline(base: &str, deadline: Instant) -> Result<Self, HostError> {
+        Ok(Self {
+            base: checked_base(base)?,
+            max_time_seconds: 60,
+            deadline: Some(deadline),
         })
     }
 
@@ -38,6 +50,7 @@ impl HttpsTransport {
         Self {
             base: self.base.clone(),
             max_time_seconds: 5,
+            deadline: self.deadline,
         }
     }
 
@@ -61,7 +74,13 @@ impl HttpsTransport {
 
 impl Transport for HttpsTransport {
     fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
-        match perform(&self.base, self.max_time_seconds, request) {
+        let deadline =
+            request_deadline(self.deadline, self.max_time_seconds).ok_or(TransportFail::Timeout)?;
+        let result = perform(&self.base, deadline, request);
+        if self.deadline.is_some_and(|limit| Instant::now() >= limit) {
+            return Err(TransportFail::Timeout);
+        }
+        match result {
             Ok(exchange) => Ok(exchange),
             Err(CurlFail::Timeout) => Err(TransportFail::Timeout),
             Err(CurlFail::Reset) => Err(TransportFail::Reset),
@@ -74,18 +93,18 @@ enum CurlFail {
     Reset,
 }
 
-fn perform(
-    base: &str,
-    max_time_seconds: u64,
-    request: &SessionRequest,
-) -> Result<Exchange, CurlFail> {
+fn perform(base: &str, deadline: Instant, request: &SessionRequest) -> Result<Exchange, CurlFail> {
     let url = join_url(base, &request.path, request.query.as_deref()).ok_or(CurlFail::Reset)?;
     let scratch = Scratch::create()?;
     let body_path = scratch.path("body");
     let out_path = scratch.path("out");
     write_private(&body_path, &request.body)?;
-    let config = curl_config(&url, request, &body_path, &out_path, max_time_seconds)?;
-    let status = run_curl(&config)?;
+    let max_time = remaining(deadline).ok_or(CurlFail::Timeout)?;
+    let config = curl_config(&url, request, &body_path, &out_path, max_time)?;
+    let status = process::run_curl(&config, deadline)?;
+    if Instant::now() >= deadline {
+        return Err(CurlFail::Timeout);
+    }
     let body = read_output(&out_path)?;
     trace(base, request, status, body.len());
     Ok(Exchange { status, body })
@@ -118,34 +137,28 @@ pub(super) fn trace_lines(
     lines
 }
 
-fn run_curl(config: &str) -> Result<u16, CurlFail> {
-    run_curl_with_home(config, None)
-}
-
 #[cfg(test)]
 pub(super) fn run_curl_in_home(config: &str, home: &Path) -> Result<u16, &'static str> {
-    run_curl_with_home(config, Some(home)).map_err(|_| "curl failed")
+    process::run_in_home(config, home).map_err(|_| "curl failed")
 }
 
-fn run_curl_with_home(config: &str, home: Option<&Path>) -> Result<u16, CurlFail> {
-    let mut command = Command::new("curl");
-    command.args(CURL_ARGV);
-    if let Some(home) = home {
-        command.env("CURL_HOME", home).env("HOME", home);
-    }
-    let mut child = command
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|_| CurlFail::Reset)?;
-    let mut stdin = child.stdin.take().ok_or(CurlFail::Reset)?;
-    stdin
-        .write_all(config.as_bytes())
-        .map_err(|_| CurlFail::Reset)?;
-    drop(stdin);
-    let finished = child.wait_with_output().map_err(|_| CurlFail::Reset)?;
-    classify_exit(finished.status.code(), &finished.stdout)
+fn request_deadline(overall: Option<Instant>, max_time_seconds: u64) -> Option<Instant> {
+    request_deadline_at(overall, max_time_seconds, Instant::now())
+}
+
+pub(super) fn request_deadline_at(
+    overall: Option<Instant>,
+    max_time_seconds: u64,
+    now: Instant,
+) -> Option<Instant> {
+    let request = now.checked_add(Duration::from_secs(max_time_seconds))?;
+    Some(overall.map_or(request, |deadline| deadline.min(request)))
+}
+
+fn remaining(deadline: Instant) -> Option<Duration> {
+    deadline
+        .checked_duration_since(Instant::now())
+        .filter(|left| !left.is_zero())
 }
 
 fn classify_exit(code: Option<i32>, stdout: &[u8]) -> Result<u16, CurlFail> {
@@ -178,19 +191,36 @@ pub(crate) const CURL_ARGV: &[&str] = &[
     "0",
 ];
 
+#[cfg(test)]
+mod deadline_tests {
+    use std::time::{Duration, Instant};
+
+    use super::HttpsTransport;
+
+    #[test]
+    fn bounded_transport_keeps_the_callers_absolute_cutoff() {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let transport = HttpsTransport::with_deadline("https://api.github.com", deadline)
+            .expect("valid endpoint");
+
+        assert_eq!(transport.deadline, Some(deadline));
+    }
+}
+
 fn curl_config(
     url: &str,
     request: &SessionRequest,
     body: &Path,
     output: &Path,
-    max_time_seconds: u64,
+    max_time: Duration,
 ) -> Result<String, CurlFail> {
+    let max_time_seconds = max_time.as_secs_f64();
     let mut lines = vec![
         format!("request = \"{}\"", method_name(request.method)),
         quoted("url", url)?,
         format!("output = \"{}\"", display_path(output)?),
         "write-out = \"%{http_code}\"".to_owned(),
-        format!("max-time = {max_time_seconds}"),
+        format!("max-time = {max_time_seconds:.3}"),
     ];
     for (name, value) in &request.headers {
         let header = format!("{name}: {value}");

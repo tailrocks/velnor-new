@@ -474,7 +474,7 @@ jobs:
   rust-velnor-actions-actionlint:
     name: Rust / velnor-actions-actionlint
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"
@@ -579,7 +579,7 @@ jobs:
   rust-velnor-actions-cli:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"
@@ -651,7 +651,7 @@ jobs:
   rust-velnor-actions-contract:
     name: Rust / velnor-actions-contract
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"
@@ -714,7 +714,7 @@ jobs:
   rust-velnor-actions-freshness:
     name: Rust / velnor-actions-freshness
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"
@@ -777,7 +777,7 @@ jobs:
   rust-velnor-actions-mise:
     name: Rust / velnor-actions-mise
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"
@@ -850,7 +850,7 @@ jobs:
   rust-velnor-actions-orchestrator:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"
@@ -914,7 +914,7 @@ jobs:
   rust-velnor-actions-rust:
     name: Rust / velnor-actions-rust
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"
@@ -977,7 +977,7 @@ jobs:
   rust-velnor-actions-tofu:
     name: Rust / velnor-actions-tofu
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"
@@ -1040,7 +1040,7 @@ jobs:
   rust-velnor-actions-workflow-renderer:
     name: Rust / velnor-actions-workflow-renderer
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"
@@ -1103,7 +1103,7 @@ jobs:
   rust-velnor-archive-guard:
     name: Rust / velnor-archive-guard
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"
@@ -1166,7 +1166,7 @@ jobs:
   rust-velnor-resource-probe:
     name: Rust / velnor-resource-probe
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"
@@ -1259,7 +1259,7 @@ jobs:
   rust-velnor-runner-cli:
     name: Rust / velnor-runner-cli
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"
@@ -1322,7 +1322,7 @@ jobs:
   rust-velnor-runner-core:
     name: Rust / velnor-runner-core
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"
@@ -1385,7 +1385,7 @@ jobs:
   rust-velnor-runner-github:
     name: Rust / velnor-runner-github
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"
@@ -1448,7 +1448,7 @@ jobs:
   rust-velnor-runner-host:
     name: Rust / velnor-runner-host
     runs-on: ubuntu-26.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
       MBX_BUILD_SCRIPT_EXECUTION: "0"
       MBX_CC: "0"

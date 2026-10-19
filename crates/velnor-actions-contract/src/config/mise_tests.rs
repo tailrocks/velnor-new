@@ -133,8 +133,8 @@ fn native_only_check_requires_no_mise_installed_tools() {
 }
 
 #[test]
-fn timeout_preserves_shorter_budgets_and_rejects_above_five() {
-    for minutes in 1..=5 {
+fn timeout_accepts_budgets_through_ten_minutes() {
+    for minutes in 1..=10 {
         let mut value = check();
         value.timeout_minutes = minutes;
         assert!(
@@ -142,7 +142,7 @@ fn timeout_preserves_shorter_budgets_and_rejects_above_five() {
             "{minutes}"
         );
     }
-    for minutes in [0, 6, 30, 360, u32::MAX] {
+    for minutes in [0, 11, 30, 360, u32::MAX] {
         let mut value = check();
         value.timeout_minutes = minutes;
         assert!(

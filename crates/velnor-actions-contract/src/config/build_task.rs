@@ -213,13 +213,13 @@ mod tests {
     }
 
     #[test]
-    fn timeout_preserves_shorter_budgets_and_rejects_above_five() {
-        for minutes in 1..=5 {
+    fn timeout_accepts_budgets_through_ten_minutes() {
+        for minutes in 1..=10 {
             let mut task = build_task("native-desktop", "desktop-ci");
             task.timeout_minutes = minutes;
             assert!(task.validate("config.toml").is_ok(), "{minutes}");
         }
-        for minutes in [0, 6, 120, 180, u16::MAX] {
+        for minutes in [0, 11, 120, 180, u16::MAX] {
             let mut task = build_task("native-desktop", "desktop-ci");
             task.timeout_minutes = minutes;
             assert!(task.validate("config.toml").is_err(), "{minutes}");
@@ -246,7 +246,7 @@ mod tests {
         );
 
         let mut invalid = task.clone();
-        invalid.timeout_minutes = 6;
+        invalid.timeout_minutes = 11;
         assert!(invalid.validate("config.toml").is_err());
         let mut invalid = task.clone();
         invalid.cargo_build_jobs = 3;

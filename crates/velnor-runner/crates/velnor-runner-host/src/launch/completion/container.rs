@@ -2,6 +2,7 @@
 
 use bollard::Docker;
 
+use super::super::diagnostics::{CaptureRequest, capture};
 use super::{Context, EffectBudget, Failure, run_effect};
 use crate::journal::{CleanupClaim, CompletedLaunch};
 use crate::runner_plan;
@@ -41,7 +42,7 @@ pub(super) async fn cleanup(
         },
     ];
     for task in tasks {
-        cleanup_container(context, launch.intent.id, claim, budget, task).await?;
+        cleanup_container(context, launch, claim, budget, task).await?;
     }
     Ok(())
 }
@@ -50,16 +51,17 @@ struct ContainerCleanup<'a> {
     recorded_id: Option<&'a str>,
     name: &'a str,
     volume: &'a str,
-    role: &'a str,
+    role: &'static str,
 }
 
 async fn cleanup_container(
     context: &Context<'_>,
-    intent_id: i64,
+    launch: &CompletedLaunch,
     claim: CleanupClaim,
     budget: &mut EffectBudget<'_>,
     task: ContainerCleanup<'_>,
 ) -> Result<(), Failure> {
+    let intent_id = launch.intent.id;
     let Some(owned_id) = observe_worker(context, intent_id, claim, budget, &task).await? else {
         return Ok(());
     };
@@ -84,7 +86,25 @@ async fn cleanup_container(
             return Err(Failure::not_proven("container identity"));
         }
         Some(_) => {
-            remove_container(context, intent_id, claim, budget, &owned_id).await?;
+            let captured = capture(
+                context,
+                CaptureRequest {
+                    root: context.diagnostics,
+                    launch,
+                    claim,
+                    budget,
+                    role: task.role,
+                    expected_name: task.name,
+                    container_id: &owned_id,
+                    volume: task.volume,
+                },
+            )
+            .await;
+            super::super::diagnostics::delete_after_capture(
+                captured,
+                remove_container(context, intent_id, claim, budget, &owned_id),
+            )
+            .await?;
         }
         None => {}
     }

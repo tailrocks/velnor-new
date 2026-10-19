@@ -223,7 +223,7 @@ pub struct RustSuiteConfig {
     /// Binary preparation mode (`inline` or `archive`).
     #[serde(default, skip_serializing_if = "RustSuiteBuildMode::is_default")]
     pub build: RustSuiteBuildMode,
-    /// Per-job timeout in minutes (`1..=5`, default `5`).
+    /// Per-job timeout in minutes (`1..=10`, default `5`).
     #[serde(default = "default_suite_timeout_minutes")]
     pub timeout_minutes: u16,
     /// Optional `NEXTEST_TEST_THREADS` override (`1..=64`).

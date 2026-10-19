@@ -64,6 +64,61 @@ async fn set_claim_generation(
     Ok(())
 }
 
+async fn expire_claim(path: &std::path::Path, id: i64) -> Result<(), HostError> {
+    let text = path.to_str().ok_or(HostError::Path)?;
+    let database = turso::Builder::new_local(text)
+        .build()
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let connection = database.connect().map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "UPDATE completion_cleanup SET lease_until = 0 WHERE intent_id = ?1",
+            [id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn production_claim_check_rejects_expiry_and_generation_change() -> Result<(), HostError> {
+    let scratch = Scratch::new("production-current-check")?;
+    let journal = Journal::open(&scratch.file()).await?;
+    let id = completed_launch(&journal).await?;
+    let claim = journal
+        .claim_completion_cleanup(id, 90)
+        .await?
+        .ok_or(HostError::Journal)?;
+    assert!(
+        journal
+            .completion_cleanup_claim_current(id, claim.generation)
+            .await?
+    );
+    expire_claim(&scratch.file(), id).await?;
+    assert!(
+        !journal
+            .completion_cleanup_claim_current(id, claim.generation)
+            .await?
+    );
+    let renewed = journal
+        .claim_completion_cleanup(id, 90)
+        .await?
+        .ok_or(HostError::Journal)?;
+    assert!(renewed.generation > claim.generation);
+    assert!(
+        !journal
+            .completion_cleanup_claim_current(id, claim.generation)
+            .await?
+    );
+    assert!(
+        journal
+            .completion_cleanup_claim_current(id, renewed.generation)
+            .await?
+    );
+    Ok(())
+}
+
 #[tokio::test]
 async fn claims_fence_retries_and_survive_reopen() -> Result<(), HostError> {
     let scratch = Scratch::new("retry")?;

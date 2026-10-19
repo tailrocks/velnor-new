@@ -5,6 +5,7 @@ mod saturated_tests;
 #[path = "shutdown_tests.rs"]
 mod shutdown_tests;
 
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
@@ -21,6 +22,7 @@ use super::{
 use crate::error::HostError;
 use crate::https::HttpsTransport;
 use crate::journal::Journal;
+use crate::launch::completion::diagnostics::DiagnosticsRoot;
 use crate::launch::completion::journal_ref::CompletionJournal;
 use crate::listen::Secret;
 use crate::worker::WorkerVolumeRole;
@@ -111,15 +113,15 @@ fn effect_window_and_budget_cover_the_complete_cleanup_chain() {
     );
     assert_eq!(
         MAX_CLEANUP_EFFECTS,
-        3 + 2 * 6 + WorkerVolumeRole::ALL.len() as u64 * 3
+        3 + 2 * 9 + WorkerVolumeRole::ALL.len() as u64 * 3
     );
-    assert_eq!(MAX_CLEANUP_EFFECTS, 27);
-    assert_eq!(MAX_EXTERNAL_CHAIN_SECONDS, 420);
+    assert_eq!(MAX_CLEANUP_EFFECTS, 36);
+    assert_eq!(MAX_EXTERNAL_CHAIN_SECONDS, 510);
     assert_eq!(
         u64::try_from(EFFECT_WINDOW_SECONDS)
             .ok()
             .map(|window| MAX_CLEANUP_EFFECTS * window),
-        Some(2_430)
+        Some(3_240)
     );
     assert_eq!(cleanup_retry_delay_seconds(1), EFFECT_WINDOW_SECONDS + 5);
     assert_eq!(cleanup_retry_delay_seconds(5), EFFECT_WINDOW_SECONDS + 80);
@@ -243,6 +245,8 @@ impl Scratch {
             std::process::id()
         ));
         std::fs::create_dir_all(&directory).map_err(|_| HostError::Path)?;
+        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))
+            .map_err(|_| HostError::Path)?;
         Ok(Self {
             path: directory.join("journal.db"),
             directory,
@@ -287,6 +291,7 @@ struct Harness {
     docker: Docker,
     transport: HttpsTransport,
     admin: Secret,
+    diagnostics: DiagnosticsRoot,
     _socket: SocketFile,
 }
 
@@ -304,12 +309,16 @@ impl Harness {
             .map_err(|_| HostError::Docker)?;
         let journal = Journal::open(path).await?;
         let completion_journal = CompletionJournal::root(journal.clone());
+        let state = path.parent().ok_or(HostError::Path)?;
+        let state = std::fs::canonicalize(state).map_err(|_| HostError::Path)?;
+        let diagnostics = DiagnosticsRoot::open(&state, "root")?;
         Ok(Self {
             journal,
             completion_journal,
             docker,
             transport: HttpsTransport::new("https://github.com")?,
             admin: Secret::new("test token"),
+            diagnostics,
             _socket: socket,
         })
     }
@@ -320,6 +329,7 @@ impl Harness {
             docker: &self.docker,
             transport: &mut self.transport,
             admin: &self.admin,
+            diagnostics: &self.diagnostics,
         }
     }
 }

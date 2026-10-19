@@ -505,6 +505,7 @@ async fn prepare_connection(
         docker.clone(),
         link.base(),
         link.token().to_owned(),
+        state,
     )?;
     let (session, session_intent, _header_allocation) =
         open_connection_session(&mut link, set.id, &scoped).await?;
