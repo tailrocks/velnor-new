@@ -175,10 +175,11 @@ release qualification, not every pull request. It MUST match the selected
 stable toolchain's major/minor unless compatibility requires otherwise. A
 pinned nightly MAY exist only for a check that needs it.
 
-Velnor MUST check for `rust-toolchain.toml`, `mise.toml`, and `mise.lock`; it
-MAY report their versions, components, tasks, lock coverage, and conflicts.
-They are never generated, synchronized, locked, or rewritten; their declared
-tool versions replace the corresponding Velnor pins (hard decision 5). Missing/malformed files produce manual recommendations, not
+Velnor MUST check for `rust-toolchain.toml`, `mise.toml`, and `mise.lock`.
+It MAY report their versions, components, tasks, lock coverage, and conflicts.
+Velnor does not create or change these files. Generated CI uses each declared
+project version instead of the matching Velnor pin (hard decision 5).
+Missing or malformed files produce manual recommendations. They do not cause
 automatic repair or generation failure. See the [tooling input contract](tooling-input-contract.md).
 
 Every member MUST inherit the workspace metadata and lints:

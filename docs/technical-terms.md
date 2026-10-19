@@ -32,3 +32,12 @@
 | Proof guard | A database trigger that stops a change to an execution proof when the data is not correct. |
 | Digest | A value made from data that can show whether data changed. |
 | Probe lease | A journal record that tracks an active resource-probe operation. |
+| Cache key | A value that selects one cache entry. |
+| Cache family | A cache type with one key layer, schema, and path list. |
+| Cache snapshot | The files saved in one cache entry. |
+| Cache trust | An access rule that says which workflow runs can write to a cache. |
+| Project tool version | The version of a tool that the project config declares. |
+| Project tool resolver | A workflow step that reads project tool versions and sets environment values. |
+| Plan output limit | The maximum size of output values that one job can send to other jobs. |
+| Task binding digest | A digest that identifies a generated task command with project tool references. |
+| Catalog tool | A tool that Velnor can set in generated workflows. |

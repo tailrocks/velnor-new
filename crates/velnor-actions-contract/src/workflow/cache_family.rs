@@ -1,13 +1,15 @@
-//! Typed cache families: one key layer, schema, and path list per family.
+//! Each cache family has one key layer, schema, and path list.
 //!
-//! Every restore and save of a family takes its `path` input from
-//! [`FamilySpec::path_input`], so restore and save lists are
-//! byte-identical by construction. Runtime-computed families key as
-//! `velnor-v<schema>-<layer>-<trust>-<compat>-<snapshot>`; the digests are
-//! `s256-<64 hex>` values produced by the generated `Compute cache keys`
-//! step in the Plan job (runners ship coreutils `sha256sum`, no BLAKE3
-//! tool). Changing a family's path list requires a schema bump, pinned by
-//! [`spec_pin_digest`] tests.
+//! Restore and save steps use [`FamilySpec::path_input`].
+//! Both steps use the same path list.
+//! The Plan job computes run-time keys with the generated
+//! `Compute cache keys` step.
+//! Each key uses `velnor-v<schema>-<layer>-<trust>-<compat>-<snapshot>`.
+//! Each digest uses `s256-<64 hex>` form.
+//! The step uses `sha256sum` to make the digests.
+//! Runner images provide `sha256sum`. They do not provide a BLAKE3 tool.
+//! Tests pin each schema and path list.
+//! Increase the schema when a path list changes.
 
 use crate::cachekey::MAX_CACHE_KEY_BYTES;
 use crate::errors::ContractError;
@@ -273,11 +275,11 @@ pub fn is_plan_cache_output(name: &str) -> bool {
 /// UTF-16 bytes reserved out of the Plan job output budget for cache outputs.
 pub const PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES: usize = 64 * 1024;
 
-/// Conservative UTF-16 bytes the key-step outputs add to the Plan job outputs.
+/// Maximum UTF-16 bytes added by the key-step outputs.
 ///
-/// Generation fails when this exceeds [`PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES`],
-/// which the plan step keeps free, so cache keys never push the promoted
-/// outputs past GitHub's per-job limit.
+/// Generation fails when this exceeds [`PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES`].
+/// The Plan step keeps this space free.
+/// Cache keys then stay within GitHub's per-job output limit.
 #[must_use]
 pub fn cache_output_reserve_utf16_bytes(tofu_roots: usize) -> usize {
     let record = |name: &str, value: usize| (name.len() + 1 + value + 1) * 2;

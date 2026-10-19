@@ -1,9 +1,9 @@
-//! Promote consumed `Compute cache keys` outputs to Plan job outputs.
+//! Send used cache outputs from the Plan job to other jobs.
 //!
-//! Consumers reference `needs.plan.outputs.<name>` for runtime cache keys;
-//! the Plan job promotes the runtime trust plus exactly the consumed key
-//! names from its typed key step, so no unconsumed key enters the per-job
-//! output budget.
+//! Other jobs read outputs through `needs.plan.outputs.<name>`.
+//! The Plan job sends cache trust and the keys that other jobs use.
+//! The typed key step supplies these values.
+//! This keeps unused keys out of the job output limit.
 
 use std::collections::{BTreeMap, BTreeSet};
 

@@ -1,15 +1,14 @@
-//! Run-time resolver for project-declared tool versions (hard decision 5).
+//! Resolve project tool versions at run time (hard decision 5).
 //!
-//! The generated workflow names each project-declared version as
-//! `${VELNOR_TOOL_<NAME>}`. One generated step per job, directly after Mise
-//! setup, fills those variables from the project's own config: for every
-//! referenced tool it reads each declaring source with `mise --no-config
-//! --no-env --no-hooks config get` (stored TOML values only: no config is
-//! loaded, so no template, hook, env, task, plugin, setting, or wrapper
-//! from a fork's checkout is evaluated), requires every source to agree on
-//! one exact `X.Y.Z` version, and appends `NAME=<version>` to
-//! `$GITHUB_ENV`. The digits-and-dots check runs before the write, so a
-//! config value cannot inject another variable or line.
+//! Generated workflows use `${VELNOR_TOOL_<NAME>}` for declared versions.
+//! One resolver step runs after each Mise setup. It reads stored TOML values
+//! with `mise --no-config --no-env --no-hooks config get`.
+//!
+//! The step does not load project config. It does not run templates, hooks,
+//! env, tasks, plugins, settings, or wrappers from the checkout.
+//! It requires every source to give the same exact `X.Y.Z` version.
+//! It writes `NAME=<version>` to `$GITHUB_ENV` after it checks the value.
+//! The check rejects values that can add another variable or line.
 
 use std::collections::BTreeSet;
 
