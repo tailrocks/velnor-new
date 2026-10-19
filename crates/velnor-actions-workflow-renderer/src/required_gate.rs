@@ -50,6 +50,14 @@ pub(crate) fn insert_required_gate(jobs: &mut BTreeMap<String, Job>) -> Result<(
     crate::support::insert_support_job(jobs, REQUIRED_GATE_JOB_ID, gate, "required-gate")
 }
 
+/// The gate's single step: `false` unless the verdict succeeded.
+fn gate_step() -> Result<velnor_actions_contract::Step, RenderError> {
+    let mut step =
+        crate::steps::shell_step(GATE_STEP_NAME, vec!["false".to_owned()], BTreeMap::new())?;
+    step.condition = Some(REQUIRED_GATE_FAIL_CONDITION.to_owned());
+    Ok(step)
+}
+
 /// The gate must exist exactly over the verdict, unchanged.
 ///
 /// # Errors
@@ -66,11 +74,7 @@ pub(crate) fn check_required_gate(jobs: &BTreeMap<String, Job>) -> Result<(), Re
     if gate.display_name != REQUIRED_DISPLAY_NAME
         || gate.condition.as_deref() != Some(REQUIRED_GATE_CONDITION)
         || gate.needs != [FINAL_JOB_ID]
-        || gate.steps.len() != 1
-        || gate
-            .steps
-            .iter()
-            .any(|step| step.condition.as_deref() != Some(REQUIRED_GATE_FAIL_CONDITION))
+        || gate.steps != [gate_step()?]
     {
         return bad("bad_required_gate");
     }

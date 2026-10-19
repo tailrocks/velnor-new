@@ -32,15 +32,21 @@ test_runner = "cargo_nextest"
 globs = ["scripts/parallel-targets/**"]
 packages = ["velnor-actions-workflow-renderer"]
 
-# velnor-actions-cli's repository-policy tests read every crate's manifests,
+# velnor-actions-cli's repository-policy tests read every package's manifest,
 # sources, and tests in both workspaces (MSRV parity with
-# crates/velnor-runner/Cargo.toml, test registration, metadata policy), so it
-# runs on any crate change; every other path they read is unowned and runs
-# everything anyway. Other crates whose tests read the repository through
+# crates/velnor-runner/Cargo.toml, test registration, metadata policy). The
+# globs name only package directories plus the runner workspace manifest, so
+# every unowned path (crates/test_support, crates/velnor-runner/deny.toml, ...)
+# still runs everything. Other crates whose tests read the repository through
 # CARGO_MANIFEST_DIR stay always-run (`undeclared_reads`) until a rule naming
 # them lists all their inputs with `complete = true`.
 [[stacks.rust.inputs]]
-globs = ["crates/**"]
+globs = [
+  "crates/velnor-actions-*/**",
+  "crates/velnor-archive-guard/**",
+  "crates/velnor-runner/Cargo.toml",
+  "crates/velnor-runner/crates/*/**",
+]
 packages = ["velnor-actions-cli"]
 complete = true
 

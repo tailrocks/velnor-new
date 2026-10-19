@@ -103,6 +103,21 @@ impl<'a> Ownership<'a> {
         })
     }
 
+    /// True when a package directory, workspace root, or declared input
+    /// rule lies strictly below directory `dir` (the root holds them all).
+    pub(crate) fn has_claims_below(&self, dir: &str) -> bool {
+        let prefix = format!("{dir}/");
+        let below = |path: &str| dir.is_empty() || path.starts_with(&prefix);
+        dir.is_empty()
+            || self.owners.iter().any(|(owner, _)| below(owner))
+            || self.workspaces.iter().any(|(root, _)| below(root))
+            || self.discovery.affected.rules.iter().any(|rule| {
+                rule.globs
+                    .iter()
+                    .any(|glob| below(glob) || glob.starts_with(['*', '?', '[', '{']))
+            })
+    }
+
     /// True when a declared input rule names package `id` as complete.
     pub(crate) fn declares_complete_inputs(&self, id: &str) -> bool {
         self.discovery

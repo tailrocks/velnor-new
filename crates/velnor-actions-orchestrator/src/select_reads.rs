@@ -84,9 +84,17 @@ pub(crate) fn forced_ids(forced: &Forced) -> BTreeSet<String> {
 }
 
 /// True when package `id` claims what `target` reads.
+///
+/// An unclaimed target is covered only when nothing claimable lies at or
+/// below it: a change to an unowned file already runs everything, but a
+/// read of a directory (the repository root, `crates/`) reaches every
+/// package beneath it.
 fn covered(ownership: &Ownership<'_>, id: &str, target: &ReadTarget) -> bool {
     match target {
-        ReadTarget::Path(path) => !ownership.is_owned(path) || ownership.claim(path).contains(id),
+        ReadTarget::Path(path) => {
+            ownership.claim(path).contains(id)
+                || (!ownership.is_owned(path) && !ownership.has_claims_below(path))
+        }
         ReadTarget::Outside => true,
         ReadTarget::Unbounded(_) => ownership.declares_complete_inputs(id),
     }
@@ -101,7 +109,13 @@ fn reason(read: &SourceRead) -> String {
     }
 }
 
-/// Reads in every tracked `.rs` file, attributed to its deepest package.
+/// Every read each package's compiled sources perform.
+///
+/// A package compiles the tracked `.rs` files it owns plus every unowned
+/// `.rs` file they pull in through `#[path]` or `include!` (shared test
+/// support), transitively; included files resolve `CARGO_MANIFEST_DIR`
+/// against the including package. Anchor and escape signals combine over
+/// all of a package's files.
 fn source_reads(
     root: &Path,
     ownership: &Ownership<'_>,
@@ -112,26 +126,77 @@ fn source_reads(
     output
         .require_success("git")
         .map_err(|err| err.to_string())?;
-    let mut reads = Vec::new();
     let files: Vec<String> = split_nul_paths(&output.stdout)?;
-    for file in files {
-        if !Path::new(&file)
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
-        {
-            continue;
+    let sources: BTreeSet<String> = files
+        .into_iter()
+        .filter(|file| is_rust_source(file))
+        .collect();
+    let mut by_package: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
+    for file in &sources {
+        if let Some((dir, id)) = ownership.package_of(file) {
+            by_package
+                .entry((id.clone(), dir.clone()))
+                .or_default()
+                .push(file.clone());
         }
-        let Some((dir, id)) = ownership.package_of(&file) else {
-            continue;
-        };
+    }
+    let mut reads = Vec::new();
+    for ((id, dir), owned) in by_package {
+        for read in package_reads(root, ownership, &sources, &dir, owned) {
+            reads.push((id.clone(), read));
+        }
+    }
+    Ok(reads)
+}
+
+/// Reads of one package: its owned files plus the unowned files they include.
+fn package_reads(
+    root: &Path,
+    ownership: &Ownership<'_>,
+    sources: &BTreeSet<String>,
+    dir: &str,
+    owned: Vec<String>,
+) -> Vec<SourceRead> {
+    let mut queue = owned;
+    let mut seen: BTreeSet<String> = queue.iter().cloned().collect();
+    let mut reads = Vec::new();
+    let mut anchor: Option<String> = None;
+    let mut escapes = false;
+    while let Some(file) = queue.pop() {
         // A tracked file missing from the worktree or not UTF-8 cannot
         // compile; the dirty-worktree and Cargo checks own those cases.
         let Ok(text) = std::fs::read_to_string(root.join(&file)) else {
             continue;
         };
-        for read in scan_source(&file, dir, &text) {
-            reads.push((id.clone(), read));
+        let scanned = scan_source(&file, dir, &text);
+        if scanned.anchored && anchor.is_none() {
+            anchor = Some(file.clone());
+        }
+        escapes |= scanned.escapes;
+        for read in scanned.reads {
+            if let ReadTarget::Path(target) = &read.target
+                && sources.contains(target)
+                && ownership.package_of(target).is_none()
+                && seen.insert(target.clone())
+            {
+                queue.push(target.clone());
+            }
+            reads.push(read);
         }
     }
-    Ok(reads)
+    if let (Some(file), true) = (anchor, escapes) {
+        reads.push(SourceRead {
+            file,
+            target: ReadTarget::Unbounded("manifest_dir_escape"),
+        });
+    }
+    reads.sort_by(|left, right| left.file.cmp(&right.file));
+    reads
+}
+
+/// True for a Rust source path (`.rs`, any case).
+fn is_rust_source(file: &str) -> bool {
+    Path::new(file)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
 }

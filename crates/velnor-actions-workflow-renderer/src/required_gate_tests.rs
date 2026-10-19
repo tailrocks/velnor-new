@@ -63,6 +63,21 @@ fn missing_or_altered_gates_fail_generation() {
         gate.condition = Some(FINAL_CONDITION.to_owned());
     }
     assert!(check_required_gate(&altered).is_err(), "cancellable gate");
+    let mut passing = jobs.clone();
+    insert_required_gate(&mut passing).expect("gate inserts");
+    if let Some(step) = passing
+        .get_mut(REQUIRED_GATE_JOB_ID)
+        .and_then(|gate| gate.steps.first_mut())
+    {
+        step.kind = velnor_actions_contract::StepKind::Shell {
+            run: vec!["true".to_owned()],
+            env: BTreeMap::new(),
+        };
+    }
+    assert!(
+        check_required_gate(&passing).is_err(),
+        "gate step must fail"
+    );
     let mut renamed = jobs;
     if let Some(verdict) = renamed.get_mut(FINAL_JOB_ID) {
         verdict.display_name = REQUIRED_DISPLAY_NAME.to_owned();

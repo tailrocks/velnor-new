@@ -65,8 +65,24 @@ pub(crate) struct SourceRead {
     pub(crate) target: ReadTarget,
 }
 
-/// Every read `text` (the file at `file`, inside `package_dir`) performs.
-pub(crate) fn scan_source(file: &str, package_dir: &str, text: &str) -> Vec<SourceRead> {
+/// Reads and escape signals one source file carries.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct FileReads {
+    /// Reads that resolve to a target or are unbounded on their own.
+    pub(crate) reads: Vec<SourceRead>,
+    /// The file names `CARGO_MANIFEST_DIR` or calls `current_dir`.
+    pub(crate) anchored: bool,
+    /// The file holds a `..` path component or calls `parent`/`ancestors`.
+    pub(crate) escapes: bool,
+}
+
+/// Every read `text` (the file at `file`, compiled into the package at
+/// `package_dir`) performs.
+///
+/// The anchor and escape signals stay separate: a package combines them
+/// over every file it compiles, because a helper module can hold the
+/// manifest-dir anchor while a test file walks out of it.
+pub(crate) fn scan_source(file: &str, package_dir: &str, text: &str) -> FileReads {
     let tokens = tokenize(text);
     let file_dir = file.rsplit_once('/').map_or("", |(dir, _)| dir);
     let mut scan = Scan {
@@ -78,17 +94,18 @@ pub(crate) fn scan_source(file: &str, package_dir: &str, text: &str) -> Vec<Sour
         escapes: false,
     };
     scan.run();
-    let mut targets = scan.targets;
-    if scan.anchored && scan.escapes {
-        targets.push(ReadTarget::Unbounded("manifest_dir_escape"));
+    FileReads {
+        reads: scan
+            .targets
+            .into_iter()
+            .map(|target| SourceRead {
+                file: file.to_owned(),
+                target,
+            })
+            .collect(),
+        anchored: scan.anchored,
+        escapes: scan.escapes,
     }
-    targets
-        .into_iter()
-        .map(|target| SourceRead {
-            file: file.to_owned(),
-            target,
-        })
-        .collect()
 }
 
 /// What a `concat!` argument list names.
@@ -130,6 +147,9 @@ impl Scan<'_> {
                 Token::Ident(word) if word == "concat" && self.is_macro(at) => {
                     let (args, next) = group(self.tokens, at + 2);
                     if let Concat::Read(target) = self.concat_target(args) {
+                        // The resolved path is still a manifest-dir value
+                        // that later `parent()` calls can walk out of.
+                        self.anchored = true;
                         self.targets.push(target);
                         at = next;
                         continue;

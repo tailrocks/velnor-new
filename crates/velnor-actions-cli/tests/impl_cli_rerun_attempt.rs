@@ -115,9 +115,9 @@ fn merge_attempt_two(
         ("VELNOR_NEEDS_EXPECTED", expected_json.as_str()),
         ("VELNOR_REQUEST_FILE", request_text),
     ];
-    if let Some(attempt) = plan_attempt {
-        env.push(("VELNOR_RUN_KEY_ATTEMPT", attempt));
-    }
+    // An empty value is "unset" to the resolver; set it explicitly so a CI
+    // runner's own VELNOR_RUN_KEY_ATTEMPT never leaks into the child.
+    env.push(("VELNOR_RUN_KEY_ATTEMPT", plan_attempt.unwrap_or("")));
     for op in ["write-request-v1", "merge-v1"] {
         let mut vars = env.clone();
         vars.push(("VELNOR_INTERNAL_OP", op));

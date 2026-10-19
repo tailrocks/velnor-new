@@ -2,11 +2,15 @@
 
 use super::{ReadTarget, scan_source};
 
+/// Targets one file yields as a one-file package (anchor plus escape
+/// combine into `manifest_dir_escape`, as `select_reads` does per package).
 fn targets(file: &str, package_dir: &str, text: &str) -> Vec<ReadTarget> {
-    scan_source(file, package_dir, text)
-        .into_iter()
-        .map(|read| read.target)
-        .collect()
+    let scanned = scan_source(file, package_dir, text);
+    let mut targets: Vec<ReadTarget> = scanned.reads.into_iter().map(|read| read.target).collect();
+    if scanned.anchored && scanned.escapes {
+        targets.push(ReadTarget::Unbounded("manifest_dir_escape"));
+    }
+    targets
 }
 
 fn path(target: &str) -> ReadTarget {
@@ -75,6 +79,18 @@ fn manifest_dir_with_parent_components_is_unbounded() {
             "{text}"
         );
     }
+}
+
+#[test]
+fn resolved_manifest_dir_concat_still_anchors_parent_walks() {
+    let text = "let p = Path::new(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/Cargo.toml\")).parent().unwrap().parent();";
+    assert_eq!(
+        targets("crates/a/tests/t.rs", "crates/a", text),
+        vec![
+            path("crates/a/Cargo.toml"),
+            ReadTarget::Unbounded("manifest_dir_escape")
+        ]
+    );
 }
 
 #[test]

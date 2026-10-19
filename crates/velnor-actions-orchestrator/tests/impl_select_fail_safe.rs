@@ -335,3 +335,65 @@ fn reads_of_unowned_paths_never_force() -> TestResult {
     assert_runs(&plan, &["a1"]);
     Ok(())
 }
+
+#[test]
+fn directory_reads_above_packages_force_the_reader() -> TestResult {
+    let plan = plan_with(
+        "",
+        |root| {
+            put(
+                root,
+                "apps/a7/tests/t.rs",
+                "#[test] fn t(){ let _ = std::fs::read_dir(\"../..\"); }\n",
+            )
+        },
+        |root| put(root, "apps/a1/src/lib.rs", "pub fn g() {}\n"),
+    )?;
+    assert_runs(&plan, &["a1", "a7"]);
+    Ok(())
+}
+
+#[test]
+fn manifest_dir_anchor_and_escape_in_different_files_force_the_package() -> TestResult {
+    let plan = plan_with(
+        "",
+        |root| {
+            put(
+                root,
+                "apps/a7/tests/common/mod.rs",
+                "pub fn dir() -> std::path::PathBuf { std::path::PathBuf::from(env!(\"CARGO_MANIFEST_DIR\")) }\n",
+            )?;
+            put(
+                root,
+                "apps/a7/tests/t.rs",
+                "mod common;\n#[test] fn t(){ let _ = std::fs::read(common::dir().join(\"../../libs/util/x.json\")); }\n",
+            )
+        },
+        |root| put(root, "apps/a1/src/lib.rs", "pub fn g() {}\n"),
+    )?;
+    assert_runs(&plan, &["a1", "a7"]);
+    Ok(())
+}
+
+#[test]
+fn reads_inside_included_unowned_support_files_count_for_the_includer() -> TestResult {
+    let plan = plan_with(
+        "",
+        |root| {
+            put(root, "libs/util/data.txt", "a\n")?;
+            put(
+                root,
+                "shared/support.rs",
+                "pub const D: &str = include_str!(\"../libs/util/data.txt\");\n",
+            )?;
+            put(
+                root,
+                "apps/a7/tests/t.rs",
+                "#[path = \"../../../shared/support.rs\"]\nmod support;\n",
+            )
+        },
+        |root| put(root, "libs/util/data.txt", "b\n"),
+    )?;
+    assert_runs(&plan, &["a2", "a7", "util"]);
+    Ok(())
+}

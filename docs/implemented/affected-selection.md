@@ -121,7 +121,8 @@ Globs support `**`, `*`, `?`, `[...]`, and `{a,b}`. Packages are exact Cargo
 package names. `complete = true` on a rule states that the named packages'
 rules list all their out-of-directory inputs (see the read scan below).
 
-velnor-new declares `crates/**` with `complete = true` for
+velnor-new declares its package directories (plus the runner workspace
+manifest) with `complete = true` for
 `velnor-actions-cli`: its repository-policy
 tests read every crate's manifests, sources, and tests in both workspaces (for
 example MSRV parity with `crates/velnor-runner/Cargo.toml`). Its other crates

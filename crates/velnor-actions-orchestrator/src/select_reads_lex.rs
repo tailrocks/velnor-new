@@ -151,7 +151,8 @@ fn raw(chars: &[char], mut at: usize) -> Option<(String, usize)> {
 /// Skip a character literal or a lifetime starting at quote index `at`.
 fn skip_quote(chars: &[char], at: usize) -> usize {
     if chars.get(at + 1) == Some(&'\\') {
-        let mut end = at + 2;
+        // Skip the escaped character itself: `'\''` must not end at it.
+        let mut end = at + 3;
         while chars.get(end).is_some_and(|ch| *ch != '\'') {
             end += 1;
         }
@@ -181,6 +182,12 @@ mod tests {
     fn comments_chars_and_lifetimes_hide_no_literals() {
         let text = "// \"a\"\n/* \"b\" /* \"c\" */ */ fn f<'a>(x: &'a str) { let q = '\"'; let e = '\\''; g(\"d\") }";
         assert_eq!(strs(text), vec!["d".to_owned()]);
+    }
+
+    #[test]
+    fn escaped_quote_chars_keep_string_parity() {
+        let text = "let q = ('\\'','\"'); include_str!(\"x\");";
+        assert_eq!(strs(text), vec!["x".to_owned()]);
     }
 
     #[test]
