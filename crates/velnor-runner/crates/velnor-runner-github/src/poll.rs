@@ -171,7 +171,7 @@ struct Envelope {
     message_id: i64,
     #[serde(rename = "messageType")]
     message_type: String,
-    body: String,
+    body: Option<String>,
     #[serde(default)]
     statistics: Option<Statistics>,
 }
@@ -203,7 +203,7 @@ fn parse_envelope(body: &str) -> Result<Poll, WireError> {
     if envelope.message_id < 0 {
         return Err(WireError::Malformed);
     }
-    let raw_body = envelope.body;
+    let raw_body = envelope.body.unwrap_or_default();
     if raw_body.len() > MAX_POLL_BODY_BYTES {
         return Err(WireError::Malformed);
     }
