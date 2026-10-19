@@ -1,17 +1,25 @@
+#[cfg(target_os = "linux")]
 use std::io::Read;
 
-use crate::{
-    ProbeError,
-    worker_binding::{
-        CgroupNodeObservation, OwnedContainerCgroupObservation, ProcessWitness, WorkerRole,
-    },
+#[cfg(target_os = "linux")]
+use rustix::fs::{FileType, Mode, OFlags, fstat, fstatfs, major, minor, open};
+
+#[cfg(target_os = "linux")]
+use super::cgroup::{observe_hierarchy, verify_membership};
+use crate::ProbeError;
+#[cfg(target_os = "linux")]
+use crate::worker_binding::{
+    CgroupNodeObservation, OwnedContainerCgroupObservation, ProcessWitness, WorkerRole,
 };
 
-use super::cgroup::{observe_hierarchy, verify_membership};
-
+#[cfg(any(target_os = "linux", test))]
 const PROC_FILE_LIMIT: usize = 4096;
+#[cfg(any(target_os = "linux", test))]
 const MAX_NAMESPACE_DEPTH: usize = 8;
+#[cfg(target_os = "linux")]
+const NSFS_MAGIC: i64 = 0x6e73_6673;
 
+#[cfg(target_os = "linux")]
 pub(super) fn observe_container(
     role: WorkerRole,
     container_id: &str,
@@ -25,7 +33,12 @@ pub(super) fn observe_container(
     }
     let init = observe_process(init_pid, init_start_ticks)?;
     let helper = observe_process(helper_pid, helper_start_ticks)?;
-    if init.cgroup_path != helper.cgroup_path || init.namespace_pids.last() != Some(&1) {
+    if init.cgroup_path != helper.cgroup_path
+        || init.mount_namespace_id != helper.mount_namespace_id
+        || init.mount_namespace_device_major != helper.mount_namespace_device_major
+        || init.mount_namespace_device_minor != helper.mount_namespace_device_minor
+        || init.namespace_pids.last() != Some(&1)
+    {
         return Err(ProbeError::Invalid("owned_process_cgroup_mismatch"));
     }
     let hierarchy = observe_hierarchy(&init.cgroup_path)?;
@@ -49,10 +62,15 @@ pub(super) fn observe_container(
     })
 }
 
-fn observe_process(pid: u32, expected_start_ticks: u64) -> Result<ProcessWitness, ProbeError> {
+#[cfg(target_os = "linux")]
+pub(super) fn observe_process(
+    pid: u32,
+    expected_start_ticks: u64,
+) -> Result<ProcessWitness, ProbeError> {
     let start_before = process_start_ticks(pid)?;
     let pids_before = namespace_pids(pid)?;
     let cgroup_path = process_cgroup_path(pid)?;
+    let mount_namespace_before = mount_namespace_identity(pid)?;
     if start_before != expected_start_ticks || pids_before.first() != Some(&pid) {
         return Err(ProbeError::Invalid("owned_process_identity_mismatch"));
     }
@@ -60,23 +78,74 @@ fn observe_process(pid: u32, expected_start_ticks: u64) -> Result<ProcessWitness
     let start_after = process_start_ticks(pid)?;
     let namespace_after = namespace_pids(pid)?;
     let cgroup_after = process_cgroup_path(pid)?;
-    if start_after != start_before || namespace_after != pids_before || cgroup_after != cgroup_path
+    if start_after != start_before
+        || namespace_after != pids_before
+        || cgroup_after != cgroup_path
+        || mount_namespace_identity(pid)? != mount_namespace_before
     {
         return Err(ProbeError::Invalid("owned_process_changed"));
     }
     Ok(ProcessWitness {
         host_pid: pid,
         start_ticks: start_before,
+        mount_namespace_id: mount_namespace_before.inode,
+        mount_namespace_device_major: mount_namespace_before.device_major,
+        mount_namespace_device_minor: mount_namespace_before.device_minor,
         namespace_pids: pids_before,
         cgroup_path,
     })
 }
 
+#[cfg(target_os = "linux")]
+pub(super) fn observe_current_process(pid: u32) -> Result<ProcessWitness, ProbeError> {
+    let start_ticks = process_start_ticks(pid)?;
+    observe_process(pid, start_ticks)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::worker_binding) struct MountNamespaceIdentity {
+    pub(in crate::worker_binding) device_major: u32,
+    pub(in crate::worker_binding) device_minor: u32,
+    pub(in crate::worker_binding) inode: u64,
+}
+
+#[cfg(target_os = "linux")]
+pub(in crate::worker_binding) fn mount_namespace_identity(
+    pid: u32,
+) -> Result<MountNamespaceIdentity, ProbeError> {
+    let path = format!("/proc/{pid}/ns/mnt");
+    let descriptor = open(path, OFlags::RDONLY | OFlags::CLOEXEC, Mode::empty())
+        .map_err(|error| ProbeError::Read("process_mount_namespace", error.into()))?;
+    let status = fstat(&descriptor)
+        .map_err(|error| ProbeError::Read("process_mount_namespace_stat", error.into()))?;
+    let filesystem = fstatfs(&descriptor)
+        .map_err(|error| ProbeError::Read("process_mount_namespace_fs", error.into()))?;
+    if filesystem.f_type != NSFS_MAGIC
+        || FileType::from_raw_mode(status.st_mode) != FileType::RegularFile
+    {
+        return Err(ProbeError::Invalid("process_mount_namespace_type"));
+    }
+    Ok(MountNamespaceIdentity {
+        device_major: major(status.st_dev),
+        device_minor: minor(status.st_dev),
+        inode: status.st_ino,
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+pub(in crate::worker_binding) fn mount_namespace_identity(
+    _pid: u32,
+) -> Result<MountNamespaceIdentity, ProbeError> {
+    Err(ProbeError::Invalid("linux_guest_required"))
+}
+
+#[cfg(target_os = "linux")]
 fn process_start_ticks(pid: u32) -> Result<u64, ProbeError> {
     let bytes = read_proc(pid, "stat")?;
     parse_stat_start_ticks(&bytes, pid)
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn parse_stat_start_ticks(input: &[u8], expected_pid: u32) -> Result<u64, ProbeError> {
     if input.len() > PROC_FILE_LIMIT {
         return Err(ProbeError::InputTooLarge("proc_stat"));
@@ -104,11 +173,13 @@ fn parse_stat_start_ticks(input: &[u8], expected_pid: u32) -> Result<u64, ProbeE
     )
 }
 
+#[cfg(target_os = "linux")]
 fn namespace_pids(pid: u32) -> Result<Vec<u32>, ProbeError> {
     let bytes = read_proc(pid, "status")?;
     parse_namespace_pids(&bytes, pid)
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn parse_namespace_pids(bytes: &[u8], pid: u32) -> Result<Vec<u32>, ProbeError> {
     if bytes.len() > PROC_FILE_LIMIT {
         return Err(ProbeError::InputTooLarge("proc_status"));
@@ -124,7 +195,7 @@ fn parse_namespace_pids(bytes: &[u8], pid: u32) -> Result<Vec<u32>, ProbeError> 
         }
         let values = value
             .split_ascii_whitespace()
-            .map(|part| parse_pid(part, "proc_status_nspid"))
+            .map(parse_namespace_pid)
             .collect::<Result<Vec<_>, _>>()?;
         if values.is_empty()
             || values.len() > MAX_NAMESPACE_DEPTH
@@ -138,6 +209,12 @@ fn parse_namespace_pids(bytes: &[u8], pid: u32) -> Result<Vec<u32>, ProbeError> 
     result.ok_or(ProbeError::Invalid("proc_status_nspid_missing"))
 }
 
+#[cfg(any(target_os = "linux", test))]
+fn parse_namespace_pid(value: &str) -> Result<u32, ProbeError> {
+    parse_pid(value, "proc_status_nspid")
+}
+
+#[cfg(target_os = "linux")]
 fn process_cgroup_path(pid: u32) -> Result<String, ProbeError> {
     let bytes = read_proc(pid, "cgroup")?;
     let text = std::str::from_utf8(&bytes).map_err(|_| ProbeError::Invalid("proc_cgroup_utf8"))?;
@@ -158,6 +235,7 @@ fn process_cgroup_path(pid: u32) -> Result<String, ProbeError> {
     Ok(path)
 }
 
+#[cfg(target_os = "linux")]
 fn read_proc(pid: u32, name: &'static str) -> Result<Vec<u8>, ProbeError> {
     let path = format!("/proc/{pid}/{name}");
     let file = std::fs::File::open(path).map_err(|error| ProbeError::Read(name, error))?;
@@ -171,11 +249,13 @@ fn read_proc(pid: u32, name: &'static str) -> Result<Vec<u8>, ProbeError> {
     Ok(bytes)
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn parse_pid(value: &str, error: &'static str) -> Result<u32, ProbeError> {
     let parsed = parse_decimal(value, error)?;
     u32::try_from(parsed).map_err(|_| ProbeError::Overflow(error))
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn parse_decimal(value: &str, error: &'static str) -> Result<u64, ProbeError> {
     if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err(ProbeError::Invalid(error));
@@ -183,6 +263,7 @@ fn parse_decimal(value: &str, error: &'static str) -> Result<u64, ProbeError> {
     value.parse().map_err(|_| ProbeError::Overflow(error))
 }
 
+#[cfg(target_os = "linux")]
 fn same_limits(left: &[CgroupNodeObservation], right: &[CgroupNodeObservation]) -> bool {
     left.len() == right.len()
         && left.iter().zip(right).all(|(left, right)| {
@@ -223,5 +304,14 @@ mod tests {
         assert!(parse_namespace_pids(b"NSpid:\t9 0\n", 9).is_err());
         assert!(parse_namespace_pids(b"NSpid:\t10\n", 9).is_err());
         assert!(parse_namespace_pids(b"NSpid:\t1 2 3 4 5 6 7 8 9\n", 1).is_err());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn mount_namespace_identity_measures_nsfs_device_and_inode() {
+        let identity = super::mount_namespace_identity(std::process::id())
+            .expect("current mount namespace is readable");
+        assert_ne!([identity.device_major, identity.device_minor], [0, 0]);
+        assert_ne!(identity.inode, 0);
     }
 }

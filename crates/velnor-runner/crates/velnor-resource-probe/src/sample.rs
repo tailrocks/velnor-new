@@ -6,7 +6,7 @@ use crate::{
     filesystem::{filesystem_name, observe_docker_root, parse_boot_id},
     load,
     memory::available_bytes,
-    mountinfo::cgroup2_root,
+    mountinfo::{attachment_mount_source, cgroup2_root},
     pressure::memory_some_avg10,
 };
 
@@ -47,8 +47,10 @@ pub fn sample() -> Result<ProbeRecord, ProbeError> {
     let cpu_hierarchy = process_cgroup.cpu;
     let pid_pair = process_cgroup.pids;
     Ok(ProbeRecord {
-        schema_version: 3,
+        schema_version: 5,
         docker_root_mount_target: filesystem.mount_target.to_owned(),
+        docker_root_mount_source: attachment_mount_source(&mountinfo, filesystem.mount_target)?,
+        docker_root_mount_root: filesystem.mount.root.clone(),
         docker_root_mount_id: filesystem.mount.mount_id,
         docker_root_device_major: filesystem.mount.device_major,
         docker_root_device_minor: filesystem.mount.device_minor,

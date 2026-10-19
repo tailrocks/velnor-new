@@ -4,6 +4,10 @@ mod capacity;
 mod cgroup;
 #[cfg(target_os = "linux")]
 pub mod cleanup_observation;
+#[cfg(target_os = "linux")]
+pub mod cleanup_observer;
+/// Cleanup request and record types shared by the host and guest.
+pub mod cleanup_observer_wire;
 mod error;
 #[cfg(target_os = "linux")]
 pub mod execution_channel;
@@ -11,6 +15,9 @@ pub mod execution_channel;
 pub mod execution_channel_wire;
 pub mod execution_publication;
 mod filesystem;
+pub mod job_facts;
+/// Job facts records shared by the host and Linux guest.
+pub mod job_facts_wire;
 mod load;
 mod memory;
 mod mountinfo;

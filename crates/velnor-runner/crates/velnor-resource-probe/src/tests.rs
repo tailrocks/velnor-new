@@ -90,8 +90,10 @@ fn psi_is_optional_but_valid_some_line_is_strict() {
 #[test]
 fn record_json_has_stable_required_keys_and_nullable_psi() -> Result<(), Box<dyn Error>> {
     let record = ProbeRecord {
-        schema_version: 3,
+        schema_version: 5,
         docker_root_mount_target: "/velnor/docker-root".into(),
+        docker_root_mount_source: "/var/lib/docker".into(),
+        docker_root_mount_root: "/var/lib/docker".into(),
         docker_root_mount_id: 1,
         docker_root_device_major: 0,
         docker_root_device_minor: 38,
@@ -134,8 +136,10 @@ fn record_json_has_stable_required_keys_and_nullable_psi() -> Result<(), Box<dyn
     let object = value
         .as_object()
         .ok_or("the probe record is not an object")?;
-    assert_eq!(object.len(), 33);
-    assert_eq!(value["schema_version"], 3);
+    assert_eq!(object.len(), 35);
+    assert_eq!(value["schema_version"], 5);
+    assert_eq!(value["docker_root_mount_source"], "/var/lib/docker");
+    assert_eq!(value["docker_root_mount_root"], "/var/lib/docker");
     assert_eq!(value["docker_root_device_major"], 0);
     assert_eq!(value["docker_root_device_minor"], 38);
     assert_eq!(value["docker_root_statx_device_major"], 0);

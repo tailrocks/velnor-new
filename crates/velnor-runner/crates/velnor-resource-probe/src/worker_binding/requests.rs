@@ -23,7 +23,7 @@ pub struct SelfStorageRequest {
 #[serde(deny_unknown_fields)]
 /// Request for both owned worker cgroup chains.
 pub struct OwnedCgroupRequest {
-    /// Wire schema version. Must equal one.
+    /// Wire schema version. Must equal two.
     pub schema_version: u8,
     /// Fresh 32-character lower-case hexadecimal identity.
     pub operation_id: String,
@@ -47,6 +47,8 @@ pub struct OwnedCgroupRequest {
     pub dind_helper_pid: u32,
     /// Expected `DinD` helper process start time.
     pub dind_helper_start_ticks: u64,
+    /// Selected Docker root directory from the verified engine.
+    pub docker_root_path: String,
 }
 
 impl SelfStorageRequest {
@@ -71,7 +73,7 @@ impl OwnedCgroupRequest {
     ///
     /// Returns an error when any container or process identity is invalid.
     pub fn validate(&self) -> Result<(), ProbeError> {
-        if self.schema_version != 1 {
+        if self.schema_version != 2 {
             return Err(ProbeError::Invalid("worker_schema_version"));
         }
         validate_operation_id(&self.operation_id)?;
@@ -91,6 +93,9 @@ impl OwnedCgroupRequest {
         {
             return Err(ProbeError::Invalid("owned_process_identity"));
         }
+        crate::worker_binding::observer::root_backing::validate_docker_root_path(
+            &self.docker_root_path,
+        )?;
         let process_ids = [
             self.runner_init_pid,
             self.runner_helper_pid,

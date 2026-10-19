@@ -17,11 +17,12 @@ use std::{
 const HOME: &str = "/velnor/init/home";
 const WORK: &str = "/velnor/init/work";
 const METADATA: &str = "/velnor/init/metadata";
+const HOME_SOURCE_PROOF: &str = "/velnor/init/home/source-proof";
+const HOME_INBOX: &str = "/velnor/init/home/source-proof/inbox";
 const RUNTIME_IDENTITY: &str = "/velnor/init/metadata/runtime-identity";
 const JOB_FACTS: &str = "/velnor/init/metadata/job-facts";
 const SOURCE_PROOF: &str = "/velnor/init/metadata/source-proof";
 const CONTROL: &str = "/velnor/init/metadata/source-proof/control";
-const INBOX: &str = "/velnor/init/metadata/source-proof/inbox";
 
 struct OpenDirectory {
     descriptor: OwnedFd,
@@ -44,17 +45,19 @@ pub(super) fn initialize(operation_id: String) -> Result<ResultRecord, &'static 
     validate_empty_root(&metadata)?;
     set_runner_owner(&home)?;
     set_runner_owner(&work)?;
+    let home_source_proof = create_child_directory(&home, "source-proof", HOME_SOURCE_PROOF)?;
+    let inbox = create_child_directory(&home_source_proof, "inbox", HOME_INBOX)?;
     let runtime_identity = create_child_directory(&metadata, "runtime-identity", RUNTIME_IDENTITY)?;
     let job_facts = create_child_directory(&metadata, "job-facts", JOB_FACTS)?;
     let source_proof = create_child_directory(&metadata, "source-proof", SOURCE_PROOF)?;
     let control = create_child_directory(&source_proof, "control", CONTROL)?;
-    let inbox = create_child_directory(&source_proof, "inbox", INBOX)?;
     set_directory_owner(&metadata, 0, 0, 0o755)?;
+    set_directory_owner(&home_source_proof, 0, 0, 0o755)?;
+    set_directory_owner(&inbox, 1000, 1000, 0o700)?;
     set_directory_owner(&runtime_identity, 0, 0, 0o555)?;
     set_directory_owner(&job_facts, 0, 0, 0o555)?;
     set_directory_owner(&source_proof, 0, 0, 0o755)?;
     set_directory_owner(&control, 0, 0, 0o555)?;
-    set_directory_owner(&inbox, 1000, 1000, 0o700)?;
     Ok(ResultRecord {
         schema: 2,
         operation_id,

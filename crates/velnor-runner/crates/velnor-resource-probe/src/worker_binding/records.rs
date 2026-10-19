@@ -20,8 +20,12 @@ pub struct StorageAttachmentObservation {
     pub mount_id: u64,
     /// Mount ID from statx.
     pub statx_mount_id: u64,
+    /// Inode from statx on the observed attachment descriptor.
+    pub statx_inode: u64,
     /// Mount root from mount information.
     pub mount_root: String,
+    /// Mount source from mount information.
+    pub mount_source: String,
     /// Device major value from mount information.
     pub mount_device_major: u32,
     /// Device minor value from mount information.
@@ -108,6 +112,10 @@ pub struct SelfStorageObservation {
     pub init_start_ticks: u64,
     /// Mount namespace inode number.
     pub mount_namespace_id: u64,
+    /// Mount namespace device major value from nsfs.
+    pub mount_namespace_device_major: u32,
+    /// Mount namespace device minor value from nsfs.
+    pub mount_namespace_device_minor: u32,
     /// Cgroup namespace inode number.
     pub cgroup_namespace_id: u64,
     /// Helper cgroup path in its namespace.
@@ -126,10 +134,112 @@ pub struct ProcessWitness {
     pub host_pid: u32,
     /// Process start time from procfs.
     pub start_ticks: u64,
+    /// Mount namespace inode number.
+    pub mount_namespace_id: u64,
+    /// Mount namespace device major value from nsfs.
+    pub mount_namespace_device_major: u32,
+    /// Mount namespace device minor value from nsfs.
+    pub mount_namespace_device_minor: u32,
     /// PID values from procfs status.
     pub namespace_pids: Vec<u32>,
     /// Actual cgroup path.
     pub cgroup_path: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+/// Role of one overlay backing directory.
+pub enum RootBackingKind {
+    /// Writable container layer.
+    Upper,
+    /// Overlay work directory.
+    Work,
+    /// One read-only lower layer.
+    Lower,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+/// Raw filesystem identity and capacity for one backing directory.
+pub struct RootBackingDirectoryObservation {
+    /// Backing role.
+    pub kind: RootBackingKind,
+    /// Actual path from the worker mount options.
+    pub path: String,
+    /// Mount root from probe mount information.
+    pub mount_root: String,
+    /// Mount source from probe mount information.
+    pub mount_source: String,
+    /// Mount filesystem type from probe mount information.
+    pub mount_filesystem_type: String,
+    /// Mount read-only state from probe mount information.
+    pub mount_read_only: bool,
+    /// Mount device major value from probe mount information.
+    pub mount_device_major: u32,
+    /// Mount device minor value from probe mount information.
+    pub mount_device_minor: u32,
+    /// Mount ID from statx.
+    pub statx_mount_id: u64,
+    /// Device major value from statx.
+    pub statx_device_major: u32,
+    /// Device minor value from statx.
+    pub statx_device_minor: u32,
+    /// Filesystem magic value from statfs.
+    pub filesystem_type_magic: u64,
+    /// Filesystem ID from statvfs.
+    pub filesystem_id: u64,
+    /// Filesystem fragment size in bytes.
+    pub block_size: u64,
+    /// Total filesystem bytes.
+    pub total_bytes: u64,
+    /// Free filesystem bytes.
+    pub free_bytes: u64,
+    /// Available filesystem bytes.
+    pub available_bytes: u64,
+    /// Total filesystem inodes.
+    pub inode_total: u64,
+    /// Free filesystem inodes.
+    pub inode_free: u64,
+    /// Available filesystem inodes.
+    pub inode_available: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+/// Root overlay and its measured backing directories for one worker.
+pub struct RootBackingObservation {
+    /// Fixed worker role.
+    pub role: WorkerRole,
+    /// Exact Docker container identity.
+    pub container_id: String,
+    /// Linux guest boot UUID.
+    pub guest_boot_id: String,
+    /// Worker init process identity.
+    pub init: ProcessWitness,
+    /// Self-helper process identity.
+    pub helper: ProcessWitness,
+    /// Actual root mount source.
+    pub mount_source: String,
+    /// Root mount filesystem type.
+    pub filesystem_type: String,
+    /// Root mount ID from mount information.
+    pub mount_id: u64,
+    /// Root mount device major value.
+    pub mount_device_major: u32,
+    /// Root mount device minor value.
+    pub mount_device_minor: u32,
+    /// Root mount root path.
+    pub mount_root: String,
+    /// Root mount read-only state.
+    pub read_only: bool,
+    /// Actual overlay upper directory.
+    pub upperdir: String,
+    /// Actual overlay work directory.
+    pub workdir: String,
+    /// Actual overlay lower directories in order.
+    pub lowerdirs: Vec<String>,
+    /// Measurements for upper, work, and lower directories.
+    pub directories: Vec<RootBackingDirectoryObservation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -182,7 +292,7 @@ pub struct OwnedContainerCgroupObservation {
 pub struct OwnedCgroupObservation {
     /// Producer mode name.
     pub wire_mode: String,
-    /// Wire schema version. Must equal one.
+    /// Wire schema version. Must equal three.
     pub schema_version: u8,
     /// Fresh 32-character lower-case hexadecimal identity.
     pub operation_id: String,
@@ -190,6 +300,30 @@ pub struct OwnedCgroupObservation {
     pub guest_boot_id: String,
     /// Selected Docker-root observation.
     pub engine_metadata: StorageAttachmentObservation,
+    /// Selected Docker-root object identity.
+    pub docker_root_object: DockerRootObjectIdentity,
+    /// Unique selected daemon process witness.
+    pub daemon: ProcessWitness,
     /// Runner then `DinD` observations.
     pub containers: Vec<OwnedContainerCgroupObservation>,
+    /// Independently measured worker root backing directories.
+    pub root_backings: Vec<RootBackingObservation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+/// Exact selected Docker-root object identity.
+pub struct DockerRootObjectIdentity {
+    /// Mount ID from statx.
+    pub mount_id: u64,
+    /// Device major value from statx.
+    pub device_major: u32,
+    /// Device minor value from statx.
+    pub device_minor: u32,
+    /// Inode value from statx.
+    pub inode: u64,
+    /// Filesystem type magic value from statfs.
+    pub filesystem_type_magic: u64,
+    /// Filesystem ID from statvfs.
+    pub filesystem_id: u64,
 }

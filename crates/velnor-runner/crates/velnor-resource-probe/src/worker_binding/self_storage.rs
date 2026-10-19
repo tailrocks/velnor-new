@@ -23,7 +23,7 @@ pub(super) fn observe(request: SelfStorageRequest) -> Result<SelfStorageObservat
     let process_pid = process::id();
     let helper_start_ticks = process_start_ticks("self", process_pid)?;
     let init_start_ticks = process_start_ticks("1", 1)?;
-    let mount_namespace_id = namespace_inode("mnt")?;
+    let mount_namespace = super::observer::mount_namespace_identity(process_pid)?;
     let cgroup_namespace_id = namespace_inode("cgroup")?;
     let cgroup_path_in_self_namespace = self_cgroup_path()?;
     let self_leaf_limits = observe_leaf(&cgroup_path_in_self_namespace, process_pid)?;
@@ -33,7 +33,7 @@ pub(super) fn observe(request: SelfStorageRequest) -> Result<SelfStorageObservat
 
     if process_start_ticks("self", process_pid)? != helper_start_ticks
         || process_start_ticks("1", 1)? != init_start_ticks
-        || namespace_inode("mnt")? != mount_namespace_id
+        || super::observer::mount_namespace_identity(process_pid)? != mount_namespace
         || namespace_inode("cgroup")? != cgroup_namespace_id
         || self_cgroup_path()? != cgroup_path_in_self_namespace
         || read_bounded(MOUNTINFO_PATH, MOUNTINFO_LIMIT, "mountinfo")? != mountinfo
@@ -44,7 +44,7 @@ pub(super) fn observe(request: SelfStorageRequest) -> Result<SelfStorageObservat
 
     Ok(SelfStorageObservation {
         wire_mode: "self_storage".to_owned(),
-        schema_version: 1,
+        schema_version: 2,
         operation_id: request.operation_id,
         container_id: request.container_id,
         role: request.role,
@@ -54,7 +54,9 @@ pub(super) fn observe(request: SelfStorageRequest) -> Result<SelfStorageObservat
         process_pid,
         process_start_ticks: helper_start_ticks,
         init_start_ticks,
-        mount_namespace_id,
+        mount_namespace_id: mount_namespace.inode,
+        mount_namespace_device_major: mount_namespace.device_major,
+        mount_namespace_device_minor: mount_namespace.device_minor,
         cgroup_namespace_id,
         cgroup_path_in_self_namespace,
         self_leaf_limits,

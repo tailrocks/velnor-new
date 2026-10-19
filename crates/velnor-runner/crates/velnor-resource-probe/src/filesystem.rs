@@ -32,6 +32,7 @@ pub(crate) struct FilesystemObservation {
     pub(crate) mount: MountEntry,
     pub(crate) mount_target: &'static str,
     pub(crate) statx_mount_id: u64,
+    pub(crate) statx_inode: u64,
     pub(crate) statx_device_major: u32,
     pub(crate) statx_device_minor: u32,
     pub(crate) fs_type_magic: u64,
@@ -68,7 +69,7 @@ pub(crate) fn observe_docker_root(mountinfo: &[u8]) -> Result<FilesystemObservat
     )
     .map_err(|error| ProbeError::Read("docker_root_statx", error.into()))?;
     let required = StatxFlags::BASIC_STATS | StatxFlags::MNT_ID;
-    if mount_stat.stx_mask & required.bits() != required.bits() {
+    if mount_stat.stx_mask & required.bits() != required.bits() || mount_stat.stx_ino == 0 {
         return Err(ProbeError::Invalid("docker_root_statx_fields"));
     }
     let fs = fstatfs(&descriptor)
@@ -94,6 +95,7 @@ pub(crate) fn observe_docker_root(mountinfo: &[u8]) -> Result<FilesystemObservat
         mount,
         mount_target: DOCKER_ROOT,
         statx_mount_id: mount_stat.stx_mnt_id,
+        statx_inode: mount_stat.stx_ino,
         statx_device_major: device_major,
         statx_device_minor: device_minor,
         fs_type_magic,
