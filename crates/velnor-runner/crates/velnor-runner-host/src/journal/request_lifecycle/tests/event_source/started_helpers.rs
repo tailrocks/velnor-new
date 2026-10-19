@@ -175,6 +175,7 @@ async fn clean_and_release_runner(fixture: &StartedFixture) -> Result<(), HostEr
         .ok_or(HostError::Journal)?
         .reservation_id;
     record_owned_storage_cleanup(scope, &fixture.provisioned).await?;
+    record_owned_network_cleanup(scope, reservation_id).await?;
     scope.record_remote_cleanup(reservation_id).await?;
     scope.record_local_cleanup(reservation_id).await?;
     assert_eq!(

@@ -3,7 +3,8 @@
 use super::helpers::{
     ProvisionedRunner, Scratch, binding, created_scope, event_source,
     finish_initialized_listener_delivery, provision_acquired_request_with_initialization, receipt,
-    record_owned_storage_cleanup, runner_name, settle_storage_metadata,
+    record_owned_network_cleanup, record_owned_storage_cleanup, runner_name,
+    settle_storage_metadata,
 };
 use crate::error::HostError;
 use crate::journal::{
