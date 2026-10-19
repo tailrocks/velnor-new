@@ -58,15 +58,7 @@ root job). The default is `5`; accepted values are `1..=360`. Zero or more than
 360 is rejected, never clamped. See
 [job timeout limits](implemented/job-timeout-limits.md).
 
-## 3. No required model, agent, or trailer
-
-**Decision.** The repository never forces a model or coding agent. No
-instruction, document, rule, ruleset, check, or hook may require a specific
-model, coding agent, or co-author trailer on commits or pull requests; whoever
-makes a commit decides its attribution. A human sign-off (`Signed-off-by`) may
-be added but must not be required.
-
-## 4. Pull requests test only what they affect
+## 3. Pull requests test only what they affect
 
 **Decision.** On `pull_request` (fork pull requests included), the plan
 classifies every crate job as `run` or `not_affected` from the pull request's
@@ -146,7 +138,7 @@ passes a skipped job the plan scheduled, a protected check a cancelled run can
 leave skipped, one stack's ownership hiding another stack's claims, or a forced
 package whose dependents do not run.
 
-## 5. Tool versions come from the project's Mise config
+## 4. Tool versions come from the project's Mise config
 
 **Decision.** Tool versions come from the project's `mise.toml` (and
 `mise.lock`). Generated workflows never copy a project-declared version;

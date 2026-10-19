@@ -1,6 +1,6 @@
 # Affected selection: pull requests test only what they affect
 
-Hard decision: [4. Pull requests test only what they affect](../hard-decisions.md#4-pull-requests-test-only-what-they-affect).
+Hard decision: [3. Pull requests test only what they affect](../hard-decisions.md#3-pull-requests-test-only-what-they-affect).
 
 A pull request runs only the crate jobs its change can affect. The other crate
 jobs are skipped as whole jobs: no runner, checkout, tool setup, cache restore,
@@ -61,7 +61,7 @@ records a stable `*:all_changed` or `*:selecting_all` warning:
 
 A change to a **declared tool version** selects everything
 (`project_tool_config_changed:all_changed`): generated CI runs the versions
-the project declares (hard decision 5). Every location Mise reads `[tools]`
+the project declares (hard decision 4). Every location Mise reads `[tools]`
 from counts (`mise.toml`, `.mise.toml`, `mise.<env>.toml`, `mise.local.toml`,
 `.config/mise.toml`, `.config/mise/config.toml`, `.config/mise/conf.d/*.toml`,
 `mise/config.toml`, `.mise/config.toml`, `.tool-versions`, `rust-toolchain.toml`,
