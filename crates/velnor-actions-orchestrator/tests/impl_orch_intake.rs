@@ -266,23 +266,23 @@ fn intake_unconfigured_suites_are_not_sharded() -> TestResult {
 }
 
 #[test]
-fn intake_generated_workflow_uses_crate_jobs_not_native_parallel() -> TestResult {
+fn intake_generated_workflow_uses_one_crate_job_with_background_checks() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
     generate(&prep, &GenerateOptions { output_dir: None })?;
     let yml = fs::read_to_string(repo.path().join(".github/workflows/ci.yml"))?;
-    for phase in ["lint", "tests", "docs"] {
-        assert!(
-            yml.contains(&format!("  rust-demo-{phase}:")),
-            "phase job:\n{yml}"
-        );
-    }
+    assert!(yml.contains("  rust-demo:"), "crate job:\n{yml}");
+    assert!(
+        yml.contains("        background: true\n"),
+        "parallel checks:\n{yml}"
+    );
+    assert!(yml.contains("        wait-all:\n"), "joined checks:\n{yml}");
     assert!(!yml.contains("strategy:"), "static graph:\n{yml}");
     for line in yml.lines() {
         let stepped = line.trim_start();
         assert!(
-            !stepped.starts_with("parallel:") && !stepped.starts_with("background:"),
-            "native syntax: {line}"
+            !stepped.starts_with("parallel:") && !stepped.starts_with("- parallel:"),
+            "the actionlint-blind `parallel:` sugar is never emitted: {line}"
         );
     }
     Ok(())

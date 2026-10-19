@@ -183,7 +183,6 @@ fn plan_reports_structural_critical_path() -> TestResult {
         .lines()
         .find(|line| line.contains("Critical path:"))
         .ok_or("missing critical path line")?;
-    assert!(line.contains("clippy"), "{line}");
     let chain: Vec<&str> = line
         .split_once("Critical path:")
         .ok_or("malformed line")?
@@ -195,7 +194,8 @@ fn plan_reports_structural_critical_path() -> TestResult {
         .map(str::trim)
         .filter(|part| !part.is_empty())
         .collect();
-    assert!(chain.len() >= 2, "{line}");
+    // Independent crate checks carry no edges: the path is one task.
+    assert_eq!(chain.len(), 1, "{line}");
     for pair in chain.windows(2) {
         let next = prep
             .discovery
@@ -230,17 +230,13 @@ fn critical_path_reports_task_durations() -> TestResult {
         durations.insert(task.task_id.clone(), weight);
     }
     let path = critical_path_for_groups(&prep.discovery.proposals, &durations);
-    assert!(path.path.len() >= 2);
+    assert_eq!(path.path.len(), 1, "independent checks: {:?}", path.path);
     assert!(path.path.last().is_some_and(|id| id.contains("/test/")));
-    assert_eq!(path.total_duration_ms, 600);
+    assert_eq!(path.total_duration_ms, 500);
     let lines = render_critical_path(&path, &durations);
-    assert!(lines[0].contains("total 600 ms"), "{lines:?}");
+    assert!(lines[0].contains("total 500 ms"), "{lines:?}");
     assert!(
         lines.iter().any(|line| line.contains("500 ms")),
-        "{lines:?}"
-    );
-    assert!(
-        lines.iter().any(|line| line.contains("100 ms")),
         "{lines:?}"
     );
     Ok(())

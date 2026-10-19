@@ -68,6 +68,7 @@ fn scale_token() -> String {
 
 pub(super) fn echo_step(index: usize, payload: &str) -> Step {
     Step {
+        parallel: false,
         name: format!("echo {index}"),
         id: None,
         role: None,
@@ -96,6 +97,7 @@ fn lane_job(display: &str, runs_on: &str, steps: Vec<Step>) -> Job {
 
 fn checkout() -> Step {
     Step {
+        parallel: false,
         name: "Checkout".to_owned(),
         id: None,
         role: Some(StepRole::Checkout),

@@ -65,6 +65,7 @@ pub(super) fn declared_task_call(
         task.execution_digest.clone(),
     )]);
     Step {
+        parallel: original.parallel,
         name: original.name.clone(),
         id: original.id,
         role: original.role,

@@ -24,6 +24,7 @@ fn suppression_preserves_existing_cache_step_condition() {
 #[test]
 fn dispatch_suppression_preserves_canonical_push_only_save_gate() {
     let save = Step {
+        parallel: false,
         name: "Save Tofu providers".to_owned(),
         id: None,
         role: Some(velnor_actions_contract::StepRole::TofuProvidersSave),

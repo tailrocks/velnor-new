@@ -226,7 +226,7 @@ fn assert_sample_mbx_compile_route(
         .workflow
         .ir
         .jobs
-        .get("rust-demo-lint")
+        .get("rust-demo")
         .ok_or("sample Rust job")?;
     let clippy = job
         .steps

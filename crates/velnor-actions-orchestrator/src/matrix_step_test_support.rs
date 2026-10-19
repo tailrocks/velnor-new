@@ -20,7 +20,7 @@ pub(super) fn generated_pinned_task_step() -> Step {
     let toolchain = toolchain_id(&task.toolchain_inputs).expect("toolchain identity");
     task.task_digest = task_digest_for_execution(&task.task_id, &task.run, &toolchain)
         .expect("updated task digest");
-    obligation_step(&task, &catalog, &[], None, env!("CARGO_PKG_VERSION"))
+    obligation_step(&task, &catalog, &[], None, env!("CARGO_PKG_VERSION"), None)
         .expect("generated task step")
 }
 

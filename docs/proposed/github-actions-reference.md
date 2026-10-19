@@ -93,19 +93,18 @@ change; Velnor emits no new aliases into composite `action.yml` files.
 
 ## 2026 GitHub Actions & Dependabot Platform Contracts
 
-### 1. Native Parallel Steps (`parallel:`) — `2026-06-25`
-- **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-06-25-actions-run-steps-in-parallel/), `actions/runner` v2.337.0+):
-  - Jobs can group up to **10** independent sub-steps (`run:` or `uses:`) under a step-level `parallel:` block on the same runner.
-  - Sub-steps execute concurrently against the shared workspace and runner environment without spinning up additional VMs or repeating checkout/cache setup.
-  - **Constraints**:
-    - Maximum of 10 sub-steps per `parallel:` group (`MAX_PARALLEL_SUBSTEPS = 10`).
-    - Sub-steps cannot nest `parallel:` blocks.
-    - Sub-steps cannot reference sibling sub-step outputs (`steps.<sibling-id>.outputs.*`); downstream sequential steps after the `parallel:` block completes can read sub-step outputs.
-    - If any sub-step fails (unless `continue-on-error: true` is set on the sub-step), the parent `parallel:` step fails.
+### 1. Native Step Concurrency (`background`, `wait`, `wait-all`, `cancel`, `parallel`) — `2026-06-25`
+- **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-06-25-actions-steps-can-now-be-run-in-parallel/), [workflow syntax](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idstepsbackground), `actions/runner` v2.335.0+; pinned runner v2.338.0 `src/Runner.Worker/BackgroundStepCoordinator.cs`, `JobExtension.cs`):
+  - `background: true` on a `run` or `uses` step starts it asynchronously; the job continues to the next step. A composite action may run as a background step but cannot declare background steps or `parallel:` internally.
+  - `wait` (one id or a list) and `wait-all` (no arguments) block until the referenced or all active background steps finish; neither accepts `if:` and both always run. Outputs and environment changes of a background step become visible only after a wait that includes it.
+  - A failed background step fails the next `wait`/`wait-all` that includes it (unless the step sets `continue-on-error`); the coordinator merges member results into the wait step's result, so later default-`success()` steps are skipped while `always()` steps still run. An implicit `wait-all` runs before post-job cleanup for unjoined members.
+  - Background steps are linked to the job cancellation token, so job `timeout-minutes` and run cancellation cancel them. `cancel` terminates one member (SIGTERM, then SIGKILL after a 7.5 s grace).
+  - At most 10 background steps of one job run concurrently (`DefaultMaxBackgroundSteps = 10`); additional members queue until a slot is free.
+  - `parallel:` is sugar for a group of background steps followed by a wait.
 - **Velnor Implementation**:
-  - `velnor-actions-contract` models `StepKind::Parallel { steps: Vec<ParallelSubStep> }`, `ParallelSubStep`, and `ParallelSubStepKind` (`Shell` / `Uses`), enforcing `1..=MAX_PARALLEL_SUBSTEPS` (10), unique step/sub-step IDs, and forbidding sibling `steps.<id>.outputs` references across sub-steps in the same `parallel:` group.
-  - `velnor-actions-workflow-renderer` renders `StepKind::Parallel` as native `parallel:` YAML sequences.
-  - `velnor-actions-actionlint` gates native `parallel:` step emission on `ActionlintCapabilities::supports_native_parallel_steps()` (default `false` for pinned `actionlint` `v1.7.12` until upstream `rhysd/actionlint` adds `parallel:` schema support).
+  - `Step::parallel` in `velnor-actions-contract` marks a member of a contiguous group; members may not carry an id, a typed role or an internal operation. `velnor-actions-workflow-renderer` (`parallel_steps`) renders each member with `background: true` and joins each group with one generated `Wait for parallel checks` `wait-all` step; composite renderers, lane sharing and obligation extraction reject or skip parallel members.
+  - Each Rust crate job uses one such group for its checks (see [hard decisions](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps) and [native Rust crate jobs](../implemented/native-rust-crate-jobs.md)).
+  - Pinned `actionlint` v1.7.12 does not parse the keys (rhysd/actionlint#693). `velnor-actions-actionlint` passes the two exact `STEP_PARALLELISM_IGNORES` to generation-time and CI actionlint; members stay fully validated in the `background` spelling, whereas actionlint skips `parallel:` children entirely. Pinned `zizmor` v1.31.1 (support since v1.27.0) parses the syntax.
 
 ### 2. Workflow Execution Protections — `2026-09-17`
 - **Upstream Contract** ([Changelog](https://github.blog/changelog/2026-09-17-actions-new-workflow-execution-protections/)):

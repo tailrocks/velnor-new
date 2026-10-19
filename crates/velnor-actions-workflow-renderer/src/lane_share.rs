@@ -103,6 +103,14 @@ pub(crate) fn share_lanes(
         let Some(hosted) = jobs.get(&hosted_id) else {
             continue;
         };
+        // Composite actions cannot declare background steps, so a lane pair
+        // with a parallel group keeps both bodies literal in the workflow.
+        if [hosted, local]
+            .iter()
+            .any(|job| job.steps.iter().any(|step| step.parallel))
+        {
+            continue;
+        }
         let Some(parts) = split_pair(hosted, local, &ctx.checkout_uses) else {
             return Err(RenderError::InvalidWorkflow(format!(
                 "lane_body_differs:{logical}"

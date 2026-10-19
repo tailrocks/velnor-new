@@ -10,16 +10,18 @@ production and tap-updater configuration instead accept only one through five
 minutes, independently of the general workflow range. No job family may omit the
 field, substitute GitHub's implicit default, or silently clamp a request.
 
-Crate jobs (each Rust lint/tests/docs phase job and each OpenTofu root job) use
-`[workflow] crate_timeout_minutes` (default `5`). Hosted cold builds can exceed
-five minutes before every phase obligation finishes; raising this one value
-gives every crate job the same larger literal bound without changing the phase
-topology. Control jobs (plan, required, validators, candidate, release and
+Crate jobs (the one job per Rust crate and each OpenTofu root job) use
+`[workflow] crate_timeout_minutes` (default `5`), a
+[hard decision](../hard-decisions.md#2-configurable-crate-job-timeout). Hosted
+cold builds can exceed five minutes before every check finishes; raising this
+one value gives every crate job the same larger literal bound without changing
+the one-job-per-crate topology. Parallel check steps are linked to the job's
+cancellation, so the bound covers the whole job. Control jobs (plan, required, validators, candidate, release and
 publish) keep the five-minute default.
 
 ```toml
 [workflow]
-crate_timeout_minutes = 20 # every Rust phase and OpenTofu root job
+crate_timeout_minutes = 20 # every Rust crate job and OpenTofu root job
 ```
 
 The contract owns the range and defaults. Typed workflow factories use that

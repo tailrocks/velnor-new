@@ -95,12 +95,12 @@ fn both_mode_splits_verification_and_keeps_release_hosted() -> TestResult {
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let ci = required_file(&tree, ".github/workflows/ci.yml")?;
     let release = required_file(&tree, ".github/workflows/release.yml")?;
-    for phase in ["lint", "tests", "docs"] {
-        let path = format!(".github/actions/rust-demo-{phase}/action.yml");
-        let shared = required_file(&tree, &path)?;
-        assert!(shared.contains("shell: bash"), "{shared}");
-        assert!(shared.contains("using: composite"), "{shared}");
-    }
+    assert!(
+        tree.files
+            .iter()
+            .all(|file| !file.path.starts_with(".github/actions/rust-demo")),
+        "parallel crate jobs are never lane-shared composites"
+    );
     assert_both_ci(ci)?;
     assert_hosted_release(release);
     Ok(())
@@ -114,16 +114,8 @@ fn dispatch_mode_overrides_configured_mode() -> TestResult {
     let forced = render_staged_tree_with(&prep, Some(ExecutionMode::Both))?;
     let hosted_ci = required_file(&hosted, ".github/workflows/ci.yml")?;
     let forced_ci = required_file(&forced, ".github/workflows/ci.yml")?;
-    for phase in ["lint", "tests", "docs"] {
-        assert!(
-            job_ids(hosted_ci).contains(&format!("rust-demo-{phase}").as_str()),
-            "{hosted_ci}"
-        );
-        assert!(
-            !hosted_ci.contains(&format!("rust-demo-{phase}__hosted")),
-            "{hosted_ci}"
-        );
-    }
+    assert!(job_ids(hosted_ci).contains(&"rust-demo"), "{hosted_ci}");
+    assert!(!hosted_ci.contains("rust-demo__hosted"), "{hosted_ci}");
     assert_both_ci(forced_ci)?;
     Ok(())
 }
@@ -166,13 +158,13 @@ fn assert_both_ci(ci: &str) -> TestResult {
     assert!(!ids.contains(&"plan__hosted"), "{ids:?}");
     assert!(!ids.contains(&"required__local"), "{ids:?}");
     let required = job_body(ci, "required")?;
-    for phase in ["lint", "tests", "docs"] {
-        let logical = format!("rust-demo-{phase}");
+    {
+        let logical = "rust-demo";
         let hosted_id = format!("{logical}__hosted");
         let local_id = format!("{logical}__local");
         assert!(ids.contains(&hosted_id.as_str()), "{ids:?}");
         assert!(ids.contains(&local_id.as_str()), "{ids:?}");
-        assert!(!ids.contains(&logical.as_str()), "{ids:?}");
+        assert!(!ids.contains(&logical), "{ids:?}");
         let hosted = job_body(ci, &hosted_id)?;
         let local = job_body(ci, &local_id)?;
         assert!(hosted.contains(HOSTED_RUNS), "{hosted}");

@@ -168,17 +168,7 @@ fn cache_path_entries(yaml: &str) -> Vec<String> {
 fn per_job_sources_keys_identical_plan_and_crates() -> TestResult {
     let (_repo, prep) = prep_for(true)?;
     let crates = crate_jobs(&prep);
-    assert_eq!(
-        crates,
-        [
-            "rust-a-docs",
-            "rust-a-lint",
-            "rust-a-tests",
-            "rust-b-docs",
-            "rust-b-lint",
-            "rust-b-tests"
-        ]
-    );
+    assert_eq!(crates, ["rust-a", "rust-b"]);
     let plan_restore = action_inputs(job_steps(&prep, "plan")?, "Restore Cargo sources")?
         .get("key")
         .cloned();
@@ -224,15 +214,10 @@ fn per_job_mise_keys_qualified_without_job_suffix() -> TestResult {
                 .find(|(job, _)| job == want)
                 .map(|(_, key)| key.clone())
         };
-        for phase in ["lint", "tests", "docs"] {
-            let a = key_for(&format!("rust-a-{phase}"));
-            let b = key_for(&format!("rust-b-{phase}"));
-            assert!(a.is_some() && b.is_some() && key_for("plan").is_some());
-            assert_eq!(
-                a, b,
-                "identical {phase} unions share (mbx={mbx}): {pairs:?}"
-            );
-        }
+        let a = key_for("rust-a");
+        let b = key_for("rust-b");
+        assert!(a.is_some() && b.is_some() && key_for("plan").is_some());
+        assert_eq!(a, b, "identical unions share (mbx={mbx}): {pairs:?}");
     }
     Ok(())
 }

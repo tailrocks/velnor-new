@@ -216,7 +216,7 @@ fn generate_scales_to_workflow_file_limit_then_fails_closed() -> TestResult {
     Ok(())
 }
 
-/// One hundred fifty members retain every fixed phase and obligation inside 500 KB.
+/// One hundred fifty members retain one crate job and every obligation inside 500 KB.
 #[test]
 fn generate_150_crates_schedules_every_member() -> TestResult {
     let members = 150_usize;
@@ -226,9 +226,7 @@ fn generate_150_crates_schedules_every_member() -> TestResult {
     let expected_jobs: BTreeSet<_> = (0..members)
         .map(|index| format!("c{index:03}"))
         .chain(["demo".to_owned()])
-        .flat_map(|package| {
-            ["lint", "tests", "docs"].map(|phase| format!("rust-{package}-{phase}"))
-        })
+        .map(|package| format!("rust-{package}"))
         .collect();
     let actual_jobs: BTreeSet<_> = prep
         .workflow
@@ -238,10 +236,7 @@ fn generate_150_crates_schedules_every_member() -> TestResult {
         .filter(|id| id.starts_with("rust-"))
         .cloned()
         .collect();
-    assert_eq!(
-        actual_jobs, expected_jobs,
-        "all three phases of every package"
-    );
+    assert_eq!(actual_jobs, expected_jobs, "one crate job per package");
     let expected_tasks: BTreeSet<_> = prep
         .workflow
         .ir

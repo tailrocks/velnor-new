@@ -175,29 +175,21 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
         for spec in trio {
             assert!(plan.contains(spec), "plan installs {spec}: {plan}");
         }
-        for phase in ["lint", "tests", "docs"] {
+        {
             let cli = runs
-                .get(&format!("rust-velnor-actions-cli-{phase}"))
-                .ok_or("cli phase missing")?;
+                .get("rust-velnor-actions-cli")
+                .ok_or("cli job missing")?;
             for spec in trio {
                 assert!(
                     cli.contains(spec),
-                    "cli {phase} keeps its validator-spawning suite tools: {cli}"
+                    "cli keeps its validator-spawning suite tools: {cli}"
                 );
             }
-            let demo = runs
-                .get(&format!("rust-demo-{phase}"))
-                .ok_or("demo phase missing")?;
+            let demo = runs.get("rust-demo").ok_or("demo job missing")?;
             for spec in trio {
-                assert!(
-                    !demo.contains(spec),
-                    "demo {phase} must trim {spec}: {demo}"
-                );
+                assert!(!demo.contains(spec), "demo must trim {spec}: {demo}");
             }
-            assert!(
-                demo.contains("rust@"),
-                "demo {phase} keeps its driver: {demo}"
-            );
+            assert!(demo.contains("rust@"), "demo keeps its driver: {demo}");
         }
         let required = runs.get("required").ok_or("required missing")?;
         assert!(required.contains("gh@"), "required installs gh: {required}");

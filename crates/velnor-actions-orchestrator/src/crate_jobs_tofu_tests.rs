@@ -332,10 +332,7 @@ fn all_tofu_groups_take_tofu_ids_mixed_keep_rust() {
     );
     assert_eq!(found.jobs.len(), 3);
     let ids: Vec<&str> = found.jobs.iter().map(|(id, _)| id.as_str()).collect();
-    assert_eq!(
-        ids,
-        vec!["rust-demo-lint", "tofu-stacks-a", "tofu-stacks-b"]
-    );
+    assert_eq!(ids, vec!["rust-demo", "tofu-stacks-a", "tofu-stacks-b"]);
     for (id, job) in &found.jobs {
         assert!(
             velnor_actions_contract::is_crate_job_id(id),

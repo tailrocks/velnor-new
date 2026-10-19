@@ -242,6 +242,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
         steps: vec![
             checkout,
             Step {
+                parallel: false,
                 name: "Run Alint".to_owned(),
                 id: None,
                 role: None,

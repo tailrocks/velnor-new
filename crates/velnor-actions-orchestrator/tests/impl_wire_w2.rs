@@ -30,7 +30,8 @@ fn v1_push_plan_wiring() -> TestResult {
     let (_repo, plan) = plan_for_source_change()?;
     assert_eq!(plan.runner.label, "ubuntu-26.04");
     C::validate_plan_edges(&plan.edges, &plan.task_ids)?;
-    assert!(plan.edges.iter().any(|e| e.kind == C::EdgeKind::Gate));
+    // Crate checks are independent parallel steps: no quality-gate edges.
+    assert!(plan.edges.iter().all(|e| e.kind != C::EdgeKind::Gate));
     for ob in &plan.obligations {
         assert_eq!(ob.decision, C::ObligationDecision::Execute);
         assert_eq!(ob.reason, "affected_by_change");

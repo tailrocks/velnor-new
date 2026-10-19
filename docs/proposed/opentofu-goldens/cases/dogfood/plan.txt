@@ -48,89 +48,37 @@ Workflow to generate
     - plan (24 steps)
     - publish-baseline (7 steps)
     - required (10 steps)
-    - rust-velnor-actions-actionlint-docs (19 steps)
-    - rust-velnor-actions-actionlint-lint (19 steps)
-    - rust-velnor-actions-actionlint-tests (20 steps)
-    - rust-velnor-actions-cli-docs (20 steps)
-    - rust-velnor-actions-cli-lint (20 steps)
-    - rust-velnor-actions-cli-tests (20 steps)
-    - rust-velnor-actions-contract-docs (18 steps)
-    - rust-velnor-actions-contract-lint (19 steps)
-    - rust-velnor-actions-contract-tests (20 steps)
-    - rust-velnor-actions-mise-docs (19 steps)
-    - rust-velnor-actions-mise-lint (19 steps)
-    - rust-velnor-actions-mise-tests (20 steps)
-    - rust-velnor-actions-orchestrator-docs (19 steps)
-    - rust-velnor-actions-orchestrator-lint (20 steps)
-    - rust-velnor-actions-orchestrator-tests (21 steps)
-    - rust-velnor-actions-rust-docs (18 steps)
-    - rust-velnor-actions-rust-lint (19 steps)
-    - rust-velnor-actions-rust-tests (20 steps)
-    - rust-velnor-actions-tofu-docs (18 steps)
-    - rust-velnor-actions-tofu-lint (19 steps)
-    - rust-velnor-actions-tofu-tests (20 steps)
-    - rust-velnor-actions-workflow-renderer-docs (18 steps)
-    - rust-velnor-actions-workflow-renderer-lint (19 steps)
-    - rust-velnor-actions-workflow-renderer-tests (20 steps)
-    - rust-velnor-resource-probe-docs (18 steps)
-    - rust-velnor-resource-probe-lint (19 steps)
-    - rust-velnor-resource-probe-tests (20 steps)
-    - rust-velnor-runner-cli-docs (18 steps)
-    - rust-velnor-runner-cli-lint (19 steps)
-    - rust-velnor-runner-cli-tests (20 steps)
-    - rust-velnor-runner-core-docs (18 steps)
-    - rust-velnor-runner-core-lint (19 steps)
-    - rust-velnor-runner-core-tests (20 steps)
-    - rust-velnor-runner-github-docs (18 steps)
-    - rust-velnor-runner-github-lint (19 steps)
-    - rust-velnor-runner-github-tests (20 steps)
-    - rust-velnor-runner-host-docs (18 steps)
-    - rust-velnor-runner-host-lint (19 steps)
-    - rust-velnor-runner-host-tests (20 steps)
+    - rust-velnor-actions-actionlint (24 steps)
+    - rust-velnor-actions-cli (24 steps)
+    - rust-velnor-actions-contract (23 steps)
+    - rust-velnor-actions-mise (24 steps)
+    - rust-velnor-actions-orchestrator (24 steps)
+    - rust-velnor-actions-rust (23 steps)
+    - rust-velnor-actions-tofu (23 steps)
+    - rust-velnor-actions-workflow-renderer (23 steps)
+    - rust-velnor-resource-probe (23 steps)
+    - rust-velnor-runner-cli (23 steps)
+    - rust-velnor-runner-core (23 steps)
+    - rust-velnor-runner-github (23 steps)
+    - rust-velnor-runner-host (23 steps)
     - zizmor (7 steps)
-    - 39 Rust phase jobs
+    - 13 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
-        - rust-velnor-actions-actionlint-docs
-        - rust-velnor-actions-actionlint-lint
-        - rust-velnor-actions-actionlint-tests
-        - rust-velnor-actions-cli-docs
-        - rust-velnor-actions-cli-lint
-        - rust-velnor-actions-cli-tests
-        - rust-velnor-actions-contract-docs
-        - rust-velnor-actions-contract-lint
-        - rust-velnor-actions-contract-tests
-        - rust-velnor-actions-mise-docs
-        - rust-velnor-actions-mise-lint
-        - rust-velnor-actions-mise-tests
-        - rust-velnor-actions-orchestrator-docs
-        - rust-velnor-actions-orchestrator-lint
-        - rust-velnor-actions-orchestrator-tests
-        - rust-velnor-actions-rust-docs
-        - rust-velnor-actions-rust-lint
-        - rust-velnor-actions-rust-tests
-        - rust-velnor-actions-tofu-docs
-        - rust-velnor-actions-tofu-lint
-        - rust-velnor-actions-tofu-tests
-        - rust-velnor-actions-workflow-renderer-docs
-        - rust-velnor-actions-workflow-renderer-lint
-        - rust-velnor-actions-workflow-renderer-tests
-        - rust-velnor-resource-probe-docs
-        - rust-velnor-resource-probe-lint
-        - rust-velnor-resource-probe-tests
-        - rust-velnor-runner-cli-docs
-        - rust-velnor-runner-cli-lint
-        - rust-velnor-runner-cli-tests
-        - rust-velnor-runner-core-docs
-        - rust-velnor-runner-core-lint
-        - rust-velnor-runner-core-tests
-        - rust-velnor-runner-github-docs
-        - rust-velnor-runner-github-lint
-        - rust-velnor-runner-github-tests
-        - rust-velnor-runner-host-docs
-        - rust-velnor-runner-host-lint
-        - rust-velnor-runner-host-tests
+        - rust-velnor-actions-actionlint
+        - rust-velnor-actions-cli
+        - rust-velnor-actions-contract
+        - rust-velnor-actions-mise
+        - rust-velnor-actions-orchestrator
+        - rust-velnor-actions-rust
+        - rust-velnor-actions-tofu
+        - rust-velnor-actions-workflow-renderer
+        - rust-velnor-resource-probe
+        - rust-velnor-runner-cli
+        - rust-velnor-runner-core
+        - rust-velnor-runner-github
+        - rust-velnor-runner-host
       Obligations:
         - stack/rust/crates/velnor-actions-actionlint/build/default
         - stack/rust/crates/velnor-actions-actionlint/clippy/default
@@ -209,8 +157,8 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
-  Parallel: 39 execution jobs; dependencies preserved; no matrix fan-out
-  Critical path: stack/rust/crates/velnor-actions-actionlint/clippy/default -> stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (3 tasks)
+  Parallel: 13 execution jobs; dependencies preserved; no matrix fan-out
+  Critical path: stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
   Actionlint: 1.7.12 pinned

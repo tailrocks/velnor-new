@@ -294,8 +294,8 @@ fn staging_suppressions_stable_no_new() -> TestResult {
         "SHA-pinned refs produce no findings: {text}"
     );
     assert_eq!(
-        ignores, 23,
-        "only the current 23 local-action calls are ignored"
+        ignores, 19,
+        "only the current 19 local-action calls are ignored"
     );
     assert!(
         text.contains(&format!("{ignores} ignored")),

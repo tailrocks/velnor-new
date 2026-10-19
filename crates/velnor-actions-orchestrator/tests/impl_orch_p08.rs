@@ -171,8 +171,8 @@ fn c7_cargo_only_uses_exact_sources_transport_without_legacy_fallback() -> TestR
         "{plan:?}"
     );
     assert!(plan.contains(&"Save Cargo sources".to_owned()), "{plan:?}");
-    for phase in ["lint", "tests", "docs"] {
-        let crates = job_names(&format!("rust-demo-{phase}"), false)?;
+    {
+        let crates = job_names("rust-demo", false)?;
         assert!(
             crates.contains(&"Restore Cargo sources".to_owned()),
             "{crates:?}"
@@ -195,19 +195,14 @@ fn c8_crate_jobs_install_validators_for_test_spawns() -> TestResult {
             with_mbx(root)?;
         }
         let prep = prepare(root)?;
-        for phase in ["lint", "tests", "docs"] {
-            let id = format!("rust-demo-{phase}");
-            let job = prep
-                .workflow
-                .ir
-                .jobs
-                .get(&id)
-                .ok_or("missing crate phase")?;
+        {
+            let id = "rust-demo";
+            let job = prep.workflow.ir.jobs.get(id).ok_or("missing crate job")?;
             let step = job
                 .steps
                 .iter()
                 .find(|step| step.name == "Prepare pinned tools")
-                .ok_or("phase prepare missing")?;
+                .ok_or("crate prepare missing")?;
             let StepKind::Shell { run, .. } = &step.kind else {
                 return Err("prepare must be a shell".into());
             };

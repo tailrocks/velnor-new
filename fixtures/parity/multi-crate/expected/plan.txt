@@ -21,22 +21,14 @@ Workflow to generate
     - plan (14 steps)
     - publish-baseline (5 steps)
     - required (8 steps)
-    - rust-parity-app-docs (17 steps)
-    - rust-parity-app-lint (17 steps)
-    - rust-parity-app-tests (19 steps)
-    - rust-parity-tool-docs (16 steps)
-    - rust-parity-tool-lint (17 steps)
-    - rust-parity-tool-tests (18 steps)
-    - 6 Rust phase jobs
+    - rust-parity-app (23 steps)
+    - rust-parity-tool (21 steps)
+    - 2 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
-        - rust-parity-app-docs
-        - rust-parity-app-lint
-        - rust-parity-app-tests
-        - rust-parity-tool-docs
-        - rust-parity-tool-lint
-        - rust-parity-tool-tests
+        - rust-parity-app
+        - rust-parity-tool
       Obligations:
         - stack/rust/crates/app/build/default
         - stack/rust/crates/app/clippy/default
@@ -51,8 +43,8 @@ Workflow to generate
         - stack/rust/crates/tool/fmt/default
         - stack/rust/crates/tool/nextest/default/shard-1-of-2
         - stack/rust/crates/tool/nextest/default/shard-2-of-2
-  Parallel: 6 execution jobs; dependencies preserved; no matrix fan-out
-  Critical path: stack/rust/crates/app/clippy/default -> stack/rust/crates/app/build/default -> stack/rust/crates/app/nextest/default/shard-1-of-2 (3 tasks)
+  Parallel: 2 execution jobs; dependencies preserved; no matrix fan-out
+  Critical path: stack/rust/crates/app/build/default -> stack/rust/crates/app/nextest/default/shard-1-of-2 (2 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
   Actionlint: 1.7.12 pinned

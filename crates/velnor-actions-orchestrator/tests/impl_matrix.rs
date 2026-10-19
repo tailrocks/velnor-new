@@ -39,16 +39,14 @@ fn preview_yml(config: &str) -> Result<(TempDir, TempDir, String), Box<dyn std::
 fn crate_yaml_shape_exact() -> TestResult {
     let (_repo, _parent, text) = preview_yml(config_with_branch())?;
     for line in [
-        "  rust-demo-lint:",
-        "  rust-demo-tests:",
-        "  rust-demo-docs:",
-        "    name: Rust / demo",
+        "  rust-demo:",
+        "    name: Rust / demo\n",
         "  required:",
         "  plan:",
         "  actionlint:",
-        "      - rust-demo-lint",
-        "      - rust-demo-tests",
-        "      - rust-demo-docs",
+        "      - rust-demo\n",
+        "        background: true",
+        "        wait-all:",
     ] {
         assert!(text.contains(line), "missing {line}:\n{text}");
     }
@@ -74,7 +72,7 @@ fn rust_jobs_ignore_matrix_cap() -> TestResult {
     let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\nmax_parallel_jobs = 3\n";
     let repo = make_repo(config)?;
     let prep = prepare(repo.path())?;
-    assert!(plan_for(&prep)?.contains("3 Rust phase jobs"), "crate plan");
+    assert!(plan_for(&prep)?.contains("1 Rust crate job"), "crate plan");
     let (_repo, _parent, text) = preview_yml(config)?;
     for marker in ["max-parallel:", "strategy:", "fromJSON"] {
         assert!(
@@ -143,13 +141,11 @@ fn tofu_root_jobs_honor_matrix_cap() -> TestResult {
 fn plan_crate_agreement() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let plan = plan_for(&prepare(repo.path())?)?;
-    assert!(plan.contains("3 Rust phase jobs"), "crate plan:\n{plan}");
+    assert!(plan.contains("1 Rust crate job"), "crate plan:\n{plan}");
     assert!(plan.contains("rust-demo"), "crate entry:\n{plan}");
     let (_repo, _parent, text) = preview_yml(config_with_branch())?;
     assert!(
-        text.contains("  rust-demo-lint:")
-            && text.contains("  rust-demo-tests:")
-            && text.contains("  rust-demo-docs:"),
+        text.contains("  rust-demo:") && !text.contains("  rust-demo-lint:"),
         "crate yaml:\n{text}"
     );
     assert!(text.contains("name: Rust / demo"), "display yaml:\n{text}");
@@ -158,7 +154,7 @@ fn plan_crate_agreement() -> TestResult {
     let repo = make_repo(ignored)?;
     let plan = plan_for(&prepare(repo.path())?)?;
     assert!(plan.contains("no-work workflow"), "static plan:\n{plan}");
-    assert!(!plan.contains("Rust phase job"), "static plan:\n{plan}");
+    assert!(!plan.contains("Rust crate job"), "static plan:\n{plan}");
     assert!(plan.contains("no matrix fan-out"), "static plan:\n{plan}");
     let (_repo, _parent, text) = preview_yml(ignored)?;
     assert!(!text.contains("strategy:"), "static yaml:\n{text}");
@@ -255,7 +251,7 @@ fn obligations_carry_fixed_identity() -> TestResult {
         .workflow
         .ir
         .jobs
-        .get("rust-demo-lint")
+        .get("rust-demo")
         .ok_or("missing Rust job")?;
     let clippy = job
         .steps
