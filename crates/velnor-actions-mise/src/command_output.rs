@@ -85,6 +85,23 @@ pub struct ProcessOutput {
     pub success: bool,
 }
 
+/// Child result whose standard output was streamed to a caller-owned file.
+///
+/// The caller owns file admission, identity checks and removal on any failure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcessFileOutput {
+    /// Number of standard-output bytes written successfully.
+    pub stdout_bytes: u64,
+    /// Captured standard error, independently bounded from the file stream.
+    pub stderr: Vec<u8>,
+    /// Exit code when the child exited normally.
+    pub code: Option<i32>,
+    /// Terminating signal number (Unix only).
+    pub signal: Option<i32>,
+    /// Whether the exit status reports success.
+    pub success: bool,
+}
+
 impl ProcessOutput {
     /// Fail with [`MiseError::NonZeroExit`] unless the status reports success.
     ///
