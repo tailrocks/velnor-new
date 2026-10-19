@@ -39,6 +39,7 @@ pub(crate) fn run_public() -> ExitCode {
             &linux_x64_binary,
             &macos_arm64_binary,
         ),
+        Command::AuthorityInventory => crate::dispatch_job_authority::run(),
     }
 }
 

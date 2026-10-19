@@ -7,6 +7,8 @@ use crate::{RenderError, RenderedFile, yaml::Yaml};
 
 const MAX_MATRIX_COMBINATIONS: usize = 256;
 
+#[path = "workflow_routing_authority.rs"]
+mod authority;
 #[path = "workflow_routing_calls.rs"]
 mod calls;
 #[path = "workflow_routing_container.rs"]
@@ -23,7 +25,17 @@ mod parse;
 mod runner;
 #[path = "workflow_routing_typed_jobs.rs"]
 mod typed_jobs;
+pub use authority::{
+    AuthorityCall, AuthorityConcurrency, AuthorityJob, AuthorityPermissions, AuthorityTrigger,
+    AuthorityWorkflow, extract_workflow_authority,
+};
 pub(crate) use typed_jobs::route_jobs;
+
+pub(crate) fn parse_authority_document(
+    file: &RenderedFile,
+) -> Result<saphyr::Yaml<'_>, RenderError> {
+    parse::parse_final_workflow(file)
+}
 
 /// Effective placement policy for a generated workflow document.
 #[derive(Debug, Clone, PartialEq, Eq)]

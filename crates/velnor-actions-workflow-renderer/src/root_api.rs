@@ -83,8 +83,9 @@ pub use crate::verification_jobs::{
     build_verification_task_job,
 };
 pub use crate::workflow_routing::{
-    WorkflowRoutingPolicy, validate_generated_workflow_calls,
-    validate_generated_workflow_calls_with_ir,
+    AuthorityCall, AuthorityConcurrency, AuthorityJob, AuthorityPermissions, AuthorityTrigger,
+    AuthorityWorkflow, WorkflowRoutingPolicy, extract_workflow_authority,
+    validate_generated_workflow_calls, validate_generated_workflow_calls_with_ir,
 };
 pub use crate::workflow_size::MAX_WORKFLOW_BYTES;
 pub use crate::yaml::{Yaml, quote_scalar, render_yaml};

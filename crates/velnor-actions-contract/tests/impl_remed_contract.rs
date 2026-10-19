@@ -17,6 +17,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
         checks: Vec::new(),
         qualified_tools: Vec::new(),
         distribution: velnor_actions_contract::config::DistributionConfig::default(),
+        job_authority: Vec::new(),
         schema: 1,
         workflow: WorkflowConfig {
             name: "CI".to_owned(),

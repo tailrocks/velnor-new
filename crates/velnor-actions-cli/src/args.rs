@@ -74,6 +74,8 @@ pub(crate) enum Command {
         #[arg(long, value_name = "PATH")]
         macos_arm64_binary: PathBuf,
     },
+    /// Write reviewed workflow authority facts as JSON to stdout.
+    AuthorityInventory,
 }
 
 impl Command {

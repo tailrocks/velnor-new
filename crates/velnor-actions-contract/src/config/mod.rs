@@ -12,6 +12,7 @@ mod distribution;
 mod execution;
 mod host_container;
 mod image_task;
+mod job_authority;
 mod mise;
 mod preview_policy;
 mod qualified_tools;
@@ -66,6 +67,7 @@ pub use host_container::{
     HostOrbStackSdk,
 };
 pub use image_task::{NativeImageCachePolicy, NativeImagePlatform, NativeImageTask};
+pub use job_authority::{JobAuthorityBinding, JobAuthorityRole};
 pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
     MiseCheck, is_valid_check_system_build, is_valid_check_system_version, is_valid_mise_task_name,
@@ -167,6 +169,9 @@ pub struct VelnorConfig {
     /// Optional downstream package promotion policy.
     #[serde(default, skip_serializing_if = "DistributionConfig::is_empty")]
     pub distribution: DistributionConfig,
+    /// Reviewed job roles for explicit authority inventory generation.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub job_authority: Vec<JobAuthorityBinding>,
 }
 
 impl VelnorConfig {
@@ -220,6 +225,7 @@ impl VelnorConfig {
             }
         }
         self.distribution.validate(file)?;
+        job_authority::validate_job_authority_bindings(&self.job_authority, file)?;
         self.check_distribution_source(file)?;
         self.check_preview_tools(file)?;
         self.discovery.validate(file)?;

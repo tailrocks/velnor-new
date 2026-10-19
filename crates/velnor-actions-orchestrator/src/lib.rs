@@ -43,6 +43,8 @@ mod internal_plan;
 mod internal_request;
 mod inventory;
 mod inventory_reuse;
+mod job_authority_inventory;
+mod job_authority_inventory_types;
 pub mod local_release_manifest;
 mod lock_audit;
 mod matrix_step;
