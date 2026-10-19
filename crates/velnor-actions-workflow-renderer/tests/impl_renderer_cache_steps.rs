@@ -353,7 +353,7 @@ fn strict_leaves_setup_less_jobs_without_tools_cache()
     );
     let mut final_job = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned()],
         vec![acquire_fixture()?, merge_step()],
     );

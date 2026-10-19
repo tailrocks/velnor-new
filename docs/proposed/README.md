@@ -62,7 +62,7 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 6. [Task execution contract](task-execution-contract.md) defines task steps, Mise invocation, execution, and reports.
 7. [Cache and report contract](cache-contract.md) defines task identities, cache ownership/trust, reports, and final status aggregation.
 8. [Host-image seed admission contract](host-seed-contract.md) defines trusted preinstalled seed inputs and fail-cold admission.
-9. [Parallelism and affected-work contract](parallelism-and-selection-contract.md) defines dependency-aware selection, trusted baseline coverage, native background/wait steps, bounded concurrency, and complete test partitioning.
+9. [Parallelism and affected-work contract](parallelism-and-selection-contract.md) defines dependency-aware selection, not-affected crate jobs (hard decision 4), native background/wait steps, bounded concurrency, and complete test partitioning.
 10. [Rust quality contract](rust-quality-contract.md) defines crate ownership, lints, file limits, dependencies, and repository-policy protection.
 11. [Agent and performance contract](agent-and-performance-contract.md) defines agent instructions, performance measurements, acceptance budgets, and readiness evidence.
 12. [Tooling input contract](tooling-input-contract.md) defines read-only inspection and human recommendations for Rust/Mise tool files.

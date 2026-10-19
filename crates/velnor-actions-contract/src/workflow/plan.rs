@@ -1,7 +1,7 @@
 //! Schema-2 affected plan and generic matrix entries.
 use super::lanes::NamedCheckLaneVariant;
 pub use super::matrix_entry::MatrixEntry;
-pub use super::plan_jobs::{JobDisposition, PlanJob};
+pub use super::plan_jobs::{JobDisposition, PlanJob, plan_skips_work, selects_affected_work};
 use super::qualification_dispatch::QualificationDispatch;
 use super::trust::Trust;
 use crate::canonical::validate_digest;

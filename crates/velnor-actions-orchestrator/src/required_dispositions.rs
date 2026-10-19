@@ -18,10 +18,16 @@
 //! Jobs the plan does not list (plan, actionlint, named checks, `OpenTofu`
 //! roots) keep the generic rule: skipped is never success. A missing,
 //! invalid, or failed plan never reaches this fold (`planning_failed`).
+//! A plan that skips any work on a full-run event (push, merge group,
+//! qualification, judged by the merge-time actual event) fails closed
+//! with `not_affected_on_full_event`, whatever the plan claims.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{JobConclusion, JobDisposition, PlanJob, RequiredJobResult};
+use velnor_actions_contract::{
+    JobConclusion, JobDisposition, Plan, PlanJob, RequiredJobResult, WorkflowEvent,
+    plan_skips_work, selects_affected_work,
+};
 
 use crate::cover::Signals;
 
@@ -29,6 +35,26 @@ use crate::cover::Signals;
 pub(crate) const PLANNED_JOB_SKIPPED: &str = "planned_job_skipped";
 /// Miss reason for a `not_affected` job that ran anyway.
 pub(crate) const GATE_MISMATCH: &str = "gate_mismatch";
+
+/// Miss reason for skipped work on a full-run event.
+pub(crate) const NOT_AFFECTED_ON_FULL_EVENT: &str = "not_affected_on_full_event";
+
+/// Full-run events never skip: backstop independent of plan validation.
+///
+/// A missing actual event fails trust coherence on its own; here only a
+/// known full-run actual event with skipped work is judged.
+pub(crate) fn check_full_event_skips(
+    plan: &Plan,
+    actual_event: Option<WorkflowEvent>,
+    signals: &mut Signals,
+    miss_reasons: &mut BTreeSet<String>,
+) {
+    let full = |event: WorkflowEvent| !selects_affected_work(event);
+    if (full(plan.event) || actual_event.is_some_and(full)) && plan_skips_work(plan) {
+        signals.planning_failed = true;
+        miss_reasons.insert(NOT_AFFECTED_ON_FULL_EVENT.to_owned());
+    }
+}
 
 /// Fold every observed job result against the plan's job dispositions.
 pub(crate) fn fold_planned_jobs(

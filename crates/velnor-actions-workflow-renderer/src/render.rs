@@ -215,9 +215,11 @@ fn merged_jobs(
         &mut jobs,
         &workflow_task_ids,
     )?;
+    crate::required_gate::insert_required_gate(&mut jobs)?;
     msrv::check_no_msrv(&jobs)?;
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
+    crate::required_gate::check_required_gate(&jobs)?;
     support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }

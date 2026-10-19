@@ -108,7 +108,7 @@ pub(crate) fn preseed_plan() -> Result<(String, Job), RenderError> {
 pub(crate) fn preseed_final() -> Result<(String, Job), RenderError> {
     let mut final_job = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned()],
         vec![
             preseed_download_step()?,

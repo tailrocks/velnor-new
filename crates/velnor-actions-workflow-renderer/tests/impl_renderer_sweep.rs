@@ -51,7 +51,7 @@ fn every_emitted_step_has_name() -> Result<(), RenderError> {
     );
     let mut final_job = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned()],
         vec![acquire_fixture()?, merge_step()],
     )
@@ -91,7 +91,7 @@ fn final_gate_needs_plan_lint_and_support() -> Result<(), RenderError> {
     });
     let mut final_job = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned(), "actionlint".to_owned()],
         vec![merge_step()],
     )

@@ -99,19 +99,7 @@ pub(crate) fn plan_pr(
     base: Option<&str>,
     head: &str,
 ) -> Result<(Plan, Vec<String>), Box<dyn std::error::Error>> {
-    let request = serde_json::json!({
-        "schema": 1,
-        "run_key": "local",
-        "base": base,
-        "head": head,
-        "event": "pull_request",
-        "root": root.display().to_string(),
-    });
-    let response = plan_internal(&request.to_string())?;
-    let value: serde_json::Value = serde_json::from_str(&response)?;
-    let plan: Plan = serde_json::from_value(value["plan"].clone())?;
-    let warnings: Vec<String> = serde_json::from_value(value["plan"]["warnings"].clone())?;
-    Ok((plan, warnings))
+    plan_event(root, base, head, "pull_request")
 }
 
 /// Plan base..head as a push; return plan plus warnings.
@@ -120,12 +108,22 @@ pub(crate) fn plan_push(
     base: Option<&str>,
     head: &str,
 ) -> Result<(Plan, Vec<String>), Box<dyn std::error::Error>> {
+    plan_event(root, base, head, "push")
+}
+
+/// Plan base..head for one event token; return plan plus warnings.
+pub(crate) fn plan_event(
+    root: &Path,
+    base: Option<&str>,
+    head: &str,
+    event: &str,
+) -> Result<(Plan, Vec<String>), Box<dyn std::error::Error>> {
     let request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
         "base": base,
         "head": head,
-        "event": "push",
+        "event": event,
         "root": root.display().to_string(),
     });
     let response = plan_internal(&request.to_string())?;

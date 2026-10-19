@@ -207,10 +207,12 @@ fn discovery(root: &Path) -> Outcome<Discovery> {
         InputRule {
             globs: vec!["protos/**/*.proto".to_owned()],
             package_ids: BTreeSet::from([id("a8")?]),
+            complete: false,
         },
         InputRule {
             globs: vec!["libs/core/data/**".to_owned()],
             package_ids: BTreeSet::from([id("a8")?]),
+            complete: false,
         },
     ];
     Ok(Discovery {

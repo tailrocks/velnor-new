@@ -12,7 +12,7 @@ use super::impl_renderer_fixtures::*;
 fn final_job() -> Result<(String, velnor_actions_contract::Job), RenderError> {
     let (id, mut job) = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned()],
         vec![
             acquire_fixture()?,
@@ -133,7 +133,7 @@ fn merge_steps_carry_needs_channel_matching_final_needs() -> Result<(), RenderEr
     );
     let (final_id, mut final_job) = job(
         "required",
-        "Required",
+        "Required verdict",
         vec!["plan".to_owned()],
         vec![
             acquire_fixture()?,
@@ -278,7 +278,7 @@ fn expected_inventory_excludes_post_gate_jobs() -> Result<(), RenderError> {
     );
     let (final_id, mut final_job) = job(
         FINAL_JOB_ID,
-        "Required",
+        "Required verdict",
         vec![PLAN_JOB_ID.to_owned()],
         vec![
             acquire_fixture()?,

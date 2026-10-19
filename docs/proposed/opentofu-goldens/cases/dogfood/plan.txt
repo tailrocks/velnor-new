@@ -48,6 +48,7 @@ Workflow to generate
     - check-maintenance-helpers (8 steps)
     - plan (25 steps)
     - required (10 steps)
+    - required-gate (1 steps)
     - rust-velnor-actions-actionlint (24 steps)
     - rust-velnor-actions-cli (24 steps)
     - rust-velnor-actions-contract (23 steps)

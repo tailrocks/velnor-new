@@ -21,7 +21,7 @@ The contract crate owns this envelope and canonical serialization. Each detector
 `stack_extension`; Mise supplies tool, environment, and generated-task identity. Only the orchestrator
 combines task identity and decides reuse eligibility. The V2 tools layer separately derives its static
 archive digest from typed tool obligations; the renderer adds only the qualified runtime identity. An unknown
-extension schema disables reuse and baseline coverage.
+extension schema disables reuse.
 
 For `stack_id = "rust"`, `stack_extension` is a `RustTaskIdentityExtension` containing the Cargo package ID,
 normalized manifest path, workspace/local-package graph digest, target kinds and names, features and required
@@ -72,16 +72,14 @@ containing `schema_id`, `repository_id`, `workspace_id`, `lane_id`, `platform_id
 `cache_format_id`, and `stack_extension_id`.
 
 Trust is an access and promotion boundary, not semantic task input. Keep trust out of `input_digest`; encode
-it in cache namespaces, permissions, and baseline proof. This permits PRs to read exact trusted baseline
-evidence without allowing PR results to become trusted. An input digest MUST include task definition and
+it in cache namespaces and permissions. This permits PRs to read trusted cache entries without allowing
+PR results to become trusted. An input digest MUST include task definition and
 arguments, working directory, complete declared input closure, dependency and tool identities, relevant
-environment, generator/schema, and output contract. Unknown or dynamic inputs disable result reuse and
-baseline coverage.
+environment, generator/schema, and output contract. Unknown or dynamic inputs disable result reuse.
 
 `lane_id` MUST also include task/build configuration and a distinct concurrent writer lane. Concurrent Cargo
-writers never share a target directory. The complete graph, change selection, trusted baseline artifact, and
-status definitions are specified in the [parallelism and affected-work
-contract](parallelism-and-selection-contract.md).
+writers never share a target directory. Graph, change selection, and status definitions: [parallelism
+contract](parallelism-and-selection-contract.md), [affected selection](../implemented/affected-selection.md).
 
 The GitHub cache key MUST be:
 
@@ -239,9 +237,8 @@ never reused across runs. `outputs` lists only declared outputs of the task itse
 tokens, credentials, or secret environment values. `reused`, `executed`, `empty_partition`, and `not_selected`
 are distinct. An `empty_partition` is valid only for one test shard whose exact inventory manifest assigns no
 tests while the complete selected test inventory is nonempty. A cache hit is `reused` only when all declared
-outputs are present and verified. A baseline-covered obligation is represented in the complete plan and final
-coverage report, not as an execution-matrix task report. Its proof MUST name the exact trusted baseline
-artifact and task/input identities. A failed or cancelled task MUST retain its report and MUST NOT save a
+outputs are present and verified. A `not_affected` obligation appears in the plan and final counts, never as a
+task report; `Required` proves its whole-job skip against the plan's job disposition. A failed or cancelled task MUST retain its report and MUST NOT save a
 successful task result. `task_report_id` is `task-<run-key>-<matrix-key>-<task-digest-prefix>`, where
 `task-digest-prefix` is the first 16 lowercase hexadecimal characters of the task digest without its `b3-`
 prefix. A duplicate task-report ID is a planning or reporting error. `not_selected_reason` is required when
@@ -278,14 +275,15 @@ ID. The matrix artifact named by `artifact_id` MUST contain `matrix-report.json`
 under `tasks/`; no report may be written only to the job log.
 
 The plan MUST also contain one obligation record per task, including the decision (`execute`,
-`reused_from_task_cache`, or `covered_by_trusted_baseline`), reason, task/input digest, and cache/baseline
-evidence reference. The matrix contains only `execute` obligations. The final job validates every obligation
+`reused_from_task_cache`, or `not_affected`), reason, task/input digest, owning job, and cache evidence
+reference. The matrix contains only `execute` obligations. `not_affected` is valid only on pull-request and
+local plans (`not_affected_on_full_event` otherwise). The final job validates every obligation
 against its required evidence.
 
 The final job writes `$RUNNER_TEMP/velnor/<run-key>/final-report.json` with report ID `final-<run-key>` and
 uploads `velnor-final-<run-key>`. It MUST record the `plan_id`, every expected matrix `report_id`, every
 downloaded artifact ID, each required job ID and conclusion (including `alint` when emitted), the
-computed final result, and selected/reused/executed/empty-partition/covered/failed/cancelled/blocked/not-run
+computed final result, and selected/reused/executed/empty-partition/covered/not-affected/failed/cancelled/blocked/not-run
 counts. Its `status` MUST use the final result enum below. `required_job_results` MUST include every
 non-matrix required job's ID and conclusion, including `alint` when emitted. The final report is an
 aggregate and is not a task-cache input.
@@ -316,8 +314,7 @@ manifest fields beyond the commit are consumer-asserted audit data at merge time
 Field grammars here are normative over examples. `*_digest` fields are path-independent semantic identities:
 BLAKE3 over canonical JSON with absolute paths stripped and repository-relative POSIX paths. Artifact `*_id`
 values (`velnor-<kind>-<run-key>-…`) are derived NAMEs for upload/download matching only. Bare numeric service
-IDs are permitted ONLY in evidence records (`baseline.proof` and the final report's `downloaded_artifacts`
-array), never in identities or NAME derivation beyond the run-key correlator. Platform, toolchain,
+IDs are permitted ONLY in evidence records (the final report's `downloaded_artifacts` array), never in identities or NAME derivation beyond the run-key correlator. Platform, toolchain,
 cache-format, or declared-input changes invalidate. `shard-1-of-1` runs in one step; multi-shard entries use
 archive-plus-partition fan-out. Publication is atomic: validate in staging, then rename-swap; failure leaves
 prior bytes byte-identical.
@@ -351,17 +348,19 @@ The final gate computes exactly one result:
 | Result | Condition | Exit |
 |---|---|---:|
 | `no_work` | Valid plan has zero obligations, and every always-required plan/policy/workflow/format check passed | 0 |
-| `passed` | Every obligation is `reused`, `executed`, validly `empty_partition`, or exactly `covered` by trusted baseline evidence | 0 |
+| `passed` | Every obligation is `reused`, `executed`, validly `empty_partition`, or `not_affected` on an affected-selection event with its crate job skipped | 0 |
 | `failed` | A valid required task report records failure, a nonzero child exit, or required candidate validation fails | 1 |
 | `cancelled` | Any required task was cancelled | 1 |
 | `blocked` | A required task was blocked (`not_selected`), below cancelled | 1 |
 | `not_run` | A selected matrix entry lacks a valid report and no task failure was reported | 1 |
 | `planning_failed` | Discovery, generation, formatting, matrix validation, or plan-report validation failed | 1 |
 
-`required` MUST run with `if: ${{ !cancelled() }}` (after failed or skipped needs, never after cancellation) and MUST be the branch-protection check. A skipped job, missing
-report, cache miss, or omitted task MUST NOT be treated as success. The final summary MUST show selected,
-reused, executed, empty-partition, covered, failed, cancelled, blocked, and not-run counts plus every
-cache/baseline miss reason.
+The verdict job `required` (`Required verdict`) MUST run with `if: ${{ !cancelled() }}`; the branch-protection
+check MUST be the always-run gate `required-gate` (`Required`) that fails unless the verdict succeeded
+([workflow contract](workflow-contract.md), job 5), because GitHub reports a skipped check as successful. A
+skipped job, missing report, cache miss, or omitted task MUST NOT be treated as success; `planned_job_skipped`,
+`gate_mismatch`, and `not_affected_on_full_event` fail closed. The final summary MUST show selected, reused,
+executed, empty-partition, not-affected, failed, cancelled, blocked, and not-run counts plus every miss reason.
 
 If more than one result condition applies, choose the result in this order: `planning_failed`, `failed`,
 `cancelled`, `blocked`, `not_run`, then `passed` or `no_work`. A shard with `empty_partition` is valid only with its
@@ -373,7 +372,7 @@ matrix report is `not_run`.
 
 `velnor-actions plan` MAY describe cache layers and eligibility from the validated workflow plan. It MUST NOT
 restore, write, or publish cache contents. Cache reads and writes belong only to generated workflow execution.
-`plan` MUST NOT claim cache hits, task-result reuse, or baseline coverage because it does not perform
+`plan` MUST NOT claim cache hits or task-result reuse because it does not perform
 event-time lookup or execute the generated workflow. It may show which cache layers would be used and which
 planned tasks are eligible; the evidence result remains unknown until workflow execution.
 

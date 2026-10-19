@@ -58,6 +58,25 @@ fn verify_checkout_inner(
     Err(internal("checkout_head_mismatch"))
 }
 
+/// True when the checkout's tree is the one `base...head` describes.
+///
+/// A checkout at `head` itself is bound by construction. A pull-request
+/// merge checkout (`HEAD^2 == head`) is bound only when its first parent
+/// is `base`: after a retarget or a base push, `refs/pull/N/merge` can
+/// still point at a merge with an older base, so the graph and ownership
+/// would describe a tree the change set never saw.
+///
+/// # Errors
+///
+/// Returns a problem token when Git cannot resolve the checkout.
+pub(crate) fn checkout_bound_to_base(root: &Path, base: &str, head: &str) -> Result<bool, String> {
+    let checkout = head_sha(root, None)?;
+    if checkout == head {
+        return Ok(true);
+    }
+    Ok(parent(root, None, "HEAD^1")?.as_deref() == Some(base))
+}
+
 /// Resolve `HEAD` under an optional caller-owned deadline.
 fn head_sha(root: &Path, deadline: Option<CheckDeadline>) -> Result<String, String> {
     let request = GitRequest::rev_parse(vec![OsString::from("HEAD")]);
@@ -76,7 +95,16 @@ fn head_sha(root: &Path, deadline: Option<CheckDeadline>) -> Result<String, Stri
 
 /// Second parent of a merge checkout, if present.
 fn second_parent(root: &Path, deadline: Option<CheckDeadline>) -> Result<Option<String>, String> {
-    let request = GitRequest::rev_parse(vec![OsString::from("HEAD^2")]);
+    parent(root, deadline, "HEAD^2")
+}
+
+/// One parent (`HEAD^1` or `HEAD^2`) of the checkout, if present.
+fn parent(
+    root: &Path,
+    deadline: Option<CheckDeadline>,
+    spec: &str,
+) -> Result<Option<String>, String> {
+    let request = GitRequest::rev_parse(vec![OsString::from(spec)]);
     let output = run_git(&request, root, deadline)?;
     if !output.success {
         return Ok(None);

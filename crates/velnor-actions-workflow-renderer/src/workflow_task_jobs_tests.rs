@@ -127,7 +127,7 @@ fn image_policy() -> NativeImageTaskPolicy {
 
 fn required_job() -> Job {
     Job {
-        display_name: "Required".to_owned(),
+        display_name: "Required verdict".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         check_runner: None,
         timeout_minutes: JobTimeout::PLAN,
