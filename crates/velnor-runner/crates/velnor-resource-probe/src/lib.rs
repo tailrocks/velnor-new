@@ -7,6 +7,9 @@ pub mod cleanup_observation;
 mod error;
 #[cfg(target_os = "linux")]
 pub mod execution_channel;
+/// Data records shared by host and Linux guest processes.
+pub mod execution_channel_wire;
+pub mod execution_publication;
 mod filesystem;
 mod load;
 mod memory;
