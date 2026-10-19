@@ -25,8 +25,8 @@ runner_sha256_source = "GitHub Release API asset digest and release notes"
 runner_platform = "linux/amd64"
 runner_source_tag_signature = "GitHub verified commit signature"
 
-# On this date the three named repository-scoped downloads still selected 2.337.0.
-# This records progressive distribution only; it does not show that 2.338.0 is rejected.
+# The repository download API returned Runner 2.337.0 on this date.
+# This result does not show that GitHub rejects Runner 2.338.0.
 runner_scope_download_observed_date = "2026-10-18"
 runner_scope_download_version = "2.337.0"
 runner_scope_download_sha256 = "70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613"

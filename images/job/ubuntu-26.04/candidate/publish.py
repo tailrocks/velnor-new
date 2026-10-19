@@ -25,7 +25,7 @@ REPOSITORY_ID = 1390620900
 REGISTRY = "ghcr.io"
 PACKAGE = "tailrocks/velnor-job"
 WORKFLOW = "tailrocks/velnor-new/.github/workflows/job-image-candidate.yml"
-ARTIFACT = "velnor-job-image-candidate"
+ARTIFACT_PREFIX = "velnor-job-image-candidate-"
 MAX_HTTP_BODY = 2 * 1024 * 1024
 MAX_RESULT_BYTES = 64 * 1024
 MAX_UPLOAD_BYTES = candidate.MAX_BLOB_BYTES
@@ -194,8 +194,9 @@ def _check_artifact(identity: dict[str, Any]) -> None:
     response = _api(f"repos/{REPOSITORY}/actions/runs/{identity['run_id']}/artifacts?per_page=100")
     if not isinstance(response, dict) or not isinstance(response.get("artifacts"), list):
         _fail("Candidate artifact response is invalid.")
+    expected_name = f"{ARTIFACT_PREFIX}{identity['run_attempt']}"
     matches = [item for item in response["artifacts"] if isinstance(item, dict)
-               and item.get("name") == ARTIFACT]
+               and item.get("name") == expected_name]
     if len(matches) != 1:
         _fail("Expected one candidate artifact in this workflow run.")
     artifact = matches[0]

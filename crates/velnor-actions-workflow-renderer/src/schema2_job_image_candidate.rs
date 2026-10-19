@@ -14,8 +14,9 @@ pub(super) const WORKFLOW_PATH: &str = ".github/workflows/job-image-candidate.ym
 
 const ARCHIVE: &str = "job-image.oci.tar";
 const RECORD: &str = "job-image-candidate.json";
-const ARTIFACT_NAME: &str = "velnor-job-image-candidate";
-const PUBLICATION_EVIDENCE: &str = "velnor-job-image-publication-evidence";
+const ARTIFACT_NAME: &str = "velnor-job-image-candidate-${{ github.run_attempt }}";
+const PUBLICATION_EVIDENCE: &str =
+    "velnor-job-image-publication-evidence-${{ github.run_attempt }}";
 const BUILDX_INSTALL: &str = r#"python3 - "$GITHUB_WORKSPACE/.velnor/runner.lock" "$RUNNER_TEMP/velnor-docker-config/cli-plugins/docker-buildx" <<'PY'
 import hashlib
 import os

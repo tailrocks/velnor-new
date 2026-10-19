@@ -76,6 +76,7 @@ fn image_selection_emits_repeatable_candidate_build_attestation_and_publish() {
         );
     }
     assert!(rendered.contains(ARTIFACT_NAME));
+    assert!(ARTIFACT_NAME.ends_with("-${{ github.run_attempt }}"));
     assert!(rendered.contains(crate::steps::UPLOAD_ARTIFACT_USES));
     assert!(rendered.contains(crate::steps::DOWNLOAD_ARTIFACT_USES));
     assert!(rendered.contains(crate::steps::ATTEST_BUILD_PROVENANCE_USES));
@@ -274,6 +275,7 @@ fn publisher_consumes_same_run_artifact_and_keeps_token_out_of_evidence_upload()
         field(field(evidence, "with"), "name"),
         &Yaml::str(PUBLICATION_EVIDENCE)
     );
+    assert!(PUBLICATION_EVIDENCE.ends_with("-${{ github.run_attempt }}"));
     assert_eq!(
         field(field(evidence, "with"), "retention-days"),
         &Yaml::Int(7)

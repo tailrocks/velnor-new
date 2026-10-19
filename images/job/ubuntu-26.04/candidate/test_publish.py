@@ -72,35 +72,61 @@ class PublisherTests(unittest.TestCase):
                     publish._current_identity(Path("."))
 
     def test_candidate_source_and_run_must_match_dispatch(self):
-        identity = {
-            "repository_id": publish.REPOSITORY_ID, "workflow_ref": publish.WORKFLOW + "@refs/heads/main",
-            "source": "a" * 40, "run_id": 100, "run_attempt": 2,
-        }
-        record = {
-            "source": {"commit": "a" * 40, "ref": "refs/heads/main"},
-            "workflow": {
-                "repository": publish.REPOSITORY, "repository_id": publish.REPOSITORY_ID,
-                "event": "workflow_dispatch", "workflow_ref": identity["workflow_ref"],
-                "authority_commit": "a" * 40, "run_id": 100, "run_attempt": 2,
-            },
-        }
-        publish._check_candidate_identity(record, identity)
-        for key, value in (("commit", "b" * 40), ("ref", "refs/heads/feature")):
+        for attempt in (1, 2):
+            identity = {
+                "repository_id": publish.REPOSITORY_ID,
+                "workflow_ref": publish.WORKFLOW + "@refs/heads/main",
+                "source": "a" * 40, "run_id": 100, "run_attempt": attempt,
+            }
+            record = {
+                "source": {"commit": "a" * 40, "ref": "refs/heads/main"},
+                "workflow": {
+                    "repository": publish.REPOSITORY, "repository_id": publish.REPOSITORY_ID,
+                    "event": "workflow_dispatch", "workflow_ref": identity["workflow_ref"],
+                    "authority_commit": "a" * 40, "run_id": 100, "run_attempt": attempt,
+                },
+            }
+            with self.subTest(attempt=attempt, result="matching"):
+                publish._check_candidate_identity(record, identity)
+            for key, value in (("commit", "b" * 40), ("ref", "refs/heads/feature")):
+                changed = json.loads(json.dumps(record))
+                changed["source"][key] = value
+                with self.subTest(attempt=attempt, source_key=key), self.assertRaises(publish.PublishError):
+                    publish._check_candidate_identity(changed, identity)
             changed = json.loads(json.dumps(record))
-            changed["source"][key] = value
-            with self.subTest(source_key=key), self.assertRaises(publish.PublishError):
-                publish._check_candidate_identity(changed, identity)
-        changed = json.loads(json.dumps(record))
-        changed["workflow"]["run_attempt"] = 1
-        with self.assertRaisesRegex(publish.PublishError, "run identity"):
-            publish._check_candidate_identity(changed, identity)
+            changed["workflow"]["run_attempt"] = 3 - attempt
+            with self.subTest(attempt=attempt, result="mismatched-run-attempt"):
+                with self.assertRaisesRegex(publish.PublishError, "run identity"):
+                    publish._check_candidate_identity(changed, identity)
 
     def test_artifact_id_name_and_run_must_match(self):
-        identity = {"run_id": 100, "artifact_id": 501, "source": "a" * 40}
-        payload = {"artifacts": [{
-            "id": 502, "name": publish.ARTIFACT, "expired": False,
-            "workflow_run": {"id": 100, "head_sha": "a" * 40, "head_branch": "main"},
-        }]}
+        for attempt in (1, 2):
+            identity = {
+                "run_id": 100, "run_attempt": attempt, "artifact_id": 501,
+                "source": "a" * 40,
+            }
+
+            def response(name, artifact_id=501):
+                return {"artifacts": [{
+                    "id": artifact_id, "name": name, "expired": False,
+                    "workflow_run": {
+                        "id": 100, "head_sha": "a" * 40, "head_branch": "main",
+                    },
+                }]}
+
+            expected_name = f"{publish.ARTIFACT_PREFIX}{attempt}"
+            with self.subTest(attempt=attempt, result="matching"):
+                with mock.patch.object(publish, "_api", return_value=response(expected_name)):
+                    publish._check_artifact(identity)
+            with self.subTest(attempt=attempt, result="prior-attempt"):
+                old_name = f"{publish.ARTIFACT_PREFIX}{1 if attempt == 2 else 2}"
+                with mock.patch.object(publish, "_api", return_value=response(old_name)):
+                    with self.assertRaisesRegex(publish.PublishError, "one candidate artifact"):
+                        publish._check_artifact(identity)
+        identity = {
+            "run_id": 100, "run_attempt": 2, "artifact_id": 501, "source": "a" * 40,
+        }
+        payload = response(f"{publish.ARTIFACT_PREFIX}2", artifact_id=502)
         with mock.patch.object(publish, "_api", return_value=payload):
             with self.assertRaisesRegex(publish.PublishError, "artifact ID"):
                 publish._check_artifact(identity)
