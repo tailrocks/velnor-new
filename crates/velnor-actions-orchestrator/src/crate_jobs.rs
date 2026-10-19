@@ -29,7 +29,7 @@ use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
 use crate::OrchestratorError;
-use crate::crate_job_ids::{assign_group_ids, group_is_tofu, group_runnable};
+use crate::crate_job_ids::{JobOwners, group_is_tofu, group_runnable};
 use crate::discover::Discovery;
 use crate::internal::internal;
 use crate::matrix_step::step_name_for;
@@ -115,14 +115,14 @@ pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, 
         ..
     } = input;
     let grouped = group_runnable(&discovery.proposals)?;
-    let assigned = assign_group_ids(&grouped);
+    let owners = JobOwners::from_grouped(&discovery.proposals, &grouped);
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
     let mut tofu_ids = Vec::new();
     for (key, tasks) in &grouped {
         let first = tasks.first().ok_or_else(|| internal("crate_empty"))?;
-        let job_id = assigned
-            .get(key)
+        let job_id = owners
+            .group_id(key)
             .ok_or_else(|| internal("crate_job_id_missing"))?
             .clone();
         let manifest = first.identity.unit_path.clone();
@@ -154,7 +154,7 @@ pub(crate) fn build_crate_jobs(input: CrateJobInputs<'_>) -> Result<CrateBuild, 
             obligations: obligations_for(tasks, catalog)?,
         };
         model.validate()?;
-        let needs = phase::external_needs(tasks, &discovery.proposals, &job_id)?;
+        let needs = phase::external_needs(tasks, &owners, &job_id)?;
         let job = render_job(
             &input,
             &model,

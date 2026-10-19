@@ -4,7 +4,7 @@
 
 use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
-use crate::crate_job_ids::job_id_for_member;
+use crate::crate_job_ids::JobOwners;
 use crate::matrix_step::{shard_suffix, step_name_for};
 use std::collections::BTreeSet;
 use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
@@ -192,32 +192,33 @@ fn member_binding_agrees_with_built_jobs() {
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
+    let owners = JobOwners::new(&groups).expect("owners");
     assert_eq!(found.jobs.len(), 2);
     let lint = found.jobs[0].0.as_str();
     let tests = found.jobs[1].0.as_str();
     assert_eq!(
-        job_id_for_member(&groups, &groups[0])
+        owners
+            .for_member(&groups[0])
             .expect("valid owner")
             .as_deref(),
         Some(lint)
     );
     assert_eq!(
-        job_id_for_member(&groups, &groups[1])
+        owners
+            .for_member(&groups[1])
             .expect("valid owner")
             .as_deref(),
         Some(tests)
     );
     assert_eq!(
-        job_id_for_member(&groups, &groups[2])
+        owners
+            .for_member(&groups[2])
             .expect("valid owner")
             .as_deref(),
         Some(PLAN_JOB_ID)
     );
     let outsider = group("other", TaskKind::Clippy, &[]);
-    assert_eq!(
-        job_id_for_member(&groups, &outsider).expect("absent owner"),
-        None
-    );
+    assert_eq!(owners.for_member(&outsider).expect("absent owner"), None);
 }
 
 #[test]

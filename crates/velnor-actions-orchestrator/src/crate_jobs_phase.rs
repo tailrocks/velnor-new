@@ -4,13 +4,13 @@
 //! an exact owning-job dependency; it must succeed before this job can start.
 //! No-target obligations remain vacuous, as in the ordered crate-job model.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use velnor_actions_contract::ProposedTask;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 
 use crate::OrchestratorError;
-use crate::crate_job_ids::job_id_for_member;
+use crate::crate_job_ids::JobOwners;
 use crate::internal::internal;
 
 #[cfg(test)]
@@ -20,21 +20,17 @@ mod workflow_tests;
 /// Lift runnable external gate owners into deterministic job dependencies.
 pub(super) fn external_needs(
     tasks: &[&ProposedTask],
-    proposals: &[ProposedTask],
+    owners: &JobOwners<'_>,
     current_job: &str,
 ) -> Result<Vec<String>, OrchestratorError> {
-    let runnable: BTreeMap<&str, &ProposedTask> = proposals
-        .iter()
-        .filter(|task| super::is_runnable(task))
-        .map(|task| (task.task_id.as_str(), task))
-        .collect();
     let mut needs = BTreeSet::from([PLAN_JOB_ID.to_owned()]);
     for task in tasks {
         for gate in task.gated_by.iter().chain(&task.depends_on) {
-            let Some(member) = runnable.get(gate.as_str()) else {
+            let Some(member) = owners.runnable_member(gate.as_str()) else {
                 continue;
             };
-            let owner = job_id_for_member(proposals, member)?
+            let owner = owners
+                .for_member(member)?
                 .ok_or_else(|| internal("crate_gate_owner_missing"))?;
             if owner != current_job {
                 needs.insert(owner);
@@ -57,13 +53,16 @@ mod tests {
         let mut test = group("demo", TaskKind::Nextest, &[&lint.task_id]);
         test.depends_on.push(build.task_id.clone());
         let proposals = vec![lint.clone(), build, test.clone()];
-        let current = job_id_for_member(&proposals, &test)
+        let owners = JobOwners::new(&proposals).expect("owners");
+        let current = owners
+            .for_member(&test)
             .expect("valid phase")
             .expect("test owner");
-        let lint_owner = job_id_for_member(&proposals, &lint)
+        let lint_owner = owners
+            .for_member(&lint)
             .expect("valid phase")
             .expect("lint owner");
-        let needs = external_needs(&[&test], &proposals, &current).expect("phase needs");
+        let needs = external_needs(&[&test], &owners, &current).expect("phase needs");
         assert_eq!(needs, vec![PLAN_JOB_ID.to_owned(), lint_owner]);
         assert!(!needs.contains(&current), "same-phase data stays local");
     }
@@ -75,10 +74,12 @@ mod tests {
         let mut docs = group("demo", TaskKind::Doc, &[&lint.task_id]);
         docs.depends_on = vec![doctest.task_id.clone(), doctest.task_id.clone()];
         let proposals = vec![docs.clone(), doctest, lint];
-        let owner = job_id_for_member(&proposals, &docs)
+        let owners = JobOwners::new(&proposals).expect("owners");
+        let owner = owners
+            .for_member(&docs)
             .expect("valid phase")
             .expect("docs owner");
-        let needs = external_needs(&[&docs], &proposals, &owner).expect("phase needs");
+        let needs = external_needs(&[&docs], &owners, &owner).expect("phase needs");
         assert_eq!(needs.len(), 3, "plan, lint and tests, without duplicates");
         assert!(needs.iter().any(|id| id.ends_with("-lint")));
         assert!(needs.iter().any(|id| id.ends_with("-tests")));
@@ -91,11 +92,13 @@ mod tests {
         doctest.no_targets = true;
         let docs = group("demo", TaskKind::Doc, &[&doctest.task_id]);
         let proposals = vec![doctest, docs.clone()];
-        let owner = job_id_for_member(&proposals, &docs)
+        let owners = JobOwners::new(&proposals).expect("owners");
+        let owner = owners
+            .for_member(&docs)
             .expect("valid phase")
             .expect("docs owner");
         assert_eq!(
-            external_needs(&[&docs], &proposals, &owner).expect("vacuous gate"),
+            external_needs(&[&docs], &owners, &owner).expect("vacuous gate"),
             vec![PLAN_JOB_ID.to_owned()]
         );
     }
