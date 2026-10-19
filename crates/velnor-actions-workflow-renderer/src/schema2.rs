@@ -41,6 +41,8 @@ mod consumer_release_eligibility;
 mod features;
 #[path = "schema2_generator_release.rs"]
 mod generator_release;
+#[path = "schema2_job_image_candidate.rs"]
+mod job_image_candidate;
 #[path = "schema2_mbx_qualification.rs"]
 mod mbx_qualification;
 #[path = "schema2_mise_pin_qualification.rs"]
@@ -171,6 +173,9 @@ pub fn render_schema2_workflows(
         for (path, action) in generated.actions {
             files.push(file(&path, &request.version, &action)?);
         }
+    }
+    if request.workflows.contains(&RoutingWorkflow::ImageRelease) {
+        files.push(job_image_candidate::render_candidate_workflow(request)?);
     }
     if request.workflows.contains(&RoutingWorkflow::Monitoring) {
         files.push(file(
