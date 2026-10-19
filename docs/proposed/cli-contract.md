@@ -212,7 +212,7 @@ schema = 1
 # kind = "verification"
 # mise_task = "desktop-format-check"
 # runner = "macos-arm64"           # Or "linux-x64".
-# timeout_minutes = 5              # Required, bounded 1..=5.
+# timeout_minutes = 5              # Required, bounded 1..=10.
 
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]

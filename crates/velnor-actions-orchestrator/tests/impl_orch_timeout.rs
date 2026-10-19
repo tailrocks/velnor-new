@@ -57,7 +57,7 @@ fn generated_ci_bounds_every_job_per_kind() -> TestResult {
         ("plan", "5"),
         ("required", "5"),
         ("actionlint", "5"),
-        ("rust-demo", "5"),
+        ("rust-demo", "10"),
         ("publish-baseline", "5"),
     ] {
         assert_eq!(

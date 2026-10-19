@@ -285,7 +285,7 @@ check must include `gtar` on Darwin. Until the action-level check shows
 pre-extraction confinement for the staged path used by the action, do not report a
 stored-payload result.
 
-## Five-minute job budgets and cancellation (2026-10-18)
+## Job budgets and cancellation (2026-10-18)
 
 Compatibility was checked against original `actions/runner` commit
 [`9abfe11d2abd9de09d3a8d933d7ed701ea0518a3`](https://github.com/actions/runner/commit/9abfe11d2abd9de09d3a8d933d7ed701ea0518a3).
@@ -293,7 +293,7 @@ The runner's [executable-job schema](https://github.com/actions/runner/blob/9abf
 accepts `timeout-minutes` on a job with `runs-on`. GitHub's
 [job-timeout contract](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idtimeout-minutes)
 says expiration automatically cancels that job; its default is 360 minutes.
-Velnor must explicitly emit a timeout between one and five minutes on every
+Velnor must explicitly emit a timeout between one and ten minutes on every
 executable job, including CI, qualification, native image, signing, publication,
 recovery, and reusable-workflow callees. GitHub provides no workflow-wide timeout
 keyword: queued time, environment approval, and successive jobs are separate
