@@ -394,6 +394,6 @@ async fn probe_seed_with_id(journal: &Journal, nibble: &str) -> Result<ProbeSeed
         image_binding_digest: "e".repeat(64),
         projection_digest: "f".repeat(64),
         purpose: ResourceProbePurpose::Capacity,
-        request_sha256: "0".repeat(64),
+        request_sha256: crate::journal::capacity_request_sha256(),
     })
 }

@@ -97,6 +97,8 @@ use sql::{intent_row, one_row, same_ids, token_rejected};
 pub(crate) use request_lifecycle::{AuthorizedOffer, RequestAcquireState};
 #[cfg(test)]
 pub(crate) use resource_probe::ProbeLeaseState;
+#[cfg(test)]
+pub(crate) use resource_probe::capacity_request_sha256;
 pub(crate) use resource_probe::{
     ExecutionPublicationContext, ExecutionPublicationParent, ExecutionPublicationRecoveryRecord,
     ExecutionPublicationSeed, HostHelperRole, ProbePhase, ProbeRow, ProbeSeed, ProbeWork,

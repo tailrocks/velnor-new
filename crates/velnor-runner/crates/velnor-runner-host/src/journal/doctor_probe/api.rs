@@ -526,6 +526,8 @@ mod validation_tests {
         };
         assert!(!doctor_seed_valid(&seed));
         seed.purpose = ResourceProbePurpose::Capacity;
+        assert!(!doctor_seed_valid(&seed));
+        seed.request_sha256 = crate::journal::capacity_request_sha256();
         assert!(doctor_seed_valid(&seed));
     }
 }

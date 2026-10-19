@@ -69,8 +69,7 @@ pub(super) async fn seed(journal: &Journal, operation: char) -> Result<ProbeSeed
         image_binding_digest: "d".repeat(64),
         projection_digest: "e".repeat(64),
         purpose: crate::journal::ResourceProbePurpose::Capacity,
-        request_sha256: "5d76d86293261804706a16a73e0491cf4caa859f1b876cda706e568592b85cdf"
-            .to_owned(),
+        request_sha256: crate::journal::capacity_request_sha256(),
     })
 }
 
