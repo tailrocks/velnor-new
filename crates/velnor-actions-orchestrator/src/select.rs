@@ -14,16 +14,13 @@ use std::collections::BTreeSet;
 use std::ffi::OsString;
 use std::path::Path;
 
-use velnor_actions_contract::{ProposedTask, WorkflowEvent};
-use velnor_actions_mise::GitRequest;
-use velnor_actions_rust::SelectionBroadening;
-
-use crate::decisions::{broadening_for_path, selection_broadens_for_path};
 use crate::discover::Discovery;
 use crate::git_paths::{NON_UTF8_PATH, split_nul_paths};
 use crate::select_affected::{Ownership, affected_packages, has_unowned_file};
 use crate::select_edges::{base_edges, head_edges};
 use crate::validators::{validate_diff_rev, validate_select_diff_args};
+use velnor_actions_contract::{ProposedTask, WorkflowEvent};
+use velnor_actions_mise::GitRequest;
 
 #[path = "select_checkout.rs"]
 mod checkout;
@@ -36,6 +33,8 @@ pub(crate) use checkout::{verify_checkout, verify_checkout_until};
 pub(crate) use mode::{SelectionMode, selection_mode};
 use mode::{event_token, resolved_edges, resolved_links};
 
+#[path = "select_broadening_warning.rs"]
+mod broadening_warning;
 #[path = "select_tool_sources.rs"]
 mod tool_sources;
 
@@ -165,7 +164,7 @@ fn affected_from_changed(
         );
         BTreeSet::new()
     } else {
-        if let Some(warning) = broadening_warning(changed) {
+        if let Some(warning) = broadening_warning::for_changed_paths(changed) {
             warnings.push(warning);
             return all_packages;
         }
@@ -181,31 +180,6 @@ fn affected_from_changed(
     };
     affected.extend(tofu_affected);
     affected
-}
-
-/// The whole-run broadening warning one changed path triggers, if any.
-fn broadening_warning(changed: &BTreeSet<String>) -> Option<String> {
-    for (kind, warning) in [
-        (
-            SelectionBroadening::Lockfile,
-            "cargo_lock_changed:all_changed",
-        ),
-        (
-            SelectionBroadening::RootConfig,
-            "root_config_changed:all_changed",
-        ),
-    ] {
-        if changed
-            .iter()
-            .any(|path| broadening_for_path(path) == Some(kind))
-        {
-            return Some(warning.to_owned());
-        }
-    }
-    changed
-        .iter()
-        .find_map(|path| selection_broadens_for_path(path))
-        .map(str::to_owned)
 }
 
 /// Rust packages the full change set affects, or `None` to broaden.
@@ -393,7 +367,6 @@ fn local_change_set(
 #[cfg(test)]
 #[path = "group_selection_tests.rs"]
 mod group_selection_tests;
-
 #[cfg(test)]
 #[path = "select_matrix_tests.rs"]
 mod matrix_tests;

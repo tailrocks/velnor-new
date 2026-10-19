@@ -1,5 +1,8 @@
 //! In-memory workflow and generated-file rendering.
 
+#[path = "review_completion_workflow_emit.rs"]
+mod review_completion_workflow_emit;
+
 use velnor_actions_actionlint::render_actionlint_yaml;
 use velnor_actions_contract::{ExecutionMode, expand_workflow_with_qualification_sources};
 use velnor_actions_workflow_renderer::render::{RenderedFile, RenderedTree};
@@ -69,9 +72,7 @@ pub(super) fn render_all(
         prep, &routing,
     )?);
     extra.extend(crate::tofu_apply_emit::tofu_apply_files(prep, &routing)?);
-    extra.extend(crate::review_completion_workflow_emit::files(
-        prep, &routing,
-    )?);
+    extra.extend(review_completion_workflow_emit::files(prep, &routing)?);
     extra.extend(crate::routing::extra_files(
         &prep.config,
         &prep.emission_catalog(),
