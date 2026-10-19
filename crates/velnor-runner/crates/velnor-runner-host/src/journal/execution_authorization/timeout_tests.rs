@@ -4,90 +4,6 @@ use crate::worker::execution_authorization::{
     VerifiedProofChannelBinding, test_proof_channel_mount, test_verified_proof_channel_binding,
 };
 
-#[tokio::test]
-async fn timeout_api_denies_exact_started_request_and_keeps_charge() -> Result<(), HostError> {
-    let fixture = crate::journal::request_lifecycle::tests::native_started_intake_fixture().await?;
-    fixture.record_started().await?;
-    let NativeStartedParts {
-        scratch,
-        journal,
-        scope,
-        request_id,
-        channel,
-        ..
-    } = NativeStartedParts::from(fixture);
-
-    assert_eq!(
-        scope
-            .deny_started_request_timeout(&channel, request_id)
-            .await?,
-        StartedRequestTimeoutResult::Enqueued
-    );
-    assert_eq!(
-        scope
-            .deny_started_request_timeout(&channel, request_id)
-            .await?,
-        StartedRequestTimeoutResult::AlreadyEnqueued
-    );
-    assert_eq!(
-        scope
-            .deny_started_request_timeout(&channel, request_id + 1)
-            .await?,
-        StartedRequestTimeoutResult::NotEligible
-    );
-
-    let connection = journal.connection().await?;
-    assert_timeout_state(&connection, request_id, true).await?;
-    drop(connection);
-    drop(scope);
-    drop(journal);
-
-    // Opening a journal after timeout must preserve the denied proof and its
-    // cleanup charge. It must not turn the timeout into completion or release.
-    let reopened = crate::journal::Journal::open(&scratch.file()).await?;
-    let connection = reopened.connection().await?;
-    assert_timeout_state(&connection, request_id, true).await?;
-    drop(connection);
-    Ok(())
-}
-
-#[tokio::test]
-async fn timeout_api_loses_to_a_real_completed_event() -> Result<(), HostError> {
-    let fixture = crate::journal::request_lifecycle::tests::native_started_intake_fixture().await?;
-    fixture.record_started().await?;
-    let crate::journal::request_lifecycle::tests::NativeStartedIntakeFixture {
-        _journal: journal,
-        scope,
-        request_id,
-        message_id,
-        assignment,
-        runner,
-        source,
-        channel,
-        ..
-    } = fixture;
-    scope
-        .record_job_completed(
-            &assignment,
-            message_id + 1,
-            &source,
-            Some("success"),
-            Some(&runner),
-            Some("opaque-started-job"),
-        )
-        .await?;
-
-    assert_eq!(
-        scope
-            .deny_started_request_timeout(&channel, request_id)
-            .await?,
-        StartedRequestTimeoutResult::NotEligible
-    );
-    let connection = journal.connection().await?;
-    assert_completed_state(&connection, request_id).await?;
-    Ok(())
-}
-
 struct NativeStartedParts {
     scratch: crate::journal::request_lifecycle::tests::helpers::Scratch,
     journal: crate::journal::Journal,
@@ -240,91 +156,6 @@ async fn assert_completed_state(
     Ok(())
 }
 
-#[tokio::test]
-async fn timeout_classifier_requires_exact_live_started_pending_proof() -> Result<(), HostError> {
-    let path = std::env::temp_dir().join(format!(
-        "velnor-timeout-classifier-{}-{}.db",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|_| HostError::Journal)?
-            .as_nanos()
-    ));
-    let database = turso::Builder::new_local(path.to_str().ok_or(HostError::Journal)?)
-        .build()
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let connection = database.connect().map_err(|_| HostError::Journal)?;
-    create_schema(&connection).await?;
-    let channel = test_channel()?;
-    let channel_json =
-        String::from_utf8(channel.canonical_json()?).map_err(|_| HostError::Journal)?;
-    let channel_digest = channel.computed_digest()?;
-    insert_live_rows(&connection, &channel, &channel_json, &channel_digest).await?;
-
-    assert!(matches!(
-        load_timeout_state(&connection, &channel, 100, &channel_json, &channel_digest,).await?,
-        TimeoutState::Pending
-    ));
-    assert!(matches!(
-        load_timeout_state(&connection, &channel, 101, &channel_json, &channel_digest,).await?,
-        TimeoutState::NotEligible
-    ));
-    connection
-        .execute(
-            "UPDATE connection_request_authorizations SET completed_event_digest='completed' WHERE request_id=100",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    assert!(matches!(
-        load_timeout_state(&connection, &channel, 100, &channel_json, &channel_digest,).await?,
-        TimeoutState::NotEligible
-    ));
-    connection
-        .execute(
-            "UPDATE connection_request_authorizations SET completed_event_digest=NULL WHERE request_id=100",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-
-    connection
-        .execute(
-            "UPDATE connection_execution_proofs SET challenge_state='abandoned', proof_state='denied', deny_code='proof_malformed' WHERE intent_id=12",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute(
-            "INSERT INTO connection_completion_cleanup VALUES (12,'connection-1',13,100,701,'runner-701')",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    assert!(matches!(
-        load_timeout_state(&connection, &channel, 100, &channel_json, &channel_digest,).await?,
-        TimeoutState::AlreadyEnqueued
-    ));
-
-    connection
-        .execute(
-            "UPDATE connection_execution_proofs SET deny_code='interrupted_after_restart' WHERE intent_id=12",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    assert!(matches!(
-        load_timeout_state(&connection, &channel, 100, &channel_json, &channel_digest,).await?,
-        TimeoutState::NotEligible
-    ));
-    drop(connection);
-    drop(database);
-    std::fs::remove_file(path).map_err(|_| HostError::Journal)?;
-    Ok(())
-}
-
 fn test_channel() -> Result<VerifiedProofChannelBinding, HostError> {
     let control = test_proof_channel_mount(
         "/opt/velnor/source-proof/control".to_owned(),
@@ -434,3 +265,74 @@ async fn insert_live_rows(
     connection.execute("INSERT INTO connection_request_authorizations VALUES ('connection-1',13,100,'started-event',NULL)", ()).await.map_err(|_| HostError::Journal)?;
     Ok(())
 }
+
+async fn assert_timeout_classifier_states(
+    connection: &turso::Connection,
+    channel: &VerifiedProofChannelBinding,
+    channel_json: &str,
+    channel_digest: &str,
+) -> Result<(), HostError> {
+    assert!(matches!(
+        load_timeout_state(connection, channel, 100, channel_json, channel_digest,).await?,
+        TimeoutState::Pending
+    ));
+    assert!(matches!(
+        load_timeout_state(connection, channel, 101, channel_json, channel_digest,).await?,
+        TimeoutState::NotEligible
+    ));
+    connection
+        .execute(
+            "UPDATE connection_request_authorizations SET completed_event_digest='completed' WHERE request_id=100",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    assert!(matches!(
+        load_timeout_state(connection, channel, 100, channel_json, channel_digest,).await?,
+        TimeoutState::NotEligible
+    ));
+    connection
+        .execute(
+            "UPDATE connection_request_authorizations SET completed_event_digest=NULL WHERE request_id=100",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+
+    connection
+        .execute(
+            "UPDATE connection_execution_proofs SET challenge_state='abandoned', proof_state='denied', deny_code='proof_malformed' WHERE intent_id=12",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    connection
+        .execute(
+            "INSERT INTO connection_completion_cleanup VALUES (12,'connection-1',13,100,701,'runner-701')",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    assert!(matches!(
+        load_timeout_state(connection, channel, 100, channel_json, channel_digest,).await?,
+        TimeoutState::AlreadyEnqueued
+    ));
+
+    connection
+        .execute(
+            "UPDATE connection_execution_proofs SET deny_code='interrupted_after_restart' WHERE intent_id=12",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    assert!(matches!(
+        load_timeout_state(connection, channel, 100, channel_json, channel_digest,).await?,
+        TimeoutState::NotEligible
+    ));
+    Ok(())
+}
+
+#[path = "timeout_tests/api_cases.rs"]
+mod api_cases;
+#[path = "timeout_tests/classifier_cases.rs"]
+mod classifier_cases;
