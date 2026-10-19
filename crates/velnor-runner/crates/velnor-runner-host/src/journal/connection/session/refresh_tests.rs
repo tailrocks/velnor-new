@@ -15,6 +15,9 @@ use crate::journal::{
 };
 use crate::launch::{ReturnedSessionRefreshTransportError, VerifiedSessionRefresh};
 
+#[path = "refresh_tests/v13_fixture.rs"]
+mod v13_fixture;
+
 struct Scratch(PathBuf);
 
 impl Scratch {
@@ -353,39 +356,18 @@ async fn same_remote_session_id_has_independent_connection_scoped_generations()
 async fn version_thirteen_migration_keeps_bound_session_and_capacity() -> Result<(), HostError> {
     let scratch = Scratch::new()?;
     let path = scratch.file();
-    let (journal, scope) = open_scope(&path, "essential", 101).await?;
-    let (intent_id, _) = bind_session(
-        &scope,
-        "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-        "remote-session-v13",
-    )
-    .await?;
-    assert_eq!(journal.charged_header_capacity().await?, 1);
-    drop(scope);
-    drop(journal);
+    let intent_id = v13_fixture::seed(&path).await?;
+    let journal = Journal::open(&path).await?;
+    let scope = journal
+        .connection_scope(&binding("essential", 101)?)
+        .await?;
 
-    let database = turso::Builder::new_local(path.to_str().ok_or(HostError::Path)?)
-        .build()
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let connection = database.connect().map_err(|_| HostError::Journal)?;
-    connection
-        .execute("DROP TABLE connection_session_refreshes", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    connection
-        .execute("PRAGMA user_version = 13", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    drop(connection);
-    drop(database);
-
-    let (journal, scope) = open_scope(&path, "essential", 101).await?;
     assert_eq!(journal.charged_header_capacity().await?, 1);
-    assert_eq!(
-        scope.session_creates().await?[0].state(),
-        SessionCreateState::Bound
-    );
+    let creates = scope.session_creates().await?;
+    assert_eq!(creates.len(), 1);
+    assert_eq!(creates[0].intent_id(), Some(intent_id));
+    assert_eq!(creates[0].session_id(), Some(v13_fixture::session_id()));
+    assert_eq!(creates[0].state(), SessionCreateState::Bound);
     assert_eq!(scope.session_refreshes(intent_id).await?, Vec::new());
     Ok(())
 }
