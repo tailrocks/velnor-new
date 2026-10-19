@@ -140,9 +140,10 @@ fn buildx_installer_uses_the_lock_and_rejects_a_wrong_checksum() {
     let workspace = root.join("workspace");
     let runner_temp = root.join("runner-temp");
     let fake_bin = root.join("bin");
-    fs::create_dir_all(workspace.join(".velnor")).expect("create source lock path");
-    fs::create_dir_all(&fake_bin).expect("create fake command path");
-    fs::write(workspace.join(".velnor/runner.lock"), lock_text(SHA256)).expect("write source lock");
+    fs::create_dir_all(workspace.join(".velnor")).expect("The source lock path is not available.");
+    fs::create_dir_all(&fake_bin).expect("The fake command path is not available.");
+    fs::write(workspace.join(".velnor/runner.lock"), lock_text(SHA256))
+        .expect("The source lock file is not available.");
     let fake_curl = fake_bin.join("curl");
     fs::write(
         &fake_curl,
@@ -162,22 +163,26 @@ fn buildx_installer_uses_the_lock_and_rejects_a_wrong_checksum() {
     );
     let plugin = runner_temp.join("velnor-docker-config/cli-plugins/docker-buildx");
     assert_eq!(
-        fs::read(&plugin).expect("read installed plugin"),
+        fs::read(&plugin).expect("The installed plug-in is not available."),
         PAYLOAD.as_bytes()
     );
     assert_eq!(
         fs::metadata(&plugin)
-            .expect("plugin metadata")
+            .expect("The plug-in metadata is not available.")
             .permissions()
             .mode()
             & 0o777,
         0o755
     );
     assert_eq!(
-        fs::metadata(plugin.parent().expect("plugin directory"))
-            .expect("plugin directory metadata")
-            .permissions()
-            .mode()
+        fs::metadata(
+            plugin
+                .parent()
+                .expect("The plug-in directory is not available.")
+        )
+        .expect("The plug-in directory metadata is not available.")
+        .permissions()
+        .mode()
             & 0o777,
         0o700
     );
@@ -187,7 +192,7 @@ fn buildx_installer_uses_the_lock_and_rejects_a_wrong_checksum() {
         workspace.join(".velnor/runner.lock"),
         lock_text(&"0".repeat(64)),
     )
-    .expect("write incorrect source checksum");
+    .expect("Write a source checksum with an incorrect value.");
     let failure = run_installer(&workspace, &wrong_temp, &fake_bin);
     assert!(!failure.status.success());
     assert!(
@@ -199,7 +204,7 @@ fn buildx_installer_uses_the_lock_and_rejects_a_wrong_checksum() {
             .join("velnor-docker-config/cli-plugins/docker-buildx")
             .exists()
     );
-    fs::remove_dir_all(root).expect("remove installer test files");
+    fs::remove_dir_all(root).expect("Remove the installer test files.");
 }
 
 #[test]
@@ -214,7 +219,7 @@ fn attestation_download_uses_only_the_uploaded_artifact_id() {
         .find(|step| {
             optional_field(step, "uses") == Some(&Yaml::str(crate::steps::DOWNLOAD_ARTIFACT_USES))
         })
-        .expect("find artifact download step");
+        .expect("The artifact download step is not available.");
     let inputs = field(download, "with");
     assert_eq!(
         field(inputs, "artifact-ids"),
@@ -247,7 +252,10 @@ fn publisher_consumes_same_run_artifact_and_keeps_token_out_of_evidence_upload()
     let publisher = steps
         .iter()
         .find(|step| {
-            optional_field(step, "name") == Some(&Yaml::str("Publish the verified job image"))
+            optional_field(step, "name")
+                == Some(&Yaml::str(
+                    "Publish the job image with its signed build evidence.",
+                ))
         })
         .expect("Find the job image publisher step.");
     let env = field(publisher, "env");
@@ -267,7 +275,8 @@ fn publisher_consumes_same_run_artifact_and_keeps_token_out_of_evidence_upload()
     let evidence = steps
         .iter()
         .find(|step| {
-            optional_field(step, "name") == Some(&Yaml::str("Store job image publication evidence"))
+            optional_field(step, "name")
+                == Some(&Yaml::str("Upload job image publication evidence"))
         })
         .expect("Find the publication evidence upload step.");
     assert!(optional_field(evidence, "env").is_none());
@@ -293,7 +302,7 @@ fn no_image_selection_emits_no_candidate_workflow() {
 
 fn request() -> Schema2WorkflowRequest {
     let scale_set =
-        Schema2WorkflowRequest::canonical_scale_set().expect("Get the Scale Set selector.");
+        Schema2WorkflowRequest::canonical_scale_set().expect("Read the Scale Set selector.");
     Schema2WorkflowRequest {
         version: "0.1.19".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
@@ -319,9 +328,9 @@ fn run_installer(
     use std::process::Command;
 
     let path = std::env::join_paths(std::iter::once(fake_bin.to_path_buf()).chain(
-        std::env::split_paths(&std::env::var_os("PATH").expect("PATH is set")),
+        std::env::split_paths(&std::env::var_os("PATH").expect("PATH is available.")),
     ))
-    .expect("join test path");
+    .expect("The test path cannot be joined.");
     Command::new("bash")
         .args(["-e", "-o", "pipefail", "-c", super::BUILDX_INSTALL])
         .env("GITHUB_WORKSPACE", workspace)
@@ -339,7 +348,7 @@ fn temporary_directory(label: &str) -> std::path::PathBuf {
         std::process::id(),
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("system time follows epoch")
+            .expect("System time is later than the epoch.")
             .as_nanos()
     ))
 }

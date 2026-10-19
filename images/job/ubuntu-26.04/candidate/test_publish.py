@@ -156,7 +156,7 @@ class PublisherTests(unittest.TestCase):
             "status": "completed", "conclusion": "failure",
         }
         with mock.patch.object(publish, "_api", return_value={"workflow_runs": [run]}):
-            with self.assertRaisesRegex(publish.PublishError, "did not succeed"):
+            with self.assertRaisesRegex(publish.PublishError, "has no `success` conclusion"):
                 publish._check_ci(identity)
         run["conclusion"] = "success"
         run["path"] = ".github/workflows/other.yml"
@@ -257,7 +257,7 @@ class PublisherTests(unittest.TestCase):
     def test_registry_digest_and_manifest_byte_mismatch_fail(self):
         content = b"exact manifest"
         wrong = FakeTransport([publish._Response(200, {}, b"tampered value")])
-        with self.assertRaisesRegex(publish.PublishError, "wrong digest"):
+        with self.assertRaisesRegex(publish.PublishError, "incorrect digest"):
             publish._verify_get(wrong, "token-value-1234567890", "manifests", digest(content), content, len(content))
         bad_head = FakeTransport([publish._Response(200, {
             "Docker-Content-Digest": digest(b"different"), "Content-Length": str(len(content)),

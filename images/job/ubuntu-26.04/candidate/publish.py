@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish one verified job image candidate to the fixed GHCR repository."""
+"""Publish one job image candidate after the signed data has a PASS result in each check."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ TIMEOUT_SECONDS = 30
 
 
 class PublishError(ValueError):
-    """Publication evidence or registry response is invalid."""
+    """Publication evidence or registry response is incorrect."""
 
 
 def _fail(message: str) -> None:
@@ -45,7 +45,7 @@ def _json(data: bytes, label: str) -> Any:
     try:
         return json.loads(data, object_pairs_hook=candidate._unique_object)
     except (UnicodeDecodeError, json.JSONDecodeError, candidate.CandidateError):
-        _fail(f"{label} is invalid.")
+        _fail(f"{label} has an incorrect format.")
 
 
 def _sha(data: bytes) -> str:
@@ -66,13 +66,13 @@ def _sha_file(path: Path) -> tuple[str, int]:
 
 def _run_id(value: str, label: str) -> int:
     if not re.fullmatch(r"[1-9][0-9]{0,19}", value):
-        _fail(f"{label} is invalid.")
+        _fail(f"{label} is incorrect.")
     return int(value)
 
 
 def _sha1(value: str, label: str) -> str:
     if not re.fullmatch(r"[0-9a-f]{40}", value):
-        _fail(f"{label} is invalid.")
+        _fail(f"{label} is incorrect.")
     return value
 
 
@@ -105,26 +105,26 @@ def _current_identity(root: Path) -> dict[str, Any]:
     if any(not env.get(name) for name in required):
         _fail("Required GitHub workflow identity is missing.")
     if env["GITHUB_REPOSITORY"] != REPOSITORY:
-        _fail("Publication repository is invalid.")
+        _fail("Publication repository is incorrect.")
     if env["GITHUB_REF"] != "refs/heads/main" or env["GITHUB_EVENT_NAME"] != "workflow_dispatch":
-        _fail("Publication requires workflow_dispatch on refs/heads/main.")
+        _fail("Publication is only for workflow_dispatch on refs/heads/main.")
     if env["GITHUB_WORKFLOW_REF"] != f"{WORKFLOW}@refs/heads/main":
-        _fail("Publication workflow authority is invalid.")
+        _fail("Publication workflow authority is incorrect.")
     source = _sha1(env["GITHUB_SHA"], "Source SHA")
     authority = _sha1(env["GITHUB_WORKFLOW_SHA"], "Workflow authority SHA")
     if authority != source:
-        _fail("Workflow authority SHA differs from source SHA.")
+        _fail("Workflow authority SHA is different from source SHA.")
     if not env["GITHUB_REPOSITORY_ID"].isdigit() or int(env["GITHUB_REPOSITORY_ID"]) != REPOSITORY_ID:
-        _fail("GitHub repository ID is invalid.")
+        _fail("GitHub repository ID is incorrect.")
     try:
         checkout = subprocess.check_output(
             ["git", "-C", str(root), "rev-parse", "HEAD"],
             stderr=subprocess.DEVNULL, timeout=TIMEOUT_SECONDS, text=True,
         ).strip()
     except (OSError, subprocess.SubprocessError):
-        _fail("Cannot read checked-out source commit.")
+        _fail("Cannot read the Git source commit.")
     if checkout != source:
-        _fail("Checked-out source differs from GitHub source SHA.")
+        _fail("Git source commit is not the same as the commit identified by GitHub source SHA.")
     return {
         "repository": REPOSITORY,
         "repository_id": int(env["GITHUB_REPOSITORY_ID"]),
@@ -145,7 +145,7 @@ def _assert_current_main(identity: dict[str, Any]) -> None:
             or type(repository.get("id")) is not int
             or repository["id"] != REPOSITORY_ID
             or identity["repository_id"] != REPOSITORY_ID):
-        _fail("GitHub repository ID does not match the canonical repository.")
+        _fail("GitHub repository ID is not the same as the canonical repository ID.")
     tip = _api(f"repos/{REPOSITORY}/commits/main")
     if not isinstance(tip, dict) or tip.get("sha") != identity["source"]:
         _fail("Source SHA is not the current main commit.")
@@ -160,16 +160,16 @@ def _check_candidate(root: Path, archive: Path, record_path: Path,
     oci = candidate.verify_oci_archive(archive)
     archive_hash, archive_size = _sha_file(archive)
     if record["archive"] != {"sha256": archive_hash, "size_bytes": archive_size}:
-        _fail("Candidate archive does not match its signed record.")
+        _fail("Candidate archive is not the same as the archive in its signed record.")
     if record["oci"] != oci:
-        _fail("Candidate OCI graph does not match its signed record.")
+        _fail("Candidate OCI graph is not the same as the graph in its signed record.")
     candidate._verify_source_inputs(record, root)
     try:
         lock = tomllib.loads((root / ".velnor/runner.lock").read_text())
     except (OSError, tomllib.TOMLDecodeError):
-        _fail("Runner image lock is invalid.")
+        _fail("Cannot read the runner image lock.")
     if not isinstance(lock, dict) or not isinstance(lock.get("buildx_version"), str):
-        _fail("Runner image lock is invalid.")
+        _fail("Runner image lock has incorrect fields.")
     candidate._locked_buildx_identity(record["build"]["builder"], lock["buildx_version"])
     _check_candidate_identity(record, identity)
     return record, record_raw, oci
@@ -187,24 +187,24 @@ def _check_candidate_identity(record: dict[str, Any], identity: dict[str, Any]) 
         "run_id": identity["run_id"],
         "run_attempt": identity["run_attempt"],
     }:
-        _fail("Candidate run identity differs from the publication run.")
+        _fail("Candidate run identity is different from the publication run identity.")
 
 
 def _check_artifact(identity: dict[str, Any]) -> None:
     response = _api(f"repos/{REPOSITORY}/actions/runs/{identity['run_id']}/artifacts?per_page=100")
     if not isinstance(response, dict) or not isinstance(response.get("artifacts"), list):
-        _fail("Candidate artifact response is invalid.")
+        _fail("Candidate artifact response has an incorrect format.")
     expected_name = f"{ARTIFACT_PREFIX}{identity['run_attempt']}"
     matches = [item for item in response["artifacts"] if isinstance(item, dict)
                and item.get("name") == expected_name]
     if len(matches) != 1:
-        _fail("Expected one candidate artifact in this workflow run.")
+        _fail("This workflow run must have one candidate artifact.")
     artifact = matches[0]
     if (artifact.get("id") != identity["artifact_id"] or artifact.get("expired") is not False
             or artifact.get("workflow_run", {}).get("id") != identity["run_id"]
             or artifact.get("workflow_run", {}).get("head_sha") != identity["source"]
             or artifact.get("workflow_run", {}).get("head_branch") != "main"):
-        _fail("Candidate artifact ID, expiry, or workflow run does not match.")
+        _fail("Candidate artifact ID, expiry, or workflow run is incorrect.")
 
 
 def _check_ci(source: str) -> dict[str, Any]:
@@ -212,7 +212,7 @@ def _check_ci(source: str) -> dict[str, Any]:
         f"repos/{REPOSITORY}/actions/workflows/ci.yml/runs?head_sha={source}&branch=main&event=push&per_page=100"
     )
     if not isinstance(response, dict) or not isinstance(response.get("workflow_runs"), list):
-        _fail("Canonical CI run response is invalid.")
+        _fail("Canonical CI run response has an incorrect format.")
     runs = [run for run in response["workflow_runs"] if isinstance(run, dict)
             and run.get("path") == ".github/workflows/ci.yml"
             and run.get("event") == "push" and run.get("head_branch") == "main"
@@ -226,7 +226,7 @@ def _check_ci(source: str) -> dict[str, Any]:
     latest = runs[-1]
     same_number = [item for item in runs if item["run_number"] == latest["run_number"]]
     if len(same_number) != 1 or latest.get("status") != "completed" or latest.get("conclusion") != "success":
-        _fail("Latest canonical main CI run did not succeed.")
+        _fail("The latest canonical main CI run has no `success` conclusion.")
     return {"run_id": latest["id"], "run_attempt": latest["run_attempt"]}
 
 
@@ -242,7 +242,7 @@ def _verify_attestation(path: Path, source: str) -> None:
         _fail("Attestation verification output exceeds its size limit.")
     verified = _json(raw, "Attestation verification output")
     if not isinstance(verified, list) or not verified:
-        _fail("Attestation verification output has no verified records.")
+        _fail("Attestation verification output has no records.")
     for item in verified:
         try:
             certificate = item["verificationResult"]["signature"]["certificate"]
@@ -251,14 +251,14 @@ def _verify_attestation(path: Path, source: str) -> None:
             _fail("Attestation certificate has no repository identifier.")
         if not ((type(identifier) is int and identifier == REPOSITORY_ID)
                 or (type(identifier) is str and identifier == str(REPOSITORY_ID))):
-            _fail("Attestation certificate repository ID is invalid.")
+            _fail("Attestation certificate repository ID is incorrect.")
         if (certificate.get("githubWorkflowRepository") != REPOSITORY
                 or certificate.get("githubWorkflowSHA") != source
                 or certificate.get("githubWorkflowRef") != "refs/heads/main"
                 or certificate.get("githubWorkflowTrigger") != "workflow_dispatch"
                 or certificate.get("sourceRepositoryRef") != "refs/heads/main"
                 or certificate.get("sourceRepositoryDigest") != source):
-            _fail("Attestation certificate source or workflow identity is invalid.")
+            _fail("Attestation certificate source or workflow identity is incorrect.")
 
 
 def _file_blob(archive: Path, digest: str, expected_size: int, directory: Path) -> Path:
@@ -270,7 +270,7 @@ def _file_blob(archive: Path, digest: str, expected_size: int, directory: Path) 
         with tarfile.open(archive, "r:") as tar:
             member = tar.getmember(f"blobs/sha256/{hexdigest}")
             if not member.isfile() or member.size != expected_size or expected_size > MAX_UPLOAD_BYTES:
-                _fail("OCI blob descriptor size is invalid.")
+                _fail("OCI blob descriptor size is incorrect.")
             source = tar.extractfile(member)
             if source is None:
                 _fail("OCI blob is missing from archive.")
@@ -284,7 +284,7 @@ def _file_blob(archive: Path, digest: str, expected_size: int, directory: Path) 
     except (OSError, tarfile.TarError):
         _fail("Cannot read OCI blob from archive.")
     if size != expected_size or hasher.hexdigest() != hexdigest:
-        _fail("OCI blob bytes do not match their descriptor.")
+        _fail("OCI blob bytes are not the same as the bytes identified by their descriptor.")
     return output
 
 
@@ -310,7 +310,7 @@ class _HttpsTransport:
             connection.putrequest(method, path)
             for name, value in headers.items():
                 if "\r" in name + value or "\n" in name + value:
-                    _fail("Invalid registry request header.")
+                    _fail("Registry request header has an incorrect format.")
                 connection.putheader(name, value)
             if body is not None:
                 connection.putheader("Content-Length", str(length))
@@ -361,7 +361,7 @@ class _HttpsTransport:
             if response.status != 200 or normalized.get("content-length") != str(size):
                 _fail("Registry GET verification failed.")
             if normalized.get("docker-content-digest") not in (None, digest):
-                _fail("Registry GET digest header differs from the requested digest.")
+                _fail("Registry GET digest header is different from the requested digest.")
             hasher = hashlib.sha256()
             remaining = size
             if isinstance(expected, bytes):
@@ -385,7 +385,7 @@ class _HttpsTransport:
                     if stream.read(1):
                         _fail("Expected OCI blob changed during verification.")
             if response.read(1) or hasher.hexdigest() != digest.removeprefix("sha256:"):
-                _fail("Registry returned bytes with the wrong digest or size.")
+                _fail("Registry response bytes have an incorrect digest or size.")
             return _Response(response.status, response_headers, b"")
         except (OSError, http.client.HTTPException, TimeoutError):
             _fail("Registry GET request failed or timed out.")
@@ -396,23 +396,23 @@ class _HttpsTransport:
 def _auth_token(transport: _HttpsTransport, actor: str, github_token: str) -> str:
     challenge = transport.request("GET", f"https://{REGISTRY}/v2/", {})
     if challenge.status != 401:
-        _fail("Registry did not require authentication.")
+        _fail("Registry did not ask for authentication.")
     value = challenge.headers.get("www-authenticate", "")
     match = re.fullmatch(r"Bearer\s+(.+)", value)
     if match is None:
-        _fail("Registry authentication challenge is invalid.")
+        _fail("Registry authentication challenge has an incorrect format.")
     params: dict[str, str] = {}
     remaining = match.group(1)
     while remaining:
         part = re.match(r'\s*([A-Za-z][A-Za-z0-9_-]*)="([^"\\]*)"\s*(?:,|$)', remaining)
         if part is None or part.group(1) in params:
-            _fail("Registry authentication challenge is invalid.")
+            _fail("Registry authentication challenge has an incorrect format.")
         params[part.group(1)] = part.group(2)
         remaining = remaining[part.end():]
     if (set(params) - {"realm", "service", "scope"}
             or params.get("realm") != f"https://{REGISTRY}/token"
             or params.get("service") != REGISTRY):
-        _fail("Registry authentication challenge is invalid.")
+        _fail("Registry authentication challenge has an incorrect format.")
     basic = base64.b64encode(f"{actor}:{github_token}".encode()).decode("ascii")
     query = urlencode({"service": "ghcr.io", "scope": f"repository:{PACKAGE}:pull,push"})
     response = transport.request(
@@ -424,7 +424,7 @@ def _auth_token(transport: _HttpsTransport, actor: str, github_token: str) -> st
     data = _json(response.body, "Registry token response")
     token = data.get("token", data.get("access_token")) if isinstance(data, dict) else None
     if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9._~=-]{16,8192}", token):
-        _fail("Registry token response has no valid token.")
+        _fail("Registry token response has no token in the required format.")
     return token
 
 
@@ -456,7 +456,7 @@ def _validate_location(base: str, location: str) -> str:
         _fail("Registry upload location is outside the fixed HTTPS upload path.")
     if any(not key or "\r" in key + value or "\n" in key + value
            for key, value in parse_qsl(parsed.query, keep_blank_values=True)):
-        _fail("Registry upload query is invalid.")
+        _fail("Registry upload query has an incorrect format.")
     return resolved
 
 
@@ -484,9 +484,9 @@ def _verify_get(transport: _HttpsTransport, token: str, kind: str, digest: str,
         if response.status != 200 or len(response.body) != size:
             _fail("Registry GET verification failed.")
         if response.headers.get("docker-content-digest") not in (None, digest):
-            _fail("Registry GET digest header differs from the requested digest.")
+            _fail("Registry GET digest header is different from the requested digest.")
         if hashlib.sha256(response.body).hexdigest() != digest.removeprefix("sha256:"):
-            _fail("Registry returned bytes with the wrong digest.")
+            _fail("Registry response bytes have an incorrect digest.")
         if isinstance(expected, bytes) and response.body != expected:
             _fail("Registry manifest bytes changed during publication.")
         if isinstance(expected, Path):
@@ -549,7 +549,7 @@ def _upload_manifest(transport: _HttpsTransport, token: str, manifest: bytes,
     if response.status != 201:
         _fail("Registry manifest upload did not complete.")
     if response.headers.get("docker-content-digest") not in (None, digest):
-        _fail("Registry reported a different manifest digest.")
+        _fail("Registry response has a manifest digest that is different from the requested digest.")
     if not _head_object(transport, token, "manifests", digest, size):
         _fail("Registry manifest is absent after upload.")
     _verify_get(transport, token, "manifests", digest, manifest, size)
@@ -571,16 +571,16 @@ def _blob_descriptors(manifest: dict[str, Any]) -> dict[str, int]:
     config = manifest.get("config")
     layers = manifest.get("layers")
     if not isinstance(config, dict) or not isinstance(layers, list):
-        _fail("OCI manifest blob descriptors are invalid.")
+        _fail("OCI manifest blob descriptors are incorrect.")
     unique: dict[str, int] = {}
     for descriptor in [config, *layers]:
         if not isinstance(descriptor, dict):
-            _fail("OCI blob descriptor is invalid.")
+            _fail("OCI blob descriptor is incorrect.")
         digest = descriptor.get("digest")
         size = descriptor.get("size")
         if (not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest)
                 or type(size) is not int or not 1 <= size <= MAX_UPLOAD_BYTES):
-            _fail("OCI blob descriptor is invalid.")
+            _fail("OCI blob descriptor is incorrect.")
         if digest in unique and unique[digest] != size:
             _fail("Repeated OCI blob digest has inconsistent sizes.")
         unique[digest] = size
@@ -612,7 +612,7 @@ def publish(args: argparse.Namespace) -> None:
                                        oci["platform_manifest_size_bytes"])
     manifest_value = _json(platform_manifest, "OCI manifest")
     if not isinstance(manifest_value, dict):
-        _fail("OCI platform manifest is invalid.")
+        _fail("OCI platform manifest has an incorrect format.")
     with tempfile.TemporaryDirectory(prefix="velnor-job-publish-") as temp:
         temp_path = Path(temp)
         config = manifest_value["config"]
@@ -659,11 +659,11 @@ def publish(args: argparse.Namespace) -> None:
         _fail("Publication evidence exceeds its size limit.")
     result_path.parent.mkdir(parents=True, exist_ok=True)
     result_path.write_bytes(encoded)
-    print("PASS: Verified job image published by OCI digest; private package access remains unproven.")
+    print("PASS: Publication completed for the job image with its OCI digest. Package access is `NOT_RUN`.")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Verify and publish a job image candidate.")
+    parser = argparse.ArgumentParser(description="Do a check of a job image candidate and publish it.")
     parser.add_argument("--root", required=True)
     parser.add_argument("--archive", required=True)
     parser.add_argument("--record", required=True)

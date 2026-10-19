@@ -104,7 +104,7 @@ fn build_job(hosted: Yaml) -> (String, Yaml) {
         "DOCKER_CONFIG=\"$RUNNER_TEMP/velnor-docker-config\" python3 images/job/ubuntu-26.04/candidate/candidate.py build --source-commit \"$GITHUB_SHA\" --archive \"$RUNNER_TEMP/{ARCHIVE}\" --record \"$RUNNER_TEMP/{RECORD}\""
     );
     let steps = vec![
-        checkout_step("Use the exact source commit"),
+        checkout_step("Use the source commit selected by GitHub."),
         run_step(
             "Install the Buildx plugin from .velnor/runner.lock",
             BUILDX_INSTALL,
@@ -148,10 +148,7 @@ fn attest_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
         "python3 images/job/ubuntu-26.04/candidate/candidate.py validate --archive \"{archive}\" --record \"{record}\""
     );
     let attest = Yaml::Map(vec![
-        (
-            "name".to_owned(),
-            Yaml::str("Attest the exact candidate bytes"),
-        ),
+        ("name".to_owned(), Yaml::str("Attest all candidate bytes.")),
         ("uses".to_owned(), Yaml::str(ATTEST_BUILD_PROVENANCE_USES)),
         (
             "with".to_owned(),
@@ -162,7 +159,7 @@ fn attest_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
         ),
     ]);
     let steps = vec![
-        checkout_step("Use the exact source commit"),
+        checkout_step("Use the source commit selected by GitHub."),
         artifact_id_check_step(artifact_id),
         download_step(artifact_id),
         run_step("Do a check of source and archive identity", &validate),
@@ -204,7 +201,10 @@ fn publish_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
     let publish = format!(
         "python3 images/job/ubuntu-26.04/candidate/publish.py --root . --archive \"{archive}\" --record \"{record}\" --result \"{result}\""
     );
-    let mut publish_step = run_step("Publish the verified job image", &publish);
+    let mut publish_step = run_step(
+        "Publish the job image with its signed build evidence.",
+        &publish,
+    );
     if let Yaml::Map(fields) = &mut publish_step {
         fields.push((
             "env".to_owned(),
@@ -218,7 +218,7 @@ fn publish_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
         ));
     }
     let steps = vec![
-        checkout_step("Use the exact source commit"),
+        checkout_step("Use the source commit selected by GitHub."),
         artifact_id_check_step(artifact_id),
         download_step(artifact_id),
         publish_step,
@@ -295,7 +295,7 @@ fn upload_step() -> Yaml {
     Yaml::Map(vec![
         (
             "name".to_owned(),
-            Yaml::str("Store candidate archive and record"),
+            Yaml::str("Upload candidate archive and record"),
         ),
         ("id".to_owned(), Yaml::str("upload")),
         ("uses".to_owned(), Yaml::str(UPLOAD_ARTIFACT_USES)),
@@ -320,7 +320,7 @@ fn publication_evidence_upload_step(result: &str) -> Yaml {
     Yaml::Map(vec![
         (
             "name".to_owned(),
-            Yaml::str("Store job image publication evidence"),
+            Yaml::str("Upload job image publication evidence"),
         ),
         ("uses".to_owned(), Yaml::str(UPLOAD_ARTIFACT_USES)),
         (
@@ -359,7 +359,7 @@ fn download_step(artifact_id: &str) -> Yaml {
     Yaml::Map(vec![
         (
             "name".to_owned(),
-            Yaml::str("Get the job image candidate from this workflow run"),
+            Yaml::str("Download the job image candidate from this workflow run"),
         ),
         ("uses".to_owned(), Yaml::str(DOWNLOAD_ARTIFACT_USES)),
         (

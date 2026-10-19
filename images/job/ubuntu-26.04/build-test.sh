@@ -27,9 +27,9 @@ if lock["base_image_platform"] != "linux/amd64":
 if not re.fullmatch(r"ubuntu:26\.04", base_name) or not re.fullmatch(r"sha256:[0-9a-f]{64}", base_digest):
     raise SystemExit(".velnor/runner.lock has an incorrect Ubuntu image identity.")
 if base != f"{base_name}@{base_digest}":
-    raise SystemExit(".velnor/runner.lock does not preserve its fully pinned base image.")
+    raise SystemExit("The base image is not pinned to the complete image reference in `.velnor/runner.lock`.")
 if dockerfile.count(f"FROM --platform=linux/amd64 {base}\n") != 1:
-    raise SystemExit("Dockerfile must use the exact pinned amd64 Ubuntu image.")
+    raise SystemExit("Dockerfile must use the pinned amd64 Ubuntu image.")
 
 docker_version = lock["docker_version"]
 if docker_version != "29.9.1":
@@ -58,7 +58,7 @@ for name, url, sha256, destination in artifacts:
         raise SystemExit(f"Dockerfile does not contain the pinned {name} URL or SHA-256.")
     digest_target = f"{sha256} \\\n        {destination}"
     if digest_target not in dockerfile:
-        raise SystemExit(f"The {name} checksum has the wrong file path in Dockerfile.")
+        raise SystemExit(f"The {name} checksum has an incorrect file path in Dockerfile.")
 if dockerfile.count("sha256sum --check --status") != len(artifacts):
     raise SystemExit("Dockerfile must compare each artifact's SHA-256 with its pinned SHA-256.")
 
@@ -110,7 +110,7 @@ for forbidden in (
     "node24",
 ):
     if forbidden in lower:
-        raise SystemExit(f"The job Dockerfile contains Runner or controller data: {forbidden}")
+        raise SystemExit(f"The job Dockerfile has Runner or controller data: {forbidden}")
 
 if "Runner tools at `/__e`" not in readme_text:
     raise SystemExit("README must give the official Runner mount path /__e.")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build an Ubuntu job image candidate. Verify its OCI archive."""
+"""Build an Ubuntu job image candidate. Do a check of its OCI archive."""
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ OCI_KEYS = {
 
 
 class CandidateError(ValueError):
-    """The candidate input or archive is invalid."""
+    """The candidate input or archive is incorrect."""
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -81,11 +81,11 @@ def _json_bytes(data: bytes, label: str) -> Any:
     try:
         return json.loads(data, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise CandidateError(f"Invalid {label} JSON.") from error
+        raise CandidateError(f"{label} JSON has an incorrect format.") from error
 
 
 def _reject_constant(value: str) -> None:
-    raise CandidateError(f"Invalid JSON constant: {value}")
+    raise CandidateError(f"JSON constant has an incorrect value: {value}.")
 
 
 def _exact_keys(value: Any, expected: set[str], label: str) -> dict[str, Any]:
@@ -119,7 +119,7 @@ def _safe_member(name: str) -> str:
     path = PurePosixPath(name)
     normalized = str(path)
     if path.is_absolute() or ".." in path.parts or normalized != name or name in {"", "."}:
-        raise CandidateError("OCI archive contains an unsafe path.")
+        raise CandidateError("OCI archive contains a path that is not safe.")
     return name
 
 
@@ -192,7 +192,7 @@ def verify_oci_archive(path: Path) -> dict[str, Any]:
     if not isinstance(index, dict) or set(index) - {"schemaVersion", "mediaType", "manifests", "annotations"}:
         raise CandidateError("OCI index has unknown fields.")
     if index.get("schemaVersion") != 2 or not isinstance(index.get("manifests"), list):
-        raise CandidateError("OCI index schema is invalid.")
+        raise CandidateError("OCI index schema is incorrect.")
     manifests = index["manifests"]
     if len(manifests) != 1:
         raise CandidateError("OCI index must select one platform manifest.")
@@ -203,33 +203,33 @@ def verify_oci_archive(path: Path) -> dict[str, Any]:
     ):
         raise CandidateError("OCI platform descriptor has unknown or missing fields.")
     if type(descriptor["size"]) is not int or descriptor["size"] < 1:
-        raise CandidateError("OCI manifest size is invalid.")
+        raise CandidateError("OCI manifest size is incorrect.")
     if index.get("mediaType", "application/vnd.oci.image.index.v1+json") != "application/vnd.oci.image.index.v1+json":
-        raise CandidateError("OCI index media type is invalid.")
+        raise CandidateError("OCI index media type is incorrect.")
     if descriptor["platform"] != PLATFORM:
-        raise CandidateError("OCI archive does not contain exactly linux/amd64.")
+        raise CandidateError("OCI archive platform is not linux/amd64.")
     manifest_digest = _digest(descriptor["digest"], "Manifest digest")
     manifest_hex = manifest_digest.removeprefix("sha256:")
     manifest_size = blobs.get(manifest_hex)
     if manifest_size is None:
         raise CandidateError("OCI manifest blob is missing.")
     if manifest_size != descriptor["size"]:
-        raise CandidateError("OCI manifest size does not match its descriptor.")
+        raise CandidateError("OCI manifest size is not the same as its descriptor size.")
     manifest_raw = _read_blob(path, manifest_hex)
     if _sha(manifest_raw) != manifest_hex:
-        raise CandidateError("OCI manifest blob has the wrong digest.")
+        raise CandidateError("OCI manifest blob has an incorrect digest.")
     manifest = _json_bytes(manifest_raw, "OCI manifest")
     if not isinstance(manifest, dict) or manifest.get("schemaVersion") != 2:
-        raise CandidateError("OCI manifest schema is invalid.")
+        raise CandidateError("OCI manifest schema is incorrect.")
     if manifest.get("mediaType") != "application/vnd.oci.image.manifest.v1+json":
-        raise CandidateError("OCI manifest media type is invalid.")
+        raise CandidateError("OCI manifest media type is incorrect.")
     if descriptor["mediaType"] != manifest["mediaType"]:
-        raise CandidateError("OCI index and manifest media types differ.")
+        raise CandidateError("OCI index and manifest media types are different.")
     if set(manifest) - {"schemaVersion", "mediaType", "config", "layers", "annotations"}:
         raise CandidateError("OCI manifest has unknown fields.")
     config = _descriptor(manifest.get("config"), "config")
     if config["mediaType"] != "application/vnd.oci.image.config.v1+json":
-        raise CandidateError("OCI image configuration media type is invalid.")
+        raise CandidateError("OCI image configuration media type is incorrect.")
     layers = manifest.get("layers")
     if not isinstance(layers, list) or not layers:
         raise CandidateError("OCI manifest must contain image layers.")
@@ -244,20 +244,20 @@ def verify_oci_archive(path: Path) -> dict[str, Any]:
     for layer in layers:
         entry = _descriptor(layer, "layer")
         if entry["mediaType"] not in LAYER_MEDIA_TYPES:
-            raise CandidateError("OCI layer media type is invalid.")
+            raise CandidateError("OCI layer media type is incorrect.")
         _record_blob_descriptor(referenced, entry)
         layer_digests.append(entry["digest"])
     if set(blobs) != set(referenced):
         raise CandidateError("OCI archive has missing or unreferenced blobs.")
     for digest, (size, _media_type) in referenced.items():
         if blobs[digest] != size:
-            raise CandidateError("OCI blob size does not match its descriptor.")
+            raise CandidateError("OCI blob size is not the same as its descriptor size.")
     config_raw = _read_blob(path, config["hex"])
     if _sha(config_raw) != config["hex"]:
-        raise CandidateError("OCI image configuration blob has the wrong digest.")
+        raise CandidateError("OCI image configuration blob has an incorrect digest.")
     config_data = _json_bytes(config_raw, "OCI image configuration")
     if not isinstance(config_data, dict) or config_data.get("os") != "linux" or config_data.get("architecture") != "amd64":
-        raise CandidateError("OCI image configuration is not linux/amd64.")
+        raise CandidateError("OCI image configuration platform is not linux/amd64.")
     rootfs = config_data.get("rootfs")
     diff_ids = rootfs.get("diff_ids") if isinstance(rootfs, dict) else None
     if (
@@ -267,7 +267,7 @@ def verify_oci_archive(path: Path) -> dict[str, Any]:
         or len(diff_ids) != len(layers)
         or any(not isinstance(item, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", item) for item in diff_ids)
     ):
-        raise CandidateError("OCI image configuration layers do not match the manifest.")
+        raise CandidateError("OCI image configuration has incorrect DiffID data for its manifest layers.")
     uncompressed_total = 0
     member_total = 0
     for layer, expected_diff_id in zip(layers, diff_ids):
@@ -278,7 +278,7 @@ def verify_oci_archive(path: Path) -> dict[str, Any]:
             MAX_LAYER_MEMBERS - member_total,
         )
         if f"sha256:{actual_digest}" != expected_diff_id:
-            raise CandidateError("OCI layer DiffID does not match its uncompressed bytes.")
+            raise CandidateError("OCI layer DiffID is not the same as the digest of its uncompressed bytes.")
         uncompressed_total += layer_size
         member_total += member_count
         if member_total > MAX_LAYER_MEMBERS:
@@ -289,7 +289,7 @@ def verify_oci_archive(path: Path) -> dict[str, Any]:
         if digest not in {manifest_hex, config["hex"]}:
             actual_digest, actual_size = _hash_blob(path, digest)
             if actual_digest != digest or actual_size != referenced[digest][0]:
-                raise CandidateError("OCI blob bytes do not match their descriptor.")
+                raise CandidateError("OCI blob bytes are not the same as the bytes identified by their descriptor.")
     index_raw = json_files["index.json"]
     return {
         "archive_index_digest": _sha(index_raw),
@@ -304,13 +304,13 @@ def verify_oci_archive(path: Path) -> dict[str, Any]:
 
 def _descriptor(value: Any, label: str) -> dict[str, Any]:
     if not isinstance(value, dict) or not {"mediaType", "digest", "size"}.issubset(value):
-        raise CandidateError(f"OCI {label} descriptor is invalid.")
+        raise CandidateError(f"OCI {label} descriptor is incorrect.")
     digest = _digest(value["digest"], f"OCI {label} digest")
     size = value["size"]
     if type(size) is not int or size < 0:
-        raise CandidateError(f"OCI {label} size is invalid.")
+        raise CandidateError(f"OCI {label} size is incorrect.")
     if not isinstance(value["mediaType"], str):
-        raise CandidateError(f"OCI {label} media type is invalid.")
+        raise CandidateError(f"OCI {label} media type is incorrect.")
     return {"digest": digest, "hex": digest.removeprefix("sha256:"), "size": size, "mediaType": value["mediaType"]}
 
 
@@ -380,7 +380,7 @@ def _layer_diff_id(
                     pass
                 return reader.digest.hexdigest(), reader.size, len(paths)
             except (tarfile.TarError, OSError, EOFError, zlib.error) as error:
-                raise CandidateError("OCI layer is not a valid tar archive.") from error
+                raise CandidateError("OCI layer is not a tar archive.") from error
 
 
 def _tar_member_size(header: bytes) -> int:
@@ -391,7 +391,7 @@ def _tar_member_size(header: bytes) -> int:
         try:
             value = int(field.strip(b"\0 ") or b"0", 8)
         except ValueError as error:
-            raise CandidateError("Tar archive has an invalid member size.") from error
+            raise CandidateError("Tar archive has an incorrect member size.") from error
     if value < 0:
         raise CandidateError("Tar archive has a negative member size.")
     return value
@@ -434,7 +434,7 @@ def _scan_archive_extensions(path: Path) -> None:
 def _layer_path(name: str) -> str:
     path = PurePosixPath(name)
     if path.is_absolute() or ".." in path.parts:
-        raise CandidateError("OCI layer has an unsafe path.")
+        raise CandidateError("OCI layer has a path that is not safe.")
     normalized = str(path)
     if normalized in {"", "."}:
         return "."
@@ -476,13 +476,13 @@ def _git_output(root: Path, *args: str) -> str:
 def _identity(root: Path, source_commit: str) -> dict[str, Any]:
     commit = _git_output(root, "rev-parse", "HEAD")
     if source_commit != commit or not re.fullmatch(r"[0-9a-f]{40}", commit):
-        raise CandidateError("Requested source commit must match the exact Git commit.")
+        raise CandidateError("Requested source commit is not the same as the Git commit in the worktree.")
     if _git_output(root, "status", "--porcelain", "--untracked-files=all"):
-        raise CandidateError("Candidate builds require a clean Git worktree.")
+        raise CandidateError("Build only when the Git worktree is clean.")
     if os.environ.get("GITHUB_SHA") != commit:
-        raise CandidateError("GitHub source commit does not match the checked out commit.")
+        raise CandidateError("GitHub source commit is not the same as the Git commit in the worktree.")
     if _git_output(root, "show", f"{commit}:images/job/ubuntu-26.04/Dockerfile") != (root / INPUT_PATHS[1]).read_text().rstrip("\n"):
-        raise CandidateError("Dockerfile bytes do not match the requested source commit.")
+        raise CandidateError("Dockerfile bytes are not the same as the Dockerfile bytes in the requested source commit.")
     return _source_inputs(root)
 
 
@@ -498,21 +498,21 @@ def _workflow_identity(env: dict[str, str]) -> dict[str, Any]:
         "run_attempt": env.get("GITHUB_RUN_ATTEMPT", ""),
     }
     if not fields["ref"].startswith("refs/") or "\n" in fields["ref"]:
-        raise CandidateError("GitHub source ref is missing or invalid.")
+        raise CandidateError("GitHub source ref is missing or incorrect.")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", fields["repository"]):
-        raise CandidateError("GitHub repository identity is invalid.")
+        raise CandidateError("GitHub repository identity is incorrect.")
     if not fields["repository_id"].isdigit() or int(fields["repository_id"]) < 1:
-        raise CandidateError("GitHub repository ID is invalid.")
+        raise CandidateError("GitHub repository ID is incorrect.")
     if not re.fullmatch(r"[a-z_]+", fields["event"]):
-        raise CandidateError("GitHub event name is invalid.")
+        raise CandidateError("GitHub event name is incorrect.")
     if not fields["workflow_ref"].startswith(f"{fields['repository']}/.github/workflows/") or "@refs/" not in fields["workflow_ref"]:
-        raise CandidateError("GitHub workflow ref is invalid.")
+        raise CandidateError("GitHub workflow ref is incorrect.")
     fields["repository_id"] = int(fields["repository_id"])
     if not re.fullmatch(r"[0-9a-f]{40}", fields["authority_commit"]):
-        raise CandidateError("GitHub workflow authority commit is invalid.")
+        raise CandidateError("GitHub workflow authority commit is incorrect.")
     for name in ("run_id", "run_attempt"):
         if not fields[name].isdigit() or int(fields[name]) < 1:
-            raise CandidateError(f"GitHub {name} is invalid.")
+            raise CandidateError(f"GitHub {name} is incorrect.")
         fields[name] = int(fields[name])
     return fields
 
@@ -592,7 +592,7 @@ def build(args: argparse.Namespace) -> None:
         if _hash_file(isolated_buildx)[0] != tomllib.loads(
             (root / ".velnor/runner.lock").read_text()
         )["buildx_sha256"]:
-            raise CandidateError("Isolated Buildx binary does not match .velnor/runner.lock.")
+            raise CandidateError("Isolated Buildx binary is not the same as the value in .velnor/runner.lock.")
         staged_archive = context / "candidate.oci.tar"
         staged_record = context / "candidate.json"
         docker_env = os.environ.copy()
@@ -636,11 +636,11 @@ def build(args: argparse.Namespace) -> None:
 def _buildx_details(docker: str, root: Path) -> tuple[str, Path]:
     result = subprocess.check_output([docker, "buildx", "version"], text=True, timeout=30).strip()
     if not result:
-        raise CandidateError("Docker Buildx did not report its version.")
+        raise CandidateError("Docker Buildx output has no version.")
     lock = tomllib.loads((root / ".velnor/runner.lock").read_text())
     match = re.fullmatch(r"github\.com/docker/buildx v(\d+\.\d+\.\d+)(?: .+)?", result)
     if match is None or match.group(1) != lock["buildx_version"]:
-        raise CandidateError("Docker Buildx version does not match .velnor/runner.lock.")
+        raise CandidateError("Docker Buildx version is not the same as the value in .velnor/runner.lock.")
     plugin_data = subprocess.check_output(
         [docker, "info", "--format", "{{json .ClientInfo.Plugins}}"],
         text=True, timeout=30,
@@ -648,18 +648,18 @@ def _buildx_details(docker: str, root: Path) -> tuple[str, Path]:
     try:
         plugins = json.loads(plugin_data)
     except json.JSONDecodeError as error:
-        raise CandidateError("Docker did not report CLI plugin identities.") from error
+        raise CandidateError("Docker output has no CLI plug-in identities.") from error
     matches = [plugin for plugin in plugins if isinstance(plugin, dict) and plugin.get("Name") == "buildx"]
     if len(matches) != 1 or not isinstance(matches[0].get("Path"), str):
-        raise CandidateError("Docker did not report one Buildx plugin path.")
+        raise CandidateError("Docker output does not list one Buildx plug-in path.")
     binary = Path(matches[0]["Path"])
     if binary.is_symlink() or not binary.is_file():
         raise CandidateError("Docker Buildx plugin path is not a regular file.")
     actual_hash, _ = _hash_file(binary)
     if actual_hash != lock["buildx_sha256"]:
-        raise CandidateError("Docker Buildx binary does not match .velnor/runner.lock.")
+        raise CandidateError("Docker Buildx binary is not the same as the value in .velnor/runner.lock.")
     if matches[0].get("Version") != f"v{lock['buildx_version']}":
-        raise CandidateError("Docker Buildx plugin metadata does not match .velnor/runner.lock.")
+        raise CandidateError("Docker Buildx plug-in metadata is not the same as the value in .velnor/runner.lock.")
     return result, binary
 
 
@@ -683,33 +683,33 @@ def _read_limited_file(path: Path, limit: int, label: str) -> bytes:
 def validate_record(value: Any) -> dict[str, Any]:
     record = _exact_keys(value, RECORD_KEYS, "Candidate record")
     if record["schema"] != SCHEMA or record["platform"] != "linux/amd64":
-        raise CandidateError("Candidate schema or platform is invalid.")
+        raise CandidateError("Candidate schema or platform is incorrect.")
     source = _exact_keys(record["source"], SOURCE_KEYS, "Source")
     if not isinstance(source["commit"], str) or not re.fullmatch(r"[0-9a-f]{40}", source["commit"]) or not isinstance(source["ref"], str) or not source["ref"].startswith("refs/"):
-        raise CandidateError("Source identity is invalid.")
+        raise CandidateError("Source identity is incorrect.")
     if not isinstance(source["inputs"], dict) or set(source["inputs"]) != set(INPUT_PATHS):
-        raise CandidateError("Source input closure is incomplete or unknown.")
+        raise CandidateError("The source input list is incomplete or unknown.")
     for name, digest in source["inputs"].items():
         if not isinstance(name, str) or not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
-            raise CandidateError("Source input hash is invalid.")
+            raise CandidateError("Source input hash is incorrect.")
     workflow = _exact_keys(record["workflow"], WORKFLOW_KEYS, "Workflow")
     if not isinstance(workflow["repository"], str) or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", workflow["repository"]):
-        raise CandidateError("Workflow repository identity is invalid.")
+        raise CandidateError("Workflow repository identity is incorrect.")
     if type(workflow["repository_id"]) is not int or workflow["repository_id"] < 1:
-        raise CandidateError("Workflow repository ID is invalid.")
+        raise CandidateError("Workflow repository ID is incorrect.")
     if not isinstance(workflow["event"], str) or not re.fullmatch(r"[a-z_]+", workflow["event"]):
-        raise CandidateError("Workflow event is invalid.")
+        raise CandidateError("Workflow event is incorrect.")
     if (
         not isinstance(workflow["workflow_ref"], str)
         or not workflow["workflow_ref"].startswith(f"{workflow['repository']}/.github/workflows/")
         or "@refs/" not in workflow["workflow_ref"]
     ):
-        raise CandidateError("Workflow ref is invalid.")
+        raise CandidateError("Workflow ref is incorrect.")
     if not isinstance(workflow["authority_commit"], str) or not re.fullmatch(r"[0-9a-f]{40}", workflow["authority_commit"]):
-        raise CandidateError("Workflow authority commit is invalid.")
+        raise CandidateError("Workflow authority commit is incorrect.")
     for name in ("run_id", "run_attempt"):
         if type(workflow[name]) is not int or workflow[name] < 1:
-            raise CandidateError(f"Workflow {name} is invalid.")
+            raise CandidateError(f"Workflow {name} is incorrect.")
     build = _exact_keys(record["build"], BUILD_KEYS, "Build")
     if (
         not isinstance(build["builder"], str)
@@ -720,26 +720,26 @@ def validate_record(value: Any) -> dict[str, Any]:
         or build["compression"] != "gzip"
         or build["force_compression"] is not True
     ):
-        raise CandidateError("Build identity is invalid.")
+        raise CandidateError("Build identity is incorrect.")
     if build["arguments"] != []:
-        raise CandidateError("Build arguments must match the empty build argument list.")
+        raise CandidateError("Build arguments must be empty.")
     archive = _exact_keys(record["archive"], ARCHIVE_KEYS, "Archive")
     if not isinstance(archive["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", archive["sha256"]) or type(archive["size_bytes"]) is not int or archive["size_bytes"] < 1:
-        raise CandidateError("Archive identity is invalid.")
+        raise CandidateError("Archive identity is incorrect.")
     oci = _exact_keys(record["oci"], OCI_KEYS, "OCI")
     for name in ("archive_index_digest",):
         if not isinstance(oci[name], str) or not re.fullmatch(r"[0-9a-f]{64}", oci[name]):
-            raise CandidateError(f"OCI {name} is invalid.")
+            raise CandidateError(f"OCI {name} is incorrect.")
     for name in (
         "archive_index_size_bytes", "platform_manifest_size_bytes",
         "image_configuration_size_bytes",
     ):
         if type(oci[name]) is not int or oci[name] < 1:
-            raise CandidateError(f"OCI {name} is invalid.")
+            raise CandidateError(f"OCI {name} is incorrect.")
     _digest(oci["platform_manifest_digest"], "OCI platform manifest digest")
     _digest(oci["image_configuration_digest"], "OCI image configuration digest")
     if not isinstance(oci["layer_digests"], list) or not oci["layer_digests"]:
-        raise CandidateError("OCI layer digest list is invalid.")
+        raise CandidateError("OCI layer digest list is incorrect.")
     for digest in oci["layer_digests"]:
         _digest(digest, "OCI layer digest")
     return record
@@ -754,32 +754,32 @@ def validate(args: argparse.Namespace) -> None:
     actual_oci = verify_oci_archive(archive)
     archive_hash, archive_size = _hash_file(archive)
     if record["archive"] != {"sha256": archive_hash, "size_bytes": archive_size}:
-        raise CandidateError("Candidate archive does not match its record.")
+        raise CandidateError("Candidate archive is not the same as the archive in its record.")
     if record["oci"] != actual_oci:
-        raise CandidateError("OCI graph does not match its candidate record.")
+        raise CandidateError("OCI graph is not the same as the graph in its candidate record.")
     root = Path(args.root).resolve()
     _verify_source_inputs(record, root)
     workflow = _workflow_identity(os.environ)
     source_ref = workflow.pop("ref")
     if record["source"]["commit"] != os.environ.get("GITHUB_SHA") or record["source"]["ref"] != source_ref:
-        raise CandidateError("Candidate source identity does not match the current GitHub job.")
+        raise CandidateError("Candidate source identity is not the same as the current GitHub source identity.")
     if record["workflow"] != workflow:
-        raise CandidateError("Candidate workflow identity does not match the current GitHub job.")
+        raise CandidateError("Candidate workflow identity is not the same as the current GitHub workflow identity.")
     lock = tomllib.loads((root / ".velnor/runner.lock").read_text())
     if record["build"]["builder"] != _locked_buildx_identity(record["build"]["builder"], lock["buildx_version"]):
-        raise CandidateError("Candidate Buildx identity does not match .velnor/runner.lock.")
-    print("PASS: Candidate record matches source inputs and OCI archive.")
+        raise CandidateError("Candidate Buildx identity is not the same as the value in .velnor/runner.lock.")
+    print("PASS: Candidate record has the same source inputs and OCI archive identities.")
 
 
 def _locked_buildx_identity(builder: str, expected: str) -> str:
     match = re.fullmatch(r"github\.com/docker/buildx v(\d+\.\d+\.\d+)(?: .+)?", builder)
     if match is None or match.group(1) != expected:
-        raise CandidateError("Candidate Buildx identity does not match .velnor/runner.lock.")
+        raise CandidateError("Candidate Buildx identity is not the same as the value in .velnor/runner.lock.")
     return builder
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Build or verify an Ubuntu job image candidate.")
+    parser = argparse.ArgumentParser(description="Build a candidate image or do a check of it.")
     commands = parser.add_subparsers(dest="command", required=True)
     build_parser = commands.add_parser("build")
     build_parser.add_argument("--root", default=str(ROOT))

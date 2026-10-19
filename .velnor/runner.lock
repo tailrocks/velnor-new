@@ -23,10 +23,10 @@ runner_asset_size_bytes = 227660598
 runner_sha256 = "af4b794c1bc41d73d40535e3fe092a39f9679cd8d965954c2aca25a05ca41d32"
 runner_sha256_source = "GitHub Release API asset digest and release notes"
 runner_platform = "linux/amd64"
-runner_source_tag_signature = "GitHub verified commit signature"
+runner_source_tag_signature = "PASS: GitHub commit signature."
 
 # The repository download API returned Runner 2.337.0 on this date.
-# This result does not show that GitHub rejects Runner 2.338.0.
+# This result does not indicate that GitHub rejects Runner 2.338.0.
 runner_scope_download_observed_date = "2026-10-18"
 runner_scope_download_version = "2.337.0"
 runner_scope_download_sha256 = "70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613"
@@ -39,7 +39,7 @@ docker_source_commit = "b26fb77d3e7b01f9d21b89539c1ab428f5ca431f"
 docker_archive_url = "https://download.docker.com/linux/static/stable/x86_64/docker-29.9.1.tgz"
 docker_sha256 = "c158ecc55adb3afb01bbd3539ed3b997d20c26dbdc418080506cc1bf5243ff57"
 docker_sha256_source = "Measured from the official HTTPS archive; the download path has no .sha256 or .sig sidecar"
-docker_source_tag_signature = "GitHub verified signed tag"
+docker_source_tag_signature = "PASS: GitHub signed tag."
 
 buildx_version = "0.38.0"
 buildx_source_repository = "docker/buildx"
@@ -49,7 +49,7 @@ buildx_release_url = "https://github.com/docker/buildx/releases/tag/v0.38.0"
 buildx_asset_url = "https://github.com/docker/buildx/releases/download/v0.38.0/buildx-v0.38.0.linux-amd64"
 buildx_sha256 = "4fe4cc38adf48169132749b6ca22a990928db0118e3407584ee553723115d287"
 buildx_sha256_source = "GitHub Release API asset digest"
-buildx_source_tag_signature = "GitHub verified PGP-signed tag"
+buildx_source_tag_signature = "PASS: GitHub PGP-signed tag."
 
 compose_version = "5.6.0"
 compose_source_repository = "docker/compose"
@@ -59,7 +59,7 @@ compose_release_url = "https://github.com/docker/compose/releases/tag/v5.6.0"
 compose_asset_url = "https://github.com/docker/compose/releases/download/v5.6.0/docker-compose-linux-x86_64"
 compose_sha256 = "40343e21ca777173e69cff5dbafeb37c6f81f3b0d57d9e597f036e95eb63e76a"
 compose_sha256_source = "GitHub Release API asset digest"
-compose_source_tag_signature = "GitHub verified SSH-signed tag"
+compose_source_tag_signature = "PASS: GitHub SSH-signed tag."
 
 node_version = "26.12.0"
 node_release_channel = "Current"
@@ -71,7 +71,7 @@ node_sha256 = "d9f88af72ad34f7ddf8e67289829f1698f54b6254f7d4f54b7453117ff1a3d2c"
 node_checksum_manifest_url = "https://nodejs.org/dist/v26.12.0/SHASUMS256.txt"
 node_checksum_signature_url = "https://nodejs.org/dist/v26.12.0/SHASUMS256.txt.sig"
 node_checksum_signing_key_fingerprint = "C82FA3AE1CBEDC6BE46B9360C43CEC45C17AB93C"
-node_source_tag_signature = "GitHub verified signed tag; checksum manifest signature verified against official Node.js release key"
+node_source_tag_signature = "PASS: GitHub signed tag; PASS: checksum manifest signature against the official Node.js release key."
 
 bollard = "=0.21.1"
 turso = "=0.8.3"

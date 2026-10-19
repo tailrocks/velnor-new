@@ -16,7 +16,7 @@ jobs:
       artifact_name: velnor-job-image-candidate-${{ github.run_attempt }}
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
     steps:
-      - name: Use the exact source commit
+      - name: Use the source commit selected by GitHub.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
@@ -28,7 +28,7 @@ jobs:
       - name: Build the job image candidate
         shell: bash
         run: "DOCKER_CONFIG=\"$RUNNER_TEMP/velnor-docker-config\" python3 images/job/ubuntu-26.04/candidate/candidate.py build --source-commit \"$GITHUB_SHA\" --archive \"$RUNNER_TEMP/job-image.oci.tar\" --record \"$RUNNER_TEMP/job-image-candidate.json\""
-      - name: Store candidate archive and record
+      - name: Upload candidate archive and record
         id: upload
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -49,7 +49,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - name: Use the exact source commit
+      - name: Use the source commit selected by GitHub.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
@@ -60,7 +60,7 @@ jobs:
         env:
           ARTIFACT_ID: ${{ needs.build-image-candidate.outputs.artifact_id }}
         run: "if [[ ! \"$ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]; then\n  printf '%s\\n' 'The artifact ID is missing or incorrect.' >&2\n  exit 1\nfi"
-      - name: Get the job image candidate from this workflow run
+      - name: Download the job image candidate from this workflow run
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.build-image-candidate.outputs.artifact_id }}
@@ -68,7 +68,7 @@ jobs:
       - name: Do a check of source and archive identity
         shell: bash
         run: "python3 images/job/ubuntu-26.04/candidate/candidate.py validate --archive \"candidate/job-image.oci.tar\" --record \"candidate/job-image-candidate.json\""
-      - name: Attest the exact candidate bytes
+      - name: Attest all candidate bytes.
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
         with:
           subject-path: "candidate/job-image.oci.tar\ncandidate/job-image-candidate.json"
@@ -89,7 +89,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - name: Use the exact source commit
+      - name: Use the source commit selected by GitHub.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
@@ -100,18 +100,18 @@ jobs:
         env:
           ARTIFACT_ID: ${{ needs.build-image-candidate.outputs.artifact_id }}
         run: "if [[ ! \"$ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]; then\n  printf '%s\\n' 'The artifact ID is missing or incorrect.' >&2\n  exit 1\nfi"
-      - name: Get the job image candidate from this workflow run
+      - name: Download the job image candidate from this workflow run
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.build-image-candidate.outputs.artifact_id }}
           path: candidate
-      - name: Publish the verified job image
+      - name: Publish the job image with its signed build evidence.
         shell: bash
         run: "python3 images/job/ubuntu-26.04/candidate/publish.py --root . --archive \"candidate/job-image.oci.tar\" --record \"candidate/job-image-candidate.json\" --result \"$RUNNER_TEMP/job-image-publication.json\""
         env:
           GH_TOKEN: ${{ github.token }}
           VELNOR_CANDIDATE_ARTIFACT_ID: ${{ needs.build-image-candidate.outputs.artifact_id }}
-      - name: Store job image publication evidence
+      - name: Upload job image publication evidence
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: velnor-job-image-publication-evidence-${{ github.run_attempt }}
