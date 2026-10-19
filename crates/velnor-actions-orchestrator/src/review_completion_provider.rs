@@ -64,16 +64,14 @@ pub(super) fn inspect(
     {
         return Ok((CompletionState::Pending, Some(evidence)));
     }
-    let Ok((fresh, newest_code)) = requests(records, summary, code_time, security_time, restart)
-    else {
+    let Ok(fresh) = requests(records, summary, code_time, security_time, restart) else {
         return Ok((CompletionState::Blocked, Some(evidence)));
     };
     if !fresh {
         return Ok((CompletionState::Pending, Some(evidence)));
     }
-    let newest_code = newest_code.into_iter().chain(finding.latest).max();
-    let Some((current, mut review_metadata)) =
-        authenticate_reviews(api, head, records, newest_code)?
+    let Some((covered, mut review_metadata)) =
+        authenticate_reviews(api, records, (code_time, security_time))?
     else {
         return Ok((CompletionState::Blocked, Some(evidence)));
     };
@@ -86,8 +84,10 @@ pub(super) fn inspect(
         &review_metadata,
         restart,
     )?;
+    // The authenticated exact-head role summary owns completion. Clean reviews
+    // emit no formal receipt; present receipts remain independent custody evidence.
     Ok((
-        if current {
+        if covered {
             CompletionState::Ready
         } else {
             CompletionState::Pending
@@ -98,12 +98,11 @@ pub(super) fn inspect(
 
 fn authenticate_reviews(
     api: &TapMergeGitHub,
-    head: &str,
     records: &FeedbackRecords,
-    newest_code: Option<time::Timestamp>,
+    terminal: (time::Timestamp, time::Timestamp),
 ) -> Result<Option<(bool, Vec<Value>)>, OrchestratorError> {
+    let mut covered = true;
     let mut ids = std::collections::BTreeSet::new();
-    let mut current = false;
     let mut review_metadata = Vec::new();
     for review in &records.reviews {
         let id = review["id"]
@@ -119,24 +118,16 @@ fn authenticate_reviews(
         {
             return Ok(None);
         }
-        let is_code = receipt_is_code(
+        let code = receipt_is_code(
             review["body"]
                 .as_str()
                 .ok_or_else(|| internal("review_provider_receipt"))?,
         )?;
-        review_metadata.push(authenticate_review(api, review)?);
-        if is_code && review["commit_id"].as_str() == Some(head) {
-            let submitted = time::parse(
-                review["submitted_at"]
-                    .as_str()
-                    .ok_or_else(|| internal("review_provider_review_time"))?,
-            )?;
-            if newest_code.is_none_or(|trigger| submitted > trigger) {
-                current = true;
-            }
-        }
+        let (metadata, activity) = authenticate_review(api, review)?;
+        covered &= activity <= if code { terminal.0 } else { terminal.1 };
+        review_metadata.push(metadata);
     }
-    Ok(Some((current, review_metadata)))
+    Ok(Some((covered, review_metadata)))
 }
 
 fn receipt_is_code(body: &str) -> Result<bool, OrchestratorError> {
@@ -209,16 +200,12 @@ fn requests(
     code_time: time::Timestamp,
     security_time: time::Timestamp,
     restart: Option<(&str, &str)>,
-) -> Result<(bool, Option<time::Timestamp>), OrchestratorError> {
-    let mut newest_code = None;
+) -> Result<bool, OrchestratorError> {
     if let Some((role, stamp)) = restart {
         let stamp = time::parse(stamp)?;
         if (role == "code" && code_time <= stamp) || (role == "security" && security_time <= stamp)
         {
-            return Ok((false, newest_code));
-        }
-        if role == "code" {
-            newest_code = Some(stamp);
+            return Ok(false);
         }
     }
     let mut ids = std::collections::BTreeSet::new();
@@ -248,16 +235,21 @@ fn requests(
         )?;
         if (role == "code" && code_time <= stamp) || (role == "security" && security_time <= stamp)
         {
-            return Ok((false, newest_code));
-        }
-        if role == "code" {
-            newest_code = Some(newest_code.map_or(stamp, |old: time::Timestamp| old.max(stamp)));
+            return Ok(false);
         }
     }
-    Ok((true, newest_code))
+    Ok(true)
 }
 
-fn authenticate_review(api: &TapMergeGitHub, review: &Value) -> Result<Value, OrchestratorError> {
+fn authenticate_review(
+    api: &TapMergeGitHub,
+    review: &Value,
+) -> Result<(Value, time::Timestamp), OrchestratorError> {
+    let submitted = time::parse(
+        review["submitted_at"]
+            .as_str()
+            .ok_or_else(|| internal("review_provider_review_time"))?,
+    )?;
     let id = review["node_id"]
         .as_str()
         .ok_or_else(|| internal("review_provider_review_node"))?;
@@ -276,19 +268,21 @@ fn authenticate_review(api: &TapMergeGitHub, review: &Value) -> Result<Value, Or
     if node.get("lastEditedAt").is_none() || node.get("editor").is_none() {
         return Err(internal("review_provider_review_editor"));
     }
+    let mut activity = submitted;
     if !node["lastEditedAt"].is_null() || !node["editor"].is_null() {
-        time::parse(
+        activity = time::parse(
             node["lastEditedAt"]
                 .as_str()
                 .ok_or_else(|| internal("review_provider_review_editor"))?,
         )?;
-        if node.pointer("/editor/databaseId").and_then(Value::as_u64) != Some(PROVIDER_BOT)
+        if activity < submitted
+            || node.pointer("/editor/databaseId").and_then(Value::as_u64) != Some(PROVIDER_BOT)
             || node.pointer("/editor/__typename").and_then(Value::as_str) != Some("Bot")
         {
             return Err(internal("review_provider_review_editor"));
         }
     }
-    Ok(response)
+    Ok((response, activity))
 }
 
 fn authenticate_summary(summary: &Value) -> Result<(), OrchestratorError> {

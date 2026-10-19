@@ -48,7 +48,7 @@ fn api(records: &FeedbackRecords, owner: u64, editor: u64) -> TapMergeGitHub {
                 })
                 .cloned()
                 .unwrap_or(Value::Null);
-            json!({"data":{"node":{"databaseId":review["id"],"body":review["body"],"submittedAt":review["submitted_at"],"lastEditedAt":null,"author":{"__typename":"Bot","databaseId":PROVIDER_BOT},"editor":null,"commit":{"oid":review["commit_id"]}}}})
+            json!({"data":{"node":{"databaseId":review["id"],"body":review["body"],"submittedAt":review["submitted_at"],"lastEditedAt":review.get("fixture_edited_at").unwrap_or(&Value::Null),"author":{"__typename":"Bot","databaseId":PROVIDER_BOT},"editor":review.get("fixture_editor").unwrap_or(&Value::Null),"commit":{"oid":review["commit_id"]}}}})
         } else {
             return Err(internal("unexpected_provider_fixture_request"));
         };
@@ -81,10 +81,10 @@ fn synthetic_closed_both_role_completion_requires_actual_exact_head_review_ident
     let mut fixture = records();
     assert_eq!(decision(&fixture), CompletionState::Ready);
     fixture.reviews.clear();
-    assert_eq!(decision(&fixture), CompletionState::Pending);
+    assert_eq!(decision(&fixture), CompletionState::Ready);
     fixture = records();
     fixture.reviews[0]["commit_id"] = json!("b".repeat(40));
-    assert_eq!(decision(&fixture), CompletionState::Pending);
+    assert_eq!(decision(&fixture), CompletionState::Ready);
     fixture = records();
     fixture.reviews[0]["id"] = json!(0);
     assert!(
@@ -199,7 +199,15 @@ fn historical_finding() -> FeedbackRecords {
 #[test]
 fn historical_findings_cannot_recover_with_stale_current_receipt_or_unknown_custody() {
     let mut fixture = historical_finding();
-    fixture.reviews[1]["submitted_at"] = json!("2026-10-19T00:59:59Z");
+    // A historical receipt is custody evidence; the current role clock must
+    // follow the finding even when no new formal review is emitted.
+    fixture.reviews.remove(1);
+    fixture.issue_comments[0]["body"] = json!(
+        fixture.issue_comments[0]["body"]
+            .as_str()
+            .expect("body")
+            .replace("2026-10-19T01:02:01.500Z", "2026-10-19T00:59:59Z")
+    );
     assert_eq!(decision(&fixture), CompletionState::Pending);
     let mut fixture = historical_finding();
     let stale_security = fixture.issue_comments[0]["body"]
@@ -251,9 +259,17 @@ fn security_receipts_cannot_substitute_for_current_code_review_receipts() {
         .expect("body")
         .replace("### 💡 Codex Review", "### 🛡️ Codex Security Review");
     fixture.reviews[1]["body"] = json!(security);
+    assert_eq!(decision(&fixture), CompletionState::Ready);
+    let clean_summary = fixture.issue_comments[0]["body"].clone();
+    fixture.issue_comments[0]["body"] = json!(clean_summary.as_str().expect("body").replacen(
+        "\"status\":\"completed\"",
+        "\"status\":\"running\"",
+        1
+    ));
     assert_eq!(decision(&fixture), CompletionState::Pending);
-    // Historical security receipts remain authenticated evidence, while the
-    // actual current code receipt is independently required.
+    fixture.issue_comments[0]["body"] = clean_summary;
+    // Historical security receipts remain authenticated evidence; they cannot
+    // substitute for actual completed code-role authority in the summary.
     fixture.reviews.swap(0, 1);
     fixture.reviews[1]["body"] = fixture.reviews[0]["body"].clone();
     fixture.reviews[0]["body"] = records().reviews[0]["body"].clone();
@@ -364,3 +380,6 @@ fn deleted_current_event_trigger_still_invalidates_an_old_same_head_completion()
         assert_eq!(result.0, CompletionState::Pending);
     }
 }
+
+#[path = "review_completion_provider_clean_tests.rs"]
+mod clean_tests;
