@@ -22,6 +22,26 @@ review, treat this record as the binding contract for implementation.
 - Affects: workflow renderer, planner/matrix code, all generator tests
   and fixtures, workflow docs.
 
+### Five-minute capacity amendment (2026-10-19)
+
+The later explicit requirement that every concrete job have at most five minutes
+supersedes this section's single Rust job per crate and R16's serial grouping.
+Jackin main CI run 39214070421 attempt 1 canceled two jobs despite successful
+same-tree PR CI: Clippy took 136/98 seconds, test executable compilation then
+used 150 seconds before cancellation or 124 seconds before tests, and docs
+exhausted the remaining budget. Tool acquisition took only 12–13 seconds.
+A warm-cache passing run cannot satisfy the existing cold-correctness rule.
+
+Replace the serial Rust job with the closed lint, tests and docs phases in the
+[workflow contract](../proposed/workflow-contract.md). Keep one owner for each
+logical obligation, exact planner/report bindings, explicit cross-phase gate
+owners, independent validators and the stable Required gate. Retain test builds
+with their tests; do not add arbitrary per-task fan-out, configurable phase
+selectors or a binary artifact transfer protocol. Empty phases are absent.
+This is an explicit change to the earlier topology decision, not a claim that
+any package's cold workload now fits. Every phase needs cold execution evidence;
+failure still blocks promotion and never increases its five-minute limit.
+
 ## 2. `ci.yml` vs `velnor.yml` — adopt pr-1
 
 - Old: emits `velnor.yml`, `velnor-release.yml`,

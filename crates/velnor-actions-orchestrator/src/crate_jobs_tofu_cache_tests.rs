@@ -173,28 +173,56 @@ fn mixed_job_restores_both_sources_and_providers() {
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 1, "shared group renders once");
-    let names = crate_jobs_tests::names(&found.jobs[0].1);
-    assert!(
-        names.contains(&"Restore Cargo sources"),
-        "mixed restores sources: {names:?}"
-    );
-    assert!(
-        names.contains(&"Restore Tofu providers"),
-        "mixed restores providers: {names:?}"
-    );
-    let restore_at = names
+    assert_eq!(found.jobs.len(), 2, "each stack owns its execution job");
+    let rust = &found
+        .jobs
         .iter()
-        .position(|step| *step == "Restore Tofu providers")
-        .expect("provider restore present");
-    let validate_at = names
+        .find(|(id, _)| id.starts_with("rust-"))
+        .expect("Rust owner")
+        .1;
+    let tofu = &found
+        .jobs
         .iter()
-        .position(|step| *step == "Validate")
-        .expect("validate present");
+        .find(|(id, _)| id.starts_with("tofu-"))
+        .expect("Tofu owner")
+        .1;
+    let rust_names = crate_jobs_tests::names(rust);
+    let tofu_names = crate_jobs_tests::names(tofu);
     assert!(
-        restore_at < validate_at,
-        "provider restore precedes obligations: {names:?}"
+        rust_names.contains(&"Restore Cargo sources"),
+        "{rust_names:?}"
     );
+    assert!(
+        !rust_names.contains(&"Restore Tofu providers"),
+        "{rust_names:?}"
+    );
+    assert!(
+        tofu_names.contains(&"Restore Tofu providers"),
+        "{tofu_names:?}"
+    );
+    assert!(
+        !tofu_names.contains(&"Restore Cargo sources"),
+        "{tofu_names:?}"
+    );
+    assert!(!rust_names.contains(&"Validate"), "no foreign obligation");
+    assert!(!tofu_names.contains(&"Clippy"), "no foreign obligation");
+    for (names, restore, obligation) in [
+        (&rust_names, "Restore Cargo sources", "Clippy"),
+        (&tofu_names, "Restore Tofu providers", "Validate"),
+    ] {
+        let restore_at = names
+            .iter()
+            .position(|step| *step == restore)
+            .expect("restore");
+        let obligation_at = names
+            .iter()
+            .position(|step| *step == obligation)
+            .expect("obligation");
+        assert!(
+            restore_at < obligation_at,
+            "restore precedes its owned obligation: {names:?}"
+        );
+    }
 }
 
 #[test]

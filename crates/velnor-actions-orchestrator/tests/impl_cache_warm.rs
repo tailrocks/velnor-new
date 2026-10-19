@@ -166,14 +166,15 @@ fn fetch_carries_offline_skip_branch() -> TestResult {
         let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
         let driver = if mbx { "mbx" } else { "cargo" };
         let mut obligations = 0;
+        let mut phase_jobs = 0;
         for (job_id, job) in &prep.workflow.ir.jobs {
             if !job_id.starts_with("rust-") {
                 continue;
             }
+            phase_jobs += 1;
+            let mut captured = 0;
             for step in &job.steps {
-                if !["Clippy", "Build", "Test", "Nextest", "Doc", "Format"]
-                    .contains(&step.name.as_str())
-                {
+                if !matches!(step.kind, StepKind::TaskExecution { .. }) {
                     continue;
                 }
                 assert_task_is_offline_and_manifest_bound(
@@ -185,8 +186,14 @@ fn fetch_carries_offline_skip_branch() -> TestResult {
                     &ToolCatalog::pinned(),
                 )?;
                 obligations += 1;
+                captured += 1;
             }
+            assert!(captured > 0, "{job_id} owns manifest-bound obligations");
         }
+        assert_eq!(
+            phase_jobs, 6,
+            "all phases of both fixture crates (mbx={mbx})"
+        );
         assert!(obligations >= 2, "obligations present (mbx={mbx})");
     }
     Ok(())

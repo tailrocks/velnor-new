@@ -13,6 +13,9 @@ mod run_anchor;
 #[path = "validate_shell_yaml_alias_scope.rs"]
 mod alias_scope;
 
+#[path = "validate_shell_yaml_mapping.rs"]
+mod mapping;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ShellDialect {
     Bash,
@@ -98,9 +101,10 @@ pub(super) fn staged_runs(
 }
 
 fn scan_workflow(text: &str) -> Result<Vec<StagedRun>, OrchestratorError> {
+    let normalized = mapping::normalize(text)?;
     let mut scan = WorkflowScan::default();
-    for raw in text.lines() {
-        let (indent, content) = indent_content(raw)?;
+    for raw in normalized.lines() {
+        let (indent, content) = mapping::indent_content(raw)?;
         if content.is_empty() || content.starts_with('#') {
             continue;
         }
@@ -368,14 +372,6 @@ fn hosted_runner_default(runs_on: Option<&str>) -> Option<ShellDialect> {
     } else {
         None
     }
-}
-
-fn indent_content(line: &str) -> Result<(usize, &str), OrchestratorError> {
-    let indent = line.bytes().take_while(|byte| *byte == b' ').count();
-    if line.as_bytes().get(indent) == Some(&b'\t') {
-        return Err(shellcheck_fail("workflow_yaml_tabs_unsupported"));
-    }
-    Ok((indent, line[indent..].trim_end()))
 }
 
 fn mapping_entry(content: &str) -> Option<(&str, &str)> {

@@ -90,7 +90,7 @@ fn plan_counts_tofu_roots_on_their_own_line() -> TestResult {
         text.contains("2 OpenTofu root jobs"),
         "tofu count line:\n{text}"
     );
-    assert!(!text.contains("Rust crate job"), "no rust label:\n{text}");
+    assert!(!text.contains("Rust phase job"), "no rust label:\n{text}");
     Ok(())
 }
 

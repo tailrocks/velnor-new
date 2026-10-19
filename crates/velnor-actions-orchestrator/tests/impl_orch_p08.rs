@@ -116,20 +116,7 @@ fn c2_v2_mise_cache_restores_with_elected_tools_saves() -> TestResult {
 
 #[test]
 fn c4_mbx_and_restore_precede_fetch_with_offline_skip() -> TestResult {
-    let names = job_names("rust-demo", true)?;
-    let at = |name: &str| names.iter().position(|seen| seen == name);
-    let (Some(restore), Some(mbx), Some(fetch), Some(clippy)) = (
-        at("Restore Cargo sources"),
-        at("Restore MBX objects"),
-        at("Fetch Cargo sources"),
-        at("Clippy"),
-    ) else {
-        return Err(format!("order missing: {names:?}").into());
-    };
-    assert!(
-        restore < mbx && mbx < fetch && fetch < clippy,
-        "restore<mbx<fetch<clippy: {names:?}"
-    );
+    super::impl_orch_p08_sources::assert_restore_before_obligations(&preparation_for(true)?)?;
     let yaml = yaml_for(true)?;
     for need in [
         "metadata --locked --offline",
@@ -184,15 +171,17 @@ fn c7_cargo_only_uses_exact_sources_transport_without_legacy_fallback() -> TestR
         "{plan:?}"
     );
     assert!(plan.contains(&"Save Cargo sources".to_owned()), "{plan:?}");
-    let crates = job_names("rust-demo", false)?;
-    assert!(
-        crates.contains(&"Restore Cargo sources".to_owned()),
-        "{crates:?}"
-    );
-    assert!(
-        !crates.contains(&"Save Cargo sources".to_owned()),
-        "reader only: {crates:?}"
-    );
+    for phase in ["lint", "tests", "docs"] {
+        let crates = job_names(&format!("rust-demo-{phase}"), false)?;
+        assert!(
+            crates.contains(&"Restore Cargo sources".to_owned()),
+            "{crates:?}"
+        );
+        assert!(
+            !crates.contains(&"Save Cargo sources".to_owned()),
+            "reader only: {crates:?}"
+        );
+    }
     Ok(())
 }
 
@@ -206,24 +195,27 @@ fn c8_crate_jobs_install_validators_for_test_spawns() -> TestResult {
             with_mbx(root)?;
         }
         let prep = prepare(root)?;
-        let job = prep
-            .workflow
-            .ir
-            .jobs
-            .get("rust-demo")
-            .ok_or_else(|| std::io::Error::other("missing crate job"))?;
-        for step in &job.steps {
-            if step.name != "Prepare pinned tools" {
-                continue;
-            }
+        for phase in ["lint", "tests", "docs"] {
+            let id = format!("rust-demo-{phase}");
+            let job = prep
+                .workflow
+                .ir
+                .jobs
+                .get(&id)
+                .ok_or("missing crate phase")?;
+            let step = job
+                .steps
+                .iter()
+                .find(|step| step.name == "Prepare pinned tools")
+                .ok_or("phase prepare missing")?;
             let StepKind::Shell { run, .. } = &step.kind else {
-                continue;
+                return Err("prepare must be a shell".into());
             };
             let text = run.join(" ");
             for tool in ["actionlint@", "shellcheck@", "zizmor@"] {
                 assert!(
                     text.contains(tool),
-                    "crate prepare must install {tool} for test-spawned generate: {text}"
+                    "{id} prepare must install {tool} for test-spawned generate: {text}"
                 );
             }
         }

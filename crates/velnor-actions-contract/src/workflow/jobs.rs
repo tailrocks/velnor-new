@@ -1,11 +1,13 @@
-//! Crate-job graph model: obligations grouped by crate, never jobs per task.
+//! Crate-job graph model: logical obligations retain one execution owner.
 //!
-//! Root cause (P05): logical obligations were equated with execution
-//! jobs, so per-task fan-out and vendor-prefixed internals leaked into
-//! CI. The structural fix keeps obligations per task
-//! ([`super::crate_job::CrateObligation`]) and groups them into one
-//! ordered job per crate ([`super::crate_job::CrateJob`]): a smaller
-//! job graph with identical check coverage.
+//! The P05 migration replaced arbitrary per-task matrices and vendor-prefixed
+//! jobs with package/configuration ownership and ordered obligations. The later
+//! five-minute capacity amendment splits Rust into closed lint/tests/docs
+//! responsibilities while retaining each logical task and its exact report.
+//! A [`super::crate_job::CrateJob`] validates local obligation order and gates;
+//! typed job dependencies preserve external quality/data gate owners. Required
+//! must validate every emitted phase, so partitioning cannot omit coverage or
+//! convert a failed, missing or canceled execution into a successful release.
 
 use std::collections::{BTreeMap, BTreeSet};
 

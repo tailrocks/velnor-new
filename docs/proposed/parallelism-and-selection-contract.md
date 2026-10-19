@@ -241,13 +241,42 @@ Overlap independent preparation, such as downloading a verified build artifact w
 
 ### Default Rust validation topology
 
-1. Planning, structural policy, generated-file freshness, and format validation run early.
-2. Each affected package/configuration is a matrix obligation. Independent entries run concurrently with a finite `max-parallel` derived from the configured runner budget.
-3. Within a package, required Clippy configurations that are supported become independent matrix obligations, each with its own target directory/lane. Unsupported all-feature combinations are not generated; they require explicit declared feature configurations.
-4. After Clippy passes, use the workspace's detected test runner. Cargo-test projects run `cargo test` as one visible task. Nextest projects may create one archive and fan out partitions as separate jobs when measured suite size justifies transfer/setup costs. Doctests and docs remain distinct visible tasks. Other independent packages continue and report their result.
-5. The final job joins the complete expected task/report set and decides the required status.
+1. Planning, structural policy, generated-file freshness and workspace format
+   validation run early.
+2. Each selected package/configuration has the nonempty members of the closed
+   `lint`, `tests` and `docs` execution phases. These are literal jobs, not a
+   task matrix or user-configurable phase list. Task identities, configuration
+   identities and argument vectors remain unchanged; the planner and renderer
+   use the same exact owning-job assignment.
+3. `lint` owns explicit package formatting and Clippy. `tests` owns the
+   applicable executable build, detected test runner and doctests. `docs`
+   owns documentation building. Same-phase gates retain obligation order;
+   cross-phase gates become exact owning-job dependencies. Tests wait for
+   their Clippy gate, and docs wait for their applicable Clippy/doctest gates.
+4. Independent packages/configurations may continue after another package
+   fails; dependent phases do not start after a failed predecessor. No global
+   lint-before-any-test barrier is introduced. Each job retains its own
+   bounded compiler/test resources and isolated paths. `workflow.max_parallel_jobs`
+   is not a `strategy.max-parallel` limit on these literal Rust jobs; its
+   existing OpenTofu lane-staging responsibility remains unchanged.
+5. The final `Required` job always joins every emitted phase and the complete
+   expected task/report inventory. Missing, skipped, canceled or failed phase
+   evidence fails the gate. Every concrete job retains the five-minute maximum;
+   the sum of dependent jobs, queueing and approvals is not a five-minute
+   workflow-wide bound.
 
-The workflow matrix MUST set `fail-fast: false`: one package failure must not cancel unrelated required package work. This does not weaken fail-fast inside a package: dependent test tasks do not start after Clippy failure. Newer commits may cancel superseded workflow runs through the workflow concurrency group; the final result of the active candidate still requires complete evidence.
+Explicit named Nextest suites remain a separate supported fan-out mechanism.
+Their declared matrix uses `fail-fast: false`; an archive-backed suite builds
+its qualified archive once and runs its complete nonoverlapping partitions on
+separate runners. Cargo-test profiles do not invent Nextest work. Default phase
+partitioning keeps test compilation and execution together and introduces no
+compiled-binary artifact handoff. Unsupported all-feature combinations are not
+generated; supported feature configurations remain explicit declarations.
+
+Newer commits may cancel superseded workflow runs through the workflow
+concurrency group. The active run still requires complete evidence. A retry
+must create the new attempt's Plan and all report owners; prior-attempt
+artifacts cannot substitute for a failed-only partial rerun.
 
 GitHub background concurrency, matrix jobs, Cargo build jobs, and Nextest test threads are separate limits. Velnor MUST set an explicit finite budget for each and avoid accidental multiplication. One matrix job MUST use at most ten simultaneous background steps. Resource classes include at least lightweight, network, compiler CPU/memory, test CPU, service-backed test, and exclusive. If the runner has no reliable capacity data, use conservative fixed limits and report them; do not assume more parallelism is faster.
 

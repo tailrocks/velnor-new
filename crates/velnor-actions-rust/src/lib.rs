@@ -14,6 +14,7 @@ pub mod evidence;
 mod evidence_text;
 pub mod graph;
 pub mod identity;
+mod job_phase;
 mod manifest_edges;
 pub mod metadata;
 pub mod metadata_edges;
@@ -53,6 +54,7 @@ pub use identity::{
     GroupExtensionInputs, adapter_entry_metadata, entry_metadata_for_task, expand_shards_for_group,
     extension_for_proposal,
 };
+pub use job_phase::RustJobPhase;
 pub use manifest_edges::manifest_edges;
 pub use metadata::{
     METADATA_FORMAT_VERSION, MetadataError, PackageRecord, TargetRecord, VelnorV1TaskOwner,

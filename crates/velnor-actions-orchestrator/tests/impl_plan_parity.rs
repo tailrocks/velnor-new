@@ -270,7 +270,7 @@ fn parity_pure_tofu() -> TestResult {
         );
         assert!(yaml.contains(&format!("\n  {id}:")), "yaml has {id}");
         assert!(
-            !plan.contains("Rust crate job"),
+            !plan.contains("Rust phase job"),
             "no rust label on a pure-tofu plan:\n{plan}"
         );
     }
@@ -295,7 +295,7 @@ fn parity_velnor_policy_lists_validators() -> TestResult {
         assert!(plan.contains("asamarts/alint@"), "plan pins alint:\n{plan}");
         // Merged support jobs never inflate the crate count.
         assert!(
-            plan.contains("Parallel: 1 independent crate job; no matrix fan-out"),
+            plan.contains("Parallel: 3 execution jobs; dependencies preserved; no matrix fan-out"),
             "parallel line:\n{plan}"
         );
         Ok(())

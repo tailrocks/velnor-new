@@ -2,7 +2,7 @@
 //!
 //! Declared via `#[path]` from `crate_jobs.rs` under `cfg(test)`: ID
 //! and display prefixes derive from the same all-tofu partition, so
-//! they can never disagree; mixed groups keep the rust union.
+//! they can never disagree; collocated Rust and Tofu obligations keep separate owners.
 
 use super::crate_jobs_tests::{discovery, group};
 use super::*;
@@ -48,7 +48,11 @@ fn id_and_display_prefixes_agree_per_partition() {
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
-    assert_eq!(found.jobs.len(), 3, "rust plus tofu plus mixed");
+    assert_eq!(
+        found.jobs.len(),
+        4,
+        "two Rust lint phases plus two Tofu owners"
+    );
     for (id, job) in &found.jobs {
         let tofu_id = id.starts_with(TOFU_JOB_ID_PREFIX);
         let tofu_display = job.display_name.starts_with(TOFU_DISPLAY_PREFIX);
@@ -66,16 +70,18 @@ fn id_and_display_prefixes_agree_per_partition() {
             .map(|(_, job)| job.display_name.clone())
             .expect("built job")
     };
-    assert_eq!(display("rust-demo"), "Rust / demo");
+    assert_eq!(display("rust-demo-lint"), "Rust / demo / Lint");
     assert_eq!(display("tofu-stacks-a"), "OpenToFu — stacks/a");
+    assert_eq!(display("tofu-stacks-b"), "OpenToFu — stacks/b");
     let mixed = found
         .jobs
         .iter()
-        .find(|(id, _)| id.starts_with("rust-") && *id != "rust-demo")
-        .expect("mixed group");
+        .find(|(id, _)| id.starts_with("rust-") && *id != "rust-demo-lint")
+        .expect("Rust phase sharing the Tofu unit");
+    assert!(mixed.0.ends_with("-lint"), "closed lint phase ID");
     assert!(
-        mixed.1.display_name.starts_with("Rust / "),
-        "mixed keeps rust: {}",
+        mixed.1.display_name.starts_with("Rust / ") && mixed.1.display_name.ends_with(" / Lint"),
+        "Rust phase keeps its display namespace: {}",
         mixed.1.display_name
     );
 }

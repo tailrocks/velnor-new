@@ -247,7 +247,7 @@ to stderr.
 The report MUST list detected stacks and their selected/ignored state; Rust
 workspace roots; each crate's package name, relative manifest path, targets,
 and local dependency names; planned workflow file paths; job groups and their
-purpose; matrix entry count; focused step names; parallel groups; runner label;
+purpose; Rust phase and Tofu root job counts; obligation names; runner label;
 planned cache layers; actionlint version/configuration; selected action pins;
 detected Rust test runner and compile driver with evidence; and concise reasons
 for ignored or ineligible work. It
@@ -282,10 +282,10 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - plan and formatting
-    - Rust crate matrix: 5 entries
-      Each: Clippy → build tests → run tests → doctests
+    - 15 Rust phase jobs
+      Obligations: Clippy → build tests → run tests → doctests → docs
     - final required result
-  Parallel: independent crate entries; eligible Clippy lanes
+  Parallel: 15 execution jobs; dependencies preserved; no matrix fan-out
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
 
 Recommendations

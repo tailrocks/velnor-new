@@ -17,8 +17,8 @@ fn drivers_follow_per_crate_selection() {
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
     })
     .expect("crate jobs");
-    assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);
-    assert_eq!(found.drivers["rust-nested"], RenderDriver::Cargo);
+    assert_eq!(found.drivers["rust-demo-lint"], RenderDriver::Mbx);
+    assert_eq!(found.drivers["rust-nested-lint"], RenderDriver::Cargo);
     let steps = names(&found.jobs[0].1);
     let preflight = steps
         .iter()

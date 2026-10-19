@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.19
+Velnor Actions plan 0.1.20
 Repository: <repo>
 
 Detected stacks
@@ -18,18 +18,22 @@ Workflow to generate
     - plan (11 steps)
     - publish-baseline (5 steps)
     - required (8 steps)
-    - rust-minimal-cargo (15 steps)
-    - 1 Rust crate job
-      Each: Clippy -> run tests -> doctests -> doc build -> format check
+    - rust-minimal-cargo-docs (11 steps)
+    - rust-minimal-cargo-lint (11 steps)
+    - rust-minimal-cargo-tests (11 steps)
+    - 3 Rust phase jobs
+      Obligations: Clippy -> run tests -> doctests -> doc build -> format check
       Entries:
-        - rust-minimal-cargo
+        - rust-minimal-cargo-docs
+        - rust-minimal-cargo-lint
+        - rust-minimal-cargo-tests
       Obligations:
         - stack/rust/root/clippy/default
         - stack/rust/root/doc/default
         - stack/rust/root/doctest/default
         - stack/rust/root/fmt/default
         - stack/rust/root/test/default
-  Parallel: 1 independent crate job; no matrix fan-out
+  Parallel: 3 execution jobs; dependencies preserved; no matrix fan-out
   Critical path: stack/rust/root/clippy/default -> stack/rust/root/doctest/default -> stack/rust/root/doc/default (3 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools
