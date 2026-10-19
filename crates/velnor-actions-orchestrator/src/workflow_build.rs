@@ -155,7 +155,6 @@ fn build_workflow_plan(
         prepared.needs,
         input.fetch_roots,
         input.discovery,
-        input.config.workflow.pull_request_cache_policy,
     )?;
     if let Some(format) = prepared.format.take() {
         insert_format_step(&mut plan, format);

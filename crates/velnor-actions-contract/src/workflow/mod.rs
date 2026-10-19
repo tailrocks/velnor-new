@@ -1,5 +1,6 @@
 //! Stack-neutral workflow IR, matrix, plan, and report types.
 pub mod artifacts;
+pub mod cache_family;
 pub mod cache_ids;
 pub mod crate_job;
 pub mod dispatch;
@@ -21,6 +22,7 @@ pub mod qualification_phase;
 pub mod report;
 mod report_validate;
 pub mod step;
+mod step_id;
 pub mod step_identity;
 mod step_mbx_lifecycle;
 mod step_protocol;

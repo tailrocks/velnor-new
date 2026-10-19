@@ -171,7 +171,7 @@ fn finalized_tofu_jobs_save_exactly_their_restored_key() -> TestResult {
         let save = saves[0];
         assert_eq!(
             save.condition.as_deref(),
-            Some("success() && github.event_name == 'push'")
+            Some("success() && needs.plan.outputs.cache_trust == 'trusted'")
         );
         let StepKind::Action { with: inputs, .. } = &save.kind else {
             return Err(format!("{id} save must be an action step").into());

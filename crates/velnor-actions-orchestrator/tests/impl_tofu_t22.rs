@@ -97,8 +97,8 @@ fn finalized_tofu_jobs_order_restore_before_work_before_save() -> TestResult {
         );
         assert_eq!(
             job.steps[save].condition.as_deref(),
-            Some("success() && github.event_name == 'push'"),
-            "{id} saves only for push, outside unvalidated dispatch"
+            Some("success() && needs.plan.outputs.cache_trust == 'trusted'"),
+            "{id} saves only on trusted runs, outside unvalidated dispatch"
         );
         renderer_steps::check_cache_step_order(&job.steps).map_err(|err| format!("{id}: {err}"))?;
     }
@@ -389,8 +389,8 @@ fn fork_event_plans_pr_trust_and_generates_restore_only_roundtrip() -> TestResul
         let save = at("Save Tofu providers").ok_or(format!("{id} saves"))?;
         assert_eq!(
             job.steps[save].condition.as_deref(),
-            Some("success() && github.event_name == 'push'"),
-            "{id} saves only on push: fork runs restore without saving"
+            Some("success() && needs.plan.outputs.cache_trust == 'trusted'"),
+            "{id} saves only on trusted runs: fork runs restore without saving"
         );
     }
     assert_eq!(seen, 1, "one tofu job for one root");

@@ -2,65 +2,45 @@
 //!
 //! The `tofu-providers` layer is acceleration only: a hit warms the
 //! job-private plugin-cache dir before init, and never replaces
-//! validate execution. Keys mirror the sources transport (static
-//! segments plus a `hashFiles` snapshot), scoped per validation root.
+//! validate execution. Keys come from the Plan job's runtime key step
+//! (compat over the family paths, platform, and installed `tofu version`;
+//! snapshot over the root lock file), one per validation root.
 
 use velnor_actions_contract::{CrateObligation, Step, StepId, StepRole};
-use velnor_actions_mise::PinnedTool;
 
 use crate::OrchestratorError;
 use crate::internal::internal;
 
-/// Provider-cache key prefix (per-root: target + tofu + root locator).
-pub(crate) const TOFU_PROVIDERS_KEY_PREFIX: &str =
-    velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDERS_KEY_PREFIX;
 /// Owned plugin-cache base (expression form; mirrors the renderer's).
 pub(crate) const TOFU_PROVIDER_CACHE_BASE_EXPR: &str =
     velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_CACHE_BASE_EXPR;
-/// Per-root provider-cache key: target + tofu + opaque root locator + lock hash.
+
+/// Sorted provider-cache roots; a root's position is its Plan key ordinal.
 ///
-/// Static segments invalidate exactly when pins or the root change;
-/// the trailing `hashFiles` over the root lockfile churns the key
-/// when provider pins change. No spaces: the cache action rejects
-/// them. The locator mirrors the isolated data-dir scheme and never
-/// interpolates repository paths. Depth budget: roots carry no
-/// separate depth cap; the 512-byte key cap bounds them instead — a
-/// root nested deep enough to overflow the key fails `key_too_long`.
+/// The Plan key step and every root job derive ordinals from this one
+/// list, so `tofu_providers_key_<n>` always names the same root.
 /// # Errors
 ///
-/// Returns contract errors for unsupported targets, loose tofu pins,
-/// unsafe or leading-dash roots, or overlong keys.
-pub(crate) fn tofu_providers_cache_key(
-    target: &str,
-    tofu_version: &str,
-    root: &str,
-) -> Result<String, OrchestratorError> {
-    use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
-    if !velnor_actions_contract::is_supported_target(target) {
-        return Err(bad_key(format!("bad_target:{target}")));
-    }
-    velnor_actions_mise::validate_exact_version("opentofu", tofu_version).map_err(|err| {
-        OrchestratorError::Contract {
-            problem: err.to_string(),
+/// Returns contract errors for a non-canonical tofu task identity.
+pub(crate) fn tofu_cache_roots(
+    discovery: &crate::discover::Discovery,
+) -> Result<Vec<String>, OrchestratorError> {
+    let mut roots = std::collections::BTreeSet::new();
+    for task in &discovery.proposals {
+        if velnor_actions_contract::Stack::from_id(&task.stack_id)
+            != Some(velnor_actions_contract::Stack::Tofu)
+            || !crate::crate_jobs::is_runnable(task)
+        {
+            continue;
         }
-    })?;
-    crate::source_prep::validate_root(root)?;
-    if root.starts_with('-') {
-        return Err(bad_key(format!("leading_dash_root:{root}")));
+        let key = task
+            .task_id
+            .split('/')
+            .nth(2)
+            .ok_or_else(|| internal("tofu_unparsable_task_id"))?;
+        roots.insert(velnor_actions_tofu::root_for_key(key)?);
     }
-    let lock = if root.is_empty() {
-        ".terraform.lock.hcl".to_owned()
-    } else {
-        format!("{root}/.terraform.lock.hcl")
-    };
-    let locator = velnor_actions_tofu::tofu_root_locator(root)?;
-    let key = format!(
-        "{TOFU_PROVIDERS_KEY_PREFIX}-{target}-{tofu_version}-{locator}-${{{{hashFiles('{lock}')}}}}"
-    );
-    if key.len() > MAX_CACHE_KEY_BYTES {
-        return Err(bad_key("key_too_long".to_owned()));
-    }
-    Ok(key)
+    Ok(roots.into_iter().collect())
 }
 
 /// Job-private plugin-cache path for one root (never the data dir).
@@ -69,11 +49,12 @@ pub(crate) fn tofu_providers_cache_key(
 /// Returns contract errors for an empty base (unreachable: the base
 /// is a literal) or a root the adapter rejects.
 pub(crate) fn tofu_provider_cache_path(root: &str) -> Result<String, OrchestratorError> {
-    velnor_actions_tofu::tofu_cache_dir_under(TOFU_PROVIDER_CACHE_BASE_EXPR, root).map_err(|err| {
-        OrchestratorError::Contract {
-            problem: err.to_string(),
-        }
-    })
+    let locator = velnor_actions_tofu::tofu_root_locator(root)?;
+    Ok(
+        velnor_actions_contract::workflow::cache_family::CacheFamily::TofuProviders
+            .spec()
+            .path_input(Some(&locator)),
+    )
 }
 
 /// Per-root provider restore/admission composite (L2 exact-key).
@@ -202,23 +183,27 @@ fn validate_tofu_obligation_gate(
 }
 
 /// Build the compact restore/admission step for one root.
+///
+/// The exact key comes from the Plan job's runtime key step (ordinal of
+/// `root` in `tofu_roots`); the path is the family spec's per-root path.
 /// # Errors
 ///
-/// Returns contract, actionlint, or render errors for invalid cache identity.
+/// Returns contract, actionlint, or render errors for an unknown root or
+/// invalid cache identity.
 pub(crate) fn provider_cache_step_for_tofu_root(
-    label: &str,
-    catalog: &velnor_actions_mise::ToolCatalog,
     root: &str,
+    tofu_roots: &[String],
 ) -> Result<[Step; 1], OrchestratorError> {
-    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
-        .map(velnor_actions_contract::ReleaseTarget::triple)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("bad_label:{label}"),
-        })?;
-    let tofu = catalog.version(PinnedTool::Opentofu);
-    let key = tofu_providers_cache_key(target, tofu, root)?;
+    use velnor_actions_contract::workflow::cache_family::tofu_providers_key_plan_expr;
+    let ordinal = tofu_roots
+        .iter()
+        .position(|candidate| candidate == root)
+        .ok_or_else(|| bad_key(format!("tofu_root_without_key:{root}")))?;
     let path = tofu_provider_cache_path(root)?;
-    Ok([tofu_providers_restore_step(&key, &path)?])
+    Ok([tofu_providers_restore_step(
+        &tofu_providers_key_plan_expr(ordinal),
+        &path,
+    )?])
 }
 
 /// Provider-cache key rejection.
@@ -232,20 +217,16 @@ mod tests {
     use velnor_actions_contract::StepKind;
 
     #[test]
-    fn provider_restore_composite_binds_exact_key_and_owned_path() {
-        let key = tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", "stacks/vpc")
-            .expect("key builds");
+    fn provider_restore_composite_binds_plan_key_and_owned_path() {
+        let roots = vec![String::new(), "stacks/vpc".to_owned()];
+        let [step] = provider_cache_step_for_tofu_root("stacks/vpc", &roots).expect("builds");
         let path = tofu_provider_cache_path("stacks/vpc").expect("path builds");
         assert_eq!(
-            TOFU_PROVIDER_CACHE_BASE_EXPR,
-            velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_CACHE_BASE_EXPR,
-            "one base across crates"
+            path,
+            velnor_actions_tofu::tofu_cache_dir_under(TOFU_PROVIDER_CACHE_BASE_EXPR, "stacks/vpc")
+                .expect("adapter path"),
+            "the family spec and the adapter agree on the private leaf"
         );
-        assert!(
-            path.starts_with(&format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/b3-")),
-            "{path}"
-        );
-        let step = tofu_providers_restore_step(&key, &path).expect("restore builds");
         assert_eq!(step.name, "Restore Tofu providers");
         assert!(step.condition.is_none(), "restores carry no gate");
         let StepKind::Action { uses, with, .. } = &step.kind else {
@@ -257,45 +238,19 @@ mod tests {
         );
         assert_eq!(
             with.get("cache-key").map(String::as_str),
-            Some(key.as_str()),
-            "the composite receives the configured key once"
+            Some("${{needs.plan.outputs.tofu_providers_key_1}}"),
+            "the composite receives the Plan runtime key for the root ordinal"
         );
-        assert_eq!(
-            with.get("cache-path").map(String::as_str),
-            Some(path.as_str()),
-            "the composite receives only the owned plugin-cache path"
-        );
+        assert_eq!(with.get("cache-path"), Some(&path));
+        assert!(provider_cache_step_for_tofu_root("other", &roots).is_err());
         let script = velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_SCRIPT;
         for expected in [
             "[ \"$TOFU_CACHE_HIT\" = true ]",
             "[ \"$TOFU_MATCHED_KEY\" = \"$TOFU_EXPECTED_KEY\" ]",
-            "\"$TOFU_PROVIDER_CACHE_PATH\" = \"$d\"",
             "rm -rf \"$d\"",
-            "mkdir -m 700 \"$d\"",
         ] {
-            assert!(
-                script.contains(expected),
-                "script lacks {expected:?}: {script}"
-            );
+            assert!(script.contains(expected), "script lacks {expected:?}");
         }
         assert!(!script.contains("TF_DATA_DIR"), "data dir is untouched");
-    }
-
-    #[test]
-    fn provider_key_shape_binds_target_tofu_root_and_lock() {
-        let key = tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", "")
-            .expect("provider key builds");
-        assert!(
-            key.starts_with("velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-b3-"),
-            "{key}"
-        );
-        assert!(
-            key.ends_with("${{hashFiles('.terraform.lock.hcl')}}"),
-            "{key}"
-        );
-        assert!(
-            key.len() <= velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES,
-            "{key}"
-        );
     }
 }

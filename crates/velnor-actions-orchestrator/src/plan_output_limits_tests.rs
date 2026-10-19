@@ -136,7 +136,7 @@ fn matrix_and_qualification_outputs_share_one_aggregate_budget() {
 #[test]
 fn output_budget_boundary_is_inclusive() {
     let key_units = "qualification_campaign".encode_utf16().count() + 2;
-    let value_units = JOB_OUTPUTS_BUDGET_UTF16_BYTES / 2 - key_units;
+    let value_units = super::PLAN_STEP_OUTPUTS_BUDGET_UTF16_BYTES / 2 - key_units;
     let exact = "x".repeat(value_units);
     assert!(
         check_plan_outputs(

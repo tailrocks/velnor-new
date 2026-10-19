@@ -103,6 +103,12 @@ pub(crate) const MATRIX_JOB_LIMIT: usize = 256;
 /// Keeping 100,000 bytes in reserve avoids depending on service-side
 /// accounting details.
 pub const JOB_OUTPUTS_BUDGET_UTF16_BYTES: usize = 900_000;
+/// Share of [`JOB_OUTPUTS_BUDGET_UTF16_BYTES`] left to plan-step outputs.
+///
+/// The Plan key step's cache outputs are promoted beside these values, so
+/// their generation-checked reserve stays free.
+pub(crate) const PLAN_STEP_OUTPUTS_BUDGET_UTF16_BYTES: usize = JOB_OUTPUTS_BUDGET_UTF16_BYTES
+    - velnor_actions_contract::workflow::cache_family::PLAN_CACHE_OUTPUTS_RESERVE_UTF16_BYTES;
 
 /// Which outputs the plan job promotes to downstream jobs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -199,7 +205,7 @@ pub(crate) fn check_plan_outputs(
     let Some(bytes) = bytes else {
         return Err(internal("job_outputs_size_overflow"));
     };
-    if bytes > JOB_OUTPUTS_BUDGET_UTF16_BYTES {
+    if bytes > PLAN_STEP_OUTPUTS_BUDGET_UTF16_BYTES {
         return Err(internal(&format!(
             "job_outputs_budget_exceeded:{bytes}:reduce matrix entries"
         )));

@@ -255,15 +255,14 @@ fn render_job(
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
     steps.extend(crate::source_cache::restore_step_for_crate(
-        label,
-        catalog,
         fetch_roots,
         use_rust,
     )?);
     if use_opentofu {
         let root = crate::tofu_cache::tofu_root_for_obligations(&model.obligations)?;
+        let roots = crate::tofu_cache::tofu_cache_roots(input.discovery)?;
         steps.extend(crate::tofu_cache::provider_cache_step_for_tofu_root(
-            label, catalog, &root,
+            &root, &roots,
         )?);
     }
     if use_mbx {

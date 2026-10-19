@@ -54,8 +54,10 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// default branch; Scale Set routes do not invoke action restore.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 12] = [
+const ENV_EXPRESSIONS: [&str; 14] = [
     "runner.temp",
+    "format('refs/heads/{0}', github.event.repository.default_branch)",
+    "github.event.pull_request.head.repo.fork",
     "github.ref_name",
     "github.event_name",
     "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read'",
@@ -74,7 +76,7 @@ const ENV_EXPRESSIONS: [&str; 12] = [
 /// Run-scoped names, runner paths, matrix coordinates, the
 /// push-gated cache-save flag, and runtime cache identities. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 12] = [
+const WITH_EXPRESSIONS: [&str; 16] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
@@ -87,7 +89,22 @@ const WITH_EXPRESSIONS: [&str; 12] = [
     "github.job",
     "steps.tofu-providers.outputs.cache-key",
     "steps.tofu-providers.outputs.cache-path",
+    "steps.cache-keys.outputs.sources_key",
+    "steps.cache-keys.outputs.sources_restore_keys",
+    "needs.plan.outputs.sources_key",
+    "needs.plan.outputs.sources_restore_keys",
 ];
+
+/// True for a Plan-published per-root provider key (`tofu_providers_key_<n>`).
+fn is_tofu_providers_plan_key(inner: &str) -> bool {
+    inner
+        .strip_prefix("needs.plan.outputs.")
+        .is_some_and(|name| {
+            name.starts_with(
+                velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_KEY_OUTPUT_PREFIX,
+            ) && velnor_actions_contract::workflow::cache_family::is_plan_cache_output(name)
+        })
+}
 
 /// True for a `matrix.*` field reference (both layers allow the family).
 fn is_matrix_field(inner: &str) -> bool {
@@ -215,7 +232,11 @@ pub(crate) fn check_with_value(key: &str, value: &str) -> Result<(), RenderError
         )));
     };
     for inner in spans {
-        if !WITH_EXPRESSIONS.contains(&inner) && !is_matrix_field(inner) && !is_hash_files(inner) {
+        if !WITH_EXPRESSIONS.contains(&inner)
+            && !is_matrix_field(inner)
+            && !is_hash_files(inner)
+            && !is_tofu_providers_plan_key(inner)
+        {
             return Err(RenderError::BadActionRef(format!(
                 "bad_with_expression:{key}"
             )));

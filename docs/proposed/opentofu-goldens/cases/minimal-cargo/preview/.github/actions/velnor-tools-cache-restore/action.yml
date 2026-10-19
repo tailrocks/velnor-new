@@ -9,6 +9,10 @@ inputs:
     description: Whether the trusted V2 prelude copied the exact seed.
     required: false
     default: "false"
+outputs:
+  cache-hit:
+    description: Exact-key hit of the restored V2 tools entry.
+    value: ${{ steps.restore.outputs.cache-hit }}
 runs:
   using: composite
   steps:

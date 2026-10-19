@@ -7,11 +7,21 @@ use super::{
 };
 
 fn fake_mise_script() -> &'static str {
-    "#!/bin/sh\nset -eu\n[ \"$1\" = --no-config ] && [ \"$2\" = --no-env ] && [ \"$3\" = --no-hooks ] || exit 2\n[ \"$4\" = exec ] && [ \"$5\" = rust@1.98.1 ] && [ \"$6\" = -- ] || exit 3\nmbx_bin=$7\ncase \"$mbx_bin\" in /*) ;; *) exit 4 ;; esac\n[ -f \"$mbx_bin\" ] && [ -x \"$mbx_bin\" ] || exit 5\nshift 6\n[ \"$1\" = \"$mbx_bin\" ] || exit 6\nshift\nPATH=/usr/bin:/bin exec \"$mbx_bin\" \"$@\"\n"
+    "#!/bin/sh\nset -eu\n[ \"$1\" = --no-config ] && [ \"$2\" = --no-env ] && [ \"$3\" = --no-hooks ] || exit 2\n[ \"$4\" = exec ] && [ \"$5\" = rust@1.98.1 ] && [ \"$6\" = -- ] || exit 3\nshift 6\nif [ \"$1\" = rustup ]; then [ \"$*\" = 'rustup which --toolchain 1.98.1 rustc' ] || exit 9; printf '%s\\n' \"${0%/*}/rustc\"; exit 0; fi\nmbx_bin=$1\ncase \"$mbx_bin\" in /*) ;; *) exit 4 ;; esac\n[ -f \"$mbx_bin\" ] && [ -x \"$mbx_bin\" ] || exit 5\nshift\nPATH=/usr/bin:/bin exec \"$mbx_bin\" \"$@\"\n"
+}
+
+/// Fake toolchain `rustc` printing a fixed `-vV` identity.
+const FAKE_RUSTC: &str = "#!/bin/sh\n[ \"$1\" = -vV ] || exit 10\nprintf '%s\\n' 'rustc 1.98.1 (fake 2026-01-01)' 'release: 1.98.1'\n";
+
+fn write_fake_toolchain(fake_bin: &std::path::Path) -> std::io::Result<()> {
+    write_tool(&fake_bin.join("mise"), fake_mise_script())?;
+    write_tool(&fake_bin.join("rustc"), FAKE_RUSTC)
 }
 
 fn fake_mbx_script(version_body: Option<&str>) -> String {
-    let mut script = String::from("#!/bin/sh\ncase \"$1\" in\n--version)\n");
+    let mut script = String::from(
+        "#!/bin/sh\ncase \"${0##*/}\" in mbx-rustc) r=$1; shift; if [ \"${MBX_RUSTC_MODE:-}\" = lie ]; then \"$r\" \"$@\"; echo wrapped; exit 0; fi; exec \"$r\" \"$@\" ;; esac\ncase \"$1\" in\n--version)\n",
+    );
     if let Some(body) = version_body {
         script.push_str(body.strip_prefix("#!/bin/sh\n").unwrap_or(body));
     } else {
@@ -59,7 +69,7 @@ fn native_action_version_guard_accepts_only_one_exact_complete_line()
         let root = TempRoot::new()?;
         let fake_bin = root.0.join("fake-bin");
         fs::create_dir(&fake_bin)?;
-        write_tool(&fake_bin.join("mise"), fake_mise_script())?;
+        write_fake_toolchain(&fake_bin)?;
         if let Some(output) = output {
             write_tool(&fake_bin.join("mbx"), &fake_mbx_script(Some(output)))?;
         }
@@ -83,7 +93,7 @@ fn native_action_cache_dir_guard_rejects_wrong_or_ambiguous_output()
         let root = TempRoot::new()?;
         let fake_bin = root.0.join("fake-bin");
         fs::create_dir(&fake_bin)?;
-        write_tool(&fake_bin.join("mise"), fake_mise_script())?;
+        write_fake_toolchain(&fake_bin)?;
         write_tool(
             &fake_bin.join("mbx"),
             &fake_mbx_script(Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\n")),
@@ -92,6 +102,33 @@ fn native_action_cache_dir_guard_rejects_wrong_or_ambiguous_output()
         assert!(
             !result.status.success(),
             "{mode} cache-dir output must fail: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert_version_scratch_removed(&root.0)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn native_action_version_guard_requires_a_transparent_rustc_wrapper()
+-> Result<(), Box<dyn std::error::Error>> {
+    let guard = version_check_script()?;
+    assert!(guard.contains("ln -s \"$mbx_bin\" \"$probe_dir/mbx-rustc\""));
+    for (mode, want_success) in [("exact", true), ("lie", false)] {
+        let root = TempRoot::new()?;
+        let fake_bin = root.0.join("fake-bin");
+        fs::create_dir(&fake_bin)?;
+        write_fake_toolchain(&fake_bin)?;
+        write_tool(
+            &fake_bin.join("mbx"),
+            &fake_mbx_script(Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\n")),
+        )?;
+        let result =
+            super::run_version_check_with_env(&root.0, &guard, &[("MBX_RUSTC_MODE", mode)])?;
+        assert_eq!(
+            result.status.success(),
+            want_success,
+            "{mode}: {}",
             String::from_utf8_lossy(&result.stderr)
         );
         assert_version_scratch_removed(&root.0)?;

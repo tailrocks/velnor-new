@@ -29,10 +29,11 @@ pub(crate) fn emit_shared(
 ) -> Result<RenderedWorkflow, RenderError> {
     let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(jobs);
     let mut document = document::workflow_to_yaml(ir, shared, ctx, &mbx_jobs)?;
+    let cache_outputs = crate::cache_plan_outputs::consumed(jobs)?;
     if let Some((source, max_parallel)) = matrix {
-        matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
+        matrix::attach_task_matrix(&mut document, source, *max_parallel, &cache_outputs)?;
     } else {
-        matrix::attach_plan_outputs(&mut document)?;
+        matrix::attach_plan_outputs(&mut document, &cache_outputs)?;
     }
     matrix::attach_crate_job_caps(&mut document, caps)?;
     matrix::suites::attach_suite_allow_failure(&mut document, &suite_matrices.1)?;

@@ -1,108 +1,47 @@
-//! P08 shared cache constructors for the exact Cargo sources subset.
+//! Cargo sources family steps: Plan-only writer, crate-job readers.
 //!
-//! The plan job saves the shared sources snapshot once (single writer);
-//! crate jobs restore it read-only. Cargo-only, MBX, and mixed repos use
-//! this same archive so no action can overlap V2 tools-owned Cargo paths.
+//! The Plan job computes the runtime key (`Compute cache keys`), restores,
+//! fetches, and saves the shared sources snapshot under a producer gate;
+//! crate jobs restore read-only through the Plan job outputs. Every
+//! restore and save takes its `path` input from the typed family spec, so
+//! the lists are byte-identical by construction.
 
 use velnor_actions_actionlint::actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION};
-use velnor_actions_contract::{Step, StepRole};
-use velnor_actions_mise::{PinnedTool, ToolCatalog};
+use velnor_actions_contract::workflow::cache_family::{
+    CacheFamily, SOURCES_KEY_PLAN_EXPR, SOURCES_KEY_STEP_EXPR, SOURCES_RESTORE_KEYS_PLAN_EXPR,
+    SOURCES_RESTORE_KEYS_STEP_EXPR, SOURCES_SAVE_CONDITION,
+};
+use velnor_actions_contract::{Step, StepId, StepRole};
 
 use crate::OrchestratorError;
 
 /// Owned Cargo home expression shared by writers and readers.
-pub(crate) const SHARED_CARGO_HOME: &str = "${{ runner.temp }}/velnor/cargo";
-/// Sources key prefix (shared: target + Rust + lock hash, never job id).
-pub(crate) const SOURCES_KEY_PREFIX: &str = "velnor-v1-sources";
-/// Shared sources key: target + Rust + lock hash (no job id, no trust).
+pub(crate) const SHARED_CARGO_HOME: &str =
+    velnor_actions_contract::workflow::cache_family::CARGO_HOME_EXPR;
+
+/// Plan-job restore and producer-gated save over the runtime key.
 /// # Errors
 ///
-/// Returns contract errors for unsupported targets, loose Rust versions,
-/// unsafe roots, or overlong keys.
-pub(crate) fn sources_cache_key(
-    target: &str,
-    rust_version: &str,
-    roots: &[String],
-) -> Result<String, OrchestratorError> {
-    use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
-    if !velnor_actions_contract::is_supported_target(target) {
-        return Err(bad_key(format!("bad_target:{target}")));
-    }
-    velnor_actions_mise::validate_exact_version("rust", rust_version).map_err(|err| {
+/// Returns contract, actionlint, or render errors for rejected pins,
+/// paths, or step shapes.
+pub(crate) fn plan_sources_steps() -> Result<(Step, Step), OrchestratorError> {
+    let mut restore = sources_step(true, SOURCES_KEY_STEP_EXPR, SOURCES_RESTORE_KEYS_STEP_EXPR)?;
+    restore.id = Some(StepId::SourcesRestore);
+    let mut save = sources_step(false, SOURCES_KEY_STEP_EXPR, "")?;
+    save.condition = Some(SOURCES_SAVE_CONDITION.to_owned());
+    Ok((restore, save))
+}
+
+/// The one sources restore/save constructor (paths from the family spec).
+fn sources_step(restore: bool, key: &str, restore_keys: &str) -> Result<Step, OrchestratorError> {
+    use velnor_actions_actionlint::PinnedActionRef;
+    use velnor_actions_mise::cache_sources::validate_sources_subset;
+    let paths = CacheFamily::Sources.spec().resolved_paths(None);
+    validate_sources_subset(&paths, SHARED_CARGO_HOME).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
         }
     })?;
-    let mut locks = Vec::with_capacity(roots.len());
-    for root in roots {
-        crate::source_prep::validate_root(root)?;
-        locks.push(if root.is_empty() {
-            "Cargo.lock".to_owned()
-        } else {
-            format!("{root}/Cargo.lock")
-        });
-    }
-    let quoted: Vec<String> = locks.iter().map(|lock| format!("'{lock}'")).collect();
-    let key = format!(
-        "{SOURCES_KEY_PREFIX}-{target}-{rust_version}-${{{{hashFiles({})}}}}",
-        quoted.join(",")
-    );
-    if key.len() > MAX_CACHE_KEY_BYTES {
-        return Err(bad_key("key_too_long".to_owned()));
-    }
-    Ok(key)
-}
-
-/// Same-compat restore prefix (snapshot omitted).
-#[must_use]
-pub(crate) fn sources_restore_prefix(key: &str) -> String {
-    key.split_once("${{")
-        .map_or_else(|| format!("{key}-"), |(head, _)| head.to_owned())
-}
-
-/// Shared restore step over the owned-home subset (readers and writer).
-/// # Errors
-///
-/// Returns contract, actionlint, or render errors for rejected pins,
-/// paths, or step shapes.
-pub(crate) fn sources_restore_step(
-    key: &str,
-    restore_keys: &[String],
-) -> Result<Step, OrchestratorError> {
-    sources_step(
-        true,
-        key,
-        restore_keys,
-        velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
-    )
-}
-
-/// Shared save step over the owned-home subset (writer only).
-/// # Errors
-///
-/// Returns contract, actionlint, or render errors for rejected pins,
-/// paths, or step shapes.
-pub(crate) fn sources_save_step(
-    key: &str,
-    policy: velnor_actions_contract::PullRequestCachePolicy,
-) -> Result<Step, OrchestratorError> {
-    sources_step(false, key, &[], policy)
-}
-
-/// One sources restore/save step with the P08 display name.
-fn sources_step(
-    restore: bool,
-    key: &str,
-    restore_keys: &[String],
-    policy: velnor_actions_contract::PullRequestCachePolicy,
-) -> Result<Step, OrchestratorError> {
-    use velnor_actions_actionlint::PinnedActionRef;
-    use velnor_actions_mise::cache_sources::{sources_cache_paths, validate_sources_subset};
-    let wrap = |err: velnor_actions_mise::MiseError| OrchestratorError::Contract {
-        problem: err.to_string(),
-    };
-    let paths = sources_cache_paths(SHARED_CARGO_HOME).map_err(wrap)?;
-    validate_sources_subset(&paths, SHARED_CARGO_HOME).map_err(wrap)?;
     let op = if restore { "restore" } else { "save" };
     let uses = PinnedActionRef::new(
         "actions/cache",
@@ -112,12 +51,17 @@ fn sources_step(
     )
     .map_err(OrchestratorError::from)?
     .uses_value();
+    let restore_keys: Vec<String> = if restore {
+        vec![restore_keys.to_owned()]
+    } else {
+        Vec::new()
+    };
     let mut step = velnor_actions_workflow_renderer::steps::cache_action_step(
         restore,
         &uses,
-        "sources",
+        CacheFamily::Sources.spec().layer,
         key,
-        restore_keys,
+        &restore_keys,
         &paths,
     )
     .map_err(OrchestratorError::from)?;
@@ -126,10 +70,6 @@ fn sources_step(
     } else {
         "Save Cargo sources".to_owned()
     };
-    if !restore {
-        let gate = velnor_actions_contract::workflow::ir::cargo_sources_save_condition(policy);
-        step.condition = Some(gate.to_owned());
-    }
     step.role = Some(if restore {
         StepRole::CargoSourcesRestore
     } else {
@@ -138,56 +78,59 @@ fn sources_step(
     Ok(step)
 }
 
+/// Read-only crate-job restore through the Plan job outputs.
+///
 /// Lockless emits nothing, and tofu roles restore providers through
 /// the separate provider-cache step (never here). The separate V2 tools
 /// layer owns Cargo binaries and tool receipts. Compiler driver does not
 /// change which shared-source payload readers restore.
 pub(crate) fn restore_step_for_crate(
-    label: &str,
-    catalog: &ToolCatalog,
     fetch_roots: &[String],
     use_rust: bool,
 ) -> Result<Option<Step>, OrchestratorError> {
     if !use_rust || fetch_roots.is_empty() {
         return Ok(None);
     }
-    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
-        .map(velnor_actions_contract::ReleaseTarget::triple)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("bad_label:{label}"),
-        })?;
-    let rust = catalog.version(PinnedTool::Rust);
-    let key = sources_cache_key(target, rust, fetch_roots)?;
-    let prefix = sources_restore_prefix(&key);
-    sources_restore_step(&key, &[prefix]).map(Some)
-}
-
-/// Shared-cache key rejection.
-fn bad_key(problem: String) -> OrchestratorError {
-    OrchestratorError::Contract { problem }
+    sources_step(true, SOURCES_KEY_PLAN_EXPR, SOURCES_RESTORE_KEYS_PLAN_EXPR).map(Some)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use velnor_actions_contract::StepKind;
+
+    fn with_of(step: &Step) -> &std::collections::BTreeMap<String, String> {
+        let StepKind::Action { with, .. } = &step.kind else {
+            panic!("cache steps are actions");
+        };
+        with
+    }
 
     #[test]
-    fn cache_keys_reject_unsupported_execution_targets() {
-        // Rust execution targets are charset-validated, so supported
-        // configs can carry non-release triples; the cache path
-        // hard-fails on them instead of keying a foreign toolchain.
-        for target in [
-            "aarch64-unknown-linux-gnu",
-            "wasm32-unknown-unknown",
-            "host",
-        ] {
-            let err = sources_cache_key(target, "1.98.1", &[]).expect_err("target");
-            assert!(err.to_string().contains("bad_target"), "{target}: {err}");
+    fn plan_and_crate_steps_share_one_spec_path_list() {
+        let (restore, save) = plan_sources_steps().expect("plan steps");
+        let reader = restore_step_for_crate(&[String::new()], true)
+            .expect("reader")
+            .expect("lockful");
+        let expected = CacheFamily::Sources.spec().path_input(None);
+        for step in [&restore, &save, &reader] {
+            assert_eq!(with_of(step).get("path"), Some(&expected), "{}", step.name);
+            assert!(!with_of(step)["key"].contains("hashFiles"), "{}", step.name);
         }
-        for target in velnor_actions_contract::ReleaseTarget::ALL {
-            let key = sources_cache_key(target.triple(), "1.98.1", &[]).expect("supported");
-            assert!(key.starts_with(SOURCES_KEY_PREFIX), "{key}");
-        }
-        assert!(sources_cache_key("x86_64-unknown-linux-gnu", "1.98", &[]).is_err());
+        assert_eq!(with_of(&restore)["key"], SOURCES_KEY_STEP_EXPR);
+        assert_eq!(with_of(&reader)["key"], SOURCES_KEY_PLAN_EXPR);
+        assert_eq!(
+            with_of(&reader)["restore-keys"],
+            SOURCES_RESTORE_KEYS_PLAN_EXPR
+        );
+        assert_eq!(save.condition.as_deref(), Some(SOURCES_SAVE_CONDITION));
+        assert_eq!(restore.id, Some(StepId::SourcesRestore));
+        assert!(reader.id.is_none() && reader.condition.is_none());
+        assert!(restore_step_for_crate(&[], true).expect("none").is_none());
+        assert!(
+            restore_step_for_crate(&[String::new()], false)
+                .expect("none")
+                .is_none()
+        );
     }
 }
