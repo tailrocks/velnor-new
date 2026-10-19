@@ -1,0 +1,187 @@
+//! Literal payload jobs and complete-union assembly without signing authority.
+
+use super::{
+    BTreeMap, ConsumerPreviewSpec, JobTimeout, RenderError, Yaml, acquire, base, finish,
+    join_argv_for_run, non_internal_step_to_yaml, operation, permissions, run_step, setup, steps,
+};
+use velnor_actions_contract::preview_production::{
+    PreviewPayloadPair, expected_preview_payload_pairs, preview_payload_job_id,
+};
+
+pub(super) fn jobs(spec: &ConsumerPreviewSpec) -> Result<Vec<(String, Yaml)>, RenderError> {
+    let pairs = expected_preview_payload_pairs(&spec.plan)
+        .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
+    let mut jobs = Vec::with_capacity(pairs.len() + 1);
+    let mut dependencies = vec!["preview-eligibility".to_owned()];
+    for pair in &pairs {
+        let id = preview_payload_job_id(&spec.plan, pair)
+            .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
+        dependencies.push(id.clone());
+        jobs.push(producer(
+            spec,
+            &id,
+            Some(pair),
+            &["preview-eligibility".to_owned()],
+        )?);
+    }
+    jobs.push(producer(spec, "preview-assemble", None, &dependencies)?);
+    Ok(jobs)
+}
+
+fn producer(
+    spec: &ConsumerPreviewSpec,
+    id: &str,
+    pair: Option<&PreviewPayloadPair>,
+    dependencies: &[String],
+) -> Result<(String, Yaml), RenderError> {
+    // The service jobs API exposes the display name, so it must equal the closed job ID.
+    let mut fields = base(
+        id,
+        Yaml::str(spec.producer_runner.runs_on()),
+        JobTimeout::new(spec.producer_timeout_minutes).map_err(RenderError::Contract)?,
+    );
+    fields.push((
+        "if".to_owned(),
+        Yaml::str("${{ github.event_name == 'workflow_run' }}"),
+    ));
+    fields.push((
+        "needs".to_owned(),
+        Yaml::Seq(dependencies.iter().map(Yaml::str).collect()),
+    ));
+    let access = if pair.is_some() {
+        vec![("contents", "read")]
+    } else {
+        vec![("actions", "read"), ("contents", "read")]
+    };
+    fields.push(("permissions".to_owned(), permissions(&access)));
+    fields.push((
+        "outputs".to_owned(),
+        permissions(&[
+            ("artifact_id", "${{ steps.upload.outputs.artifact-id }}"),
+            (
+                "artifact_digest",
+                "${{ steps.upload.outputs.artifact-digest }}",
+            ),
+        ]),
+    ));
+    let mut steps = source_steps(spec, id)?;
+    let mut operation = operation(spec, "execute-preview-producer-v1", pair.is_none())?;
+    let env = if let Some(pair) = pair {
+        vec![
+            ("VELNOR_PREVIEW_STAGE", "payload"),
+            ("VELNOR_PREVIEW_PRODUCT_ID", pair.product_id.as_str()),
+            ("VELNOR_PREVIEW_TARGET", pair.target.as_str()),
+        ]
+    } else {
+        vec![
+            ("VELNOR_PREVIEW_STAGE", "assemble"),
+            ("VELNOR_PREVIEW_NEEDS_JSON", "${{ toJSON(needs) }}"),
+        ]
+    };
+    operation_env(&mut operation, &env)?;
+    steps.push(operation);
+    steps.push(upload(pair));
+    for step in &mut steps {
+        super::steps::with_producer_homes(step, &spec.producer_cargo_env)?;
+    }
+    Ok(finish(id, fields, steps))
+}
+
+pub(super) fn operation_env(step: &mut Yaml, values: &[(&str, &str)]) -> Result<(), RenderError> {
+    let Yaml::Map(fields) = step else {
+        return Err(RenderError::InvalidWorkflow(
+            "preview_operation_not_map".to_owned(),
+        ));
+    };
+    let Some((_, Yaml::Map(env))) = fields.iter_mut().find(|(key, _)| key == "env") else {
+        return Err(RenderError::InvalidWorkflow(
+            "preview_operation_env_missing".to_owned(),
+        ));
+    };
+    for (key, value) in values {
+        if env.iter().any(|(existing, _)| existing == key) {
+            return Err(RenderError::InvalidWorkflow(
+                "preview_operation_env_conflict".to_owned(),
+            ));
+        }
+        env.push(((*key).to_owned(), Yaml::str(*value)));
+    }
+    Ok(())
+}
+
+pub(super) fn upload(pair: Option<&PreviewPayloadPair>) -> Yaml {
+    let prefix = "${{ github.run_id }}-a${{ github.run_attempt }}";
+    let name = pair.map_or_else(
+        || format!("velnor-preview-aggregate-r{prefix}"),
+        |pair| {
+            format!(
+                "velnor-preview-payload-r{prefix}-{}-{}",
+                pair.product_id, pair.target
+            )
+        },
+    );
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Retain immutable native production evidence"),
+        ),
+        ("id".to_owned(), Yaml::str("upload")),
+        (
+            "uses".to_owned(),
+            Yaml::str(crate::steps::UPLOAD_ARTIFACT_USES),
+        ),
+        (
+            "with".to_owned(),
+            Yaml::Map(vec![
+                ("name".to_owned(), Yaml::str(name)),
+                (
+                    "path".to_owned(),
+                    Yaml::str("${{ runner.temp }}/velnor/preview-output"),
+                ),
+                ("if-no-files-found".to_owned(), Yaml::str("error")),
+                ("retention-days".to_owned(), Yaml::Int(30)),
+                ("overwrite".to_owned(), Yaml::Bool(false)),
+                ("include-hidden-files".to_owned(), Yaml::Bool(false)),
+            ]),
+        ),
+    ])
+}
+
+fn source_steps(spec: &ConsumerPreviewSpec, id: &str) -> Result<Vec<Yaml>, RenderError> {
+    let runner = spec.producer_runner.runs_on();
+    crate::toolchain_env::check_toolchain_homes(&spec.producer_cargo_env)?;
+    crate::toolchain_env::reject_denied_step_keys(&spec.producer_cargo_env)?;
+    let checkout = steps::checkout("${{ needs.preview-eligibility.outputs.source_sha }}");
+    let mut producer_steps = vec![
+        checkout,
+        setup(&spec.producer_setup),
+        run_step(
+            "Create owned Cargo metadata homes",
+            "mkdir -p \"$MISE_CARGO_HOME\" \"$MISE_RUSTUP_HOME\"",
+        ),
+        run_step(
+            "Install pinned Cargo metadata toolchain",
+            &join_argv_for_run(&spec.install_rust_argv)?,
+        ),
+    ];
+    for step in &spec.producer_source_prep {
+        let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+            return Err(RenderError::InvalidWorkflow(
+                "preview_source_preparation_not_shell".to_owned(),
+            ));
+        };
+        if env != &spec.producer_cargo_env {
+            return Err(RenderError::InvalidWorkflow(
+                "preview_source_preparation_home_mismatch".to_owned(),
+            ));
+        }
+        producer_steps.push(non_internal_step_to_yaml(
+            id,
+            step,
+            &BTreeMap::new(),
+            runner,
+        )?);
+    }
+    producer_steps.push(acquire(&spec.producer_acquire, id, runner)?);
+    Ok(producer_steps)
+}

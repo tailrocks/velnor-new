@@ -45,7 +45,7 @@ pub(super) fn recover() -> Result<super::PackagePublicationOutcome, Orchestrator
 /// Authenticate original bytes for promotion without release-write authority.
 pub(crate) fn verify_original_for_promotion()
 -> Result<VerifiedAttestedSignedPackage, OrchestratorError> {
-    verified_original().map(|(signed, _)| signed)
+    super::artifact_zip::within_operation(|| verified_original().map(|(signed, _)| signed))
 }
 
 fn verified_original()

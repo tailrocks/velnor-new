@@ -60,6 +60,8 @@ fn scan_tree(
         })?;
     entries.sort_by_key(std::fs::DirEntry::file_name);
     for entry in entries {
+        velnor_actions_mise::CheckDeadline::check_scope()
+            .map_err(|_| invalid("package_output_verification_timeout"))?;
         *count = count.saturating_add(1);
         if *count > MAX_FILE_COUNT {
             return Err(invalid("producer_output_entry_limit"));

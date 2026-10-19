@@ -19,18 +19,20 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use velnor_actions_orchestrator::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP,
-    MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP,
-    PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PUBLISH_PACKAGE_RELEASE_OP,
-    PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP, REQUEST_FILE_ENV,
-    SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP, WRITE_HOMEBREW_TAP_PR_OP,
-    WRITE_REQUEST_OP, execute_check, execute_preview_producer, merge_internal, merge_passed,
+    ADMIT_PREVIEW_AGGREGATE_OP, DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP,
+    EXECUTE_PREVIEW_PRODUCER_OP, FETCH_OP, MERGE_HOMEBREW_TAP_PR_OP, MERGE_OP, OrchestratorError,
+    PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PREPARE_HOMEBREW_TAP_OP, PRESEED_MANIFEST_OP, PUBLISH_OP,
+    PUBLISH_PACKAGE_RELEASE_OP, PlanOutputMode, RECOVER_PACKAGE_RELEASE_OP, REPORT_OP,
+    REQUEST_FILE_ENV, SIGN_PACKAGE_RELEASE_OP, TASK_EXECUTION_RESOLVER_OP,
+    WRITE_HOMEBREW_TAP_PR_OP, WRITE_REQUEST_OP, execute_check, merge_internal, merge_passed,
     plan_internal, plan_outputs, publish_final_report, publish_plan_files, resolve_task_execution,
     response_path_for, retrieve_reports, write_preseed_manifest, write_request, write_task_report,
 };
 
 use crate::dispatch_publish::run_publish_internal;
 
+#[path = "dispatch_preview_production.rs"]
+mod preview_production;
 mod public;
 pub(crate) use public::run_public;
 #[path = "dispatch_owned_tool_publication.rs"]
@@ -66,6 +68,8 @@ enum InternalOp {
     ExecuteCheck,
     /// Run the credential-free native preview producer.
     ExecutePreviewProducer,
+    /// Source-free authentication of the complete native preview union.
+    AdmitPreviewAggregate,
     /// Plan operation.
     Plan,
     /// Merge operation.
@@ -121,6 +125,7 @@ fn internal_op() -> Option<InternalOp> {
     Some(match env::var(OP_ENV).as_deref() {
         Ok(tag) if tag == EXECUTE_CHECK_OP => InternalOp::ExecuteCheck,
         Ok(tag) if tag == EXECUTE_PREVIEW_PRODUCER_OP => InternalOp::ExecutePreviewProducer,
+        Ok(tag) if tag == ADMIT_PREVIEW_AGGREGATE_OP => InternalOp::AdmitPreviewAggregate,
         Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
         Ok(tag) if tag == PLAN_OP => InternalOp::Plan,
         Ok(tag) if tag == MERGE_OP => InternalOp::Merge,
@@ -197,7 +202,10 @@ fn gate_request() -> Option<InternalRequest> {
                 return None;
             }
         }
-        InternalOp::PackageSigner | InternalOp::PackagePublisher | InternalOp::PackageRecovery => {
+        InternalOp::PackageSigner
+        | InternalOp::PackagePublisher
+        | InternalOp::PackageRecovery
+        | InternalOp::AdmitPreviewAggregate => {
             return package_release::gate_request(&path).map(|path| InternalRequest { op, path });
         }
         InternalOp::TapPrepare => {
@@ -238,10 +246,8 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
-        InternalOp::ExecutePreviewProducer => match execute_preview_producer() {
-            Ok(()) => ExitCode::SUCCESS,
-            Err(error) => fail_internal(&error.to_string()),
-        },
+        InternalOp::ExecutePreviewProducer => preview_production::produce(),
+        InternalOp::AdmitPreviewAggregate => preview_production::admit(),
         InternalOp::WriteRequest => match write_request() {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),

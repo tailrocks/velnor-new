@@ -5,6 +5,8 @@ use velnor_actions_contract::{
     package_release::PackageReleasePayloadFormat,
 };
 
+#[path = "schema2_consumer_preview_payload_tests.rs"]
+mod payloads;
 #[path = "schema2_consumer_preview_source_tests.rs"]
 mod sources;
 
@@ -114,13 +116,13 @@ fn preview_has_isolated_privileges_and_exact_inventory_attestation() {
     assert!(triggers.contains("- CI"));
     assert!(triggers.contains("- completed"));
     assert!(!triggers.contains("  push:"));
-    let eligibility = job(yaml, "preview-eligibility", Some("preview-producer"));
+    let eligibility = job(yaml, "preview-eligibility", Some("preview-payload-000"));
     assert!(eligibility.contains("ref: ${{ github.sha }}"));
     assert_eq!(eligibility.matches("actions/checkout").count(), 1);
     assert!(eligibility.find("actions/checkout") < eligibility.find("Verify source and CI"));
     assert!(eligibility.contains("fetch-depth: 0"));
     assert!(eligibility.contains("persist-credentials: false"));
-    let producer = job(yaml, "preview-producer", Some("preview-signer"));
+    let producer = job(yaml, "preview-payload-000", Some("preview-payload-001"));
     assert!(producer.contains("fetch-depth: 0"));
     assert!(producer.contains("persist-credentials: false"));
     assert!(!producer.contains("environment:"));
@@ -172,7 +174,8 @@ fn manual_recovery_has_no_build_or_signing_authority() {
     assert!(!yaml.contains("Original push workflow run ID"));
     assert!(!yaml.contains("Original signer run attempt"));
     for (name, next) in [
-        ("preview-producer", "preview-signer"),
+        ("preview-payload-000", "preview-payload-001"),
+        ("preview-assemble", "preview-signer"),
         ("preview-signer", "preview-publisher"),
         ("preview-publisher", "preview-recovery"),
     ] {

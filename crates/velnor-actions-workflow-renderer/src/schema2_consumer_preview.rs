@@ -16,6 +16,8 @@ use velnor_actions_contract::{
     package_release_plan::PackageReleasePlan,
 };
 
+#[path = "schema2_consumer_preview_production.rs"]
+mod production;
 #[path = "schema2_consumer_preview_steps.rs"]
 mod steps;
 #[path = "schema2_consumer_preview_tap.rs"]
@@ -82,13 +84,9 @@ pub fn render_consumer_preview(spec: &ConsumerPreviewSpec) -> Result<RenderedFil
         &spec.gh_argv,
         false,
     )?;
-    let mut jobs = vec![
-        eligibility(spec, &gate)?,
-        producer(spec)?,
-        signer(spec)?,
-        publisher(spec)?,
-        recovery(spec)?,
-    ];
+    let mut jobs = vec![eligibility(spec, &gate)?];
+    jobs.extend(production::jobs(spec)?);
+    jobs.extend([signer(spec)?, publisher(spec)?, recovery(spec)?]);
     if let Some(tap) = &spec.homebrew_tap {
         jobs.extend(tap::jobs(spec, tap)?);
     }
@@ -193,69 +191,9 @@ fn eligibility(spec: &ConsumerPreviewSpec, gate: &str) -> Result<(String, Yaml),
     ))
 }
 
-fn producer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
-    let runner = spec.producer_runner.runs_on();
-    let mut fields = base(
-        "Build preview archives without publication credentials",
-        Yaml::str(runner),
-        JobTimeout::new(spec.producer_timeout_minutes).map_err(RenderError::Contract)?,
-    );
-    fields.push((
-        "if".to_owned(),
-        Yaml::str("${{ github.event_name == 'workflow_run' }}"),
-    ));
-    fields.push(("needs".to_owned(), needs(&["preview-eligibility"])));
-    fields.push((
-        "permissions".to_owned(),
-        permissions(&[("contents", "read")]),
-    ));
-    crate::toolchain_env::check_toolchain_homes(&spec.producer_cargo_env)?;
-    crate::toolchain_env::reject_denied_step_keys(&spec.producer_cargo_env)?;
-    let checkout = steps::checkout("${{ needs.preview-eligibility.outputs.source_sha }}");
-    let mut producer_steps = vec![
-        checkout,
-        setup(&spec.producer_setup),
-        run_step(
-            "Create owned Cargo metadata homes",
-            "mkdir -p \"$MISE_CARGO_HOME\" \"$MISE_RUSTUP_HOME\"",
-        ),
-        run_step(
-            "Install pinned Cargo metadata toolchain",
-            &join_argv_for_run(&spec.install_rust_argv)?,
-        ),
-    ];
-    for step in &spec.producer_source_prep {
-        let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
-            return Err(RenderError::InvalidWorkflow(
-                "preview_source_preparation_not_shell".to_owned(),
-            ));
-        };
-        if env != &spec.producer_cargo_env {
-            return Err(RenderError::InvalidWorkflow(
-                "preview_source_preparation_home_mismatch".to_owned(),
-            ));
-        }
-        producer_steps.push(non_internal_step_to_yaml(
-            "preview-producer",
-            step,
-            &BTreeMap::new(),
-            runner,
-        )?);
-    }
-    producer_steps.extend([
-        acquire(&spec.producer_acquire, "preview-producer", runner)?,
-        operation(spec, "execute-preview-producer-v1", false)?,
-        transfer(false, Artifact::Producer),
-    ]);
-    for step in &mut producer_steps {
-        steps::with_producer_homes(step, &spec.producer_cargo_env)?;
-    }
-    Ok(finish("preview-producer", fields, producer_steps))
-}
-
 fn signer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
     let mut fields = base(
-        "Independently validate and sign preview bytes",
+        "preview-signer",
         Yaml::str("ubuntu-26.04"),
         JobTimeout::DEFAULT,
     );
@@ -265,7 +203,7 @@ fn signer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
     ));
     fields.push((
         "needs".to_owned(),
-        needs(&["preview-eligibility", "preview-producer"]),
+        needs(&["preview-eligibility", "preview-assemble"]),
     ));
     fields.push(("environment".to_owned(), Yaml::str("preview-publish")));
     fields.push((
@@ -287,12 +225,39 @@ fn signer(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {
                 &join_argv_for_run(&spec.install_gh_argv)?,
             ),
             acquire(&spec.linux_acquire, "preview-signer", "ubuntu-26.04")?,
-            transfer(true, Artifact::Producer),
+            aggregate_admission(spec)?,
             operation(spec, "sign-package-release-v1", true)?,
             steps::attest(&spec.plan),
             transfer(false, Artifact::Signed),
         ],
     ))
+}
+
+fn aggregate_admission(spec: &ConsumerPreviewSpec) -> Result<Yaml, RenderError> {
+    let mut step = operation(spec, "admit-preview-aggregate-v1", true)?;
+    if let Yaml::Map(fields) = &mut step {
+        let (_, id) = fields
+            .iter_mut()
+            .find(|(key, _)| key == "id")
+            .ok_or_else(|| {
+                RenderError::InvalidWorkflow("preview_operation_id_missing".to_owned())
+            })?;
+        *id = Yaml::str("aggregate");
+    }
+    production::operation_env(
+        &mut step,
+        &[
+            (
+                "VELNOR_PREVIEW_AGGREGATE_ARTIFACT_ID",
+                "${{ needs.preview-assemble.outputs.artifact_id }}",
+            ),
+            (
+                "VELNOR_PREVIEW_AGGREGATE_ARTIFACT_DIGEST",
+                "${{ needs.preview-assemble.outputs.artifact_digest }}",
+            ),
+        ],
+    )?;
+    Ok(step)
 }
 
 fn publisher(spec: &ConsumerPreviewSpec) -> Result<(String, Yaml), RenderError> {

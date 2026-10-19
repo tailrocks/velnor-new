@@ -380,7 +380,7 @@ fn lower_sha256(value: &str) -> bool {
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn hex_lower(bytes: &[u8]) -> String {
+pub(super) fn hex_lower(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut output = String::with_capacity(bytes.len() * 2);
     for byte in bytes {

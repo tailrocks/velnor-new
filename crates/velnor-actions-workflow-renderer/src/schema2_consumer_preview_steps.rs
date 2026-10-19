@@ -173,8 +173,14 @@ pub(super) fn operation(
         ));
     }
     // JSON is an environment value, never interpolated into the command source.
+    let materialize = if op == "sign-package-release-v1" {
+        // The preceding native aggregate admission already created and validated this file.
+        ""
+    } else {
+        "(set -C; printf '%s' \"$VELNOR_RELEASE_PLAN\" > \"$VELNOR_REQUEST_FILE\")\n"
+    };
     let run = format!(
-        "set -euo pipefail\numask 077\nmkdir -p \"$RUNNER_TEMP/velnor\"\n(set -C; printf '%s' \"$VELNOR_RELEASE_PLAN\" > \"$VELNOR_REQUEST_FILE\")\n\"$RUNNER_TEMP/velnor/bin/velnor-actions-{}\"\n",
+        "set -euo pipefail\numask 077\nmkdir -p \"$RUNNER_TEMP/velnor\"\n{materialize}\"$RUNNER_TEMP/velnor/bin/velnor-actions-{}\"\n",
         spec.generator_version
     );
     Ok(script(
@@ -187,7 +193,6 @@ pub(super) fn operation(
 
 #[derive(Clone, Copy)]
 pub(super) enum Artifact {
-    Producer,
     Signed,
     TapCandidate,
     TapPr,
@@ -195,8 +200,6 @@ pub(super) enum Artifact {
 
 pub(super) fn transfer(download: bool, artifact: Artifact) -> Yaml {
     let (suffix, directory) = match (download, artifact) {
-        (true, Artifact::Producer) => ("producer", "preview-input"),
-        (false, Artifact::Producer) => ("producer", "preview-output"),
         (true, Artifact::Signed) => ("signed", "preview-publish-input"),
         (false, Artifact::Signed) => ("signed", "preview-signed"),
         (_, Artifact::TapCandidate) => ("tap-candidate", "tap-candidate"),

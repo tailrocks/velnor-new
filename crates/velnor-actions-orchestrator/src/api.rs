@@ -43,7 +43,10 @@ pub use super::plan::{plan_text, plan_text_checked};
 pub use super::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode};
 pub use super::prepare::{GenerationPreparation, prepare};
 pub use super::preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
-pub use super::preview_producer::{EXECUTE_PREVIEW_PRODUCER_OP, execute_preview_producer};
+pub use super::preview_producer::{
+    ADMIT_PREVIEW_AGGREGATE_OP, EXECUTE_PREVIEW_PRODUCER_OP, admit_preview_aggregate,
+    execute_preview_producer,
+};
 pub use super::provenance::{EvidenceProvenance, ProfileProvenance};
 pub use super::qualification_resolver::{
     QUALIFICATION_ADMISSION_FILENAME, QUALIFICATION_RESOLVER_OP, read_qualification_admission,

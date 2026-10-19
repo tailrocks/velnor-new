@@ -36,6 +36,14 @@ use github::{
 mod run_identity;
 use run_identity::RunSource;
 
+#[path = "artifact_zip.rs"]
+pub(crate) mod artifact_zip;
+#[path = "preview_artifact_transport.rs"]
+mod preview_artifacts;
+pub(crate) use preview_artifacts::{
+    acquire_preview_aggregate, acquire_preview_artifacts, authenticate_preview_assembly,
+};
+
 /// Private operation that publishes one authenticated native release.
 pub const PUBLISH_PACKAGE_RELEASE_OP: &str = "publish-package-release-v1";
 /// Private operation that resumes publication from the exact retained signed preview artifact.
@@ -70,7 +78,7 @@ pub fn publish_package_release_from_env() -> Result<PackagePublicationOutcome, O
 /// # Errors
 /// Rejects an invalid retained run/artifact, stale candidate, or conflicting remote state.
 pub fn recover_package_release_from_env() -> Result<PackagePublicationOutcome, OrchestratorError> {
-    recovery::recover()
+    artifact_zip::within_operation(recovery::recover)
 }
 
 #[derive(Clone)]

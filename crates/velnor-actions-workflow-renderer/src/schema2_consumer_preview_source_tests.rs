@@ -24,7 +24,7 @@ fn preview_prepares_every_workspace_before_dispatch_with_shared_homes() {
     let spec = with_sources();
     let rendered = render_consumer_preview(&spec).expect("preview sources");
     let yaml = rendered.bytes;
-    let producer = job(&yaml, "preview-producer", Some("preview-signer"));
+    let producer = job(&yaml, "preview-payload-000", Some("preview-payload-001"));
     let ordered = [
         "Create owned Cargo metadata homes",
         "Install pinned Cargo metadata toolchain",
@@ -66,7 +66,7 @@ fn preview_prepares_every_workspace_before_dispatch_with_shared_homes() {
 #[test]
 fn preview_owned_homes_are_on_every_producer_step_not_job_scope() {
     let spec = with_sources();
-    let (_, Yaml::Map(fields)) = producer(&spec).expect("producer") else {
+    let (_, Yaml::Map(fields)) = production::jobs(&spec).expect("producer").remove(0) else {
         unreachable!()
     };
     assert!(!fields.iter().any(|(key, _)| key == "env"));

@@ -30,6 +30,7 @@ pub mod package_release;
 pub mod package_release_plan;
 pub mod policy;
 pub mod preview_identity;
+pub mod preview_production;
 pub mod propose;
 pub mod publication_retry;
 pub mod secrets;

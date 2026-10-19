@@ -27,13 +27,13 @@ mod archive;
 mod checksums;
 #[path = "package_release_artifacts_inventory.rs"]
 mod inventory;
+pub(crate) mod preview_payload;
 #[cfg(test)]
 #[path = "package_release_artifacts_real_tests.rs"]
 mod real_tests;
 #[cfg(test)]
 #[path = "package_release_artifacts_tests.rs"]
 mod tests;
-
 const HANDOFF_SCHEMA: &str = "velnor.package-output.v1";
 const MAX_HANDOFF_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_SBOM_BYTES: u64 = 32 * 1024 * 1024;
