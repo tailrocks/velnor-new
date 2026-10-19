@@ -216,7 +216,7 @@ fn save_step_renders_generic_protected_default_branch_policy() {
 
     assert_eq!(
         condition,
-        "success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'"
+        "success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'"
     );
     assert!(!condition.contains("github.repository"));
     assert!(!condition.contains("refs/heads/main"));

@@ -8,7 +8,7 @@
 
 pub use velnor_actions_contract::workflow::step_identity::{
     TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDER_CACHE_BASE_EXPR, TOFU_PROVIDERS_KEY_OUTPUT_EXPR,
-    TOFU_PROVIDERS_KEY_PREFIX, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
+    TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
 };
 use velnor_actions_contract::{Step, StepRole};
 

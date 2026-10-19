@@ -125,7 +125,8 @@ fn finalize_suite_workflow_jobs(
         crate::cache_p08::check_mbx_before_fetch(id, job)?;
     }
     crate::cache_p08::elect_cache_writers_with_policy(jobs, spec.pull_request_cache_policy)?;
-    crate::cache_steps::append_workspace_cleanups(jobs)
+    crate::cache_steps::append_workspace_cleanups(jobs)?;
+    crate::cache_doctor::check(jobs)
 }
 
 fn workflow_display_name(slug: &str) -> String {

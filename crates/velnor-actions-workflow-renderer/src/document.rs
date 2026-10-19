@@ -282,13 +282,11 @@ fn job_to_yaml(
     });
     let mut job_env = if step_has_env && ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id))
     {
-        // Verification jobs intentionally execute repository-declared
-        // Mise tasks, so they need Mise config while retaining the same
-        // credential scrub as every other repository-code step.
+        // Verification jobs execute repository-declared Mise tasks, so they need Mise
+        // config with the same credential scrub as every other repository-code step.
         crate::toolchain_env::credential_scrub()
     } else {
-        // Hoisted: ordinary jobs inherit the workflow-level env.
-        BTreeMap::new()
+        BTreeMap::new() // Hoisted: ordinary jobs inherit the workflow-level env.
     };
     if step_has_env {
         for step in source_steps {
@@ -298,6 +296,8 @@ fn job_to_yaml(
             {
                 if let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN") {
                     job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
+                    let (key, value) = crate::toolchain_env::CARGO_AUTO_CLEAN_ENV;
+                    job_env.insert(key.to_owned(), value.to_owned());
                 }
                 if step.role == Some(StepRole::AcquireVelnor) {
                     for key in [

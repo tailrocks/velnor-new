@@ -234,15 +234,19 @@ fn fetch_steps_with(
 ///
 /// Runs from the cargo isolation dir with an absolute manifest path,
 /// so repo `.cargo/config.toml` (credential-providers, source
-/// replacement) is never read while ambient auth is in scope.
+/// replacement) is never read while ambient auth is in scope. Both
+/// paths print `velnor: sources downloaded=<n>`; the fallback counts
+/// Cargo's per-crate `Downloaded <name> v<version>` stderr lines.
 fn fetch_script(catalog: &ToolCatalog, root: &str) -> String {
     let spec = catalog.tool_spec(PinnedTool::Rust);
     let base = format!("mise --no-config --no-env --no-hooks exec {spec} -- cargo");
     let manifest = format!(" {}", isolated_manifest_flag(root));
     let probe = format!("{base} metadata --locked --offline{manifest} >/dev/null 2>&1");
-    let fetch = format!("{base} fetch --locked{manifest}");
+    let log = "\"$RUNNER_TEMP/velnor/cargo-clean/fetch-stderr.log\"";
+    let count = "\"$RUNNER_TEMP/velnor/cargo-clean/fetch-downloads\"";
+    let fetch = format!("{base} fetch --locked{manifest} 2> {log}");
     format!(
-        "{}if {probe}; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; {fetch}; fi",
+        "{}if {probe}; then echo \"velnor: sources hit, skipping fetch\"; echo \"velnor: sources downloaded=0\"; else echo \"velnor: sources miss (source_missing), fetching\"; status=0; {fetch} || status=$?; cat {log} >&2; grep -Ec '^ *Downloaded [^ ]+ v[0-9]' {log} > {count} || true; n=; read -r n < {count} || true; echo \"velnor: sources downloaded=${{n:-0}}\"; exit $status; fi",
         cargo_isolation_prefix()
     )
 }

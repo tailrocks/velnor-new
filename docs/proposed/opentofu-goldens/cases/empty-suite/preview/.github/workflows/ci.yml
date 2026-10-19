@@ -54,6 +54,7 @@ jobs:
         with:
           d: 13ad71fbb2c9e49a26537796d69fd9ec80d39da4e2625a515d59f556722309be
       - name: Restore Mise tools
+        id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
@@ -73,7 +74,7 @@ jobs:
       - name: Run actionlint
         run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color -ignore '^unexpected key \"background\" for step to (run shell command|execute action)\\. ' -ignore '^step must run script with \"run\" section or run action with \"uses\" section$'"
       - name: Save Mise tools
-        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
@@ -83,6 +84,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     env:
+      CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
       RUSTUP_TOOLCHAIN: 1.99.1
       VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.25/velnor-actions-0.1.25-x86_64-unknown-linux-gnu
@@ -108,6 +110,7 @@ jobs:
         with:
           d: 60f865ce725bf5d869a04e8be4a5e305fe09241dd930c7393b201fc77c16e0b3
       - name: Restore Mise tools
+        id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
@@ -157,7 +160,7 @@ jobs:
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Save Mise tools
-        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}
@@ -167,6 +170,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     env:
+      CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
       RUSTUP_TOOLCHAIN: 1.99.1
       VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.25/velnor-actions-0.1.25-x86_64-unknown-linux-gnu
@@ -237,6 +241,7 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     env:
+      CARGO_CACHE_AUTO_CLEAN_FREQUENCY: never
       RUSTUP_TOOLCHAIN: 1.99.1
       VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.25/velnor-actions-0.1.25-x86_64-unknown-linux-gnu
@@ -256,6 +261,7 @@ jobs:
         with:
           d: 27f7284e8b4c6ecf11a875f14d90c50b19352bd449c82dd5cfd87129c2b237ce
       - name: Restore Mise tools
+        id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
         with:
@@ -317,7 +323,7 @@ jobs:
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
       - name: Save Mise tools
-        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: mise-tools-v2-${{steps.v2.outputs.identity}}

@@ -319,33 +319,28 @@ fn lockfile_delta_changes_cache_identity() -> TestResult {
     // Compiler driver does not change the exact Cargo sources archive.
     let mbx_keys = cache_keys(&yaml_for(&lock, true)?);
     let cargo_keys = cache_keys(&yaml_for(&lock, false)?);
-    assert!(
-        mbx_keys
-            .iter()
-            .any(|key| key.contains("velnor-v1-sources-")),
-        "mbx snapshot: {mbx_keys:?}"
-    );
-    assert!(
-        cargo_keys
-            .iter()
-            .any(|key| key.contains("velnor-v1-sources-")),
-        "cargo sources key: {cargo_keys:?}"
-    );
+    // The sources key is computed at runtime by the Plan key step over the
+    // lockfile digests, so both driver modes share one key expression.
+    let sources = |keys: &[String]| {
+        keys.iter()
+            .filter(|key| key.contains("sources_key"))
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    assert!(!sources(&mbx_keys).is_empty(), "mbx snapshot: {mbx_keys:?}");
     assert_eq!(
-        mbx_keys
-            .iter()
-            .find(|key| key.contains("velnor-v1-sources-")),
-        cargo_keys
-            .iter()
-            .find(|key| key.contains("velnor-v1-sources-")),
+        sources(&mbx_keys),
+        sources(&cargo_keys),
         "same source identity in both driver modes"
     );
-    // Lock CONTENT deltas re-key at runtime through `hashFiles`: the
-    // template is stable across renders, the resolved key is not.
     for key in &mbx_keys {
-        if key.contains("velnor-v1-sources-") {
-            assert!(key.contains("hashFiles("), "content-pinned: {key}");
-        }
+        assert!(!key.contains("hashFiles("), "runtime-keyed: {key}");
+    }
+    for yaml in [yaml_for(&lock, true)?, yaml_for(&lock, false)?] {
+        assert!(
+            yaml.contains("$GITHUB_WORKSPACE/Cargo.lock"),
+            "the key step digests the lockfile"
+        );
     }
     // Lockless emits no sources cache at all: removing the lock removes reuse.
     let repo = make_workspace(&lock, true)?;

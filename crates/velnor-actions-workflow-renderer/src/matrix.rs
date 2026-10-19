@@ -196,6 +196,7 @@ pub(crate) fn attach_task_matrix(
     document: &mut Yaml,
     source: &MatrixSource,
     max_parallel: u32,
+    cache: &[(String, String)],
 ) -> Result<(), RenderError> {
     let MatrixSource::PlanOutput { needs_job, output } = source;
     let Yaml::Map(entries) = document else {
@@ -239,6 +240,7 @@ pub(crate) fn attach_task_matrix(
         }
     }
     outputs.push(plan_attempt_output());
+    outputs.extend(crate::cache_plan_outputs::output_entries(cache));
     insert_job_key(jobs, needs_job, "outputs", Yaml::Map(outputs))?;
     require_plan_step_id(jobs, needs_job, output)
 }
@@ -292,7 +294,10 @@ fn plan_attempt_output() -> (String, Yaml) {
 /// Static (non-matrix) workflows gate crate jobs on `not_affected_jobs`
 /// and bind downstream run identities to `plan_attempt`; without a plan
 /// job or plan step there is nothing to export.
-pub(crate) fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError> {
+pub(crate) fn attach_plan_outputs(
+    document: &mut Yaml,
+    cache: &[(String, String)],
+) -> Result<(), RenderError> {
     let Yaml::Map(entries) = document else {
         return Err(matrix_invalid("matrix_without_document"));
     };
@@ -316,6 +321,7 @@ pub(crate) fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError
         })
         .collect();
     outputs.push(plan_attempt_output());
+    outputs.extend(crate::cache_plan_outputs::output_entries(cache));
     insert_job_key(jobs, PLAN_JOB_ID, "outputs", Yaml::Map(outputs))
 }
 

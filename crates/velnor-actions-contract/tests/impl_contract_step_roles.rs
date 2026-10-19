@@ -3,13 +3,15 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
+use velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION;
 use velnor_actions_contract::workflow::step_identity::validate_step_sequence;
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
-const TOFU_KEY: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-${{hashFiles('.terraform.lock.hcl')}}";
+const TOFU_KEY: &str = "${{needs.plan.outputs.tofu_providers_key_0}}";
 const TOFU_PATH: &str = "${{ runner.temp }}/velnor/tofu-cache/root-0123456789ab";
 const TOFU_DATA_PATH: &str = "${{ runner.temp }}/velnor/tofu-data/root-0123456789ab";
-const OTHER_TOFU_KEY: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.2-stacks-vpc-abcdef012345-${{hashFiles('stacks/vpc/.terraform.lock.hcl')}}";
+const OTHER_TOFU_KEY: &str = "${{needs.plan.outputs.tofu_providers_key_1}}";
+const STATIC_TOFU_KEY: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.2-stacks-vpc-abcdef012345-${{hashFiles('stacks/vpc/.terraform.lock.hcl')}}";
 const OTHER_TOFU_PATH: &str = "${{ runner.temp }}/velnor/tofu-cache/stacks-vpc-abcdef012345";
 
 fn plan_step(name: &str) -> Step {
@@ -165,7 +167,7 @@ fn tofu_save() -> Step {
         name: "Save Tofu providers".to_owned(),
         id: None,
         role: Some(StepRole::TofuProvidersSave),
-        condition: Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned()),
+        condition: Some(TOFU_PROVIDERS_SAVE_CONDITION.to_owned()),
         kind: StepKind::Action {
             uses: "actions/cache/save@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_owned(),
             with: BTreeMap::from([
@@ -226,27 +228,24 @@ fn tofu_provider_sequence_rejects_missing_conditional_or_malformed_composite() {
             .contains("tofu_provider_restore_conditional")
     );
 
-    let mut wrong_key_slug = tofu_sequence();
-    if let StepKind::Action { with, .. } = &mut wrong_key_slug[0].kind {
-        with.insert("cache-key".to_owned(), OTHER_TOFU_KEY.to_owned());
+    let mut static_key = tofu_sequence();
+    if let StepKind::Action { with, .. } = &mut static_key[0].kind {
+        with.insert("cache-key".to_owned(), STATIC_TOFU_KEY.to_owned());
     }
     assert!(
-        validate_step_sequence(&wrong_key_slug, "tofu-job")
-            .expect_err("composite key must bind the path leaf")
+        validate_step_sequence(&static_key, "tofu-job")
+            .expect_err("composite key must be the Plan runtime key")
             .to_string()
             .contains("role_kind_mismatch")
     );
 
-    let mut wrong_path_slug = tofu_sequence();
-    if let StepKind::Action { with, .. } = &mut wrong_path_slug[0].kind {
-        with.insert("cache-path".to_owned(), OTHER_TOFU_PATH.to_owned());
+    let mut foreign_path = tofu_sequence();
+    if let StepKind::Action { with, .. } = &mut foreign_path[0].kind {
+        let foreign = "${{ runner.temp }}/velnor/other/stacks-vpc".to_owned();
+        with.insert("cache-path".to_owned(), foreign);
     }
-    assert!(
-        validate_step_sequence(&wrong_path_slug, "tofu-job")
-            .expect_err("composite path must bind the key leaf")
-            .to_string()
-            .contains("role_kind_mismatch")
-    );
+    let err = validate_step_sequence(&foreign_path, "tofu-job").expect_err("owned path only");
+    assert!(err.to_string().contains("role_kind_mismatch"), "{err}");
 }
 
 #[test]
@@ -318,7 +317,7 @@ fn tofu_provider_save_must_match_restore_gate_and_order() {
     weak_gate[2].condition = Some("success()".to_owned());
     assert!(
         validate_step_sequence(&weak_gate, "tofu-job")
-            .expect_err("save must keep the elected push gate")
+            .expect_err("save must keep the elected trusted gate")
             .to_string()
             .contains("tofu_provider_save_gate_mismatch")
     );

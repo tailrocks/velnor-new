@@ -44,8 +44,14 @@ review is the trust root for the committed `needs` set"
   `consumer_gate_rejects_attacker_manifests`).
 - Forge the asset digest: a wrong `VELNOR_ASSET_SHA256` fails
   `sha256sum -c` in the Acquire step (`pins.rs:192-198`) — red, not green.
-- Poison shared caches: PR runs restore read-only; saves are
-  push-gated (`gate-4-tool-compilation-reuse.md`, R13).
+- Poison shared caches: the Plan `Compute cache keys` step grants
+  sources writes only to protected default-branch pushes and
+  same-repository PRs; a same-repository PR writes a PR-scoped sources
+  entry visible only to that PR, forks and merge groups never write,
+  and the default branch never restores `pr` entries (its restore keys
+  name only the `trusted` scope). Tools saves keep their trust gate
+  and never re-store an exact hit (`gate-4-tool-compilation-reuse.md`,
+  R13).
 - Fake validator conclusions at runtime: `needs` conclusions are
   server-side; any observed-vs-expected divergence fails closed
   (`needs_channel.rs:81-83`).

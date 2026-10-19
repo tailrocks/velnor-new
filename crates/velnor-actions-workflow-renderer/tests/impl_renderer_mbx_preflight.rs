@@ -74,25 +74,33 @@ fn version_check_script() -> Result<String, Box<dyn std::error::Error>> {
 }
 
 fn run_version_check(root: &Path, script: &str) -> std::io::Result<std::process::Output> {
-    run_version_check_with_cache_dir_mode(root, script, "exact")
+    run_version_check_with_env(root, script, &[])
 }
 
 fn run_version_check_with_cache_dir_mode(
     root: &Path,
     script: &str,
-    cache_dir_mode: &str,
+    mode: &str,
+) -> std::io::Result<std::process::Output> {
+    run_version_check_with_env(root, script, &[("MBX_CACHE_DIR_MODE", mode)])
+}
+
+fn run_version_check_with_env(
+    root: &Path,
+    script: &str,
+    extra: &[(&str, &str)],
 ) -> std::io::Result<std::process::Output> {
     let mbx_cache_dir = root.join("velnor/mbx");
     fs::create_dir_all(mbx_cache_dir.join("actions"))?;
-    let fake_bin = root.join("fake-bin");
-    let path = format!("{}:/usr/bin:/bin", fake_bin.display());
+    let path = format!("{}:/usr/bin:/bin", root.join("fake-bin").display());
     Command::new("sh")
         .args(["-c", script])
         .env_clear()
         .env("PATH", path)
         .env("RUNNER_TEMP", root)
         .env("MBX_CACHE_DIR", mbx_cache_dir)
-        .env("MBX_CACHE_DIR_MODE", cache_dir_mode)
+        .env("MBX_CACHE_DIR_MODE", "exact")
+        .envs(extra.iter().copied())
         .env("GITHUB_RUN_ID", "9876")
         .env("GITHUB_RUN_ATTEMPT", "2")
         .env("GITHUB_JOB", "rust_linux")

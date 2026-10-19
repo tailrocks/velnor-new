@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+use velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION as CACHE_SAVE_CONDITION;
 use velnor_actions_contract::{Job, JobTimeout, Step, StepId, StepKind, StepRole};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::cache_p08::elect_cache_writers;
@@ -70,9 +70,9 @@ fn provider_saved_key(job: &Job) -> Option<&str> {
     }
 }
 
-const PROVIDER_KEY_A: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-b3-0000000000000000000000000000000000000000000000000000000000000000-${{hashFiles('.terraform.lock.hcl')}}";
+const PROVIDER_KEY_A: &str = "${{needs.plan.outputs.tofu_providers_key_0}}";
 const PROVIDER_PATH_A: &str = "${{ runner.temp }}/velnor/tofu-cache/b3-0000000000000000000000000000000000000000000000000000000000000000";
-const PROVIDER_KEY_B: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-b3-1111111111111111111111111111111111111111111111111111111111111111-${{hashFiles('stacks/vpc/.terraform.lock.hcl')}}";
+const PROVIDER_KEY_B: &str = "${{needs.plan.outputs.tofu_providers_key_1}}";
 const PROVIDER_PATH_B: &str = "${{ runner.temp }}/velnor/tofu-cache/b3-1111111111111111111111111111111111111111111111111111111111111111";
 
 #[test]
@@ -190,7 +190,7 @@ fn provider_writer_election_rejects_mismatched_or_weak_existing_save() -> Result
     let mut wrong_key = provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A);
     let mut key_save = provider_save()?;
     if let StepKind::Action { with, .. } = &mut key_save.kind {
-        with.insert("key".to_owned(), PROVIDER_KEY_A.replace("1.13.1", "1.13.2"));
+        with.insert("key".to_owned(), PROVIDER_KEY_B.to_owned());
     }
     wrong_key.steps.push(key_save);
     assert!(

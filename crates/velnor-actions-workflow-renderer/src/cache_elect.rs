@@ -171,7 +171,7 @@ fn validate_existing_tools_save(
 /// Construct, but do not append, validated `OpenTofu` provider saves.
 ///
 /// Every `OpenTofu` job restores its own root key read-only; exactly one
-/// job per key gets a push-gated `Save Tofu providers` step over
+/// job per key gets a trusted-only `Save Tofu providers` step over
 /// that key. Keys are per-root so the winner is usually the sole
 /// owner; a shared key (one root under another configuration) goes
 /// to the lowest job ID, so the election stays deterministic across
@@ -221,8 +221,10 @@ fn plan_provider_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step
             validate_provider_save(job, key, path)?;
             if owner == winner && !has_provider_save(job) {
                 let mut save = crate::tofu_cache::tofu_providers_save_step()?;
-                save.condition =
-                    Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
+                save.condition = Some(
+                    velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION
+                        .to_owned(),
+                );
                 planned.push((owner.clone(), save));
             }
         }
@@ -307,7 +309,7 @@ fn validate_provider_save(job: &Job, key: &str, path: &str) -> Result<(), Render
             || with.get("path").map(String::as_str)
                 != Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_PATH_OUTPUT_EXPR)
             || save.condition.as_deref()
-                != Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
+                != Some(velnor_actions_contract::workflow::cache_family::TOFU_PROVIDERS_SAVE_CONDITION)
         {
             return Err(RenderError::InvalidWorkflow(
                 "tofu_provider_save_restore_mismatch".to_owned(),

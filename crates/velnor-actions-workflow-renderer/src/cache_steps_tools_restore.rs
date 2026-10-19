@@ -17,7 +17,7 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
     })?;
     let seed_admitted = with.get(super::TOOLS_SEED_ADMITTED_INPUT);
     if step.role != Some(StepRole::ToolsCacheRestore)
-        || step.id.is_some()
+        || step.id != Some(velnor_actions_contract::StepId::ToolsRestore)
         || uses != super::TOOLS_RESTORE_USES
         || !env.is_empty()
         || with.len() != 2
@@ -151,6 +151,22 @@ fn action_body() -> Result<Yaml, RenderError> {
                     ]),
                 ),
             ]),
+        ),
+        (
+            "outputs".to_owned(),
+            Yaml::Map(vec![(
+                "cache-hit".to_owned(),
+                Yaml::Map(vec![
+                    (
+                        "description".to_owned(),
+                        Yaml::str("Exact-key hit of the restored V2 tools entry."),
+                    ),
+                    (
+                        "value".to_owned(),
+                        Yaml::str("${{ steps.restore.outputs.cache-hit }}"),
+                    ),
+                ]),
+            )]),
         ),
         (
             "runs".to_owned(),

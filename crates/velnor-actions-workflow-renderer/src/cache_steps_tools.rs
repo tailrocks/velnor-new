@@ -72,6 +72,7 @@ pub(super) fn cache_step(
             ]),
         )?;
         step.condition = condition;
+        step.id = Some(velnor_actions_contract::StepId::ToolsRestore);
         step.role = Some(StepRole::ToolsCacheRestore);
         return Ok(step);
     }
