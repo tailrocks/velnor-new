@@ -343,11 +343,28 @@ pub(crate) async fn provision_acquired_request_with_initialization(
     nonce: char,
     sample_nonce: char,
 ) -> Result<JobFactsReaderFixture, HostError> {
+    provision_acquired_request_with_initialization_for_repository(
+        scope,
+        request_id,
+        nonce,
+        sample_nonce,
+        101,
+    )
+    .await
+}
+
+pub(crate) async fn provision_acquired_request_with_initialization_for_repository(
+    scope: &ConnectionJournal,
+    request_id: i64,
+    nonce: char,
+    sample_nonce: char,
+    repository_id: i64,
+) -> Result<JobFactsReaderFixture, HostError> {
     use crate::journal::{AssignmentKey, SourceAuthorizationResult};
     let request = scope
         .assignment_identity(crate::journal::AssignmentKey::AssignedRequest { request_id })
         .await?;
-    let source = receipt(scope, request_id, request_id + 100, 101).await?;
+    let source = receipt(scope, request_id, request_id + 100, repository_id).await?;
     if scope.record_source_authorization(&request, &source).await?
         != SourceAuthorizationResult::Recorded
     {

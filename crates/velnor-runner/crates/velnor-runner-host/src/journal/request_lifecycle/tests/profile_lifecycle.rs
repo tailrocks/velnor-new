@@ -1,4 +1,7 @@
-use super::helpers::{TEST_ENGINE_ID, record_owned_storage_cleanup, settle_storage_metadata};
+use super::helpers::{
+    TEST_ENGINE_ID, record_owned_network_cleanup, record_owned_storage_cleanup,
+    settle_storage_metadata,
+};
 use super::review_counterexamples::ready;
 use crate::connect::SetOwnership;
 use crate::error::HostError;
@@ -27,6 +30,7 @@ async fn profile_generation_change_waits_for_hold_settlement_across_reopen() -> 
         .await?
         .ok_or(HostError::Journal)?;
     record_owned_storage_cleanup(&fixture.scope, &fixture.provisioned).await?;
+    record_owned_network_cleanup(&fixture.scope, reservation.reservation_id).await?;
     fixture
         .scope
         .record_remote_cleanup(reservation.reservation_id)
@@ -114,6 +118,7 @@ async fn profile_switch_serializes_with_settlement_claim() -> Result<(), HostErr
         .await?
         .ok_or(HostError::Journal)?;
     record_owned_storage_cleanup(&fixture.scope, &fixture.provisioned).await?;
+    record_owned_network_cleanup(&fixture.scope, reservation.reservation_id).await?;
     fixture
         .scope
         .record_remote_cleanup(reservation.reservation_id)
@@ -150,8 +155,7 @@ async fn profile_switch_serializes_with_settlement_claim() -> Result<(), HostErr
         operation_name: format!("velnor-resource-probe-{operation_id}"),
         projection_digest: "e".repeat(64),
         purpose: crate::journal::ResourceProbePurpose::Capacity,
-        request_sha256: "5d76d86293261804706a16a73e0491cf4caa859f1b876cda706e568592b85cdf"
-            .to_owned(),
+        request_sha256: crate::journal::capacity_request_sha256(),
     };
 
     let (profile_result, claim_result) = tokio::join!(

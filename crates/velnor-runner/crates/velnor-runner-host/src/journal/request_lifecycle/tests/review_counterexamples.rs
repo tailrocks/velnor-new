@@ -2,7 +2,8 @@ use super::admission::JOB_LIMIT;
 use super::helpers::{
     ProvisionedRunner, Scratch, binding, created_scope, event_source,
     finish_initialized_listener_delivery, provision_acquired_request_with_initialization, receipt,
-    record_acquired, record_owned_storage_cleanup, runner_name, settle_storage_metadata,
+    record_acquired, record_owned_network_cleanup, record_owned_storage_cleanup, runner_name,
+    settle_storage_metadata,
 };
 use crate::error::HostError;
 use crate::journal::{AssignmentIdentity, AssignmentKey, ConnectionJournal, Journal};
@@ -192,6 +193,7 @@ async fn independent_recovered_unassigned_runner_allows_replacement_for_same_req
         .ok_or(HostError::Journal)?;
     f.scope.mark_recovering(reservation.reservation_id).await?;
     record_owned_storage_cleanup(&f.scope, &f.provisioned).await?;
+    record_owned_network_cleanup(&f.scope, reservation.reservation_id).await?;
     f.scope
         .record_remote_cleanup(reservation.reservation_id)
         .await?;
@@ -256,6 +258,7 @@ async fn independent_completed_cleanup_allows_new_demand_after_restart() -> Resu
         .await?
         .ok_or(HostError::Journal)?;
     record_owned_storage_cleanup(&f.scope, &f.provisioned).await?;
+    record_owned_network_cleanup(&f.scope, reservation.reservation_id).await?;
     f.scope
         .record_remote_cleanup(reservation.reservation_id)
         .await?;
@@ -281,7 +284,6 @@ async fn independent_completed_cleanup_allows_new_demand_after_restart() -> Resu
             .await?,
         f.intent
     );
-    record_acquired(&scope, 72).await?;
     let next = provision_acquired_request_with_initialization(&scope, 72, 'f', 'f').await?;
     let (generation, digest) = scope.test_active_authority_identity().await?;
     assert!(

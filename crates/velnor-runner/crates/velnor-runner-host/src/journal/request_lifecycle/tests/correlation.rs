@@ -263,11 +263,23 @@ async fn every_acquired_request_must_match_the_bound_source_receipt() -> Result<
         .await?;
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
-    record_acquired(&scope, 100).await?;
-    record_acquired(&scope, 101).await?;
-    let provisioned = provision_physical_intent(&scope, 'd').await?;
-    let physical = provisioned.assignment;
-    let intent_id = provisioned.intent_id;
+    let initialized = provision_acquired_request_with_initialization(&scope, 100, 'd', 'd').await?;
+    let physical = initialized.reservation_assignment.clone();
+    let intent_id = initialized.intent_id;
+    let stale_request = scope
+        .assignment_identity(AssignmentKey::AssignedRequest { request_id: 101 })
+        .await?;
+    let stale_receipt = receipt(&scope, 101, 201, 101).await?;
+    scope
+        .record_source_authorization(&stale_request, &stale_receipt)
+        .await?;
+    assert!(scope.claim_request_acquire(&stale_request).await?);
+    scope
+        .record_request_acquire(
+            &stale_request,
+            crate::journal::AssignedAcquireResult::Returned(vec![101]),
+        )
+        .await?;
     let (generation, digest) = scope.test_active_authority_identity().await?;
     journal
         .connection()
@@ -283,7 +295,7 @@ async fn every_acquired_request_must_match_the_bound_source_receipt() -> Result<
         scope
             .claim_runner_jit_for_request(
                 intent_id,
-                provisioned.reservation_id,
+                initialized.reservation_id,
                 100,
                 &runner_name('d'),
                 generation,
@@ -313,16 +325,15 @@ async fn claimed_jit_stays_one_shot_and_holds_capacity_after_restart() -> Result
         .await?;
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
-    record_acquired(&scope, 100).await?;
-    let provisioned = provision_physical_intent(&scope, 'f').await?;
-    let physical = provisioned.assignment;
-    let intent_id = provisioned.intent_id;
+    let initialized = provision_acquired_request_with_initialization(&scope, 100, 'f', 'f').await?;
+    let physical = initialized.reservation_assignment.clone();
+    let intent_id = initialized.intent_id;
     let (generation, digest) = scope.test_active_authority_identity().await?;
     assert!(
         scope
             .claim_runner_jit_for_request(
                 intent_id,
-                provisioned.reservation_id,
+                initialized.reservation_id,
                 100,
                 &runner_name('f'),
                 generation,
@@ -341,7 +352,7 @@ async fn claimed_jit_stays_one_shot_and_holds_capacity_after_restart() -> Result
         scope
             .claim_runner_jit_for_request(
                 intent_id,
-                provisioned.reservation_id,
+                initialized.reservation_id,
                 100,
                 &runner_name('f'),
                 generation,

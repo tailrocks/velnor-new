@@ -1,12 +1,10 @@
 use super::admission::{JOB_LIMIT, physical_intent};
 use super::helpers::{
-    Scratch, binding, created_scope, provision_physical_intent_with_sample, record_acquired,
-    runner_name,
+    Scratch, binding, created_scope, provision_acquired_request_with_initialization,
+    provision_acquired_request_with_initialization_for_repository, record_acquired, runner_name,
 };
 use crate::error::HostError;
-use crate::journal::{
-    AssignedAcquireResult, AssignmentKey, CapacityLimits, Journal, ReservationState,
-};
+use crate::journal::{AssignmentKey, CapacityLimits, Journal, ReservationState};
 
 #[tokio::test]
 async fn duplicate_scale_set_scope_blocks_jit_for_both_connections() -> Result<(), HostError> {
@@ -95,6 +93,15 @@ struct DuplicateNameWinner {
     losing_binding: crate::config::RepositoryConnection,
     assignment: crate::journal::AssignmentIdentity,
     intent_id: i64,
+    request_id: i64,
+    losing: Option<DuplicateNameLoser>,
+}
+
+struct DuplicateNameLoser {
+    assignment: crate::journal::AssignmentIdentity,
+    intent_id: i64,
+    reservation_id: i64,
+    request_id: i64,
 }
 
 #[tokio::test]
@@ -137,20 +144,8 @@ async fn prepare_duplicate_name_scopes(
 > {
     let first_binding = binding("essential", 101)?;
     let first = created_scope(journal, &first_binding, 501).await?;
-    record_acquired(&first, 65).await?;
     let second_binding = binding("chain", 202)?;
     let second = created_scope(journal, &second_binding, 502).await?;
-    let request = second
-        .assignment_identity(AssignmentKey::AssignedRequest { request_id: 66 })
-        .await?;
-    let receipt = super::helpers::receipt(&second, 66, 166, 202).await?;
-    second
-        .record_source_authorization(&request, &receipt)
-        .await?;
-    assert!(second.claim_request_acquire(&request).await?);
-    second
-        .record_request_acquire(&request, AssignedAcquireResult::Returned(vec![66]))
-        .await?;
     Ok((first_binding, first, second_binding, second))
 }
 
@@ -161,31 +156,47 @@ async fn claim_one_duplicate_name(
     second_binding: &crate::config::RepositoryConnection,
 ) -> Result<DuplicateNameWinner, HostError> {
     let (first_attempt, second_attempt) = tokio::join!(
-        provision_physical_intent_with_sample(first, 'a', 'a'),
-        provision_physical_intent_with_sample(second, 'a', 'b'),
+        provision_acquired_request_with_initialization(first, 65, 'a', 'a'),
+        provision_acquired_request_with_initialization_for_repository(second, 66, 'a', 'b', 202),
     );
-    let (winner, binding, losing_binding, winner_scope) = match (first_attempt, second_attempt) {
-        (Ok(provisioned), Err(_)) => (
-            provisioned,
-            first_binding.clone(),
-            second_binding.clone(),
-            first,
-        ),
-        (Err(_), Ok(provisioned)) => (
-            provisioned,
-            second_binding.clone(),
-            first_binding.clone(),
-            second,
-        ),
-        _ => return Err(HostError::Journal),
-    };
+    let (winner, binding, losing_binding, request_id, losing) =
+        match (first_attempt, second_attempt) {
+            (Ok(provisioned), Err(_)) => (
+                provisioned,
+                first_binding.clone(),
+                second_binding.clone(),
+                65,
+                None,
+            ),
+            (Err(_), Ok(provisioned)) => (
+                provisioned,
+                second_binding.clone(),
+                first_binding.clone(),
+                66,
+                None,
+            ),
+            (Ok(first), Ok(second)) => (
+                first,
+                first_binding.clone(),
+                second_binding.clone(),
+                65,
+                Some(DuplicateNameLoser {
+                    assignment: second.reservation_assignment,
+                    intent_id: second.intent_id,
+                    reservation_id: second.reservation_id,
+                    request_id: 66,
+                }),
+            ),
+            _ => return Err(HostError::Journal),
+        };
+    let winner_scope = if request_id == 65 { first } else { second };
     let intent_id = winner.intent_id;
     let (generation, digest) = winner_scope.test_active_authority_identity().await?;
     let jit = winner_scope
         .claim_runner_jit_for_request(
             intent_id,
             winner.reservation_id,
-            65,
+            request_id,
             &runner_name('a'),
             generation,
             &digest,
@@ -196,8 +207,10 @@ async fn claim_one_duplicate_name(
     Ok(DuplicateNameWinner {
         binding,
         losing_binding,
-        assignment: winner.assignment,
+        assignment: winner.reservation_assignment,
         intent_id,
+        request_id,
+        losing,
     })
 }
 
@@ -219,7 +232,7 @@ async fn assert_reopened_duplicate_name_is_held(
             .claim_runner_jit_for_request(
                 winner.intent_id,
                 reservation_id,
-                65,
+                winner.request_id,
                 &runner_name('a'),
                 generation,
                 &digest
@@ -240,12 +253,36 @@ async fn assert_reopened_duplicate_name_is_held(
             subject: "a".repeat(32),
         })
         .await?;
-    assert!(
-        losing_scope
-            .reservation(&losing_assignment)
-            .await?
-            .is_none()
-    );
+    if let Some(losing) = winner.losing {
+        let (generation, digest) = losing_scope.test_active_authority_identity().await?;
+        assert!(
+            losing_scope
+                .claim_runner_jit_for_request(
+                    losing.intent_id,
+                    losing.reservation_id,
+                    losing.request_id,
+                    &runner_name('a'),
+                    generation,
+                    &digest,
+                )
+                .await?
+                .is_none()
+        );
+        assert_eq!(
+            losing_scope
+                .reservation(&losing.assignment)
+                .await?
+                .map(|row| row.state),
+            Some(ReservationState::Reserved)
+        );
+    } else {
+        assert!(
+            losing_scope
+                .reservation(&losing_assignment)
+                .await?
+                .is_none()
+        );
+    }
     Ok(())
 }
 
@@ -262,13 +299,9 @@ async fn runner_name_must_match_the_physical_intent_nonce() -> Result<(), HostEr
         .await?;
     let binding = binding("essential", 101)?;
     let scope = created_scope(&journal, &binding, 501).await?;
-    record_acquired(&scope, 100).await?;
-    let (assignment, intent_id) = physical_intent(&scope, 'a').await?;
-    let reservation_id = scope
-        .reservation(&assignment)
-        .await?
-        .ok_or(HostError::Journal)?
-        .reservation_id;
+    let initialized = provision_acquired_request_with_initialization(&scope, 100, 'a', 'a').await?;
+    let intent_id = initialized.intent_id;
+    let reservation_id = initialized.reservation_id;
     let (generation, digest) = scope.test_active_authority_identity().await?;
 
     assert!(
