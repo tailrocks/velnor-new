@@ -201,7 +201,7 @@ fn atomic_commit_never_exposes_missing_tree() -> TestResult {
             writer_phase.store(WRITER_COMPLETE, Ordering::Relaxed);
         });
         for observer in 0..4 {
-            let parent = root.to_path_buf();
+            let parent = root.clone();
             let target = live.clone();
             let done_ref = &done;
             let counts_ref = &counts;
