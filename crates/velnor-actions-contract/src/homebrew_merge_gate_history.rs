@@ -51,7 +51,7 @@ pub struct TapCompletedPromotionObservation {
     pub server_protection: TapServerMergeProtection,
     /// All active required checks were exhaustively resolved for the original head.
     pub required_checks_complete: bool,
-    /// Exact-head results, including DCO and the protected completion App.
+    /// Exact-head results, including the protected completion App.
     pub checks: Vec<TapRequiredCheck>,
     /// Every same-receipt PR was enumerated, without truncation.
     pub historical_feedback_complete: bool,

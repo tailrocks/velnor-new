@@ -80,11 +80,9 @@ rules are in §6 and [workflow §3](workflow-contract.md).
 Repository-maintenance checks use the separate private operation
 `VELNOR_INTERNAL_OP=repo-policy-v1` and the allowlisted
 `VELNOR_REPO_POLICY_ACTION` values `freshness`, `toolchain-specs`,
-`mise-version`, `workspace-members`, `library-members`, and `trailer-policy`.
+`mise-version`, `workspace-members`, and `library-members`.
 The `VELNOR_REPO_POLICY_ROOT` variable must name an existing directory.
-Optional upstream, advisory, and trailer-identity flags accept only absent,
-`0`, or `1`; trailer validation also requires an absolute existing message
-file. Unknown actions and malformed flags fail closed. The gate transports
+Optional upstream and advisory flags accept only absent, `0`, or `1`. Unknown actions and malformed flags fail closed. The gate transports
 read-only operations to the repository-only `velnor-actions-freshness`
 support crate; the orchestrator, public command tree, V1 product task graph,
 and generated workflows MUST NOT depend on it. This adds no public command or

@@ -240,7 +240,7 @@ An already-promoted candidate authorizes no branch, commit, PR, or merge write.
 The independently authenticated merge boundary must prove the actual merged
 PR, original formula commit and base, expected bot and branch, canonical formula
 tree, signed-off commit, merge ancestry to captured tap main, exact current
-formula, required exact-head checks including DCO, and trusted completed review.
+formula, every required exact-head check, and trusted completed review.
 A matching formula without that historical proof is blocked. A newer formula is
 not an already-current outcome for an older receipt and must never be downgraded.
 
@@ -293,8 +293,8 @@ Every configured reviewer must have terminal completion for this exact head;
 missing comments or elapsed time do not establish completion.
 
 The final admission re-fetches tap main and PR head and requires both to equal
-the independently validated base and formula commit. Every active required check,
-including DCO, must complete successfully on that exact commit with any required
+the independently validated base and formula commit. Every active required check
+must complete successfully on that exact commit with any required
 App binding. The squash request must carry the validated head SHA as its API
 precondition. A changed base requires preparation again. This contract and its
 negative acceptance tests do not themselves deploy a trusted completion App or
@@ -336,8 +336,10 @@ absent or bypassable. Re-reading the base immediately before merge is necessary
 but does not replace server enforcement.
 If classic protection exempts administrators, native admission requires active
 effective rulesets to supply PR and resolved-thread protection, strict checks,
-force-push and deletion protection, DCO and completion bindings, and every
-required classic check binding, with no writer bypass.
+force-push and deletion protection, the completion binding, and every
+required classic check binding, with no writer bypass. No sign-off (DCO)
+check is mandated; a tap that requires one is verified like any other
+required check.
 Strictness evidence requires a nonempty validated check list from that same
 source; an empty strict rule cannot qualify checks supplied only by a loose
 source. Absent classic protection does not invent an administrator exemption. This keeps
