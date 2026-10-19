@@ -16,11 +16,14 @@ It MUST NOT create, modify, delete, normalize, lock, or otherwise manage them.
 | `mise.lock` | Yes | Never | Report `missing_recommended_input`; recommend the maintainer create/refresh it with Mise. |
 
 These files are optional repository inputs, not prerequisites for `init` or
-stack detection. Missing or malformed files MUST produce a structured finding
-and a concrete human-readable recommendation; they MUST NOT trigger a write.
+stack detection. Missing files MUST produce a structured finding and a
+concrete human-readable recommendation; they MUST NOT trigger a write.
 Generation continues with Velnor's own exact tool versions from its locked
-version policy through Mise, so it does not silently inherit an older or loose
-project tool selection.
+version policy through Mise for every tool the project does not declare.
+A project source that does not parse, or a declaration that is not one exact
+`X.Y.Z` or that another source contradicts, fails generation naming the tool
+and the file ([hard decision 5](../hard-decisions.md)): a Velnor pin must never
+silently replace a declaration Mise would honor.
 
 `velnor-actions-rust` owns read-only inspection of `rust-toolchain.toml`.
 `velnor-actions-mise` owns read-only inspection of `mise.toml` and `mise.lock`.
@@ -58,7 +61,7 @@ to prove — there is no config gate to bypass when no config is loaded.
 Download bytes in CI trust upstream TLS plus exact `tool@exact` specs:
 a version the project's Mise config declares is read at run time by the
 generated **Resolve project tool versions** step (`mise --no-config
---no-env --no-hooks config get`, stored values only, exact `X.Y.Z` only;
+--no-env --no-hooks config get`, stored values only, exact `X.Y.Z` only, every Mise config location and `.tool-versions`;
 [hard decision 5](../hard-decisions.md)),
 and every other tool uses Velnor's locked catalog pin. Generator-owned Rust-lane installs do not
 consult the committed `mise.lock` — a lone lock is not enforced by mise
@@ -225,11 +228,12 @@ and content digests where readable. `plan` prints findings in its report;
 Velnor MUST NOT execute those suggestions. `init` does not inspect or modify
 these files.
 
-Malformed optional tool files MUST be reported as `tooling_input_invalid`.
-Velnor continues using its own exact pinned tool selection and MUST NOT pass
-malformed or project-defined configuration through to tool execution. A missing
-lock or version mismatch MUST be visible as a recommendation, not an implicit
-lock refresh.
+The read-only tool-input check reports a malformed optional tool file as
+`tooling_input_invalid`; `plan` and `generate` fail
+(`malformed_project_tool_source`) for a malformed Mise config or toolchain file
+instead of continuing. Velnor MUST NOT pass malformed or project-defined
+configuration through to tool execution. A missing lock or version mismatch
+MUST be visible as a recommendation, not an implicit lock refresh.
 
 `init` creates only the missing root `.velnor/config.toml` sample defined by
 the CLI contract. `generate` produces product output only under `.github` and

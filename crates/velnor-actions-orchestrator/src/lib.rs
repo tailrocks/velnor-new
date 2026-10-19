@@ -69,6 +69,7 @@ mod prepare;
 mod preseed_manifest;
 mod preview_producer;
 mod product_release_pins;
+pub(crate) mod project_tool_sources;
 mod provenance;
 mod qualification_candidate;
 mod qualification_resolver;

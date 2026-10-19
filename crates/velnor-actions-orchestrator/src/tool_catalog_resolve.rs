@@ -36,10 +36,12 @@ use velnor_actions_rust::{
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::native_tool_input::{NativeToolSelector, parse_native_tool_selector};
+use crate::project_tool_sources::{read_nested_toolchains, read_project_sources};
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
-use crate::tool_catalog_project::{
-    PinInputs, ToolchainFile, apply_declarations, contract, project_declarations,
-};
+use crate::tool_catalog_project::{PinInputs, apply_declarations, contract, project_declarations};
+
+/// Toolchain-file Rust channel: `(file, raw channel, exact version)`.
+type ToolchainFile = (&'static str, String, String);
 
 /// Resolve the effective [`ToolCatalog`] for a repository root and parsed [`VelnorConfig`].
 ///
@@ -91,22 +93,20 @@ pub(crate) fn resolve_tool_catalog(
         ));
     }
     let export_rustup_toolchain = file_tc.is_none();
+    // Every declaration source is read (and must parse) before any is used.
+    let sources = read_project_sources(root)?;
     let repo_mise = read_repo_mise_tools(root)?;
     let rust_mr_boxington = repo_mise.as_ref().is_some_and(|tools| {
-        tools.lenient_mbx_option
-            || tools
-                .tools
-                .get("rust")
-                .is_some_and(|rust| rust.mr_boxington == Some(true))
+        tools
+            .tools
+            .get("rust")
+            .is_some_and(|rust| rust.mr_boxington == Some(true))
     });
     if rust_mr_boxington {
         resolve_wrapped_mr_boxington_pin(repo_mise.as_ref(), config.tools.get("mr-boxington"))?;
     }
-    let empty = BTreeMap::new();
-    let declared = project_declarations(
-        repo_mise.as_ref().map_or(&empty, |tools| &tools.tools),
-        file_tc.as_ref(),
-    );
+    let declared = project_declarations(&sources)?;
+    reject_divergent_nested_toolchains(root, declared.get(&PinnedTool::Rust))?;
     let pins = PinInputs {
         declared: &declared,
         config,
@@ -136,48 +136,65 @@ pub(crate) fn resolve_tool_catalog(
     )
 }
 
+/// Fail generation for a sub-workspace toolchain file that differs from the
+/// root declaration.
+///
+/// The generated resolver reads root sources only, and rustup honors a
+/// toolchain file in the directory a command runs from, so a divergent
+/// nested file would build with a toolchain the workflow never resolved.
+/// Nested files that declare the root version are inert and accepted.
+fn reject_divergent_nested_toolchains(
+    root: &Path,
+    root_rust: Option<&String>,
+) -> Result<(), OrchestratorError> {
+    for source in read_nested_toolchains(root)? {
+        for declaration in source.declarations {
+            if root_rust != Some(&declaration.value) {
+                return Err(OrchestratorError::config(
+                    source.file.as_str(),
+                    "toolchain.channel",
+                    format!(
+                        "nested_rust_toolchain_not_supported:{}={},root={}",
+                        source.file,
+                        declaration.value,
+                        root_rust.map_or("undeclared", String::as_str)
+                    ),
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Repository-root `mise.toml` tool records the catalog must agree with.
 struct RepoMiseTools {
     /// Repository-relative file the records were read from.
     file: &'static str,
     /// Every `[tools]` record by key.
     tools: BTreeMap<String, NativeToolSelector>,
-    /// Line-local wrapper detection over bytes too malformed to parse as
-    /// TOML — the exact predicate that feeds P06 driver evidence, so the
-    /// two readers of the same file cannot disagree.
-    lenient_mbx_option: bool,
 }
 
 /// Read the repository-root Mise tool records (`mise.toml`, then `.mise.toml`).
 ///
-/// Recorded decision — first parseable file wins: mise merges every
-/// config file it loads, but this reader deliberately takes only the
-/// first parseable spelling (the same precedence the profile-evidence
-/// reader in `evidence.rs::tool_config_input` applies) and never merges
-/// records across the two. Repositories that rely on per-file merging
-/// must keep the `rust` and `mr-boxington` records in the first file.
-///
-/// Malformed bytes contribute no records and never fail resolution on
-/// their own (tooling-input contract: a malformed `mise.toml` stays a
-/// read-only input reported as a `tooling_input_invalid` finding with a
-/// manual suggestion); the reader keeps walking to the next spelling.
-/// The wrapper option is still detected line-locally in malformed bytes
-/// through [`velnor_actions_rust::tool_config_selects_mbx`] — the same
-/// predicate the P06 driver detector reads — so a malformed file that
-/// selects the wrapper cannot degrade to a silent flag-off while
-/// detection picks the MBX driver; the missing exact pin then fails
-/// closed in [`resolve_wrapped_mr_boxington_pin`]. No readable file
-/// returns `None`.
+/// Recorded decision — first file wins for the `mr_boxington` wrapper
+/// option: mise merges every config file it loads, but the wrapper option
+/// is read from the first spelling only (the same precedence the
+/// profile-evidence reader in `evidence.rs::tool_config_input` applies).
+/// Versions are different: [`read_project_sources`] reads every location
+/// and requires all declarations to agree. A file that does not parse is an
+/// error here as well; it never reads as "no records".
 fn read_repo_mise_tools(root: &Path) -> Result<Option<RepoMiseTools>, OrchestratorError> {
-    let mut lenient_mbx_option = false;
     for file in [MISE_TOML_FILE, DOT_MISE_TOML_FILE] {
         let RepoRead::Text(text) = read_repo_file(root, file, MAX_REPO_FILE_BYTES)? else {
             continue;
         };
-        let Ok(value) = toml::from_str::<toml::Value>(&text) else {
-            lenient_mbx_option |= velnor_actions_rust::tool_config_selects_mbx(&text);
-            continue;
-        };
+        let value = toml::from_str::<toml::Value>(&text).map_err(|err| {
+            OrchestratorError::config(
+                file,
+                "tools",
+                format!("malformed_project_tool_source:not valid TOML: {err}"),
+            )
+        })?;
         let tools = value
             .get("tools")
             .and_then(toml::Value::as_table)
@@ -188,17 +205,9 @@ fn read_repo_mise_tools(root: &Path) -> Result<Option<RepoMiseTools>, Orchestrat
                     .collect()
             })
             .unwrap_or_default();
-        return Ok(Some(RepoMiseTools {
-            file,
-            tools,
-            lenient_mbx_option,
-        }));
+        return Ok(Some(RepoMiseTools { file, tools }));
     }
-    Ok((lenient_mbx_option).then_some(RepoMiseTools {
-        file: MISE_TOML_FILE,
-        tools: BTreeMap::new(),
-        lenient_mbx_option: true,
-    }))
+    Ok(None)
 }
 
 /// Resolve the mise-managed `mr-boxington` pin the preflight must install.
@@ -293,3 +302,7 @@ fn read_toolchain_file(
 #[cfg(test)]
 #[path = "tool_catalog_resolve_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tool_catalog_sources_tests.rs"]
+mod sources_tests;

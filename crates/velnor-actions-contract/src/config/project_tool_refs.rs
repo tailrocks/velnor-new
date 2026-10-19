@@ -13,10 +13,11 @@ pub const PROJECT_TOOL_REF_PREFIX: &str = "${VELNOR_TOOL_";
 /// Contract-fixed display name of the generated resolver step.
 pub const PROJECT_TOOLS_STEP_NAME: &str = "Resolve project tool versions";
 
-/// Every repository file a project tool version may come from.
+/// Root files the tools-cache identity hashes (`hashFiles`).
 ///
-/// Cache identities that bind project versions before the resolver runs
-/// hash these files, so a version bump (or lock change) invalidates them.
+/// This is only the cache-identity input; it is not the list of places a
+/// version may be declared (see [`PROJECT_MISE_CONFIG_PATTERNS`]). The
+/// cache key is owned by the cache design, so this list is fixed here.
 pub const PROJECT_TOOL_SOURCE_FILES: [&str; 6] = [
     "mise.toml",
     ".mise.toml",
@@ -25,6 +26,74 @@ pub const PROJECT_TOOL_SOURCE_FILES: [&str; 6] = [
     "rust-toolchain.toml",
     "rust-toolchain",
 ];
+
+/// Every location Mise reads `[tools]` from in a project root.
+///
+/// One entry is `dir/name`; `name` may hold one `*` that matches any
+/// characters except `/`. This covers the plain, dot-prefixed and
+/// `.config` spellings, `conf.d`, environment files (`mise.<env>.toml`)
+/// and `mise.local.toml`. The generator reads exactly this list, the
+/// generated resolver globs exactly this list, and change selection
+/// treats exactly this list as declaration sources.
+pub const PROJECT_MISE_CONFIG_PATTERNS: [&str; 13] = [
+    "mise.toml",
+    ".mise.toml",
+    "mise.*.toml",
+    ".mise.*.toml",
+    ".config/mise.toml",
+    ".config/mise.*.toml",
+    ".config/mise/config.toml",
+    ".config/mise/config.*.toml",
+    ".config/mise/conf.d/*.toml",
+    "mise/config.toml",
+    "mise/config.*.toml",
+    ".mise/config.toml",
+    ".mise/config.*.toml",
+];
+
+/// Mise's asdf-compatible tool list.
+pub const PROJECT_TOOL_VERSIONS_FILE: &str = ".tool-versions";
+
+/// Rust toolchain files Mise (idiomatic version files) and rustup both read.
+pub const RUST_TOOLCHAIN_SOURCE_FILES: [&str; 2] = ["rust-toolchain.toml", "rust-toolchain"];
+
+/// Mise lock files: not parsed, so any change re-tests everything.
+pub const PROJECT_TOOL_LOCK_FILES: [&str; 2] = ["mise.lock", ".mise.lock"];
+
+/// Whether `path` matches one `dir/name` pattern of
+/// [`PROJECT_MISE_CONFIG_PATTERNS`].
+#[must_use]
+pub fn matches_source_pattern(pattern: &str, path: &str) -> bool {
+    let (pattern_dir, pattern_name) = pattern.rsplit_once('/').unwrap_or(("", pattern));
+    let (dir, name) = path.rsplit_once('/').unwrap_or(("", path));
+    if dir != pattern_dir {
+        return false;
+    }
+    match pattern_name.split_once('*') {
+        None => name == pattern_name,
+        Some((prefix, suffix)) => {
+            name.len() >= prefix.len() + suffix.len()
+                && name.starts_with(prefix)
+                && name.ends_with(suffix)
+        }
+    }
+}
+
+/// Whether `path` is a file a project tool version may be declared in.
+#[must_use]
+pub fn is_declaration_source(path: &str) -> bool {
+    path == PROJECT_TOOL_VERSIONS_FILE
+        || RUST_TOOLCHAIN_SOURCE_FILES.contains(&path)
+        || PROJECT_MISE_CONFIG_PATTERNS
+            .iter()
+            .any(|pattern| matches_source_pattern(pattern, path))
+}
+
+/// Whether `path` is a lock file that always re-tests everything.
+#[must_use]
+pub fn is_project_tool_lock(path: &str) -> bool {
+    PROJECT_TOOL_LOCK_FILES.contains(&path)
+}
 
 /// `${{ hashFiles(...) }}` over [`PROJECT_TOOL_SOURCE_FILES`].
 #[must_use]
@@ -77,14 +146,20 @@ fn ref_spans(text: &str) -> Vec<(usize, usize, &str)> {
 /// resolver validates as exact at run time.
 #[must_use]
 pub fn is_exact_or_project_version(version: &str) -> bool {
-    if is_project_tool_ref(version) {
-        return true;
-    }
+    is_project_tool_ref(version) || is_exact_project_version(version)
+}
+
+/// Exact `X.Y.Z` of plain decimal numbers without leading zeros: the one
+/// shape the generated resolver accepts for a project-declared version.
+#[must_use]
+pub fn is_exact_project_version(version: &str) -> bool {
     let parts: Vec<&str> = version.split('.').collect();
     parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+        && parts.iter().all(|part| {
+            !part.is_empty()
+                && part.bytes().all(|byte| byte.is_ascii_digit())
+                && (*part == "0" || !part.starts_with('0'))
+        })
 }
 
 /// True when `value` is exactly one project reference.

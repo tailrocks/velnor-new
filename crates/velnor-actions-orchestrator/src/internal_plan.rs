@@ -125,6 +125,7 @@ pub(crate) fn cache_ids_for(
     task: &ProposedTask,
     label: &str,
     toolchain: &str,
+    catalog: &velnor_actions_mise::ToolCatalog,
 ) -> Result<EntryCacheIds, ContractError> {
     if Stack::require_known(&task.stack_id)? == Stack::Mise {
         return Err(ContractError::identity(
@@ -136,7 +137,10 @@ pub(crate) fn cache_ids_for(
     let format_id = if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
         identities::cache_format_id_for_tofu()
     } else {
-        identities::cache_format_id_for(CompileDriver::parse(&task.identity.compile_driver)?)
+        identities::cache_format_id_for(
+            CompileDriver::parse(&task.identity.compile_driver)?,
+            catalog.version(velnor_actions_mise::PinnedTool::MrBoxington),
+        )
     };
     EntryCacheIds::new(
         &workspace_id,

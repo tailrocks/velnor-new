@@ -137,11 +137,11 @@ fn toolchains_bind_sorted_specs_driver_runner() {
 #[test]
 fn formats_stay_single_and_graphs_relocate() {
     assert_ne!(
-        cache_format_id_for(CompileDriver::Cargo),
-        cache_format_id_for(CompileDriver::Mbx)
+        cache_format_id_for(CompileDriver::Cargo, MBX),
+        cache_format_id_for(CompileDriver::Mbx, MBX)
     );
-    assert!(validate_digest(&cache_format_id_for(CompileDriver::Cargo)).is_ok());
-    assert!(validate_digest(&cache_format_id_for(CompileDriver::Mbx)).is_ok());
+    assert!(validate_digest(&cache_format_id_for(CompileDriver::Cargo, MBX)).is_ok());
+    assert!(validate_digest(&cache_format_id_for(CompileDriver::Mbx, MBX)).is_ok());
     let record = |id: &str| WorkspaceRecord {
         workspace_root: String::new(),
         members: vec![id.to_owned()],
@@ -177,9 +177,27 @@ fn formats_stay_single_and_graphs_relocate() {
     assert_eq!(component_id_for_unit("a-id", "a/Cargo.toml"), "a-id");
 }
 
+/// The compiled Velnor MBX pin: what an undeclared project runs.
+const MBX: &str = velnor_actions_mise::catalog::MR_BOXINGTON_VERSION;
+
+#[test]
+fn cache_format_identity_follows_the_mbx_version_the_workflow_runs() {
+    // A project-declared MBX (hard decision 5) re-keys the format identity;
+    // the compiled pin is only the default for an undeclared project.
+    assert_ne!(
+        cache_format_id_for(CompileDriver::Mbx, "9.9.9"),
+        cache_format_id_for(CompileDriver::Mbx, MBX)
+    );
+    assert_eq!(
+        cache_format_id_for(CompileDriver::Cargo, "9.9.9"),
+        cache_format_id_for(CompileDriver::Cargo, MBX),
+        "the cargo format has no MBX generation"
+    );
+}
+
 #[test]
 fn cache_format_identity_tracks_emitted_mbx_generation() {
-    let version = velnor_actions_mise::catalog::MR_BOXINGTON_VERSION;
+    let version = MBX;
     let generation = mbx_cache_generation(version);
     let current = cache_format_id(&FormatInputs {
         adapter: "mbx".to_owned(),
@@ -194,7 +212,7 @@ fn cache_format_identity_tracks_emitted_mbx_generation() {
     })
     .expect("stale MBX format identity");
 
-    assert_eq!(cache_format_id_for(CompileDriver::Mbx), current);
+    assert_eq!(cache_format_id_for(CompileDriver::Mbx, MBX), current);
     assert_ne!(
         current, stale,
         "a cache generation change must re-key identity"
@@ -267,8 +285,8 @@ fn tofu_proposal(kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
 fn tofu_cache_format_is_distinct_and_valid() {
     let tofu = cache_format_id_for_tofu();
     assert!(validate_digest(&tofu).is_ok());
-    assert_ne!(tofu, cache_format_id_for(CompileDriver::Cargo));
-    assert_ne!(tofu, cache_format_id_for(CompileDriver::Mbx));
+    assert_ne!(tofu, cache_format_id_for(CompileDriver::Cargo, MBX));
+    assert_ne!(tofu, cache_format_id_for(CompileDriver::Mbx, MBX));
 }
 
 /// Minimal discovery with no workspaces or tool checks.

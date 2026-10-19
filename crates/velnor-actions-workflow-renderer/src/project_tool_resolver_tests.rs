@@ -135,3 +135,68 @@ fn run_references_become_single_shell_words() {
     );
     assert!(quote_run_refs("echo 'open ${VELNOR_TOOL_RUST}").is_err());
 }
+
+fn composite(steps: Vec<Yaml>) -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("shared")),
+        (
+            "runs".to_owned(),
+            Yaml::Map(vec![
+                ("using".to_owned(), Yaml::str("composite")),
+                ("steps".to_owned(), Yaml::Seq(steps)),
+            ]),
+        ),
+    ])
+}
+
+#[test]
+fn binding_is_idempotent_and_emits_one_resolver_per_document() {
+    let steps = || {
+        vec![
+            step(&[("uses", SETUP)]),
+            step(&[("run", "mise exec rust@${VELNOR_TOOL_RUST} -- cargo build")]),
+        ]
+    };
+    for mut doc in [
+        composite(steps()),
+        workflow(Vec::new(), {
+            let mut all = vec![step(&[("uses", "actions/checkout@0123")])];
+            all.extend(steps());
+            all
+        }),
+    ] {
+        bind_workflow(&mut doc).expect("first");
+        let once = render_yaml(&doc);
+        bind_workflow(&mut doc).expect("second");
+        let twice = render_yaml(&doc);
+        assert_eq!(once, twice, "a second bind must change nothing");
+        assert_eq!(twice.matches("Resolve project tool versions").count(), 1);
+    }
+}
+
+#[test]
+fn composite_reading_a_version_without_its_own_setup_fails_closed() {
+    let mut doc = composite(vec![step(&[(
+        "run",
+        "mise exec rust@${VELNOR_TOOL_RUST} -- cargo build",
+    )])]);
+    let err = bind_workflow(&mut doc).expect_err("unbound composite");
+    assert!(err.to_string().contains("composite_no_mise_setup"), "{err}");
+    // No reference, no requirement.
+    let mut inert = composite(vec![step(&[("run", "echo hi")])]);
+    bind_workflow(&mut inert).expect("no references");
+}
+
+#[test]
+fn case_commands_inside_substitutions_are_refused_not_guessed() {
+    use super::quote_run_refs;
+    let err = quote_run_refs("v=$(case x in a) echo ${VELNOR_TOOL_RUST} ;; esac)")
+        .expect_err("case in substitution");
+    assert!(
+        err.to_string().contains("case_in_command_substitution"),
+        "{err}"
+    );
+    // A word that merely contains `case`, and a top-level case, are fine.
+    assert!(quote_run_refs("v=$(showcase ${VELNOR_TOOL_RUST})").is_ok());
+    assert!(quote_run_refs("case x in a) echo ${VELNOR_TOOL_RUST} ;; esac").is_ok());
+}
