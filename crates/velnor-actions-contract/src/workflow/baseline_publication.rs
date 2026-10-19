@@ -144,6 +144,14 @@ impl TryFrom<ManifestTaskProofUnchecked> for ManifestTaskProof {
     }
 }
 
+/// Check that a proof run ID is nonzero.
+fn check_proof_id(id: u64, field: &'static str) -> Result<(), ContractError> {
+    if id == 0 {
+        return Err(ContractError::identity(field, "missing_proof_id"));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::ManifestTaskProof;
@@ -170,12 +178,4 @@ mod tests {
         assert_eq!(value["proof_run_id"], 12);
         assert_eq!(value.as_object().expect("object").len(), 9);
     }
-}
-
-/// Check that a proof run ID is nonzero.
-fn check_proof_id(id: u64, field: &'static str) -> Result<(), ContractError> {
-    if id == 0 {
-        return Err(ContractError::identity(field, "missing_proof_id"));
-    }
-    Ok(())
 }
