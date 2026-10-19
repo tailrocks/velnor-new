@@ -1,6 +1,6 @@
 //! Component probes retain exact compiler, platform, and banner authority.
 use super::*;
-use crate::config::{CheckPlatform, QualifiedToolArtifactRecipe};
+use crate::config::{CheckPlatform, QualifiedTool, QualifiedToolArtifactRecipe};
 
 const BANNER: &str = "rustfmt 1.10.0-stable (58cf8f9c35 2026-10-13)";
 const COMPILER: &str = "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: aarch64-apple-darwin\nrelease: 1.99.1\nLLVM version: 23.1.1";
@@ -40,6 +40,28 @@ fn recipe() -> QualifiedToolRecipe {
 
 fn rejected(recipe: &QualifiedToolRecipe) {
     assert!(recipe.validate("test", "tool").is_err(), "{recipe:?}");
+    assert!(with_measurements(recipe).validate("test", "tool").is_err());
+}
+
+fn with_measurements(recipe: &QualifiedToolRecipe) -> QualifiedTool {
+    let mut value = serde_json::to_value(recipe).expect("recipe metadata");
+    for platform in value["platforms"].as_array_mut().expect("platforms") {
+        platform["install_tree_sha256"] = "b".repeat(64).into();
+        for field in ["artifacts", "dependency_artifacts", "executables"] {
+            for record in platform[field].as_array_mut().expect("records") {
+                record["sha256"] = "a".repeat(64).into();
+            }
+        }
+    }
+    serde_json::from_value(value).expect("complete synthetic measurements")
+}
+
+fn formatter_recipe(name: &str) -> QualifiedToolRecipe {
+    let mut value = recipe();
+    value.platforms[0]
+        .executables
+        .retain(|executable| executable.name == name || executable.name == "rustc");
+    value
 }
 
 fn compiler_output(recipe: &mut QualifiedToolRecipe, output: String) {
@@ -53,6 +75,9 @@ fn rustfmt_component_admits_both_canonical_executables_and_roundtrips() {
     valid
         .validate("test", "tool")
         .expect("official formatter and compiler identities");
+    with_measurements(&valid)
+        .validate("test", "tool")
+        .expect("complete formatter record");
     let json = serde_json::to_value(&valid).expect("serialize recipe");
     assert_eq!(
         json["platforms"][0]["executables"][0]["probe"]["kind"],
@@ -71,6 +96,119 @@ fn rustfmt_component_admits_both_canonical_executables_and_roundtrips() {
         };
     }
     valid.validate("test", "tool").expect("real leap date");
+    with_measurements(&valid)
+        .validate("test", "tool")
+        .expect("complete leap-date formatter record");
+}
+
+#[test]
+fn formatter_declarations_reject_every_alternate_probe_even_with_parent_version() {
+    for name in ["cargo-fmt", "rustfmt"] {
+        for probe in [
+            QualifiedToolProbe::Version {
+                expected: "rustfmt 1.99.1".into(),
+            },
+            QualifiedToolProbe::VersionSubcommand {
+                expected: "rustfmt 1.99.1".into(),
+            },
+            QualifiedToolProbe::CargoNextestVersion {
+                expected: "cargo-nextest 1.99.1".into(),
+            },
+            QualifiedToolProbe::RustcVerbose {
+                expected: COMPILER.into(),
+            },
+        ] {
+            let mut invalid = formatter_recipe(name);
+            let executable = invalid.platforms[0]
+                .executables
+                .iter_mut()
+                .find(|executable| executable.name == name)
+                .expect("formatter");
+            executable.probe = probe;
+            if matches!(
+                executable.probe,
+                QualifiedToolProbe::Version { .. } | QualifiedToolProbe::VersionSubcommand { .. }
+            ) {
+                super::super::probes::validate_recipe_probe(
+                    &invalid.version,
+                    CheckPlatform::MacosArm64,
+                    executable,
+                    "test",
+                    "tool",
+                )
+                .expect("generic parent-version probe would otherwise pass");
+            }
+            rejected(&invalid);
+        }
+    }
+}
+
+#[test]
+fn generic_formatter_aliases_and_missing_requirements_cannot_bypass_admission() {
+    for name in ["cargo-fmt", "rustfmt"] {
+        for (exposed, path) in [(name, "bin/formatter"), ("formatter", name)] {
+            let mut invalid = formatter_recipe(name);
+            let executable = invalid.platforms[0]
+                .executables
+                .iter_mut()
+                .find(|executable| executable.name == name)
+                .expect("formatter");
+            executable.name = exposed.into();
+            executable.path = if exposed == "formatter" {
+                format!("bin/{path}")
+            } else {
+                path.into()
+            };
+            executable.probe = QualifiedToolProbe::Version {
+                expected: "formatter 1.99.1".into(),
+            };
+            invalid.platforms[0]
+                .executables
+                .sort_by(|a, b| a.name.cmp(&b.name));
+            rejected(&invalid);
+        }
+        for missing_compiler in [false, true] {
+            let mut invalid = formatter_recipe(name);
+            invalid.platforms[0]
+                .executables
+                .iter_mut()
+                .find(|executable| executable.name == name)
+                .expect("formatter")
+                .probe = QualifiedToolProbe::Version {
+                expected: "formatter 1.99.1".into(),
+            };
+            if missing_compiler {
+                invalid.platforms[0]
+                    .executables
+                    .retain(|executable| executable.name != "rustc");
+            } else {
+                invalid.options = QualifiedToolOptions::Rust {
+                    components: Vec::new(),
+                    targets: Vec::new(),
+                };
+            }
+            rejected(&invalid);
+        }
+    }
+}
+
+#[test]
+fn unrelated_rust_executable_keeps_generic_version_admission() {
+    let mut valid = recipe();
+    valid.platforms[0].executables.insert(
+        0,
+        QualifiedToolExecutableRecipe {
+            name: "cargo".into(),
+            path: "bin/cargo".into(),
+            probe: QualifiedToolProbe::Version {
+                expected: "cargo 1.99.1".into(),
+            },
+        },
+    );
+    valid.validate("test", "tool").expect("generic Cargo probe");
+    with_measurements(&valid)
+        .validate("test", "tool")
+        .expect("complete Cargo probe");
 }
 
 #[test]

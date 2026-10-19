@@ -83,7 +83,10 @@ pub(super) fn validate_recipe(
             if matches!(
                 executable.probe,
                 super::QualifiedToolProbe::RustfmtVersion { .. }
-            ) {
+            ) || (matches!(&recipe.backend, QualifiedToolBackend::Core { tool } if tool == "rust")
+                && (matches!(executable.name.as_str(), "rustfmt" | "cargo-fmt")
+                    || matches!(executable.path.as_str(), "bin/rustfmt" | "bin/cargo-fmt")))
+            {
                 super::rustfmt_probes::validate(recipe, platform, executable, file, key)?;
             } else {
                 super::probes::validate_recipe_probe(

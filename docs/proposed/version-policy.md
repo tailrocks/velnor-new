@@ -150,7 +150,8 @@ and its matching stable version. Keys must be exact allowlisted action
 repositories, and the pair must appear in that action's bundled approved-pin
 catalog (latest release plus maintained compatibility pins). The Alint action
 is not a per-project override: Velnor emits exactly
-`asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87` (`# v0.19.0`).
+`asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87` with the binary input
+`version: v0.19.0`.
 Changing that pin is a Velnor version-policy change,
 not a consumer configuration change. Velnor validates every ordinary pair and
 the action's input/output schema before replacing generated output. Unknown
@@ -182,10 +183,12 @@ compatibility override, recorded as `config_override`. No config means the
 generator emits `default` and records `latest_default`. Unsupported or unversioned runner labels MUST block generation.
 
 Alint runs as a separate job only in Velnor's `velnor-repository-v1` profile,
-using this exact generated step (current pin as of 2026-10-19):
+using the following action and binary pins (current as of 2026-10-19):
 
 ```yaml
 - uses: asamarts/alint@f39a25a7e061bb8738a87372561d8b9a6a29ca87 # v0.19.0
+  with:
+    version: v0.19.0
 ```
 
 It reads `.alint.yml` and enforces only the rules supported and explicitly
