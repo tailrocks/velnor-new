@@ -224,8 +224,8 @@ fn reads_exact_regular_request_and_rejects_changed_owner_or_mode() {
     inbox.file(payload, 0o600);
     let (bytes, identity) =
         read_request_file(&inbox.open(), geteuid().as_raw(), getegid().as_raw())
-            .expect("read request")
-            .expect("request present");
+            .expect("The program could not read the request.")
+            .expect("The request is absent.");
     assert_eq!(bytes, payload);
     assert_eq!(identity.size, payload.len() as u64);
     assert_eq!(identity.mode, 0o600);
@@ -260,18 +260,20 @@ fn only_an_initial_missing_request_is_retryable_absence() {
     let inbox = TestInbox::new();
     assert_eq!(
         read_request_file(&inbox.open(), geteuid().as_raw(), getegid().as_raw())
-            .expect("missing fixed request is a typed absence"),
+            .expect("The program could not read the request."),
         None
     );
 
-    std::os::unix::fs::symlink("missing", inbox.0.join(REQUEST_FILE)).expect("make symlink");
+    std::os::unix::fs::symlink("missing", inbox.0.join(REQUEST_FILE))
+        .expect("Make a symbolic link.");
     assert!(read_request_file(&inbox.open(), geteuid().as_raw(), getegid().as_raw()).is_err());
 }
 
 #[test]
 fn nofollow_and_nonblocking_open_reject_symlinks_and_fifos() {
     let inbox = TestInbox::new();
-    std::os::unix::fs::symlink("missing", inbox.0.join(REQUEST_FILE)).expect("make symlink");
+    std::os::unix::fs::symlink("missing", inbox.0.join(REQUEST_FILE))
+        .expect("Make a symbolic link.");
     assert!(read_request_file(&inbox.open(), geteuid().as_raw(), getegid().as_raw()).is_err());
     fs::remove_file(inbox.0.join(REQUEST_FILE)).expect("remove symlink");
     let status = std::process::Command::new("mkfifo")

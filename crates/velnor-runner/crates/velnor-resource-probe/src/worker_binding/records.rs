@@ -8,7 +8,7 @@ use super::{AttachmentRole, WorkerRole};
 #[serde(deny_unknown_fields)]
 /// Observed filesystem attachment facts.
 pub struct StorageAttachmentObservation {
-    /// Fixed role for this observation.
+    /// Role specified for this observation.
     pub role: AttachmentRole,
     /// Absolute path inside the worker container.
     pub target: String,
@@ -62,7 +62,7 @@ pub struct StorageAttachmentObservation {
 #[serde(deny_unknown_fields)]
 /// Measured limits for the helper cgroup.
 pub struct SelfLeafLimits {
-    /// Actual cgroup path.
+    /// Cgroup path read from procfs.
     pub cgroup_path: String,
     /// Memory limit, or null when unlimited.
     pub memory_max_bytes: Option<u64>,
@@ -94,9 +94,9 @@ pub struct SelfStorageObservation {
     pub schema_version: u8,
     /// Fresh 32-character lower-case hexadecimal identity.
     pub operation_id: String,
-    /// Exact container identity.
+    /// Container ID from the worker record.
     pub container_id: String,
-    /// Fixed role for this observation.
+    /// Role specified for this observation.
     pub role: WorkerRole,
     /// Helper protocol version.
     pub helper_protocol_version: u16,
@@ -122,7 +122,7 @@ pub struct SelfStorageObservation {
     pub cgroup_path_in_self_namespace: String,
     /// Measured limits for the helper cgroup.
     pub self_leaf_limits: SelfLeafLimits,
-    /// Complete fixed attachment inventory.
+    /// All filesystem attachments necessary for this observation.
     pub attachments: Vec<StorageAttachmentObservation>,
 }
 
@@ -142,7 +142,7 @@ pub struct ProcessWitness {
     pub mount_namespace_device_minor: u32,
     /// PID values from procfs status.
     pub namespace_pids: Vec<u32>,
-    /// Actual cgroup path.
+    /// Cgroup path read from procfs.
     pub cgroup_path: String,
 }
 
@@ -152,7 +152,7 @@ pub struct ProcessWitness {
 pub enum RootBackingKind {
     /// Writable container layer.
     Upper,
-    /// Overlay work directory.
+    /// Overlay work directory used with the upper directory.
     Work,
     /// One read-only lower layer.
     Lower,
@@ -164,7 +164,7 @@ pub enum RootBackingKind {
 pub struct RootBackingDirectoryObservation {
     /// Backing role.
     pub kind: RootBackingKind,
-    /// Actual path from the worker mount options.
+    /// Path from the worker mount options.
     pub path: String,
     /// Mount root from probe mount information.
     pub mount_root: String,
@@ -206,11 +206,11 @@ pub struct RootBackingDirectoryObservation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-/// Root overlay and its measured backing directories for one worker.
+/// Overlay filesystem root and its measured backing directories for one worker.
 pub struct RootBackingObservation {
-    /// Fixed worker role.
+    /// Worker role specified for this observation.
     pub role: WorkerRole,
-    /// Exact Docker container identity.
+    /// Docker container ID from the worker record.
     pub container_id: String,
     /// Linux guest boot UUID.
     pub guest_boot_id: String,
@@ -218,7 +218,7 @@ pub struct RootBackingObservation {
     pub init: ProcessWitness,
     /// Self-helper process identity.
     pub helper: ProcessWitness,
-    /// Actual root mount source.
+    /// Root mount source from mount information.
     pub mount_source: String,
     /// Root mount filesystem type.
     pub filesystem_type: String,
@@ -232,11 +232,11 @@ pub struct RootBackingObservation {
     pub mount_root: String,
     /// Root mount read-only state.
     pub read_only: bool,
-    /// Actual overlay upper directory.
+    /// Overlay upper directory read from the root mount data.
     pub upperdir: String,
-    /// Actual overlay work directory.
+    /// Overlay work directory read from the root mount data.
     pub workdir: String,
-    /// Actual overlay lower directories in order.
+    /// Overlay lower directories read from the root mount data, in order.
     pub lowerdirs: Vec<String>,
     /// Measurements for upper, work, and lower directories.
     pub directories: Vec<RootBackingDirectoryObservation>,
@@ -246,7 +246,7 @@ pub struct RootBackingObservation {
 #[serde(deny_unknown_fields)]
 /// Measured values for one cgroup node.
 pub struct CgroupNodeObservation {
-    /// Actual cgroup path.
+    /// Cgroup path read from procfs.
     pub path: String,
     /// True when this node is the hierarchy root.
     pub root: bool,
@@ -274,9 +274,9 @@ pub struct CgroupNodeObservation {
 #[serde(deny_unknown_fields)]
 /// One worker process and cgroup record.
 pub struct OwnedContainerCgroupObservation {
-    /// Fixed role for this observation.
+    /// Role specified for this observation.
     pub role: WorkerRole,
-    /// Exact Docker container identity.
+    /// Docker container ID from the worker record.
     pub container_id: String,
     /// Container init process witness.
     pub init: ProcessWitness,
@@ -300,9 +300,9 @@ pub struct OwnedCgroupObservation {
     pub guest_boot_id: String,
     /// Selected Docker-root observation.
     pub engine_metadata: StorageAttachmentObservation,
-    /// Selected Docker-root object identity.
+    /// Docker-root object identity selected for this engine.
     pub docker_root_object: DockerRootObjectIdentity,
-    /// Unique selected daemon process witness.
+    /// Daemon process identity selected for this engine.
     pub daemon: ProcessWitness,
     /// Runner then `DinD` observations.
     pub containers: Vec<OwnedContainerCgroupObservation>,
@@ -312,7 +312,7 @@ pub struct OwnedCgroupObservation {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-/// Exact selected Docker-root object identity.
+/// Docker-root object identity selected for this engine.
 pub struct DockerRootObjectIdentity {
     /// Mount ID from statx.
     pub mount_id: u64,

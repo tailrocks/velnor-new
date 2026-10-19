@@ -3,7 +3,7 @@ use serde::Serialize;
 /// One cgroup ancestor's effective CPU set and quota.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct CpuAncestorLimit {
-    /// Exact path, ordered from cgroup-v2 root toward the probe leaf's parent.
+    /// Path from the cgroup-v2 root toward the probe leaf's parent.
     pub path: String,
     /// CPU count in this cgroup's effective cpuset.
     pub cpuset_cpus_count: u32,
@@ -13,12 +13,12 @@ pub struct CpuAncestorLimit {
     pub cpu_period_micros: u64,
 }
 
-/// Version-5 bounded output record. `None` serializes as the required JSON `null` value.
+/// Version-5 output record with a size limit. The JSON value for `None` is `null`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ProbeRecord {
     /// Protocol schema version.
     pub schema_version: u8,
-    /// Fixed path that the probe measured.
+    /// Specified path that the probe measured.
     pub docker_root_mount_target: String,
     /// Mount source from mount information.
     pub docker_root_mount_source: String,

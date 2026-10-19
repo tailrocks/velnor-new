@@ -2,19 +2,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::execution_channel_wire::ExecutionChannelDirectory;
 
-/// One fixed request to publish the cache admission document.
+/// One request to publish the cache admission document.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct JobFactsPublicationContext {
     /// Wire schema version. The value must be one.
     pub schema_version: u8,
-    /// One durable publication operation identity.
+    /// Publication operation identity recorded in the journal.
     pub operation_id: String,
     /// Guest boot identity measured by the host.
     pub expected_guest_boot_id: String,
-    /// Canonical document bytes in lower-case hexadecimal form.
+    /// Document bytes in the specified JSON format, with hexadecimal encoding.
     pub payload_hex: String,
-    /// SHA-256 digest of the canonical document bytes.
+    /// SHA-256 digest of the document bytes.
     pub payload_sha256: String,
     /// Read-only `JobFacts` directory measured in the Runner namespace.
     pub expected_runner_job_facts: ExecutionChannelDirectory,
@@ -26,7 +26,7 @@ pub struct JobFactsPublicationContext {
 pub struct JobFactsPublicationRecord {
     /// Wire schema version. The value must be one.
     pub schema_version: u8,
-    /// One durable publication operation identity.
+    /// Publication operation identity recorded in the journal.
     pub operation_id: String,
     /// Guest boot identity read from procfs.
     pub guest_boot_id: String,
@@ -36,15 +36,15 @@ pub struct JobFactsPublicationRecord {
     pub payload_sha256: String,
     /// Measured `JobFacts` directory in the publisher namespace.
     pub directory: ExecutionChannelDirectory,
-    /// Actual published file and its backing filesystem facts.
+    /// Published file and its filesystem data.
     pub file: JobFactsPublicationFile,
 }
 
-/// Measured identity of the fixed admission file.
+/// Measured identity of the admission file.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct JobFactsPublicationFile {
-    /// Fixed destination path in the publisher container.
+    /// Destination path in the publisher container.
     pub path: String,
     /// File inode from the open descriptor.
     pub inode: u64,

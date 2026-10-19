@@ -310,7 +310,7 @@ mod tests {
     #[test]
     fn mount_namespace_identity_measures_nsfs_device_and_inode() {
         let identity = super::mount_namespace_identity(std::process::id())
-            .expect("current mount namespace is readable");
+            .expect("Read the current mount namespace.");
         assert_ne!([identity.device_major, identity.device_minor], [0, 0]);
         assert_ne!(identity.inode, 0);
     }

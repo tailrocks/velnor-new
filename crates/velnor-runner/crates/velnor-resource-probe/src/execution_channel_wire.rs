@@ -88,11 +88,11 @@ pub struct ExecutionRequestContext {
     pub expected_channel: ExecutionChannelObservation,
 }
 
-/// One bounded read result from the specified Runner inbox.
+/// One read result from the specified Runner inbox.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(tag = "status", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ExecutionRequestOutcome {
-    /// The fixed request path was absent on its initial no-follow open.
+    /// The request path was absent when the program first opened it without following links.
     NotYetPresent {
         /// Wire schema version. The value must be three.
         schema_version: u8,
@@ -100,7 +100,7 @@ pub enum ExecutionRequestOutcome {
         operation_id: String,
         /// Guest boot identity measured during the read.
         guest_boot_id: String,
-        /// Revalidated channel facts measured during the read.
+        /// Channel data read again during the request.
         channel: ExecutionChannelObservation,
     },
     /// A present request and its measured file identity.

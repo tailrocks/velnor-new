@@ -1,4 +1,4 @@
-//! Publish one checked cache admission document to the fixed Runner volume.
+//! Publish one cache admission document to the specified Runner volume.
 
 #[cfg(target_os = "linux")]
 mod publish;
@@ -13,11 +13,11 @@ pub const JOB_FACTS_REQUEST_LIMIT: usize = 160 * 1024;
 /// Maximum serialized result size for one `JobFacts` publication.
 pub const JOB_FACTS_RECORD_LIMIT: usize = 16 * 1024;
 
-/// Publish one bounded storage cache admission document at its fixed target.
+/// Publish one storage cache admission document at the specified path.
 ///
 /// # Errors
 ///
-/// Returns an error when the document, volume, file, or measured identity is unsafe.
+/// Returns an error when the document, volume, file, or identity does not meet its specified rules.
 #[cfg(target_os = "linux")]
 pub fn publish_job_facts(
     context: JobFactsPublicationContext,
