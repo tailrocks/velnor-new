@@ -33,6 +33,10 @@ pub const FINAL_JOB_ID: &str = CONTRACT_REQUIRED_JOB_ID;
 pub const FINAL_DISPLAY_NAME: &str = CONTRACT_REQUIRED_DISPLAY_NAME;
 /// Final gate condition (contract [`CONTRACT_REQUIRED_CONDITION`] alias).
 pub const FINAL_CONDITION: &str = CONTRACT_REQUIRED_CONDITION;
+
+/// Condition attached to report upload steps: they run even when the job
+/// fails or the run is cancelled.
+pub const UPLOAD_STEP_CONDITION: &str = "always()";
 /// Planner job ID: the sole matrix producer (contract alias).
 pub const PLAN_JOB_ID: &str = CONTRACT_PLAN_JOB_ID;
 /// Matrix consumer job ID.

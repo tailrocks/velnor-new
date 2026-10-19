@@ -35,7 +35,7 @@ pub(crate) enum AssignedPopulationBlock {
     UncertainPhysicalWork,
     /// The journal has more than one reservation for one request.
     DuplicateRequestReservation,
-    /// The assigned job count has no acquired request with the same identity.
+    /// A runner has no linked acquired request.
     MissingSourceWitness,
     /// An acquired request has no saved reservation with the same identity.
     ClosedUnproven,

@@ -94,7 +94,7 @@ fn run_control(
         .env_clear()
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()?;
     let Some(mut input) = child.stdin.take() else {
         return Err("helper stdin missing".into());
@@ -146,7 +146,9 @@ fn product_binary_kills_and_reaps_a_stalled_control_child_by_deadline() -> Resul
         Ok(())
     });
 
-    let output = run_control(state.path(), 8_000, false)?;
+    let started = Instant::now();
+    let output = run_control(state.path(), 3_000, false)?;
+    let elapsed = started.elapsed();
     let released = release_peer.send(()).is_ok();
     let peer_result = peer
         .join()
@@ -154,9 +156,43 @@ fn product_binary_kills_and_reaps_a_stalled_control_child_by_deadline() -> Resul
         .map_err(|error| error.to_string());
     peer_result?;
 
-    assert!(output.status.success());
+    assert!(
+        output.status.success(),
+        "The helper exited with {:?}, wrote {:?}, and reported {:?}.",
+        output.status,
+        output.stdout,
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert_eq!(output.stdout, b"false\n");
+    assert!(elapsed >= Duration::from_secs(2));
+    assert!(elapsed < Duration::from_secs(5));
     assert!(released, "The host did not send the request to the peer.");
+    assert_eq!(fs::read(state.path().join("drain"))?, TOKEN.as_bytes());
+    Ok(())
+}
+
+#[test]
+fn invalid_control_response_fails_without_a_boolean_result() -> Result<(), Box<dyn Error>> {
+    let state = OwnedState::new()?;
+    let listener = state.listener()?;
+    let peer = thread::spawn(move || -> Result<(), Box<dyn Error + Send + Sync>> {
+        let mut stream = accept(&listener)?;
+        read_request(&mut stream)?;
+        stream.write_all(&1_u32.to_be_bytes())?;
+        stream.write_all(b"{")?;
+        Ok(())
+    });
+
+    let started = Instant::now();
+    let output = run_control(state.path(), 2_000, false)?;
+    let elapsed = started.elapsed();
+    peer.join()
+        .map_err(|_| "peer panicked")?
+        .map_err(|error| error.to_string())?;
+
+    assert!(!output.status.success());
+    assert_eq!(output.stdout, Vec::<u8>::new());
+    assert!(elapsed < Duration::from_secs(5));
     assert_eq!(fs::read(state.path().join("drain"))?, TOKEN.as_bytes());
     Ok(())
 }

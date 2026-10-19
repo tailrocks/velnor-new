@@ -20,7 +20,7 @@ fn final_job() -> Result<(String, velnor_actions_contract::Job), RenderError> {
             merge_step(),
         ],
     );
-    job.condition = Some("always()".to_owned());
+    job.condition = Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     job.permissions = Some(Permissions {
         contents: PermissionLevel::Read,
         pull_requests: PermissionLevel::None,
@@ -141,7 +141,8 @@ fn merge_steps_carry_needs_channel_matching_final_needs() -> Result<(), RenderEr
             merge_step(),
         ],
     );
-    final_job.condition = Some("always()".to_owned());
+    final_job.condition =
+        Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     let ir = fixture_ir(vec![plan, (final_id, final_job)]);
     let text = strict(&ir, &fixture_ctx())?;
     assert_eq!(

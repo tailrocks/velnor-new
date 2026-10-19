@@ -289,7 +289,10 @@ const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 /// Curl stays HTTPS-only (`--proto '=https'`) over TLS 1.2+. Paths are
 /// double-quoted, and a seed with the wrong digest is never copied. Curl
 /// retries all failures up to five times, including a TLS EOF; certificate
-/// verification stays enabled.
+/// verification stays enabled. Every attempt is time-bounded
+/// (`--connect-timeout 15`, `--max-time 120`) and retrying stops after
+/// `--retry-max-time 180`, so a hung download during an Actions outage
+/// fails within about 5.5 minutes; the step's `timeout-minutes` backs it.
 /// Both checks inline that target's native digest utility. A shared hash
 /// prefix keeps each repeated step inside the 500_000-byte workflow cap.
 /// The staged path stays a literal `$RUNNER_TEMP/velnor/bin/velnor-actions-`
@@ -326,7 +329,7 @@ pub fn acquire_script_argv(
         });
     }
     let script = format!(
-        "d=\"{staged}\"&&mkdir -p \"${{d%/*}}\"&&s=\"{seed_root}/generator/${{d##*/}}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|{digest};then cp \"$s\" \"$d\";else curl -fsSL --retry 5 --retry-all-errors --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|{digest};fi&&chmod +x \"$d\""
+        "d=\"{staged}\"&&mkdir -p \"${{d%/*}}\"&&s=\"{seed_root}/generator/${{d##*/}}\"&&p=\"$VELNOR_ASSET_SHA256  \"&&if [ -f \"$s\" ]&&echo \"$p$s\"|{digest};then cp \"$s\" \"$d\";else curl -fsSL --connect-timeout 15 --max-time 120 --retry 5 --retry-all-errors --retry-max-time 180 --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&echo \"$p$d\"|{digest};fi&&chmod +x \"$d\""
     );
     Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
 }

@@ -122,6 +122,14 @@ pub const CANDIDATE_OUTPUT_DIR: &str = "$RUNNER_TEMP/velnor/candidate-output";
 pub const CANDIDATE_STAGE_DIR: &str = "$RUNNER_TEMP/velnor/candidate";
 /// Contract-fixed display name of the helper-staging step.
 pub const ACQUIRE_NAME: &str = "Acquire Velnor";
+
+/// `timeout-minutes` of the Acquire step.
+///
+/// The curl inside is bounded to a worst case of about 5.5 minutes
+/// (`--retry-max-time 180` plus one `--max-time 120` attempt plus retry
+/// delays), so a hung download fails the step instead of waiting for the
+/// job timeout during a GitHub outage.
+pub const ACQUIRE_TIMEOUT_MINUTES: i64 = 6;
 /// Run-key expression (`r<run-id>-a<run-attempt>`, workflow-contract §3).
 pub const RUN_KEY_EXPR: &str = "r${{ github.run_id }}-a${{ github.run_attempt }}";
 /// Display name of the matrix-report upload step.

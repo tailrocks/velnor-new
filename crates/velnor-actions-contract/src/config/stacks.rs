@@ -8,7 +8,7 @@ use crate::discover::Stack;
 use crate::errors::ContractError;
 use crate::ids::is_component_byte;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Stack selection and per-stack options.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -73,6 +73,27 @@ pub struct RustStackConfig {
     /// Named Nextest suites (`[[stacks.rust.suites]]`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub suites: Vec<RustSuiteConfig>,
+    /// Per-package options (`[stacks.rust.crates.<package>]`), keyed by Cargo package name.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub crates: BTreeMap<String, RustCrateConfig>,
+}
+
+/// Largest accepted per-crate `build_jobs`.
+pub const MAX_CRATE_BUILD_JOBS: u32 = 64;
+
+/// Per-package Rust options (`[stacks.rust.crates.<package>]`).
+///
+/// `build_jobs` caps Cargo's parallel compiler processes
+/// (`CARGO_BUILD_JOBS`) for every Cargo step of that package's crate job:
+/// the test-executable build and each parallel check. It bounds peak memory
+/// for crates whose rustc processes are large (a lib and its unit-test
+/// harness compiled together can need several GiB each). It never exceeds
+/// `resources.compiler_process_budget`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RustCrateConfig {
+    /// Cargo compiler process cap for this package's crate job.
+    pub build_jobs: u32,
 }
 
 /// Documented default: one `default` configuration variant list.
@@ -154,6 +175,7 @@ impl RustStackConfig {
             release: RustReleaseConfig::default(),
             binary_release: RustBinaryReleaseConfig::default(),
             suites: Vec::new(),
+            crates: BTreeMap::new(),
         }
     }
 }
@@ -283,6 +305,32 @@ impl RustStackConfig {
         self.release.validate(file)?;
         self.binary_release.validate(file)?;
         validate_rust_suites(&self.suites, file)?;
+        self.validate_crates(file)
+    }
+
+    /// Validate per-package options: package-name grammar and `build_jobs` range.
+    fn validate_crates(&self, file: &str) -> Result<(), ContractError> {
+        for (package, options) in &self.crates {
+            let path = format!("stacks.rust.crates.{package}");
+            if package.is_empty()
+                || !package
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+            {
+                return Err(ContractError::config(
+                    file,
+                    "stacks.rust.crates",
+                    format!("bad_package_name:{package}"),
+                ));
+            }
+            if !(1..=MAX_CRATE_BUILD_JOBS).contains(&options.build_jobs) {
+                return Err(ContractError::config(
+                    file,
+                    format!("{path}.build_jobs"),
+                    format!("must_be_between_1_and_{MAX_CRATE_BUILD_JOBS}"),
+                ));
+            }
+        }
         Ok(())
     }
 }

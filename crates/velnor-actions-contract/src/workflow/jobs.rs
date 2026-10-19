@@ -46,8 +46,14 @@ pub const PLAN_DISPLAY_NAME: &str = "Plan";
 /// Display name of the required gate.
 pub const REQUIRED_DISPLAY_NAME: &str = "Required";
 
-/// Required-gate run condition: always runs, judges every conclusion.
-pub const REQUIRED_CONDITION: &str = "always()";
+/// The Required job checks failed or skipped dependencies.
+/// It does not run after cancellation.
+///
+/// `always()` kept the concurrency group active after cancellation.
+/// `!cancelled()` is a status function.
+/// GitHub does not add the implicit `success()` condition.
+/// Required still checks failed or skipped dependencies.
+pub const REQUIRED_CONDITION: &str = "${{ !cancelled() }}";
 
 /// Weekly upstream-freshness schedule (Mondays 06:00 UTC).
 pub const FRESHNESS_CRON_WEEKLY: &str = "0 6 * * 1";

@@ -151,6 +151,16 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # test_runner = "cargo_test"       # Sticky override: "cargo_test" (default) or "cargo_nextest". Without it, .config/nextest.toml selects Nextest ([profile.ci] when declared, else the documented default profile).
 # Do not put free-form Mise commands in credential-bearing Rust jobs.
 
+# Optional per-package Cargo compile parallelism cap for memory-heavy crates.
+# [stacks.rust.crates.repo-scan]
+# build_jobs = 1                   # CARGO_BUILD_JOBS for every Cargo step of that crate job; 1..=64 and at most resources.compiler_process_budget. The package must exist.
+
+# Optional generated .github/dco.yml for the cncf/dco2 GitHub App. Absent emits no file.
+# [dco]
+# allow_override_action = true      # allowOverrideAction: show the "Set DCO to pass" button.
+# allow_remediation_commits = { individual = true, third_party = true }  # third_party requires individual.
+# require = { members = false }     # members = false exempts organization members from sign-off.
+
 # Optional single-package native binary release workflow (consumer-v1 only).
 # [stacks.rust.binary_release]
 # enabled = true

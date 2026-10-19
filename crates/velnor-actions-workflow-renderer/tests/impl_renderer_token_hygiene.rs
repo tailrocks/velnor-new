@@ -103,7 +103,8 @@ fn token_hygiene_allows_final_fetch_token() -> Result<(), RenderError> {
             merge_step(),
         ],
     );
-    final_job.condition = Some("always()".to_owned());
+    final_job.condition =
+        Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     final_job.permissions = Some(Permissions {
         contents: PermissionLevel::Read,
         pull_requests: PermissionLevel::None,

@@ -368,7 +368,8 @@ fn strict_leaves_setup_less_jobs_without_tools_cache()
         vec!["plan".to_owned()],
         vec![acquire_fixture()?, merge_step()],
     );
-    final_job.1.condition = Some("always()".to_owned());
+    final_job.1.condition =
+        Some(velnor_actions_workflow_renderer::render::FINAL_CONDITION.to_owned());
     let text = strict(&fixture_ir(vec![plan, final_job]), &fixture_ctx())?;
     let names = step_names(&text, "required");
     assert!(

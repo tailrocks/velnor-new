@@ -9,6 +9,10 @@ generator_validation = "bootstrap"
 max_parallel_jobs = 2
 pull_request_cache_policy = "same-repository-scoped"
 
+[dco]
+# The dco-2 app is installed organization-wide; this repository requires no sign-off.
+require = { members = false }
+
 [resources]
 compiler_process_budget = 2
 test_process_budget = 2

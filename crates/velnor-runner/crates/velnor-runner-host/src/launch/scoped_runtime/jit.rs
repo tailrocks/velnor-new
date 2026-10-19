@@ -9,6 +9,9 @@ use crate::launch::VerifiedWorkerImages;
 use crate::worker::execution_authorization::{VerifiedProofChannelBinding, measure_proof_channel};
 
 #[cfg(test)]
+#[path = "jit/acquired_resume_tests.rs"]
+mod acquired_resume_tests;
+#[cfg(test)]
 #[path = "jit/tests.rs"]
 mod tests;
 

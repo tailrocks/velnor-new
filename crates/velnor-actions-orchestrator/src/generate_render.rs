@@ -80,6 +80,11 @@ pub(super) fn render_all(
     extra.extend(crate::rust_suites_emit::suite_workflow_files(
         prep, &routing,
     )?);
+    if let Some(dco) = &prep.config.dco {
+        extra.push(velnor_actions_workflow_renderer::dco::render_dco_yml(
+            dco, version,
+        )?);
+    }
     extra.extend(rendered.shared);
     let tree = render_tree_with_claude_mode(
         &workflow,

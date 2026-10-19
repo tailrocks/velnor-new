@@ -1,0 +1,35 @@
+{
+  "base": "30efd68734d18dfdefede57c0904dd0809a206cc",
+  "checks": [
+    {
+      "result": "PASS",
+      "run_id": "00a71736-e20e-4c6e-b04b-87c2d7e83789",
+      "log": "/Users/donbeave/Downloads/velnor-goal/evidence/test-repairs-shipping-nextest-20261020.log",
+      "sha256": "2f3f86b998bb3995aa33f74c1fa80abc5f4895e89e93b1c46f4abb188fb70abc",
+      "summary": [
+        "Summary [   5.039s] 4 tests run: 4 passed, 1144 skipped"
+      ]
+    },
+    {
+      "result": "PASS",
+      "run_id": "97028841-28ed-48b9-be1a-2cf94db6662b",
+      "log": "/Users/donbeave/Downloads/velnor-goal/evidence/control-cleanup-shipping-nextest-20261020.log",
+      "sha256": "8dbb64d807fbc7d45a21c5da027fe9d56a91b01292e68f3cbbc77d06512f2d2c",
+      "summary": [
+        "Summary [   4.299s] 9 tests run: 9 passed, 1139 skipped"
+      ]
+    },
+    {
+      "name": "version_seven_fixture",
+      "result": "PASS",
+      "run_id": "146fef03-c052-4c14-8d4b-c9350e9cb6db",
+      "count": 2,
+      "log": "/Users/donbeave/Downloads/velnor-goal/evidence/v7-fixture-shipping-final-nextest-20261020.log",
+      "sha256": "ecbd45aa87a16bdb65196ccde5cb913f5716ffa1dd9e46a907b29adc504c94fc",
+      "historical_source": "488f106bad62ed3b9c94acd3744a5a1614a238ee",
+      "scope": "empty_database"
+    }
+  ],
+  "live_docker_recovery": "NOT_RUN",
+  "full_gate": "NOT_RUN"
+}

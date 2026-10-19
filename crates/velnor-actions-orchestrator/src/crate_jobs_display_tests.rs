@@ -47,6 +47,7 @@ fn id_and_display_prefixes_agree_per_partition() {
         timeout: velnor_actions_contract::JobTimeout::CRATE,
         helper_version: env!("CARGO_PKG_VERSION"),
         cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        crates: &std::collections::BTreeMap::new(),
     })
     .expect("crate jobs");
     assert_eq!(found.jobs.len(), 4, "one job for each package or root");

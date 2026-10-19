@@ -1,4 +1,4 @@
-//! Saved state for an acquired request that can resume before JIT.
+//! Saved state for an acquired request that can continue before JIT.
 
 use crate::error::HostError;
 use crate::journal::connection::storage::in_transaction;

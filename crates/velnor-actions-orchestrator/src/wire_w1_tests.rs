@@ -163,7 +163,6 @@ fn crate_tools_follow_selection_with_validators() {
                 "triple follows the rust role: {env:?}"
             );
         }
-        assert_eq!(declared_config_variables(), [] as [String; 0]);
     }
 }
 
@@ -317,4 +316,62 @@ fn pure_tofu_crate_jobs_never_install_the_repo_mr_boxington_pin() {
             }
         }
     }
+}
+
+#[test]
+fn native_variables_are_exact_sorted_deduplicated_and_enabled_only() {
+    let root = tempfile::tempdir().expect("repository");
+    std::fs::create_dir(root.path().join(".velnor")).expect("config directory");
+    std::fs::write(
+        root.path().join(".velnor/config.toml"),
+        "schema = 1\n[workflow]\nname = 'CI'\n",
+    )
+    .expect("config");
+    let mut config = crate::config::load_config(root.path()).expect("default config");
+    assert_eq!(declared_config_variables(&config), Vec::<String>::new());
+    config.workflow.review_completion = Some(
+        toml::from_str(
+            r#"provider = "codex-v1"
+check_name = "Review completion"
+app_id_variable = "CUSTOM_C"
+app_private_key_secret = "PRIVATE_C_KEY"
+reviewer_app_id_variable = "CUSTOM_R"
+"#,
+        )
+        .expect("completion"),
+    );
+    assert_eq!(declared_config_variables(&config), ["CUSTOM_C", "CUSTOM_R"]);
+    let mut tap = crate::tap_test_support::policy();
+    tap.enabled = false;
+    config.distribution.homebrew_tap = Some(tap.clone());
+    assert_eq!(declared_config_variables(&config), ["CUSTOM_C", "CUSTOM_R"]);
+    tap.enabled = true;
+    tap.app_id_variable = "CUSTOM_W".to_owned();
+    tap.protection_observer.app_id_variable = "CUSTOM_O".to_owned();
+    tap.review_completion.app_id_variable = "CUSTOM_C".to_owned();
+    tap.review_completion.expected_reviewers = vec![
+        velnor_actions_contract::config::ReviewAppIdentity {
+            app_id_variable: "CUSTOM_R".to_owned(),
+        },
+        velnor_actions_contract::config::ReviewAppIdentity {
+            app_id_variable: "ANOTHER_R".to_owned(),
+        },
+    ];
+    config.distribution.homebrew_tap = Some(tap);
+    assert_eq!(
+        declared_config_variables(&config),
+        ["ANOTHER_R", "CUSTOM_C", "CUSTOM_O", "CUSTOM_R", "CUSTOM_W"]
+    );
+    config.workflow.review_completion = None;
+    assert_eq!(
+        declared_config_variables(&config),
+        ["ANOTHER_R", "CUSTOM_C", "CUSTOM_O", "CUSTOM_R", "CUSTOM_W"]
+    );
+    config
+        .distribution
+        .homebrew_tap
+        .as_mut()
+        .expect("tap")
+        .enabled = false;
+    assert_eq!(declared_config_variables(&config), Vec::<String>::new());
 }

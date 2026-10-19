@@ -17,7 +17,7 @@ pub(crate) struct RecoveryObservation {
 }
 
 impl Observation {
-    /// Link this guest sample to the existing reservation and selected engine.
+    /// Check this guest resource sample against the existing charge and selected engine.
     pub(crate) fn into_recovery_observation(
         self,
         budget: ResourceBudget,

@@ -254,6 +254,7 @@ fn release_wired_into_stack_validation_with_key_paths() {
         release: valid_release(),
         binary_release: RustBinaryReleaseConfig::default(),
         suites: Vec::new(),
+        crates: std::collections::BTreeMap::new(),
     };
     assert_eq!(stack.validate(FILE), Ok(()));
     let mut bad = stack.clone();

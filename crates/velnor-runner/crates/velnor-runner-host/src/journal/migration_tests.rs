@@ -5,6 +5,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::Journal;
 
+#[path = "migration_tests/version_seven_fixture.rs"]
+pub(super) mod version_seven_fixture;
+
 struct Scratch(PathBuf);
 
 impl Scratch {
@@ -443,20 +446,14 @@ async fn version_four_migration_validates_connection_and_remote_tables() {
 async fn version_seven_migration_installs_current_source_authorization_schema() {
     let scratch = Scratch::new();
     let path = scratch.file();
-    drop(Journal::open(&path).await.expect("initial schema"));
     let database = turso::Builder::new_local(path.to_str().expect("UTF-8 temp path"))
         .build()
         .await
-        .expect("open SQLite");
-    let connection = database.connect().expect("connect SQLite");
-    connection
-        .execute("DROP TABLE connection_source_authorizations", ())
+        .expect("open historical SQLite");
+    let connection = database.connect().expect("connect historical SQLite");
+    version_seven_fixture::install(&connection)
         .await
-        .expect("restore version-seven shape");
-    connection
-        .execute("PRAGMA user_version = 7", ())
-        .await
-        .expect("mark version seven");
+        .expect("install version 7 schema");
     drop(connection);
     drop(database);
 
@@ -572,20 +569,14 @@ async fn version_seventeen_requires_complete_provisioning_cleanup_schema() {
 async fn version_seven_migration_rejects_malformed_source_table_atomically() {
     let scratch = Scratch::new();
     let path = scratch.file();
-    drop(Journal::open(&path).await.expect("initial schema"));
     let database = turso::Builder::new_local(path.to_str().expect("UTF-8 temp path"))
         .build()
         .await
-        .expect("open SQLite");
-    let connection = database.connect().expect("connect SQLite");
-    connection
-        .execute("DROP INDEX connection_source_authorization_intent", ())
+        .expect("open historical SQLite");
+    let connection = database.connect().expect("connect historical SQLite");
+    version_seven_fixture::install(&connection)
         .await
-        .expect("drop source index");
-    connection
-        .execute("DROP TABLE connection_source_authorizations", ())
-        .await
-        .expect("drop source table");
+        .expect("install version 7 schema");
     connection
         .execute(
             "CREATE TABLE connection_source_authorizations (connection_id TEXT, request_id INTEGER)",
@@ -593,10 +584,6 @@ async fn version_seven_migration_rejects_malformed_source_table_atomically() {
         )
         .await
         .expect("create malformed source table");
-    connection
-        .execute("PRAGMA user_version = 7", ())
-        .await
-        .expect("mark version seven");
     drop(connection);
     drop(database);
 

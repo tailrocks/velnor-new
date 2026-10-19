@@ -111,7 +111,7 @@ pub(super) async fn poll_positive_connection(
     Ok(outcome)
 }
 
-/// Resume an acquired request only when the plan names its existing reservation.
+/// Continue an acquired request only when the plan names its existing reservation.
 pub(super) async fn reconcile_assigned_population(
     prepared: &mut PreparedConnection,
     context: &PositivePollContext<'_>,
@@ -210,7 +210,7 @@ pub(super) async fn reconcile_assigned_population(
             }
             Err(error) => {
                 eprintln!(
-                    "Recovery paused for this request. connection={} request={} reason={error}",
+                    "The controller cannot continue recovery for this request. connection={} request={} reason={error}",
                     prepared.binding.connection_id, request_id
                 );
             }

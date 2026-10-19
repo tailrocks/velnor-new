@@ -7,6 +7,7 @@ mod agents;
 mod binary_release;
 mod build_task;
 mod check_receipt_budget;
+mod dco;
 mod discovery;
 mod distribution;
 mod execution;
@@ -52,6 +53,7 @@ pub use check_receipt_budget::{
     MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, MAX_CHECK_SOURCE_BYTES,
     MAX_CHECK_SYSTEM_VERSION_BYTES, check_execution_receipt_upper_bound,
 };
+pub use dco::{DCO_CONFIG_PATH, DcoConfig, DcoRemediationCommits, DcoRequire};
 pub use discovery::DiscoveryConfig;
 pub use distribution::{
     DistributionConfig, ExactHeadReviewCheck, HomebrewTapConfig, HomebrewTapProtectionObserver,
@@ -99,8 +101,8 @@ pub use rust_suites_validate::{
     validate_preserve_workflows, validate_rust_suites, validate_suites_with_dispatch,
 };
 pub use stacks::{
-    DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
-    is_valid_feature_name, is_valid_rust_target,
+    DeclaredCompileDriver, DeclaredTestRunner, MAX_CRATE_BUILD_JOBS, RustConfiguration,
+    RustCrateConfig, RustStackConfig, StacksConfig, is_valid_feature_name, is_valid_rust_target,
 };
 pub use task_source::MiseTaskSource;
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
@@ -147,6 +149,9 @@ pub struct VelnorConfig {
     /// Agent instruction file policy (`[agents]`).
     #[serde(default, skip_serializing_if = "AgentsConfig::is_default")]
     pub agents: AgentsConfig,
+    /// Generated dco2 configuration (`[dco]`); absent emits no `.github/dco.yml`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dco: Option<DcoConfig>,
     /// Schema 2 routing. Absent on schema 1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution: Option<ExecutionConfig>,
@@ -180,6 +185,9 @@ impl VelnorConfig {
         self.test_sharding.validate(file)?;
         self.stacks.validate(file)?;
         self.tools.validate(file)?;
+        if let Some(dco) = &self.dco {
+            dco.validate(file)?;
+        }
         self.check_toolchain_consistency(file)?;
         let suites = self.stacks.rust.as_ref().map_or(&[][..], |r| &r.suites);
         validate_suites_with_dispatch(suites, &self.workflow.dispatch, file)?;
@@ -218,6 +226,7 @@ impl VelnorConfig {
         job_authority::validate_job_authority_bindings(&self.job_authority, file)?;
         self.check_distribution_source(file)?;
         self.check_preview_tools(file)?;
+        self.check_crate_build_jobs(file)?;
         self.discovery.validate(file)?;
         self.actions.validate(file)?;
         validate_qualified_tools(&self.qualified_tools, file)?;

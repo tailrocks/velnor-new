@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.22
+Velnor Actions plan 0.1.24
 Repository: <repo>
 
 Detected stacks
@@ -18,7 +18,7 @@ Detected stacks
     - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib, test; depends on velnor-runner-core, velnor-runner-host]
     - velnor-runner-core (crates/velnor-runner/crates/velnor-runner-core/Cargo.toml) [lib, test]
     - velnor-runner-github (crates/velnor-runner/crates/velnor-runner-github/Cargo.toml) [lib, test; depends on velnor-runner-core]
-    - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [lib; depends on velnor-runner-core, velnor-runner-github]
+    - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [lib; depends on velnor-resource-probe, velnor-runner-core, velnor-runner-github]
   Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
     evidence .config/nextest.toml:4 [profile.ci] [durable]
@@ -35,6 +35,7 @@ Workflow to generate
   .github/actionlint.yaml
   .github/workflows/ci.yml
   .github/workflows/freshness.yml
+  .github/dco.yml
   Workflow: CI (velnor-repository-v1)
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
@@ -45,7 +46,7 @@ Workflow to generate
     - cargo-machete (11 steps)
     - plan (19 steps)
     - publish-baseline (7 steps)
-    - required (11 steps)
+    - required (10 steps)
     - rust-velnor-actions-actionlint (26 steps)
     - rust-velnor-actions-cli (26 steps)
     - rust-velnor-actions-contract (25 steps)

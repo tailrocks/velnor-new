@@ -6,8 +6,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CrateJob, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig, WorkflowPolicy,
-    crate_display_name, tofu_display_name,
+    CrateJob, Job, JobTimeout, ProposedTask, RustCrateConfig, Stack, Step, VelnorConfig,
+    WorkflowPolicy, crate_display_name, tofu_display_name,
 };
 #[cfg(test)]
 use velnor_actions_mise::PinnedTool;
@@ -22,6 +22,12 @@ use crate::crate_job_ids::{
 };
 use crate::discover::Discovery;
 use crate::internal::internal;
+
+#[path = "crate_jobs_build_jobs.rs"]
+mod build_jobs;
+use build_jobs::{cap_cargo_jobs, reject_unknown_crates};
+
+static NO_CRATE_CONFIGS: BTreeMap<String, RustCrateConfig> = BTreeMap::new();
 
 #[path = "crate_jobs_obligations.rs"]
 mod obligations;
@@ -92,6 +98,12 @@ pub(crate) fn workflow_job_inputs<'a>(
     acquire: Option<&'a Step>,
     helper_version: &'a str,
 ) -> Result<CrateJobInputs<'a>, OrchestratorError> {
+    let crates = config
+        .stacks
+        .rust
+        .as_ref()
+        .map_or(&NO_CRATE_CONFIGS, |rust| &rust.crates);
+    reject_unknown_crates(crates, discovery)?;
     Ok(CrateJobInputs {
         label,
         policy: config.workflow.policy,
@@ -104,6 +116,7 @@ pub(crate) fn workflow_job_inputs<'a>(
             .map_err(crate::internal::internal_contract)?,
         helper_version,
         cache_policy: config.workflow.pull_request_cache_policy,
+        crates,
     })
 }
 
@@ -121,6 +134,8 @@ pub(crate) struct CrateJobInputs<'a> {
     pub(crate) timeout: JobTimeout,
     pub(crate) helper_version: &'a str,
     pub(crate) cache_policy: velnor_actions_contract::PullRequestCachePolicy,
+    /// Per-package Rust options keyed by Cargo package name.
+    pub(crate) crates: &'a BTreeMap<String, RustCrateConfig>,
 }
 
 /// Build one ordered IR job per runnable crate from discovery proposals.
@@ -153,6 +168,7 @@ pub(crate) fn build_qualification_crate_jobs(
         .filter(|task| is_runnable(task) && Stack::from_id(&task.stack_id) == Some(Stack::Tofu))
         .collect();
     tasks.sort_by(|left, right| left.task_id.cmp(&right.task_id));
+    reject_unknown_crates(input.crates, input.discovery)?;
     let grouped = group_runnable(&input.discovery.proposals)?;
     let owners = JobOwners::from_grouped(&input.discovery.proposals, &grouped);
     let mut jobs = Vec::with_capacity(tasks.len());
@@ -300,6 +316,12 @@ fn build_job_for_members(
         needs,
         qualification,
     )?;
+    let mut job = job;
+    if use_rust && let Some(options) = input.crates.get(&first.display_name) {
+        for step in &mut job.steps {
+            cap_cargo_jobs(step, options.build_jobs);
+        }
+    }
     Ok((job, driver, use_opentofu))
 }
 

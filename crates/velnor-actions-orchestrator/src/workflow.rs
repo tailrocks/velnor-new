@@ -257,7 +257,7 @@ fn actionlint_input(config: &VelnorConfig, version: &str, label: &str) -> Action
     let policy = config.workflow.policy;
     let mut input = ActionlintConfigInput::new(version)
         .with_workflow_path(WORKFLOW_PATH)
-        .with_config_variables(wire_w1::declared_config_variables())
+        .with_config_variables(wire_w1::declared_config_variables(config))
         .with_runner_label(label);
     if let Some(execution) = &config.execution {
         input.extra_runner_labels = execution.actionlint_labels();

@@ -241,7 +241,7 @@ fn drive(fixture: &Fixture, state: &std::path::Path) -> Drive {
         repo: "repository".to_owned(),
         pat: "test-token".to_owned(),
         connection: Some(fixture.binding.clone()),
-        authority_policy: None,
+        authority_policy: Some(fixture.authority_policy.clone()),
         host_journal: Some(fixture.journal.clone()),
         scoped_journal: Some(fixture.scope.clone()),
         allocated_header: 1,

@@ -114,6 +114,9 @@ struct PartialConfig {
     /// Agent instruction file policy.
     #[serde(default)]
     agents: velnor_actions_contract::AgentsConfig,
+    /// Generated dco2 configuration.
+    #[serde(default)]
+    dco: Option<velnor_actions_contract::DcoConfig>,
     /// Schema 2 routing section.
     #[serde(default)]
     execution: Option<velnor_actions_contract::ExecutionConfig>,
@@ -231,6 +234,7 @@ impl PartialConfig {
             discovery: self.discovery.materialize(),
             actions: self.actions.materialize(),
             agents: self.agents,
+            dco: self.dco,
             execution: self.execution,
             checks: self.checks,
             qualified_tools: self.qualified_tools,

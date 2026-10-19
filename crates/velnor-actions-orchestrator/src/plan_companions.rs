@@ -8,6 +8,12 @@ pub(super) fn file_lines(out: &mut String, prep: &GenerationPreparation) {
     freshness_file_lines(out, prep);
     owned_tool_file_lines(out, prep);
     tofu_apply_file_lines(out, prep);
+    if prep.config.dco.is_some() {
+        push(
+            out,
+            &format!("  {}", velnor_actions_contract::DCO_CONFIG_PATH),
+        );
+    }
     if prep
         .config
         .stacks
