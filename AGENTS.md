@@ -5,6 +5,7 @@
   - [actions/scaleset](https://github.com/actions/scaleset)
   - [actions/runner-images](https://github.com/actions/runner-images)
   Always check the original source code for compatibility and make it clear in reference doc files (`docs/proposed/github-actions-reference.md`). Never guess protocol contracts or operational semantics.
+- Previous Velnor reference: [tailrocks/velnor](https://github.com/tailrocks/velnor) contains earlier Velnor experiments. Consult its code, designs, tests, and results when they can help the current task. Reuse or adapt suitable code after independent checks against current requirements and contracts. Use that repository as a reference, not an authority. Reject approaches that fail current requirements or have less useful results. Do not copy code or keep old behavior only because that repository contains it.
 - No legacy code. Finish every migration: remove old paths completely—no compatibility shims, aliases, or deprecation periods. Breaking changes are preferred.
 - Research project: unsafe, breaking changes expected, never production-ready. Break things when needed; deliver fast.
 - Requirements and adopted contracts: read `docs/reviews/pr-1.md`, `docs/reviews/pr-1-adoption.md`, and `docs/reviews/pr-1-disposition.md`. Specifications live in `docs/proposed/*` (OpenTofu: `docs/proposed/opentofu-contract.md`), and procedures live in `docs/implemented/*`. Pins and exceptions: `.velnor/version-policy.toml` and `.velnor/freshness-inventory.json`.
