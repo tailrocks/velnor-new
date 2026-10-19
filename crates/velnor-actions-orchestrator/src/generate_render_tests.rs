@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use velnor_actions_contract::config::{
     CheckExecutor, CheckPlatform, CheckRunner, EPHEMERAL_CHECK_ADMISSION_CONDITION,
@@ -16,6 +15,7 @@ use velnor_actions_workflow_renderer::WorkflowRoutingPolicy;
 use velnor_actions_workflow_renderer::render::RenderedFile;
 
 use super::validate_final_routing;
+use crate::git_fixture;
 
 const IMAGE: &str = "ghcr.io/tailrocks/velnor-job@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
@@ -212,9 +212,9 @@ fn full_generator_renders_typed_native_check_before_its_final_audit() {
 
 fn isolated_generation_root(source: &Path) -> tempfile::TempDir {
     let temporary = tempfile::tempdir().expect("temporary generation root");
-    let output = fixture_git_command()
+    let output = git_fixture::command(source)
+        .expect("source Git authority is available")
         .args(["ls-files", "-z"])
-        .current_dir(source)
         .output()
         .expect("tracked file list is available");
     assert!(output.status.success(), "tracked file listing succeeds");
@@ -225,9 +225,9 @@ fn isolated_generation_root(source: &Path) -> tempfile::TempDir {
 }
 
 fn initialize_fixture_git(source: &Path, root: &Path) {
-    let remote = fixture_git_command()
+    let remote = git_fixture::command(source)
+        .expect("source Git authority is available")
         .args(["remote", "get-url", "origin"])
-        .current_dir(source)
         .output()
         .expect("source origin is readable");
     assert!(remote.status.success(), "source origin is readable");
@@ -237,7 +237,16 @@ fn initialize_fixture_git(source: &Path, root: &Path) {
         .to_owned();
     assert!(!remote.is_empty(), "source origin is not empty");
 
-    run_git(root, ["init", "--quiet"]);
+    let initialized = git_fixture::sterile_command()
+        .current_dir(root)
+        .args(["init", "--quiet"])
+        .output()
+        .expect("fixture Git command starts");
+    assert!(
+        initialized.status.success(),
+        "fixture Git command succeeds: {}",
+        String::from_utf8_lossy(&initialized.stderr)
+    );
     run_git(root, ["remote", "add", "origin", remote.as_str()]);
     run_git(root, ["add", "--all"]);
     assert!(
@@ -247,9 +256,9 @@ fn initialize_fixture_git(source: &Path, root: &Path) {
 }
 
 fn run_git<const N: usize>(root: &Path, args: [&str; N]) {
-    let output = fixture_git_command()
+    let output = git_fixture::command(root)
+        .expect("fixture Git authority is available")
         .args(args)
-        .current_dir(root)
         .output()
         .expect("fixture Git command starts");
     assert!(
@@ -257,16 +266,6 @@ fn run_git<const N: usize>(root: &Path, args: [&str; N]) {
         "fixture Git command succeeds: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-}
-
-fn fixture_git_command() -> Command {
-    let mut command = Command::new("git");
-    for (name, _) in
-        std::env::vars_os().filter(|(name, _)| name.to_string_lossy().starts_with("GIT_"))
-    {
-        command.env_remove(name);
-    }
-    command
 }
 
 fn copy_tracked_files(source: &Path, destination: &Path, listing: &[u8]) {
