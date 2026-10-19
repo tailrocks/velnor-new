@@ -8,10 +8,15 @@ use velnor_runner_github::Method;
 use super::support::{
     FakeLane, Fixture, REQUEST_ID, SET_ID, exchange, fixture_storage, selected_engine, test_images,
 };
+use crate::launch::Drive;
 use crate::launch::resource_probe::StartPermit;
 use crate::launch::steps::scoped::{acquire, runner};
 use crate::worker::{self, test_resource_budget};
 
+#[path = "docker_pair/bootstrap_start.rs"]
+mod bootstrap_start;
+#[path = "docker_pair/request_checks.rs"]
+mod request_checks;
 #[path = "docker_pair/server.rs"]
 mod server;
 
@@ -151,40 +156,67 @@ impl PairSetup {
         let started = match started {
             Ok(started) => started,
             Err(error) => {
-                let detail = start_error
-                    .lock()
-                    .ok()
-                    .and_then(|slot| slot.clone())
-                    .unwrap_or_else(|| "no callback error".to_owned());
-                let intent = fixture
-                    .scope
-                    .intent(physical.intent_id)
-                    .await
-                    .map(|row| format!("{row:?}"))
-                    .unwrap_or_else(|journal_error| format!("intent read failed: {journal_error}"));
-                return Err(format!(
-                    "{error} after {} GitHub calls; stage error: {detail}; intent: {intent}",
-                    lane.methods.len(),
-                ));
+                return Err(start_failure_detail(
+                    &fixture,
+                    physical.intent_id,
+                    &lane,
+                    &start_error,
+                    error,
+                )
+                .await);
             }
         };
-        let methods = lane.methods;
-        let api = docker_api.finish().await?;
-        let occupied_reservations = fixture
-            .journal
-            .occupied_reservation_count()
-            .await
-            .map_err(|error| error.to_string())?;
-        Ok(PairResult {
-            started,
-            methods,
-            requests: api.requests,
-            jit_input: api.jit_input,
-            images,
-            state_root: state.path.clone(),
-            occupied_reservations,
-        })
+        collect_pair_result(started, lane, docker_api, fixture, images, state).await
     }
+}
+
+async fn collect_pair_result(
+    started: crate::worker::Started,
+    lane: FakeLane,
+    docker_api: PairDockerApi,
+    fixture: Fixture,
+    images: crate::launch::VerifiedWorkerImages,
+    state: PrivateState,
+) -> Result<PairResult, String> {
+    let api = docker_api.finish().await?;
+    let occupied_reservations = fixture
+        .journal
+        .occupied_reservation_count()
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(PairResult {
+        started,
+        methods: lane.methods,
+        requests: api.requests,
+        jit_input: api.jit_input,
+        images,
+        state_root: state.path.clone(),
+        occupied_reservations,
+    })
+}
+
+async fn start_failure_detail(
+    fixture: &Fixture,
+    intent_id: i64,
+    lane: &FakeLane,
+    start_error: &Mutex<Option<String>>,
+    error: impl std::fmt::Display,
+) -> String {
+    let detail = start_error
+        .lock()
+        .ok()
+        .and_then(|slot| slot.clone())
+        .unwrap_or_else(|| "no callback error".to_owned());
+    let intent = fixture
+        .scope
+        .intent(intent_id)
+        .await
+        .map(|row| format!("{row:?}"))
+        .unwrap_or_else(|journal_error| format!("intent read failed: {journal_error}"));
+    format!(
+        "{error} after {} GitHub calls; stage error: {detail}; intent: {intent}",
+        lane.methods.len(),
+    )
 }
 
 fn fake_lane(runner_name: &str) -> FakeLane {

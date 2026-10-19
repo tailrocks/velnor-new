@@ -159,5 +159,5 @@ mod recovery;
 mod restart_recovery;
 
 #[path = "tests/test_support.rs"]
-mod test_support;
+pub(super) mod test_support;
 use test_support::InitializationDockerApi;

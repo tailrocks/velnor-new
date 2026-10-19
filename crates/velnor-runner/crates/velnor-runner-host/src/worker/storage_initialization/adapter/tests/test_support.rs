@@ -28,6 +28,116 @@ pub(super) struct ApiCapture {
     pub(super) create_name: Option<String>,
 }
 
+/// Reuse the initializer test responder in a combined Docker API fixture.
+pub(crate) struct InitializationTestResponder {
+    state: server::ApiState,
+    capture: Arc<Mutex<ApiCapture>>,
+}
+
+pub(crate) struct InitializationAttachHandle {
+    operation: String,
+    capture: Arc<Mutex<ApiCapture>>,
+}
+
+impl InitializationTestResponder {
+    pub(crate) async fn new(
+        scope: &crate::journal::ConnectionJournal,
+        reservation_id: i64,
+        home_volume: &str,
+        work_volume: &str,
+        metadata_volume: &str,
+        image_id: &str,
+        engine_id: &str,
+    ) -> Result<Self, String> {
+        let volume_identity = volume_identity(scope, reservation_id)
+            .await
+            .map_err(|error| error.to_string())?;
+        Ok(Self {
+            state: server::ApiState {
+                volume_identity,
+                home_volume: home_volume.to_owned(),
+                work_volume: work_volume.to_owned(),
+                metadata_volume: metadata_volume.to_owned(),
+                image_id: image_id.to_owned(),
+                engine_id: engine_id.to_owned(),
+                create_gate: None,
+                create_seen: None,
+                create_completed: None,
+                response_gate: None,
+                response_seen: None,
+                delete_response_gate: None,
+                delete_response_seen: None,
+                inspect_response_gate: None,
+                inspect_response_seen: None,
+                inspect_status: None,
+                create_status: None,
+                foreign_helper: false,
+                remove_status: None,
+                reported_helper_id: None,
+                start_status: None,
+                create_config: None,
+                helper_name: None,
+                lifecycle: server::ContainerLifecycle::Created,
+            },
+            capture: Arc::new(Mutex::new(ApiCapture {
+                requests: Vec::new(),
+                stdin: Vec::new(),
+                create_name: None,
+            })),
+        })
+    }
+
+    pub(crate) async fn handle(
+        &mut self,
+        method: &str,
+        target: &str,
+        body: &[u8],
+    ) -> Result<(u16, Vec<u8>), String> {
+        let route = http::normalized_route(target);
+        self.capture
+            .lock()
+            .await
+            .requests
+            .push(format!("{method} {route}"));
+        let request = http::CapturedRequest {
+            method: method.to_owned(),
+            target: target.to_owned(),
+            body: body.to_vec(),
+        };
+        let (status, response) = server::route_request(&mut self.state, &request, &route)?;
+        Ok((status, response.into_bytes()))
+    }
+
+    pub(crate) async fn prepare_attach(&self) -> Result<InitializationAttachHandle, String> {
+        let operation = self
+            .state
+            .create_config
+            .as_ref()
+            .and_then(|config| config["Labels"]["velnor.operation"].as_str())
+            .ok_or_else(|| "Container operation label is absent".to_owned())?
+            .to_owned();
+        Ok(InitializationAttachHandle {
+            operation,
+            capture: Arc::clone(&self.capture),
+        })
+    }
+}
+
+impl InitializationAttachHandle {
+    pub(crate) async fn attach(self, stream: UnixStream) -> Result<(), String> {
+        use tokio::io::AsyncWriteExt;
+
+        let mut stream = stream;
+        stream
+            .write_all(b"HTTP/1.1 101 UPGRADED\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
+            .await
+            .map_err(|error| format!("write attach upgrade: {error}"))?;
+        server::serve_attach_stream(stream, self.operation, self.capture)
+            .await
+            .map_err(|error| format!("serve attach stream: {error}"))
+    }
+}
+
 pub(super) struct InitializationDockerApi {
     pub(super) docker: Docker,
     path: PathBuf,

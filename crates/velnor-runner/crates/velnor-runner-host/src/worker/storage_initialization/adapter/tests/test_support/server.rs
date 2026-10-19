@@ -193,7 +193,7 @@ async fn start_attach(
     Ok(())
 }
 
-fn route_request(
+pub(super) fn route_request(
     state: &mut ApiState,
     request: &CapturedRequest,
     route: &str,
@@ -315,7 +315,7 @@ fn container_response(state: &ApiState, config: &Value, host_config: &Value, nam
     }).to_string()
 }
 
-async fn serve_attach_stream(
+pub(super) async fn serve_attach_stream(
     mut stream: UnixStream,
     expected_operation: String,
     capture: Arc<Mutex<ApiCapture>>,

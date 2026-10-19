@@ -7,6 +7,8 @@ pub(crate) mod request_result;
 pub(crate) mod specification;
 mod verification;
 
+#[cfg(test)]
+pub(crate) use adapter::InitializationTestResponder;
 pub(crate) use adapter::{finish_after_pair_mounts, initialize};
 pub(crate) use pending::PendingStorageInitialization;
 pub(crate) use proof::{

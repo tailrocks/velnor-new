@@ -319,4 +319,7 @@ pub(crate) async fn remove(
 
 #[cfg(test)]
 #[path = "adapter/tests.rs"]
-mod tests;
+pub(crate) mod tests;
+
+#[cfg(test)]
+pub(crate) use tests::test_support::InitializationTestResponder;
