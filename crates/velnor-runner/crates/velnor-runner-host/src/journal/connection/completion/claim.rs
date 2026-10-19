@@ -12,6 +12,39 @@ use super::super::storage::in_transaction;
 const MAX_ATTEMPTS: i64 = 5;
 
 impl ConnectionJournal {
+    pub(crate) fn completion_state_identity(&self) -> String {
+        format!(
+            "{}#{}",
+            self.journal.completion_state_identity(),
+            self.connection_id().as_str()
+        )
+    }
+
+    /// Check whether this generation still owns an unexpired cleanup claim.
+    pub(crate) async fn completion_cleanup_claim_current(
+        &self,
+        id: i64,
+        generation: i64,
+    ) -> Result<bool, HostError> {
+        if id <= 0 || generation <= 0 {
+            return Err(HostError::Journal);
+        }
+        in_transaction(&self.journal, async |connection| {
+            self.validate_scope(connection).await?;
+            let set_id = self.required_set_id(connection).await?;
+            current_claim(
+                connection,
+                self.connection_id().as_str(),
+                set_id,
+                id,
+                generation,
+                unix_seconds()?,
+            )
+            .await
+        })
+        .await
+    }
+
     /// Claim one due cleanup row before bounded HTTP or Docker work.
     pub(crate) async fn claim_completion_cleanup(
         &self,

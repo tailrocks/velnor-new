@@ -180,18 +180,24 @@ pub(super) async fn poll_and_drive(
             step: "resource budget",
         });
     }
+    let diagnostics_state = rest.admission_state.ok_or(EnsureError::Unexpected {
+        status: 0,
+        step: "completion diagnostics state",
+    })?;
     let completion = match rest.scoped_journal {
         Some(scoped) => CompletionWorker::start_scoped(
             scoped.clone(),
             docker.clone(),
             link.base(),
             admin_token.to_owned(),
+            diagnostics_state,
         ),
         None => CompletionWorker::start(
             journal.clone(),
             docker.clone(),
             link.base(),
             admin_token.to_owned(),
+            diagnostics_state,
         ),
     }
     .map_err(|_| completion_error())?;

@@ -51,7 +51,7 @@ async fn exercise_inbox_only(
         .next()
         .ok_or(HostError::Journal)?;
     scope.defer_completion_inbox(&inbox_entry, 0).await?;
-    assert!(scope.pending_completion_inbox(0, 1).await?.is_empty());
+    assert_eq!(scope.pending_completion_inbox(0, 1).await?.len(), 0);
     let deferred = scope
         .pending_completion_inbox(1, 1)
         .await?
@@ -229,7 +229,7 @@ async fn record_completion_cleanup(
             .record_completion_cleanup_at(intent_id, generation, 9)
             .await?
     );
-    assert!(first.due_completed_launches(9, 8).await?.is_empty());
+    assert_eq!(first.due_completed_launches(9, 8).await?.len(), 0);
     Ok(())
 }
 
@@ -241,7 +241,7 @@ async fn settle_completion_inboxes(
     first
         .resolve_completion_inbox(&fixture.first_inbox[0])
         .await?;
-    assert!(first.pending_completion_inbox(0, 8).await?.is_empty());
+    assert_eq!(first.pending_completion_inbox(0, 8).await?.len(), 0);
     assert_eq!(
         second.pending_completion_inbox(0, 8).await?,
         fixture.second_inbox

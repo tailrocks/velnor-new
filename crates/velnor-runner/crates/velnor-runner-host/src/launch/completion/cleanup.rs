@@ -4,21 +4,21 @@
 mod container;
 #[path = "runner.rs"]
 mod runner;
+#[path = "cleanup/service_loop.rs"]
+mod service_loop;
 #[cfg(test)]
 #[path = "tests.rs"]
 mod tests;
 #[path = "volume.rs"]
 mod volume;
 
+pub(super) use service_loop::run;
+
 use std::future::Future;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Receiver};
-use std::time::Duration;
 
 use bollard::Docker;
 
-use super::Resources;
 use crate::error::HostError;
 use crate::https::HttpsTransport;
 use crate::journal::{CleanupClaim, CompletedLaunch};
@@ -34,7 +34,7 @@ const EFFECT_MARGIN_SECONDS: u64 = 30;
 const EFFECT_WINDOW_SECONDS: i64 = 90;
 const RUNNER_REQUESTS: u64 = 3;
 const CONTAINER_COUNT: u64 = 2;
-const CONTAINER_REQUESTS: u64 = 6;
+const CONTAINER_REQUESTS: u64 = 9;
 const VOLUME_COUNT: u64 = crate::worker::WorkerVolumeRole::ALL.len() as u64;
 const VOLUME_REQUESTS: u64 = 3;
 const MAX_CLEANUP_EFFECTS: u64 =
@@ -45,7 +45,6 @@ const MAX_EXTERNAL_CHAIN_SECONDS: u64 = RUNNER_REQUESTS * CURL_REQUEST_TIMEOUT_S
         * crate::docker_client::DOCKER_OPERATION_TIMEOUT.as_secs();
 const SCAN_LIMIT: u32 = 4;
 const MAX_SCAN_WAVES: usize = 3;
-const SCAN_INTERVAL: Duration = Duration::from_secs(30);
 
 type HostResult<T> = Result<T, HostError>;
 
@@ -54,9 +53,10 @@ pub(super) struct Context<'a> {
     pub(super) docker: &'a Docker,
     pub(super) transport: &'a mut HttpsTransport,
     pub(super) admin: &'a Secret,
+    pub(super) diagnostics: &'a super::diagnostics::DiagnosticsRoot,
 }
 
-/// One bounded reconciliation chain uses three GitHub calls, twelve container calls, and three calls per volume role.
+/// One bounded cleanup uses three GitHub calls, eighteen container calls, and three calls per volume role.
 /// Each call renews its durable lease independently.
 pub(super) struct EffectBudget<'a> {
     remaining: u64,
@@ -149,56 +149,6 @@ const fn error_reason(error: HostError) -> &'static str {
         HostError::Endpoint => "endpoint",
         HostError::Journal => "journal",
         _ => "host",
-    }
-}
-
-pub(super) fn run(
-    runtime: &tokio::runtime::Runtime,
-    resources: Resources,
-    stopping: &Arc<AtomicBool>,
-    receiver: &Receiver<()>,
-) -> Result<(), HostError> {
-    let Resources {
-        journal,
-        docker,
-        mut transport,
-        admin,
-    } = resources;
-    let mut context = Context {
-        journal: &journal,
-        docker: &docker,
-        transport: &mut transport,
-        admin: &admin,
-    };
-    let mut first_failure = None;
-    loop {
-        if stopping.load(Ordering::Acquire) {
-            return first_failure.map_or(Ok(()), Err);
-        }
-        match runtime.block_on(reconcile_due_burst(&mut context, stopping)) {
-            Ok((_, failure)) => remember_failure(&mut first_failure, failure),
-            Err(failure) => {
-                failure.report();
-                remember_failure(&mut first_failure, Some(failure));
-            }
-        }
-        if stopping.load(Ordering::Acquire) {
-            return first_failure.map_or(Ok(()), Err);
-        }
-        match receiver.recv_timeout(SCAN_INTERVAL) {
-            Ok(()) | Err(mpsc::RecvTimeoutError::Timeout) => {}
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                return first_failure.map_or(Ok(()), Err);
-            }
-        }
-    }
-}
-
-fn remember_failure(first: &mut Option<HostError>, failure: Option<Failure>) {
-    if first.is_none()
-        && let Some(failure) = failure
-    {
-        *first = Some(failure.error);
     }
 }
 
@@ -300,6 +250,13 @@ async fn reconcile_claimed(
     claim: CleanupClaim,
     budget: &mut EffectBudget<'_>,
 ) -> Result<(), Failure> {
+    if context
+        .diagnostics
+        .pending_for(launch.intent.id)
+        .map_err(|error| Failure::request("diagnostic worker state", error))?
+    {
+        return Err(Failure::not_proven("diagnostic write pending"));
+    }
     if !valid_completion(launch) {
         return Err(Failure::not_proven("completion identity"));
     }

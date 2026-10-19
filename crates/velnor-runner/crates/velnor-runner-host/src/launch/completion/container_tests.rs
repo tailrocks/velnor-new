@@ -1,10 +1,17 @@
-//! Retry identity checks when removed containers are already absent.
+//! Shared fixtures for completion cleanup tests.
 
+#[path = "container_tests/diagnostics.rs"]
+mod diagnostics;
+#[path = "container_tests/identity.rs"]
+mod identity;
+
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use bollard::Docker;
+use sha2::{Digest, Sha256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
@@ -16,6 +23,7 @@ use crate::journal::{CleanupClaim, CompletedLaunch, Journal};
 use crate::launch::completion::cleanup::{
     Context, EffectBudget, Failure, cleanup_retry_delay_seconds, completion_now,
 };
+use crate::launch::completion::diagnostics::{DiagnosticsRoot, SCOPE_DIRECTORY, scope_component};
 use crate::launch::completion::journal_ref::CompletionJournal;
 use crate::listen::Secret;
 
@@ -23,147 +31,6 @@ const WORKER: &str = "wcompletion";
 const RUNNER_ID: &str = "runner-id";
 const DIND_ID: &str = "dind-id";
 const TEST_TIMEOUT: Duration = Duration::from_secs(2);
-
-#[tokio::test]
-async fn retry_accepts_runner_absent_by_recorded_id_and_name_after_dind_failure()
--> Result<(), HostError> {
-    let scratch = Scratch::open("retry-absent")?;
-    let journal = Journal::open(&scratch.path).await?;
-    let launch = completed_launch(&journal).await?;
-    let completion_journal = CompletionJournal::root(journal.clone());
-    let claim = journal
-        .claim_completion_cleanup(launch.intent.id, 2)
-        .await?
-        .ok_or(HostError::Journal)?;
-    let stub = DockerStub::open(vec![
-        response(200, &container_json(RUNNER_ID, "runner")),
-        response(200, &container_json(RUNNER_ID, "runner")),
-        response(204, ""),
-        response(404, r#"{"message":"missing"}"#),
-        response(404, r#"{"message":"missing"}"#),
-        response(200, &container_json(DIND_ID, "dind")),
-        response(200, &container_json(DIND_ID, "dind")),
-        response(500, r#"{"message":"busy"}"#),
-        response(404, r#"{"message":"missing"}"#),
-        response(404, r#"{"message":"missing"}"#),
-        response(200, &container_json(DIND_ID, "dind")),
-        response(200, &container_json(DIND_ID, "dind")),
-        response(204, ""),
-        response(404, r#"{"message":"missing"}"#),
-        response(404, r#"{"message":"missing"}"#),
-    ])?;
-    let mut transport = HttpsTransport::new("https://github.com")?;
-    let admin = Secret::new("test token");
-    let context = Context {
-        journal: &completion_journal,
-        docker: &stub.docker,
-        transport: &mut transport,
-        admin: &admin,
-    };
-
-    let first_result = run_cleanup(&context, &launch, claim).await;
-    assert_eq!(
-        first_result,
-        Err(Failure::request("container delete", HostError::Docker))
-    );
-    let retry_delay = cleanup_retry_delay_seconds(claim.attempt);
-    if !journal
-        .retry_completion_cleanup(launch.intent.id, claim.generation, retry_delay)
-        .await?
-    {
-        return Err(HostError::Journal);
-    }
-    let retry_at = completion_now()?
-        .checked_add(retry_delay)
-        .ok_or(HostError::Journal)?;
-    let retry_claim = journal
-        .claim_completion_cleanup_at(launch.intent.id, retry_at, 90)
-        .await?
-        .ok_or(HostError::Journal)?;
-    let retry_result = run_cleanup(&context, &launch, retry_claim).await;
-    assert_eq!(retry_result, Ok(()));
-
-    let requests = stub.finish().await?;
-    assert_eq!(requests.len(), 15);
-    assert!(requests[2].starts_with("DELETE "));
-    assert!(requests[7].starts_with("DELETE "));
-    assert!(requests[8].contains(RUNNER_ID));
-    assert!(requests[9].contains("wcompletion-runner"));
-    assert!(requests[12].starts_with("DELETE "));
-    Ok(())
-}
-
-#[tokio::test]
-async fn retry_rejects_a_different_container_at_the_durable_name() -> Result<(), HostError> {
-    let scratch = Scratch::open("replacement")?;
-    let journal = Journal::open(&scratch.path).await?;
-    let launch = completed_launch(&journal).await?;
-    let completion_journal = CompletionJournal::root(journal.clone());
-    let claim = journal
-        .claim_completion_cleanup(launch.intent.id, 90)
-        .await?
-        .ok_or(HostError::Journal)?;
-    let stub = DockerStub::open(vec![
-        response(404, r#"{"message":"missing"}"#),
-        response(200, &container_json("replacement-id", "runner")),
-    ])?;
-    let mut transport = HttpsTransport::new("https://github.com")?;
-    let admin = Secret::new("test token");
-    let context = Context {
-        journal: &completion_journal,
-        docker: &stub.docker,
-        transport: &mut transport,
-        admin: &admin,
-    };
-    let result = run_cleanup(&context, &launch, claim).await;
-    assert_eq!(result, Err(Failure::not_proven("container name identity")));
-    let requests = stub.finish().await?;
-    assert_eq!(requests.len(), 2);
-    assert!(requests.iter().all(|request| request.starts_with("GET ")));
-    Ok(())
-}
-
-#[tokio::test]
-async fn home_volume_delete_failure_keeps_capacity_until_cleanup_proof() -> Result<(), HostError> {
-    let scratch = Scratch::open("home-volume-hold")?;
-    let journal = Journal::open(&scratch.path).await?;
-    let launch = completed_launch(&journal).await?;
-    let completion_journal = CompletionJournal::root(journal.clone());
-    let claim = journal
-        .claim_completion_cleanup(launch.intent.id, 90)
-        .await?
-        .ok_or(HostError::Journal)?;
-    let stub = DockerStub::open(vec![
-        response(404, r#"{"message":"missing"}"#),
-        response(200, &volume_json("wcompletion-home", WORKER, "home")),
-        response(500, r#"{"message":"busy"}"#),
-    ])?;
-    let mut transport = HttpsTransport::new("https://github.com")?;
-    let admin = Secret::new("test token");
-    let context = Context {
-        journal: &completion_journal,
-        docker: &stub.docker,
-        transport: &mut transport,
-        admin: &admin,
-    };
-    let stopping = AtomicBool::new(false);
-    let mut budget = EffectBudget::new(&stopping);
-
-    let result = volume::cleanup(&context, &launch, claim, &mut budget).await;
-    assert_eq!(
-        result,
-        Err(Failure::request("volume delete", HostError::Docker))
-    );
-    let requests = stub.finish().await?;
-    assert_eq!(requests.len(), 3);
-    assert!(requests[1].contains("wcompletion-home"));
-    assert!(requests[2].starts_with("DELETE "));
-    let rows = journal.rows().await?;
-    assert_eq!(rows.len(), 1);
-    assert!(!rows[0].cleanup_proven);
-    assert_eq!(journal.capacity_rows(1).await?.len(), 1);
-    Ok(())
-}
 
 async fn run_cleanup(
     context: &Context<'_>,
@@ -197,15 +64,48 @@ async fn completed_launch(journal: &Journal) -> Result<CompletedLaunch, HostErro
     Ok(launch)
 }
 
+fn diagnostics_root(scratch: &Scratch) -> Result<DiagnosticsRoot, HostError> {
+    let state = std::fs::canonicalize(&scratch.directory).map_err(|_| HostError::Path)?;
+    DiagnosticsRoot::open(&state, "root")
+}
+
+fn diagnostic_filename(intent_id: i64, generation: i64, role: &str, container_id: &str) -> String {
+    let digest = Sha256::digest(container_id.as_bytes());
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write as _;
+        let _ignored = write!(hex, "{byte:02x}");
+    }
+    format!("i{intent_id}-g{generation}-{role}-{hex}.json")
+}
+
 fn container_json(id: &str, role: &str) -> String {
     serde_json::json!({
         "Id": id,
+        "Name": format!("/{WORKER}-{role}"),
+        "Image": "sha256:0123456789abcdef",
+        "RestartCount": 2,
+        "State": {
+            "Status": "exited",
+            "Running": false,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "ExitCode": 1,
+            "Error": "secret-state-error",
+            "StartedAt": "2026-10-19T00:00:00Z",
+            "FinishedAt": "2026-10-19T00:01:00Z",
+            "Health": {"Log": [{"Output": "secret-health-output"}]}
+        },
         "Config": {
             "Labels": {
                 "velnor.volume": WORKER,
                 "velnor.worker": WORKER,
                 "velnor.role": role,
-            }
+                "secret-label": "secret-label-value"
+            },
+            "Env": ["SECRET_ENV=secret-env-value"]
         }
     })
     .to_string()
@@ -250,7 +150,7 @@ impl DockerStub {
             std::process::id()
         ));
         let listener = UnixListener::bind(&path).map_err(|_| HostError::Path)?;
-        let task = tokio::spawn(serve(listener, responses));
+        let task = tokio::spawn(serve(listener, responses, None));
         let socket = path.to_str().ok_or(HostError::Path)?;
         let docker = Docker::connect_with_unix(socket, 120, bollard::API_DEFAULT_VERSION)
             .map_err(|_| HostError::Docker)?;
@@ -259,6 +159,46 @@ impl DockerStub {
             path,
             task: Some(task),
         })
+    }
+
+    fn open_paused(
+        responses: Vec<Response>,
+        request_index: usize,
+    ) -> Result<
+        (
+            Self,
+            tokio::sync::oneshot::Receiver<()>,
+            tokio::sync::oneshot::Sender<()>,
+        ),
+        HostError,
+    > {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "velnor-container-cleanup-paused-{}-{id}.sock",
+            std::process::id()
+        ));
+        let listener = UnixListener::bind(&path).map_err(|_| HostError::Path)?;
+        let (reached_tx, reached_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        let gate = RequestGate {
+            request_index,
+            reached: reached_tx,
+            release: release_rx,
+        };
+        let task = tokio::spawn(serve(listener, responses, Some(gate)));
+        let socket = path.to_str().ok_or(HostError::Path)?;
+        let docker = Docker::connect_with_unix(socket, 120, bollard::API_DEFAULT_VERSION)
+            .map_err(|_| HostError::Docker)?;
+        Ok((
+            Self {
+                docker,
+                path,
+                task: Some(task),
+            },
+            reached_rx,
+            release_tx,
+        ))
     }
 
     async fn finish(mut self) -> Result<Vec<String>, HostError> {
@@ -284,11 +224,37 @@ impl Drop for DockerStub {
     }
 }
 
-async fn serve(listener: UnixListener, responses: Vec<Response>) -> Result<Vec<String>, String> {
+struct RequestGate {
+    request_index: usize,
+    reached: tokio::sync::oneshot::Sender<()>,
+    release: tokio::sync::oneshot::Receiver<()>,
+}
+
+async fn serve(
+    listener: UnixListener,
+    responses: Vec<Response>,
+    mut gate: Option<RequestGate>,
+) -> Result<Vec<String>, String> {
     let mut requests = Vec::with_capacity(responses.len());
-    for response in responses {
+    for (index, response) in responses.into_iter().enumerate() {
         let (mut stream, _) = listener.accept().await.map_err(|error| error.to_string())?;
         requests.push(read_request_line(&mut stream).await?);
+        if gate
+            .as_ref()
+            .is_some_and(|pending| pending.request_index == index)
+        {
+            let pending = gate
+                .take()
+                .ok_or_else(|| "request gate missing".to_owned())?;
+            pending
+                .reached
+                .send(())
+                .map_err(|()| "request gate receiver closed".to_owned())?;
+            pending
+                .release
+                .await
+                .map_err(|_| "request gate release closed".to_owned())?;
+        }
         send_response(&mut stream, response).await?;
     }
     Ok(requests)
@@ -355,6 +321,8 @@ impl Scratch {
             std::process::id()
         ));
         std::fs::create_dir_all(&directory).map_err(|_| HostError::Path)?;
+        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o700))
+            .map_err(|_| HostError::Path)?;
         Ok(Self {
             path: directory.join("journal.db"),
             directory,

@@ -5,7 +5,7 @@ use std::future::Future;
 use crate::error::HostError;
 use crate::journal::{CleanupClaim, CompletedLaunch, ConnectionJournal, Journal};
 
-pub(super) enum CompletionJournal {
+pub(in crate::launch) enum CompletionJournal {
     Root(Journal),
     Scoped(ConnectionJournal),
 }
@@ -17,6 +17,32 @@ impl CompletionJournal {
 
     pub(super) const fn scoped(journal: ConnectionJournal) -> Self {
         Self::Scoped(journal)
+    }
+
+    pub(super) fn instance_identity(&self) -> String {
+        match self {
+            Self::Root(journal) => journal.completion_state_identity(),
+            Self::Scoped(journal) => journal.completion_state_identity(),
+        }
+    }
+
+    pub(super) async fn completion_claim_current(
+        &self,
+        id: i64,
+        generation: i64,
+    ) -> Result<bool, HostError> {
+        match self {
+            Self::Root(journal) => {
+                journal
+                    .completion_cleanup_claim_current(id, generation)
+                    .await
+            }
+            Self::Scoped(journal) => {
+                journal
+                    .completion_cleanup_claim_current(id, generation)
+                    .await
+            }
+        }
     }
 
     pub(super) async fn due_completed_launches(

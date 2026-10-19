@@ -11,6 +11,28 @@ use super::{CleanupClaim, finish_transaction};
 const MAX_COMPLETION_ATTEMPTS: i64 = 5;
 
 impl Journal {
+    pub(crate) fn completion_state_identity(&self) -> String {
+        self.path().to_string_lossy().into_owned()
+    }
+
+    /// Check whether this generation still owns an unexpired cleanup claim.
+    pub(crate) async fn completion_cleanup_claim_current(
+        &self,
+        id: i64,
+        generation: i64,
+    ) -> Result<bool, HostError> {
+        if id <= 0 || generation <= 0 {
+            return Err(HostError::Journal);
+        }
+        let connection = self.connection().await?;
+        connection
+            .execute("BEGIN IMMEDIATE", ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let result = current_claim(&connection, id, generation, unix_seconds()?).await;
+        finish_transaction(&connection, result).await
+    }
+
     /// Claim one due completion row before bounded HTTP or Docker work.
     pub(crate) async fn claim_completion_cleanup(
         &self,
