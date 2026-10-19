@@ -23,6 +23,7 @@ import candidate
 REPOSITORY = "tailrocks/velnor-new"
 REPOSITORY_ID = 1390620900
 REGISTRY = "ghcr.io"
+DOWNLOAD_HOST = "pkg-containers.githubusercontent.com"
 PACKAGE = "tailrocks/velnor-job"
 WORKFLOW = "tailrocks/velnor-new/.github/workflows/job-image-candidate.yml"
 ARTIFACT_PREFIX = "velnor-job-image-candidate-"
@@ -296,7 +297,7 @@ class _Response:
 
 
 class _HttpsTransport:
-    """HTTPS-only transport; no redirects and bounded response reads."""
+    """HTTPS transport with one permitted OCI blob redirect and response size limits."""
 
     def request(self, method: str, url: str, headers: dict[str, str],
                 body: bytes | BinaryIO | None = None, length: int = 0) -> _Response:
@@ -356,10 +357,21 @@ class _HttpsTransport:
             path = urlunsplit(("", "", parts.path, parts.query, ""))
             connection.request("GET", path, headers=headers)
             response = connection.getresponse()
+            if response.status in (302, 307):
+                if parts.path != f"/v2/{PACKAGE}/blobs/{digest}":
+                    _fail("Registry manifest redirects are not permitted.")
+                location = response.getheader("Location", "")
+                download = _blob_download_location(location, digest)
+                connection.close()
+                connection = http.client.HTTPSConnection(DOWNLOAD_HOST, timeout=TIMEOUT_SECONDS)
+                connection.request("GET", download, headers={"Accept": "application/octet-stream"})
+                response = connection.getresponse()
             response_headers = dict(response.getheaders())
             normalized = {key.lower(): value for key, value in response_headers.items()}
-            if response.status != 200 or normalized.get("content-length") != str(size):
-                _fail("Registry GET verification failed.")
+            if response.status != 200:
+                _fail(f"Registry GET status is incorrect: {response.status}.")
+            if normalized.get("content-length") != str(size):
+                _fail("Registry GET size is different from the specified size.")
             if normalized.get("docker-content-digest") not in (None, digest):
                 _fail("Registry GET digest header is different from the requested digest.")
             hasher = hashlib.sha256()
@@ -391,6 +403,24 @@ class _HttpsTransport:
             _fail("Registry GET request failed or timed out.")
         finally:
             connection.close()
+
+
+def _blob_download_location(location: str, digest: str) -> str:
+    if any(ord(char) < 32 or ord(char) == 127 for char in location) or "\\" in location:
+        _fail("Registry download URL has an incorrect character.")
+    try:
+        parts = urlsplit(location)
+        if (parts.scheme != "https" or parts.hostname != DOWNLOAD_HOST
+                or parts.port not in (None, 443) or parts.username is not None
+                or parts.password is not None or parts.fragment
+                or not parts.path.endswith(f"/blobs/{digest}")):
+            _fail("Registry download URL is outside the permitted HTTPS location.")
+    except ValueError:
+        _fail("Registry download URL has an incorrect format.")
+    decoded = unquote(parts.path + parts.query)
+    if any(ord(char) < 32 or ord(char) == 127 for char in decoded) or "\\" in decoded:
+        _fail("Registry download URL has an incorrect character.")
+    return urlunsplit(("", "", parts.path, parts.query, ""))
 
 
 def _auth_token(transport: _HttpsTransport, actor: str, github_token: str) -> str:
