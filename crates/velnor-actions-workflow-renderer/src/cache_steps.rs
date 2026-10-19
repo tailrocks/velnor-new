@@ -47,14 +47,23 @@ pub(crate) use tools::{TOOLS_SEED_ADMITTED_EXPRESSION, TOOLS_SEED_ADMITTED_INPUT
 pub(crate) use tools::assert_rendered_admission_parses;
 pub(crate) use tools::restore_action_file as tools_restore_action_file;
 
-/// Build one V2 tools-cache action over the fixed path set.
+/// Build the fixed V2 tools restore composite call.
 /// # Errors
-pub(crate) fn tools_cache_step(
-    restore: bool,
+pub(crate) fn tools_cache_restore_step(
+    key: &str,
+    mise_sha256: &str,
+    condition: Option<String>,
+) -> Result<Step, RenderError> {
+    tools::restore_step(key, mise_sha256, condition)
+}
+
+/// Build the V2 tools save over the fixed path set.
+/// # Errors
+pub(crate) fn tools_cache_save_step(
     key: &str,
     condition: Option<String>,
 ) -> Result<Step, RenderError> {
-    tools::cache_step(restore, key, condition)
+    tools::save_step(key, condition)
 }
 
 pub(crate) fn validate_tools_restore_call(step: &Step) -> Result<&str, RenderError> {

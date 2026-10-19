@@ -3,34 +3,42 @@
 use velnor_actions_contract::{RunsOn, Step, StepKind, StepRole};
 
 /// Peel typed runtime identity, seed, and restore steps before lane sharing.
+///
+/// The identity binds versions the resolver exports after Setup Mise, so
+/// a non-empty prelude must directly follow the job's one Setup Mise step,
+/// which leaves the shared body with the prelude: `(prelude, common)` puts
+/// Setup Mise first in `prelude`. An empty prelude keeps Setup Mise common.
 pub(super) fn peel_tools_cache_prelude(
     steps: &[Step],
     runs_on: &str,
 ) -> Option<(Vec<Step>, Vec<Step>)> {
-    let mut prelude = Vec::new();
-    let mut common = Vec::new();
-    for step in steps {
-        if is_tools_prelude_step(step.role) {
-            prelude.push(step.clone());
-        } else {
-            common.push(step.clone());
-        }
-    }
+    let prelude: Vec<Step> = steps
+        .iter()
+        .filter(|step| is_tools_prelude_step(step.role))
+        .cloned()
+        .collect();
     if !valid_tools_cache_prelude(&prelude, runs_on) {
         return None;
     }
-    let setup = steps
-        .iter()
-        .position(|step| step.role == Some(StepRole::MiseSetup));
-    if setup.is_some_and(|setup| {
-        steps
-            .iter()
-            .enumerate()
-            .any(|(index, step)| is_tools_prelude_step(step.role) && index > setup)
-    }) {
+    if prelude.is_empty() {
+        return Some((prelude, steps.to_vec()));
+    }
+    let (setup, rest) = steps.split_first()?;
+    let (head, common) = rest.split_at_checked(prelude.len())?;
+    if setup.role != Some(StepRole::MiseSetup) || head != prelude.as_slice() {
         return None;
     }
-    Some((prelude, common))
+    let mut lane = vec![setup.clone()];
+    lane.extend(prelude);
+    Some((lane, common.to_vec()))
+}
+
+/// Split Setup Mise off a lane without a V2 prelude when its paired lane
+/// keeps one, so both lanes render Setup Mise before their lane steps.
+pub(super) fn peel_setup(steps: Vec<Step>) -> Option<(Step, Vec<Step>)> {
+    let mut steps = steps.into_iter();
+    let setup = steps.next()?;
+    (setup.role == Some(StepRole::MiseSetup)).then(|| (setup, steps.collect()))
 }
 
 fn is_tools_prelude_step(role: Option<StepRole>) -> bool {
@@ -45,6 +53,14 @@ fn valid_tools_cache_prelude(steps: &[Step], runs_on: &str) -> bool {
         [] => true,
         [identity, restore] => valid_identity(identity, runs_on) && valid_restore(restore),
         _ => false,
+    }
+}
+
+/// The V2 steps of a peeled lane prelude, without its leading Setup Mise.
+fn tools_steps(steps: &[Step]) -> &[Step] {
+    match steps.split_first() {
+        Some((setup, rest)) if setup.role == Some(StepRole::MiseSetup) => rest,
+        _ => steps,
     }
 }
 
@@ -66,19 +82,7 @@ fn valid_identity(step: &Step, runs_on: &str) -> bool {
 }
 
 fn valid_restore(step: &Step) -> bool {
-    step.role == Some(StepRole::ToolsCacheRestore)
-        && step.id == Some(velnor_actions_contract::StepId::ToolsRestore)
-        && step.condition.as_deref() == Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
-        && matches!(
-            &step.kind,
-            StepKind::Action { uses, with, env }
-                if uses == crate::cache_steps::TOOLS_RESTORE_USES
-                    && env.is_empty()
-                    && with.len() == 2
-                    && with.get("key").is_some_and(|key| is_tools_cache_key(key))
-                    && with.get(crate::cache_steps::TOOLS_SEED_ADMITTED_INPUT)
-                        == Some(&crate::cache_steps::TOOLS_SEED_ADMITTED_EXPRESSION.to_owned())
-        )
+    crate::cache_steps::validate_tools_restore_call(step).is_ok()
 }
 
 /// Ensure the lane-specific preludes have the same action and key structure.
@@ -88,6 +92,7 @@ pub(super) fn same_tools_cache_prelude_shape(
     hosted_runs_on: &str,
     local_runs_on: &str,
 ) -> bool {
+    let (hosted, local) = (tools_steps(hosted), tools_steps(local));
     if !valid_tools_cache_prelude(hosted, hosted_runs_on)
         || !valid_tools_cache_prelude(local, local_runs_on)
     {
