@@ -285,25 +285,17 @@ CI planning MUST receive explicit base and head commit IDs. Local planning compa
 
 Changes to a package select that package and every reverse-dependent local package. Manifest changes are evaluated against both base and head graphs so removed or renamed edges do not hide consumers. Changes to root Cargo config, `Cargo.lock`, Velnor-owned generator config, shared build inputs, or an unclassified file select all packages. Changes to `rust-toolchain.toml`, `mise.toml`, or `mise.lock` update inspection findings only; they do not invalidate task results because execution uses Velnor's exact pins. Documentation is relevant when included by rustdoc, tests, fixtures, or declared task inputs.
 
-Plan JSON MUST use schema version 1 and contain:
+Plan JSON MUST use schema version 2 and contain:
 
 ```json
 {
-  "schema": 1,
+  "schema": 2,
   "run_key": "r123-a1",
   "plan_id": "plan-r123-a1",
   "base": "<commit-or-null>",
   "head": "<commit>",
   "event": "pull_request", "runner": {"label": "ubuntu-26.04", "selection": "latest_default"},
   "trust": "pr",
-  "baseline": {
-    "status": "used",
-    "base_commit": "<40 lowercase hex>",
-    "run_id": 12345,
-    "artifact_id": "<exact artifact ID>",
-    "manifest_digest": "b3-<64 lowercase hex>",
-    "reason": null
-  },
   "generator": {
     "version": "<exact-semver>",
     "target": "x86_64-unknown-linux-gnu",
@@ -314,25 +306,23 @@ Plan JSON MUST use schema version 1 and contain:
     "name": "velnor-actions-contract",
     "manifest": "crates/velnor-actions-contract/Cargo.toml",
     "selected": false,
-    "reasons": ["exact_baseline_identity"],
+    "reasons": ["not_affected"],
     "tasks": ["stack/rust/crates/velnor-actions-contract/clippy/default"]
   }],
   "obligations": [{
     "task_id": "stack/rust/crates/velnor-actions-contract/clippy/default",
-    "decision": "covered_by_trusted_baseline",
-    "reason": "exact_baseline_identity",
+    "decision": "not_affected",
+    "reason": "not_affected",
     "task_digest": "b3-<64 lowercase hex>",
     "input_digest": "b3-<64 lowercase hex>",
-    "baseline_proof": {
-      "source_commit": "<base commit>",
-      "run_id": 12345,
-      "proof_run_id": 12345,
-      "manifest_digest": "b3-<64 lowercase hex>"
-    }
+    "closure_digest": "b3-<64 lowercase hex>",
+    "job_id": "rust-velnor-actions-contract"
   }],
+  "jobs": [{"job_id": "rust-velnor-actions-contract", "disposition": "not_affected"}],
   "matrix": {"include": []},
   "task_ids": ["<sorted unique IDs>"],
-  "warnings": []
+  "edges": [],
+  "warnings": ["no_affected_files:all_unchanged"]
 }
 ```
 
@@ -340,8 +330,10 @@ Plan JSON MUST use schema version 1 and contain:
 local planning. `plan_id` is `plan-<run-key>`. `matrix.include` MUST use the
 exact entry shape and derived ID rules in [the workflow contract](workflow-contract.md).
 The plan lists every current obligation; each matrix entry lists only its
-`execute_task_ids`. Covered and cached obligations remain in `obligations` and
-must carry their evidence reference. `packages` contains the complete Rust
+`execute_task_ids`. `not_affected` and cached obligations remain in
+`obligations`; a `not_affected` obligation belongs to a `not_affected` job
+(hard decision 4, [affected selection](../implemented/affected-selection.md)),
+and only pull-request and local plans may carry one. `packages` contains the complete Rust
 inventory; `selected` is true only when that package has at least one execute
 obligation. Packages, reasons, obligations, matrix
 entries, and task IDs MUST be sorted deterministically. Unknown plan schema
@@ -356,7 +348,7 @@ JSON with absolute paths stripped and repository-relative POSIX paths.
 Artifact `*_id` values of form `velnor-<kind>-<run-key>-…` are derived
 NAMEs for upload/download matching only, never identity inputs. Bare
 numeric service IDs are permitted ONLY in evidence records
-(`baseline.proof`, `final-report.downloaded_artifacts`), never in
+(`final-report.downloaded_artifacts`), never in
 identities or NAME derivation beyond the run-key correlator; the run key
 is correlation, not identity, and MUST NOT enter task/input digests.
 Platform, toolchain, cache-format, or declared-input changes invalidate

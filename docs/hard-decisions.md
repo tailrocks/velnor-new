@@ -87,31 +87,55 @@ job to skip steps inside it.
 
 **Invariants.**
 
-- Fail closed: any doubt selects everything. Unknown or unowned files, Git
-  failures, a missing base, untracked files, any `Cargo.lock` change, root Cargo
-  configuration, `.velnor/**` and `.github/**`, a workspace without a complete
-  resolved graph, and an owned symlink that escapes, dangles, or loops all run
-  every job. Selection never narrows on an error.
-- Unowned → all. A changed path is narrowed only when a package directory, a
-  scoped Cargo tool config, a workspace root, a declared
-  `[[stacks.rust.inputs]]` rule, or a tracked symlink claims it. No `ignore`
-  list exists until in-job runtime-read capture exists.
+- Fail closed on every detectable doubt. Unknown or unowned files, Git
+  failures, a missing base, a merge checkout whose first parent is not the
+  pull request's base (`stale_merge_ref`), untracked files, a modified tracked
+  file, any `Cargo.lock` change, root Cargo configuration, `.velnor/**` and
+  `.github/**`, a workspace without a complete resolved graph, and an owned
+  symlink that escapes, dangles, or loops all run every job. Selection never
+  narrows on an error.
+- Unowned → all, per stack. Rust ownership is computed over the full change
+  set: a path is narrowed only when a package directory, a scoped Cargo tool
+  config, a workspace root, a declared `[[stacks.rust.inputs]]` rule, or a
+  tracked symlink claims it. A path an OpenTofu root owns but no Rust rule
+  claims still runs every Rust job; the Tofu split feeds only Tofu root
+  selection. No `ignore` list exists until in-job runtime-read capture exists.
+- Unverified reads force a package (`undeclared_reads`): a package with a
+  build script, or whose tracked `.rs` sources read outside the paths it
+  claims (`include_str!`/`include_bytes!`/`include!`/`#[path]`, a
+  `CARGO_MANIFEST_DIR` path with a `..` component or `parent()`, a relative
+  `..` file-system read), counts as changed on every pull request until it
+  declares those inputs, and its dependents run with it. An unchanged sharded
+  archive whose source is not content-bound fails the plan instead of running
+  alone (unreachable today: the closure digest always binds it).
+- Residual risk, named: the read scan is static. A read through a computed
+  path with none of those anchors, a spawned process, a non-Rust file, or a
+  macro that expands to a read is invisible to it, and a declared input is
+  the owner's unverified statement. Pull requests can therefore still skip a
+  crate whose undetected read changed; the full runs on `push` and
+  `merge_group` are the backstop until in-job read verification exists.
 - The dependency graph is the full resolve from
   `cargo metadata --locked --offline --all-features` at head, unioned with base
   and head path edges, so registry crates reach `[patch]`ed and vendored crates.
-- Packages with a build script, and sharded archives whose source is not
-  content-bound, always run until in-job read verification exists.
-- The default branch and the merge queue are always full runs.
+- The default branch, the merge queue, and qualification dispatches are always
+  full runs. `Plan::validate` and `Required` both reject `not_affected` work on
+  those events (`not_affected_on_full_event`), whatever the planner did.
 - `Required` compares every planned crate job's disposition with its observed
   result: `not_affected` + skipped passes; `run` + skipped fails
   (`planned_job_skipped`); `not_affected` + ran fails (`gate_mismatch`); a
   missing, invalid, or failed plan fails. A planned job is never assumed
   successful from its conclusion alone.
+- A cancelled run never satisfies protection. The protected `Required` check
+  is the `required-gate` job: it runs under `always()` and fails unless the
+  verdict job (`Required verdict`, `!cancelled()`) succeeded, because GitHub
+  reports a skipped required check as successful.
 - A base retarget re-plans (`edited` is a `pull_request` trigger type), and a
   partial re-run resolves the plan by the attempt that produced it.
 
 **Must not be reintroduced without owner approval:** baseline-gated skipping or
 any other second skip mechanism, hand-written per-job path filters, an `ignore`
 list without runtime-read capture, narrowing on any selection error, affected
-mode on `push`, `merge_group`, or `workflow_dispatch`, or a `Required` rule that
-passes a skipped job the plan scheduled.
+mode on `push`, `merge_group`, or `workflow_dispatch`, a `Required` rule that
+passes a skipped job the plan scheduled, a protected check a cancelled run can
+leave skipped, one stack's ownership hiding another stack's claims, or a forced
+package whose dependents do not run.

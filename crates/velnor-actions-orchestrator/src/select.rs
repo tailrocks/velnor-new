@@ -3,9 +3,12 @@
 //! The plan carries the full configured obligation universe. On events
 //! that select affected work (pull requests), packages the change cannot
 //! reach are classified unchanged and their crate jobs become
-//! `not_affected`; any doubt (unknown files, git failures, lockfile
-//! changes, unresolved graphs, unbounded symlinks) selects everything.
-//! Full-run events (push, merge group, qualification) change everything.
+//! `not_affected`. Every detectable doubt (unknown files, git failures, a
+//! stale merge ref, lockfile changes, unresolved graphs, unbounded
+//! symlinks) selects everything, and packages with unverified reads count
+//! as changed (`select_reads`); reads the static scan cannot see are the
+//! named residual risk (hard decision 4). Full-run events (push, merge
+//! group, qualification) change everything.
 
 use std::collections::BTreeSet;
 use std::ffi::OsString;
@@ -60,10 +63,10 @@ pub(crate) fn select_universe<'a>(
 
 /// Changed package IDs, or `None` when the comparison is unknown.
 ///
-/// `None` marks every obligation changed (fail-open broad: the correct
-/// unknown-comparison behavior). An empty set means nothing changed, so
-/// obligations stay eligible for verified coverage instead of executing
-/// unconditionally. Push compares `before...head` when a base exists.
+/// `None` marks every obligation changed (fail-closed broad: the correct
+/// unknown-comparison behavior). A set lists the affected packages; every
+/// other unchanged obligation becomes `not_affected`. Full-run events
+/// always return `None`.
 pub(crate) fn classify_changed(
     root: &Path,
     event: WorkflowEvent,

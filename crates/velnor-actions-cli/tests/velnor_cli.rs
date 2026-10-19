@@ -33,6 +33,7 @@ mod impl_cli_protocol;
 mod impl_cli_release_manifest;
 #[path = "impl_cli_report.rs"]
 mod impl_cli_report;
+mod impl_cli_rerun_attempt;
 #[path = "impl_cli_schema2.rs"]
 mod impl_cli_schema2;
 #[path = "impl_cli_smoke.rs"]

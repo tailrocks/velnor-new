@@ -115,7 +115,10 @@ fn source_reads(
     let mut reads = Vec::new();
     let files: Vec<String> = split_nul_paths(&output.stdout)?;
     for file in files {
-        if !file.ends_with(".rs") {
+        if !Path::new(&file)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
+        {
             continue;
         }
         let Some((dir, id)) = ownership.package_of(&file) else {

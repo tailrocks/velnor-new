@@ -91,6 +91,16 @@ pub(crate) fn scan_source(file: &str, package_dir: &str, text: &str) -> Vec<Sour
         .collect()
 }
 
+/// What a `concat!` argument list names.
+enum Concat {
+    /// A read anchored at the manifest directory.
+    Read(ReadTarget),
+    /// Build output under `OUT_DIR`, never a repository read.
+    BuildOutput,
+    /// Not anchored at a known directory.
+    Unanchored,
+}
+
 /// Token walk state for one file.
 struct Scan<'a> {
     tokens: &'a [Token],
@@ -119,7 +129,7 @@ impl Scan<'_> {
                 }
                 Token::Ident(word) if word == "concat" && self.is_macro(at) => {
                     let (args, next) = group(self.tokens, at + 2);
-                    if let Some(Some(target)) = self.concat_target(args) {
+                    if let Concat::Read(target) = self.concat_target(args) {
                         self.targets.push(target);
                         at = next;
                         continue;
@@ -127,11 +137,11 @@ impl Scan<'_> {
                 }
                 Token::Ident(word) if FS_CALLS.contains(&word.as_str()) => self.fs_call(at),
                 Token::Ident(word) if word == "path" && attribute_depth > 0 => {
-                    self.path_attribute(at)
+                    self.path_attribute(at);
                 }
                 Token::Ident(word) if word == "current_dir" => self.anchored = true,
                 Token::Ident(word) if word == "parent" || word == "ancestors" => {
-                    self.escapes = true
+                    self.escapes = true;
                 }
                 Token::Str(body) => self.literal(body),
                 Token::Punct('[') if attribute_depth > 0 || self.opens_attribute(at) => {
@@ -179,40 +189,43 @@ impl Scan<'_> {
                 Token::Punct('('),
                 inner @ ..,
                 Token::Punct(')'),
-            ] if word == "concat" => self
-                .concat_target(inner)
-                .unwrap_or(Some(ReadTarget::Unbounded("include_argument"))),
+            ] if word == "concat" => match self.concat_target(inner) {
+                Concat::Read(target) => Some(target),
+                Concat::BuildOutput => None,
+                Concat::Unanchored => Some(ReadTarget::Unbounded("include_argument")),
+            },
             _ => Some(ReadTarget::Unbounded("include_argument")),
         }
     }
 
-    /// `concat!` parts: `Some(Some(target))` resolved, `Some(None)` build
-    /// output, `None` when not anchored at the manifest directory.
-    fn concat_target(&self, args: &[Token]) -> Option<Option<ReadTarget>> {
+    /// What one `concat!` argument list names.
+    fn concat_target(&self, args: &[Token]) -> Concat {
         let parts: Vec<&[Token]> = args.split(|token| *token == Token::Punct(',')).collect();
-        let (first, rest) = parts.split_first()?;
-        let base = match env_name(first)? {
-            "CARGO_MANIFEST_DIR" => self.package_dir,
-            "OUT_DIR" => return Some(None),
-            _ => return None,
+        let Some((first, rest)) = parts.split_first() else {
+            return Concat::Unanchored;
+        };
+        let base = match env_name(first) {
+            Some("CARGO_MANIFEST_DIR") => self.package_dir,
+            Some("OUT_DIR") => return Concat::BuildOutput,
+            _ => return Concat::Unanchored,
         };
         let mut tail = String::new();
         for part in rest {
             match part {
                 [Token::Str(body)] => tail.push_str(body),
                 [] => {}
-                _ => return Some(Some(ReadTarget::Unbounded("include_argument"))),
+                _ => return Concat::Read(ReadTarget::Unbounded("include_argument")),
             }
         }
-        Some(Some(resolve(base, &tail)))
+        Concat::Read(resolve(base, &tail))
     }
 
     /// `path = "..."` inside an attribute.
     fn path_attribute(&mut self, at: usize) {
-        if self.tokens.get(at + 1) == Some(&Token::Punct('=')) {
-            if let Some(Token::Str(body)) = self.tokens.get(at + 2) {
-                self.targets.push(resolve_literal(self.file_dir, body));
-            }
+        if self.tokens.get(at + 1) == Some(&Token::Punct('='))
+            && let Some(Token::Str(body)) = self.tokens.get(at + 2)
+        {
+            self.targets.push(resolve_literal(self.file_dir, body));
         }
     }
 
@@ -221,10 +234,10 @@ impl Scan<'_> {
         if self.tokens.get(at + 1) != Some(&Token::Punct('(')) {
             return;
         }
-        if let Some(Token::Str(body)) = self.tokens.get(at + 2) {
-            if body.split('/').next() == Some("..") {
-                self.targets.push(resolve(self.package_dir, body));
-            }
+        if let Some(Token::Str(body)) = self.tokens.get(at + 2)
+            && body.split('/').next() == Some("..")
+        {
+            self.targets.push(resolve(self.package_dir, body));
         }
     }
 }

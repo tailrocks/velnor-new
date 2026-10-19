@@ -366,7 +366,7 @@ artifacts = [{ name = "tier-capture-{shard}", paths = ["target/snapshots/actual"
 
 Each `[[stacks.rust.suites]]` entry validates fail-closed before rendering:
 
-- `id`: unique lowercase identifier (`[a-z0-9-]+`, no leading/trailing `-`); reserved IDs (`plan`, `required`, `actionlint`, `publish-baseline`, `rust`) are rejected.
+- `id`: unique lowercase identifier (`[a-z0-9-]+`, no leading/trailing `-`); reserved IDs (`plan`, `required`, `required-gate`, `actionlint`, `rust`) are rejected.
 - `profile`: Nextest profile name (`[a-zA-Z0-9_-]+`); any profile other than `"default"` MUST exist as `[profile.<name>]` in the workspace's `.config/nextest.toml`.
 - `run_ignored`: optional `"default" | "only" | "all"` (alias `"ignored-only"` for `"only"`), passing `--run-ignored only` or `--run-ignored all` when non-default; `[stacks.rust] run_ignored` sets the workspace-level default for standard crate tasks.
 - `partitions`: `1..=64` (default `1`), rendered as a GitHub Actions `strategy.matrix.shard` (`[1..=N]`, `fail-fast: false`) with `VELNOR_SUITE_SHARD: ${{ matrix.shard }}` in step `env` and `--partition "hash:$VELNOR_SUITE_SHARD/<N>"` passed to `nextest run`, independent of `resources.test_process_budget`.
