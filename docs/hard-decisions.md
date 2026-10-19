@@ -151,9 +151,12 @@ declaration, because Mise (idiomatic version files) and rustup both read it.
   tools-cache `d` input appends `hashFiles` over `mise.toml`, `.mise.toml`,
   `mise.lock`, `.mise.lock`, and both Rust toolchain files; Cargo-source and
   MBX keys and MBX action inputs read the resolved `env` value. Plan
-  coverage binds the concrete declared versions, so a bump invalidates
-  trusted-baseline coverage, while the generated record (task digests,
-  argv) stays version-free.
+  identities bind the concrete declared versions while the generated record
+  (task digests, argv) stays version-free.
+- A pull request that changes a root project tool source (`mise.toml`,
+  `.mise.toml`, `mise.lock`, `.mise.lock`, `rust-toolchain.toml`,
+  `rust-toolchain`) selects every crate job under hard decision 4, because CI
+  runs the versions those files declare.
 - Bumping a declared version in `mise.toml` therefore needs no regeneration.
   Adding or removing a catalog tool from the project config still does (it
   changes which commands carry a reference), as does an option change such

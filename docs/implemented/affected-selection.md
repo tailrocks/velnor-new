@@ -49,8 +49,11 @@ everything and records a stable `*:all_changed` or `*:selecting_all` warning:
   loops (`symlink_unbounded:<path>:<reason>:all_changed`);
 - any changed path no rule below claims (`unclassified_files:all_changed`).
 
-Advisory tool files (`rust-toolchain*`, `mise.toml`, `mise.lock`,
-`.mise.toml`) never select work: generated execution uses Velnor's own pins.
+A root project tool source (`mise.toml`, `.mise.toml`, `mise.lock`,
+`.mise.lock`, `rust-toolchain.toml`, `rust-toolchain`) selects everything
+(`project_tool_config_changed:all_changed`): generated CI runs the tool
+versions those files declare (hard decision 5). Nested Mise tool files stay
+advisory and never select work.
 
 ## Ownership
 
