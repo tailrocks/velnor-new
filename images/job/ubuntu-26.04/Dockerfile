@@ -15,6 +15,7 @@ RUN apt-get update \
         curl \
         git \
         gzip \
+        libatomic1 \
         netcat-openbsd \
         python3 \
         tar \
