@@ -8,6 +8,8 @@ use velnor_runner_github::jit_request;
 mod runner_image_contract_home;
 #[path = "runner_image_contract_lock.rs"]
 mod runner_image_contract_lock;
+#[path = "runner_storage_init_image_tests.rs"]
+mod runner_storage_init_image_tests;
 
 const RUNNER_LOCK: &str = include_str!("../../../../../.velnor/runner.lock");
 const RUNNER_DOCKERFILE: &str =

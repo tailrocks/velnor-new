@@ -164,7 +164,10 @@ RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docke
     && echo '035ec786cea68c6da6065e8c8d78e9b08aed5bbd168dee4e52da4a56417ba4c6  /usr/bin/tar' | sha256sum -c -
 
 COPY --from=resource_probe resource-probe /velnor/resource-probe
-RUN chmod 0555 /velnor/resource-probe
+COPY --from=storage_init storage-init /velnor/storage-init
+RUN chmod 0555 /velnor/resource-probe /velnor/storage-init \
+    && test "$(stat -c %a /velnor/storage-init)" = 555 \
+    && test -x /velnor/storage-init
 
 COPY tar-semantics-test.sh tar-semantics-planned-test.sh tar-absolute-test.sh tar-absolute-test-extended.sh /tmp/velnor-gnu-tar-tests/
 RUN chmod 0755 /tmp/velnor-gnu-tar-tests/*.sh \
