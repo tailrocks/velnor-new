@@ -120,7 +120,7 @@ pub(super) async fn run_lost_create(
     assert_eq!(
         journal.occupied_reservation_count().await?,
         1,
-        "initializer cleanup must not release the physical reservation"
+        "Cleanup must keep the physical reservation."
     );
     let capture = api.finish().await?;
     Ok((recovered, abort_state, capture.requests))

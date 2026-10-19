@@ -1,10 +1,10 @@
-//! Exact durable state for one acquired request that can resume before JIT.
+//! Saved state for an acquired request that can resume before JIT.
 
 use crate::error::HostError;
 use crate::journal::connection::storage::in_transaction;
 use crate::journal::connection::{AssignmentIdentity, AssignmentKey, ConnectionJournal};
 
-/// Journal proof for one acquired request and its existing physical charge.
+/// Journal record that links an acquired request to its reservation.
 pub(crate) struct AcquiredRecoveryCandidate {
     request: AssignmentIdentity,
     physical_assignment: AssignmentIdentity,
@@ -64,7 +64,7 @@ impl AcquiredRecoveryCandidate {
 }
 
 impl ConnectionJournal {
-    /// Verify one exact acquired request and its still-pristine physical reservation.
+    /// Check that this acquired request has an unused reservation.
     pub(crate) async fn acquired_recovery_candidate(
         &self,
         request: &AssignmentIdentity,

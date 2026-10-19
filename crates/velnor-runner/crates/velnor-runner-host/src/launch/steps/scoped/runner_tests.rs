@@ -152,7 +152,9 @@ async fn exact_acquire_jit_and_bounded_docker_preflight_use_one_physical_nonce()
     );
     let storage = permit
         .storage_provisioning_admission(&profile, permit.engine_id(), permit.docker_root_digest())
-        .ok_or_else(|| "the verified test sample did not satisfy storage admission".to_owned())?;
+        .ok_or_else(|| {
+            "The verified test sample does not meet storage admission rules.".to_owned()
+        })?;
     let root_digest = permit.docker_root_digest().to_owned();
     let engine_id = permit.engine_id().to_owned();
     let reserved = runner::reserve_and_claim(
@@ -271,7 +273,7 @@ async fn exact_acquire_jit_and_bounded_docker_preflight_use_one_physical_nonce()
                 fixture
                     .request
                     .request_id()
-                    .ok_or_else(|| "request ID is absent".to_owned())?,
+                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
                 &physical.runner_name,
                 physical.authority_generation,
                 &physical.authority_digest,
@@ -349,7 +351,7 @@ async fn expiry_after_acquire_keeps_charge_and_sends_no_jit_or_docker_request() 
                 fixture
                     .request
                     .request_id()
-                    .ok_or_else(|| "request ID is absent".to_owned())?,
+                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
                 &physical.runner_name,
                 physical.authority_generation,
                 &physical.authority_digest,
@@ -425,7 +427,7 @@ async fn uncertain_acquire_keeps_charge_and_blocks_jit_replay() -> Result<(), St
                 fixture
                     .request
                     .request_id()
-                    .ok_or_else(|| "request ID is absent".to_owned())?,
+                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
                 &physical.runner_name,
                 physical.authority_generation,
                 &physical.authority_digest,
@@ -476,7 +478,7 @@ async fn already_acquired_request_never_authorizes_a_new_runner() -> Result<(), 
                 fixture
                     .request
                     .request_id()
-                    .ok_or_else(|| "request ID is absent".to_owned())?,
+                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
                 &physical.runner_name,
                 physical.authority_generation,
                 &physical.authority_digest,

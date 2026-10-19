@@ -239,7 +239,7 @@ async fn zero_header_receipt_set_must_cover_every_available_request() -> Result<
         )
         .await
         .is_err(),
-        "one authorization cannot acknowledge a response with two offers"
+        "A response with two requests needs two approvals."
     );
     let complete = DeferredAuthorizedOffers::from_receipts(
         &connection,

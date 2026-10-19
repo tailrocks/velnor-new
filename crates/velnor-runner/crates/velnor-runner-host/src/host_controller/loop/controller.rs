@@ -326,7 +326,7 @@ impl<'a> ControllerLoop<'a> {
                     self.rotation_due = false;
                 }
                 Err(error) => {
-                    eprintln!("host controller fairness rotation held: {error}");
+                    eprintln!("The host controller cannot rotate capacity: {error}");
                 }
             }
         }

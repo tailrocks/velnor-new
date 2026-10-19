@@ -56,7 +56,7 @@ async fn committed_pair_handoff_and_initializer_removal_survive_restart() -> Res
             .metadata_initialization_ready(reservation_id)
             .await?
             .is_some(),
-        "post-pair removal commit must remain ready after restart"
+        "The cleanup commit must leave the runner pair ready after restart."
     );
     assert_eq!(reopened.occupied_reservation_count().await?, 1);
     Ok(())

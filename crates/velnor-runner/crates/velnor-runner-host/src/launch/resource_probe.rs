@@ -242,7 +242,7 @@ pub(crate) async fn start_permit(
     }
 }
 
-/// Obtain fresh guest evidence for one existing physical reservation.
+/// Get a new guest resource sample for one existing reservation.
 pub(crate) async fn recovery_observation(
     docker: &Docker,
     journal: &Journal,

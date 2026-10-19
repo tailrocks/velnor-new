@@ -111,8 +111,7 @@ pub(super) async fn poll_positive_connection(
     Ok(outcome)
 }
 
-/// Resume only acquired work that the durable population plan can bind to an
-/// exact existing physical reservation.
+/// Resume an acquired request only when the plan names its existing reservation.
 pub(super) async fn reconcile_assigned_population(
     prepared: &mut PreparedConnection,
     context: &PositivePollContext<'_>,
@@ -211,7 +210,7 @@ pub(super) async fn reconcile_assigned_population(
             }
             Err(error) => {
                 eprintln!(
-                    "Acquired population recovery held. connection={} request={} reason={error}",
+                    "Recovery paused for this request. connection={} request={} reason={error}",
                     prepared.binding.connection_id, request_id
                 );
             }

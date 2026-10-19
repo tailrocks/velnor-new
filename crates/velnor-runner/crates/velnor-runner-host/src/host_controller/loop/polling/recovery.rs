@@ -83,7 +83,7 @@ pub(super) fn report_acquired_recovery(
     if let Some(recovery) = recovery {
         recovery.failure = error;
         eprintln!(
-            "Acquired work remains held for recovery. reservation={} intent={} reason={}",
+            "Keep this work for recovery. reservation={} intent={} reason={}",
             recovery.reservation_id, recovery.intent_id, recovery.failure
         );
     }

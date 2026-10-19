@@ -107,7 +107,7 @@ impl Fixture {
             .validated_job_authority_policy(&binding.connection_id)
             .map_err(|error| error.to_string())?
             .cloned()
-            .ok_or_else(|| "test authority policy is absent".to_owned())?;
+            .ok_or_else(|| "The test authority policy is missing.".to_owned())?;
         let request = scope
             .assignment_identity(AssignmentKey::AssignedRequest {
                 request_id: REQUEST_ID,

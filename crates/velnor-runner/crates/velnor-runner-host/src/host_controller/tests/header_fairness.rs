@@ -27,8 +27,8 @@ async fn production_poll_turn_rotates_durable_sessions_after_drain_and_exact_del
         .reserve_header_allocation(beta.clone(), 202, "session-b", 0)
         .await?;
 
-    // This is the same turn state machine used by poll_active_connections.
-    // A settled positive poll closes admission for the rest of this pass.
+    // This test uses the controller turn from `poll_active_connections`.
+    // A poll with a positive capacity header ends admission for this pass.
     let mut first_turn = FairnessTurn::new(true, false);
     assert_eq!(
         first_turn.poll_plan(false, positive.target(), || 91),
@@ -45,8 +45,8 @@ async fn production_poll_turn_rotates_durable_sessions_after_drain_and_exact_del
         HeaderPollPlan::Zero { cursor: 0 }
     );
 
-    // The mock source first reports a deferred Available head. That response
-    // is not a delete candidate. A subsequent empty zero-header response is.
+    // The mock first returns an Available request. Do not delete that request.
+    // The next empty response has a zero header.
     let available_head_deferred = true;
     let zero_poll = journal.begin_zero_header_poll(&waiting).await?;
     assert_eq!(zero_poll.header_value(), 0);
@@ -72,8 +72,8 @@ async fn production_poll_turn_rotates_durable_sessions_after_drain_and_exact_del
     assert!(!first_turn.rotation_complete(false));
     drop(journal);
 
-    // The actual Journal reopens between turns. The positive allocation and
-    // its cursor survive while the zero-target connection has retired.
+    // The test opens the journal again between turns. The allocation and cursor
+    // remain after the zero-capacity connection stops.
     let reopened = open_journal(&scratch).await?;
     assert_eq!(
         reopened.header_fairness_cursor().await?,
@@ -100,7 +100,7 @@ async fn production_poll_turn_rotates_durable_sessions_after_drain_and_exact_del
     assert!(retiring_turn.rotation_complete(true));
     drop(reopened);
 
-    // Setup uses the persisted cursor to give the next single header to beta.
+    // Setup reads the saved cursor. It gives the next header to beta.
     let next_journal = open_journal(&scratch).await?;
     let cursor = next_journal.header_fairness_cursor().await?;
     let next = config

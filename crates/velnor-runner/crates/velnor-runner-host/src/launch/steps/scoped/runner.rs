@@ -100,7 +100,7 @@ impl AcquiredProvisioning {
     }
 }
 
-/// Keep a checked Acquire result that is safe to continue after restart.
+/// Keep the recorded `AcquireJobs` result so work can continue after restart.
 #[must_use]
 pub(crate) struct CheckedAcquiredRecovery(AcquiredProvisioning);
 

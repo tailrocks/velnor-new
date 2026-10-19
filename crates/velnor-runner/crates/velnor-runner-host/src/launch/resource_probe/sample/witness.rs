@@ -158,7 +158,7 @@ impl StartObservationWitness {
         &self.storage_mount
     }
 
-    /// Return the sample identity for this observation.
+    /// Return the sample ID for this check.
     #[must_use]
     pub(crate) fn sample_generation_id(&self) -> &str {
         &self.sample_generation_id
@@ -169,7 +169,7 @@ impl StartObservationWitness {
             ObservationAdmissionBinding::Recovered(admission_sample_generation_id.to_owned());
     }
 
-    /// Check this observation against its original admission sample.
+    /// Compare this sample with the first admission sample.
     #[must_use]
     pub(crate) fn is_fresh_for_admission(
         &self,

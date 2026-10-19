@@ -88,7 +88,7 @@ pub(crate) struct PhysicalRunnerReservation {
     pub(crate) completed_request_id: Option<i64>,
     /// Request currently joined to the physical runner.
     pub(crate) runner_request_id: Option<i64>,
-    /// Exact acquired request linked to this physical reservation.
+    /// Acquired request linked to this reservation.
     pub(crate) acquired_request: Option<AssignmentIdentity>,
     /// Durable worker volume identity.
     pub(crate) worker_volume: Option<String>,

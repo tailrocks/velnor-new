@@ -14,7 +14,7 @@ use crate::{
     worker::ResourceBudget,
 };
 
-/// Continue an acquired request without a new reservation or acquire call.
+/// Continue an acquired request. Do not reserve it again or call `AcquireJobs` again.
 pub(crate) async fn recover_acquired_scoped_offer(
     connection: &RepositoryConnection,
     authority_policy: &ApprovedJobAuthorityPolicy,

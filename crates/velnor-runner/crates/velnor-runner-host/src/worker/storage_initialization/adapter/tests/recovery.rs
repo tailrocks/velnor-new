@@ -96,7 +96,7 @@ async fn precreate_validation_failure_reconciles_only_after_owned_absence() -> R
     assert_eq!(
         journal.occupied_reservation_count().await?,
         1,
-        "pre-start reconciliation must retain the physical reservation"
+        "Reconciliation before start must keep the reservation."
     );
     let capture = api.finish().await?;
     assert!(capture.requests.iter().any(|request| {

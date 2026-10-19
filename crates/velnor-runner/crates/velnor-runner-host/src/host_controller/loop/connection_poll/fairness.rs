@@ -1,4 +1,4 @@
-//! One oversubscribed connection turn in the production poll driver.
+//! One turn for a connection when demand is more than shared capacity.
 
 use super::super::polling::PollKind;
 

@@ -47,7 +47,7 @@ impl ConnectionJournal {
         .await
     }
 
-    /// Record JIT permission for the exact acquired request linked to one reservation.
+    /// Record JIT permission for the specified acquired request and its reservation.
     pub(crate) async fn claim_runner_jit_for_request(
         &self,
         intent_id: i64,

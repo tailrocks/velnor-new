@@ -1,4 +1,4 @@
-//! Fresh resource evidence for one charged reservation.
+//! New resource sample for one charged reservation.
 
 use crate::error::HostError;
 use crate::journal::{StorageProfile, StorageProvisioningAdmission};
@@ -6,9 +6,9 @@ use crate::worker::ResourceBudget;
 
 use super::{Observation, StartObservationWitness};
 
-/// Fresh guest evidence for work with an existing capacity charge.
+/// New guest resource sample for work with an existing capacity charge.
 ///
-/// This token does not grant a new capacity reservation.
+/// This token does not reserve more capacity.
 pub(crate) struct RecoveryObservation {
     observation: Observation,
     witness: StartObservationWitness,
@@ -17,7 +17,7 @@ pub(crate) struct RecoveryObservation {
 }
 
 impl Observation {
-    /// Bind this guest sample to one existing charge and selected engine.
+    /// Link this guest sample to the existing reservation and selected engine.
     pub(crate) fn into_recovery_observation(
         self,
         budget: ResourceBudget,
@@ -57,27 +57,27 @@ impl Observation {
 }
 
 impl RecoveryObservation {
-    /// Give the fresh sample identity.
+    /// Return the sample ID.
     pub(crate) fn sample_generation_id(&self) -> &str {
         self.observation.sample_generation_id()
     }
 
-    /// Give the exact fresh sample used for recovery effects.
+    /// Return the sample used for recovery.
     pub(crate) fn witness(&self) -> &StartObservationWitness {
         &self.witness
     }
 
-    /// Give the validated worker-pair resource limits.
+    /// Return the checked CPU and memory limits for both containers.
     pub(crate) const fn resource_budget(&self) -> ResourceBudget {
         self.budget
     }
 
-    /// Give the existing immutable reservation charge.
+    /// Return the existing reservation charge.
     pub(crate) const fn charge(&self) -> (u64, u64) {
         self.charge
     }
 
-    /// Bind the fresh sample to the current storage profile.
+    /// Check the new sample against the current storage profile.
     pub(crate) fn storage_admission(
         &self,
         profile: &StorageProfile,
@@ -88,7 +88,7 @@ impl RecoveryObservation {
             .storage_provisioning_admission(profile, engine_id, root_digest)
     }
 
-    /// Consume this sample for one exact recovery effect boundary.
+    /// Use this sample for one recovery action only.
     pub(crate) fn consume_for_recovery(
         self,
         engine_id: &str,

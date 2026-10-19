@@ -11,7 +11,7 @@ use velnor_runner_github::Poll;
 /// Delay before the skipped head is read again.
 pub(crate) const RETRY: Duration = Duration::from_secs(5);
 
-/// Assigned population reported by the native response, when present.
+/// Assigned job count from this response, if present.
 pub(crate) fn assigned_total(polled: &Poll) -> Option<i64> {
     match polled {
         Poll::Batch(batch) => batch

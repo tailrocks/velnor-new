@@ -1,4 +1,4 @@
-//! Plan work from the Scale Set assigned-job population.
+//! Plan work from the assigned job count in the Scale Set response.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -12,47 +12,47 @@ use crate::journal::{
 #[path = "assigned_population_tests.rs"]
 mod tests;
 
-/// Exact work that an authorized acquired request can support.
+/// Work that an approved acquired request can support.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AssignedPopulationAction {
-    /// Continue an existing physical reservation through its checked recovery path.
+    /// Continue an existing reservation through the checked recovery path.
     ContinueExisting {
-        /// Exact request whose acquire result is durable.
+        /// Request with a saved `AcquireJobs` result.
         request: AssignmentIdentity,
-        /// Existing physical reservation. Never reserve it again.
+        /// Existing reservation. Do not reserve it again.
         reservation_id: i64,
-        /// Index of the journal-validated recovery candidate.
+        /// Index of the recovery candidate checked against the journal.
         candidate_index: usize,
     },
 }
 
-/// Why the population pass cannot safely plan more work.
+/// Reason that the planner cannot safely plan more work.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AssignedPopulationBlock {
-    /// The signed protocol count is outside the supported range.
+    /// The assigned job count or Scale Set ID is outside the allowed range.
     InvalidCount,
-    /// A physical row has unknown or uncertain ownership.
+    /// A reservation row has unknown or uncertain ownership.
     UncertainPhysicalWork,
-    /// The durable journal contains duplicate physical ownership for one request.
+    /// The journal has more than one reservation for one request.
     DuplicateRequestReservation,
-    /// The current assigned population has no exact acquired source witness.
+    /// The assigned job count has no matching acquired request.
     MissingSourceWitness,
-    /// An acquired request has no exact durable physical reservation.
+    /// An acquired request has no matching saved reservation.
     ClosedUnproven,
 }
 
-/// Plan derived from the official assigned-job count and durable ownership.
+/// Plan from the assigned job count and saved reservations.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AssignedPopulationPlan {
     /// Full assigned count from `Statistics.TotalAssignedJobs`.
     pub(crate) assigned_total: u64,
-    /// Distinct healthy runners or known preparation rows for this Scale Set.
+    /// Separate healthy runners or known preparation rows for this Scale Set.
     pub(crate) owned_coverage: u64,
-    /// Exact journal-backed actions. This list never contains synthetic IDs.
+    /// Each action names a request and reservation from the journal. This list has no generated request IDs.
     pub(crate) actions: Vec<AssignedPopulationAction>,
-    /// Demand without an exact acquired request witness.
+    /// Demand without a matching acquired request.
     pub(crate) uncovered: u64,
-    /// A fail-closed reason, when source or physical state prevents planning.
+    /// Reason to stop when source or reservation state prevents planning.
     pub(crate) blocked: Option<AssignedPopulationBlock>,
 }
 
@@ -62,10 +62,10 @@ struct PhysicalCoverage {
     has_unattributed_runner: bool,
 }
 
-/// Compare assigned demand with complete durable reservation and acquire reads.
+/// Compare assigned demand with all saved reservations and `AcquireJobs` results.
 ///
-/// The caller owns session freshness, header allocation, and the resource permit.
-/// This function never acquires a request or creates a physical reservation.
+/// The caller checks that the session is current. The caller sets the capacity header. The caller uses the resource permit.
+/// This function does not call `AcquireJobs`. It does not create a reservation.
 pub(crate) fn plan_assigned_population(
     assigned_total: i64,
     connection_id: &ConnectionId,

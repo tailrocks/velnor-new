@@ -193,7 +193,7 @@ mod cursor_tests {
         record_assigned_total(&mut assigned_total, None);
         assert_eq!(assigned_total, Some(6));
 
-        // A replacement session starts from its own create/refresh response.
+        // A new session uses its own create or refresh response.
         assigned_total = session_assigned_total(Some(&statistics(2)));
         record_assigned_total(&mut assigned_total, None);
         assert_eq!(assigned_total, Some(2));

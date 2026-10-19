@@ -1,8 +1,8 @@
 //! Tests for shared header allocation.
 //!
-//! Keep these tests until controller tests prove both connections can receive capacity.
+//! Keep these tests until controller tests confirm that both connections receive capacity.
 
-/// Give active connections capacity from the shared total.
+/// Assign shared capacity to active connections.
 #[must_use]
 pub(crate) fn allocate_headers(active: &[bool], total: u32, cursor: &mut usize) -> Vec<u32> {
     let mut headers = vec![0; active.len()];

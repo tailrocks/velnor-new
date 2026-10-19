@@ -36,7 +36,7 @@ async fn fresh_jit_claim_rejects_a_policy_changed_after_acquire() -> Result<(), 
         StartPermit::test_fixture_with_available_memory(&"a".repeat(32), 32 * 1024 * 1024 * 1024);
     let storage = permit
         .storage_provisioning_admission(&profile, permit.engine_id(), permit.docker_root_digest())
-        .ok_or_else(|| "the sample did not satisfy storage admission".to_owned())?;
+        .ok_or_else(|| "The sample does not meet storage admission rules.".to_owned())?;
     let reserved = runner::reserve_and_claim(
         &fixture.scope,
         permit,
@@ -82,7 +82,7 @@ async fn fresh_jit_claim_rejects_a_policy_changed_after_acquire() -> Result<(), 
                 fixture
                     .request
                     .request_id()
-                    .ok_or_else(|| "request ID is absent".to_owned())?,
+                    .ok_or_else(|| "Request ID is missing.".to_owned())?,
                 &physical.runner_name,
                 physical.authority_generation,
                 &physical.authority_digest,
@@ -99,7 +99,7 @@ async fn fresh_jit_claim_rejects_a_policy_changed_after_acquire() -> Result<(), 
     let row = reservations
         .iter()
         .find(|row| row.reservation_id == physical.reservation_id)
-        .ok_or_else(|| "the physical reservation disappeared".to_owned())?;
+        .ok_or_else(|| "The physical reservation is missing.".to_owned())?;
     assert_eq!(row.reservation.state, ReservationState::Reserved);
     assert_eq!(format!("{:?}", row.jit_state), "Absent");
     assert_eq!(lane.methods, [Method::Post]);
